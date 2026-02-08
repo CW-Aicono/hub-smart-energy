@@ -4,7 +4,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useTranslation } from "@/hooks/useTranslation";
 import { Button } from "@/components/ui/button";
-import { LayoutDashboard, LogOut, Shield, Settings, Users, ChevronDown, ChevronRight, MapPin, PanelLeftClose, PanelLeft, UserCircle } from "lucide-react";
+import { LayoutDashboard, LogOut, Shield, Settings, Users, ChevronDown, ChevronRight, MapPin, PanelLeftClose, PanelLeft, UserCircle, Key } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TenantLogo } from "@/components/tenant/TenantLogo";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -74,7 +74,7 @@ const DashboardSidebar = () => {
         icon: Shield, 
         labelKey: "nav.userManagement" as TranslationKey,
         children: [
-          { to: "/roles", icon: Users, labelKey: "nav.rolesAndPermissions" as TranslationKey },
+          { to: "/roles", icon: Key, labelKey: "nav.rolesAndPermissions" as TranslationKey },
         ]
       },
       { to: "/settings", icon: Settings, labelKey: "nav.settings" as TranslationKey },
