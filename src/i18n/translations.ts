@@ -38,6 +38,12 @@ export const translations = {
     es: "Configuración",
     nl: "Instellingen",
   },
+  "nav.integrations": {
+    de: "Integrationen",
+    en: "Integrations",
+    es: "Integraciones",
+    nl: "Integraties",
+  },
   "nav.myProfile": {
     de: "Mein Profil",
     en: "My Profile",

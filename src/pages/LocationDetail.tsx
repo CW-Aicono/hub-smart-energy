@@ -1,13 +1,13 @@
-import { useState } from "react";
 import { Navigate, useParams, Link } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
-import { useLocations, Location, LocationUsageType } from "@/hooks/useLocations";
+import { useLocations, LocationUsageType } from "@/hooks/useLocations";
 import { useFloors } from "@/hooks/useFloors";
 import { useTranslation } from "@/hooks/useTranslation";
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
 import { FloorList } from "@/components/locations/FloorList";
 import { AddFloorDialog } from "@/components/locations/AddFloorDialog";
+import { LocationIntegrationsList } from "@/components/integrations/LocationIntegrationsList";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -193,6 +193,9 @@ const LocationDetail = () => {
               />
             </CardContent>
           </Card>
+
+          {/* Integrations Card */}
+          <LocationIntegrationsList locationId={location.id} />
         </div>
       </main>
     </div>
