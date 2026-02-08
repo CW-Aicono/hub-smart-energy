@@ -152,8 +152,8 @@ const WeatherWidget = () => {
 
     loadWeather();
     
-    // Refresh weather every 30 minutes
-    const interval = setInterval(loadWeather, 30 * 60 * 1000);
+    // Refresh weather every 15 minutes
+    const interval = setInterval(loadWeather, 15 * 60 * 1000);
     return () => clearInterval(interval);
   }, [t]);
 
