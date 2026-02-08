@@ -11,6 +11,7 @@ import CostOverview from "@/components/dashboard/CostOverview";
 import SustainabilityKPIs from "@/components/dashboard/SustainabilityKPIs";
 import AlertsList from "@/components/dashboard/AlertsList";
 import LocationMapWidget from "@/components/dashboard/LocationMapWidget";
+import FloorPlanWidget from "@/components/dashboard/FloorPlanWidget";
 import WeatherWidget from "@/components/dashboard/WeatherWidget";
 
 interface WidgetProps {
@@ -23,7 +24,13 @@ const WIDGET_COMPONENTS: Record<string, React.ComponentType<WidgetProps>> = {
   sustainability_kpis: SustainabilityKPIs,
   alerts_list: AlertsList,
   location_map: LocationMapWidget,
+  floor_plan: FloorPlanWidget,
   weather: WeatherWidget,
+};
+
+// Widget to show based on location selection
+const getLocationWidget = (locationId: string | null): string => {
+  return locationId ? "floor_plan" : "location_map";
 };
 
 const DashboardContent = () => {
@@ -62,7 +69,11 @@ const DashboardContent = () => {
         </header>
         <div className="p-6 space-y-6">
           {visibleWidgets.map((widget) => {
-            const Component = WIDGET_COMPONENTS[widget.widget_type];
+            // Swap location_map with floor_plan when location is selected
+            const widgetType = widget.widget_type === "location_map" 
+              ? getLocationWidget(selectedLocationId) 
+              : widget.widget_type;
+            const Component = WIDGET_COMPONENTS[widgetType];
             return Component ? (
               <Component key={widget.widget_type} locationId={selectedLocationId} />
             ) : null;

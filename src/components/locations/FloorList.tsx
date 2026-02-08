@@ -3,10 +3,11 @@ import { Floor } from "@/hooks/useFloors";
 import { useUserRole } from "@/hooks/useUserRole";
 import { EditFloorDialog } from "./EditFloorDialog";
 import { DeleteFloorDialog } from "./DeleteFloorDialog";
+import { FloorPlanEditor } from "./FloorPlanEditor";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Layers, Image, SquareStack, Maximize2 } from "lucide-react";
+import { Layers, Image, SquareStack, MapPin } from "lucide-react";
 
 interface FloorListProps {
   floors: Floor[];
@@ -18,6 +19,7 @@ interface FloorListProps {
 export function FloorList({ floors, loading, locationId, onRefresh }: FloorListProps) {
   const { isAdmin } = useUserRole();
   const [selectedFloor, setSelectedFloor] = useState<Floor | null>(null);
+  const [editorFloor, setEditorFloor] = useState<Floor | null>(null);
 
   if (loading) {
     return (
@@ -61,6 +63,18 @@ export function FloorList({ floors, loading, locationId, onRefresh }: FloorListP
           </div>
 
           <div className="flex items-center gap-2">
+            {isAdmin && floor.floor_plan_url && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-2"
+                onClick={() => setEditorFloor(floor)}
+              >
+                <MapPin className="h-4 w-4" />
+                Messgeräte
+              </Button>
+            )}
+            
             {floor.floor_plan_url ? (
               <Dialog>
                 <DialogTrigger asChild>
@@ -95,6 +109,16 @@ export function FloorList({ floors, loading, locationId, onRefresh }: FloorListP
           </div>
         </div>
       ))}
+      
+      {/* Floor Plan Editor Dialog */}
+      {editorFloor && (
+        <FloorPlanEditor
+          floor={editorFloor}
+          locationId={locationId}
+          open={!!editorFloor}
+          onOpenChange={(open) => !open && setEditorFloor(null)}
+        />
+      )}
     </div>
   );
 }

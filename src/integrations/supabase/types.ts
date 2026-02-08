@@ -159,6 +159,57 @@ export type Database = {
           },
         ]
       }
+      floor_sensor_positions: {
+        Row: {
+          created_at: string
+          floor_id: string
+          id: string
+          location_integration_id: string
+          position_x: number
+          position_y: number
+          sensor_name: string
+          sensor_uuid: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          floor_id: string
+          id?: string
+          location_integration_id: string
+          position_x: number
+          position_y: number
+          sensor_name: string
+          sensor_uuid: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          floor_id?: string
+          id?: string
+          location_integration_id?: string
+          position_x?: number
+          position_y?: number
+          sensor_name?: string
+          sensor_uuid?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "floor_sensor_positions_floor_id_fkey"
+            columns: ["floor_id"]
+            isOneToOne: false
+            referencedRelation: "floors"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "floor_sensor_positions_location_integration_id_fkey"
+            columns: ["location_integration_id"]
+            isOneToOne: false
+            referencedRelation: "location_integrations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       floors: {
         Row: {
           area_sqm: number | null
