@@ -3,6 +3,7 @@ import { Navigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useLocations, Location } from "@/hooks/useLocations";
+import { useTranslation } from "@/hooks/useTranslation";
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
 import { LocationsMap } from "@/components/locations/LocationsMap";
 import { LocationTree } from "@/components/locations/LocationTree";
@@ -15,6 +16,7 @@ const Locations = () => {
   const { user, loading: authLoading } = useAuth();
   const { isAdmin } = useUserRole();
   const { locations, hierarchicalLocations, loading: locationsLoading, refetch } = useLocations();
+  const { t } = useTranslation();
   const [selectedLocation, setSelectedLocation] = useState<Location | null>(null);
 
   // Filter locations that should be shown on map
@@ -23,7 +25,7 @@ const Locations = () => {
   if (authLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
-        <div className="animate-pulse text-muted-foreground">Laden...</div>
+        <div className="animate-pulse text-muted-foreground">{t("common.loading")}</div>
       </div>
     );
   }
@@ -36,9 +38,9 @@ const Locations = () => {
       <main className="flex-1 overflow-auto">
         <header className="border-b p-6 flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-display font-bold">Standorte</h1>
+            <h1 className="text-2xl font-display font-bold">{t("locations.title")}</h1>
             <p className="text-sm text-muted-foreground mt-1">
-              Verwalten Sie Ihre Standorte, Gebäude und Bereiche
+              {t("locations.subtitle")}
             </p>
           </div>
           {isAdmin && <AddLocationDialog />}
@@ -49,10 +51,10 @@ const Locations = () => {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Map className="h-5 w-5" />
-                Standortkarte
+                {t("locations.map")}
               </CardTitle>
               <CardDescription>
-                Übersicht aller Standorte auf der Karte
+                {t("locations.mapDescription")}
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -72,10 +74,10 @@ const Locations = () => {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Building2 className="h-5 w-5" />
-                Standortübersicht
+                {t("locations.overview")}
               </CardTitle>
               <CardDescription>
-                Hierarchische Ansicht aller Standorte und Gebäude
+                {t("locations.overviewDescription")}
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -83,11 +85,11 @@ const Locations = () => {
                 <TabsList className="mb-4">
                   <TabsTrigger value="tree" className="gap-2">
                     <List className="h-4 w-4" />
-                    Baumansicht
+                    {t("locations.treeView")}
                   </TabsTrigger>
                   <TabsTrigger value="list" className="gap-2">
                     <List className="h-4 w-4" />
-                    Liste
+                    {t("locations.listView")}
                   </TabsTrigger>
                 </TabsList>
                 <TabsContent value="tree">
@@ -116,7 +118,7 @@ const Locations = () => {
                   ) : locations.length === 0 ? (
                     <div className="text-center py-8 text-muted-foreground">
                       <Building2 className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                      <p>Keine Standorte vorhanden</p>
+                      <p>{t("locations.noLocations")}</p>
                     </div>
                   ) : (
                     <div className="space-y-2">
@@ -150,30 +152,30 @@ const Locations = () => {
               <CardHeader>
                 <CardTitle>{selectedLocation.name}</CardTitle>
                 <CardDescription>
-                  Details zum ausgewählten Standort
+                  {t("locations.details")}
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 <dl className="grid gap-3 sm:grid-cols-2">
                   <div>
-                    <dt className="text-sm font-medium text-muted-foreground">Typ</dt>
-                    <dd className="capitalize">{selectedLocation.type}</dd>
+                    <dt className="text-sm font-medium text-muted-foreground">{t("locations.type")}</dt>
+                    <dd className="capitalize">{t(`locations.types.${selectedLocation.type}` as any)}</dd>
                   </div>
                   {selectedLocation.address && (
                     <div>
-                      <dt className="text-sm font-medium text-muted-foreground">Adresse</dt>
+                      <dt className="text-sm font-medium text-muted-foreground">{t("locations.address")}</dt>
                       <dd>{selectedLocation.address}</dd>
                     </div>
                   )}
                   {selectedLocation.city && (
                     <div>
-                      <dt className="text-sm font-medium text-muted-foreground">Stadt</dt>
+                      <dt className="text-sm font-medium text-muted-foreground">{t("locations.city")}</dt>
                       <dd>{selectedLocation.postal_code} {selectedLocation.city}</dd>
                     </div>
                   )}
                   {selectedLocation.latitude && selectedLocation.longitude && (
                     <div>
-                      <dt className="text-sm font-medium text-muted-foreground">Koordinaten</dt>
+                      <dt className="text-sm font-medium text-muted-foreground">{t("locations.coordinates")}</dt>
                       <dd>{selectedLocation.latitude}, {selectedLocation.longitude}</dd>
                     </div>
                   )}

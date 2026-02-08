@@ -1,46 +1,49 @@
 import { Navigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
+import { useTranslation } from "@/hooks/useTranslation";
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Shield, Users, Eye, Edit, Trash2 } from "lucide-react";
-
-const ROLE_PERMISSIONS = {
-  admin: {
-    label: "Administrator",
-    description: "Vollzugriff auf alle Funktionen",
-    color: "bg-destructive/10 text-destructive border-destructive/20",
-    permissions: [
-      { name: "Dashboard anzeigen", icon: Eye },
-      { name: "Standorte verwalten", icon: Edit },
-      { name: "Benutzer einladen", icon: Users },
-      { name: "Rollen zuweisen", icon: Shield },
-      { name: "Branding anpassen", icon: Edit },
-      { name: "Berichte erstellen", icon: Eye },
-      { name: "Daten löschen", icon: Trash2 },
-    ],
-  },
-  user: {
-    label: "Benutzer",
-    description: "Lesezugriff auf zugewiesene Bereiche",
-    color: "bg-primary/10 text-primary border-primary/20",
-    permissions: [
-      { name: "Dashboard anzeigen", icon: Eye },
-      { name: "Standorte anzeigen", icon: Eye },
-      { name: "Berichte anzeigen", icon: Eye },
-    ],
-  },
-};
+import { TranslationKey } from "@/i18n/translations";
 
 const Roles = () => {
   const { user, loading: authLoading } = useAuth();
   const { isAdmin, loading: roleLoading } = useUserRole();
+  const { t } = useTranslation();
+
+  const ROLE_PERMISSIONS = {
+    admin: {
+      labelKey: "roles.admin" as TranslationKey,
+      descriptionKey: "roles.adminDescription" as TranslationKey,
+      color: "bg-destructive/10 text-destructive border-destructive/20",
+      permissions: [
+        { nameKey: "roles.viewDashboard" as TranslationKey, icon: Eye },
+        { nameKey: "roles.manageLocations" as TranslationKey, icon: Edit },
+        { nameKey: "roles.inviteUsers" as TranslationKey, icon: Users },
+        { nameKey: "roles.assignRoles" as TranslationKey, icon: Shield },
+        { nameKey: "roles.customizeBranding" as TranslationKey, icon: Edit },
+        { nameKey: "roles.createReports" as TranslationKey, icon: Eye },
+        { nameKey: "roles.deleteData" as TranslationKey, icon: Trash2 },
+      ],
+    },
+    user: {
+      labelKey: "roles.user" as TranslationKey,
+      descriptionKey: "roles.userDescription" as TranslationKey,
+      color: "bg-primary/10 text-primary border-primary/20",
+      permissions: [
+        { nameKey: "roles.viewDashboard" as TranslationKey, icon: Eye },
+        { nameKey: "roles.viewLocations" as TranslationKey, icon: Eye },
+        { nameKey: "roles.viewReports" as TranslationKey, icon: Eye },
+      ],
+    },
+  };
 
   if (authLoading || roleLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
-        <div className="animate-pulse text-muted-foreground">Laden...</div>
+        <div className="animate-pulse text-muted-foreground">{t("common.loading")}</div>
       </div>
     );
   }
@@ -53,9 +56,9 @@ const Roles = () => {
       <DashboardSidebar />
       <main className="flex-1 overflow-auto">
         <header className="border-b p-6">
-          <h1 className="text-2xl font-display font-bold">Rollen & Rechte</h1>
+          <h1 className="text-2xl font-display font-bold">{t("roles.title")}</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Übersicht der verfügbaren Rollen und deren Berechtigungen
+            {t("roles.subtitle")}
           </p>
         </header>
         <div className="p-6 space-y-6">
@@ -66,18 +69,18 @@ const Roles = () => {
                   <div className="flex items-center justify-between">
                     <CardTitle className="flex items-center gap-2">
                       <Shield className="h-5 w-5" />
-                      {role.label}
+                      {t(role.labelKey)}
                     </CardTitle>
                     <Badge variant="outline" className={role.color}>
                       {key}
                     </Badge>
                   </div>
-                  <CardDescription>{role.description}</CardDescription>
+                  <CardDescription>{t(role.descriptionKey)}</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-2">
                     <p className="text-sm font-medium text-muted-foreground mb-3">
-                      Berechtigungen:
+                      {t("roles.permissions")}:
                     </p>
                     <ul className="space-y-2">
                       {role.permissions.map((permission, idx) => (
@@ -86,7 +89,7 @@ const Roles = () => {
                           className="flex items-center gap-2 text-sm text-foreground/80"
                         >
                           <permission.icon className="h-4 w-4 text-muted-foreground" />
-                          {permission.name}
+                          {t(permission.nameKey)}
                         </li>
                       ))}
                     </ul>
@@ -98,13 +101,10 @@ const Roles = () => {
 
           <Card>
             <CardHeader>
-              <CardTitle>Hinweis zur Rollenverwaltung</CardTitle>
+              <CardTitle>{t("roles.noteTitle")}</CardTitle>
             </CardHeader>
             <CardContent className="text-sm text-muted-foreground">
-              <p>
-                Rollen werden Benutzern beim Einladen zugewiesen. Bestehende Benutzerrollen
-                können im <strong>Admin-Bereich</strong> unter "Benutzer verwalten" geändert werden.
-              </p>
+              <p>{t("roles.noteText")}</p>
             </CardContent>
           </Card>
         </div>
