@@ -3,7 +3,7 @@ import { NavLink, useLocation } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
 import { Button } from "@/components/ui/button";
-import { LayoutDashboard, LogOut, Shield, Settings, Users, ChevronDown, MapPin, PanelLeftClose, PanelLeft } from "lucide-react";
+import { LayoutDashboard, LogOut, Shield, Settings, Users, ChevronDown, MapPin, PanelLeftClose, PanelLeft, UserCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TenantLogo } from "@/components/tenant/TenantLogo";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -168,6 +168,12 @@ const DashboardSidebar = () => {
             side="top" 
             className="w-56 bg-popover"
           >
+            <DropdownMenuItem asChild>
+              <a href="/profile" className="flex items-center cursor-pointer">
+                <UserCircle className="h-4 w-4 mr-2" />
+                Mein Profil
+              </a>
+            </DropdownMenuItem>
             <DropdownMenuItem onClick={signOut} className="text-destructive focus:text-destructive">
               <LogOut className="h-4 w-4 mr-2" />
               Abmelden

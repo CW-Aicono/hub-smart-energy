@@ -282,6 +282,36 @@ export type Database = {
         }
         Relationships: []
       }
+      user_preferences: {
+        Row: {
+          color_scheme: string
+          created_at: string
+          id: string
+          language: string
+          theme_mode: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          color_scheme?: string
+          created_at?: string
+          id?: string
+          language?: string
+          theme_mode?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          color_scheme?: string
+          created_at?: string
+          id?: string
+          language?: string
+          theme_mode?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           created_at: string
