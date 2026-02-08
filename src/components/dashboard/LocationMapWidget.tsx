@@ -16,21 +16,22 @@ const LocationMapWidget = () => {
   };
 
   return (
-    <Card>
+    <Card className="overflow-hidden">
       <CardHeader className="pb-2">
         <CardTitle className="flex items-center gap-2 text-lg">
           <Map className="h-5 w-5" />
           Standortkarte
         </CardTitle>
       </CardHeader>
-      <CardContent>
+      <CardContent className="p-0">
         {loading ? (
-          <div className="h-[300px] rounded-lg bg-muted/50 animate-pulse" />
+          <div className="h-[300px] bg-muted/50 animate-pulse" />
         ) : (
-          <div className="h-[300px]">
+          <div className="h-[300px] overflow-hidden">
             <LocationsMap 
               locations={mapLocations} 
               onLocationClick={handleLocationClick}
+              className="h-full rounded-none border-0"
             />
           </div>
         )}
