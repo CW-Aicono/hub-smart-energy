@@ -148,6 +148,19 @@ const UserManagement = () => {
   };
 
   const updateUserRole = async (userId: string, newRole: "admin" | "user") => {
+    // Prevent last admin from demoting themselves
+    if (newRole !== "admin" && adminCount <= 1) {
+      const user = users.find(u => u.user_id === userId);
+      if (user?.role === "admin") {
+        toast({
+          title: t("common.error"),
+          description: t("users.cannotDemoteLastAdmin"),
+          variant: "destructive",
+        });
+        return;
+      }
+    }
+
     const { error } = await supabase
       .from("user_roles")
       .update({ role: newRole })
