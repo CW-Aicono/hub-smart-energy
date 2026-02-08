@@ -298,23 +298,23 @@ export const translations = {
     es: "Coordenadas",
     nl: "Coördinaten",
   },
-  "locations.types.standort": {
-    de: "Standort",
-    en: "Location",
-    es: "Ubicación",
-    nl: "Locatie",
+  "locations.types.einzelgebaeude": {
+    de: "Einzelgebäude",
+    en: "Single Building",
+    es: "Edificio individual",
+    nl: "Enkel gebouw",
   },
-  "locations.types.gebaeude": {
-    de: "Gebäude",
-    en: "Building",
-    es: "Edificio",
-    nl: "Gebouw",
+  "locations.types.gebaeudekomplex": {
+    de: "Gebäudekomplex",
+    en: "Building Complex",
+    es: "Complejo de edificios",
+    nl: "Gebouwencomplex",
   },
-  "locations.types.bereich": {
-    de: "Bereich",
-    en: "Area",
-    es: "Área",
-    nl: "Gebied",
+  "locations.types.sonstiges": {
+    de: "Sonstiges",
+    en: "Other",
+    es: "Otro",
+    nl: "Overig",
   },
 
   // Add Location Dialog

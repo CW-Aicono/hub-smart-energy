@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "./useTenant";
 
-export type LocationType = "standort" | "gebaeude" | "bereich";
+export type LocationType = "einzelgebaeude" | "gebaeudekomplex" | "sonstiges";
 export type LocationUsageType = "verwaltungsgebaeude" | "universitaet" | "schule" | "kindertageseinrichtung" | "sportstaette" | "jugendzentrum" | "sonstiges";
 
 export interface Location {
@@ -124,7 +124,7 @@ export function useLocations(): UseLocationsReturn {
   const updateLocation = async (id: string, updates: Partial<Location>) => {
     const { error: updateError } = await supabase
       .from("locations")
-      .update(updates)
+      .update(updates as any)
       .eq("id", id);
 
     if (!updateError) {

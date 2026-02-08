@@ -48,7 +48,7 @@ const ENERGY_SOURCES = [
 
 const locationSchema = z.object({
   name: z.string().trim().min(1, "Name ist erforderlich").max(100, "Name darf maximal 100 Zeichen haben"),
-  type: z.enum(["standort", "gebaeude", "bereich"] as const),
+  type: z.enum(["einzelgebaeude", "gebaeudekomplex", "sonstiges"] as const),
   usage_type: z.enum(["verwaltungsgebaeude", "universitaet", "schule", "kindertageseinrichtung", "sportstaette", "jugendzentrum", "sonstiges"] as const),
   address: z.string().trim().max(200, "Adresse darf maximal 200 Zeichen haben").optional(),
   postal_code: z.string().trim().max(10, "PLZ darf maximal 10 Zeichen haben").optional(),
@@ -80,7 +80,7 @@ export function AddLocationDialog({ parentId }: AddLocationDialogProps) {
     resolver: zodResolver(locationSchema),
     defaultValues: {
       name: "",
-      type: "standort",
+      type: "einzelgebaeude",
       usage_type: "sonstiges",
       address: "",
       postal_code: "",
@@ -184,9 +184,9 @@ export function AddLocationDialog({ parentId }: AddLocationDialogProps) {
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value="standort">Standort</SelectItem>
-                        <SelectItem value="gebaeude">Gebäude</SelectItem>
-                        <SelectItem value="bereich">Bereich</SelectItem>
+                        <SelectItem value="einzelgebaeude">Einzelgebäude</SelectItem>
+                        <SelectItem value="gebaeudekomplex">Gebäudekomplex</SelectItem>
+                        <SelectItem value="sonstiges">Sonstiges</SelectItem>
                       </SelectContent>
                     </Select>
                     <FormMessage />
