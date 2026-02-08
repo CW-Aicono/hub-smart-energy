@@ -89,15 +89,20 @@ export type Database = {
         Row: {
           address: string | null
           city: string | null
+          contact_email: string | null
+          contact_person: string | null
+          contact_phone: string | null
           country: string | null
           created_at: string
           description: string | null
+          energy_sources: string[] | null
           id: string
           latitude: number | null
           longitude: number | null
           name: string
           parent_id: string | null
           postal_code: string | null
+          show_on_map: boolean
           tenant_id: string
           type: Database["public"]["Enums"]["location_type"]
           updated_at: string
@@ -105,15 +110,20 @@ export type Database = {
         Insert: {
           address?: string | null
           city?: string | null
+          contact_email?: string | null
+          contact_person?: string | null
+          contact_phone?: string | null
           country?: string | null
           created_at?: string
           description?: string | null
+          energy_sources?: string[] | null
           id?: string
           latitude?: number | null
           longitude?: number | null
           name: string
           parent_id?: string | null
           postal_code?: string | null
+          show_on_map?: boolean
           tenant_id: string
           type?: Database["public"]["Enums"]["location_type"]
           updated_at?: string
@@ -121,15 +131,20 @@ export type Database = {
         Update: {
           address?: string | null
           city?: string | null
+          contact_email?: string | null
+          contact_person?: string | null
+          contact_phone?: string | null
           country?: string | null
           created_at?: string
           description?: string | null
+          energy_sources?: string[] | null
           id?: string
           latitude?: number | null
           longitude?: number | null
           name?: string
           parent_id?: string | null
           postal_code?: string | null
+          show_on_map?: boolean
           tenant_id?: string
           type?: Database["public"]["Enums"]["location_type"]
           updated_at?: string
