@@ -11,6 +11,7 @@ interface DashboardCustomizerProps {
 }
 
 const WIDGET_LABELS: Record<string, string> = {
+  location_map: "Standortkarte",
   cost_overview: "Kostenübersicht",
   energy_chart: "Energieverbrauch",
   sustainability_kpis: "Nachhaltigkeits-KPIs",

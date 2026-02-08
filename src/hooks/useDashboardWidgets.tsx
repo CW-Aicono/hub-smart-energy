@@ -11,10 +11,11 @@ export interface DashboardWidget {
 }
 
 const DEFAULT_WIDGETS = [
-  { widget_type: "cost_overview", position: 0, is_visible: true },
-  { widget_type: "energy_chart", position: 1, is_visible: true },
-  { widget_type: "sustainability_kpis", position: 2, is_visible: true },
-  { widget_type: "alerts_list", position: 3, is_visible: true },
+  { widget_type: "location_map", position: 0, is_visible: true },
+  { widget_type: "cost_overview", position: 1, is_visible: true },
+  { widget_type: "energy_chart", position: 2, is_visible: true },
+  { widget_type: "sustainability_kpis", position: 3, is_visible: true },
+  { widget_type: "alerts_list", position: 4, is_visible: true },
 ];
 
 export function useDashboardWidgets() {
