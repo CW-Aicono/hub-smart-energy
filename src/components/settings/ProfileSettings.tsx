@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useUserPreferences, ColorScheme, ThemeMode, Language } from "@/hooks/useUserPreferences";
+import { useTranslation } from "@/hooks/useTranslation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -8,32 +9,35 @@ import { useToast } from "@/hooks/use-toast";
 import { Globe, Palette, Monitor, Sun, Moon, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-const colorSchemes: { value: ColorScheme; label: string; colors: string[] }[] = [
-  { value: "default", label: "Standard", colors: ["hsl(220, 60%, 20%)", "hsl(152, 55%, 42%)"] },
-  { value: "ocean", label: "Ozean", colors: ["hsl(200, 70%, 30%)", "hsl(180, 60%, 45%)"] },
-  { value: "forest", label: "Wald", colors: ["hsl(140, 40%, 25%)", "hsl(80, 50%, 45%)"] },
-  { value: "sunset", label: "Sonnenuntergang", colors: ["hsl(20, 70%, 30%)", "hsl(35, 90%, 55%)"] },
-  { value: "lavender", label: "Lavendel", colors: ["hsl(270, 40%, 35%)", "hsl(280, 50%, 60%)"] },
-  { value: "slate", label: "Schiefer", colors: ["hsl(220, 15%, 25%)", "hsl(220, 20%, 50%)"] },
-  { value: "rose", label: "Rose", colors: ["hsl(350, 50%, 35%)", "hsl(340, 60%, 55%)"] },
-  { value: "amber", label: "Bernstein", colors: ["hsl(30, 60%, 25%)", "hsl(38, 92%, 50%)"] },
-];
-
-const themeModes: { value: ThemeMode; label: string; icon: typeof Sun }[] = [
-  { value: "light", label: "Hell", icon: Sun },
-  { value: "dark", label: "Dunkel", icon: Moon },
-  { value: "system", label: "System", icon: Monitor },
-];
-
-const languages: { value: Language; label: string }[] = [
-  { value: "de", label: "Deutsch" },
-  { value: "en", label: "English" },
-];
-
 export function ProfileSettings() {
+  const { t } = useTranslation();
   const { preferences, loading, updatePreferences } = useUserPreferences();
   const { toast } = useToast();
   const [updating, setUpdating] = useState<string | null>(null);
+
+  const colorSchemes: { value: ColorScheme; labelKey: "colorScheme.default" | "colorScheme.ocean" | "colorScheme.forest" | "colorScheme.sunset" | "colorScheme.lavender" | "colorScheme.slate" | "colorScheme.rose" | "colorScheme.amber"; colors: string[] }[] = [
+    { value: "default", labelKey: "colorScheme.default", colors: ["hsl(220, 60%, 20%)", "hsl(152, 55%, 42%)"] },
+    { value: "ocean", labelKey: "colorScheme.ocean", colors: ["hsl(200, 70%, 30%)", "hsl(180, 60%, 45%)"] },
+    { value: "forest", labelKey: "colorScheme.forest", colors: ["hsl(140, 40%, 25%)", "hsl(80, 50%, 45%)"] },
+    { value: "sunset", labelKey: "colorScheme.sunset", colors: ["hsl(20, 70%, 30%)", "hsl(35, 90%, 55%)"] },
+    { value: "lavender", labelKey: "colorScheme.lavender", colors: ["hsl(270, 40%, 35%)", "hsl(280, 50%, 60%)"] },
+    { value: "slate", labelKey: "colorScheme.slate", colors: ["hsl(220, 15%, 25%)", "hsl(220, 20%, 50%)"] },
+    { value: "rose", labelKey: "colorScheme.rose", colors: ["hsl(350, 50%, 35%)", "hsl(340, 60%, 55%)"] },
+    { value: "amber", labelKey: "colorScheme.amber", colors: ["hsl(30, 60%, 25%)", "hsl(38, 92%, 50%)"] },
+  ];
+
+  const themeModes: { value: ThemeMode; labelKey: "profile.light" | "profile.dark" | "profile.system"; icon: typeof Sun }[] = [
+    { value: "light", labelKey: "profile.light", icon: Sun },
+    { value: "dark", labelKey: "profile.dark", icon: Moon },
+    { value: "system", labelKey: "profile.system", icon: Monitor },
+  ];
+
+  const languages: { value: Language; labelKey: "language.de" | "language.en" | "language.es" | "language.nl" }[] = [
+    { value: "de", labelKey: "language.de" },
+    { value: "en", labelKey: "language.en" },
+    { value: "es", labelKey: "language.es" },
+    { value: "nl", labelKey: "language.nl" },
+  ];
 
   const handleUpdate = async (
     field: "language" | "color_scheme" | "theme_mode",
@@ -45,14 +49,14 @@ export function ProfileSettings() {
 
     if (error) {
       toast({
-        title: "Fehler",
-        description: "Einstellung konnte nicht gespeichert werden.",
+        title: t("common.error"),
+        description: t("profile.settingError"),
         variant: "destructive",
       });
     } else {
       toast({
-        title: "Gespeichert",
-        description: "Ihre Einstellung wurde aktualisiert.",
+        title: t("common.saved"),
+        description: t("profile.settingSaved"),
       });
     }
   };
@@ -78,10 +82,10 @@ export function ProfileSettings() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-lg">
             <Globe className="h-5 w-5" />
-            Sprache
+            {t("profile.language")}
           </CardTitle>
           <CardDescription>
-            Wählen Sie Ihre bevorzugte Sprache für die Benutzeroberfläche
+            {t("profile.languageDescription")}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -91,12 +95,12 @@ export function ProfileSettings() {
             disabled={updating === "language"}
           >
             <SelectTrigger className="w-[200px]">
-              <SelectValue placeholder="Sprache wählen" />
+              <SelectValue placeholder={t("profile.language")} />
             </SelectTrigger>
             <SelectContent>
               {languages.map((lang) => (
                 <SelectItem key={lang.value} value={lang.value}>
-                  {lang.label}
+                  {t(lang.labelKey)}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -109,10 +113,10 @@ export function ProfileSettings() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-lg">
             <Palette className="h-5 w-5" />
-            Farbschema
+            {t("profile.colorScheme")}
           </CardTitle>
           <CardDescription>
-            Wählen Sie ein Farbschema für die Anwendung
+            {t("profile.colorSchemeDescription")}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -138,7 +142,7 @@ export function ProfileSettings() {
                     />
                   ))}
                 </div>
-                <span className="text-sm font-medium">{scheme.label}</span>
+                <span className="text-sm font-medium">{t(scheme.labelKey)}</span>
                 {preferences?.color_scheme === scheme.value && (
                   <div className="absolute top-2 right-2">
                     <Check className="h-4 w-4 text-primary" />
@@ -155,10 +159,10 @@ export function ProfileSettings() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-lg">
             <Monitor className="h-5 w-5" />
-            Darstellungsmodus
+            {t("profile.themeMode")}
           </CardTitle>
           <CardDescription>
-            Wählen Sie zwischen hellem, dunklem oder System-Modus
+            {t("profile.themeModeDescription")}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -176,7 +180,7 @@ export function ProfileSettings() {
                   className="flex items-center gap-2 cursor-pointer"
                 >
                   <mode.icon className="h-4 w-4" />
-                  {mode.label}
+                  {t(mode.labelKey)}
                 </Label>
               </div>
             ))}

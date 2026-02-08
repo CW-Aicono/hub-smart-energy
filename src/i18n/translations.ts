@@ -1,0 +1,805 @@
+export type Language = "de" | "en" | "es" | "nl";
+
+export const translations = {
+  // Navigation
+  "nav.dashboard": {
+    de: "Dashboard",
+    en: "Dashboard",
+    es: "Panel de control",
+    nl: "Dashboard",
+  },
+  "nav.locations": {
+    de: "Standorte",
+    en: "Locations",
+    es: "Ubicaciones",
+    nl: "Locaties",
+  },
+  "nav.userManagement": {
+    de: "Benutzerverwaltung",
+    en: "User Management",
+    es: "Gestión de usuarios",
+    nl: "Gebruikersbeheer",
+  },
+  "nav.manageUsers": {
+    de: "Nutzer verwalten",
+    en: "Manage Users",
+    es: "Gestionar usuarios",
+    nl: "Gebruikers beheren",
+  },
+  "nav.rolesAndPermissions": {
+    de: "Rollen & Rechte",
+    en: "Roles & Permissions",
+    es: "Roles y permisos",
+    nl: "Rollen & Rechten",
+  },
+  "nav.settings": {
+    de: "Einstellungen",
+    en: "Settings",
+    es: "Configuración",
+    nl: "Instellingen",
+  },
+  "nav.myProfile": {
+    de: "Mein Profil",
+    en: "My Profile",
+    es: "Mi perfil",
+    nl: "Mijn profiel",
+  },
+  "nav.logout": {
+    de: "Abmelden",
+    en: "Log out",
+    es: "Cerrar sesión",
+    nl: "Uitloggen",
+  },
+
+  // Common
+  "common.loading": {
+    de: "Laden...",
+    en: "Loading...",
+    es: "Cargando...",
+    nl: "Laden...",
+  },
+  "common.save": {
+    de: "Speichern",
+    en: "Save",
+    es: "Guardar",
+    nl: "Opslaan",
+  },
+  "common.cancel": {
+    de: "Abbrechen",
+    en: "Cancel",
+    es: "Cancelar",
+    nl: "Annuleren",
+  },
+  "common.delete": {
+    de: "Löschen",
+    en: "Delete",
+    es: "Eliminar",
+    nl: "Verwijderen",
+  },
+  "common.edit": {
+    de: "Bearbeiten",
+    en: "Edit",
+    es: "Editar",
+    nl: "Bewerken",
+  },
+  "common.add": {
+    de: "Hinzufügen",
+    en: "Add",
+    es: "Añadir",
+    nl: "Toevoegen",
+  },
+  "common.search": {
+    de: "Suchen",
+    en: "Search",
+    es: "Buscar",
+    nl: "Zoeken",
+  },
+  "common.actions": {
+    de: "Aktionen",
+    en: "Actions",
+    es: "Acciones",
+    nl: "Acties",
+  },
+  "common.status": {
+    de: "Status",
+    en: "Status",
+    es: "Estado",
+    nl: "Status",
+  },
+  "common.active": {
+    de: "Aktiv",
+    en: "Active",
+    es: "Activo",
+    nl: "Actief",
+  },
+  "common.blocked": {
+    de: "Gesperrt",
+    en: "Blocked",
+    es: "Bloqueado",
+    nl: "Geblokkeerd",
+  },
+  "common.yes": {
+    de: "Ja",
+    en: "Yes",
+    es: "Sí",
+    nl: "Ja",
+  },
+  "common.no": {
+    de: "Nein",
+    en: "No",
+    es: "No",
+    nl: "Nee",
+  },
+  "common.error": {
+    de: "Fehler",
+    en: "Error",
+    es: "Error",
+    nl: "Fout",
+  },
+  "common.success": {
+    de: "Erfolg",
+    en: "Success",
+    es: "Éxito",
+    nl: "Succes",
+  },
+  "common.saved": {
+    de: "Gespeichert",
+    en: "Saved",
+    es: "Guardado",
+    nl: "Opgeslagen",
+  },
+
+  // Auth
+  "auth.login": {
+    de: "Anmelden",
+    en: "Log in",
+    es: "Iniciar sesión",
+    nl: "Inloggen",
+  },
+  "auth.register": {
+    de: "Registrieren",
+    en: "Register",
+    es: "Registrarse",
+    nl: "Registreren",
+  },
+  "auth.email": {
+    de: "E-Mail",
+    en: "Email",
+    es: "Correo electrónico",
+    nl: "E-mail",
+  },
+  "auth.password": {
+    de: "Passwort",
+    en: "Password",
+    es: "Contraseña",
+    nl: "Wachtwoord",
+  },
+  "auth.forgotPassword": {
+    de: "Passwort vergessen?",
+    en: "Forgot password?",
+    es: "¿Olvidaste tu contraseña?",
+    nl: "Wachtwoord vergeten?",
+  },
+
+  // Dashboard
+  "dashboard.title": {
+    de: "Dashboard",
+    en: "Dashboard",
+    es: "Panel de control",
+    nl: "Dashboard",
+  },
+  "dashboard.welcome": {
+    de: "Willkommen zurück",
+    en: "Welcome back",
+    es: "Bienvenido de nuevo",
+    nl: "Welkom terug",
+  },
+  "dashboard.overview": {
+    de: "Übersicht",
+    en: "Overview",
+    es: "Resumen",
+    nl: "Overzicht",
+  },
+  "dashboard.customizeWidgets": {
+    de: "Dashboard anpassen",
+    en: "Customize Dashboard",
+    es: "Personalizar panel",
+    nl: "Dashboard aanpassen",
+  },
+
+  // Locations
+  "locations.title": {
+    de: "Standorte",
+    en: "Locations",
+    es: "Ubicaciones",
+    nl: "Locaties",
+  },
+  "locations.subtitle": {
+    de: "Verwalten Sie Ihre Standorte, Gebäude und Bereiche",
+    en: "Manage your locations, buildings and areas",
+    es: "Gestione sus ubicaciones, edificios y áreas",
+    nl: "Beheer uw locaties, gebouwen en gebieden",
+  },
+  "locations.map": {
+    de: "Standortkarte",
+    en: "Location Map",
+    es: "Mapa de ubicaciones",
+    nl: "Locatiekaart",
+  },
+  "locations.mapDescription": {
+    de: "Übersicht aller Standorte auf der Karte",
+    en: "Overview of all locations on the map",
+    es: "Vista general de todas las ubicaciones en el mapa",
+    nl: "Overzicht van alle locaties op de kaart",
+  },
+  "locations.overview": {
+    de: "Standortübersicht",
+    en: "Location Overview",
+    es: "Resumen de ubicaciones",
+    nl: "Locatieoverzicht",
+  },
+  "locations.overviewDescription": {
+    de: "Hierarchische Ansicht aller Standorte und Gebäude",
+    en: "Hierarchical view of all locations and buildings",
+    es: "Vista jerárquica de todas las ubicaciones y edificios",
+    nl: "Hiërarchische weergave van alle locaties en gebouwen",
+  },
+  "locations.treeView": {
+    de: "Baumansicht",
+    en: "Tree View",
+    es: "Vista de árbol",
+    nl: "Boomweergave",
+  },
+  "locations.listView": {
+    de: "Liste",
+    en: "List",
+    es: "Lista",
+    nl: "Lijst",
+  },
+  "locations.noLocations": {
+    de: "Keine Standorte vorhanden",
+    en: "No locations available",
+    es: "No hay ubicaciones disponibles",
+    nl: "Geen locaties beschikbaar",
+  },
+  "locations.addLocation": {
+    de: "Standort anlegen",
+    en: "Add Location",
+    es: "Añadir ubicación",
+    nl: "Locatie toevoegen",
+  },
+  "locations.details": {
+    de: "Details zum ausgewählten Standort",
+    en: "Details of the selected location",
+    es: "Detalles de la ubicación seleccionada",
+    nl: "Details van de geselecteerde locatie",
+  },
+  "locations.type": {
+    de: "Typ",
+    en: "Type",
+    es: "Tipo",
+    nl: "Type",
+  },
+  "locations.address": {
+    de: "Adresse",
+    en: "Address",
+    es: "Dirección",
+    nl: "Adres",
+  },
+  "locations.city": {
+    de: "Stadt",
+    en: "City",
+    es: "Ciudad",
+    nl: "Stad",
+  },
+  "locations.coordinates": {
+    de: "Koordinaten",
+    en: "Coordinates",
+    es: "Coordenadas",
+    nl: "Coördinaten",
+  },
+  "locations.types.standort": {
+    de: "Standort",
+    en: "Location",
+    es: "Ubicación",
+    nl: "Locatie",
+  },
+  "locations.types.gebaeude": {
+    de: "Gebäude",
+    en: "Building",
+    es: "Edificio",
+    nl: "Gebouw",
+  },
+  "locations.types.bereich": {
+    de: "Bereich",
+    en: "Area",
+    es: "Área",
+    nl: "Gebied",
+  },
+
+  // Add Location Dialog
+  "addLocation.title": {
+    de: "Neuen Standort anlegen",
+    en: "Create New Location",
+    es: "Crear nueva ubicación",
+    nl: "Nieuwe locatie aanmaken",
+  },
+  "addLocation.description": {
+    de: "Fügen Sie einen neuen Standort, ein Gebäude oder einen Bereich hinzu",
+    en: "Add a new location, building or area",
+    es: "Añada una nueva ubicación, edificio o área",
+    nl: "Voeg een nieuwe locatie, gebouw of gebied toe",
+  },
+  "addLocation.basicInfo": {
+    de: "Grunddaten",
+    en: "Basic Info",
+    es: "Información básica",
+    nl: "Basisinformatie",
+  },
+  "addLocation.name": {
+    de: "Name",
+    en: "Name",
+    es: "Nombre",
+    nl: "Naam",
+  },
+  "addLocation.namePlaceholder": {
+    de: "z.B. Hauptsitz Berlin",
+    en: "e.g. Berlin Headquarters",
+    es: "p.ej. Sede principal Berlín",
+    nl: "bijv. Hoofdkantoor Berlijn",
+  },
+  "addLocation.parentLocation": {
+    de: "Übergeordneter Standort",
+    en: "Parent Location",
+    es: "Ubicación superior",
+    nl: "Bovenliggende locatie",
+  },
+  "addLocation.selectParent": {
+    de: "Übergeordneten Standort wählen",
+    en: "Select parent location",
+    es: "Seleccionar ubicación superior",
+    nl: "Selecteer bovenliggende locatie",
+  },
+  "addLocation.noParent": {
+    de: "Kein übergeordneter Standort",
+    en: "No parent location",
+    es: "Sin ubicación superior",
+    nl: "Geen bovenliggende locatie",
+  },
+  "addLocation.addressSection": {
+    de: "Adresse",
+    en: "Address",
+    es: "Dirección",
+    nl: "Adres",
+  },
+  "addLocation.street": {
+    de: "Straße und Hausnummer",
+    en: "Street and Number",
+    es: "Calle y número",
+    nl: "Straat en nummer",
+  },
+  "addLocation.postalCode": {
+    de: "PLZ",
+    en: "Postal Code",
+    es: "Código postal",
+    nl: "Postcode",
+  },
+  "addLocation.country": {
+    de: "Land",
+    en: "Country",
+    es: "País",
+    nl: "Land",
+  },
+  "addLocation.contactSection": {
+    de: "Ansprechpartner",
+    en: "Contact Person",
+    es: "Persona de contacto",
+    nl: "Contactpersoon",
+  },
+  "addLocation.contactName": {
+    de: "Name",
+    en: "Name",
+    es: "Nombre",
+    nl: "Naam",
+  },
+  "addLocation.contactEmail": {
+    de: "E-Mail",
+    en: "Email",
+    es: "Correo electrónico",
+    nl: "E-mail",
+  },
+  "addLocation.contactPhone": {
+    de: "Telefon",
+    en: "Phone",
+    es: "Teléfono",
+    nl: "Telefoon",
+  },
+  "addLocation.energySources": {
+    de: "Energiequellen",
+    en: "Energy Sources",
+    es: "Fuentes de energía",
+    nl: "Energiebronnen",
+  },
+  "addLocation.showOnMap": {
+    de: "Auf Karte anzeigen",
+    en: "Show on Map",
+    es: "Mostrar en el mapa",
+    nl: "Tonen op kaart",
+  },
+  "addLocation.showOnMapDescription": {
+    de: "Dieser Standort wird auf der Übersichtskarte angezeigt",
+    en: "This location will be shown on the overview map",
+    es: "Esta ubicación se mostrará en el mapa general",
+    nl: "Deze locatie wordt op de overzichtskaart getoond",
+  },
+  "addLocation.creating": {
+    de: "Erstelle...",
+    en: "Creating...",
+    es: "Creando...",
+    nl: "Aanmaken...",
+  },
+  "addLocation.success": {
+    de: "Standort erfolgreich erstellt",
+    en: "Location created successfully",
+    es: "Ubicación creada con éxito",
+    nl: "Locatie succesvol aangemaakt",
+  },
+  "addLocation.error": {
+    de: "Standort konnte nicht erstellt werden",
+    en: "Failed to create location",
+    es: "No se pudo crear la ubicación",
+    nl: "Kon locatie niet aanmaken",
+  },
+
+  // Energy Sources
+  "energy.electricity": {
+    de: "Strom",
+    en: "Electricity",
+    es: "Electricidad",
+    nl: "Elektriciteit",
+  },
+  "energy.gas": {
+    de: "Gas",
+    en: "Gas",
+    es: "Gas",
+    nl: "Gas",
+  },
+  "energy.districtHeating": {
+    de: "Fernwärme",
+    en: "District Heating",
+    es: "Calefacción urbana",
+    nl: "Stadsverwarming",
+  },
+  "energy.solar": {
+    de: "Solar",
+    en: "Solar",
+    es: "Solar",
+    nl: "Zonne-energie",
+  },
+  "energy.heatPump": {
+    de: "Wärmepumpe",
+    en: "Heat Pump",
+    es: "Bomba de calor",
+    nl: "Warmtepomp",
+  },
+  "energy.oil": {
+    de: "Heizöl",
+    en: "Heating Oil",
+    es: "Gasóleo",
+    nl: "Stookolie",
+  },
+
+  // User Management
+  "users.title": {
+    de: "Admin-Bereich",
+    en: "Admin Area",
+    es: "Área de administración",
+    nl: "Beheergebied",
+  },
+  "users.subtitle": {
+    de: "Nutzer, Rollen und Einladungen verwalten",
+    en: "Manage users, roles and invitations",
+    es: "Gestionar usuarios, roles e invitaciones",
+    nl: "Beheer gebruikers, rollen en uitnodigingen",
+  },
+  "users.management": {
+    de: "Benutzerverwaltung",
+    en: "User Management",
+    es: "Gestión de usuarios",
+    nl: "Gebruikersbeheer",
+  },
+  "users.noUsers": {
+    de: "Noch keine Benutzer vorhanden.",
+    en: "No users yet.",
+    es: "Aún no hay usuarios.",
+    nl: "Nog geen gebruikers.",
+  },
+  "users.user": {
+    de: "Benutzer",
+    en: "User",
+    es: "Usuario",
+    nl: "Gebruiker",
+  },
+  "users.company": {
+    de: "Firma",
+    en: "Company",
+    es: "Empresa",
+    nl: "Bedrijf",
+  },
+  "users.role": {
+    de: "Rolle",
+    en: "Role",
+    es: "Rol",
+    nl: "Rol",
+  },
+  "users.admin": {
+    de: "Administrator",
+    en: "Administrator",
+    es: "Administrador",
+    nl: "Beheerder",
+  },
+  "users.userRole": {
+    de: "Benutzer",
+    en: "User",
+    es: "Usuario",
+    nl: "Gebruiker",
+  },
+  "users.block": {
+    de: "Sperren",
+    en: "Block",
+    es: "Bloquear",
+    nl: "Blokkeren",
+  },
+  "users.unblock": {
+    de: "Entsperren",
+    en: "Unblock",
+    es: "Desbloquear",
+    nl: "Deblokkeren",
+  },
+  "users.inviteUser": {
+    de: "Benutzer einladen",
+    en: "Invite User",
+    es: "Invitar usuario",
+    nl: "Gebruiker uitnodigen",
+  },
+  "users.unknown": {
+    de: "Unbekannt",
+    en: "Unknown",
+    es: "Desconocido",
+    nl: "Onbekend",
+  },
+  "users.roleUpdated": {
+    de: "Rolle aktualisiert",
+    en: "Role updated",
+    es: "Rol actualizado",
+    nl: "Rol bijgewerkt",
+  },
+  "users.roleUpdateError": {
+    de: "Rolle konnte nicht aktualisiert werden.",
+    en: "Failed to update role.",
+    es: "No se pudo actualizar el rol.",
+    nl: "Kon rol niet bijwerken.",
+  },
+  "users.userBlocked": {
+    de: "Benutzer gesperrt",
+    en: "User blocked",
+    es: "Usuario bloqueado",
+    nl: "Gebruiker geblokkeerd",
+  },
+  "users.userUnblocked": {
+    de: "Benutzer entsperrt",
+    en: "User unblocked",
+    es: "Usuario desbloqueado",
+    nl: "Gebruiker gedeblokkeerd",
+  },
+  "users.userUpdateError": {
+    de: "Benutzer konnte nicht aktualisiert werden.",
+    en: "Failed to update user.",
+    es: "No se pudo actualizar el usuario.",
+    nl: "Kon gebruiker niet bijwerken.",
+  },
+
+  // Profile Settings
+  "profile.title": {
+    de: "Mein Profil",
+    en: "My Profile",
+    es: "Mi perfil",
+    nl: "Mijn profiel",
+  },
+  "profile.subtitle": {
+    de: "Verwalten Sie Ihre persönlichen Einstellungen",
+    en: "Manage your personal settings",
+    es: "Gestione su configuración personal",
+    nl: "Beheer uw persoonlijke instellingen",
+  },
+  "profile.accountInfo": {
+    de: "Kontoinformationen",
+    en: "Account Information",
+    es: "Información de la cuenta",
+    nl: "Accountinformatie",
+  },
+  "profile.accountInfoDescription": {
+    de: "Ihre grundlegenden Kontodaten",
+    en: "Your basic account data",
+    es: "Sus datos básicos de cuenta",
+    nl: "Uw basisaccountgegevens",
+  },
+  "profile.memberSince": {
+    de: "Mitglied seit",
+    en: "Member since",
+    es: "Miembro desde",
+    nl: "Lid sinds",
+  },
+  "profile.language": {
+    de: "Sprache",
+    en: "Language",
+    es: "Idioma",
+    nl: "Taal",
+  },
+  "profile.languageDescription": {
+    de: "Wählen Sie Ihre bevorzugte Sprache für die Benutzeroberfläche",
+    en: "Choose your preferred language for the user interface",
+    es: "Elija su idioma preferido para la interfaz de usuario",
+    nl: "Kies uw voorkeurstaal voor de gebruikersinterface",
+  },
+  "profile.colorScheme": {
+    de: "Farbschema",
+    en: "Color Scheme",
+    es: "Esquema de color",
+    nl: "Kleurenschema",
+  },
+  "profile.colorSchemeDescription": {
+    de: "Wählen Sie ein Farbschema für die Anwendung",
+    en: "Choose a color scheme for the application",
+    es: "Elija un esquema de color para la aplicación",
+    nl: "Kies een kleurenschema voor de applicatie",
+  },
+  "profile.themeMode": {
+    de: "Darstellungsmodus",
+    en: "Display Mode",
+    es: "Modo de visualización",
+    nl: "Weergavemodus",
+  },
+  "profile.themeModeDescription": {
+    de: "Wählen Sie zwischen hellem, dunklem oder System-Modus",
+    en: "Choose between light, dark or system mode",
+    es: "Elija entre modo claro, oscuro o sistema",
+    nl: "Kies tussen lichte, donkere of systeemmodus",
+  },
+  "profile.light": {
+    de: "Hell",
+    en: "Light",
+    es: "Claro",
+    nl: "Licht",
+  },
+  "profile.dark": {
+    de: "Dunkel",
+    en: "Dark",
+    es: "Oscuro",
+    nl: "Donker",
+  },
+  "profile.system": {
+    de: "System",
+    en: "System",
+    es: "Sistema",
+    nl: "Systeem",
+  },
+  "profile.settingSaved": {
+    de: "Ihre Einstellung wurde aktualisiert.",
+    en: "Your setting has been updated.",
+    es: "Su configuración ha sido actualizada.",
+    nl: "Uw instelling is bijgewerkt.",
+  },
+  "profile.settingError": {
+    de: "Einstellung konnte nicht gespeichert werden.",
+    en: "Failed to save setting.",
+    es: "No se pudo guardar la configuración.",
+    nl: "Kon instelling niet opslaan.",
+  },
+
+  // Color Schemes
+  "colorScheme.default": {
+    de: "Standard",
+    en: "Default",
+    es: "Predeterminado",
+    nl: "Standaard",
+  },
+  "colorScheme.ocean": {
+    de: "Ozean",
+    en: "Ocean",
+    es: "Océano",
+    nl: "Oceaan",
+  },
+  "colorScheme.forest": {
+    de: "Wald",
+    en: "Forest",
+    es: "Bosque",
+    nl: "Bos",
+  },
+  "colorScheme.sunset": {
+    de: "Sonnenuntergang",
+    en: "Sunset",
+    es: "Atardecer",
+    nl: "Zonsondergang",
+  },
+  "colorScheme.lavender": {
+    de: "Lavendel",
+    en: "Lavender",
+    es: "Lavanda",
+    nl: "Lavendel",
+  },
+  "colorScheme.slate": {
+    de: "Schiefer",
+    en: "Slate",
+    es: "Pizarra",
+    nl: "Leisteen",
+  },
+  "colorScheme.rose": {
+    de: "Rose",
+    en: "Rose",
+    es: "Rosa",
+    nl: "Roos",
+  },
+  "colorScheme.amber": {
+    de: "Bernstein",
+    en: "Amber",
+    es: "Ámbar",
+    nl: "Amber",
+  },
+
+  // Languages
+  "language.de": {
+    de: "Deutsch",
+    en: "German",
+    es: "Alemán",
+    nl: "Duits",
+  },
+  "language.en": {
+    de: "Englisch",
+    en: "English",
+    es: "Inglés",
+    nl: "Engels",
+  },
+  "language.es": {
+    de: "Spanisch",
+    en: "Spanish",
+    es: "Español",
+    nl: "Spaans",
+  },
+  "language.nl": {
+    de: "Niederländisch",
+    en: "Dutch",
+    es: "Holandés",
+    nl: "Nederlands",
+  },
+
+  // Settings
+  "settings.title": {
+    de: "Einstellungen",
+    en: "Settings",
+    es: "Configuración",
+    nl: "Instellingen",
+  },
+  "settings.subtitle": {
+    de: "Anwendungseinstellungen und Branding verwalten",
+    en: "Manage application settings and branding",
+    es: "Gestionar configuración de la aplicación y marca",
+    nl: "Beheer applicatie-instellingen en branding",
+  },
+
+  // Roles
+  "roles.title": {
+    de: "Rollen & Rechte",
+    en: "Roles & Permissions",
+    es: "Roles y permisos",
+    nl: "Rollen & Rechten",
+  },
+  "roles.subtitle": {
+    de: "Verwalten Sie Benutzerrollen und deren Berechtigungen",
+    en: "Manage user roles and their permissions",
+    es: "Gestione los roles de usuario y sus permisos",
+    nl: "Beheer gebruikersrollen en hun rechten",
+  },
+} as const;
+
+export type TranslationKey = keyof typeof translations;
