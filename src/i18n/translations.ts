@@ -906,6 +906,12 @@ export const translations = {
     es: "Expira en {days} días",
     nl: "Verloopt over {days} dagen",
   },
+  "users.cannotDemoteLastAdmin": {
+    de: "Die Rolle des letzten Administrators kann nicht geändert werden. Es muss immer mindestens ein Administrator vorhanden sein.",
+    en: "Cannot change the role of the last administrator. There must always be at least one administrator.",
+    es: "No se puede cambiar el rol del último administrador. Siempre debe haber al menos un administrador.",
+    nl: "Kan de rol van de laatste beheerder niet wijzigen. Er moet altijd minimaal één beheerder zijn.",
+  },
 
   // Profile Settings
   "profile.title": {
