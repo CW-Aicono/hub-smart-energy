@@ -229,20 +229,6 @@ const Integrations = () => {
     return config?.connection_status === "connected" ? "connected" : "disconnected";
   };
 
-    if (error) {
-      toast({
-        title: "Fehler",
-        description: "Die Integration konnte nicht gelöscht werden.",
-        variant: "destructive",
-      });
-    } else {
-      toast({
-        title: "Integration gelöscht",
-        description: "Die Integration wurde erfolgreich gelöscht.",
-      });
-    }
-  };
-
   const getCategoryName = (slug: string) => {
     return categories.find(c => c.slug === slug)?.name || slug;
   };
