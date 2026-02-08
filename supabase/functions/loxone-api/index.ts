@@ -117,13 +117,14 @@ serve(async (req) => {
   }
 
   try {
-    const { locationIntegrationId, action } = await req.json();
+    const requestBody = await req.json();
+    const { locationIntegrationId, action, sensorName } = requestBody;
 
     if (!locationIntegrationId) {
       throw new Error("Location Integration ID ist erforderlich");
     }
 
-    console.log(`Loxone API request: action=${action}, locationIntegrationId=${locationIntegrationId}`);
+    console.log(`Loxone API request: action=${action}, locationIntegrationId=${locationIntegrationId}, sensorName=${sensorName || "N/A"}`);
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -441,6 +442,124 @@ serve(async (req) => {
 
       return new Response(
         JSON.stringify({ success: true, sensors }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // New action: get all states for a specific sensor
+    if (action === "getSensorDetails") {
+      if (!sensorName) {
+        throw new Error("sensorName ist erforderlich für getSensorDetails");
+      }
+      
+      console.log(`Searching for sensor: "${sensorName}"`);
+      
+      const structureUrl = `${baseUrl}/data/LoxAPP3.json`;
+      console.log(`Fetching structure: ${structureUrl}`);
+
+      const structureResponse = await fetch(structureUrl, {
+        method: "GET",
+        headers: { Authorization: authHeader },
+      });
+
+      if (!structureResponse.ok) {
+        throw new Error(`Struktur konnte nicht geladen werden: ${structureResponse.status}`);
+      }
+
+      const structure: LoxoneStructure = await structureResponse.json();
+      const controls = structure.controls || {};
+      
+      // Find all sensors matching the name
+      const matchingControls: Array<{ uuid: string; control: LoxoneControl }> = [];
+      
+      for (const [uuid, control] of Object.entries(controls)) {
+        if (control.name && control.name.toLowerCase().includes(sensorName.toLowerCase())) {
+          matchingControls.push({ uuid, control });
+        }
+      }
+      
+      console.log(`Found ${matchingControls.length} sensors matching "${sensorName}"`);
+      
+      if (matchingControls.length === 0) {
+        // List all sensor names for debugging
+        const allNames = Object.values(controls).map(c => c.name).filter(Boolean);
+        console.log(`Available sensors: ${allNames.join(", ")}`);
+        throw new Error(`Sensor "${sensorName}" nicht gefunden. Verfügbar: ${allNames.slice(0, 10).join(", ")}...`);
+      }
+      
+      // Fetch all state values for all matching controls
+      const results = [];
+      
+      for (const { uuid: targetUuid, control: targetControl } of matchingControls) {
+        console.log(`Found sensor: ${targetControl.name} (${targetControl.type})`);
+        console.log(`Available states: ${JSON.stringify(Object.keys(targetControl.states || {}))}`);
+        
+        const stateValues: Record<string, { uuid: string; value: number | string | null }> = {};
+        const states = targetControl.states || {};
+        
+        for (const [stateName, stateUuid] of Object.entries(states)) {
+          const value = await fetchStateValue(baseUrl, authHeader, stateUuid);
+          stateValues[stateName] = { uuid: stateUuid, value };
+          console.log(`State ${stateName}: ${value}`);
+        }
+        
+        results.push({
+          uuid: targetUuid,
+          name: targetControl.name,
+          type: targetControl.type,
+          states: stateValues,
+        });
+      }
+      
+      return new Response(
+        JSON.stringify({ 
+          success: true, 
+          sensors: results,
+          count: results.length,
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // New action: list all sensor names and types
+    if (action === "listAllSensors") {
+      const structureUrl = `${baseUrl}/data/LoxAPP3.json`;
+      console.log(`Fetching structure for sensor list: ${structureUrl}`);
+
+      const structureResponse = await fetch(structureUrl, {
+        method: "GET",
+        headers: { Authorization: authHeader },
+      });
+
+      if (!structureResponse.ok) {
+        throw new Error(`Struktur konnte nicht geladen werden: ${structureResponse.status}`);
+      }
+
+      const structure: LoxoneStructure = await structureResponse.json();
+      const controls = structure.controls || {};
+      
+      const sensorList = Object.entries(controls).map(([uuid, control]) => ({
+        uuid,
+        name: control.name,
+        type: control.type,
+        stateNames: Object.keys(control.states || {}),
+      }));
+      
+      // Group by type
+      const typeGroups: Record<string, string[]> = {};
+      for (const sensor of sensorList) {
+        const type = sensor.type || "unknown";
+        if (!typeGroups[type]) typeGroups[type] = [];
+        typeGroups[type].push(sensor.name);
+      }
+      
+      return new Response(
+        JSON.stringify({ 
+          success: true, 
+          sensors: sensorList,
+          count: sensorList.length,
+          typeGroups,
+        }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
