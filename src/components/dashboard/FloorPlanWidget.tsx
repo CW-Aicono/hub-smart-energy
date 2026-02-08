@@ -141,10 +141,17 @@ const FloorPlanWidget = ({ locationId }: FloorPlanWidgetProps) => {
     }
   }, [positions, locationIntegrations]);
 
-  // Auto-fetch values when positions change
+  // Auto-fetch values when positions change and set up interval
   useEffect(() => {
     if (positions.length > 0) {
       fetchSensorValues();
+      
+      // Auto-refresh every 300 seconds (5 minutes)
+      const interval = setInterval(() => {
+        fetchSensorValues();
+      }, 300000);
+      
+      return () => clearInterval(interval);
     }
   }, [positions, fetchSensorValues]);
 
