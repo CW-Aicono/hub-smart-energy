@@ -14,6 +14,80 @@ export type Database = {
   }
   public: {
     Tables: {
+      custom_role_permissions: {
+        Row: {
+          created_at: string
+          custom_role_id: string
+          id: string
+          permission_id: string
+        }
+        Insert: {
+          created_at?: string
+          custom_role_id: string
+          id?: string
+          permission_id: string
+        }
+        Update: {
+          created_at?: string
+          custom_role_id?: string
+          id?: string
+          permission_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "custom_role_permissions_custom_role_id_fkey"
+            columns: ["custom_role_id"]
+            isOneToOne: false
+            referencedRelation: "custom_roles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "custom_role_permissions_permission_id_fkey"
+            columns: ["permission_id"]
+            isOneToOne: false
+            referencedRelation: "permissions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      custom_roles: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          is_system_role: boolean
+          name: string
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_system_role?: boolean
+          name: string
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_system_role?: boolean
+          name?: string
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "custom_roles_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       dashboard_widgets: {
         Row: {
           config: Json | null

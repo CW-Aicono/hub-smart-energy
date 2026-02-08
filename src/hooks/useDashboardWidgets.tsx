@@ -38,24 +38,27 @@ export function useDashboardWidgets() {
       console.error("Error fetching widgets:", error);
       setWidgets([]);
     } else if (data && data.length > 0) {
-      // Check if weather widget exists, if not add it for existing users
-      const hasWeatherWidget = data.some(w => w.widget_type === "weather");
-      if (!hasWeatherWidget) {
+      // Check for missing default widgets and add them for existing users
+      const existingTypes = new Set(data.map(w => w.widget_type));
+      const missingWidgets = DEFAULT_WIDGETS.filter(dw => !existingTypes.has(dw.widget_type));
+      
+      if (missingWidgets.length > 0) {
         const maxPosition = Math.max(...data.map(w => w.position), 0);
-        const { data: newWidget } = await supabase
-          .from("dashboard_widgets")
-          .insert({
-            user_id: user.id,
-            widget_type: "weather",
-            position: maxPosition + 1,
-            is_visible: true,
-            config: {},
-          })
-          .select()
-          .single();
+        const widgetsToInsert = missingWidgets.map((w, idx) => ({
+          user_id: user.id,
+          widget_type: w.widget_type,
+          position: maxPosition + idx + 1,
+          is_visible: w.is_visible,
+          config: {},
+        }));
         
-        if (newWidget) {
-          setWidgets([...data, newWidget] as DashboardWidget[]);
+        const { data: newWidgets } = await supabase
+          .from("dashboard_widgets")
+          .insert(widgetsToInsert)
+          .select();
+        
+        if (newWidgets) {
+          setWidgets([...data, ...newWidgets] as DashboardWidget[]);
         } else {
           setWidgets(data as DashboardWidget[]);
         }
