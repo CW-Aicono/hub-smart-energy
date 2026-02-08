@@ -43,6 +43,7 @@ const ENERGY_SOURCES = [
   { id: "solar", labelKey: "energy.solar" },
   { id: "wasser", labelKey: "energy.water" },
   { id: "oel", labelKey: "energy.oil" },
+  { id: "pellets", labelKey: "energy.pellets" },
 ] as const;
 
 const USAGE_TYPES: { value: LocationUsageType; labelKey: string }[] = [

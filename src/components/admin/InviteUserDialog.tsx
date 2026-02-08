@@ -40,12 +40,47 @@ const InviteUserDialog = () => {
         description: "Einladung konnte nicht erstellt werden.",
         variant: "destructive",
       });
-    } else {
-      const link = `${window.location.origin}/auth?invite=${data.token}`;
-      setInviteLink(link);
+      setLoading(false);
+      return;
+    }
+
+    const link = `${window.location.origin}/auth?invite=${data.token}`;
+    setInviteLink(link);
+
+    // Send invitation email
+    try {
+      const { data: inviterProfile } = await supabase
+        .from("profiles")
+        .select("email")
+        .eq("user_id", user.id)
+        .single();
+
+      const { error: emailError } = await supabase.functions.invoke("send-invitation-email", {
+        body: {
+          email,
+          inviteLink: link,
+          invitedByEmail: inviterProfile?.email || user.email,
+          role,
+        },
+      });
+
+      if (emailError) {
+        console.error("Failed to send invitation email:", emailError);
+        toast({
+          title: "Einladung erstellt",
+          description: "Der Link wurde generiert, aber die E-Mail konnte nicht gesendet werden.",
+        });
+      } else {
+        toast({
+          title: "Einladung gesendet",
+          description: `Eine Einladungsmail wurde an ${email} gesendet.`,
+        });
+      }
+    } catch (emailErr) {
+      console.error("Error sending invitation email:", emailErr);
       toast({
         title: "Einladung erstellt",
-        description: "Der Einladungslink wurde generiert.",
+        description: "Der Link wurde generiert, aber die E-Mail konnte nicht gesendet werden.",
       });
     }
 
