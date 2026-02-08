@@ -5,7 +5,7 @@ import { Location } from "@/hooks/useLocations";
 import { Building2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import "leaflet/dist/leaflet.css";
+// CSS is now imported globally in App.tsx
 
 // Fix for default marker icons in Leaflet with bundlers
 const defaultIcon = new Icon({

@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
 import { TenantProvider } from "@/hooks/useTenant";
 import { TranslationProvider } from "@/hooks/useTranslation";
+import { ThemeProvider } from "@/hooks/useTheme";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import Admin from "./pages/Admin";
@@ -16,6 +17,9 @@ import Profile from "./pages/Profile";
 import Help from "./pages/Help";
 import NotFound from "./pages/NotFound";
 
+// Import Leaflet CSS globally
+import "leaflet/dist/leaflet.css";
+
 const queryClient = new QueryClient();
 
 const App = () => (
@@ -23,23 +27,25 @@ const App = () => (
     <AuthProvider>
       <TenantProvider>
         <TranslationProvider>
-          <TooltipProvider>
-            <Toaster />
-            <Sonner />
-            <BrowserRouter>
-              <Routes>
-                <Route path="/" element={<Index />} />
-                <Route path="/auth" element={<Auth />} />
-                <Route path="/admin" element={<Admin />} />
-                <Route path="/settings" element={<Settings />} />
-                <Route path="/roles" element={<Roles />} />
-                <Route path="/locations" element={<Locations />} />
-                <Route path="/profile" element={<Profile />} />
-                <Route path="/help" element={<Help />} />
-                <Route path="*" element={<NotFound />} />
-              </Routes>
-            </BrowserRouter>
-          </TooltipProvider>
+          <ThemeProvider>
+            <TooltipProvider>
+              <Toaster />
+              <Sonner />
+              <BrowserRouter>
+                <Routes>
+                  <Route path="/" element={<Index />} />
+                  <Route path="/auth" element={<Auth />} />
+                  <Route path="/admin" element={<Admin />} />
+                  <Route path="/settings" element={<Settings />} />
+                  <Route path="/roles" element={<Roles />} />
+                  <Route path="/locations" element={<Locations />} />
+                  <Route path="/profile" element={<Profile />} />
+                  <Route path="/help" element={<Help />} />
+                  <Route path="*" element={<NotFound />} />
+                </Routes>
+              </BrowserRouter>
+            </TooltipProvider>
+          </ThemeProvider>
         </TranslationProvider>
       </TenantProvider>
     </AuthProvider>
