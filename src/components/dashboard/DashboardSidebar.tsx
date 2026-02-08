@@ -2,7 +2,7 @@ import { NavLink, useLocation } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
 import { Button } from "@/components/ui/button";
-import { LayoutDashboard, LogOut, Shield, Settings, Users, ChevronDown } from "lucide-react";
+import { LayoutDashboard, LogOut, Shield, Settings, Users, ChevronDown, MapPin } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TenantLogo } from "@/components/tenant/TenantLogo";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -20,8 +20,9 @@ const DashboardSidebar = () => {
 
   const navItems = [
     { to: "/", icon: LayoutDashboard, label: "Dashboard" },
+    { to: "/locations", icon: MapPin, label: "Standorte" },
     ...(isAdmin ? [
-      { to: "/admin", icon: Shield, label: "Admin" },
+      { to: "/admin", icon: Shield, label: "Benutzerverwaltung" },
       { to: "/roles", icon: Users, label: "Rollen & Rechte" },
       { to: "/settings", icon: Settings, label: "Einstellungen" },
     ] : []),
