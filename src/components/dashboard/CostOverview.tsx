@@ -2,6 +2,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { costOverview } from "@/data/mockData";
 import { Euro, TrendingDown, TrendingUp, ArrowDownRight } from "lucide-react";
 
+interface CostOverviewProps {
+  locationId: string | null;
+}
+
 const kpis = [
   {
     label: "Aktuelle Kosten",
@@ -24,7 +28,8 @@ const kpis = [
   },
 ];
 
-const CostOverview = () => {
+const CostOverview = ({ locationId }: CostOverviewProps) => {
+  // In a real implementation, filter data by locationId
   return (
     <div className="grid gap-4 md:grid-cols-3">
       {kpis.map((kpi) => (
