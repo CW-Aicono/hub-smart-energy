@@ -36,9 +36,9 @@ const typeLabels: Record<LocationType, string> = {
 };
 
 const typeColors: Record<LocationType, string> = {
-  einzelgebaeude: "bg-primary/10 text-primary border-primary/20",
-  gebaeudekomplex: "bg-accent/10 text-accent-foreground border-accent/20",
-  sonstiges: "bg-muted text-muted-foreground border-muted-foreground/20",
+  einzelgebaeude: "bg-blue-100 text-blue-800 border-blue-200",
+  gebaeudekomplex: "bg-purple-100 text-purple-800 border-purple-200",
+  sonstiges: "bg-slate-100 text-slate-700 border-slate-200",
 };
 
 function LocationNode({ location, level, selectedId, onSelect, onRefresh, isAdmin }: LocationNodeProps) {
