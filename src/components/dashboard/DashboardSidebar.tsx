@@ -3,7 +3,7 @@ import { NavLink, useLocation } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
 import { Button } from "@/components/ui/button";
-import { LayoutDashboard, LogOut, Shield, Settings, Users, ChevronDown, MapPin, PanelLeftClose, PanelLeft, UserCircle } from "lucide-react";
+import { LayoutDashboard, LogOut, Shield, Settings, Users, ChevronDown, ChevronRight, MapPin, PanelLeftClose, PanelLeft, UserCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TenantLogo } from "@/components/tenant/TenantLogo";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -18,8 +18,20 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 
 const SIDEBAR_COLLAPSED_KEY = "sidebar-collapsed";
+
+interface NavItem {
+  to: string;
+  icon: typeof LayoutDashboard;
+  label: string;
+  children?: { to: string; icon: typeof Users; label: string }[];
+}
 
 const DashboardSidebar = () => {
   const { signOut, user } = useAuth();
@@ -31,16 +43,37 @@ const DashboardSidebar = () => {
     return stored === "true";
   });
 
+  const [openMenus, setOpenMenus] = useState<string[]>([]);
+
   useEffect(() => {
     localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(collapsed));
   }, [collapsed]);
 
-  const navItems = [
+  // Auto-open parent menu if child is active
+  useEffect(() => {
+    if (location.pathname === "/admin" || location.pathname === "/roles") {
+      setOpenMenus((prev) => prev.includes("/admin") ? prev : [...prev, "/admin"]);
+    }
+  }, [location.pathname]);
+
+  const toggleMenu = (to: string) => {
+    setOpenMenus((prev) =>
+      prev.includes(to) ? prev.filter((m) => m !== to) : [...prev, to]
+    );
+  };
+
+  const navItems: NavItem[] = [
     { to: "/", icon: LayoutDashboard, label: "Dashboard" },
     { to: "/locations", icon: MapPin, label: "Standorte" },
     ...(isAdmin ? [
-      { to: "/admin", icon: Shield, label: "Benutzerverwaltung" },
-      { to: "/roles", icon: Users, label: "Rollen & Rechte" },
+      { 
+        to: "/admin", 
+        icon: Shield, 
+        label: "Benutzerverwaltung",
+        children: [
+          { to: "/roles", icon: Users, label: "Rollen & Rechte" },
+        ]
+      },
       { to: "/settings", icon: Settings, label: "Einstellungen" },
     ] : []),
   ];
@@ -48,6 +81,143 @@ const DashboardSidebar = () => {
   const userInitials = user?.email
     ? user.email.substring(0, 2).toUpperCase()
     : "??";
+
+  const renderNavItem = (item: NavItem) => {
+    const isActive = location.pathname === item.to;
+    const hasChildren = item.children && item.children.length > 0;
+    const isOpen = openMenus.includes(item.to);
+    const isChildActive = hasChildren && item.children?.some((child) => location.pathname === child.to);
+
+    if (hasChildren && !collapsed) {
+      return (
+        <Collapsible key={item.to} open={isOpen} onOpenChange={() => toggleMenu(item.to)}>
+          <CollapsibleTrigger asChild>
+            <button
+              className={cn(
+                "flex items-center w-full rounded-lg text-sm font-medium transition-colors gap-3 px-3 py-2.5",
+                isActive || isChildActive
+                  ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                  : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+              )}
+            >
+              <item.icon className="h-4 w-4 shrink-0" />
+              <span className="flex-1 text-left">{item.label}</span>
+              <ChevronRight className={cn("h-4 w-4 transition-transform", isOpen && "rotate-90")} />
+            </button>
+          </CollapsibleTrigger>
+          <CollapsibleContent className="pl-4 mt-1 space-y-1">
+            {/* Parent link */}
+            <NavLink
+              to={item.to}
+              className={cn(
+                "flex items-center rounded-lg text-sm font-medium transition-colors gap-3 px-3 py-2",
+                isActive
+                  ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                  : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+              )}
+            >
+              <Users className="h-4 w-4 shrink-0" />
+              <span>Nutzer verwalten</span>
+            </NavLink>
+            {/* Children */}
+            {item.children?.map((child) => {
+              const isChildItemActive = location.pathname === child.to;
+              return (
+                <NavLink
+                  key={child.to}
+                  to={child.to}
+                  className={cn(
+                    "flex items-center rounded-lg text-sm font-medium transition-colors gap-3 px-3 py-2",
+                    isChildItemActive
+                      ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                      : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+                  )}
+                >
+                  <child.icon className="h-4 w-4 shrink-0" />
+                  <span>{child.label}</span>
+                </NavLink>
+              );
+            })}
+          </CollapsibleContent>
+        </Collapsible>
+      );
+    }
+
+    // For collapsed sidebar with children, show dropdown
+    if (hasChildren && collapsed) {
+      return (
+        <DropdownMenu key={item.to}>
+          <Tooltip delayDuration={0}>
+            <TooltipTrigger asChild>
+              <DropdownMenuTrigger asChild>
+                <button
+                  className={cn(
+                    "flex items-center rounded-lg text-sm font-medium transition-colors justify-center p-2.5 w-full",
+                    isActive || isChildActive
+                      ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                      : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+                  )}
+                >
+                  <item.icon className="h-4 w-4 shrink-0" />
+                </button>
+              </DropdownMenuTrigger>
+            </TooltipTrigger>
+            <TooltipContent side="right" className="bg-popover">
+              {item.label}
+            </TooltipContent>
+          </Tooltip>
+          <DropdownMenuContent side="right" align="start" className="w-48 bg-popover">
+            <DropdownMenuItem asChild>
+              <NavLink to={item.to} className="flex items-center gap-2 cursor-pointer">
+                <Users className="h-4 w-4" />
+                Nutzer verwalten
+              </NavLink>
+            </DropdownMenuItem>
+            {item.children?.map((child) => (
+              <DropdownMenuItem key={child.to} asChild>
+                <NavLink to={child.to} className="flex items-center gap-2 cursor-pointer">
+                  <child.icon className="h-4 w-4" />
+                  {child.label}
+                </NavLink>
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      );
+    }
+
+    // Regular nav item
+    const linkContent = (
+      <NavLink
+        to={item.to}
+        className={cn(
+          "flex items-center rounded-lg text-sm font-medium transition-colors",
+          collapsed ? "justify-center p-2.5" : "gap-3 px-3 py-2.5",
+          isActive
+            ? "bg-sidebar-accent text-sidebar-accent-foreground"
+            : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+        )}
+      >
+        <item.icon className="h-4 w-4 shrink-0" />
+        {!collapsed && <span>{item.label}</span>}
+      </NavLink>
+    );
+
+    if (collapsed) {
+      return (
+        <Tooltip key={item.to} delayDuration={0}>
+          <TooltipTrigger asChild>
+            {linkContent}
+          </TooltipTrigger>
+          <TooltipContent side="right" className="bg-popover">
+            {item.label}
+          </TooltipContent>
+        </Tooltip>
+      );
+    }
+
+    return <div key={item.to}>{linkContent}</div>;
+  };
 
   return (
     <aside 
@@ -81,40 +251,7 @@ const DashboardSidebar = () => {
         "flex-1 space-y-1 overflow-y-auto",
         collapsed ? "p-2" : "p-4"
       )}>
-        {navItems.map((item) => {
-          const isActive = location.pathname === item.to;
-          const linkContent = (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              className={cn(
-                "flex items-center rounded-lg text-sm font-medium transition-colors",
-                collapsed ? "justify-center p-2.5" : "gap-3 px-3 py-2.5",
-                isActive
-                  ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                  : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
-              )}
-            >
-              <item.icon className="h-4 w-4 shrink-0" />
-              {!collapsed && <span>{item.label}</span>}
-            </NavLink>
-          );
-
-          if (collapsed) {
-            return (
-              <Tooltip key={item.to} delayDuration={0}>
-                <TooltipTrigger asChild>
-                  {linkContent}
-                </TooltipTrigger>
-                <TooltipContent side="right" className="bg-popover">
-                  {item.label}
-                </TooltipContent>
-              </Tooltip>
-            );
-          }
-
-          return linkContent;
-        })}
+        {navItems.map(renderNavItem)}
       </nav>
 
       {/* User section - fixed at bottom */}
