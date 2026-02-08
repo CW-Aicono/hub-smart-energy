@@ -4,6 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useLocations, LocationType } from "@/hooks/useLocations";
 import { useUserRole } from "@/hooks/useUserRole";
+import { useGeocode } from "@/hooks/useGeocode";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -34,7 +35,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, MapPin } from "lucide-react";
+import { Plus, MapPin, LocateFixed, Loader2 } from "lucide-react";
 
 const ENERGY_SOURCES = [
   { id: "strom", label: "Strom" },
@@ -72,6 +73,7 @@ export function AddLocationDialog({ parentId }: AddLocationDialogProps) {
   const [open, setOpen] = useState(false);
   const { createLocation } = useLocations();
   const { isAdmin } = useUserRole();
+  const { geocodeAddress, isLoading: isGeocoding } = useGeocode();
   const { toast } = useToast();
 
   const form = useForm<LocationFormData>({
@@ -359,7 +361,32 @@ export function AddLocationDialog({ parentId }: AddLocationDialogProps) {
 
             {/* Coordinates */}
             <div className="space-y-4">
-              <h4 className="text-sm font-medium">Koordinaten (optional)</h4>
+              <div className="flex items-center justify-between">
+                <h4 className="text-sm font-medium">Koordinaten (optional)</h4>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={isGeocoding}
+                  onClick={async () => {
+                    const address = form.getValues("address") || "";
+                    const postalCode = form.getValues("postal_code") || "";
+                    const city = form.getValues("city") || "";
+                    const result = await geocodeAddress(address, postalCode, city);
+                    if (result) {
+                      form.setValue("latitude", result.latitude);
+                      form.setValue("longitude", result.longitude);
+                    }
+                  }}
+                >
+                  {isGeocoding ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <LocateFixed className="h-4 w-4 mr-2" />
+                  )}
+                  Aus Adresse ermitteln
+                </Button>
+              </div>
               <div className="grid gap-4 sm:grid-cols-2">
                 <FormField
                   control={form.control}

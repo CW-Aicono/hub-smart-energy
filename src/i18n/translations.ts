@@ -476,6 +476,12 @@ export const translations = {
     es: "No se pudo actualizar la ubicación",
     nl: "Kon locatie niet bijwerken",
   },
+  "locations.geocodeFromAddress": {
+    de: "Aus Adresse ermitteln",
+    en: "Get from address",
+    es: "Obtener de la dirección",
+    nl: "Van adres ophalen",
+  },
   "locations.deleteLocationTitle": {
     de: "Standort löschen",
     en: "Delete Location",
