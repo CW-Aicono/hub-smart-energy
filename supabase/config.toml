@@ -1,1 +1,10 @@
 project_id = "xnveugycurplszevdxtw"
+
+[functions.loxone-api]
+verify_jwt = false
+
+[functions.loxone-websocket]
+verify_jwt = false
+
+[functions.send-invitation-email]
+verify_jwt = false
