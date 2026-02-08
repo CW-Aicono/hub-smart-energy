@@ -5,7 +5,9 @@
 @tailwind utilities;
 
 @layer base {
-  :root {
+  /* Default Color Scheme */
+  :root,
+  :root[data-color-scheme="default"] {
     --background: 220 20% 97%;
     --foreground: 220 30% 10%;
 
@@ -52,7 +54,99 @@
     --sidebar-ring: 152 55% 42%;
   }
 
-  .dark {
+  /* Ocean Color Scheme */
+  :root[data-color-scheme="ocean"] {
+    --primary: 200 70% 30%;
+    --primary-foreground: 200 20% 98%;
+    --accent: 180 60% 45%;
+    --accent-foreground: 0 0% 100%;
+    --ring: 200 70% 30%;
+    --sidebar-background: 200 50% 12%;
+    --sidebar-primary: 180 60% 45%;
+    --sidebar-accent: 200 40% 18%;
+    --sidebar-ring: 180 60% 45%;
+  }
+
+  /* Forest Color Scheme */
+  :root[data-color-scheme="forest"] {
+    --primary: 140 40% 25%;
+    --primary-foreground: 140 20% 98%;
+    --accent: 80 50% 45%;
+    --accent-foreground: 0 0% 100%;
+    --ring: 140 40% 25%;
+    --sidebar-background: 140 30% 10%;
+    --sidebar-primary: 80 50% 45%;
+    --sidebar-accent: 140 25% 16%;
+    --sidebar-ring: 80 50% 45%;
+  }
+
+  /* Sunset Color Scheme */
+  :root[data-color-scheme="sunset"] {
+    --primary: 20 70% 30%;
+    --primary-foreground: 20 20% 98%;
+    --accent: 35 90% 55%;
+    --accent-foreground: 0 0% 10%;
+    --ring: 20 70% 30%;
+    --sidebar-background: 20 50% 10%;
+    --sidebar-primary: 35 90% 55%;
+    --sidebar-accent: 20 40% 16%;
+    --sidebar-ring: 35 90% 55%;
+  }
+
+  /* Lavender Color Scheme */
+  :root[data-color-scheme="lavender"] {
+    --primary: 270 40% 35%;
+    --primary-foreground: 270 20% 98%;
+    --accent: 280 50% 60%;
+    --accent-foreground: 0 0% 100%;
+    --ring: 270 40% 35%;
+    --sidebar-background: 270 30% 12%;
+    --sidebar-primary: 280 50% 60%;
+    --sidebar-accent: 270 25% 18%;
+    --sidebar-ring: 280 50% 60%;
+  }
+
+  /* Slate Color Scheme */
+  :root[data-color-scheme="slate"] {
+    --primary: 220 15% 25%;
+    --primary-foreground: 220 10% 98%;
+    --accent: 220 20% 50%;
+    --accent-foreground: 0 0% 100%;
+    --ring: 220 15% 25%;
+    --sidebar-background: 220 15% 10%;
+    --sidebar-primary: 220 20% 50%;
+    --sidebar-accent: 220 15% 16%;
+    --sidebar-ring: 220 20% 50%;
+  }
+
+  /* Rose Color Scheme */
+  :root[data-color-scheme="rose"] {
+    --primary: 350 50% 35%;
+    --primary-foreground: 350 20% 98%;
+    --accent: 340 60% 55%;
+    --accent-foreground: 0 0% 100%;
+    --ring: 350 50% 35%;
+    --sidebar-background: 350 40% 12%;
+    --sidebar-primary: 340 60% 55%;
+    --sidebar-accent: 350 35% 18%;
+    --sidebar-ring: 340 60% 55%;
+  }
+
+  /* Amber Color Scheme */
+  :root[data-color-scheme="amber"] {
+    --primary: 30 60% 25%;
+    --primary-foreground: 30 20% 98%;
+    --accent: 38 92% 50%;
+    --accent-foreground: 0 0% 10%;
+    --ring: 30 60% 25%;
+    --sidebar-background: 30 40% 10%;
+    --sidebar-primary: 38 92% 50%;
+    --sidebar-accent: 30 35% 16%;
+    --sidebar-ring: 38 92% 50%;
+  }
+
+  .dark,
+  .dark[data-color-scheme="default"] {
     --background: 220 30% 6%;
     --foreground: 210 40% 95%;
 
@@ -95,6 +189,90 @@
     --sidebar-accent-foreground: 220 10% 85%;
     --sidebar-border: 220 25% 14%;
     --sidebar-ring: 152 55% 42%;
+  }
+
+  /* Dark mode for Ocean */
+  .dark[data-color-scheme="ocean"] {
+    --primary: 180 60% 45%;
+    --primary-foreground: 200 50% 6%;
+    --accent: 180 60% 45%;
+    --ring: 180 60% 45%;
+    --sidebar-background: 200 50% 6%;
+    --sidebar-primary: 180 60% 45%;
+    --sidebar-accent: 200 40% 12%;
+    --sidebar-ring: 180 60% 45%;
+  }
+
+  /* Dark mode for Forest */
+  .dark[data-color-scheme="forest"] {
+    --primary: 80 50% 45%;
+    --primary-foreground: 140 30% 6%;
+    --accent: 80 50% 45%;
+    --ring: 80 50% 45%;
+    --sidebar-background: 140 30% 6%;
+    --sidebar-primary: 80 50% 45%;
+    --sidebar-accent: 140 25% 12%;
+    --sidebar-ring: 80 50% 45%;
+  }
+
+  /* Dark mode for Sunset */
+  .dark[data-color-scheme="sunset"] {
+    --primary: 35 90% 55%;
+    --primary-foreground: 20 50% 6%;
+    --accent: 35 90% 55%;
+    --ring: 35 90% 55%;
+    --sidebar-background: 20 50% 6%;
+    --sidebar-primary: 35 90% 55%;
+    --sidebar-accent: 20 40% 12%;
+    --sidebar-ring: 35 90% 55%;
+  }
+
+  /* Dark mode for Lavender */
+  .dark[data-color-scheme="lavender"] {
+    --primary: 280 50% 60%;
+    --primary-foreground: 270 30% 6%;
+    --accent: 280 50% 60%;
+    --ring: 280 50% 60%;
+    --sidebar-background: 270 30% 6%;
+    --sidebar-primary: 280 50% 60%;
+    --sidebar-accent: 270 25% 12%;
+    --sidebar-ring: 280 50% 60%;
+  }
+
+  /* Dark mode for Slate */
+  .dark[data-color-scheme="slate"] {
+    --primary: 220 20% 50%;
+    --primary-foreground: 220 15% 6%;
+    --accent: 220 20% 50%;
+    --ring: 220 20% 50%;
+    --sidebar-background: 220 15% 6%;
+    --sidebar-primary: 220 20% 50%;
+    --sidebar-accent: 220 15% 12%;
+    --sidebar-ring: 220 20% 50%;
+  }
+
+  /* Dark mode for Rose */
+  .dark[data-color-scheme="rose"] {
+    --primary: 340 60% 55%;
+    --primary-foreground: 350 40% 6%;
+    --accent: 340 60% 55%;
+    --ring: 340 60% 55%;
+    --sidebar-background: 350 40% 6%;
+    --sidebar-primary: 340 60% 55%;
+    --sidebar-accent: 350 35% 12%;
+    --sidebar-ring: 340 60% 55%;
+  }
+
+  /* Dark mode for Amber */
+  .dark[data-color-scheme="amber"] {
+    --primary: 38 92% 50%;
+    --primary-foreground: 30 40% 6%;
+    --accent: 38 92% 50%;
+    --ring: 38 92% 50%;
+    --sidebar-background: 30 40% 6%;
+    --sidebar-primary: 38 92% 50%;
+    --sidebar-accent: 30 35% 12%;
+    --sidebar-ring: 38 92% 50%;
   }
 }
 
