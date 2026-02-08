@@ -1,18 +1,24 @@
+import { useState } from "react";
 import { Navigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useTranslation } from "@/hooks/useTranslation";
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
+import UserManualContent from "@/components/help/UserManualContent";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { BookOpen, HelpCircle, Mail, Phone, History, ExternalLink } from "lucide-react";
 
-const APP_VERSION = "1.0.1";
+const APP_VERSION = "1.0.2";
+
+type ManualChapter = "gettingStarted" | "locationManagement" | "floorManagement" | "energyAnalysis";
 
 const Help = () => {
   const { user, loading } = useAuth();
   const { t } = useTranslation();
+  const [manualOpen, setManualOpen] = useState(false);
+  const [selectedChapter, setSelectedChapter] = useState<ManualChapter>("gettingStarted");
 
   if (loading) {
     return (
@@ -24,6 +30,11 @@ const Help = () => {
 
   if (!user) return <Navigate to="/auth" replace />;
 
+  const openManualChapter = (chapter: ManualChapter) => {
+    setSelectedChapter(chapter);
+    setManualOpen(true);
+  };
+
   const faqs = [
     { questionKey: "help.faq1Question", answerKey: "help.faq1Answer" },
     { questionKey: "help.faq2Question", answerKey: "help.faq2Answer" },
@@ -34,6 +45,16 @@ const Help = () => {
   ];
 
   const changelog = [
+    {
+      version: "1.0.2",
+      date: "2026-02-08",
+      changes: [
+        { type: "feature", textKey: "help.changelog102Feature1" },
+        { type: "feature", textKey: "help.changelog102Feature2" },
+        { type: "feature", textKey: "help.changelog102Feature3" },
+        { type: "improvement", textKey: "help.changelog102Improvement1" },
+      ],
+    },
     {
       version: "1.0.1",
       date: "2026-02-08",
@@ -85,28 +106,44 @@ const Help = () => {
             </CardHeader>
             <CardContent>
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                <Button variant="outline" className="justify-start gap-2 h-auto py-4">
+                <Button 
+                  variant="outline" 
+                  className="justify-start gap-2 h-auto py-4"
+                  onClick={() => openManualChapter("gettingStarted")}
+                >
                   <BookOpen className="h-5 w-5 text-muted-foreground" />
                   <div className="text-left">
                     <p className="font-medium">{t("help.gettingStarted")}</p>
                     <p className="text-xs text-muted-foreground">{t("help.gettingStartedDesc")}</p>
                   </div>
                 </Button>
-                <Button variant="outline" className="justify-start gap-2 h-auto py-4">
+                <Button 
+                  variant="outline" 
+                  className="justify-start gap-2 h-auto py-4"
+                  onClick={() => openManualChapter("locationManagement")}
+                >
                   <BookOpen className="h-5 w-5 text-muted-foreground" />
                   <div className="text-left">
                     <p className="font-medium">{t("help.locationManagement")}</p>
                     <p className="text-xs text-muted-foreground">{t("help.locationManagementDesc")}</p>
                   </div>
                 </Button>
-                <Button variant="outline" className="justify-start gap-2 h-auto py-4">
+                <Button 
+                  variant="outline" 
+                  className="justify-start gap-2 h-auto py-4"
+                  onClick={() => openManualChapter("floorManagement")}
+                >
                   <BookOpen className="h-5 w-5 text-muted-foreground" />
                   <div className="text-left">
                     <p className="font-medium">{t("help.floorManagement" as any)}</p>
                     <p className="text-xs text-muted-foreground">{t("help.floorManagementDesc" as any)}</p>
                   </div>
                 </Button>
-                <Button variant="outline" className="justify-start gap-2 h-auto py-4">
+                <Button 
+                  variant="outline" 
+                  className="justify-start gap-2 h-auto py-4"
+                  onClick={() => openManualChapter("energyAnalysis")}
+                >
                   <BookOpen className="h-5 w-5 text-muted-foreground" />
                   <div className="text-left">
                     <p className="font-medium">{t("help.energyAnalysis")}</p>
@@ -116,6 +153,12 @@ const Help = () => {
               </div>
             </CardContent>
           </Card>
+
+          <UserManualContent 
+            open={manualOpen} 
+            onOpenChange={setManualOpen} 
+            chapter={selectedChapter} 
+          />
 
           {/* FAQ */}
           <Card>

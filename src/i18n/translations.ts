@@ -1742,6 +1742,62 @@ export const translations = {
     es: "Gestionar pisos y planos",
     nl: "Verdiepingen en plattegronden beheren",
   },
+  // Version 1.0.2 changelog
+  "help.changelog102Feature1": {
+    de: "Sensoren können auf Grundrissplänen positioniert und verschoben werden",
+    en: "Sensors can be positioned and moved on floor plans",
+    es: "Los sensores se pueden posicionar y mover en los planos de planta",
+    nl: "Sensoren kunnen op plattegronden worden gepositioneerd en verplaatst",
+  },
+  "help.changelog102Feature2": {
+    de: "Grundrisse im Dashboard sind zoombar und verschiebbar",
+    en: "Floor plans in the dashboard are zoomable and pannable",
+    es: "Los planos de planta en el panel son ampliables y desplazables",
+    nl: "Plattegronden in het dashboard zijn zoombaar en verschuifbaar",
+  },
+  "help.changelog102Feature3": {
+    de: "Erweiterte Berechtigungen für Grundrisse, Integrationen und Dashboard",
+    en: "Extended permissions for floor plans, integrations and dashboard",
+    es: "Permisos extendidos para planos, integraciones y panel",
+    nl: "Uitgebreide rechten voor plattegronden, integraties en dashboard",
+  },
+  "help.changelog102Improvement1": {
+    de: "Automatische Aktualisierung der Sensor-Messwerte alle 5 Minuten",
+    en: "Automatic sensor value refresh every 5 minutes",
+    es: "Actualización automática de valores de sensores cada 5 minutos",
+    nl: "Automatische sensorwaarde-verversing elke 5 minuten",
+  },
+  // User management - activate user
+  "users.activateUser": {
+    de: "Benutzer aktivieren",
+    en: "Activate User",
+    es: "Activar usuario",
+    nl: "Gebruiker activeren",
+  },
+  "users.activateUserDescription": {
+    de: "Diesen eingeladenen Benutzer als aktiv markieren",
+    en: "Mark this invited user as active",
+    es: "Marcar a este usuario invitado como activo",
+    nl: "Markeer deze uitgenodigde gebruiker als actief",
+  },
+  "users.userActivated": {
+    de: "Benutzer aktiviert",
+    en: "User Activated",
+    es: "Usuario activado",
+    nl: "Gebruiker geactiveerd",
+  },
+  "users.userActivatedDescription": {
+    de: "Der Benutzer wurde erfolgreich aktiviert und kann sich nun anmelden.",
+    en: "The user has been activated and can now log in.",
+    es: "El usuario ha sido activado y ahora puede iniciar sesión.",
+    nl: "De gebruiker is geactiveerd en kan nu inloggen.",
+  },
+  "users.activationError": {
+    de: "Fehler bei der Aktivierung",
+    en: "Activation Error",
+    es: "Error de activación",
+    nl: "Activeringsfout",
+  },
 } as const;
 
 export type TranslationKey = keyof typeof translations;
