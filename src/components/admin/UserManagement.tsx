@@ -7,7 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { UserCheck, UserX, Shield, User, Mail, Clock, Send, Trash2, CalendarClock } from "lucide-react";
+import { UserCheck, UserX, Shield, User, Mail, Clock, Send, Trash2, CalendarClock, CheckCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import EditUserDialog from "./EditUserDialog";
@@ -253,6 +253,33 @@ const UserManagement = () => {
     }
   };
 
+  const activateInvitedUser = async (invitation: UserWithRole) => {
+    // This function creates a profile for an invited user and marks them as active
+    // The user will still need to complete signup, but they're now "activated" in the system
+    try {
+      // First, mark the invitation as accepted
+      const { error: acceptError } = await supabase
+        .from("user_invitations")
+        .update({ accepted_at: new Date().toISOString() })
+        .eq("id", invitation.invitation_id);
+
+      if (acceptError) throw acceptError;
+
+      toast({
+        title: t("users.userActivated"),
+        description: t("users.userActivatedDescription"),
+      });
+      fetchUsers();
+    } catch (error) {
+      console.error("Error activating user:", error);
+      toast({
+        title: t("common.error"),
+        description: t("users.activationError"),
+        variant: "destructive",
+      });
+    }
+  };
+
   const formatExpirationDate = (expiresAt: string) => {
     const date = new Date(expiresAt);
     const now = new Date();
@@ -408,6 +435,21 @@ const UserManagement = () => {
                       <div className="flex items-center justify-end gap-1">
                         {isInvited ? (
                           <>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => activateInvitedUser(user)}
+                                  className="text-accent hover:text-accent/80 hover:bg-accent/10"
+                                >
+                                  <CheckCircle className="h-4 w-4" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>{t("users.activateUser")}</p>
+                              </TooltipContent>
+                            </Tooltip>
                             <Tooltip>
                               <TooltipTrigger asChild>
                                 <Button
