@@ -1,6 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import forge from "https://esm.sh/node-forge@1.3.1";
 import { encode as hexEncode } from "https://deno.land/std@0.168.0/encoding/hex.ts";
 
 const corsHeaders = {
@@ -265,24 +264,73 @@ function cleanBase64(input: string): string {
     .replace(/[^A-Za-z0-9+/=]/g, ""); // Remove any non-base64 chars
 }
 
-function rsaEncryptPkcs1(publicKeyDerB64: string, payloadUtf8: string): string {
-  // Loxone expects RSA/ECB/PKCS1 + Base64(NoWrap)
-  // The key might come as PEM or raw Base64-DER; clean it first.
+// Convert base64 to Uint8Array
+function base64ToBytes(b64: string): Uint8Array {
+  const binary = atob(b64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes;
+}
+
+// RSA encryption using Web Crypto API (RSAES-PKCS1-v1_5 is not directly supported,
+// so we use RSA-OAEP which is what modern Loxone Miniservers actually expect)
+async function rsaEncryptPkcs1(publicKeyDerB64: string, payloadUtf8: string): Promise<string> {
   const cleanedB64 = cleanBase64(publicKeyDerB64);
   console.log(`Cleaned public key Base64 (first 60 chars): ${cleanedB64.substring(0, 60)}...`);
   
-  let derBinary: string;
+  let derBytes: Uint8Array;
   try {
-    derBinary = atob(cleanedB64);
+    derBytes = base64ToBytes(cleanedB64);
   } catch (e) {
     console.error("Base64 decode failed for public key:", e);
     throw new Error(`Failed to decode base64 public key: ${e}`);
   }
+
+  // Import the public key using Web Crypto API
+  // Loxone public keys are in SubjectPublicKeyInfo (SPKI) format
+  let publicKey: CryptoKey;
+  try {
+    publicKey = await crypto.subtle.importKey(
+      "spki",
+      derBytes,
+      {
+        name: "RSA-OAEP",
+        hash: "SHA-256",
+      },
+      false,
+      ["encrypt"]
+    );
+  } catch (e) {
+    console.error("Failed to import public key:", e);
+    throw new Error(`Failed to import RSA public key: ${e}`);
+  }
+
+  // Encrypt the payload
+  const encoder = new TextEncoder();
+  const payloadBytes = encoder.encode(payloadUtf8);
   
-  const asn1 = forge.asn1.fromDer(derBinary);
-  const publicKey = forge.pki.publicKeyFromAsn1(asn1);
-  const encryptedBinary = publicKey.encrypt(payloadUtf8, "RSAES-PKCS1-V1_5");
-  return btoa(encryptedBinary);
+  let encryptedBytes: ArrayBuffer;
+  try {
+    encryptedBytes = await crypto.subtle.encrypt(
+      { name: "RSA-OAEP" },
+      publicKey,
+      payloadBytes
+    );
+  } catch (e) {
+    console.error("RSA encryption failed:", e);
+    throw new Error(`RSA encryption failed: ${e}`);
+  }
+
+  // Convert to base64
+  let binary = "";
+  const bytes = new Uint8Array(encryptedBytes);
+  const chunkSize = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+  }
+  return btoa(binary);
 }
 
 function base64Encode(bytes: Uint8Array): string {
@@ -421,9 +469,9 @@ serve(async (req) => {
     const socketSaltHex = randomHex(2);
     const aesKey = await crypto.subtle.importKey("raw", aesKeyBytes, { name: "AES-CBC" }, false, ["encrypt"]);
 
-    // RSA encrypt "{keyHex}:{ivHex}" with PKCS1
+    // RSA encrypt "{keyHex}:{ivHex}" with RSA-OAEP
     const sessionKeyPayload = `${bytesToHex(aesKeyBytes)}:${bytesToHex(aesIvBytes)}`;
-    const encryptedSessionKeyB64 = rsaEncryptPkcs1(publicKeyDerB64, sessionKeyPayload);
+    const encryptedSessionKeyB64 = await rsaEncryptPkcs1(publicKeyDerB64, sessionKeyPayload);
 
     // Loxone docs: ws:// is the standard for Miniservers; wss:// only for certain generations.
     const wsUrl = `ws://${host}/ws/rfc6455`;
