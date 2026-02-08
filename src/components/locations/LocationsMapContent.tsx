@@ -64,7 +64,7 @@ function LocationsMapContent({ locations, onLocationClick, className }: Location
   }, [locations]);
 
   const containerClass = useMemo(
-    () => cn("h-[400px] w-full rounded-lg overflow-hidden border", className),
+    () => cn("h-[400px] w-full rounded-lg overflow-hidden border relative z-0", className),
     [className]
   );
 
