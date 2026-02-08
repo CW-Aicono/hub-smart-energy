@@ -451,6 +451,134 @@ export const translations = {
     nl: "Kon locatie niet aanmaken",
   },
 
+  // Location Edit/Delete
+  "locations.editLocation": {
+    de: "Standort bearbeiten",
+    en: "Edit Location",
+    es: "Editar ubicación",
+    nl: "Locatie bewerken",
+  },
+  "locations.editLocationDescription": {
+    de: "Bearbeiten Sie die Standortdaten",
+    en: "Edit location details",
+    es: "Editar los datos de la ubicación",
+    nl: "Bewerk de locatiegegevens",
+  },
+  "locations.updated": {
+    de: "Standort erfolgreich aktualisiert",
+    en: "Location updated successfully",
+    es: "Ubicación actualizada con éxito",
+    nl: "Locatie succesvol bijgewerkt",
+  },
+  "locations.updateError": {
+    de: "Standort konnte nicht aktualisiert werden",
+    en: "Failed to update location",
+    es: "No se pudo actualizar la ubicación",
+    nl: "Kon locatie niet bijwerken",
+  },
+  "locations.deleteLocationTitle": {
+    de: "Standort löschen",
+    en: "Delete Location",
+    es: "Eliminar ubicación",
+    nl: "Locatie verwijderen",
+  },
+  "locations.deleteLocationConfirmation": {
+    de: "Möchten Sie diesen Standort wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.",
+    en: "Are you sure you want to delete this location? This action cannot be undone.",
+    es: "¿Está seguro de que desea eliminar esta ubicación? Esta acción no se puede deshacer.",
+    nl: "Weet u zeker dat u deze locatie wilt verwijderen? Deze actie kan niet ongedaan worden gemaakt.",
+  },
+  "locations.deleted": {
+    de: "Standort erfolgreich gelöscht",
+    en: "Location deleted successfully",
+    es: "Ubicación eliminada con éxito",
+    nl: "Locatie succesvol verwijderd",
+  },
+  "locations.deleteError": {
+    de: "Standort konnte nicht gelöscht werden",
+    en: "Failed to delete location",
+    es: "No se pudo eliminar la ubicación",
+    nl: "Kon locatie niet verwijderen",
+  },
+  "locations.cannotDeleteWithChildren": {
+    de: "Standorte mit untergeordneten Elementen können nicht gelöscht werden.",
+    en: "Locations with child elements cannot be deleted.",
+    es: "Las ubicaciones con elementos secundarios no se pueden eliminar.",
+    nl: "Locaties met onderliggende elementen kunnen niet worden verwijderd.",
+  },
+  "locations.description": {
+    de: "Beschreibung",
+    en: "Description",
+    es: "Descripción",
+    nl: "Beschrijving",
+  },
+  "locations.latitude": {
+    de: "Breitengrad",
+    en: "Latitude",
+    es: "Latitud",
+    nl: "Breedtegraad",
+  },
+  "locations.longitude": {
+    de: "Längengrad",
+    en: "Longitude",
+    es: "Longitud",
+    nl: "Lengtegraad",
+  },
+  "locations.usageType": {
+    de: "Nutzungsart",
+    en: "Usage Type",
+    es: "Tipo de uso",
+    nl: "Gebruikstype",
+  },
+  "locations.usage.verwaltungsgebaeude": {
+    de: "Verwaltungsgebäude",
+    en: "Administrative Building",
+    es: "Edificio administrativo",
+    nl: "Administratief gebouw",
+  },
+  "locations.usage.universitaet": {
+    de: "Universität",
+    en: "University",
+    es: "Universidad",
+    nl: "Universiteit",
+  },
+  "locations.usage.schule": {
+    de: "Schule",
+    en: "School",
+    es: "Escuela",
+    nl: "School",
+  },
+  "locations.usage.kindertageseinrichtung": {
+    de: "Kindertageseinrichtung",
+    en: "Daycare Facility",
+    es: "Guardería",
+    nl: "Kinderdagverblijf",
+  },
+  "locations.usage.sportstaette": {
+    de: "Sportstätte",
+    en: "Sports Facility",
+    es: "Instalación deportiva",
+    nl: "Sportfaciliteit",
+  },
+  "locations.usage.jugendzentrum": {
+    de: "Jugendzentrum",
+    en: "Youth Center",
+    es: "Centro juvenil",
+    nl: "Jongerencentrum",
+  },
+  "locations.usage.sonstiges": {
+    de: "Sonstiges",
+    en: "Other",
+    es: "Otro",
+    nl: "Overig",
+  },
+  "energy.water": {
+    de: "Wasser",
+    en: "Water",
+    es: "Agua",
+    nl: "Water",
+  },
+
   // Energy Sources
   "energy.electricity": {
     de: "Strom",

@@ -14,7 +14,7 @@ import { Map, List, Building2 } from "lucide-react";
 const Locations = () => {
   const { user, loading: authLoading } = useAuth();
   const { isAdmin } = useUserRole();
-  const { locations, hierarchicalLocations, loading: locationsLoading } = useLocations();
+  const { locations, hierarchicalLocations, loading: locationsLoading, refetch } = useLocations();
   const [selectedLocation, setSelectedLocation] = useState<Location | null>(null);
 
   // Filter locations that should be shown on map
@@ -102,6 +102,7 @@ const Locations = () => {
                       locations={hierarchicalLocations}
                       selectedId={selectedLocation?.id}
                       onSelect={setSelectedLocation}
+                      onRefresh={refetch}
                     />
                   )}
                 </TabsContent>
