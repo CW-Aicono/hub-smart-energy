@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
 import { Icon, LatLngBounds, Map as LeafletMap } from "leaflet";
 import { Location } from "@/hooks/useLocations";
@@ -23,61 +23,67 @@ interface LocationsMapContentProps {
   className?: string;
 }
 
-function MapBoundsUpdater({ locations }: { locations: Location[] }) {
+function MapController({ locations }: { locations: Location[] }) {
   const map = useMap();
 
   useEffect(() => {
-    if (locations.length > 0) {
-      const bounds = new LatLngBounds(
-        locations.map((loc) => [loc.latitude!, loc.longitude!])
-      );
-      map.fitBounds(bounds, { padding: [50, 50] });
+    // Force tile redraw after mount
+    const timer = setTimeout(() => {
+      map.invalidateSize();
+      
+      if (locations.length > 0) {
+        const bounds = new LatLngBounds(
+          locations.map((loc) => [loc.latitude!, loc.longitude!])
+        );
+        map.fitBounds(bounds, { padding: [50, 50] });
+      }
+    }, 100);
 
-      // Prevent a common Leaflet issue where the map is rendered before its container
-      // has a final size (can appear as a blank/white map).
-      setTimeout(() => map.invalidateSize(), 0);
-    }
+    return () => clearTimeout(timer);
   }, [locations, map]);
 
   return null;
 }
 
 const typeLabels: Record<string, string> = {
-  standort: "Standort",
-  gebaeude: "Gebäude",
-  bereich: "Bereich",
+  einzelgebaeude: "Einzelgebäude",
+  gebaeudekomplex: "Gebäudekomplex",
+  sonstiges: "Sonstiges",
 };
 
 function LocationsMapContent({ locations, onLocationClick, className }: LocationsMapContentProps) {
-  const mapRef = useRef<LeafletMap | null>(null);
+  const [mapReady, setMapReady] = useState(false);
 
-  const defaultCenter: [number, number] = [51.1657, 10.4515];
-  const defaultZoom = 6;
+  const defaultCenter: [number, number] = useMemo(() => {
+    if (locations.length > 0) {
+      const avgLat = locations.reduce((sum, loc) => sum + (loc.latitude || 0), 0) / locations.length;
+      const avgLng = locations.reduce((sum, loc) => sum + (loc.longitude || 0), 0) / locations.length;
+      return [avgLat, avgLng];
+    }
+    return [51.1657, 10.4515]; // Germany center
+  }, [locations]);
 
   const containerClass = useMemo(
-    () => cn("h-full min-h-[300px] rounded-lg overflow-hidden border", className),
+    () => cn("h-[400px] w-full rounded-lg overflow-hidden border", className),
     [className]
   );
 
   return (
     <div className={containerClass}>
       <MapContainer
-        ref={mapRef}
         center={defaultCenter}
-        zoom={defaultZoom}
+        zoom={locations.length === 1 ? 14 : 6}
         className="h-full w-full"
         scrollWheelZoom={true}
-        whenReady={() => {
-          // Ensure tiles render after mount
-          setTimeout(() => mapRef.current?.invalidateSize(), 0);
-        }}
+        style={{ height: "100%", width: "100%" }}
+        whenReady={() => setMapReady(true)}
       >
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
 
-        <MapBoundsUpdater locations={locations} />
+        {mapReady && <MapController locations={locations} />}
 
         {locations.map((location) => (
           <Marker
