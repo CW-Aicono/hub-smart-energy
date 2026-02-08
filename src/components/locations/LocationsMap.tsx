@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
 import { Icon, LatLngBounds } from "leaflet";
 import { Location } from "@/hooks/useLocations";
@@ -21,6 +21,7 @@ const defaultIcon = new Icon({
 interface LocationsMapProps {
   locations: Location[];
   onLocationClick?: (location: Location) => void;
+  className?: string;
 }
 
 function MapBoundsUpdater({ locations }: { locations: Location[] }) {
@@ -48,7 +49,14 @@ const typeLabels: Record<string, string> = {
   bereich: "Bereich",
 };
 
-export function LocationsMap({ locations, onLocationClick, className }: LocationsMapProps & { className?: string }) {
+export function LocationsMap({ locations, onLocationClick, className }: LocationsMapProps) {
+  const [isClient, setIsClient] = useState(false);
+
+  // Ensure component only renders on client side
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+
   const validLocations = locations.filter(
     (loc) => loc.latitude !== null && loc.longitude !== null
   );
@@ -56,6 +64,14 @@ export function LocationsMap({ locations, onLocationClick, className }: Location
   // Default center: Germany
   const defaultCenter: [number, number] = [51.1657, 10.4515];
   const defaultZoom = 6;
+
+  if (!isClient) {
+    return (
+      <div className={cn("h-full min-h-[300px] rounded-lg border bg-muted/50 flex items-center justify-center", className)}>
+        <div className="animate-pulse text-muted-foreground">Karte wird geladen...</div>
+      </div>
+    );
+  }
 
   if (validLocations.length === 0) {
     return (
@@ -72,6 +88,7 @@ export function LocationsMap({ locations, onLocationClick, className }: Location
   return (
     <div className={cn("h-full min-h-[300px] rounded-lg overflow-hidden border", className)}>
       <MapContainer
+        key="locations-map"
         center={defaultCenter}
         zoom={defaultZoom}
         className="h-full w-full"
