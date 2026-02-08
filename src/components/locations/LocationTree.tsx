@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { Location, LocationType } from "@/hooks/useLocations";
+import { useFloors, Floor } from "@/hooks/useFloors";
 import { useUserRole } from "@/hooks/useUserRole";
-import { ChevronRight, ChevronDown, Building2, Building, MapPin, Star } from "lucide-react";
+import { ChevronRight, ChevronDown, Building2, Building, MapPin, Star, Layers } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { EditLocationDialog } from "./EditLocationDialog";
@@ -22,6 +23,12 @@ interface LocationNodeProps {
   onSelect?: (location: Location) => void;
   onRefresh?: () => void;
   isAdmin: boolean;
+  showFloors?: boolean;
+}
+
+interface FloorNodeProps {
+  floor: Floor;
+  level: number;
 }
 
 const typeIcons: Record<LocationType, typeof MapPin> = {
@@ -42,11 +49,40 @@ const typeColors: Record<LocationType, string> = {
   sonstiges: "bg-slate-100 text-slate-700 border-slate-200",
 };
 
-function LocationNode({ location, level, selectedId, onSelect, onRefresh, isAdmin }: LocationNodeProps) {
+function FloorNode({ floor, level }: FloorNodeProps) {
+  return (
+    <div
+      className="flex items-center gap-2 px-3 py-1.5 text-sm text-muted-foreground"
+      style={{ paddingLeft: `${level * 16 + 12}px` }}
+    >
+      <span className="w-5" />
+      <Layers className="h-3.5 w-3.5" />
+      <span>{floor.name}</span>
+      {floor.area_sqm && (
+        <span className="text-xs">({floor.area_sqm} m²)</span>
+      )}
+    </div>
+  );
+}
+
+function LocationNode({ location, level, selectedId, onSelect, onRefresh, isAdmin, showFloors = true }: LocationNodeProps) {
   const [expanded, setExpanded] = useState(true);
+  const { floors } = useFloors(showFloors ? location.id : undefined);
+  
   const hasChildren = location.children && location.children.length > 0;
+  const hasFloors = floors.length > 0;
   const isSelected = selectedId === location.id;
   const Icon = typeIcons[location.type];
+  
+  // For Einzelgebäude: show floors directly
+  // For Gebäudekomplex: children are buildings, those show floors
+  const isEinzelgebaeude = location.type === "einzelgebaeude";
+  const isGebaeudekomplex = location.type === "gebaeudekomplex";
+  const isChildOfComplex = level > 0;
+  
+  // Show floors for Einzelgebäude or for buildings that are children of a complex
+  const shouldShowFloors = isEinzelgebaeude || isChildOfComplex;
+  const hasExpandableContent = hasChildren || (shouldShowFloors && hasFloors);
 
   return (
     <div>
@@ -59,7 +95,7 @@ function LocationNode({ location, level, selectedId, onSelect, onRefresh, isAdmi
         )}
         style={{ paddingLeft: `${level * 16 + 12}px` }}
       >
-        {hasChildren ? (
+        {hasExpandableContent ? (
           <button
             onClick={(e) => {
               e.stopPropagation();
@@ -83,7 +119,7 @@ function LocationNode({ location, level, selectedId, onSelect, onRefresh, isAdmi
           <Icon className="h-4 w-4 text-muted-foreground" />
           <Link 
             to={`/locations/${location.id}`}
-            className="flex-1 font-medium text-sm text-primary hover:underline"
+            className="flex-1 font-medium text-sm hover:underline"
             onClick={(e) => e.stopPropagation()}
           >
             {location.name}
@@ -111,20 +147,40 @@ function LocationNode({ location, level, selectedId, onSelect, onRefresh, isAdmi
           </div>
         )}
       </div>
-      {hasChildren && expanded && (
-        <div>
-          {location.children!.map((child) => (
-            <LocationNode
-              key={child.id}
-              location={child}
-              level={level + 1}
-              selectedId={selectedId}
-              onSelect={onSelect}
-              onRefresh={onRefresh}
-              isAdmin={isAdmin}
-            />
-          ))}
-        </div>
+      
+      {expanded && (
+        <>
+          {/* For Gebäudekomplex: show child buildings first */}
+          {hasChildren && (
+            <div>
+              {location.children!.map((child) => (
+                <LocationNode
+                  key={child.id}
+                  location={child}
+                  level={level + 1}
+                  selectedId={selectedId}
+                  onSelect={onSelect}
+                  onRefresh={onRefresh}
+                  isAdmin={isAdmin}
+                  showFloors={true}
+                />
+              ))}
+            </div>
+          )}
+          
+          {/* Show floors for Einzelgebäude or child buildings of complex */}
+          {shouldShowFloors && hasFloors && (
+            <div>
+              {floors.map((floor) => (
+                <FloorNode
+                  key={floor.id}
+                  floor={floor}
+                  level={level + 1}
+                />
+              ))}
+            </div>
+          )}
+        </>
       )}
     </div>
   );

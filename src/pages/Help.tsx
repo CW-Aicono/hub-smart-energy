@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { BookOpen, HelpCircle, Mail, Phone, History, ExternalLink } from "lucide-react";
 
-const APP_VERSION = "1.0.0";
+const APP_VERSION = "1.0.1";
 
 const Help = () => {
   const { user, loading } = useAuth();
@@ -30,9 +30,19 @@ const Help = () => {
     { questionKey: "help.faq3Question", answerKey: "help.faq3Answer" },
     { questionKey: "help.faq4Question", answerKey: "help.faq4Answer" },
     { questionKey: "help.faq5Question", answerKey: "help.faq5Answer" },
+    { questionKey: "help.faq6Question", answerKey: "help.faq6Answer" },
   ];
 
   const changelog = [
+    {
+      version: "1.0.1",
+      date: "2026-02-08",
+      changes: [
+        { type: "feature", textKey: "help.changelog101Feature1" },
+        { type: "feature", textKey: "help.changelog101Feature2" },
+        { type: "improvement", textKey: "help.changelog101Improvement1" },
+      ],
+    },
     {
       version: "1.0.0",
       date: "2026-02-08",
@@ -74,7 +84,7 @@ const Help = () => {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 <Button variant="outline" className="justify-start gap-2 h-auto py-4">
                   <BookOpen className="h-5 w-5 text-muted-foreground" />
                   <div className="text-left">
@@ -87,6 +97,13 @@ const Help = () => {
                   <div className="text-left">
                     <p className="font-medium">{t("help.locationManagement")}</p>
                     <p className="text-xs text-muted-foreground">{t("help.locationManagementDesc")}</p>
+                  </div>
+                </Button>
+                <Button variant="outline" className="justify-start gap-2 h-auto py-4">
+                  <BookOpen className="h-5 w-5 text-muted-foreground" />
+                  <div className="text-left">
+                    <p className="font-medium">{t("help.floorManagement" as any)}</p>
+                    <p className="text-xs text-muted-foreground">{t("help.floorManagementDesc" as any)}</p>
                   </div>
                 </Button>
                 <Button variant="outline" className="justify-start gap-2 h-auto py-4">
