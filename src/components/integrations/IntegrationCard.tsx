@@ -15,21 +15,22 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Server, Trash2, Settings, CheckCircle2, XCircle, Clock, Loader2, Gauge } from "lucide-react";
+import { Server, Trash2, Pencil, CheckCircle2, XCircle, Clock, Loader2, Gauge } from "lucide-react";
 import { LocationIntegration, LoxoneConfig } from "@/hooks/useIntegrations";
 import { SensorsDialog } from "./SensorsDialog";
+import { EditIntegrationDialog } from "./EditIntegrationDialog";
 
 interface IntegrationCardProps {
   locationIntegration: LocationIntegration;
   onUpdate: (id: string, updates: Partial<LocationIntegration>) => Promise<{ error: Error | null }>;
   onDelete: (id: string) => Promise<{ error: Error | null }>;
-  onConfigure?: (locationIntegration: LocationIntegration) => void;
 }
 
-export function IntegrationCard({ locationIntegration, onUpdate, onDelete, onConfigure }: IntegrationCardProps) {
+export function IntegrationCard({ locationIntegration, onUpdate, onDelete }: IntegrationCardProps) {
   const [isDeleting, setIsDeleting] = useState(false);
   const [isToggling, setIsToggling] = useState(false);
   const [sensorsOpen, setSensorsOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
   const { toast } = useToast();
 
   const integration = locationIntegration.integration;
@@ -145,15 +146,14 @@ export function IntegrationCard({ locationIntegration, onUpdate, onDelete, onCon
                 disabled={isToggling}
               />
               
-              {onConfigure && (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => onConfigure(locationIntegration)}
-                >
-                  <Settings className="h-4 w-4" />
-                </Button>
-              )}
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setEditOpen(true)}
+                title="Bearbeiten"
+              >
+                <Pencil className="h-4 w-4" />
+              </Button>
 
               <AlertDialog>
                 <AlertDialogTrigger asChild>
@@ -197,6 +197,13 @@ export function IntegrationCard({ locationIntegration, onUpdate, onDelete, onCon
         locationIntegration={locationIntegration}
         open={sensorsOpen}
         onOpenChange={setSensorsOpen}
+      />
+
+      <EditIntegrationDialog
+        locationIntegration={locationIntegration}
+        open={editOpen}
+        onOpenChange={setEditOpen}
+        onUpdate={onUpdate}
       />
     </>
   );
