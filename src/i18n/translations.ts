@@ -44,6 +44,12 @@ export const translations = {
     es: "Integraciones",
     nl: "Integraties",
   },
+  "nav.branding": {
+    de: "Branding",
+    en: "Branding",
+    es: "Marca",
+    nl: "Branding",
+  },
   "nav.myProfile": {
     de: "Mein Profil",
     en: "My Profile",

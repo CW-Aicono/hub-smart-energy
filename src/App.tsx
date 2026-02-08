@@ -11,6 +11,7 @@ import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import Admin from "./pages/Admin";
 import Settings from "./pages/Settings";
+import Branding from "./pages/Branding";
 import Roles from "./pages/Roles";
 import Locations from "./pages/Locations";
 import LocationDetail from "./pages/LocationDetail";
@@ -39,6 +40,7 @@ const App = () => (
                   <Route path="/auth" element={<Auth />} />
                   <Route path="/admin" element={<Admin />} />
                   <Route path="/settings" element={<Settings />} />
+                  <Route path="/settings/branding" element={<Branding />} />
                   <Route path="/roles" element={<Roles />} />
                   <Route path="/locations" element={<Locations />} />
                   <Route path="/locations/:id" element={<LocationDetail />} />
