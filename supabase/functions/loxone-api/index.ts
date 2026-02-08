@@ -32,7 +32,7 @@ interface LoxoneStructure {
 }
 
 // Resolve Loxone Cloud DNS to get actual IP and port
-async function resolveLoxoneCloudDNS(serialNumber: string): Promise<{ ip: string; port: number } | null> {
+async function resolveLoxoneCloudDNS(serialNumber: string): Promise<{ ip: string; port: number; useHttps: boolean } | null> {
   try {
     const dnsUrl = `http://dns.loxonecloud.com/?getip&snr=${serialNumber}&json=true`;
     console.log(`Resolving Cloud DNS: ${dnsUrl}`);
@@ -46,23 +46,33 @@ async function resolveLoxoneCloudDNS(serialNumber: string): Promise<{ ip: string
     const data = await response.json();
     console.log("DNS response:", JSON.stringify(data));
     
-    // Response format: { "IP": "x.x.x.x", "Port": 80, ... }
-    if (data.IP && data.Port) {
-      return { ip: data.IP, port: data.Port };
-    }
-    
-    // Alternative format: { "ip": "x.x.x.x", "port": 80, ... }
-    if (data.ip && data.port) {
-      return { ip: data.ip, port: data.port };
+    // Check if Miniserver is registered and reachable
+    if (data.Code !== 200 || data["DNS-Status"] !== "registered") {
+      console.error("Miniserver not registered or unreachable");
+      return null;
     }
 
-    // Sometimes the response is just the IP:Port string
-    if (typeof data === "string" && data.includes(":")) {
-      const [ip, port] = data.split(":");
-      return { ip, port: parseInt(port) };
+    // Parse IPHTTPS format: "[IPv6]:port" or "IPv4:port"
+    if (data.IPHTTPS) {
+      const iphttps = data.IPHTTPS as string;
+      // IPv6 format: [2a01:4f8:1c1c:57c8::1]:58747
+      const ipv6Match = iphttps.match(/^\[([^\]]+)\]:(\d+)$/);
+      if (ipv6Match) {
+        return { ip: ipv6Match[1], port: parseInt(ipv6Match[2]), useHttps: true };
+      }
+      // IPv4 format: 1.2.3.4:8080
+      const ipv4Match = iphttps.match(/^([^:]+):(\d+)$/);
+      if (ipv4Match) {
+        return { ip: ipv4Match[1], port: parseInt(ipv4Match[2]), useHttps: true };
+      }
+    }
+
+    // Fallback: Response format: { "IP": "x.x.x.x", "Port": 80, ... }
+    if (data.IP && data.Port) {
+      return { ip: data.IP, port: data.Port, useHttps: false };
     }
     
-    console.error("Unexpected DNS response format:", data);
+    console.error("Could not parse DNS response:", data);
     return null;
   } catch (error) {
     console.error("DNS resolution error:", error);
@@ -77,45 +87,53 @@ serve(async (req) => {
   }
 
   try {
-    const { integrationId, action } = await req.json();
+    const { locationIntegrationId, action } = await req.json();
 
-    if (!integrationId) {
-      throw new Error("Integration ID ist erforderlich");
+    if (!locationIntegrationId) {
+      throw new Error("Location Integration ID ist erforderlich");
     }
 
-    console.log(`Loxone API request: action=${action}, integrationId=${integrationId}`);
+    console.log(`Loxone API request: action=${action}, locationIntegrationId=${locationIntegrationId}`);
 
     // Get Supabase client
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Fetch integration config
-    const { data: integration, error: integrationError } = await supabase
-      .from("integrations")
-      .select("*")
-      .eq("id", integrationId)
-      .single();
+    // Fetch location_integration with its config (contains credentials)
+    const { data: locationIntegration, error: liError } = await supabase
+      .from("location_integrations")
+      .select("*, integration:integrations(*)")
+      .eq("id", locationIntegrationId)
+      .maybeSingle();
 
-    if (integrationError || !integration) {
-      console.error("Integration not found:", integrationError);
-      throw new Error("Integration nicht gefunden");
+    if (liError || !locationIntegration) {
+      console.error("Location integration not found:", liError);
+      throw new Error("Standort-Integration nicht gefunden");
     }
 
-    const config = integration.config as LoxoneConfig;
+    const config = locationIntegration.config as LoxoneConfig;
     
-    if (!config?.serial_number && !config?.host) {
+    if (!config) {
+      throw new Error("Keine Konfiguration vorhanden");
+    }
+
+    if (!config.serial_number && !config.host) {
       throw new Error("Seriennummer oder Host nicht konfiguriert");
+    }
+
+    if (!config.username || !config.password) {
+      throw new Error("Benutzername oder Passwort nicht konfiguriert");
     }
 
     console.log(`Config: serial=${config.serial_number}, host=${config.host}, user=${config.username}`);
 
     // Determine base URL - either direct IP or resolve via Cloud DNS
     let baseUrl: string;
-    const protocol = config.use_ssl ? "https" : "http";
 
     if (config.host && config.host.match(/^[\d.]+$|^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/)) {
       // Direct IP address or hostname provided
+      const protocol = config.use_ssl ? "https" : "http";
       baseUrl = `${protocol}://${config.host}:${config.port}`;
       console.log(`Using direct connection: ${baseUrl}`);
     } else if (config.serial_number) {
@@ -124,10 +142,14 @@ serve(async (req) => {
       const resolved = await resolveLoxoneCloudDNS(config.serial_number);
       
       if (!resolved) {
-        throw new Error("Cloud DNS Auflösung fehlgeschlagen. Miniserver nicht erreichbar.");
+        throw new Error("Cloud DNS Auflösung fehlgeschlagen. Miniserver nicht erreichbar oder nicht für Remote-Zugriff konfiguriert.");
       }
       
-      baseUrl = `${protocol}://${resolved.ip}:${resolved.port}`;
+      // Use HTTPS for IPv6 connections via Cloud
+      const protocol = resolved.useHttps ? "https" : "http";
+      // For IPv6, wrap in brackets
+      const host = resolved.ip.includes(":") ? `[${resolved.ip}]` : resolved.ip;
+      baseUrl = `${protocol}://${host}:${resolved.port}`;
       console.log(`Resolved to: ${baseUrl}`);
     } else {
       throw new Error("Weder Host noch Seriennummer konfiguriert");

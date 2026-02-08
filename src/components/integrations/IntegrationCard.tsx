@@ -15,8 +15,9 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Server, Trash2, Settings, CheckCircle2, XCircle, Clock, Loader2 } from "lucide-react";
+import { Server, Trash2, Settings, CheckCircle2, XCircle, Clock, Loader2, Gauge } from "lucide-react";
 import { LocationIntegration, LoxoneConfig } from "@/hooks/useIntegrations";
+import { SensorsDialog } from "./SensorsDialog";
 
 interface IntegrationCardProps {
   locationIntegration: LocationIntegration;
@@ -28,6 +29,7 @@ interface IntegrationCardProps {
 export function IntegrationCard({ locationIntegration, onUpdate, onDelete, onConfigure }: IntegrationCardProps) {
   const [isDeleting, setIsDeleting] = useState(false);
   const [isToggling, setIsToggling] = useState(false);
+  const [sensorsOpen, setSensorsOpen] = useState(false);
   const { toast } = useToast();
 
   const integration = locationIntegration.integration;
@@ -105,80 +107,97 @@ export function IntegrationCard({ locationIntegration, onUpdate, onDelete, onCon
   };
 
   return (
-    <Card className={`transition-opacity ${!locationIntegration.is_enabled ? "opacity-60" : ""}`}>
-      <CardContent className="p-4">
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex items-start gap-3">
-            <div className="p-2 rounded-lg bg-primary/10">
-              <Server className="h-5 w-5 text-primary" />
-            </div>
-            <div className="space-y-1">
-              <div className="flex items-center gap-2">
-                <h4 className="font-medium">{integration?.name || "Integration"}</h4>
-                {getSyncStatusBadge()}
+    <>
+      <Card className={`transition-opacity ${!locationIntegration.is_enabled ? "opacity-60" : ""}`}>
+        <CardContent className="p-4">
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex items-start gap-3">
+              <div className="p-2 rounded-lg bg-primary/10">
+                <Server className="h-5 w-5 text-primary" />
               </div>
-              <p className="text-sm text-muted-foreground">
-                {config?.host}:{config?.port}
-              </p>
-              {integration?.description && (
-                <p className="text-xs text-muted-foreground">{integration.description}</p>
-              )}
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <h4 className="font-medium">{integration?.name || "Integration"}</h4>
+                  {getSyncStatusBadge()}
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  {config?.host ? `${config.host}:${config.port}` : config?.serial_number ? `SN: ${config.serial_number}` : "Nicht konfiguriert"}
+                </p>
+                {integration?.description && (
+                  <p className="text-xs text-muted-foreground">{integration.description}</p>
+                )}
+              </div>
             </div>
-          </div>
 
-          <div className="flex items-center gap-2">
-            <Switch
-              checked={locationIntegration.is_enabled}
-              onCheckedChange={handleToggleEnabled}
-              disabled={isToggling}
-            />
-            
-            {onConfigure && (
+            <div className="flex items-center gap-2">
               <Button
                 variant="ghost"
                 size="icon"
-                onClick={() => onConfigure(locationIntegration)}
+                onClick={() => setSensorsOpen(true)}
+                title="Sensoren anzeigen"
               >
-                <Settings className="h-4 w-4" />
+                <Gauge className="h-4 w-4" />
               </Button>
-            )}
 
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive">
-                  <Trash2 className="h-4 w-4" />
+              <Switch
+                checked={locationIntegration.is_enabled}
+                onCheckedChange={handleToggleEnabled}
+                disabled={isToggling}
+              />
+              
+              {onConfigure && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => onConfigure(locationIntegration)}
+                >
+                  <Settings className="h-4 w-4" />
                 </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Integration entfernen?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    Möchten Sie die Integration "{integration?.name}" wirklich entfernen? 
-                    Diese Aktion kann nicht rückgängig gemacht werden.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Abbrechen</AlertDialogCancel>
-                  <AlertDialogAction
-                    onClick={handleDelete}
-                    disabled={isDeleting}
-                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                  >
-                    {isDeleting ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Entfernen...
-                      </>
-                    ) : (
-                      "Entfernen"
-                    )}
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
+              )}
+
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive">
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Integration entfernen?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Möchten Sie die Integration "{integration?.name}" wirklich entfernen? 
+                      Diese Aktion kann nicht rückgängig gemacht werden.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Abbrechen</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={handleDelete}
+                      disabled={isDeleting}
+                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    >
+                      {isDeleting ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Entfernen...
+                        </>
+                      ) : (
+                        "Entfernen"
+                      )}
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </div>
           </div>
-        </div>
-      </CardContent>
-    </Card>
+        </CardContent>
+      </Card>
+
+      <SensorsDialog
+        locationIntegration={locationIntegration}
+        open={sensorsOpen}
+        onOpenChange={setSensorsOpen}
+      />
+    </>
   );
 }
