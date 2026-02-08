@@ -19,8 +19,9 @@ export function LocationsMap({ locations, onLocationClick, className }: Location
     setIsClient(true);
   }, []);
 
+  // Filter: only show locations with coordinates AND exclude child buildings of complexes
   const validLocations = locations.filter(
-    (loc) => loc.latitude !== null && loc.longitude !== null
+    (loc) => loc.latitude !== null && loc.longitude !== null && !loc.parent_id
   );
 
   if (!isClient) {
