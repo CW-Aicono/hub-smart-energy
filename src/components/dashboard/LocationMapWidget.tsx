@@ -1,7 +1,6 @@
 import { useLocations } from "@/hooks/useLocations";
 import { LocationsMap } from "@/components/locations/LocationsMap";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Map } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
 import { useNavigate } from "react-router-dom";
 
 const LocationMapWidget = () => {
@@ -17,21 +16,15 @@ const LocationMapWidget = () => {
 
   return (
     <Card className="overflow-hidden">
-      <CardHeader className="pb-2">
-        <CardTitle className="flex items-center gap-2 text-lg">
-          <Map className="h-5 w-5" />
-          Standortkarte
-        </CardTitle>
-      </CardHeader>
       <CardContent className="p-0">
         {loading ? (
-          <div className="h-[300px] bg-muted/50 animate-pulse" />
+          <div className="h-[350px] bg-muted/50 animate-pulse" />
         ) : (
-          <div className="h-[300px] overflow-hidden">
+          <div className="h-[350px] overflow-hidden">
             <LocationsMap 
               locations={mapLocations} 
               onLocationClick={handleLocationClick}
-              className="h-full rounded-none border-0"
+              className="h-full rounded-b-lg border-0"
             />
           </div>
         )}
