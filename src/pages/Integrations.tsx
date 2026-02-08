@@ -54,7 +54,7 @@ type IntegrationFormData = z.infer<typeof integrationSchema>;
 
 const Integrations = () => {
   const { user, loading: authLoading } = useAuth();
-  const { isAdmin } = useUserRole();
+  const { isAdmin, loading: roleLoading } = useUserRole();
   const { tenant } = useTenant();
   const { integrations, loading, createIntegration, deleteIntegration, refetch } = useIntegrations();
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -115,7 +115,7 @@ const Integrations = () => {
     }
   };
 
-  if (authLoading) {
+  if (authLoading || roleLoading) {
     return (
       <div className="flex min-h-screen bg-background">
         <DashboardSidebar />
