@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Navigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
+import { useTranslation } from "@/hooks/useTranslation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -9,24 +10,24 @@ import { useToast } from "@/hooks/use-toast";
 import { Zap } from "lucide-react";
 import { z } from "zod";
 
-const authSchema = z.object({
-  email: z.string().email("Bitte geben Sie eine gültige E-Mail-Adresse ein"),
-  password: z.string().min(6, "Passwort muss mindestens 6 Zeichen lang sein"),
-});
-
 const Auth = () => {
-  const { user, loading } = useAuth();
-  const { signIn, signUp } = useAuth();
+  const { user, loading, signIn, signUp } = useAuth();
+  const { t } = useTranslation();
   const { toast } = useToast();
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
+  const authSchema = z.object({
+    email: z.string().email(t("auth.invalidCredentials")),
+    password: z.string().min(6, t("auth.password")),
+  });
+
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
-        <div className="animate-pulse text-muted-foreground">Laden...</div>
+        <div className="animate-pulse text-muted-foreground">{t("common.loading")}</div>
       </div>
     );
   }
@@ -37,7 +38,7 @@ const Auth = () => {
     e.preventDefault();
     const result = authSchema.safeParse({ email, password });
     if (!result.success) {
-      toast({ title: "Fehler", description: result.error.errors[0].message, variant: "destructive" });
+      toast({ title: t("common.error"), description: result.error.errors[0].message, variant: "destructive" });
       return;
     }
 
@@ -47,11 +48,11 @@ const Auth = () => {
 
     if (error) {
       let message = error.message;
-      if (message.includes("Invalid login")) message = "Ungültige E-Mail oder Passwort";
-      if (message.includes("already registered")) message = "Diese E-Mail ist bereits registriert";
-      toast({ title: "Fehler", description: message, variant: "destructive" });
+      if (message.includes("Invalid login")) message = t("auth.invalidCredentials");
+      if (message.includes("already registered")) message = t("auth.emailAlreadyRegistered");
+      toast({ title: t("common.error"), description: message, variant: "destructive" });
     } else if (!isLogin) {
-      toast({ title: "Registrierung erfolgreich", description: "Bitte bestätigen Sie Ihre E-Mail-Adresse." });
+      toast({ title: t("auth.registrationSuccess"), description: t("auth.confirmEmail") });
     }
   };
 
@@ -67,7 +68,7 @@ const Auth = () => {
             <h1 className="text-3xl font-display font-bold">Smart Energy Hub</h1>
           </div>
           <p className="text-lg opacity-80 leading-relaxed">
-            Ihr intelligentes B2B-Dashboard für Energiemanagement. Verbrauch analysieren, Kosten optimieren und Nachhaltigkeitsziele erreichen.
+            {t("auth.appDescription")}
           </p>
         </div>
       </div>
@@ -83,27 +84,27 @@ const Auth = () => {
               <span className="text-xl font-display font-bold">Smart Energy Hub</span>
             </div>
             <CardTitle className="text-2xl font-display">
-              {isLogin ? "Willkommen zurück" : "Konto erstellen"}
+              {isLogin ? t("auth.welcomeBack") : t("auth.createAccount")}
             </CardTitle>
             <CardDescription>
-              {isLogin ? "Melden Sie sich an, um fortzufahren" : "Erstellen Sie Ihr Unternehmenskonto"}
+              {isLogin ? t("auth.loginSubtitle") : t("auth.registerSubtitle")}
             </CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="email">E-Mail</Label>
+                <Label htmlFor="email">{t("auth.email")}</Label>
                 <Input
                   id="email"
                   type="email"
-                  placeholder="name@unternehmen.de"
+                  placeholder={t("auth.emailPlaceholder")}
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="password">Passwort</Label>
+                <Label htmlFor="password">{t("auth.password")}</Label>
                 <Input
                   id="password"
                   type="password"
@@ -114,16 +115,16 @@ const Auth = () => {
                 />
               </div>
               <Button type="submit" className="w-full" disabled={submitting}>
-                {submitting ? "Laden..." : isLogin ? "Anmelden" : "Registrieren"}
+                {submitting ? t("common.loading") : isLogin ? t("auth.login") : t("auth.register")}
               </Button>
             </form>
             <div className="mt-4 text-center text-sm text-muted-foreground">
-              {isLogin ? "Noch kein Konto?" : "Bereits registriert?"}{" "}
+              {isLogin ? t("auth.noAccount") : t("auth.hasAccount")}{" "}
               <button
                 onClick={() => setIsLogin(!isLogin)}
                 className="text-accent hover:underline font-medium"
               >
-                {isLogin ? "Jetzt registrieren" : "Anmelden"}
+                {isLogin ? t("auth.registerNow") : t("auth.loginNow")}
               </button>
             </div>
           </CardContent>

@@ -1,6 +1,7 @@
 import { Navigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useDashboardWidgets } from "@/hooks/useDashboardWidgets";
+import { useTranslation } from "@/hooks/useTranslation";
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
 import DashboardCustomizer from "@/components/dashboard/DashboardCustomizer";
 import EnergyChart from "@/components/dashboard/EnergyChart";
@@ -20,11 +21,12 @@ const WIDGET_COMPONENTS: Record<string, React.ComponentType> = {
 const Index = () => {
   const { user, loading } = useAuth();
   const { widgets, visibleWidgets, loading: widgetsLoading, toggleWidgetVisibility } = useDashboardWidgets();
+  const { t } = useTranslation();
 
   if (loading || widgetsLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
-        <div className="animate-pulse text-muted-foreground">Laden...</div>
+        <div className="animate-pulse text-muted-foreground">{t("common.loading")}</div>
       </div>
     );
   }
@@ -37,8 +39,8 @@ const Index = () => {
       <main className="flex-1 overflow-auto">
         <header className="border-b p-6 flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-display font-bold">Energie-Dashboard</h1>
-            <p className="text-sm text-muted-foreground mt-1">Übersicht Ihrer Energiedaten und Kennzahlen</p>
+            <h1 className="text-2xl font-display font-bold">{t("dashboard.energyDashboard")}</h1>
+            <p className="text-sm text-muted-foreground mt-1">{t("dashboard.subtitle")}</p>
           </div>
           <DashboardCustomizer 
             widgets={widgets} 
@@ -52,8 +54,8 @@ const Index = () => {
           })}
           {visibleWidgets.length === 0 && (
             <div className="text-center py-12 text-muted-foreground">
-              <p>Keine Widgets aktiviert.</p>
-              <p className="text-sm mt-1">Nutzen Sie "Dashboard anpassen" um Widgets hinzuzufügen.</p>
+              <p>{t("dashboard.noWidgets")}</p>
+              <p className="text-sm mt-1">{t("dashboard.noWidgetsHint")}</p>
             </div>
           )}
         </div>
