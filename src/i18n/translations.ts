@@ -1676,6 +1676,48 @@ export const translations = {
     es: "Gestión de usuarios y roles",
     nl: "Gebruikers- en rollenbeheer",
   },
+  "help.changelog101Feature1": {
+    de: "Etagenverwaltung mit Grundrissplänen für jedes Gebäude",
+    en: "Floor management with floor plans for each building",
+    es: "Gestión de pisos con planos para cada edificio",
+    nl: "Verdiepingsbeheer met plattegronden voor elk gebouw",
+  },
+  "help.changelog101Feature2": {
+    de: "Standort-Detailseiten mit Kontaktdaten und Etagen-Übersicht",
+    en: "Location detail pages with contact info and floor overview",
+    es: "Páginas de detalle de ubicación con información de contacto y resumen de pisos",
+    nl: "Locatiedetailpagina's met contactgegevens en verdiepingenoverzicht",
+  },
+  "help.changelog101Improvement1": {
+    de: "Verbesserte Baumansicht mit Etagen-Hierarchie",
+    en: "Improved tree view with floor hierarchy",
+    es: "Vista de árbol mejorada con jerarquía de pisos",
+    nl: "Verbeterde boomweergave met verdiepingenhiërarchie",
+  },
+  "help.faq6Question": {
+    de: "Wie verwalte ich Etagen für ein Gebäude?",
+    en: "How do I manage floors for a building?",
+    es: "¿Cómo gestiono los pisos de un edificio?",
+    nl: "Hoe beheer ik verdiepingen voor een gebouw?",
+  },
+  "help.faq6Answer": {
+    de: "Klicken Sie auf den Standortnamen, um zur Detailseite zu gelangen. Dort finden Sie den Bereich 'Etagen', wo Sie Etagen hinzufügen, bearbeiten und Grundrisspläne hochladen können.",
+    en: "Click on the location name to go to the detail page. There you'll find the 'Floors' section where you can add, edit floors and upload floor plans.",
+    es: "Haga clic en el nombre de la ubicación para ir a la página de detalles. Allí encontrará la sección 'Pisos' donde puede agregar, editar pisos y cargar planos.",
+    nl: "Klik op de locatienaam om naar de detailpagina te gaan. Daar vindt u de sectie 'Verdiepingen' waar u verdiepingen kunt toevoegen, bewerken en plattegronden kunt uploaden.",
+  },
+  "help.floorManagement": {
+    de: "Etagenverwaltung",
+    en: "Floor Management",
+    es: "Gestión de pisos",
+    nl: "Verdiepingsbeheer",
+  },
+  "help.floorManagementDesc": {
+    de: "Etagen und Grundrisspläne verwalten",
+    en: "Manage floors and floor plans",
+    es: "Gestionar pisos y planos",
+    nl: "Verdiepingen en plattegronden beheren",
+  },
 } as const;
 
 export type TranslationKey = keyof typeof translations;
