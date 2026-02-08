@@ -553,12 +553,20 @@ serve(async (req) => {
         typeGroups[type].push(sensor.name);
       }
       
+      // Find sensors with Pf/Mrc states
+      const sensorsWithPfMrc = sensorList.filter(s => 
+        s.stateNames.includes("Pf") || 
+        s.stateNames.includes("Mrc") || 
+        s.stateNames.includes("Mrd")
+      );
+      
       return new Response(
         JSON.stringify({ 
           success: true, 
           sensors: sensorList,
           count: sensorList.length,
           typeGroups,
+          sensorsWithPfMrc,
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
