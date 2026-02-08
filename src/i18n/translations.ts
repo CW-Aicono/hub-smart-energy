@@ -598,6 +598,78 @@ export const translations = {
     es: "No se pudo actualizar el usuario.",
     nl: "Kon gebruiker niet bijwerken.",
   },
+  "users.userUpdated": {
+    de: "Benutzer erfolgreich aktualisiert",
+    en: "User updated successfully",
+    es: "Usuario actualizado con éxito",
+    nl: "Gebruiker succesvol bijgewerkt",
+  },
+  "users.editUser": {
+    de: "Benutzer bearbeiten",
+    en: "Edit User",
+    es: "Editar usuario",
+    nl: "Gebruiker bewerken",
+  },
+  "users.editUserDescription": {
+    de: "Bearbeiten Sie die Benutzerdaten",
+    en: "Edit user details",
+    es: "Editar los datos del usuario",
+    nl: "Bewerk de gebruikersgegevens",
+  },
+  "users.contactPerson": {
+    de: "Ansprechpartner",
+    en: "Contact Person",
+    es: "Persona de contacto",
+    nl: "Contactpersoon",
+  },
+  "users.contactPersonPlaceholder": {
+    de: "Name des Ansprechpartners",
+    en: "Name of contact person",
+    es: "Nombre de la persona de contacto",
+    nl: "Naam van de contactpersoon",
+  },
+  "users.companyName": {
+    de: "Firmenname",
+    en: "Company Name",
+    es: "Nombre de la empresa",
+    nl: "Bedrijfsnaam",
+  },
+  "users.companyNamePlaceholder": {
+    de: "Name der Firma",
+    en: "Name of the company",
+    es: "Nombre de la empresa",
+    nl: "Naam van het bedrijf",
+  },
+  "users.deleteUserTitle": {
+    de: "Benutzer löschen",
+    en: "Delete User",
+    es: "Eliminar usuario",
+    nl: "Gebruiker verwijderen",
+  },
+  "users.deleteUserConfirmation": {
+    de: "Möchten Sie diesen Benutzer wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.",
+    en: "Are you sure you want to delete this user? This action cannot be undone.",
+    es: "¿Está seguro de que desea eliminar este usuario? Esta acción no se puede deshacer.",
+    nl: "Weet u zeker dat u deze gebruiker wilt verwijderen? Deze actie kan niet ongedaan worden gemaakt.",
+  },
+  "users.userDeleted": {
+    de: "Benutzer erfolgreich gelöscht",
+    en: "User deleted successfully",
+    es: "Usuario eliminado con éxito",
+    nl: "Gebruiker succesvol verwijderd",
+  },
+  "users.deleteError": {
+    de: "Benutzer konnte nicht gelöscht werden.",
+    en: "Failed to delete user.",
+    es: "No se pudo eliminar el usuario.",
+    nl: "Kon gebruiker niet verwijderen.",
+  },
+  "users.cannotDeleteLastAdmin": {
+    de: "Der letzte Administrator kann nicht gelöscht werden.",
+    en: "The last administrator cannot be deleted.",
+    es: "El último administrador no puede ser eliminado.",
+    nl: "De laatste beheerder kan niet worden verwijderd.",
+  },
 
   // Profile Settings
   "profile.title": {
