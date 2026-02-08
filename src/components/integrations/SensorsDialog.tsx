@@ -15,17 +15,22 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Thermometer, Droplets, Gauge, Lightbulb, Power, Activity } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Loader2, Thermometer, Droplets, Gauge, Lightbulb, Power, Activity, RefreshCw, AlertCircle } from "lucide-react";
 import { Integration } from "@/hooks/useIntegrations";
+import { supabase } from "@/integrations/supabase/client";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 interface Sensor {
   id: string;
   name: string;
   type: string;
+  controlType?: string;
+  room: string;
+  category: string;
   value: string;
   unit: string;
   status: "online" | "offline" | "warning";
-  lastUpdate: string;
 }
 
 interface SensorsDialogProps {
@@ -33,82 +38,6 @@ interface SensorsDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
-
-// Mock data - in real implementation this would come from the Loxone API
-const getMockSensors = (integrationId: string): Sensor[] => [
-  {
-    id: "1",
-    name: "Außentemperatur",
-    type: "temperature",
-    value: "12.5",
-    unit: "°C",
-    status: "online",
-    lastUpdate: "vor 2 Min.",
-  },
-  {
-    id: "2",
-    name: "Raumtemperatur Büro",
-    type: "temperature",
-    value: "21.3",
-    unit: "°C",
-    status: "online",
-    lastUpdate: "vor 1 Min.",
-  },
-  {
-    id: "3",
-    name: "Luftfeuchtigkeit",
-    type: "humidity",
-    value: "45",
-    unit: "%",
-    status: "online",
-    lastUpdate: "vor 3 Min.",
-  },
-  {
-    id: "4",
-    name: "Stromverbrauch Gesamt",
-    type: "power",
-    value: "2.45",
-    unit: "kW",
-    status: "online",
-    lastUpdate: "vor 1 Min.",
-  },
-  {
-    id: "5",
-    name: "Beleuchtung Flur",
-    type: "light",
-    value: "Ein",
-    unit: "",
-    status: "online",
-    lastUpdate: "vor 5 Min.",
-  },
-  {
-    id: "6",
-    name: "Drucksensor Heizung",
-    type: "pressure",
-    value: "1.8",
-    unit: "bar",
-    status: "warning",
-    lastUpdate: "vor 10 Min.",
-  },
-  {
-    id: "7",
-    name: "Bewegungsmelder EG",
-    type: "motion",
-    value: "Keine Bewegung",
-    unit: "",
-    status: "online",
-    lastUpdate: "vor 30 Sek.",
-  },
-  {
-    id: "8",
-    name: "Wasserverbrauch",
-    type: "water",
-    value: "125",
-    unit: "L/h",
-    status: "offline",
-    lastUpdate: "vor 2 Std.",
-  },
-];
 
 const getSensorIcon = (type: string) => {
   switch (type) {
@@ -118,10 +47,13 @@ const getSensorIcon = (type: string) => {
     case "water":
       return <Droplets className="h-4 w-4" />;
     case "pressure":
+    case "analog":
       return <Gauge className="h-4 w-4" />;
     case "light":
+    case "dimmer":
       return <Lightbulb className="h-4 w-4" />;
     case "power":
+    case "switch":
       return <Power className="h-4 w-4" />;
     default:
       return <Activity className="h-4 w-4" />;
@@ -142,16 +74,48 @@ const getStatusBadge = (status: Sensor["status"]) => {
 export function SensorsDialog({ integration, open, onOpenChange }: SensorsDialogProps) {
   const [loading, setLoading] = useState(false);
   const [sensors, setSensors] = useState<Sensor[]>([]);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchSensors = async () => {
+    if (!integration) return;
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      console.log("Fetching sensors for integration:", integration.id);
+      
+      const { data, error: fnError } = await supabase.functions.invoke("loxone-api", {
+        body: {
+          integrationId: integration.id,
+          action: "getSensors",
+        },
+      });
+
+      if (fnError) {
+        console.error("Edge function error:", fnError);
+        throw new Error(fnError.message || "Fehler beim Abrufen der Sensoren");
+      }
+
+      if (!data?.success) {
+        throw new Error(data?.error || "Unbekannter Fehler");
+      }
+
+      console.log("Received sensors:", data.sensors?.length);
+      setSensors(data.sensors || []);
+    } catch (err) {
+      console.error("Failed to fetch sensors:", err);
+      setError(err instanceof Error ? err.message : "Verbindung zum Miniserver fehlgeschlagen");
+      setSensors([]);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Load sensors when dialog opens
   const handleOpenChange = (isOpen: boolean) => {
     if (isOpen && integration) {
-      setLoading(true);
-      // Simulate API call
-      setTimeout(() => {
-        setSensors(getMockSensors(integration.id));
-        setLoading(false);
-      }, 1000);
+      fetchSensors();
     }
     onOpenChange(isOpen);
   };
@@ -160,56 +124,76 @@ export function SensorsDialog({ integration, open, onOpenChange }: SensorsDialog
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="max-w-4xl max-h-[80vh] overflow-hidden flex flex-col">
         <DialogHeader>
-          <DialogTitle>
-            Sensoren & Messgeräte – {integration?.name}
-          </DialogTitle>
-          <DialogDescription>
-            Übersicht aller verfügbaren Sensoren und Messgeräte vom Gateway
-          </DialogDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <DialogTitle>
+                Sensoren & Messgeräte – {integration?.name}
+              </DialogTitle>
+              <DialogDescription>
+                Übersicht aller verfügbaren Sensoren und Messgeräte vom Gateway
+              </DialogDescription>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={fetchSensors}
+              disabled={loading}
+            >
+              <RefreshCw className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`} />
+              Aktualisieren
+            </Button>
+          </div>
         </DialogHeader>
 
         <div className="flex-1 overflow-auto">
+          {error && (
+            <Alert variant="destructive" className="mb-4">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+
           {loading ? (
             <div className="flex items-center justify-center py-12">
               <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-              <span className="ml-2 text-muted-foreground">Lade Sensoren...</span>
+              <span className="ml-2 text-muted-foreground">Lade Sensoren vom Miniserver...</span>
             </div>
-          ) : sensors.length === 0 ? (
+          ) : sensors.length === 0 && !error ? (
             <div className="text-center py-12 text-muted-foreground">
               Keine Sensoren gefunden
             </div>
-          ) : (
+          ) : sensors.length > 0 ? (
             <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-[50px]">Typ</TableHead>
                   <TableHead>Name</TableHead>
+                  <TableHead>Raum</TableHead>
+                  <TableHead>Kategorie</TableHead>
                   <TableHead className="text-right">Wert</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Letzte Aktualisierung</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {sensors.map((sensor) => (
                   <TableRow key={sensor.id}>
                     <TableCell>
-                      <div className="p-1.5 rounded bg-muted w-fit">
+                      <div className="p-1.5 rounded bg-muted w-fit" title={sensor.controlType}>
                         {getSensorIcon(sensor.type)}
                       </div>
                     </TableCell>
                     <TableCell className="font-medium">{sensor.name}</TableCell>
+                    <TableCell className="text-muted-foreground">{sensor.room}</TableCell>
+                    <TableCell className="text-muted-foreground">{sensor.category}</TableCell>
                     <TableCell className="text-right font-mono">
                       {sensor.value} {sensor.unit}
                     </TableCell>
                     <TableCell>{getStatusBadge(sensor.status)}</TableCell>
-                    <TableCell className="text-right text-muted-foreground text-sm">
-                      {sensor.lastUpdate}
-                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
             </Table>
-          )}
+          ) : null}
         </div>
       </DialogContent>
     </Dialog>
