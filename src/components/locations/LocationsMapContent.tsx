@@ -1,13 +1,12 @@
-import { useEffect } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
-import { Icon, LatLngBounds } from "leaflet";
+import { Icon, LatLngBounds, Map as LeafletMap } from "leaflet";
 import { Location } from "@/hooks/useLocations";
 import { Building2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-// CSS is now imported globally in App.tsx
+// CSS is imported globally in App.tsx
 
-// Fix for default marker icons in Leaflet with bundlers
 const defaultIcon = new Icon({
   iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
   iconRetinaUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
@@ -33,6 +32,10 @@ function MapBoundsUpdater({ locations }: { locations: Location[] }) {
         locations.map((loc) => [loc.latitude!, loc.longitude!])
       );
       map.fitBounds(bounds, { padding: [50, 50] });
+
+      // Prevent a common Leaflet issue where the map is rendered before its container
+      // has a final size (can appear as a blank/white map).
+      setTimeout(() => map.invalidateSize(), 0);
     }
   }, [locations, map]);
 
@@ -46,23 +49,36 @@ const typeLabels: Record<string, string> = {
 };
 
 function LocationsMapContent({ locations, onLocationClick, className }: LocationsMapContentProps) {
-  // Default center: Germany
+  const mapRef = useRef<LeafletMap | null>(null);
+
   const defaultCenter: [number, number] = [51.1657, 10.4515];
   const defaultZoom = 6;
 
+  const containerClass = useMemo(
+    () => cn("h-full min-h-[300px] rounded-lg overflow-hidden border", className),
+    [className]
+  );
+
   return (
-    <div className={cn("h-full min-h-[300px] rounded-lg overflow-hidden border", className)}>
+    <div className={containerClass}>
       <MapContainer
+        ref={mapRef}
         center={defaultCenter}
         zoom={defaultZoom}
         className="h-full w-full"
         scrollWheelZoom={true}
+        whenReady={() => {
+          // Ensure tiles render after mount
+          setTimeout(() => mapRef.current?.invalidateSize(), 0);
+        }}
       >
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
+
         <MapBoundsUpdater locations={locations} />
+
         {locations.map((location) => (
           <Marker
             key={location.id}
