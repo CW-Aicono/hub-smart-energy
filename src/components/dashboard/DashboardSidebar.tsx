@@ -4,7 +4,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useTranslation } from "@/hooks/useTranslation";
 import { Button } from "@/components/ui/button";
-import { LayoutDashboard, LogOut, Shield, Settings, Users, ChevronDown, ChevronRight, MapPin, PanelLeftClose, PanelLeft, UserCircle, Key, HelpCircle, Plug } from "lucide-react";
+import { LayoutDashboard, LogOut, Shield, Settings, Users, ChevronDown, ChevronRight, MapPin, PanelLeftClose, PanelLeft, UserCircle, Key, HelpCircle, Plug, Palette } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TenantLogo } from "@/components/tenant/TenantLogo";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -57,6 +57,9 @@ const DashboardSidebar = () => {
     if (location.pathname === "/admin" || location.pathname === "/roles") {
       setOpenMenus((prev) => prev.includes("/admin") ? prev : [...prev, "/admin"]);
     }
+    if (location.pathname === "/settings" || location.pathname === "/settings/branding" || location.pathname === "/integrations") {
+      setOpenMenus((prev) => prev.includes("/settings") ? prev : [...prev, "/settings"]);
+    }
   }, [location.pathname]);
 
   const toggleMenu = (to: string) => {
@@ -77,8 +80,15 @@ const DashboardSidebar = () => {
           { to: "/roles", icon: Key, labelKey: "nav.rolesAndPermissions" as TranslationKey },
         ]
       },
-      { to: "/integrations", icon: Plug, labelKey: "nav.integrations" as TranslationKey },
-      { to: "/settings", icon: Settings, labelKey: "nav.settings" as TranslationKey },
+      { 
+        to: "/settings", 
+        icon: Settings, 
+        labelKey: "nav.settings" as TranslationKey,
+        children: [
+          { to: "/settings/branding", icon: Palette, labelKey: "nav.branding" as TranslationKey },
+          { to: "/integrations", icon: Plug, labelKey: "nav.integrations" as TranslationKey },
+        ]
+      },
     ] : []),
     { to: "/help", icon: HelpCircle, labelKey: "nav.helpAndSupport" as TranslationKey },
   ];
@@ -111,19 +121,6 @@ const DashboardSidebar = () => {
             </button>
           </CollapsibleTrigger>
           <CollapsibleContent className="pl-4 mt-1 space-y-1">
-            {/* Parent link */}
-            <NavLink
-              to={item.to}
-              className={cn(
-                "flex items-center rounded-lg text-sm font-medium transition-colors gap-3 px-3 py-2",
-                isActive
-                  ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                  : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
-              )}
-            >
-              <Users className="h-4 w-4 shrink-0" />
-              <span>{t("nav.manageUsers")}</span>
-            </NavLink>
             {/* Children */}
             {item.children?.map((child) => {
               const isChildItemActive = location.pathname === child.to;
@@ -172,12 +169,6 @@ const DashboardSidebar = () => {
             </TooltipContent>
           </Tooltip>
           <DropdownMenuContent side="right" align="start" className="w-48 bg-popover">
-            <DropdownMenuItem asChild>
-              <NavLink to={item.to} className="flex items-center gap-2 cursor-pointer">
-                <Users className="h-4 w-4" />
-                {t("nav.manageUsers")}
-              </NavLink>
-            </DropdownMenuItem>
             {item.children?.map((child) => (
               <DropdownMenuItem key={child.to} asChild>
                 <NavLink to={child.to} className="flex items-center gap-2 cursor-pointer">
