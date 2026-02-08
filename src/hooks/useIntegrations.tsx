@@ -45,6 +45,7 @@ export interface LoxoneConfig {
   username: string;
   password: string;
   use_ssl: boolean;
+  serial_number: string;
 }
 
 interface UseIntegrationsReturn {

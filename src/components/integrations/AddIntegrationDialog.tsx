@@ -35,6 +35,7 @@ import {
 
 const loxoneConfigSchema = z.object({
   integration_id: z.string().min(1, "Bitte wählen Sie eine Integration"),
+  serial_number: z.string().min(1, "Seriennummer ist erforderlich"),
   host: z.string().min(1, "Host ist erforderlich"),
   port: z.coerce.number().min(1, "Port ist erforderlich").max(65535, "Ungültiger Port"),
   username: z.string().min(1, "Benutzername ist erforderlich"),
@@ -60,6 +61,7 @@ export function AddIntegrationDialog({ locationId, onSuccess }: AddIntegrationDi
     resolver: zodResolver(loxoneConfigSchema),
     defaultValues: {
       integration_id: "",
+      serial_number: "",
       host: "",
       port: 80,
       username: "",
@@ -82,6 +84,7 @@ export function AddIntegrationDialog({ locationId, onSuccess }: AddIntegrationDi
       username: values.username,
       password: values.password,
       use_ssl: values.use_ssl,
+      serial_number: values.serial_number,
     };
 
     const result = await testConnection(config);
@@ -108,6 +111,7 @@ export function AddIntegrationDialog({ locationId, onSuccess }: AddIntegrationDi
       username: data.username,
       password: data.password,
       use_ssl: data.use_ssl,
+      serial_number: data.serial_number,
     };
 
     const { error } = await addIntegration(locationId, data.integration_id, config);
@@ -178,6 +182,23 @@ export function AddIntegrationDialog({ locationId, onSuccess }: AddIntegrationDi
                       ))}
                     </SelectContent>
                   </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="serial_number"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Seriennummer</FormLabel>
+                  <FormControl>
+                    <Input placeholder="504F94A0XXXX" {...field} />
+                  </FormControl>
+                  <FormDescription>
+                    Die Seriennummer des Loxone Miniservers
+                  </FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
