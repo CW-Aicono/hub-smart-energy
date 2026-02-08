@@ -159,6 +159,50 @@ export type Database = {
           },
         ]
       }
+      floors: {
+        Row: {
+          area_sqm: number | null
+          created_at: string
+          description: string | null
+          floor_number: number
+          floor_plan_url: string | null
+          id: string
+          location_id: string
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          area_sqm?: number | null
+          created_at?: string
+          description?: string | null
+          floor_number?: number
+          floor_plan_url?: string | null
+          id?: string
+          location_id: string
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          area_sqm?: number | null
+          created_at?: string
+          description?: string | null
+          floor_number?: number
+          floor_plan_url?: string | null
+          id?: string
+          location_id?: string
+          name?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "floors_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       locations: {
         Row: {
           address: string | null
