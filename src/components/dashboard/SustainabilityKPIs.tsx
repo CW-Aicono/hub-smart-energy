@@ -1,7 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { sustainabilityKPIs } from "@/data/mockData";
-import { Leaf, Wind, Gauge } from "lucide-react";
+import { Leaf, Wind, Gauge, Cloud } from "lucide-react";
 
 interface SustainabilityKPIsProps {
   locationId: string | null;
@@ -22,7 +22,9 @@ const SustainabilityKPIs = ({ locationId }: SustainabilityKPIsProps) => {
       <CardContent className="space-y-6">
         <div>
           <div className="flex items-center justify-between mb-2">
-            <span className="text-sm font-medium">CO₂-Emissionen</span>
+            <span className="text-sm font-medium flex items-center gap-1">
+              <Cloud className="h-4 w-4 text-accent" /> CO₂-Emissionen
+            </span>
             <span className="text-sm text-muted-foreground">
               {sustainabilityKPIs.co2Current}t / {sustainabilityKPIs.co2Target}t Ziel
             </span>
