@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { useTranslation } from "@/hooks/useTranslation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -7,6 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { UserCheck, UserX, Shield, User } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import EditUserDialog from "./EditUserDialog";
+import DeleteUserDialog from "./DeleteUserDialog";
 
 interface UserWithRole {
   id: string;
@@ -20,9 +23,12 @@ interface UserWithRole {
 }
 
 const UserManagement = () => {
+  const { t } = useTranslation();
   const [users, setUsers] = useState<UserWithRole[]>([]);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
+
+  const adminCount = users.filter((u) => u.role === "admin").length;
 
   const fetchUsers = async () => {
     setLoading(true);
@@ -53,7 +59,7 @@ const UserManagement = () => {
       return {
         id: profile.id,
         user_id: profile.user_id,
-        email: profile.user_id, // Will be fetched from auth
+        email: profile.user_id,
         company_name: profile.company_name,
         contact_person: profile.contact_person,
         is_blocked: profile.is_blocked,
@@ -78,14 +84,14 @@ const UserManagement = () => {
 
     if (error) {
       toast({
-        title: "Fehler",
-        description: "Benutzer konnte nicht aktualisiert werden.",
+        title: t("common.error"),
+        description: t("users.userUpdateError"),
         variant: "destructive",
       });
     } else {
       toast({
-        title: currentlyBlocked ? "Benutzer entsperrt" : "Benutzer gesperrt",
-        description: `Der Benutzer wurde erfolgreich ${currentlyBlocked ? "entsperrt" : "gesperrt"}.`,
+        title: currentlyBlocked ? t("users.userUnblocked") : t("users.userBlocked"),
+        description: currentlyBlocked ? t("users.userUnblocked") : t("users.userBlocked"),
       });
       fetchUsers();
     }
@@ -99,14 +105,14 @@ const UserManagement = () => {
 
     if (error) {
       toast({
-        title: "Fehler",
-        description: "Rolle konnte nicht aktualisiert werden.",
+        title: t("common.error"),
+        description: t("users.roleUpdateError"),
         variant: "destructive",
       });
     } else {
       toast({
-        title: "Rolle aktualisiert",
-        description: `Die Rolle wurde erfolgreich auf "${newRole === "admin" ? "Administrator" : "Benutzer"}" geändert.`,
+        title: t("users.roleUpdated"),
+        description: t("users.roleUpdated"),
       });
       fetchUsers();
     }
@@ -116,7 +122,7 @@ const UserManagement = () => {
     return (
       <Card>
         <CardContent className="p-6">
-          <div className="animate-pulse text-muted-foreground">Lade Benutzer...</div>
+          <div className="animate-pulse text-muted-foreground">{t("common.loading")}</div>
         </CardContent>
       </Card>
     );
@@ -127,23 +133,23 @@ const UserManagement = () => {
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Shield className="h-5 w-5" />
-          Benutzerverwaltung
+          {t("users.management")}
         </CardTitle>
       </CardHeader>
       <CardContent>
         {users.length === 0 ? (
           <p className="text-muted-foreground text-center py-8">
-            Noch keine Benutzer vorhanden.
+            {t("users.noUsers")}
           </p>
         ) : (
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Benutzer</TableHead>
-                <TableHead>Firma</TableHead>
-                <TableHead>Rolle</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right">Aktionen</TableHead>
+                <TableHead>{t("users.user")}</TableHead>
+                <TableHead>{t("users.company")}</TableHead>
+                <TableHead>{t("users.role")}</TableHead>
+                <TableHead>{t("common.status")}</TableHead>
+                <TableHead className="text-right">{t("common.actions")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -155,7 +161,7 @@ const UserManagement = () => {
                         <User className="h-4 w-4 text-primary" />
                       </div>
                       <div>
-                        <p className="font-medium">{user.contact_person || "Unbekannt"}</p>
+                        <p className="font-medium">{user.contact_person || t("users.unknown")}</p>
                         <p className="text-xs text-muted-foreground truncate max-w-[200px]">
                           {user.user_id}
                         </p>
@@ -177,13 +183,13 @@ const UserManagement = () => {
                         <SelectItem value="admin">
                           <div className="flex items-center gap-2">
                             <Shield className="h-3 w-3" />
-                            Administrator
+                            {t("users.admin")}
                           </div>
                         </SelectItem>
                         <SelectItem value="user">
                           <div className="flex items-center gap-2">
                             <User className="h-3 w-3" />
-                            Benutzer
+                            {t("users.userRole")}
                           </div>
                         </SelectItem>
                       </SelectContent>
@@ -191,27 +197,37 @@ const UserManagement = () => {
                   </TableCell>
                   <TableCell>
                     <Badge variant={user.is_blocked ? "destructive" : "default"}>
-                      {user.is_blocked ? "Gesperrt" : "Aktiv"}
+                      {user.is_blocked ? t("common.blocked") : t("common.active")}
                     </Badge>
                   </TableCell>
-                  <TableCell className="text-right">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => toggleBlockUser(user.user_id, user.is_blocked)}
-                    >
-                      {user.is_blocked ? (
-                        <>
-                          <UserCheck className="h-4 w-4 mr-1" />
-                          Entsperren
-                        </>
-                      ) : (
-                        <>
-                          <UserX className="h-4 w-4 mr-1" />
-                          Sperren
-                        </>
-                      )}
-                    </Button>
+                  <TableCell>
+                    <div className="flex items-center justify-end gap-1">
+                      <EditUserDialog user={user} onSuccess={fetchUsers} />
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => toggleBlockUser(user.user_id, user.is_blocked)}
+                      >
+                        {user.is_blocked ? (
+                          <>
+                            <UserCheck className="h-4 w-4 mr-1" />
+                            {t("users.unblock")}
+                          </>
+                        ) : (
+                          <>
+                            <UserX className="h-4 w-4 mr-1" />
+                            {t("users.block")}
+                          </>
+                        )}
+                      </Button>
+                      <DeleteUserDialog
+                        userId={user.user_id}
+                        userName={user.contact_person || t("users.unknown")}
+                        isAdmin={user.role === "admin"}
+                        adminCount={adminCount}
+                        onSuccess={fetchUsers}
+                      />
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
