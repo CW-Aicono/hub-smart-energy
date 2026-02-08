@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
 
-export type Language = "de" | "en";
+export type Language = "de" | "en" | "es" | "nl";
 export type ColorScheme = "default" | "ocean" | "forest" | "sunset" | "lavender" | "slate" | "rose" | "amber";
 export type ThemeMode = "light" | "dark" | "system";
 

@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
+import { useTranslation } from "@/hooks/useTranslation";
 import { Button } from "@/components/ui/button";
 import { LayoutDashboard, LogOut, Shield, Settings, Users, ChevronDown, ChevronRight, MapPin, PanelLeftClose, PanelLeft, UserCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -23,19 +24,21 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
+import { TranslationKey } from "@/i18n/translations";
 
 const SIDEBAR_COLLAPSED_KEY = "sidebar-collapsed";
 
 interface NavItem {
   to: string;
   icon: typeof LayoutDashboard;
-  label: string;
-  children?: { to: string; icon: typeof Users; label: string }[];
+  labelKey: TranslationKey;
+  children?: { to: string; icon: typeof Users; labelKey: TranslationKey }[];
 }
 
 const DashboardSidebar = () => {
   const { signOut, user } = useAuth();
   const { isAdmin } = useUserRole();
+  const { t } = useTranslation();
   const location = useLocation();
   
   const [collapsed, setCollapsed] = useState(() => {
@@ -63,18 +66,18 @@ const DashboardSidebar = () => {
   };
 
   const navItems: NavItem[] = [
-    { to: "/", icon: LayoutDashboard, label: "Dashboard" },
-    { to: "/locations", icon: MapPin, label: "Standorte" },
+    { to: "/", icon: LayoutDashboard, labelKey: "nav.dashboard" },
+    { to: "/locations", icon: MapPin, labelKey: "nav.locations" },
     ...(isAdmin ? [
       { 
         to: "/admin", 
         icon: Shield, 
-        label: "Benutzerverwaltung",
+        labelKey: "nav.userManagement" as TranslationKey,
         children: [
-          { to: "/roles", icon: Users, label: "Rollen & Rechte" },
+          { to: "/roles", icon: Users, labelKey: "nav.rolesAndPermissions" as TranslationKey },
         ]
       },
-      { to: "/settings", icon: Settings, label: "Einstellungen" },
+      { to: "/settings", icon: Settings, labelKey: "nav.settings" as TranslationKey },
     ] : []),
   ];
 
@@ -101,7 +104,7 @@ const DashboardSidebar = () => {
               )}
             >
               <item.icon className="h-4 w-4 shrink-0" />
-              <span className="flex-1 text-left">{item.label}</span>
+              <span className="flex-1 text-left">{t(item.labelKey)}</span>
               <ChevronRight className={cn("h-4 w-4 transition-transform", isOpen && "rotate-90")} />
             </button>
           </CollapsibleTrigger>
@@ -117,7 +120,7 @@ const DashboardSidebar = () => {
               )}
             >
               <Users className="h-4 w-4 shrink-0" />
-              <span>Nutzer verwalten</span>
+              <span>{t("nav.manageUsers")}</span>
             </NavLink>
             {/* Children */}
             {item.children?.map((child) => {
@@ -134,7 +137,7 @@ const DashboardSidebar = () => {
                   )}
                 >
                   <child.icon className="h-4 w-4 shrink-0" />
-                  <span>{child.label}</span>
+                  <span>{t(child.labelKey)}</span>
                 </NavLink>
               );
             })}
@@ -163,21 +166,21 @@ const DashboardSidebar = () => {
               </DropdownMenuTrigger>
             </TooltipTrigger>
             <TooltipContent side="right" className="bg-popover">
-              {item.label}
+              {t(item.labelKey)}
             </TooltipContent>
           </Tooltip>
           <DropdownMenuContent side="right" align="start" className="w-48 bg-popover">
             <DropdownMenuItem asChild>
               <NavLink to={item.to} className="flex items-center gap-2 cursor-pointer">
                 <Users className="h-4 w-4" />
-                Nutzer verwalten
+                {t("nav.manageUsers")}
               </NavLink>
             </DropdownMenuItem>
             {item.children?.map((child) => (
               <DropdownMenuItem key={child.to} asChild>
                 <NavLink to={child.to} className="flex items-center gap-2 cursor-pointer">
                   <child.icon className="h-4 w-4" />
-                  {child.label}
+                  {t(child.labelKey)}
                 </NavLink>
               </DropdownMenuItem>
             ))}
@@ -199,7 +202,7 @@ const DashboardSidebar = () => {
         )}
       >
         <item.icon className="h-4 w-4 shrink-0" />
-        {!collapsed && <span>{item.label}</span>}
+        {!collapsed && <span>{t(item.labelKey)}</span>}
       </NavLink>
     );
 
@@ -210,7 +213,7 @@ const DashboardSidebar = () => {
             {linkContent}
           </TooltipTrigger>
           <TooltipContent side="right" className="bg-popover">
-            {item.label}
+            {t(item.labelKey)}
           </TooltipContent>
         </Tooltip>
       );
@@ -293,7 +296,7 @@ const DashboardSidebar = () => {
                 <div className="flex-1 text-left overflow-hidden">
                   <p className="text-sm font-medium truncate">{user?.email}</p>
                   <p className="text-xs text-sidebar-foreground/50">
-                    {isAdmin ? "Administrator" : "Benutzer"}
+                    {isAdmin ? t("users.admin") : t("users.userRole")}
                   </p>
                 </div>
                 <ChevronDown className="h-4 w-4 opacity-50" />
@@ -308,12 +311,12 @@ const DashboardSidebar = () => {
             <DropdownMenuItem asChild>
               <a href="/profile" className="flex items-center cursor-pointer">
                 <UserCircle className="h-4 w-4 mr-2" />
-                Mein Profil
+                {t("nav.myProfile")}
               </a>
             </DropdownMenuItem>
             <DropdownMenuItem onClick={signOut} className="text-destructive focus:text-destructive">
               <LogOut className="h-4 w-4 mr-2" />
-              Abmelden
+              {t("nav.logout")}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
