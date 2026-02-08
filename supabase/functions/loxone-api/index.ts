@@ -263,7 +263,8 @@ serve(async (req) => {
         success: false, 
         error: error instanceof Error ? error.message : "Unbekannter Fehler" 
       }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      // IMPORTANT: return 200 so the client can read the structured error payload
+      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
 });

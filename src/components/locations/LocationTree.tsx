@@ -96,7 +96,7 @@ function LocationNode({ location, level, selectedId, onSelect, onRefresh, isAdmi
 
     if (status.hasUnconfigured) {
       return (
-        <Badge variant="outline" className="text-xs gap-1 bg-warning/10 text-warning-foreground border-warning/20">
+        <Badge variant="outline" className="text-xs gap-1 bg-secondary/50 text-secondary-foreground border-border">
           <AlertCircle className="h-3 w-3" />
         </Badge>
       );
