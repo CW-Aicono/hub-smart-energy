@@ -26,6 +26,12 @@ export const translations = {
     es: "Gestionar usuarios",
     nl: "Gebruikers beheren",
   },
+  "nav.users": {
+    de: "Nutzer",
+    en: "Users",
+    es: "Usuarios",
+    nl: "Gebruikers",
+  },
   "nav.rolesAndPermissions": {
     de: "Rollen & Rechte",
     en: "Roles & Permissions",

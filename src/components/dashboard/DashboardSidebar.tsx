@@ -77,6 +77,7 @@ const DashboardSidebar = () => {
         icon: Shield, 
         labelKey: "nav.userManagement" as TranslationKey,
         children: [
+          { to: "/admin", icon: Users, labelKey: "nav.users" as TranslationKey },
           { to: "/roles", icon: Key, labelKey: "nav.rolesAndPermissions" as TranslationKey },
         ]
       },
