@@ -3,6 +3,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useTranslation } from "@/hooks/useTranslation";
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
 import { ProfileSettings } from "@/components/settings/ProfileSettings";
+import { ChangePasswordCard } from "@/components/settings/ChangePasswordCard";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { User } from "lucide-react";
@@ -65,6 +66,9 @@ const Profile = () => {
               </div>
             </CardContent>
           </Card>
+
+          {/* Change Password */}
+          <ChangePasswordCard />
 
           {/* Profile Settings */}
           <ProfileSettings />
