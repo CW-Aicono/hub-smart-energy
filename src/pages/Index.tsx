@@ -22,7 +22,7 @@ const WIDGET_COMPONENTS: Record<string, React.ComponentType> = {
 
 const Index = () => {
   const { user, loading } = useAuth();
-  const { widgets, visibleWidgets, loading: widgetsLoading, toggleWidgetVisibility } = useDashboardWidgets();
+  const { widgets, visibleWidgets, loading: widgetsLoading, toggleWidgetVisibility, reorderWidgets } = useDashboardWidgets();
   const { t } = useTranslation();
 
   if (loading || widgetsLoading) {
@@ -46,7 +46,8 @@ const Index = () => {
           </div>
           <DashboardCustomizer 
             widgets={widgets} 
-            onToggleVisibility={toggleWidgetVisibility} 
+            onToggleVisibility={toggleWidgetVisibility}
+            onReorder={reorderWidgets}
           />
         </header>
         <div className="p-6 space-y-6">

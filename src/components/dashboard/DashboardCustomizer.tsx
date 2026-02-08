@@ -1,13 +1,16 @@
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Settings2, GripVertical } from "lucide-react";
 import { DashboardWidget } from "@/hooks/useDashboardWidgets";
+import { cn } from "@/lib/utils";
 
 interface DashboardCustomizerProps {
   widgets: DashboardWidget[];
   onToggleVisibility: (widgetType: string) => void;
+  onReorder: (newOrder: string[]) => void;
 }
 
 const WIDGET_LABELS: Record<string, string> = {
@@ -19,7 +22,58 @@ const WIDGET_LABELS: Record<string, string> = {
   alerts_list: "Alerts & Benachrichtigungen",
 };
 
-const DashboardCustomizer = ({ widgets, onToggleVisibility }: DashboardCustomizerProps) => {
+const DashboardCustomizer = ({ widgets, onToggleVisibility, onReorder }: DashboardCustomizerProps) => {
+  const [draggedItem, setDraggedItem] = useState<string | null>(null);
+  const [dragOverItem, setDragOverItem] = useState<string | null>(null);
+
+  const sortedWidgets = [...widgets].sort((a, b) => a.position - b.position);
+
+  const handleDragStart = (e: React.DragEvent, widgetType: string) => {
+    setDraggedItem(widgetType);
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", widgetType);
+  };
+
+  const handleDragOver = (e: React.DragEvent, widgetType: string) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    if (widgetType !== draggedItem) {
+      setDragOverItem(widgetType);
+    }
+  };
+
+  const handleDragLeave = () => {
+    setDragOverItem(null);
+  };
+
+  const handleDrop = (e: React.DragEvent, targetWidgetType: string) => {
+    e.preventDefault();
+    
+    if (!draggedItem || draggedItem === targetWidgetType) {
+      setDraggedItem(null);
+      setDragOverItem(null);
+      return;
+    }
+
+    const currentOrder = sortedWidgets.map(w => w.widget_type);
+    const draggedIndex = currentOrder.indexOf(draggedItem);
+    const targetIndex = currentOrder.indexOf(targetWidgetType);
+
+    // Remove dragged item and insert at target position
+    const newOrder = [...currentOrder];
+    newOrder.splice(draggedIndex, 1);
+    newOrder.splice(targetIndex, 0, draggedItem);
+
+    onReorder(newOrder);
+    setDraggedItem(null);
+    setDragOverItem(null);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedItem(null);
+    setDragOverItem(null);
+  };
+
   return (
     <Popover>
       <PopoverTrigger asChild>
@@ -28,25 +82,35 @@ const DashboardCustomizer = ({ widgets, onToggleVisibility }: DashboardCustomize
           Dashboard anpassen
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="end" className="w-80">
+      <PopoverContent align="end" className="w-80 bg-popover border shadow-lg z-50">
         <div className="space-y-4">
           <div>
             <h4 className="font-medium text-sm mb-1">Widgets anzeigen</h4>
             <p className="text-xs text-muted-foreground">
-              Wählen Sie, welche Widgets auf Ihrem Dashboard erscheinen sollen.
+              Ziehen Sie die Widgets, um die Reihenfolge zu ändern.
             </p>
           </div>
-          <div className="space-y-3">
-            {widgets.map((widget) => (
+          <div className="space-y-2">
+            {sortedWidgets.map((widget) => (
               <div
                 key={widget.widget_type}
-                className="flex items-center justify-between p-2 rounded-lg bg-muted/50"
+                draggable
+                onDragStart={(e) => handleDragStart(e, widget.widget_type)}
+                onDragOver={(e) => handleDragOver(e, widget.widget_type)}
+                onDragLeave={handleDragLeave}
+                onDrop={(e) => handleDrop(e, widget.widget_type)}
+                onDragEnd={handleDragEnd}
+                className={cn(
+                  "flex items-center justify-between p-2 rounded-lg bg-muted/50 cursor-grab active:cursor-grabbing transition-all",
+                  draggedItem === widget.widget_type && "opacity-50 scale-95",
+                  dragOverItem === widget.widget_type && "ring-2 ring-primary ring-offset-1"
+                )}
               >
                 <div className="flex items-center gap-2">
-                  <GripVertical className="h-4 w-4 text-muted-foreground" />
+                  <GripVertical className="h-4 w-4 text-muted-foreground flex-shrink-0" />
                   <Label
                     htmlFor={widget.widget_type}
-                    className="text-sm cursor-pointer"
+                    className="text-sm cursor-grab"
                   >
                     {WIDGET_LABELS[widget.widget_type] || widget.widget_type}
                   </Label>
