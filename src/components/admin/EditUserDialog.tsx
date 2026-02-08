@@ -13,11 +13,11 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Pencil } from "lucide-react";
 
 interface UserData {
   id: string;
   user_id: string;
+  email: string | null;
   company_name: string | null;
   contact_person: string | null;
 }
@@ -25,9 +25,10 @@ interface UserData {
 interface EditUserDialogProps {
   user: UserData;
   onSuccess: () => void;
+  trigger: React.ReactNode;
 }
 
-const EditUserDialog = ({ user, onSuccess }: EditUserDialogProps) => {
+const EditUserDialog = ({ user, onSuccess, trigger }: EditUserDialogProps) => {
   const { t } = useTranslation();
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
@@ -73,10 +74,9 @@ const EditUserDialog = ({ user, onSuccess }: EditUserDialogProps) => {
 
   return (
     <>
-      <Button variant="ghost" size="sm" onClick={handleOpen}>
-        <Pencil className="h-4 w-4 mr-1" />
-        {t("common.edit")}
-      </Button>
+      <span onClick={handleOpen} className="cursor-pointer">
+        {trigger}
+      </span>
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent>
@@ -86,6 +86,16 @@ const EditUserDialog = ({ user, onSuccess }: EditUserDialogProps) => {
           </DialogHeader>
 
           <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="email">{t("auth.email")}</Label>
+              <Input
+                id="email"
+                value={user.email || ""}
+                disabled
+                className="bg-muted"
+              />
+            </div>
+
             <div className="space-y-2">
               <Label htmlFor="contactPerson">{t("users.contactPerson")}</Label>
               <Input

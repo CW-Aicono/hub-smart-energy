@@ -670,6 +670,12 @@ export const translations = {
     es: "El último administrador no puede ser eliminado.",
     nl: "De laatste beheerder kan niet worden verwijderd.",
   },
+  "users.cannotBlockLastAdmin": {
+    de: "Der letzte Administrator kann sich nicht selbst sperren.",
+    en: "The last administrator cannot block themselves.",
+    es: "El último administrador no puede bloquearse a sí mismo.",
+    nl: "De laatste beheerder kan zichzelf niet blokkeren.",
+  },
 
   // Profile Settings
   "profile.title": {
