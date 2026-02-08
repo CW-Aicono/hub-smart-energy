@@ -407,6 +407,10 @@ export type Database = {
         Args: never
         Returns: Database["public"]["Enums"]["app_role"]
       }
+      ensure_at_least_one_admin: {
+        Args: never
+        Returns: Database["public"]["Enums"]["app_role"]
+      }
       get_user_tenant_id: { Args: never; Returns: string }
       has_permission: {
         Args: { _permission_code: string; _user_id: string }

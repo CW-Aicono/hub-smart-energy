@@ -24,45 +24,26 @@ export function useUserRole(): UserRoleState {
       return;
     }
 
-    const fetchRole = async () => {
+    const resolveRole = async () => {
       setLoading(true);
 
-      const { data, error } = await supabase
-        .from("user_roles")
-        .select("role")
-        .eq("user_id", user.id)
-        .maybeSingle();
+      // Ensures the first user becomes admin if no admin exists.
+      // Also inserts a default role row for users missing one.
+      const { data, error } = await supabase.rpc("ensure_at_least_one_admin");
 
       if (cancelled) return;
 
-      // If the user has no role row yet, bootstrap one (and guarantee at least one admin exists).
-      if (!error && !data?.role) {
-        const { data: bootstrappedRole, error: bootstrapError } =
-          await supabase.rpc("bootstrap_user_role");
-
-        if (!cancelled) {
-          if (bootstrapError) {
-            console.error("Error bootstrapping role:", bootstrapError);
-            setRole("user");
-          } else {
-            setRole((bootstrappedRole as AppRole) ?? "user");
-          }
-          setLoading(false);
-        }
-        return;
-      }
-
       if (error) {
-        console.error("Error fetching role:", error);
+        console.error("Error resolving user role:", error);
         setRole("user");
       } else {
-        setRole((data?.role as AppRole) ?? "user");
+        setRole((data as AppRole) ?? "user");
       }
 
       setLoading(false);
     };
 
-    fetchRole();
+    resolveRole();
 
     return () => {
       cancelled = true;
