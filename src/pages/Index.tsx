@@ -9,6 +9,7 @@ import CostOverview from "@/components/dashboard/CostOverview";
 import SustainabilityKPIs from "@/components/dashboard/SustainabilityKPIs";
 import AlertsList from "@/components/dashboard/AlertsList";
 import LocationMapWidget from "@/components/dashboard/LocationMapWidget";
+import WeatherWidget from "@/components/dashboard/WeatherWidget";
 
 const WIDGET_COMPONENTS: Record<string, React.ComponentType> = {
   cost_overview: CostOverview,
@@ -16,6 +17,7 @@ const WIDGET_COMPONENTS: Record<string, React.ComponentType> = {
   sustainability_kpis: SustainabilityKPIs,
   alerts_list: AlertsList,
   location_map: LocationMapWidget,
+  weather: WeatherWidget,
 };
 
 const Index = () => {

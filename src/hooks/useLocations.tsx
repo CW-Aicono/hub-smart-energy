@@ -24,6 +24,7 @@ export interface Location {
   contact_phone: string | null;
   energy_sources: string[];
   show_on_map: boolean;
+  is_main_location: boolean;
   created_at: string;
   updated_at: string;
   children?: Location[];

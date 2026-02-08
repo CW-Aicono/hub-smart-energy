@@ -97,6 +97,7 @@ export type Database = {
           description: string | null
           energy_sources: string[] | null
           id: string
+          is_main_location: boolean
           latitude: number | null
           longitude: number | null
           name: string
@@ -119,6 +120,7 @@ export type Database = {
           description?: string | null
           energy_sources?: string[] | null
           id?: string
+          is_main_location?: boolean
           latitude?: number | null
           longitude?: number | null
           name: string
@@ -141,6 +143,7 @@ export type Database = {
           description?: string | null
           energy_sources?: string[] | null
           id?: string
+          is_main_location?: boolean
           latitude?: number | null
           longitude?: number | null
           name?: string
