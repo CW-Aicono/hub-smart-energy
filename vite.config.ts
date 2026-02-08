@@ -14,18 +14,16 @@ export default defineConfig(({ mode }) => ({
   },
   plugins: [react(), mode === "development" && componentTagger()].filter(Boolean),
 
-  // Prevent Vite from pre-bundling Leaflet packages into node_modules/.vite/deps.
-  // The prebundle cache can get stuck on a React-19 build (renderable context + use()),
-  // which crashes React 18 at runtime with `render2 is not a function`.
+  // Force Vite to rebuild the dependency optimization cache.
+  // This ensures react-leaflet@4.2.1 (React 18 compatible) is bundled
+  // instead of a stale v5 (React 19) cache entry.
   optimizeDeps: {
-    exclude: ["react-leaflet", "@react-leaflet/core", "leaflet"],
+    force: true,
   },
 
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
     },
-    // Ensure we never bundle multiple copies of React.
-    dedupe: ["react", "react-dom"],
   },
 }));
