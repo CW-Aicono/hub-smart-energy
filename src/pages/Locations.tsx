@@ -47,7 +47,7 @@ const Locations = () => {
 
     if (status.hasUnconfigured) {
       return (
-        <Badge variant="outline" className="gap-1 text-xs bg-warning/10 text-warning-foreground border-warning/20">
+        <Badge variant="outline" className="gap-1 text-xs bg-secondary/50 text-secondary-foreground border-border">
           <AlertCircle className="h-3 w-3" />
           Konfig. fehlt
         </Badge>
