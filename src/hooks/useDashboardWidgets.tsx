@@ -12,10 +12,11 @@ export interface DashboardWidget {
 
 const DEFAULT_WIDGETS = [
   { widget_type: "location_map", position: 0, is_visible: true },
-  { widget_type: "cost_overview", position: 1, is_visible: true },
-  { widget_type: "energy_chart", position: 2, is_visible: true },
-  { widget_type: "sustainability_kpis", position: 3, is_visible: true },
-  { widget_type: "alerts_list", position: 4, is_visible: true },
+  { widget_type: "weather", position: 1, is_visible: true },
+  { widget_type: "cost_overview", position: 2, is_visible: true },
+  { widget_type: "energy_chart", position: 3, is_visible: true },
+  { widget_type: "sustainability_kpis", position: 4, is_visible: true },
+  { widget_type: "alerts_list", position: 5, is_visible: true },
 ];
 
 export function useDashboardWidgets() {
@@ -37,7 +38,30 @@ export function useDashboardWidgets() {
       console.error("Error fetching widgets:", error);
       setWidgets([]);
     } else if (data && data.length > 0) {
-      setWidgets(data as DashboardWidget[]);
+      // Check if weather widget exists, if not add it for existing users
+      const hasWeatherWidget = data.some(w => w.widget_type === "weather");
+      if (!hasWeatherWidget) {
+        const maxPosition = Math.max(...data.map(w => w.position), 0);
+        const { data: newWidget } = await supabase
+          .from("dashboard_widgets")
+          .insert({
+            user_id: user.id,
+            widget_type: "weather",
+            position: maxPosition + 1,
+            is_visible: true,
+            config: {},
+          })
+          .select()
+          .single();
+        
+        if (newWidget) {
+          setWidgets([...data, newWidget] as DashboardWidget[]);
+        } else {
+          setWidgets(data as DashboardWidget[]);
+        }
+      } else {
+        setWidgets(data as DashboardWidget[]);
+      }
     } else {
       // Initialize default widgets for new users
       await initializeDefaultWidgets();

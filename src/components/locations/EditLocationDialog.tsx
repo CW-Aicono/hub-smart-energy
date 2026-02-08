@@ -68,6 +68,7 @@ const locationSchema = z.object({
   contact_phone: z.string().trim().max(30).optional(),
   energy_sources: z.array(z.string()).default([]),
   show_on_map: z.boolean().default(true),
+  is_main_location: z.boolean().default(false),
   latitude: z.coerce.number().min(-90).max(90).optional().or(z.literal("")),
   longitude: z.coerce.number().min(-180).max(180).optional().or(z.literal("")),
   description: z.string().trim().max(500).optional(),
@@ -102,6 +103,7 @@ export function EditLocationDialog({ location, onSuccess, trigger }: EditLocatio
       contact_phone: location.contact_phone || "",
       energy_sources: location.energy_sources || [],
       show_on_map: location.show_on_map,
+      is_main_location: location.is_main_location,
       latitude: location.latitude ?? "",
       longitude: location.longitude ?? "",
       description: location.description || "",
@@ -121,6 +123,7 @@ export function EditLocationDialog({ location, onSuccess, trigger }: EditLocatio
       contact_phone: location.contact_phone || "",
       energy_sources: location.energy_sources || [],
       show_on_map: location.show_on_map,
+      is_main_location: location.is_main_location,
       latitude: location.latitude ?? "",
       longitude: location.longitude ?? "",
       description: location.description || "",
@@ -457,6 +460,23 @@ export function EditLocationDialog({ location, onSuccess, trigger }: EditLocatio
                     <div className="space-y-0.5">
                       <FormLabel className="text-base">{t("addLocation.showOnMap")}</FormLabel>
                       <FormDescription>{t("addLocation.showOnMapDescription")}</FormDescription>
+                    </div>
+                    <FormControl>
+                      <Switch checked={field.value} onCheckedChange={field.onChange} />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+
+              {/* Main Location */}
+              <FormField
+                control={form.control}
+                name="is_main_location"
+                render={({ field }) => (
+                  <FormItem className="flex items-center justify-between rounded-lg border p-4 border-primary/20 bg-primary/5">
+                    <div className="space-y-0.5">
+                      <FormLabel className="text-base">{t("locations.mainLocation")}</FormLabel>
+                      <FormDescription>{t("locations.mainLocationDescription")}</FormDescription>
                     </div>
                     <FormControl>
                       <Switch checked={field.value} onCheckedChange={field.onChange} />

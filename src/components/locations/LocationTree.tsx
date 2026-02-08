@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Location, LocationType } from "@/hooks/useLocations";
 import { useUserRole } from "@/hooks/useUserRole";
-import { ChevronRight, ChevronDown, Building2, Building, MapPin } from "lucide-react";
+import { ChevronRight, ChevronDown, Building2, Building, MapPin, Star } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { EditLocationDialog } from "./EditLocationDialog";
@@ -81,6 +81,12 @@ function LocationNode({ location, level, selectedId, onSelect, onRefresh, isAdmi
         >
           <Icon className="h-4 w-4 text-muted-foreground" />
           <span className="flex-1 font-medium text-sm">{location.name}</span>
+          {location.is_main_location && (
+            <Badge variant="secondary" className="text-xs gap-1 bg-amber-100 text-amber-700 border-amber-200">
+              <Star className="h-3 w-3 fill-amber-500 text-amber-500" />
+              Hauptstandort
+            </Badge>
+          )}
           <Badge variant="outline" className={cn("text-xs", typeColors[location.type])}>
             {typeLabels[location.type]}
           </Badge>

@@ -59,6 +59,7 @@ const locationSchema = z.object({
   contact_phone: z.string().trim().max(30, "Telefonnummer darf maximal 30 Zeichen haben").optional(),
   energy_sources: z.array(z.string()).default([]),
   show_on_map: z.boolean().default(true),
+  is_main_location: z.boolean().default(false),
   latitude: z.coerce.number().min(-90).max(90).optional().or(z.literal("")),
   longitude: z.coerce.number().min(-180).max(180).optional().or(z.literal("")),
   description: z.string().trim().max(500, "Beschreibung darf maximal 500 Zeichen haben").optional(),
@@ -91,6 +92,7 @@ export function AddLocationDialog({ parentId }: AddLocationDialogProps) {
       contact_phone: "",
       energy_sources: [],
       show_on_map: true,
+      is_main_location: false,
       description: "",
     },
   });
@@ -109,6 +111,7 @@ export function AddLocationDialog({ parentId }: AddLocationDialogProps) {
       contact_phone: data.contact_phone || null,
       energy_sources: data.energy_sources,
       show_on_map: data.show_on_map,
+      is_main_location: data.is_main_location,
       latitude: typeof data.latitude === "number" ? data.latitude : null,
       longitude: typeof data.longitude === "number" ? data.longitude : null,
       description: data.description || null,
@@ -440,6 +443,28 @@ export function AddLocationDialog({ parentId }: AddLocationDialogProps) {
                     <FormLabel className="text-base">Auf Karte anzeigen</FormLabel>
                     <FormDescription>
                       Standort wird auf der interaktiven Karte dargestellt.
+                    </FormDescription>
+                  </div>
+                  <FormControl>
+                    <Switch
+                      checked={field.value}
+                      onCheckedChange={field.onChange}
+                    />
+                  </FormControl>
+                </FormItem>
+              )}
+            />
+
+            {/* Main Location */}
+            <FormField
+              control={form.control}
+              name="is_main_location"
+              render={({ field }) => (
+                <FormItem className="flex items-center justify-between rounded-lg border p-4 border-primary/20 bg-primary/5">
+                  <div className="space-y-0.5">
+                    <FormLabel className="text-base">Hauptstandort</FormLabel>
+                    <FormDescription>
+                      Als Hauptstandort für Wetter-Widget und Berichte verwenden.
                     </FormDescription>
                   </div>
                   <FormControl>

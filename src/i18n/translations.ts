@@ -578,6 +578,18 @@ export const translations = {
     es: "Otro",
     nl: "Overig",
   },
+  "locations.mainLocation": {
+    de: "Hauptstandort",
+    en: "Main Location",
+    es: "Ubicación principal",
+    nl: "Hoofdlocatie",
+  },
+  "locations.mainLocationDescription": {
+    de: "Als Hauptstandort für Wetter-Widget und Berichte verwenden.",
+    en: "Use as main location for weather widget and reports.",
+    es: "Usar como ubicación principal para el widget del clima e informes.",
+    nl: "Gebruiken als hoofdlocatie voor weerwidget en rapporten.",
+  },
   "energy.water": {
     de: "Wasser",
     en: "Water",
@@ -1217,6 +1229,32 @@ export const translations = {
     en: "Use \"Customize Dashboard\" to add widgets.",
     es: "Use \"Personalizar panel\" para añadir widgets.",
     nl: "Gebruik \"Dashboard aanpassen\" om widgets toe te voegen.",
+  },
+
+  // Weather Widget
+  "weather.title": {
+    de: "Lokales Wetter",
+    en: "Local Weather",
+    es: "Clima local",
+    nl: "Lokaal weer",
+  },
+  "weather.noMainLocation": {
+    de: "Kein Hauptstandort definiert. Bitte markieren Sie einen Standort als Hauptstandort.",
+    en: "No main location defined. Please mark a location as main location.",
+    es: "No hay ubicación principal definida. Marque una ubicación como principal.",
+    nl: "Geen hoofdlocatie gedefinieerd. Markeer een locatie als hoofdlocatie.",
+  },
+  "weather.noCoordinates": {
+    de: "Keine Koordinaten oder PLZ für den Hauptstandort verfügbar.",
+    en: "No coordinates or postal code available for the main location.",
+    es: "No hay coordenadas o código postal disponibles para la ubicación principal.",
+    nl: "Geen coördinaten of postcode beschikbaar voor de hoofdlocatie.",
+  },
+  "weather.fetchError": {
+    de: "Wetterdaten konnten nicht geladen werden.",
+    en: "Failed to load weather data.",
+    es: "No se pudieron cargar los datos del clima.",
+    nl: "Weergegevens konden niet worden geladen.",
   },
 
   // Auth
