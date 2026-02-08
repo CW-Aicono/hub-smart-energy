@@ -3,11 +3,10 @@ import { Floor } from "@/hooks/useFloors";
 import { useUserRole } from "@/hooks/useUserRole";
 import { EditFloorDialog } from "./EditFloorDialog";
 import { DeleteFloorDialog } from "./DeleteFloorDialog";
-import { FloorPlanEditor } from "./FloorPlanEditor";
+import { FloorPlanDialog } from "./FloorPlanDialog";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Layers, Image, SquareStack, MapPin } from "lucide-react";
+import { Layers, Image, SquareStack } from "lucide-react";
 
 interface FloorListProps {
   floors: Floor[];
@@ -18,8 +17,7 @@ interface FloorListProps {
 
 export function FloorList({ floors, loading, locationId, onRefresh }: FloorListProps) {
   const { isAdmin } = useUserRole();
-  const [selectedFloor, setSelectedFloor] = useState<Floor | null>(null);
-  const [editorFloor, setEditorFloor] = useState<Floor | null>(null);
+  const [openFloor, setOpenFloor] = useState<Floor | null>(null);
 
   if (loading) {
     return (
@@ -63,39 +61,16 @@ export function FloorList({ floors, loading, locationId, onRefresh }: FloorListP
           </div>
 
           <div className="flex items-center gap-2">
-            {isAdmin && floor.floor_plan_url && (
-              <Button
-                variant="outline"
-                size="sm"
-                className="gap-2"
-                onClick={() => setEditorFloor(floor)}
-              >
-                <MapPin className="h-4 w-4" />
-                Messgeräte
-              </Button>
-            )}
-            
             {floor.floor_plan_url ? (
-              <Dialog>
-                <DialogTrigger asChild>
-                  <Button variant="outline" size="sm" className="gap-2">
-                    <Image className="h-4 w-4" />
-                    Grundriss
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="max-w-4xl max-h-[90vh]">
-                  <DialogHeader>
-                    <DialogTitle>{floor.name} - Grundriss</DialogTitle>
-                  </DialogHeader>
-                  <div className="relative overflow-auto">
-                    <img
-                      src={floor.floor_plan_url}
-                      alt={`Grundriss ${floor.name}`}
-                      className="w-full h-auto"
-                    />
-                  </div>
-                </DialogContent>
-              </Dialog>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="gap-2"
+                onClick={() => setOpenFloor(floor)}
+              >
+                <Image className="h-4 w-4" />
+                Grundriss
+              </Button>
             ) : (
               <span className="text-sm text-muted-foreground">Kein Grundriss</span>
             )}
@@ -110,13 +85,13 @@ export function FloorList({ floors, loading, locationId, onRefresh }: FloorListP
         </div>
       ))}
       
-      {/* Floor Plan Editor Dialog */}
-      {editorFloor && (
-        <FloorPlanEditor
-          floor={editorFloor}
+      {/* Floor Plan Dialog */}
+      {openFloor && (
+        <FloorPlanDialog
+          floor={openFloor}
           locationId={locationId}
-          open={!!editorFloor}
-          onOpenChange={(open) => !open && setEditorFloor(null)}
+          open={!!openFloor}
+          onOpenChange={(open) => !open && setOpenFloor(null)}
         />
       )}
     </div>
