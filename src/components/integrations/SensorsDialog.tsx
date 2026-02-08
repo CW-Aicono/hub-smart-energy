@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -115,16 +115,16 @@ export function SensorsDialog({ locationIntegration, open, onOpenChange }: Senso
     }
   };
 
-  // Load sensors when dialog opens
-  const handleOpenChange = (isOpen: boolean) => {
-    if (isOpen && locationIntegration) {
+  // Auto-fetch sensors when dialog opens
+  useEffect(() => {
+    if (open && locationIntegration) {
       fetchSensors();
     }
-    onOpenChange(isOpen);
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, locationIntegration?.id]);
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl max-h-[80vh] overflow-hidden flex flex-col">
         <DialogHeader>
           <div className="flex items-center justify-between">
