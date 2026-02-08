@@ -256,10 +256,29 @@ function randomHex(bytesLen: number): string {
   return bytesToHex(bytes).toUpperCase();
 }
 
+function cleanBase64(input: string): string {
+  // Remove PEM headers/footers if present, and all whitespace
+  return input
+    .replace(/-----BEGIN [A-Z ]+-----/g, "")
+    .replace(/-----END [A-Z ]+-----/g, "")
+    .replace(/\s+/g, "")
+    .replace(/[^A-Za-z0-9+/=]/g, ""); // Remove any non-base64 chars
+}
+
 function rsaEncryptPkcs1(publicKeyDerB64: string, payloadUtf8: string): string {
   // Loxone expects RSA/ECB/PKCS1 + Base64(NoWrap)
-  // Avoid forge.util.* (can be undefined in some ESM builds) and use native base64 helpers.
-  const derBinary = atob(publicKeyDerB64.replace(/\s+/g, ""));
+  // The key might come as PEM or raw Base64-DER; clean it first.
+  const cleanedB64 = cleanBase64(publicKeyDerB64);
+  console.log(`Cleaned public key Base64 (first 60 chars): ${cleanedB64.substring(0, 60)}...`);
+  
+  let derBinary: string;
+  try {
+    derBinary = atob(cleanedB64);
+  } catch (e) {
+    console.error("Base64 decode failed for public key:", e);
+    throw new Error(`Failed to decode base64 public key: ${e}`);
+  }
+  
   const asn1 = forge.asn1.fromDer(derBinary);
   const publicKey = forge.pki.publicKeyFromAsn1(asn1);
   const encryptedBinary = publicKey.encrypt(payloadUtf8, "RSAES-PKCS1-V1_5");
