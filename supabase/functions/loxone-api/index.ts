@@ -28,30 +28,20 @@ interface LoxoneStructure {
   cats: Record<string, { name: string }>;
 }
 
-interface LoxoneStateValue {
-  value: number | string;
-  text?: string;
-}
-
 // Resolve Loxone Cloud DNS by following the redirect from dns.loxonecloud.com/{serial}
 async function resolveLoxoneCloudURL(serialNumber: string): Promise<string | null> {
   try {
-    // The Loxone Cloud DNS service redirects to the actual Miniserver URL
-    // Format: http://dns.loxonecloud.com/{SERIAL} -> https://{ip-encoded}.{serial}.dyndns.loxonecloud.com:{port}
     const dnsUrl = `http://dns.loxonecloud.com/${serialNumber}`;
     console.log(`Resolving via Loxone Cloud redirect: ${dnsUrl}`);
     
-    // Make a HEAD request and follow redirects to get the final URL
     const response = await fetch(dnsUrl, {
       method: "HEAD",
       redirect: "follow",
     });
     
-    // The final URL after redirects is what we need
     const finalUrl = response.url;
     console.log(`Resolved to final URL: ${finalUrl}`);
     
-    // Extract base URL (remove any path)
     const urlObj = new URL(finalUrl);
     const baseUrl = `${urlObj.protocol}//${urlObj.host}`;
     console.log(`Using base URL: ${baseUrl}`);
@@ -63,28 +53,53 @@ async function resolveLoxoneCloudURL(serialNumber: string): Promise<string | nul
   }
 }
 
+// Fetch individual state value from Loxone
+async function fetchStateValue(
+  baseUrl: string,
+  authHeader: string,
+  stateUuid: string
+): Promise<number | string | null> {
+  try {
+    const url = `${baseUrl}/jdev/sps/io/${stateUuid}/state`;
+    const response = await fetch(url, {
+      method: "GET",
+      headers: { Authorization: authHeader },
+    });
+    
+    if (!response.ok) return null;
+    
+    const data = await response.json();
+    // Loxone returns: {"LL":{"control":"uuid","value":"123.45","Code":"200"}}
+    if (data?.LL?.value !== undefined) {
+      const val = data.LL.value;
+      // Try to parse as number
+      const numVal = parseFloat(val);
+      return isNaN(numVal) ? val : numVal;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 // Update sync status in database
 async function updateSyncStatus(
   supabase: ReturnType<typeof createClient>,
   locationIntegrationId: string,
-  status: "success" | "error" | "syncing",
-  error?: string
+  status: "success" | "error" | "syncing"
 ) {
-  const updateData: Record<string, unknown> = {
-    sync_status: status,
-    last_sync_at: new Date().toISOString(),
-  };
-  
   await supabase
     .from("location_integrations")
-    .update(updateData)
+    .update({
+      sync_status: status,
+      last_sync_at: new Date().toISOString(),
+    })
     .eq("id", locationIntegrationId);
     
   console.log(`Updated sync_status to: ${status}`);
 }
 
 serve(async (req) => {
-  // Handle CORS preflight
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
@@ -98,12 +113,10 @@ serve(async (req) => {
 
     console.log(`Loxone API request: action=${action}, locationIntegrationId=${locationIntegrationId}`);
 
-    // Get Supabase client
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Fetch location_integration with its config (contains credentials)
     const { data: locationIntegration, error: liError } = await supabase
       .from("location_integrations")
       .select("*, integration:integrations(*)")
@@ -117,11 +130,7 @@ serve(async (req) => {
 
     const config = locationIntegration.config as LoxoneConfig;
     
-    if (!config) {
-      throw new Error("Keine Konfiguration vorhanden");
-    }
-
-    if (!config.serial_number) {
+    if (!config?.serial_number) {
       throw new Error("Seriennummer nicht konfiguriert");
     }
 
@@ -131,41 +140,31 @@ serve(async (req) => {
 
     console.log(`Config: serial=${config.serial_number}, user=${config.username}`);
 
-    // Resolve via Loxone Cloud redirect
-    console.log(`Resolving Cloud URL for serial: ${config.serial_number}`);
     const baseUrl = await resolveLoxoneCloudURL(config.serial_number);
     
     if (!baseUrl) {
       await updateSyncStatus(supabase, locationIntegrationId, "error");
-      throw new Error("Cloud DNS Auflösung fehlgeschlagen. Miniserver nicht erreichbar oder nicht für Remote-Zugriff konfiguriert.");
+      throw new Error("Cloud DNS Auflösung fehlgeschlagen. Miniserver nicht erreichbar.");
     }
 
-    // Create Basic Auth header
     const credentials = btoa(`${config.username}:${config.password}`);
     const authHeader = `Basic ${credentials}`;
 
     if (action === "test") {
-      // Test connection by fetching API status
       const testUrl = `${baseUrl}/jdev/cfg/api`;
       console.log(`Testing connection: ${testUrl}`);
 
       const response = await fetch(testUrl, {
         method: "GET",
-        headers: {
-          Authorization: authHeader,
-        },
+        headers: { Authorization: authHeader },
       });
 
       if (!response.ok) {
-        console.error(`Connection test failed: ${response.status} ${response.statusText}`);
         await updateSyncStatus(supabase, locationIntegrationId, "error");
-        throw new Error(`Verbindung fehlgeschlagen: ${response.status} - Prüfen Sie Benutzername und Passwort`);
+        throw new Error(`Verbindung fehlgeschlagen: ${response.status}`);
       }
 
       const data = await response.json();
-      console.log("Connection test successful:", data);
-
-      // Update sync status to success
       await updateSyncStatus(supabase, locationIntegrationId, "success");
 
       return new Response(
@@ -175,73 +174,95 @@ serve(async (req) => {
     }
 
     if (action === "getSensors") {
-      // Set status to syncing
       await updateSyncStatus(supabase, locationIntegrationId, "syncing");
 
-      // Fetch structure file (LoxAPP3.json)
+      // Fetch structure file
       const structureUrl = `${baseUrl}/data/LoxAPP3.json`;
       console.log(`Fetching structure: ${structureUrl}`);
 
       const structureResponse = await fetch(structureUrl, {
         method: "GET",
-        headers: {
-          Authorization: authHeader,
-        },
+        headers: { Authorization: authHeader },
       });
 
       if (!structureResponse.ok) {
-        console.error(`Failed to fetch structure: ${structureResponse.status} ${structureResponse.statusText}`);
         await updateSyncStatus(supabase, locationIntegrationId, "error");
-        
         if (structureResponse.status === 401) {
-          throw new Error("Authentifizierung fehlgeschlagen. Bitte Benutzername und Passwort prüfen.");
+          throw new Error("Authentifizierung fehlgeschlagen.");
         }
-        
         throw new Error(`Struktur konnte nicht geladen werden: ${structureResponse.status}`);
       }
 
       const structure: LoxoneStructure = await structureResponse.json();
-      console.log(`Loaded structure with ${Object.keys(structure.controls || {}).length} controls`);
-
-      // Fetch current states from the Miniserver
-      const statesUrl = `${baseUrl}/jdev/sps/status`;
-      console.log(`Fetching current states: ${statesUrl}`);
-      
-      let currentStates: Record<string, unknown> = {};
-      try {
-        const statesResponse = await fetch(statesUrl, {
-          method: "GET",
-          headers: {
-            Authorization: authHeader,
-          },
-        });
-        
-        if (statesResponse.ok) {
-          const statesData = await statesResponse.json();
-          currentStates = statesData?.LL?.value || {};
-          console.log(`Loaded ${Object.keys(currentStates).length} state values`);
-        } else {
-          console.log(`States endpoint returned ${statesResponse.status}, will use structure values`);
-        }
-      } catch (statesError) {
-        console.log("Could not fetch states, will use structure values:", statesError);
-      }
-
-      // Parse controls into sensors
-      const sensors = [];
       const controls = structure.controls || {};
       const rooms = structure.rooms || {};
       const categories = structure.cats || {};
+      
+      console.log(`Loaded structure with ${Object.keys(controls).length} controls`);
 
+      // Collect all state UUIDs we need to query
+      const stateUuidsToQuery: { controlUuid: string; stateName: string; stateUuid: string }[] = [];
+      
       for (const [uuid, control] of Object.entries(controls)) {
-        // Get room and category names
+        if (control.states) {
+          // Prioritize certain state names for value display
+          const priorityStates = ["value", "actual", "Mrc", "Mrt", "position", "level", "brightness", "temperature"];
+          for (const stateName of priorityStates) {
+            if (control.states[stateName]) {
+              stateUuidsToQuery.push({
+                controlUuid: uuid,
+                stateName,
+                stateUuid: control.states[stateName],
+              });
+              break; // Only take first matching priority state
+            }
+          }
+          // If no priority state found, take the first available
+          if (!stateUuidsToQuery.find(s => s.controlUuid === uuid)) {
+            const firstStateName = Object.keys(control.states)[0];
+            if (firstStateName) {
+              stateUuidsToQuery.push({
+                controlUuid: uuid,
+                stateName: firstStateName,
+                stateUuid: control.states[firstStateName],
+              });
+            }
+          }
+        }
+      }
+
+      console.log(`Querying ${stateUuidsToQuery.length} state values...`);
+
+      // Batch fetch state values (limit concurrent requests)
+      const stateValues: Record<string, { value: number | string | null; stateName: string }> = {};
+      const batchSize = 10;
+      
+      for (let i = 0; i < stateUuidsToQuery.length; i += batchSize) {
+        const batch = stateUuidsToQuery.slice(i, i + batchSize);
+        const results = await Promise.all(
+          batch.map(async (item) => {
+            const value = await fetchStateValue(baseUrl, authHeader, item.stateUuid);
+            return { controlUuid: item.controlUuid, stateName: item.stateName, value };
+          })
+        );
+        
+        for (const result of results) {
+          stateValues[result.controlUuid] = { value: result.value, stateName: result.stateName };
+        }
+      }
+
+      console.log(`Fetched ${Object.keys(stateValues).length} state values`);
+
+      // Build sensors array
+      const sensors = [];
+      
+      for (const [uuid, control] of Object.entries(controls)) {
         const roomName = control.room ? rooms[control.room]?.name || "Unbekannt" : "Unbekannt";
         const catName = control.cat ? categories[control.cat]?.name || "Sonstige" : "Sonstige";
 
-        // Determine sensor type based on control type
+        // Determine sensor type and unit
         let sensorType = "unknown";
         let unit = "";
-
         const controlType = control.type?.toLowerCase() || "";
 
         if (controlType.includes("temperature") || controlType.includes("temp")) {
@@ -250,7 +271,7 @@ serve(async (req) => {
         } else if (controlType.includes("humidity") || controlType.includes("feuchte")) {
           sensorType = "humidity";
           unit = "%";
-        } else if (controlType.includes("meter") || controlType.includes("zähler")) {
+        } else if (controlType.includes("meter") || controlType.includes("zähler") || controlType.includes("energymonitor")) {
           sensorType = "power";
           unit = "kWh";
         } else if (controlType.includes("switch") || controlType.includes("schalter")) {
@@ -271,38 +292,29 @@ serve(async (req) => {
           sensorType = "motion";
         }
 
-        // Try to get current value from states
+        // Get the fetched value
+        const stateData = stateValues[uuid];
         let value = "-";
-        let status: "online" | "offline" = "online";
-
-        // Check if this control has states defined and try to get their values
-        if (control.states) {
-          // Try common state names: value, actual, position, level, etc.
-          const stateKeys = Object.keys(control.states);
-          for (const stateKey of stateKeys) {
-            const stateUuid = control.states[stateKey];
-            if (stateUuid && currentStates[stateUuid] !== undefined) {
-              const stateValue = currentStates[stateUuid];
-              if (typeof stateValue === "number") {
-                // Format the value based on type
-                if (sensorType === "temperature") {
-                  value = stateValue.toFixed(1);
-                } else if (sensorType === "humidity" || sensorType === "light" || sensorType === "blind") {
-                  value = Math.round(stateValue).toString();
-                } else if (sensorType === "switch" || sensorType === "digital") {
-                  value = stateValue > 0 ? "Ein" : "Aus";
-                  unit = "";
-                } else if (sensorType === "power") {
-                  value = stateValue.toFixed(2);
-                } else {
-                  value = typeof stateValue === "number" ? stateValue.toFixed(2) : String(stateValue);
-                }
-                break; // Use first found value
-              } else if (typeof stateValue === "string") {
-                value = stateValue;
-                break;
-              }
+        let displayStateName = "";
+        
+        if (stateData?.value !== null && stateData?.value !== undefined) {
+          displayStateName = stateData.stateName;
+          const rawValue = stateData.value;
+          
+          if (typeof rawValue === "number") {
+            if (sensorType === "switch" || sensorType === "digital") {
+              value = rawValue > 0 ? "Ein" : "Aus";
+              unit = "";
+            } else if (sensorType === "power") {
+              // Format large numbers with thousands separator
+              value = rawValue.toLocaleString("de-DE", { maximumFractionDigits: 0 });
+            } else if (sensorType === "temperature") {
+              value = rawValue.toFixed(1);
+            } else {
+              value = rawValue.toFixed(2);
             }
+          } else {
+            value = String(rawValue);
           }
         }
 
@@ -315,14 +327,19 @@ serve(async (req) => {
           category: catName,
           value: value,
           unit: unit,
-          status: status,
-          states: control.states,
+          status: stateData?.value !== null ? "online" : "offline",
+          stateName: displayStateName,
         });
       }
 
-      console.log(`Parsed ${sensors.length} sensors`);
+      // Sort sensors: those with values first
+      sensors.sort((a, b) => {
+        if (a.value !== "-" && b.value === "-") return -1;
+        if (a.value === "-" && b.value !== "-") return 1;
+        return a.name.localeCompare(b.name);
+      });
 
-      // Update sync status to success
+      console.log(`Parsed ${sensors.length} sensors with values`);
       await updateSyncStatus(supabase, locationIntegrationId, "success");
 
       return new Response(
@@ -339,7 +356,6 @@ serve(async (req) => {
         success: false, 
         error: error instanceof Error ? error.message : "Unbekannter Fehler" 
       }),
-      // IMPORTANT: return 200 so the client can read the structured error payload
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }

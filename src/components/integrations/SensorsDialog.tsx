@@ -31,6 +31,7 @@ interface Sensor {
   value: string;
   unit: string;
   status: "online" | "offline" | "warning";
+  stateName?: string;
 }
 
 interface SensorsDialogProps {
@@ -172,6 +173,7 @@ export function SensorsDialog({ locationIntegration, open, onOpenChange }: Senso
                   <TableHead>Name</TableHead>
                   <TableHead>Raum</TableHead>
                   <TableHead>Kategorie</TableHead>
+                  <TableHead>Messwert</TableHead>
                   <TableHead className="text-right">Wert</TableHead>
                   <TableHead>Status</TableHead>
                 </TableRow>
@@ -187,10 +189,12 @@ export function SensorsDialog({ locationIntegration, open, onOpenChange }: Senso
                     <TableCell className="font-medium">{sensor.name}</TableCell>
                     <TableCell className="text-muted-foreground">{sensor.room}</TableCell>
                     <TableCell className="text-muted-foreground">{sensor.category}</TableCell>
+                    <TableCell className="text-muted-foreground text-xs">
+                      {sensor.stateName || "-"}
+                    </TableCell>
                     <TableCell className="text-right font-mono">
                       {sensor.value} {sensor.unit}
                     </TableCell>
-                    <TableCell>{getStatusBadge(sensor.status)}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
