@@ -17,7 +17,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Loader2, Thermometer, Droplets, Gauge, Lightbulb, Power, Activity, RefreshCw, AlertCircle } from "lucide-react";
-import { Integration } from "@/hooks/useIntegrations";
+import { LocationIntegration } from "@/hooks/useIntegrations";
 import { supabase } from "@/integrations/supabase/client";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
@@ -34,7 +34,7 @@ interface Sensor {
 }
 
 interface SensorsDialogProps {
-  integration: Integration | null;
+  locationIntegration: LocationIntegration | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
@@ -71,23 +71,25 @@ const getStatusBadge = (status: Sensor["status"]) => {
   }
 };
 
-export function SensorsDialog({ integration, open, onOpenChange }: SensorsDialogProps) {
+export function SensorsDialog({ locationIntegration, open, onOpenChange }: SensorsDialogProps) {
   const [loading, setLoading] = useState(false);
   const [sensors, setSensors] = useState<Sensor[]>([]);
   const [error, setError] = useState<string | null>(null);
 
+  const integrationName = locationIntegration?.integration?.name || "Integration";
+
   const fetchSensors = async () => {
-    if (!integration) return;
+    if (!locationIntegration) return;
 
     setLoading(true);
     setError(null);
 
     try {
-      console.log("Fetching sensors for integration:", integration.id);
+      console.log("Fetching sensors for location integration:", locationIntegration.id);
       
       const { data, error: fnError } = await supabase.functions.invoke("loxone-api", {
         body: {
-          integrationId: integration.id,
+          locationIntegrationId: locationIntegration.id,
           action: "getSensors",
         },
       });
@@ -114,7 +116,7 @@ export function SensorsDialog({ integration, open, onOpenChange }: SensorsDialog
 
   // Load sensors when dialog opens
   const handleOpenChange = (isOpen: boolean) => {
-    if (isOpen && integration) {
+    if (isOpen && locationIntegration) {
       fetchSensors();
     }
     onOpenChange(isOpen);
@@ -127,7 +129,7 @@ export function SensorsDialog({ integration, open, onOpenChange }: SensorsDialog
           <div className="flex items-center justify-between">
             <div>
               <DialogTitle>
-                Sensoren & Messgeräte – {integration?.name}
+                Sensoren & Messgeräte – {integrationName}
               </DialogTitle>
               <DialogDescription>
                 Übersicht aller verfügbaren Sensoren und Messgeräte vom Gateway
