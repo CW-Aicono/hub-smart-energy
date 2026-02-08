@@ -16,6 +16,11 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Trash2 } from "lucide-react";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 interface DeleteUserDialogProps {
   userId: string;
@@ -39,6 +44,7 @@ const DeleteUserDialog = ({
 
   const isLastAdmin = isAdmin && adminCount <= 1;
   const isSelf = currentUser?.id === userId;
+  // Cannot delete if: last admin trying to delete themselves
   const cannotDelete = isLastAdmin && isSelf;
 
   const handleDelete = async () => {
@@ -79,6 +85,29 @@ const DeleteUserDialog = ({
     }
   };
 
+  if (cannotDelete) {
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-muted-foreground"
+              disabled
+            >
+              <Trash2 className="h-4 w-4 mr-1" />
+              {t("common.delete")}
+            </Button>
+          </span>
+        </TooltipTrigger>
+        <TooltipContent>
+          <p>{t("users.cannotDeleteLastAdmin")}</p>
+        </TooltipContent>
+      </Tooltip>
+    );
+  }
+
   return (
     <AlertDialog>
       <AlertDialogTrigger asChild>
@@ -86,8 +115,6 @@ const DeleteUserDialog = ({
           variant="ghost"
           size="sm"
           className="text-destructive hover:text-destructive"
-          disabled={cannotDelete}
-          title={cannotDelete ? t("users.cannotDeleteLastAdmin") : undefined}
         >
           <Trash2 className="h-4 w-4 mr-1" />
           {t("common.delete")}

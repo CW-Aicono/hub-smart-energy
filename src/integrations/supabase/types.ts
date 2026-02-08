@@ -171,6 +171,7 @@ export type Database = {
           company_name: string | null
           contact_person: string | null
           created_at: string
+          email: string | null
           id: string
           is_blocked: boolean
           tenant_id: string | null
@@ -181,6 +182,7 @@ export type Database = {
           company_name?: string | null
           contact_person?: string | null
           created_at?: string
+          email?: string | null
           id?: string
           is_blocked?: boolean
           tenant_id?: string | null
@@ -191,6 +193,7 @@ export type Database = {
           company_name?: string | null
           contact_person?: string | null
           created_at?: string
+          email?: string | null
           id?: string
           is_blocked?: boolean
           tenant_id?: string | null
