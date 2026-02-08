@@ -69,17 +69,14 @@ const Locations = () => {
 
           {/* Locations List/Tree */}
           <Card>
-            <CardHeader className="flex flex-row items-start justify-between space-y-0">
-              <div>
-                <CardTitle className="flex items-center gap-2">
-                  <Building2 className="h-5 w-5" />
-                  Standortübersicht
-                </CardTitle>
-                <CardDescription className="mt-1">
-                  Hierarchische Ansicht aller Standorte und Gebäude
-                </CardDescription>
-              </div>
-              {isAdmin && <AddLocationDialog />}
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Building2 className="h-5 w-5" />
+                Standortübersicht
+              </CardTitle>
+              <CardDescription>
+                Hierarchische Ansicht aller Standorte und Gebäude
+              </CardDescription>
             </CardHeader>
             <CardContent>
               <Tabs defaultValue="tree">
