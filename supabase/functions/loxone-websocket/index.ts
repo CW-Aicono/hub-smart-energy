@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import forge from "https://esm.sh/node-forge@1.3.1";
 import { encode as hexEncode } from "https://deno.land/std@0.168.0/encoding/hex.ts";
 
 const corsHeaders = {
@@ -244,6 +245,68 @@ function maybeHexToAscii(input: string): string {
   return printable <= Math.ceil(decoded.length * 0.2) ? decoded : input;
 }
 
+function bytesToHex(bytes: Uint8Array): string {
+  return Array.from(bytes)
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+function randomHex(bytesLen: number): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(bytesLen));
+  return bytesToHex(bytes).toUpperCase();
+}
+
+function rsaEncryptPkcs1(publicKeyDerB64: string, payloadUtf8: string): string {
+  // Loxone expects RSA/ECB/PKCS1 + Base64(NoWrap)
+  // Avoid forge.util.* (can be undefined in some ESM builds) and use native base64 helpers.
+  const derBinary = atob(publicKeyDerB64.replace(/\s+/g, ""));
+  const asn1 = forge.asn1.fromDer(derBinary);
+  const publicKey = forge.pki.publicKeyFromAsn1(asn1);
+  const encryptedBinary = publicKey.encrypt(payloadUtf8, "RSAES-PKCS1-V1_5");
+  return btoa(encryptedBinary);
+}
+
+function base64Encode(bytes: Uint8Array): string {
+  let binary = "";
+  const chunkSize = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+  }
+  return btoa(binary);
+}
+
+function zeroPad(bytes: Uint8Array, blockSize = 16): Uint8Array {
+  const padLen = (blockSize - (bytes.length % blockSize)) % blockSize;
+  if (padLen === 0) return bytes;
+  const out = new Uint8Array(bytes.length + padLen);
+  out.set(bytes);
+  // remaining bytes are already 0x00
+  return out;
+}
+
+async function aesCbcEncryptZeroPad(
+  key: CryptoKey,
+  iv: Uint8Array,
+  plaintextUtf8: string
+): Promise<string> {
+  const encoder = new TextEncoder();
+  const plain = zeroPad(encoder.encode(plaintextUtf8));
+  const cipher = await crypto.subtle.encrypt({ name: "AES-CBC", iv }, key, plain);
+  return base64Encode(new Uint8Array(cipher));
+}
+
+async function buildEncryptedWsCommand(
+  aesKey: CryptoKey,
+  aesIv: Uint8Array,
+  socketSaltHex: string,
+  cmd: string
+): Promise<string> {
+  const plaintext = `salt/${socketSaltHex}/${cmd}`;
+  const cipherB64 = await aesCbcEncryptZeroPad(aesKey, aesIv, plaintext);
+  const encCipher = encodeURIComponent(cipherB64);
+  return `jdev/sys/enc/${encCipher}`;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -313,15 +376,47 @@ serve(async (req) => {
     const structure: LoxoneStructure = await structureResponse.json();
     const stateUuidMap = buildStateUuidMap(structure);
 
-    // Connect via WebSocket using wss (secure) with Basic Auth
-    // Loxone supports Basic Auth in WebSocket URL or via authenticate command
-    const wsUrl = `wss://${host}/ws/rfc6455`;
+    // --- Token-based WebSocket Auth (Config 10.3) ---
+    // The Miniserver will return 400 for most commands until the socket is authenticated or a token was acquired.
+    // Therefore we must do: getPublicKey (HTTP) -> keyexchange (WS) -> encrypted getkey2 -> encrypted getjwt -> encrypted enablebinstatusupdate.
+
+    const publicKeyUrl = `https://${host}/jdev/sys/getPublicKey`;
+    console.log(`Fetching public key: ${publicKeyUrl}`);
+    const publicKeyResp = await fetch(publicKeyUrl, {
+      method: "GET",
+      headers: { Authorization: authHeader },
+    });
+
+    if (!publicKeyResp.ok) {
+      throw new Error(`Public Key konnte nicht geladen werden: ${publicKeyResp.status}`);
+    }
+
+    const publicKeyJson = await publicKeyResp.json();
+    const publicKeyDerB64 = publicKeyJson?.LL?.value;
+    if (typeof publicKeyDerB64 !== "string" || !publicKeyDerB64) {
+      throw new Error("Public Key ungültig");
+    }
+
+    const aesKeyBytes = crypto.getRandomValues(new Uint8Array(32));
+    const aesIvBytes = crypto.getRandomValues(new Uint8Array(16));
+    const socketSaltHex = randomHex(2);
+    const aesKey = await crypto.subtle.importKey("raw", aesKeyBytes, { name: "AES-CBC" }, false, ["encrypt"]);
+
+    // RSA encrypt "{keyHex}:{ivHex}" with PKCS1
+    const sessionKeyPayload = `${bytesToHex(aesKeyBytes)}:${bytesToHex(aesIvBytes)}`;
+    const encryptedSessionKeyB64 = rsaEncryptPkcs1(publicKeyDerB64, sessionKeyPayload);
+
+    // Loxone docs: ws:// is the standard for Miniservers; wss:// only for certain generations.
+    const wsUrl = `ws://${host}/ws/rfc6455`;
     console.log(`Connecting to WebSocket: ${wsUrl}`);
 
     const collectedValues: Map<string, CollectedValue> = new Map();
-    let authCompleted = false;
+    let socketAuthenticated = false;
     let statusEnabled = false;
     let collectingStarted = false;
+
+    type AuthStage = "keyexchange" | "getkey2" | "getjwt" | "ready";
+    let stage: AuthStage = "keyexchange";
 
     // Create a promise that resolves when we've collected enough data
     const result = await new Promise<{ success: boolean; values: CollectedValue[]; error?: string }>((resolve) => {
@@ -342,8 +437,6 @@ serve(async (req) => {
       ws.onopen = async () => {
         console.log("WebSocket connected, starting live value collection...");
 
-        (ws as any).__gotKey = false;
-
         // Start collecting immediately so we also catch the initial event tables.
         collectingStarted = true;
         collectionTimeout = setTimeout(() => {
@@ -357,192 +450,145 @@ serve(async (req) => {
           });
         }, collectDuration) as unknown as number;
 
-        // Try enabling binary status updates (often required to receive values).
-        console.log("Sending enablebinstatusupdate...");
-        ws.send("jdev/sps/enablebinstatusupdate");
-
-        // Additionally attempt legacy authentication (some Miniservers require it).
-        // Prefer getkey2 (returns userSalt on newer Miniservers). Fallback to getkey.
-        console.log(`Requesting hashing key via getkey2 for user=${config.username}...`);
-        ws.send(`jdev/sys/getkey2/${encodeURIComponent(config.username)}`);
-
-        (ws as any).__keyFallbackTimer = setTimeout(() => {
-          if (!(ws as any).__gotKey) {
-            console.warn("No getkey2 response yet, falling back to getkey...");
-            ws.send("jdev/sys/getkey");
-          }
-        }, 1500);
+        // Step 1: keyexchange
+        stage = "keyexchange";
+        const keyexchangeCmd = `jdev/sys/keyexchange/${encodeURIComponent(encryptedSessionKeyB64)}`;
+        console.log("Sending keyexchange...");
+        ws.send(keyexchangeCmd);
       };
 
       ws.onmessage = async (event) => {
         const data = event.data;
 
-        // Handle text messages (auth responses, commands)
+        // Handle text messages (auth/token responses, command responses)
         if (typeof data === "string") {
           console.log(`Text message received: ${data.substring(0, 200)}`);
-          
+
           try {
             const parsed = JSON.parse(data);
             const llResponse = parsed?.LL;
-            
-            if (llResponse) {
-              const control = llResponse.control?.toLowerCase() || "";
-              const code = parseInt(llResponse.Code || llResponse.code || "0");
-              const value = llResponse.value;
 
-              // Handle getkey2/getkey response
-              if ((control.includes("getkey2") || control.match(/getkey$/)) && value) {
-                (ws as any).__gotKey = true;
-                if ((ws as any).__keyFallbackTimer) {
-                  clearTimeout((ws as any).__keyFallbackTimer);
-                  (ws as any).__keyFallbackTimer = undefined;
-                }
+            if (!llResponse) return;
 
-                const isKey2 = control.includes("getkey2");
+            const controlRaw = String(llResponse.control ?? "");
+            const control = controlRaw.toLowerCase();
+            const code = parseInt(llResponse.Code || llResponse.code || "0");
+            const value = llResponse.value;
 
-                const rawLen = typeof value === "string" ? value.length : undefined;
-                console.log(
-                  `Received ${isKey2 ? "getkey2" : "getkey"} for authentication, code=${code}, raw value length=${rawLen}`
-                );
-
-                // getkey:
-                //   value = hex-encoded ASCII that decodes to a hex-string key
-                // getkey2:
-                //   value can be an object: { key: "...", salt: "..." }
-                //   (each field is often hex-encoded ASCII)
-
-                let keyHexString = "";
-                let userSalt: string | null = null;
-
-                if (typeof value === "string") {
-                  const decoded = maybeHexToAscii(value);
-                  keyHexString = decoded;
-
-                  if (isKey2) {
-                    if (decoded.trim().startsWith("{")) {
-                      try {
-                        const obj = JSON.parse(decoded);
-                        if (typeof obj?.key === "string") keyHexString = obj.key;
-                        if (typeof obj?.salt === "string") userSalt = obj.salt;
-                        if (typeof obj?.userSalt === "string") userSalt = obj.userSalt;
-                      } catch {
-                        // ignore
-                      }
-                    } else if (decoded.includes(":")) {
-                      const [k, s] = decoded.split(":");
-                      if (k) keyHexString = k;
-                      if (s) userSalt = s;
-                    }
-                  }
-                } else if (isKey2 && typeof value === "object") {
-                  const keyRaw = (value as any).key;
-                  const saltRaw = (value as any).salt ?? (value as any).userSalt;
-
-                  if (typeof keyRaw === "string") keyHexString = maybeHexToAscii(keyRaw);
-                  if (typeof saltRaw === "string") userSalt = maybeHexToAscii(saltRaw);
-                }
-
-                // At this point, keyHexString should be the *actual* hex key (length typically 40 => 20 bytes)
-                const keyBytes = keyHexString ? hexToBytes(keyHexString) : new Uint8Array();
-
-                console.log(
-                  `Decoded key: keyHexLen=${keyHexString.length}, keyBytesLen=${keyBytes.length}, userSalt=${userSalt ? "present" : "none"}`
-                );
-                console.log(
-                  `Decoded key: keyHexLen=${keyHexString.length}, keyBytesLen=${keyBytes.length}, userSalt=${userSalt ? "present" : "none"}`
-                );
-
-                // According to Loxone docs, authenticate hash is computed over: "user:passHash"
-                // and passHash is derived from {password}:{userSalt} (hash algorithm varies: SHA1/SHA256).
-                const saltedSha1 = userSalt
-                  ? (await shaHex("SHA-1", `${config.password}:${userSalt}`)).toUpperCase()
-                  : null;
-                const saltedSha256 = userSalt
-                  ? (await shaHex("SHA-256", `${config.password}:${userSalt}`)).toUpperCase()
-                  : null;
-
-                const unsaltedSha1 = (await shaHex("SHA-1", config.password)).toUpperCase();
-                const unsaltedSha256 = (await shaHex("SHA-256", config.password)).toUpperCase();
-
-                const candidateMessages = [
-                  ...(saltedSha1 ? [`${config.username}:${saltedSha1}`] : []),
-                  ...(saltedSha256 ? [`${config.username}:${saltedSha256}`] : []),
-                  `${config.username}:${unsaltedSha1}`,
-                  `${config.username}:${unsaltedSha256}`,
-                  `${config.username}:${config.password}`,
-                ];
-
-                (ws as any).__authCandidates = {
-                  idx: 0,
-                  messages: candidateMessages,
-                  keyBytes,
-                };
-
-                const firstMsg = candidateMessages[0];
-                const firstHash = (await hmacSha1(keyBytes, firstMsg)).toUpperCase();
-
-                console.log(
-                  `Sending authentication (variant 1/${candidateMessages.length}), hash=${firstHash.substring(
-                    0,
-                    20
-                  )}...`
-                );
-
-                ws.send(`authenticate/${firstHash}`);
-              }
-              
-              // Handle authenticate response
-              else if (control.includes("authenticate")) {
-                if (code === 200) {
-                  console.log("Authentication successful!");
-                  authCompleted = true;
-                  
-                  // Enable binary status updates
-                  console.log("Enabling binary status updates...");
-                  ws.send("jdev/sps/enablebinstatusupdate");
-                } else {
-                  const candidates = (ws as any).__authCandidates as
-                    | { idx: number; messages: string[]; keyBytes: Uint8Array }
-                    | undefined;
-
-                  if (candidates && candidates.idx < candidates.messages.length - 1) {
-                    candidates.idx += 1;
-                    const msg = candidates.messages[candidates.idx];
-                    const msgType =
-                      candidates.idx === 1
-                        ? "user:passHash(SHA256)"
-                        : "user:password(raw)";
-                    const nextHash = (await hmacSha1(candidates.keyBytes, msg)).toUpperCase();
-
-                    console.warn(
-                      `Authentication failed (Code ${code}) – retrying with ${msgType}, hash=${nextHash.substring(
-                        0,
-                        20
-                      )}...`
-                    );
-
-                    ws.send(`authenticate/${nextHash}`);
-                    return;
-                  }
-
-                  console.error(`Authentication failed with code ${code} (continuing without auth)`);
-                  // Do not close the socket here — some setups still send the initial state tables without authentication.
-                  // We'll return whatever values we were able to collect within the collection window.
-                }
-              }
-              
-              // Handle enablebinstatusupdate response
-              else if (control.includes("enablebinstatusupdate")) {
-                if (code === 200) {
-                  console.log("Binary status updates enabled");
-                  statusEnabled = true;
-                } else {
-                  console.error(`Enable status update failed with code ${code} (continuing)`);
-                }
-              }
+            if (code === 420) {
+              console.error("Auth Policy Not Fulfilled (420) – wahrscheinlich wurde nicht rechtzeitig authentifiziert.");
+              ws.close();
+              return;
             }
+
+            if (control.includes("keyexchange")) {
+              if (code !== 200) {
+                console.error(`Keyexchange fehlgeschlagen: ${code}`);
+                ws.close();
+                return;
+              }
+
+              console.log("Keyexchange OK – requesting getkey2 (encrypted)...");
+              stage = "getkey2";
+              const getkey2Cmd = await buildEncryptedWsCommand(
+                aesKey,
+                aesIvBytes,
+                socketSaltHex,
+                `jdev/sys/getkey2/${encodeURIComponent(config.username)}`
+              );
+              ws.send(getkey2Cmd);
+              return;
+            }
+
+            if (control.includes("getkey2")) {
+              if (code !== 200) {
+                console.error(`getkey2 fehlgeschlagen: ${code}`);
+                ws.close();
+                return;
+              }
+
+              // getkey2 returns: { key: "...", salt: "..." }
+              let keyHexString = "";
+              let userSalt = "";
+
+              if (typeof value === "object" && value) {
+                const keyRaw = (value as any).key;
+                const saltRaw = (value as any).salt ?? (value as any).userSalt;
+                if (typeof keyRaw === "string") keyHexString = maybeHexToAscii(keyRaw);
+                if (typeof saltRaw === "string") userSalt = maybeHexToAscii(saltRaw);
+              } else if (typeof value === "string") {
+                // fallback if server returns combined string
+                const decoded = maybeHexToAscii(value);
+                if (decoded.includes(":")) {
+                  const [k, s] = decoded.split(":");
+                  keyHexString = k || "";
+                  userSalt = s || "";
+                }
+              }
+
+              if (!keyHexString || !userSalt) {
+                console.error("getkey2 response missing key/salt");
+                ws.close();
+                return;
+              }
+
+              const keyBytes = hexToBytes(keyHexString);
+
+              // pwHash = SHA1("password:userSalt") in UPPERCASE
+              const pwHash = (await shaHex("SHA-1", `${config.password}:${userSalt}`)).toUpperCase();
+
+              // hash = HMAC_SHA1(keyBytes, "user:pwHash") – keep result case unchanged
+              const authHash = await hmacSha1(keyBytes, `${config.username}:${pwHash}`);
+
+              console.log("getkey2 OK – requesting JWT (encrypted)...");
+              stage = "getjwt";
+
+              const permission = 4; // app permission (longer lived)
+              const clientUuid = locationIntegrationId; // already a UUID
+              const info = encodeURIComponent("Lovable Live Values");
+
+              const getJwtInner = `jdev/sys/getjwt/${authHash}/${encodeURIComponent(
+                config.username
+              )}/${permission}/${clientUuid}/${info}`;
+
+              const getJwtCmd = await buildEncryptedWsCommand(aesKey, aesIvBytes, socketSaltHex, getJwtInner);
+              ws.send(getJwtCmd);
+              return;
+            }
+
+            if (control.includes("getjwt")) {
+              if (code !== 200) {
+                console.error(`getjwt fehlgeschlagen: ${code}`);
+                ws.close();
+                return;
+              }
+
+              socketAuthenticated = true; // acquiring a token authenticates the socket
+              stage = "ready";
+              console.log("JWT acquired – enabling binary status updates (encrypted)...");
+
+              const enableCmd = await buildEncryptedWsCommand(
+                aesKey,
+                aesIvBytes,
+                socketSaltHex,
+                "jdev/sps/enablebinstatusupdate"
+              );
+              ws.send(enableCmd);
+              return;
+            }
+
+            if (control.includes("enablebinstatusupdate")) {
+              if (code === 200) {
+                console.log("Binary status updates enabled");
+                statusEnabled = true;
+              } else {
+                console.error(`Enable status update failed with code ${code} (continuing)`);
+              }
+              return;
+            }
+
+            // Other responses are ignored
           } catch {
-            // Not JSON, might be a plain text response
             console.log("Non-JSON text message");
           }
         }
@@ -624,7 +670,9 @@ serve(async (req) => {
         resolve({
           success: values.length > 0,
           values,
-          error: values.length === 0 ? (authCompleted ? "Keine Werte empfangen" : "Keine Werte empfangen (Auth nicht möglich)") : undefined,
+          error: values.length === 0
+            ? (socketAuthenticated ? "Keine Werte empfangen" : "Keine Werte empfangen (Auth nicht möglich)")
+            : undefined,
         });
       };
     });
