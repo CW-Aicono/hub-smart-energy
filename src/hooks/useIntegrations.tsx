@@ -40,12 +40,9 @@ export interface LocationIntegration {
 }
 
 export interface LoxoneConfig {
-  host: string;
-  port: number;
+  serial_number: string;
   username: string;
   password: string;
-  use_ssl: boolean;
-  serial_number: string;
 }
 
 interface UseIntegrationsReturn {
@@ -268,10 +265,9 @@ export function useLocationIntegrations(locationId: string | undefined): UseLoca
   };
 
   const testConnection = async (config: LoxoneConfig): Promise<{ success: boolean; error: string | null }> => {
-    // This would typically call an edge function to test the connection
-    // For now, we'll just validate the config
-    if (!config.host || !config.port || !config.username || !config.password) {
-      return { success: false, error: "Alle Felder müssen ausgefüllt werden" };
+    // Validate required fields for Cloud DNS connection
+    if (!config.serial_number || !config.username || !config.password) {
+      return { success: false, error: "Seriennummer, Benutzername und Passwort müssen ausgefüllt werden" };
     }
     
     // In a real implementation, this would make an API call to test the Loxone connection

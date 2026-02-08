@@ -121,7 +121,7 @@ export function IntegrationCard({ locationIntegration, onUpdate, onDelete, onCon
                   {getSyncStatusBadge()}
                 </div>
                 <p className="text-sm text-muted-foreground">
-                  {config?.host ? `${config.host}:${config.port}` : config?.serial_number ? `SN: ${config.serial_number}` : "Nicht konfiguriert"}
+                  {config?.serial_number ? `SN: ${config.serial_number}` : "Nicht konfiguriert"}
                 </p>
                 {integration?.description && (
                   <p className="text-xs text-muted-foreground">{integration.description}</p>

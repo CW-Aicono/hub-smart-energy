@@ -36,11 +36,8 @@ import {
 const loxoneConfigSchema = z.object({
   integration_id: z.string().min(1, "Bitte wählen Sie eine Integration"),
   serial_number: z.string().min(1, "Seriennummer ist erforderlich"),
-  host: z.string().min(1, "Host ist erforderlich"),
-  port: z.coerce.number().min(1, "Port ist erforderlich").max(65535, "Ungültiger Port"),
   username: z.string().min(1, "Benutzername ist erforderlich"),
   password: z.string().min(1, "Passwort ist erforderlich"),
-  use_ssl: z.boolean().default(false),
 });
 
 type LoxoneFormData = z.infer<typeof loxoneConfigSchema>;
@@ -62,11 +59,8 @@ export function AddIntegrationDialog({ locationId, onSuccess }: AddIntegrationDi
     defaultValues: {
       integration_id: "",
       serial_number: "",
-      host: "",
-      port: 80,
       username: "",
       password: "",
-      use_ssl: false,
     },
   });
 
@@ -79,12 +73,9 @@ export function AddIntegrationDialog({ locationId, onSuccess }: AddIntegrationDi
     setTesting(true);
 
     const config: LoxoneConfig = {
-      host: values.host,
-      port: values.port,
+      serial_number: values.serial_number,
       username: values.username,
       password: values.password,
-      use_ssl: values.use_ssl,
-      serial_number: values.serial_number,
     };
 
     const result = await testConnection(config);
@@ -106,12 +97,9 @@ export function AddIntegrationDialog({ locationId, onSuccess }: AddIntegrationDi
 
   const onSubmit = async (data: LoxoneFormData) => {
     const config: LoxoneConfig = {
-      host: data.host,
-      port: data.port,
+      serial_number: data.serial_number,
       username: data.username,
       password: data.password,
-      use_ssl: data.use_ssl,
-      serial_number: data.serial_number,
     };
 
     const { error } = await addIntegration(locationId, data.integration_id, config);
@@ -207,36 +195,6 @@ export function AddIntegrationDialog({ locationId, onSuccess }: AddIntegrationDi
             <div className="grid grid-cols-2 gap-4">
               <FormField
                 control={form.control}
-                name="host"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Host / IP-Adresse</FormLabel>
-                    <FormControl>
-                      <Input placeholder="192.168.1.100" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="port"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Port</FormLabel>
-                    <FormControl>
-                      <Input type="number" placeholder="80" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
                 name="username"
                 render={({ field }) => (
                   <FormItem>
@@ -263,24 +221,6 @@ export function AddIntegrationDialog({ locationId, onSuccess }: AddIntegrationDi
                 )}
               />
             </div>
-
-            <FormField
-              control={form.control}
-              name="use_ssl"
-              render={({ field }) => (
-                <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
-                  <div className="space-y-0.5">
-                    <FormLabel>SSL/TLS verwenden</FormLabel>
-                    <FormDescription>
-                      Sichere Verbindung zum Miniserver
-                    </FormDescription>
-                  </div>
-                  <FormControl>
-                    <Switch checked={field.value} onCheckedChange={field.onChange} />
-                  </FormControl>
-                </FormItem>
-              )}
-            />
 
             <div className="flex gap-2 justify-end pt-4">
               <Button
