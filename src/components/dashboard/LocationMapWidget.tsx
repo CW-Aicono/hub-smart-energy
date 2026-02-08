@@ -3,12 +3,21 @@ import { LocationsMap } from "@/components/locations/LocationsMap";
 import { Card, CardContent } from "@/components/ui/card";
 import { useNavigate } from "react-router-dom";
 
-const LocationMapWidget = () => {
+interface LocationMapWidgetProps {
+  locationId: string | null;
+}
+
+const LocationMapWidget = ({ locationId }: LocationMapWidgetProps) => {
   const { locations, loading } = useLocations();
   const navigate = useNavigate();
 
-  // Filter locations that should be shown on map and exclude child buildings of complexes
-  const mapLocations = locations.filter((loc) => loc.show_on_map && !loc.parent_id);
+  // Filter locations based on selection
+  let mapLocations = locations.filter((loc) => loc.show_on_map && !loc.parent_id);
+  
+  // If a specific location is selected, only show that one
+  if (locationId) {
+    mapLocations = locations.filter((loc) => loc.id === locationId && loc.show_on_map);
+  }
 
   const handleLocationClick = () => {
     navigate("/locations");

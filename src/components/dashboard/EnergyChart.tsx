@@ -1,12 +1,27 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import { energyConsumptionData } from "@/data/mockData";
+import { useLocations } from "@/hooks/useLocations";
 
-const EnergyChart = () => {
+interface EnergyChartProps {
+  locationId: string | null;
+}
+
+const EnergyChart = ({ locationId }: EnergyChartProps) => {
+  const { locations } = useLocations();
+  const selectedLocation = locationId ? locations.find((l) => l.id === locationId) : null;
+  
+  // In a real implementation, filter data by locationId
+  // For now, show all data or indicate the filter is active
+  const subtitle = selectedLocation 
+    ? `Daten für: ${selectedLocation.name}` 
+    : "Alle Liegenschaften";
+
   return (
     <Card>
       <CardHeader>
         <CardTitle className="font-display text-lg">Energieverbrauch (kWh)</CardTitle>
+        <p className="text-sm text-muted-foreground">{subtitle}</p>
       </CardHeader>
       <CardContent>
         <ResponsiveContainer width="100%" height={300}>

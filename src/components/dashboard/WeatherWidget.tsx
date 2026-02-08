@@ -91,7 +91,11 @@ async function fetchWeather(lat: number, lon: number): Promise<WeatherData | nul
   }
 }
 
-const WeatherWidget = () => {
+interface WeatherWidgetProps {
+  locationId: string | null;
+}
+
+const WeatherWidget = ({ locationId }: WeatherWidgetProps) => {
   const { t } = useTranslation();
   const [weather, setWeather] = useState<WeatherData | null>(null);
   const [mainLocation, setMainLocation] = useState<MainLocation | null>(null);
@@ -104,15 +108,21 @@ const WeatherWidget = () => {
       setError(null);
 
       try {
-        // Fetch main location
-        const { data: location, error: locError } = await supabase
+        // Fetch location - either the selected one or the main location
+        let query = supabase
           .from("locations")
-          .select("name, postal_code, city, latitude, longitude")
-          .eq("is_main_location", true)
-          .single();
+          .select("name, postal_code, city, latitude, longitude");
+        
+        if (locationId) {
+          query = query.eq("id", locationId);
+        } else {
+          query = query.eq("is_main_location", true);
+        }
+        
+        const { data: location, error: locError } = await query.single();
 
         if (locError || !location) {
-          setError(t("weather.noMainLocation"));
+          setError(locationId ? t("weather.locationNotFound") : t("weather.noMainLocation"));
           setLoading(false);
           return;
         }
@@ -155,7 +165,7 @@ const WeatherWidget = () => {
     // Refresh weather every 15 minutes
     const interval = setInterval(loadWeather, 15 * 60 * 1000);
     return () => clearInterval(interval);
-  }, [t]);
+  }, [t, locationId]);
 
   if (loading) {
     return (

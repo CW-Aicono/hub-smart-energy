@@ -2,6 +2,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { alerts } from "@/data/mockData";
 import { AlertTriangle, Info, CheckCircle, Bell } from "lucide-react";
 
+interface AlertsListProps {
+  locationId: string | null;
+}
+
 const iconMap = {
   warning: AlertTriangle,
   info: Info,
@@ -14,7 +18,8 @@ const colorMap = {
   success: "text-accent",
 };
 
-const AlertsList = () => {
+const AlertsList = ({ locationId }: AlertsListProps) => {
+  // In a real implementation, filter alerts by locationId
   return (
     <Card>
       <CardHeader>

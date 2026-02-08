@@ -3,7 +3,12 @@ import { Progress } from "@/components/ui/progress";
 import { sustainabilityKPIs } from "@/data/mockData";
 import { Leaf, Wind, Gauge } from "lucide-react";
 
-const SustainabilityKPIs = () => {
+interface SustainabilityKPIsProps {
+  locationId: string | null;
+}
+
+const SustainabilityKPIs = ({ locationId }: SustainabilityKPIsProps) => {
+  // In a real implementation, filter data by locationId
   const co2Progress = Math.round((1 - sustainabilityKPIs.co2Current / sustainabilityKPIs.co2Target) * 100 + 100);
   
   return (

@@ -1328,11 +1328,17 @@ export const translations = {
     es: "No hay ubicación principal definida. Marque una ubicación como principal.",
     nl: "Geen hoofdlocatie gedefinieerd. Markeer een locatie als hoofdlocatie.",
   },
+  "weather.locationNotFound": {
+    de: "Der ausgewählte Standort wurde nicht gefunden.",
+    en: "The selected location was not found.",
+    es: "La ubicación seleccionada no fue encontrada.",
+    nl: "De geselecteerde locatie is niet gevonden.",
+  },
   "weather.noCoordinates": {
-    de: "Keine Koordinaten oder PLZ für den Hauptstandort verfügbar.",
-    en: "No coordinates or postal code available for the main location.",
-    es: "No hay coordenadas o código postal disponibles para la ubicación principal.",
-    nl: "Geen coördinaten of postcode beschikbaar voor de hoofdlocatie.",
+    de: "Keine Koordinaten oder PLZ für den Standort verfügbar.",
+    en: "No coordinates or postal code available for the location.",
+    es: "No hay coordenadas o código postal disponibles para la ubicación.",
+    nl: "Geen coördinaten of postcode beschikbaar voor de locatie.",
   },
   "weather.fetchError": {
     de: "Wetterdaten konnten nicht geladen werden.",
