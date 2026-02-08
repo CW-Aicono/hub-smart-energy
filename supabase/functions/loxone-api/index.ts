@@ -28,45 +28,32 @@ interface LoxoneStructure {
   cats: Record<string, { name: string }>;
 }
 
-// Resolve Loxone Cloud DNS to get actual IP and port
-async function resolveLoxoneCloudDNS(serialNumber: string): Promise<{ ip: string; port: number; useHttps: boolean } | null> {
+// Resolve Loxone Cloud DNS by following the redirect from dns.loxonecloud.com/{serial}
+async function resolveLoxoneCloudURL(serialNumber: string): Promise<string | null> {
   try {
-    const dnsUrl = `http://dns.loxonecloud.com/?getip&snr=${serialNumber}&json=true`;
-    console.log(`Resolving Cloud DNS: ${dnsUrl}`);
+    // The Loxone Cloud DNS service redirects to the actual Miniserver URL
+    // Format: http://dns.loxonecloud.com/{SERIAL} -> https://{ip-encoded}.{serial}.dyndns.loxonecloud.com:{port}
+    const dnsUrl = `http://dns.loxonecloud.com/${serialNumber}`;
+    console.log(`Resolving via Loxone Cloud redirect: ${dnsUrl}`);
     
-    const response = await fetch(dnsUrl);
-    if (!response.ok) {
-      console.error(`DNS resolution failed: ${response.status}`);
-      return null;
-    }
+    // Make a HEAD request and follow redirects to get the final URL
+    const response = await fetch(dnsUrl, {
+      method: "HEAD",
+      redirect: "follow",
+    });
     
-    const data = await response.json();
-    console.log("DNS response:", JSON.stringify(data));
+    // The final URL after redirects is what we need
+    const finalUrl = response.url;
+    console.log(`Resolved to final URL: ${finalUrl}`);
     
-    // Check if Miniserver is registered and reachable
-    if (data.Code !== 200 || data["DNS-Status"] !== "registered") {
-      console.error("Miniserver not registered or unreachable");
-      return null;
-    }
-
-    // Prefer HTTP connection since edge functions cannot handle self-signed SSL certs
-    // Check PortOpen for HTTP availability first
-    if (data.PortOpen && data.IP && data.Port) {
-      console.log("Using HTTP connection (PortOpen available)");
-      return { ip: data.IP, port: data.Port, useHttps: false };
-    }
-
-    // Use loxonecloud.com subdomain format for HTTP (always works if registered)
-    // Format: http://{serialNumber}.dns.loxonecloud.com/
-    if (data["DNS-Status"] === "registered") {
-      console.log("Using Loxone Cloud DNS subdomain for HTTP");
-      return { ip: `${serialNumber.toLowerCase()}.dns.loxonecloud.com`, port: 80, useHttps: false };
-    }
+    // Extract base URL (remove any path)
+    const urlObj = new URL(finalUrl);
+    const baseUrl = `${urlObj.protocol}//${urlObj.host}`;
+    console.log(`Using base URL: ${baseUrl}`);
     
-    console.error("Could not establish HTTP connection path:", data);
-    return null;
+    return baseUrl;
   } catch (error) {
-    console.error("DNS resolution error:", error);
+    console.error("Cloud DNS resolution error:", error);
     return null;
   }
 }
@@ -119,20 +106,13 @@ serve(async (req) => {
 
     console.log(`Config: serial=${config.serial_number}, user=${config.username}`);
 
-    // Resolve via Loxone Cloud DNS
-    console.log(`Resolving Cloud DNS for serial: ${config.serial_number}`);
-    const resolved = await resolveLoxoneCloudDNS(config.serial_number);
+    // Resolve via Loxone Cloud redirect
+    console.log(`Resolving Cloud URL for serial: ${config.serial_number}`);
+    const baseUrl = await resolveLoxoneCloudURL(config.serial_number);
     
-    if (!resolved) {
+    if (!baseUrl) {
       throw new Error("Cloud DNS Auflösung fehlgeschlagen. Miniserver nicht erreichbar oder nicht für Remote-Zugriff konfiguriert.");
     }
-    
-    // Use HTTPS for IPv6 connections via Cloud
-    const protocol = resolved.useHttps ? "https" : "http";
-    // For IPv6, wrap in brackets
-    const host = resolved.ip.includes(":") ? `[${resolved.ip}]` : resolved.ip;
-    const baseUrl = `${protocol}://${host}:${resolved.port}`;
-    console.log(`Resolved to: ${baseUrl}`);
 
     // Create Basic Auth header
     const credentials = btoa(`${config.username}:${config.password}`);
