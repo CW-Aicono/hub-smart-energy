@@ -28,7 +28,15 @@ interface LoxoneStructure {
   cats: Record<string, { name: string }>;
 }
 
-// Resolve Loxone Cloud DNS by following the redirect from dns.loxonecloud.com/{serial}
+interface StateValueResult {
+  value: number | string | null;
+  stateName: string;
+  secondaryValue?: number | string | null;
+  secondaryStateName?: string;
+  secondaryUnit?: string;
+}
+
+// Resolve Loxone Cloud DNS by following the redirect
 async function resolveLoxoneCloudURL(serialNumber: string): Promise<string | null> {
   try {
     const dnsUrl = `http://dns.loxonecloud.com/${serialNumber}`;
@@ -69,10 +77,8 @@ async function fetchStateValue(
     if (!response.ok) return null;
     
     const data = await response.json();
-    // Loxone returns: {"LL":{"control":"uuid","value":"123.45","Code":"200"}}
     if (data?.LL?.value !== undefined) {
       const val = data.LL.value;
-      // Try to parse as number
       const numVal = parseFloat(val);
       return isNaN(numVal) ? val : numVal;
     }
@@ -97,6 +103,12 @@ async function updateSyncStatus(
     .eq("id", locationIntegrationId);
     
   console.log(`Updated sync_status to: ${status}`);
+}
+
+// Check if control is an energy monitor type
+function isEnergyMonitor(controlType: string): boolean {
+  const ct = controlType.toLowerCase();
+  return ct.includes("meter") || ct.includes("zähler") || ct.includes("energymonitor");
 }
 
 serve(async (req) => {
@@ -201,30 +213,79 @@ serve(async (req) => {
       console.log(`Loaded structure with ${Object.keys(controls).length} controls`);
 
       // Collect all state UUIDs we need to query
-      const stateUuidsToQuery: { controlUuid: string; stateName: string; stateUuid: string }[] = [];
+      // For energy monitors, we want both Pf (power) and Mrc (meter reading)
+      interface StateQuery {
+        controlUuid: string;
+        stateName: string;
+        stateUuid: string;
+        isPrimary: boolean;
+      }
+      
+      const stateUuidsToQuery: StateQuery[] = [];
       
       for (const [uuid, control] of Object.entries(controls)) {
-        if (control.states) {
-          // Prioritize certain state names for value display
-          const priorityStates = ["value", "actual", "Mrc", "Mrt", "position", "level", "brightness", "temperature"];
+        if (!control.states) continue;
+        
+        const controlType = control.type || "";
+        
+        if (isEnergyMonitor(controlType)) {
+          // For energy monitors, query both Pf (power in kW) and Mrc (meter reading in kWh)
+          if (control.states["Pf"]) {
+            stateUuidsToQuery.push({
+              controlUuid: uuid,
+              stateName: "Pf",
+              stateUuid: control.states["Pf"],
+              isPrimary: true,
+            });
+          }
+          if (control.states["Mrc"]) {
+            stateUuidsToQuery.push({
+              controlUuid: uuid,
+              stateName: "Mrc",
+              stateUuid: control.states["Mrc"],
+              isPrimary: control.states["Pf"] ? false : true, // Secondary if Pf exists
+            });
+          }
+          // If neither Pf nor Mrc, try other common states
+          if (!control.states["Pf"] && !control.states["Mrc"]) {
+            const fallbackStates = ["value", "actual", "Mrt"];
+            for (const stateName of fallbackStates) {
+              if (control.states[stateName]) {
+                stateUuidsToQuery.push({
+                  controlUuid: uuid,
+                  stateName,
+                  stateUuid: control.states[stateName],
+                  isPrimary: true,
+                });
+                break;
+              }
+            }
+          }
+        } else {
+          // For other controls, prioritize certain state names
+          const priorityStates = ["value", "actual", "position", "level", "brightness", "temperature"];
+          let found = false;
           for (const stateName of priorityStates) {
             if (control.states[stateName]) {
               stateUuidsToQuery.push({
                 controlUuid: uuid,
                 stateName,
                 stateUuid: control.states[stateName],
+                isPrimary: true,
               });
-              break; // Only take first matching priority state
+              found = true;
+              break;
             }
           }
           // If no priority state found, take the first available
-          if (!stateUuidsToQuery.find(s => s.controlUuid === uuid)) {
+          if (!found) {
             const firstStateName = Object.keys(control.states)[0];
             if (firstStateName) {
               stateUuidsToQuery.push({
                 controlUuid: uuid,
                 stateName: firstStateName,
                 stateUuid: control.states[firstStateName],
+                isPrimary: true,
               });
             }
           }
@@ -233,8 +294,8 @@ serve(async (req) => {
 
       console.log(`Querying ${stateUuidsToQuery.length} state values...`);
 
-      // Batch fetch state values (limit concurrent requests)
-      const stateValues: Record<string, { value: number | string | null; stateName: string }> = {};
+      // Batch fetch state values
+      const stateResults: Record<string, StateValueResult> = {};
       const batchSize = 10;
       
       for (let i = 0; i < stateUuidsToQuery.length; i += batchSize) {
@@ -242,16 +303,31 @@ serve(async (req) => {
         const results = await Promise.all(
           batch.map(async (item) => {
             const value = await fetchStateValue(baseUrl, authHeader, item.stateUuid);
-            return { controlUuid: item.controlUuid, stateName: item.stateName, value };
+            return { ...item, value };
           })
         );
         
         for (const result of results) {
-          stateValues[result.controlUuid] = { value: result.value, stateName: result.stateName };
+          if (!stateResults[result.controlUuid]) {
+            stateResults[result.controlUuid] = {
+              value: null,
+              stateName: "",
+            };
+          }
+          
+          if (result.isPrimary) {
+            stateResults[result.controlUuid].value = result.value;
+            stateResults[result.controlUuid].stateName = result.stateName;
+          } else {
+            // Secondary value (e.g., Mrc for energy monitors)
+            stateResults[result.controlUuid].secondaryValue = result.value;
+            stateResults[result.controlUuid].secondaryStateName = result.stateName;
+            stateResults[result.controlUuid].secondaryUnit = result.stateName === "Mrc" ? "kWh" : "";
+          }
         }
       }
 
-      console.log(`Fetched ${Object.keys(stateValues).length} state values`);
+      console.log(`Fetched values for ${Object.keys(stateResults).length} controls`);
 
       // Build sensors array
       const sensors = [];
@@ -271,9 +347,9 @@ serve(async (req) => {
         } else if (controlType.includes("humidity") || controlType.includes("feuchte")) {
           sensorType = "humidity";
           unit = "%";
-        } else if (controlType.includes("meter") || controlType.includes("zähler") || controlType.includes("energymonitor")) {
+        } else if (isEnergyMonitor(control.type || "")) {
           sensorType = "power";
-          unit = "kWh";
+          unit = "kW"; // Primary value is power in kW
         } else if (controlType.includes("switch") || controlType.includes("schalter")) {
           sensorType = "switch";
         } else if (controlType.includes("dimmer") || controlType.includes("light")) {
@@ -292,10 +368,13 @@ serve(async (req) => {
           sensorType = "motion";
         }
 
-        // Get the fetched value
-        const stateData = stateValues[uuid];
+        // Get the fetched value(s)
+        const stateData = stateResults[uuid];
         let value = "-";
         let displayStateName = "";
+        let secondaryValue = "";
+        let secondaryStateName = "";
+        let secondaryUnit = "";
         
         if (stateData?.value !== null && stateData?.value !== undefined) {
           displayStateName = stateData.stateName;
@@ -306,8 +385,8 @@ serve(async (req) => {
               value = rawValue > 0 ? "Ein" : "Aus";
               unit = "";
             } else if (sensorType === "power") {
-              // Format large numbers with thousands separator
-              value = rawValue.toLocaleString("de-DE", { maximumFractionDigits: 0 });
+              // Format power value with decimals
+              value = rawValue.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
             } else if (sensorType === "temperature") {
               value = rawValue.toFixed(1);
             } else {
@@ -315,6 +394,19 @@ serve(async (req) => {
             }
           } else {
             value = String(rawValue);
+          }
+        }
+
+        // Handle secondary value (Mrc for energy monitors)
+        if (stateData?.secondaryValue !== null && stateData?.secondaryValue !== undefined) {
+          secondaryStateName = stateData.secondaryStateName || "";
+          secondaryUnit = stateData.secondaryUnit || "kWh";
+          const rawSecondary = stateData.secondaryValue;
+          
+          if (typeof rawSecondary === "number") {
+            secondaryValue = rawSecondary.toLocaleString("de-DE", { maximumFractionDigits: 0 });
+          } else {
+            secondaryValue = String(rawSecondary);
           }
         }
 
@@ -327,15 +419,20 @@ serve(async (req) => {
           category: catName,
           value: value,
           unit: unit,
-          status: stateData?.value !== null ? "online" : "offline",
+          status: (stateData?.value !== null || stateData?.secondaryValue !== null) ? "online" : "offline",
           stateName: displayStateName,
+          secondaryValue: secondaryValue,
+          secondaryStateName: secondaryStateName,
+          secondaryUnit: secondaryUnit,
         });
       }
 
-      // Sort sensors: those with values first
+      // Sort sensors: those with values first, then by name
       sensors.sort((a, b) => {
-        if (a.value !== "-" && b.value === "-") return -1;
-        if (a.value === "-" && b.value !== "-") return 1;
+        const aHasValue = a.value !== "-" || a.secondaryValue !== "";
+        const bHasValue = b.value !== "-" || b.secondaryValue !== "";
+        if (aHasValue && !bHasValue) return -1;
+        if (!aHasValue && bHasValue) return 1;
         return a.name.localeCompare(b.name);
       });
 

@@ -32,6 +32,9 @@ interface Sensor {
   unit: string;
   status: "online" | "offline" | "warning";
   stateName?: string;
+  secondaryValue?: string;
+  secondaryStateName?: string;
+  secondaryUnit?: string;
 }
 
 interface SensorsDialogProps {
@@ -191,9 +194,17 @@ export function SensorsDialog({ locationIntegration, open, onOpenChange }: Senso
                     <TableCell className="text-muted-foreground">{sensor.category}</TableCell>
                     <TableCell className="text-muted-foreground text-xs">
                       {sensor.stateName || "-"}
+                      {sensor.secondaryStateName && (
+                        <span className="block">{sensor.secondaryStateName}</span>
+                      )}
                     </TableCell>
                     <TableCell className="text-right font-mono">
-                      {sensor.value} {sensor.unit}
+                      <div>{sensor.value} {sensor.unit}</div>
+                      {sensor.secondaryValue && (
+                        <div className="text-muted-foreground">
+                          {sensor.secondaryValue} {sensor.secondaryUnit}
+                        </div>
+                      )}
                     </TableCell>
                   </TableRow>
                 ))}
