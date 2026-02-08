@@ -274,12 +274,64 @@ function base64ToBytes(b64: string): Uint8Array {
   return bytes;
 }
 
-// RSA encryption using Web Crypto API (RSAES-PKCS1-v1_5 is not directly supported,
-// so we use RSA-OAEP which is what modern Loxone Miniservers actually expect)
+function base64UrlToBytes(b64url: string): Uint8Array {
+  const b64 = b64url.replace(/-/g, "+").replace(/_/g, "/");
+  const padded = b64 + "===".slice((b64.length + 3) % 4);
+  return base64ToBytes(padded);
+}
+
+function bytesToBigIntBE(bytes: Uint8Array): bigint {
+  let result = 0n;
+  for (const b of bytes) {
+    result = (result << 8n) + BigInt(b);
+  }
+  return result;
+}
+
+function bigIntToBytesBE(value: bigint, length: number): Uint8Array {
+  const out = new Uint8Array(length);
+  let v = value;
+  for (let i = length - 1; i >= 0; i--) {
+    out[i] = Number(v & 0xffn);
+    v >>= 8n;
+  }
+  return out;
+}
+
+function modPow(base: bigint, exponent: bigint, modulus: bigint): bigint {
+  if (modulus === 1n) return 0n;
+  let result = 1n;
+  let b = base % modulus;
+  let e = exponent;
+  while (e > 0n) {
+    if (e & 1n) result = (result * b) % modulus;
+    e >>= 1n;
+    b = (b * b) % modulus;
+  }
+  return result;
+}
+
+function randomNonZeroBytes(length: number): Uint8Array {
+  const out = new Uint8Array(length);
+  let i = 0;
+  while (i < length) {
+    const chunk = crypto.getRandomValues(new Uint8Array(length - i));
+    for (const b of chunk) {
+      if (b === 0) continue;
+      out[i++] = b;
+      if (i >= length) break;
+    }
+  }
+  return out;
+}
+
+// RSA encryption for Loxone keyexchange
+// Spec (Config 10.3): RSA/ECB/PKCS1 + Base64(NoWrap)
+// WebCrypto doesn't expose RSAES-PKCS1-v1_5 directly, so we implement the padding + raw RSA ourselves.
 async function rsaEncryptPkcs1(publicKeyDerB64: string, payloadUtf8: string): Promise<string> {
   const cleanedB64 = cleanBase64(publicKeyDerB64);
   console.log(`Cleaned public key Base64 (first 60 chars): ${cleanedB64.substring(0, 60)}...`);
-  
+
   let derBytes: Uint8Array;
   try {
     derBytes = base64ToBytes(cleanedB64);
@@ -288,49 +340,53 @@ async function rsaEncryptPkcs1(publicKeyDerB64: string, payloadUtf8: string): Pr
     throw new Error(`Failed to decode base64 public key: ${e}`);
   }
 
-  // Import the public key using Web Crypto API
-  // Loxone public keys are in SubjectPublicKeyInfo (SPKI) format
-  let publicKey: CryptoKey;
+  // Import key just to export as JWK (to get modulus/exponent)
+  let cryptoKey: CryptoKey;
   try {
-    publicKey = await crypto.subtle.importKey(
+    cryptoKey = await crypto.subtle.importKey(
       "spki",
       derBytes,
-      {
-        name: "RSA-OAEP",
-        hash: "SHA-256",
-      },
-      false,
+      { name: "RSA-OAEP", hash: "SHA-256" },
+      true,
       ["encrypt"]
     );
   } catch (e) {
-    console.error("Failed to import public key:", e);
-    throw new Error(`Failed to import RSA public key: ${e}`);
+    console.error("Failed to import SPKI public key:", e);
+    throw new Error(`Failed to import public key: ${e}`);
   }
 
-  // Encrypt the payload
-  const encoder = new TextEncoder();
-  const payloadBytes = encoder.encode(payloadUtf8);
-  
-  let encryptedBytes: ArrayBuffer;
-  try {
-    encryptedBytes = await crypto.subtle.encrypt(
-      { name: "RSA-OAEP" },
-      publicKey,
-      payloadBytes
-    );
-  } catch (e) {
-    console.error("RSA encryption failed:", e);
-    throw new Error(`RSA encryption failed: ${e}`);
+  const jwk = (await crypto.subtle.exportKey("jwk", cryptoKey)) as JsonWebKey;
+  if (!jwk.n || !jwk.e) {
+    throw new Error("Public key export failed (missing n/e)");
   }
 
-  // Convert to base64
-  let binary = "";
-  const bytes = new Uint8Array(encryptedBytes);
-  const chunkSize = 0x8000;
-  for (let i = 0; i < bytes.length; i += chunkSize) {
-    binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+  const nBytes = base64UrlToBytes(jwk.n);
+  const eBytes = base64UrlToBytes(jwk.e);
+  const n = bytesToBigIntBE(nBytes);
+  const e = bytesToBigIntBE(eBytes);
+
+  const k = nBytes.length; // modulus length in bytes
+  const m = new TextEncoder().encode(payloadUtf8);
+  if (m.length > k - 11) {
+    throw new Error(`RSA message too long: ${m.length} > ${k - 11}`);
   }
-  return btoa(binary);
+
+  // PKCS#1 v1.5 (encryption) padding: 0x00 0x02 PS 0x00 M (PS = non-zero random)
+  const psLen = k - m.length - 3;
+  const ps = randomNonZeroBytes(psLen);
+
+  const em = new Uint8Array(k);
+  em[0] = 0x00;
+  em[1] = 0x02;
+  em.set(ps, 2);
+  em[2 + psLen] = 0x00;
+  em.set(m, 3 + psLen);
+
+  const emInt = bytesToBigIntBE(em);
+  const cInt = modPow(emInt, e, n);
+  const cBytes = bigIntToBytesBE(cInt, k);
+
+  return base64Encode(cBytes);
 }
 
 function base64Encode(bytes: Uint8Array): string {
@@ -469,13 +525,12 @@ serve(async (req) => {
     const socketSaltHex = randomHex(2);
     const aesKey = await crypto.subtle.importKey("raw", aesKeyBytes, { name: "AES-CBC" }, false, ["encrypt"]);
 
-    // RSA encrypt "{keyHex}:{ivHex}" with RSA-OAEP
-    const sessionKeyPayload = `${bytesToHex(aesKeyBytes)}:${bytesToHex(aesIvBytes)}`;
+    // RSA encrypt "{keyHex}:{ivHex}" with RSA/ECB/PKCS1
+    const sessionKeyPayload = `${bytesToHex(aesKeyBytes).toUpperCase()}:${bytesToHex(aesIvBytes).toUpperCase()}`;
     const encryptedSessionKeyB64 = await rsaEncryptPkcs1(publicKeyDerB64, sessionKeyPayload);
 
-    // Use wss:// since Edge Functions require secure WebSocket connections
-    // and modern Loxone Cloud connections typically use HTTPS/WSS
-    const wsUrl = `wss://${host}/ws/rfc6455`;
+    // Loxone spec: use ws:// (wss:// is typically not supported by the Miniserver)
+    const wsUrl = `ws://${host}/ws/rfc6455`;
     console.log(`Connecting to WebSocket: ${wsUrl}`);
 
     const collectedValues: Map<string, CollectedValue> = new Map();
