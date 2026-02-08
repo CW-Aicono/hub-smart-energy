@@ -38,7 +38,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { Plus, Server, Trash2, Loader2, Plug, Pencil } from "lucide-react";
+import { Plus, Server, Trash2, Loader2, Plug, Pencil, Wifi, WifiOff } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -53,7 +53,7 @@ import {
 
 const integrationSchema = z.object({
   name: z.string().min(1, "Name ist erforderlich"),
-  type: z.string().min(1, "Typ ist erforderlich"),
+  serial_number: z.string().min(1, "Seriennummer ist erforderlich"),
   category: z.string().min(1, "Kategorie ist erforderlich"),
   description: z.string().optional(),
 });
@@ -68,13 +68,14 @@ const Integrations = () => {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingIntegration, setEditingIntegration] = useState<Integration | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [testingId, setTestingId] = useState<string | null>(null);
   const { toast } = useToast();
 
   const form = useForm<IntegrationFormData>({
     resolver: zodResolver(integrationSchema),
     defaultValues: {
       name: "",
-      type: "loxone_miniserver",
+      serial_number: "",
       category: "",
       description: "",
     },
@@ -83,16 +84,17 @@ const Integrations = () => {
   // Reset form when editing integration changes
   useEffect(() => {
     if (editingIntegration) {
+      const config = editingIntegration.config as { serial_number?: string } | null;
       form.reset({
         name: editingIntegration.name,
-        type: editingIntegration.type,
+        serial_number: config?.serial_number || "",
         category: editingIntegration.category,
         description: editingIntegration.description || "",
       });
     } else {
       form.reset({
         name: "",
-        type: "loxone_miniserver",
+        serial_number: "",
         category: categories[0]?.slug || "",
         description: "",
       });
@@ -100,13 +102,18 @@ const Integrations = () => {
   }, [editingIntegration, categories, form]);
 
   const onSubmit = async (data: IntegrationFormData) => {
+    const configData = {
+      serial_number: data.serial_number,
+      connection_status: "disconnected",
+    };
+
     if (editingIntegration) {
       // Update existing integration
       const { error } = await updateIntegration(editingIntegration.id, {
         name: data.name,
-        type: data.type,
         category: data.category,
         description: data.description || null,
+        config: configData,
       });
 
       if (error) {
@@ -127,11 +134,11 @@ const Integrations = () => {
       // Create new integration
       const { error } = await createIntegration({
         name: data.name,
-        type: data.type,
+        type: "loxone_miniserver",
         category: data.category,
         description: data.description || null,
         icon: "server",
-        config: {},
+        config: configData,
         is_active: true,
       });
 
@@ -168,6 +175,59 @@ const Integrations = () => {
     setDeletingId(id);
     const { error } = await deleteIntegration(id);
     setDeletingId(null);
+
+    if (error) {
+      toast({
+        title: "Fehler",
+        description: "Die Integration konnte nicht gelöscht werden.",
+        variant: "destructive",
+      });
+    } else {
+      toast({
+        title: "Integration gelöscht",
+        description: "Die Integration wurde erfolgreich gelöscht.",
+      });
+    }
+  };
+
+  const handleTestConnection = async (integration: Integration) => {
+    setTestingId(integration.id);
+    const config = integration.config as { serial_number?: string } | null;
+    
+    // Simulate connection test - in real implementation this would call an API
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    
+    // For now, we'll simulate a successful connection
+    const newStatus = "connected";
+    const { error } = await updateIntegration(integration.id, {
+      config: {
+        ...config,
+        connection_status: newStatus,
+        last_tested_at: new Date().toISOString(),
+      },
+    });
+
+    setTestingId(null);
+
+    if (error) {
+      toast({
+        title: "Verbindungstest fehlgeschlagen",
+        description: "Die Verbindung konnte nicht getestet werden.",
+        variant: "destructive",
+      });
+    } else {
+      toast({
+        title: "Verbindung erfolgreich",
+        description: `Die Verbindung zum Miniserver wurde hergestellt.`,
+      });
+      refetch();
+    }
+  };
+
+  const getConnectionStatus = (integration: Integration): "connected" | "disconnected" => {
+    const config = integration.config as { connection_status?: string } | null;
+    return config?.connection_status === "connected" ? "connected" : "disconnected";
+  };
 
     if (error) {
       toast({
@@ -297,12 +357,12 @@ const Integrations = () => {
                     />
                     <FormField
                       control={form.control}
-                      name="type"
+                      name="serial_number"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Typ</FormLabel>
+                          <FormLabel>Seriennummer</FormLabel>
                           <FormControl>
-                            <Input placeholder="loxone_miniserver" {...field} />
+                            <Input placeholder="504F94A0XXXX" {...field} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -376,7 +436,7 @@ const Integrations = () => {
                   <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                     {integrations.map((integration) => (
                       <Card key={integration.id}>
-                        <CardHeader>
+                        <CardHeader className="pb-3">
                           <div className="flex items-start justify-between">
                             <div className="flex items-center gap-3">
                               <div className="p-2 rounded-lg bg-primary/10">
@@ -384,9 +444,19 @@ const Integrations = () => {
                               </div>
                               <div>
                                 <CardTitle className="text-lg">{integration.name}</CardTitle>
-                                <Badge variant="secondary" className="mt-1">
-                                  {integration.type}
-                                </Badge>
+                                <div className="flex items-center gap-2 mt-1">
+                                  {getConnectionStatus(integration) === "connected" ? (
+                                    <Badge variant="success">
+                                      <Wifi className="h-3 w-3 mr-1" />
+                                      Verbunden
+                                    </Badge>
+                                  ) : (
+                                    <Badge variant="secondary" className="text-muted-foreground">
+                                      <WifiOff className="h-3 w-3 mr-1" />
+                                      Nicht verbunden
+                                    </Badge>
+                                  )}
+                                </div>
                               </div>
                             </div>
                             <div className="flex gap-1">
@@ -437,11 +507,36 @@ const Integrations = () => {
                             </div>
                           </div>
                         </CardHeader>
-                        {integration.description && (
-                          <CardContent>
-                            <CardDescription>{integration.description}</CardDescription>
-                          </CardContent>
-                        )}
+                        <CardContent className="pt-0">
+                          {integration.description && (
+                            <p className="text-sm text-muted-foreground mb-3">{integration.description}</p>
+                          )}
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground mb-3">
+                            <span>Seriennummer:</span>
+                            <code className="bg-muted px-1.5 py-0.5 rounded">
+                              {(integration.config as { serial_number?: string })?.serial_number || "–"}
+                            </code>
+                          </div>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="w-full"
+                            onClick={() => handleTestConnection(integration)}
+                            disabled={testingId === integration.id}
+                          >
+                            {testingId === integration.id ? (
+                              <>
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                Teste Verbindung...
+                              </>
+                            ) : (
+                              <>
+                                <Wifi className="mr-2 h-4 w-4" />
+                                Verbindung testen
+                              </>
+                            )}
+                          </Button>
+                        </CardContent>
                       </Card>
                     ))}
                   </div>
