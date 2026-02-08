@@ -28,6 +28,11 @@ interface LoxoneStructure {
   cats: Record<string, { name: string }>;
 }
 
+interface LoxoneStateValue {
+  value: number | string;
+  text?: string;
+}
+
 // Resolve Loxone Cloud DNS by following the redirect from dns.loxonecloud.com/{serial}
 async function resolveLoxoneCloudURL(serialNumber: string): Promise<string | null> {
   try {
@@ -56,6 +61,26 @@ async function resolveLoxoneCloudURL(serialNumber: string): Promise<string | nul
     console.error("Cloud DNS resolution error:", error);
     return null;
   }
+}
+
+// Update sync status in database
+async function updateSyncStatus(
+  supabase: ReturnType<typeof createClient>,
+  locationIntegrationId: string,
+  status: "success" | "error" | "syncing",
+  error?: string
+) {
+  const updateData: Record<string, unknown> = {
+    sync_status: status,
+    last_sync_at: new Date().toISOString(),
+  };
+  
+  await supabase
+    .from("location_integrations")
+    .update(updateData)
+    .eq("id", locationIntegrationId);
+    
+  console.log(`Updated sync_status to: ${status}`);
 }
 
 serve(async (req) => {
@@ -111,6 +136,7 @@ serve(async (req) => {
     const baseUrl = await resolveLoxoneCloudURL(config.serial_number);
     
     if (!baseUrl) {
+      await updateSyncStatus(supabase, locationIntegrationId, "error");
       throw new Error("Cloud DNS Auflösung fehlgeschlagen. Miniserver nicht erreichbar oder nicht für Remote-Zugriff konfiguriert.");
     }
 
@@ -132,11 +158,15 @@ serve(async (req) => {
 
       if (!response.ok) {
         console.error(`Connection test failed: ${response.status} ${response.statusText}`);
+        await updateSyncStatus(supabase, locationIntegrationId, "error");
         throw new Error(`Verbindung fehlgeschlagen: ${response.status} - Prüfen Sie Benutzername und Passwort`);
       }
 
       const data = await response.json();
       console.log("Connection test successful:", data);
+
+      // Update sync status to success
+      await updateSyncStatus(supabase, locationIntegrationId, "success");
 
       return new Response(
         JSON.stringify({ success: true, data }),
@@ -145,29 +175,57 @@ serve(async (req) => {
     }
 
     if (action === "getSensors") {
+      // Set status to syncing
+      await updateSyncStatus(supabase, locationIntegrationId, "syncing");
+
       // Fetch structure file (LoxAPP3.json)
       const structureUrl = `${baseUrl}/data/LoxAPP3.json`;
       console.log(`Fetching structure: ${structureUrl}`);
 
-      const response = await fetch(structureUrl, {
+      const structureResponse = await fetch(structureUrl, {
         method: "GET",
         headers: {
           Authorization: authHeader,
         },
       });
 
-      if (!response.ok) {
-        console.error(`Failed to fetch structure: ${response.status} ${response.statusText}`);
+      if (!structureResponse.ok) {
+        console.error(`Failed to fetch structure: ${structureResponse.status} ${structureResponse.statusText}`);
+        await updateSyncStatus(supabase, locationIntegrationId, "error");
         
-        if (response.status === 401) {
+        if (structureResponse.status === 401) {
           throw new Error("Authentifizierung fehlgeschlagen. Bitte Benutzername und Passwort prüfen.");
         }
         
-        throw new Error(`Struktur konnte nicht geladen werden: ${response.status}`);
+        throw new Error(`Struktur konnte nicht geladen werden: ${structureResponse.status}`);
       }
 
-      const structure: LoxoneStructure = await response.json();
+      const structure: LoxoneStructure = await structureResponse.json();
       console.log(`Loaded structure with ${Object.keys(structure.controls || {}).length} controls`);
+
+      // Fetch current states from the Miniserver
+      const statesUrl = `${baseUrl}/jdev/sps/status`;
+      console.log(`Fetching current states: ${statesUrl}`);
+      
+      let currentStates: Record<string, unknown> = {};
+      try {
+        const statesResponse = await fetch(statesUrl, {
+          method: "GET",
+          headers: {
+            Authorization: authHeader,
+          },
+        });
+        
+        if (statesResponse.ok) {
+          const statesData = await statesResponse.json();
+          currentStates = statesData?.LL?.value || {};
+          console.log(`Loaded ${Object.keys(currentStates).length} state values`);
+        } else {
+          console.log(`States endpoint returned ${statesResponse.status}, will use structure values`);
+        }
+      } catch (statesError) {
+        console.log("Could not fetch states, will use structure values:", statesError);
+      }
 
       // Parse controls into sensors
       const sensors = [];
@@ -213,6 +271,41 @@ serve(async (req) => {
           sensorType = "motion";
         }
 
+        // Try to get current value from states
+        let value = "-";
+        let status: "online" | "offline" = "online";
+
+        // Check if this control has states defined and try to get their values
+        if (control.states) {
+          // Try common state names: value, actual, position, level, etc.
+          const stateKeys = Object.keys(control.states);
+          for (const stateKey of stateKeys) {
+            const stateUuid = control.states[stateKey];
+            if (stateUuid && currentStates[stateUuid] !== undefined) {
+              const stateValue = currentStates[stateUuid];
+              if (typeof stateValue === "number") {
+                // Format the value based on type
+                if (sensorType === "temperature") {
+                  value = stateValue.toFixed(1);
+                } else if (sensorType === "humidity" || sensorType === "light" || sensorType === "blind") {
+                  value = Math.round(stateValue).toString();
+                } else if (sensorType === "switch" || sensorType === "digital") {
+                  value = stateValue > 0 ? "Ein" : "Aus";
+                  unit = "";
+                } else if (sensorType === "power") {
+                  value = stateValue.toFixed(2);
+                } else {
+                  value = typeof stateValue === "number" ? stateValue.toFixed(2) : String(stateValue);
+                }
+                break; // Use first found value
+              } else if (typeof stateValue === "string") {
+                value = stateValue;
+                break;
+              }
+            }
+          }
+        }
+
         sensors.push({
           id: uuid,
           name: control.name || "Unbekannt",
@@ -220,14 +313,17 @@ serve(async (req) => {
           controlType: control.type,
           room: roomName,
           category: catName,
-          value: "-",
+          value: value,
           unit: unit,
-          status: "online",
+          status: status,
           states: control.states,
         });
       }
 
       console.log(`Parsed ${sensors.length} sensors`);
+
+      // Update sync status to success
+      await updateSyncStatus(supabase, locationIntegrationId, "success");
 
       return new Response(
         JSON.stringify({ success: true, sensors }),
