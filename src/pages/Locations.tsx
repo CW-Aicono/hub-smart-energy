@@ -1,18 +1,24 @@
 import { useState } from "react";
 import { Navigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
+import { useUserRole } from "@/hooks/useUserRole";
 import { useLocations, Location } from "@/hooks/useLocations";
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
 import { LocationsMap } from "@/components/locations/LocationsMap";
 import { LocationTree } from "@/components/locations/LocationTree";
+import { AddLocationDialog } from "@/components/locations/AddLocationDialog";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Map, List, Building2 } from "lucide-react";
 
 const Locations = () => {
   const { user, loading: authLoading } = useAuth();
+  const { isAdmin } = useUserRole();
   const { locations, hierarchicalLocations, loading: locationsLoading } = useLocations();
   const [selectedLocation, setSelectedLocation] = useState<Location | null>(null);
+
+  // Filter locations that should be shown on map
+  const mapLocations = locations.filter((loc) => loc.show_on_map);
 
   if (authLoading) {
     return (
@@ -28,11 +34,14 @@ const Locations = () => {
     <div className="flex min-h-screen bg-background">
       <DashboardSidebar />
       <main className="flex-1 overflow-auto">
-        <header className="border-b p-6">
-          <h1 className="text-2xl font-display font-bold">Standorte</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Verwalten Sie Ihre Standorte, Gebäude und Bereiche
-          </p>
+        <header className="border-b p-6 flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-display font-bold">Standorte</h1>
+            <p className="text-sm text-muted-foreground mt-1">
+              Verwalten Sie Ihre Standorte, Gebäude und Bereiche
+            </p>
+          </div>
+          {isAdmin && <AddLocationDialog />}
         </header>
         <div className="p-6 space-y-6">
           {/* Map Card */}
@@ -47,14 +56,14 @@ const Locations = () => {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              {locationsLoading ? (
-                <div className="h-[400px] rounded-lg bg-muted/50 animate-pulse" />
-              ) : (
-                <LocationsMap 
-                  locations={locations} 
-                  onLocationClick={setSelectedLocation}
-                />
-              )}
+            {locationsLoading ? (
+              <div className="h-[400px] rounded-lg bg-muted/50 animate-pulse" />
+            ) : (
+              <LocationsMap 
+                locations={mapLocations} 
+                onLocationClick={setSelectedLocation}
+              />
+            )}
             </CardContent>
           </Card>
 

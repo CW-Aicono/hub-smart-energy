@@ -8,6 +8,9 @@ const LocationMapWidget = () => {
   const { locations, loading } = useLocations();
   const navigate = useNavigate();
 
+  // Filter locations that should be shown on map
+  const mapLocations = locations.filter((loc) => loc.show_on_map);
+
   const handleLocationClick = () => {
     navigate("/locations");
   };
@@ -26,7 +29,7 @@ const LocationMapWidget = () => {
         ) : (
           <div className="h-[300px]">
             <LocationsMap 
-              locations={locations} 
+              locations={mapLocations} 
               onLocationClick={handleLocationClick}
             />
           </div>

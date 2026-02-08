@@ -17,10 +17,17 @@ export interface Location {
   latitude: number | null;
   longitude: number | null;
   description: string | null;
+  contact_person: string | null;
+  contact_email: string | null;
+  contact_phone: string | null;
+  energy_sources: string[];
+  show_on_map: boolean;
   created_at: string;
   updated_at: string;
   children?: Location[];
 }
+
+export type LocationInsert = Omit<Location, "id" | "tenant_id" | "created_at" | "updated_at" | "children">;
 
 interface UseLocationsReturn {
   locations: Location[];
@@ -95,7 +102,7 @@ export function useLocations(): UseLocationsReturn {
     fetchLocations();
   }, [fetchLocations]);
 
-  const createLocation = async (location: Omit<Location, "id" | "tenant_id" | "created_at" | "updated_at">) => {
+  const createLocation = async (location: LocationInsert) => {
     if (!tenant) return { error: new Error("No tenant") };
 
     const { error: insertError } = await supabase
@@ -103,7 +110,7 @@ export function useLocations(): UseLocationsReturn {
       .insert({
         ...location,
         tenant_id: tenant.id,
-      });
+      } as any);
 
     if (!insertError) {
       await fetchLocations();
