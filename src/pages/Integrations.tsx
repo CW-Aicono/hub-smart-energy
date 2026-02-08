@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Navigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
@@ -25,13 +25,20 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { Plus, Server, Trash2, Loader2, Plug } from "lucide-react";
+import { Plus, Server, Trash2, Loader2, Plug, Pencil } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -47,6 +54,7 @@ import {
 const integrationSchema = z.object({
   name: z.string().min(1, "Name ist erforderlich"),
   type: z.string().min(1, "Typ ist erforderlich"),
+  category: z.string().min(1, "Kategorie ist erforderlich"),
   description: z.string().optional(),
 });
 
@@ -56,8 +64,9 @@ const Integrations = () => {
   const { user, loading: authLoading } = useAuth();
   const { isAdmin, loading: roleLoading } = useUserRole();
   const { tenant } = useTenant();
-  const { integrations, loading, createIntegration, deleteIntegration, refetch } = useIntegrations();
+  const { integrations, categories, loading, createIntegration, updateIntegration, deleteIntegration, refetch } = useIntegrations();
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingIntegration, setEditingIntegration] = useState<Integration | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const { toast } = useToast();
 
@@ -66,34 +75,93 @@ const Integrations = () => {
     defaultValues: {
       name: "",
       type: "loxone_miniserver",
+      category: "",
       description: "",
     },
   });
 
-  const onSubmit = async (data: IntegrationFormData) => {
-    const { error } = await createIntegration({
-      name: data.name,
-      type: data.type,
-      description: data.description || null,
-      icon: "server",
-      config: {},
-      is_active: true,
-    });
-
-    if (error) {
-      toast({
-        title: "Fehler",
-        description: "Die Integration konnte nicht erstellt werden.",
-        variant: "destructive",
+  // Reset form when editing integration changes
+  useEffect(() => {
+    if (editingIntegration) {
+      form.reset({
+        name: editingIntegration.name,
+        type: editingIntegration.type,
+        category: editingIntegration.category,
+        description: editingIntegration.description || "",
       });
     } else {
-      toast({
-        title: "Integration erstellt",
-        description: "Die Integration wurde erfolgreich erstellt.",
+      form.reset({
+        name: "",
+        type: "loxone_miniserver",
+        category: categories[0]?.slug || "",
+        description: "",
       });
-      form.reset();
-      setDialogOpen(false);
     }
+  }, [editingIntegration, categories, form]);
+
+  const onSubmit = async (data: IntegrationFormData) => {
+    if (editingIntegration) {
+      // Update existing integration
+      const { error } = await updateIntegration(editingIntegration.id, {
+        name: data.name,
+        type: data.type,
+        category: data.category,
+        description: data.description || null,
+      });
+
+      if (error) {
+        toast({
+          title: "Fehler",
+          description: "Die Integration konnte nicht aktualisiert werden.",
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Integration aktualisiert",
+          description: "Die Integration wurde erfolgreich aktualisiert.",
+        });
+        setEditingIntegration(null);
+        setDialogOpen(false);
+      }
+    } else {
+      // Create new integration
+      const { error } = await createIntegration({
+        name: data.name,
+        type: data.type,
+        category: data.category,
+        description: data.description || null,
+        icon: "server",
+        config: {},
+        is_active: true,
+      });
+
+      if (error) {
+        toast({
+          title: "Fehler",
+          description: "Die Integration konnte nicht erstellt werden.",
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Integration erstellt",
+          description: "Die Integration wurde erfolgreich erstellt.",
+        });
+        form.reset();
+        setDialogOpen(false);
+      }
+    }
+  };
+
+  const handleEdit = (integration: Integration) => {
+    setEditingIntegration(integration);
+    setDialogOpen(true);
+  };
+
+  const handleDialogClose = (open: boolean) => {
+    if (!open) {
+      setEditingIntegration(null);
+    }
+    setDialogOpen(open);
   };
 
   const handleDelete = async (id: string) => {
@@ -114,6 +182,27 @@ const Integrations = () => {
       });
     }
   };
+
+  const getCategoryName = (slug: string) => {
+    return categories.find(c => c.slug === slug)?.name || slug;
+  };
+
+  // Group integrations by category
+  const integrationsByCategory = categories.map(category => ({
+    category,
+    integrations: integrations.filter(i => i.category === category.slug),
+  })).filter(group => group.integrations.length > 0);
+
+  // Add uncategorized integrations
+  const uncategorizedIntegrations = integrations.filter(
+    i => !categories.some(c => c.slug === i.category)
+  );
+  if (uncategorizedIntegrations.length > 0) {
+    integrationsByCategory.push({
+      category: { id: "uncategorized", tenant_id: "", name: "Sonstige", slug: "sonstige", description: null, sort_order: 999, created_at: "" },
+      integrations: uncategorizedIntegrations,
+    });
+  }
 
   if (authLoading || roleLoading) {
     return (
@@ -148,7 +237,7 @@ const Integrations = () => {
                 Verwalten Sie die verfügbaren Integrationen für Ihre Standorte
               </p>
             </div>
-            <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+            <Dialog open={dialogOpen} onOpenChange={handleDialogClose}>
               <DialogTrigger asChild>
                 <Button className="gap-2">
                   <Plus className="h-4 w-4" />
@@ -157,9 +246,14 @@ const Integrations = () => {
               </DialogTrigger>
               <DialogContent>
                 <DialogHeader>
-                  <DialogTitle>Neue Integration</DialogTitle>
+                  <DialogTitle>
+                    {editingIntegration ? "Integration bearbeiten" : "Neue Integration"}
+                  </DialogTitle>
                   <DialogDescription>
-                    Erstellen Sie eine neue Integration, die an Standorten verwendet werden kann
+                    {editingIntegration 
+                      ? "Bearbeiten Sie die Einstellungen der Integration"
+                      : "Erstellen Sie eine neue Integration, die an Standorten verwendet werden kann"
+                    }
                   </DialogDescription>
                 </DialogHeader>
                 <Form {...form}>
@@ -173,6 +267,30 @@ const Integrations = () => {
                           <FormControl>
                             <Input placeholder="Loxone Miniserver" {...field} />
                           </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="category"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Kategorie</FormLabel>
+                          <Select onValueChange={field.onChange} value={field.value}>
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Kategorie auswählen" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {categories.map((category) => (
+                                <SelectItem key={category.id} value={category.slug}>
+                                  {category.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                           <FormMessage />
                         </FormItem>
                       )}
@@ -210,7 +328,7 @@ const Integrations = () => {
                       <Button
                         type="button"
                         variant="outline"
-                        onClick={() => setDialogOpen(false)}
+                        onClick={() => handleDialogClose(false)}
                       >
                         Abbrechen
                       </Button>
@@ -218,10 +336,10 @@ const Integrations = () => {
                         {form.formState.isSubmitting ? (
                           <>
                             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            Erstellen...
+                            {editingIntegration ? "Speichern..." : "Erstellen..."}
                           </>
                         ) : (
-                          "Erstellen"
+                          editingIntegration ? "Speichern" : "Erstellen"
                         )}
                       </Button>
                     </div>
@@ -251,67 +369,83 @@ const Integrations = () => {
               </CardContent>
             </Card>
           ) : (
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {integrations.map((integration) => (
-                <Card key={integration.id}>
-                  <CardHeader>
-                    <div className="flex items-start justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className="p-2 rounded-lg bg-primary/10">
-                          <Server className="h-5 w-5 text-primary" />
-                        </div>
-                        <div>
-                          <CardTitle className="text-lg">{integration.name}</CardTitle>
-                          <Badge variant="secondary" className="mt-1">
-                            {integration.type}
-                          </Badge>
-                        </div>
-                      </div>
-                      <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="text-destructive hover:text-destructive"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>Integration löschen?</AlertDialogTitle>
-                            <AlertDialogDescription>
-                              Möchten Sie die Integration "{integration.name}" wirklich löschen?
-                              Alle Standort-Verknüpfungen werden ebenfalls entfernt.
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>Abbrechen</AlertDialogCancel>
-                            <AlertDialogAction
-                              onClick={() => handleDelete(integration.id)}
-                              disabled={deletingId === integration.id}
-                              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                            >
-                              {deletingId === integration.id ? (
-                                <>
-                                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                  Löschen...
-                                </>
-                              ) : (
-                                "Löschen"
-                              )}
-                            </AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
-                    </div>
-                  </CardHeader>
-                  {integration.description && (
-                    <CardContent>
-                      <CardDescription>{integration.description}</CardDescription>
-                    </CardContent>
-                  )}
-                </Card>
+            <div className="space-y-8">
+              {integrationsByCategory.map(({ category, integrations }) => (
+                <div key={category.id}>
+                  <h2 className="text-lg font-semibold mb-4">{category.name}</h2>
+                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                    {integrations.map((integration) => (
+                      <Card key={integration.id}>
+                        <CardHeader>
+                          <div className="flex items-start justify-between">
+                            <div className="flex items-center gap-3">
+                              <div className="p-2 rounded-lg bg-primary/10">
+                                <Server className="h-5 w-5 text-primary" />
+                              </div>
+                              <div>
+                                <CardTitle className="text-lg">{integration.name}</CardTitle>
+                                <Badge variant="secondary" className="mt-1">
+                                  {integration.type}
+                                </Badge>
+                              </div>
+                            </div>
+                            <div className="flex gap-1">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleEdit(integration)}
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="text-destructive hover:text-destructive"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>Integration löschen?</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      Möchten Sie die Integration "{integration.name}" wirklich löschen?
+                                      Alle Standort-Verknüpfungen werden ebenfalls entfernt.
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>Abbrechen</AlertDialogCancel>
+                                    <AlertDialogAction
+                                      onClick={() => handleDelete(integration.id)}
+                                      disabled={deletingId === integration.id}
+                                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                    >
+                                      {deletingId === integration.id ? (
+                                        <>
+                                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                          Löschen...
+                                        </>
+                                      ) : (
+                                        "Löschen"
+                                      )}
+                                    </AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                            </div>
+                          </div>
+                        </CardHeader>
+                        {integration.description && (
+                          <CardContent>
+                            <CardDescription>{integration.description}</CardDescription>
+                          </CardContent>
+                        )}
+                      </Card>
+                    ))}
+                  </div>
+                </div>
               ))}
             </div>
           )}

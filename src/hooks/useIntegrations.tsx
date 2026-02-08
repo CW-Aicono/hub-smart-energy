@@ -2,11 +2,22 @@ import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "./useTenant";
 
+export interface IntegrationCategory {
+  id: string;
+  tenant_id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  sort_order: number;
+  created_at: string;
+}
+
 export interface Integration {
   id: string;
   tenant_id: string;
   name: string;
   type: string;
+  category: string;
   description: string | null;
   icon: string | null;
   config: Record<string, unknown>;
@@ -38,6 +49,7 @@ export interface LoxoneConfig {
 
 interface UseIntegrationsReturn {
   integrations: Integration[];
+  categories: IntegrationCategory[];
   loading: boolean;
   error: string | null;
   refetch: () => Promise<void>;
@@ -49,12 +61,14 @@ interface UseIntegrationsReturn {
 export function useIntegrations(): UseIntegrationsReturn {
   const { tenant } = useTenant();
   const [integrations, setIntegrations] = useState<Integration[]>([]);
+  const [categories, setCategories] = useState<IntegrationCategory[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const fetchIntegrations = useCallback(async () => {
     if (!tenant) {
       setIntegrations([]);
+      setCategories([]);
       setLoading(false);
       return;
     }
@@ -63,16 +77,28 @@ export function useIntegrations(): UseIntegrationsReturn {
     setError(null);
 
     try {
-      const { data, error: fetchError } = await supabase
-        .from("integrations")
-        .select("*")
-        .eq("is_active", true)
-        .order("name");
+      const [integrationsResult, categoriesResult] = await Promise.all([
+        supabase
+          .from("integrations")
+          .select("*")
+          .eq("is_active", true)
+          .order("name"),
+        supabase
+          .from("integration_categories")
+          .select("*")
+          .order("sort_order")
+      ]);
 
-      if (fetchError) {
-        setError(fetchError.message);
+      if (integrationsResult.error) {
+        setError(integrationsResult.error.message);
       } else {
-        setIntegrations((data as Integration[]) || []);
+        setIntegrations((integrationsResult.data as Integration[]) || []);
+      }
+
+      if (categoriesResult.error) {
+        console.error("Error fetching categories:", categoriesResult.error);
+      } else {
+        setCategories((categoriesResult.data as IntegrationCategory[]) || []);
       }
     } catch (err) {
       setError("Failed to fetch integrations");
@@ -132,6 +158,7 @@ export function useIntegrations(): UseIntegrationsReturn {
 
   return {
     integrations,
+    categories,
     loading,
     error,
     refetch: fetchIntegrations,

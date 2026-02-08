@@ -203,8 +203,47 @@ export type Database = {
           },
         ]
       }
+      integration_categories: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+          slug: string
+          sort_order: number | null
+          tenant_id: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name: string
+          slug: string
+          sort_order?: number | null
+          tenant_id: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+          slug?: string
+          sort_order?: number | null
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "integration_categories_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       integrations: {
         Row: {
+          category: string
           config: Json | null
           created_at: string
           description: string | null
@@ -217,6 +256,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          category?: string
           config?: Json | null
           created_at?: string
           description?: string | null
@@ -229,6 +269,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          category?: string
           config?: Json | null
           created_at?: string
           description?: string | null
