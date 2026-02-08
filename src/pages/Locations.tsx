@@ -61,10 +61,13 @@ const Locations = () => {
             {locationsLoading ? (
               <div className="h-[400px] rounded-lg bg-muted/50 animate-pulse" />
             ) : (
-              <LocationsMap 
-                locations={mapLocations} 
-                onLocationClick={setSelectedLocation}
-              />
+              <div className="h-[400px]">
+                <LocationsMap 
+                  locations={mapLocations} 
+                  onLocationClick={setSelectedLocation}
+                  className="h-full"
+                />
+              </div>
             )}
             </CardContent>
           </Card>
