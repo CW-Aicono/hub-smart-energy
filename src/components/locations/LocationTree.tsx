@@ -24,21 +24,21 @@ interface LocationNodeProps {
 }
 
 const typeIcons: Record<LocationType, typeof MapPin> = {
-  standort: MapPin,
-  gebaeude: Building2,
-  bereich: Building,
+  einzelgebaeude: Building2,
+  gebaeudekomplex: Building,
+  sonstiges: MapPin,
 };
 
 const typeLabels: Record<LocationType, string> = {
-  standort: "Standort",
-  gebaeude: "Gebäude",
-  bereich: "Bereich",
+  einzelgebaeude: "Einzelgebäude",
+  gebaeudekomplex: "Gebäudekomplex",
+  sonstiges: "Sonstiges",
 };
 
 const typeColors: Record<LocationType, string> = {
-  standort: "bg-primary/10 text-primary border-primary/20",
-  gebaeude: "bg-accent/10 text-accent-foreground border-accent/20",
-  bereich: "bg-muted text-muted-foreground border-muted-foreground/20",
+  einzelgebaeude: "bg-primary/10 text-primary border-primary/20",
+  gebaeudekomplex: "bg-accent/10 text-accent-foreground border-accent/20",
+  sonstiges: "bg-muted text-muted-foreground border-muted-foreground/20",
 };
 
 function LocationNode({ location, level, selectedId, onSelect, onRefresh, isAdmin }: LocationNodeProps) {

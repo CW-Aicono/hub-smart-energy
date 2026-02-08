@@ -57,7 +57,7 @@ const USAGE_TYPES: { value: LocationUsageType; labelKey: string }[] = [
 
 const locationSchema = z.object({
   name: z.string().trim().min(1, "Name ist erforderlich").max(100),
-  type: z.enum(["standort", "gebaeude", "bereich"] as const),
+  type: z.enum(["einzelgebaeude", "gebaeudekomplex", "sonstiges"] as const),
   usage_type: z.enum(["verwaltungsgebaeude", "universitaet", "schule", "kindertageseinrichtung", "sportstaette", "jugendzentrum", "sonstiges"] as const),
   address: z.string().trim().max(200).optional(),
   postal_code: z.string().trim().max(10).optional(),
@@ -219,9 +219,9 @@ export function EditLocationDialog({ location, onSuccess, trigger }: EditLocatio
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          <SelectItem value="standort">{t("locations.types.standort")}</SelectItem>
-                          <SelectItem value="gebaeude">{t("locations.types.gebaeude")}</SelectItem>
-                          <SelectItem value="bereich">{t("locations.types.bereich")}</SelectItem>
+                          <SelectItem value="einzelgebaeude">{t("locations.types.einzelgebaeude")}</SelectItem>
+                          <SelectItem value="gebaeudekomplex">{t("locations.types.gebaeudekomplex")}</SelectItem>
+                          <SelectItem value="sonstiges">{t("locations.types.sonstiges")}</SelectItem>
                         </SelectContent>
                       </Select>
                       <FormMessage />

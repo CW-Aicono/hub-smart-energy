@@ -357,7 +357,7 @@ export type Database = {
     Enums: {
       app_role: "admin" | "user"
       energy_type: "strom" | "gas" | "waerme" | "wasser"
-      location_type: "standort" | "gebaeude" | "bereich"
+      location_type: "einzelgebaeude" | "gebaeudekomplex" | "sonstiges"
       location_usage_type:
         | "verwaltungsgebaeude"
         | "universitaet"
@@ -495,7 +495,7 @@ export const Constants = {
     Enums: {
       app_role: ["admin", "user"],
       energy_type: ["strom", "gas", "waerme", "wasser"],
-      location_type: ["standort", "gebaeude", "bereich"],
+      location_type: ["einzelgebaeude", "gebaeudekomplex", "sonstiges"],
       location_usage_type: [
         "verwaltungsgebaeude",
         "universitaet",
