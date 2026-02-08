@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { Location, LocationType } from "@/hooks/useLocations";
 import { useUserRole } from "@/hooks/useUserRole";
 import { ChevronRight, ChevronDown, Building2, Building, MapPin, Star } from "lucide-react";
@@ -80,7 +81,13 @@ function LocationNode({ location, level, selectedId, onSelect, onRefresh, isAdmi
           onClick={() => onSelect?.(location)}
         >
           <Icon className="h-4 w-4 text-muted-foreground" />
-          <span className="flex-1 font-medium text-sm">{location.name}</span>
+          <Link 
+            to={`/locations/${location.id}`}
+            className="flex-1 font-medium text-sm text-primary hover:underline"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {location.name}
+          </Link>
           {location.is_main_location && (
             <Badge variant="secondary" className="text-xs gap-1 bg-amber-100 text-amber-700 border-amber-200">
               <Star className="h-3 w-3 fill-amber-500 text-amber-500" />
