@@ -196,12 +196,23 @@ async function hmacSha1(key: Uint8Array, message: string): Promise<string> {
     false,
     ["sign"]
   );
-  
+
   const signature = await crypto.subtle.sign("HMAC", cryptoKey, encoder.encode(message));
   const hashArray = new Uint8Array(signature);
-  
+
   // Convert to hex string
-  return Array.from(hashArray).map(b => b.toString(16).padStart(2, "0")).join("");
+  return Array.from(hashArray)
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+async function shaHex(algo: "SHA-1" | "SHA-256", message: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const digest = await crypto.subtle.digest(algo, encoder.encode(message));
+  const bytes = new Uint8Array(digest);
+  return Array.from(bytes)
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
 }
 
 // Decode hex string to Uint8Array
@@ -213,7 +224,7 @@ function hexToBytes(hex: string): Uint8Array {
   return bytes;
 }
 
-// Decode hex-encoded ASCII to string (Loxone returns keys as hex-encoded ASCII)
+// Decode hex-encoded ASCII to string (Loxone returns keys/salts often as hex-encoded ASCII)
 function hexToAscii(hex: string): string {
   let str = "";
   for (let i = 0; i < hex.length; i += 2) {
@@ -221,6 +232,16 @@ function hexToAscii(hex: string): string {
     str += String.fromCharCode(charCode);
   }
   return str;
+}
+
+function maybeHexToAscii(input: string): string {
+  const isHex = /^[0-9a-fA-F]+$/.test(input) && input.length % 2 === 0;
+  if (!isHex) return input;
+
+  // Heuristic: decoded should be mostly printable
+  const decoded = hexToAscii(input);
+  const printable = decoded.replace(/[\x20-\x7E]/g, "").length;
+  return printable <= Math.ceil(decoded.length * 0.2) ? decoded : input;
 }
 
 serve(async (req) => {
@@ -315,14 +336,42 @@ serve(async (req) => {
 
       let collectionTimeout: number | undefined;
 
-      const ws = new WebSocket(wsUrl);
+      const ws = new WebSocket(wsUrl, "remotecontrol");
       ws.binaryType = "arraybuffer";
 
       ws.onopen = async () => {
-        console.log("WebSocket connected, starting legacy authentication...");
-        
-        // Legacy authentication: first request the key
-        ws.send("jdev/sys/getkey");
+        console.log("WebSocket connected, starting live value collection...");
+
+        (ws as any).__gotKey = false;
+
+        // Start collecting immediately so we also catch the initial event tables.
+        collectingStarted = true;
+        collectionTimeout = setTimeout(() => {
+          console.log(`Collection period ended, got ${collectedValues.size} values`);
+          ws.close();
+          clearTimeout(timeout);
+          resolve({
+            success: collectedValues.size > 0,
+            values: Array.from(collectedValues.values()),
+            error: collectedValues.size === 0 ? "Keine Werte empfangen" : undefined,
+          });
+        }, collectDuration) as unknown as number;
+
+        // Try enabling binary status updates (often required to receive values).
+        console.log("Sending enablebinstatusupdate...");
+        ws.send("jdev/sps/enablebinstatusupdate");
+
+        // Additionally attempt legacy authentication (some Miniservers require it).
+        // Prefer getkey2 (returns userSalt on newer Miniservers). Fallback to getkey.
+        console.log(`Requesting hashing key via getkey2 for user=${config.username}...`);
+        ws.send(`jdev/sys/getkey2/${encodeURIComponent(config.username)}`);
+
+        (ws as any).__keyFallbackTimer = setTimeout(() => {
+          if (!(ws as any).__gotKey) {
+            console.warn("No getkey2 response yet, falling back to getkey...");
+            ws.send("jdev/sys/getkey");
+          }
+        }, 1500);
       };
 
       ws.onmessage = async (event) => {
@@ -341,25 +390,105 @@ serve(async (req) => {
               const code = parseInt(llResponse.Code || llResponse.code || "0");
               const value = llResponse.value;
 
-              // Handle getkey response
-              if (control.includes("getkey") && value) {
-                console.log(`Received key for authentication, code=${code}, raw value length=${value.length}`);
-                
-                // The key is returned as hex-encoded ASCII
-                // e.g., "30433744..." decodes to ASCII "0C7D..." which is the actual hex key
-                // We need to decode hex→ASCII to get the key hex string, then hex→bytes
-                const keyHexString = hexToAscii(value);
-                console.log(`Decoded key hex string: ${keyHexString.substring(0, 20)}... (length=${keyHexString.length})`);
-                
-                const keyBytes = hexToBytes(keyHexString);
-                console.log(`Key bytes length: ${keyBytes.length}`);
-                
-                // Compute HMAC-SHA1 hash of "user:password"
-                const authString = `${config.username}:${config.password}`;
-                const hash = await hmacSha1(keyBytes, authString);
-                
-                console.log(`Sending authentication command with hash: ${hash.substring(0, 20)}...`);
-                ws.send(`authenticate/${hash}`);
+              // Handle getkey2/getkey response
+              if ((control.includes("getkey2") || control.match(/getkey$/)) && value) {
+                (ws as any).__gotKey = true;
+                if ((ws as any).__keyFallbackTimer) {
+                  clearTimeout((ws as any).__keyFallbackTimer);
+                  (ws as any).__keyFallbackTimer = undefined;
+                }
+
+                const isKey2 = control.includes("getkey2");
+
+                const rawLen = typeof value === "string" ? value.length : undefined;
+                console.log(
+                  `Received ${isKey2 ? "getkey2" : "getkey"} for authentication, code=${code}, raw value length=${rawLen}`
+                );
+
+                // getkey:
+                //   value = hex-encoded ASCII that decodes to a hex-string key
+                // getkey2:
+                //   value can be an object: { key: "...", salt: "..." }
+                //   (each field is often hex-encoded ASCII)
+
+                let keyHexString = "";
+                let userSalt: string | null = null;
+
+                if (typeof value === "string") {
+                  const decoded = maybeHexToAscii(value);
+                  keyHexString = decoded;
+
+                  if (isKey2) {
+                    if (decoded.trim().startsWith("{")) {
+                      try {
+                        const obj = JSON.parse(decoded);
+                        if (typeof obj?.key === "string") keyHexString = obj.key;
+                        if (typeof obj?.salt === "string") userSalt = obj.salt;
+                        if (typeof obj?.userSalt === "string") userSalt = obj.userSalt;
+                      } catch {
+                        // ignore
+                      }
+                    } else if (decoded.includes(":")) {
+                      const [k, s] = decoded.split(":");
+                      if (k) keyHexString = k;
+                      if (s) userSalt = s;
+                    }
+                  }
+                } else if (isKey2 && typeof value === "object") {
+                  const keyRaw = (value as any).key;
+                  const saltRaw = (value as any).salt ?? (value as any).userSalt;
+
+                  if (typeof keyRaw === "string") keyHexString = maybeHexToAscii(keyRaw);
+                  if (typeof saltRaw === "string") userSalt = maybeHexToAscii(saltRaw);
+                }
+
+                // At this point, keyHexString should be the *actual* hex key (length typically 40 => 20 bytes)
+                const keyBytes = keyHexString ? hexToBytes(keyHexString) : new Uint8Array();
+
+                console.log(
+                  `Decoded key: keyHexLen=${keyHexString.length}, keyBytesLen=${keyBytes.length}, userSalt=${userSalt ? "present" : "none"}`
+                );
+                console.log(
+                  `Decoded key: keyHexLen=${keyHexString.length}, keyBytesLen=${keyBytes.length}, userSalt=${userSalt ? "present" : "none"}`
+                );
+
+                // According to Loxone docs, authenticate hash is computed over: "user:passHash"
+                // and passHash is derived from {password}:{userSalt} (hash algorithm varies: SHA1/SHA256).
+                const saltedSha1 = userSalt
+                  ? (await shaHex("SHA-1", `${config.password}:${userSalt}`)).toUpperCase()
+                  : null;
+                const saltedSha256 = userSalt
+                  ? (await shaHex("SHA-256", `${config.password}:${userSalt}`)).toUpperCase()
+                  : null;
+
+                const unsaltedSha1 = (await shaHex("SHA-1", config.password)).toUpperCase();
+                const unsaltedSha256 = (await shaHex("SHA-256", config.password)).toUpperCase();
+
+                const candidateMessages = [
+                  ...(saltedSha1 ? [`${config.username}:${saltedSha1}`] : []),
+                  ...(saltedSha256 ? [`${config.username}:${saltedSha256}`] : []),
+                  `${config.username}:${unsaltedSha1}`,
+                  `${config.username}:${unsaltedSha256}`,
+                  `${config.username}:${config.password}`,
+                ];
+
+                (ws as any).__authCandidates = {
+                  idx: 0,
+                  messages: candidateMessages,
+                  keyBytes,
+                };
+
+                const firstMsg = candidateMessages[0];
+                const firstHash = (await hmacSha1(keyBytes, firstMsg)).toUpperCase();
+
+                console.log(
+                  `Sending authentication (variant 1/${candidateMessages.length}), hash=${firstHash.substring(
+                    0,
+                    20
+                  )}...`
+                );
+
+                ws.send(`authenticate/${firstHash}`);
               }
               
               // Handle authenticate response
@@ -372,32 +501,43 @@ serve(async (req) => {
                   console.log("Enabling binary status updates...");
                   ws.send("jdev/sps/enablebinstatusupdate");
                 } else {
-                  console.error(`Authentication failed with code ${code}`);
-                  ws.close();
-                  clearTimeout(timeout);
-                  resolve({ success: false, values: [], error: `Authentifizierung fehlgeschlagen (Code ${code})` });
+                  const candidates = (ws as any).__authCandidates as
+                    | { idx: number; messages: string[]; keyBytes: Uint8Array }
+                    | undefined;
+
+                  if (candidates && candidates.idx < candidates.messages.length - 1) {
+                    candidates.idx += 1;
+                    const msg = candidates.messages[candidates.idx];
+                    const msgType =
+                      candidates.idx === 1
+                        ? "user:passHash(SHA256)"
+                        : "user:password(raw)";
+                    const nextHash = (await hmacSha1(candidates.keyBytes, msg)).toUpperCase();
+
+                    console.warn(
+                      `Authentication failed (Code ${code}) – retrying with ${msgType}, hash=${nextHash.substring(
+                        0,
+                        20
+                      )}...`
+                    );
+
+                    ws.send(`authenticate/${nextHash}`);
+                    return;
+                  }
+
+                  console.error(`Authentication failed with code ${code} (continuing without auth)`);
+                  // Do not close the socket here — some setups still send the initial state tables without authentication.
+                  // We'll return whatever values we were able to collect within the collection window.
                 }
               }
               
               // Handle enablebinstatusupdate response
               else if (control.includes("enablebinstatusupdate")) {
                 if (code === 200) {
-                  console.log("Binary status updates enabled, collecting values...");
+                  console.log("Binary status updates enabled");
                   statusEnabled = true;
-                  collectingStarted = true;
-                  
-                  // Start collection timeout
-                  collectionTimeout = setTimeout(() => {
-                    console.log(`Collection period ended, got ${collectedValues.size} values`);
-                    ws.close();
-                    clearTimeout(timeout);
-                    resolve({
-                      success: collectedValues.size > 0,
-                      values: Array.from(collectedValues.values()),
-                    });
-                  }, collectDuration) as unknown as number;
                 } else {
-                  console.error(`Enable status update failed with code ${code}`);
+                  console.error(`Enable status update failed with code ${code} (continuing)`);
                 }
               }
             }
@@ -480,14 +620,12 @@ serve(async (req) => {
         
         clearTimeout(timeout);
         
-        if (!authCompleted) {
-          resolve({ success: false, values: [], error: "Verbindung geschlossen vor Authentifizierung" });
-        } else {
-          resolve({
-            success: collectedValues.size > 0,
-            values: Array.from(collectedValues.values()),
-          });
-        }
+        const values = Array.from(collectedValues.values());
+        resolve({
+          success: values.length > 0,
+          values,
+          error: values.length === 0 ? (authCompleted ? "Keine Werte empfangen" : "Keine Werte empfangen (Auth nicht möglich)") : undefined,
+        });
       };
     });
 
