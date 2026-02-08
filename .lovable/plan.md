@@ -1,32 +1,57 @@
 
 
-# Smart Energy Hub B2B
+# Multi-Tenant White-Label Architektur
 
-Ein professionelles B2B-Energie-Dashboard mit Login, Benutzerprofilen und umfassender Energiedatenvisualisierung.
+## Datenmodell
 
-## Design & Branding
-- **Corporate & professioneller Look**: Dunkle Primärfarben (z.B. tiefes Blau/Anthrazit), scharfe Typografie, Business-Ästhetik
-- **Akzentfarben** in Grün für Nachhaltigkeits-KPIs und Energie-Themen
-- **Klares, aufgeräumtes Layout** mit Sidebar-Navigation
+```
+Tenants (Organisationen)
+├── Branding (Logo, Farben, Schriftarten)
+├── Standorte (hierarchisch)
+│   ├── Gebäude
+│   │   └── Bereiche
+│   └── Energiedaten
+├── Benutzer (mit Rollen)
+├── Reports (im Tenant-CI)
+└── Einstellungen
+```
 
-## Seite 1: Auth-Seite (Login & Registrierung)
-- Professionelle Login-/Signup-Seite mit E-Mail und Passwort
-- Markenlogo und Corporate-Design
-- Automatische Weiterleitung zum Dashboard nach Login
+### Neue Tabellen:
 
-## Seite 2: Energie-Dashboard (Hauptseite)
-Vier Hauptbereiche als Karten/Widgets:
+**`tenants`** – Organisationen/Mandanten
+- Name, Adresse, Kontakt
+- Branding-Einstellungen (JSON: Farben, Schriftart)
+- Logo-URL (Storage)
+- Report-Template-Einstellungen
 
-1. **Energieverbrauch-Charts** – Linien-/Balkendiagramme für Strom, Gas und Wärme über verschiedene Zeiträume (Tag/Woche/Monat)
-2. **Kostenübersicht** – Aktuelle Kosten, Einsparungen und Vergleich zum Vormonat als KPI-Karten
-3. **Nachhaltigkeits-KPIs** – CO₂-Emissionen, Fortschritt zu Nachhaltigkeitszielen mit Fortschrittsbalken
-4. **Alerts & Benachrichtigungen** – Liste mit Warnungen bei ungewöhnlichem Verbrauch oder wichtigen Updates
+**`locations`** – Hierarchische Standorte
+- tenant_id (Zugehörigkeit)
+- parent_id (für Hierarchie)
+- Typ: standort | gebaeude | bereich
+- Koordinaten, Adresse
 
-## Backend (Lovable Cloud / Supabase)
-- **Authentifizierung**: E-Mail/Passwort Login & Signup
-- **Profiles-Tabelle**: Firmenname, Ansprechpartner, Rolle
-- **Geschützte Routen**: Dashboard nur für eingeloggte Benutzer zugänglich
+**`energy_readings`** – Verbrauchsdaten
+- location_id
+- Typ: strom | gas | waerme
+- Wert, Zeitstempel
 
-## Hinweis
-Da wir einfach starten, werden die Dashboard-Daten zunächst mit realistischen Demo-Daten befüllt. Echte Datenquellen können später angebunden werden.
+## White-Label Features
+
+1. **Dynamisches Theming**
+   - CSS-Variablen werden zur Laufzeit aus Tenant-Einstellungen geladen
+   - Logo im Header/Sidebar dynamisch
+   
+2. **Branded Reports (PDF)**
+   - Tenant-Logo im Header
+   - Farben aus CI
+   - Benutzerdefinierte Fußzeile
+
+3. **Storage für Tenant-Assets**
+   - Bucket für Logos und Dokumente
+
+## Benutzer-Zuordnung
+
+- Jeder Benutzer gehört zu genau einem Tenant
+- Admins verwalten ihren Tenant
+- Super-Admins (optional) verwalten alle Tenants
 
