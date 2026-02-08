@@ -47,6 +47,110 @@ export type Database = {
         }
         Relationships: []
       }
+      energy_readings: {
+        Row: {
+          created_at: string
+          energy_type: Database["public"]["Enums"]["energy_type"]
+          id: string
+          location_id: string
+          recorded_at: string
+          unit: string
+          value: number
+        }
+        Insert: {
+          created_at?: string
+          energy_type: Database["public"]["Enums"]["energy_type"]
+          id?: string
+          location_id: string
+          recorded_at: string
+          unit?: string
+          value: number
+        }
+        Update: {
+          created_at?: string
+          energy_type?: Database["public"]["Enums"]["energy_type"]
+          id?: string
+          location_id?: string
+          recorded_at?: string
+          unit?: string
+          value?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "energy_readings_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      locations: {
+        Row: {
+          address: string | null
+          city: string | null
+          country: string | null
+          created_at: string
+          description: string | null
+          id: string
+          latitude: number | null
+          longitude: number | null
+          name: string
+          parent_id: string | null
+          postal_code: string | null
+          tenant_id: string
+          type: Database["public"]["Enums"]["location_type"]
+          updated_at: string
+        }
+        Insert: {
+          address?: string | null
+          city?: string | null
+          country?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          latitude?: number | null
+          longitude?: number | null
+          name: string
+          parent_id?: string | null
+          postal_code?: string | null
+          tenant_id: string
+          type?: Database["public"]["Enums"]["location_type"]
+          updated_at?: string
+        }
+        Update: {
+          address?: string | null
+          city?: string | null
+          country?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          latitude?: number | null
+          longitude?: number | null
+          name?: string
+          parent_id?: string | null
+          postal_code?: string | null
+          tenant_id?: string
+          type?: Database["public"]["Enums"]["location_type"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "locations_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "locations_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           company_name: string | null
@@ -54,6 +158,7 @@ export type Database = {
           created_at: string
           id: string
           is_blocked: boolean
+          tenant_id: string | null
           updated_at: string
           user_id: string
         }
@@ -63,6 +168,7 @@ export type Database = {
           created_at?: string
           id?: string
           is_blocked?: boolean
+          tenant_id?: string | null
           updated_at?: string
           user_id: string
         }
@@ -72,8 +178,59 @@ export type Database = {
           created_at?: string
           id?: string
           is_blocked?: boolean
+          tenant_id?: string | null
           updated_at?: string
           user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "profiles_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tenants: {
+        Row: {
+          address: string | null
+          branding: Json
+          contact_email: string | null
+          contact_phone: string | null
+          created_at: string
+          id: string
+          logo_url: string | null
+          name: string
+          report_settings: Json | null
+          slug: string
+          updated_at: string
+        }
+        Insert: {
+          address?: string | null
+          branding?: Json
+          contact_email?: string | null
+          contact_phone?: string | null
+          created_at?: string
+          id?: string
+          logo_url?: string | null
+          name: string
+          report_settings?: Json | null
+          slug: string
+          updated_at?: string
+        }
+        Update: {
+          address?: string | null
+          branding?: Json
+          contact_email?: string | null
+          contact_phone?: string | null
+          created_at?: string
+          id?: string
+          logo_url?: string | null
+          name?: string
+          report_settings?: Json | null
+          slug?: string
+          updated_at?: string
         }
         Relationships: []
       }
@@ -136,6 +293,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      get_user_tenant_id: { Args: never; Returns: string }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -147,6 +305,8 @@ export type Database = {
     }
     Enums: {
       app_role: "admin" | "user"
+      energy_type: "strom" | "gas" | "waerme" | "wasser"
+      location_type: "standort" | "gebaeude" | "bereich"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -275,6 +435,8 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["admin", "user"],
+      energy_type: ["strom", "gas", "waerme", "wasser"],
+      location_type: ["standort", "gebaeude", "bereich"],
     },
   },
 } as const

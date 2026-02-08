@@ -2,8 +2,9 @@ import { NavLink, useLocation } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
 import { Button } from "@/components/ui/button";
-import { Zap, LayoutDashboard, LogOut, User, Shield } from "lucide-react";
+import { LayoutDashboard, LogOut, User, Shield, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { TenantLogo } from "@/components/tenant/TenantLogo";
 
 const DashboardSidebar = () => {
   const { signOut, user } = useAuth();
@@ -12,17 +13,17 @@ const DashboardSidebar = () => {
 
   const navItems = [
     { to: "/", icon: LayoutDashboard, label: "Dashboard" },
-    ...(isAdmin ? [{ to: "/admin", icon: Shield, label: "Admin" }] : []),
+    ...(isAdmin ? [
+      { to: "/admin", icon: Shield, label: "Admin" },
+      { to: "/settings", icon: Settings, label: "Einstellungen" },
+    ] : []),
   ];
 
   return (
     <aside className="hidden md:flex w-64 flex-col bg-sidebar text-sidebar-foreground border-r border-sidebar-border">
       {/* Logo */}
-      <div className="flex items-center gap-3 p-6 border-b border-sidebar-border">
-        <div className="h-9 w-9 rounded-lg bg-sidebar-primary flex items-center justify-center">
-          <Zap className="h-5 w-5 text-sidebar-primary-foreground" />
-        </div>
-        <span className="text-lg font-display font-bold text-sidebar-foreground">Energy Hub</span>
+      <div className="p-6 border-b border-sidebar-border">
+        <TenantLogo />
       </div>
 
       {/* Nav */}
