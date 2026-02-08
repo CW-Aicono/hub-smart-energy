@@ -908,6 +908,72 @@ export const translations = {
     es: "No se pudo guardar la configuración.",
     nl: "Kon instelling niet opslaan.",
   },
+  "profile.changePassword": {
+    de: "Passwort ändern",
+    en: "Change Password",
+    es: "Cambiar contraseña",
+    nl: "Wachtwoord wijzigen",
+  },
+  "profile.changePasswordDescription": {
+    de: "Ändern Sie Ihr Passwort über eine Bestätigungs-E-Mail",
+    en: "Change your password via a confirmation email",
+    es: "Cambie su contraseña mediante un correo de confirmación",
+    nl: "Wijzig uw wachtwoord via een bevestigingsmail",
+  },
+  "profile.passwordResetViaEmail": {
+    de: "Passwortänderung per E-Mail",
+    en: "Password change via email",
+    es: "Cambio de contraseña por correo electrónico",
+    nl: "Wachtwoordwijziging via e-mail",
+  },
+  "profile.passwordResetViaEmailDescription": {
+    de: "Sie erhalten eine E-Mail mit einem Link, um Ihr Passwort sicher zu ändern.",
+    en: "You will receive an email with a link to securely change your password.",
+    es: "Recibirá un correo electrónico con un enlace para cambiar su contraseña de forma segura.",
+    nl: "U ontvangt een e-mail met een link om uw wachtwoord veilig te wijzigen.",
+  },
+  "profile.requestPasswordChange": {
+    de: "Passwortänderung anfordern",
+    en: "Request password change",
+    es: "Solicitar cambio de contraseña",
+    nl: "Wachtwoordwijziging aanvragen",
+  },
+  "profile.confirmPasswordReset": {
+    de: "Passwortänderung bestätigen",
+    en: "Confirm password change",
+    es: "Confirmar cambio de contraseña",
+    nl: "Wachtwoordwijziging bevestigen",
+  },
+  "profile.confirmPasswordResetDescription": {
+    de: "Eine E-Mail mit einem Link zur Passwortänderung wird an {email} gesendet. Möchten Sie fortfahren?",
+    en: "An email with a password change link will be sent to {email}. Do you want to continue?",
+    es: "Se enviará un correo electrónico con un enlace para cambiar la contraseña a {email}. ¿Desea continuar?",
+    nl: "Er wordt een e-mail met een link voor wachtwoordwijziging verzonden naar {email}. Wilt u doorgaan?",
+  },
+  "profile.sendResetEmail": {
+    de: "E-Mail senden",
+    en: "Send email",
+    es: "Enviar correo electrónico",
+    nl: "E-mail verzenden",
+  },
+  "profile.passwordResetSent": {
+    de: "E-Mail gesendet",
+    en: "Email sent",
+    es: "Correo electrónico enviado",
+    nl: "E-mail verzonden",
+  },
+  "profile.passwordResetSentDescription": {
+    de: "Bitte prüfen Sie Ihr Postfach und folgen Sie dem Link, um Ihr Passwort zu ändern.",
+    en: "Please check your inbox and follow the link to change your password.",
+    es: "Por favor revise su bandeja de entrada y siga el enlace para cambiar su contraseña.",
+    nl: "Controleer uw inbox en volg de link om uw wachtwoord te wijzigen.",
+  },
+  "profile.passwordResetError": {
+    de: "Die E-Mail konnte nicht gesendet werden. Bitte versuchen Sie es später erneut.",
+    en: "The email could not be sent. Please try again later.",
+    es: "No se pudo enviar el correo electrónico. Por favor, inténtelo de nuevo más tarde.",
+    nl: "De e-mail kon niet worden verzonden. Probeer het later opnieuw.",
+  },
 
   // Color Schemes
   "colorScheme.default": {
