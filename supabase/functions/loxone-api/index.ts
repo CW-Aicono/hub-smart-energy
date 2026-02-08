@@ -8,12 +8,9 @@ const corsHeaders = {
 };
 
 interface LoxoneConfig {
-  host: string;
-  port: number;
+  serial_number: string;
   username: string;
   password: string;
-  use_ssl: boolean;
-  serial_number: string;
 }
 
 interface LoxoneControl {
@@ -118,42 +115,30 @@ serve(async (req) => {
       throw new Error("Keine Konfiguration vorhanden");
     }
 
-    if (!config.serial_number && !config.host) {
-      throw new Error("Seriennummer oder Host nicht konfiguriert");
+    if (!config.serial_number) {
+      throw new Error("Seriennummer nicht konfiguriert");
     }
 
     if (!config.username || !config.password) {
       throw new Error("Benutzername oder Passwort nicht konfiguriert");
     }
 
-    console.log(`Config: serial=${config.serial_number}, host=${config.host}, user=${config.username}`);
+    console.log(`Config: serial=${config.serial_number}, user=${config.username}`);
 
-    // Determine base URL - either direct IP or resolve via Cloud DNS
-    let baseUrl: string;
-
-    if (config.host && config.host.match(/^[\d.]+$|^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/)) {
-      // Direct IP address or hostname provided
-      const protocol = config.use_ssl ? "https" : "http";
-      baseUrl = `${protocol}://${config.host}:${config.port}`;
-      console.log(`Using direct connection: ${baseUrl}`);
-    } else if (config.serial_number) {
-      // Resolve via Loxone Cloud DNS first
-      console.log(`Resolving Cloud DNS for serial: ${config.serial_number}`);
-      const resolved = await resolveLoxoneCloudDNS(config.serial_number);
-      
-      if (!resolved) {
-        throw new Error("Cloud DNS Auflösung fehlgeschlagen. Miniserver nicht erreichbar oder nicht für Remote-Zugriff konfiguriert.");
-      }
-      
-      // Use HTTPS for IPv6 connections via Cloud
-      const protocol = resolved.useHttps ? "https" : "http";
-      // For IPv6, wrap in brackets
-      const host = resolved.ip.includes(":") ? `[${resolved.ip}]` : resolved.ip;
-      baseUrl = `${protocol}://${host}:${resolved.port}`;
-      console.log(`Resolved to: ${baseUrl}`);
-    } else {
-      throw new Error("Weder Host noch Seriennummer konfiguriert");
+    // Resolve via Loxone Cloud DNS
+    console.log(`Resolving Cloud DNS for serial: ${config.serial_number}`);
+    const resolved = await resolveLoxoneCloudDNS(config.serial_number);
+    
+    if (!resolved) {
+      throw new Error("Cloud DNS Auflösung fehlgeschlagen. Miniserver nicht erreichbar oder nicht für Remote-Zugriff konfiguriert.");
     }
+    
+    // Use HTTPS for IPv6 connections via Cloud
+    const protocol = resolved.useHttps ? "https" : "http";
+    // For IPv6, wrap in brackets
+    const host = resolved.ip.includes(":") ? `[${resolved.ip}]` : resolved.ip;
+    const baseUrl = `${protocol}://${host}:${resolved.port}`;
+    console.log(`Resolved to: ${baseUrl}`);
 
     // Create Basic Auth header
     const credentials = btoa(`${config.username}:${config.password}`);
