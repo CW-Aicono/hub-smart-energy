@@ -473,8 +473,9 @@ serve(async (req) => {
     const sessionKeyPayload = `${bytesToHex(aesKeyBytes)}:${bytesToHex(aesIvBytes)}`;
     const encryptedSessionKeyB64 = await rsaEncryptPkcs1(publicKeyDerB64, sessionKeyPayload);
 
-    // Loxone docs: ws:// is the standard for Miniservers; wss:// only for certain generations.
-    const wsUrl = `ws://${host}/ws/rfc6455`;
+    // Use wss:// since Edge Functions require secure WebSocket connections
+    // and modern Loxone Cloud connections typically use HTTPS/WSS
+    const wsUrl = `wss://${host}/ws/rfc6455`;
     console.log(`Connecting to WebSocket: ${wsUrl}`);
 
     const collectedValues: Map<string, CollectedValue> = new Map();
