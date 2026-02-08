@@ -622,6 +622,12 @@ export const translations = {
     es: "Gasóleo",
     nl: "Stookolie",
   },
+  "energy.pellets": {
+    de: "Pellets",
+    en: "Pellets",
+    es: "Pellets",
+    nl: "Pellets",
+  },
 
   // User Management
   "users.title": {
@@ -695,6 +701,18 @@ export const translations = {
     en: "Invite User",
     es: "Invitar usuario",
     nl: "Gebruiker uitnodigen",
+  },
+  "users.invited": {
+    de: "Eingeladen",
+    en: "Invited",
+    es: "Invitado",
+    nl: "Uitgenodigd",
+  },
+  "users.pendingInvitation": {
+    de: "Einladung ausstehend",
+    en: "Pending Invitation",
+    es: "Invitación pendiente",
+    nl: "Uitnodiging in behandeling",
   },
   "users.unknown": {
     de: "Unbekannt",

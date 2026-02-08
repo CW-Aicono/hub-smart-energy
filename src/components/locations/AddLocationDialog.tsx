@@ -44,6 +44,7 @@ const ENERGY_SOURCES = [
   { id: "solar", label: "Solar/Photovoltaik" },
   { id: "wasser", label: "Wasser" },
   { id: "oel", label: "Heizöl" },
+  { id: "pellets", label: "Pellets" },
 ] as const;
 
 const locationSchema = z.object({

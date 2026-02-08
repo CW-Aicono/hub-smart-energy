@@ -7,7 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { UserCheck, UserX, Shield, User } from "lucide-react";
+import { UserCheck, UserX, Shield, User, Mail, Clock } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import EditUserDialog from "./EditUserDialog";
@@ -22,6 +22,7 @@ interface UserWithRole {
   is_blocked: boolean;
   role: "admin" | "user";
   created_at: string;
+  status: "active" | "invited";
 }
 
 const UserManagement = () => {
@@ -56,8 +57,19 @@ const UserManagement = () => {
       console.error("Error fetching roles:", rolesError);
     }
 
-    // Combine data
-    const combinedUsers: UserWithRole[] = profiles.map((profile) => {
+    // Fetch pending invitations
+    const { data: invitations, error: invitationsError } = await supabase
+      .from("user_invitations")
+      .select("*")
+      .is("accepted_at", null)
+      .gt("expires_at", new Date().toISOString());
+
+    if (invitationsError) {
+      console.error("Error fetching invitations:", invitationsError);
+    }
+
+    // Combine registered users
+    const registeredUsers: UserWithRole[] = profiles.map((profile) => {
       const userRole = roles?.find((r) => r.user_id === profile.user_id);
       return {
         id: profile.id,
@@ -68,10 +80,24 @@ const UserManagement = () => {
         is_blocked: profile.is_blocked,
         role: (userRole?.role as "admin" | "user") ?? "user",
         created_at: profile.created_at,
+        status: "active" as const,
       };
     });
 
-    setUsers(combinedUsers);
+    // Add pending invitations
+    const pendingInvitations: UserWithRole[] = (invitations || []).map((inv) => ({
+      id: inv.id,
+      user_id: inv.id, // Use invitation id as user_id placeholder
+      email: inv.email,
+      company_name: null,
+      contact_person: null,
+      is_blocked: false,
+      role: inv.role as "admin" | "user",
+      created_at: inv.created_at,
+      status: "invited" as const,
+    }));
+
+    setUsers([...registeredUsers, ...pendingInvitations]);
     setLoading(false);
   };
 
@@ -173,105 +199,147 @@ const UserManagement = () => {
             <TableBody>
               {users.map((user) => {
                 const cannotModify = isLastAdminSelf(user.user_id, user.role);
+                const isInvited = user.status === "invited";
                 
                 return (
-                  <TableRow key={user.id}>
+                  <TableRow key={user.id} className={isInvited ? "opacity-70" : ""}>
                     <TableCell>
-                      <EditUserDialog
-                        user={user}
-                        onSuccess={fetchUsers}
-                        trigger={
-                          <div className="flex items-center gap-2 hover:bg-muted/50 rounded-md p-1 -m-1 transition-colors">
-                            <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
-                              <User className="h-4 w-4 text-primary" />
-                            </div>
-                            <div>
-                              <p className="font-medium hover:underline">
-                                {user.contact_person || t("users.unknown")}
-                              </p>
-                              <p className="text-xs text-muted-foreground truncate max-w-[200px]">
-                                {user.email || user.user_id}
-                              </p>
-                            </div>
+                      {isInvited ? (
+                        <div className="flex items-center gap-2">
+                          <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center">
+                            <Mail className="h-4 w-4 text-muted-foreground" />
                           </div>
-                        }
-                      />
+                          <div>
+                            <p className="font-medium text-muted-foreground">
+                              {t("users.pendingInvitation")}
+                            </p>
+                            <p className="text-xs text-muted-foreground truncate max-w-[200px]">
+                              {user.email}
+                            </p>
+                          </div>
+                        </div>
+                      ) : (
+                        <EditUserDialog
+                          user={user}
+                          onSuccess={fetchUsers}
+                          trigger={
+                            <div className="flex items-center gap-2 hover:bg-muted/50 rounded-md p-1 -m-1 transition-colors cursor-pointer">
+                              <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
+                                <User className="h-4 w-4 text-primary" />
+                              </div>
+                              <div>
+                                <p className="font-medium hover:underline">
+                                  {user.contact_person || t("users.unknown")}
+                                </p>
+                                <p className="text-xs text-muted-foreground truncate max-w-[200px]">
+                                  {user.email || user.user_id}
+                                </p>
+                              </div>
+                            </div>
+                          }
+                        />
+                      )}
                     </TableCell>
                     <TableCell>{user.company_name || "-"}</TableCell>
                     <TableCell>
-                      <Select
-                        value={user.role}
-                        onValueChange={(value: "admin" | "user") =>
-                          updateUserRole(user.user_id, value)
-                        }
-                      >
-                        <SelectTrigger className="w-[130px]">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="admin">
-                            <div className="flex items-center gap-2">
+                      {isInvited ? (
+                        <div className="flex items-center gap-2 text-muted-foreground">
+                          {user.role === "admin" ? (
+                            <>
                               <Shield className="h-3 w-3" />
                               {t("users.admin")}
-                            </div>
-                          </SelectItem>
-                          <SelectItem value="user">
-                            <div className="flex items-center gap-2">
+                            </>
+                          ) : (
+                            <>
                               <User className="h-3 w-3" />
                               {t("users.userRole")}
-                            </div>
-                          </SelectItem>
-                        </SelectContent>
-                      </Select>
+                            </>
+                          )}
+                        </div>
+                      ) : (
+                        <Select
+                          value={user.role}
+                          onValueChange={(value: "admin" | "user") =>
+                            updateUserRole(user.user_id, value)
+                          }
+                        >
+                          <SelectTrigger className="w-[130px]">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="admin">
+                              <div className="flex items-center gap-2">
+                                <Shield className="h-3 w-3" />
+                                {t("users.admin")}
+                              </div>
+                            </SelectItem>
+                            <SelectItem value="user">
+                              <div className="flex items-center gap-2">
+                                <User className="h-3 w-3" />
+                                {t("users.userRole")}
+                              </div>
+                            </SelectItem>
+                          </SelectContent>
+                        </Select>
+                      )}
                     </TableCell>
                     <TableCell>
-                      <Badge variant={user.is_blocked ? "destructive" : "default"}>
-                        {user.is_blocked ? t("common.blocked") : t("common.active")}
-                      </Badge>
+                      {isInvited ? (
+                        <Badge variant="secondary" className="flex items-center gap-1 w-fit">
+                          <Clock className="h-3 w-3" />
+                          {t("users.invited")}
+                        </Badge>
+                      ) : (
+                        <Badge variant={user.is_blocked ? "destructive" : "default"}>
+                          {user.is_blocked ? t("common.blocked") : t("common.active")}
+                        </Badge>
+                      )}
                     </TableCell>
                     <TableCell>
-                      <div className="flex items-center justify-end gap-1">
-                        {cannotModify && !user.is_blocked ? (
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <span>
-                                <Button variant="ghost" size="sm" disabled>
+                      {!isInvited && (
+                        <div className="flex items-center justify-end gap-1">
+                          {cannotModify && !user.is_blocked ? (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span>
+                                  <Button variant="ghost" size="sm" disabled>
+                                    <UserX className="h-4 w-4 mr-1" />
+                                    {t("users.block")}
+                                  </Button>
+                                </span>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>{t("users.cannotBlockLastAdmin")}</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          ) : (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => toggleBlockUser(user.user_id, user.is_blocked)}
+                            >
+                              {user.is_blocked ? (
+                                <>
+                                  <UserCheck className="h-4 w-4 mr-1" />
+                                  {t("users.unblock")}
+                                </>
+                              ) : (
+                                <>
                                   <UserX className="h-4 w-4 mr-1" />
                                   {t("users.block")}
-                                </Button>
-                              </span>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              <p>{t("users.cannotBlockLastAdmin")}</p>
-                            </TooltipContent>
-                          </Tooltip>
-                        ) : (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => toggleBlockUser(user.user_id, user.is_blocked)}
-                          >
-                            {user.is_blocked ? (
-                              <>
-                                <UserCheck className="h-4 w-4 mr-1" />
-                                {t("users.unblock")}
-                              </>
-                            ) : (
-                              <>
-                                <UserX className="h-4 w-4 mr-1" />
-                                {t("users.block")}
-                              </>
-                            )}
-                          </Button>
-                        )}
-                        <DeleteUserDialog
-                          userId={user.user_id}
-                          userName={user.contact_person || t("users.unknown")}
-                          isAdmin={user.role === "admin"}
-                          adminCount={adminCount}
-                          onSuccess={fetchUsers}
-                        />
-                      </div>
+                                </>
+                              )}
+                            </Button>
+                          )}
+                          <DeleteUserDialog
+                            userId={user.user_id}
+                            userName={user.contact_person || t("users.unknown")}
+                            isAdmin={user.role === "admin"}
+                            adminCount={adminCount}
+                            onSuccess={fetchUsers}
+                          />
+                        </div>
+                      )}
                     </TableCell>
                   </TableRow>
                 );
