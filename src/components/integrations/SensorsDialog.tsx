@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Loader2, Thermometer, Droplets, Gauge, Lightbulb, Power, Activity, RefreshCw, AlertCircle, Zap } from "lucide-react";
+import { Loader2, Thermometer, Droplets, Gauge, Lightbulb, Power, Activity, RefreshCw, AlertCircle } from "lucide-react";
 import { LocationIntegration } from "@/hooks/useIntegrations";
 import { supabase } from "@/integrations/supabase/client";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -37,13 +37,6 @@ interface Sensor {
   secondaryUnit?: string;
 }
 
-interface WebSocketControl {
-  name: string;
-  type: string;
-  room: string;
-  category: string;
-  states: Record<string, number>;
-}
 
 interface SensorsDialogProps {
   locationIntegration: LocationIntegration | null;
@@ -83,230 +76,54 @@ const getStatusBadge = (status: Sensor["status"]) => {
   }
 };
 
-// Check if control is an energy monitor type
-function isEnergyMonitor(controlType: string): boolean {
-  const ct = controlType?.toLowerCase() || "";
-  return ct.includes("meter") || ct.includes("zähler") || ct.includes("energymonitor") || ct.includes("fronius");
-}
-
-// Format a numeric value for display
-function formatValue(value: number, type: string, stateName: string): string {
-  if (type === "switch" || type === "digital") {
-    return value > 0 ? "Ein" : "Aus";
-  }
-  if (stateName === "Pf" || stateName === "actual" || stateName === "power") {
-    return value.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  }
-  if (stateName === "Mrc" || stateName === "Mrd" || stateName === "total") {
-    return value.toLocaleString("de-DE", { maximumFractionDigits: 0 });
-  }
-  if (type === "temperature") {
-    return value.toFixed(1);
-  }
-  return value.toFixed(2);
-}
-
-// Determine sensor type from control type
-function getSensorType(controlType: string): string {
-  const ct = controlType?.toLowerCase() || "";
-  
-  if (ct.includes("temperature") || ct.includes("temp")) return "temperature";
-  if (ct.includes("humidity") || ct.includes("feuchte")) return "humidity";
-  if (isEnergyMonitor(controlType)) return "power";
-  if (ct.includes("switch") || ct.includes("schalter")) return "switch";
-  if (ct.includes("dimmer") || ct.includes("light")) return "light";
-  if (ct.includes("jalousie") || ct.includes("blind")) return "blind";
-  if (ct.includes("infoonlyanalog")) return "analog";
-  if (ct.includes("infoonlydigital")) return "digital";
-  if (ct.includes("pushbutton") || ct.includes("taster")) return "button";
-  if (ct.includes("presence") || ct.includes("motion")) return "motion";
-  
-  return "unknown";
-}
-
-// Get unit for a state/type combination
-function getUnit(stateName: string, sensorType: string): string {
-  if (stateName === "Pf" || stateName === "actual" || stateName === "power") return "kW";
-  if (stateName === "Mrc" || stateName === "Mrd" || stateName === "total") return "kWh";
-  if (sensorType === "temperature") return "°C";
-  if (sensorType === "humidity") return "%";
-  if (sensorType === "light" || sensorType === "blind") return "%";
-  return "";
-}
 
 export function SensorsDialog({ locationIntegration, open, onOpenChange }: SensorsDialogProps) {
   const [loading, setLoading] = useState(false);
-  const [wsLoading, setWsLoading] = useState(false);
   const [sensors, setSensors] = useState<Sensor[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   const integrationName = locationIntegration?.integration?.name || "Integration";
 
-  const fetchSensors = async (useWebSocket = false) => {
+  const fetchSensors = async () => {
     if (!locationIntegration) return;
 
-    if (useWebSocket) {
-      setWsLoading(true);
-    } else {
-      setLoading(true);
-    }
+    setLoading(true);
     setError(null);
 
     try {
-      console.log(`Fetching sensors via ${useWebSocket ? "WebSocket" : "REST API"}:`, locationIntegration.id);
+      console.log("Fetching sensors via REST API:", locationIntegration.id);
       
-      if (useWebSocket) {
-        // Use WebSocket endpoint for live values
-        const { data, error: fnError } = await supabase.functions.invoke("loxone-websocket", {
-          body: {
-            locationIntegrationId: locationIntegration.id,
-            collectDuration: 4000, // Wait 4 seconds for value events
-          },
-        });
+      const { data, error: fnError } = await supabase.functions.invoke("loxone-api", {
+        body: {
+          locationIntegrationId: locationIntegration.id,
+          action: "getSensors",
+        },
+      });
 
-        if (fnError) {
-          console.error("WebSocket edge function error:", fnError);
-          throw new Error(fnError.message || "WebSocket-Verbindung fehlgeschlagen");
-        }
-
-        if (!data?.success) {
-          throw new Error(data?.error || "Keine Werte empfangen");
-        }
-
-        console.log(`WebSocket: Received ${data.controlCount} controls with ${data.rawValueCount} values`);
-
-        // Convert WebSocket data to Sensor format
-        const wsControls = data.controls as Record<string, WebSocketControl>;
-        const wsSensors: Sensor[] = [];
-
-        for (const [controlUuid, control] of Object.entries(wsControls)) {
-          const sensorType = getSensorType(control.type);
-          const states = control.states || {};
-          
-          // Determine primary and secondary values based on available states
-          let primaryValue = "-";
-          let primaryStateName = "";
-          let primaryUnit = "";
-          let secondaryValue = "";
-          let secondaryStateName = "";
-          let secondaryUnit = "";
-
-          // For energy monitors, prefer Pf as primary (power) and Mrc as secondary (meter reading)
-          if (isEnergyMonitor(control.type)) {
-            if (states["Pf"] !== undefined) {
-              primaryStateName = "Pf";
-              primaryValue = formatValue(states["Pf"], sensorType, "Pf");
-              primaryUnit = "kW";
-            }
-            if (states["Mrc"] !== undefined) {
-              if (primaryStateName) {
-                secondaryStateName = "Mrc";
-                secondaryValue = formatValue(states["Mrc"], sensorType, "Mrc");
-                secondaryUnit = "kWh";
-              } else {
-                primaryStateName = "Mrc";
-                primaryValue = formatValue(states["Mrc"], sensorType, "Mrc");
-                primaryUnit = "kWh";
-              }
-            }
-            // Fallback to actual/total if Pf/Mrc not available
-            if (!primaryStateName && states["actual"] !== undefined) {
-              primaryStateName = "actual";
-              primaryValue = formatValue(states["actual"], sensorType, "actual");
-              primaryUnit = "kW";
-            }
-            if (!primaryStateName && states["total"] !== undefined) {
-              primaryStateName = "total";
-              primaryValue = formatValue(states["total"], sensorType, "total");
-              primaryUnit = "kWh";
-            }
-          } else {
-            // For non-energy monitors, take first meaningful state
-            const priorityStates = ["value", "actual", "position", "level", "brightness", "temperature"];
-            for (const stateName of priorityStates) {
-              if (states[stateName] !== undefined) {
-                primaryStateName = stateName;
-                primaryValue = formatValue(states[stateName], sensorType, stateName);
-                primaryUnit = getUnit(stateName, sensorType);
-                break;
-              }
-            }
-            // Fallback to first state
-            if (!primaryStateName) {
-              const stateEntries = Object.entries(states);
-              if (stateEntries.length > 0) {
-                const [stateName, stateValue] = stateEntries[0];
-                primaryStateName = stateName;
-                primaryValue = formatValue(stateValue, sensorType, stateName);
-                primaryUnit = getUnit(stateName, sensorType);
-              }
-            }
-          }
-
-          wsSensors.push({
-            id: controlUuid,
-            name: control.name,
-            type: sensorType,
-            controlType: control.type,
-            room: control.room || "Unbekannt",
-            category: control.category || "Sonstige",
-            value: primaryValue,
-            unit: primaryUnit,
-            status: primaryValue !== "-" ? "online" : "offline",
-            stateName: primaryStateName,
-            secondaryValue,
-            secondaryStateName,
-            secondaryUnit,
-          });
-        }
-
-        // Sort: those with values first, then by name
-        wsSensors.sort((a, b) => {
-          const aHasValue = a.value !== "-" || a.secondaryValue !== "";
-          const bHasValue = b.value !== "-" || b.secondaryValue !== "";
-          if (aHasValue && !bHasValue) return -1;
-          if (!aHasValue && bHasValue) return 1;
-          return a.name.localeCompare(b.name);
-        });
-
-        setSensors(wsSensors);
-      } else {
-        // Use REST API
-        const { data, error: fnError } = await supabase.functions.invoke("loxone-api", {
-          body: {
-            locationIntegrationId: locationIntegration.id,
-            action: "getSensors",
-          },
-        });
-
-        if (fnError) {
-          console.error("Edge function error:", fnError);
-          throw new Error(fnError.message || "Fehler beim Abrufen der Sensoren");
-        }
-
-        if (!data?.success) {
-          throw new Error(data?.error || "Unbekannter Fehler");
-        }
-
-        console.log("REST API: Received sensors:", data.sensors?.length);
-        setSensors(data.sensors || []);
+      if (fnError) {
+        console.error("Edge function error:", fnError);
+        throw new Error(fnError.message || "Fehler beim Abrufen der Sensoren");
       }
+
+      if (!data?.success) {
+        throw new Error(data?.error || "Unbekannter Fehler");
+      }
+
+      console.log("REST API: Received sensors:", data.sensors?.length);
+      setSensors(data.sensors || []);
     } catch (err) {
       console.error("Failed to fetch sensors:", err);
       setError(err instanceof Error ? err.message : "Verbindung zum Miniserver fehlgeschlagen");
-      if (!useWebSocket) {
-        setSensors([]);
-      }
+      setSensors([]);
     } finally {
       setLoading(false);
-      setWsLoading(false);
     }
   };
 
-  // Auto-fetch sensors when dialog opens (REST API first)
+  // Auto-fetch sensors when dialog opens
   useEffect(() => {
     if (open && locationIntegration) {
-      fetchSensors(false);
+      fetchSensors();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, locationIntegration?.id]);
@@ -328,18 +145,8 @@ export function SensorsDialog({ locationIntegration, open, onOpenChange }: Senso
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => fetchSensors(true)}
-                disabled={loading || wsLoading}
-                title="Live-Werte über WebSocket abrufen (für Meter, Fronius, etc.)"
-              >
-                <Zap className={`h-4 w-4 mr-2 ${wsLoading ? "animate-pulse text-yellow-500" : ""}`} />
-                {wsLoading ? "Verbinde..." : "Live-Werte"}
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => fetchSensors(false)}
-                disabled={loading || wsLoading}
+                onClick={() => fetchSensors()}
+                disabled={loading}
               >
                 <RefreshCw className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`} />
                 Aktualisieren
@@ -356,11 +163,11 @@ export function SensorsDialog({ locationIntegration, open, onOpenChange }: Senso
             </Alert>
           )}
 
-          {(loading || wsLoading) ? (
+          {loading ? (
             <div className="flex items-center justify-center py-12">
               <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
               <span className="ml-2 text-muted-foreground">
-                {wsLoading ? "WebSocket-Verbindung, sammle Live-Werte..." : "Lade Sensoren vom Miniserver..."}
+                Lade Sensoren vom Miniserver...
               </span>
             </div>
           ) : sensors.length === 0 && !error ? (
