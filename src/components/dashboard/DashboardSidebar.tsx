@@ -1,9 +1,19 @@
+import { NavLink, useLocation } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
+import { useUserRole } from "@/hooks/useUserRole";
 import { Button } from "@/components/ui/button";
-import { Zap, LayoutDashboard, LogOut, User } from "lucide-react";
+import { Zap, LayoutDashboard, LogOut, User, Shield } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 const DashboardSidebar = () => {
   const { signOut, user } = useAuth();
+  const { isAdmin } = useUserRole();
+  const location = useLocation();
+
+  const navItems = [
+    { to: "/", icon: LayoutDashboard, label: "Dashboard" },
+    ...(isAdmin ? [{ to: "/admin", icon: Shield, label: "Admin" }] : []),
+  ];
 
   return (
     <aside className="hidden md:flex w-64 flex-col bg-sidebar text-sidebar-foreground border-r border-sidebar-border">
@@ -17,10 +27,24 @@ const DashboardSidebar = () => {
 
       {/* Nav */}
       <nav className="flex-1 p-4 space-y-1">
-        <div className="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-sidebar-accent text-sidebar-accent-foreground text-sm font-medium">
-          <LayoutDashboard className="h-4 w-4" />
-          Dashboard
-        </div>
+        {navItems.map((item) => {
+          const isActive = location.pathname === item.to;
+          return (
+            <NavLink
+              key={item.to}
+              to={item.to}
+              className={cn(
+                "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
+                isActive
+                  ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                  : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+              )}
+            >
+              <item.icon className="h-4 w-4" />
+              {item.label}
+            </NavLink>
+          );
+        })}
       </nav>
 
       {/* User section */}
