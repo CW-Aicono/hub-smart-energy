@@ -211,33 +211,60 @@ export function AddLocationDialog({ parentId }: AddLocationDialogProps) {
               <FormField
                 control={form.control}
                 name="parent_id"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Zugehöriger Gebäudekomplex (optional)</FormLabel>
-                    <Select 
-                      onValueChange={field.onChange} 
-                      value={field.value || "none"}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Kein Gebäudekomplex" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="none">Kein Gebäudekomplex (eigenständig)</SelectItem>
-                        {availableComplexes.map((complex) => (
-                          <SelectItem key={complex.id} value={complex.id}>
-                            {complex.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormDescription>
-                      Ordnen Sie dieses Gebäude einem bestehenden Gebäudekomplex zu.
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
+                render={({ field }) => {
+                  const selectedComplex = availableComplexes.find(c => c.id === field.value);
+                  const hasComplexAddress = selectedComplex && (selectedComplex.address || selectedComplex.city);
+                  
+                  const copyAddressFromComplex = () => {
+                    if (selectedComplex) {
+                      form.setValue("address", selectedComplex.address || "");
+                      form.setValue("postal_code", selectedComplex.postal_code || "");
+                      form.setValue("city", selectedComplex.city || "");
+                      if (selectedComplex.latitude) form.setValue("latitude", selectedComplex.latitude);
+                      if (selectedComplex.longitude) form.setValue("longitude", selectedComplex.longitude);
+                    }
+                  };
+                  
+                  return (
+                    <FormItem>
+                      <FormLabel>Zugehöriger Gebäudekomplex (optional)</FormLabel>
+                      <Select 
+                        onValueChange={field.onChange} 
+                        value={field.value || "none"}
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Kein Gebäudekomplex" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="none">Kein Gebäudekomplex (eigenständig)</SelectItem>
+                          {availableComplexes.map((complex) => (
+                            <SelectItem key={complex.id} value={complex.id}>
+                              {complex.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormDescription>
+                        Ordnen Sie dieses Gebäude einem bestehenden Gebäudekomplex zu.
+                      </FormDescription>
+                      {hasComplexAddress && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="mt-2"
+                          onClick={copyAddressFromComplex}
+                        >
+                          <MapPin className="h-4 w-4 mr-2" />
+                          Adresse vom Komplex übernehmen
+                        </Button>
+                      )}
+                      <FormMessage />
+                    </FormItem>
+                  );
+                }}
               />
             )}
 

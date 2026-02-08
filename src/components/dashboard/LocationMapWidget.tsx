@@ -8,8 +8,8 @@ const LocationMapWidget = () => {
   const { locations, loading } = useLocations();
   const navigate = useNavigate();
 
-  // Filter locations that should be shown on map
-  const mapLocations = locations.filter((loc) => loc.show_on_map);
+  // Filter locations that should be shown on map and exclude child buildings of complexes
+  const mapLocations = locations.filter((loc) => loc.show_on_map && !loc.parent_id);
 
   const handleLocationClick = () => {
     navigate("/locations");
