@@ -285,3 +285,20 @@
     @apply bg-background text-foreground font-sans antialiased;
   }
 }
+
+/* Ensure Leaflet map stays below modals/dialogs */
+@layer components {
+  .leaflet-container {
+    z-index: 0 !important;
+  }
+
+  .leaflet-pane,
+  .leaflet-control {
+    z-index: 1 !important;
+  }
+
+  .leaflet-top,
+  .leaflet-bottom {
+    z-index: 2 !important;
+  }
+}
