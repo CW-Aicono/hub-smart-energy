@@ -13,6 +13,7 @@ import Settings from "./pages/Settings";
 import Roles from "./pages/Roles";
 import Locations from "./pages/Locations";
 import Profile from "./pages/Profile";
+import Help from "./pages/Help";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -34,6 +35,7 @@ const App = () => (
                 <Route path="/roles" element={<Roles />} />
                 <Route path="/locations" element={<Locations />} />
                 <Route path="/profile" element={<Profile />} />
+                <Route path="/help" element={<Help />} />
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </BrowserRouter>
