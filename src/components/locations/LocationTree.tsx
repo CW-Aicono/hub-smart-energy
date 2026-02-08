@@ -3,7 +3,8 @@ import { Link } from "react-router-dom";
 import { Location, LocationType } from "@/hooks/useLocations";
 import { useFloors, Floor } from "@/hooks/useFloors";
 import { useUserRole } from "@/hooks/useUserRole";
-import { ChevronRight, ChevronDown, Building2, Building, MapPin, Star, Layers } from "lucide-react";
+import { LocationStatus } from "@/hooks/useLocationStatus";
+import { ChevronRight, ChevronDown, Building2, Building, MapPin, Star, Layers, Wifi, WifiOff, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { EditLocationDialog } from "./EditLocationDialog";
@@ -14,6 +15,7 @@ interface LocationTreeProps {
   selectedId?: string;
   onSelect?: (location: Location) => void;
   onRefresh?: () => void;
+  locationStatuses?: Map<string, LocationStatus>;
 }
 
 interface LocationNodeProps {
@@ -24,6 +26,7 @@ interface LocationNodeProps {
   onRefresh?: () => void;
   isAdmin: boolean;
   showFloors?: boolean;
+  locationStatuses?: Map<string, LocationStatus>;
 }
 
 interface FloorNodeProps {
@@ -65,7 +68,7 @@ function FloorNode({ floor, level }: FloorNodeProps) {
   );
 }
 
-function LocationNode({ location, level, selectedId, onSelect, onRefresh, isAdmin, showFloors = true }: LocationNodeProps) {
+function LocationNode({ location, level, selectedId, onSelect, onRefresh, isAdmin, showFloors = true, locationStatuses }: LocationNodeProps) {
   const [expanded, setExpanded] = useState(true);
   const { floors } = useFloors(showFloors ? location.id : undefined);
   
@@ -83,6 +86,36 @@ function LocationNode({ location, level, selectedId, onSelect, onRefresh, isAdmi
   // Show floors for Einzelgebäude or for buildings that are children of a complex
   const shouldShowFloors = isEinzelgebaeude || isChildOfComplex;
   const hasExpandableContent = hasChildren || (shouldShowFloors && hasFloors);
+
+  // Get online status
+  const status = locationStatuses?.get(location.id);
+  const getOnlineStatusBadge = () => {
+    if (!status || status.totalIntegrations === 0) {
+      return null;
+    }
+
+    if (status.hasUnconfigured) {
+      return (
+        <Badge variant="outline" className="text-xs gap-1 bg-warning/10 text-warning-foreground border-warning/20">
+          <AlertCircle className="h-3 w-3" />
+        </Badge>
+      );
+    }
+
+    if (status.isOnline) {
+      return (
+        <Badge variant="outline" className="text-xs gap-1 bg-primary/10 text-primary border-primary/20">
+          <Wifi className="h-3 w-3" />
+        </Badge>
+      );
+    }
+
+    return (
+      <Badge variant="outline" className="text-xs gap-1 bg-destructive/10 text-destructive border-destructive/20">
+        <WifiOff className="h-3 w-3" />
+      </Badge>
+    );
+  };
 
   return (
     <div>
@@ -124,9 +157,10 @@ function LocationNode({ location, level, selectedId, onSelect, onRefresh, isAdmi
           >
             {location.name}
           </Link>
+          {getOnlineStatusBadge()}
           {location.is_main_location && (
-            <Badge variant="secondary" className="text-xs gap-1 bg-amber-100 text-amber-700 border-amber-200">
-              <Star className="h-3 w-3 fill-amber-500 text-amber-500" />
+            <Badge variant="secondary" className="text-xs gap-1 bg-secondary text-secondary-foreground border-border">
+              <Star className="h-3 w-3 fill-primary text-primary" />
               Hauptstandort
             </Badge>
           )}
@@ -163,6 +197,7 @@ function LocationNode({ location, level, selectedId, onSelect, onRefresh, isAdmi
                   onRefresh={onRefresh}
                   isAdmin={isAdmin}
                   showFloors={true}
+                  locationStatuses={locationStatuses}
                 />
               ))}
             </div>
@@ -186,7 +221,7 @@ function LocationNode({ location, level, selectedId, onSelect, onRefresh, isAdmi
   );
 }
 
-export function LocationTree({ locations, selectedId, onSelect, onRefresh }: LocationTreeProps) {
+export function LocationTree({ locations, selectedId, onSelect, onRefresh, locationStatuses }: LocationTreeProps) {
   const { isAdmin } = useUserRole();
 
   if (locations.length === 0) {
@@ -210,6 +245,7 @@ export function LocationTree({ locations, selectedId, onSelect, onRefresh }: Loc
           onSelect={onSelect}
           onRefresh={onRefresh}
           isAdmin={isAdmin}
+          locationStatuses={locationStatuses}
         />
       ))}
     </div>

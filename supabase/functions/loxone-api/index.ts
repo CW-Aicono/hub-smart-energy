@@ -49,27 +49,21 @@ async function resolveLoxoneCloudDNS(serialNumber: string): Promise<{ ip: string
       return null;
     }
 
-    // Parse IPHTTPS format: "[IPv6]:port" or "IPv4:port"
-    if (data.IPHTTPS) {
-      const iphttps = data.IPHTTPS as string;
-      // IPv6 format: [2a01:4f8:1c1c:57c8::1]:58747
-      const ipv6Match = iphttps.match(/^\[([^\]]+)\]:(\d+)$/);
-      if (ipv6Match) {
-        return { ip: ipv6Match[1], port: parseInt(ipv6Match[2]), useHttps: true };
-      }
-      // IPv4 format: 1.2.3.4:8080
-      const ipv4Match = iphttps.match(/^([^:]+):(\d+)$/);
-      if (ipv4Match) {
-        return { ip: ipv4Match[1], port: parseInt(ipv4Match[2]), useHttps: true };
-      }
-    }
-
-    // Fallback: Response format: { "IP": "x.x.x.x", "Port": 80, ... }
-    if (data.IP && data.Port) {
+    // Prefer HTTP connection since edge functions cannot handle self-signed SSL certs
+    // Check PortOpen for HTTP availability first
+    if (data.PortOpen && data.IP && data.Port) {
+      console.log("Using HTTP connection (PortOpen available)");
       return { ip: data.IP, port: data.Port, useHttps: false };
     }
+
+    // Use loxonecloud.com subdomain format for HTTP (always works if registered)
+    // Format: http://{serialNumber}.dns.loxonecloud.com/
+    if (data["DNS-Status"] === "registered") {
+      console.log("Using Loxone Cloud DNS subdomain for HTTP");
+      return { ip: `${serialNumber.toLowerCase()}.dns.loxonecloud.com`, port: 80, useHttps: false };
+    }
     
-    console.error("Could not parse DNS response:", data);
+    console.error("Could not establish HTTP connection path:", data);
     return null;
   } catch (error) {
     console.error("DNS resolution error:", error);
