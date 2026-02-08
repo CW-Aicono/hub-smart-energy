@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Navigate } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { Navigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useTranslation } from "@/hooks/useTranslation";
 import { Button } from "@/components/ui/button";
@@ -9,22 +9,85 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { useToast } from "@/hooks/use-toast";
 import { Zap } from "lucide-react";
 import { z } from "zod";
+import { supabase } from "@/integrations/supabase/client";
+
+interface InvitationData {
+  id: string;
+  email: string;
+  role: "admin" | "user";
+}
 
 const Auth = () => {
   const { user, loading, signIn, signUp } = useAuth();
   const { t } = useTranslation();
   const { toast } = useToast();
+  const [searchParams] = useSearchParams();
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [invitation, setInvitation] = useState<InvitationData | null>(null);
+  const [loadingInvitation, setLoadingInvitation] = useState(false);
+
+  const inviteToken = searchParams.get("token");
+
+  // Check for invitation token
+  useEffect(() => {
+    const checkInvitation = async () => {
+      if (!inviteToken) return;
+
+      setLoadingInvitation(true);
+      const { data, error } = await supabase
+        .from("user_invitations")
+        .select("id, email, role, expires_at, accepted_at")
+        .eq("token", inviteToken)
+        .single();
+
+      if (error || !data) {
+        toast({
+          title: t("common.error"),
+          description: t("auth.invalidInvitation"),
+          variant: "destructive",
+        });
+        setLoadingInvitation(false);
+        return;
+      }
+
+      if (data.accepted_at) {
+        toast({
+          title: t("common.error"),
+          description: t("auth.invitationAlreadyUsed"),
+          variant: "destructive",
+        });
+        setLoadingInvitation(false);
+        return;
+      }
+
+      if (new Date(data.expires_at) < new Date()) {
+        toast({
+          title: t("common.error"),
+          description: t("auth.invitationExpired"),
+          variant: "destructive",
+        });
+        setLoadingInvitation(false);
+        return;
+      }
+
+      setInvitation({ id: data.id, email: data.email, role: data.role as "admin" | "user" });
+      setEmail(data.email);
+      setIsLogin(false); // Switch to registration mode
+      setLoadingInvitation(false);
+    };
+
+    checkInvitation();
+  }, [inviteToken, t, toast]);
 
   const authSchema = z.object({
     email: z.string().email(t("auth.invalidCredentials")),
     password: z.string().min(6, t("auth.password")),
   });
 
-  if (loading) {
+  if (loading || loadingInvitation) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <div className="animate-pulse text-muted-foreground">{t("common.loading")}</div>
@@ -43,15 +106,45 @@ const Auth = () => {
     }
 
     setSubmitting(true);
-    const { error } = isLogin ? await signIn(email, password) : await signUp(email, password);
-    setSubmitting(false);
+    
+    if (isLogin) {
+      const { error } = await signIn(email, password);
+      setSubmitting(false);
+      if (error) {
+        let message = error.message;
+        if (message.includes("Invalid login")) message = t("auth.invalidCredentials");
+        toast({ title: t("common.error"), description: message, variant: "destructive" });
+      }
+    } else {
+      // Registration flow
+      const { error, data } = await signUp(email, password);
+      
+      if (error) {
+        setSubmitting(false);
+        let message = error.message;
+        if (message.includes("already registered")) message = t("auth.emailAlreadyRegistered");
+        toast({ title: t("common.error"), description: message, variant: "destructive" });
+        return;
+      }
 
-    if (error) {
-      let message = error.message;
-      if (message.includes("Invalid login")) message = t("auth.invalidCredentials");
-      if (message.includes("already registered")) message = t("auth.emailAlreadyRegistered");
-      toast({ title: t("common.error"), description: message, variant: "destructive" });
-    } else if (!isLogin) {
+      // If this is an invitation registration, mark the invitation as accepted and assign the role
+      if (invitation && data?.user) {
+        // Mark invitation as accepted
+        await supabase
+          .from("user_invitations")
+          .update({ accepted_at: new Date().toISOString() })
+          .eq("id", invitation.id);
+
+        // Assign the role from the invitation
+        if (invitation.role === "admin") {
+          await supabase
+            .from("user_roles")
+            .update({ role: "admin" })
+            .eq("user_id", data.user.id);
+        }
+      }
+
+      setSubmitting(false);
       toast({ title: t("auth.registrationSuccess"), description: t("auth.confirmEmail") });
     }
   };
@@ -84,10 +177,14 @@ const Auth = () => {
               <span className="text-xl font-display font-bold">Smart Energy Hub</span>
             </div>
             <CardTitle className="text-2xl font-display">
-              {isLogin ? t("auth.welcomeBack") : t("auth.createAccount")}
+              {invitation 
+                ? t("auth.completeRegistration")
+                : isLogin ? t("auth.welcomeBack") : t("auth.createAccount")}
             </CardTitle>
             <CardDescription>
-              {isLogin ? t("auth.loginSubtitle") : t("auth.registerSubtitle")}
+              {invitation 
+                ? t("auth.invitationDescription").replace("{email}", invitation.email)
+                : isLogin ? t("auth.loginSubtitle") : t("auth.registerSubtitle")}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -101,6 +198,7 @@ const Auth = () => {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
+                  disabled={!!invitation}
                 />
               </div>
               <div className="space-y-2">
@@ -118,15 +216,17 @@ const Auth = () => {
                 {submitting ? t("common.loading") : isLogin ? t("auth.login") : t("auth.register")}
               </Button>
             </form>
-            <div className="mt-4 text-center text-sm text-muted-foreground">
-              {isLogin ? t("auth.noAccount") : t("auth.hasAccount")}{" "}
-              <button
-                onClick={() => setIsLogin(!isLogin)}
-                className="text-accent hover:underline font-medium"
-              >
-                {isLogin ? t("auth.registerNow") : t("auth.loginNow")}
-              </button>
-            </div>
+            {!invitation && (
+              <div className="mt-4 text-center text-sm text-muted-foreground">
+                {isLogin ? t("auth.noAccount") : t("auth.hasAccount")}{" "}
+                <button
+                  onClick={() => setIsLogin(!isLogin)}
+                  className="text-accent hover:underline font-medium"
+                >
+                  {isLogin ? t("auth.registerNow") : t("auth.loginNow")}
+                </button>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>

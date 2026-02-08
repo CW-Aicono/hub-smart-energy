@@ -840,6 +840,72 @@ export const translations = {
     es: "El último administrador no puede bloquearse a sí mismo.",
     nl: "De laatste beheerder kan zichzelf niet blokkeren.",
   },
+  "users.invitationRevoked": {
+    de: "Einladung widerrufen",
+    en: "Invitation revoked",
+    es: "Invitación revocada",
+    nl: "Uitnodiging ingetrokken",
+  },
+  "users.invitationRevokedDescription": {
+    de: "Die Einladung wurde erfolgreich widerrufen.",
+    en: "The invitation has been successfully revoked.",
+    es: "La invitación ha sido revocada con éxito.",
+    nl: "De uitnodiging is succesvol ingetrokken.",
+  },
+  "users.invitationRevokeError": {
+    de: "Einladung konnte nicht widerrufen werden.",
+    en: "Failed to revoke invitation.",
+    es: "No se pudo revocar la invitación.",
+    nl: "Kon uitnodiging niet intrekken.",
+  },
+  "users.invitationResent": {
+    de: "Einladung erneut gesendet",
+    en: "Invitation resent",
+    es: "Invitación reenviada",
+    nl: "Uitnodiging opnieuw verzonden",
+  },
+  "users.invitationResentDescription": {
+    de: "Die Einladung wurde erneut gesendet.",
+    en: "The invitation has been resent.",
+    es: "La invitación ha sido reenviada.",
+    nl: "De uitnodiging is opnieuw verzonden.",
+  },
+  "users.invitationResendError": {
+    de: "Einladung konnte nicht erneut gesendet werden.",
+    en: "Failed to resend invitation.",
+    es: "No se pudo reenviar la invitación.",
+    nl: "Kon uitnodiging niet opnieuw verzenden.",
+  },
+  "users.resendInvitation": {
+    de: "Einladung erneut senden",
+    en: "Resend invitation",
+    es: "Reenviar invitación",
+    nl: "Uitnodiging opnieuw verzenden",
+  },
+  "users.revokeInvitation": {
+    de: "Einladung widerrufen",
+    en: "Revoke invitation",
+    es: "Revocar invitación",
+    nl: "Uitnodiging intrekken",
+  },
+  "users.expired": {
+    de: "Abgelaufen",
+    en: "Expired",
+    es: "Expirado",
+    nl: "Verlopen",
+  },
+  "users.expiresIn1Day": {
+    de: "Läuft in 1 Tag ab",
+    en: "Expires in 1 day",
+    es: "Expira en 1 día",
+    nl: "Verloopt over 1 dag",
+  },
+  "users.expiresInDays": {
+    de: "Läuft in {days} Tagen ab",
+    en: "Expires in {days} days",
+    es: "Expira en {days} días",
+    nl: "Verloopt over {days} dagen",
+  },
 
   // Profile Settings
   "profile.title": {
@@ -1341,6 +1407,36 @@ export const translations = {
     en: "Your intelligent B2B dashboard for energy management. Analyze consumption, optimize costs and achieve sustainability goals.",
     es: "Su panel B2B inteligente para gestión de energía. Analice el consumo, optimice costos y alcance objetivos de sostenibilidad.",
     nl: "Uw intelligente B2B-dashboard voor energiebeheer. Analyseer verbruik, optimaliseer kosten en bereik duurzaamheidsdoelen.",
+  },
+  "auth.invalidInvitation": {
+    de: "Diese Einladung ist ungültig oder existiert nicht.",
+    en: "This invitation is invalid or does not exist.",
+    es: "Esta invitación es inválida o no existe.",
+    nl: "Deze uitnodiging is ongeldig of bestaat niet.",
+  },
+  "auth.invitationAlreadyUsed": {
+    de: "Diese Einladung wurde bereits verwendet.",
+    en: "This invitation has already been used.",
+    es: "Esta invitación ya ha sido utilizada.",
+    nl: "Deze uitnodiging is al gebruikt.",
+  },
+  "auth.invitationExpired": {
+    de: "Diese Einladung ist abgelaufen.",
+    en: "This invitation has expired.",
+    es: "Esta invitación ha expirado.",
+    nl: "Deze uitnodiging is verlopen.",
+  },
+  "auth.completeRegistration": {
+    de: "Registrierung abschließen",
+    en: "Complete Registration",
+    es: "Completar registro",
+    nl: "Registratie voltooien",
+  },
+  "auth.invitationDescription": {
+    de: "Sie wurden eingeladen. Erstellen Sie Ihr Passwort für {email}.",
+    en: "You have been invited. Create your password for {email}.",
+    es: "Ha sido invitado. Cree su contraseña para {email}.",
+    nl: "U bent uitgenodigd. Maak uw wachtwoord aan voor {email}.",
   },
 
   // Navigation - Help
