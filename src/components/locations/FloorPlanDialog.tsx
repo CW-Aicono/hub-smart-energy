@@ -1,10 +1,9 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2, Trash2, GripVertical, Activity, AlertCircle, Image, MapPin, Maximize2, Minimize2 } from "lucide-react";
+import { Loader2, Trash2, GripVertical, AlertCircle, Image, MapPin, Maximize2, Minimize2 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Floor } from "@/hooks/useFloors";
 import { useFloorSensorPositions, FloorSensorPosition, FloorSensorPositionInsert } from "@/hooks/useFloorSensorPositions";
@@ -221,10 +220,13 @@ export function FloorPlanDialog({ floor, locationId, open, onOpenChange }: Floor
 
   const loading = positionsLoading || integrationsLoading || loadingSensors;
 
+  // Calculate dialog height based on content
+  const dialogHeight = isFullscreen ? "h-[90vh]" : "h-[70vh]";
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className={`${isFullscreen ? "max-w-[95vw] max-h-[95vh]" : "max-w-5xl max-h-[85vh]"} overflow-hidden flex flex-col`}>
-        <DialogHeader className="flex-shrink-0">
+      <DialogContent className={`${isFullscreen ? "max-w-[95vw]" : "max-w-5xl"} p-0 gap-0 overflow-hidden`}>
+        <DialogHeader className="p-4 pb-2 flex-shrink-0">
           <div className="flex items-center justify-between">
             <div>
               <DialogTitle className="flex items-center gap-2">
@@ -247,197 +249,201 @@ export function FloorPlanDialog({ floor, locationId, open, onOpenChange }: Floor
         </DialogHeader>
 
         {error && (
-          <Alert variant="destructive" className="flex-shrink-0">
+          <Alert variant="destructive" className="mx-4 flex-shrink-0">
             <AlertCircle className="h-4 w-4" />
             <AlertDescription>{error}</AlertDescription>
           </Alert>
         )}
 
-        {isAdmin ? (
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 overflow-hidden flex flex-col">
-            <TabsList className="flex-shrink-0 w-fit">
-              <TabsTrigger value="view" className="gap-2">
-                <Image className="h-4 w-4" />
-                Ansicht
-              </TabsTrigger>
-              <TabsTrigger value="edit" className="gap-2">
-                <MapPin className="h-4 w-4" />
-                Messgeräte bearbeiten
-              </TabsTrigger>
-            </TabsList>
+        <div className={`px-4 pb-4 ${dialogHeight}`}>
+          {isAdmin ? (
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full flex flex-col">
+              <TabsList className="flex-shrink-0 w-fit mb-3">
+                <TabsTrigger value="view" className="gap-2">
+                  <Image className="h-4 w-4" />
+                  Ansicht
+                </TabsTrigger>
+                <TabsTrigger value="edit" className="gap-2">
+                  <MapPin className="h-4 w-4" />
+                  Messgeräte bearbeiten
+                </TabsTrigger>
+              </TabsList>
 
-            <TabsContent value="view" className="flex-1 overflow-auto m-0 mt-4">
-              <FloorPlanView 
-                floor={floor}
-                positions={placedSensorsWithInfo}
-                isFullscreen={isFullscreen}
-              />
-            </TabsContent>
-
-            <TabsContent value="edit" className="flex-1 overflow-hidden m-0 mt-4">
-              <div className="flex gap-4 h-full">
-                {/* Sensor List */}
-                <div className="w-56 flex-shrink-0 border rounded-lg bg-muted/30 flex flex-col">
-                  <div className="p-3 border-b bg-muted/50">
-                    <h3 className="font-medium text-sm">Verfügbare Sensoren</h3>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {unplacedSensors.length} von {availableSensors.length}
-                    </p>
-                  </div>
-                  <ScrollArea className="flex-1">
-                    <div className="p-2 space-y-1">
-                      {loading ? (
-                        <div className="flex items-center justify-center py-8">
-                          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                        </div>
-                      ) : unplacedSensors.length === 0 ? (
-                        <p className="text-sm text-muted-foreground text-center py-8">
-                          {availableSensors.length === 0 
-                            ? "Keine Sensoren verfügbar" 
-                            : "Alle platziert ✓"}
-                        </p>
-                      ) : (
-                        unplacedSensors.map((sensor) => (
-                          <div
-                            key={sensor.id}
-                            draggable
-                            onDragStart={(e) => handleDragStart(e, sensor)}
-                            className="flex items-center gap-2 p-2 rounded-md bg-card border cursor-grab hover:bg-accent transition-colors active:cursor-grabbing"
-                          >
-                            <GripVertical className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium truncate">{sensor.name}</p>
-                              <p className="text-xs text-muted-foreground truncate">{sensor.room}</p>
-                            </div>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  </ScrollArea>
-                </div>
-
-                {/* Floor Plan Editor */}
-                <div 
-                  ref={containerRef}
-                  className="flex-1 relative border rounded-lg overflow-hidden bg-muted/20"
-                  onDragOver={handleDragOver}
-                  onDragLeave={handleDragLeave}
-                  onDrop={handleDrop}
-                >
+              <TabsContent value="view" className="flex-1 m-0 overflow-hidden">
+                <div className="relative w-full h-full border rounded-lg overflow-hidden bg-muted/10">
                   <img
-                    ref={imageRef}
                     src={floor.floor_plan_url!}
                     alt={floor.name}
                     className="w-full h-full object-contain"
-                    draggable={false}
                   />
-                  
-                  {/* Placed Sensors */}
-                  {placedSensorsWithInfo.map((placed) => (
+                  {/* Sensor Overlays */}
+                  {placedSensorsWithInfo.map((pos) => (
                     <div
-                      key={placed.id}
-                      draggable
-                      onDragStart={(e) => handlePositionDragStart(e, placed)}
-                      className={`absolute transform -translate-x-1/2 -translate-y-1/2 group cursor-grab active:cursor-grabbing ${
-                        draggingPosition?.id === placed.id ? "opacity-50" : ""
-                      }`}
+                      key={pos.id}
+                      className="absolute transform -translate-x-1/2 -translate-y-1/2"
                       style={{
-                        left: `${placed.position_x}%`,
-                        top: `${placed.position_y}%`,
+                        left: `${pos.position_x}%`,
+                        top: `${pos.position_y}%`,
                       }}
                     >
-                      <div className="bg-card border-2 border-primary shadow-lg rounded-lg px-2 py-1 min-w-[90px] text-center">
-                        <p className="text-xs font-medium truncate">{placed.sensor_name}</p>
-                        {placed.sensorInfo && (
-                          <p className="text-sm font-mono font-bold text-primary">
-                            {placed.sensorInfo.value} {placed.sensorInfo.unit}
-                          </p>
-                        )}
-                      </div>
-                      <Button
-                        variant="destructive"
-                        size="icon"
-                        className="absolute -top-2 -right-2 h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleRemoveSensor(placed.id, placed.sensor_name);
-                        }}
-                      >
-                        <Trash2 className="h-3 w-3" />
-                      </Button>
-                    </div>
-                  ))}
-
-                  {/* Drag Preview */}
-                  {dragPreview && (draggingSensor || draggingPosition) && (
-                    <div
-                      className="absolute transform -translate-x-1/2 -translate-y-1/2 pointer-events-none"
-                      style={{
-                        left: `${dragPreview.x}%`,
-                        top: `${dragPreview.y}%`,
-                      }}
-                    >
-                      <div className="bg-primary/20 border-2 border-primary border-dashed rounded-lg px-2 py-1 min-w-[90px] text-center">
-                        <p className="text-xs font-medium">
-                          {draggingSensor?.name || draggingPosition?.sensor_name}
+                      <div className="bg-card/95 backdrop-blur-sm border shadow-lg rounded-lg px-2 py-1 min-w-[80px] text-center">
+                        <p className="text-[10px] font-medium text-muted-foreground truncate max-w-[100px]">
+                          {pos.sensor_name}
+                        </p>
+                        <p className="text-sm font-mono font-bold text-primary">
+                          {pos.sensorInfo ? `${pos.sensorInfo.value} ${pos.sensorInfo.unit}` : "—"}
                         </p>
                       </div>
                     </div>
-                  )}
+                  ))}
                 </div>
-              </div>
-            </TabsContent>
-          </Tabs>
-        ) : (
-          <div className="flex-1 overflow-auto">
-            <FloorPlanView 
-              floor={floor}
-              positions={placedSensorsWithInfo}
-              isFullscreen={isFullscreen}
-            />
-          </div>
-        )}
+              </TabsContent>
+
+              <TabsContent value="edit" className="flex-1 m-0 overflow-hidden">
+                <div className="flex gap-4 h-full">
+                  {/* Sensor List */}
+                  <div className="w-56 flex-shrink-0 border rounded-lg bg-muted/30 flex flex-col h-full">
+                    <div className="p-3 border-b bg-muted/50 flex-shrink-0">
+                      <h3 className="font-medium text-sm">Verfügbare Sensoren</h3>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {unplacedSensors.length} von {availableSensors.length}
+                      </p>
+                    </div>
+                    <ScrollArea className="flex-1 min-h-0">
+                      <div className="p-2 space-y-1">
+                        {loading ? (
+                          <div className="flex items-center justify-center py-8">
+                            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                          </div>
+                        ) : unplacedSensors.length === 0 ? (
+                          <p className="text-sm text-muted-foreground text-center py-8">
+                            {availableSensors.length === 0 
+                              ? "Keine Sensoren verfügbar" 
+                              : "Alle platziert ✓"}
+                          </p>
+                        ) : (
+                          unplacedSensors.map((sensor) => (
+                            <div
+                              key={sensor.id}
+                              draggable
+                              onDragStart={(e) => handleDragStart(e, sensor)}
+                              className="flex items-center gap-2 p-2 rounded-md bg-card border cursor-grab hover:bg-accent transition-colors active:cursor-grabbing"
+                            >
+                              <GripVertical className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium truncate">{sensor.name}</p>
+                                <p className="text-xs text-muted-foreground truncate">{sensor.room}</p>
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </ScrollArea>
+                  </div>
+
+                  {/* Floor Plan Editor */}
+                  <div 
+                    ref={containerRef}
+                    className="flex-1 relative border rounded-lg overflow-hidden bg-muted/20 min-h-0"
+                    onDragOver={handleDragOver}
+                    onDragLeave={handleDragLeave}
+                    onDrop={handleDrop}
+                  >
+                    <img
+                      ref={imageRef}
+                      src={floor.floor_plan_url!}
+                      alt={floor.name}
+                      className="w-full h-full object-contain"
+                      draggable={false}
+                    />
+                    
+                    {/* Placed Sensors */}
+                    {placedSensorsWithInfo.map((placed) => (
+                      <div
+                        key={placed.id}
+                        draggable
+                        onDragStart={(e) => handlePositionDragStart(e, placed)}
+                        className={`absolute transform -translate-x-1/2 -translate-y-1/2 group cursor-grab active:cursor-grabbing ${
+                          draggingPosition?.id === placed.id ? "opacity-50" : ""
+                        }`}
+                        style={{
+                          left: `${placed.position_x}%`,
+                          top: `${placed.position_y}%`,
+                        }}
+                      >
+                        <div className="bg-card border-2 border-primary shadow-lg rounded-lg px-2 py-1 min-w-[90px] text-center">
+                          <p className="text-xs font-medium truncate">{placed.sensor_name}</p>
+                          {placed.sensorInfo && (
+                            <p className="text-sm font-mono font-bold text-primary">
+                              {placed.sensorInfo.value} {placed.sensorInfo.unit}
+                            </p>
+                          )}
+                        </div>
+                        <Button
+                          variant="destructive"
+                          size="icon"
+                          className="absolute -top-2 -right-2 h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleRemoveSensor(placed.id, placed.sensor_name);
+                          }}
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    ))}
+
+                    {/* Drag Preview */}
+                    {dragPreview && (draggingSensor || draggingPosition) && (
+                      <div
+                        className="absolute transform -translate-x-1/2 -translate-y-1/2 pointer-events-none"
+                        style={{
+                          left: `${dragPreview.x}%`,
+                          top: `${dragPreview.y}%`,
+                        }}
+                      >
+                        <div className="bg-primary/20 border-2 border-primary border-dashed rounded-lg px-2 py-1 min-w-[90px] text-center">
+                          <p className="text-xs font-medium">
+                            {draggingSensor?.name || draggingPosition?.sensor_name}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </TabsContent>
+            </Tabs>
+          ) : (
+            <div className="relative w-full h-full border rounded-lg overflow-hidden bg-muted/10">
+              <img
+                src={floor.floor_plan_url!}
+                alt={floor.name}
+                className="w-full h-full object-contain"
+              />
+              {/* Sensor Overlays */}
+              {placedSensorsWithInfo.map((pos) => (
+                <div
+                  key={pos.id}
+                  className="absolute transform -translate-x-1/2 -translate-y-1/2"
+                  style={{
+                    left: `${pos.position_x}%`,
+                    top: `${pos.position_y}%`,
+                  }}
+                >
+                  <div className="bg-card/95 backdrop-blur-sm border shadow-lg rounded-lg px-2 py-1 min-w-[80px] text-center">
+                    <p className="text-[10px] font-medium text-muted-foreground truncate max-w-[100px]">
+                      {pos.sensor_name}
+                    </p>
+                    <p className="text-sm font-mono font-bold text-primary">
+                      {pos.sensorInfo ? `${pos.sensorInfo.value} ${pos.sensorInfo.unit}` : "—"}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </DialogContent>
     </Dialog>
-  );
-}
-
-// Simple view component for floor plan with sensors
-interface FloorPlanViewProps {
-  floor: Floor;
-  positions: (FloorSensorPosition & { sensorInfo?: Sensor })[];
-  isFullscreen: boolean;
-}
-
-function FloorPlanView({ floor, positions, isFullscreen }: FloorPlanViewProps) {
-  return (
-    <div className="relative w-full h-full">
-      <img
-        src={floor.floor_plan_url!}
-        alt={floor.name}
-        className="w-full h-auto max-h-full object-contain"
-      />
-      
-      {/* Sensor Overlays */}
-      {positions.map((pos) => (
-        <div
-          key={pos.id}
-          className="absolute transform -translate-x-1/2 -translate-y-1/2"
-          style={{
-            left: `${pos.position_x}%`,
-            top: `${pos.position_y}%`,
-          }}
-        >
-          <div className="bg-card/95 backdrop-blur-sm border shadow-lg rounded-lg px-2 py-1 min-w-[80px] text-center">
-            <p className="text-[10px] font-medium text-muted-foreground truncate max-w-[100px]">
-              {pos.sensor_name}
-            </p>
-            <p className="text-sm font-mono font-bold text-primary">
-              {pos.sensorInfo ? `${pos.sensorInfo.value} ${pos.sensorInfo.unit}` : "—"}
-            </p>
-          </div>
-        </div>
-      ))}
-    </div>
   );
 }
