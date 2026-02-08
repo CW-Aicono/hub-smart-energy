@@ -33,14 +33,14 @@ const DashboardSidebar = () => {
     : "??";
 
   return (
-    <aside className="hidden md:flex w-64 flex-col bg-sidebar text-sidebar-foreground border-r border-sidebar-border">
+    <aside className="hidden md:flex w-64 flex-col bg-sidebar text-sidebar-foreground border-r border-sidebar-border h-screen sticky top-0">
       {/* Logo */}
       <div className="p-6 border-b border-sidebar-border">
         <TenantLogo />
       </div>
 
-      {/* Nav */}
-      <nav className="flex-1 p-4 space-y-1">
+      {/* Nav - scrollable */}
+      <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
         {navItems.map((item) => {
           const isActive = location.pathname === item.to;
           return (
@@ -61,8 +61,8 @@ const DashboardSidebar = () => {
         })}
       </nav>
 
-      {/* User section */}
-      <div className="p-4 border-t border-sidebar-border">
+      {/* User section - fixed at bottom */}
+      <div className="p-4 border-t border-sidebar-border mt-auto">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
@@ -83,7 +83,7 @@ const DashboardSidebar = () => {
               <ChevronDown className="h-4 w-4 opacity-50" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-56">
+          <DropdownMenuContent align="end" side="top" className="w-56 bg-popover">
             <DropdownMenuItem onClick={signOut} className="text-destructive focus:text-destructive">
               <LogOut className="h-4 w-4 mr-2" />
               Abmelden

@@ -4,6 +4,7 @@ import { Icon, LatLngBounds } from "leaflet";
 import { Location } from "@/hooks/useLocations";
 import { Building2, MapPin } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 import "leaflet/dist/leaflet.css";
 
 // Fix for default marker icons in Leaflet with bundlers
@@ -47,7 +48,7 @@ const typeLabels: Record<string, string> = {
   bereich: "Bereich",
 };
 
-export function LocationsMap({ locations, onLocationClick }: LocationsMapProps) {
+export function LocationsMap({ locations, onLocationClick, className }: LocationsMapProps & { className?: string }) {
   const validLocations = locations.filter(
     (loc) => loc.latitude !== null && loc.longitude !== null
   );
@@ -58,7 +59,7 @@ export function LocationsMap({ locations, onLocationClick }: LocationsMapProps) 
 
   if (validLocations.length === 0) {
     return (
-      <div className="h-[400px] rounded-lg border bg-muted/50 flex items-center justify-center">
+      <div className={cn("h-full min-h-[300px] rounded-lg border bg-muted/50 flex items-center justify-center", className)}>
         <div className="text-center text-muted-foreground">
           <MapPin className="h-12 w-12 mx-auto mb-2 opacity-50" />
           <p>Keine Standorte mit Koordinaten vorhanden</p>
@@ -69,7 +70,7 @@ export function LocationsMap({ locations, onLocationClick }: LocationsMapProps) 
   }
 
   return (
-    <div className="h-[400px] rounded-lg overflow-hidden border">
+    <div className={cn("h-full min-h-[300px] rounded-lg overflow-hidden border", className)}>
       <MapContainer
         center={defaultCenter}
         zoom={defaultZoom}

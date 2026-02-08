@@ -7,12 +7,14 @@ import EnergyChart from "@/components/dashboard/EnergyChart";
 import CostOverview from "@/components/dashboard/CostOverview";
 import SustainabilityKPIs from "@/components/dashboard/SustainabilityKPIs";
 import AlertsList from "@/components/dashboard/AlertsList";
+import LocationMapWidget from "@/components/dashboard/LocationMapWidget";
 
 const WIDGET_COMPONENTS: Record<string, React.ComponentType> = {
   cost_overview: CostOverview,
   energy_chart: EnergyChart,
   sustainability_kpis: SustainabilityKPIs,
   alerts_list: AlertsList,
+  location_map: LocationMapWidget,
 };
 
 const Index = () => {
