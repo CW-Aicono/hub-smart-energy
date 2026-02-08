@@ -48,6 +48,7 @@ const ENERGY_SOURCES = [
 const locationSchema = z.object({
   name: z.string().trim().min(1, "Name ist erforderlich").max(100, "Name darf maximal 100 Zeichen haben"),
   type: z.enum(["standort", "gebaeude", "bereich"] as const),
+  usage_type: z.enum(["verwaltungsgebaeude", "universitaet", "schule", "kindertageseinrichtung", "sportstaette", "jugendzentrum", "sonstiges"] as const),
   address: z.string().trim().max(200, "Adresse darf maximal 200 Zeichen haben").optional(),
   postal_code: z.string().trim().max(10, "PLZ darf maximal 10 Zeichen haben").optional(),
   city: z.string().trim().max(100, "Stadt darf maximal 100 Zeichen haben").optional(),
@@ -78,6 +79,7 @@ export function AddLocationDialog({ parentId }: AddLocationDialogProps) {
     defaultValues: {
       name: "",
       type: "standort",
+      usage_type: "sonstiges",
       address: "",
       postal_code: "",
       city: "",
@@ -94,6 +96,7 @@ export function AddLocationDialog({ parentId }: AddLocationDialogProps) {
     const locationData = {
       name: data.name,
       type: data.type as LocationType,
+      usage_type: data.usage_type as any,
       address: data.address || null,
       postal_code: data.postal_code || null,
       city: data.city || null,
@@ -189,6 +192,34 @@ export function AddLocationDialog({ parentId }: AddLocationDialogProps) {
                 )}
               />
             </div>
+
+            {/* Usage Type */}
+            <FormField
+              control={form.control}
+              name="usage_type"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Nutzungsart</FormLabel>
+                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Nutzungsart wählen" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="verwaltungsgebaeude">Verwaltungsgebäude</SelectItem>
+                      <SelectItem value="universitaet">Universität</SelectItem>
+                      <SelectItem value="schule">Schule</SelectItem>
+                      <SelectItem value="kindertageseinrichtung">Kindertageseinrichtung</SelectItem>
+                      <SelectItem value="sportstaette">Sportstätte</SelectItem>
+                      <SelectItem value="jugendzentrum">Jugendzentrum</SelectItem>
+                      <SelectItem value="sonstiges">Sonstiges</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
             {/* Address */}
             <div className="space-y-4">

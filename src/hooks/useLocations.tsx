@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "./useTenant";
 
 export type LocationType = "standort" | "gebaeude" | "bereich";
+export type LocationUsageType = "verwaltungsgebaeude" | "universitaet" | "schule" | "kindertageseinrichtung" | "sportstaette" | "jugendzentrum" | "sonstiges";
 
 export interface Location {
   id: string;
@@ -10,6 +11,7 @@ export interface Location {
   parent_id: string | null;
   name: string;
   type: LocationType;
+  usage_type: LocationUsageType | null;
   address: string | null;
   city: string | null;
   postal_code: string | null;

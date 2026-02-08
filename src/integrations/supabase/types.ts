@@ -106,6 +106,7 @@ export type Database = {
           tenant_id: string
           type: Database["public"]["Enums"]["location_type"]
           updated_at: string
+          usage_type: Database["public"]["Enums"]["location_usage_type"] | null
         }
         Insert: {
           address?: string | null
@@ -127,6 +128,7 @@ export type Database = {
           tenant_id: string
           type?: Database["public"]["Enums"]["location_type"]
           updated_at?: string
+          usage_type?: Database["public"]["Enums"]["location_usage_type"] | null
         }
         Update: {
           address?: string | null
@@ -148,6 +150,7 @@ export type Database = {
           tenant_id?: string
           type?: Database["public"]["Enums"]["location_type"]
           updated_at?: string
+          usage_type?: Database["public"]["Enums"]["location_usage_type"] | null
         }
         Relationships: [
           {
@@ -355,6 +358,14 @@ export type Database = {
       app_role: "admin" | "user"
       energy_type: "strom" | "gas" | "waerme" | "wasser"
       location_type: "standort" | "gebaeude" | "bereich"
+      location_usage_type:
+        | "verwaltungsgebaeude"
+        | "universitaet"
+        | "schule"
+        | "kindertageseinrichtung"
+        | "sportstaette"
+        | "jugendzentrum"
+        | "sonstiges"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -485,6 +496,15 @@ export const Constants = {
       app_role: ["admin", "user"],
       energy_type: ["strom", "gas", "waerme", "wasser"],
       location_type: ["standort", "gebaeude", "bereich"],
+      location_usage_type: [
+        "verwaltungsgebaeude",
+        "universitaet",
+        "schule",
+        "kindertageseinrichtung",
+        "sportstaette",
+        "jugendzentrum",
+        "sonstiges",
+      ],
     },
   },
 } as const

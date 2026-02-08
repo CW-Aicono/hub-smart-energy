@@ -1,13 +1,17 @@
 import { useState } from "react";
 import { Location, LocationType } from "@/hooks/useLocations";
+import { useUserRole } from "@/hooks/useUserRole";
 import { ChevronRight, ChevronDown, Building2, Building, MapPin } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
+import { EditLocationDialog } from "./EditLocationDialog";
+import { DeleteLocationDialog } from "./DeleteLocationDialog";
 
 interface LocationTreeProps {
   locations: Location[];
   selectedId?: string;
   onSelect?: (location: Location) => void;
+  onRefresh?: () => void;
 }
 
 interface LocationNodeProps {
@@ -15,6 +19,8 @@ interface LocationNodeProps {
   level: number;
   selectedId?: string;
   onSelect?: (location: Location) => void;
+  onRefresh?: () => void;
+  isAdmin: boolean;
 }
 
 const typeIcons: Record<LocationType, typeof MapPin> = {
@@ -35,7 +41,7 @@ const typeColors: Record<LocationType, string> = {
   bereich: "bg-muted text-muted-foreground border-muted-foreground/20",
 };
 
-function LocationNode({ location, level, selectedId, onSelect }: LocationNodeProps) {
+function LocationNode({ location, level, selectedId, onSelect, onRefresh, isAdmin }: LocationNodeProps) {
   const [expanded, setExpanded] = useState(true);
   const hasChildren = location.children && location.children.length > 0;
   const isSelected = selectedId === location.id;
@@ -45,13 +51,12 @@ function LocationNode({ location, level, selectedId, onSelect }: LocationNodePro
     <div>
       <div
         className={cn(
-          "flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer transition-colors",
+          "flex items-center gap-2 px-3 py-2 rounded-lg transition-colors group",
           isSelected
             ? "bg-primary/10 text-primary"
             : "hover:bg-muted"
         )}
         style={{ paddingLeft: `${level * 16 + 12}px` }}
-        onClick={() => onSelect?.(location)}
       >
         {hasChildren ? (
           <button
@@ -70,11 +75,28 @@ function LocationNode({ location, level, selectedId, onSelect }: LocationNodePro
         ) : (
           <span className="w-5" />
         )}
-        <Icon className="h-4 w-4 text-muted-foreground" />
-        <span className="flex-1 font-medium text-sm">{location.name}</span>
-        <Badge variant="outline" className={cn("text-xs", typeColors[location.type])}>
-          {typeLabels[location.type]}
-        </Badge>
+        <div
+          className="flex items-center gap-2 flex-1 cursor-pointer"
+          onClick={() => onSelect?.(location)}
+        >
+          <Icon className="h-4 w-4 text-muted-foreground" />
+          <span className="flex-1 font-medium text-sm">{location.name}</span>
+          <Badge variant="outline" className={cn("text-xs", typeColors[location.type])}>
+            {typeLabels[location.type]}
+          </Badge>
+        </div>
+        {isAdmin && (
+          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+            <EditLocationDialog
+              location={location}
+              onSuccess={() => onRefresh?.()}
+            />
+            <DeleteLocationDialog
+              location={location}
+              onSuccess={() => onRefresh?.()}
+            />
+          </div>
+        )}
       </div>
       {hasChildren && expanded && (
         <div>
@@ -85,6 +107,8 @@ function LocationNode({ location, level, selectedId, onSelect }: LocationNodePro
               level={level + 1}
               selectedId={selectedId}
               onSelect={onSelect}
+              onRefresh={onRefresh}
+              isAdmin={isAdmin}
             />
           ))}
         </div>
@@ -93,7 +117,9 @@ function LocationNode({ location, level, selectedId, onSelect }: LocationNodePro
   );
 }
 
-export function LocationTree({ locations, selectedId, onSelect }: LocationTreeProps) {
+export function LocationTree({ locations, selectedId, onSelect, onRefresh }: LocationTreeProps) {
+  const { isAdmin } = useUserRole();
+
   if (locations.length === 0) {
     return (
       <div className="text-center py-8 text-muted-foreground">
@@ -113,6 +139,8 @@ export function LocationTree({ locations, selectedId, onSelect }: LocationTreePr
           level={0}
           selectedId={selectedId}
           onSelect={onSelect}
+          onRefresh={onRefresh}
+          isAdmin={isAdmin}
         />
       ))}
     </div>
