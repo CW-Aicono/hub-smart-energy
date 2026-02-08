@@ -50,6 +50,7 @@ const ENERGY_SOURCES = [
 const locationSchema = z.object({
   name: z.string().trim().min(1, "Name ist erforderlich").max(100, "Name darf maximal 100 Zeichen haben"),
   type: z.enum(["einzelgebaeude", "gebaeudekomplex", "sonstiges"] as const),
+  parent_id: z.string().nullable().optional(),
   usage_type: z.enum(["verwaltungsgebaeude", "universitaet", "schule", "kindertageseinrichtung", "sportstaette", "jugendzentrum", "sonstiges"] as const),
   address: z.string().trim().max(200, "Adresse darf maximal 200 Zeichen haben").optional(),
   postal_code: z.string().trim().max(10, "PLZ darf maximal 10 Zeichen haben").optional(),
@@ -73,7 +74,10 @@ interface AddLocationDialogProps {
 
 export function AddLocationDialog({ parentId }: AddLocationDialogProps) {
   const [open, setOpen] = useState(false);
-  const { createLocation } = useLocations();
+  const { locations, createLocation } = useLocations();
+  
+  // Get available Gebäudekomplexe for parent selection
+  const availableComplexes = locations.filter(loc => loc.type === "gebaeudekomplex");
   const { isAdmin } = useUserRole();
   const { geocodeAddress, isLoading: isGeocoding } = useGeocode();
   const { toast } = useToast();
@@ -94,8 +98,11 @@ export function AddLocationDialog({ parentId }: AddLocationDialogProps) {
       show_on_map: true,
       is_main_location: false,
       description: "",
+      parent_id: parentId || null,
     },
   });
+
+  const watchedType = form.watch("type");
 
   const onSubmit = async (data: LocationFormData) => {
     const locationData = {
@@ -115,7 +122,7 @@ export function AddLocationDialog({ parentId }: AddLocationDialogProps) {
       latitude: typeof data.latitude === "number" ? data.latitude : null,
       longitude: typeof data.longitude === "number" ? data.longitude : null,
       description: data.description || null,
-      parent_id: parentId || null,
+      parent_id: (data.parent_id && data.parent_id !== "none") ? data.parent_id : (parentId || null),
     };
 
     const { error } = await createLocation(locationData);
@@ -198,6 +205,41 @@ export function AddLocationDialog({ parentId }: AddLocationDialogProps) {
                 )}
               />
             </div>
+
+            {/* Parent Complex Selection - only for Einzelgebäude */}
+            {watchedType === "einzelgebaeude" && availableComplexes.length > 0 && !parentId && (
+              <FormField
+                control={form.control}
+                name="parent_id"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Zugehöriger Gebäudekomplex (optional)</FormLabel>
+                    <Select 
+                      onValueChange={field.onChange} 
+                      value={field.value || "none"}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Kein Gebäudekomplex" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="none">Kein Gebäudekomplex (eigenständig)</SelectItem>
+                        {availableComplexes.map((complex) => (
+                          <SelectItem key={complex.id} value={complex.id}>
+                            {complex.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormDescription>
+                      Ordnen Sie dieses Gebäude einem bestehenden Gebäudekomplex zu.
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
 
             {/* Usage Type */}
             <FormField
