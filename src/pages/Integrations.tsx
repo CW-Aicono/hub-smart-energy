@@ -38,7 +38,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { Plus, Server, Trash2, Loader2, Plug, Pencil, Wifi, WifiOff } from "lucide-react";
+import { Plus, Server, Trash2, Loader2, Plug, Pencil, Wifi, WifiOff, Gauge } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -50,6 +50,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { SensorsDialog } from "@/components/integrations/SensorsDialog";
 
 const integrationSchema = z.object({
   name: z.string().min(1, "Name ist erforderlich"),
@@ -69,6 +70,8 @@ const Integrations = () => {
   const [editingIntegration, setEditingIntegration] = useState<Integration | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [testingId, setTestingId] = useState<string | null>(null);
+  const [sensorsDialogOpen, setSensorsDialogOpen] = useState(false);
+  const [selectedIntegrationForSensors, setSelectedIntegrationForSensors] = useState<Integration | null>(null);
   const { toast } = useToast();
 
   const form = useForm<IntegrationFormData>({
@@ -169,6 +172,11 @@ const Integrations = () => {
       setEditingIntegration(null);
     }
     setDialogOpen(open);
+  };
+
+  const handleOpenSensors = (integration: Integration) => {
+    setSelectedIntegrationForSensors(integration);
+    setSensorsDialogOpen(true);
   };
 
   const handleDelete = async (id: string) => {
@@ -449,6 +457,14 @@ const Integrations = () => {
                               <Button
                                 variant="ghost"
                                 size="icon"
+                                onClick={() => handleOpenSensors(integration)}
+                                title="Sensoren anzeigen"
+                              >
+                                <Gauge className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
                                 onClick={() => handleEdit(integration)}
                               >
                                 <Pencil className="h-4 w-4" />
@@ -532,6 +548,12 @@ const Integrations = () => {
           )}
         </div>
       </main>
+
+      <SensorsDialog
+        integration={selectedIntegrationForSensors}
+        open={sensorsDialogOpen}
+        onOpenChange={setSensorsDialogOpen}
+      />
     </div>
   );
 };
