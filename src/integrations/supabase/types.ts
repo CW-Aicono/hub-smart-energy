@@ -403,6 +403,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      bootstrap_user_role: {
+        Args: never
+        Returns: Database["public"]["Enums"]["app_role"]
+      }
       get_user_tenant_id: { Args: never; Returns: string }
       has_permission: {
         Args: { _permission_code: string; _user_id: string }
