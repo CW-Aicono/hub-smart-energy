@@ -3,6 +3,7 @@ import { Navigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useLocations, Location, LocationUsageType } from "@/hooks/useLocations";
+import { useLocationStatus } from "@/hooks/useLocationStatus";
 import { useTranslation } from "@/hooks/useTranslation";
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
 import { LocationsMap } from "@/components/locations/LocationsMap";
@@ -12,7 +13,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { Map, List, Building2, ArrowUpAZ, ArrowDownAZ, Filter } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Map, List, Building2, ArrowUpAZ, ArrowDownAZ, Filter, Wifi, WifiOff, AlertCircle } from "lucide-react";
 
 const usageTypeLabels: Record<LocationUsageType, string> = {
   verwaltungsgebaeude: "Verwaltungsgebäude",
@@ -28,10 +30,46 @@ const Locations = () => {
   const { user, loading: authLoading } = useAuth();
   const { isAdmin } = useUserRole();
   const { locations, hierarchicalLocations, loading: locationsLoading, refetch } = useLocations();
+  const locationIds = useMemo(() => locations.map((l) => l.id), [locations]);
+  const { locationStatuses } = useLocationStatus(locationIds);
   const { t } = useTranslation();
   const [selectedLocation, setSelectedLocation] = useState<Location | null>(null);
   const [usageFilter, setUsageFilter] = useState<string>("all");
   const [sortAscending, setSortAscending] = useState(true);
+
+  // Helper to render online status badge
+  const getOnlineStatusBadge = (locationId: string) => {
+    const status = locationStatuses.get(locationId);
+    
+    if (!status || status.totalIntegrations === 0) {
+      return null; // No integrations, don't show badge
+    }
+
+    if (status.hasUnconfigured) {
+      return (
+        <Badge variant="outline" className="gap-1 text-xs bg-warning/10 text-warning-foreground border-warning/20">
+          <AlertCircle className="h-3 w-3" />
+          Konfig. fehlt
+        </Badge>
+      );
+    }
+
+    if (status.isOnline) {
+      return (
+        <Badge variant="outline" className="gap-1 text-xs bg-primary/10 text-primary border-primary/20">
+          <Wifi className="h-3 w-3" />
+          Online
+        </Badge>
+      );
+    }
+
+    return (
+      <Badge variant="outline" className="gap-1 text-xs bg-destructive/10 text-destructive border-destructive/20">
+        <WifiOff className="h-3 w-3" />
+        Offline
+      </Badge>
+    );
+  };
 
   // Filter and sort locations
   const filteredAndSortedLocations = useMemo(() => {
@@ -211,6 +249,7 @@ const Locations = () => {
                       selectedId={selectedLocation?.id}
                       onSelect={setSelectedLocation}
                       onRefresh={refetch}
+                      locationStatuses={locationStatuses}
                     />
                   )}
                 </TabsContent>
@@ -236,7 +275,10 @@ const Locations = () => {
                         >
                           <Building2 className="h-5 w-5 text-muted-foreground" />
                           <div className="flex-1">
-                            <p className="font-medium">{location.name}</p>
+                            <div className="flex items-center gap-2">
+                              <p className="font-medium">{location.name}</p>
+                              {getOnlineStatusBadge(location.id)}
+                            </div>
                             {location.city && (
                               <p className="text-sm text-muted-foreground">
                                 {location.city}

@@ -74,7 +74,20 @@ export function IntegrationCard({ locationIntegration, onUpdate, onDelete }: Int
     }
   };
 
+  // Check if configuration is complete
+  const isConfigured = config?.serial_number && config?.username && config?.password;
+
   const getSyncStatusBadge = () => {
+    // If not configured, always show "not configured"
+    if (!isConfigured) {
+      return (
+        <Badge variant="outline" className="gap-1 bg-muted text-muted-foreground border-border">
+          <Clock className="h-3 w-3" />
+          Nicht konfiguriert
+        </Badge>
+      );
+    }
+
     switch (locationIntegration.sync_status) {
       case "success":
         return (
