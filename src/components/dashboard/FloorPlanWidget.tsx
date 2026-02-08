@@ -1,10 +1,11 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { TransformWrapper, TransformComponent, useControls } from "react-zoom-pan-pinch";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { Loader2, RefreshCw, Layers } from "lucide-react";
+import { Loader2, RefreshCw, Layers, ZoomIn, ZoomOut, RotateCcw } from "lucide-react";
 import { useLocations } from "@/hooks/useLocations";
-import { useFloors, Floor } from "@/hooks/useFloors";
+import { useFloors } from "@/hooks/useFloors";
 import { useFloorSensorPositions, FloorSensorPosition } from "@/hooks/useFloorSensorPositions";
 import { useLocationIntegrations } from "@/hooks/useIntegrations";
 import { supabase } from "@/integrations/supabase/client";
@@ -17,6 +18,40 @@ interface SensorValue {
   id: string;
   value: string;
   unit: string;
+}
+
+// Zoom controls component
+function ZoomControls() {
+  const { zoomIn, zoomOut, resetTransform } = useControls();
+  
+  return (
+    <div className="absolute bottom-3 right-3 flex flex-col gap-1 z-10">
+      <Button
+        variant="secondary"
+        size="icon"
+        className="h-8 w-8 bg-card/90 backdrop-blur-sm shadow-md"
+        onClick={() => zoomIn()}
+      >
+        <ZoomIn className="h-4 w-4" />
+      </Button>
+      <Button
+        variant="secondary"
+        size="icon"
+        className="h-8 w-8 bg-card/90 backdrop-blur-sm shadow-md"
+        onClick={() => zoomOut()}
+      >
+        <ZoomOut className="h-4 w-4" />
+      </Button>
+      <Button
+        variant="secondary"
+        size="icon"
+        className="h-8 w-8 bg-card/90 backdrop-blur-sm shadow-md"
+        onClick={() => resetTransform()}
+      >
+        <RotateCcw className="h-4 w-4" />
+      </Button>
+    </div>
+  );
 }
 
 const FloorPlanWidget = ({ locationId }: FloorPlanWidgetProps) => {
@@ -192,52 +227,68 @@ const FloorPlanWidget = ({ locationId }: FloorPlanWidgetProps) => {
           </div>
         </div>
 
-        {/* Floor Plan with Sensors */}
+        {/* Floor Plan with Sensors - Zoomable */}
         <div className="relative h-[350px] bg-muted/10">
           {floorsLoading || positionsLoading ? (
             <div className="flex items-center justify-center h-full">
               <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
             </div>
           ) : selectedFloor?.floor_plan_url ? (
-            <>
-              <img
-                src={selectedFloor.floor_plan_url}
-                alt={selectedFloor.name}
-                className="w-full h-full object-contain"
-              />
-              
-              {/* Sensor Overlays */}
-              {positions.map((pos) => {
-                const sensorValue = sensorValues.get(pos.sensor_uuid);
-                return (
-                  <div
-                    key={pos.id}
-                    className="absolute transform -translate-x-1/2 -translate-y-1/2"
-                    style={{
-                      left: `${pos.position_x}%`,
-                      top: `${pos.position_y}%`,
-                    }}
-                  >
-                    <div className="bg-card/95 backdrop-blur-sm border shadow-lg rounded-lg px-2 py-1 min-w-[80px] text-center hover:scale-105 transition-transform">
-                      <p className="text-[10px] font-medium text-muted-foreground truncate max-w-[100px]">
-                        {pos.sensor_name}
-                      </p>
-                      <p className="text-sm font-mono font-bold text-primary">
-                        {sensorValue ? `${sensorValue.value} ${sensorValue.unit}` : "—"}
-                      </p>
-                    </div>
-                  </div>
-                );
-              })}
+            <TransformWrapper
+              initialScale={1}
+              minScale={0.5}
+              maxScale={4}
+              centerOnInit
+              wheel={{ step: 0.1 }}
+              panning={{ velocityDisabled: true }}
+            >
+              <ZoomControls />
+              <TransformComponent
+                wrapperStyle={{ width: "100%", height: "100%" }}
+                contentStyle={{ width: "100%", height: "100%", display: "flex", justifyContent: "center", alignItems: "center" }}
+              >
+                <div className="relative inline-block">
+                  <img
+                    src={selectedFloor.floor_plan_url}
+                    alt={selectedFloor.name}
+                    className="max-w-full max-h-[350px] object-contain"
+                    draggable={false}
+                  />
+                  
+                  {/* Sensor Overlays - positioned relative to image */}
+                  {positions.map((pos) => {
+                    const sensorValue = sensorValues.get(pos.sensor_uuid);
+                    return (
+                      <div
+                        key={pos.id}
+                        className="absolute transform -translate-x-1/2 -translate-y-1/2 pointer-events-auto"
+                        style={{
+                          left: `${pos.position_x}%`,
+                          top: `${pos.position_y}%`,
+                        }}
+                      >
+                        <div className="bg-card/95 backdrop-blur-sm border shadow-lg rounded-lg px-2 py-1 min-w-[80px] text-center whitespace-nowrap">
+                          <p className="text-[10px] font-medium text-muted-foreground truncate max-w-[100px]">
+                            {pos.sensor_name}
+                          </p>
+                          <p className="text-sm font-mono font-bold text-primary">
+                            {sensorValue ? `${sensorValue.value} ${sensorValue.unit}` : "—"}
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </TransformComponent>
 
               {positions.length === 0 && (
-                <div className="absolute inset-0 flex items-center justify-center bg-background/50">
+                <div className="absolute inset-0 flex items-center justify-center bg-background/50 pointer-events-none">
                   <p className="text-sm text-muted-foreground">
                     Keine Messgeräte auf dieser Etage platziert
                   </p>
                 </div>
               )}
-            </>
+            </TransformWrapper>
           ) : (
             <div className="flex items-center justify-center h-full text-muted-foreground">
               <div className="text-center">
