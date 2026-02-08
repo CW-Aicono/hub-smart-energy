@@ -213,6 +213,16 @@ function hexToBytes(hex: string): Uint8Array {
   return bytes;
 }
 
+// Decode hex-encoded ASCII to string (Loxone returns keys as hex-encoded ASCII)
+function hexToAscii(hex: string): string {
+  let str = "";
+  for (let i = 0; i < hex.length; i += 2) {
+    const charCode = parseInt(hex.substr(i, 2), 16);
+    str += String.fromCharCode(charCode);
+  }
+  return str;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -333,14 +343,22 @@ serve(async (req) => {
 
               // Handle getkey response
               if (control.includes("getkey") && value) {
-                console.log(`Received key for authentication, code=${code}`);
+                console.log(`Received key for authentication, code=${code}, raw value length=${value.length}`);
                 
-                // Compute HMAC-SHA1 hash
-                const keyBytes = hexToBytes(value);
+                // The key is returned as hex-encoded ASCII
+                // e.g., "30433744..." decodes to ASCII "0C7D..." which is the actual hex key
+                // We need to decode hex→ASCII to get the key hex string, then hex→bytes
+                const keyHexString = hexToAscii(value);
+                console.log(`Decoded key hex string: ${keyHexString.substring(0, 20)}... (length=${keyHexString.length})`);
+                
+                const keyBytes = hexToBytes(keyHexString);
+                console.log(`Key bytes length: ${keyBytes.length}`);
+                
+                // Compute HMAC-SHA1 hash of "user:password"
                 const authString = `${config.username}:${config.password}`;
                 const hash = await hmacSha1(keyBytes, authString);
                 
-                console.log("Sending authentication command...");
+                console.log(`Sending authentication command with hash: ${hash.substring(0, 20)}...`);
                 ws.send(`authenticate/${hash}`);
               }
               
