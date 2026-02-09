@@ -22,6 +22,9 @@ const WIDGET_LABELS: Record<string, string> = {
   energy_chart: "Energieverbrauch",
   sustainability_kpis: "Nachhaltigkeits-KPIs",
   alerts_list: "Alerts & Benachrichtigungen",
+  floor_plan_explorer: "Grundriss-Explorer",
+  pie_chart: "Kreisdiagramm",
+  sankey: "Sankey-Diagramm",
 };
 
 const SIZE_LABELS: Record<WidgetSize, string> = {

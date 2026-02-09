@@ -12,7 +12,10 @@ import SustainabilityKPIs from "@/components/dashboard/SustainabilityKPIs";
 import AlertsList from "@/components/dashboard/AlertsList";
 import LocationMapWidget from "@/components/dashboard/LocationMapWidget";
 import FloorPlanWidget from "@/components/dashboard/FloorPlanWidget";
+import FloorPlanDashboardWidget from "@/components/dashboard/FloorPlanDashboardWidget";
 import WeatherWidget from "@/components/dashboard/WeatherWidget";
+import PieChartWidget from "@/components/dashboard/PieChartWidget";
+import SankeyWidget from "@/components/dashboard/SankeyWidget";
 import { Responsive, WidthProvider, Layout } from "react-grid-layout";
 import { useCallback, useRef, useState, useEffect } from "react";
 import "react-grid-layout/css/styles.css";
@@ -32,6 +35,9 @@ const WIDGET_COMPONENTS: Record<string, React.ComponentType<WidgetProps>> = {
   location_map: LocationMapWidget,
   floor_plan: FloorPlanWidget,
   weather: WeatherWidget,
+  floor_plan_explorer: FloorPlanDashboardWidget,
+  pie_chart: PieChartWidget,
+  sankey: SankeyWidget,
 };
 
 const DEFAULT_LAYOUTS: Record<string, WidgetLayout> = {
@@ -41,6 +47,9 @@ const DEFAULT_LAYOUTS: Record<string, WidgetLayout> = {
   energy_chart: { x: 1, y: 2, w: 2, h: 2 },
   sustainability_kpis: { x: 0, y: 4, w: 2, h: 2 },
   alerts_list: { x: 2, y: 4, w: 1, h: 2 },
+  floor_plan_explorer: { x: 0, y: 6, w: 2, h: 3 },
+  pie_chart: { x: 2, y: 6, w: 1, h: 2 },
+  sankey: { x: 0, y: 8, w: 3, h: 2 },
 };
 
 const getLocationWidget = (locationId: string | null): string => {
