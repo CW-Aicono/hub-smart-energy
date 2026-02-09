@@ -8,9 +8,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { BookOpen, HelpCircle, Mail, Phone, History, ExternalLink, Gauge, Smartphone, ShieldCheck } from "lucide-react";
+import { BookOpen, HelpCircle, Mail, Phone, History, ExternalLink, Gauge, Smartphone, ShieldCheck, RefreshCw, Download } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { useTenant } from "@/hooks/useTenant";
+import { useUpdateCheck } from "@/hooks/useUpdateCheck";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
@@ -22,6 +23,7 @@ const Help = () => {
   const { user, loading } = useAuth();
   const { t } = useTranslation();
   const { tenant, refetch: refetchTenant } = useTenant();
+  const { updateAvailable, checking, checkForUpdate, applyUpdate } = useUpdateCheck();
   const [manualOpen, setManualOpen] = useState(false);
   const [selectedChapter, setSelectedChapter] = useState<ManualChapter>("gettingStarted");
   const [remoteSupportEnabled, setRemoteSupportEnabled] = useState(false);
@@ -137,9 +139,35 @@ const Help = () => {
                 {t("help.subtitle")}
               </p>
             </div>
-            <Badge variant="outline" className="text-xs">
-              {t("help.version")} {APP_VERSION}
-            </Badge>
+            <div className="flex items-center gap-3">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  checkForUpdate();
+                  if (!checking) {
+                    setTimeout(() => {
+                      if (!updateAvailable) {
+                        toast.success("Sie verwenden bereits die neueste Version.");
+                      }
+                    }, 2500);
+                  }
+                }}
+                disabled={checking}
+              >
+                <RefreshCw className={`h-4 w-4 mr-2 ${checking ? "animate-spin" : ""}`} />
+                {checking ? "Prüfe..." : "Auf Update prüfen"}
+              </Button>
+              {updateAvailable && (
+                <Button size="sm" onClick={applyUpdate}>
+                  <Download className="h-4 w-4 mr-2" />
+                  Update installieren
+                </Button>
+              )}
+              <Badge variant="outline" className="text-xs">
+                {t("help.version")} {APP_VERSION}
+              </Badge>
+            </div>
           </div>
         </header>
         <div className="p-6 space-y-6">
