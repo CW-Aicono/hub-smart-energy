@@ -19,46 +19,48 @@ const PieChartWidget = ({ locationId }: PieChartWidgetProps) => {
   const subtitle = selectedLocation ? `Daten für: ${selectedLocation.name}` : "Alle Liegenschaften";
 
   return (
-    <Card className="h-full flex flex-col">
+    <Card>
       <CardHeader className="pb-2">
         <CardTitle className="font-display text-lg">Energieverteilung</CardTitle>
         <p className="text-sm text-muted-foreground">{subtitle}</p>
       </CardHeader>
-      <CardContent className="flex-1 min-h-0">
-        <ResponsiveContainer width="100%" height="100%">
-          <PieChart>
-            <Pie
-              data={ENERGY_DISTRIBUTION}
-              cx="50%"
-              cy="50%"
-              innerRadius="40%"
-              outerRadius="70%"
-              paddingAngle={4}
-              dataKey="value"
-              label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-              labelLine={false}
-            >
-              {ENERGY_DISTRIBUTION.map((entry, index) => (
-                <Cell key={`cell-${index}`} fill={entry.color} stroke="hsl(var(--background))" strokeWidth={2} />
-              ))}
-            </Pie>
-            <Tooltip
-              contentStyle={{
-                backgroundColor: "hsl(var(--card))",
-                border: "1px solid hsl(var(--border))",
-                borderRadius: "var(--radius)",
-                color: "hsl(var(--card-foreground))",
-              }}
-              formatter={(value: number) => [`${value}%`, "Anteil"]}
-            />
-            <Legend
-              verticalAlign="bottom"
-              iconType="circle"
-              iconSize={8}
-              formatter={(value) => <span style={{ color: "hsl(var(--foreground))", fontSize: "12px" }}>{value}</span>}
-            />
-          </PieChart>
-        </ResponsiveContainer>
+      <CardContent>
+        <div className="h-[300px]">
+          <ResponsiveContainer width="100%" height="100%">
+            <PieChart>
+              <Pie
+                data={ENERGY_DISTRIBUTION}
+                cx="50%"
+                cy="45%"
+                innerRadius={60}
+                outerRadius={100}
+                paddingAngle={4}
+                dataKey="value"
+                label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                labelLine={true}
+              >
+                {ENERGY_DISTRIBUTION.map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={entry.color} stroke="hsl(var(--background))" strokeWidth={2} />
+                ))}
+              </Pie>
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: "hsl(var(--card))",
+                  border: "1px solid hsl(var(--border))",
+                  borderRadius: "var(--radius)",
+                  color: "hsl(var(--card-foreground))",
+                }}
+                formatter={(value: number) => [`${value}%`, "Anteil"]}
+              />
+              <Legend
+                verticalAlign="bottom"
+                iconType="circle"
+                iconSize={8}
+                formatter={(value) => <span style={{ color: "hsl(var(--foreground))", fontSize: "12px" }}>{value}</span>}
+              />
+            </PieChart>
+          </ResponsiveContainer>
+        </div>
       </CardContent>
     </Card>
   );
