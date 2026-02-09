@@ -159,6 +159,56 @@ export type Database = {
           },
         ]
       }
+      floor_rooms: {
+        Row: {
+          color: string | null
+          created_at: string | null
+          depth: number
+          floor_id: string
+          id: string
+          name: string
+          position_x: number
+          position_y: number
+          updated_at: string | null
+          wall_height: number
+          width: number
+        }
+        Insert: {
+          color?: string | null
+          created_at?: string | null
+          depth?: number
+          floor_id: string
+          id?: string
+          name: string
+          position_x?: number
+          position_y?: number
+          updated_at?: string | null
+          wall_height?: number
+          width?: number
+        }
+        Update: {
+          color?: string | null
+          created_at?: string | null
+          depth?: number
+          floor_id?: string
+          id?: string
+          name?: string
+          position_x?: number
+          position_y?: number
+          updated_at?: string | null
+          wall_height?: number
+          width?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "floor_rooms_floor_id_fkey"
+            columns: ["floor_id"]
+            isOneToOne: false
+            referencedRelation: "floors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       floor_sensor_positions: {
         Row: {
           created_at: string
@@ -167,6 +217,8 @@ export type Database = {
           location_integration_id: string
           position_x: number
           position_y: number
+          position_z: number | null
+          room_id: string | null
           sensor_name: string
           sensor_uuid: string
           updated_at: string
@@ -178,6 +230,8 @@ export type Database = {
           location_integration_id: string
           position_x: number
           position_y: number
+          position_z?: number | null
+          room_id?: string | null
           sensor_name: string
           sensor_uuid: string
           updated_at?: string
@@ -189,6 +243,8 @@ export type Database = {
           location_integration_id?: string
           position_x?: number
           position_y?: number
+          position_z?: number | null
+          room_id?: string | null
           sensor_name?: string
           sensor_uuid?: string
           updated_at?: string
@@ -206,6 +262,13 @@ export type Database = {
             columns: ["location_integration_id"]
             isOneToOne: false
             referencedRelation: "location_integrations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "floor_sensor_positions_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "floor_rooms"
             referencedColumns: ["id"]
           },
         ]
