@@ -718,6 +718,7 @@ export type Database = {
           meter_number: string | null
           name: string
           notes: string | null
+          photo_url: string | null
           sensor_uuid: string | null
           tenant_id: string
           unit: string
@@ -735,6 +736,7 @@ export type Database = {
           meter_number?: string | null
           name: string
           notes?: string | null
+          photo_url?: string | null
           sensor_uuid?: string | null
           tenant_id: string
           unit?: string
@@ -752,6 +754,7 @@ export type Database = {
           meter_number?: string | null
           name?: string
           notes?: string | null
+          photo_url?: string | null
           sensor_uuid?: string | null
           tenant_id?: string
           unit?: string
