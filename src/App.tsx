@@ -16,6 +16,7 @@ import Roles from "./pages/Roles";
 import Locations from "./pages/Locations";
 import LocationDetail from "./pages/LocationDetail";
 import EnergyData from "./pages/EnergyData";
+import MetersOverview from "./pages/MetersOverview";
 import Integrations from "./pages/Integrations";
 import Profile from "./pages/Profile";
 import Help from "./pages/Help";
@@ -55,6 +56,7 @@ const App = () => (
                   <Route path="/locations" element={<Locations />} />
                   <Route path="/locations/:id" element={<LocationDetail />} />
                   <Route path="/energy-data" element={<EnergyData />} />
+                  <Route path="/meters" element={<MetersOverview />} />
                   <Route path="/integrations" element={<Integrations />} />
                   <Route path="/profile" element={<Profile />} />
                   <Route path="/help" element={<Help />} />

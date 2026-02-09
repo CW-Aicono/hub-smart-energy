@@ -613,6 +613,60 @@ export type Database = {
           },
         ]
       }
+      meter_readings: {
+        Row: {
+          capture_method: string
+          created_at: string
+          created_by: string | null
+          id: string
+          meter_id: string
+          notes: string | null
+          reading_date: string
+          tenant_id: string
+          updated_at: string
+          value: number
+        }
+        Insert: {
+          capture_method?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          meter_id: string
+          notes?: string | null
+          reading_date?: string
+          tenant_id: string
+          updated_at?: string
+          value: number
+        }
+        Update: {
+          capture_method?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          meter_id?: string
+          notes?: string | null
+          reading_date?: string
+          tenant_id?: string
+          updated_at?: string
+          value?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meter_readings_meter_id_fkey"
+            columns: ["meter_id"]
+            isOneToOne: false
+            referencedRelation: "meters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meter_readings_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       meters: {
         Row: {
           capture_type: string
