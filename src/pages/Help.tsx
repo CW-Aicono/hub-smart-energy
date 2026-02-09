@@ -15,7 +15,7 @@ import { useUpdateCheck } from "@/hooks/useUpdateCheck";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
-const APP_VERSION = "1.0.3";
+const APP_VERSION = "1.0.4";
 
 type ManualChapter = "gettingStarted" | "locationManagement" | "floorManagement" | "energyAnalysis" | "meterManagement" | "mobileApp";
 
@@ -83,9 +83,23 @@ const Help = () => {
     { questionKey: "help.faq8Question", answerKey: "help.faq8Answer" },
     { questionKey: "help.faq9Question", answerKey: "help.faq9Answer" },
     { questionKey: "help.faq10Question", answerKey: "help.faq10Answer" },
+    { questionKey: "help.faq11Question", answerKey: "help.faq11Answer" },
+    { questionKey: "help.faq12Question", answerKey: "help.faq12Answer" },
   ];
 
   const changelog = [
+    {
+      version: "1.0.4",
+      date: "2026-02-09",
+      changes: [
+        { type: "feature", textKey: "help.changelog104Feature1" },
+        { type: "feature", textKey: "help.changelog104Feature2" },
+        { type: "feature", textKey: "help.changelog104Feature3" },
+        { type: "feature", textKey: "help.changelog104Feature4" },
+        { type: "improvement", textKey: "help.changelog104Improvement1" },
+        { type: "improvement", textKey: "help.changelog104Improvement2" },
+      ],
+    },
     {
       version: "1.0.3",
       date: "2026-02-09",

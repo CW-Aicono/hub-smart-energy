@@ -12,8 +12,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Download, Database, Filter, Calendar } from "lucide-react";
-import { downloadCSV } from "@/lib/exportUtils";
+import { Download, Database, Filter, Calendar, FileText } from "lucide-react";
+import { downloadCSV, downloadPDF } from "@/lib/exportUtils";
 import { energyConsumptionData } from "@/data/mockData";
 
 const ENERGY_TYPE_LABELS: Record<string, string> = {
@@ -61,10 +61,9 @@ const EnergyData = () => {
     return true;
   });
 
-  const handleExport = () => {
+  const buildExportRows = () => {
     const rows: Record<string, string | number>[] = [];
 
-    // Add mock consumption data if selected
     if (includeMockData) {
       energyConsumptionData.forEach((d) => {
         if (selectedEnergyTypes.includes("strom")) {
@@ -79,7 +78,6 @@ const EnergyData = () => {
       });
     }
 
-    // Add meter info if selected
     if (includeMeters && filteredMeters.length > 0) {
       filteredMeters.forEach((m) => {
         const loc = locations.find((l) => l.id === m.location_id);
@@ -95,16 +93,26 @@ const EnergyData = () => {
       });
     }
 
-    if (rows.length === 0) {
-      return;
-    }
+    return rows;
+  };
 
-    // Collect all unique keys
+  const getHeaders = (rows: Record<string, string | number>[]) => {
     const allKeys = Array.from(new Set(rows.flatMap(Object.keys)));
     const headers: Record<string, string> = {};
     allKeys.forEach((k) => (headers[k] = k));
+    return headers;
+  };
 
-    downloadCSV(rows, "energiedaten-export", headers);
+  const handleExport = () => {
+    const rows = buildExportRows();
+    if (rows.length === 0) return;
+    downloadCSV(rows, "energiedaten-export", getHeaders(rows));
+  };
+
+  const handlePdfExport = () => {
+    const rows = buildExportRows();
+    if (rows.length === 0) return;
+    downloadPDF(rows, "energiedaten-export", getHeaders(rows), "Energiedaten Export");
   };
 
   return (
@@ -229,8 +237,17 @@ const EnergyData = () => {
             </CardContent>
           </Card>
 
-          {/* Export Button */}
-          <div className="flex justify-end">
+          {/* Export Buttons */}
+          <div className="flex justify-end gap-3">
+            <Button
+              variant="outline"
+              size="lg"
+              onClick={handlePdfExport}
+              disabled={!includeMockData && !includeMeters}
+            >
+              <FileText className="h-4 w-4 mr-2" />
+              PDF exportieren
+            </Button>
             <Button
               size="lg"
               onClick={handleExport}

@@ -50,6 +50,24 @@ const UserManualContent = ({ open, onOpenChange, chapter }: UserManualContentPro
           <Separator />
 
           <section>
+            <h4 className="font-semibold mb-2">Erste Schritte (Einrichtungsassistent)</h4>
+            <p className="text-sm text-muted-foreground mb-2">
+              Beim ersten Login werden Sie durch einen interaktiven Einrichtungsassistenten geführt:
+            </p>
+            <ol className="list-decimal list-inside text-sm text-muted-foreground space-y-1 ml-4">
+              <li>Firmenprofil einrichten (Name, Kontaktdaten)</li>
+              <li>Erste Liegenschaft anlegen</li>
+              <li>Ersten Zähler hinzufügen</li>
+            </ol>
+            <p className="text-sm text-muted-foreground mt-2">
+              Jeden Schritt können Sie überspringen und den Assistenten jederzeit über 
+              <strong> Hilfe & Support → Erste Schritte</strong> erneut aufrufen.
+            </p>
+          </section>
+
+          <Separator />
+
+          <section>
             <h4 className="font-semibold mb-2">1. Dashboard verstehen</h4>
             <p className="text-sm text-muted-foreground mb-2">
               Nach dem Login landen Sie auf dem Dashboard. Hier sehen Sie:
@@ -304,11 +322,12 @@ const UserManualContent = ({ open, onOpenChange, chapter }: UserManualContentPro
             </p>
           </section>
 
-          <section>
+           <section>
             <h4 className="font-semibold mb-2">Datenexport</h4>
             <p className="text-sm text-muted-foreground">
-              Exportieren Sie Energiedaten über die Export-Funktion in den Widgets. 
-              Verfügbare Formate: CSV für Tabellenkalkulationen.
+              Exportieren Sie Energiedaten über die Export-Funktion unter "Energiedaten". 
+              Verfügbare Formate: CSV für Tabellenkalkulationen und PDF für druckfertige Berichte.
+              Filtern Sie nach Standort, Energieart und Zeitraum.
             </p>
           </section>
         </div>
@@ -373,9 +392,10 @@ const UserManualContent = ({ open, onOpenChange, chapter }: UserManualContentPro
           <section>
             <h4 className="font-semibold mb-2">QR-Codes für Zähler</h4>
             <p className="text-sm text-muted-foreground">
-              Für jeden Zähler kann ein QR-Code generiert werden. Drucken Sie diesen aus 
-              und kleben Sie ihn an den physischen Zähler. Die mobile App erkennt den 
-              Zähler dann automatisch per Kamerascan.
+              Für jeden Zähler kann ein QR-Code generiert werden. Nutzen Sie die Funktionen 
+              "Herunterladen" oder "Drucken", um den QR-Code auszudrucken und an den 
+              physischen Zähler zu kleben. Die mobile App erkennt den Zähler dann 
+              automatisch per Kamerascan.
             </p>
           </section>
 
@@ -459,7 +479,7 @@ const UserManualContent = ({ open, onOpenChange, chapter }: UserManualContentPro
             <p className="text-sm text-muted-foreground">
               Erkennt die KI eine Zählernummer, die nicht im System hinterlegt ist, können 
               Sie den Zähler direkt in der App anlegen – inklusive Standortzuordnung, 
-              Foto und erstem Zählerstand.
+              Energieart (Strom, Gas, Wasser, Wärme), Foto und erstem Zählerstand.
             </p>
           </section>
 
