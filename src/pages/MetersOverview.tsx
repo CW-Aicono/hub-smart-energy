@@ -1,10 +1,12 @@
 import { useState } from "react";
 import { MeterQrCode } from "@/components/integrations/MeterQrCode";
+import { EditMeterDialog } from "@/components/locations/EditMeterDialog";
 import { Navigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useLocations } from "@/hooks/useLocations";
 import { useMeters, Meter } from "@/hooks/useMeters";
 import { useMeterReadings } from "@/hooks/useMeterReadings";
+import { useUserRole } from "@/hooks/useUserRole";
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
 import { AddMeterReadingDialog } from "@/components/meters/AddMeterReadingDialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,7 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Gauge, ClipboardEdit, Filter, QrCode } from "lucide-react";
+import { Gauge, ClipboardEdit, Filter, QrCode, Pencil, Archive, ArchiveRestore, Trash2, Eye, EyeOff } from "lucide-react";
 import { format } from "date-fns";
 import { de } from "date-fns/locale";
 
@@ -27,12 +29,15 @@ const ENERGY_TYPE_LABELS: Record<string, string> = {
 const MetersOverview = () => {
   const { user, loading: authLoading } = useAuth();
   const { locations, loading: locationsLoading } = useLocations();
-  const { meters, loading: metersLoading } = useMeters();
-  const { readings, loading: readingsLoading, addReading, getLastReading } = useMeterReadings();
+  const { meters, loading: metersLoading, updateMeter, archiveMeter, deleteMeter } = useMeters();
+  const { readings, loading: readingsLoading, addReading } = useMeterReadings();
+  const { isAdmin } = useUserRole();
 
   const [selectedLocationId, setSelectedLocationId] = useState<string>("all");
   const [readingDialogMeter, setReadingDialogMeter] = useState<Meter | null>(null);
   const [qrMeter, setQrMeter] = useState<Meter | null>(null);
+  const [editingMeter, setEditingMeter] = useState<Meter | null>(null);
+  const [showArchived, setShowArchived] = useState(false);
 
   if (authLoading || locationsLoading) {
     return (
@@ -48,9 +53,13 @@ const MetersOverview = () => {
 
   if (!user) return <Navigate to="/auth" replace />;
 
-  const filteredMeters = meters.filter((m) =>
+  const locationFiltered = meters.filter((m) =>
     selectedLocationId === "all" ? true : m.location_id === selectedLocationId
   );
+
+  const activeMeters = locationFiltered.filter((m) => !m.is_archived);
+  const archivedMeters = locationFiltered.filter((m) => m.is_archived);
+  const filteredMeters = showArchived ? archivedMeters : activeMeters;
 
   const getLocationName = (locationId: string) =>
     locations.find((l) => l.id === locationId)?.name || "–";
@@ -105,16 +114,24 @@ const MetersOverview = () => {
           {/* Meters Table */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">
-                Zähler ({filteredMeters.length})
-              </CardTitle>
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-base">
+                  {showArchived ? "Archivierte Zähler" : "Zähler"} ({filteredMeters.length})
+                </CardTitle>
+                {archivedMeters.length > 0 && (
+                  <Button variant="ghost" size="sm" className="gap-1.5 text-xs" onClick={() => setShowArchived(!showArchived)}>
+                    {showArchived ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+                    {showArchived ? `Aktive anzeigen (${activeMeters.length})` : `Archiv (${archivedMeters.length})`}
+                  </Button>
+                )}
+              </div>
             </CardHeader>
             <CardContent>
               {metersLoading || readingsLoading ? (
                 <Skeleton className="h-32" />
               ) : filteredMeters.length === 0 ? (
                 <p className="text-sm text-muted-foreground py-4">
-                  Keine Messstellen gefunden.
+                  {showArchived ? "Keine archivierten Messstellen." : "Keine Messstellen gefunden."}
                 </p>
               ) : (
                 <Table>
@@ -126,7 +143,7 @@ const MetersOverview = () => {
                       <TableHead>Energieart</TableHead>
                       <TableHead>Erfassung</TableHead>
                       <TableHead>Letzter Stand</TableHead>
-                      <TableHead className="w-48" />
+                      <TableHead className="w-56" />
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -134,7 +151,7 @@ const MetersOverview = () => {
                       const lastReading = getLastReadingForMeter(m.id);
                       const isManual = m.capture_type === "manual";
                       return (
-                        <TableRow key={m.id}>
+                        <TableRow key={m.id} className={m.is_archived ? "opacity-60" : ""}>
                           <TableCell className="font-medium">{m.name}</TableCell>
                           <TableCell>{getLocationName(m.location_id)}</TableCell>
                           <TableCell>{m.meter_number || "–"}</TableCell>
@@ -162,24 +179,38 @@ const MetersOverview = () => {
                           </TableCell>
                           <TableCell>
                             <div className="flex gap-1">
-                              {isManual && (
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => setReadingDialogMeter(m)}
-                                >
+                              {!m.is_archived && isManual && (
+                                <Button size="sm" variant="outline" onClick={() => setReadingDialogMeter(m)}>
                                   <ClipboardEdit className="h-4 w-4 mr-1" />
                                   Ablesen
                                 </Button>
                               )}
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => setQrMeter(m)}
-                                title="QR-Code generieren"
-                              >
-                                <QrCode className="h-4 w-4" />
-                              </Button>
+                              {!m.is_archived && (
+                                <Button size="sm" variant="ghost" onClick={() => setQrMeter(m)} title="QR-Code">
+                                  <QrCode className="h-4 w-4" />
+                                </Button>
+                              )}
+                              {isAdmin && !m.is_archived && (
+                                <Button size="sm" variant="ghost" onClick={() => setEditingMeter(m)} title="Bearbeiten">
+                                  <Pencil className="h-4 w-4" />
+                                </Button>
+                              )}
+                              {isAdmin && (
+                                m.is_archived ? (
+                                  <>
+                                    <Button size="sm" variant="ghost" onClick={() => archiveMeter(m.id, false)} title="Wiederherstellen">
+                                      <ArchiveRestore className="h-4 w-4 text-primary" />
+                                    </Button>
+                                    <Button size="sm" variant="ghost" onClick={() => deleteMeter(m.id)} title="Endgültig löschen">
+                                      <Trash2 className="h-4 w-4 text-destructive" />
+                                    </Button>
+                                  </>
+                                ) : (
+                                  <Button size="sm" variant="ghost" onClick={() => archiveMeter(m.id, true)} title="Archivieren">
+                                    <Archive className="h-4 w-4" />
+                                  </Button>
+                                )
+                              )}
                             </div>
                           </TableCell>
                         </TableRow>
@@ -208,6 +239,16 @@ const MetersOverview = () => {
                 ...data,
               });
             }}
+          />
+        )}
+
+        {/* Edit Meter Dialog */}
+        {editingMeter && (
+          <EditMeterDialog
+            meter={editingMeter}
+            open={!!editingMeter}
+            onOpenChange={(open) => { if (!open) setEditingMeter(null); }}
+            onSave={async (id, updates) => { await updateMeter(id, updates); }}
           />
         )}
 
