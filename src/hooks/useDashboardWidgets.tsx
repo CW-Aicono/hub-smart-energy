@@ -31,6 +31,7 @@ const DEFAULT_WIDGETS = [
   { widget_type: "floor_plan_explorer", position: 6, is_visible: true },
   { widget_type: "pie_chart", position: 7, is_visible: true },
   { widget_type: "sankey", position: 8, is_visible: true },
+  { widget_type: "forecast", position: 9, is_visible: true },
 ];
 
 export function useDashboardWidgets() {

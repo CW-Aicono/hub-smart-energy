@@ -14,6 +14,73 @@ export type Database = {
   }
   public: {
     Tables: {
+      alert_rules: {
+        Row: {
+          created_at: string
+          energy_type: string
+          id: string
+          is_active: boolean
+          location_id: string | null
+          meter_id: string | null
+          name: string
+          notification_email: string | null
+          tenant_id: string
+          threshold_type: string
+          threshold_value: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          energy_type?: string
+          id?: string
+          is_active?: boolean
+          location_id?: string | null
+          meter_id?: string | null
+          name: string
+          notification_email?: string | null
+          tenant_id: string
+          threshold_type?: string
+          threshold_value: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          energy_type?: string
+          id?: string
+          is_active?: boolean
+          location_id?: string | null
+          meter_id?: string | null
+          name?: string
+          notification_email?: string | null
+          tenant_id?: string
+          threshold_type?: string
+          threshold_value?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "alert_rules_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "alert_rules_meter_id_fkey"
+            columns: ["meter_id"]
+            isOneToOne: false
+            referencedRelation: "meters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "alert_rules_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       custom_role_permissions: {
         Row: {
           created_at: string
@@ -539,6 +606,66 @@ export type Database = {
           },
           {
             foreignKeyName: "locations_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      meters: {
+        Row: {
+          created_at: string
+          energy_type: string
+          id: string
+          installation_date: string | null
+          location_id: string
+          medium: string | null
+          meter_number: string | null
+          name: string
+          notes: string | null
+          tenant_id: string
+          unit: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          energy_type?: string
+          id?: string
+          installation_date?: string | null
+          location_id: string
+          medium?: string | null
+          meter_number?: string | null
+          name: string
+          notes?: string | null
+          tenant_id: string
+          unit?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          energy_type?: string
+          id?: string
+          installation_date?: string | null
+          location_id?: string
+          medium?: string | null
+          meter_number?: string | null
+          name?: string
+          notes?: string | null
+          tenant_id?: string
+          unit?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meters_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meters_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "tenants"

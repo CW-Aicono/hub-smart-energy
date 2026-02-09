@@ -26,6 +26,8 @@ export const sustainabilityKPIs = {
   renewablePercent: 68,
   renewableTarget: 80,
   efficiencyScore: 82,
+  scope1: { value: 28.3, target: 22.0, label: "Scope 1 (direkt)", sources: "Gas, Heizöl" },
+  scope2: { value: 14.2, target: 13.0, label: "Scope 2 (indirekt)", sources: "Strom, Fernwärme" },
 };
 
 export const alerts = [

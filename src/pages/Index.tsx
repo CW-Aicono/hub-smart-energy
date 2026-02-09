@@ -16,6 +16,7 @@ import FloorPlanDashboardWidget from "@/components/dashboard/FloorPlanDashboardW
 import WeatherWidget from "@/components/dashboard/WeatherWidget";
 import PieChartWidget from "@/components/dashboard/PieChartWidget";
 import SankeyWidget from "@/components/dashboard/SankeyWidget";
+import ForecastWidget from "@/components/dashboard/ForecastWidget";
 
 interface WidgetProps {
   locationId: string | null;
@@ -32,6 +33,7 @@ const WIDGET_COMPONENTS: Record<string, React.ComponentType<WidgetProps>> = {
   floor_plan_explorer: FloorPlanDashboardWidget,
   pie_chart: PieChartWidget,
   sankey: SankeyWidget,
+  forecast: ForecastWidget,
 };
 
 const SIZE_CLASS: Record<WidgetSize, string> = {

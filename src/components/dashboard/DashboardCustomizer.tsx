@@ -26,6 +26,7 @@ const WIDGET_LABELS: Record<string, string> = {
   floor_plan_explorer: "Grundriss-Explorer",
   pie_chart: "Kreisdiagramm",
   sankey: "Sankey-Diagramm",
+  forecast: "Jahresprognose",
 };
 
 const SIZE_LABELS: Record<WidgetSize, string> = {
