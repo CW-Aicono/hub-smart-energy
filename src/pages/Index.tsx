@@ -41,15 +41,15 @@ const WIDGET_COMPONENTS: Record<string, React.ComponentType<WidgetProps>> = {
 };
 
 const DEFAULT_LAYOUTS: Record<string, WidgetLayout> = {
-  location_map: { x: 0, y: 0, w: 2, h: 2 },
-  weather: { x: 2, y: 0, w: 1, h: 2 },
-  cost_overview: { x: 0, y: 2, w: 1, h: 2 },
-  energy_chart: { x: 1, y: 2, w: 2, h: 2 },
-  sustainability_kpis: { x: 0, y: 4, w: 2, h: 2 },
-  alerts_list: { x: 2, y: 4, w: 1, h: 2 },
-  floor_plan_explorer: { x: 0, y: 6, w: 2, h: 3 },
-  pie_chart: { x: 2, y: 6, w: 1, h: 2 },
-  sankey: { x: 0, y: 8, w: 3, h: 2 },
+  location_map: { x: 0, y: 0, w: 2, h: 3 },
+  weather: { x: 2, y: 0, w: 1, h: 3 },
+  cost_overview: { x: 0, y: 3, w: 1, h: 3 },
+  energy_chart: { x: 1, y: 3, w: 2, h: 3 },
+  sustainability_kpis: { x: 0, y: 6, w: 2, h: 3 },
+  alerts_list: { x: 2, y: 6, w: 1, h: 3 },
+  floor_plan_explorer: { x: 0, y: 9, w: 2, h: 3 },
+  pie_chart: { x: 2, y: 9, w: 1, h: 3 },
+  sankey: { x: 0, y: 12, w: 3, h: 3 },
 };
 
 const getLocationWidget = (locationId: string | null): string => {
@@ -57,7 +57,7 @@ const getLocationWidget = (locationId: string | null): string => {
 };
 
 const DashboardContent = () => {
-  const { widgets, visibleWidgets, loading: widgetsLoading, toggleWidgetVisibility, reorderWidgets, updateWidgetSize, updateAllLayouts } = useDashboardWidgets();
+  const { widgets, visibleWidgets, loading: widgetsLoading, toggleWidgetVisibility, reorderWidgets, updateWidgetSize, updateAllLayouts, resetLayouts } = useDashboardWidgets();
   const { t } = useTranslation();
   const { selectedLocationId, setSelectedLocationId } = useDashboardFilter();
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -122,6 +122,7 @@ const DashboardContent = () => {
               onToggleVisibility={toggleWidgetVisibility}
               onReorder={reorderWidgets}
               onResizeWidget={updateWidgetSize}
+              onResetLayout={() => resetLayouts(DEFAULT_LAYOUTS)}
             />
           </div>
         </header>
