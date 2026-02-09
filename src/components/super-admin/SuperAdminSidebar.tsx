@@ -37,7 +37,7 @@ export default function SuperAdminSidebar() {
 
   return (
     <aside className={cn(
-      "hidden md:flex flex-col bg-sidebar text-sidebar-foreground border-r border-sidebar-border h-screen sticky top-0 transition-all duration-300",
+      "hidden md:flex flex-col bg-sidebar text-sidebar-foreground border-r border-sidebar-border h-screen sticky top-0 z-30 transition-all duration-300",
       collapsed ? "w-16" : "w-64"
     )}>
       {/* Header */}
