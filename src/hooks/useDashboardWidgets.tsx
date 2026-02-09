@@ -32,6 +32,7 @@ const DEFAULT_WIDGETS = [
   { widget_type: "pie_chart", position: 7, is_visible: true },
   { widget_type: "sankey", position: 8, is_visible: true },
   { widget_type: "forecast", position: 9, is_visible: true },
+  { widget_type: "anomaly", position: 10, is_visible: true },
 ];
 
 export function useDashboardWidgets() {
