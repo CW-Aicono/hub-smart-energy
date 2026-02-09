@@ -107,7 +107,7 @@ const DashboardContent = () => {
               breakpoints={{ lg: 1200, md: 996, sm: 768 }}
               cols={{ lg: 3, md: 3, sm: 1 }}
               rowHeight={150}
-              margin={[16, 16]}
+              margin={[8, 8]}
               isDraggable={false}
               isResizable={false}
               draggableCancel=".no-drag"
