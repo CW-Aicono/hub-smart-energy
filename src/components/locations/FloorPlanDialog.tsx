@@ -245,7 +245,8 @@ export function FloorPlanDialog({ floor, locationId, open, onOpenChange }: Floor
               variant="ghost"
               size="icon"
               onClick={() => setIsFullscreen(!isFullscreen)}
-              className="h-8 w-8"
+              className="h-8 w-8 mr-8"
+              title={isFullscreen ? "Verkleinern" : "Vollbild"}
             >
               {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
             </Button>
