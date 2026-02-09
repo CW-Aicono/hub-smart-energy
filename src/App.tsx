@@ -31,6 +31,7 @@ import SuperAdminUsers from "./pages/SuperAdminUsers";
 import SuperAdminRoles from "./pages/SuperAdminRoles";
 import SuperAdminMap from "./pages/SuperAdminMap";
 import MobileApp from "./pages/MobileApp";
+import GettingStarted from "./pages/GettingStarted";
 import UpdateBanner from "./components/UpdateBanner";
 // Import Leaflet CSS globally
 import "leaflet/dist/leaflet.css";
@@ -72,6 +73,7 @@ const App = () => (
                   <Route path="/super-admin/billing" element={<SuperAdminBilling />} />
                   <Route path="/super-admin/support" element={<SuperAdminSupport />} />
                   <Route path="/m" element={<MobileApp />} />
+                  <Route path="/getting-started" element={<GettingStarted />} />
                   <Route path="*" element={<NotFound />} />
                 </Routes>
               </BrowserRouter>

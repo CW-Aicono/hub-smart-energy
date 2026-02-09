@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Navigate } from "react-router-dom";
+import { Navigate, useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useTranslation } from "@/hooks/useTranslation";
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { BookOpen, HelpCircle, Mail, Phone, History, ExternalLink, Gauge, Smartphone, ShieldCheck, RefreshCw, Download } from "lucide-react";
+import { BookOpen, HelpCircle, Mail, Phone, History, ExternalLink, Gauge, Smartphone, ShieldCheck, RefreshCw, Download, Rocket } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { useTenant } from "@/hooks/useTenant";
 import { useUpdateCheck } from "@/hooks/useUpdateCheck";
@@ -24,6 +24,7 @@ const Help = () => {
   const { t } = useTranslation();
   const { tenant, refetch: refetchTenant } = useTenant();
   const { updateAvailable, checking, checkForUpdate, applyUpdate } = useUpdateCheck();
+  const navigate = useNavigate();
   const [manualOpen, setManualOpen] = useState(false);
   const [selectedChapter, setSelectedChapter] = useState<ManualChapter>("gettingStarted");
   const [remoteSupportEnabled, setRemoteSupportEnabled] = useState(false);
@@ -171,6 +172,27 @@ const Help = () => {
           </div>
         </header>
         <div className="p-6 space-y-6">
+          {/* Getting Started */}
+          <Card className="border-primary/20 bg-primary/5">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+                    <Rocket className="h-6 w-6 text-primary" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold">{t("onboarding.gettingStarted")}</h3>
+                    <p className="text-sm text-muted-foreground">{t("onboarding.gettingStartedDesc")}</p>
+                  </div>
+                </div>
+                <Button onClick={() => navigate("/getting-started")} className="gap-2">
+                  <Rocket className="h-4 w-4" />
+                  {t("onboarding.gettingStarted")}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
           {/* User Manual */}
           <Card>
             <CardHeader className="px-6">
