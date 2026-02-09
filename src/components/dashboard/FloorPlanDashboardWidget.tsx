@@ -26,15 +26,15 @@ interface FloorOption {
 function ZoomControls() {
   const { zoomIn, zoomOut, resetTransform } = useControls();
   return (
-    <div className="absolute bottom-3 right-3 flex flex-col gap-1 z-10">
-      <Button variant="secondary" size="icon" className="h-7 w-7 bg-card/90 backdrop-blur-sm shadow-md" onClick={() => zoomIn()}>
-        <ZoomIn className="h-3 w-3" />
+    <div className="absolute bottom-3 right-3 flex flex-col gap-2 z-10">
+      <Button variant="secondary" size="icon" className="h-8 w-8 bg-card/90 backdrop-blur-sm shadow-md" onClick={() => zoomIn()}>
+        <ZoomIn className="h-4 w-4" />
       </Button>
-      <Button variant="secondary" size="icon" className="h-7 w-7 bg-card/90 backdrop-blur-sm shadow-md" onClick={() => zoomOut()}>
-        <ZoomOut className="h-3 w-3" />
+      <Button variant="secondary" size="icon" className="h-8 w-8 bg-card/90 backdrop-blur-sm shadow-md" onClick={() => zoomOut()}>
+        <ZoomOut className="h-4 w-4" />
       </Button>
-      <Button variant="secondary" size="icon" className="h-7 w-7 bg-card/90 backdrop-blur-sm shadow-md" onClick={() => resetTransform()}>
-        <RotateCcw className="h-3 w-3" />
+      <Button variant="secondary" size="icon" className="h-8 w-8 bg-card/90 backdrop-blur-sm shadow-md" onClick={() => resetTransform()}>
+        <RotateCcw className="h-4 w-4" />
       </Button>
     </div>
   );
