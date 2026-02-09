@@ -36,6 +36,9 @@ const PieChartWidget = ({ locationId }: PieChartWidgetProps) => {
                 outerRadius={95}
                 paddingAngle={4}
                 dataKey="value"
+                animationBegin={0}
+                animationDuration={1200}
+                animationEasing="ease-out"
               >
                 {ENERGY_DISTRIBUTION.map((entry, index) => (
                   <Cell key={`cell-${index}`} fill={entry.color} stroke="hsl(var(--background))" strokeWidth={2} />
