@@ -20,6 +20,18 @@ export const translations = {
     es: "Datos de energía",
     nl: "Energiegegevens",
   },
+  "nav.meters": {
+    de: "Messstellen",
+    en: "Meters",
+    es: "Contadores",
+    nl: "Meters",
+  },
+  "nav.exports": {
+    de: "Exporte",
+    en: "Exports",
+    es: "Exportaciones",
+    nl: "Exports",
+  },
   "nav.userManagement": {
     de: "Benutzerverwaltung",
     en: "User Management",
