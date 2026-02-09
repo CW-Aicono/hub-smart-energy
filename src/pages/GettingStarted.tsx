@@ -73,7 +73,8 @@ const GettingStarted = () => {
 
   const progress = ((step + 1) / TOTAL_STEPS) * 100;
 
-  const handleCancel = () => {
+  const handleCancel = async () => {
+    await markOnboardingComplete();
     navigate("/");
   };
 
