@@ -14,12 +14,16 @@ export function useUpdateCheck(): UpdateCheckState {
   const [checking, setChecking] = useState(false);
   const [dismissed, setDismissed] = useState(false);
   const [waitingWorker, setWaitingWorker] = useState<ServiceWorker | null>(null);
+  const [userAppliedUpdate, setUserAppliedUpdate] = useState(false);
 
   useEffect(() => {
     if (!("serviceWorker" in navigator)) return;
 
     const handleControllerChange = () => {
-      window.location.reload();
+      // Only reload if the user explicitly chose to update
+      if (userAppliedUpdate) {
+        window.location.reload();
+      }
     };
 
     navigator.serviceWorker.addEventListener("controllerchange", handleControllerChange);
@@ -47,7 +51,7 @@ export function useUpdateCheck(): UpdateCheckState {
     return () => {
       navigator.serviceWorker.removeEventListener("controllerchange", handleControllerChange);
     };
-  }, []);
+  }, [userAppliedUpdate]);
 
   const checkForUpdate = useCallback(async () => {
     setChecking(true);
@@ -80,6 +84,7 @@ export function useUpdateCheck(): UpdateCheckState {
   }, []);
 
   const applyUpdate = useCallback(() => {
+    setUserAppliedUpdate(true);
     if (waitingWorker) {
       waitingWorker.postMessage({ type: "SKIP_WAITING" });
     } else {
