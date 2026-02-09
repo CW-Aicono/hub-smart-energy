@@ -4,7 +4,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useTranslation } from "@/hooks/useTranslation";
 import { Button } from "@/components/ui/button";
-import { LayoutDashboard, LogOut, Shield, Settings, Users, ChevronDown, ChevronRight, MapPin, PanelLeftClose, PanelLeft, UserCircle, Key, HelpCircle, Plug, Palette } from "lucide-react";
+import { LayoutDashboard, LogOut, Shield, Settings, Users, ChevronDown, ChevronRight, MapPin, PanelLeftClose, PanelLeft, UserCircle, Key, HelpCircle, Plug, Palette, Database } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TenantLogo } from "@/components/tenant/TenantLogo";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -71,6 +71,7 @@ const DashboardSidebar = () => {
   const navItems: NavItem[] = [
     { to: "/", icon: LayoutDashboard, labelKey: "nav.dashboard" },
     { to: "/locations", icon: MapPin, labelKey: "nav.locations" },
+    { to: "/energy-data", icon: Database, labelKey: "nav.energyData" as TranslationKey },
     ...(isAdmin ? [
       { 
         to: "/admin", 
