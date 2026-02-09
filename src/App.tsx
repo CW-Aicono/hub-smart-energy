@@ -19,6 +19,12 @@ import Integrations from "./pages/Integrations";
 import Profile from "./pages/Profile";
 import Help from "./pages/Help";
 import NotFound from "./pages/NotFound";
+import SuperAdminDashboard from "./pages/SuperAdminDashboard";
+import SuperAdminTenants from "./pages/SuperAdminTenants";
+import SuperAdminTenantDetail from "./pages/SuperAdminTenantDetail";
+import SuperAdminStatistics from "./pages/SuperAdminStatistics";
+import SuperAdminBilling from "./pages/SuperAdminBilling";
+import SuperAdminSupport from "./pages/SuperAdminSupport";
 
 // Import Leaflet CSS globally
 import "leaflet/dist/leaflet.css";
@@ -47,6 +53,12 @@ const App = () => (
                   <Route path="/integrations" element={<Integrations />} />
                   <Route path="/profile" element={<Profile />} />
                   <Route path="/help" element={<Help />} />
+                  <Route path="/super-admin" element={<SuperAdminDashboard />} />
+                  <Route path="/super-admin/tenants" element={<SuperAdminTenants />} />
+                  <Route path="/super-admin/tenants/:id" element={<SuperAdminTenantDetail />} />
+                  <Route path="/super-admin/statistics" element={<SuperAdminStatistics />} />
+                  <Route path="/super-admin/billing" element={<SuperAdminBilling />} />
+                  <Route path="/super-admin/support" element={<SuperAdminSupport />} />
                   <Route path="*" element={<NotFound />} />
                 </Routes>
               </BrowserRouter>
