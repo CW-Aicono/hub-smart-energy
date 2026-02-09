@@ -24,6 +24,7 @@ interface FloorPlan3DViewerProps {
   locationId: string;
   sensors?: Sensor[];
   isAdmin?: boolean;
+  compact?: boolean;
 }
 
 // Tracks camera position for minimap
@@ -166,7 +167,7 @@ function Scene({
   );
 }
 
-export function FloorPlan3DViewer({ floor, locationId, sensors = [], isAdmin = false }: FloorPlan3DViewerProps) {
+export function FloorPlan3DViewer({ floor, locationId, sensors = [], isAdmin = false, compact = false }: FloorPlan3DViewerProps) {
   const { rooms, loading: roomsLoading, refetch: refetchRooms } = useFloorRooms(floor.id);
   const { positions: sensorPositions, loading: positionsLoading } = useFloorSensorPositions(floor.id);
   
@@ -207,39 +208,41 @@ export function FloorPlan3DViewer({ floor, locationId, sensors = [], isAdmin = f
 
   return (
     <div className="flex flex-col h-full">
-      {/* Controls Bar */}
-      <div className="flex items-center justify-between p-3 border-b bg-muted/30 flex-shrink-0">
-        <div className="flex items-center gap-2">
-          {isAdmin && (
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={() => setShowRoomEditor(true)}
-              disabled={isWalking}
-            >
-              <Edit className="h-4 w-4 mr-2" />
-              Räume bearbeiten
-            </Button>
-          )}
-          <span className="text-sm text-muted-foreground">
-            {rooms.length} Räume | {sensorPositions.length} Sensoren
-          </span>
+      {/* Controls Bar - hidden in compact mode */}
+      {!compact && (
+        <div className="flex items-center justify-between p-3 border-b bg-muted/30 flex-shrink-0">
+          <div className="flex items-center gap-2">
+            {isAdmin && (
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => setShowRoomEditor(true)}
+                disabled={isWalking}
+              >
+                <Edit className="h-4 w-4 mr-2" />
+                Räume bearbeiten
+              </Button>
+            )}
+            <span className="text-sm text-muted-foreground">
+              {rooms.length} Räume | {sensorPositions.length} Sensoren
+            </span>
+          </div>
+          
+          <div className="flex items-center gap-2">
+            {!isWalking ? (
+              <Button onClick={startWalking} disabled={loading}>
+                <Play className="h-4 w-4 mr-2" />
+                Begehung starten
+              </Button>
+            ) : (
+              <Button variant="destructive" onClick={stopWalking}>
+                <Square className="h-4 w-4 mr-2" />
+                Beenden
+              </Button>
+            )}
+          </div>
         </div>
-        
-        <div className="flex items-center gap-2">
-          {!isWalking ? (
-            <Button onClick={startWalking} disabled={loading}>
-              <Play className="h-4 w-4 mr-2" />
-              Begehung starten
-            </Button>
-          ) : (
-            <Button variant="destructive" onClick={stopWalking}>
-              <Square className="h-4 w-4 mr-2" />
-              Beenden
-            </Button>
-          )}
-        </div>
-      </div>
+      )}
 
       {/* Status bar when walking */}
       {isWalking && (
