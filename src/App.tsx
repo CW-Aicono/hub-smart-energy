@@ -27,6 +27,7 @@ import SuperAdminBilling from "./pages/SuperAdminBilling";
 import SuperAdminSupport from "./pages/SuperAdminSupport";
 import SuperAdminUsers from "./pages/SuperAdminUsers";
 import SuperAdminRoles from "./pages/SuperAdminRoles";
+import SuperAdminMap from "./pages/SuperAdminMap";
 
 // Import Leaflet CSS globally
 import "leaflet/dist/leaflet.css";
@@ -61,6 +62,7 @@ const App = () => (
                   <Route path="/super-admin/statistics" element={<SuperAdminStatistics />} />
                   <Route path="/super-admin/users" element={<SuperAdminUsers />} />
                   <Route path="/super-admin/roles" element={<SuperAdminRoles />} />
+                  <Route path="/super-admin/map" element={<SuperAdminMap />} />
                   <Route path="/super-admin/billing" element={<SuperAdminBilling />} />
                   <Route path="/super-admin/support" element={<SuperAdminSupport />} />
                   <Route path="*" element={<NotFound />} />
