@@ -1785,6 +1785,92 @@ export const translations = {
     es: "Actualización automática de valores de sensores cada 5 minutos",
     nl: "Automatische sensorwaarde-verversing elke 5 minuten",
   },
+  // Version 1.0.3 changelog
+  "help.changelog103Feature1": {
+    de: "Messstellen können archiviert und wiederhergestellt werden",
+    en: "Meters can be archived and restored",
+    es: "Los medidores se pueden archivar y restaurar",
+    nl: "Meters kunnen worden gearchiveerd en hersteld",
+  },
+  "help.changelog103Feature2": {
+    de: "Mobile App mit Offline-Modus und automatischer Synchronisation",
+    en: "Mobile app with offline mode and automatic sync",
+    es: "App móvil con modo sin conexión y sincronización automática",
+    nl: "Mobiele app met offline-modus en automatische synchronisatie",
+  },
+  "help.changelog103Feature3": {
+    de: "KI-Erkennung kann unbekannte Zähler direkt in der App anlegen",
+    en: "AI recognition can create unknown meters directly in the app",
+    es: "El reconocimiento IA puede crear medidores desconocidos directamente en la app",
+    nl: "AI-herkenning kan onbekende meters direct in de app aanmaken",
+  },
+  "help.changelog103Feature4": {
+    de: "Erweiterte Filter in der Messstellen-Übersicht (Energieart, Erfassung)",
+    en: "Extended filters in meter overview (energy type, capture method)",
+    es: "Filtros ampliados en la vista de medidores (tipo de energía, captura)",
+    nl: "Uitgebreide filters in meteroverzicht (energietype, registratie)",
+  },
+  "help.changelog103Improvement1": {
+    de: "QR-Code-Scanner zeigt jetzt zuverlässig das Kamerabild an",
+    en: "QR code scanner now reliably displays the camera feed",
+    es: "El escáner QR ahora muestra de forma fiable la imagen de la cámara",
+    nl: "QR-code scanner toont nu betrouwbaar het camerabeeld",
+  },
+  "help.changelog103Improvement2": {
+    de: "Erweitertes Benutzerhandbuch mit Kapiteln zu Messstellen und mobiler App",
+    en: "Extended user manual with chapters on meters and mobile app",
+    es: "Manual de usuario ampliado con capítulos sobre medidores y app móvil",
+    nl: "Uitgebreide gebruikershandleiding met hoofdstukken over meters en mobiele app",
+  },
+  // Additional FAQs
+  "help.faq7Question": {
+    de: "Wie funktioniert die mobile Zählerablesung?",
+    en: "How does mobile meter reading work?",
+    es: "¿Cómo funciona la lectura móvil del medidor?",
+    nl: "Hoe werkt het mobiel aflezen van meters?",
+  },
+  "help.faq7Answer": {
+    de: "Öffnen Sie die App unter /m auf Ihrem Smartphone. Sie können Zählerstände per KI-Foto, QR-Code-Scan oder manuelle Eingabe erfassen. Die App funktioniert auch offline.",
+    en: "Open the app at /m on your smartphone. You can capture meter readings via AI photo, QR code scan, or manual entry. The app also works offline.",
+    es: "Abra la aplicación en /m en su smartphone. Puede capturar lecturas de medidores mediante foto IA, escaneo QR o entrada manual. La app también funciona sin conexión.",
+    nl: "Open de app op /m op uw smartphone. U kunt meterstanden vastleggen via AI-foto, QR-codescan of handmatige invoer. De app werkt ook offline.",
+  },
+  "help.faq8Question": {
+    de: "Was passiert, wenn ich einen Zähler archiviere?",
+    en: "What happens when I archive a meter?",
+    es: "¿Qué sucede cuando archivo un medidor?",
+    nl: "Wat gebeurt er als ik een meter archiveer?",
+  },
+  "help.faq8Answer": {
+    de: "Archivierte Zähler werden aus der aktiven Ansicht ausgeblendet, aber nicht gelöscht. Alle Messwerte bleiben erhalten. Sie können den Zähler jederzeit wiederherstellen oder endgültig löschen.",
+    en: "Archived meters are hidden from the active view but not deleted. All readings are preserved. You can restore or permanently delete the meter at any time.",
+    es: "Los medidores archivados se ocultan de la vista activa pero no se eliminan. Todas las lecturas se conservan. Puede restaurar o eliminar permanentemente el medidor en cualquier momento.",
+    nl: "Gearchiveerde meters worden verborgen in de actieve weergave maar niet verwijderd. Alle meetwaarden blijven bewaard. U kunt de meter op elk moment herstellen of definitief verwijderen.",
+  },
+  "help.faq9Question": {
+    de: "Wie drucke ich QR-Codes für meine Zähler?",
+    en: "How do I print QR codes for my meters?",
+    es: "¿Cómo imprimo códigos QR para mis medidores?",
+    nl: "Hoe print ik QR-codes voor mijn meters?",
+  },
+  "help.faq9Answer": {
+    de: "In der Messstellen-Übersicht finden Sie bei jedem Zähler ein QR-Code-Symbol. Klicken Sie darauf, um den QR-Code anzuzeigen und herunterzuladen. Drucken Sie ihn aus und kleben Sie ihn an den physischen Zähler.",
+    en: "In the meter overview, you'll find a QR code icon next to each meter. Click it to view and download the QR code. Print it and attach it to the physical meter.",
+    es: "En la vista de medidores, encontrará un icono de código QR junto a cada medidor. Haga clic para ver y descargar el código QR. Imprímalo y péguelo en el medidor físico.",
+    nl: "In het meteroverzicht vindt u bij elke meter een QR-code-icoon. Klik erop om de QR-code te bekijken en te downloaden. Print hem uit en plak hem op de fysieke meter.",
+  },
+  "help.faq10Question": {
+    de: "Funktioniert die App auch ohne Internetverbindung?",
+    en: "Does the app work without an internet connection?",
+    es: "¿Funciona la aplicación sin conexión a internet?",
+    nl: "Werkt de app ook zonder internetverbinding?",
+  },
+  "help.faq10Answer": {
+    de: "Ja, die mobile App speichert Zählerablesungen lokal, wenn keine Verbindung besteht. Sobald das Internet wieder verfügbar ist, werden die Daten automatisch synchronisiert. Ein Banner zeigt die Anzahl ausstehender Ablesungen.",
+    en: "Yes, the mobile app stores meter readings locally when offline. Once the internet is available again, the data syncs automatically. A banner shows the number of pending readings.",
+    es: "Sí, la app móvil almacena las lecturas localmente cuando no hay conexión. Una vez que el internet esté disponible, los datos se sincronizan automáticamente. Un banner muestra el número de lecturas pendientes.",
+    nl: "Ja, de mobiele app slaat meterstanden lokaal op wanneer er geen verbinding is. Zodra internet weer beschikbaar is, worden de gegevens automatisch gesynchroniseerd. Een banner toont het aantal openstaande aflezingen.",
+  },
   // User management - activate user
   "users.activateUser": {
     de: "Benutzer aktivieren",
