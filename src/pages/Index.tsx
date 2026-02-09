@@ -77,8 +77,12 @@ const DashboardContent = () => {
               onReorder={reorderWidgets}
               onResizeWidget={updateWidgetSize}
               onResetLayout={() => {
-                // Reset all widgets to full width
-                visibleWidgets.forEach(w => updateWidgetSize(w.widget_type, "full"));
+                // Reset all to full width and keep current order
+                widgets.forEach(w => {
+                  if (w.widget_size !== "full") {
+                    updateWidgetSize(w.widget_type, "full");
+                  }
+                });
               }}
             />
           </div>
