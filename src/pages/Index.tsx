@@ -4,6 +4,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useDashboardWidgets, WidgetSize } from "@/hooks/useDashboardWidgets";
 import { useTranslation } from "@/hooks/useTranslation";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { ZoomIn, ZoomOut } from "lucide-react";
 import { DashboardFilterProvider, useDashboardFilter } from "@/hooks/useDashboardFilter";
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
 import DashboardCustomizer from "@/components/dashboard/DashboardCustomizer";
@@ -106,14 +107,18 @@ const DashboardContent = () => {
                 return Component ? (
                   <div
                     key={widget.widget_type}
-                    className={`${sizeClass} min-w-0 ${widget.widget_size !== "full" ? "cursor-pointer" : ""}`}
+                    className={`${sizeClass} min-w-0 relative group`}
                     style={{ flexBasis: sizeClass === "w-full" ? "100%" : sizeClass === "w-2/3" ? "calc(66.666% - 8px)" : "calc(33.333% - 11px)" }}
-                    onClick={() => {
-                      if (widget.widget_size !== "full") {
-                        setExpandedWidget(widgetType);
-                      }
-                    }}
                   >
+                    {widget.widget_size !== "full" && (
+                      <button
+                        onClick={() => setExpandedWidget(widgetType)}
+                        className="absolute top-3 right-3 z-10 p-1.5 rounded-md bg-background/80 border border-border shadow-sm opacity-0 group-hover:opacity-100 transition-opacity hover:bg-muted"
+                        title="Vergrößern"
+                      >
+                        <ZoomIn className="h-4 w-4 text-muted-foreground" />
+                      </button>
+                    )}
                     <Component locationId={selectedLocationId} />
                   </div>
                 ) : null;
@@ -129,6 +134,13 @@ const DashboardContent = () => {
       {/* Expanded widget dialog */}
       <Dialog open={!!expandedWidget} onOpenChange={() => setExpandedWidget(null)}>
         <DialogContent className="max-w-[90vw] w-full max-h-[90vh] overflow-auto p-6">
+          <button
+            onClick={() => setExpandedWidget(null)}
+            className="absolute top-4 right-12 p-1.5 rounded-md bg-background/80 border border-border shadow-sm hover:bg-muted"
+            title="Verkleinern"
+          >
+            <ZoomOut className="h-4 w-4 text-muted-foreground" />
+          </button>
           {expandedWidget && WIDGET_COMPONENTS[expandedWidget] && (() => {
             const ExpandedComponent = WIDGET_COMPONENTS[expandedWidget];
             return <ExpandedComponent locationId={selectedLocationId} />;
