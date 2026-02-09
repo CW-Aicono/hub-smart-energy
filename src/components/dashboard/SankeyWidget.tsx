@@ -162,7 +162,7 @@ const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
         <p className="text-sm text-muted-foreground">{subtitle}</p>
       </CardHeader>
       <CardContent>
-        <div className="h-[350px]">
+        <div className="w-full" style={{ aspectRatio: "16/9" }}>
           <svg viewBox={`0 0 ${vbW} ${vbH}`} className="w-full h-full" preserveAspectRatio="xMidYMid meet">
             <defs>
               {LINKS.map((link, i) => {

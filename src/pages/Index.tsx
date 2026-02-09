@@ -1,6 +1,6 @@
 import { Navigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
-import { useDashboardWidgets } from "@/hooks/useDashboardWidgets";
+import { useDashboardWidgets, WidgetSize } from "@/hooks/useDashboardWidgets";
 import { useTranslation } from "@/hooks/useTranslation";
 import { DashboardFilterProvider, useDashboardFilter } from "@/hooks/useDashboardFilter";
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
@@ -34,12 +34,18 @@ const WIDGET_COMPONENTS: Record<string, React.ComponentType<WidgetProps>> = {
   sankey: SankeyWidget,
 };
 
+const SIZE_CLASS: Record<WidgetSize, string> = {
+  "full": "w-full",
+  "2/3": "w-2/3",
+  "1/3": "w-1/3",
+};
+
 const getLocationWidget = (locationId: string | null): string => {
   return locationId ? "floor_plan" : "location_map";
 };
 
 const DashboardContent = () => {
-  const { widgets, visibleWidgets, loading: widgetsLoading, toggleWidgetVisibility, reorderWidgets } = useDashboardWidgets();
+  const { widgets, visibleWidgets, loading: widgetsLoading, toggleWidgetVisibility, reorderWidgets, updateWidgetSize } = useDashboardWidgets();
   const { t } = useTranslation();
   const { selectedLocationId, setSelectedLocationId } = useDashboardFilter();
 
@@ -69,34 +75,36 @@ const DashboardContent = () => {
               widgets={widgets}
               onToggleVisibility={toggleWidgetVisibility}
               onReorder={reorderWidgets}
+              onResizeWidget={updateWidgetSize}
               onResetLayout={() => {
-                const defaultOrder = widgets
-                  .sort((a, b) => a.position - b.position)
-                  .map(w => w.widget_type);
-                reorderWidgets(defaultOrder);
+                // Reset all widgets to full width
+                visibleWidgets.forEach(w => updateWidgetSize(w.widget_type, "full"));
               }}
             />
           </div>
         </header>
-        <div className="p-6 flex flex-col gap-2">
-          {visibleWidgets.length > 0 ? (
-            visibleWidgets.map((widget) => {
-              const widgetType = widget.widget_type === "location_map"
-                ? getLocationWidget(selectedLocationId)
-                : widget.widget_type;
-              const Component = WIDGET_COMPONENTS[widgetType];
-              return Component ? (
-                <div key={widget.widget_type}>
-                  <Component locationId={selectedLocationId} />
-                </div>
-              ) : null;
-            })
-          ) : (
-            <div className="text-center py-12 text-muted-foreground">
-              <p>{t("dashboard.noWidgets")}</p>
-              <p className="text-sm mt-1">{t("dashboard.noWidgetsHint")}</p>
-            </div>
-          )}
+        <div className="p-6">
+          <div className="flex flex-wrap gap-4">
+            {visibleWidgets.length > 0 ? (
+              visibleWidgets.map((widget) => {
+                const widgetType = widget.widget_type === "location_map"
+                  ? getLocationWidget(selectedLocationId)
+                  : widget.widget_type;
+                const Component = WIDGET_COMPONENTS[widgetType];
+                const sizeClass = SIZE_CLASS[widget.widget_size] || "w-full";
+                return Component ? (
+                  <div key={widget.widget_type} className={`${sizeClass} min-w-0`} style={{ flexBasis: sizeClass === "w-full" ? "100%" : sizeClass === "w-2/3" ? "calc(66.666% - 8px)" : "calc(33.333% - 11px)" }}>
+                    <Component locationId={selectedLocationId} />
+                  </div>
+                ) : null;
+              })
+            ) : (
+              <div className="text-center py-12 text-muted-foreground w-full">
+                <p>{t("dashboard.noWidgets")}</p>
+                <p className="text-sm mt-1">{t("dashboard.noWidgetsHint")}</p>
+              </div>
+            )}
+          </div>
         </div>
       </main>
     </div>

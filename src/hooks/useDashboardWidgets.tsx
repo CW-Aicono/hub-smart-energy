@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
 
-export type WidgetSize = "small" | "medium" | "large" | "full";
+export type WidgetSize = "full" | "2/3" | "1/3";
 
 export interface WidgetLayout {
   x: number;
