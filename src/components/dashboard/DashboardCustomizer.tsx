@@ -3,14 +3,16 @@ import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Settings2, GripVertical } from "lucide-react";
-import { DashboardWidget } from "@/hooks/useDashboardWidgets";
+import { DashboardWidget, WidgetSize } from "@/hooks/useDashboardWidgets";
 import { cn } from "@/lib/utils";
 
 interface DashboardCustomizerProps {
   widgets: DashboardWidget[];
   onToggleVisibility: (widgetType: string) => void;
   onReorder: (newOrder: string[]) => void;
+  onResizeWidget: (widgetType: string, size: WidgetSize) => void;
 }
 
 const WIDGET_LABELS: Record<string, string> = {
@@ -22,7 +24,14 @@ const WIDGET_LABELS: Record<string, string> = {
   alerts_list: "Alerts & Benachrichtigungen",
 };
 
-const DashboardCustomizer = ({ widgets, onToggleVisibility, onReorder }: DashboardCustomizerProps) => {
+const SIZE_LABELS: Record<WidgetSize, string> = {
+  small: "Klein",
+  medium: "Mittel",
+  large: "Groß",
+  full: "Volle Breite",
+};
+
+const DashboardCustomizer = ({ widgets, onToggleVisibility, onReorder, onResizeWidget }: DashboardCustomizerProps) => {
   const [draggedItem, setDraggedItem] = useState<string | null>(null);
   const [dragOverItem, setDragOverItem] = useState<string | null>(null);
 
@@ -59,7 +68,6 @@ const DashboardCustomizer = ({ widgets, onToggleVisibility, onReorder }: Dashboa
     const draggedIndex = currentOrder.indexOf(draggedItem);
     const targetIndex = currentOrder.indexOf(targetWidgetType);
 
-    // Remove dragged item and insert at target position
     const newOrder = [...currentOrder];
     newOrder.splice(draggedIndex, 1);
     newOrder.splice(targetIndex, 0, draggedItem);
@@ -82,7 +90,7 @@ const DashboardCustomizer = ({ widgets, onToggleVisibility, onReorder }: Dashboa
           Dashboard anpassen
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="end" className="w-80 bg-popover border shadow-lg z-50">
+      <PopoverContent align="end" className="w-96 bg-popover border shadow-lg z-50">
         <div className="space-y-4">
           <div>
             <h4 className="font-medium text-sm mb-1">Widgets anzeigen</h4>
@@ -101,25 +109,42 @@ const DashboardCustomizer = ({ widgets, onToggleVisibility, onReorder }: Dashboa
                 onDrop={(e) => handleDrop(e, widget.widget_type)}
                 onDragEnd={handleDragEnd}
                 className={cn(
-                  "flex items-center justify-between p-2 rounded-lg bg-muted/50 cursor-grab active:cursor-grabbing transition-all",
+                  "flex items-center justify-between p-2 rounded-lg bg-muted/50 cursor-grab active:cursor-grabbing transition-all gap-2",
                   draggedItem === widget.widget_type && "opacity-50 scale-95",
                   dragOverItem === widget.widget_type && "ring-2 ring-primary ring-offset-1"
                 )}
               >
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 min-w-0 flex-1">
                   <GripVertical className="h-4 w-4 text-muted-foreground flex-shrink-0" />
                   <Label
                     htmlFor={widget.widget_type}
-                    className="text-sm cursor-grab"
+                    className="text-sm cursor-grab truncate"
                   >
                     {WIDGET_LABELS[widget.widget_type] || widget.widget_type}
                   </Label>
                 </div>
-                <Switch
-                  id={widget.widget_type}
-                  checked={widget.is_visible}
-                  onCheckedChange={() => onToggleVisibility(widget.widget_type)}
-                />
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <Select
+                    value={widget.widget_size || "medium"}
+                    onValueChange={(value) => onResizeWidget(widget.widget_type, value as WidgetSize)}
+                  >
+                    <SelectTrigger className="h-7 w-[90px] text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {(Object.entries(SIZE_LABELS) as [WidgetSize, string][]).map(([value, label]) => (
+                        <SelectItem key={value} value={value} className="text-xs">
+                          {label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Switch
+                    id={widget.widget_type}
+                    checked={widget.is_visible}
+                    onCheckedChange={() => onToggleVisibility(widget.widget_type)}
+                  />
+                </div>
               </div>
             ))}
           </div>

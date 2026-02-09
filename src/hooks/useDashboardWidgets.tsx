@@ -2,11 +2,14 @@ import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
 
+export type WidgetSize = "small" | "medium" | "large" | "full";
+
 export interface DashboardWidget {
   id: string;
   widget_type: string;
   position: number;
   is_visible: boolean;
+  widget_size: WidgetSize;
   config: Record<string, unknown>;
 }
 
@@ -140,6 +143,24 @@ export function useDashboardWidgets() {
     }
   };
 
+  const updateWidgetSize = async (widgetType: string, size: WidgetSize) => {
+    const widget = widgets.find((w) => w.widget_type === widgetType);
+    if (!widget) return;
+
+    const { error } = await supabase
+      .from("dashboard_widgets")
+      .update({ widget_size: size })
+      .eq("id", widget.id);
+
+    if (!error) {
+      setWidgets((prev) =>
+        prev.map((w) =>
+          w.widget_type === widgetType ? { ...w, widget_size: size } : w
+        )
+      );
+    }
+  };
+
   useEffect(() => {
     fetchWidgets();
   }, [fetchWidgets]);
@@ -154,6 +175,7 @@ export function useDashboardWidgets() {
     loading,
     toggleWidgetVisibility,
     reorderWidgets,
+    updateWidgetSize,
     refetch: fetchWidgets,
   };
 }
