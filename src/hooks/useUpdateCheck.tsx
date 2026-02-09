@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 
 interface UpdateCheckState {
   updateAvailable: boolean;
@@ -13,25 +13,23 @@ export function useUpdateCheck(): UpdateCheckState {
   const [updateAvailable, setUpdateAvailable] = useState(false);
   const [checking, setChecking] = useState(false);
   const [dismissed, setDismissed] = useState(false);
-  const [waitingWorker, setWaitingWorker] = useState<ServiceWorker | null>(null);
-  const [userAppliedUpdate, setUserAppliedUpdate] = useState(false);
+  const waitingWorkerRef = useRef<ServiceWorker | null>(null);
+  const userAppliedRef = useRef(false);
 
   useEffect(() => {
     if (!("serviceWorker" in navigator)) return;
 
     const handleControllerChange = () => {
-      // Only reload if the user explicitly chose to update
-      if (userAppliedUpdate) {
+      if (userAppliedRef.current) {
         window.location.reload();
       }
     };
 
     navigator.serviceWorker.addEventListener("controllerchange", handleControllerChange);
 
-    // Check if there's already a waiting worker
     navigator.serviceWorker.ready.then((registration) => {
       if (registration.waiting) {
-        setWaitingWorker(registration.waiting);
+        waitingWorkerRef.current = registration.waiting;
         setUpdateAvailable(true);
       }
 
@@ -41,7 +39,7 @@ export function useUpdateCheck(): UpdateCheckState {
 
         newWorker.addEventListener("statechange", () => {
           if (newWorker.state === "installed" && navigator.serviceWorker.controller) {
-            setWaitingWorker(newWorker);
+            waitingWorkerRef.current = newWorker;
             setUpdateAvailable(true);
           }
         });
@@ -51,14 +49,13 @@ export function useUpdateCheck(): UpdateCheckState {
     return () => {
       navigator.serviceWorker.removeEventListener("controllerchange", handleControllerChange);
     };
-  }, [userAppliedUpdate]);
+  }, []);
 
   const checkForUpdate = useCallback(async () => {
     setChecking(true);
     setDismissed(false);
 
     if (!("serviceWorker" in navigator) || !navigator.serviceWorker.controller) {
-      // No active service worker – nothing to update
       setTimeout(() => setChecking(false), 1500);
       return;
     }
@@ -67,10 +64,9 @@ export function useUpdateCheck(): UpdateCheckState {
       const registration = await navigator.serviceWorker.getRegistration();
       if (registration) {
         await registration.update();
-        // Give it a moment to detect the update
         setTimeout(() => {
           if (registration.waiting) {
-            setWaitingWorker(registration.waiting);
+            waitingWorkerRef.current = registration.waiting;
             setUpdateAvailable(true);
           }
           setChecking(false);
@@ -84,14 +80,13 @@ export function useUpdateCheck(): UpdateCheckState {
   }, []);
 
   const applyUpdate = useCallback(() => {
-    setUserAppliedUpdate(true);
-    if (waitingWorker) {
-      waitingWorker.postMessage({ type: "SKIP_WAITING" });
+    userAppliedRef.current = true;
+    if (waitingWorkerRef.current) {
+      waitingWorkerRef.current.postMessage({ type: "SKIP_WAITING" });
     } else {
-      // Fallback: hard reload
       window.location.reload();
     }
-  }, [waitingWorker]);
+  }, []);
 
   const dismissUpdate = useCallback(() => {
     setDismissed(true);
