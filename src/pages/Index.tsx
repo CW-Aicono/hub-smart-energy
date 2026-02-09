@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Navigate } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { Navigate, useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useDashboardWidgets, WidgetSize } from "@/hooks/useDashboardWidgets";
 import { useTranslation } from "@/hooks/useTranslation";
@@ -155,8 +155,26 @@ const DashboardContent = () => {
 const Index = () => {
   const { user, loading } = useAuth();
   const { t } = useTranslation();
+  const navigate = useNavigate();
+  const [onboardingChecked, setOnboardingChecked] = useState(false);
 
-  if (loading) {
+  useEffect(() => {
+    if (!user || onboardingChecked) return;
+    const checkOnboarding = async () => {
+      const { data } = await (await import("@/integrations/supabase/client")).supabase
+        .from("user_preferences")
+        .select("onboarding_completed")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      setOnboardingChecked(true);
+      if (data && !(data as any).onboarding_completed) {
+        navigate("/getting-started", { replace: true });
+      }
+    };
+    checkOnboarding();
+  }, [user, onboardingChecked, navigate]);
+
+  if (loading || !onboardingChecked) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <div className="animate-pulse text-muted-foreground">{t("common.loading")}</div>

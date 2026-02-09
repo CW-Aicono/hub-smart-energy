@@ -1191,6 +1191,7 @@ export type Database = {
           created_at: string
           id: string
           language: string
+          onboarding_completed: boolean
           theme_mode: string
           updated_at: string
           user_id: string
@@ -1200,6 +1201,7 @@ export type Database = {
           created_at?: string
           id?: string
           language?: string
+          onboarding_completed?: boolean
           theme_mode?: string
           updated_at?: string
           user_id: string
@@ -1209,6 +1211,7 @@ export type Database = {
           created_at?: string
           id?: string
           language?: string
+          onboarding_completed?: boolean
           theme_mode?: string
           updated_at?: string
           user_id?: string
