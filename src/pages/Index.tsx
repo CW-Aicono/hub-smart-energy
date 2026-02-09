@@ -133,8 +133,8 @@ const DashboardContent = () => {
               layouts={{ lg: layouts, md: layouts, sm: layouts }}
               breakpoints={{ lg: 1200, md: 996, sm: 768 }}
               cols={{ lg: 3, md: 3, sm: 1 }}
-              rowHeight={150}
-              margin={[16, 24]}
+              rowHeight={120}
+              margin={[16, 16]}
               isDraggable={false}
               isResizable={false}
               onLayoutChange={(layout) => handleLayoutChange(layout)}
