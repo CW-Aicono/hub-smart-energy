@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useMeters, Meter } from "@/hooks/useMeters";
+import { useLocations } from "@/hooks/useLocations";
 import { useMeterReadings } from "@/hooks/useMeterReadings";
 import { useOfflineReadings } from "@/hooks/useOfflineReadings";
 import { supabase } from "@/integrations/supabase/client";
@@ -81,13 +82,19 @@ function MobileLogin({ onLogin }: { onLogin: () => void }) {
 interface UnknownMeterPromptProps {
   meterNumber: string;
   reading: string;
+  capturedImage: string | null;
+  locations: { id: string; name: string }[];
+  onCreateMeter: (locationId: string) => void;
   onDismiss: () => void;
+  creating: boolean;
 }
 
-function UnknownMeterPrompt({ meterNumber, reading, onDismiss }: UnknownMeterPromptProps) {
+function UnknownMeterPrompt({ meterNumber, reading, capturedImage, locations, onCreateMeter, onDismiss, creating }: UnknownMeterPromptProps) {
+  const [selectedLocationId, setSelectedLocationId] = useState("");
+
   return (
     <Card className="border-destructive/40 bg-muted">
-      <CardContent className="p-4 space-y-3">
+      <CardContent className="p-4 space-y-4">
         <div className="flex items-start gap-3">
           <AlertTriangle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
           <div className="space-y-1">
@@ -95,14 +102,58 @@ function UnknownMeterPrompt({ meterNumber, reading, onDismiss }: UnknownMeterPro
             <p className="text-xs text-muted-foreground">
               Die erkannte Zählernummer <span className="font-mono font-semibold">{meterNumber}</span> ist im System nicht hinterlegt.
             </p>
-            <p className="text-xs text-muted-foreground">
-              Bitte legen Sie den Zähler zuerst im Backend unter "Messstellen" an und ordnen Sie ihn einer Liegenschaft zu.
-            </p>
+            {reading && (
+              <p className="text-xs text-muted-foreground">
+                Erkannter Zählerstand: <span className="font-mono font-semibold">{reading}</span>
+              </p>
+            )}
           </div>
         </div>
-        <Button variant="outline" className="w-full h-10" onClick={onDismiss}>
-          Verstanden
-        </Button>
+
+        <div className="space-y-3 border-t pt-3">
+          <p className="text-sm font-medium">Zähler jetzt anlegen?</p>
+          <div className="space-y-2">
+            <Label>Messstelle zuordnen</Label>
+            <Select value={selectedLocationId} onValueChange={setSelectedLocationId}>
+              <SelectTrigger className="h-12 text-base">
+                <SelectValue placeholder="Messstelle wählen" />
+              </SelectTrigger>
+              <SelectContent>
+                {locations.map((loc) => (
+                  <SelectItem key={loc.id} value={loc.id}>
+                    {loc.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {capturedImage && (
+            <div className="rounded-lg overflow-hidden border">
+              <img src={capturedImage} alt="Zählerfoto" className="w-full h-32 object-cover" />
+              <p className="text-xs text-muted-foreground p-2">Foto wird dem Zähler zugeordnet</p>
+            </div>
+          )}
+
+          <div className="flex gap-3">
+            <Button variant="outline" className="flex-1 h-12" onClick={onDismiss} disabled={creating}>
+              Abbrechen
+            </Button>
+            <Button
+              variant="secondary"
+              className="flex-1 h-12"
+              onClick={() => onCreateMeter(selectedLocationId)}
+              disabled={!selectedLocationId || creating}
+            >
+              {creating ? <Loader2 className="h-5 w-5 animate-spin" /> : (
+                <>
+                  <Check className="h-5 w-5 mr-1" />
+                  Anlegen
+                </>
+              )}
+            </Button>
+          </div>
+        </div>
       </CardContent>
     </Card>
   );
@@ -210,7 +261,8 @@ function ReadingConfirmation({
 // --- Main Mobile App ---
 const MobileApp = () => {
   const { user, loading: authLoading, signOut } = useAuth();
-  const { meters, loading: metersLoading } = useMeters();
+  const { meters, loading: metersLoading, addMeter, refetch: refetchMeters } = useMeters();
+  const { locations, loading: locationsLoading } = useLocations();
   const { addReading, getLastReading } = useMeterReadings();
   const { pending, pendingCount, isOnline, syncing, enqueue, syncAll } = useOfflineReadings();
   const [searchParams] = useSearchParams();
@@ -227,6 +279,7 @@ const MobileApp = () => {
 
   // Unknown meter state
   const [unknownMeterNumber, setUnknownMeterNumber] = useState<string | null>(null);
+  const [creatingMeter, setCreatingMeter] = useState(false);
 
   // Camera/AI state
   const [processing, setProcessing] = useState(false);
@@ -291,7 +344,67 @@ const MobileApp = () => {
     setUnknownMeterNumber(null);
   };
 
-  // --- AI Camera ---
+  // --- Create unknown meter ---
+  const handleCreateUnknownMeter = async (locationId: string) => {
+    if (!unknownMeterNumber || !locationId) return;
+    setCreatingMeter(true);
+    try {
+      // Upload photo if available
+      let photoUrl: string | undefined;
+      if (capturedImage) {
+        const fileName = `${Date.now()}-${unknownMeterNumber.replace(/\s/g, "_")}.jpg`;
+        const base64Data = capturedImage.split(",")[1];
+        const byteArray = Uint8Array.from(atob(base64Data), (c) => c.charCodeAt(0));
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from("meter-photos")
+          .upload(fileName, byteArray, { contentType: "image/jpeg" });
+        if (!uploadError && uploadData) {
+          const { data: urlData } = supabase.storage.from("meter-photos").getPublicUrl(uploadData.path);
+          photoUrl = urlData.publicUrl;
+        }
+      }
+
+      // Create meter
+      const meterName = `Zähler ${unknownMeterNumber}`;
+      await addMeter({
+        name: meterName,
+        location_id: locationId,
+        meter_number: unknownMeterNumber,
+        energy_type: "strom",
+        unit: "kWh",
+        capture_type: "manual",
+        notes: photoUrl ? `Foto: ${photoUrl}` : undefined,
+      });
+
+      // Refetch meters, then find the new meter and save the reading
+      await refetchMeters();
+
+      // Small delay to ensure state update
+      const { data: newMeters } = await supabase
+        .from("meters")
+        .select("id")
+        .eq("meter_number", unknownMeterNumber)
+        .limit(1);
+
+      if (newMeters?.[0] && reading) {
+        await addReading({
+          meter_id: newMeters[0].id,
+          value: parseFloat(reading),
+          reading_date: readingDate,
+          capture_method: "ai",
+        });
+        toast.success("Zähler angelegt und Zählerstand gespeichert!");
+      } else {
+        toast.success("Zähler angelegt!");
+      }
+      resetState();
+    } catch (err) {
+      toast.error("Fehler beim Anlegen des Zählers");
+    }
+    setCreatingMeter(false);
+  };
+
+
   const processImage = async (imageData: string) => {
     setProcessing(true);
     setCapturedImage(imageData);
@@ -523,7 +636,11 @@ const MobileApp = () => {
           <UnknownMeterPrompt
             meterNumber={unknownMeterNumber}
             reading={reading}
+            capturedImage={capturedImage}
+            locations={locations.map((l) => ({ id: l.id, name: l.name }))}
+            onCreateMeter={handleCreateUnknownMeter}
             onDismiss={resetState}
+            creating={creatingMeter}
           />
         ) : showConfirm ? (
           <ReadingConfirmation
