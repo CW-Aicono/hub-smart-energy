@@ -15,7 +15,9 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { HeadsetIcon } from "lucide-react";
 import { useState } from "react";
+import { toast } from "sonner";
 
 const SuperAdminTenantDetail = () => {
   const { id } = useParams<{ id: string }>();
@@ -67,9 +69,26 @@ const SuperAdminTenantDetail = () => {
     <div className="flex min-h-screen bg-background">
       <SuperAdminSidebar />
       <main className="flex-1 overflow-auto">
-        <header className="border-b p-6">
-          <h1 className="text-2xl font-bold">{tenant?.name ?? "Mandant"}</h1>
-          <p className="text-sm text-muted-foreground mt-1">{tenant?.slug}</p>
+        <header className="border-b p-6 flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold">{tenant?.name ?? "Mandant"}</h1>
+            <p className="text-sm text-muted-foreground mt-1">{tenant?.slug}</p>
+          </div>
+          <Button
+            variant={(tenant as any)?.remote_support_enabled ? "default" : "outline"}
+            disabled={!(tenant as any)?.remote_support_enabled}
+            onClick={() => {
+              if ((tenant as any)?.remote_support_enabled) {
+                toast.success("Remote-Support-Sitzung gestartet für " + tenant?.name);
+              }
+            }}
+          >
+            <HeadsetIcon className="h-4 w-4 mr-2" />
+            Remote-Support
+            {(tenant as any)?.remote_support_enabled && (
+              <Badge variant="secondary" className="ml-2 bg-green-500/20 text-green-600">Aktiv</Badge>
+            )}
+          </Button>
         </header>
         <div className="p-6">
           <Tabs defaultValue="modules">

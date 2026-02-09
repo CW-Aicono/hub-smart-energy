@@ -8,7 +8,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { BookOpen, HelpCircle, Mail, Phone, History, ExternalLink, Gauge, Smartphone } from "lucide-react";
+import { BookOpen, HelpCircle, Mail, Phone, History, ExternalLink, Gauge, Smartphone, ShieldCheck } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { useTenant } from "@/hooks/useTenant";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
 const APP_VERSION = "1.0.3";
 
@@ -17,8 +21,38 @@ type ManualChapter = "gettingStarted" | "locationManagement" | "floorManagement"
 const Help = () => {
   const { user, loading } = useAuth();
   const { t } = useTranslation();
+  const { tenant, refetch: refetchTenant } = useTenant();
   const [manualOpen, setManualOpen] = useState(false);
   const [selectedChapter, setSelectedChapter] = useState<ManualChapter>("gettingStarted");
+  const [remoteSupportEnabled, setRemoteSupportEnabled] = useState(false);
+  const [remoteSupportLoading, setRemoteSupportLoading] = useState(false);
+
+  // Sync local state with tenant data
+  useState(() => {
+    if (tenant && 'remote_support_enabled' in (tenant as any)) {
+      setRemoteSupportEnabled((tenant as any).remote_support_enabled ?? false);
+    }
+  });
+
+  const handleToggleRemoteSupport = async (enabled: boolean) => {
+    if (!tenant) return;
+    setRemoteSupportLoading(true);
+    const { error } = await supabase
+      .from("tenants")
+      .update({
+        remote_support_enabled: enabled,
+        remote_support_enabled_at: enabled ? new Date().toISOString() : null,
+      } as any)
+      .eq("id", tenant.id);
+    setRemoteSupportLoading(false);
+    if (error) {
+      toast.error("Fehler beim Ändern des Remote-Zugriffs");
+    } else {
+      setRemoteSupportEnabled(enabled);
+      refetchTenant();
+      toast.success(enabled ? "Remote-Zugriff aktiviert" : "Remote-Zugriff deaktiviert");
+    }
+  };
 
   if (loading) {
     return (
@@ -222,6 +256,36 @@ const Help = () => {
                   </AccordionItem>
                 ))}
               </Accordion>
+            </CardContent>
+          </Card>
+
+          {/* Remote Support */}
+          <Card>
+            <CardHeader className="px-6">
+              <CardTitle className="flex items-center gap-2">
+                <ShieldCheck className="h-5 w-5" />
+                Remote-Support
+              </CardTitle>
+              <CardDescription>
+                Aktivieren Sie den Remote-Zugriff, damit unser Support-Team Ihnen direkt helfen kann.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="px-6 pb-6">
+              <div className="flex items-center justify-between p-4 rounded-lg border bg-muted/30">
+                <div className="space-y-1">
+                  <p className="font-medium">Remote-Zugriff erlauben</p>
+                  <p className="text-sm text-muted-foreground">
+                    {remoteSupportEnabled
+                      ? "Ein Support-Mitarbeiter kann aktuell auf Ihr System zugreifen."
+                      : "Derzeit hat kein Support-Mitarbeiter Zugriff auf Ihr System."}
+                  </p>
+                </div>
+                <Switch
+                  checked={remoteSupportEnabled}
+                  onCheckedChange={handleToggleRemoteSupport}
+                  disabled={remoteSupportLoading}
+                />
+              </div>
             </CardContent>
           </Card>
 
