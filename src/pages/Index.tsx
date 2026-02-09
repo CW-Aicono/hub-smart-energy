@@ -135,8 +135,8 @@ const DashboardContent = () => {
               cols={{ lg: 3, md: 3, sm: 1 }}
               rowHeight={150}
               margin={[16, 16]}
-              isDraggable={true}
-              isResizable={true}
+              isDraggable={false}
+              isResizable={false}
               onLayoutChange={(layout) => handleLayoutChange(layout)}
               draggableCancel=".no-drag"
             >
