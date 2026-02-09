@@ -31,10 +31,17 @@ interface RoleCardProps {
 
 const CATEGORY_LABELS: Record<string, string> = {
   locations: "Standorte",
+  floors: "Etagen & Grundrisse",
   energy: "Energiedaten",
+  meters: "Messstellen",
+  alerts: "Alarmregeln",
+  scanners: "Scanner",
+  integrations: "Integrationen",
   reports: "Berichte",
   users: "Benutzerverwaltung",
+  roles: "Rollenverwaltung",
   settings: "Einstellungen",
+  dashboard: "Dashboard",
 };
 
 export function RoleCard({
