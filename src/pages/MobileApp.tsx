@@ -362,16 +362,24 @@ const MobileApp = () => {
         video: { facingMode: "environment" },
       });
       streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        videoRef.current.play();
-      }
+      // Set scanning state first so the <video> element renders
       setQrScanning(true);
-      scanQrFrame();
     } catch (err) {
       toast.error("Kamera konnte nicht geöffnet werden");
     }
   };
+
+  // Attach stream to video element once it's rendered
+  useEffect(() => {
+    if (qrScanning && streamRef.current && videoRef.current) {
+      videoRef.current.srcObject = streamRef.current;
+      videoRef.current.play().then(() => {
+        scanQrFrame();
+      }).catch(() => {
+        toast.error("Video konnte nicht gestartet werden");
+      });
+    }
+  }, [qrScanning]);
 
   const stopQrScan = () => {
     streamRef.current?.getTracks().forEach((t) => t.stop());
