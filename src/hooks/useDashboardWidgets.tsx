@@ -28,9 +28,9 @@ const DEFAULT_WIDGETS = [
   { widget_type: "energy_chart", position: 3, is_visible: true },
   { widget_type: "sustainability_kpis", position: 4, is_visible: true },
   { widget_type: "alerts_list", position: 5, is_visible: true },
-  { widget_type: "floor_plan_explorer", position: 6, is_visible: false },
-  { widget_type: "pie_chart", position: 7, is_visible: false },
-  { widget_type: "sankey", position: 8, is_visible: false },
+  { widget_type: "floor_plan_explorer", position: 6, is_visible: true },
+  { widget_type: "pie_chart", position: 7, is_visible: true },
+  { widget_type: "sankey", position: 8, is_visible: true },
 ];
 
 export function useDashboardWidgets() {
