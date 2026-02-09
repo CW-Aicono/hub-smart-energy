@@ -17,12 +17,12 @@ import {
   Keyboard,
   Zap,
   LogOut,
-  ArrowLeft,
   Loader2,
   Check,
   AlertTriangle,
   X,
   ImageIcon,
+  PlusCircle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
@@ -47,7 +47,7 @@ function MobileLogin({ onLogin }: { onLogin: () => void }) {
   };
 
   return (
-    <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6">
+    <div className="min-h-screen bg-background flex flex-col items-center justify-center px-6" style={{ paddingTop: "env(safe-area-inset-top, 20px)" }}>
       <div className="w-full max-w-sm space-y-6">
         <div className="text-center">
           <div className="h-14 w-14 rounded-xl bg-primary flex items-center justify-center mx-auto mb-3">
@@ -71,6 +71,37 @@ function MobileLogin({ onLogin }: { onLogin: () => void }) {
         </form>
       </div>
     </div>
+  );
+}
+
+// --- Unknown Meter Prompt ---
+interface UnknownMeterPromptProps {
+  meterNumber: string;
+  reading: string;
+  onDismiss: () => void;
+}
+
+function UnknownMeterPrompt({ meterNumber, reading, onDismiss }: UnknownMeterPromptProps) {
+  return (
+    <Card className="border-destructive/40 bg-muted">
+      <CardContent className="p-4 space-y-3">
+        <div className="flex items-start gap-3">
+          <AlertTriangle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
+          <div className="space-y-1">
+            <p className="text-sm font-medium">Zähler nicht gefunden</p>
+            <p className="text-xs text-muted-foreground">
+              Die erkannte Zählernummer <span className="font-mono font-semibold">{meterNumber}</span> ist im System nicht hinterlegt.
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Bitte legen Sie den Zähler zuerst im Backend unter "Messstellen" an und ordnen Sie ihn einer Liegenschaft zu.
+            </p>
+          </div>
+        </div>
+        <Button variant="outline" className="w-full h-10" onClick={onDismiss}>
+          Verstanden
+        </Button>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -142,7 +173,7 @@ function ReadingConfirmation({
               </p>
             )}
             {plausibilityWarning && (
-              <div className="flex items-center gap-2 text-sm text-amber-600 bg-amber-50 dark:bg-amber-950/30 p-2 rounded">
+              <div className="flex items-center gap-2 text-sm text-destructive bg-muted p-2 rounded">
                 <AlertTriangle className="h-4 w-4 shrink-0" />
                 Der neue Stand ist niedriger als der letzte Stand!
               </div>
@@ -158,7 +189,7 @@ function ReadingConfirmation({
             <Button variant="outline" className="flex-1 h-12" onClick={onCancel}>
               Abbrechen
             </Button>
-            <Button className="flex-1 h-12" onClick={onSubmit} disabled={submitting || !reading || !meter}>
+            <Button variant="secondary" className="flex-1 h-12" onClick={onSubmit} disabled={submitting || !reading || !meter}>
               {submitting ? <Loader2 className="h-5 w-5 animate-spin" /> : (
                 <>
                   <Check className="h-5 w-5 mr-1" />
@@ -189,6 +220,9 @@ const MobileApp = () => {
   const [showConfirm, setShowConfirm] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [confidence, setConfidence] = useState<string | undefined>();
+
+  // Unknown meter state
+  const [unknownMeterNumber, setUnknownMeterNumber] = useState<string | null>(null);
 
   // Camera/AI state
   const [processing, setProcessing] = useState(false);
@@ -234,6 +268,7 @@ const MobileApp = () => {
     setSelectedMeterId("");
     setCapturedImage(null);
     setConfidence(undefined);
+    setUnknownMeterNumber(null);
   };
 
   // --- AI Camera ---
@@ -264,6 +299,7 @@ const MobileApp = () => {
       setConfidence(data.confidence);
 
       // Try to match meter by number
+      let meterMatched = false;
       if (data.meter_number) {
         const matched = meters.find(
           (m) => m.meter_number && m.meter_number.replace(/\s/g, "") === data.meter_number.replace(/\s/g, "")
@@ -271,6 +307,12 @@ const MobileApp = () => {
         if (matched) {
           setSelectedMeterId(matched.id);
           toast.success(`Zähler erkannt: ${matched.name}`);
+          meterMatched = true;
+        } else {
+          // Meter number detected but not found in system
+          setUnknownMeterNumber(data.meter_number);
+          setProcessing(false);
+          return;
         }
       }
 
@@ -333,7 +375,6 @@ const MobileApp = () => {
     if (!ctx) return;
     ctx.drawImage(video, 0, 0);
 
-    // Use BarcodeDetector API if available
     if ("BarcodeDetector" in window) {
       const detector = new (window as any).BarcodeDetector({ formats: ["qr_code"] });
       detector.detect(canvas).then((barcodes: any[]) => {
@@ -346,7 +387,6 @@ const MobileApp = () => {
         if (streamRef.current) requestAnimationFrame(scanQrFrame);
       });
     } else {
-      // Fallback: try using ImageData (limited, mainly for BarcodeDetector polyfill)
       if (streamRef.current) requestAnimationFrame(scanQrFrame);
     }
   }, [meters]);
@@ -365,7 +405,6 @@ const MobileApp = () => {
         }
       }
     } catch {
-      // Not JSON, try matching as meter number
       const matched = meters.find(
         (m) => m.meter_number && m.meter_number.replace(/\s/g, "") === rawValue.replace(/\s/g, "")
       );
@@ -389,7 +428,7 @@ const MobileApp = () => {
   // --- Auth check ---
   if (authLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
+      <div className="min-h-screen flex items-center justify-center bg-background" style={{ paddingTop: "env(safe-area-inset-top, 20px)" }}>
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
@@ -401,14 +440,14 @@ const MobileApp = () => {
 
   if (metersLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
+      <div className="min-h-screen flex items-center justify-center bg-background" style={{ paddingTop: "env(safe-area-inset-top, 20px)" }}>
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
+    <div className="min-h-screen bg-background flex flex-col" style={{ paddingTop: "env(safe-area-inset-top, 20px)", paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
       {/* Header */}
       <header className="sticky top-0 z-10 bg-background border-b px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
@@ -424,7 +463,14 @@ const MobileApp = () => {
 
       {/* Content */}
       <main className="flex-1 p-4">
-        {showConfirm ? (
+        {/* Unknown meter prompt */}
+        {unknownMeterNumber && !showConfirm ? (
+          <UnknownMeterPrompt
+            meterNumber={unknownMeterNumber}
+            reading={reading}
+            onDismiss={resetState}
+          />
+        ) : showConfirm ? (
           <ReadingConfirmation
             meter={selectedMeter}
             meters={meters}
@@ -470,7 +516,7 @@ const MobileApp = () => {
                     </div>
                   ) : (
                     <div className="flex flex-col gap-3">
-                      <Button className="h-14 text-base gap-2" onClick={() => cameraInputRef.current?.click()}>
+                      <Button variant="secondary" className="h-14 text-base gap-2" onClick={() => cameraInputRef.current?.click()}>
                         <Camera className="h-5 w-5" />
                         Foto aufnehmen
                       </Button>
@@ -526,7 +572,7 @@ const MobileApp = () => {
                       </Button>
                     </div>
                   ) : (
-                    <Button className="h-14 w-full text-base gap-2" onClick={startQrScan}>
+                    <Button variant="secondary" className="h-14 w-full text-base gap-2" onClick={startQrScan}>
                       <QrCode className="h-5 w-5" />
                       QR-Code scannen
                     </Button>
@@ -559,6 +605,7 @@ const MobileApp = () => {
                   </div>
                   {selectedMeterId && (
                     <Button
+                      variant="secondary"
                       className="h-14 w-full text-base"
                       onClick={() => setShowConfirm(true)}
                     >
