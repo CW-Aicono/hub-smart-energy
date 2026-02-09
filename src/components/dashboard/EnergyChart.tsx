@@ -1,7 +1,10 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import { energyConsumptionData } from "@/data/mockData";
 import { useLocations } from "@/hooks/useLocations";
+import { downloadCSV } from "@/lib/exportUtils";
+import { Download } from "lucide-react";
 
 interface EnergyChartProps {
   locationId: string | null;
@@ -19,9 +22,24 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle className="font-display text-lg">Energieverbrauch (kWh)</CardTitle>
-        <p className="text-sm text-muted-foreground">{subtitle}</p>
+      <CardHeader className="flex flex-row items-center justify-between">
+        <div>
+          <CardTitle className="font-display text-lg">Energieverbrauch (kWh)</CardTitle>
+          <p className="text-sm text-muted-foreground">{subtitle}</p>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() =>
+            downloadCSV(
+              energyConsumptionData.map((d) => ({ Monat: d.month, Strom: d.strom, Gas: d.gas, Wärme: d.waerme })),
+              "energieverbrauch",
+              { Monat: "Monat", Strom: "Strom (kWh)", Gas: "Gas (kWh)", Wärme: "Wärme (kWh)" }
+            )
+          }
+        >
+          <Download className="h-4 w-4 mr-1" /> CSV
+        </Button>
       </CardHeader>
       <CardContent>
         <ResponsiveContainer width="100%" height={300}>

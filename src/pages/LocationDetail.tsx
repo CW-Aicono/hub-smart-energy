@@ -8,6 +8,7 @@ import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
 import { FloorList } from "@/components/locations/FloorList";
 import { AddFloorDialog } from "@/components/locations/AddFloorDialog";
 import { LocationIntegrationsList } from "@/components/integrations/LocationIntegrationsList";
+import { MeterManagement } from "@/components/locations/MeterManagement";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -193,6 +194,9 @@ const LocationDetail = () => {
               />
             </CardContent>
           </Card>
+
+          {/* Meters & Alerts */}
+          <MeterManagement locationId={location.id} />
 
           {/* Integrations Card */}
           <LocationIntegrationsList locationId={location.id} />

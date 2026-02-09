@@ -1,6 +1,8 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { costOverview } from "@/data/mockData";
-import { Euro, TrendingDown, TrendingUp, ArrowDownRight } from "lucide-react";
+import { Euro, TrendingDown, TrendingUp, ArrowDownRight, Download } from "lucide-react";
+import { downloadCSV } from "@/lib/exportUtils";
 
 interface CostOverviewProps {
   locationId: string | null;
@@ -31,7 +33,23 @@ const kpis = [
 const CostOverview = ({ locationId }: CostOverviewProps) => {
   // In a real implementation, filter data by locationId
   return (
-    <div className="grid gap-4 md:grid-cols-3">
+    <div className="space-y-3">
+      <div className="flex justify-end">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() =>
+            downloadCSV(
+              [{ Kategorie: "Aktuelle Kosten", Wert: costOverview.currentMonth }, { Kategorie: "Vormonat", Wert: costOverview.previousMonth }, { Kategorie: "Einsparungen", Wert: costOverview.savings }],
+              "kostenuebersicht",
+              { Kategorie: "Kategorie", Wert: "Wert (€)" }
+            )
+          }
+        >
+          <Download className="h-4 w-4 mr-1" /> CSV
+        </Button>
+      </div>
+      <div className="grid gap-4 md:grid-cols-3">
       {kpis.map((kpi) => (
         <Card key={kpi.label}>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
@@ -47,6 +65,7 @@ const CostOverview = ({ locationId }: CostOverviewProps) => {
           </CardContent>
         </Card>
       ))}
+      </div>
     </div>
   );
 };
