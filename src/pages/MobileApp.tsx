@@ -507,8 +507,18 @@ const MobileApp = () => {
           if (streamRef.current) requestAnimationFrame(() => scanQrFrameRef.current());
         });
       } else {
-        toast.error("Ihr Browser unterstützt keinen QR-Code-Scanner. Bitte nutzen Sie Chrome auf Android.");
-        stopQrScan();
+        // Fallback for Safari/iOS using jsQR
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        import("jsqr").then(({ default: jsQR }) => {
+          const code = jsQR(imageData.data, imageData.width, imageData.height);
+          if (code) {
+            handleQrResult(code.data);
+            return;
+          }
+          if (streamRef.current) requestAnimationFrame(() => scanQrFrameRef.current());
+        }).catch(() => {
+          if (streamRef.current) requestAnimationFrame(() => scanQrFrameRef.current());
+        });
       }
     };
   });
