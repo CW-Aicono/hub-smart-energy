@@ -48,7 +48,8 @@ const PieChartWidget = ({ locationId }: PieChartWidgetProps) => {
                   borderRadius: "var(--radius)",
                   color: "hsl(var(--card-foreground))",
                 }}
-                formatter={(value: number) => [`${value}%`, "Anteil"]}
+                formatter={(value: number, name: string) => [`${value}% (Anteil)`, name]}
+                labelFormatter={() => ""}
               />
               <Legend
                 verticalAlign="bottom"
