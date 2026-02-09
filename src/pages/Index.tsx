@@ -1,6 +1,6 @@
 import { Navigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
-import { useDashboardWidgets, WidgetLayout } from "@/hooks/useDashboardWidgets";
+import { useDashboardWidgets, WidgetLayout, WidgetSize } from "@/hooks/useDashboardWidgets";
 import { useTranslation } from "@/hooks/useTranslation";
 import { DashboardFilterProvider, useDashboardFilter } from "@/hooks/useDashboardFilter";
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
@@ -40,16 +40,30 @@ const WIDGET_COMPONENTS: Record<string, React.ComponentType<WidgetProps>> = {
   sankey: SankeyWidget,
 };
 
-const DEFAULT_LAYOUTS: Record<string, WidgetLayout> = {
-  location_map: { x: 0, y: 0, w: 2, h: 3 },
-  weather: { x: 2, y: 0, w: 1, h: 3 },
-  cost_overview: { x: 0, y: 3, w: 1, h: 3 },
-  energy_chart: { x: 1, y: 3, w: 2, h: 3 },
-  sustainability_kpis: { x: 0, y: 6, w: 2, h: 3 },
-  alerts_list: { x: 2, y: 6, w: 1, h: 3 },
-  floor_plan_explorer: { x: 0, y: 9, w: 2, h: 3 },
-  pie_chart: { x: 2, y: 9, w: 1, h: 3 },
-  sankey: { x: 0, y: 12, w: 3, h: 3 },
+const SIZE_TO_WIDTH: Record<WidgetSize, number> = {
+  small: 1,
+  medium: 2,
+  large: 2,
+  full: 3,
+};
+
+const SIZE_TO_HEIGHT: Record<WidgetSize, number> = {
+  small: 3,
+  medium: 3,
+  large: 4,
+  full: 3,
+};
+
+const DEFAULT_SIZES: Record<string, WidgetSize> = {
+  location_map: "medium",
+  weather: "small",
+  cost_overview: "small",
+  energy_chart: "medium",
+  sustainability_kpis: "medium",
+  alerts_list: "small",
+  floor_plan_explorer: "medium",
+  pie_chart: "small",
+  sankey: "full",
 };
 
 const getLocationWidget = (locationId: string | null): string => {
@@ -62,23 +76,47 @@ const DashboardContent = () => {
   const { selectedLocationId, setSelectedLocationId } = useDashboardFilter();
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const layouts = visibleWidgets.map((widget, idx): Layout => {
-    const l = widget.layout || DEFAULT_LAYOUTS[widget.widget_type] || { x: (idx % 3), y: Math.floor(idx / 3) * 2, w: 1, h: 2 };
-    return {
-      i: widget.widget_type,
-      x: l.x,
-      y: l.y,
-      w: l.w,
-      h: l.h,
-      minW: 1,
-      minH: 1,
-      maxW: 3,
-      maxH: 4,
-    };
-  });
+  // Compute layouts from widget_size and position order
+  const layouts = (() => {
+    const result: Layout[] = [];
+    let cursorX = 0;
+    let cursorY = 0;
+    const cols = 3;
+
+    for (const widget of visibleWidgets) {
+      const size = widget.widget_size || DEFAULT_SIZES[widget.widget_type] || "medium";
+      const w = SIZE_TO_WIDTH[size] || 1;
+      const h = SIZE_TO_HEIGHT[size] || 3;
+
+      // If widget doesn't fit in current row, move to next row
+      if (cursorX + w > cols) {
+        cursorX = 0;
+        cursorY += 1; // react-grid-layout compacts, so approximate y
+      }
+
+      result.push({
+        i: widget.widget_type,
+        x: cursorX,
+        y: cursorY,
+        w,
+        h,
+        minW: 1,
+        minH: 1,
+        maxW: 3,
+        maxH: 4,
+      });
+
+      cursorX += w;
+      if (cursorX >= cols) {
+        cursorX = 0;
+        cursorY += h;
+      }
+    }
+
+    return result;
+  })();
 
   const handleLayoutChange = useCallback((newLayout: Layout[]) => {
-    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     saveTimeoutRef.current = setTimeout(() => {
       const layoutMap: Record<string, WidgetLayout> = {};
@@ -122,7 +160,12 @@ const DashboardContent = () => {
               onToggleVisibility={toggleWidgetVisibility}
               onReorder={reorderWidgets}
               onResizeWidget={updateWidgetSize}
-              onResetLayout={() => resetLayouts(DEFAULT_LAYOUTS)}
+              onResetLayout={async () => {
+                // Reset sizes to defaults
+                for (const [type, size] of Object.entries(DEFAULT_SIZES)) {
+                  await updateWidgetSize(type, size);
+                }
+              }}
             />
           </div>
         </header>
