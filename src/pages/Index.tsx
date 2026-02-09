@@ -61,7 +61,6 @@ const DashboardContent = () => {
   const { t } = useTranslation();
   const { selectedLocationId, setSelectedLocationId } = useDashboardFilter();
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [isEditing, setIsEditing] = useState(false);
 
   const layouts = visibleWidgets.map((widget, idx): Layout => {
     const l = widget.layout || DEFAULT_LAYOUTS[widget.widget_type] || { x: (idx % 3), y: Math.floor(idx / 3) * 2, w: 1, h: 2 };
@@ -79,8 +78,7 @@ const DashboardContent = () => {
   });
 
   const handleLayoutChange = useCallback((newLayout: Layout[]) => {
-    if (!isEditing) return;
-    
+    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     saveTimeoutRef.current = setTimeout(() => {
       const layoutMap: Record<string, WidgetLayout> = {};
@@ -89,7 +87,7 @@ const DashboardContent = () => {
       });
       updateAllLayouts(layoutMap);
     }, 800);
-  }, [updateAllLayouts, isEditing]);
+  }, [updateAllLayouts]);
 
   useEffect(() => {
     return () => {
@@ -119,13 +117,7 @@ const DashboardContent = () => {
               selectedLocationId={selectedLocationId}
               onLocationChange={setSelectedLocationId}
             />
-            <button
-              onClick={() => setIsEditing(!isEditing)}
-              className={`inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors h-9 px-3 border ${isEditing ? 'bg-primary text-primary-foreground border-primary' : 'bg-background border-input hover:bg-accent hover:text-accent-foreground'}`}
-            >
-              {isEditing ? "✓ Fertig" : "⊞ Layout bearbeiten"}
-            </button>
-            <DashboardCustomizer 
+            <DashboardCustomizer
               widgets={widgets} 
               onToggleVisibility={toggleWidgetVisibility}
               onReorder={reorderWidgets}
@@ -142,8 +134,8 @@ const DashboardContent = () => {
               cols={{ lg: 3, md: 3, sm: 1 }}
               rowHeight={150}
               margin={[16, 16]}
-              isDraggable={isEditing}
-              isResizable={isEditing}
+              isDraggable={true}
+              isResizable={true}
               onLayoutChange={(layout) => handleLayoutChange(layout)}
               draggableCancel=".no-drag"
             >
@@ -153,7 +145,7 @@ const DashboardContent = () => {
                   : widget.widget_type;
                 const Component = WIDGET_COMPONENTS[widgetType];
                 return Component ? (
-                  <div key={widget.widget_type} className={`${isEditing ? 'ring-1 ring-border ring-dashed rounded-lg' : ''}`}>
+                  <div key={widget.widget_type}>
                     <div className="h-full w-full overflow-auto">
                       <Component locationId={selectedLocationId} />
                     </div>
