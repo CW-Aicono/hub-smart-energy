@@ -1,6 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useLocations } from "@/hooks/useLocations";
-import { useMemo } from "react";
+import { useMemo, useState, useRef } from "react";
 
 interface SankeyWidgetProps {
   locationId: string | null;
@@ -45,6 +45,8 @@ const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
   const { locations } = useLocations();
   const selectedLocation = locationId ? locations.find((l) => l.id === locationId) : null;
   const subtitle = selectedLocation ? `Daten für: ${selectedLocation.name}` : "Alle Liegenschaften";
+  const svgRef = useRef<SVGSVGElement>(null);
+  const [tooltip, setTooltip] = useState<{ x: number; y: number; source: string; target: string; value: number } | null>(null);
 
   const targetValues = useMemo(() => {
     const vals: Record<number, number> = {};
@@ -121,14 +123,25 @@ const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
     const cx1 = x1 + (x2 - x1) * 0.35;
     const cx2 = x1 + (x2 - x1) * 0.65;
 
-    // Label at mid-point of the link
     const midX = (x1 + x2) / 2;
     const midYTop = (sy + ty) / 2;
     const midYBot = (sy + linkHSrc + ty + linkHTgt) / 2;
     const labelY = (midYTop + midYBot) / 2;
 
+    const handleMouseMove = (e: React.MouseEvent) => {
+      if (!svgRef.current) return;
+      const rect = svgRef.current.getBoundingClientRect();
+      setTooltip({
+        x: e.clientX - rect.left,
+        y: e.clientY - rect.top - 10,
+        source: SOURCES[srcIdx].name,
+        target: TARGETS[tgtIdx].name,
+        value: link.value,
+      });
+    };
+
     return (
-      <g key={`link-${i}`}>
+      <g key={`link-${i}`} onMouseMove={handleMouseMove} onMouseLeave={() => setTooltip(null)} className="cursor-pointer">
         <path
           d={`M${x1},${sy} C${cx1},${sy} ${cx2},${ty} ${x2},${ty}
               L${x2},${ty + linkHTgt} C${cx2},${ty + linkHTgt} ${cx1},${sy + linkHSrc} ${x1},${sy + linkHSrc} Z`}
@@ -146,6 +159,7 @@ const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
             fontSize={8}
             fontWeight={500}
             opacity={0.8}
+            className="pointer-events-none"
           >
             {link.value.toLocaleString()} kWh
           </text>
@@ -161,8 +175,8 @@ const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
         <p className="text-sm text-muted-foreground">{subtitle}</p>
       </CardHeader>
       <CardContent className="px-2 pb-2">
-        <div className="w-full" style={{ aspectRatio: "2/1" }}>
-          <svg viewBox={`0 0 ${vbW} ${vbH}`} className="w-full h-full" preserveAspectRatio="xMidYMid meet">
+        <div className="w-full relative" style={{ aspectRatio: "2/1" }}>
+          <svg ref={svgRef} viewBox={`0 0 ${vbW} ${vbH}`} className="w-full h-full" preserveAspectRatio="xMidYMid meet">
             <defs>
               {LINKS.map((link, i) => {
                 const srcColor = SOURCES[link.source]?.color || "hsl(var(--muted))";
@@ -218,6 +232,15 @@ const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
               );
             })}
           </svg>
+          {tooltip && (
+            <div
+              className="absolute pointer-events-none z-10 rounded-lg border bg-background px-3 py-2 text-xs shadow-lg"
+              style={{ left: tooltip.x, top: tooltip.y, transform: "translate(-50%, -100%)" }}
+            >
+              <div className="font-semibold">{tooltip.source} → {tooltip.target}</div>
+              <div className="text-muted-foreground">{tooltip.value.toLocaleString()} kWh</div>
+            </div>
+          )}
         </div>
       </CardContent>
     </Card>
