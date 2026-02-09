@@ -3,7 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2, Trash2, GripVertical, AlertCircle, Image, MapPin, Maximize2, Minimize2, Box } from "lucide-react";
+import { Loader2, Trash2, GripVertical, AlertCircle, Image, MapPin, Maximize2, Minimize2, Box, LayoutGrid } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Floor } from "@/hooks/useFloors";
 import { useFloorSensorPositions, FloorSensorPosition, FloorSensorPositionInsert } from "@/hooks/useFloorSensorPositions";
@@ -12,8 +12,9 @@ import { useUserRole } from "@/hooks/useUserRole";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
-// Lazy load 3D viewer for performance
+// Lazy load 3D viewer and room editor for performance
 const FloorPlan3DViewer = lazy(() => import("./FloorPlan3DViewer").then(m => ({ default: m.FloorPlan3DViewer })));
+import { RoomEditor } from "./RoomEditor";
 
 interface Sensor {
   id: string;
@@ -274,6 +275,10 @@ export function FloorPlanDialog({ floor, locationId, open, onOpenChange }: Floor
                   <Box className="h-4 w-4" />
                   3D-Begehung
                 </TabsTrigger>
+                <TabsTrigger value="rooms" className="gap-2">
+                  <LayoutGrid className="h-4 w-4" />
+                  Räume
+                </TabsTrigger>
               </TabsList>
 
               <TabsContent value="view" className="flex-1 m-0 overflow-hidden">
@@ -440,35 +445,55 @@ export function FloorPlanDialog({ floor, locationId, open, onOpenChange }: Floor
                   />
                 </Suspense>
               </TabsContent>
+
+              {/* Room Editor Tab */}
+              <TabsContent value="rooms" className="flex-1 m-0 overflow-hidden">
+                <RoomEditor floor={floor} onClose={() => setActiveTab("3d")} />
+              </TabsContent>
             </Tabs>
           ) : (
-            <div className="relative w-full h-full border rounded-lg overflow-hidden bg-muted/10">
-              <img
-                src={floor.floor_plan_url!}
-                alt={floor.name}
-                className="w-full h-full object-contain"
-              />
-              {/* Sensor Overlays */}
-              {placedSensorsWithInfo.map((pos) => (
-                <div
-                  key={pos.id}
-                  className="absolute transform -translate-x-1/2 -translate-y-1/2"
-                  style={{
-                    left: `${pos.position_x}%`,
-                    top: `${pos.position_y}%`,
-                  }}
-                >
-                  <div className="bg-card/95 backdrop-blur-sm border shadow-lg rounded-lg px-2 py-1 min-w-[80px] text-center">
-                    <p className="text-[10px] font-medium text-muted-foreground truncate max-w-[100px]">
-                      {pos.sensor_name}
-                    </p>
-                    <p className="text-sm font-mono font-bold text-primary">
-                      {pos.sensorInfo ? `${pos.sensorInfo.value} ${pos.sensorInfo.unit}` : "—"}
-                    </p>
-                  </div>
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full flex flex-col">
+              <TabsList className="flex-shrink-0 w-fit mb-3">
+                <TabsTrigger value="view" className="gap-2">
+                  <Image className="h-4 w-4" />
+                  Ansicht
+                </TabsTrigger>
+                <TabsTrigger value="3d" className="gap-2">
+                  <Box className="h-4 w-4" />
+                  3D-Begehung
+                </TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="view" className="flex-1 m-0 overflow-hidden">
+                <div className="relative w-full h-full border rounded-lg overflow-hidden bg-muted/10">
+                  <img
+                    src={floor.floor_plan_url!}
+                    alt={floor.name}
+                    className="w-full h-full object-contain"
+                  />
+                  {placedSensorsWithInfo.map((pos) => (
+                    <div
+                      key={pos.id}
+                      className="absolute transform -translate-x-1/2 -translate-y-1/2"
+                      style={{ left: `${pos.position_x}%`, top: `${pos.position_y}%` }}
+                    >
+                      <div className="bg-card/95 backdrop-blur-sm border shadow-lg rounded-lg px-2 py-1 min-w-[80px] text-center">
+                        <p className="text-[10px] font-medium text-muted-foreground truncate max-w-[100px]">{pos.sensor_name}</p>
+                        <p className="text-sm font-mono font-bold text-primary">
+                          {pos.sensorInfo ? `${pos.sensorInfo.value} ${pos.sensorInfo.unit}` : "—"}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
+              </TabsContent>
+
+              <TabsContent value="3d" className="flex-1 m-0 overflow-hidden">
+                <Suspense fallback={<div className="flex items-center justify-center h-full"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}>
+                  <FloorPlan3DViewer floor={floor} locationId={locationId} sensors={[]} isAdmin={false} />
+                </Suspense>
+              </TabsContent>
+            </Tabs>
           )}
         </div>
       </DialogContent>
