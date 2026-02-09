@@ -14,6 +14,12 @@ export const translations = {
     es: "Ubicaciones",
     nl: "Locaties",
   },
+  "nav.energyData": {
+    de: "Energiedaten",
+    en: "Energy Data",
+    es: "Datos de energía",
+    nl: "Energiegegevens",
+  },
   "nav.userManagement": {
     de: "Benutzerverwaltung",
     en: "User Management",
