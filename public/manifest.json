@@ -1,0 +1,17 @@
+{
+  "name": "Smart Energy Hub",
+  "short_name": "Energy Hub",
+  "description": "Zählerstand erfassen per App",
+  "start_url": "/m",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0f172a",
+  "theme_color": "#0f172a",
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "64x64",
+      "type": "image/x-icon"
+    }
+  ]
+}

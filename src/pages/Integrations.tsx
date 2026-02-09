@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { Navigate } from "react-router-dom";
+import { ScannerManagement } from "@/components/integrations/ScannerManagement";
 import { useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useIntegrations, Integration } from "@/hooks/useIntegrations";
@@ -530,6 +531,11 @@ const Integrations = () => {
               ))}
             </div>
           )}
+
+          {/* Scanner Management Section */}
+          <div className="border-t pt-8 mt-8">
+            <ScannerManagement />
+          </div>
         </div>
       </main>
     </div>

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { MeterQrCode } from "@/components/integrations/MeterQrCode";
 import { Navigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useLocations } from "@/hooks/useLocations";
@@ -12,7 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Gauge, ClipboardEdit, Filter } from "lucide-react";
+import { Gauge, ClipboardEdit, Filter, QrCode } from "lucide-react";
 import { format } from "date-fns";
 import { de } from "date-fns/locale";
 
@@ -31,6 +32,7 @@ const MetersOverview = () => {
 
   const [selectedLocationId, setSelectedLocationId] = useState<string>("all");
   const [readingDialogMeter, setReadingDialogMeter] = useState<Meter | null>(null);
+  const [qrMeter, setQrMeter] = useState<Meter | null>(null);
 
   if (authLoading || locationsLoading) {
     return (
@@ -124,7 +126,7 @@ const MetersOverview = () => {
                       <TableHead>Energieart</TableHead>
                       <TableHead>Erfassung</TableHead>
                       <TableHead>Letzter Stand</TableHead>
-                      <TableHead className="w-32" />
+                      <TableHead className="w-48" />
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -159,16 +161,26 @@ const MetersOverview = () => {
                             )}
                           </TableCell>
                           <TableCell>
-                            {isManual && (
+                            <div className="flex gap-1">
+                              {isManual && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => setReadingDialogMeter(m)}
+                                >
+                                  <ClipboardEdit className="h-4 w-4 mr-1" />
+                                  Ablesen
+                                </Button>
+                              )}
                               <Button
                                 size="sm"
-                                variant="outline"
-                                onClick={() => setReadingDialogMeter(m)}
+                                variant="ghost"
+                                onClick={() => setQrMeter(m)}
+                                title="QR-Code generieren"
                               >
-                                <ClipboardEdit className="h-4 w-4 mr-1" />
-                                Ablesen
+                                <QrCode className="h-4 w-4" />
                               </Button>
-                            )}
+                            </div>
                           </TableCell>
                         </TableRow>
                       );
@@ -196,6 +208,15 @@ const MetersOverview = () => {
                 ...data,
               });
             }}
+          />
+        )}
+
+        {/* Meter QR Code Dialog */}
+        {qrMeter && (
+          <MeterQrCode
+            meter={qrMeter}
+            open={!!qrMeter}
+            onOpenChange={(open) => !open && setQrMeter(null)}
           />
         )}
       </main>
