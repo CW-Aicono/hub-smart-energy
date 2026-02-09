@@ -16,11 +16,6 @@ import FloorPlanDashboardWidget from "@/components/dashboard/FloorPlanDashboardW
 import WeatherWidget from "@/components/dashboard/WeatherWidget";
 import PieChartWidget from "@/components/dashboard/PieChartWidget";
 import SankeyWidget from "@/components/dashboard/SankeyWidget";
-import { Responsive, WidthProvider, Layout } from "react-grid-layout";
-import "react-grid-layout/css/styles.css";
-import "react-resizable/css/styles.css";
-
-const ResponsiveGridLayout = WidthProvider(Responsive);
 
 interface WidgetProps {
   locationId: string | null;
@@ -39,8 +34,6 @@ const WIDGET_COMPONENTS: Record<string, React.ComponentType<WidgetProps>> = {
   sankey: SankeyWidget,
 };
 
-const WIDGET_HEIGHT = 3;
-
 const getLocationWidget = (locationId: string | null): string => {
   return locationId ? "floor_plan" : "location_map";
 };
@@ -49,19 +42,6 @@ const DashboardContent = () => {
   const { widgets, visibleWidgets, loading: widgetsLoading, toggleWidgetVisibility, reorderWidgets } = useDashboardWidgets();
   const { t } = useTranslation();
   const { selectedLocationId, setSelectedLocationId } = useDashboardFilter();
-
-  // All widgets full width, stacked by position order
-  const layouts: Layout[] = visibleWidgets.map((widget, idx) => ({
-    i: widget.widget_type,
-    x: 0,
-    y: idx * WIDGET_HEIGHT,
-    w: 3,
-    h: WIDGET_HEIGHT,
-    minW: 3,
-    maxW: 3,
-    minH: WIDGET_HEIGHT,
-    maxH: WIDGET_HEIGHT,
-  }));
 
   if (widgetsLoading) {
     return (
@@ -90,7 +70,6 @@ const DashboardContent = () => {
               onToggleVisibility={toggleWidgetVisibility}
               onReorder={reorderWidgets}
               onResetLayout={() => {
-                // Reset to default order (by widget_type alphabetical or original)
                 const defaultOrder = widgets
                   .sort((a, b) => a.position - b.position)
                   .map(w => w.widget_type);
@@ -99,33 +78,19 @@ const DashboardContent = () => {
             />
           </div>
         </header>
-        <div className="p-6">
+        <div className="p-6 flex flex-col gap-2">
           {visibleWidgets.length > 0 ? (
-            <ResponsiveGridLayout
-              className="layout"
-              layouts={{ lg: layouts, md: layouts, sm: layouts }}
-              breakpoints={{ lg: 1200, md: 996, sm: 768 }}
-              cols={{ lg: 3, md: 3, sm: 1 }}
-              rowHeight={150}
-              margin={[8, 8]}
-              isDraggable={false}
-              isResizable={false}
-              draggableCancel=".no-drag"
-            >
-              {visibleWidgets.map((widget) => {
-                const widgetType = widget.widget_type === "location_map"
-                  ? getLocationWidget(selectedLocationId)
-                  : widget.widget_type;
-                const Component = WIDGET_COMPONENTS[widgetType];
-                return Component ? (
-                  <div key={widget.widget_type}>
-                    <div className="h-full w-full overflow-hidden">
-                      <Component locationId={selectedLocationId} />
-                    </div>
-                  </div>
-                ) : null;
-              })}
-            </ResponsiveGridLayout>
+            visibleWidgets.map((widget) => {
+              const widgetType = widget.widget_type === "location_map"
+                ? getLocationWidget(selectedLocationId)
+                : widget.widget_type;
+              const Component = WIDGET_COMPONENTS[widgetType];
+              return Component ? (
+                <div key={widget.widget_type}>
+                  <Component locationId={selectedLocationId} />
+                </div>
+              ) : null;
+            })
           ) : (
             <div className="text-center py-12 text-muted-foreground">
               <p>{t("dashboard.noWidgets")}</p>
