@@ -35,7 +35,7 @@ serve(async (req) => {
           {
             role: "system",
             content: `Du bist ein Experte für das Ablesen von Zählerständen. Analysiere das Bild und extrahiere:
-1. Den Zählerstand (die Ziffern auf dem Display/Rollenzählwerk). Gib nur die Vorkomma-Ziffern zurück, KEINE Nachkommastellen die rot markiert sind.
+1. Den Zählerstand (die Ziffern auf dem Display/Rollenzählwerk). Gib den vollständigen Zählerstand MIT Nachkommastellen zurück, falls vorhanden. Rot markierte Ziffern sind Nachkommastellen und sollen mit erfasst werden.
 2. Die Zählernummer (falls sichtbar, oft auf einem Schild am Zähler).
 Gib die Daten strukturiert zurück.`,
           },
@@ -58,7 +58,7 @@ Gib die Daten strukturiert zurück.`,
                 properties: {
                   reading: {
                     type: "number",
-                    description: "Der abgelesene Zählerstand als Zahl (nur Vorkomma-Ziffern)",
+                    description: "Der abgelesene Zählerstand als Zahl, inklusive Nachkommastellen falls vorhanden (z.B. 12345.678)",
                   },
                   meter_number: {
                     type: "string",
