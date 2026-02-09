@@ -133,7 +133,7 @@ const DashboardContent = () => {
               layouts={{ lg: layouts, md: layouts, sm: layouts }}
               breakpoints={{ lg: 1200, md: 996, sm: 768 }}
               cols={{ lg: 3, md: 3, sm: 1 }}
-              rowHeight={120}
+              rowHeight={150}
               margin={[16, 16]}
               isDraggable={false}
               isResizable={false}
@@ -147,7 +147,7 @@ const DashboardContent = () => {
                 const Component = WIDGET_COMPONENTS[widgetType];
                 return Component ? (
                   <div key={widget.widget_type}>
-                    <div className="h-full w-full overflow-auto">
+                    <div className="h-full w-full overflow-hidden">
                       <Component locationId={selectedLocationId} />
                     </div>
                   </div>
