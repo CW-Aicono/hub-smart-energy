@@ -27,12 +27,14 @@ export function Floor3DControls({
     backward: false,
     left: false,
     right: false,
-    jump: false,
+    up: false,
+    down: false,
   });
 
   // Velocity for smooth movement
   const velocity = useRef(new THREE.Vector3());
   const direction = useRef(new THREE.Vector3());
+  const currentHeight = useRef(eyeHeight);
 
   // Set initial camera height
   useEffect(() => {
@@ -78,7 +80,12 @@ export function Floor3DControls({
           setKeys((k) => ({ ...k, right: true }));
           break;
         case "Space":
-          setKeys((k) => ({ ...k, jump: true }));
+          e.preventDefault();
+          setKeys((k) => ({ ...k, up: true }));
+          break;
+        case "ShiftLeft":
+        case "ShiftRight":
+          setKeys((k) => ({ ...k, down: true }));
           break;
       }
     };
@@ -102,19 +109,31 @@ export function Floor3DControls({
           setKeys((k) => ({ ...k, right: false }));
           break;
         case "Space":
-          setKeys((k) => ({ ...k, jump: false }));
+          setKeys((k) => ({ ...k, up: false }));
+          break;
+        case "ShiftLeft":
+        case "ShiftRight":
+          setKeys((k) => ({ ...k, down: false }));
           break;
       }
+    };
+
+    const handleWheel = (e: WheelEvent) => {
+      if (!controlsRef.current?.isLocked) return;
+      e.preventDefault();
+      currentHeight.current = Math.max(0.5, Math.min(20, currentHeight.current - e.deltaY * 0.005));
     };
 
     if (enabled) {
       document.addEventListener("keydown", handleKeyDown);
       document.addEventListener("keyup", handleKeyUp);
+      gl.domElement.addEventListener("wheel", handleWheel, { passive: false });
     }
 
     return () => {
       document.removeEventListener("keydown", handleKeyDown);
       document.removeEventListener("keyup", handleKeyUp);
+      gl.domElement.removeEventListener("wheel", handleWheel);
     };
   }, [enabled]);
 
@@ -122,7 +141,7 @@ export function Floor3DControls({
   useFrame((_, delta) => {
     if (!enabled || !controlsRef.current?.isLocked) return;
 
-    // Damping
+    // Damping for horizontal movement
     velocity.current.x -= velocity.current.x * 10.0 * delta;
     velocity.current.z -= velocity.current.z * 10.0 * delta;
 
@@ -131,7 +150,7 @@ export function Floor3DControls({
     direction.current.x = Number(keys.right) - Number(keys.left);
     direction.current.normalize();
 
-    // Apply movement
+    // Apply horizontal movement
     if (keys.forward || keys.backward) {
       velocity.current.z -= direction.current.z * moveSpeed * delta * 10;
     }
@@ -139,12 +158,21 @@ export function Floor3DControls({
       velocity.current.x -= direction.current.x * moveSpeed * delta * 10;
     }
 
+    // Vertical movement via Space/Shift
+    const verticalSpeed = moveSpeed * 0.6;
+    if (keys.up) {
+      currentHeight.current = Math.min(20, currentHeight.current + verticalSpeed * delta);
+    }
+    if (keys.down) {
+      currentHeight.current = Math.max(0.5, currentHeight.current - verticalSpeed * delta);
+    }
+
     // Move the controls/camera
     controlsRef.current.moveRight(-velocity.current.x * delta);
     controlsRef.current.moveForward(-velocity.current.z * delta);
 
-    // Keep camera at eye height
-    camera.position.y = eyeHeight;
+    // Apply height
+    camera.position.y = currentHeight.current;
   });
 
   // Auto-lock when enabled
