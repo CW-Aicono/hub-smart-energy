@@ -38,6 +38,8 @@ const MetersOverview = () => {
   const [qrMeter, setQrMeter] = useState<Meter | null>(null);
   const [editingMeter, setEditingMeter] = useState<Meter | null>(null);
   const [showArchived, setShowArchived] = useState(false);
+  const [selectedEnergyType, setSelectedEnergyType] = useState<string>("all");
+  const [selectedCaptureType, setSelectedCaptureType] = useState<string>("all");
 
   if (authLoading || locationsLoading) {
     return (
@@ -53,9 +55,12 @@ const MetersOverview = () => {
 
   if (!user) return <Navigate to="/auth" replace />;
 
-  const locationFiltered = meters.filter((m) =>
-    selectedLocationId === "all" ? true : m.location_id === selectedLocationId
-  );
+  const locationFiltered = meters.filter((m) => {
+    if (selectedLocationId !== "all" && m.location_id !== selectedLocationId) return false;
+    if (selectedEnergyType !== "all" && m.energy_type !== selectedEnergyType) return false;
+    if (selectedCaptureType !== "all" && m.capture_type !== selectedCaptureType) return false;
+    return true;
+  });
 
   const activeMeters = locationFiltered.filter((m) => !m.is_archived);
   const archivedMeters = locationFiltered.filter((m) => m.is_archived);
@@ -95,19 +100,45 @@ const MetersOverview = () => {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <Select value={selectedLocationId} onValueChange={setSelectedLocationId}>
-                <SelectTrigger className="max-w-sm">
-                  <SelectValue placeholder="Standort wählen" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Alle Liegenschaften</SelectItem>
-                  {locations.map((loc) => (
-                    <SelectItem key={loc.id} value={loc.id}>
-                      {loc.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div className="flex flex-wrap gap-4">
+                <Select value={selectedLocationId} onValueChange={setSelectedLocationId}>
+                  <SelectTrigger className="w-[220px]">
+                    <SelectValue placeholder="Standort wählen" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Alle Liegenschaften</SelectItem>
+                    {locations.map((loc) => (
+                      <SelectItem key={loc.id} value={loc.id}>
+                        {loc.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                <Select value={selectedEnergyType} onValueChange={setSelectedEnergyType}>
+                  <SelectTrigger className="w-[180px]">
+                    <SelectValue placeholder="Energieart" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Alle Energiearten</SelectItem>
+                    <SelectItem value="strom">Strom</SelectItem>
+                    <SelectItem value="gas">Gas</SelectItem>
+                    <SelectItem value="waerme">Wärme</SelectItem>
+                    <SelectItem value="wasser">Wasser</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                <Select value={selectedCaptureType} onValueChange={setSelectedCaptureType}>
+                  <SelectTrigger className="w-[180px]">
+                    <SelectValue placeholder="Erfassung" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Alle Erfassungen</SelectItem>
+                    <SelectItem value="manual">Manuell</SelectItem>
+                    <SelectItem value="automatic">Automatisch</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </CardContent>
           </Card>
 
