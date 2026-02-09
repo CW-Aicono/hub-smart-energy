@@ -1,7 +1,9 @@
+import { useState } from "react";
 import { Navigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useDashboardWidgets, WidgetSize } from "@/hooks/useDashboardWidgets";
 import { useTranslation } from "@/hooks/useTranslation";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { DashboardFilterProvider, useDashboardFilter } from "@/hooks/useDashboardFilter";
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
 import DashboardCustomizer from "@/components/dashboard/DashboardCustomizer";
@@ -50,6 +52,7 @@ const getLocationWidget = (locationId: string | null): string => {
 
 const DashboardContent = () => {
   const { widgets, visibleWidgets, loading: widgetsLoading, toggleWidgetVisibility, reorderWidgets, updateWidgetSize } = useDashboardWidgets();
+  const [expandedWidget, setExpandedWidget] = useState<string | null>(null);
   const { t } = useTranslation();
   const { selectedLocationId, setSelectedLocationId } = useDashboardFilter();
 
@@ -101,7 +104,16 @@ const DashboardContent = () => {
                 const Component = WIDGET_COMPONENTS[widgetType];
                 const sizeClass = SIZE_CLASS[widget.widget_size] || "w-full";
                 return Component ? (
-                  <div key={widget.widget_type} className={`${sizeClass} min-w-0`} style={{ flexBasis: sizeClass === "w-full" ? "100%" : sizeClass === "w-2/3" ? "calc(66.666% - 8px)" : "calc(33.333% - 11px)" }}>
+                  <div
+                    key={widget.widget_type}
+                    className={`${sizeClass} min-w-0 ${widget.widget_size !== "full" ? "cursor-pointer" : ""}`}
+                    style={{ flexBasis: sizeClass === "w-full" ? "100%" : sizeClass === "w-2/3" ? "calc(66.666% - 8px)" : "calc(33.333% - 11px)" }}
+                    onClick={() => {
+                      if (widget.widget_size !== "full") {
+                        setExpandedWidget(widgetType);
+                      }
+                    }}
+                  >
                     <Component locationId={selectedLocationId} />
                   </div>
                 ) : null;
@@ -114,6 +126,15 @@ const DashboardContent = () => {
             )}
           </div>
         </div>
+      {/* Expanded widget dialog */}
+      <Dialog open={!!expandedWidget} onOpenChange={() => setExpandedWidget(null)}>
+        <DialogContent className="max-w-[90vw] w-full max-h-[90vh] overflow-auto p-6">
+          {expandedWidget && WIDGET_COMPONENTS[expandedWidget] && (() => {
+            const ExpandedComponent = WIDGET_COMPONENTS[expandedWidget];
+            return <ExpandedComponent locationId={selectedLocationId} />;
+          })()}
+        </DialogContent>
+      </Dialog>
       </main>
     </div>
   );
