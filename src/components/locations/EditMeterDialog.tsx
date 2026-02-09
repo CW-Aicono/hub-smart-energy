@@ -1,0 +1,225 @@
+import { useState, useEffect } from "react";
+import { Meter, MeterInsert } from "@/hooks/useMeters";
+import { useLocationIntegrations } from "@/hooks/useIntegrations";
+import { supabase } from "@/integrations/supabase/client";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Skeleton } from "@/components/ui/skeleton";
+import { AlertCircle } from "lucide-react";
+
+interface EditMeterDialogProps {
+  meter: Meter;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onSave: (id: string, updates: Partial<MeterInsert>) => Promise<void>;
+}
+
+interface SensorOption {
+  uuid: string;
+  name: string;
+}
+
+export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeterDialogProps) => {
+  const { locationIntegrations, loading: integrationsLoading } = useLocationIntegrations(meter.location_id);
+  const [name, setName] = useState(meter.name);
+  const [meterNumber, setMeterNumber] = useState(meter.meter_number || "");
+  const [energyType, setEnergyType] = useState(meter.energy_type);
+  const [unit, setUnit] = useState(meter.unit);
+  const [medium, setMedium] = useState(meter.medium || "");
+  const [notes, setNotes] = useState(meter.notes || "");
+  const [captureType, setCaptureType] = useState<"manual" | "automatic">(meter.capture_type as "manual" | "automatic");
+  const [selectedIntegration, setSelectedIntegration] = useState(meter.location_integration_id || "");
+  const [selectedSensor, setSelectedSensor] = useState(meter.sensor_uuid || "");
+  const [sensors, setSensors] = useState<SensorOption[]>([]);
+  const [sensorsLoading, setSensorsLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  const enabledIntegrations = locationIntegrations.filter((li) => li.is_enabled);
+
+  // Reset form when meter changes
+  useEffect(() => {
+    setName(meter.name);
+    setMeterNumber(meter.meter_number || "");
+    setEnergyType(meter.energy_type);
+    setUnit(meter.unit);
+    setMedium(meter.medium || "");
+    setNotes(meter.notes || "");
+    setCaptureType(meter.capture_type as "manual" | "automatic");
+    setSelectedIntegration(meter.location_integration_id || "");
+    setSelectedSensor(meter.sensor_uuid || "");
+  }, [meter]);
+
+  // Fetch sensors when integration selected
+  useEffect(() => {
+    if (!selectedIntegration || captureType !== "automatic") {
+      setSensors([]);
+      return;
+    }
+    const li = enabledIntegrations.find((i) => i.id === selectedIntegration);
+    if (!li) return;
+
+    const fetchSensors = async () => {
+      setSensorsLoading(true);
+      try {
+        const { data, error } = await supabase.functions.invoke("loxone-api", {
+          body: { action: "structure", config: li.config },
+        });
+        if (error || !data?.controls) {
+          setSensors([]);
+        } else {
+          const list: SensorOption[] = [];
+          const controls = data.controls as Record<string, { name: string; uuidAction: string }>;
+          Object.values(controls).forEach((ctrl) => {
+            if (ctrl.name && ctrl.uuidAction) list.push({ uuid: ctrl.uuidAction, name: ctrl.name });
+          });
+          setSensors(list.sort((a, b) => a.name.localeCompare(b.name)));
+        }
+      } catch {
+        setSensors([]);
+      } finally {
+        setSensorsLoading(false);
+      }
+    };
+    fetchSensors();
+  }, [selectedIntegration, captureType]);
+
+  const handleSubmit = async () => {
+    if (!name.trim()) return;
+    setSaving(true);
+    await onSave(meter.id, {
+      name: name.trim(),
+      meter_number: meterNumber || undefined,
+      energy_type: energyType,
+      unit,
+      medium: medium || undefined,
+      notes: notes || undefined,
+      capture_type: captureType,
+      location_integration_id: captureType === "automatic" && selectedIntegration ? selectedIntegration : undefined,
+      sensor_uuid: captureType === "automatic" && selectedSensor ? selectedSensor : undefined,
+    });
+    setSaving(false);
+    onOpenChange(false);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Zähler bearbeiten</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div>
+            <Label className="mb-2 block">Erfassungsart *</Label>
+            <RadioGroup
+              value={captureType}
+              onValueChange={(v) => setCaptureType(v as "manual" | "automatic")}
+              className="flex gap-6"
+            >
+              <div className="flex items-center gap-2">
+                <RadioGroupItem value="manual" id="edit-capture-manual" />
+                <Label htmlFor="edit-capture-manual" className="cursor-pointer font-normal">Manuelle Erfassung</Label>
+              </div>
+              <div className="flex items-center gap-2">
+                <RadioGroupItem value="automatic" id="edit-capture-automatic" />
+                <Label htmlFor="edit-capture-automatic" className="cursor-pointer font-normal">Automatische Erfassung</Label>
+              </div>
+            </RadioGroup>
+          </div>
+
+          {captureType === "automatic" && (
+            <div className="space-y-3 rounded-md border p-3 bg-muted/30">
+              <div>
+                <Label>Datengateway *</Label>
+                {integrationsLoading ? (
+                  <Skeleton className="h-9 w-full mt-1" />
+                ) : enabledIntegrations.length === 0 ? (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground mt-1">
+                    <AlertCircle className="h-4 w-4" />
+                    <span>Kein aktives Gateway konfiguriert.</span>
+                  </div>
+                ) : (
+                  <Select value={selectedIntegration} onValueChange={setSelectedIntegration}>
+                    <SelectTrigger className="mt-1"><SelectValue placeholder="Gateway auswählen" /></SelectTrigger>
+                    <SelectContent>
+                      {enabledIntegrations.map((li) => (
+                        <SelectItem key={li.id} value={li.id}>{li.integration?.name || "Gateway"}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              </div>
+              {selectedIntegration && (
+                <div>
+                  <Label>Sensor *</Label>
+                  {sensorsLoading ? (
+                    <Skeleton className="h-9 w-full mt-1" />
+                  ) : sensors.length === 0 ? (
+                    <p className="text-sm text-muted-foreground mt-1">Keine Sensoren gefunden.</p>
+                  ) : (
+                    <Select value={selectedSensor} onValueChange={setSelectedSensor}>
+                      <SelectTrigger className="mt-1"><SelectValue placeholder="Sensor auswählen" /></SelectTrigger>
+                      <SelectContent>
+                        {sensors.map((s) => (
+                          <SelectItem key={s.uuid} value={s.uuid}>{s.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          <div>
+            <Label>Name *</Label>
+            <Input value={name} onChange={(e) => setName(e.target.value)} />
+          </div>
+          <div>
+            <Label>Zählernummer</Label>
+            <Input value={meterNumber} onChange={(e) => setMeterNumber(e.target.value)} />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label>Energieart</Label>
+              <Select value={energyType} onValueChange={setEnergyType}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="strom">Strom</SelectItem>
+                  <SelectItem value="gas">Gas</SelectItem>
+                  <SelectItem value="waerme">Wärme</SelectItem>
+                  <SelectItem value="wasser">Wasser</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Einheit</Label>
+              <Input value={unit} onChange={(e) => setUnit(e.target.value)} />
+            </div>
+          </div>
+          <div>
+            <Label>Medium</Label>
+            <Input value={medium} onChange={(e) => setMedium(e.target.value)} />
+          </div>
+          <div>
+            <Label>Notizen</Label>
+            <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Abbrechen</Button>
+          <Button
+            onClick={handleSubmit}
+            disabled={!name.trim() || saving || (captureType === "automatic" && (!selectedIntegration || !selectedSensor))}
+          >
+            {saving ? "Speichern…" : "Speichern"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+};

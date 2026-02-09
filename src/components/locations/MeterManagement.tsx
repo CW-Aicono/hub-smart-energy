@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMeters, Meter } from "@/hooks/useMeters";
-import { useAlertRules, AlertRule } from "@/hooks/useAlertRules";
+import { useAlertRules } from "@/hooks/useAlertRules";
 import { useUserRole } from "@/hooks/useUserRole";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -8,8 +8,9 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
-import { Gauge, Bell, Plus, Pencil, Trash2 } from "lucide-react";
+import { Gauge, Plus, Pencil, Trash2 } from "lucide-react";
 import { AddMeterDialog } from "./AddMeterDialog";
+import { EditMeterDialog } from "./EditMeterDialog";
 import { AddAlertRuleDialog } from "./AddAlertRuleDialog";
 
 interface MeterManagementProps {
@@ -24,11 +25,12 @@ const ENERGY_TYPE_LABELS: Record<string, string> = {
 };
 
 export const MeterManagement = ({ locationId }: MeterManagementProps) => {
-  const { meters, loading: metersLoading, deleteMeter } = useMeters(locationId);
+  const { meters, loading: metersLoading, deleteMeter, updateMeter } = useMeters(locationId);
   const { alertRules, loading: rulesLoading, deleteAlertRule, toggleAlertRule } = useAlertRules(locationId);
   const { isAdmin } = useUserRole();
   const [meterDialogOpen, setMeterDialogOpen] = useState(false);
   const [alertDialogOpen, setAlertDialogOpen] = useState(false);
+  const [editingMeter, setEditingMeter] = useState<Meter | null>(null);
 
   return (
     <Card>
@@ -69,7 +71,7 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
                     <TableHead>Erfassung</TableHead>
                     <TableHead>Energieart</TableHead>
                     <TableHead>Einheit</TableHead>
-                    {isAdmin && <TableHead className="w-20" />}
+                    {isAdmin && <TableHead className="w-24" />}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -87,7 +89,10 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
                       </TableCell>
                       <TableCell>{m.unit}</TableCell>
                       {isAdmin && (
-                        <TableCell>
+                        <TableCell className="flex gap-1">
+                          <Button variant="ghost" size="icon" onClick={() => setEditingMeter(m)}>
+                            <Pencil className="h-4 w-4" />
+                          </Button>
                           <Button variant="ghost" size="icon" onClick={() => deleteMeter(m.id)}>
                             <Trash2 className="h-4 w-4 text-destructive" />
                           </Button>
@@ -160,6 +165,14 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
           open={meterDialogOpen}
           onOpenChange={setMeterDialogOpen}
         />
+        {editingMeter && (
+          <EditMeterDialog
+            meter={editingMeter}
+            open={!!editingMeter}
+            onOpenChange={(open) => { if (!open) setEditingMeter(null); }}
+            onSave={async (id, updates) => { await updateMeter(id, updates); }}
+          />
+        )}
         <AddAlertRuleDialog
           locationId={locationId}
           open={alertDialogOpen}

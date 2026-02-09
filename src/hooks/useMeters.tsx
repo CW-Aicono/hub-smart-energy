@@ -84,7 +84,13 @@ export function useMeters(locationId?: string) {
   };
 
   const updateMeter = async (id: string, updates: Partial<MeterInsert>) => {
-    const { error } = await supabase.from("meters").update(updates as any).eq("id", id);
+    // If switching to manual, clear sensor fields
+    const cleanedUpdates = { ...updates };
+    if (cleanedUpdates.capture_type === "manual") {
+      (cleanedUpdates as any).location_integration_id = null;
+      (cleanedUpdates as any).sensor_uuid = null;
+    }
+    const { error } = await supabase.from("meters").update(cleanedUpdates as any).eq("id", id);
     if (error) {
       toast.error("Zähler konnte nicht aktualisiert werden");
       console.error(error);

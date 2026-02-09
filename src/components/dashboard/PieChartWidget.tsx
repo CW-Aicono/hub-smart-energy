@@ -25,18 +25,34 @@ const PieChartWidget = ({ locationId }: PieChartWidgetProps) => {
         <p className="text-sm text-muted-foreground">{subtitle}</p>
       </CardHeader>
       <CardContent>
-        <div className="h-[300px]">
+        <div className="h-[250px]">
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
               <Pie
                 data={ENERGY_DISTRIBUTION}
                 cx="50%"
                 cy="45%"
-                innerRadius={60}
-                outerRadius={100}
+                innerRadius={50}
+                outerRadius={80}
                 paddingAngle={4}
                 dataKey="value"
-                label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                label={({ name, percent, x, y, midAngle }) => {
+                  const RADIAN = Math.PI / 180;
+                  const radius = 95;
+                  const cx2 = 0;
+                  const cy2 = 0;
+                  return (
+                    <text
+                      x={x}
+                      y={y}
+                      textAnchor={x > 0 ? "start" : "end"}
+                      dominantBaseline="central"
+                      style={{ fontSize: "11px", fill: "hsl(var(--foreground))" }}
+                    >
+                      {`${name} ${(percent * 100).toFixed(0)}%`}
+                    </text>
+                  );
+                }}
                 labelLine={true}
               >
                 {ENERGY_DISTRIBUTION.map((entry, index) => (
@@ -56,7 +72,8 @@ const PieChartWidget = ({ locationId }: PieChartWidgetProps) => {
                 verticalAlign="bottom"
                 iconType="circle"
                 iconSize={8}
-                formatter={(value) => <span style={{ color: "hsl(var(--foreground))", fontSize: "12px" }}>{value}</span>}
+                wrapperStyle={{ fontSize: "11px", paddingTop: "0px" }}
+                formatter={(value) => <span style={{ color: "hsl(var(--foreground))", fontSize: "11px" }}>{value}</span>}
               />
             </PieChart>
           </ResponsiveContainer>
