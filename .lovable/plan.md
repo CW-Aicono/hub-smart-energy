@@ -1,94 +1,70 @@
 
-# Umsetzung der Quick-Win Anforderungen aus der Bewertungsmatrix
+# Loxone API: Korrekte State-Abfrage pro Control-Typ
 
-Basierend auf der Analyse der Bewertungsmatrix und dem aktuellen Stand des Projekts werden folgende Punkte umgesetzt, die ohne externe Abhängigkeiten oder zusätzliche Klärung realisierbar sind.
+## Problem
+Die Edge Function erkennt viele Loxone-Control-Typen nicht korrekt und fragt daher falsche oder nutzlose States ab (z.B. `jLocked` statt des eigentlichen Messwerts). Das betrifft insbesondere:
+- **EFM, EnergyManager2, Fronius** werden nicht als Energie-Controls erkannt
+- **Meter**-Typ bekommt keinen Sekundaerwert (`total`)
+- Fallback greift oft auf `jLocked` zurueck (nutzlos)
 
----
+## Loesung
 
-## 1. CSV/Excel-Export fuer Verbrauchsdaten
+### Aenderungen an der Edge Function (`supabase/functions/loxone-api/index.ts`)
 
-Aktuell gibt es keinen Datenexport. Es wird ein Export-Button in die relevanten Dashboard-Widgets (Energieverbrauch, Kostenübersicht) eingebaut.
+**1. Erweiterte Typ-Erkennung durch eine State-Mapping-Tabelle**
 
-**Umfang:**
-- Export-Button im `EnergyChart`-Widget fuer CSV-Download der Verbrauchsdaten
-- Export-Button im `CostOverview`-Widget
-- Wiederverwendbare Hilfsfunktion `downloadCSV()` in einer neuen Datei `src/lib/exportUtils.ts`
+Statt der einfachen `isEnergyMonitor`-Funktion wird eine kontrolltyp-spezifische Mapping-Tabelle eingefuehrt:
 
----
+```text
+Control-Typ       | Primaer-State  | Einheit | Sekundaer-State | Sekundaer-Einheit
+------------------|----------------|---------|-----------------|------------------
+Meter             | actual         | kW      | total           | kWh
+EFM               | Ppwr           | kW      | Gpwr            | kW
+EnergyManager2    | Gpwr           | kW      | Ppwr            | kW
+Fronius           | consCurr       | kW      | prodCurr        | kW
+InfoOnlyAnalog    | value          | (auto)  | -               | -
+InfoOnlyDigital   | active         | -       | -               | -
+Pushbutton        | active         | -       | -               | -
+TextState         | textAndIcon    | -       | -               | -
+```
 
-## 2. Jahresverbrauchsprognose-Widget
+**2. "jLocked" aus Fallback-Logik ausschliessen**
 
-Neues Dashboard-Widget, das basierend auf den bisherigen Monatsdaten eine Hochrechnung auf das Gesamtjahr zeigt (linearer Trend ab Maerz).
+Bei der Fallback-Suche nach dem ersten verfuegbaren State wird `jLocked` uebersprungen, da es nur ein Lock-Indikator ist und keinen Messwert darstellt.
 
-**Umfang:**
-- Neue Komponente `src/components/dashboard/ForecastWidget.tsx`
-- Liniendiagramm mit Ist-Daten und gestrichelter Prognoselinie (Recharts)
-- Registrierung als neues Widget (`forecast`) im Dashboard-System (`useDashboardWidgets`, `DashboardCustomizer`, `Index.tsx`)
+**3. Verbesserte Typ-Erkennung fuer Sensor-Kategorie und Einheit**
 
----
+Die Typ-Erkennung (`sensorType` und `unit`) wird erweitert, um die neuen Control-Typen korrekt zuzuordnen:
+- `EFM` -> Typ "power", Einheit "kW"
+- `EnergyManager2` -> Typ "power", Einheit "kW"
+- `Fronius` -> Typ "power", Einheit "kW"
+- `Meter` -> Primaer "kW" (actual = Momentanleistung), Sekundaer "kWh" (total = Zaehlerstand)
 
-## 3. CO2-Bilanzierung erweitern (Scope 1 & 2)
+**4. Meter-Typ: Sekundaerwert `total` immer abfragen**
 
-Das bestehende Nachhaltigkeits-Widget wird um eine Scope-1/Scope-2-Aufschluesselung erweitert.
+Fuer alle `Meter`-Controls wird neben `actual` auch der `total`-State abgefragt und als Sekundaerwert angezeigt (Zaehlerstand in kWh).
 
-**Umfang:**
-- Erweiterung der Mock-Daten um Scope-1 (direkte Emissionen: Gas, Heizöl) und Scope-2 (indirekte: Strom, Fernwaerme)
-- Visuelle Aufschluesselung im `SustainabilityKPIs`-Widget mit gestapeltem Balkendiagramm
-- Zielwert-Vergleich je Scope
+### Technische Details
 
----
+Die zentrale Aenderung ist eine neue Funktion `getStateMapping(controlType, availableStates)`, die anhand des Control-Typs und der verfuegbaren States bestimmt, welche States als Primaer- und Sekundaerwert abgefragt werden sollen:
 
-## 4. Messstellen-Verwaltung (herstellerunabhaengig)
+```text
+function getStateMapping(type, states):
+  1. Pruefe exakten Typ gegen Mapping-Tabelle
+  2. Wenn Treffer: verwende definierte Primaer-/Sekundaer-States
+  3. Wenn kein Treffer: Fallback auf Prioritaetsliste
+     (value, actual, position, level, brightness, temperature)
+  4. "jLocked" wird nie als Fallback verwendet
+```
 
-Aktuell sind Sensoren an Loxone gekoppelt. Es wird eine Moeglichkeit geschaffen, Messstellen/Zaehler manuell und herstellerunabhaengig anzulegen.
+Die Aenderungen betreffen ausschliesslich die Edge Function. Am Frontend (SensorsDialog) sind keine Aenderungen noetig, da es bereits Primaer- und Sekundaerwerte darstellen kann.
 
-**Umfang:**
-- Neue DB-Tabelle `meters` (id, location_id, tenant_id, name, meter_number, energy_type, unit, medium, installation_date, notes)
-- Neue Seite bzw. Bereich in der Standort-Detailansicht: "Messstellen / Zaehler"
-- CRUD-Dialoge: Zaehler anlegen, bearbeiten, loeschen
-- RLS-Policies basierend auf tenant_id
+### Erwartetes Ergebnis
 
----
-
-## 5. Alarmierungs-Konfiguration (Grenzwerte)
-
-Aktuell sind Alerts statisch in Mock-Daten. Es wird eine Moeglichkeit geschaffen, Grenzwerte/Schwellenwerte pro Messstelle zu definieren.
-
-**Umfang:**
-- Neue DB-Tabelle `alert_rules` (id, tenant_id, location_id, meter_id, energy_type, threshold_value, threshold_type [above/below], notification_email, is_active)
-- Konfigurationsbereich in den Einstellungen oder der Standort-Detailansicht
-- Alert-Regel CRUD
-
----
-
-## Technische Details
-
-### Neue Dateien
-- `src/lib/exportUtils.ts` - CSV-Export-Hilfsfunktionen
-- `src/components/dashboard/ForecastWidget.tsx` - Prognose-Widget
-- `src/components/locations/MeterManagement.tsx` - Zaehler-Verwaltung
-- `src/components/locations/AddMeterDialog.tsx` - Zaehler anlegen
-- `src/components/locations/EditMeterDialog.tsx` - Zaehler bearbeiten
-- `src/hooks/useMeters.tsx` - Hook fuer Zaehler-CRUD
-
-### Geaenderte Dateien
-- `src/components/dashboard/EnergyChart.tsx` - Export-Button hinzufuegen
-- `src/components/dashboard/CostOverview.tsx` - Export-Button hinzufuegen
-- `src/components/dashboard/SustainabilityKPIs.tsx` - Scope 1/2 Erweiterung
-- `src/components/dashboard/DashboardCustomizer.tsx` - Neue Widget-Labels
-- `src/hooks/useDashboardWidgets.tsx` - Neue Default-Widgets
-- `src/pages/Index.tsx` - Neue Widget-Komponenten registrieren
-- `src/pages/LocationDetail.tsx` - Messstellen-Bereich einbinden
-- `src/data/mockData.ts` - Erweiterte Mock-Daten (Scope 1/2, Prognose)
-
-### Datenbank-Migrationen
-1. Tabelle `meters` mit RLS-Policies
-2. Tabelle `alert_rules` mit RLS-Policies
-
-### Reihenfolge
-1. DB-Migrationen (meters, alert_rules)
-2. Export-Utilities + CSV-Export in bestehende Widgets
-3. Prognose-Widget
-4. CO2-Scope-Erweiterung
-5. Messstellen-Verwaltung
-6. Alert-Konfiguration
+Nach der Aenderung sollten alle 66 Controls korrekte Werte anzeigen:
+- ~42 Meter-Controls: Momentanleistung (kW) + Zaehlerstand (kWh)
+- EFM: Produktionsleistung (Ppwr) + Netzeinspeisung (Gpwr)
+- EnergyManager2: Netzleistung (Gpwr) + Produktionsleistung (Ppwr)
+- Fronius: Verbrauch (consCurr) + Produktion (prodCurr)
+- InfoOnlyAnalog: Aktueller Wert
+- InfoOnlyDigital/Pushbutton: Ein/Aus Status
