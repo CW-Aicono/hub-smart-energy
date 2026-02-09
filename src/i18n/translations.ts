@@ -1785,6 +1785,43 @@ export const translations = {
     es: "Actualización automática de valores de sensores cada 5 minutos",
     nl: "Automatische sensorwaarde-verversing elke 5 minuten",
   },
+  // Version 1.0.4 changelog
+  "help.changelog104Feature1": {
+    de: "Interaktive 'Erste Schritte'-Anleitung zur Ersteinrichtung",
+    en: "Interactive 'Getting Started' guide for initial setup",
+    es: "Guía interactiva de 'Primeros pasos' para la configuración inicial",
+    nl: "Interactieve 'Aan de slag'-handleiding voor de eerste configuratie",
+  },
+  "help.changelog104Feature2": {
+    de: "QR-Codes für Zähler und Scanner können ausgedruckt werden",
+    en: "QR codes for meters and scanners can be printed",
+    es: "Los códigos QR de medidores y escáneres se pueden imprimir",
+    nl: "QR-codes voor meters en scanners kunnen worden afgedrukt",
+  },
+  "help.changelog104Feature3": {
+    de: "PDF-Export für Energiedaten verfügbar",
+    en: "PDF export for energy data available",
+    es: "Exportación en PDF de datos de energía disponible",
+    nl: "PDF-export voor energiegegevens beschikbaar",
+  },
+  "help.changelog104Feature4": {
+    de: "Energieart-Auswahl bei Zähleranlage über die Scan-App",
+    en: "Energy type selection when creating meters via scan app",
+    es: "Selección del tipo de energía al crear medidores desde la app de escaneo",
+    nl: "Energietype selectie bij het aanmaken van meters via de scan-app",
+  },
+  "help.changelog104Improvement1": {
+    de: "QR-Code-Scanner funktioniert jetzt auch auf iPhone/Safari",
+    en: "QR code scanner now works on iPhone/Safari too",
+    es: "El escáner QR ahora funciona también en iPhone/Safari",
+    nl: "QR-codescanner werkt nu ook op iPhone/Safari",
+  },
+  "help.changelog104Improvement2": {
+    de: "KI-Erkennung erfasst Nachkommastellen bei Zählerständen",
+    en: "AI recognition captures decimal places in meter readings",
+    es: "El reconocimiento IA captura decimales en las lecturas de medidores",
+    nl: "AI-herkenning registreert decimalen bij meterstanden",
+  },
   // Version 1.0.3 changelog
   "help.changelog103Feature1": {
     de: "Messstellen können archiviert und wiederhergestellt werden",
@@ -1870,6 +1907,30 @@ export const translations = {
     en: "Yes, the mobile app stores meter readings locally when offline. Once the internet is available again, the data syncs automatically. A banner shows the number of pending readings.",
     es: "Sí, la app móvil almacena las lecturas localmente cuando no hay conexión. Una vez que el internet esté disponible, los datos se sincronizan automáticamente. Un banner muestra el número de lecturas pendientes.",
     nl: "Ja, de mobiele app slaat meterstanden lokaal op wanneer er geen verbinding is. Zodra internet weer beschikbaar is, worden de gegevens automatisch gesynchroniseerd. Een banner toont het aantal openstaande aflezingen.",
+  },
+  "help.faq11Question": {
+    de: "Kann ich den Einrichtungsassistenten erneut aufrufen?",
+    en: "Can I restart the setup wizard?",
+    es: "¿Puedo reiniciar el asistente de configuración?",
+    nl: "Kan ik de installatiewizard opnieuw starten?",
+  },
+  "help.faq11Answer": {
+    de: "Ja, über Hilfe & Support → Erste Schritte können Sie den interaktiven Einrichtungsassistenten jederzeit erneut starten.",
+    en: "Yes, via Help & Support → Getting Started you can restart the interactive setup wizard at any time.",
+    es: "Sí, a través de Ayuda y soporte → Primeros pasos puede reiniciar el asistente de configuración interactivo en cualquier momento.",
+    nl: "Ja, via Help & ondersteuning → Aan de slag kunt u de interactieve installatiewizard op elk moment opnieuw starten.",
+  },
+  "help.faq12Question": {
+    de: "Kann ich Daten als PDF exportieren?",
+    en: "Can I export data as PDF?",
+    es: "¿Puedo exportar datos como PDF?",
+    nl: "Kan ik gegevens exporteren als PDF?",
+  },
+  "help.faq12Answer": {
+    de: "Ja, unter Energiedaten → Exporte stehen CSV- und PDF-Export zur Verfügung. Der PDF-Export öffnet eine druckfertige Ansicht, die Sie als PDF speichern oder direkt drucken können.",
+    en: "Yes, under Energy Data → Exports both CSV and PDF exports are available. The PDF export opens a print-ready view that you can save as PDF or print directly.",
+    es: "Sí, en Datos de energía → Exportaciones están disponibles exportaciones CSV y PDF. La exportación PDF abre una vista lista para imprimir que puede guardar como PDF o imprimir directamente.",
+    nl: "Ja, onder Energiegegevens → Exports zijn CSV- en PDF-exports beschikbaar. De PDF-export opent een printklare weergave die u als PDF kunt opslaan of direct afdrukken.",
   },
   // User management - activate user
   "users.activateUser": {

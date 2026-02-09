@@ -9,7 +9,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Copy, Check, Download, ExternalLink } from "lucide-react";
+import { Copy, Check, Download, ExternalLink, Printer } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 interface ScannerQrCodeProps {
@@ -49,6 +49,30 @@ export function ScannerQrCode({ scanner, open, onOpenChange }: ScannerQrCodeProp
     link.click();
   };
 
+  const handlePrint = () => {
+    const printWindow = window.open("", "_blank");
+    if (!printWindow) return;
+    printWindow.document.write(`
+      <html><head><title>QR-Code: ${scanner.name}</title>
+      <style>
+        body { font-family: Arial, sans-serif; text-align: center; padding: 40px; }
+        img { width: 250px; height: 250px; }
+        h2 { margin-bottom: 4px; }
+        p { color: #666; font-size: 14px; margin-top: 4px; }
+        @media print { button { display: none; } }
+      </style></head><body>
+      <h2>${scanner.name}</h2>
+      <p>Scan-App öffnen</p>
+      <img src="${qrDataUrl}" alt="QR-Code" />
+      <p style="font-size:11px; word-break:break-all;">${appUrl}</p>
+      <p>Smart Energy Hub</p>
+      <br/><button onclick="window.print()">Drucken</button>
+      </body></html>
+    `);
+    printWindow.document.close();
+    setTimeout(() => printWindow.print(), 300);
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-sm">
@@ -65,11 +89,15 @@ export function ScannerQrCode({ scanner, open, onOpenChange }: ScannerQrCodeProp
           <div className="flex gap-2 w-full">
             <Button variant="outline" className="flex-1 gap-1.5" onClick={handleCopy}>
               {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-              {copied ? "Kopiert" : "Link kopieren"}
+              {copied ? "Kopiert" : "Link"}
             </Button>
             <Button variant="outline" className="flex-1 gap-1.5" onClick={handleDownload}>
               <Download className="h-4 w-4" />
-              Herunterladen
+              Download
+            </Button>
+            <Button variant="outline" className="flex-1 gap-1.5" onClick={handlePrint}>
+              <Printer className="h-4 w-4" />
+              Drucken
             </Button>
           </div>
           <p className="text-xs text-muted-foreground text-center break-all">{appUrl}</p>
