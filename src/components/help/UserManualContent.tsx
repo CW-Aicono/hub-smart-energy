@@ -10,19 +10,21 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { 
   ArrowRight, 
-  Settings, 
   MapPin, 
   LayoutDashboard, 
   Building2, 
   Zap,
-  Users,
-  FileText
+  Gauge,
+  Smartphone,
+  QrCode,
+  Camera,
+  WifiOff,
 } from "lucide-react";
 
 interface UserManualContentProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  chapter: "gettingStarted" | "locationManagement" | "floorManagement" | "energyAnalysis";
+  chapter: "gettingStarted" | "locationManagement" | "floorManagement" | "energyAnalysis" | "meterManagement" | "mobileApp";
 }
 
 const UserManualContent = ({ open, onOpenChange, chapter }: UserManualContentProps) => {
@@ -58,6 +60,8 @@ const UserManualContent = ({ open, onOpenChange, chapter }: UserManualContentPro
               <li>Wetterdaten für Ihre Standorte</li>
               <li>Grundrisspläne mit Echtzeit-Sensordaten</li>
               <li>Aktuelle Alerts und Benachrichtigungen</li>
+              <li>Jahresverbrauchsprognose und CO₂-Bilanzierung</li>
+              <li>Sankey- und Pie-Chart-Widgets für Energieflüsse</li>
             </ul>
           </section>
 
@@ -67,10 +71,12 @@ const UserManualContent = ({ open, onOpenChange, chapter }: UserManualContentPro
               Die Seitenleiste links enthält alle wichtigen Bereiche:
             </p>
             <ul className="list-disc list-inside text-sm text-muted-foreground space-y-1 ml-4">
-              <li><strong>Dashboard:</strong> Übersicht und Widgets</li>
+              <li><strong>Dashboard:</strong> Übersicht und anpassbare Widgets</li>
               <li><strong>Standorte:</strong> Gebäude und Bereiche verwalten</li>
-              <li><strong>Integrationen:</strong> Externe Systeme verbinden</li>
-              <li><strong>Einstellungen:</strong> Profil und System konfigurieren</li>
+              <li><strong>Messstellen:</strong> Zähler und Zählerstände verwalten</li>
+              <li><strong>Integrationen:</strong> Externe Systeme und Gateways verbinden</li>
+              <li><strong>Benutzerverwaltung:</strong> Benutzer und Rollen verwalten</li>
+              <li><strong>Einstellungen:</strong> Profil, Branding und System konfigurieren</li>
             </ul>
           </section>
 
@@ -78,7 +84,8 @@ const UserManualContent = ({ open, onOpenChange, chapter }: UserManualContentPro
             <h4 className="font-semibold mb-2">3. Dashboard anpassen</h4>
             <p className="text-sm text-muted-foreground">
               Klicken Sie auf "Dashboard anpassen" oben rechts, um Widgets ein- oder auszublenden 
-              und die Anordnung nach Ihren Wünschen zu ändern.
+              und die Anordnung nach Ihren Wünschen zu ändern. Widgets können in drei Größen 
+              dargestellt werden (1/3, 2/3, volle Breite).
             </p>
           </section>
 
@@ -87,6 +94,15 @@ const UserManualContent = ({ open, onOpenChange, chapter }: UserManualContentPro
             <p className="text-sm text-muted-foreground">
               Unter "Mein Profil" können Sie die Sprache (Deutsch, Englisch, Spanisch, Niederländisch) 
               und das Farbschema (Hell, Dunkel, System) ändern.
+            </p>
+          </section>
+
+          <section>
+            <h4 className="font-semibold mb-2">5. Mandantenfähigkeit</h4>
+            <p className="text-sm text-muted-foreground">
+              Smart Energy Hub ist mandantenfähig. Jeder Mandant hat seine eigenen Standorte, 
+              Benutzer, Rollen und Branding-Einstellungen. Super-Admins können alle Mandanten 
+              zentral verwalten.
             </p>
           </section>
         </div>
@@ -293,6 +309,178 @@ const UserManualContent = ({ open, onOpenChange, chapter }: UserManualContentPro
             <p className="text-sm text-muted-foreground">
               Exportieren Sie Energiedaten über die Export-Funktion in den Widgets. 
               Verfügbare Formate: CSV für Tabellenkalkulationen.
+            </p>
+          </section>
+        </div>
+      ),
+    },
+    meterManagement: {
+      title: "Messstellen",
+      icon: <Gauge className="h-5 w-5" />,
+      content: (
+        <div className="space-y-6">
+          <section>
+            <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
+              <Gauge className="h-4 w-4 text-primary" />
+              Messstellenverwaltung
+            </h3>
+            <p className="text-muted-foreground mb-4">
+              Verwalten Sie alle Zähler zentral – unabhängig vom Hersteller. Zähler können 
+              manuell oder automatisch über Gateways erfasst werden.
+            </p>
+          </section>
+
+          <Separator />
+
+          <section>
+            <h4 className="font-semibold mb-2">Zähler anlegen</h4>
+            <ol className="list-decimal list-inside text-sm text-muted-foreground space-y-2 ml-4">
+              <li>Navigieren Sie zu <strong>Standorte → Standort-Detail</strong> oder zur <strong>Messstellen-Übersicht</strong></li>
+              <li>Klicken Sie auf <strong>"Zähler anlegen"</strong></li>
+              <li>Wählen Sie die Erfassungsart:
+                <ul className="list-disc list-inside ml-4 mt-1">
+                  <li><strong>Manuell:</strong> Zählerstand wird von Hand eingegeben</li>
+                  <li><strong>Automatisch:</strong> Zählerstand wird über ein Gateway/Sensor ausgelesen</li>
+                </ul>
+              </li>
+              <li>Füllen Sie Name, Zählernummer, Energieart und Einheit aus</li>
+              <li>Speichern Sie den Zähler</li>
+            </ol>
+          </section>
+
+          <section>
+            <h4 className="font-semibold mb-2">Zähler bearbeiten</h4>
+            <p className="text-sm text-muted-foreground">
+              Über das Stift-Symbol in der Zähler-Tabelle können Sie Name, Zählernummer, 
+              Energieart, Einheit und Erfassungsart ändern. Bei automatischer Erfassung 
+              wählen Sie das Gateway und den Sensor aus.
+            </p>
+          </section>
+
+          <section>
+            <h4 className="font-semibold mb-2">Zähler archivieren</h4>
+            <p className="text-sm text-muted-foreground mb-2">
+              Statt einen Zähler zu löschen, können Sie ihn archivieren:
+            </p>
+            <ul className="list-disc list-inside text-sm text-muted-foreground space-y-1 ml-4">
+              <li>Klicken Sie auf das <strong>Archiv-Symbol</strong> neben dem Zähler</li>
+              <li>Archivierte Zähler sind über den Toggle <strong>"Archiv anzeigen"</strong> sichtbar</li>
+              <li>Archivierte Zähler können wiederhergestellt oder endgültig gelöscht werden</li>
+              <li>Bestehende Messwerte bleiben bei der Archivierung erhalten</li>
+            </ul>
+          </section>
+
+          <section>
+            <h4 className="font-semibold mb-2">QR-Codes für Zähler</h4>
+            <p className="text-sm text-muted-foreground">
+              Für jeden Zähler kann ein QR-Code generiert werden. Drucken Sie diesen aus 
+              und kleben Sie ihn an den physischen Zähler. Die mobile App erkennt den 
+              Zähler dann automatisch per Kamerascan.
+            </p>
+          </section>
+
+          <section>
+            <h4 className="font-semibold mb-2">Alarmregeln</h4>
+            <p className="text-sm text-muted-foreground">
+              Definieren Sie Schwellenwerte pro Standort und Energieart. Das System benachrichtigt 
+              Sie, wenn ein Verbrauchswert den definierten Grenzwert über- oder unterschreitet.
+            </p>
+          </section>
+
+          <section>
+            <h4 className="font-semibold mb-2">Filter in der Übersicht</h4>
+            <p className="text-sm text-muted-foreground">
+              Die Messstellen-Übersicht bietet drei Filter: Liegenschaft, Energieart 
+              und Erfassungsart. Kombinieren Sie diese, um schnell den gewünschten 
+              Zähler zu finden.
+            </p>
+          </section>
+        </div>
+      ),
+    },
+    mobileApp: {
+      title: "Mobile App (Meter Mate)",
+      icon: <Smartphone className="h-5 w-5" />,
+      content: (
+        <div className="space-y-6">
+          <section>
+            <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
+              <Smartphone className="h-4 w-4 text-primary" />
+              Mobile Zählerablesung
+            </h3>
+            <p className="text-muted-foreground mb-4">
+              Die mobile App ermöglicht die Zählerablesung direkt vor Ort – per manuelle Eingabe, 
+              QR-Code-Scan oder KI-Bilderkennung.
+            </p>
+          </section>
+
+          <Separator />
+
+          <section>
+            <h4 className="font-semibold mb-2">Zugang zur App</h4>
+            <p className="text-sm text-muted-foreground mb-2">
+              Die App ist unter <strong>/m</strong> erreichbar und für Smartphones optimiert. 
+              Sie können sie als PWA auf Ihrem Homescreen installieren:
+            </p>
+            <ol className="list-decimal list-inside text-sm text-muted-foreground space-y-1 ml-4">
+              <li>Öffnen Sie die App-URL im Browser</li>
+              <li>Tippen Sie auf "Zum Startbildschirm hinzufügen"</li>
+              <li>Die App läuft dann wie eine native App</li>
+            </ol>
+          </section>
+
+          <section>
+            <h4 className="font-semibold mb-2 flex items-center gap-2">
+              <Camera className="h-4 w-4" />
+              KI-Bilderkennung
+            </h4>
+            <p className="text-sm text-muted-foreground">
+              Fotografieren Sie den Zählerstand mit der Kamera. Die KI erkennt automatisch 
+              die Zählernummer und den aktuellen Stand. Sie können das Ergebnis vor dem 
+              Speichern überprüfen und korrigieren. Ein Konfidenzwert zeigt an, wie 
+              sicher die Erkennung ist.
+            </p>
+          </section>
+
+          <section>
+            <h4 className="font-semibold mb-2 flex items-center gap-2">
+              <QrCode className="h-4 w-4" />
+              QR-Code-Scan
+            </h4>
+            <p className="text-sm text-muted-foreground">
+              Scannen Sie den QR-Code-Sticker am Zähler. Der Zähler wird automatisch 
+              erkannt und Sie können direkt den Stand eingeben. Nutzen Sie die 
+              QR-Code-Funktion in der Messstellen-Übersicht, um die Sticker zu drucken.
+            </p>
+          </section>
+
+          <section>
+            <h4 className="font-semibold mb-2">Unbekannte Zähler</h4>
+            <p className="text-sm text-muted-foreground">
+              Erkennt die KI eine Zählernummer, die nicht im System hinterlegt ist, können 
+              Sie den Zähler direkt in der App anlegen – inklusive Standortzuordnung, 
+              Foto und erstem Zählerstand.
+            </p>
+          </section>
+
+          <section>
+            <h4 className="font-semibold mb-2 flex items-center gap-2">
+              <WifiOff className="h-4 w-4" />
+              Offline-Funktion
+            </h4>
+            <p className="text-sm text-muted-foreground">
+              Die App funktioniert auch ohne Internetverbindung. Erfasste Zählerstände 
+              werden lokal gespeichert und automatisch übermittelt, sobald die Verbindung 
+              wiederhergestellt ist. Ein Banner zeigt die Anzahl ausstehender Ablesungen.
+            </p>
+          </section>
+
+          <section>
+            <h4 className="font-semibold mb-2">Plausibilitätsprüfung</h4>
+            <p className="text-sm text-muted-foreground">
+              Bei jeder Erfassung wird geprüft, ob der neue Zählerstand plausibel ist. 
+              Ist der Wert niedriger als der letzte gespeicherte Stand, wird eine 
+              Warnung angezeigt. Sie können den Wert dennoch speichern.
             </p>
           </section>
         </div>
