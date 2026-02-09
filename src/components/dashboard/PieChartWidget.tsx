@@ -25,7 +25,7 @@ const PieChartWidget = ({ locationId }: PieChartWidgetProps) => {
         <p className="text-sm text-muted-foreground">{subtitle}</p>
       </CardHeader>
       <CardContent>
-        <div className="h-[280px]">
+        <div className="h-[280px] relative" style={{ zIndex: 0 }}>
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
               <Pie
