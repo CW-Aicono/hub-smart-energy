@@ -13,6 +13,7 @@ import AlertsList from "@/components/dashboard/AlertsList";
 import LocationMapWidget from "@/components/dashboard/LocationMapWidget";
 import FloorPlanWidget from "@/components/dashboard/FloorPlanWidget";
 import WeatherWidget from "@/components/dashboard/WeatherWidget";
+import { cn } from "@/lib/utils";
 
 interface WidgetProps {
   locationId: string | null;
@@ -28,13 +29,20 @@ const WIDGET_COMPONENTS: Record<string, React.ComponentType<WidgetProps>> = {
   weather: WeatherWidget,
 };
 
+const SIZE_CLASSES: Record<string, string> = {
+  small: "col-span-1",
+  medium: "col-span-2",
+  large: "col-span-3",
+  full: "col-span-full",
+};
+
 // Widget to show based on location selection
 const getLocationWidget = (locationId: string | null): string => {
   return locationId ? "floor_plan" : "location_map";
 };
 
 const DashboardContent = () => {
-  const { widgets, visibleWidgets, loading: widgetsLoading, toggleWidgetVisibility, reorderWidgets } = useDashboardWidgets();
+  const { widgets, visibleWidgets, loading: widgetsLoading, toggleWidgetVisibility, reorderWidgets, updateWidgetSize } = useDashboardWidgets();
   const { t } = useTranslation();
   const { selectedLocationId, setSelectedLocationId } = useDashboardFilter();
 
@@ -64,20 +72,25 @@ const DashboardContent = () => {
               widgets={widgets} 
               onToggleVisibility={toggleWidgetVisibility}
               onReorder={reorderWidgets}
+              onResizeWidget={updateWidgetSize}
             />
           </div>
         </header>
-        <div className="p-6 space-y-6">
-          {visibleWidgets.map((widget) => {
-            // Swap location_map with floor_plan when location is selected
-            const widgetType = widget.widget_type === "location_map" 
-              ? getLocationWidget(selectedLocationId) 
-              : widget.widget_type;
-            const Component = WIDGET_COMPONENTS[widgetType];
-            return Component ? (
-              <Component key={widget.widget_type} locationId={selectedLocationId} />
-            ) : null;
-          })}
+        <div className="p-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {visibleWidgets.map((widget) => {
+              const widgetType = widget.widget_type === "location_map" 
+                ? getLocationWidget(selectedLocationId) 
+                : widget.widget_type;
+              const Component = WIDGET_COMPONENTS[widgetType];
+              const sizeClass = SIZE_CLASSES[(widget as any).widget_size || "medium"] || SIZE_CLASSES.medium;
+              return Component ? (
+                <div key={widget.widget_type} className={cn(sizeClass)}>
+                  <Component locationId={selectedLocationId} />
+                </div>
+              ) : null;
+            })}
+          </div>
           {visibleWidgets.length === 0 && (
             <div className="text-center py-12 text-muted-foreground">
               <p>{t("dashboard.noWidgets")}</p>

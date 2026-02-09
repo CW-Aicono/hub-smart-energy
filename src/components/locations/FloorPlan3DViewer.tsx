@@ -1,5 +1,5 @@
-import { Suspense, useState, useCallback, useMemo } from "react";
-import { Canvas } from "@react-three/fiber";
+import { Suspense, useState, useCallback, useMemo, useRef } from "react";
+import { Canvas, useFrame } from "@react-three/fiber";
 import { Environment, Grid, Text } from "@react-three/drei";
 import { Button } from "@/components/ui/button";
 import { Play, Square, Edit, Loader2 } from "lucide-react";
@@ -10,6 +10,7 @@ import { Room3D } from "./Room3D";
 import { Floor3DControls } from "./Floor3DControls";
 import { Sensor3DLabel } from "./Sensor3DLabel";
 import { RoomEditor } from "./RoomEditor";
+import { Minimap3D } from "./Minimap3D";
 
 interface Sensor {
   id: string;
@@ -25,18 +26,28 @@ interface FloorPlan3DViewerProps {
   isAdmin?: boolean;
 }
 
+// Tracks camera position for minimap
+function CameraTracker({ onUpdate }: { onUpdate: (pos: { x: number; z: number }, rotY: number) => void }) {
+  useFrame(({ camera }) => {
+    onUpdate({ x: camera.position.x, z: camera.position.z }, camera.rotation.y);
+  });
+  return null;
+}
+
 function Scene({ 
   rooms, 
   sensorPositions, 
   sensors,
   isWalking,
   onLockChange,
+  onCameraUpdate,
 }: { 
   rooms: FloorRoom[];
   sensorPositions: FloorSensorPosition[];
   sensors: Sensor[];
   isWalking: boolean;
   onLockChange: (locked: boolean) => void;
+  onCameraUpdate: (pos: { x: number; z: number }, rotY: number) => void;
 }) {
   // Calculate scene bounds based on rooms
   const sceneBounds = useMemo(() => {
@@ -135,6 +146,9 @@ function Scene({
         enabled={isWalking} 
         onLockChange={onLockChange}
       />
+
+      {/* Camera tracker for minimap */}
+      <CameraTracker onUpdate={onCameraUpdate} />
       
       {/* Empty state hint */}
       {rooms.length === 0 && (
@@ -159,6 +173,13 @@ export function FloorPlan3DViewer({ floor, locationId, sensors = [], isAdmin = f
   const [isWalking, setIsWalking] = useState(false);
   const [isLocked, setIsLocked] = useState(false);
   const [showRoomEditor, setShowRoomEditor] = useState(false);
+  const [cameraPos, setCameraPos] = useState({ x: 0, z: 10 });
+  const [cameraRotY, setCameraRotY] = useState(0);
+
+  const handleCameraUpdate = useCallback((pos: { x: number; z: number }, rotY: number) => {
+    setCameraPos(pos);
+    setCameraRotY(rotY);
+  }, []);
 
   const handleLockChange = useCallback((locked: boolean) => {
     setIsLocked(locked);
@@ -167,13 +188,8 @@ export function FloorPlan3DViewer({ floor, locationId, sensors = [], isAdmin = f
     }
   }, []);
 
-  const startWalking = () => {
-    setIsWalking(true);
-  };
-
-  const stopWalking = () => {
-    setIsWalking(false);
-  };
+  const startWalking = () => setIsWalking(true);
+  const stopWalking = () => setIsWalking(false);
 
   const loading = roomsLoading || positionsLoading;
 
@@ -237,32 +253,44 @@ export function FloorPlan3DViewer({ floor, locationId, sensors = [], isAdmin = f
       )}
 
       {/* 3D Canvas */}
-      <div className="flex-1 relative min-h-0 bg-gradient-to-b from-sky-100 to-sky-200 dark:from-slate-800 dark:to-slate-900">
+      <div className="flex-1 relative min-h-0 bg-gradient-to-b from-muted/30 to-muted/60">
         {loading ? (
           <div className="absolute inset-0 flex items-center justify-center">
             <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
           </div>
         ) : (
-          <Canvas
-            shadows
-            camera={{ 
-              position: [0, 1.7, 10], 
-              fov: 75,
-              near: 0.1,
-              far: 1000,
-            }}
-            style={{ cursor: isWalking && isLocked ? "none" : "grab" }}
-          >
-            <Suspense fallback={null}>
-              <Scene 
+          <>
+            <Canvas
+              shadows
+              camera={{ 
+                position: [0, 1.7, 10], 
+                fov: 75,
+                near: 0.1,
+                far: 1000,
+              }}
+              style={{ cursor: isWalking && isLocked ? "none" : "grab" }}
+            >
+              <Suspense fallback={null}>
+                <Scene 
+                  rooms={rooms}
+                  sensorPositions={sensorPositions}
+                  sensors={sensors}
+                  isWalking={isWalking}
+                  onLockChange={handleLockChange}
+                  onCameraUpdate={handleCameraUpdate}
+                />
+              </Suspense>
+            </Canvas>
+
+            {/* Minimap overlay */}
+            {rooms.length > 0 && (
+              <Minimap3D
                 rooms={rooms}
-                sensorPositions={sensorPositions}
-                sensors={sensors}
-                isWalking={isWalking}
-                onLockChange={handleLockChange}
+                cameraPosition={cameraPos}
+                cameraRotation={cameraRotY}
               />
-            </Suspense>
-          </Canvas>
+            )}
+          </>
         )}
       </div>
     </div>

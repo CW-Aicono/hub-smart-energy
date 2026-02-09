@@ -97,6 +97,7 @@ export type Database = {
           position: number
           updated_at: string
           user_id: string
+          widget_size: string
           widget_type: string
         }
         Insert: {
@@ -107,6 +108,7 @@ export type Database = {
           position?: number
           updated_at?: string
           user_id: string
+          widget_size?: string
           widget_type: string
         }
         Update: {
@@ -117,6 +119,7 @@ export type Database = {
           position?: number
           updated_at?: string
           user_id?: string
+          widget_size?: string
           widget_type?: string
         }
         Relationships: []
