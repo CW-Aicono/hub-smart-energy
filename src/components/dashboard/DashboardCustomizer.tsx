@@ -4,7 +4,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Settings2, GripVertical } from "lucide-react";
+import { Settings2, GripVertical, RotateCcw } from "lucide-react";
 import { DashboardWidget, WidgetSize } from "@/hooks/useDashboardWidgets";
 import { cn } from "@/lib/utils";
 
@@ -13,6 +13,7 @@ interface DashboardCustomizerProps {
   onToggleVisibility: (widgetType: string) => void;
   onReorder: (newOrder: string[]) => void;
   onResizeWidget: (widgetType: string, size: WidgetSize) => void;
+  onResetLayout?: () => void;
 }
 
 const WIDGET_LABELS: Record<string, string> = {
@@ -34,7 +35,7 @@ const SIZE_LABELS: Record<WidgetSize, string> = {
   full: "Volle Breite",
 };
 
-const DashboardCustomizer = ({ widgets, onToggleVisibility, onReorder, onResizeWidget }: DashboardCustomizerProps) => {
+const DashboardCustomizer = ({ widgets, onToggleVisibility, onReorder, onResizeWidget, onResetLayout }: DashboardCustomizerProps) => {
   const [draggedItem, setDraggedItem] = useState<string | null>(null);
   const [dragOverItem, setDragOverItem] = useState<string | null>(null);
 
@@ -151,6 +152,12 @@ const DashboardCustomizer = ({ widgets, onToggleVisibility, onReorder, onResizeW
               </div>
             ))}
           </div>
+          {onResetLayout && (
+            <Button variant="outline" size="sm" className="w-full" onClick={onResetLayout}>
+              <RotateCcw className="h-4 w-4 mr-2" />
+              Layout zurücksetzen
+            </Button>
+          )}
         </div>
       </PopoverContent>
     </Popover>

@@ -216,6 +216,30 @@ export function useDashboardWidgets() {
     );
   };
 
+  const resetLayouts = async (defaultLayouts: Record<string, WidgetLayout>) => {
+    const updates = Object.entries(defaultLayouts).map(async ([widgetType, layout]) => {
+      const widget = widgets.find((w) => w.widget_type === widgetType);
+      if (!widget) return;
+      const newConfig = { ...(widget.config || {}), layout };
+      await supabase
+        .from("dashboard_widgets")
+        .update({ config: newConfig as any })
+        .eq("id", widget.id);
+    });
+    await Promise.all(updates);
+
+    setWidgets((prev) =>
+      prev.map((w) => {
+        const layout = defaultLayouts[w.widget_type];
+        if (layout) {
+          const newConfig = { ...(w.config || {}), layout };
+          return { ...w, config: newConfig, layout };
+        }
+        return w;
+      })
+    );
+  };
+
   useEffect(() => {
     fetchWidgets();
   }, [fetchWidgets]);
@@ -239,6 +263,7 @@ export function useDashboardWidgets() {
     updateWidgetSize,
     updateWidgetLayout,
     updateAllLayouts,
+    resetLayouts,
     refetch: fetchWidgets,
   };
 }
