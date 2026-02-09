@@ -50,22 +50,30 @@ export function useUpdateCheck(): UpdateCheckState {
   }, []);
 
   const checkForUpdate = useCallback(async () => {
-    if (!("serviceWorker" in navigator)) return;
     setChecking(true);
     setDismissed(false);
 
-    try {
-      const registration = await navigator.serviceWorker.ready;
-      await registration.update();
+    if (!("serviceWorker" in navigator) || !navigator.serviceWorker.controller) {
+      // No active service worker – nothing to update
+      setTimeout(() => setChecking(false), 1500);
+      return;
+    }
 
-      // Give it a moment to detect the update
-      setTimeout(() => {
-        if (registration.waiting) {
-          setWaitingWorker(registration.waiting);
-          setUpdateAvailable(true);
-        }
+    try {
+      const registration = await navigator.serviceWorker.getRegistration();
+      if (registration) {
+        await registration.update();
+        // Give it a moment to detect the update
+        setTimeout(() => {
+          if (registration.waiting) {
+            setWaitingWorker(registration.waiting);
+            setUpdateAvailable(true);
+          }
+          setChecking(false);
+        }, 2000);
+      } else {
         setChecking(false);
-      }, 2000);
+      }
     } catch {
       setChecking(false);
     }
