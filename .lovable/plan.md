@@ -1,247 +1,127 @@
 
-# Plan: 3D-Grundriss mit virtueller Begehung
 
-## Übersicht
+# Super-Admin Backend -- Integrierter Plattform-Verwaltungsbereich
 
-Implementierung eines interaktiven 3D-Grundriss-Viewers mit prozedural generierten Räumen, First-Person-Navigation (WASD + Maus) und platzierbaren Sensor-Overlays. Die Lösung integriert sich nahtlos in die bestehende Grundriss-Verwaltung.
+## Uebersicht
+
+Aufbau eines vollstaendigen Super-Admin-Bereichs innerhalb des bestehenden Projekts. Dieser Bereich ist komplett getrennt vom Kunden-Frontend und nur fuer euch als Plattformbetreiber sichtbar. Eure Kunden sehen davon nichts.
+
+Der Super-Admin-Bereich umfasst 5 Kernmodule:
+1. **Mandanten-Verwaltung** -- Neue Kunden-Systeme anlegen und verwalten
+2. **Modul-Freischaltung** -- Einzelne Features pro Kunde aktivieren/deaktivieren
+3. **Support-Zugriff** -- Als Kunde einloggen, Logs einsehen
+4. **Statistiken** -- Nutzungsdaten, Auslastung, Aktivitaet
+5. **Abrechnung** -- Lizenzkosten, Rechnungsgenerierung
 
 ## Architektur
 
-```text
-┌─────────────────────────────────────────────────────────────────┐
-│                    FloorPlanDialog.tsx                          │
-│  ┌──────────┬─────────────────────┬───────────────────────┐     │
-│  │ Ansicht  │ Messgeräte bearbeiten │ 3D-Begehung (NEU)   │     │
-│  └──────────┴─────────────────────┴───────────────────────┘     │
-│                              │                                   │
-│                              ▼                                   │
-│  ┌────────────────────────────────────────────────────────┐     │
-│  │              FloorPlan3DViewer.tsx                      │     │
-│  │  ┌─────────────────────────────────────────────────┐   │     │
-│  │  │  React Three Fiber Canvas                       │   │     │
-│  │  │  ┌─────────────┐  ┌──────────────────────────┐  │   │     │
-│  │  │  │ FirstPerson │  │ RoomGeometry (Wände)     │  │   │     │
-│  │  │  │ Controls    │  │ - Aus Raumdaten generiert│  │   │     │
-│  │  │  └─────────────┘  └──────────────────────────┘  │   │     │
-│  │  │                   ┌──────────────────────────┐  │   │     │
-│  │  │                   │ Sensor3DLabels           │  │   │     │
-│  │  │                   │ - Aus floor_sensor_      │  │   │     │
-│  │  │                   │   positions geladen      │  │   │     │
-│  │  │                   └──────────────────────────┘  │   │     │
-│  │  └─────────────────────────────────────────────────┘   │     │
-│  └────────────────────────────────────────────────────────┘     │
-└─────────────────────────────────────────────────────────────────┘
-```
-
-## Komponenten
-
-### 1. Raumdefinitions-Editor
-Ein einfacher Editor zum Definieren von Räumen für eine Etage:
-- Rechteckige Räume mit Position (x, y) und Größe (Breite, Tiefe)
-- Türöffnungen zwischen Räumen
-- Wandhöhe (Standard: 2.8m)
-
-### 2. 3D-Viewer mit First-Person-Steuerung
-- WASD für Bewegung (vorwärts, links, rückwärts, rechts)
-- Maus für Blickrichtung (Pointer Lock)
-- Leertaste zum Springen
-- ESC zum Verlassen des Steuerungsmodus
-
-### 3. Sensor-Integration
-- Bestehende `floor_sensor_positions` werden in 3D-Koordinaten umgewandelt
-- Sensor-Labels schweben über dem Boden mit Live-Werten
-- Labels drehen sich zur Kamera (Billboard-Effekt)
-
-## Datenbank-Erweiterung
-
-Neue Tabelle `floor_rooms` zur Speicherung der Raumdefinitionen:
-
-```sql
-CREATE TABLE floor_rooms (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  floor_id UUID NOT NULL REFERENCES floors(id) ON DELETE CASCADE,
-  name TEXT NOT NULL,
-  position_x NUMERIC NOT NULL DEFAULT 0,
-  position_y NUMERIC NOT NULL DEFAULT 0,
-  width NUMERIC NOT NULL DEFAULT 4,
-  depth NUMERIC NOT NULL DEFAULT 4,
-  wall_height NUMERIC NOT NULL DEFAULT 2.8,
-  color TEXT DEFAULT '#f0f0f0',
-  created_at TIMESTAMPTZ DEFAULT now(),
-  updated_at TIMESTAMPTZ DEFAULT now()
-);
-```
-
-Erweiterung der `floor_sensor_positions` um 3D-Koordinaten:
-
-```sql
-ALTER TABLE floor_sensor_positions
-ADD COLUMN position_z NUMERIC DEFAULT 1.5,
-ADD COLUMN room_id UUID REFERENCES floor_rooms(id) ON DELETE SET NULL;
-```
-
-## Neue Dateien
-
-| Datei | Beschreibung |
-|-------|--------------|
-| `src/components/locations/FloorPlan3DViewer.tsx` | Haupt-3D-Canvas mit React Three Fiber |
-| `src/components/locations/Floor3DControls.tsx` | First-Person-Steuerung (WASD + Maus) |
-| `src/components/locations/Room3D.tsx` | Einzelner Raum aus Wand-Geometrien |
-| `src/components/locations/Sensor3DLabel.tsx` | Billboard-Label für Sensor-Werte |
-| `src/components/locations/RoomEditor.tsx` | Editor zum Definieren der Räume |
-| `src/hooks/useFloorRooms.tsx` | Hook für CRUD-Operationen auf Räume |
-
-## Änderungen an bestehenden Dateien
-
-### FloorPlanDialog.tsx
-- Neuer Tab "3D-Begehung" für Admins und Viewer
-- Lazy-Loading des 3D-Viewers für Performance
-
-### useFloorSensorPositions.tsx
-- Erweiterung um `position_z` und `room_id`
-
-## Abhängigkeiten
-
-```json
-{
-  "@react-three/fiber": "^8.18.0",
-  "@react-three/drei": "^9.122.0",
-  "three": "^0.170.0",
-  "@types/three": "^0.170.0"
-}
-```
-
-Hinweis: Version 8.x für @react-three/fiber ist erforderlich wegen React 18-Kompatibilität.
-
-## Benutzerablauf
-
-### Räume definieren (Admin)
-1. Öffnet Grundriss-Dialog einer Etage
-2. Wechselt zu Tab "3D-Begehung"
-3. Klickt "Räume bearbeiten"
-4. Fügt rechteckige Räume hinzu (Name, Position, Größe)
-5. Speichert die Raumkonfiguration
-
-### 3D-Begehung starten
-1. Klickt "Begehung starten" im 3D-Tab
-2. Maus wird gesperrt (Pointer Lock)
-3. Bewegt sich mit WASD durch die Räume
-4. Sieht Sensor-Werte als schwebende Labels
-5. ESC zum Beenden
-
-### Sensoren im 3D-Raum platzieren
-1. Im Editor-Modus Sensor aus Liste wählen
-2. In 3D-Ansicht auf Wand oder Boden klicken
-3. Position wird mit x/y/z gespeichert
-
-## UI-Mockup
+Der Super-Admin nutzt eine neue Rolle `super_admin` im bestehenden Rollensystem. Super-Admins sind NICHT an einen Tenant gebunden -- sie sehen alle Tenants. Das bestehende `app_role` Enum wird um `super_admin` erweitert.
 
 ```text
-┌────────────────────────────────────────────────────────────────┐
-│  Erdgeschoss - Grundriss                           [Vollbild] │
-├────────────────────────────────────────────────────────────────┤
-│  [Ansicht] [Messgeräte bearbeiten] [3D-Begehung]              │
-├────────────────────────────────────────────────────────────────┤
-│                                                                │
-│  ┌──────────────────────────────────────────────────────────┐ │
-│  │                                                          │ │
-│  │     ╔══════════════╗    ╔══════════════╗                │ │
-│  │     ║   Büro 1     ║    ║   Büro 2     ║                │ │
-│  │     ║              ║    ║              ║                │ │
-│  │     ║  [23.5°C]    ║    ║  [21.2°C]    ║                │ │
-│  │     ║              ║    ║              ║                │ │
-│  │     ╠══════════════╣    ╠══════════════╣                │ │
-│  │     ║              Flur               ║                  │ │
-│  │     ╚══════════════════════════════════╝                │ │
-│  │                                                          │ │
-│  └──────────────────────────────────────────────────────────┘ │
-│                                                                │
-│  [Räume bearbeiten]              [Begehung starten →]         │
-│                                                                │
-│  Steuerung: WASD = Bewegen | Maus = Umsehen | ESC = Beenden  │
-└────────────────────────────────────────────────────────────────┘
++---------------------------+
+|     Bestehendes System    |
+|  (Tenant-isoliert via RLS)|
++---------------------------+
+         |
+         v
++---------------------------+
+|   Super-Admin Bereich     |
+|  /super-admin/...         |
+|  Rolle: super_admin       |
+|  Sieht ALLE Tenants       |
++---------------------------+
 ```
 
-## Technische Details
+## Datenbank-Aenderungen
 
-### First-Person-Controls
-```typescript
-// Vereinfachte Logik für Bewegungssteuerung
-const MOVE_SPEED = 5;
-const keys = { w: false, a: false, s: false, d: false };
+### 1. Enum erweitern
+Das bestehende `app_role` Enum (`admin | user`) wird um `super_admin` erweitert.
 
-useFrame((state, delta) => {
-  const direction = new Vector3();
-  if (keys.w) direction.z -= 1;
-  if (keys.s) direction.z += 1;
-  if (keys.a) direction.x -= 1;
-  if (keys.d) direction.x += 1;
-  
-  direction.normalize().multiplyScalar(MOVE_SPEED * delta);
-  camera.position.add(direction.applyQuaternion(camera.quaternion));
-});
-```
+### 2. Neue Tabellen
 
-### Raum-Geometrie
-```typescript
-// Wände als BoxGeometry mit Loch für Türen
-function Room({ position, width, depth, height, doorPositions }) {
-  return (
-    <group position={position}>
-      {/* Boden */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]}>
-        <planeGeometry args={[width, depth]} />
-        <meshStandardMaterial color="#e0e0e0" />
-      </mesh>
-      
-      {/* Wände (4 Seiten) */}
-      {walls.map((wall, i) => (
-        <mesh key={i} position={wall.position}>
-          <boxGeometry args={[wall.width, height, 0.1]} />
-          <meshStandardMaterial color="#ffffff" />
-        </mesh>
-      ))}
-    </group>
-  );
-}
-```
+**`tenant_modules`** -- Welche Module ein Tenant freigeschaltet hat
+- `id`, `tenant_id` (FK tenants), `module_code` (z.B. "locations", "integrations", "reporting", "3d_viewer"), `is_enabled`, `enabled_at`, `disabled_at`
 
-### Sensor Billboard-Labels
-```typescript
-<Billboard follow={true} lockX={false} lockY={false}>
-  <Html center distanceFactor={10}>
-    <div className="bg-card/95 rounded-lg px-2 py-1">
-      <p className="text-xs">{sensor.name}</p>
-      <p className="text-sm font-bold">{value} {unit}</p>
-    </div>
-  </Html>
-</Billboard>
-```
+**`tenant_licenses`** -- Lizenz- und Abrechnungsdaten
+- `id`, `tenant_id`, `plan_name`, `price_monthly`, `price_yearly`, `billing_cycle` (monthly/yearly), `valid_from`, `valid_until`, `status` (active/expired/cancelled), `max_users`, `max_locations`
+
+**`tenant_invoices`** -- Generierte Rechnungen
+- `id`, `tenant_id`, `invoice_number`, `period_start`, `period_end`, `amount`, `status` (draft/sent/paid/overdue), `pdf_url`, `created_at`
+
+**`platform_statistics`** -- Aggregierte Nutzungsstatistiken
+- `id`, `tenant_id`, `metric_type` (logins, api_calls, storage_mb, active_users), `value`, `recorded_at`
+
+**`support_sessions`** -- Protokoll von Support-Zugriffen
+- `id`, `super_admin_user_id`, `tenant_id`, `started_at`, `ended_at`, `reason`
+
+### 3. RLS-Policies
+Alle neuen Tabellen erhalten RLS-Policies, die nur Nutzer mit der Rolle `super_admin` Zugriff gewaehren. Die bestehende `has_role`-Funktion wird wiederverwendet.
+
+### 4. Bestehende RLS anpassen
+Die bestehenden Tenant-Tabellen (tenants, locations, profiles, etc.) benoetigen zusaetzliche SELECT-Policies fuer `super_admin`, damit der Support-Zugriff funktioniert.
+
+## Frontend-Struktur
+
+### Neue Seiten
+- `/super-admin` -- Dashboard mit Uebersicht aller Tenants und KPIs
+- `/super-admin/tenants` -- Mandanten-Liste mit Anlegen/Bearbeiten
+- `/super-admin/tenants/:id` -- Detail-Ansicht eines Mandanten (Module, Lizenz, Nutzer)
+- `/super-admin/statistics` -- Plattform-weite Statistiken und Charts
+- `/super-admin/billing` -- Rechnungsuebersicht und -generierung
+- `/super-admin/support` -- Support-Log und Tenant-Impersonation
+
+### Neue Komponenten
+- `src/components/super-admin/SuperAdminSidebar.tsx` -- Eigene Sidebar (getrennt vom Kunden-Sidebar)
+- `src/components/super-admin/TenantList.tsx` -- Mandanten-Tabelle mit Suche/Filter
+- `src/components/super-admin/CreateTenantDialog.tsx` -- Neuen Mandanten anlegen
+- `src/components/super-admin/TenantDetailView.tsx` -- Tabs: Module, Lizenz, Nutzer, Support
+- `src/components/super-admin/ModuleToggle.tsx` -- Module ein-/ausschalten
+- `src/components/super-admin/LicenseEditor.tsx` -- Lizenz bearbeiten
+- `src/components/super-admin/InvoiceList.tsx` -- Rechnungen anzeigen/generieren
+- `src/components/super-admin/PlatformStats.tsx` -- Charts mit Recharts
+- `src/components/super-admin/SupportAccessButton.tsx` -- "Als Kunde anmelden"
+
+### Hooks
+- `src/hooks/useSuperAdmin.tsx` -- Prueft ob Nutzer `super_admin` ist
+- `src/hooks/useTenants.tsx` -- Alle Tenants laden (nur fuer Super-Admin)
+- `src/hooks/useTenantModules.tsx` -- Module eines Tenants verwalten
+- `src/hooks/useTenantLicense.tsx` -- Lizenzdaten verwalten
+- `src/hooks/usePlatformStats.tsx` -- Statistiken laden
+
+### Routing
+Neue Routes in `App.tsx` -- alle unter `/super-admin/*`. Die Seiten pruefen die `super_admin`-Rolle und leiten normale Nutzer um.
+
+## Modul-Freischaltung (Kundenansicht)
+
+Damit die Modul-Freischaltung Wirkung zeigt, wird ein `useEnabledModules`-Hook erstellt, der die freigeschalteten Module des aktuellen Tenants laedt. Die Navigation und Seiten pruefen dann, ob das jeweilige Modul aktiv ist, und blenden gesperrte Bereiche aus.
+
+Verfuegbare Module:
+- `dashboard` (immer aktiv)
+- `locations` -- Standortverwaltung
+- `integrations` -- Integrationen
+- `3d_viewer` -- 3D-Ansichten
+- `reporting` -- Berichte
+- `floor_plans` -- Etagenplaene
+- `energy_monitoring` -- Energiemonitoring
+
+## Support-Zugriff
+
+Der Support-Zugriff funktioniert ueber einen "Tenant-Kontext-Wechsel": Der Super-Admin waehlt einen Tenant aus und sieht dann das System aus dessen Perspektive (read-only oder mit eingeschraenkten Rechten). Dies wird ueber einen temporaeren Kontext im Frontend umgesetzt, nicht ueber echtes Einloggen als Kunde.
 
 ## Implementierungsreihenfolge
 
-1. **Dependencies installieren** - React Three Fiber + Drei + Three.js
-2. **Datenbank-Migration** - `floor_rooms` Tabelle + Erweiterung `floor_sensor_positions`
-3. **useFloorRooms Hook** - CRUD für Räume
-4. **Room3D Komponente** - Einzelner Raum aus Geometrien
-5. **Floor3DControls** - First-Person-Steuerung
-6. **Sensor3DLabel** - Billboard mit Messwerten
-7. **FloorPlan3DViewer** - Haupt-Canvas mit allen Komponenten
-8. **RoomEditor** - UI zum Definieren der Räume
-9. **FloorPlanDialog erweitern** - Neuer Tab "3D-Begehung"
-10. **Sensor-Platzierung in 3D** - Klick-Positionierung im Raum
+Da alle Module gleichzeitig gewuenscht sind, wird schrittweise vorgegangen:
 
-## Einschränkungen
+1. **Datenbank**: Enum erweitern, alle neuen Tabellen + RLS anlegen
+2. **Authentifizierung**: `useSuperAdmin`-Hook, Route-Guards
+3. **Super-Admin Layout**: Sidebar, Dashboard-Seite
+4. **Mandanten-Verwaltung**: CRUD fuer Tenants mit Erstbenutzer-Anlage
+5. **Modul-Freischaltung**: Toggle-UI + `useEnabledModules` im Kundenbereich
+6. **Statistiken**: Tabelle + Charts mit Recharts
+7. **Abrechnung**: Lizenz-Editor, Rechnungsliste
+8. **Support-Zugriff**: Tenant-Kontext-Wechsel + Protokollierung
 
-- **Nur rechteckige Räume**: Komplexere Formen (L-förmig, rund) werden zunächst nicht unterstützt
-- **Keine Physik-Kollision**: Der Nutzer kann durch Wände laufen (Kollisionserkennung wäre Erweiterung)
-- **Einfache Materialien**: Keine Texturen, nur Farben
-- **Keine Möblierung**: Räume sind leer, nur Wände und Sensoren
+---
 
-## Erweiterungsmöglichkeiten (Zukunft)
+**Hinweis**: Dies ist ein umfangreiches Feature. Die Implementierung wird in mehreren Nachrichten erfolgen, um die Qualitaet sicherzustellen.
 
-- Kollisionserkennung mit `@react-three/rapier`
-- Import von GLTF-Modellen für realistische Räume
-- Möbel und Objekte hinzufügen
-- Minimap-Übersicht
-- VR-Unterstützung mit WebXR
