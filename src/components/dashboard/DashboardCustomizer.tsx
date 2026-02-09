@@ -3,14 +3,16 @@ import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Settings2, GripVertical, RotateCcw } from "lucide-react";
-import { DashboardWidget } from "@/hooks/useDashboardWidgets";
+import { DashboardWidget, WidgetSize } from "@/hooks/useDashboardWidgets";
 import { cn } from "@/lib/utils";
 
 interface DashboardCustomizerProps {
   widgets: DashboardWidget[];
   onToggleVisibility: (widgetType: string) => void;
   onReorder: (newOrder: string[]) => void;
+  onResizeWidget: (widgetType: string, size: WidgetSize) => void;
   onResetLayout?: () => void;
 }
 
@@ -26,7 +28,13 @@ const WIDGET_LABELS: Record<string, string> = {
   sankey: "Sankey-Diagramm",
 };
 
-const DashboardCustomizer = ({ widgets, onToggleVisibility, onReorder, onResetLayout }: DashboardCustomizerProps) => {
+const SIZE_LABELS: Record<WidgetSize, string> = {
+  "full": "Volle Breite",
+  "2/3": "2/3 Breite",
+  "1/3": "1/3 Breite",
+};
+
+const DashboardCustomizer = ({ widgets, onToggleVisibility, onReorder, onResizeWidget, onResetLayout }: DashboardCustomizerProps) => {
   const [draggedItem, setDraggedItem] = useState<string | null>(null);
   const [dragOverItem, setDragOverItem] = useState<string | null>(null);
 
@@ -119,6 +127,21 @@ const DashboardCustomizer = ({ widgets, onToggleVisibility, onReorder, onResetLa
                   </Label>
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
+                  <Select
+                    value={widget.widget_size || "full"}
+                    onValueChange={(value) => onResizeWidget(widget.widget_type, value as WidgetSize)}
+                  >
+                    <SelectTrigger className="h-7 w-[100px] text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {(Object.entries(SIZE_LABELS) as [WidgetSize, string][]).map(([value, label]) => (
+                        <SelectItem key={value} value={value} className="text-xs">
+                          {label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                   <Switch
                     id={widget.widget_type}
                     checked={widget.is_visible}
