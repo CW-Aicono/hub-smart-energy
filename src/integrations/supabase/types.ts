@@ -573,6 +573,41 @@ export type Database = {
         }
         Relationships: []
       }
+      platform_statistics: {
+        Row: {
+          created_at: string
+          id: string
+          metric_type: string
+          recorded_at: string
+          tenant_id: string | null
+          value: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          metric_type: string
+          recorded_at?: string
+          tenant_id?: string | null
+          value?: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          metric_type?: string
+          recorded_at?: string
+          tenant_id?: string | null
+          value?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "platform_statistics_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           company_name: string | null
@@ -642,6 +677,188 @@ export type Database = {
             columns: ["permission_id"]
             isOneToOne: false
             referencedRelation: "permissions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      support_sessions: {
+        Row: {
+          created_at: string
+          ended_at: string | null
+          id: string
+          reason: string | null
+          started_at: string
+          super_admin_user_id: string
+          tenant_id: string
+        }
+        Insert: {
+          created_at?: string
+          ended_at?: string | null
+          id?: string
+          reason?: string | null
+          started_at?: string
+          super_admin_user_id: string
+          tenant_id: string
+        }
+        Update: {
+          created_at?: string
+          ended_at?: string | null
+          id?: string
+          reason?: string | null
+          started_at?: string
+          super_admin_user_id?: string
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "support_sessions_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tenant_invoices: {
+        Row: {
+          amount: number
+          created_at: string
+          id: string
+          invoice_number: string
+          pdf_url: string | null
+          period_end: string
+          period_start: string
+          status: string
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          amount?: number
+          created_at?: string
+          id?: string
+          invoice_number: string
+          pdf_url?: string | null
+          period_end: string
+          period_start: string
+          status?: string
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          id?: string
+          invoice_number?: string
+          pdf_url?: string | null
+          period_end?: string
+          period_start?: string
+          status?: string
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tenant_invoices_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tenant_licenses: {
+        Row: {
+          billing_cycle: string
+          created_at: string
+          id: string
+          max_locations: number
+          max_users: number
+          plan_name: string
+          price_monthly: number
+          price_yearly: number
+          status: string
+          tenant_id: string
+          updated_at: string
+          valid_from: string
+          valid_until: string | null
+        }
+        Insert: {
+          billing_cycle?: string
+          created_at?: string
+          id?: string
+          max_locations?: number
+          max_users?: number
+          plan_name?: string
+          price_monthly?: number
+          price_yearly?: number
+          status?: string
+          tenant_id: string
+          updated_at?: string
+          valid_from?: string
+          valid_until?: string | null
+        }
+        Update: {
+          billing_cycle?: string
+          created_at?: string
+          id?: string
+          max_locations?: number
+          max_users?: number
+          plan_name?: string
+          price_monthly?: number
+          price_yearly?: number
+          status?: string
+          tenant_id?: string
+          updated_at?: string
+          valid_from?: string
+          valid_until?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tenant_licenses_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tenant_modules: {
+        Row: {
+          created_at: string
+          disabled_at: string | null
+          enabled_at: string | null
+          id: string
+          is_enabled: boolean
+          module_code: string
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          disabled_at?: string | null
+          enabled_at?: string | null
+          id?: string
+          is_enabled?: boolean
+          module_code: string
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          disabled_at?: string | null
+          enabled_at?: string | null
+          id?: string
+          is_enabled?: boolean
+          module_code?: string
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tenant_modules_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
             referencedColumns: ["id"]
           },
         ]
@@ -800,7 +1017,7 @@ export type Database = {
       is_own_profile: { Args: { profile_user_id: string }; Returns: boolean }
     }
     Enums: {
-      app_role: "admin" | "user"
+      app_role: "admin" | "user" | "super_admin"
       energy_type: "strom" | "gas" | "waerme" | "wasser"
       location_type: "einzelgebaeude" | "gebaeudekomplex" | "sonstiges"
       location_usage_type:
@@ -938,7 +1155,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["admin", "user"],
+      app_role: ["admin", "user", "super_admin"],
       energy_type: ["strom", "gas", "waerme", "wasser"],
       location_type: ["einzelgebaeude", "gebaeudekomplex", "sonstiges"],
       location_usage_type: [
