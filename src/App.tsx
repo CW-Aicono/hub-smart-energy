@@ -31,7 +31,7 @@ import SuperAdminUsers from "./pages/SuperAdminUsers";
 import SuperAdminRoles from "./pages/SuperAdminRoles";
 import SuperAdminMap from "./pages/SuperAdminMap";
 import MobileApp from "./pages/MobileApp";
-
+import UpdateBanner from "./components/UpdateBanner";
 // Import Leaflet CSS globally
 import "leaflet/dist/leaflet.css";
 
@@ -46,6 +46,7 @@ const App = () => (
             <TooltipProvider>
               <Toaster />
               <Sonner />
+              <UpdateBanner />
               <BrowserRouter>
                 <Routes>
                   <Route path="/" element={<Index />} />
