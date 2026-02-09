@@ -712,6 +712,7 @@ export type Database = {
           energy_type: string
           id: string
           installation_date: string | null
+          is_archived: boolean
           location_id: string
           location_integration_id: string | null
           medium: string | null
@@ -730,6 +731,7 @@ export type Database = {
           energy_type?: string
           id?: string
           installation_date?: string | null
+          is_archived?: boolean
           location_id: string
           location_integration_id?: string | null
           medium?: string | null
@@ -748,6 +750,7 @@ export type Database = {
           energy_type?: string
           id?: string
           installation_date?: string | null
+          is_archived?: boolean
           location_id?: string
           location_integration_id?: string | null
           medium?: string | null
