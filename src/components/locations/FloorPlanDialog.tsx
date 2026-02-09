@@ -1,9 +1,9 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, lazy, Suspense } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2, Trash2, GripVertical, AlertCircle, Image, MapPin, Maximize2, Minimize2 } from "lucide-react";
+import { Loader2, Trash2, GripVertical, AlertCircle, Image, MapPin, Maximize2, Minimize2, Box } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Floor } from "@/hooks/useFloors";
 import { useFloorSensorPositions, FloorSensorPosition, FloorSensorPositionInsert } from "@/hooks/useFloorSensorPositions";
@@ -11,6 +11,9 @@ import { useLocationIntegrations } from "@/hooks/useIntegrations";
 import { useUserRole } from "@/hooks/useUserRole";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+
+// Lazy load 3D viewer for performance
+const FloorPlan3DViewer = lazy(() => import("./FloorPlan3DViewer").then(m => ({ default: m.FloorPlan3DViewer })));
 
 interface Sensor {
   id: string;
@@ -267,6 +270,10 @@ export function FloorPlanDialog({ floor, locationId, open, onOpenChange }: Floor
                   <MapPin className="h-4 w-4" />
                   Messgeräte bearbeiten
                 </TabsTrigger>
+                <TabsTrigger value="3d" className="gap-2">
+                  <Box className="h-4 w-4" />
+                  3D-Begehung
+                </TabsTrigger>
               </TabsList>
 
               <TabsContent value="view" className="flex-1 m-0 overflow-hidden">
@@ -411,6 +418,27 @@ export function FloorPlanDialog({ floor, locationId, open, onOpenChange }: Floor
                     )}
                   </div>
                 </div>
+              </TabsContent>
+
+              {/* 3D Walkthrough Tab */}
+              <TabsContent value="3d" className="flex-1 m-0 overflow-hidden">
+                <Suspense fallback={
+                  <div className="flex items-center justify-center h-full">
+                    <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                  </div>
+                }>
+                  <FloorPlan3DViewer 
+                    floor={floor} 
+                    locationId={locationId}
+                    sensors={availableSensors.map(s => ({
+                      id: s.id,
+                      name: s.name,
+                      value: s.value,
+                      unit: s.unit,
+                    }))}
+                    isAdmin={isAdmin}
+                  />
+                </Suspense>
               </TabsContent>
             </Tabs>
           ) : (
