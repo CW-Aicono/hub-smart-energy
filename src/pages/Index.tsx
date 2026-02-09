@@ -1,6 +1,6 @@
 import { Navigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
-import { useDashboardWidgets } from "@/hooks/useDashboardWidgets";
+import { useDashboardWidgets, WidgetLayout } from "@/hooks/useDashboardWidgets";
 import { useTranslation } from "@/hooks/useTranslation";
 import { DashboardFilterProvider, useDashboardFilter } from "@/hooks/useDashboardFilter";
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
@@ -13,7 +13,12 @@ import AlertsList from "@/components/dashboard/AlertsList";
 import LocationMapWidget from "@/components/dashboard/LocationMapWidget";
 import FloorPlanWidget from "@/components/dashboard/FloorPlanWidget";
 import WeatherWidget from "@/components/dashboard/WeatherWidget";
-import { cn } from "@/lib/utils";
+import { Responsive, WidthProvider, Layout } from "react-grid-layout";
+import { useCallback, useRef, useState, useEffect } from "react";
+import "react-grid-layout/css/styles.css";
+import "react-resizable/css/styles.css";
+
+const ResponsiveGridLayout = WidthProvider(Responsive);
 
 interface WidgetProps {
   locationId: string | null;
@@ -29,22 +34,59 @@ const WIDGET_COMPONENTS: Record<string, React.ComponentType<WidgetProps>> = {
   weather: WeatherWidget,
 };
 
-const SIZE_CLASSES: Record<string, string> = {
-  small: "col-span-1",
-  medium: "col-span-2",
-  large: "col-span-3",
-  full: "col-span-full",
+const DEFAULT_LAYOUTS: Record<string, WidgetLayout> = {
+  location_map: { x: 0, y: 0, w: 2, h: 2 },
+  weather: { x: 2, y: 0, w: 1, h: 2 },
+  cost_overview: { x: 0, y: 2, w: 1, h: 2 },
+  energy_chart: { x: 1, y: 2, w: 2, h: 2 },
+  sustainability_kpis: { x: 0, y: 4, w: 2, h: 2 },
+  alerts_list: { x: 2, y: 4, w: 1, h: 2 },
 };
 
-// Widget to show based on location selection
 const getLocationWidget = (locationId: string | null): string => {
   return locationId ? "floor_plan" : "location_map";
 };
 
 const DashboardContent = () => {
-  const { widgets, visibleWidgets, loading: widgetsLoading, toggleWidgetVisibility, reorderWidgets, updateWidgetSize } = useDashboardWidgets();
+  const { widgets, visibleWidgets, loading: widgetsLoading, toggleWidgetVisibility, reorderWidgets, updateWidgetSize, updateAllLayouts } = useDashboardWidgets();
   const { t } = useTranslation();
   const { selectedLocationId, setSelectedLocationId } = useDashboardFilter();
+  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
+
+  const layouts = visibleWidgets.map((widget, idx): Layout => {
+    const l = widget.layout || DEFAULT_LAYOUTS[widget.widget_type] || { x: (idx % 3), y: Math.floor(idx / 3) * 2, w: 1, h: 2 };
+    return {
+      i: widget.widget_type,
+      x: l.x,
+      y: l.y,
+      w: l.w,
+      h: l.h,
+      minW: 1,
+      minH: 1,
+      maxW: 3,
+      maxH: 4,
+    };
+  });
+
+  const handleLayoutChange = useCallback((newLayout: Layout[]) => {
+    if (!isEditing) return;
+    
+    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    saveTimeoutRef.current = setTimeout(() => {
+      const layoutMap: Record<string, WidgetLayout> = {};
+      newLayout.forEach((item) => {
+        layoutMap[item.i] = { x: item.x, y: item.y, w: item.w, h: item.h };
+      });
+      updateAllLayouts(layoutMap);
+    }, 800);
+  }, [updateAllLayouts, isEditing]);
+
+  useEffect(() => {
+    return () => {
+      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    };
+  }, []);
 
   if (widgetsLoading) {
     return (
@@ -68,6 +110,12 @@ const DashboardContent = () => {
               selectedLocationId={selectedLocationId}
               onLocationChange={setSelectedLocationId}
             />
+            <button
+              onClick={() => setIsEditing(!isEditing)}
+              className={`inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors h-9 px-3 border ${isEditing ? 'bg-primary text-primary-foreground border-primary' : 'bg-background border-input hover:bg-accent hover:text-accent-foreground'}`}
+            >
+              {isEditing ? "✓ Fertig" : "⊞ Layout bearbeiten"}
+            </button>
             <DashboardCustomizer 
               widgets={widgets} 
               onToggleVisibility={toggleWidgetVisibility}
@@ -77,21 +125,34 @@ const DashboardContent = () => {
           </div>
         </header>
         <div className="p-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {visibleWidgets.map((widget) => {
-              const widgetType = widget.widget_type === "location_map" 
-                ? getLocationWidget(selectedLocationId) 
-                : widget.widget_type;
-              const Component = WIDGET_COMPONENTS[widgetType];
-              const sizeClass = SIZE_CLASSES[(widget as any).widget_size || "medium"] || SIZE_CLASSES.medium;
-              return Component ? (
-                <div key={widget.widget_type} className={cn(sizeClass)}>
-                  <Component locationId={selectedLocationId} />
-                </div>
-              ) : null;
-            })}
-          </div>
-          {visibleWidgets.length === 0 && (
+          {visibleWidgets.length > 0 ? (
+            <ResponsiveGridLayout
+              className="layout"
+              layouts={{ lg: layouts, md: layouts, sm: layouts }}
+              breakpoints={{ lg: 1200, md: 996, sm: 768 }}
+              cols={{ lg: 3, md: 3, sm: 1 }}
+              rowHeight={150}
+              margin={[16, 16]}
+              isDraggable={isEditing}
+              isResizable={isEditing}
+              onLayoutChange={(layout) => handleLayoutChange(layout)}
+              draggableCancel=".no-drag"
+            >
+              {visibleWidgets.map((widget) => {
+                const widgetType = widget.widget_type === "location_map"
+                  ? getLocationWidget(selectedLocationId)
+                  : widget.widget_type;
+                const Component = WIDGET_COMPONENTS[widgetType];
+                return Component ? (
+                  <div key={widget.widget_type} className={`${isEditing ? 'ring-1 ring-border ring-dashed rounded-lg' : ''}`}>
+                    <div className="h-full w-full overflow-auto">
+                      <Component locationId={selectedLocationId} />
+                    </div>
+                  </div>
+                ) : null;
+              })}
+            </ResponsiveGridLayout>
+          ) : (
             <div className="text-center py-12 text-muted-foreground">
               <p>{t("dashboard.noWidgets")}</p>
               <p className="text-sm mt-1">{t("dashboard.noWidgetsHint")}</p>
