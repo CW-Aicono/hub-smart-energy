@@ -162,25 +162,18 @@ const DashboardSidebar = () => {
     if (hasChildren && collapsed) {
       return (
         <DropdownMenu key={item.to}>
-          <Tooltip delayDuration={0}>
-            <TooltipTrigger asChild>
-              <DropdownMenuTrigger asChild>
-                <button
-                  className={cn(
-                    "flex items-center rounded-lg text-sm font-medium transition-colors justify-center p-2.5 w-full",
-                    isActive || isChildActive
-                      ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                      : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
-                  )}
-                >
-                  <item.icon className="h-4 w-4 shrink-0" />
-                </button>
-              </DropdownMenuTrigger>
-            </TooltipTrigger>
-            <TooltipContent side="right" className="bg-popover">
-              {t(item.labelKey)}
-            </TooltipContent>
-          </Tooltip>
+          <DropdownMenuTrigger asChild>
+            <button
+              className={cn(
+                "flex items-center rounded-lg text-sm font-medium transition-colors justify-center p-2.5 w-full",
+                isActive || isChildActive
+                  ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                  : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+              )}
+            >
+              <item.icon className="h-4 w-4 shrink-0" />
+            </button>
+          </DropdownMenuTrigger>
           <DropdownMenuContent side="right" align="start" className="w-48 bg-popover">
             {item.children?.map((child) => (
               <DropdownMenuItem key={child.to} asChild>
