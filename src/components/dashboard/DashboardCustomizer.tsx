@@ -27,6 +27,7 @@ const WIDGET_LABELS: Record<string, string> = {
   pie_chart: "Kreisdiagramm",
   sankey: "Sankey-Diagramm",
   forecast: "Jahresprognose",
+  anomaly: "KI-Anomalie-Erkennung",
 };
 
 const SIZE_LABELS: Record<WidgetSize, string> = {
