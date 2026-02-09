@@ -246,7 +246,7 @@ export function FloorPlan3DViewer({ floor, locationId, sensors = [], isAdmin = f
         <div className="bg-primary/10 border-b px-3 py-2 text-sm text-center flex-shrink-0">
           <span className="font-medium">
             {isLocked 
-              ? "WASD = Bewegen | Maus = Umsehen | ESC = Beenden" 
+              ? "WASD = Bewegen | Leertaste = Hoch | Shift = Runter | Mausrad = Höhe | ESC = Beenden" 
               : "Klicken Sie in das 3D-Fenster, um die Steuerung zu aktivieren"}
           </span>
         </div>
