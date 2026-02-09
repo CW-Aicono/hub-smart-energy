@@ -1,6 +1,6 @@
 import { Navigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
-import { useDashboardWidgets, WidgetLayout, WidgetSize } from "@/hooks/useDashboardWidgets";
+import { useDashboardWidgets } from "@/hooks/useDashboardWidgets";
 import { useTranslation } from "@/hooks/useTranslation";
 import { DashboardFilterProvider, useDashboardFilter } from "@/hooks/useDashboardFilter";
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
@@ -17,7 +17,6 @@ import WeatherWidget from "@/components/dashboard/WeatherWidget";
 import PieChartWidget from "@/components/dashboard/PieChartWidget";
 import SankeyWidget from "@/components/dashboard/SankeyWidget";
 import { Responsive, WidthProvider, Layout } from "react-grid-layout";
-import { useCallback, useRef, useState, useEffect } from "react";
 import "react-grid-layout/css/styles.css";
 import "react-resizable/css/styles.css";
 
@@ -40,98 +39,29 @@ const WIDGET_COMPONENTS: Record<string, React.ComponentType<WidgetProps>> = {
   sankey: SankeyWidget,
 };
 
-const SIZE_TO_WIDTH: Record<WidgetSize, number> = {
-  small: 1,
-  medium: 2,
-  large: 2,
-  full: 3,
-};
-
-const SIZE_TO_HEIGHT: Record<WidgetSize, number> = {
-  small: 3,
-  medium: 3,
-  large: 4,
-  full: 3,
-};
-
-const DEFAULT_SIZES: Record<string, WidgetSize> = {
-  location_map: "medium",
-  weather: "small",
-  cost_overview: "small",
-  energy_chart: "medium",
-  sustainability_kpis: "medium",
-  alerts_list: "small",
-  floor_plan_explorer: "medium",
-  pie_chart: "small",
-  sankey: "full",
-};
+const WIDGET_HEIGHT = 3;
 
 const getLocationWidget = (locationId: string | null): string => {
   return locationId ? "floor_plan" : "location_map";
 };
 
 const DashboardContent = () => {
-  const { widgets, visibleWidgets, loading: widgetsLoading, toggleWidgetVisibility, reorderWidgets, updateWidgetSize, updateAllLayouts, resetLayouts } = useDashboardWidgets();
+  const { widgets, visibleWidgets, loading: widgetsLoading, toggleWidgetVisibility, reorderWidgets } = useDashboardWidgets();
   const { t } = useTranslation();
   const { selectedLocationId, setSelectedLocationId } = useDashboardFilter();
-  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Compute layouts from widget_size and position order
-  const layouts = (() => {
-    const result: Layout[] = [];
-    let cursorX = 0;
-    let cursorY = 0;
-    const cols = 3;
-
-    for (const widget of visibleWidgets) {
-      const size = widget.widget_size || DEFAULT_SIZES[widget.widget_type] || "medium";
-      const w = SIZE_TO_WIDTH[size] || 1;
-      const h = SIZE_TO_HEIGHT[size] || 3;
-
-      // If widget doesn't fit in current row, move to next row
-      if (cursorX + w > cols) {
-        cursorX = 0;
-        cursorY += 1; // react-grid-layout compacts, so approximate y
-      }
-
-      result.push({
-        i: widget.widget_type,
-        x: cursorX,
-        y: cursorY,
-        w,
-        h,
-        minW: 1,
-        minH: 1,
-        maxW: 3,
-        maxH: 4,
-      });
-
-      cursorX += w;
-      if (cursorX >= cols) {
-        cursorX = 0;
-        cursorY += h;
-      }
-    }
-
-    return result;
-  })();
-
-  const handleLayoutChange = useCallback((newLayout: Layout[]) => {
-    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
-    saveTimeoutRef.current = setTimeout(() => {
-      const layoutMap: Record<string, WidgetLayout> = {};
-      newLayout.forEach((item) => {
-        layoutMap[item.i] = { x: item.x, y: item.y, w: item.w, h: item.h };
-      });
-      updateAllLayouts(layoutMap);
-    }, 800);
-  }, [updateAllLayouts]);
-
-  useEffect(() => {
-    return () => {
-      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
-    };
-  }, []);
+  // All widgets full width, stacked by position order
+  const layouts: Layout[] = visibleWidgets.map((widget, idx) => ({
+    i: widget.widget_type,
+    x: 0,
+    y: idx * WIDGET_HEIGHT,
+    w: 3,
+    h: WIDGET_HEIGHT,
+    minW: 3,
+    maxW: 3,
+    minH: WIDGET_HEIGHT,
+    maxH: WIDGET_HEIGHT,
+  }));
 
   if (widgetsLoading) {
     return (
@@ -156,15 +86,15 @@ const DashboardContent = () => {
               onLocationChange={setSelectedLocationId}
             />
             <DashboardCustomizer
-              widgets={widgets} 
+              widgets={widgets}
               onToggleVisibility={toggleWidgetVisibility}
               onReorder={reorderWidgets}
-              onResizeWidget={updateWidgetSize}
-              onResetLayout={async () => {
-                // Reset sizes to defaults
-                for (const [type, size] of Object.entries(DEFAULT_SIZES)) {
-                  await updateWidgetSize(type, size);
-                }
+              onResetLayout={() => {
+                // Reset to default order (by widget_type alphabetical or original)
+                const defaultOrder = widgets
+                  .sort((a, b) => a.position - b.position)
+                  .map(w => w.widget_type);
+                reorderWidgets(defaultOrder);
               }}
             />
           </div>
@@ -180,7 +110,6 @@ const DashboardContent = () => {
               margin={[16, 16]}
               isDraggable={false}
               isResizable={false}
-              onLayoutChange={(layout) => handleLayoutChange(layout)}
               draggableCancel=".no-drag"
             >
               {visibleWidgets.map((widget) => {
