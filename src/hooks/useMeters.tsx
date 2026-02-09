@@ -23,6 +23,8 @@ export interface Meter {
   capture_type: string;
   location_integration_id: string | null;
   sensor_uuid: string | null;
+  photo_url: string | null;
+  is_archived: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -111,5 +113,16 @@ export function useMeters(locationId?: string) {
     }
   };
 
-  return { meters, loading, addMeter, updateMeter, deleteMeter, refetch: fetchMeters };
+  const archiveMeter = async (id: string, archived: boolean) => {
+    const { error } = await supabase.from("meters").update({ is_archived: archived } as any).eq("id", id);
+    if (error) {
+      toast.error(archived ? "Zähler konnte nicht archiviert werden" : "Zähler konnte nicht wiederhergestellt werden");
+      console.error(error);
+    } else {
+      toast.success(archived ? "Zähler archiviert" : "Zähler wiederhergestellt");
+      fetchMeters();
+    }
+  };
+
+  return { meters, loading, addMeter, updateMeter, deleteMeter, archiveMeter, refetch: fetchMeters };
 }

@@ -469,68 +469,75 @@ const MobileApp = () => {
   };
 
   // --- QR Scanner ---
+  const stopQrScan = useCallback(() => {
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+    streamRef.current = null;
+    setQrScanning(false);
+  }, []);
+
+  const scanQrFrameRef = useRef<() => void>(() => {});
+
+  // Keep scanQrFrame logic in a ref to avoid stale closures
+  useEffect(() => {
+    scanQrFrameRef.current = () => {
+      if (!videoRef.current || !streamRef.current) return;
+
+      const video = videoRef.current;
+      if (video.readyState !== video.HAVE_ENOUGH_DATA) {
+        requestAnimationFrame(() => scanQrFrameRef.current());
+        return;
+      }
+
+      const canvas = document.createElement("canvas");
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+      ctx.drawImage(video, 0, 0);
+
+      if ("BarcodeDetector" in window) {
+        const detector = new (window as any).BarcodeDetector({ formats: ["qr_code"] });
+        detector.detect(canvas).then((barcodes: any[]) => {
+          if (barcodes.length > 0) {
+            handleQrResult(barcodes[0].rawValue);
+            return;
+          }
+          if (streamRef.current) requestAnimationFrame(() => scanQrFrameRef.current());
+        }).catch(() => {
+          if (streamRef.current) requestAnimationFrame(() => scanQrFrameRef.current());
+        });
+      } else {
+        toast.error("Ihr Browser unterstützt keinen QR-Code-Scanner. Bitte nutzen Sie Chrome auf Android.");
+        stopQrScan();
+      }
+    };
+  });
+
   const startQrScan = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: "environment" },
       });
       streamRef.current = stream;
-      // Set scanning state first so the <video> element renders
       setQrScanning(true);
     } catch (err) {
       toast.error("Kamera konnte nicht geöffnet werden");
     }
   };
 
-  // Attach stream to video element once it's rendered
-  useEffect(() => {
-    if (qrScanning && streamRef.current && videoRef.current) {
-      videoRef.current.srcObject = streamRef.current;
-      videoRef.current.play().then(() => {
-        scanQrFrame();
+  // Callback ref to attach stream immediately when video element mounts
+  const videoCallbackRef = useCallback((node: HTMLVideoElement | null) => {
+    (videoRef as React.MutableRefObject<HTMLVideoElement | null>).current = node;
+    if (node && streamRef.current) {
+      node.srcObject = streamRef.current;
+      node.setAttribute("autoplay", "true");
+      node.play().then(() => {
+        scanQrFrameRef.current();
       }).catch(() => {
         toast.error("Video konnte nicht gestartet werden");
       });
     }
-  }, [qrScanning]);
-
-  const stopQrScan = () => {
-    streamRef.current?.getTracks().forEach((t) => t.stop());
-    streamRef.current = null;
-    setQrScanning(false);
-  };
-
-  const scanQrFrame = useCallback(() => {
-    if (!videoRef.current || !streamRef.current) return;
-
-    const video = videoRef.current;
-    if (video.readyState !== video.HAVE_ENOUGH_DATA) {
-      requestAnimationFrame(scanQrFrame);
-      return;
-    }
-
-    const canvas = document.createElement("canvas");
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    ctx.drawImage(video, 0, 0);
-
-    if ("BarcodeDetector" in window) {
-      const detector = new (window as any).BarcodeDetector({ formats: ["qr_code"] });
-      detector.detect(canvas).then((barcodes: any[]) => {
-        if (barcodes.length > 0) {
-          handleQrResult(barcodes[0].rawValue);
-          return;
-        }
-        if (streamRef.current) requestAnimationFrame(scanQrFrame);
-      }).catch(() => {
-        if (streamRef.current) requestAnimationFrame(scanQrFrame);
-      });
-    } else {
-      if (streamRef.current) requestAnimationFrame(scanQrFrame);
-    }
-  }, [meters]);
+  }, []);
 
   const handleQrResult = (rawValue: string) => {
     stopQrScan();
@@ -727,10 +734,11 @@ const MobileApp = () => {
                   {qrScanning ? (
                     <div className="relative">
                       <video
-                        ref={videoRef}
+                        ref={videoCallbackRef}
                         className="w-full aspect-square object-cover rounded-lg bg-black"
                         playsInline
                         muted
+                        autoPlay
                       />
                       <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                         <div className="w-48 h-48 border-2 border-primary rounded-lg" />

@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
-import { Gauge, Plus, Pencil, Trash2 } from "lucide-react";
+import { Gauge, Plus, Pencil, Trash2, Archive, ArchiveRestore, Eye, EyeOff } from "lucide-react";
 import { AddMeterDialog } from "./AddMeterDialog";
 import { EditMeterDialog } from "./EditMeterDialog";
 import { AddAlertRuleDialog } from "./AddAlertRuleDialog";
@@ -25,12 +25,17 @@ const ENERGY_TYPE_LABELS: Record<string, string> = {
 };
 
 export const MeterManagement = ({ locationId }: MeterManagementProps) => {
-  const { meters, loading: metersLoading, deleteMeter, updateMeter } = useMeters(locationId);
+  const { meters, loading: metersLoading, deleteMeter, updateMeter, archiveMeter } = useMeters(locationId);
   const { alertRules, loading: rulesLoading, deleteAlertRule, toggleAlertRule } = useAlertRules(locationId);
   const { isAdmin } = useUserRole();
   const [meterDialogOpen, setMeterDialogOpen] = useState(false);
   const [alertDialogOpen, setAlertDialogOpen] = useState(false);
   const [editingMeter, setEditingMeter] = useState<Meter | null>(null);
+  const [showArchived, setShowArchived] = useState(false);
+
+  const activeMeters = meters.filter((m) => !m.is_archived);
+  const archivedMeters = meters.filter((m) => m.is_archived);
+  const displayedMeters = showArchived ? archivedMeters : activeMeters;
 
   return (
     <Card>
@@ -46,22 +51,31 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
       <CardContent>
         <Tabs defaultValue="meters">
           <TabsList>
-            <TabsTrigger value="meters">Zähler ({meters.length})</TabsTrigger>
+            <TabsTrigger value="meters">Zähler ({activeMeters.length})</TabsTrigger>
             <TabsTrigger value="alerts">Alarmregeln ({alertRules.length})</TabsTrigger>
           </TabsList>
 
           <TabsContent value="meters" className="space-y-4">
-            {isAdmin && (
-              <div className="flex justify-end">
+            <div className="flex items-center justify-between">
+              {archivedMeters.length > 0 && (
+                <Button variant="ghost" size="sm" className="gap-1.5 text-xs" onClick={() => setShowArchived(!showArchived)}>
+                  {showArchived ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+                  {showArchived ? `Aktive anzeigen (${activeMeters.length})` : `Archiv anzeigen (${archivedMeters.length})`}
+                </Button>
+              )}
+              <div className="flex-1" />
+              {isAdmin && !showArchived && (
                 <Button size="sm" onClick={() => setMeterDialogOpen(true)}>
                   <Plus className="h-4 w-4 mr-1" /> Zähler anlegen
                 </Button>
-              </div>
-            )}
+              )}
+            </div>
             {metersLoading ? (
               <p className="text-sm text-muted-foreground">Laden...</p>
-            ) : meters.length === 0 ? (
-              <p className="text-sm text-muted-foreground py-4">Keine Zähler angelegt.</p>
+            ) : displayedMeters.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-4">
+                {showArchived ? "Keine archivierten Zähler." : "Keine Zähler angelegt."}
+              </p>
             ) : (
               <Table>
                 <TableHeader>
@@ -71,12 +85,12 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
                     <TableHead>Erfassung</TableHead>
                     <TableHead>Energieart</TableHead>
                     <TableHead>Einheit</TableHead>
-                    {isAdmin && <TableHead className="w-24" />}
+                    {isAdmin && <TableHead className="w-32" />}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {meters.map((m) => (
-                    <TableRow key={m.id}>
+                  {displayedMeters.map((m) => (
+                    <TableRow key={m.id} className={m.is_archived ? "opacity-60" : ""}>
                       <TableCell className="font-medium">{m.name}</TableCell>
                       <TableCell>{m.meter_number || "–"}</TableCell>
                       <TableCell>
@@ -90,12 +104,25 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
                       <TableCell>{m.unit}</TableCell>
                       {isAdmin && (
                         <TableCell className="flex gap-1">
-                          <Button variant="ghost" size="icon" onClick={() => setEditingMeter(m)}>
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <Button variant="ghost" size="icon" onClick={() => deleteMeter(m.id)}>
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
+                          {!m.is_archived && (
+                            <Button variant="ghost" size="icon" onClick={() => setEditingMeter(m)} title="Bearbeiten">
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                          )}
+                          {m.is_archived ? (
+                            <Button variant="ghost" size="icon" onClick={() => archiveMeter(m.id, false)} title="Wiederherstellen">
+                              <ArchiveRestore className="h-4 w-4 text-primary" />
+                            </Button>
+                          ) : (
+                            <Button variant="ghost" size="icon" onClick={() => archiveMeter(m.id, true)} title="Archivieren">
+                              <Archive className="h-4 w-4" />
+                            </Button>
+                          )}
+                          {m.is_archived && (
+                            <Button variant="ghost" size="icon" onClick={() => deleteMeter(m.id)} title="Endgültig löschen">
+                              <Trash2 className="h-4 w-4 text-destructive" />
+                            </Button>
+                          )}
                         </TableCell>
                       )}
                     </TableRow>
