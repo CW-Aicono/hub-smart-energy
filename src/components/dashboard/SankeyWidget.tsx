@@ -54,8 +54,8 @@ const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
     return vals;
   }, []);
 
-  const vbW = 600;
-  const vbH = 400;
+  const vbW = 700;
+  const vbH = 340;
   const nodeW = 14;
   const srcX = 100;
   const tgtX = vbW - 100 - nodeW;
@@ -161,7 +161,7 @@ const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
         <p className="text-sm text-muted-foreground">{subtitle}</p>
       </CardHeader>
       <CardContent className="px-2 pb-2">
-        <div className="w-full" style={{ aspectRatio: "5/3" }}>
+        <div className="w-full" style={{ aspectRatio: "2/1" }}>
           <svg viewBox={`0 0 ${vbW} ${vbH}`} className="w-full h-full" preserveAspectRatio="xMidYMid meet">
             <defs>
               {LINKS.map((link, i) => {
