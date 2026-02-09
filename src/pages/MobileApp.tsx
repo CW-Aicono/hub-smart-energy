@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useMeters, Meter } from "@/hooks/useMeters";
 import { useMeterReadings } from "@/hooks/useMeterReadings";
+import { useOfflineReadings } from "@/hooks/useOfflineReadings";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,7 +23,9 @@ import {
   AlertTriangle,
   X,
   ImageIcon,
-  PlusCircle,
+  WifiOff,
+  RefreshCw,
+  CloudUpload,
 } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
@@ -209,6 +212,7 @@ const MobileApp = () => {
   const { user, loading: authLoading, signOut } = useAuth();
   const { meters, loading: metersLoading } = useMeters();
   const { addReading, getLastReading } = useMeterReadings();
+  const { pending, pendingCount, isOnline, syncing, enqueue, syncAll } = useOfflineReadings();
   const [searchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState("camera");
   const [loggedIn, setLoggedIn] = useState(false);
@@ -248,11 +252,27 @@ const MobileApp = () => {
   const handleSubmitReading = async () => {
     if (!selectedMeterId || !reading) return;
     setSubmitting(true);
+    const captureMethod = activeTab === "camera" ? "ai" : activeTab === "qr" ? "qr" : "manual";
+
+    if (!isOnline) {
+      // Offline: queue locally
+      enqueue({
+        meter_id: selectedMeterId,
+        value: parseFloat(reading),
+        reading_date: readingDate,
+        capture_method: captureMethod,
+      });
+      setSubmitting(false);
+      toast.success("Zählerstand offline gespeichert – wird bei Verbindung übermittelt");
+      resetState();
+      return;
+    }
+
     const success = await addReading({
       meter_id: selectedMeterId,
       value: parseFloat(reading),
       reading_date: readingDate,
-      capture_method: activeTab === "camera" ? "ai" : activeTab === "qr" ? "qr" : "manual",
+      capture_method: captureMethod,
     });
     setSubmitting(false);
     if (success) {
@@ -455,11 +475,38 @@ const MobileApp = () => {
             <Zap className="h-5 w-5 text-primary-foreground" />
           </div>
           <span className="font-bold text-sm">Zählerablesung</span>
+          {!isOnline && (
+            <Badge variant="secondary" className="gap-1 text-xs">
+              <WifiOff className="h-3 w-3" /> Offline
+            </Badge>
+          )}
         </div>
-        <Button variant="ghost" size="icon" onClick={signOut}>
-          <LogOut className="h-5 w-5" />
-        </Button>
+        <div className="flex items-center gap-1">
+          {pendingCount > 0 && isOnline && (
+            <Button variant="ghost" size="icon" onClick={syncAll} disabled={syncing}>
+              {syncing ? <Loader2 className="h-4 w-4 animate-spin" /> : <CloudUpload className="h-5 w-5" />}
+            </Button>
+          )}
+          <Button variant="ghost" size="icon" onClick={signOut}>
+            <LogOut className="h-5 w-5" />
+          </Button>
+        </div>
       </header>
+
+      {/* Pending readings banner */}
+      {pendingCount > 0 && (
+        <div className="bg-muted px-4 py-2 flex items-center justify-between text-xs border-b">
+          <span className="text-muted-foreground">
+            {pendingCount} Ablesung{pendingCount > 1 ? "en" : ""} ausstehend
+          </span>
+          {isOnline && (
+            <Button variant="ghost" size="sm" className="h-7 text-xs gap-1" onClick={syncAll} disabled={syncing}>
+              {syncing ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
+              Jetzt senden
+            </Button>
+          )}
+        </div>
+      )}
 
       {/* Content */}
       <main className="flex-1 p-4">
