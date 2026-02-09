@@ -84,13 +84,21 @@ interface UnknownMeterPromptProps {
   reading: string;
   capturedImage: string | null;
   locations: { id: string; name: string }[];
-  onCreateMeter: (locationId: string) => void;
+  onCreateMeter: (locationId: string, energyType: string) => void;
   onDismiss: () => void;
   creating: boolean;
 }
 
+const ENERGY_TYPE_OPTIONS = [
+  { value: "strom", label: "Strom", unit: "kWh" },
+  { value: "gas", label: "Gas", unit: "m³" },
+  { value: "wasser", label: "Wasser", unit: "m³" },
+  { value: "waerme", label: "Wärme", unit: "kWh" },
+];
+
 function UnknownMeterPrompt({ meterNumber, reading, capturedImage, locations, onCreateMeter, onDismiss, creating }: UnknownMeterPromptProps) {
   const [selectedLocationId, setSelectedLocationId] = useState("");
+  const [selectedEnergyType, setSelectedEnergyType] = useState("strom");
 
   return (
     <Card className="border-destructive/40 bg-muted">
@@ -127,6 +135,21 @@ function UnknownMeterPrompt({ meterNumber, reading, capturedImage, locations, on
               </SelectContent>
             </Select>
           </div>
+          <div className="space-y-2">
+            <Label>Energieart</Label>
+            <Select value={selectedEnergyType} onValueChange={setSelectedEnergyType}>
+              <SelectTrigger className="h-12 text-base">
+                <SelectValue placeholder="Energieart wählen" />
+              </SelectTrigger>
+              <SelectContent>
+                {ENERGY_TYPE_OPTIONS.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
 
           {capturedImage && (
             <div className="rounded-lg overflow-hidden border">
@@ -142,7 +165,7 @@ function UnknownMeterPrompt({ meterNumber, reading, capturedImage, locations, on
             <Button
               variant="secondary"
               className="flex-1 h-12"
-              onClick={() => onCreateMeter(selectedLocationId)}
+              onClick={() => onCreateMeter(selectedLocationId, selectedEnergyType)}
               disabled={!selectedLocationId || creating}
             >
               {creating ? <Loader2 className="h-5 w-5 animate-spin" /> : (
@@ -345,8 +368,9 @@ const MobileApp = () => {
   };
 
   // --- Create unknown meter ---
-  const handleCreateUnknownMeter = async (locationId: string) => {
+  const handleCreateUnknownMeter = async (locationId: string, energyType: string = "strom") => {
     if (!unknownMeterNumber || !locationId) return;
+    const selectedUnit = ENERGY_TYPE_OPTIONS.find(o => o.value === energyType)?.unit || "kWh";
     setCreatingMeter(true);
     try {
       // Upload photo if available
@@ -370,8 +394,8 @@ const MobileApp = () => {
         name: meterName,
         location_id: locationId,
         meter_number: unknownMeterNumber,
-        energy_type: "strom",
-        unit: "kWh",
+        energy_type: energyType,
+        unit: selectedUnit,
         capture_type: "manual",
         notes: photoUrl ? `Foto: ${photoUrl}` : undefined,
       });
