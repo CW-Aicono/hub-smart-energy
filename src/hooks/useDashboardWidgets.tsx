@@ -4,6 +4,13 @@ import { useAuth } from "./useAuth";
 
 export type WidgetSize = "small" | "medium" | "large" | "full";
 
+export interface WidgetLayout {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
 export interface DashboardWidget {
   id: string;
   widget_type: string;
@@ -11,6 +18,7 @@ export interface DashboardWidget {
   is_visible: boolean;
   widget_size: WidgetSize;
   config: Record<string, unknown>;
+  layout?: WidgetLayout;
 }
 
 const DEFAULT_WIDGETS = [
@@ -161,21 +169,73 @@ export function useDashboardWidgets() {
     }
   };
 
+  const updateWidgetLayout = async (widgetType: string, layout: WidgetLayout) => {
+    const widget = widgets.find((w) => w.widget_type === widgetType);
+    if (!widget) return;
+
+    const newConfig = { ...(widget.config || {}), layout };
+
+    const { error } = await supabase
+      .from("dashboard_widgets")
+      .update({ config: newConfig as any })
+      .eq("id", widget.id);
+
+    if (!error) {
+      setWidgets((prev) =>
+        prev.map((w) =>
+          w.widget_type === widgetType ? { ...w, config: newConfig, layout } : w
+        )
+      );
+    }
+  };
+
+  const updateAllLayouts = async (layouts: Record<string, WidgetLayout>) => {
+    const updates = Object.entries(layouts).map(async ([widgetType, layout]) => {
+      const widget = widgets.find((w) => w.widget_type === widgetType);
+      if (!widget) return;
+      const newConfig = { ...(widget.config || {}), layout };
+      await supabase
+        .from("dashboard_widgets")
+        .update({ config: newConfig as any })
+        .eq("id", widget.id);
+    });
+    await Promise.all(updates);
+
+    setWidgets((prev) =>
+      prev.map((w) => {
+        const layout = layouts[w.widget_type];
+        if (layout) {
+          const newConfig = { ...(w.config || {}), layout };
+          return { ...w, config: newConfig, layout };
+        }
+        return w;
+      })
+    );
+  };
+
   useEffect(() => {
     fetchWidgets();
   }, [fetchWidgets]);
 
-  const visibleWidgets = widgets
+  // Parse layout from config
+  const widgetsWithLayout = widgets.map((w) => ({
+    ...w,
+    layout: (w.config as any)?.layout as WidgetLayout | undefined,
+  }));
+
+  const visibleWidgets = widgetsWithLayout
     .filter((w) => w.is_visible)
     .sort((a, b) => a.position - b.position);
 
   return {
-    widgets,
+    widgets: widgetsWithLayout,
     visibleWidgets,
     loading,
     toggleWidgetVisibility,
     reorderWidgets,
     updateWidgetSize,
+    updateWidgetLayout,
+    updateAllLayouts,
     refetch: fetchWidgets,
   };
 }
