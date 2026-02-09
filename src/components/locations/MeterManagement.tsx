@@ -66,9 +66,9 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
                   <TableRow>
                     <TableHead>Name</TableHead>
                     <TableHead>Zählernummer</TableHead>
+                    <TableHead>Erfassung</TableHead>
                     <TableHead>Energieart</TableHead>
                     <TableHead>Einheit</TableHead>
-                    <TableHead>Medium</TableHead>
                     {isAdmin && <TableHead className="w-20" />}
                   </TableRow>
                 </TableHeader>
@@ -78,10 +78,14 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
                       <TableCell className="font-medium">{m.name}</TableCell>
                       <TableCell>{m.meter_number || "–"}</TableCell>
                       <TableCell>
+                        <Badge variant={m.capture_type === "automatic" ? "default" : "secondary"}>
+                          {m.capture_type === "automatic" ? "Automatisch" : "Manuell"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
                         <Badge variant="outline">{ENERGY_TYPE_LABELS[m.energy_type] || m.energy_type}</Badge>
                       </TableCell>
                       <TableCell>{m.unit}</TableCell>
-                      <TableCell>{m.medium || "–"}</TableCell>
                       {isAdmin && (
                         <TableCell>
                           <Button variant="ghost" size="icon" onClick={() => deleteMeter(m.id)}>

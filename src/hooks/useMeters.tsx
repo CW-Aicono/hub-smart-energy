@@ -20,6 +20,9 @@ export interface Meter {
   medium: string | null;
   installation_date: string | null;
   notes: string | null;
+  capture_type: string;
+  location_integration_id: string | null;
+  sensor_uuid: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -33,6 +36,9 @@ export interface MeterInsert {
   medium?: string;
   installation_date?: string;
   notes?: string;
+  capture_type?: string;
+  location_integration_id?: string;
+  sensor_uuid?: string;
 }
 
 export function useMeters(locationId?: string) {

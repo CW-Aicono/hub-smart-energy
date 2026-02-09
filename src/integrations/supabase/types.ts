@@ -615,43 +615,52 @@ export type Database = {
       }
       meters: {
         Row: {
+          capture_type: string
           created_at: string
           energy_type: string
           id: string
           installation_date: string | null
           location_id: string
+          location_integration_id: string | null
           medium: string | null
           meter_number: string | null
           name: string
           notes: string | null
+          sensor_uuid: string | null
           tenant_id: string
           unit: string
           updated_at: string
         }
         Insert: {
+          capture_type?: string
           created_at?: string
           energy_type?: string
           id?: string
           installation_date?: string | null
           location_id: string
+          location_integration_id?: string | null
           medium?: string | null
           meter_number?: string | null
           name: string
           notes?: string | null
+          sensor_uuid?: string | null
           tenant_id: string
           unit?: string
           updated_at?: string
         }
         Update: {
+          capture_type?: string
           created_at?: string
           energy_type?: string
           id?: string
           installation_date?: string | null
           location_id?: string
+          location_integration_id?: string | null
           medium?: string | null
           meter_number?: string | null
           name?: string
           notes?: string | null
+          sensor_uuid?: string | null
           tenant_id?: string
           unit?: string
           updated_at?: string
@@ -662,6 +671,13 @@ export type Database = {
             columns: ["location_id"]
             isOneToOne: false
             referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meters_location_integration_id_fkey"
+            columns: ["location_integration_id"]
+            isOneToOne: false
+            referencedRelation: "location_integrations"
             referencedColumns: ["id"]
           },
           {
