@@ -54,15 +54,14 @@ const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
     return vals;
   }, []);
 
-  // Use a narrower viewBox so labels fit inside
   const vbW = 600;
-  const vbH = 350;
+  const vbH = 400;
   const nodeW = 14;
   const srcX = 100;
   const tgtX = vbW - 100 - nodeW;
-  const padding = 10;
-  const topY = 20;
-  const totalH = vbH - 40;
+  const padding = 8;
+  const topY = 10;
+  const totalH = vbH - 20;
 
   const totalSrcVal = SOURCES.reduce((s, v) => s + v.value, 0);
   const availableSrcH = totalH - (SOURCES.length - 1) * padding;
@@ -161,8 +160,8 @@ const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
         <CardTitle className="font-display text-lg">Energiefluss</CardTitle>
         <p className="text-sm text-muted-foreground">{subtitle}</p>
       </CardHeader>
-      <CardContent>
-        <div className="w-full" style={{ aspectRatio: "16/9" }}>
+      <CardContent className="px-2 pb-2">
+        <div className="w-full" style={{ aspectRatio: "5/3" }}>
           <svg viewBox={`0 0 ${vbW} ${vbH}`} className="w-full h-full" preserveAspectRatio="xMidYMid meet">
             <defs>
               {LINKS.map((link, i) => {
