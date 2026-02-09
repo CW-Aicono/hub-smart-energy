@@ -3,7 +3,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import {
   LayoutDashboard, LogOut, Building2, BarChart3, Receipt, HeadsetIcon,
-  ChevronDown, PanelLeftClose, PanelLeft, Users, ShieldCheck,
+  ChevronDown, PanelLeftClose, PanelLeft, Users, ShieldCheck, Map,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -20,6 +20,7 @@ const navItems = [
   { to: "/super-admin/tenants", icon: Building2, label: "Mandanten" },
   { to: "/super-admin/users", icon: Users, label: "Benutzer" },
   { to: "/super-admin/roles", icon: ShieldCheck, label: "Rollen & Rechte" },
+  { to: "/super-admin/map", icon: Map, label: "Karte" },
   { to: "/super-admin/statistics", icon: BarChart3, label: "Statistiken" },
   { to: "/super-admin/billing", icon: Receipt, label: "Abrechnung" },
   { to: "/super-admin/support", icon: HeadsetIcon, label: "Support" },
