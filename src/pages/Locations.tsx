@@ -10,11 +10,10 @@ import { LocationsMap } from "@/components/locations/LocationsMap";
 import { LocationTree } from "@/components/locations/LocationTree";
 import { AddLocationDialog } from "@/components/locations/AddLocationDialog";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Map, List, Building2, ArrowUpAZ, ArrowDownAZ, Filter, Wifi, WifiOff, AlertCircle } from "lucide-react";
+import { Map, List, Building2, ArrowUpAZ, ArrowDownAZ, Filter, Wifi, WifiOff, AlertCircle, GitBranch, ArrowLeft } from "lucide-react";
 
 const usageTypeLabels: Record<LocationUsageType, string> = {
   verwaltungsgebaeude: "Verwaltungsgebäude",
@@ -36,6 +35,15 @@ const Locations = () => {
   const [selectedLocation, setSelectedLocation] = useState<Location | null>(null);
   const [usageFilter, setUsageFilter] = useState<string>("all");
   const [sortAscending, setSortAscending] = useState(true);
+  const [viewMode, setViewMode] = useState<"list" | "tree">("list");
+  const [treeLocationId, setTreeLocationId] = useState<string | null>(null);
+
+  // Handle clicking a location in list view - show its tree
+  const handleLocationClick = (location: Location) => {
+    setTreeLocationId(location.id);
+    setSelectedLocation(location);
+  };
+
 
   // Helper to render online status badge
   const getOnlineStatusBadge = (locationId: string) => {
@@ -121,6 +129,15 @@ const Locations = () => {
     // When filtering, show flat list instead of hierarchy
     return filteredAndSortedLocations.map((loc) => ({ ...loc, children: undefined }));
   }, [hierarchicalLocations, filteredAndSortedLocations, usageFilter, sortAscending]);
+
+  // Get locations for tree view (single selected or all)
+  const treeViewLocations = useMemo(() => {
+    if (treeLocationId) {
+      const found = filteredHierarchicalLocations.find((l) => l.id === treeLocationId);
+      return found ? [found] : [];
+    }
+    return filteredHierarchicalLocations;
+  }, [treeLocationId, filteredHierarchicalLocations]);
 
   // Filter locations that should be shown on map
   const mapLocations = locations.filter((loc) => loc.show_on_map);
@@ -223,74 +240,79 @@ const Locations = () => {
                     </>
                   )}
                 </Button>
+                <Select value={viewMode} onValueChange={(v) => { setViewMode(v as "list" | "tree"); setTreeLocationId(null); }}>
+                  <SelectTrigger className="w-[180px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="list">
+                      <span className="flex items-center gap-2"><List className="h-4 w-4" /> Liste</span>
+                    </SelectItem>
+                    <SelectItem value="tree">
+                      <span className="flex items-center gap-2"><GitBranch className="h-4 w-4" /> Baumansicht</span>
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
 
-              <Tabs defaultValue="tree">
-                <TabsList className="mb-4">
-                  <TabsTrigger value="tree" className="gap-2">
-                    <List className="h-4 w-4" />
-                    {t("locations.treeView")}
-                  </TabsTrigger>
-                  <TabsTrigger value="list" className="gap-2">
-                    <List className="h-4 w-4" />
-                    {t("locations.listView")}
-                  </TabsTrigger>
-                </TabsList>
-                <TabsContent value="tree">
-                  {locationsLoading ? (
-                    <div className="space-y-2">
-                      {[1, 2, 3].map((i) => (
-                        <div key={i} className="h-10 bg-muted/50 rounded animate-pulse" />
-                      ))}
-                    </div>
-                  ) : (
-                    <LocationTree
-                      locations={filteredHierarchicalLocations}
-                      selectedId={selectedLocation?.id}
-                      onSelect={setSelectedLocation}
-                      onRefresh={refetch}
-                      locationStatuses={locationStatuses}
-                    />
-                  )}
-                </TabsContent>
-                <TabsContent value="list">
-                  {locationsLoading ? (
-                    <div className="space-y-2">
-                      {[1, 2, 3].map((i) => (
-                        <div key={i} className="h-10 bg-muted/50 rounded animate-pulse" />
-                      ))}
-                    </div>
-                  ) : filteredAndSortedLocations.length === 0 ? (
-                    <div className="text-center py-8 text-muted-foreground">
-                      <Building2 className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                      <p>{t("locations.noLocations")}</p>
-                    </div>
-                  ) : (
-                    <div className="space-y-2">
-                      {filteredAndSortedLocations.map((location) => (
-                        <div
-                          key={location.id}
-                          className="flex items-center gap-3 p-3 rounded-lg border hover:bg-muted/50 cursor-pointer transition-colors"
-                          onClick={() => setSelectedLocation(location)}
-                        >
-                          <Building2 className="h-5 w-5 text-muted-foreground" />
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2">
-                              <p className="font-medium">{location.name}</p>
-                              {getOnlineStatusBadge(location.id)}
-                            </div>
-                            {location.city && (
-                              <p className="text-sm text-muted-foreground">
-                                {location.city}
-                              </p>
-                            )}
-                          </div>
+              {/* Back button when viewing single location tree */}
+              {viewMode === "list" && treeLocationId && (
+                <div className="mb-4">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => { setTreeLocationId(null); setSelectedLocation(null); }}
+                    className="gap-2"
+                  >
+                    <ArrowLeft className="h-4 w-4" />
+                    Zurück zur Liste
+                  </Button>
+                </div>
+              )}
+
+              {locationsLoading ? (
+                <div className="space-y-2">
+                  {[1, 2, 3].map((i) => (
+                    <div key={i} className="h-10 bg-muted/50 rounded animate-pulse" />
+                  ))}
+                </div>
+              ) : viewMode === "tree" || treeLocationId ? (
+                <LocationTree
+                  locations={treeViewLocations}
+                  selectedId={selectedLocation?.id}
+                  onSelect={setSelectedLocation}
+                  onRefresh={refetch}
+                  locationStatuses={locationStatuses}
+                />
+              ) : filteredAndSortedLocations.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <Building2 className="h-12 w-12 mx-auto mb-2 opacity-50" />
+                  <p>{t("locations.noLocations")}</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {filteredAndSortedLocations.map((location) => (
+                    <div
+                      key={location.id}
+                      className="flex items-center gap-4 p-4 rounded-lg border hover:bg-muted/50 cursor-pointer transition-colors"
+                      onClick={() => handleLocationClick(location)}
+                    >
+                      <Building2 className="h-5 w-5 text-muted-foreground flex-shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <p className="font-medium text-base">{location.name}</p>
+                          {getOnlineStatusBadge(location.id)}
                         </div>
-                      ))}
+                        {location.city && (
+                          <p className="text-sm text-muted-foreground">
+                            {location.city}
+                          </p>
+                        )}
+                      </div>
                     </div>
-                  )}
-                </TabsContent>
-              </Tabs>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
 
