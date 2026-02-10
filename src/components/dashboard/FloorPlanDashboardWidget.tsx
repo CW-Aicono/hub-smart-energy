@@ -171,8 +171,9 @@ const FloorPlanDashboardWidget = ({ locationId }: FloorPlanDashboardWidgetProps)
               floor={{ id: selectedFloor.id, location_id: selectedFloor.location_id, name: selectedFloor.name, floor_number: selectedFloor.floor_number, floor_plan_url: selectedFloor.floor_plan_url, description: null, area_sqm: null, model_3d_url: selectedFloor.model_3d_url, model_3d_mtl_url: selectedFloor.model_3d_mtl_url, model_3d_rotation: selectedFloor.model_3d_rotation, created_at: "", updated_at: "" }}
               locationId={selectedFloor.location_id}
               sensors={[]}
-              isAdmin={true}
+              isAdmin={false}
               compact
+              readOnly
             />
           </Suspense>
         ) : (

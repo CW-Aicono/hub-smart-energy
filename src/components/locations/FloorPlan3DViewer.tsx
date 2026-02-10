@@ -33,6 +33,7 @@ interface FloorPlan3DViewerProps {
   sensors?: Sensor[];
   isAdmin?: boolean;
   compact?: boolean;
+  readOnly?: boolean;
 }
 
 // Tracks camera position for minimap
@@ -251,6 +252,7 @@ function Scene({
   isWalking,
   rotationDeg,
   isAdmin,
+  readOnly,
   onMeterPositionChange,
   onLockChange,
   onCameraUpdate,
@@ -264,6 +266,7 @@ function Scene({
   isWalking: boolean;
   rotationDeg: number;
   isAdmin: boolean;
+  readOnly: boolean;
   onMeterPositionChange: (meterId: string, x: number, y: number, z: number) => void;
   onLockChange: (locked: boolean) => void;
   onCameraUpdate: (pos: { x: number; z: number }, rotY: number) => void;
@@ -408,10 +411,15 @@ function Scene({
         );
       })}
       
-      {/* No OrbitControls when not walking - camera stays static so meters can be dragged */}
+      {/* OrbitControls for readOnly/dashboard mode when not walking */}
+      {readOnly && !isWalking && (
+        <OrbitControls enablePan enableZoom enableRotate />
+      )}
+
+      {/* No OrbitControls for admin editing mode - allows meter dragging */}
 
       {/* First Person Controls - only render when walking to prevent unwanted pointer lock */}
-      {isWalking && (
+      {!readOnly && isWalking && (
         <Floor3DControls 
           enabled={isWalking} 
           onLockChange={onLockChange}
@@ -424,7 +432,7 @@ function Scene({
   );
 }
 
-export function FloorPlan3DViewer({ floor, locationId, sensors = [], isAdmin = false, compact = false }: FloorPlan3DViewerProps) {
+export function FloorPlan3DViewer({ floor, locationId, sensors = [], isAdmin = false, compact = false, readOnly = false }: FloorPlan3DViewerProps) {
   const { rooms, loading: roomsLoading, refetch: refetchRooms } = useFloorRooms(floor.id);
   const { positions: sensorPositions, loading: positionsLoading } = useFloorSensorPositions(floor.id);
   const { meters, loading: metersLoading, updateMeter } = useMeters(locationId);
@@ -634,7 +642,8 @@ export function FloorPlan3DViewer({ floor, locationId, sensors = [], isAdmin = f
                   meterLatestValues={meterLatestValues}
                   isWalking={isWalking}
                   rotationDeg={modelRotation}
-                  isAdmin={isAdmin}
+                  isAdmin={readOnly ? false : isAdmin}
+                  readOnly={readOnly}
                   onMeterPositionChange={handleMeterPositionChange}
                   onLockChange={handleLockChange}
                   onCameraUpdate={handleCameraUpdate}
@@ -642,8 +651,8 @@ export function FloorPlan3DViewer({ floor, locationId, sensors = [], isAdmin = f
               </Suspense>
             </Canvas>
 
-            {/* Minimap overlay */}
-            {rooms.length > 0 && (
+            {/* Minimap overlay - hidden in readOnly/dashboard mode */}
+            {!readOnly && rooms.length > 0 && (
               <Minimap3D
                 rooms={rooms}
                 cameraPosition={cameraPos}
