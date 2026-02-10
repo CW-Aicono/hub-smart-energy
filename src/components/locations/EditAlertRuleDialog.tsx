@@ -1,22 +1,23 @@
-import { useState } from "react";
-import { useAlertRules } from "@/hooks/useAlertRules";
+import { useState, useEffect } from "react";
+import { AlertRule } from "@/hooks/useAlertRules";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
-interface AddAlertRuleDialogProps {
-  locationId: string;
+interface EditAlertRuleDialogProps {
+  rule: AlertRule;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onSave: (id: string, updates: Partial<AlertRule>) => Promise<void>;
 }
 
-const UNIT_OPTIONS: Record<string, { units: { value: string; label: string }[] }> = {
-  strom: { units: [{ value: "kWh", label: "kWh" }, { value: "MWh", label: "MWh" }, { value: "W", label: "W" }, { value: "kW", label: "kW" }] },
-  gas: { units: [{ value: "kWh", label: "kWh" }, { value: "m³", label: "m³" }] },
-  waerme: { units: [{ value: "kWh", label: "kWh" }, { value: "MWh", label: "MWh" }] },
-  wasser: { units: [{ value: "m³", label: "m³" }, { value: "l", label: "Liter" }] },
+const UNIT_OPTIONS: Record<string, { label: string; units: { value: string; label: string }[] }> = {
+  strom: { label: "Strom", units: [{ value: "kWh", label: "kWh" }, { value: "MWh", label: "MWh" }, { value: "W", label: "W" }, { value: "kW", label: "kW" }] },
+  gas: { label: "Gas", units: [{ value: "kWh", label: "kWh" }, { value: "m³", label: "m³" }] },
+  waerme: { label: "Wärme", units: [{ value: "kWh", label: "kWh" }, { value: "MWh", label: "MWh" }] },
+  wasser: { label: "Wasser", units: [{ value: "m³", label: "m³" }, { value: "l", label: "Liter" }] },
 };
 
 const TIME_UNITS = [
@@ -26,15 +27,24 @@ const TIME_UNITS = [
   { value: "month", label: "Monat" },
 ];
 
-export const AddAlertRuleDialog = ({ locationId, open, onOpenChange }: AddAlertRuleDialogProps) => {
-  const { addAlertRule } = useAlertRules(locationId);
-  const [name, setName] = useState("");
-  const [energyType, setEnergyType] = useState("strom");
-  const [thresholdValue, setThresholdValue] = useState("");
-  const [thresholdType, setThresholdType] = useState("above");
-  const [thresholdUnit, setThresholdUnit] = useState("kWh");
-  const [timeUnit, setTimeUnit] = useState("month");
-  const [email, setEmail] = useState("");
+export const EditAlertRuleDialog = ({ rule, open, onOpenChange, onSave }: EditAlertRuleDialogProps) => {
+  const [name, setName] = useState(rule.name);
+  const [energyType, setEnergyType] = useState(rule.energy_type);
+  const [thresholdValue, setThresholdValue] = useState(String(rule.threshold_value));
+  const [thresholdType, setThresholdType] = useState(rule.threshold_type);
+  const [thresholdUnit, setThresholdUnit] = useState(rule.threshold_unit || "kWh");
+  const [timeUnit, setTimeUnit] = useState(rule.time_unit || "month");
+  const [email, setEmail] = useState(rule.notification_email || "");
+
+  useEffect(() => {
+    setName(rule.name);
+    setEnergyType(rule.energy_type);
+    setThresholdValue(String(rule.threshold_value));
+    setThresholdType(rule.threshold_type);
+    setThresholdUnit(rule.threshold_unit || "kWh");
+    setTimeUnit(rule.time_unit || "month");
+    setEmail(rule.notification_email || "");
+  }, [rule]);
 
   const availableUnits = UNIT_OPTIONS[energyType]?.units || [{ value: "kWh", label: "kWh" }];
 
@@ -48,27 +58,15 @@ export const AddAlertRuleDialog = ({ locationId, open, onOpenChange }: AddAlertR
 
   const handleSubmit = async () => {
     if (!name.trim() || !thresholdValue) return;
-    await addAlertRule({
+    await onSave(rule.id, {
       name: name.trim(),
-      location_id: locationId,
       energy_type: energyType,
       threshold_value: parseFloat(thresholdValue),
       threshold_type: thresholdType,
       threshold_unit: thresholdUnit,
       time_unit: timeUnit,
-      notification_email: email || undefined,
-    });
-    resetAndClose();
-  };
-
-  const resetAndClose = () => {
-    setName("");
-    setEnergyType("strom");
-    setThresholdValue("");
-    setThresholdType("above");
-    setThresholdUnit("kWh");
-    setTimeUnit("month");
-    setEmail("");
+      notification_email: email || null,
+    } as any);
     onOpenChange(false);
   };
 
@@ -76,12 +74,12 @@ export const AddAlertRuleDialog = ({ locationId, open, onOpenChange }: AddAlertR
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Alarmregel anlegen</DialogTitle>
+          <DialogTitle>Alarmregel bearbeiten</DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
           <div>
             <Label>Name *</Label>
-            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="z.B. Stromverbrauch zu hoch" />
+            <Input value={name} onChange={(e) => setName(e.target.value)} />
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
@@ -110,7 +108,7 @@ export const AddAlertRuleDialog = ({ locationId, open, onOpenChange }: AddAlertR
           <div className="grid grid-cols-3 gap-4">
             <div>
               <Label>Schwellenwert *</Label>
-              <Input type="number" value={thresholdValue} onChange={(e) => setThresholdValue(e.target.value)} placeholder="z.B. 5000" />
+              <Input type="number" value={thresholdValue} onChange={(e) => setThresholdValue(e.target.value)} />
             </div>
             <div>
               <Label>Einheit</Label>
@@ -137,12 +135,12 @@ export const AddAlertRuleDialog = ({ locationId, open, onOpenChange }: AddAlertR
           </div>
           <div>
             <Label>Benachrichtigungs-E-Mail</Label>
-            <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="alarm@example.de" />
+            <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
           </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={resetAndClose}>Abbrechen</Button>
-          <Button onClick={handleSubmit} disabled={!name.trim() || !thresholdValue}>Anlegen</Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Abbrechen</Button>
+          <Button onClick={handleSubmit} disabled={!name.trim() || !thresholdValue}>Speichern</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

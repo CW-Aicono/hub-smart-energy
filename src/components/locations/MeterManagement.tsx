@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMeters, Meter } from "@/hooks/useMeters";
-import { useAlertRules } from "@/hooks/useAlertRules";
+import { useAlertRules, AlertRule } from "@/hooks/useAlertRules";
 import { useUserRole } from "@/hooks/useUserRole";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,7 @@ import { Gauge, Plus, Pencil, Trash2, Archive, ArchiveRestore, Eye, EyeOff } fro
 import { AddMeterDialog } from "./AddMeterDialog";
 import { EditMeterDialog } from "./EditMeterDialog";
 import { AddAlertRuleDialog } from "./AddAlertRuleDialog";
+import { EditAlertRuleDialog } from "./EditAlertRuleDialog";
 
 interface MeterManagementProps {
   locationId: string;
@@ -24,13 +25,21 @@ const ENERGY_TYPE_LABELS: Record<string, string> = {
   wasser: "Wasser",
 };
 
+const TIME_UNIT_LABELS: Record<string, string> = {
+  hour: "Stunde",
+  day: "Tag",
+  week: "Woche",
+  month: "Monat",
+};
+
 export const MeterManagement = ({ locationId }: MeterManagementProps) => {
   const { meters, loading: metersLoading, deleteMeter, updateMeter, archiveMeter } = useMeters(locationId);
-  const { alertRules, loading: rulesLoading, deleteAlertRule, toggleAlertRule } = useAlertRules(locationId);
+  const { alertRules, loading: rulesLoading, deleteAlertRule, toggleAlertRule, updateAlertRule } = useAlertRules(locationId);
   const { isAdmin } = useUserRole();
   const [meterDialogOpen, setMeterDialogOpen] = useState(false);
   const [alertDialogOpen, setAlertDialogOpen] = useState(false);
   const [editingMeter, setEditingMeter] = useState<Meter | null>(null);
+  const [editingRule, setEditingRule] = useState<AlertRule | null>(null);
   const [showArchived, setShowArchived] = useState(false);
 
   const activeMeters = meters.filter((m) => !m.is_archived);
@@ -151,9 +160,10 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
                     <TableHead>Name</TableHead>
                     <TableHead>Energieart</TableHead>
                     <TableHead>Schwellenwert</TableHead>
+                    <TableHead>Zeiteinheit</TableHead>
                     <TableHead>Typ</TableHead>
                     <TableHead>Aktiv</TableHead>
-                    {isAdmin && <TableHead className="w-20" />}
+                    {isAdmin && <TableHead className="w-24" />}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -163,7 +173,8 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
                       <TableCell>
                         <Badge variant="outline">{ENERGY_TYPE_LABELS[r.energy_type] || r.energy_type}</Badge>
                       </TableCell>
-                      <TableCell>{r.threshold_value}</TableCell>
+                      <TableCell>{r.threshold_value} {r.threshold_unit || "kWh"}</TableCell>
+                      <TableCell>{TIME_UNIT_LABELS[r.time_unit] || r.time_unit}</TableCell>
                       <TableCell>{r.threshold_type === "above" ? "Über" : "Unter"}</TableCell>
                       <TableCell>
                         <Switch
@@ -173,7 +184,10 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
                         />
                       </TableCell>
                       {isAdmin && (
-                        <TableCell>
+                        <TableCell className="flex gap-1">
+                          <Button variant="ghost" size="icon" onClick={() => setEditingRule(r)} title="Bearbeiten">
+                            <Pencil className="h-4 w-4" />
+                          </Button>
                           <Button variant="ghost" size="icon" onClick={() => deleteAlertRule(r.id)}>
                             <Trash2 className="h-4 w-4 text-destructive" />
                           </Button>
@@ -205,6 +219,14 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
           open={alertDialogOpen}
           onOpenChange={setAlertDialogOpen}
         />
+        {editingRule && (
+          <EditAlertRuleDialog
+            rule={editingRule}
+            open={!!editingRule}
+            onOpenChange={(open) => { if (!open) setEditingRule(null); }}
+            onSave={async (id, updates) => { await updateAlertRule(id, updates as any); setEditingRule(null); }}
+          />
+        )}
       </CardContent>
     </Card>
   );
