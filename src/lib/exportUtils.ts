@@ -102,7 +102,7 @@ function buildDonutSVG(data: { label: string; value: number; color: string }[]):
 }
 
 const ENERGY_COLORS: Record<string, string> = {
-  Strom: "#f59e0b", Gas: "#3b82f6", "Wärme": "#ef4444", Wasser: "#06b6d4",
+  Strom: "#eab308", Gas: "#f97316", "Wärme": "#ef4444", Wasser: "#3b82f6",
 };
 
 /**

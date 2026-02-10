@@ -1,6 +1,7 @@
 import { Billboard, Html } from "@react-three/drei";
 import { Meter } from "@/hooks/useMeters";
 import { Gauge, ChevronUp, ChevronDown } from "lucide-react";
+import { ENERGY_CARD_CLASSES, ENERGY_ICON_CLASSES } from "@/lib/energyTypeColors";
 
 interface Meter3DLabelProps {
   meter: Meter;
@@ -10,23 +11,9 @@ interface Meter3DLabelProps {
   onChangeY?: (meterId: string, newY: number) => void;
 }
 
-const energyTypeColors: Record<string, string> = {
-  strom: "border-yellow-500/40 bg-yellow-50 dark:bg-yellow-950",
-  gas: "border-orange-500/40 bg-orange-50 dark:bg-orange-950",
-  waerme: "border-red-500/40 bg-red-50 dark:bg-red-950",
-  wasser: "border-blue-500/40 bg-blue-50 dark:bg-blue-950",
-};
-
-const energyTypeIconColors: Record<string, string> = {
-  strom: "text-yellow-500",
-  gas: "text-orange-500",
-  waerme: "text-red-500",
-  wasser: "text-blue-500",
-};
-
 export function Meter3DLabel({ meter, position, latestValue, isAdmin, onChangeY }: Meter3DLabelProps) {
-  const borderClass = energyTypeColors[meter.energy_type] || "border-border bg-card";
-  const iconClass = energyTypeIconColors[meter.energy_type] || "text-primary";
+  const borderClass = ENERGY_CARD_CLASSES[meter.energy_type] || "border-border bg-card";
+  const iconClass = ENERGY_ICON_CLASSES[meter.energy_type] || "text-primary";
 
   return (
     <Billboard

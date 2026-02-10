@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Loader2, Trash2, GripVertical, AlertCircle, Image, MapPin, Maximize2, Minimize2, Box, LayoutGrid, Gauge } from "lucide-react";
+import { ENERGY_SENSOR_CLASSES } from "@/lib/energyTypeColors";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Floor } from "@/hooks/useFloors";
 import { useFloorSensorPositions, FloorSensorPosition, FloorSensorPositionInsert } from "@/hooks/useFloorSensorPositions";
@@ -63,12 +64,7 @@ export function FloorPlanDialog({ floor, locationId, open, onOpenChange }: Floor
     return values;
   }, [floorMeters, readings]);
 
-  const energyTypeColors: Record<string, string> = {
-    strom: "text-yellow-500 border-yellow-500/30",
-    gas: "text-orange-500 border-orange-500/30",
-    waerme: "text-red-500 border-red-500/30",
-    wasser: "text-blue-500 border-blue-500/30",
-  };
+  const energyTypeColors = ENERGY_SENSOR_CLASSES;
   
   const [availableSensors, setAvailableSensors] = useState<(Sensor & { integrationId: string })[]>([]);
   const [loadingSensors, setLoadingSensors] = useState(false);

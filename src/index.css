@@ -44,6 +44,12 @@
     --chart-4: 200 70% 50%;
     --chart-5: 0 72% 51%;
 
+    /* Unified energy type colors */
+    --energy-strom: 45 93% 47%;
+    --energy-gas: 25 95% 53%;
+    --energy-waerme: 0 84% 60%;
+    --energy-wasser: 217 91% 60%;
+
     --sidebar-background: 220 30% 12%;
     --sidebar-foreground: 220 10% 85%;
     --sidebar-primary: 152 55% 42%;
@@ -180,6 +186,12 @@
     --chart-3: 38 92% 50%;
     --chart-4: 220 60% 50%;
     --chart-5: 0 72% 51%;
+
+    /* Unified energy type colors */
+    --energy-strom: 45 93% 47%;
+    --energy-gas: 25 95% 53%;
+    --energy-waerme: 0 84% 60%;
+    --energy-wasser: 217 91% 60%;
 
     --sidebar-background: 220 30% 6%;
     --sidebar-foreground: 220 10% 85%;

@@ -4,6 +4,7 @@ import { useEnergyData } from "@/hooks/useEnergyData";
 import { useLocations } from "@/hooks/useLocations";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatEnergy } from "@/lib/formatEnergy";
+import { ENERGY_CHART_COLORS } from "@/lib/energyTypeColors";
 
 interface EnergyChartProps {
   locationId: string | null;
@@ -47,9 +48,9 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
                 formatter={(value: number, name: string) => [formatEnergy(value), name]}
               />
               <Legend />
-              <Bar dataKey="strom" name="Strom" fill="hsl(var(--chart-1))" radius={[2, 2, 0, 0]} />
-              <Bar dataKey="gas" name="Gas" fill="hsl(var(--chart-3))" radius={[2, 2, 0, 0]} />
-              <Bar dataKey="waerme" name="Wärme" fill="hsl(var(--chart-5))" radius={[2, 2, 0, 0]} />
+              <Bar dataKey="strom" name="Strom" fill={ENERGY_CHART_COLORS.strom} radius={[2, 2, 0, 0]} />
+              <Bar dataKey="gas" name="Gas" fill={ENERGY_CHART_COLORS.gas} radius={[2, 2, 0, 0]} />
+              <Bar dataKey="waerme" name="Wärme" fill={ENERGY_CHART_COLORS.waerme} radius={[2, 2, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         )}

@@ -18,13 +18,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Gauge, ClipboardEdit, Filter, QrCode, Pencil, Archive, ArchiveRestore, Trash2, Eye, EyeOff } from "lucide-react";
 import { format } from "date-fns";
 import { de } from "date-fns/locale";
-
-const ENERGY_TYPE_LABELS: Record<string, string> = {
-  strom: "Strom",
-  gas: "Gas",
-  waerme: "Wärme",
-  wasser: "Wasser",
-};
+import { ENERGY_TYPE_LABELS, ENERGY_BADGE_CLASSES } from "@/lib/energyTypeColors";
 
 const MetersOverview = () => {
   const { user, loading: authLoading } = useAuth();
@@ -187,7 +181,7 @@ const MetersOverview = () => {
                           <TableCell>{getLocationName(m.location_id)}</TableCell>
                           <TableCell>{m.meter_number || "–"}</TableCell>
                           <TableCell>
-                            <Badge variant="outline">
+                            <Badge variant="outline" className={ENERGY_BADGE_CLASSES[m.energy_type] || ""}>
                               {ENERGY_TYPE_LABELS[m.energy_type] || m.energy_type}
                             </Badge>
                           </TableCell>
