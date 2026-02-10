@@ -84,7 +84,7 @@ export function FloorPlanDialog({ floor, locationId, open, onOpenChange }: Floor
   const imageRef = useRef<HTMLImageElement>(null);
   const viewImageRef = useRef<HTMLImageElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const [viewOverlayStyle, setViewOverlayStyle] = useState<React.CSSProperties>({});
+  const [viewOverlayStyle, setViewOverlayStyle] = useState<React.CSSProperties>({ position: 'absolute', inset: 0 });
 
   // Calculate overlay position to match object-contain image
   const updateViewOverlay = useCallback(() => {
@@ -105,12 +105,13 @@ export function FloorPlanDialog({ floor, locationId, open, onOpenChange }: Floor
   }, []);
 
   useEffect(() => {
-    // Recalculate when tab changes (with small delay to ensure layout is ready)
     if (activeTab === 'view') {
-      const timer = setTimeout(updateViewOverlay, 50);
+      // Run immediately + with delay to handle layout settling
+      updateViewOverlay();
+      const timer = setTimeout(updateViewOverlay, 100);
       return () => clearTimeout(timer);
     }
-  }, [activeTab, updateViewOverlay]);
+  }, [activeTab, isFullscreen, updateViewOverlay]);
 
   useEffect(() => {
     window.addEventListener('resize', updateViewOverlay);
