@@ -253,18 +253,13 @@ export function ScannerManagement() {
           onOpenChange={(open) => !open && setQrScanner(null)}
         />
       )}
-      {/* App Preview Dialog */}
-      <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
-        <DialogContent
-          className="sm:max-w-[370px] p-0 overflow-hidden bg-transparent border-none shadow-none [&>button]:hidden"
-          aria-describedby={undefined}
-          onInteractOutside={(e) => e.preventDefault()}
-          onPointerDownOutside={(e) => e.preventDefault()}
-          onOpenAutoFocus={(e) => e.preventDefault()}
-          onEscapeKeyDown={() => setPreviewOpen(false)}
-        >
-          <DialogTitle className="sr-only">App-Vorschau</DialogTitle>
-          <div className="flex flex-col items-center">
+      {/* App Preview - simple overlay (iframe causes Radix Dialog focus issues) */}
+      {previewOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          {/* Backdrop */}
+          <div className="absolute inset-0 bg-black/60" onClick={() => setPreviewOpen(false)} />
+          {/* Content */}
+          <div className="relative z-10 flex flex-col items-center">
             {/* Close button */}
             <div className="w-full flex justify-end mb-2 pr-1">
               <Button
@@ -278,7 +273,6 @@ export function ScannerManagement() {
             </div>
             {/* Smartphone Frame */}
             <div className="relative mx-auto" style={{ width: 320 }}>
-              {/* Phone bezel */}
               <div className="rounded-[2.5rem] border-[6px] border-foreground/80 bg-background shadow-2xl overflow-hidden">
                 {/* Notch */}
                 <div className="relative z-10 flex justify-center pt-2 pb-1 bg-background">
@@ -302,8 +296,8 @@ export function ScannerManagement() {
               Vorschau der mobilen Erfassungs-App
             </p>
           </div>
-        </DialogContent>
-      </Dialog>
+        </div>
+      )}
     </div>
   );
 }
