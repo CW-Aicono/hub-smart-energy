@@ -1,6 +1,6 @@
 import { useRef, useState, useCallback } from "react";
 import { useThree } from "@react-three/fiber";
-import { Billboard, Html } from "@react-three/drei";
+import { Html } from "@react-three/drei";
 import { Meter } from "@/hooks/useMeters";
 import { Gauge, ChevronUp, ChevronDown, GripVertical } from "lucide-react";
 import { ENERGY_CARD_CLASSES, ENERGY_ICON_CLASSES } from "@/lib/energyTypeColors";
@@ -105,21 +105,14 @@ export function DraggableMeter3D({
   const iconClass = ENERGY_ICON_CLASSES[meter.energy_type] || "text-primary";
 
   return (
-    <Billboard
-      follow={true}
-      lockX={false}
-      lockY={false}
-      lockZ={false}
-      position={currentPos}
-    >
+    <group position={currentPos}>
       <Html
         center
         distanceFactor={8}
-        occlude="blending"
+        occlude
         style={{
           pointerEvents: isAdmin ? "auto" : "none",
           userSelect: "none",
-          transition: "opacity 0.3s ease",
         }}
       >
         <div className="flex items-center gap-1">
@@ -167,6 +160,6 @@ export function DraggableMeter3D({
           </div>
         </div>
       </Html>
-    </Billboard>
+    </group>
   );
 }
