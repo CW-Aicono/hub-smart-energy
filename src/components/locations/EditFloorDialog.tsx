@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Progress } from "@/components/ui/progress";
 import { Floor, useFloors } from "@/hooks/useFloors";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -209,6 +210,8 @@ export function EditFloorDialog({ floor, locationId, onSuccess }: EditFloorDialo
               />
             </div>
           )}
+
+          {loading && <Progress value={undefined} className="h-2" />}
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setOpen(false)}>
