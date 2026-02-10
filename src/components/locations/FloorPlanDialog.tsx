@@ -1,20 +1,23 @@
-import { useState, useRef, useEffect, useCallback, lazy, Suspense } from "react";
+import { useState, useRef, useEffect, useCallback, lazy, Suspense, useMemo } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2, Trash2, GripVertical, AlertCircle, Image, MapPin, Maximize2, Minimize2, Box, LayoutGrid } from "lucide-react";
+import { Loader2, Trash2, GripVertical, AlertCircle, Image, MapPin, Maximize2, Minimize2, Box, LayoutGrid, Gauge } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Floor } from "@/hooks/useFloors";
 import { useFloorSensorPositions, FloorSensorPosition, FloorSensorPositionInsert } from "@/hooks/useFloorSensorPositions";
 import { useLocationIntegrations } from "@/hooks/useIntegrations";
 import { useUserRole } from "@/hooks/useUserRole";
+import { useMeters } from "@/hooks/useMeters";
+import { useMeterReadings } from "@/hooks/useMeterReadings";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
 // Lazy load 3D viewer and room editor for performance
 const FloorPlan3DViewer = lazy(() => import("./FloorPlan3DViewer").then(m => ({ default: m.FloorPlan3DViewer })));
 import { RoomEditor } from "./RoomEditor";
+import { MeterOverlay2D } from "./MeterOverlay2D";
 
 interface Sensor {
   id: string;
@@ -39,6 +42,33 @@ export function FloorPlanDialog({ floor, locationId, open, onOpenChange }: Floor
   const { isAdmin } = useUserRole();
   const { positions, loading: positionsLoading, addPosition, updatePosition, deletePosition } = useFloorSensorPositions(floor.id);
   const { locationIntegrations, loading: integrationsLoading } = useLocationIntegrations(locationId);
+  const { meters } = useMeters(locationId);
+  const { readings } = useMeterReadings();
+
+  // Meters for this floor (or unassigned)
+  const floorMeters = useMemo(() => 
+    meters.filter(m => !m.is_archived && (m.floor_id === floor.id || !m.floor_id)),
+    [meters, floor.id]
+  );
+
+  // Latest reading per meter
+  const meterLatestValues = useMemo(() => {
+    const values: Record<string, number | null> = {};
+    floorMeters.forEach(m => {
+      const meterReadings = readings
+        .filter(r => r.meter_id === m.id)
+        .sort((a, b) => b.reading_date.localeCompare(a.reading_date));
+      values[m.id] = meterReadings.length > 0 ? meterReadings[0].value : null;
+    });
+    return values;
+  }, [floorMeters, readings]);
+
+  const energyTypeColors: Record<string, string> = {
+    strom: "text-yellow-500 border-yellow-500/30",
+    gas: "text-orange-500 border-orange-500/30",
+    waerme: "text-red-500 border-red-500/30",
+    wasser: "text-blue-500 border-blue-500/30",
+  };
   
   const [availableSensors, setAvailableSensors] = useState<(Sensor & { integrationId: string })[]>([]);
   const [loadingSensors, setLoadingSensors] = useState(false);
@@ -406,6 +436,9 @@ export function FloorPlanDialog({ floor, locationId, open, onOpenChange }: Floor
                       </div>
                     ))}
 
+                    {/* Meter overlays */}
+                    <MeterOverlay2D meters={floorMeters} latestValues={meterLatestValues} />
+
                     {/* Drag Preview */}
                     {dragPreview && (draggingSensor || draggingPosition) && (
                       <div
@@ -486,6 +519,7 @@ export function FloorPlanDialog({ floor, locationId, open, onOpenChange }: Floor
                       </div>
                     </div>
                   ))}
+                  <MeterOverlay2D meters={floorMeters} latestValues={meterLatestValues} />
                 </div>
               </TabsContent>
 
