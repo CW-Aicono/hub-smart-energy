@@ -16,17 +16,11 @@ import { AddAlertRuleDialog } from "./AddAlertRuleDialog";
 import { EditAlertRuleDialog } from "./EditAlertRuleDialog";
 import { MeterTreeView } from "./MeterTreeView";
 import { MeterAggregationWidget } from "./MeterAggregationWidget";
+import { ENERGY_TYPE_LABELS, ENERGY_BADGE_CLASSES } from "@/lib/energyTypeColors";
 
 interface MeterManagementProps {
   locationId: string;
 }
-
-const ENERGY_TYPE_LABELS: Record<string, string> = {
-  strom: "Strom",
-  gas: "Gas",
-  waerme: "Wärme",
-  wasser: "Wasser",
-};
 
 const TIME_UNIT_LABELS: Record<string, string> = {
   hour: "Stunde",
@@ -116,7 +110,7 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
                         </Badge>
                       </TableCell>
                       <TableCell>
-                        <Badge variant="outline">{ENERGY_TYPE_LABELS[m.energy_type] || m.energy_type}</Badge>
+                        <Badge variant="outline" className={ENERGY_BADGE_CLASSES[m.energy_type] || ""}>{ENERGY_TYPE_LABELS[m.energy_type] || m.energy_type}</Badge>
                       </TableCell>
                       <TableCell>{m.unit}</TableCell>
                       {isAdmin && (
@@ -188,7 +182,7 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
                     <TableRow key={r.id}>
                       <TableCell className="font-medium">{r.name}</TableCell>
                       <TableCell>
-                        <Badge variant="outline">{ENERGY_TYPE_LABELS[r.energy_type] || r.energy_type}</Badge>
+                        <Badge variant="outline" className={ENERGY_BADGE_CLASSES[r.energy_type] || ""}>{ENERGY_TYPE_LABELS[r.energy_type] || r.energy_type}</Badge>
                       </TableCell>
                       <TableCell>{r.threshold_value} {r.threshold_unit || "kWh"}</TableCell>
                       <TableCell>{TIME_UNIT_LABELS[r.time_unit] || r.time_unit}</TableCell>

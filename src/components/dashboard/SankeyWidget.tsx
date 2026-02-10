@@ -6,6 +6,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useMemo, useState, useRef, useEffect } from "react";
 import { formatEnergy } from "@/lib/formatEnergy";
 import { supabase } from "@/integrations/supabase/client";
+import { ENERGY_CHART_COLORS, ENERGY_TYPE_LABELS } from "@/lib/energyTypeColors";
 
 interface SankeyWidgetProps {
   locationId: string | null;
@@ -18,28 +19,19 @@ interface FlowLink {
   value: number;
 }
 
-const ENERGY_COLORS: Record<string, string> = {
-  strom: "hsl(var(--chart-1))",
-  gas: "hsl(var(--chart-3))",
-  waerme: "hsl(var(--chart-5))",
-  wasser: "hsl(var(--chart-2))",
-};
+const ENERGY_COLORS = ENERGY_CHART_COLORS;
 
-const ENERGY_LABELS: Record<string, string> = {
-  strom: "Strom",
-  gas: "Gas",
-  waerme: "Wärme",
-  wasser: "Wasser",
-};
+const ENERGY_LABELS = ENERGY_TYPE_LABELS;
 
 const TARGET_COLORS = [
   "hsl(var(--primary))",
   "hsl(var(--chart-4))",
-  "hsl(var(--chart-1))",
-  "hsl(var(--chart-2))",
-  "hsl(var(--chart-3))",
-  "hsl(var(--chart-5))",
+  ENERGY_CHART_COLORS.strom,
+  ENERGY_CHART_COLORS.wasser,
+  ENERGY_CHART_COLORS.gas,
+  ENERGY_CHART_COLORS.waerme,
 ];
+
 
 const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
   const { locations } = useLocations();

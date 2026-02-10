@@ -68,6 +68,12 @@ export default {
           "4": "hsl(var(--chart-4))",
           "5": "hsl(var(--chart-5))",
         },
+        energy: {
+          strom: "hsl(var(--energy-strom))",
+          gas: "hsl(var(--energy-gas))",
+          waerme: "hsl(var(--energy-waerme))",
+          wasser: "hsl(var(--energy-wasser))",
+        },
       },
       borderRadius: {
         lg: "var(--radius)",
