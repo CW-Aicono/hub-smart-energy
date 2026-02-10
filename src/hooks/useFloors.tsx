@@ -9,11 +9,13 @@ export interface Floor {
   floor_plan_url: string | null;
   description: string | null;
   area_sqm: number | null;
+  model_3d_url: string | null;
+  model_3d_mtl_url: string | null;
   created_at: string;
   updated_at: string;
 }
 
-export type FloorInsert = Omit<Floor, "id" | "created_at" | "updated_at">;
+export type FloorInsert = Omit<Floor, "id" | "created_at" | "updated_at" | "model_3d_url" | "model_3d_mtl_url">;
 
 interface UseFloorsReturn {
   floors: Floor[];
@@ -24,6 +26,7 @@ interface UseFloorsReturn {
   updateFloor: (id: string, updates: Partial<Floor>) => Promise<{ error: Error | null }>;
   deleteFloor: (id: string) => Promise<{ error: Error | null }>;
   uploadFloorPlan: (file: File, locationId: string, floorId: string) => Promise<{ url: string | null; error: Error | null }>;
+  upload3DModel: (files: { main: File; mtl?: File }, locationId: string, floorId: string) => Promise<{ error: Error | null }>;
 }
 
 export function useFloors(locationId: string | undefined): UseFloorsReturn {
@@ -123,6 +126,64 @@ export function useFloors(locationId: string | undefined): UseFloorsReturn {
     return { url: publicUrl, error: null };
   };
 
+  const upload3DModel = async (
+    files: { main: File; mtl?: File },
+    locationId: string,
+    floorId: string
+  ) => {
+    const mainExt = files.main.name.split('.').pop()?.toLowerCase();
+    const mainPath = `${locationId}/${floorId}.${mainExt}`;
+
+    // Upload main file (GLB or OBJ)
+    const { error: mainError } = await supabase.storage
+      .from('floor-3d-models')
+      .upload(mainPath, files.main, { upsert: true });
+
+    if (mainError) {
+      return { error: mainError as Error };
+    }
+
+    const { data: { publicUrl: mainUrl } } = supabase.storage
+      .from('floor-3d-models')
+      .getPublicUrl(mainPath);
+
+    let mtlUrl: string | null = null;
+
+    // Upload MTL file if provided
+    if (files.mtl) {
+      const mtlPath = `${locationId}/${floorId}.mtl`;
+      const { error: mtlError } = await supabase.storage
+        .from('floor-3d-models')
+        .upload(mtlPath, files.mtl, { upsert: true });
+
+      if (mtlError) {
+        return { error: mtlError as Error };
+      }
+
+      const { data: { publicUrl: mtlPublicUrl } } = supabase.storage
+        .from('floor-3d-models')
+        .getPublicUrl(mtlPath);
+
+      mtlUrl = mtlPublicUrl;
+    }
+
+    // Update floor record
+    const { error: updateError } = await supabase
+      .from('floors')
+      .update({
+        model_3d_url: mainUrl,
+        model_3d_mtl_url: mtlUrl,
+      } as any)
+      .eq('id', floorId);
+
+    if (updateError) {
+      return { error: updateError as Error };
+    }
+
+    await fetchFloors();
+    return { error: null };
+  };
+
   return {
     floors,
     loading,
@@ -132,5 +193,6 @@ export function useFloors(locationId: string | undefined): UseFloorsReturn {
     updateFloor,
     deleteFloor,
     uploadFloorPlan,
+    upload3DModel,
   };
 }
