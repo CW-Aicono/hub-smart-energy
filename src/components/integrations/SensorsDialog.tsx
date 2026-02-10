@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   Dialog,
   DialogContent,
@@ -16,11 +16,13 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Loader2, Power, RefreshCw, AlertCircle, Plus } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Loader2, Power, RefreshCw, AlertCircle, Plus, CheckCircle2 } from "lucide-react";
 import { LocationIntegration } from "@/hooks/useIntegrations";
 import { supabase } from "@/integrations/supabase/client";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AssignMeterDialog } from "./AssignMeterDialog";
+import { useMeters } from "@/hooks/useMeters";
 
 interface Sensor {
   id: string;
@@ -62,12 +64,27 @@ export function SensorsDialog({ locationIntegration, open, onOpenChange, locatio
   const [loading, setLoading] = useState(false);
   const [sensors, setSensors] = useState<Sensor[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [assignSensor, setAssignSensor] = useState<Sensor | null>(null);
+  const [selectedSensorIds, setSelectedSensorIds] = useState<Set<string>>(new Set());
+  const [showAssignDialog, setShowAssignDialog] = useState(false);
+
+  const effectiveLocationId = locationId || locationIntegration?.location_id || "";
+  const { meters } = useMeters(effectiveLocationId);
 
   const integrationName = locationIntegration?.integration?.name || "Integration";
 
   // Filter for meter-type controls only
-  const meters = sensors.filter((s) => METER_CONTROL_TYPES.has(s.controlType || ""));
+  const meterSensors = sensors.filter((s) => METER_CONTROL_TYPES.has(s.controlType || ""));
+
+  // Set of sensor UUIDs already assigned to this location
+  const assignedSensorIds = useMemo(() => {
+    const ids = new Set<string>();
+    meters.forEach((m) => {
+      if (m.sensor_uuid && m.location_integration_id === locationIntegration?.id) {
+        ids.add(m.sensor_uuid);
+      }
+    });
+    return ids;
+  }, [meters, locationIntegration?.id]);
 
   const fetchSensors = async () => {
     if (!locationIntegration) return;
@@ -99,9 +116,34 @@ export function SensorsDialog({ locationIntegration, open, onOpenChange, locatio
   useEffect(() => {
     if (open && locationIntegration) {
       fetchSensors();
+      setSelectedSensorIds(new Set());
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, locationIntegration?.id]);
+
+  const toggleSensor = (sensorId: string) => {
+    setSelectedSensorIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(sensorId)) {
+        next.delete(sensorId);
+      } else {
+        next.add(sensorId);
+      }
+      return next;
+    });
+  };
+
+  const selectableSensors = meterSensors.filter((s) => !assignedSensorIds.has(s.id));
+
+  const toggleAll = () => {
+    if (selectedSensorIds.size === selectableSensors.length) {
+      setSelectedSensorIds(new Set());
+    } else {
+      setSelectedSensorIds(new Set(selectableSensors.map((s) => s.id)));
+    }
+  };
+
+  const selectedSensors = meterSensors.filter((s) => selectedSensorIds.has(s.id));
 
   return (
     <>
@@ -114,7 +156,7 @@ export function SensorsDialog({ locationIntegration, open, onOpenChange, locatio
                   Gefundene Zähler – {integrationName}
                 </DialogTitle>
                 <DialogDescription>
-                  Zähler vom Gateway. Zuordnung unter „Messstellen & Alarmierung" möglich.
+                  Wählen Sie die Zähler aus, die Sie diesem Standort zuordnen möchten.
                 </DialogDescription>
               </div>
               <div className="flex gap-2">
@@ -146,14 +188,22 @@ export function SensorsDialog({ locationIntegration, open, onOpenChange, locatio
                   Lade Zähler vom Miniserver...
                 </span>
               </div>
-            ) : meters.length === 0 && !error ? (
+            ) : meterSensors.length === 0 && !error ? (
               <div className="text-center py-12 text-muted-foreground">
                 Keine Zähler gefunden
               </div>
-            ) : meters.length > 0 ? (
+            ) : meterSensors.length > 0 ? (
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-[50px]">
+                      <Checkbox
+                        checked={selectableSensors.length > 0 && selectedSensorIds.size === selectableSensors.length}
+                        onCheckedChange={toggleAll}
+                        disabled={selectableSensors.length === 0}
+                        aria-label="Alle auswählen"
+                      />
+                    </TableHead>
                     <TableHead className="w-[50px]">Typ</TableHead>
                     <TableHead>Name</TableHead>
                     <TableHead>Raum</TableHead>
@@ -161,64 +211,92 @@ export function SensorsDialog({ locationIntegration, open, onOpenChange, locatio
                     <TableHead>Messwert</TableHead>
                     <TableHead className="text-right">Wert</TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead className="w-[100px]" />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {meters.map((sensor) => (
-                    <TableRow key={sensor.id}>
-                      <TableCell>
-                        <div className="p-1.5 rounded bg-muted w-fit" title={sensor.controlType}>
-                          <Power className="h-4 w-4" />
-                        </div>
-                      </TableCell>
-                      <TableCell className="font-medium">{sensor.name}</TableCell>
-                      <TableCell className="text-muted-foreground">{sensor.room}</TableCell>
-                      <TableCell className="text-muted-foreground">{sensor.category}</TableCell>
-                      <TableCell className="text-muted-foreground text-xs">
-                        {sensor.stateName || "-"}
-                        {sensor.secondaryStateName && (
-                          <span className="block">{sensor.secondaryStateName}</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-right font-mono">
-                        <div>{sensor.value} {sensor.unit}</div>
-                        {sensor.secondaryValue && (
-                          <div className="text-muted-foreground">
-                            {sensor.secondaryValue} {sensor.secondaryUnit}
+                  {meterSensors.map((sensor) => {
+                    const isAssigned = assignedSensorIds.has(sensor.id);
+                    return (
+                      <TableRow
+                        key={sensor.id}
+                        className={isAssigned ? "opacity-60" : selectedSensorIds.has(sensor.id) ? "bg-muted/50" : ""}
+                      >
+                        <TableCell>
+                          {isAssigned ? (
+                            <CheckCircle2 className="h-4 w-4 text-primary" />
+                          ) : (
+                            <Checkbox
+                              checked={selectedSensorIds.has(sensor.id)}
+                              onCheckedChange={() => toggleSensor(sensor.id)}
+                              aria-label={`${sensor.name} auswählen`}
+                            />
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <div className="p-1.5 rounded bg-muted w-fit" title={sensor.controlType}>
+                            <Power className="h-4 w-4" />
                           </div>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        {getStatusBadge(sensor.status)}
-                      </TableCell>
-                      <TableCell>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="gap-1"
-                          onClick={() => setAssignSensor(sensor)}
-                        >
-                          <Plus className="h-3.5 w-3.5" />
-                          Zuordnen
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                        </TableCell>
+                        <TableCell className="font-medium">
+                          {sensor.name}
+                          {isAssigned && (
+                            <span className="ml-2 text-xs text-muted-foreground">(zugeordnet)</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">{sensor.room}</TableCell>
+                        <TableCell className="text-muted-foreground">{sensor.category}</TableCell>
+                        <TableCell className="text-muted-foreground text-xs">
+                          {sensor.stateName || "-"}
+                          {sensor.secondaryStateName && (
+                            <span className="block">{sensor.secondaryStateName}</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right font-mono">
+                          <div>{sensor.value} {sensor.unit}</div>
+                          {sensor.secondaryValue && (
+                            <div className="text-muted-foreground">
+                              {sensor.secondaryValue} {sensor.secondaryUnit}
+                            </div>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {getStatusBadge(sensor.status)}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             ) : null}
           </div>
+
+          {/* Bulk assign footer */}
+          {selectedSensorIds.size > 0 && (
+            <div className="flex items-center justify-between border-t pt-4 mt-2">
+              <span className="text-sm text-muted-foreground">
+                {selectedSensorIds.size} Zähler ausgewählt
+              </span>
+              <Button onClick={() => setShowAssignDialog(true)} className="gap-2">
+                <Plus className="h-4 w-4" />
+                Zuordnen ({selectedSensorIds.size})
+              </Button>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
 
-      {assignSensor && locationIntegration && (
+      {showAssignDialog && locationIntegration && selectedSensors.length > 0 && (
         <AssignMeterDialog
-          open={!!assignSensor}
-          onOpenChange={(open) => { if (!open) setAssignSensor(null); }}
-          sensor={assignSensor}
+          open={showAssignDialog}
+          onOpenChange={(o) => {
+            if (!o) {
+              setShowAssignDialog(false);
+              setSelectedSensorIds(new Set());
+            }
+          }}
+          sensors={selectedSensors.map((s) => ({ id: s.id, name: s.name, controlType: s.controlType, unit: s.unit }))}
           locationIntegrationId={locationIntegration.id}
-          currentLocationId={locationId || locationIntegration.location_id}
+          currentLocationId={effectiveLocationId}
         />
       )}
     </>
