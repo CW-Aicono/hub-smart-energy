@@ -2,8 +2,9 @@ import { useState, useEffect, useCallback, lazy, Suspense } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { Loader2, Layers, Box, Image } from "lucide-react";
+import { Loader2, Layers, Box, Image, RefreshCw } from "lucide-react";
 import { useLocations } from "@/hooks/useLocations";
+import { useFloorSensorPositions } from "@/hooks/useFloorSensorPositions";
 import { supabase } from "@/integrations/supabase/client";
 import { TransformWrapper, TransformComponent, useControls } from "react-zoom-pan-pinch";
 import { ZoomIn, ZoomOut, RotateCcw } from "lucide-react";
@@ -43,12 +44,23 @@ function ZoomControls() {
   );
 }
 
+interface SensorValue {
+  id: string;
+  name: string;
+  value: string;
+  unit: string;
+}
+
 const FloorPlanDashboardWidget = ({ locationId }: FloorPlanDashboardWidgetProps) => {
   const { locations } = useLocations();
   const [allFloors, setAllFloors] = useState<FloorOption[]>([]);
   const [selectedFloorId, setSelectedFloorId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<"2d" | "3d">("2d");
+  const [sensorValues, setSensorValues] = useState<SensorValue[]>([]);
+  const [loadingValues, setLoadingValues] = useState(false);
+
+  const { positions } = useFloorSensorPositions(selectedFloorId || undefined);
 
   // Fetch all floors across all locations (or for selected location)
   const fetchFloors = useCallback(async () => {
@@ -91,6 +103,58 @@ const FloorPlanDashboardWidget = ({ locationId }: FloorPlanDashboardWidgetProps)
   useEffect(() => {
     setSelectedFloorId(null);
   }, [locationId]);
+
+  // Fetch live sensor values from integrations
+  const fetchSensorValues = useCallback(async () => {
+    if (!positions.length) return;
+    setLoadingValues(true);
+    const allValues: SensorValue[] = [];
+
+    try {
+      // Group positions by integration
+      const byIntegration = new Map<string, typeof positions>();
+      positions.forEach((pos) => {
+        const existing = byIntegration.get(pos.location_integration_id) || [];
+        existing.push(pos);
+        byIntegration.set(pos.location_integration_id, existing);
+      });
+
+      for (const [integrationId, intPositions] of byIntegration) {
+        try {
+          const { data, error } = await supabase.functions.invoke("loxone-api", {
+            body: { locationIntegrationId: integrationId, action: "getSensors" },
+          });
+          if (error || !data?.success) continue;
+
+          for (const pos of intPositions) {
+            const sensor = data.sensors?.find((s: any) => s.id === pos.sensor_uuid);
+            if (sensor) {
+              allValues.push({
+                id: sensor.id,
+                name: pos.sensor_name,
+                value: sensor.value,
+                unit: sensor.unit,
+              });
+            }
+          }
+        } catch (err) {
+          console.warn(`Failed to fetch sensors for integration ${integrationId}:`, err);
+        }
+      }
+      setSensorValues(allValues);
+    } finally {
+      setLoadingValues(false);
+    }
+  }, [positions]);
+
+  // Auto-fetch and refresh sensor values
+  useEffect(() => {
+    if (positions.length > 0) {
+      fetchSensorValues();
+      const interval = setInterval(fetchSensorValues, 300000);
+      return () => clearInterval(interval);
+    }
+  }, [positions, fetchSensorValues]);
 
   const selectedFloor = allFloors.find(f => f.id === selectedFloorId);
 
@@ -170,7 +234,7 @@ const FloorPlanDashboardWidget = ({ locationId }: FloorPlanDashboardWidgetProps)
             <FloorPlan3DViewer
               floor={{ id: selectedFloor.id, location_id: selectedFloor.location_id, name: selectedFloor.name, floor_number: selectedFloor.floor_number, floor_plan_url: selectedFloor.floor_plan_url, description: null, area_sqm: null, model_3d_url: selectedFloor.model_3d_url, model_3d_mtl_url: selectedFloor.model_3d_mtl_url, model_3d_rotation: selectedFloor.model_3d_rotation, created_at: "", updated_at: "" }}
               locationId={selectedFloor.location_id}
-              sensors={[]}
+              sensors={sensorValues}
               isAdmin={false}
               compact
               readOnly
