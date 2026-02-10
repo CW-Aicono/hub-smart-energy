@@ -165,13 +165,14 @@ const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
     );
   }
 
-  // Layout constants
+  // Layout constants — cap height so diagram always fits in the card
   const vbW = 700;
-  const vbH = Math.max(340, (Math.max(sourceNames.length, targetNames.length)) * 50 + 40);
+  const maxNodes = Math.max(sourceNames.length, targetNames.length);
+  const vbH = Math.min(400, Math.max(200, maxNodes * 44 + 20));
   const nodeW = 14;
   const srcX = 100;
   const tgtX = vbW - 100 - nodeW;
-  const padding = 8;
+  const padding = maxNodes > 6 ? 4 : 8;
   const topY = 10;
   const totalH = vbH - 20;
 
@@ -273,7 +274,7 @@ const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
         <p className="text-sm text-muted-foreground">{subtitle}</p>
       </CardHeader>
       <CardContent className="px-2 pb-2">
-        <div className="w-full relative" style={{ aspectRatio: `${vbW}/${vbH}` }}>
+        <div className="w-full relative overflow-hidden" style={{ maxHeight: "420px" }}>
           <svg ref={svgRef} viewBox={`0 0 ${vbW} ${vbH}`} className="w-full h-full" preserveAspectRatio="xMidYMid meet">
             {linkElements}
 
