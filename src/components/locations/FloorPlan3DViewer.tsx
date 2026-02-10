@@ -43,9 +43,18 @@ function CameraTracker({ onUpdate }: { onUpdate: (pos: { x: number; z: number },
   return null;
 }
 
-// Centers, grounds and auto-scales a 3D object to fit the scene
+// Auto-detects Z-up, centers, grounds and auto-scales a 3D object to fit the scene
 function centerAndGroundObject(obj: THREE.Object3D) {
   obj.updateMatrixWorld(true);
+  
+  // Auto-detect Z-up coordinate system (common in CAD exports like Vectorworks)
+  const tempBox = new THREE.Box3().setFromObject(obj);
+  const tempSize = tempBox.getSize(new THREE.Vector3());
+  if (tempSize.z > tempSize.y * 1.5) {
+    obj.rotation.x = -Math.PI / 2;
+    obj.updateMatrixWorld(true);
+  }
+  
   const box = new THREE.Box3().setFromObject(obj);
   const size = box.getSize(new THREE.Vector3());
   const center = box.getCenter(new THREE.Vector3());
@@ -125,16 +134,6 @@ function OBJModel({ objUrl, mtlUrl }: { objUrl: string; mtlUrl?: string | null }
           });
         }
 
-        // Auto-detect Z-up coordinate system (CAD exports) if no manual rotation set
-        const tempBox = new THREE.Box3().setFromObject(obj);
-        const tempSize = tempBox.getSize(new THREE.Vector3());
-        
-        if (tempSize.z > tempSize.y * 1.5) {
-          // Z-up to Y-up conversion
-          obj.rotation.x = -Math.PI / 2;
-          obj.updateMatrixWorld(true);
-        }
-
         // Center and ground the loaded model (includes auto-scaling)
         centerAndGroundObject(obj);
         if (!cancelled) {
@@ -195,8 +194,8 @@ function ModelViewer({ floor, rotationDeg }: { floor: Floor; rotationDeg: number
   const url = floor.model_3d_url;
   const pathOnly = url.split("?")[0].toLowerCase();
 
-  // Apply Y-axis rotation (degrees to radians)
-  const rotationY = (rotationDeg * Math.PI) / 180;
+  // Apply X-axis rotation (degrees to radians) – for tilting the model upright
+  const rotationX = (rotationDeg * Math.PI) / 180;
 
   let modelElement: JSX.Element;
 
@@ -209,7 +208,7 @@ function ModelViewer({ floor, rotationDeg }: { floor: Floor; rotationDeg: number
   }
 
   return (
-    <group rotation={[0, rotationY, 0]}>
+    <group rotation={[rotationX, 0, 0]}>
       {modelElement}
     </group>
   );
