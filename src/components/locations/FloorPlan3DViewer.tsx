@@ -1,6 +1,6 @@
 import { Suspense, useState, useCallback, useMemo, useRef, useEffect } from "react";
 import { Canvas, useFrame, useLoader } from "@react-three/fiber";
-import { Environment, Grid, Text, useGLTF } from "@react-three/drei";
+import { Environment, Grid, OrbitControls, Text, useGLTF } from "@react-three/drei";
 import { Button } from "@/components/ui/button";
 import { Play, Square, Edit, Loader2 } from "lucide-react";
 import { Floor } from "@/hooks/useFloors";
@@ -39,25 +39,46 @@ function CameraTracker({ onUpdate }: { onUpdate: (pos: { x: number; z: number },
   return null;
 }
 
+// Auto-centers and grounds a loaded 3D model
+function AutoCenterModel({ children }: { children: React.ReactNode }) {
+  const groupRef = useRef<THREE.Group>(null);
+
+  useEffect(() => {
+    if (!groupRef.current) return;
+    // Compute bounding box of the entire model
+    const box = new THREE.Box3().setFromObject(groupRef.current);
+    const center = box.getCenter(new THREE.Vector3());
+    const size = box.getSize(new THREE.Vector3());
+    
+    // Center horizontally, place on ground (y=0)
+    groupRef.current.position.set(-center.x, -box.min.y, -center.z);
+    groupRef.current.updateMatrixWorld(true);
+  }, []);
+
+  return <group ref={groupRef}>{children}</group>;
+}
+
 // Renders a GLB model
 function GLBModel({ url }: { url: string }) {
   const { scene } = useGLTF(url);
   const cloned = useMemo(() => {
     const clone = scene.clone(true);
-    // Remove any cameras that might be embedded in the model
-    const camerasToRemove: THREE.Object3D[] = [];
+    // Remove any cameras or lights embedded in the model
+    const toRemove: THREE.Object3D[] = [];
     clone.traverse((child) => {
       if (child instanceof THREE.Camera) {
-        camerasToRemove.push(child);
+        toRemove.push(child);
       }
     });
-    camerasToRemove.forEach((cam) => cam.removeFromParent());
+    toRemove.forEach((obj) => obj.removeFromParent());
+    // Ensure all transforms are applied
+    clone.updateMatrixWorld(true);
     return clone;
   }, [scene]);
   return (
-    <group position={[0, 0, 0]}>
+    <AutoCenterModel>
       <primitive object={cloned} />
-    </group>
+    </AutoCenterModel>
   );
 }
 
@@ -96,9 +117,9 @@ function OBJModel({ objUrl, mtlUrl }: { objUrl: string; mtlUrl?: string | null }
 
   if (!object) return null;
   return (
-    <group position={[0, 0, 0]}>
+    <AutoCenterModel>
       <primitive object={object} />
-    </group>
+    </AutoCenterModel>
   );
 }
 
@@ -115,9 +136,9 @@ function TDSModel({ url }: { url: string }) {
 
   if (!object) return null;
   return (
-    <group position={[0, 0, 0]}>
+    <AutoCenterModel>
       <primitive object={object} />
-    </group>
+    </AutoCenterModel>
   );
 }
 
@@ -268,6 +289,17 @@ function Scene({
         </>
       )}
       
+      {/* Orbit Controls for normal viewing (not walking) */}
+      {!isWalking && (
+        <OrbitControls 
+          makeDefault
+          target={[0, 0, 0]}
+          maxPolarAngle={Math.PI / 2}
+          minDistance={2}
+          maxDistance={100}
+        />
+      )}
+
       {/* First Person Controls */}
       <Floor3DControls 
         enabled={isWalking} 
