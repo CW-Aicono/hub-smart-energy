@@ -109,7 +109,7 @@ export function EditFloorDialog({ floor, locationId, onSuccess }: EditFloorDialo
           <Pencil className="h-4 w-4" />
         </Button>
       </DialogTrigger>
-      <DialogContent>
+      <DialogContent className="max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Etage bearbeiten</DialogTitle>
           <DialogDescription>
