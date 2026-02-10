@@ -192,23 +192,18 @@ function TDSModel({ url }: { url: string }) {
 function RotatedModelGroup({ rotationDeg, children }: { rotationDeg: number; children: React.ReactNode }) {
   const groupRef = useRef<THREE.Group>(null);
   const rotationX = (rotationDeg * Math.PI) / 180;
-  const lastMinY = useRef<number | null>(null);
 
-  // Use useFrame to continuously check and re-ground after async model loads
+  // Idempotent: reset position, measure, correct every frame
   useFrame(() => {
     if (!groupRef.current) return;
     groupRef.current.rotation.set(rotationX, 0, 0);
+    groupRef.current.position.y = 0;
     groupRef.current.updateMatrixWorld(true);
 
     const box = new THREE.Box3().setFromObject(groupRef.current);
     if (box.isEmpty()) return;
 
-    // Only re-calculate when bounding box actually changes (model loaded)
-    const currentMinY = box.min.y;
-    if (lastMinY.current === null || Math.abs(currentMinY - (lastMinY.current ?? 0)) > 0.01) {
-      groupRef.current.position.y = -currentMinY;
-      lastMinY.current = currentMinY + groupRef.current.position.y; // store corrected min
-    }
+    groupRef.current.position.y = -box.min.y;
   });
 
   return (
