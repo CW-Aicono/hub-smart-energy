@@ -132,7 +132,7 @@ export const AddMeterDialog = ({ locationId, open, onOpenChange }: AddMeterDialo
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Zähler anlegen</DialogTitle>
         </DialogHeader>
