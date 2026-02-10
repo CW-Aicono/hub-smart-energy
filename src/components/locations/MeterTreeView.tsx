@@ -352,6 +352,13 @@ export const MeterTreeView = ({ meters, onUpdateParent, onSelectMeter }: MeterTr
       const { draggedId } = dragState;
       if (!draggedId || draggedId === targetId) return;
 
+      // Hauptzähler dürfen nicht als Unterzähler platziert werden
+      const draggedMeter = allMetersMap.get(draggedId);
+      if (draggedMeter?.is_main_meter) {
+        handleDragEnd();
+        return;
+      }
+
       if (wouldCreateCycle(draggedId, targetId)) {
         handleDragEnd();
         return;
@@ -360,7 +367,7 @@ export const MeterTreeView = ({ meters, onUpdateParent, onSelectMeter }: MeterTr
       handleDragEnd();
       await onUpdateParent(draggedId, targetId);
     },
-    [dragState, wouldCreateCycle, onUpdateParent, handleDragEnd]
+    [dragState, wouldCreateCycle, onUpdateParent, handleDragEnd, allMetersMap]
   );
 
   const handleDropRoot = useCallback(
