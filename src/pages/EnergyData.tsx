@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Navigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useLocations } from "@/hooks/useLocations";
@@ -14,7 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Download, Database, Filter, Calendar, FileText } from "lucide-react";
 import { downloadCSV, downloadPDF } from "@/lib/exportUtils";
-import { energyConsumptionData } from "@/data/mockData";
+import { supabase } from "@/integrations/supabase/client";
 
 const ENERGY_TYPE_LABELS: Record<string, string> = {
   strom: "Strom",
@@ -22,6 +22,13 @@ const ENERGY_TYPE_LABELS: Record<string, string> = {
   waerme: "Wärme",
   wasser: "Wasser",
 };
+
+interface ReadingExportRow {
+  meter_id: string;
+  value: number;
+  reading_date: string;
+  capture_method: string;
+}
 
 const EnergyData = () => {
   const { user, loading: authLoading } = useAuth();
@@ -32,8 +39,22 @@ const EnergyData = () => {
   const [selectedEnergyTypes, setSelectedEnergyTypes] = useState<string[]>(["strom", "gas", "waerme", "wasser"]);
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const [includeReadings, setIncludeReadings] = useState(true);
   const [includeMeters, setIncludeMeters] = useState(true);
-  const [includeMockData, setIncludeMockData] = useState(true);
+  const [readingsCount, setReadingsCount] = useState(0);
+  const [loadingReadings, setLoadingReadings] = useState(false);
+
+  // Fetch reading count for badge
+  useEffect(() => {
+    if (!user) return;
+    const fetchCount = async () => {
+      const { count } = await supabase
+        .from("meter_readings")
+        .select("*", { count: "exact", head: true });
+      setReadingsCount(count || 0);
+    };
+    fetchCount();
+  }, [user]);
 
   if (authLoading || locationsLoading) {
     return (
@@ -61,21 +82,43 @@ const EnergyData = () => {
     return true;
   });
 
-  const buildExportRows = () => {
+  const buildExportRows = async () => {
     const rows: Record<string, string | number>[] = [];
 
-    if (includeMockData) {
-      energyConsumptionData.forEach((d) => {
-        if (selectedEnergyTypes.includes("strom")) {
-          rows.push({ Quelle: "Verbrauchsdaten", Monat: d.month, Energieart: "Strom", Wert: d.strom, Einheit: "kWh" });
-        }
-        if (selectedEnergyTypes.includes("gas")) {
-          rows.push({ Quelle: "Verbrauchsdaten", Monat: d.month, Energieart: "Gas", Wert: d.gas, Einheit: "kWh" });
-        }
-        if (selectedEnergyTypes.includes("waerme")) {
-          rows.push({ Quelle: "Verbrauchsdaten", Monat: d.month, Energieart: "Wärme", Wert: d.waerme, Einheit: "kWh" });
-        }
-      });
+    if (includeReadings) {
+      setLoadingReadings(true);
+      // Get meter IDs matching filters
+      const meterIds = filteredMeters.map((m) => m.id);
+      if (meterIds.length > 0) {
+        let query = supabase
+          .from("meter_readings")
+          .select("meter_id, value, reading_date, capture_method")
+          .in("meter_id", meterIds)
+          .order("reading_date", { ascending: true });
+
+        if (dateFrom) query = query.gte("reading_date", dateFrom);
+        if (dateTo) query = query.lte("reading_date", dateTo);
+
+        const { data } = await query;
+        const readingRows = (data ?? []) as ReadingExportRow[];
+
+        readingRows.forEach((r) => {
+          const meter = meters.find((m) => m.id === r.meter_id);
+          const loc = locations.find((l) => l.id === meter?.location_id);
+          rows.push({
+            Quelle: "Zählerablesung",
+            Standort: loc?.name || "",
+            Zähler: meter?.name || "",
+            Zählernummer: meter?.meter_number || "",
+            Energieart: ENERGY_TYPE_LABELS[meter?.energy_type || ""] || meter?.energy_type || "",
+            Datum: r.reading_date,
+            Wert: r.value,
+            Einheit: meter?.unit || "kWh",
+            Erfassung: r.capture_method === "manual" ? "Manuell" : r.capture_method === "ai" ? "KI-OCR" : r.capture_method,
+          });
+        });
+      }
+      setLoadingReadings(false);
     }
 
     if (includeMeters && filteredMeters.length > 0) {
@@ -103,14 +146,14 @@ const EnergyData = () => {
     return headers;
   };
 
-  const handleExport = () => {
-    const rows = buildExportRows();
+  const handleExport = async () => {
+    const rows = await buildExportRows();
     if (rows.length === 0) return;
     downloadCSV(rows, "energiedaten-export", getHeaders(rows));
   };
 
-  const handlePdfExport = () => {
-    const rows = buildExportRows();
+  const handlePdfExport = async () => {
+    const rows = await buildExportRows();
     if (rows.length === 0) return;
     downloadPDF(rows, "energiedaten-export", getHeaders(rows), "Energiedaten Export");
   };
@@ -205,17 +248,17 @@ const EnergyData = () => {
                 <div>
                   <div className="flex items-center gap-2">
                     <Checkbox
-                      id="source-consumption"
-                      checked={includeMockData}
-                      onCheckedChange={(c) => setIncludeMockData(!!c)}
+                      id="source-readings"
+                      checked={includeReadings}
+                      onCheckedChange={(c) => setIncludeReadings(!!c)}
                     />
-                    <Label htmlFor="source-consumption" className="cursor-pointer font-medium">
-                      Verbrauchsdaten
+                    <Label htmlFor="source-readings" className="cursor-pointer font-medium">
+                      Zählerablesungen
                     </Label>
                   </div>
-                  <p className="text-xs text-muted-foreground ml-6">Monatliche Verbrauchswerte nach Energieart</p>
+                  <p className="text-xs text-muted-foreground ml-6">Erfasste Zählerstände (manuell & automatisch)</p>
                 </div>
-                <Badge variant="secondary">12 Monate</Badge>
+                <Badge variant="secondary">{readingsCount} Ablesungen</Badge>
               </div>
 
               <div className="flex items-center justify-between p-3 rounded-md border">
@@ -243,7 +286,7 @@ const EnergyData = () => {
               variant="outline"
               size="lg"
               onClick={handlePdfExport}
-              disabled={!includeMockData && !includeMeters}
+              disabled={(!includeReadings && !includeMeters) || loadingReadings}
             >
               <FileText className="h-4 w-4 mr-2" />
               PDF exportieren
@@ -251,7 +294,7 @@ const EnergyData = () => {
             <Button
               size="lg"
               onClick={handleExport}
-              disabled={!includeMockData && !includeMeters}
+              disabled={(!includeReadings && !includeMeters) || loadingReadings}
             >
               <Download className="h-4 w-4 mr-2" />
               CSV exportieren

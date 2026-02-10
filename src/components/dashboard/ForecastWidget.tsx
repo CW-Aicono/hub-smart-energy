@@ -1,37 +1,58 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, ReferenceLine } from "recharts";
-import { energyConsumptionData } from "@/data/mockData";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
+import { useEnergyData } from "@/hooks/useEnergyData";
 import { TrendingUp } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 
 interface ForecastWidgetProps {
   locationId: string | null;
 }
 
 const ForecastWidget = ({ locationId }: ForecastWidgetProps) => {
-  // Use data up to current month (simulate March = index 2) for forecast
-  const currentMonthIndex = 2; // March (0-based)
-  const actualData = energyConsumptionData.slice(0, currentMonthIndex + 1);
+  const { monthlyData, loading, hasData } = useEnergyData(locationId);
 
-  // Calculate average total consumption per month from actual data
-  const avgTotal =
-    actualData.reduce((sum, d) => sum + d.strom + d.gas + d.waerme, 0) /
-    actualData.length;
+  if (loading) return <Card><CardContent className="p-6"><Skeleton className="h-[300px]" /></CardContent></Card>;
 
-  // Build forecast data: actual months + projected months
-  const forecastData = energyConsumptionData.map((d, i) => {
-    const actual = d.strom + d.gas + d.waerme;
+  // Find the last month with data
+  const monthsWithData = monthlyData.filter((d) => d.strom + d.gas + d.waerme + d.wasser > 0);
+  const currentMonthIndex = monthsWithData.length > 0
+    ? monthlyData.findIndex((d) => d.month === monthsWithData[monthsWithData.length - 1].month)
+    : -1;
+
+  if (!hasData || currentMonthIndex < 0) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="font-display text-lg flex items-center gap-2">
+            <TrendingUp className="h-5 w-5 text-primary" />
+            Jahresverbrauchsprognose
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="h-[300px] flex items-center justify-center text-muted-foreground text-sm">
+            Noch keine Verbrauchsdaten für eine Prognose vorhanden
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const actualData = monthlyData.slice(0, currentMonthIndex + 1);
+  const avgTotal = actualData.reduce((s, d) => s + d.strom + d.gas + d.waerme + d.wasser, 0) / actualData.length;
+
+  const forecastData = monthlyData.map((d, i) => {
+    const actual = d.strom + d.gas + d.waerme + d.wasser;
     if (i <= currentMonthIndex) {
-      return { month: d.month, ist: actual, prognose: null };
+      return { month: d.month, ist: actual, prognose: null as number | null };
     }
-    return { month: d.month, ist: null, prognose: Math.round(avgTotal) };
+    return { month: d.month, ist: null as number | null, prognose: Math.round(avgTotal) };
   });
 
-  // Add bridge point so line connects
   if (currentMonthIndex < forecastData.length - 1) {
     forecastData[currentMonthIndex].prognose = forecastData[currentMonthIndex].ist;
   }
 
-  const totalActual = actualData.reduce((s, d) => s + d.strom + d.gas + d.waerme, 0);
+  const totalActual = actualData.reduce((s, d) => s + d.strom + d.gas + d.waerme + d.wasser, 0);
   const totalForecast = totalActual + Math.round(avgTotal) * (12 - actualData.length);
 
   return (
@@ -63,23 +84,8 @@ const ForecastWidget = ({ locationId }: ForecastWidgetProps) => {
               }
             />
             <Legend formatter={(value) => (value === "ist" ? "Ist-Verbrauch" : "Prognose")} />
-            <Line
-              type="monotone"
-              dataKey="ist"
-              stroke="hsl(var(--chart-1))"
-              strokeWidth={2}
-              dot={{ fill: "hsl(var(--chart-1))" }}
-              connectNulls={false}
-            />
-            <Line
-              type="monotone"
-              dataKey="prognose"
-              stroke="hsl(var(--chart-3))"
-              strokeWidth={2}
-              strokeDasharray="8 4"
-              dot={{ fill: "hsl(var(--chart-3))" }}
-              connectNulls={false}
-            />
+            <Line type="monotone" dataKey="ist" stroke="hsl(var(--chart-1))" strokeWidth={2} dot={{ fill: "hsl(var(--chart-1))" }} connectNulls={false} />
+            <Line type="monotone" dataKey="prognose" stroke="hsl(var(--chart-3))" strokeWidth={2} strokeDasharray="8 4" dot={{ fill: "hsl(var(--chart-3))" }} connectNulls={false} />
           </LineChart>
         </ResponsiveContainer>
       </CardContent>

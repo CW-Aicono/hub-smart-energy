@@ -1,7 +1,8 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
-import { energyConsumptionData } from "@/data/mockData";
+import { useEnergyData } from "@/hooks/useEnergyData";
 import { useLocations } from "@/hooks/useLocations";
+import { Skeleton } from "@/components/ui/skeleton";
 
 interface EnergyChartProps {
   locationId: string | null;
@@ -9,11 +10,14 @@ interface EnergyChartProps {
 
 const EnergyChart = ({ locationId }: EnergyChartProps) => {
   const { locations } = useLocations();
+  const { monthlyData, loading, hasData } = useEnergyData(locationId);
   const selectedLocation = locationId ? locations.find((l) => l.id === locationId) : null;
   
   const subtitle = selectedLocation 
     ? `Daten für: ${selectedLocation.name}` 
     : "Alle Liegenschaften";
+
+  if (loading) return <Card><CardContent className="p-6"><Skeleton className="h-[300px]" /></CardContent></Card>;
 
   return (
     <Card>
@@ -22,25 +26,31 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
         <p className="text-sm text-muted-foreground">{subtitle}</p>
       </CardHeader>
       <CardContent>
-        <ResponsiveContainer width="100%" height={300}>
-          <BarChart data={energyConsumptionData} barGap={2}>
-            <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-            <XAxis dataKey="month" className="text-xs fill-muted-foreground" tick={{ fill: 'hsl(var(--muted-foreground))' }} />
-            <YAxis className="text-xs" tick={{ fill: 'hsl(var(--muted-foreground))' }} />
-            <Tooltip
-              contentStyle={{
-                backgroundColor: 'hsl(var(--card))',
-                border: '1px solid hsl(var(--border))',
-                borderRadius: 'var(--radius)',
-                color: 'hsl(var(--card-foreground))',
-              }}
-            />
-            <Legend />
-            <Bar dataKey="strom" name="Strom" fill="hsl(var(--chart-1))" radius={[2, 2, 0, 0]} />
-            <Bar dataKey="gas" name="Gas" fill="hsl(var(--chart-3))" radius={[2, 2, 0, 0]} />
-            <Bar dataKey="waerme" name="Wärme" fill="hsl(var(--chart-5))" radius={[2, 2, 0, 0]} />
-          </BarChart>
-        </ResponsiveContainer>
+        {!hasData ? (
+          <div className="h-[300px] flex items-center justify-center text-muted-foreground text-sm">
+            Noch keine Verbrauchsdaten vorhanden
+          </div>
+        ) : (
+          <ResponsiveContainer width="100%" height={300}>
+            <BarChart data={monthlyData} barGap={2}>
+              <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+              <XAxis dataKey="month" tick={{ fill: 'hsl(var(--muted-foreground))' }} />
+              <YAxis tick={{ fill: 'hsl(var(--muted-foreground))' }} />
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: 'hsl(var(--card))',
+                  border: '1px solid hsl(var(--border))',
+                  borderRadius: 'var(--radius)',
+                  color: 'hsl(var(--card-foreground))',
+                }}
+              />
+              <Legend />
+              <Bar dataKey="strom" name="Strom" fill="hsl(var(--chart-1))" radius={[2, 2, 0, 0]} />
+              <Bar dataKey="gas" name="Gas" fill="hsl(var(--chart-3))" radius={[2, 2, 0, 0]} />
+              <Bar dataKey="waerme" name="Wärme" fill="hsl(var(--chart-5))" radius={[2, 2, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        )}
       </CardContent>
     </Card>
   );
