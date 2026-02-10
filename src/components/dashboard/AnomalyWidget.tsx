@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useLocations } from "@/hooks/useLocations";
-import { energyConsumptionData } from "@/data/mockData";
+import { useEnergyData } from "@/hooks/useEnergyData";
 import { supabase } from "@/integrations/supabase/client";
 import { BrainCircuit, AlertTriangle, ShieldAlert, Info, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
@@ -42,6 +42,7 @@ const RISK_LABELS: Record<string, { label: string; color: string }> = {
 
 const AnomalyWidget = ({ locationId }: AnomalyWidgetProps) => {
   const { locations } = useLocations();
+  const { monthlyData, hasData } = useEnergyData(locationId);
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -54,7 +55,7 @@ const AnomalyWidget = ({ locationId }: AnomalyWidgetProps) => {
     try {
       const { data, error: fnError } = await supabase.functions.invoke("anomaly-detection", {
         body: {
-          energyData: energyConsumptionData,
+          energyData: monthlyData,
           locationName: selectedLocation?.name || null,
         },
       });
@@ -84,7 +85,7 @@ const AnomalyWidget = ({ locationId }: AnomalyWidgetProps) => {
             <BrainCircuit className="h-5 w-5 text-primary" />
             KI-Anomalie-Erkennung
           </CardTitle>
-          <Button size="sm" variant="outline" onClick={runAnalysis} disabled={loading}>
+          <Button size="sm" variant="outline" onClick={runAnalysis} disabled={loading || !hasData}>
             <RefreshCw className={`h-4 w-4 mr-1 ${loading ? "animate-spin" : ""}`} />
             {result ? "Erneut analysieren" : "Analyse starten"}
           </Button>
@@ -105,11 +106,14 @@ const AnomalyWidget = ({ locationId }: AnomalyWidgetProps) => {
         ) : !result ? (
           <div className="text-center py-8 text-muted-foreground">
             <BrainCircuit className="h-10 w-10 mx-auto mb-3 opacity-30" />
-            <p className="text-sm">Klicken Sie auf "Analyse starten", um die Verbrauchsdaten mit KI auszuwerten.</p>
+            <p className="text-sm">
+              {hasData
+                ? 'Klicken Sie auf "Analyse starten", um die Verbrauchsdaten mit KI auszuwerten.'
+                : "Noch keine Verbrauchsdaten für eine Analyse vorhanden."}
+            </p>
           </div>
         ) : (
           <div className="space-y-4">
-            {/* Risk + Summary */}
             <div className="rounded-md border p-3 bg-muted/30">
               <div className="flex items-center gap-2 mb-1">
                 <span className="text-sm font-medium">Gesamtrisiko:</span>
@@ -119,8 +123,6 @@ const AnomalyWidget = ({ locationId }: AnomalyWidgetProps) => {
               </div>
               <p className="text-sm text-muted-foreground">{result.summary}</p>
             </div>
-
-            {/* Anomalies */}
             {result.anomalies.length === 0 ? (
               <p className="text-sm text-muted-foreground py-2">Keine Anomalien erkannt.</p>
             ) : (
@@ -133,9 +135,7 @@ const AnomalyWidget = ({ locationId }: AnomalyWidgetProps) => {
                       <div className="flex items-center gap-2">
                         <Icon className={`h-4 w-4 ${config.color}`} />
                         <span className="text-sm font-medium">{anomaly.title}</span>
-                        <Badge variant={config.badge} className="text-xs ml-auto">
-                          {anomaly.month}
-                        </Badge>
+                        <Badge variant={config.badge} className="text-xs ml-auto">{anomaly.month}</Badge>
                       </div>
                       <p className="text-sm text-muted-foreground">{anomaly.description}</p>
                       <p className="text-xs text-primary">💡 {anomaly.recommendation}</p>
