@@ -2,9 +2,10 @@ import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { Location, LocationType } from "@/hooks/useLocations";
 import { useFloors, Floor } from "@/hooks/useFloors";
+import { useFloorRooms } from "@/hooks/useFloorRooms";
 import { useUserRole } from "@/hooks/useUserRole";
 import { LocationStatus } from "@/hooks/useLocationStatus";
-import { ChevronRight, ChevronDown, Building2, Building, MapPin, Star, Layers, Wifi, WifiOff, AlertCircle } from "lucide-react";
+import { ChevronRight, ChevronDown, Building2, Building, MapPin, Star, Layers, Wifi, WifiOff, AlertCircle, DoorOpen } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { EditLocationDialog } from "./EditLocationDialog";
@@ -53,21 +54,18 @@ const typeColors: Record<LocationType, string> = {
   sonstiges: "bg-slate-100 text-slate-700 border-slate-200",
 };
 
-function FloorNode({ floor, level, isLast }: FloorNodeProps & { isLast: boolean }) {
+function RoomNode({ name, level, isLast }: { name: string; level: number; isLast: boolean }) {
   const indent = level * 20 + 12;
   return (
-    <div className="relative flex items-center gap-2 px-3 py-1.5 text-sm text-muted-foreground">
-      {/* Tree connector lines */}
+    <div className="relative flex items-center gap-2 px-3 py-1 text-sm text-muted-foreground/80">
       <div
         className="absolute top-0 bottom-0 border-l border-border"
         style={{ left: `${indent}px` }}
       />
-      {/* Horizontal branch */}
       <div
         className="absolute border-t border-border"
         style={{ left: `${indent}px`, width: 16, top: '50%' }}
       />
-      {/* Hide vertical line below last item */}
       {isLast && (
         <div
           className="absolute bottom-0 bg-background"
@@ -75,12 +73,83 @@ function FloorNode({ floor, level, isLast }: FloorNodeProps & { isLast: boolean 
         />
       )}
       <div style={{ paddingLeft: `${indent + 20}px` }} className="flex items-center gap-2">
-        <Layers className="h-3.5 w-3.5 flex-shrink-0" />
-        <span>{floor.name}</span>
-        {floor.area_sqm && (
-          <span className="text-xs">({floor.area_sqm} m²)</span>
-        )}
+        <DoorOpen className="h-3 w-3 flex-shrink-0" />
+        <span className="text-xs">{name}</span>
       </div>
+    </div>
+  );
+}
+
+function FloorNode({ floor, level, isLast }: FloorNodeProps & { isLast: boolean }) {
+  const indent = level * 20 + 12;
+  const { rooms } = useFloorRooms(floor.id);
+  const hasRooms = rooms.length > 0;
+  const [expanded, setExpanded] = useState(false);
+
+  return (
+    <div className="relative">
+      <div className="flex items-center gap-2 px-3 py-1.5 text-sm text-muted-foreground">
+        {/* Tree connector lines */}
+        <div
+          className="absolute top-0 bottom-0 border-l border-border"
+          style={{ left: `${indent}px` }}
+        />
+        {/* Horizontal branch */}
+        <div
+          className="absolute border-t border-border"
+          style={{ left: `${indent}px`, width: 16, top: '50%' }}
+        />
+        {/* Hide vertical line below last item */}
+        {isLast && !expanded && (
+          <div
+            className="absolute bottom-0 bg-background"
+            style={{ left: `${indent - 1}px`, width: 3, top: '50%' }}
+          />
+        )}
+        <div style={{ paddingLeft: `${indent + 20}px` }} className="flex items-center gap-2">
+          {hasRooms ? (
+            <button
+              onClick={() => setExpanded(!expanded)}
+              className="p-0.5 hover:bg-muted-foreground/20 rounded -ml-5"
+            >
+              {expanded ? (
+                <ChevronDown className="h-3.5 w-3.5" />
+              ) : (
+                <ChevronRight className="h-3.5 w-3.5" />
+              )}
+            </button>
+          ) : null}
+          <Layers className="h-3.5 w-3.5 flex-shrink-0" />
+          <span>{floor.name}</span>
+          {floor.area_sqm && (
+            <span className="text-xs">({floor.area_sqm} m²)</span>
+          )}
+          {hasRooms && (
+            <span className="text-xs text-muted-foreground/60">{rooms.length} Räume</span>
+          )}
+        </div>
+      </div>
+
+      {expanded && hasRooms && (
+        <div>
+          {rooms.map((room, idx) => (
+            <RoomNode
+              key={room.id}
+              name={room.name}
+              level={level + 2}
+              isLast={idx === rooms.length - 1}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* Hide connector below last floor when expanded */}
+      {isLast && expanded && hasRooms && (
+        <div
+          className="absolute bg-background"
+          style={{ left: `${indent - 1}px`, width: 3, bottom: 0, height: 0 }}
+        />
+      )}
     </div>
   );
 }
