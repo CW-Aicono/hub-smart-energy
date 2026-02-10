@@ -1,70 +1,60 @@
 
-# Loxone API: Korrekte State-Abfrage pro Control-Typ
+## Fix: Loxone Meter-Werte korrekt abrufen
 
-## Problem
-Die Edge Function erkennt viele Loxone-Control-Typen nicht korrekt und fragt daher falsche oder nutzlose States ab (z.B. `jLocked` statt des eigentlichen Messwerts). Das betrifft insbesondere:
-- **EFM, EnergyManager2, Fronius** werden nicht als Energie-Controls erkannt
-- **Meter**-Typ bekommt keinen Sekundaerwert (`total`)
-- Fallback greift oft auf `jLocked` zurueck (nutzlos)
+### Problem
+Alle Werte des Zählers "Außenbereich" kommen als `null` zurück, obwohl die Loxone Config eindeutig Werte zeigt (Pf=10,200kW, Mr=13051,8kWh, Rd=43,1kWh etc.).
 
-## Loesung
+### Ursache
+Die Funktion `fetchStateValue` in der Edge Function nutzt den falschen REST-API-Endpunkt:
+- **Aktuell (falsch):** `/jdev/sps/io/{uuid}/state`
+- **Korrekt:** `/jdev/sps/io/{uuid}`
 
-### Aenderungen an der Edge Function (`supabase/functions/loxone-api/index.ts`)
+Die Loxone REST API kennt keinen `/state`-Suffix. Zudem werden HTTP-Fehler und Parse-Fehler komplett verschluckt, was das Debugging unmöglich macht.
 
-**1. Erweiterte Typ-Erkennung durch eine State-Mapping-Tabelle**
+### Loesung
 
-Statt der einfachen `isEnergyMonitor`-Funktion wird eine kontrolltyp-spezifische Mapping-Tabelle eingefuehrt:
+**Datei: `supabase/functions/loxone-api/index.ts`**
 
-```text
-Control-Typ       | Primaer-State  | Einheit | Sekundaer-State | Sekundaer-Einheit
-------------------|----------------|---------|-----------------|------------------
-Meter             | actual         | kW      | total           | kWh
-EFM               | Ppwr           | kW      | Gpwr            | kW
-EnergyManager2    | Gpwr           | kW      | Ppwr            | kW
-Fronius           | consCurr       | kW      | prodCurr        | kW
-InfoOnlyAnalog    | value          | (auto)  | -               | -
-InfoOnlyDigital   | active         | -       | -               | -
-Pushbutton        | active         | -       | -               | -
-TextState         | textAndIcon    | -       | -               | -
-```
-
-**2. "jLocked" aus Fallback-Logik ausschliessen**
-
-Bei der Fallback-Suche nach dem ersten verfuegbaren State wird `jLocked` uebersprungen, da es nur ein Lock-Indikator ist und keinen Messwert darstellt.
-
-**3. Verbesserte Typ-Erkennung fuer Sensor-Kategorie und Einheit**
-
-Die Typ-Erkennung (`sensorType` und `unit`) wird erweitert, um die neuen Control-Typen korrekt zuzuordnen:
-- `EFM` -> Typ "power", Einheit "kW"
-- `EnergyManager2` -> Typ "power", Einheit "kW"
-- `Fronius` -> Typ "power", Einheit "kW"
-- `Meter` -> Primaer "kW" (actual = Momentanleistung), Sekundaer "kWh" (total = Zaehlerstand)
-
-**4. Meter-Typ: Sekundaerwert `total` immer abfragen**
-
-Fuer alle `Meter`-Controls wird neben `actual` auch der `total`-State abgefragt und als Sekundaerwert angezeigt (Zaehlerstand in kWh).
+1. **Endpunkt korrigieren:** `/jdev/sps/io/{stateUuid}/state` aendern zu `/jdev/sps/io/${stateUuid}`
+2. **Fehler-Logging hinzufuegen:** Bei fehlgeschlagenen Requests den HTTP-Status und die Antwort loggen, statt still `null` zurueckzugeben
+3. **Response-Parsing erweitern:** Neben `data.LL.value` auch alternative Antwortformate beruecksichtigen (z.B. numerische Werte direkt)
 
 ### Technische Details
 
-Die zentrale Aenderung ist eine neue Funktion `getStateMapping(controlType, availableStates)`, die anhand des Control-Typs und der verfuegbaren States bestimmt, welche States als Primaer- und Sekundaerwert abgefragt werden sollen:
+Aenderung in `fetchStateValue` (Zeilen 117-137):
 
-```text
-function getStateMapping(type, states):
-  1. Pruefe exakten Typ gegen Mapping-Tabelle
-  2. Wenn Treffer: verwende definierte Primaer-/Sekundaer-States
-  3. Wenn kein Treffer: Fallback auf Prioritaetsliste
-     (value, actual, position, level, brightness, temperature)
-  4. "jLocked" wird nie als Fallback verwendet
+```typescript
+async function fetchStateValue(
+  baseUrl: string,
+  authHeader: string,
+  stateUuid: string
+): Promise<number | string | null> {
+  try {
+    const url = `${baseUrl}/jdev/sps/io/${stateUuid}`;  // ohne /state
+    const response = await fetch(url, { method: "GET", headers: { Authorization: authHeader } });
+    if (!response.ok) {
+      console.warn(`State fetch failed for ${stateUuid}: HTTP ${response.status}`);
+      return null;
+    }
+    const data = await response.json();
+    if (data?.LL?.value !== undefined) {
+      const val = data.LL.value;
+      const numVal = parseFloat(val);
+      return isNaN(numVal) ? val : numVal;
+    }
+    console.warn(`No LL.value in response for ${stateUuid}:`, JSON.stringify(data));
+    return null;
+  } catch (err) {
+    console.error(`Error fetching state ${stateUuid}:`, err);
+    return null;
+  }
+}
 ```
 
-Die Aenderungen betreffen ausschliesslich die Edge Function. Am Frontend (SensorsDialog) sind keine Aenderungen noetig, da es bereits Primaer- und Sekundaerwerte darstellen kann.
-
 ### Erwartetes Ergebnis
-
-Nach der Aenderung sollten alle 66 Controls korrekte Werte anzeigen:
-- ~42 Meter-Controls: Momentanleistung (kW) + Zaehlerstand (kWh)
-- EFM: Produktionsleistung (Ppwr) + Netzeinspeisung (Gpwr)
-- EnergyManager2: Netzleistung (Gpwr) + Produktionsleistung (Ppwr)
-- Fronius: Verbrauch (consCurr) + Produktion (prodCurr)
-- InfoOnlyAnalog: Aktueller Wert
-- InfoOnlyDigital/Pushbutton: Ein/Aus Status
+Nach dem Fix sollten die Werte des "Außenbereich"-Zählers korrekt zurueckkommen:
+- actual (Pf): 10,200 kW
+- total (Mr): 13051,8 kWh  
+- totalDay (Rd): 43,1 kWh
+- totalMonth (Rm): 718,5 kWh
+- totalYear (Ry): 2723,7 kWh
