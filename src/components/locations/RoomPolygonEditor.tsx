@@ -20,6 +20,7 @@ interface RoomPolygonEditorProps {
 export function RoomPolygonEditor({ floorId, floorPlanUrl }: RoomPolygonEditorProps) {
   const { rooms, loading, addRoom, updateRoom, deleteRoom } = useFloorRooms(floorId);
   const imageRef = useRef<HTMLImageElement>(null);
+  const overlayRef = useRef<HTMLDivElement>(null);
 
   const [selectedRoom, setSelectedRoom] = useState<FloorRoom | null>(null);
   const [drawingPoints, setDrawingPoints] = useState<PolygonPoint[]>([]);
@@ -29,12 +30,55 @@ export function RoomPolygonEditor({ floorId, floorPlanUrl }: RoomPolygonEditorPr
   const [editPoints, setEditPoints] = useState<PolygonPoint[]>([]);
   const [draggingPointIdx, setDraggingPointIdx] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
+  const [imgLoaded, setImgLoaded] = useState(false);
+  const [overlayStyle, setOverlayStyle] = useState<React.CSSProperties>({});
+
+  // Calculate the actual rendered image area within the object-contain container
+  const updateOverlayStyle = useCallback(() => {
+    if (!imageRef.current) return;
+    const img = imageRef.current;
+    const container = img.parentElement;
+    if (!container) return;
+    
+    const containerRect = container.getBoundingClientRect();
+    const imgRatio = img.naturalWidth / img.naturalHeight;
+    const containerRatio = containerRect.width / containerRect.height;
+    
+    let renderWidth: number, renderHeight: number, offsetX: number, offsetY: number;
+    
+    if (imgRatio > containerRatio) {
+      renderWidth = containerRect.width;
+      renderHeight = containerRect.width / imgRatio;
+      offsetX = 0;
+      offsetY = (containerRect.height - renderHeight) / 2;
+    } else {
+      renderHeight = containerRect.height;
+      renderWidth = containerRect.height * imgRatio;
+      offsetX = (containerRect.width - renderWidth) / 2;
+      offsetY = 0;
+    }
+    
+    setOverlayStyle({
+      position: 'absolute',
+      left: `${offsetX}px`,
+      top: `${offsetY}px`,
+      width: `${renderWidth}px`,
+      height: `${renderHeight}px`,
+    });
+  }, []);
+
+  useEffect(() => {
+    if (imgLoaded) updateOverlayStyle();
+    window.addEventListener('resize', updateOverlayStyle);
+    return () => window.removeEventListener('resize', updateOverlayStyle);
+  }, [imgLoaded, updateOverlayStyle]);
 
   const calcPos = useCallback((e: React.MouseEvent) => {
-    if (!imageRef.current) return null;
-    const rect = imageRef.current.getBoundingClientRect();
+    if (!overlayRef.current) return null;
+    const rect = overlayRef.current.getBoundingClientRect();
     const x = ((e.clientX - rect.left) / rect.width) * 100;
     const y = ((e.clientY - rect.top) / rect.height) * 100;
+    if (x < 0 || x > 100 || y < 0 || y > 100) return null;
     return { x: Math.max(0, Math.min(100, x)), y: Math.max(0, Math.min(100, y)) };
   }, []);
 
@@ -54,9 +98,8 @@ export function RoomPolygonEditor({ floorId, floorPlanUrl }: RoomPolygonEditorPr
   };
 
   // Click on the floor plan to add polygon point
-  const handleImageClick = (e: React.MouseEvent) => {
+  const handleOverlayClick = (e: React.MouseEvent) => {
     if (editingRoom && draggingPointIdx === null) {
-      // In edit mode, clicking adds a new point
       return;
     }
     if (!isDrawing) return;
@@ -297,104 +340,100 @@ export function RoomPolygonEditor({ floorId, floorPlanUrl }: RoomPolygonEditorPr
       {/* Floor plan with polygon drawing */}
       <div
         className="flex-1 relative border rounded-lg overflow-hidden bg-muted/20 min-h-0"
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
-        onMouseLeave={handleMouseUp}
       >
         <img
           ref={imageRef}
           src={floorPlanUrl}
           alt="Grundriss"
-          className={`w-full h-full object-contain ${isDrawing ? "cursor-crosshair" : ""}`}
+          className={`w-full h-full object-contain`}
           draggable={false}
-          onClick={handleImageClick}
+          onLoad={() => { setImgLoaded(true); updateOverlayStyle(); }}
         />
 
-        {/* Show existing rooms */}
-        <RoomOverlay2D
-          rooms={editingRoom ? rooms.filter((r) => r.id !== editingRoom.id) : rooms}
-          selectedRoomId={selectedRoom?.id}
-          onSelectRoom={(r) => {
-            if (!isDrawing && !editingRoom) setSelectedRoom(r);
-          }}
-        />
+        {/* Overlay that exactly matches the rendered image area */}
+        <div
+          ref={overlayRef}
+          style={overlayStyle}
+          className={`${isDrawing ? "cursor-crosshair" : ""}`}
+          onClick={handleOverlayClick}
+          onMouseMove={handleMouseMove}
+          onMouseUp={handleMouseUp}
+          onMouseLeave={handleMouseUp}
+        >
+          {/* Show existing rooms */}
+          <RoomOverlay2D
+            rooms={editingRoom ? rooms.filter((r) => r.id !== editingRoom.id) : rooms}
+            selectedRoomId={selectedRoom?.id}
+            onSelectRoom={(r) => {
+              if (!isDrawing && !editingRoom) setSelectedRoom(r);
+            }}
+          />
 
-        {/* Active polygon (drawing or editing) */}
-        {activePoints.length > 0 && (
-          <svg
-            className="absolute inset-0 w-full h-full pointer-events-none"
-            viewBox="0 0 100 100"
-            preserveAspectRatio="none"
-          >
-            {/* Polygon fill (only if >= 3 points) */}
-            {activePoints.length >= 3 && (
-              <polygon
-                points={activePoints.map((p) => `${p.x},${p.y}`).join(" ")}
-                fill={activeColor}
-                fillOpacity={0.25}
-                stroke={activeColor}
-                strokeWidth={0.3}
-              />
-            )}
-            {/* Lines between points */}
-            {activePoints.length >= 2 &&
-              activePoints.map((p, i) => {
-                const next = activePoints[(i + 1) % activePoints.length];
-                if (i === activePoints.length - 1 && activePoints.length < 3) return null;
-                if (i === activePoints.length - 1 && isDrawing) return null; // Don't close while drawing
-                return (
-                  <line
-                    key={i}
-                    x1={p.x}
-                    y1={p.y}
-                    x2={next.x}
-                    y2={next.y}
-                    stroke={activeColor}
-                    strokeWidth={0.3}
-                  />
-                );
-              })}
-            {/* Open line segments while drawing */}
-            {isDrawing &&
-              activePoints.length >= 2 &&
-              activePoints.slice(0, -1).map((p, i) => (
-                <line
-                  key={`seg-${i}`}
-                  x1={p.x}
-                  y1={p.y}
-                  x2={activePoints[i + 1].x}
-                  y2={activePoints[i + 1].y}
+          {/* Active polygon (drawing or editing) */}
+          {activePoints.length > 0 && (
+            <svg
+              className="absolute inset-0 w-full h-full pointer-events-none"
+              viewBox="0 0 100 100"
+              preserveAspectRatio="none"
+            >
+              {activePoints.length >= 3 && (
+                <polygon
+                  points={activePoints.map((p) => `${p.x},${p.y}`).join(" ")}
+                  fill={activeColor}
+                  fillOpacity={0.25}
                   stroke={activeColor}
                   strokeWidth={0.3}
                 />
+              )}
+              {activePoints.length >= 2 &&
+                activePoints.map((p, i) => {
+                  const next = activePoints[(i + 1) % activePoints.length];
+                  if (i === activePoints.length - 1 && activePoints.length < 3) return null;
+                  if (i === activePoints.length - 1 && isDrawing) return null;
+                  return (
+                    <line
+                      key={i}
+                      x1={p.x} y1={p.y} x2={next.x} y2={next.y}
+                      stroke={activeColor} strokeWidth={0.3}
+                    />
+                  );
+                })}
+              {isDrawing &&
+                activePoints.length >= 2 &&
+                activePoints.slice(0, -1).map((p, i) => (
+                  <line
+                    key={`seg-${i}`}
+                    x1={p.x} y1={p.y}
+                    x2={activePoints[i + 1].x} y2={activePoints[i + 1].y}
+                    stroke={activeColor} strokeWidth={0.3}
+                  />
+                ))}
+              {activePoints.map((p, i) => (
+                <circle
+                  key={i}
+                  cx={p.x} cy={p.y}
+                  r={editingRoom ? 0.8 : 0.5}
+                  fill="white"
+                  stroke={activeColor}
+                  strokeWidth={0.25}
+                  className={editingRoom ? "pointer-events-auto cursor-grab" : ""}
+                  onMouseDown={(e) => editingRoom && handlePointMouseDown(i, e as any)}
+                />
               ))}
-            {/* Drag handles */}
-            {activePoints.map((p, i) => (
-              <circle
-                key={i}
-                cx={p.x}
-                cy={p.y}
-                r={editingRoom ? 0.8 : 0.5}
-                fill="white"
-                stroke={activeColor}
-                strokeWidth={0.25}
-                className={editingRoom ? "pointer-events-auto cursor-grab" : ""}
-                onMouseDown={(e) => editingRoom && handlePointMouseDown(i, e as any)}
-              />
-            ))}
-          </svg>
-        )}
+            </svg>
+          )}
 
-        {/* Drawing hint */}
-        {isDrawing && drawingPoints.length === 0 && (
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-            <div className="bg-card/90 backdrop-blur-sm border rounded-lg px-4 py-3 text-center">
-              <DoorOpen className="h-6 w-6 mx-auto mb-2 text-muted-foreground" />
-              <p className="text-sm font-medium">Klicken Sie auf den Grundriss</p>
-              <p className="text-xs text-muted-foreground">um die Ecken des Raums zu definieren</p>
+          {/* Drawing hint */}
+          {isDrawing && drawingPoints.length === 0 && (
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+              <div className="bg-card/90 backdrop-blur-sm border rounded-lg px-4 py-3 text-center">
+                <DoorOpen className="h-6 w-6 mx-auto mb-2 text-muted-foreground" />
+                <p className="text-sm font-medium">Klicken Sie auf den Grundriss</p>
+                <p className="text-xs text-muted-foreground">um die Ecken des Raums zu definieren</p>
+              </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </div>
   );
