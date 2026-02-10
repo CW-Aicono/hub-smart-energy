@@ -6,9 +6,12 @@ import { Play, Square, Edit, Loader2 } from "lucide-react";
 import { Floor } from "@/hooks/useFloors";
 import { FloorRoom, useFloorRooms } from "@/hooks/useFloorRooms";
 import { FloorSensorPosition, useFloorSensorPositions } from "@/hooks/useFloorSensorPositions";
+import { useMeters, Meter } from "@/hooks/useMeters";
+import { useMeterReadings } from "@/hooks/useMeterReadings";
 import { Room3D } from "./Room3D";
 import { Floor3DControls } from "./Floor3DControls";
 import { Sensor3DLabel } from "./Sensor3DLabel";
+import { Meter3DLabel } from "./Meter3DLabel";
 import { RoomEditor } from "./RoomEditor";
 import { Minimap3D } from "./Minimap3D";
 import { OBJLoader } from "three/examples/jsm/loaders/OBJLoader.js";
@@ -151,6 +154,8 @@ function Scene({
   rooms, 
   sensorPositions, 
   sensors,
+  floorMeters,
+  meterLatestValues,
   isWalking,
   onLockChange,
   onCameraUpdate,
@@ -159,6 +164,8 @@ function Scene({
   rooms: FloorRoom[];
   sensorPositions: FloorSensorPosition[];
   sensors: Sensor[];
+  floorMeters: Meter[];
+  meterLatestValues: Record<string, number | null>;
   isWalking: boolean;
   onLockChange: (locked: boolean) => void;
   onCameraUpdate: (pos: { x: number; z: number }, rotY: number) => void;
@@ -259,7 +266,25 @@ function Scene({
               />
             );
           })}
-          
+
+          {/* Meter Labels */}
+          {floorMeters.map((meter, index) => {
+            // Position meters in the scene - use room position if assigned, otherwise spread them
+            const room = meter.room_id ? rooms.find(r => r.id === meter.room_id) : null;
+            const meterPos: [number, number, number] = room
+              ? [room.position_x + 1, 2.5, room.position_y]
+              : [sceneBounds.centerX + (index - floorMeters.length / 2) * 3, 2.5, sceneBounds.centerZ - 2];
+            
+            return (
+              <Meter3DLabel
+                key={`meter-${meter.id}`}
+                meter={meter}
+                position={meterPos}
+                latestValue={meterLatestValues[meter.id]}
+              />
+            );
+          })}
+
           {/* Empty state hint */}
           {rooms.length === 0 && (
             <Text
@@ -301,7 +326,21 @@ function Scene({
 export function FloorPlan3DViewer({ floor, locationId, sensors = [], isAdmin = false, compact = false }: FloorPlan3DViewerProps) {
   const { rooms, loading: roomsLoading, refetch: refetchRooms } = useFloorRooms(floor.id);
   const { positions: sensorPositions, loading: positionsLoading } = useFloorSensorPositions(floor.id);
+  const { meters, loading: metersLoading } = useMeters(locationId);
   
+  // Filter meters assigned to this floor
+  const floorMeters = useMemo(() => 
+    meters.filter(m => m.floor_id === floor.id && !m.is_archived),
+    [meters, floor.id]
+  );
+
+  // Get latest readings for floor meters
+  const meterLatestValues = useMemo(() => {
+    const values: Record<string, number | null> = {};
+    floorMeters.forEach(m => { values[m.id] = null; });
+    return values;
+  }, [floorMeters]);
+
   const [isWalking, setIsWalking] = useState(false);
   const [isLocked, setIsLocked] = useState(false);
   const [showRoomEditor, setShowRoomEditor] = useState(false);
@@ -323,7 +362,7 @@ export function FloorPlan3DViewer({ floor, locationId, sensors = [], isAdmin = f
   const startWalking = () => setIsWalking(true);
   const stopWalking = () => setIsWalking(false);
 
-  const loading = roomsLoading || positionsLoading;
+  const loading = roomsLoading || positionsLoading || metersLoading;
 
   if (showRoomEditor) {
     return (
@@ -355,7 +394,7 @@ export function FloorPlan3DViewer({ floor, locationId, sensors = [], isAdmin = f
               </Button>
             )}
             <span className="text-sm text-muted-foreground">
-              {rooms.length} Räume | {sensorPositions.length} Sensoren
+              {rooms.length} Räume | {sensorPositions.length} Sensoren | {floorMeters.length} Messpunkte
             </span>
           </div>
           
@@ -410,6 +449,8 @@ export function FloorPlan3DViewer({ floor, locationId, sensors = [], isAdmin = f
                   rooms={rooms}
                   sensorPositions={sensorPositions}
                   sensors={sensors}
+                  floorMeters={floorMeters}
+                  meterLatestValues={meterLatestValues}
                   isWalking={isWalking}
                   onLockChange={handleLockChange}
                   onCameraUpdate={handleCameraUpdate}
