@@ -255,7 +255,14 @@ export function ScannerManagement() {
       )}
       {/* App Preview Dialog */}
       <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
-        <DialogContent className="sm:max-w-[370px] p-0 overflow-hidden bg-transparent border-none shadow-none [&>button]:hidden" aria-describedby={undefined}>
+        <DialogContent
+          className="sm:max-w-[370px] p-0 overflow-hidden bg-transparent border-none shadow-none [&>button]:hidden"
+          aria-describedby={undefined}
+          onInteractOutside={(e) => e.preventDefault()}
+          onPointerDownOutside={(e) => e.preventDefault()}
+          onOpenAutoFocus={(e) => e.preventDefault()}
+          onEscapeKeyDown={() => setPreviewOpen(false)}
+        >
           <DialogTitle className="sr-only">App-Vorschau</DialogTitle>
           <div className="flex flex-col items-center">
             {/* Close button */}
