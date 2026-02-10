@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect } from "react";
 import { TransformWrapper, TransformComponent, useControls } from "react-zoom-pan-pinch";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -6,18 +6,10 @@ import { Button } from "@/components/ui/button";
 import { Loader2, RefreshCw, Layers, ZoomIn, ZoomOut, RotateCcw } from "lucide-react";
 import { useLocations } from "@/hooks/useLocations";
 import { useFloors } from "@/hooks/useFloors";
-import { useFloorSensorPositions, FloorSensorPosition } from "@/hooks/useFloorSensorPositions";
-import { useLocationIntegrations } from "@/hooks/useIntegrations";
-import { supabase } from "@/integrations/supabase/client";
+import { useLiveSensorValues } from "@/hooks/useLiveSensorValues";
 
 interface FloorPlanWidgetProps {
   locationId: string | null;
-}
-
-interface SensorValue {
-  id: string;
-  value: string;
-  unit: string;
 }
 
 // Zoom controls component
@@ -26,28 +18,13 @@ function ZoomControls() {
   
   return (
     <div className="absolute bottom-3 right-3 flex flex-col gap-1 z-10">
-      <Button
-        variant="secondary"
-        size="icon"
-        className="h-8 w-8 bg-card/90 backdrop-blur-sm shadow-md"
-        onClick={() => zoomIn()}
-      >
+      <Button variant="secondary" size="icon" className="h-8 w-8 bg-card/90 backdrop-blur-sm shadow-md" onClick={() => zoomIn()}>
         <ZoomIn className="h-4 w-4" />
       </Button>
-      <Button
-        variant="secondary"
-        size="icon"
-        className="h-8 w-8 bg-card/90 backdrop-blur-sm shadow-md"
-        onClick={() => zoomOut()}
-      >
+      <Button variant="secondary" size="icon" className="h-8 w-8 bg-card/90 backdrop-blur-sm shadow-md" onClick={() => zoomOut()}>
         <ZoomOut className="h-4 w-4" />
       </Button>
-      <Button
-        variant="secondary"
-        size="icon"
-        className="h-8 w-8 bg-card/90 backdrop-blur-sm shadow-md"
-        onClick={() => resetTransform()}
-      >
+      <Button variant="secondary" size="icon" className="h-8 w-8 bg-card/90 backdrop-blur-sm shadow-md" onClick={() => resetTransform()}>
         <RotateCcw className="h-4 w-4" />
       </Button>
     </div>
@@ -58,12 +35,8 @@ const FloorPlanWidget = ({ locationId }: FloorPlanWidgetProps) => {
   const { locations } = useLocations();
   const { floors, loading: floorsLoading } = useFloors(locationId || undefined);
   const [selectedFloorId, setSelectedFloorId] = useState<string | null>(null);
-  const { positions, loading: positionsLoading } = useFloorSensorPositions(selectedFloorId || undefined);
-  const { locationIntegrations } = useLocationIntegrations(locationId || undefined);
-  
-  const [sensorValues, setSensorValues] = useState<Map<string, SensorValue>>(new Map());
-  const [loadingValues, setLoadingValues] = useState(false);
-  const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
+
+  const { positions, sensorValuesMap, loadingValues, lastRefresh, refreshSensorValues } = useLiveSensorValues(selectedFloorId || undefined);
 
   const selectedLocation = locationId ? locations.find((l) => l.id === locationId) : null;
   const selectedFloor = floors.find((f) => f.id === selectedFloorId);
@@ -84,76 +57,6 @@ const FloorPlanWidget = ({ locationId }: FloorPlanWidgetProps) => {
   useEffect(() => {
     setSelectedFloorId(null);
   }, [locationId]);
-
-  // Fetch sensor values
-  const fetchSensorValues = useCallback(async () => {
-    if (!positions.length || !locationIntegrations.length) return;
-
-    setLoadingValues(true);
-    const newValues = new Map<string, SensorValue>();
-
-    try {
-      // Group positions by integration
-      const positionsByIntegration = new Map<string, FloorSensorPosition[]>();
-      positions.forEach((pos) => {
-        const existing = positionsByIntegration.get(pos.location_integration_id) || [];
-        existing.push(pos);
-        positionsByIntegration.set(pos.location_integration_id, existing);
-      });
-
-      // Fetch sensors for each integration
-      for (const [integrationId, intPositions] of positionsByIntegration) {
-        const integration = locationIntegrations.find((li) => li.id === integrationId);
-        if (!integration?.is_enabled) continue;
-
-        try {
-          const { data, error } = await supabase.functions.invoke("loxone-api", {
-            body: {
-              locationIntegrationId: integrationId,
-              action: "getSensors",
-            },
-          });
-
-          if (error || !data?.success) continue;
-
-          // Map sensor values
-          for (const pos of intPositions) {
-            const sensor = data.sensors?.find((s: any) => s.id === pos.sensor_uuid);
-            if (sensor) {
-              newValues.set(pos.sensor_uuid, {
-                id: sensor.id,
-                value: sensor.value,
-                unit: sensor.unit,
-              });
-            }
-          }
-        } catch (err) {
-          console.warn(`Failed to fetch sensors for integration ${integrationId}:`, err);
-        }
-      }
-
-      setSensorValues(newValues);
-      setLastRefresh(new Date());
-    } catch (err) {
-      console.error("Failed to fetch sensor values:", err);
-    } finally {
-      setLoadingValues(false);
-    }
-  }, [positions, locationIntegrations]);
-
-  // Auto-fetch values when positions change and set up interval
-  useEffect(() => {
-    if (positions.length > 0) {
-      fetchSensorValues();
-      
-      // Auto-refresh every 300 seconds (5 minutes)
-      const interval = setInterval(() => {
-        fetchSensorValues();
-      }, 300000);
-      
-      return () => clearInterval(interval);
-    }
-  }, [positions, fetchSensorValues]);
 
   // No location selected - show placeholder
   if (!locationId) {
@@ -226,7 +129,7 @@ const FloorPlanWidget = ({ locationId }: FloorPlanWidgetProps) => {
               variant="ghost"
               size="icon"
               className="h-8 w-8"
-              onClick={fetchSensorValues}
+              onClick={refreshSensorValues}
               disabled={loadingValues || positions.length === 0}
             >
               <RefreshCw className={`h-4 w-4 ${loadingValues ? "animate-spin" : ""}`} />
@@ -236,7 +139,7 @@ const FloorPlanWidget = ({ locationId }: FloorPlanWidgetProps) => {
 
         {/* Floor Plan with Sensors - Zoomable */}
         <div className="relative h-[350px] bg-muted/10">
-          {floorsLoading || positionsLoading ? (
+          {floorsLoading ? (
             <div className="flex items-center justify-center h-full">
               <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
             </div>
@@ -264,7 +167,7 @@ const FloorPlanWidget = ({ locationId }: FloorPlanWidgetProps) => {
                   
                   {/* Sensor Overlays - positioned relative to image */}
                   {positions.map((pos) => {
-                    const sensorValue = sensorValues.get(pos.sensor_uuid);
+                    const sensorValue = sensorValuesMap.get(pos.sensor_uuid);
                     return (
                       <div
                         key={pos.id}
