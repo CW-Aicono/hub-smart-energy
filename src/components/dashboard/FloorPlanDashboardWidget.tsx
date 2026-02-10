@@ -149,7 +149,7 @@ const FloorPlanDashboardWidget = ({ locationId }: FloorPlanDashboardWidgetProps)
           </Button>
         </div>
       </div>
-      <CardContent className="flex-1 p-0 min-h-0 overflow-hidden" style={{ minHeight: 300 }}>
+      <CardContent className="flex-1 p-0 min-h-0 overflow-hidden" style={{ minHeight: 400, height: 400 }}>
         {selectedFloor && viewMode === "2d" && selectedFloor.floor_plan_url ? (
           <div className="relative w-full h-full">
             <TransformWrapper initialScale={1} minScale={0.5} maxScale={4} centerOnInit wheel={{ step: 0.1 }}>

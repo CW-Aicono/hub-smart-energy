@@ -4,6 +4,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Settings2, GripVertical, RotateCcw } from "lucide-react";
 import { DashboardWidget, WidgetSize } from "@/hooks/useDashboardWidgets";
 import { cn } from "@/lib/utils";
@@ -89,12 +90,16 @@ const DashboardCustomizer = ({ widgets, onToggleVisibility, onReorder, onResizeW
 
   return (
     <Popover>
-      <PopoverTrigger asChild>
-        <Button variant="outline" size="sm">
-          <Settings2 className="h-4 w-4 mr-2" />
-          Dashboard anpassen
-        </Button>
-      </PopoverTrigger>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <PopoverTrigger asChild>
+            <Button variant="outline" size="icon" className="h-9 w-9">
+              <Settings2 className="h-4 w-4" />
+            </Button>
+          </PopoverTrigger>
+        </TooltipTrigger>
+        <TooltipContent>Dashboard anpassen</TooltipContent>
+      </Tooltip>
       <PopoverContent align="end" className="w-96 bg-popover border shadow-lg z-50">
         <div className="space-y-4">
           <div>
