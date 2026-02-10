@@ -251,7 +251,7 @@ const Integrations = () => {
     });
   }
 
-  if (authLoading || roleLoading) {
+  if (authLoading && !user) {
     return (
       <div className="flex min-h-screen bg-background">
         <DashboardSidebar />
