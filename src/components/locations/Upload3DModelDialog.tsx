@@ -32,6 +32,7 @@ export function Upload3DModelDialog({ floor, locationId, onSuccess, trigger }: U
   const [mtlFile, setMtlFile] = useState<File | null>(null);
 
   const isObjSelected = mainFile?.name.toLowerCase().endsWith(".obj");
+  const is3dsSelected = mainFile?.name.toLowerCase().endsWith(".3ds");
 
   const resetForm = () => {
     setMainFile(null);
@@ -85,16 +86,16 @@ export function Upload3DModelDialog({ floor, locationId, onSuccess, trigger }: U
         <DialogHeader>
           <DialogTitle>3D-Modell hochladen</DialogTitle>
           <DialogDescription>
-            Laden Sie ein 3D-Modell für "{floor.name}" hoch. Unterstützte Formate: GLB (empfohlen) und OBJ + MTL.
+            Laden Sie ein 3D-Modell für "{floor.name}" hoch. Unterstützte Formate: GLB (empfohlen), OBJ + MTL und 3DS.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="main-3d-file">3D-Datei (.glb oder .obj) *</Label>
+            <Label htmlFor="main-3d-file">3D-Datei (.glb, .obj oder .3ds) *</Label>
             <Input
               id="main-3d-file"
               type="file"
-              accept=".glb,.obj"
+              accept=".glb,.obj,.3ds"
               onChange={(e) => {
                 const file = e.target.files?.[0] || null;
                 setMainFile(file);
@@ -105,7 +106,7 @@ export function Upload3DModelDialog({ floor, locationId, onSuccess, trigger }: U
               }}
             />
             <p className="text-xs text-muted-foreground">
-              GLB enthält Geometrie + Materialien in einer Datei. Bei OBJ können Sie zusätzlich eine MTL-Datei hochladen.
+              GLB enthält Geometrie + Materialien in einer Datei. Bei OBJ können Sie zusätzlich eine MTL-Datei hochladen. 3DS enthält Geometrie und Materialien.
             </p>
           </div>
 
