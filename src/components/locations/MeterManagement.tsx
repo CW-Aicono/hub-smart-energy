@@ -8,11 +8,12 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
-import { Gauge, Plus, Pencil, Trash2, Archive, ArchiveRestore, Eye, EyeOff } from "lucide-react";
+import { Gauge, Plus, Pencil, Trash2, Archive, ArchiveRestore, Eye, EyeOff, Network } from "lucide-react";
 import { AddMeterDialog } from "./AddMeterDialog";
 import { EditMeterDialog } from "./EditMeterDialog";
 import { AddAlertRuleDialog } from "./AddAlertRuleDialog";
 import { EditAlertRuleDialog } from "./EditAlertRuleDialog";
+import { MeterTreeView } from "./MeterTreeView";
 
 interface MeterManagementProps {
   locationId: string;
@@ -33,7 +34,7 @@ const TIME_UNIT_LABELS: Record<string, string> = {
 };
 
 export const MeterManagement = ({ locationId }: MeterManagementProps) => {
-  const { meters, loading: metersLoading, deleteMeter, updateMeter, archiveMeter } = useMeters(locationId);
+  const { meters, loading: metersLoading, deleteMeter, updateMeter, archiveMeter, updateMeterParent } = useMeters(locationId);
   const { alertRules, loading: rulesLoading, deleteAlertRule, toggleAlertRule, updateAlertRule } = useAlertRules(locationId);
   const { isAdmin } = useUserRole();
   const [meterDialogOpen, setMeterDialogOpen] = useState(false);
@@ -61,6 +62,10 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
         <Tabs defaultValue="meters">
           <TabsList>
             <TabsTrigger value="meters">Zähler ({activeMeters.length})</TabsTrigger>
+            <TabsTrigger value="tree" className="gap-1">
+              <Network className="h-3.5 w-3.5" />
+              Zählerstruktur
+            </TabsTrigger>
             <TabsTrigger value="alerts">Alarmregeln ({alertRules.length})</TabsTrigger>
           </TabsList>
 
@@ -139,6 +144,14 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
                 </TableBody>
               </Table>
             )}
+          </TabsContent>
+
+          <TabsContent value="tree" className="space-y-4">
+            <MeterTreeView
+              meters={meters}
+              onUpdateParent={updateMeterParent}
+              onSelectMeter={(meter) => setEditingMeter(meter)}
+            />
           </TabsContent>
 
           <TabsContent value="alerts" className="space-y-4">

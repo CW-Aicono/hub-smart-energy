@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Switch } from "@/components/ui/switch";
 import { AlertCircle } from "lucide-react";
 
 interface AddMeterDialogProps {
@@ -26,7 +27,7 @@ interface SensorOption {
 }
 
 export const AddMeterDialog = ({ locationId, open, onOpenChange }: AddMeterDialogProps) => {
-  const { addMeter } = useMeters(locationId);
+  const { addMeter, meters } = useMeters(locationId);
   const { locationIntegrations, loading: integrationsLoading } = useLocationIntegrations(locationId);
   const [name, setName] = useState("");
   const [meterNumber, setMeterNumber] = useState("");
@@ -39,6 +40,11 @@ export const AddMeterDialog = ({ locationId, open, onOpenChange }: AddMeterDialo
   const [sensors, setSensors] = useState<SensorOption[]>([]);
   const [sensorsLoading, setSensorsLoading] = useState(false);
   const [selectedSensor, setSelectedSensor] = useState("");
+  const [parentMeterId, setParentMeterId] = useState("");
+  const [isMainMeter, setIsMainMeter] = useState(false);
+  const [meterFunction, setMeterFunction] = useState("consumption");
+
+  const activeMeters = meters.filter((m) => !m.is_archived);
 
   const enabledIntegrations = locationIntegrations.filter((li) => li.is_enabled);
 
@@ -103,7 +109,7 @@ export const AddMeterDialog = ({ locationId, open, onOpenChange }: AddMeterDialo
       capture_type: captureType,
       location_integration_id: captureType === "automatic" && selectedIntegration ? selectedIntegration : undefined,
       sensor_uuid: captureType === "automatic" && selectedSensor ? selectedSensor : undefined,
-    });
+    } as any, parentMeterId && parentMeterId !== "none" ? parentMeterId : null, isMainMeter, meterFunction);
     resetAndClose();
   };
 
@@ -118,6 +124,9 @@ export const AddMeterDialog = ({ locationId, open, onOpenChange }: AddMeterDialo
     setSelectedIntegration("");
     setSelectedSensor("");
     setSensors([]);
+    setParentMeterId("");
+    setIsMainMeter(false);
+    setMeterFunction("consumption");
     onOpenChange(false);
   };
 
@@ -230,6 +239,37 @@ export const AddMeterDialog = ({ locationId, open, onOpenChange }: AddMeterDialo
           <div>
             <Label>Medium</Label>
             <Input value={medium} onChange={(e) => setMedium(e.target.value)} placeholder="z.B. Fernwärme" />
+          </div>
+          {/* Hierarchy */}
+          <div className="space-y-3 rounded-md border p-3 bg-muted/30">
+            <div className="flex items-center justify-between">
+              <Label>Hauptzähler (Netzübergabepunkt)</Label>
+              <Switch checked={isMainMeter} onCheckedChange={setIsMainMeter} />
+            </div>
+            <div>
+              <Label>Zählerfunktion</Label>
+              <Select value={meterFunction} onValueChange={setMeterFunction}>
+                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="consumption">Verbrauch</SelectItem>
+                  <SelectItem value="generation">Erzeugung (z.B. PV)</SelectItem>
+                  <SelectItem value="technical">Technisch (z.B. Wärmepumpe)</SelectItem>
+                  <SelectItem value="submeter">Unterzähler</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Übergeordneter Zähler</Label>
+              <Select value={parentMeterId} onValueChange={setParentMeterId}>
+                <SelectTrigger className="mt-1"><SelectValue placeholder="Kein (Hauptzähler)" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Kein übergeordneter Zähler</SelectItem>
+                  {activeMeters.map((m) => (
+                    <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
           <div>
             <Label>Notizen</Label>
