@@ -180,7 +180,19 @@ const ChargingPoints = () => {
           </div>
 
           {/* Stats */}
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
+            <Card
+              className={`cursor-pointer transition-colors ${statusFilter === null ? "ring-2 ring-primary bg-primary/5" : "hover:bg-muted/50"}`}
+              onClick={() => setStatusFilter(null)}
+            >
+              <CardContent className="p-4 flex items-center gap-3">
+                <PlugZap className={`h-5 w-5 ${statusFilter === null ? "text-primary" : "text-muted-foreground"}`} />
+                <div>
+                  <p className="text-2xl font-bold">{chargePoints.length.toLocaleString("de-DE")}</p>
+                  <p className="text-sm text-muted-foreground">Alle</p>
+                </div>
+              </CardContent>
+            </Card>
             {Object.entries(statusConfig).map(([key, cfg]) => {
               const count = chargePoints.filter((cp) => cp.status === key).length;
               const isActive = statusFilter === key;
