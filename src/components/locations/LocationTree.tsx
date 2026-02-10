@@ -52,18 +52,34 @@ const typeColors: Record<LocationType, string> = {
   sonstiges: "bg-slate-100 text-slate-700 border-slate-200",
 };
 
-function FloorNode({ floor, level }: FloorNodeProps) {
+function FloorNode({ floor, level, isLast }: FloorNodeProps & { isLast: boolean }) {
+  const indent = level * 20 + 12;
   return (
-    <div
-      className="flex items-center gap-2 px-3 py-1.5 text-sm text-muted-foreground"
-      style={{ paddingLeft: `${level * 16 + 12}px` }}
-    >
-      <span className="w-5" />
-      <Layers className="h-3.5 w-3.5" />
-      <span>{floor.name}</span>
-      {floor.area_sqm && (
-        <span className="text-xs">({floor.area_sqm} m²)</span>
+    <div className="relative flex items-center gap-2 px-3 py-1.5 text-sm text-muted-foreground">
+      {/* Tree connector lines */}
+      <div
+        className="absolute top-0 bottom-0 border-l border-border"
+        style={{ left: `${indent}px` }}
+      />
+      {/* Horizontal branch */}
+      <div
+        className="absolute border-t border-border"
+        style={{ left: `${indent}px`, width: 16, top: '50%' }}
+      />
+      {/* Hide vertical line below last item */}
+      {isLast && (
+        <div
+          className="absolute bottom-0 bg-background"
+          style={{ left: `${indent - 1}px`, width: 3, top: '50%' }}
+        />
       )}
+      <div style={{ paddingLeft: `${indent + 20}px` }} className="flex items-center gap-2">
+        <Layers className="h-3.5 w-3.5 flex-shrink-0" />
+        <span>{floor.name}</span>
+        {floor.area_sqm && (
+          <span className="text-xs">({floor.area_sqm} m²)</span>
+        )}
+      </div>
     </div>
   );
 }
@@ -118,7 +134,7 @@ function LocationNode({ location, level, selectedId, onSelect, onRefresh, isAdmi
   };
 
   return (
-    <div>
+    <div className="relative">
       <div
         className={cn(
           "flex items-center gap-2 px-3 py-2 rounded-lg transition-colors group",
@@ -126,7 +142,7 @@ function LocationNode({ location, level, selectedId, onSelect, onRefresh, isAdmi
             ? "bg-primary/10 text-primary"
             : "hover:bg-muted"
         )}
-        style={{ paddingLeft: `${level * 16 + 12}px` }}
+        style={{ paddingLeft: `${level * 20 + 12}px` }}
       >
         {hasExpandableContent ? (
           <button
@@ -206,11 +222,12 @@ function LocationNode({ location, level, selectedId, onSelect, onRefresh, isAdmi
           {/* Show floors for Einzelgebäude or child buildings of complex */}
           {shouldShowFloors && hasFloors && (
             <div>
-              {floors.map((floor) => (
+              {floors.map((floor, idx) => (
                 <FloorNode
                   key={floor.id}
                   floor={floor}
                   level={level + 1}
+                  isLast={idx === floors.length - 1}
                 />
               ))}
             </div>
