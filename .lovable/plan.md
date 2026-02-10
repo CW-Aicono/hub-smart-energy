@@ -1,22 +1,42 @@
 
-## Etage und Raum im "Zähler bearbeiten"-Dialog
 
-Der aktuelle "Zähler bearbeiten"-Dialog (`EditMeterDialog.tsx`) enthält keine Felder zur Zuordnung von Etage und Raum. Diese werden ergänzt, analog zum bestehenden `AssignMeterDialog`.
+## Gemeinsamer Hook `useLiveSensorValues`
 
-### Änderungen
+Die duplizierte Sensor-Abruf-Logik aus `FloorPlanWidget.tsx` und `FloorPlanDashboardWidget.tsx` wird in einen einzigen Hook zusammengefasst.
 
-**Datei: `src/components/locations/EditMeterDialog.tsx`**
+### Was passiert
 
-1. **Neue State-Variablen** fuer `selectedFloorId`, `selectedRoomId`, `floors` und `rooms` hinzufuegen
-2. **Floors laden** wenn der Dialog geoeffnet wird (basierend auf `meter.location_id`), mit Auto-Selektion bei nur einer Etage
-3. **Rooms laden** wenn eine Etage ausgewaehlt wird
-4. **Initiale Werte** aus `meter.floor_id` und `meter.room_id` uebernehmen
-5. **UI-Felder** fuer Etage und Raum im Zuordnungs-Bereich ergaenzen (zwischen "Medium" und "Hauptzaehler"-Sektion), mit Icons (Layers, DoorOpen) wie im AssignMeterDialog
-6. **handleSubmit** erweitern um `floor_id` und `room_id` mitzuspeichern (null wenn nicht gewaehlt)
+1. **Neuer Hook `src/hooks/useLiveSensorValues.ts`** wird erstellt:
+   - Nimmt eine `floorId` entgegen
+   - Nutzt intern `useFloorSensorPositions` und `useLocationIntegrations`
+   - Ruft die `loxone-api` Edge Function auf und mappt die Ergebnisse
+   - Auto-Refresh alle 5 Minuten
+   - Gibt `sensorValues`, `loadingValues` und `refreshSensorValues` zurueck
+
+2. **`FloorPlanDashboardWidget.tsx`** wird bereinigt:
+   - Die gesamte Sensor-Fetch-Logik (ca. 60 Zeilen) wird entfernt
+   - Stattdessen ein einziger Aufruf: `const { sensorValues } = useLiveSensorValues(selectedFloorId)`
+
+3. **`FloorPlanWidget.tsx`** wird ebenfalls bereinigt:
+   - Gleiche Vereinfachung – die duplizierte Logik wird durch den Hook ersetzt
+   - `useFloorSensorPositions` und `useLocationIntegrations` werden nicht mehr direkt importiert
+
+### Ergebnis
+
+- Ein einziger Ort fuer die Sensor-Logik
+- Weniger redundante API-Aufrufe
+- Einfachere Wartung bei zukuenftigen Aenderungen
 
 ### Technische Details
 
-- Die Floor-/Room-Logik folgt exakt dem Muster aus `AssignMeterDialog.tsx` (Supabase-Queries auf `floors` und `floor_rooms` Tabellen)
-- Auto-Selektion: Hat das Gebaude nur eine Etage, wird diese automatisch vorausgewaehlt. Hat die Etage nur einen Raum, wird dieser ebenfalls automatisch vorausgewaehlt
-- Die Felder sind optional (kein Pflichtfeld)
-- `floor_id` und `room_id` werden in `onSave` als Teil der Updates mitgegeben
+```text
+Vorher:
+  FloorPlanWidget ──> useFloorSensorPositions + loxone-api fetch
+  FloorPlanDashboardWidget ──> useFloorSensorPositions + loxone-api fetch
+
+Nachher:
+  FloorPlanWidget ──> useLiveSensorValues(floorId)
+  FloorPlanDashboardWidget ──> useLiveSensorValues(floorId)
+                                    └──> useFloorSensorPositions + loxone-api fetch (einmalig)
+```
+
