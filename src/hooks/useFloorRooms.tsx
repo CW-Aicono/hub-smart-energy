@@ -11,11 +11,12 @@ export interface FloorRoom {
   depth: number;
   wall_height: number;
   color: string;
+  polygon_points: { x: number; y: number }[] | null;
   created_at: string;
   updated_at: string;
 }
 
-export type FloorRoomInsert = Omit<FloorRoom, "id" | "created_at" | "updated_at">;
+export type FloorRoomInsert = Omit<FloorRoom, "id" | "created_at" | "updated_at" | "polygon_points"> & { polygon_points?: { x: number; y: number }[] | null };
 
 interface UseFloorRoomsReturn {
   rooms: FloorRoom[];

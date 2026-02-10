@@ -3,7 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2, Trash2, GripVertical, AlertCircle, Image, MapPin, Maximize2, Minimize2, Box, Gauge } from "lucide-react";
+import { Loader2, Trash2, GripVertical, AlertCircle, Image, MapPin, Maximize2, Minimize2, Box, Gauge, DoorOpen } from "lucide-react";
 import { ENERGY_SENSOR_CLASSES } from "@/lib/energyTypeColors";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Floor } from "@/hooks/useFloors";
@@ -19,6 +19,9 @@ import { toast } from "sonner";
 const FloorPlan3DViewer = lazy(() => import("./FloorPlan3DViewer").then(m => ({ default: m.FloorPlan3DViewer })));
 
 import { MeterOverlay2D } from "./MeterOverlay2D";
+import { RoomOverlay2D } from "./RoomOverlay2D";
+import { RoomPolygonEditor } from "./RoomPolygonEditor";
+import { useFloorRooms } from "@/hooks/useFloorRooms";
 
 interface Sensor {
   id: string;
@@ -45,6 +48,7 @@ export function FloorPlanDialog({ floor, locationId, open, onOpenChange }: Floor
   const { locationIntegrations, loading: integrationsLoading } = useLocationIntegrations(locationId);
   const { meters } = useMeters(locationId);
   const { readings } = useMeterReadings();
+  const { rooms: floorRooms } = useFloorRooms(floor.id);
 
   // Only meters explicitly assigned to this floor
   const floorMeters = useMemo(() => 
@@ -310,6 +314,10 @@ export function FloorPlanDialog({ floor, locationId, open, onOpenChange }: Floor
                   <Box className="h-4 w-4" />
                   3D-Begehung
                 </TabsTrigger>
+                <TabsTrigger value="rooms" className="gap-2">
+                  <DoorOpen className="h-4 w-4" />
+                  Räume
+                </TabsTrigger>
               </TabsList>
 
               <TabsContent value="view" className="flex-1 m-0 overflow-hidden">
@@ -339,6 +347,7 @@ export function FloorPlanDialog({ floor, locationId, open, onOpenChange }: Floor
                       </div>
                     </div>
                   ))}
+                  <RoomOverlay2D rooms={floorRooms} />
                 </div>
               </TabsContent>
 
@@ -479,6 +488,11 @@ export function FloorPlanDialog({ floor, locationId, open, onOpenChange }: Floor
                 </Suspense>
               </TabsContent>
 
+              {/* Room Polygon Editor Tab */}
+              <TabsContent value="rooms" className="flex-1 m-0 overflow-hidden">
+                <RoomPolygonEditor floorId={floor.id} floorPlanUrl={floor.floor_plan_url!} />
+              </TabsContent>
+
             </Tabs>
           ) : (
             <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full flex flex-col">
@@ -514,6 +528,7 @@ export function FloorPlanDialog({ floor, locationId, open, onOpenChange }: Floor
                       </div>
                     </div>
                   ))}
+                  <RoomOverlay2D rooms={floorRooms} />
                   <MeterOverlay2D meters={floorMeters} latestValues={meterLatestValues} />
                 </div>
               </TabsContent>

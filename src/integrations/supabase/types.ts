@@ -575,6 +575,7 @@ export type Database = {
           floor_id: string
           id: string
           name: string
+          polygon_points: Json | null
           position_x: number
           position_y: number
           updated_at: string | null
@@ -588,6 +589,7 @@ export type Database = {
           floor_id: string
           id?: string
           name: string
+          polygon_points?: Json | null
           position_x?: number
           position_y?: number
           updated_at?: string | null
@@ -601,6 +603,7 @@ export type Database = {
           floor_id?: string
           id?: string
           name?: string
+          polygon_points?: Json | null
           position_x?: number
           position_y?: number
           updated_at?: string | null
