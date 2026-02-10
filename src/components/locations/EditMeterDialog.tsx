@@ -41,6 +41,9 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
 
   const enabledIntegrations = locationIntegrations.filter((li) => li.is_enabled);
 
+  // Resolve sensor display name from fetched list or meter name as fallback
+  const sensorDisplayName = sensors.find((s) => s.uuid === selectedSensor)?.name || meter.name || selectedSensor;
+
   // Reset form when meter changes
   useEffect(() => {
     setName(meter.name);
@@ -158,6 +161,8 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
                   <Label>Sensor *</Label>
                   {sensorsLoading ? (
                     <Skeleton className="h-9 w-full mt-1" />
+                  ) : sensors.length === 0 && selectedSensor ? (
+                    <p className="text-sm mt-1">{sensorDisplayName}</p>
                   ) : sensors.length === 0 ? (
                     <p className="text-sm text-muted-foreground mt-1">Keine Sensoren gefunden.</p>
                   ) : (
