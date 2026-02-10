@@ -1,42 +1,36 @@
 
+## Begehung im Dashboard ermöglichen
 
-## Gemeinsamer Hook `useLiveSensorValues`
+### Problem
+Aktuell wird die First-Person-Begehung im Dashboard durch zwei Bedingungen blockiert:
+1. Die Controls-Bar mit dem "Begehung starten"-Button wird im `compact`-Modus nicht angezeigt
+2. Die `Floor3DControls` (WASD-Steuerung) werden nur gerendert, wenn `readOnly` **nicht** aktiv ist
 
-Die duplizierte Sensor-Abruf-Logik aus `FloorPlanWidget.tsx` und `FloorPlanDashboardWidget.tsx` wird in einen einzigen Hook zusammengefasst.
+### Loesung
 
-### Was passiert
+**Datei: `src/components/locations/FloorPlan3DViewer.tsx`**
 
-1. **Neuer Hook `src/hooks/useLiveSensorValues.ts`** wird erstellt:
-   - Nimmt eine `floorId` entgegen
-   - Nutzt intern `useFloorSensorPositions` und `useLocationIntegrations`
-   - Ruft die `loxone-api` Edge Function auf und mappt die Ergebnisse
-   - Auto-Refresh alle 5 Minuten
-   - Gibt `sensorValues`, `loadingValues` und `refreshSensorValues` zurueck
+1. **Begehungs-Button auch im readOnly/compact-Modus anzeigen**: Ein schlanker, schwebender Button wird ueber dem 3D-Canvas eingeblendet, wenn `compact` aktiv ist -- damit der Benutzer die Begehung starten und beenden kann, ohne die volle Admin-Toolbar zu brauchen.
 
-2. **`FloorPlanDashboardWidget.tsx`** wird bereinigt:
-   - Die gesamte Sensor-Fetch-Logik (ca. 60 Zeilen) wird entfernt
-   - Stattdessen ein einziger Aufruf: `const { sensorValues } = useLiveSensorValues(selectedFloorId)`
+2. **Floor3DControls auch im readOnly-Modus erlauben**: Die Bedingung wird von `!readOnly && isWalking` auf `isWalking` geaendert. Die Begehung ist rein lesend (nur Kamera-Bewegung), es werden keine Daten veraendert -- daher ist sie im readOnly-Modus unbedenklich.
 
-3. **`FloorPlanWidget.tsx`** wird ebenfalls bereinigt:
-   - Gleiche Vereinfachung – die duplizierte Logik wird durch den Hook ersetzt
-   - `useFloorSensorPositions` und `useLocationIntegrations` werden nicht mehr direkt importiert
+3. **OrbitControls bei Begehung deaktivieren**: Die bestehende Bedingung `readOnly && !isWalking` stellt bereits sicher, dass OrbitControls waehrend der Begehung ausgeschaltet werden.
 
-### Ergebnis
-
-- Ein einziger Ort fuer die Sensor-Logik
-- Weniger redundante API-Aufrufe
-- Einfachere Wartung bei zukuenftigen Aenderungen
-
-### Technische Details
+### Aenderungen im Detail
 
 ```text
-Vorher:
-  FloorPlanWidget ──> useFloorSensorPositions + loxone-api fetch
-  FloorPlanDashboardWidget ──> useFloorSensorPositions + loxone-api fetch
+Zeile 422: !readOnly && isWalking  -->  isWalking
+           (erlaubt Begehung auch im Dashboard)
 
-Nachher:
-  FloorPlanWidget ──> useLiveSensorValues(floorId)
-  FloorPlanDashboardWidget ──> useLiveSensorValues(floorId)
-                                    └──> useFloorSensorPositions + loxone-api fetch (einmalig)
+Zeile 527-571: Zusaetzlicher schwebender Button im compact-Modus
+               (Play/Stop-Button unten links ueber dem Canvas)
+
+Zeile 607-615: Status-Bar auch im compact/readOnly-Modus anzeigen
+               (WASD-Hinweise)
 ```
 
+### Ergebnis
+- Im Dashboard erscheint ein schwebender "Begehung starten"-Button ueber dem 3D-Modell
+- Klick aktiviert die First-Person-Steuerung (WASD + Maus)
+- Ein "Beenden"-Button erscheint zum Verlassen
+- Keine Admin-Funktionen (Raum-Editor, Rotation, Meter-Verschiebung) werden freigeschaltet
