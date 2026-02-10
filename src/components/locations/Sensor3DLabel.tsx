@@ -39,9 +39,11 @@ export function Sensor3DLabel({
       <Html
         center
         distanceFactor={8}
+        occlude="blending"
         style={{
           pointerEvents: "none",
           userSelect: "none",
+          transition: "opacity 0.3s ease",
         }}
       >
         <div className="bg-card border shadow-lg rounded-lg px-3 py-2 min-w-[100px] text-center whitespace-nowrap">

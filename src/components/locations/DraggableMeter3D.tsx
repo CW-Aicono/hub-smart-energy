@@ -115,9 +115,11 @@ export function DraggableMeter3D({
       <Html
         center
         distanceFactor={8}
+        occlude="blending"
         style={{
           pointerEvents: isAdmin ? "auto" : "none",
           userSelect: "none",
+          transition: "opacity 0.3s ease",
         }}
       >
         <div className="flex items-center gap-1">
