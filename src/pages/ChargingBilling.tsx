@@ -20,6 +20,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Plus, Receipt, Euro, Zap, Clock, Trash2, Edit } from "lucide-react";
 import { format } from "date-fns";
+import { fmtNum, fmtCurrency, fmtKwh } from "@/lib/formatCharging";
 
 const ChargingBilling = () => {
   const { user, loading: authLoading } = useAuth();
@@ -98,10 +99,10 @@ const ChargingBilling = () => {
 
           {/* Stats */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <Card><CardContent className="p-4 flex items-center gap-3"><Zap className="h-5 w-5 text-muted-foreground" /><div><p className="text-2xl font-bold">{totalEnergy.toFixed(1)}</p><p className="text-sm text-muted-foreground">kWh gesamt</p></div></CardContent></Card>
-            <Card><CardContent className="p-4 flex items-center gap-3"><Receipt className="h-5 w-5 text-muted-foreground" /><div><p className="text-2xl font-bold">{completedSessions.length}</p><p className="text-sm text-muted-foreground">Ladevorgänge</p></div></CardContent></Card>
-            <Card><CardContent className="p-4 flex items-center gap-3"><Euro className="h-5 w-5 text-muted-foreground" /><div><p className="text-2xl font-bold">{activeTariff ? `${activeTariff.price_per_kwh} €` : "—"}</p><p className="text-sm text-muted-foreground">Preis/kWh</p></div></CardContent></Card>
-            <Card><CardContent className="p-4 flex items-center gap-3"><Clock className="h-5 w-5 text-muted-foreground" /><div><p className="text-2xl font-bold">{sessions.filter((s) => s.status === "active").length}</p><p className="text-sm text-muted-foreground">Aktive Ladevorgänge</p></div></CardContent></Card>
+            <Card><CardContent className="p-4 flex items-center gap-3"><Zap className="h-5 w-5 text-muted-foreground" /><div><p className="text-2xl font-bold">{fmtKwh(totalEnergy, 1)}</p><p className="text-sm text-muted-foreground">gesamt</p></div></CardContent></Card>
+            <Card><CardContent className="p-4 flex items-center gap-3"><Receipt className="h-5 w-5 text-muted-foreground" /><div><p className="text-2xl font-bold">{fmtNum(completedSessions.length, 0)}</p><p className="text-sm text-muted-foreground">Ladevorgänge</p></div></CardContent></Card>
+            <Card><CardContent className="p-4 flex items-center gap-3"><Euro className="h-5 w-5 text-muted-foreground" /><div><p className="text-2xl font-bold">{activeTariff ? fmtCurrency(activeTariff.price_per_kwh) : "—"}</p><p className="text-sm text-muted-foreground">Preis/kWh</p></div></CardContent></Card>
+            <Card><CardContent className="p-4 flex items-center gap-3"><Clock className="h-5 w-5 text-muted-foreground" /><div><p className="text-2xl font-bold">{fmtNum(sessions.filter((s) => s.status === "active").length, 0)}</p><p className="text-sm text-muted-foreground">Aktive Ladevorgänge</p></div></CardContent></Card>
           </div>
 
           <Tabs defaultValue="sessions">
@@ -134,7 +135,7 @@ const ChargingBilling = () => {
                             <TableCell className="font-medium">{getCpName(s.charge_point_id)}</TableCell>
                             <TableCell>{format(new Date(s.start_time), "dd.MM.yyyy HH:mm")}</TableCell>
                             <TableCell>{s.stop_time ? format(new Date(s.stop_time), "dd.MM.yyyy HH:mm") : "—"}</TableCell>
-                            <TableCell>{s.energy_kwh.toFixed(2)} kWh</TableCell>
+                            <TableCell>{fmtKwh(s.energy_kwh)}</TableCell>
                             <TableCell><Badge variant={s.status === "active" ? "default" : s.status === "completed" ? "secondary" : "destructive"}>{s.status === "active" ? "Aktiv" : s.status === "completed" ? "Abgeschlossen" : "Fehler"}</Badge></TableCell>
                             <TableCell className="font-mono text-sm">{s.id_tag || "—"}</TableCell>
                           </TableRow>
@@ -178,8 +179,8 @@ const ChargingBilling = () => {
                         {tariffs.map((tariff) => (
                           <TableRow key={tariff.id}>
                             <TableCell className="font-medium">{tariff.name}</TableCell>
-                            <TableCell>{tariff.price_per_kwh} {tariff.currency}</TableCell>
-                            <TableCell>{tariff.base_fee} {tariff.currency}</TableCell>
+                            <TableCell>{fmtCurrency(tariff.price_per_kwh)}</TableCell>
+                            <TableCell>{fmtCurrency(tariff.base_fee)}</TableCell>
                             <TableCell>
                               <Switch
                                 checked={tariff.is_active}
@@ -232,8 +233,8 @@ const ChargingBilling = () => {
                         {invoices.map((inv) => (
                           <TableRow key={inv.id}>
                             <TableCell className="font-mono">{inv.invoice_number || "—"}</TableCell>
-                            <TableCell>{inv.total_energy_kwh.toFixed(2)} kWh</TableCell>
-                            <TableCell>{inv.total_amount.toFixed(2)} {inv.currency}</TableCell>
+                            <TableCell>{fmtKwh(inv.total_energy_kwh)}</TableCell>
+                            <TableCell>{fmtCurrency(inv.total_amount)}</TableCell>
                             <TableCell><Badge variant={inv.status === "paid" ? "default" : inv.status === "issued" ? "secondary" : "outline"}>{inv.status === "paid" ? "Bezahlt" : inv.status === "issued" ? "Ausgestellt" : "Entwurf"}</Badge></TableCell>
                             <TableCell>{format(new Date(inv.created_at), "dd.MM.yyyy")}</TableCell>
                           </TableRow>
