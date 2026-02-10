@@ -13,6 +13,7 @@ import { RoomEditor } from "./RoomEditor";
 import { Minimap3D } from "./Minimap3D";
 import { OBJLoader } from "three/examples/jsm/loaders/OBJLoader.js";
 import { MTLLoader } from "three/examples/jsm/loaders/MTLLoader.js";
+import { TDSLoader } from "three/examples/jsm/loaders/TDSLoader.js";
 import * as THREE from "three";
 
 interface Sensor {
@@ -81,15 +82,34 @@ function OBJModel({ objUrl, mtlUrl }: { objUrl: string; mtlUrl?: string | null }
   return <primitive object={object} />;
 }
 
-// Renders uploaded 3D model (GLB or OBJ+MTL)
+// Renders a 3DS model
+function TDSModel({ url }: { url: string }) {
+  const [object, setObject] = useState<THREE.Group | null>(null);
+
+  useEffect(() => {
+    const loader = new TDSLoader();
+    loader.loadAsync(url).then((obj) => {
+      setObject(obj);
+    });
+  }, [url]);
+
+  if (!object) return null;
+  return <primitive object={object} />;
+}
+
+// Renders uploaded 3D model (GLB, OBJ+MTL, or 3DS)
 function ModelViewer({ floor }: { floor: Floor }) {
   if (!floor.model_3d_url) return null;
 
   const url = floor.model_3d_url;
-  const isGlb = url.toLowerCase().endsWith(".glb");
+  const lower = url.toLowerCase();
 
-  if (isGlb) {
+  if (lower.endsWith(".glb")) {
     return <GLBModel url={url} />;
+  }
+
+  if (lower.endsWith(".3ds")) {
+    return <TDSModel url={url} />;
   }
 
   return <OBJModel objUrl={url} mtlUrl={floor.model_3d_mtl_url} />;
