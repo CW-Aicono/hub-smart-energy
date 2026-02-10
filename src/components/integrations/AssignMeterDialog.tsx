@@ -96,8 +96,14 @@ export function AssignMeterDialog({
         .select("id, name, floor_number")
         .eq("location_id", selectedLocationId)
         .order("floor_number");
-      setFloors((data as Floor[]) || []);
-      setSelectedFloorId("");
+      const floorList = (data as Floor[]) || [];
+      setFloors(floorList);
+      // Auto-select if only one floor exists
+      if (floorList.length === 1) {
+        setSelectedFloorId(floorList[0].id);
+      } else {
+        setSelectedFloorId("");
+      }
       setRooms([]);
       setSelectedRoomId("");
     };
