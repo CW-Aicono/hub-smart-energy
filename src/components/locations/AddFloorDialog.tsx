@@ -209,7 +209,7 @@ export function AddFloorDialog({ locationId, onSuccess }: AddFloorDialogProps) {
             <Input
               id="model3d"
               type="file"
-              accept=".glb,.obj"
+              accept=".glb,.obj,.3ds"
               onChange={(e) => {
                 const file = e.target.files?.[0] || null;
                 setModel3dFile(file);
@@ -219,7 +219,7 @@ export function AddFloorDialog({ locationId, onSuccess }: AddFloorDialogProps) {
               }}
             />
             <p className="text-xs text-muted-foreground">
-              Unterstützte Formate: GLB (empfohlen), OBJ
+              Unterstützte Formate: GLB (empfohlen), OBJ, 3DS
             </p>
           </div>
 
