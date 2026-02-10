@@ -2344,6 +2344,12 @@ export const translations = {
     es: "Gestionar sesiones de carga, tarifas y facturas",
     nl: "Beheer laadsessies, tarieven en facturen",
   },
+  "nav.automation": {
+    de: "Automation",
+    en: "Automation",
+    es: "Automatización",
+    nl: "Automatisering",
+  },
 } as const;
 
 export type TranslationKey = keyof typeof translations;
