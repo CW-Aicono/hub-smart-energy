@@ -26,7 +26,9 @@ export type Database = {
           notification_email: string | null
           tenant_id: string
           threshold_type: string
+          threshold_unit: string
           threshold_value: number
+          time_unit: string
           updated_at: string
         }
         Insert: {
@@ -40,7 +42,9 @@ export type Database = {
           notification_email?: string | null
           tenant_id: string
           threshold_type?: string
+          threshold_unit?: string
           threshold_value: number
+          time_unit?: string
           updated_at?: string
         }
         Update: {
@@ -54,7 +58,9 @@ export type Database = {
           notification_email?: string | null
           tenant_id?: string
           threshold_type?: string
+          threshold_unit?: string
           threshold_value?: number
+          time_unit?: string
           updated_at?: string
         }
         Relationships: [

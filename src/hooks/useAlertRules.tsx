@@ -17,6 +17,8 @@ export interface AlertRule {
   energy_type: string;
   threshold_value: number;
   threshold_type: string;
+  threshold_unit: string;
+  time_unit: string;
   notification_email: string | null;
   is_active: boolean;
   name: string;
@@ -31,6 +33,8 @@ export interface AlertRuleInsert {
   energy_type: string;
   threshold_value: number;
   threshold_type: string;
+  threshold_unit?: string;
+  time_unit?: string;
   notification_email?: string;
   is_active?: boolean;
 }
