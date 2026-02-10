@@ -419,7 +419,7 @@ function Scene({
       {/* No OrbitControls for admin editing mode - allows meter dragging */}
 
       {/* First Person Controls - only render when walking to prevent unwanted pointer lock */}
-      {!readOnly && isWalking && (
+      {isWalking && (
         <Floor3DControls 
           enabled={isWalking} 
           onLockChange={onLockChange}
@@ -650,6 +650,41 @@ export function FloorPlan3DViewer({ floor, locationId, sensors = [], isAdmin = f
                 />
               </Suspense>
             </Canvas>
+
+            {/* Floating walkthrough button for compact/readOnly mode */}
+            {compact && !isWalking && (
+              <Button
+                size="sm"
+                className="absolute bottom-3 left-3 z-10 shadow-lg"
+                onClick={startWalking}
+                disabled={loading}
+              >
+                <Play className="h-4 w-4 mr-1" />
+                Begehung
+              </Button>
+            )}
+            {compact && isWalking && (
+              <Button
+                size="sm"
+                variant="destructive"
+                className="absolute bottom-3 left-3 z-10 shadow-lg"
+                onClick={stopWalking}
+              >
+                <Square className="h-4 w-4 mr-1" />
+                Beenden
+              </Button>
+            )}
+
+            {/* Status bar when walking */}
+            {isWalking && compact && (
+              <div className="absolute top-0 left-0 right-0 bg-primary/10 backdrop-blur-sm px-3 py-2 text-sm text-center z-10">
+                <span className="font-medium">
+                  {isLocked 
+                    ? "WASD = Bewegen | Leertaste = Hoch | Shift = Runter | Mausrad = Höhe | ESC = Beenden" 
+                    : "Klicken Sie in das 3D-Fenster, um die Steuerung zu aktivieren"}
+                </span>
+              </div>
+            )}
 
             {/* Minimap overlay - hidden in readOnly/dashboard mode */}
             {!readOnly && rooms.length > 0 && (
