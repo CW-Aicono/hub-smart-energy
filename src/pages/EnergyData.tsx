@@ -3,6 +3,7 @@ import { Navigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useLocations } from "@/hooks/useLocations";
 import { useMeters } from "@/hooks/useMeters";
+import { useTenant } from "@/hooks/useTenant";
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -35,6 +36,7 @@ const EnergyData = () => {
   const { user, loading: authLoading } = useAuth();
   const { locations, loading: locationsLoading } = useLocations();
   const { meters, loading: metersLoading } = useMeters();
+  const { tenant } = useTenant();
 
   const [selectedLocationId, setSelectedLocationId] = useState<string>("all");
   const [selectedEnergyTypes, setSelectedEnergyTypes] = useState<string[]>(["strom", "gas", "waerme", "wasser"]);
@@ -156,7 +158,10 @@ const EnergyData = () => {
   const handlePdfExport = async () => {
     const rows = await buildExportRows();
     if (rows.length === 0) return;
-    downloadPDF(rows, "energiedaten-export", getHeaders(rows), "Energiedaten Export");
+    downloadPDF(rows, "energiedaten-export", getHeaders(rows), "Energiedaten Export", {
+      logoUrl: tenant?.logo_url,
+      tenantName: tenant?.name,
+    });
   };
 
   return (

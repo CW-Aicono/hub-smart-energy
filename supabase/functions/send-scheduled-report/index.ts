@@ -188,9 +188,9 @@ function buildReportHTML(
     }).join("");
   }
 
-  const logoHTML = logoUrl
-    ? `<img src="${logoUrl}" alt="Logo" style="max-height:48px;max-width:180px;object-fit:contain" />`
-    : `<div style="font-size:20px;font-weight:800;color:#1e293b;letter-spacing:-0.5px">${tenantName || "Energiebericht"}</div>`;
+  const logoImgTag = logoUrl
+    ? `<img src="${logoUrl}" alt="Logo" style="max-height:52px;max-width:160px;object-fit:contain;border-radius:6px" />`
+    : "";
 
   return `
 <!DOCTYPE html>
@@ -211,22 +211,16 @@ function buildReportHTML(
 <body>
 <div class="container">
 
-  <!-- Header -->
-  <table style="width:100%;margin-bottom:24px">
+  <!-- Header / Title bar with Logo -->
+  <table style="width:100%;background:linear-gradient(135deg,#1e293b 0%,#334155 100%);border-radius:12px;margin-bottom:24px;border-spacing:0">
     <tr>
-      <td style="vertical-align:middle">${logoHTML}</td>
-      <td style="text-align:right;vertical-align:middle">
-        <div style="font-size:11px;color:#64748b">Erstellt am ${new Date().toLocaleDateString("de-DE", { day: "2-digit", month: "long", year: "numeric" })}</div>
-        <div style="font-size:11px;color:#94a3b8">Zeitraum: ${formatDateDE(dateRange.from)} – ${formatDateDE(dateRange.to)}</div>
+      <td style="padding:24px 28px;vertical-align:middle">
+        <div style="font-size:22px;font-weight:700;color:white;margin-bottom:4px">${reportTitle}</div>
+        <div style="font-size:13px;color:rgba(255,255,255,0.7)">Erstellt am ${new Date().toLocaleDateString("de-DE", { day: "2-digit", month: "long", year: "numeric" })} · Zeitraum: ${formatDateDE(dateRange.from)} – ${formatDateDE(dateRange.to)}</div>
       </td>
+      ${logoImgTag ? `<td style="padding:24px 28px;vertical-align:middle;text-align:right">${logoImgTag}</td>` : ""}
     </tr>
   </table>
-
-  <!-- Title bar -->
-  <div style="background:linear-gradient(135deg,#1e293b 0%,#334155 100%);border-radius:12px;padding:24px 28px;margin-bottom:24px;color:white">
-    <div style="font-size:22px;font-weight:700;margin-bottom:4px">${reportTitle}</div>
-    <div style="font-size:13px;opacity:0.8">Automatisch generierter Energiebericht</div>
-  </div>
 
   <!-- KPI Cards -->
   <table style="width:100%;margin-bottom:24px;border-spacing:8px;border-collapse:separate">
