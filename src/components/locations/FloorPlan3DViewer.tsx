@@ -434,7 +434,7 @@ export function FloorPlan3DViewer({ floor, locationId, sensors = [], isAdmin = f
   // Filter meters: only show meters that have been explicitly placed as sensor positions on this floor
   const floorMeters = useMemo(() => {
     const placedSensorUuids = new Set(sensorPositions.map(p => p.sensor_uuid));
-    return meters.filter(m => !m.is_archived && m.floor_id === floor.id && m.sensor_uuid && placedSensorUuids.has(m.sensor_uuid));
+    return meters.filter(m => !m.is_archived && (m.floor_id === floor.id || m.floor_id === null) && m.sensor_uuid && placedSensorUuids.has(m.sensor_uuid));
   }, [meters, floor.id, sensorPositions]);
 
   // Get meter values: prefer live sensor data from integrations, fall back to meter_readings
