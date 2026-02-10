@@ -420,11 +420,13 @@ function Scene({
         />
       )}
 
-      {/* First Person Controls */}
-      <Floor3DControls 
-        enabled={isWalking} 
-        onLockChange={onLockChange}
-      />
+      {/* First Person Controls - only render when walking to prevent unwanted pointer lock */}
+      {isWalking && (
+        <Floor3DControls 
+          enabled={isWalking} 
+          onLockChange={onLockChange}
+        />
+      )}
 
       {/* Camera tracker for minimap */}
       <CameraTracker onUpdate={onCameraUpdate} />
