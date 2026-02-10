@@ -413,7 +413,7 @@ function Scene({
       
       {/* OrbitControls for readOnly/dashboard mode when not walking */}
       {readOnly && !isWalking && (
-        <OrbitControls enablePan enableZoom enableRotate />
+        <OrbitControls enablePan enableZoom enableRotate target={[0, 2, 0]} />
       )}
 
       {/* No OrbitControls for admin editing mode - allows meter dragging */}
@@ -625,8 +625,8 @@ export function FloorPlan3DViewer({ floor, locationId, sensors = [], isAdmin = f
             <Canvas
               shadows
               camera={{ 
-                position: [0, 1.7, 10], 
-                fov: 75,
+                position: readOnly ? [15, 20, 15] : [0, 1.7, 10], 
+                fov: readOnly ? 50 : 75,
                 near: 0.1,
                 far: 1000,
               }}
