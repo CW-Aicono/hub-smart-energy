@@ -11,13 +11,17 @@ import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Plus, PlugZap, Trash2, Edit, Zap, ZapOff, AlertTriangle, WifiOff } from "lucide-react";
+import { Plus, PlugZap, Trash2, Edit, Zap, ZapOff, AlertTriangle, WifiOff, Info } from "lucide-react";
 import { format } from "date-fns";
+import { fmtKwh, fmtKw } from "@/lib/formatCharging";
+
+const OCPP_ENDPOINT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ocpp-central`;
 
 const statusConfig: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline"; icon: typeof Zap }> = {
   available: { label: "Verfügbar", variant: "default", icon: Zap },
@@ -91,10 +95,34 @@ const ChargingPoints = () => {
 
   const getActiveSession = (cpId: string) => sessions.find((s) => s.charge_point_id === cpId && s.status === "active");
 
+  const ocppHint = (
+    <Alert className="mt-4">
+      <Info className="h-4 w-4" />
+      <AlertDescription className="space-y-2">
+        <p className="font-medium">OCPP-Integrationshinweise</p>
+        <p className="text-sm">
+          Die Ladestation muss OCPP-Nachrichten per <strong>HTTP POST</strong> an den folgenden Endpunkt senden:
+        </p>
+        <code className="block text-xs bg-muted p-2 rounded break-all select-all">
+          {OCPP_ENDPOINT_URL}/{form.ocpp_id || "{OCPP_ID}"}
+        </code>
+        <p className="text-sm text-muted-foreground">
+          Protokoll: <strong>OCPP 1.6 JSON</strong> über HTTP/HTTPS (kein WebSocket). 
+          Für Ladestationen die nur <code>ws://</code> oder <code>wss://</code> unterstützen, 
+          wird ein OCPP-Proxy benötigt, der WebSocket-Verbindungen in HTTP-Anfragen umwandelt.
+        </p>
+        <p className="text-sm text-muted-foreground">
+          Die <strong>OCPP-ID</strong> muss in der Ladestation als <em>ChargeBox Identity</em> konfiguriert werden 
+          und mit dem hier eingetragenen Wert übereinstimmen.
+        </p>
+      </AlertDescription>
+    </Alert>
+  );
+
   const formFields = (
     <div className="space-y-4">
       <div><Label>Name</Label><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
-      <div><Label>OCPP-ID</Label><Input value={form.ocpp_id} onChange={(e) => setForm({ ...form, ocpp_id: e.target.value })} /></div>
+      <div><Label>OCPP-ID (ChargeBox Identity)</Label><Input value={form.ocpp_id} onChange={(e) => setForm({ ...form, ocpp_id: e.target.value })} placeholder="z.B. CP001" /></div>
       <div>
         <Label>Standort</Label>
         <Select value={form.location_id} onValueChange={(v) => setForm({ ...form, location_id: v })}>
@@ -108,6 +136,7 @@ const ChargingPoints = () => {
         <div><Label>Anschlüsse</Label><Input type="number" value={form.connector_count} onChange={(e) => setForm({ ...form, connector_count: e.target.value })} /></div>
         <div><Label>Max. Leistung (kW)</Label><Input type="number" value={form.max_power_kw} onChange={(e) => setForm({ ...form, max_power_kw: e.target.value })} /></div>
       </div>
+      {ocppHint}
     </div>
   );
 
@@ -126,7 +155,7 @@ const ChargingPoints = () => {
                 <DialogTrigger asChild>
                   <Button onClick={resetForm}><Plus className="h-4 w-4 mr-2" />Ladepunkt hinzufügen</Button>
                 </DialogTrigger>
-                <DialogContent>
+                <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
                   <DialogHeader><DialogTitle>Neuer Ladepunkt</DialogTitle></DialogHeader>
                   {formFields}
                   <Button onClick={handleAdd} disabled={!form.name || !form.ocpp_id}>Erstellen</Button>
@@ -144,7 +173,7 @@ const ChargingPoints = () => {
                   <CardContent className="p-4 flex items-center gap-3">
                     <cfg.icon className="h-5 w-5 text-muted-foreground" />
                     <div>
-                      <p className="text-2xl font-bold">{count}</p>
+                      <p className="text-2xl font-bold">{count.toLocaleString("de-DE")}</p>
                       <p className="text-sm text-muted-foreground">{cfg.label}</p>
                     </div>
                   </CardContent>
@@ -186,12 +215,12 @@ const ChargingPoints = () => {
                             <Badge variant={cfg.variant}>{cfg.label}</Badge>
                             {activeSession && (
                               <span className="ml-2 text-xs text-muted-foreground">
-                                {activeSession.energy_kwh.toFixed(1)} kWh
+                                {fmtKwh(activeSession.energy_kwh, 1)}
                               </span>
                             )}
                           </TableCell>
                           <TableCell>{getLocationName(cp.location_id)}</TableCell>
-                          <TableCell>{cp.max_power_kw} kW</TableCell>
+                          <TableCell>{fmtKw(cp.max_power_kw)}</TableCell>
                           <TableCell className="text-sm text-muted-foreground">
                             {cp.last_heartbeat ? format(new Date(cp.last_heartbeat), "dd.MM.yyyy HH:mm") : "—"}
                           </TableCell>
@@ -214,7 +243,7 @@ const ChargingPoints = () => {
 
           {/* Edit Dialog */}
           <Dialog open={!!editCp} onOpenChange={(open) => { if (!open) setEditCp(null); }}>
-            <DialogContent>
+            <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
               <DialogHeader><DialogTitle>Ladepunkt bearbeiten</DialogTitle></DialogHeader>
               {formFields}
               <Button onClick={handleEdit} disabled={!form.name || !form.ocpp_id}>Speichern</Button>
