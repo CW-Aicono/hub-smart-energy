@@ -26,7 +26,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Plus, Smartphone, Trash2, Pencil, QrCode, Loader2, Copy, Check, Eye, X } from "lucide-react";
+import { Plus, Smartphone, Trash2, Pencil, QrCode, Loader2, Copy, Check, Eye, X, ExternalLink, Camera, Keyboard, Zap } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { ScannerQrCode } from "./ScannerQrCode";
 
@@ -253,7 +253,7 @@ export function ScannerManagement() {
           onOpenChange={(open) => !open && setQrScanner(null)}
         />
       )}
-      {/* App Preview - simple overlay (iframe causes Radix Dialog focus issues) */}
+      {/* App Preview - static mockup (iframe shares auth session, causing loops) */}
       {previewOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           {/* Backdrop */}
@@ -278,13 +278,63 @@ export function ScannerManagement() {
                 <div className="relative z-10 flex justify-center pt-2 pb-1 bg-background">
                   <div className="w-24 h-5 bg-foreground/80 rounded-full" />
                 </div>
-                {/* Screen */}
-                <div className="bg-background" style={{ height: 560 }}>
-                  <iframe
-                    src="/m"
-                    className="w-full h-full border-0"
-                    title="Mobile App Preview"
-                  />
+                {/* Static App Mockup Screen */}
+                <div className="bg-background flex flex-col" style={{ height: 560 }}>
+                  {/* App Header */}
+                  <div className="border-b px-4 py-3 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="h-7 w-7 rounded-lg bg-primary flex items-center justify-center">
+                        <Zap className="h-4 w-4 text-primary-foreground" />
+                      </div>
+                      <span className="font-bold text-xs">Zählerablesung</span>
+                    </div>
+                  </div>
+                  {/* Tab Bar */}
+                  <div className="flex border-b">
+                    <div className="flex-1 py-2 text-center text-xs font-medium border-b-2 border-primary text-primary flex items-center justify-center gap-1">
+                      <Camera className="h-3 w-3" /> KI-Foto
+                    </div>
+                    <div className="flex-1 py-2 text-center text-xs text-muted-foreground flex items-center justify-center gap-1">
+                      <QrCode className="h-3 w-3" /> QR-Code
+                    </div>
+                    <div className="flex-1 py-2 text-center text-xs text-muted-foreground flex items-center justify-center gap-1">
+                      <Keyboard className="h-3 w-3" /> Manuell
+                    </div>
+                  </div>
+                  {/* Content Area */}
+                  <div className="flex-1 p-4 space-y-4">
+                    <div className="rounded-lg border bg-card p-4 space-y-3">
+                      <p className="text-xs text-muted-foreground">
+                        Fotografieren Sie den Zähler – die KI erkennt Zählernummer und Stand automatisch.
+                      </p>
+                      <div className="h-12 rounded-lg bg-secondary flex items-center justify-center gap-2 text-sm font-medium">
+                        <Camera className="h-4 w-4" />
+                        Foto aufnehmen
+                      </div>
+                      <div className="h-12 rounded-lg border border-dashed flex items-center justify-center gap-2 text-xs text-muted-foreground">
+                        <Smartphone className="h-4 w-4" />
+                        Bild aus Galerie
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <Check className="h-3 w-3 text-primary" />
+                        KI-Erkennung inkl. Nachkommastellen
+                      </div>
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <Check className="h-3 w-3 text-primary" />
+                        QR-Code-Scanner für Zähler-Sticker
+                      </div>
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <Check className="h-3 w-3 text-primary" />
+                        Offline-fähig mit Auto-Sync
+                      </div>
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <Check className="h-3 w-3 text-primary" />
+                        Unbekannte Zähler sofort anlegen
+                      </div>
+                    </div>
+                  </div>
                 </div>
                 {/* Home indicator */}
                 <div className="flex justify-center py-2 bg-background">
@@ -292,9 +342,15 @@ export function ScannerManagement() {
                 </div>
               </div>
             </div>
-            <p className="text-sm text-muted-foreground mt-3 text-center">
-              Vorschau der mobilen Erfassungs-App
-            </p>
+            {/* Open in new tab button */}
+            <Button
+              variant="secondary"
+              className="mt-3 gap-2"
+              onClick={() => window.open("/m", "_blank")}
+            >
+              <ExternalLink className="h-4 w-4" />
+              App im neuen Tab öffnen
+            </Button>
           </div>
         </div>
       )}
