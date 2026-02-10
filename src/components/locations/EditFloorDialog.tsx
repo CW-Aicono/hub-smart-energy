@@ -15,8 +15,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Pencil, Upload } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import { Pencil } from "lucide-react";
 
 interface EditFloorDialogProps {
   floor: Floor;
@@ -27,6 +26,8 @@ interface EditFloorDialogProps {
 export function EditFloorDialog({ floor, locationId, onSuccess }: EditFloorDialogProps) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadLabel, setUploadLabel] = useState("");
   const { updateFloor, uploadFloorPlan, upload3DModel } = useFloors(locationId);
   
   const [name, setName] = useState(floor.name);
@@ -48,25 +49,33 @@ export function EditFloorDialog({ floor, locationId, onSuccess }: EditFloorDialo
     }
 
     setLoading(true);
+    setUploadProgress(0);
 
     try {
       let floorPlanUrl = floor.floor_plan_url;
 
       // Upload new floor plan if provided
       if (floorPlanFile) {
+        setUploadLabel("Grundriss wird hochgeladen…");
         const { url, error: uploadError } = await uploadFloorPlan(
           floorPlanFile,
           locationId,
-          floor.id
+          floor.id,
+          (p) => setUploadProgress(p),
         );
 
         if (uploadError) {
           toast.error("Grundriss konnte nicht hochgeladen werden");
           setLoading(false);
+          setUploadProgress(0);
+          setUploadLabel("");
           return;
         }
         floorPlanUrl = url;
       }
+
+      setUploadLabel("Etagendaten werden gespeichert…");
+      setUploadProgress(model3dFile ? 0 : 100);
 
       const { error } = await updateFloor(floor.id, {
         name: name.trim(),
@@ -83,13 +92,17 @@ export function EditFloorDialog({ floor, locationId, onSuccess }: EditFloorDialo
 
       // Upload 3D model if provided
       if (model3dFile) {
+        setUploadLabel("3D-Modell wird hochgeladen…");
+        setUploadProgress(0);
         const { error: modelError } = await upload3DModel(
           { main: model3dFile, mtl: mtlFile || undefined },
           locationId,
-          floor.id
+          floor.id,
+          (p) => setUploadProgress(p),
         );
         if (modelError) {
           toast.error("Etage aktualisiert, aber 3D-Modell konnte nicht hochgeladen werden");
+          return;
         }
       }
 
@@ -97,9 +110,11 @@ export function EditFloorDialog({ floor, locationId, onSuccess }: EditFloorDialo
       setOpen(false);
       onSuccess?.();
     } catch (err) {
-      toast.error("Unerwarteter Fehler");
+      toast.error("Unerwarteter Fehler beim Speichern");
     } finally {
       setLoading(false);
+      setUploadProgress(0);
+      setUploadLabel("");
     }
   };
 
@@ -211,10 +226,18 @@ export function EditFloorDialog({ floor, locationId, onSuccess }: EditFloorDialo
             </div>
           )}
 
-          {loading && <Progress value={undefined} className="h-2" />}
+          {loading && (
+            <div className="space-y-1">
+              <div className="flex items-center justify-between text-xs text-muted-foreground">
+                <span>{uploadLabel}</span>
+                <span>{uploadProgress}%</span>
+              </div>
+              <Progress value={uploadProgress} className="h-2" />
+            </div>
+          )}
 
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+            <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={loading}>
               Abbrechen
             </Button>
             <Button type="submit" disabled={loading}>
