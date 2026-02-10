@@ -18,6 +18,21 @@ export function RoomOverlay2D({ rooms, selectedRoomId, onSelectRoom }: RoomOverl
 
   if (roomsWithPolygons.length === 0) return null;
 
+  // Ensure color has enough contrast (avoid near-white colors on white backgrounds)
+  const ensureVisibleColor = (color: string) => {
+    if (!color) return "#3b82f6";
+    // Check if color is too light (simple hex check)
+    const hex = color.replace('#', '');
+    if (hex.length === 6) {
+      const r = parseInt(hex.substring(0, 2), 16);
+      const g = parseInt(hex.substring(2, 4), 16);
+      const b = parseInt(hex.substring(4, 6), 16);
+      // If all channels > 200, it's too light
+      if (r > 200 && g > 200 && b > 200) return "#3b82f6";
+    }
+    return color;
+  };
+
   return (
     <svg
       className="absolute inset-0 w-full h-full pointer-events-none"
@@ -28,7 +43,7 @@ export function RoomOverlay2D({ rooms, selectedRoomId, onSelectRoom }: RoomOverl
         const points = room.polygon_points as PolygonPoint[];
         const pointsStr = points.map((p) => `${p.x},${p.y}`).join(" ");
         const isSelected = selectedRoomId === room.id;
-        const color = room.color || "#3b82f6";
+        const color = ensureVisibleColor(room.color || "#3b82f6");
 
         // Calculate centroid for label
         const cx = points.reduce((s, p) => s + p.x, 0) / points.length;
