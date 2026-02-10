@@ -143,7 +143,7 @@ const MetersOverview = () => {
                 <CardTitle className="text-base">
                   {showArchived ? "Archivierte Zähler" : "Zähler"} ({filteredMeters.length})
                 </CardTitle>
-                {archivedMeters.length > 0 && (
+                {(archivedMeters.length > 0 || showArchived) && (
                   <Button variant="ghost" size="sm" className="gap-1.5 text-xs" onClick={() => setShowArchived(!showArchived)}>
                     {showArchived ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
                     {showArchived ? `Aktive anzeigen (${activeMeters.length})` : `Archiv (${archivedMeters.length})`}
