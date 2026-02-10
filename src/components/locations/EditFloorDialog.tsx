@@ -178,7 +178,7 @@ export function EditFloorDialog({ floor, locationId, onSuccess }: EditFloorDialo
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="edit-model3d">3D-Modell (.glb oder .obj)</Label>
+            <Label htmlFor="edit-model3d">3D-Modell (.glb, .obj oder .3ds)</Label>
             {floor.model_3d_url && (
               <p className="text-sm text-muted-foreground">
                 Aktuelles 3D-Modell vorhanden. Laden Sie eine neue Datei hoch, um es zu ersetzen.
@@ -187,7 +187,7 @@ export function EditFloorDialog({ floor, locationId, onSuccess }: EditFloorDialo
             <Input
               id="edit-model3d"
               type="file"
-              accept=".glb,.obj"
+              accept=".glb,.obj,.3ds"
               onChange={(e) => {
                 const file = e.target.files?.[0] || null;
                 setModel3dFile(file);
