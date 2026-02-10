@@ -6,7 +6,8 @@ import { DeleteFloorDialog } from "./DeleteFloorDialog";
 import { FloorPlanDialog } from "./FloorPlanDialog";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Layers, Image, SquareStack } from "lucide-react";
+import { Layers, Image, SquareStack, Box } from "lucide-react";
+import { Upload3DModelDialog } from "./Upload3DModelDialog";
 
 interface FloorListProps {
   floors: Floor[];
@@ -73,6 +74,18 @@ export function FloorList({ floors, loading, locationId, onRefresh }: FloorListP
               </Button>
             ) : (
               <span className="text-sm text-muted-foreground">Kein Grundriss</span>
+            )}
+
+            {isAdmin && (
+              <Upload3DModelDialog
+                floor={floor}
+                locationId={locationId}
+                onSuccess={onRefresh}
+              />
+            )}
+
+            {floor.model_3d_url && (
+              <span className="text-xs text-primary font-medium">3D ✓</span>
             )}
 
             {isAdmin && (

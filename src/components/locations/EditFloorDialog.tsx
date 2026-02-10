@@ -26,13 +26,17 @@ interface EditFloorDialogProps {
 export function EditFloorDialog({ floor, locationId, onSuccess }: EditFloorDialogProps) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
-  const { updateFloor, uploadFloorPlan } = useFloors(locationId);
+  const { updateFloor, uploadFloorPlan, upload3DModel } = useFloors(locationId);
   
   const [name, setName] = useState(floor.name);
   const [floorNumber, setFloorNumber] = useState(floor.floor_number.toString());
   const [description, setDescription] = useState(floor.description || "");
   const [areaSqm, setAreaSqm] = useState(floor.area_sqm?.toString() || "");
   const [floorPlanFile, setFloorPlanFile] = useState<File | null>(null);
+  const [model3dFile, setModel3dFile] = useState<File | null>(null);
+  const [mtlFile, setMtlFile] = useState<File | null>(null);
+
+  const isObjSelected = model3dFile?.name.toLowerCase().endsWith(".obj");
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -74,6 +78,18 @@ export function EditFloorDialog({ floor, locationId, onSuccess }: EditFloorDialo
       if (error) {
         toast.error("Fehler beim Aktualisieren der Etage");
         return;
+      }
+
+      // Upload 3D model if provided
+      if (model3dFile) {
+        const { error: modelError } = await upload3DModel(
+          { main: model3dFile, mtl: mtlFile || undefined },
+          locationId,
+          floor.id
+        );
+        if (modelError) {
+          toast.error("Etage aktualisiert, aber 3D-Modell konnte nicht hochgeladen werden");
+        }
       }
 
       toast.success("Etage erfolgreich aktualisiert");
@@ -160,6 +176,39 @@ export function EditFloorDialog({ floor, locationId, onSuccess }: EditFloorDialo
               onChange={(e) => setFloorPlanFile(e.target.files?.[0] || null)}
             />
           </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="edit-model3d">3D-Modell (.glb oder .obj)</Label>
+            {floor.model_3d_url && (
+              <p className="text-sm text-muted-foreground">
+                Aktuelles 3D-Modell vorhanden. Laden Sie eine neue Datei hoch, um es zu ersetzen.
+              </p>
+            )}
+            <Input
+              id="edit-model3d"
+              type="file"
+              accept=".glb,.obj"
+              onChange={(e) => {
+                const file = e.target.files?.[0] || null;
+                setModel3dFile(file);
+                if (file && !file.name.toLowerCase().endsWith(".obj")) {
+                  setMtlFile(null);
+                }
+              }}
+            />
+          </div>
+
+          {isObjSelected && (
+            <div className="space-y-2">
+              <Label htmlFor="edit-mtlFile">Material-Datei (.mtl)</Label>
+              <Input
+                id="edit-mtlFile"
+                type="file"
+                accept=".mtl"
+                onChange={(e) => setMtlFile(e.target.files?.[0] || null)}
+              />
+            </div>
+          )}
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setOpen(false)}>

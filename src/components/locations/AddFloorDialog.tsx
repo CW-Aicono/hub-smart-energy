@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useFloors } from "@/hooks/useFloors";
+import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -31,6 +32,8 @@ export function AddFloorDialog({ locationId, onSuccess }: AddFloorDialogProps) {
   const [description, setDescription] = useState("");
   const [areaSqm, setAreaSqm] = useState("");
   const [floorPlanFile, setFloorPlanFile] = useState<File | null>(null);
+  const [model3dFile, setModel3dFile] = useState<File | null>(null);
+  const [mtlFile, setMtlFile] = useState<File | null>(null);
 
   const resetForm = () => {
     setName("");
@@ -38,7 +41,11 @@ export function AddFloorDialog({ locationId, onSuccess }: AddFloorDialogProps) {
     setDescription("");
     setAreaSqm("");
     setFloorPlanFile(null);
+    setModel3dFile(null);
+    setMtlFile(null);
   };
+
+  const isObjSelected = model3dFile?.name.toLowerCase().endsWith(".obj");
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -76,10 +83,33 @@ export function AddFloorDialog({ locationId, onSuccess }: AddFloorDialogProps) {
         if (uploadError) {
           toast.error("Etage erstellt, aber Grundriss konnte nicht hochgeladen werden");
         } else if (url) {
-          // Update floor with the URL
-          const { useFloors } = await import("@/hooks/useFloors");
-          const { supabase } = await import("@/integrations/supabase/client");
-          await supabase.from("floors").update({ floor_plan_url: url }).eq("id", floor.id);
+          await supabase.from("floors").update({ floor_plan_url: url } as any).eq("id", floor.id);
+        }
+      }
+
+      // Upload 3D model if provided
+      if (model3dFile && floor) {
+        const mainExt = model3dFile.name.split('.').pop()?.toLowerCase();
+        const mainPath = `${locationId}/${floor.id}.${mainExt}`;
+
+        const { error: modelUploadError } = await supabase.storage
+          .from('floor-3d-models')
+          .upload(mainPath, model3dFile, { upsert: true });
+
+        if (!modelUploadError) {
+          const { data: { publicUrl: mainUrl } } = supabase.storage
+            .from('floor-3d-models')
+            .getPublicUrl(mainPath);
+
+          let mtlUrl: string | null = null;
+          if (mtlFile) {
+            const mtlPath = `${locationId}/${floor.id}.mtl`;
+            await supabase.storage.from('floor-3d-models').upload(mtlPath, mtlFile, { upsert: true });
+            const { data: { publicUrl } } = supabase.storage.from('floor-3d-models').getPublicUrl(mtlPath);
+            mtlUrl = publicUrl;
+          }
+
+          await supabase.from("floors").update({ model_3d_url: mainUrl, model_3d_mtl_url: mtlUrl } as any).eq("id", floor.id);
         }
       }
 
@@ -173,6 +203,37 @@ export function AddFloorDialog({ locationId, onSuccess }: AddFloorDialogProps) {
               Unterstützte Formate: JPG, PNG, PDF
             </p>
           </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="model3d">3D-Modell (optional)</Label>
+            <Input
+              id="model3d"
+              type="file"
+              accept=".glb,.obj"
+              onChange={(e) => {
+                const file = e.target.files?.[0] || null;
+                setModel3dFile(file);
+                if (file && !file.name.toLowerCase().endsWith(".obj")) {
+                  setMtlFile(null);
+                }
+              }}
+            />
+            <p className="text-xs text-muted-foreground">
+              Unterstützte Formate: GLB (empfohlen), OBJ
+            </p>
+          </div>
+
+          {isObjSelected && (
+            <div className="space-y-2">
+              <Label htmlFor="mtlFile">Material-Datei (.mtl)</Label>
+              <Input
+                id="mtlFile"
+                type="file"
+                accept=".mtl"
+                onChange={(e) => setMtlFile(e.target.files?.[0] || null)}
+              />
+            </div>
+          )}
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setOpen(false)}>

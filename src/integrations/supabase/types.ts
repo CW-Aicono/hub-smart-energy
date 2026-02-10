@@ -358,6 +358,8 @@ export type Database = {
           floor_plan_url: string | null
           id: string
           location_id: string
+          model_3d_mtl_url: string | null
+          model_3d_url: string | null
           name: string
           updated_at: string
         }
@@ -369,6 +371,8 @@ export type Database = {
           floor_plan_url?: string | null
           id?: string
           location_id: string
+          model_3d_mtl_url?: string | null
+          model_3d_url?: string | null
           name: string
           updated_at?: string
         }
@@ -380,6 +384,8 @@ export type Database = {
           floor_plan_url?: string | null
           id?: string
           location_id?: string
+          model_3d_mtl_url?: string | null
+          model_3d_url?: string | null
           name?: string
           updated_at?: string
         }
