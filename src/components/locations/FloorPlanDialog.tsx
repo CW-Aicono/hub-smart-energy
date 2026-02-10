@@ -102,15 +102,17 @@ export function FloorPlanDialog({ floor, locationId, open, onOpenChange }: Floor
   const imageRef = useRef<HTMLImageElement>(null);
   const viewImageRef = useRef<HTMLImageElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const editOverlayRef = useRef<HTMLDivElement>(null);
   const [viewOverlayStyle, setViewOverlayStyle] = useState<React.CSSProperties>({ position: 'absolute', inset: 0 });
+  const [editOverlayStyle, setEditOverlayStyle] = useState<React.CSSProperties>({ position: 'absolute', inset: 0 });
 
-  // Calculate overlay position to match object-contain image
-  const updateViewOverlay = useCallback(() => {
-    const img = viewImageRef.current;
-    if (!img || !img.naturalWidth) return;
+  // Generic overlay calculator for object-contain images
+  const calcOverlayStyle = useCallback((img: HTMLImageElement | null): React.CSSProperties | null => {
+    if (!img || !img.naturalWidth) return null;
     const container = img.parentElement;
-    if (!container) return;
+    if (!container) return null;
     const cr = container.getBoundingClientRect();
+    if (cr.width === 0 || cr.height === 0) return null;
     const imgRatio = img.naturalWidth / img.naturalHeight;
     const cRatio = cr.width / cr.height;
     let w: number, h: number, ox: number, oy: number;
@@ -119,22 +121,38 @@ export function FloorPlanDialog({ floor, locationId, open, onOpenChange }: Floor
     } else {
       h = cr.height; w = cr.height * imgRatio; ox = (cr.width - w) / 2; oy = 0;
     }
-    setViewOverlayStyle({ position: 'absolute', left: `${ox}px`, top: `${oy}px`, width: `${w}px`, height: `${h}px` });
+    return { position: 'absolute', left: `${ox}px`, top: `${oy}px`, width: `${w}px`, height: `${h}px` };
   }, []);
+
+  // Calculate overlay position to match object-contain image
+  const updateViewOverlay = useCallback(() => {
+    const style = calcOverlayStyle(viewImageRef.current);
+    if (style) setViewOverlayStyle(style);
+  }, [calcOverlayStyle]);
+
+  const updateEditOverlay = useCallback(() => {
+    const style = calcOverlayStyle(imageRef.current);
+    if (style) setEditOverlayStyle(style);
+  }, [calcOverlayStyle]);
 
   useEffect(() => {
     if (activeTab === 'view') {
-      // Run immediately + with delay to handle layout settling
       updateViewOverlay();
       const timer = setTimeout(updateViewOverlay, 100);
       return () => clearTimeout(timer);
     }
-  }, [activeTab, isFullscreen, updateViewOverlay]);
+    if (activeTab === 'edit') {
+      updateEditOverlay();
+      const timer = setTimeout(updateEditOverlay, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [activeTab, isFullscreen, updateViewOverlay, updateEditOverlay]);
 
   useEffect(() => {
-    window.addEventListener('resize', updateViewOverlay);
-    return () => window.removeEventListener('resize', updateViewOverlay);
-  }, [updateViewOverlay]);
+    const handleResize = () => { updateViewOverlay(); updateEditOverlay(); };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [updateViewOverlay, updateEditOverlay]);
 
   // Fetch sensors from all integrations
   const fetchAllSensors = useCallback(async () => {
@@ -208,8 +226,10 @@ export function FloorPlanDialog({ floor, locationId, open, onOpenChange }: Floor
   });
 
   const calculatePosition = (e: React.DragEvent | React.MouseEvent) => {
-    if (!imageRef.current) return null;
-    const rect = imageRef.current.getBoundingClientRect();
+    // Use the edit overlay ref which matches the actual image area
+    const el = editOverlayRef.current;
+    if (!el) return null;
+    const rect = el.getBoundingClientRect();
     const x = ((e.clientX - rect.left) / rect.width) * 100;
     const y = ((e.clientY - rect.top) / rect.height) * 100;
     return { 
@@ -486,7 +506,11 @@ export function FloorPlanDialog({ floor, locationId, open, onOpenChange }: Floor
                       alt={floor.name}
                       className="w-full h-full object-contain"
                       draggable={false}
+                      onLoad={updateEditOverlay}
                     />
+                    
+                    {/* Image-aligned overlay for correct positioning */}
+                    <div ref={editOverlayRef} style={editOverlayStyle}>
                     
                     {/* Placed Sensors */}
                     {placedSensorsWithInfo.map((placed) => {
@@ -579,6 +603,7 @@ export function FloorPlanDialog({ floor, locationId, open, onOpenChange }: Floor
                         </div>
                       </div>
                     )}
+                    </div>
                   </div>
                 </div>
               </TabsContent>
