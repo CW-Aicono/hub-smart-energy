@@ -82,7 +82,32 @@ export function FloorPlanDialog({ floor, locationId, open, onOpenChange }: Floor
   const [dragPreview, setDragPreview] = useState<{ x: number; y: number } | null>(null);
   
   const imageRef = useRef<HTMLImageElement>(null);
+  const viewImageRef = useRef<HTMLImageElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const [viewOverlayStyle, setViewOverlayStyle] = useState<React.CSSProperties>({});
+
+  // Calculate overlay position to match object-contain image
+  const updateViewOverlay = useCallback(() => {
+    const img = viewImageRef.current;
+    if (!img || !img.naturalWidth) return;
+    const container = img.parentElement;
+    if (!container) return;
+    const cr = container.getBoundingClientRect();
+    const imgRatio = img.naturalWidth / img.naturalHeight;
+    const cRatio = cr.width / cr.height;
+    let w: number, h: number, ox: number, oy: number;
+    if (imgRatio > cRatio) {
+      w = cr.width; h = cr.width / imgRatio; ox = 0; oy = (cr.height - h) / 2;
+    } else {
+      h = cr.height; w = cr.height * imgRatio; ox = (cr.width - w) / 2; oy = 0;
+    }
+    setViewOverlayStyle({ position: 'absolute', left: `${ox}px`, top: `${oy}px`, width: `${w}px`, height: `${h}px` });
+  }, []);
+
+  useEffect(() => {
+    window.addEventListener('resize', updateViewOverlay);
+    return () => window.removeEventListener('resize', updateViewOverlay);
+  }, [updateViewOverlay]);
 
   // Fetch sensors from all integrations
   const fetchAllSensors = useCallback(async () => {
@@ -323,41 +348,46 @@ export function FloorPlanDialog({ floor, locationId, open, onOpenChange }: Floor
               <TabsContent value="view" className="flex-1 m-0 overflow-hidden">
                 <div className="relative w-full h-full border rounded-lg overflow-hidden bg-muted/10">
                   <img
+                    ref={viewImageRef}
                     src={floor.floor_plan_url!}
                     alt={floor.name}
                     className="w-full h-full object-contain"
+                    onLoad={updateViewOverlay}
                   />
-                  {/* Sensor Overlays */}
-                  {placedSensorsWithInfo.map((pos) => {
-                    const size = (pos as any).label_size as LabelSize || 'medium';
-                    const sizeClasses = {
-                      small: 'min-w-[60px] px-1 py-0.5',
-                      medium: 'min-w-[80px] px-2 py-1',
-                      large: 'min-w-[120px] px-3 py-2',
-                    };
-                    const textClasses = { small: 'text-[8px]', medium: 'text-[10px]', large: 'text-xs' };
-                    const valueClasses = { small: 'text-xs', medium: 'text-sm', large: 'text-base' };
-                    return (
-                      <div
-                        key={pos.id}
-                        className="absolute transform -translate-x-1/2 -translate-y-1/2"
-                        style={{
-                          left: `${pos.position_x}%`,
-                          top: `${pos.position_y}%`,
-                        }}
-                      >
-                        <div className={`bg-card/95 backdrop-blur-sm border shadow-lg rounded-lg text-center ${sizeClasses[size]}`}>
-                          <p className={`${textClasses[size]} font-medium text-muted-foreground truncate max-w-[100px]`}>
-                            {pos.sensor_name}
-                          </p>
-                          <p className={`${valueClasses[size]} font-mono font-bold text-primary`}>
-                            {pos.sensorInfo ? `${pos.sensorInfo.value} ${pos.sensorInfo.unit}` : "—"}
-                          </p>
+                  {/* Image-aligned overlay */}
+                  <div style={viewOverlayStyle}>
+                    {/* Sensor Overlays */}
+                    {placedSensorsWithInfo.map((pos) => {
+                      const size = (pos as any).label_size as LabelSize || 'medium';
+                      const sizeClasses = {
+                        small: 'min-w-[60px] px-1 py-0.5',
+                        medium: 'min-w-[80px] px-2 py-1',
+                        large: 'min-w-[120px] px-3 py-2',
+                      };
+                      const textClasses = { small: 'text-[8px]', medium: 'text-[10px]', large: 'text-xs' };
+                      const valueClasses = { small: 'text-xs', medium: 'text-sm', large: 'text-base' };
+                      return (
+                        <div
+                          key={pos.id}
+                          className="absolute transform -translate-x-1/2 -translate-y-1/2"
+                          style={{
+                            left: `${pos.position_x}%`,
+                            top: `${pos.position_y}%`,
+                          }}
+                        >
+                          <div className={`bg-card/95 backdrop-blur-sm border shadow-lg rounded-lg text-center ${sizeClasses[size]}`}>
+                            <p className={`${textClasses[size]} font-medium text-muted-foreground truncate max-w-[100px]`}>
+                              {pos.sensor_name}
+                            </p>
+                            <p className={`${valueClasses[size]} font-mono font-bold text-primary`}>
+                              {pos.sensorInfo ? `${pos.sensorInfo.value} ${pos.sensorInfo.unit}` : "—"}
+                            </p>
+                          </div>
                         </div>
-                      </div>
-                    );
-                  })}
-                  <RoomOverlay2D rooms={floorRooms} />
+                      );
+                    })}
+                    <RoomOverlay2D rooms={floorRooms} />
+                  </div>
                 </div>
               </TabsContent>
 
