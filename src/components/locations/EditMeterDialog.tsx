@@ -12,7 +12,18 @@ import { Textarea } from "@/components/ui/textarea";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
-import { AlertCircle } from "lucide-react";
+import { AlertCircle, Layers, DoorOpen } from "lucide-react";
+
+interface Floor {
+  id: string;
+  name: string;
+  floor_number: number;
+}
+
+interface Room {
+  id: string;
+  name: string;
+}
 
 interface EditMeterDialogProps {
   meter: Meter;
@@ -44,7 +55,10 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
   const [parentMeterId, setParentMeterId] = useState(meter.parent_meter_id || "none");
   const [isMainMeter, setIsMainMeter] = useState(meter.is_main_meter);
   const [meterFunction, setMeterFunction] = useState(meter.meter_function || "consumption");
-
+  const [selectedFloorId, setSelectedFloorId] = useState(meter.floor_id || "");
+  const [selectedRoomId, setSelectedRoomId] = useState(meter.room_id || "");
+  const [floors, setFloors] = useState<Floor[]>([]);
+  const [rooms, setRooms] = useState<Room[]>([]);
   // Available parents: all active meters except self and descendants
   const availableParents = allMeters.filter((m) => !m.is_archived && m.id !== meter.id);
 
@@ -67,7 +81,49 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
     setParentMeterId(meter.parent_meter_id || "none");
     setIsMainMeter(meter.is_main_meter);
     setMeterFunction(meter.meter_function || "consumption");
+    setSelectedFloorId(meter.floor_id || "");
+    setSelectedRoomId(meter.room_id || "");
   }, [meter]);
+
+  // Fetch floors for the location
+  useEffect(() => {
+    if (!meter.location_id) { setFloors([]); return; }
+    const fetchFloors = async () => {
+      const { data } = await supabase
+        .from("floors")
+        .select("id, name, floor_number")
+        .eq("location_id", meter.location_id)
+        .order("floor_number");
+      const list = (data as Floor[]) || [];
+      setFloors(list);
+      // Auto-select if only one floor and no floor set
+      if (list.length === 1 && !meter.floor_id) {
+        setSelectedFloorId(list[0].id);
+      }
+    };
+    fetchFloors();
+  }, [meter.location_id, meter.floor_id]);
+
+  // Fetch rooms when floor changes
+  useEffect(() => {
+    if (!selectedFloorId) { setRooms([]); setSelectedRoomId((prev) => prev ? "" : prev); return; }
+    const fetchRooms = async () => {
+      const { data } = await supabase
+        .from("floor_rooms")
+        .select("id, name")
+        .eq("floor_id", selectedFloorId)
+        .order("name");
+      const list = (data as Room[]) || [];
+      setRooms(list);
+      // Auto-select if only one room and no room previously set
+      if (list.length === 1 && !meter.room_id) {
+        setSelectedRoomId(list[0].id);
+      } else if (!list.find((r) => r.id === selectedRoomId)) {
+        setSelectedRoomId("");
+      }
+    };
+    fetchRooms();
+  }, [selectedFloorId]);
 
   // Fetch sensors when integration selected
   useEffect(() => {
@@ -119,6 +175,8 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
       parent_meter_id: parentMeterId && parentMeterId !== "none" ? parentMeterId : null,
       is_main_meter: isMainMeter,
       meter_function: meterFunction,
+      floor_id: selectedFloorId || null,
+      room_id: selectedRoomId || null,
     } as any);
     setSaving(false);
     onOpenChange(false);
@@ -225,6 +283,42 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
             <Label>Medium</Label>
             <Input value={medium} onChange={(e) => setMedium(e.target.value)} />
           </div>
+          {/* Floor & Room assignment */}
+          {floors.length > 0 && (
+            <div className="space-y-3 rounded-md border p-3 bg-muted/30">
+              <p className="text-sm font-medium text-muted-foreground">Zuordnung</p>
+              <div>
+                <Label className="flex items-center gap-1.5 mb-1">
+                  <Layers className="h-3.5 w-3.5" />
+                  Etage
+                </Label>
+                <Select value={selectedFloorId} onValueChange={(v) => { setSelectedFloorId(v); setSelectedRoomId(""); }}>
+                  <SelectTrigger><SelectValue placeholder="Etage wählen" /></SelectTrigger>
+                  <SelectContent>
+                    {floors.map((f) => (
+                      <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              {rooms.length > 0 && selectedFloorId && (
+                <div>
+                  <Label className="flex items-center gap-1.5 mb-1">
+                    <DoorOpen className="h-3.5 w-3.5" />
+                    Raum
+                  </Label>
+                  <Select value={selectedRoomId} onValueChange={setSelectedRoomId}>
+                    <SelectTrigger><SelectValue placeholder="Optional: Raum wählen" /></SelectTrigger>
+                    <SelectContent>
+                      {rooms.map((r) => (
+                        <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+            </div>
+          )}
           {/* Hierarchy */}
           <div className="space-y-3 rounded-md border p-3 bg-muted/30">
             <div className="flex items-center justify-between">
