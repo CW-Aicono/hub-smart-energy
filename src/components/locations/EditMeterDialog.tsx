@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { Meter, MeterInsert } from "@/hooks/useMeters";
+import { useMeters } from "@/hooks/useMeters";
 import { useLocationIntegrations } from "@/hooks/useIntegrations";
 import { supabase } from "@/integrations/supabase/client";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -10,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Switch } from "@/components/ui/switch";
 import { AlertCircle } from "lucide-react";
 
 interface EditMeterDialogProps {
@@ -26,6 +28,7 @@ interface SensorOption {
 
 export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeterDialogProps) => {
   const { locationIntegrations, loading: integrationsLoading } = useLocationIntegrations(meter.location_id);
+  const { meters: allMeters } = useMeters(meter.location_id);
   const [name, setName] = useState(meter.name);
   const [meterNumber, setMeterNumber] = useState(meter.meter_number || "");
   const [energyType, setEnergyType] = useState(meter.energy_type);
@@ -38,6 +41,12 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
   const [sensors, setSensors] = useState<SensorOption[]>([]);
   const [sensorsLoading, setSensorsLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [parentMeterId, setParentMeterId] = useState(meter.parent_meter_id || "none");
+  const [isMainMeter, setIsMainMeter] = useState(meter.is_main_meter);
+  const [meterFunction, setMeterFunction] = useState(meter.meter_function || "consumption");
+
+  // Available parents: all active meters except self and descendants
+  const availableParents = allMeters.filter((m) => !m.is_archived && m.id !== meter.id);
 
   const enabledIntegrations = locationIntegrations.filter((li) => li.is_enabled);
 
@@ -55,6 +64,9 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
     setCaptureType(meter.capture_type as "manual" | "automatic");
     setSelectedIntegration(meter.location_integration_id || "");
     setSelectedSensor(meter.sensor_uuid || "");
+    setParentMeterId(meter.parent_meter_id || "none");
+    setIsMainMeter(meter.is_main_meter);
+    setMeterFunction(meter.meter_function || "consumption");
   }, [meter]);
 
   // Fetch sensors when integration selected
@@ -104,7 +116,10 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
       capture_type: captureType,
       location_integration_id: captureType === "automatic" && selectedIntegration ? selectedIntegration : undefined,
       sensor_uuid: captureType === "automatic" && selectedSensor ? selectedSensor : undefined,
-    });
+      parent_meter_id: parentMeterId && parentMeterId !== "none" ? parentMeterId : null,
+      is_main_meter: isMainMeter,
+      meter_function: meterFunction,
+    } as any);
     setSaving(false);
     onOpenChange(false);
   };
@@ -209,6 +224,37 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
           <div>
             <Label>Medium</Label>
             <Input value={medium} onChange={(e) => setMedium(e.target.value)} />
+          </div>
+          {/* Hierarchy */}
+          <div className="space-y-3 rounded-md border p-3 bg-muted/30">
+            <div className="flex items-center justify-between">
+              <Label>Hauptzähler (Netzübergabepunkt)</Label>
+              <Switch checked={isMainMeter} onCheckedChange={setIsMainMeter} />
+            </div>
+            <div>
+              <Label>Zählerfunktion</Label>
+              <Select value={meterFunction} onValueChange={setMeterFunction}>
+                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="consumption">Verbrauch</SelectItem>
+                  <SelectItem value="generation">Erzeugung (z.B. PV)</SelectItem>
+                  <SelectItem value="technical">Technisch (z.B. Wärmepumpe)</SelectItem>
+                  <SelectItem value="submeter">Unterzähler</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Übergeordneter Zähler</Label>
+              <Select value={parentMeterId} onValueChange={setParentMeterId}>
+                <SelectTrigger className="mt-1"><SelectValue placeholder="Kein (Hauptzähler)" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Kein übergeordneter Zähler</SelectItem>
+                  {availableParents.map((m) => (
+                    <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
           <div>
             <Label>Notizen</Label>

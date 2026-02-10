@@ -27,6 +27,9 @@ export interface Meter {
   is_archived: boolean;
   floor_id: string | null;
   room_id: string | null;
+  parent_meter_id: string | null;
+  is_main_meter: boolean;
+  meter_function: string;
   created_at: string;
   updated_at: string;
 }
@@ -72,11 +75,14 @@ export function useMeters(locationId?: string) {
     fetchMeters();
   }, [fetchMeters]);
 
-  const addMeter = async (meter: MeterInsert) => {
+  const addMeter = async (meter: MeterInsert, parentMeterId?: string | null, isMainMeter?: boolean, meterFunction?: string) => {
     if (!tenantId) return;
     const { error } = await supabase.from("meters").insert({
       ...meter,
       tenant_id: tenantId,
+      parent_meter_id: parentMeterId || null,
+      is_main_meter: isMainMeter || false,
+      meter_function: meterFunction || "consumption",
     } as any);
     if (error) {
       toast.error("Zähler konnte nicht angelegt werden");
@@ -126,5 +132,19 @@ export function useMeters(locationId?: string) {
     }
   };
 
-  return { meters, loading, addMeter, updateMeter, deleteMeter, archiveMeter, refetch: fetchMeters };
+  const updateMeterParent = async (meterId: string, parentMeterId: string | null) => {
+    const { error } = await supabase
+      .from("meters")
+      .update({ parent_meter_id: parentMeterId } as any)
+      .eq("id", meterId);
+    if (error) {
+      toast.error("Zähler konnte nicht verschoben werden");
+      console.error(error);
+    } else {
+      toast.success("Zählerstruktur aktualisiert");
+      fetchMeters();
+    }
+  };
+
+  return { meters, loading, addMeter, updateMeter, deleteMeter, archiveMeter, updateMeterParent, refetch: fetchMeters };
 }

@@ -726,12 +726,15 @@ export type Database = {
           id: string
           installation_date: string | null
           is_archived: boolean
+          is_main_meter: boolean
           location_id: string
           location_integration_id: string | null
           medium: string | null
+          meter_function: string
           meter_number: string | null
           name: string
           notes: string | null
+          parent_meter_id: string | null
           photo_url: string | null
           room_id: string | null
           sensor_uuid: string | null
@@ -747,12 +750,15 @@ export type Database = {
           id?: string
           installation_date?: string | null
           is_archived?: boolean
+          is_main_meter?: boolean
           location_id: string
           location_integration_id?: string | null
           medium?: string | null
+          meter_function?: string
           meter_number?: string | null
           name: string
           notes?: string | null
+          parent_meter_id?: string | null
           photo_url?: string | null
           room_id?: string | null
           sensor_uuid?: string | null
@@ -768,12 +774,15 @@ export type Database = {
           id?: string
           installation_date?: string | null
           is_archived?: boolean
+          is_main_meter?: boolean
           location_id?: string
           location_integration_id?: string | null
           medium?: string | null
+          meter_function?: string
           meter_number?: string | null
           name?: string
           notes?: string | null
+          parent_meter_id?: string | null
           photo_url?: string | null
           room_id?: string | null
           sensor_uuid?: string | null
@@ -801,6 +810,13 @@ export type Database = {
             columns: ["location_integration_id"]
             isOneToOne: false
             referencedRelation: "location_integrations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meters_parent_meter_id_fkey"
+            columns: ["parent_meter_id"]
+            isOneToOne: false
+            referencedRelation: "meters"
             referencedColumns: ["id"]
           },
           {
