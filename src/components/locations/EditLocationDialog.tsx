@@ -148,6 +148,7 @@ export function EditLocationDialog({ location, onSuccess, trigger }: EditLocatio
       contact_phone: data.contact_phone || null,
       energy_sources: data.energy_sources,
       show_on_map: data.show_on_map,
+      is_main_location: data.is_main_location,
       latitude: typeof data.latitude === "number" ? data.latitude : null,
       longitude: typeof data.longitude === "number" ? data.longitude : null,
       description: data.description || null,
