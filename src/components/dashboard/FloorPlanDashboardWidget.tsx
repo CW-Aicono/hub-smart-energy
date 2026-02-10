@@ -21,6 +21,9 @@ interface FloorOption {
   location_name: string;
   floor_plan_url: string | null;
   floor_number: number;
+  model_3d_url: string | null;
+  model_3d_mtl_url: string | null;
+  model_3d_rotation: number | null;
 }
 
 function ZoomControls() {
@@ -66,6 +69,9 @@ const FloorPlanDashboardWidget = ({ locationId }: FloorPlanDashboardWidgetProps)
             location_name: loc?.name || "",
             floor_plan_url: f.floor_plan_url,
             floor_number: f.floor_number,
+            model_3d_url: f.model_3d_url,
+            model_3d_mtl_url: f.model_3d_mtl_url,
+            model_3d_rotation: f.model_3d_rotation,
           };
         });
         setAllFloors(options);
@@ -162,7 +168,7 @@ const FloorPlanDashboardWidget = ({ locationId }: FloorPlanDashboardWidgetProps)
         ) : selectedFloor && viewMode === "3d" ? (
           <Suspense fallback={<div className="flex items-center justify-center h-full"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>}>
             <FloorPlan3DViewer
-              floor={{ id: selectedFloor.id, location_id: selectedFloor.location_id, name: selectedFloor.name, floor_number: selectedFloor.floor_number, floor_plan_url: selectedFloor.floor_plan_url, description: null, area_sqm: null, model_3d_url: null, model_3d_mtl_url: null, model_3d_rotation: null, created_at: "", updated_at: "" }}
+              floor={{ id: selectedFloor.id, location_id: selectedFloor.location_id, name: selectedFloor.name, floor_number: selectedFloor.floor_number, floor_plan_url: selectedFloor.floor_plan_url, description: null, area_sqm: null, model_3d_url: selectedFloor.model_3d_url, model_3d_mtl_url: selectedFloor.model_3d_mtl_url, model_3d_rotation: selectedFloor.model_3d_rotation, created_at: "", updated_at: "" }}
               locationId={selectedFloor.location_id}
               sensors={[]}
               isAdmin={true}

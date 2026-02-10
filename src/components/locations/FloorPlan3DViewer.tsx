@@ -250,6 +250,8 @@ function Scene({
   meterLatestValues,
   isWalking,
   rotationDeg,
+  isAdmin,
+  onMeterYChange,
   onLockChange,
   onCameraUpdate,
 }: { 
@@ -261,6 +263,8 @@ function Scene({
   meterLatestValues: Record<string, number | null>;
   isWalking: boolean;
   rotationDeg: number;
+  isAdmin: boolean;
+  onMeterYChange: (meterId: string, newY: number) => void;
   onLockChange: (locked: boolean) => void;
   onCameraUpdate: (pos: { x: number; z: number }, rotY: number) => void;
 }) {
@@ -379,9 +383,10 @@ function Scene({
       {/* Meter Labels - always shown regardless of model/procedural mode */}
       {floorMeters.map((meter, index) => {
         const room = meter.room_id ? rooms.find(r => r.id === meter.room_id) : null;
+        const yPos = (meter as any).position_3d_y ?? 2.5;
         const meterPos: [number, number, number] = room
-          ? [room.position_x + 1, 2.5, room.position_y]
-          : [(index - floorMeters.length / 2) * 3, 2.5, -2];
+          ? [room.position_x + 1, yPos, room.position_y]
+          : [(index - floorMeters.length / 2) * 3, yPos, -2];
         
         return (
           <Meter3DLabel
@@ -389,6 +394,8 @@ function Scene({
             meter={meter}
             position={meterPos}
             latestValue={meterLatestValues[meter.id]}
+            isAdmin={isAdmin}
+            onChangeY={onMeterYChange}
           />
         );
       })}
@@ -419,13 +426,13 @@ function Scene({
 export function FloorPlan3DViewer({ floor, locationId, sensors = [], isAdmin = false, compact = false }: FloorPlan3DViewerProps) {
   const { rooms, loading: roomsLoading, refetch: refetchRooms } = useFloorRooms(floor.id);
   const { positions: sensorPositions, loading: positionsLoading } = useFloorSensorPositions(floor.id);
-  const { meters, loading: metersLoading } = useMeters(locationId);
+  const { meters, loading: metersLoading, updateMeter } = useMeters(locationId);
   const { readings, loading: readingsLoading } = useMeterReadings();
   const { updateFloor } = useFloors(locationId);
   
-  // Filter meters: assigned to this floor OR unassigned (show all location meters)
+  // Filter meters: only show meters assigned to this specific floor
   const floorMeters = useMemo(() => 
-    meters.filter(m => !m.is_archived && (m.floor_id === floor.id || !m.floor_id)),
+    meters.filter(m => !m.is_archived && m.floor_id === floor.id),
     [meters, floor.id]
   );
 
@@ -473,6 +480,10 @@ export function FloorPlan3DViewer({ floor, locationId, sensors = [], isAdmin = f
       updateFloor(floor.id, { model_3d_rotation: deg } as any);
     }, 500);
   }, [floor.id, updateFloor]);
+
+  const handleMeterYChange = useCallback((meterId: string, newY: number) => {
+    updateMeter(meterId, { position_3d_y: newY } as any);
+  }, [updateMeter]);
 
   const loading = roomsLoading || positionsLoading || metersLoading;
 
@@ -609,6 +620,8 @@ export function FloorPlan3DViewer({ floor, locationId, sensors = [], isAdmin = f
                   meterLatestValues={meterLatestValues}
                   isWalking={isWalking}
                   rotationDeg={modelRotation}
+                  isAdmin={isAdmin}
+                  onMeterYChange={handleMeterYChange}
                   onLockChange={handleLockChange}
                   onCameraUpdate={handleCameraUpdate}
                 />

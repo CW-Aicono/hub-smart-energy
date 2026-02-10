@@ -1071,6 +1071,7 @@ export type Database = {
           notes: string | null
           parent_meter_id: string | null
           photo_url: string | null
+          position_3d_y: number | null
           room_id: string | null
           sensor_uuid: string | null
           tenant_id: string
@@ -1095,6 +1096,7 @@ export type Database = {
           notes?: string | null
           parent_meter_id?: string | null
           photo_url?: string | null
+          position_3d_y?: number | null
           room_id?: string | null
           sensor_uuid?: string | null
           tenant_id: string
@@ -1119,6 +1121,7 @@ export type Database = {
           notes?: string | null
           parent_meter_id?: string | null
           photo_url?: string | null
+          position_3d_y?: number | null
           room_id?: string | null
           sensor_uuid?: string | null
           tenant_id?: string
