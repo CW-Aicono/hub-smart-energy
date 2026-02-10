@@ -187,15 +187,36 @@ function TDSModel({ url }: { url: string }) {
   return <primitive object={object} />;
 }
 
+// Wraps a model, applies X-axis rotation, then re-grounds so bottom sits at Y=0
+function RotatedModelGroup({ rotationDeg, children }: { rotationDeg: number; children: React.ReactNode }) {
+  const groupRef = useRef<THREE.Group>(null);
+  const rotationX = (rotationDeg * Math.PI) / 180;
+
+  useEffect(() => {
+    if (!groupRef.current) return;
+    // Reset position before measuring
+    groupRef.current.position.y = 0;
+    groupRef.current.rotation.set(rotationX, 0, 0);
+    groupRef.current.updateMatrixWorld(true);
+    
+    const box = new THREE.Box3().setFromObject(groupRef.current);
+    // Shift up so the bottom of the rotated model sits on Y=0
+    groupRef.current.position.y = -box.min.y;
+  }, [rotationX]);
+
+  return (
+    <group ref={groupRef} rotation={[rotationX, 0, 0]}>
+      {children}
+    </group>
+  );
+}
+
 // Renders uploaded 3D model (GLB, OBJ+MTL, or 3DS) with optional manual rotation
 function ModelViewer({ floor, rotationDeg }: { floor: Floor; rotationDeg: number }) {
   if (!floor.model_3d_url) return null;
 
   const url = floor.model_3d_url;
   const pathOnly = url.split("?")[0].toLowerCase();
-
-  // Apply X-axis rotation (degrees to radians) – for tilting the model upright
-  const rotationX = (rotationDeg * Math.PI) / 180;
 
   let modelElement: JSX.Element;
 
@@ -208,9 +229,9 @@ function ModelViewer({ floor, rotationDeg }: { floor: Floor; rotationDeg: number
   }
 
   return (
-    <group rotation={[rotationX, 0, 0]}>
+    <RotatedModelGroup rotationDeg={rotationDeg}>
       {modelElement}
-    </group>
+    </RotatedModelGroup>
   );
 }
 
