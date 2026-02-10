@@ -240,11 +240,19 @@ const Locations = () => {
                     </>
                   )}
                 </Button>
-                <Select value={viewMode} onValueChange={(v) => { setViewMode(v as "list" | "tree"); setTreeLocationId(null); }}>
+                <Select value={viewMode} onValueChange={(v) => {
+                  const scrollContainer = document.querySelector('main.flex-1.overflow-auto');
+                  const scrollTop = scrollContainer?.scrollTop ?? 0;
+                  setViewMode(v as "list" | "tree");
+                  setTreeLocationId(null);
+                  requestAnimationFrame(() => {
+                    if (scrollContainer) scrollContainer.scrollTop = scrollTop;
+                  });
+                }}>
                   <SelectTrigger className="w-[180px]">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent position="popper">
                     <SelectItem value="list">
                       <span className="flex items-center gap-2"><List className="h-4 w-4" /> Liste</span>
                     </SelectItem>
