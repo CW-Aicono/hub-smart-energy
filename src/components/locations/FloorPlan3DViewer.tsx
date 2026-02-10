@@ -2,8 +2,9 @@ import { Suspense, useState, useCallback, useMemo, useRef, useEffect } from "rea
 import { Canvas, useFrame, useLoader } from "@react-three/fiber";
 import { Environment, Grid, OrbitControls, Text, useGLTF } from "@react-three/drei";
 import { Button } from "@/components/ui/button";
-import { Play, Square, Edit, Loader2 } from "lucide-react";
-import { Floor } from "@/hooks/useFloors";
+import { Slider } from "@/components/ui/slider";
+import { Play, Square, Edit, Loader2, RotateCw } from "lucide-react";
+import { Floor, useFloors } from "@/hooks/useFloors";
 import { FloorRoom, useFloorRooms } from "@/hooks/useFloorRooms";
 import { FloorSensorPosition, useFloorSensorPositions } from "@/hooks/useFloorSensorPositions";
 import { useMeters, Meter } from "@/hooks/useMeters";
@@ -188,15 +189,14 @@ function TDSModel({ url }: { url: string }) {
 }
 
 // Renders uploaded 3D model (GLB, OBJ+MTL, or 3DS) with optional manual rotation
-function ModelViewer({ floor }: { floor: Floor }) {
+function ModelViewer({ floor, rotationDeg }: { floor: Floor; rotationDeg: number }) {
   if (!floor.model_3d_url) return null;
 
   const url = floor.model_3d_url;
   const pathOnly = url.split("?")[0].toLowerCase();
-  const manualRotation = floor.model_3d_rotation;
 
-  // Apply manual Y-axis rotation (degrees to radians)
-  const rotationY = manualRotation != null ? (manualRotation * Math.PI) / 180 : 0;
+  // Apply Y-axis rotation (degrees to radians)
+  const rotationY = (rotationDeg * Math.PI) / 180;
 
   let modelElement: JSX.Element;
 
@@ -223,6 +223,7 @@ function Scene({
   floorMeters,
   meterLatestValues,
   isWalking,
+  rotationDeg,
   onLockChange,
   onCameraUpdate,
 }: { 
@@ -233,6 +234,7 @@ function Scene({
   floorMeters: Meter[];
   meterLatestValues: Record<string, number | null>;
   isWalking: boolean;
+  rotationDeg: number;
   onLockChange: (locked: boolean) => void;
   onCameraUpdate: (pos: { x: number; z: number }, rotY: number) => void;
 }) {
@@ -293,7 +295,7 @@ function Scene({
       
       {/* 3D Model or procedural rooms */}
       {floor.model_3d_url ? (
-        <ModelViewer floor={floor} />
+        <ModelViewer floor={floor} rotationDeg={rotationDeg} />
       ) : (
         <>
           {/* Rooms */}
@@ -393,6 +395,7 @@ export function FloorPlan3DViewer({ floor, locationId, sensors = [], isAdmin = f
   const { positions: sensorPositions, loading: positionsLoading } = useFloorSensorPositions(floor.id);
   const { meters, loading: metersLoading } = useMeters(locationId);
   const { readings, loading: readingsLoading } = useMeterReadings();
+  const { updateFloor } = useFloors(locationId);
   
   // Filter meters: assigned to this floor OR unassigned (show all location meters)
   const floorMeters = useMemo(() => 
@@ -417,6 +420,9 @@ export function FloorPlan3DViewer({ floor, locationId, sensors = [], isAdmin = f
   const [showRoomEditor, setShowRoomEditor] = useState(false);
   const [cameraPos, setCameraPos] = useState({ x: 0, z: 10 });
   const [cameraRotY, setCameraRotY] = useState(0);
+  const [modelRotation, setModelRotation] = useState<number>(floor.model_3d_rotation ?? 0);
+  const [showRotationControls, setShowRotationControls] = useState(false);
+  const rotationSaveTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const handleCameraUpdate = useCallback((pos: { x: number; z: number }, rotY: number) => {
     setCameraPos(pos);
@@ -432,6 +438,15 @@ export function FloorPlan3DViewer({ floor, locationId, sensors = [], isAdmin = f
 
   const startWalking = () => setIsWalking(true);
   const stopWalking = () => setIsWalking(false);
+
+  const handleRotationChange = useCallback((deg: number) => {
+    setModelRotation(deg);
+    // Debounce save to DB
+    if (rotationSaveTimeout.current) clearTimeout(rotationSaveTimeout.current);
+    rotationSaveTimeout.current = setTimeout(() => {
+      updateFloor(floor.id, { model_3d_rotation: deg } as any);
+    }, 500);
+  }, [floor.id, updateFloor]);
 
   const loading = roomsLoading || positionsLoading || metersLoading;
 
@@ -470,6 +485,17 @@ export function FloorPlan3DViewer({ floor, locationId, sensors = [], isAdmin = f
           </div>
           
           <div className="flex items-center gap-2">
+            {floor.model_3d_url && isAdmin && (
+              <Button
+                variant={showRotationControls ? "default" : "outline"}
+                size="sm"
+                onClick={() => setShowRotationControls(!showRotationControls)}
+                disabled={isWalking}
+              >
+                <RotateCw className="h-4 w-4 mr-2" />
+                Rotation
+              </Button>
+            )}
             {!isWalking ? (
               <Button onClick={startWalking} disabled={loading}>
                 <Play className="h-4 w-4 mr-2" />
@@ -481,6 +507,39 @@ export function FloorPlan3DViewer({ floor, locationId, sensors = [], isAdmin = f
                 Beenden
               </Button>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Rotation controls bar */}
+      {showRotationControls && !isWalking && (
+        <div className="flex items-center gap-3 px-3 py-2 border-b bg-muted/30 flex-shrink-0">
+          <RotateCw className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+          <span className="text-sm text-muted-foreground flex-shrink-0">Rotation:</span>
+          <Slider
+            value={[modelRotation]}
+            onValueChange={(v) => handleRotationChange(v[0])}
+            min={0}
+            max={360}
+            step={15}
+            className="flex-1 max-w-xs"
+          />
+          <span className="text-sm font-mono text-muted-foreground w-10 text-right flex-shrink-0">
+            {modelRotation}°
+          </span>
+          <div className="flex gap-1 flex-shrink-0">
+            {[0, 90, 180, 270].map((deg) => (
+              <Button
+                key={deg}
+                type="button"
+                variant={modelRotation === deg ? "default" : "outline"}
+                size="sm"
+                className="text-xs h-7 px-2"
+                onClick={() => handleRotationChange(deg)}
+              >
+                {deg}°
+              </Button>
+            ))}
           </div>
         </div>
       )}
@@ -523,6 +582,7 @@ export function FloorPlan3DViewer({ floor, locationId, sensors = [], isAdmin = f
                   floorMeters={floorMeters}
                   meterLatestValues={meterLatestValues}
                   isWalking={isWalking}
+                  rotationDeg={modelRotation}
                   onLockChange={handleLockChange}
                   onCameraUpdate={handleCameraUpdate}
                 />
