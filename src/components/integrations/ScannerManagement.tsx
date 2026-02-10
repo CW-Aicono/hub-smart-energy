@@ -26,7 +26,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Plus, Smartphone, Trash2, Pencil, QrCode, Loader2, Copy, Check } from "lucide-react";
+import { Plus, Smartphone, Trash2, Pencil, QrCode, Loader2, Copy, Check, Eye } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { ScannerQrCode } from "./ScannerQrCode";
 
@@ -35,6 +35,7 @@ export function ScannerManagement() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingScanner, setEditingScanner] = useState<MeterScanner | null>(null);
   const [qrScanner, setQrScanner] = useState<MeterScanner | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -110,10 +111,16 @@ export function ScannerManagement() {
             Erstellen Sie Scanner für die mobile Zählerstanderfassung per App
           </p>
         </div>
-        <Button onClick={() => handleOpen()} className="gap-2">
-          <Plus className="h-4 w-4" />
-          Scanner erstellen
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={() => setPreviewOpen(true)} className="gap-2">
+            <Eye className="h-4 w-4" />
+            App-Vorschau
+          </Button>
+          <Button onClick={() => handleOpen()} className="gap-2">
+            <Plus className="h-4 w-4" />
+            Scanner erstellen
+          </Button>
+        </div>
       </div>
 
       {scanners.length === 0 ? (
@@ -246,6 +253,38 @@ export function ScannerManagement() {
           onOpenChange={(open) => !open && setQrScanner(null)}
         />
       )}
+      {/* App Preview Dialog */}
+      <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
+        <DialogContent className="sm:max-w-md p-0 overflow-hidden bg-transparent border-none shadow-none">
+          <div className="flex flex-col items-center">
+            {/* Smartphone Frame */}
+            <div className="relative mx-auto" style={{ width: 320 }}>
+              {/* Phone bezel */}
+              <div className="rounded-[2.5rem] border-[6px] border-foreground/80 bg-background shadow-2xl overflow-hidden">
+                {/* Notch */}
+                <div className="relative z-10 flex justify-center pt-2 pb-1 bg-background">
+                  <div className="w-24 h-5 bg-foreground/80 rounded-full" />
+                </div>
+                {/* Screen */}
+                <div className="bg-background" style={{ height: 560 }}>
+                  <iframe
+                    src="/m"
+                    className="w-full h-full border-0"
+                    title="Mobile App Preview"
+                  />
+                </div>
+                {/* Home indicator */}
+                <div className="flex justify-center py-2 bg-background">
+                  <div className="w-28 h-1 bg-foreground/30 rounded-full" />
+                </div>
+              </div>
+            </div>
+            <p className="text-sm text-muted-foreground mt-3 text-center">
+              Vorschau der mobilen Erfassungs-App
+            </p>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
