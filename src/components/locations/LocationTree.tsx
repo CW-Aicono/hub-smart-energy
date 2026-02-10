@@ -27,6 +27,7 @@ interface LocationNodeProps {
   isAdmin: boolean;
   showFloors?: boolean;
   locationStatuses?: Map<string, LocationStatus>;
+  isLast?: boolean;
 }
 
 interface FloorNodeProps {
@@ -84,7 +85,7 @@ function FloorNode({ floor, level, isLast }: FloorNodeProps & { isLast: boolean 
   );
 }
 
-function LocationNode({ location, level, selectedId, onSelect, onRefresh, isAdmin, showFloors = true, locationStatuses }: LocationNodeProps) {
+function LocationNode({ location, level, selectedId, onSelect, onRefresh, isAdmin, showFloors = true, locationStatuses, isLast = false }: LocationNodeProps) {
   const [expanded, setExpanded] = useState(true);
   const { floors } = useFloors(showFloors ? location.id : undefined);
   
@@ -133,8 +134,30 @@ function LocationNode({ location, level, selectedId, onSelect, onRefresh, isAdmi
     );
   };
 
+  const indent = level * 20 + 12;
+
   return (
     <div className="relative">
+      {/* Tree connector lines for child nodes */}
+      {level > 0 && (
+        <>
+          <div
+            className="absolute top-0 bottom-0 border-l border-border"
+            style={{ left: `${indent}px` }}
+          />
+          <div
+            className="absolute border-t border-border"
+            style={{ left: `${indent}px`, width: 16, top: '20px' }}
+          />
+          {/* Hide vertical line below last sibling */}
+          {isLast && (
+            <div
+              className="absolute bottom-0 bg-background"
+              style={{ left: `${indent - 1}px`, width: 3, top: '20px' }}
+            />
+          )}
+        </>
+      )}
       <div
         className={cn(
           "flex items-center gap-2 px-3 py-2 rounded-lg transition-colors group",
@@ -203,7 +226,7 @@ function LocationNode({ location, level, selectedId, onSelect, onRefresh, isAdmi
           {/* For Gebäudekomplex: show child buildings first */}
           {hasChildren && (
             <div>
-              {location.children!.map((child) => (
+              {location.children!.map((child, idx) => (
                 <LocationNode
                   key={child.id}
                   location={child}
@@ -214,6 +237,7 @@ function LocationNode({ location, level, selectedId, onSelect, onRefresh, isAdmi
                   isAdmin={isAdmin}
                   showFloors={true}
                   locationStatuses={locationStatuses}
+                  isLast={idx === location.children!.length - 1 && !(shouldShowFloors && hasFloors)}
                 />
               ))}
             </div>
