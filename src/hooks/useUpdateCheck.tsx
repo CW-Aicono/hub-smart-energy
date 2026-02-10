@@ -83,8 +83,20 @@ export function useUpdateCheck(): UpdateCheckState {
     userAppliedRef.current = true;
     if (waitingWorkerRef.current) {
       waitingWorkerRef.current.postMessage({ type: "SKIP_WAITING" });
+      // If controllerchange doesn't fire within 2s, force reload
+      setTimeout(() => {
+        window.location.reload();
+      }, 2000);
     } else {
-      window.location.reload();
+      // No waiting worker ref — clear caches and force reload
+      const doReload = () => window.location.reload();
+      if (typeof caches !== "undefined") {
+        caches.keys().then((names) => {
+          Promise.all(names.map((name) => caches.delete(name))).then(doReload);
+        }).catch(doReload);
+      } else {
+        doReload();
+      }
     }
   }, []);
 
