@@ -1,0 +1,1 @@
+ALTER TABLE public.floor_rooms ALTER COLUMN color SET DEFAULT '#3b82f6';
