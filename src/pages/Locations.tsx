@@ -15,6 +15,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Map, List, Building2, ArrowUpAZ, ArrowDownAZ, Filter, Wifi, WifiOff, AlertCircle, GitBranch, ArrowLeft, Search } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 
 const usageTypeLabels: Record<LocationUsageType, string> = {
@@ -263,27 +265,22 @@ const Locations = () => {
                     </>
                   )}
                 </Button>
-                <Select value={viewMode} onValueChange={(v) => {
-                  const scrollContainer = document.querySelector('main.flex-1.overflow-auto');
-                  const scrollTop = scrollContainer?.scrollTop ?? 0;
-                  setViewMode(v as "list" | "tree");
-                  setTreeLocationId(null);
-                  requestAnimationFrame(() => {
-                    if (scrollContainer) scrollContainer.scrollTop = scrollTop;
-                  });
-                }}>
-                  <SelectTrigger className="w-[180px]">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent position="popper">
-                    <SelectItem value="list">
-                      <span className="flex items-center gap-2"><List className="h-4 w-4" /> Liste</span>
-                    </SelectItem>
-                    <SelectItem value="tree">
-                      <span className="flex items-center gap-2"><GitBranch className="h-4 w-4" /> Baumansicht</span>
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
+                <div className="flex items-center gap-2">
+                  <List className="h-4 w-4 text-muted-foreground" />
+                  <Switch
+                    checked={viewMode === "tree"}
+                    onCheckedChange={(checked) => {
+                      const scrollContainer = document.querySelector('main.flex-1.overflow-auto');
+                      const scrollTop = scrollContainer?.scrollTop ?? 0;
+                      setViewMode(checked ? "tree" : "list");
+                      setTreeLocationId(null);
+                      requestAnimationFrame(() => {
+                        if (scrollContainer) scrollContainer.scrollTop = scrollTop;
+                      });
+                    }}
+                  />
+                  <GitBranch className="h-4 w-4 text-muted-foreground" />
+                </div>
               </div>
 
               {/* Back button when viewing single location tree */}
