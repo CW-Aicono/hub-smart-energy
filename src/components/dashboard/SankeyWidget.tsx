@@ -276,7 +276,7 @@ const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
         <p className="text-sm text-muted-foreground">{subtitle}</p>
       </CardHeader>
       <CardContent className="px-2 pb-2">
-        <div className="w-full relative" style={{ height: "220px" }}>
+        <div className="w-full relative h-[280px]">
           <svg ref={svgRef} viewBox={`0 0 ${vbW} ${vbH}`} className="w-full h-full" preserveAspectRatio="xMidYMid meet">
             {linkElements}
 
