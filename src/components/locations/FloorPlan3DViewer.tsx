@@ -124,15 +124,18 @@ function OBJModel({ objUrl, mtlUrl }: { objUrl: string; mtlUrl?: string | null }
           });
         }
 
-        // Detect Z-up coordinate system (common in CAD exports like Vectorworks)
-        // Check if the model is much flatter in Y than in X/Z
+        // CAD exports (Vectorworks etc.) typically use Z-up coordinate system
+        // Three.js uses Y-up, so we always rotate to correct orientation
+        // First: rotate X by -90° to convert Z-up to Y-up
+        // Then check if additional Y rotation is needed based on aspect ratio
         const tempBox = new THREE.Box3().setFromObject(obj);
         const tempSize = tempBox.getSize(new THREE.Vector3());
-        const isZUp = tempSize.z > tempSize.y * 2;
         
-        if (isZUp) {
-          // Rotate from Z-up to Y-up
+        // Detect Z-up: model is flat in Y but tall in Z
+        if (tempSize.z > tempSize.y * 1.5) {
           obj.rotation.x = -Math.PI / 2;
+          // Additional rotation to face camera correctly
+          obj.rotation.z = -Math.PI / 2;
           obj.updateMatrixWorld(true);
         }
 
