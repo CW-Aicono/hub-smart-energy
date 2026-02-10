@@ -31,6 +31,7 @@ import {
   AlertTriangle,
   Search,
   X,
+  Unlink,
 } from "lucide-react";
 
 interface MeterTreeViewProps {
@@ -122,6 +123,7 @@ function MeterTreeNode({
   expandedIds,
   toggleExpanded,
   onSelectMeter,
+  onDetach,
   isAdmin,
   highlightedIds,
 }: {
@@ -136,6 +138,7 @@ function MeterTreeNode({
   expandedIds: Set<string>;
   toggleExpanded: (id: string) => void;
   onSelectMeter?: (meter: Meter) => void;
+  onDetach: (meterId: string) => void;
   isAdmin: boolean;
   highlightedIds: Set<string>;
 }) {
@@ -229,6 +232,21 @@ function MeterTreeNode({
           </span>
         )}
 
+        {isAdmin && meter.parent_meter_id && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-5 w-5 shrink-0 opacity-0 group-hover:opacity-100"
+            title="Zuordnung aufheben"
+            onClick={(e) => {
+              e.stopPropagation();
+              onDetach(meter.id);
+            }}
+          >
+            <Unlink className="h-3 w-3 text-muted-foreground" />
+          </Button>
+        )}
+
         {hasChildren && (
           <span className="text-[10px] text-muted-foreground shrink-0">
             Σ {node.children.length}
@@ -252,6 +270,7 @@ function MeterTreeNode({
               expandedIds={expandedIds}
               toggleExpanded={toggleExpanded}
               onSelectMeter={onSelectMeter}
+              onDetach={onDetach}
               isAdmin={isAdmin}
               highlightedIds={highlightedIds}
             />
@@ -396,6 +415,13 @@ export const MeterTreeView = ({ meters, onUpdateParent, onSelectMeter }: MeterTr
     [dragState, wouldCreateCycle, handleDragEnd, allMetersMap, executeDrop]
   );
 
+  const handleDetach = useCallback(
+    async (meterId: string) => {
+      await onUpdateParent(meterId, null);
+    },
+    [onUpdateParent]
+  );
+
   const handleDropRoot = useCallback(
     async (e: React.DragEvent) => {
       e.preventDefault();
@@ -499,6 +525,7 @@ export const MeterTreeView = ({ meters, onUpdateParent, onSelectMeter }: MeterTr
                 expandedIds={effectiveExpandedIds}
                 toggleExpanded={toggleExpanded}
                 onSelectMeter={onSelectMeter}
+                onDetach={handleDetach}
                 isAdmin={isAdmin}
                 highlightedIds={highlightedIds}
               />
