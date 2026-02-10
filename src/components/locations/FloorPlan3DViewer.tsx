@@ -42,7 +42,23 @@ function CameraTracker({ onUpdate }: { onUpdate: (pos: { x: number; z: number },
 // Renders a GLB model
 function GLBModel({ url }: { url: string }) {
   const { scene } = useGLTF(url);
-  return <primitive object={scene.clone()} />;
+  const cloned = useMemo(() => {
+    const clone = scene.clone(true);
+    // Remove any cameras that might be embedded in the model
+    const camerasToRemove: THREE.Object3D[] = [];
+    clone.traverse((child) => {
+      if (child instanceof THREE.Camera) {
+        camerasToRemove.push(child);
+      }
+    });
+    camerasToRemove.forEach((cam) => cam.removeFromParent());
+    return clone;
+  }, [scene]);
+  return (
+    <group position={[0, 0, 0]}>
+      <primitive object={cloned} />
+    </group>
+  );
 }
 
 // Renders an OBJ model with optional MTL
@@ -79,7 +95,11 @@ function OBJModel({ objUrl, mtlUrl }: { objUrl: string; mtlUrl?: string | null }
   }, [objUrl, mtlUrl]);
 
   if (!object) return null;
-  return <primitive object={object} />;
+  return (
+    <group position={[0, 0, 0]}>
+      <primitive object={object} />
+    </group>
+  );
 }
 
 // Renders a 3DS model
@@ -94,7 +114,11 @@ function TDSModel({ url }: { url: string }) {
   }, [url]);
 
   if (!object) return null;
-  return <primitive object={object} />;
+  return (
+    <group position={[0, 0, 0]}>
+      <primitive object={object} />
+    </group>
+  );
 }
 
 // Renders uploaded 3D model (GLB, OBJ+MTL, or 3DS)
