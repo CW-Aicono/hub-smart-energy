@@ -36,6 +36,7 @@ export function Meter3DLabel({ meter, position, latestValue, isAdmin, onChangeY 
             <div className="flex flex-col gap-0.5">
               <button
                 className="h-5 w-5 flex items-center justify-center rounded bg-muted hover:bg-muted-foreground/20 border text-muted-foreground"
+                onPointerDown={(e) => e.stopPropagation()}
                 onClick={(e) => { e.stopPropagation(); onChangeY(meter.id, position[1] + 0.5); }}
                 title="Höher"
               >
@@ -43,6 +44,7 @@ export function Meter3DLabel({ meter, position, latestValue, isAdmin, onChangeY 
               </button>
               <button
                 className="h-5 w-5 flex items-center justify-center rounded bg-muted hover:bg-muted-foreground/20 border text-muted-foreground"
+                onPointerDown={(e) => e.stopPropagation()}
                 onClick={(e) => { e.stopPropagation(); onChangeY(meter.id, position[1] - 0.5); }}
                 title="Tiefer"
               >
