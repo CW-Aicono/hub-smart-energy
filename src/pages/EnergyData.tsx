@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Download, Database, Filter, Calendar, FileText } from "lucide-react";
 import { downloadCSV, downloadPDF } from "@/lib/exportUtils";
+import ReportSchedulesList from "@/components/energy-data/ReportSchedulesList";
 import { supabase } from "@/integrations/supabase/client";
 
 const ENERGY_TYPE_LABELS: Record<string, string> = {
@@ -300,6 +301,9 @@ const EnergyData = () => {
               CSV exportieren
             </Button>
           </div>
+
+          {/* Automated Reports */}
+          <ReportSchedulesList />
         </div>
       </main>
     </div>
