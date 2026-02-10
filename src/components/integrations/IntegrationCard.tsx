@@ -210,6 +210,7 @@ export function IntegrationCard({ locationIntegration, onUpdate, onDelete }: Int
         locationIntegration={locationIntegration}
         open={sensorsOpen}
         onOpenChange={setSensorsOpen}
+        locationId={locationIntegration.location_id}
       />
 
       <EditIntegrationDialog

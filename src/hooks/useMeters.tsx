@@ -25,6 +25,8 @@ export interface Meter {
   sensor_uuid: string | null;
   photo_url: string | null;
   is_archived: boolean;
+  floor_id: string | null;
+  room_id: string | null;
   created_at: string;
   updated_at: string;
 }
