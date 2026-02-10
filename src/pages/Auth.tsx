@@ -29,7 +29,7 @@ const Auth = () => {
   const [invitation, setInvitation] = useState<InvitationData | null>(null);
   const [loadingInvitation, setLoadingInvitation] = useState(false);
 
-  const inviteToken = searchParams.get("token");
+  const inviteToken = searchParams.get("invite");
 
   // Check for invitation token
   useEffect(() => {
