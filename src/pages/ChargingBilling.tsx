@@ -18,7 +18,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Receipt, Euro, Zap, Clock, Trash2, Edit } from "lucide-react";
+import { Plus, Receipt, Euro, Zap, Clock, Trash2, Edit, Users, Globe } from "lucide-react";
 import { format } from "date-fns";
 import { fmtNum, fmtCurrency, fmtKwh } from "@/lib/formatCharging";
 
@@ -110,6 +110,8 @@ const ChargingBilling = () => {
               <TabsTrigger value="sessions">Ladevorgänge</TabsTrigger>
               <TabsTrigger value="tariffs">Tarife</TabsTrigger>
               <TabsTrigger value="invoices">Rechnungen</TabsTrigger>
+              <TabsTrigger value="users">Nutzer</TabsTrigger>
+              <TabsTrigger value="roaming">Roaming</TabsTrigger>
             </TabsList>
 
             {/* Sessions Tab */}
@@ -242,6 +244,26 @@ const ChargingBilling = () => {
                       </TableBody>
                     </Table>
                   )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            {/* Users Tab */}
+            <TabsContent value="users">
+              <Card>
+                <CardHeader><CardTitle className="flex items-center gap-2"><Users className="h-5 w-5" />Nutzer</CardTitle></CardHeader>
+                <CardContent>
+                  <p className="text-muted-foreground">Hier können berechtigte Nutzer für die Ladeinfrastruktur verwaltet werden. RFID-Tags und Autorisierungen werden in einem zukünftigen Update verfügbar sein.</p>
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            {/* Roaming Tab */}
+            <TabsContent value="roaming">
+              <Card>
+                <CardHeader><CardTitle className="flex items-center gap-2"><Globe className="h-5 w-5" />Roaming</CardTitle></CardHeader>
+                <CardContent>
+                  <p className="text-muted-foreground">Roaming-Verbindungen zu externen Netzwerken (z.&nbsp;B. Hubject, OCPI) werden in einem zukünftigen Update verfügbar sein.</p>
                 </CardContent>
               </Card>
             </TabsContent>
