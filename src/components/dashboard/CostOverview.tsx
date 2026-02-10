@@ -2,6 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useEnergyData } from "@/hooks/useEnergyData";
 import { Euro, TrendingDown, TrendingUp, ArrowDownRight } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { formatEnergy } from "@/lib/formatEnergy";
 
 interface CostOverviewProps {
   locationId: string | null;
@@ -23,19 +24,19 @@ const CostOverview = ({ locationId }: CostOverviewProps) => {
   const kpis = [
     {
       label: "Aktuelle Ablesungen",
-      value: costOverview.currentMonth > 0 ? `${costOverview.currentMonth.toLocaleString("de-DE")} kWh` : "–",
+      value: costOverview.currentMonth > 0 ? formatEnergy(costOverview.currentMonth) : "–",
       icon: Euro,
       subtitle: "Laufender Monat",
     },
     {
       label: "Vormonat",
-      value: costOverview.previousMonth > 0 ? `${costOverview.previousMonth.toLocaleString("de-DE")} kWh` : "–",
+      value: costOverview.previousMonth > 0 ? formatEnergy(costOverview.previousMonth) : "–",
       icon: TrendingUp,
       subtitle: "Letzter Monat",
     },
     {
       label: "Differenz",
-      value: costOverview.savings > 0 ? `${costOverview.savings.toLocaleString("de-DE")} kWh` : "–",
+      value: costOverview.savings > 0 ? formatEnergy(costOverview.savings) : "–",
       icon: TrendingDown,
       subtitle: costOverview.savingsPercent > 0 ? `${costOverview.savingsPercent}% weniger` : "Keine Daten",
       positive: costOverview.savings > 0,

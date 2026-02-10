@@ -3,6 +3,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { useEnergyData } from "@/hooks/useEnergyData";
 import { useLocations } from "@/hooks/useLocations";
 import { Skeleton } from "@/components/ui/skeleton";
+import { formatEnergy } from "@/lib/formatEnergy";
 
 interface EnergyChartProps {
   locationId: string | null;
@@ -43,6 +44,7 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
                   borderRadius: 'var(--radius)',
                   color: 'hsl(var(--card-foreground))',
                 }}
+                formatter={(value: number, name: string) => [formatEnergy(value), name]}
               />
               <Legend />
               <Bar dataKey="strom" name="Strom" fill="hsl(var(--chart-1))" radius={[2, 2, 0, 0]} />

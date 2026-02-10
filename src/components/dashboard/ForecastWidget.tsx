@@ -3,6 +3,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { useEnergyData } from "@/hooks/useEnergyData";
 import { TrendingUp } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { formatEnergy } from "@/lib/formatEnergy";
 
 interface ForecastWidgetProps {
   locationId: string | null;
@@ -63,7 +64,7 @@ const ForecastWidget = ({ locationId }: ForecastWidgetProps) => {
           Jahresverbrauchsprognose
         </CardTitle>
         <p className="text-sm text-muted-foreground">
-          Hochrechnung: ~{totalForecast.toLocaleString("de-DE")} kWh Gesamtjahr
+          Hochrechnung: ~{formatEnergy(totalForecast)} Gesamtjahr
         </p>
       </CardHeader>
       <CardContent>
@@ -80,7 +81,7 @@ const ForecastWidget = ({ locationId }: ForecastWidgetProps) => {
                 color: "hsl(var(--card-foreground))",
               }}
               formatter={(value: number | null, name: string) =>
-                value !== null ? [`${value.toLocaleString("de-DE")} kWh`, name === "ist" ? "Ist" : "Prognose"] : ["-", name]
+                value !== null ? [formatEnergy(value), name === "ist" ? "Ist" : "Prognose"] : ["-", name]
               }
             />
             <Legend formatter={(value) => (value === "ist" ? "Ist-Verbrauch" : "Prognose")} />

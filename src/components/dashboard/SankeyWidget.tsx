@@ -3,6 +3,7 @@ import { useLocations } from "@/hooks/useLocations";
 import { useEnergyData } from "@/hooks/useEnergyData";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useMemo, useState, useRef } from "react";
+import { formatEnergy } from "@/lib/formatEnergy";
 
 interface SankeyWidgetProps {
   locationId: string | null;
@@ -144,7 +145,7 @@ const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
           opacity={0.8}
           className="pointer-events-none"
         >
-          {link.value.toLocaleString("de-DE")} kWh
+          {formatEnergy(link.value)}
         </text>
       </g>
     );
@@ -166,7 +167,7 @@ const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
                 <g key={`src-${i}`}>
                   <rect x={srcX} y={pos.y} width={nodeW} height={pos.h} rx={3} fill={src.color} opacity={0.9} />
                   <text x={srcX - 6} y={pos.y + pos.h / 2 - 6} textAnchor="end" dominantBaseline="middle" fill="hsl(var(--foreground))" fontSize={10} fontWeight={500}>{src.name}</text>
-                  <text x={srcX - 6} y={pos.y + pos.h / 2 + 6} textAnchor="end" dominantBaseline="middle" fill="hsl(var(--muted-foreground))" fontSize={8}>{src.value.toLocaleString("de-DE")} kWh</text>
+                  <text x={srcX - 6} y={pos.y + pos.h / 2 + 6} textAnchor="end" dominantBaseline="middle" fill="hsl(var(--muted-foreground))" fontSize={8}>{formatEnergy(src.value)}</text>
                 </g>
               );
             })}
@@ -178,7 +179,7 @@ const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
                 <g key={`tgt-${i}`}>
                   <rect x={tgtX} y={pos.y} width={nodeW} height={pos.h} rx={3} fill={tgt.color} opacity={0.9} />
                   <text x={tgtX + nodeW + 6} y={pos.y + pos.h / 2 - 6} textAnchor="start" dominantBaseline="middle" fill="hsl(var(--foreground))" fontSize={10} fontWeight={500}>{tgt.name}</text>
-                  <text x={tgtX + nodeW + 6} y={pos.y + pos.h / 2 + 6} textAnchor="start" dominantBaseline="middle" fill="hsl(var(--muted-foreground))" fontSize={8}>{val.toLocaleString("de-DE")} kWh</text>
+                  <text x={tgtX + nodeW + 6} y={pos.y + pos.h / 2 + 6} textAnchor="start" dominantBaseline="middle" fill="hsl(var(--muted-foreground))" fontSize={8}>{formatEnergy(val)}</text>
                 </g>
               );
             })}
@@ -186,7 +187,7 @@ const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
           {tooltip && (
             <div className="absolute pointer-events-none z-10 rounded-lg border bg-background px-3 py-2 text-xs shadow-lg" style={{ left: tooltip.x, top: tooltip.y, transform: "translate(-50%, -100%)" }}>
               <div className="font-semibold">{tooltip.source} → {tooltip.target}</div>
-              <div className="text-muted-foreground">{tooltip.value.toLocaleString("de-DE")} kWh</div>
+              <div className="text-muted-foreground">{formatEnergy(tooltip.value)}</div>
             </div>
           )}
         </div>
