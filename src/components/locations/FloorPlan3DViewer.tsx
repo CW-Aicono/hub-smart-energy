@@ -12,7 +12,7 @@ import { useMeterReadings } from "@/hooks/useMeterReadings";
 import { Room3D } from "./Room3D";
 import { Floor3DControls } from "./Floor3DControls";
 import { Sensor3DLabel } from "./Sensor3DLabel";
-import { Meter3DLabel } from "./Meter3DLabel";
+import { DraggableMeter3D } from "./DraggableMeter3D";
 import { RoomEditor } from "./RoomEditor";
 import { Minimap3D } from "./Minimap3D";
 import { OBJLoader } from "three/examples/jsm/loaders/OBJLoader.js";
@@ -251,7 +251,7 @@ function Scene({
   isWalking,
   rotationDeg,
   isAdmin,
-  onMeterYChange,
+  onMeterPositionChange,
   onLockChange,
   onCameraUpdate,
 }: { 
@@ -264,10 +264,11 @@ function Scene({
   isWalking: boolean;
   rotationDeg: number;
   isAdmin: boolean;
-  onMeterYChange: (meterId: string, newY: number) => void;
+  onMeterPositionChange: (meterId: string, x: number, y: number, z: number) => void;
   onLockChange: (locked: boolean) => void;
   onCameraUpdate: (pos: { x: number; z: number }, rotY: number) => void;
 }) {
+  const [isDraggingMeter, setIsDraggingMeter] = useState(false);
   // Calculate scene bounds based on rooms
   const sceneBounds = useMemo(() => {
     if (rooms.length === 0) {
@@ -384,30 +385,38 @@ function Scene({
       {floorMeters.map((meter, index) => {
         const room = meter.room_id ? rooms.find(r => r.id === meter.room_id) : null;
         const yPos = (meter as any).position_3d_y ?? 2.5;
-        const meterPos: [number, number, number] = room
-          ? [room.position_x + 1, yPos, room.position_y]
-          : [(index - floorMeters.length / 2) * 3, yPos, -2];
+        const xPos = (meter as any).position_3d_x;
+        const zPos = (meter as any).position_3d_z;
+        const meterPos: [number, number, number] = (xPos != null && zPos != null)
+          ? [xPos, yPos, zPos]
+          : room
+            ? [room.position_x + 1, yPos, room.position_y]
+            : [(index - floorMeters.length / 2) * 3, yPos, -2];
         
         return (
-          <Meter3DLabel
+          <DraggableMeter3D
             key={`meter-${meter.id}`}
             meter={meter}
             position={meterPos}
             latestValue={meterLatestValues[meter.id]}
-            isAdmin={isAdmin}
-            onChangeY={onMeterYChange}
+            isAdmin={isAdmin && !isWalking}
+            onPositionChange={onMeterPositionChange}
+            onDragStart={() => setIsDraggingMeter(true)}
+            onDragEnd={() => setIsDraggingMeter(false)}
           />
         );
       })}
       
-      {/* Orbit Controls for normal viewing (not walking) */}
+      {/* Orbit Controls for normal viewing (not walking), disabled while dragging */}
       {!isWalking && (
         <OrbitControls 
           makeDefault
+          enabled={!isDraggingMeter}
           target={[0, 0, 0]}
           maxPolarAngle={Math.PI / 2}
           minDistance={2}
           maxDistance={100}
+          mouseButtons={{ LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.PAN }}
         />
       )}
 
@@ -481,8 +490,8 @@ export function FloorPlan3DViewer({ floor, locationId, sensors = [], isAdmin = f
     }, 500);
   }, [floor.id, updateFloor]);
 
-  const handleMeterYChange = useCallback((meterId: string, newY: number) => {
-    updateMeter(meterId, { position_3d_y: newY } as any);
+  const handleMeterPositionChange = useCallback((meterId: string, x: number, y: number, z: number) => {
+    updateMeter(meterId, { position_3d_x: x, position_3d_y: y, position_3d_z: z } as any);
   }, [updateMeter]);
 
   const loading = roomsLoading || positionsLoading || metersLoading;
@@ -621,7 +630,7 @@ export function FloorPlan3DViewer({ floor, locationId, sensors = [], isAdmin = f
                   isWalking={isWalking}
                   rotationDeg={modelRotation}
                   isAdmin={isAdmin}
-                  onMeterYChange={handleMeterYChange}
+                  onMeterPositionChange={handleMeterPositionChange}
                   onLockChange={handleLockChange}
                   onCameraUpdate={handleCameraUpdate}
                 />
