@@ -430,11 +430,11 @@ export function FloorPlan3DViewer({ floor, locationId, sensors = [], isAdmin = f
   const { readings, loading: readingsLoading } = useMeterReadings();
   const { updateFloor } = useFloors(locationId);
   
-  // Filter meters: only show meters assigned to this specific floor
-  const floorMeters = useMemo(() => 
-    meters.filter(m => !m.is_archived && m.floor_id === floor.id),
-    [meters, floor.id]
-  );
+  // Filter meters: only show meters that have been explicitly placed as sensor positions on this floor
+  const floorMeters = useMemo(() => {
+    const placedSensorUuids = new Set(sensorPositions.map(p => p.sensor_uuid));
+    return meters.filter(m => !m.is_archived && m.floor_id === floor.id && m.sensor_uuid && placedSensorUuids.has(m.sensor_uuid));
+  }, [meters, floor.id, sensorPositions]);
 
   // Get latest reading value per meter
   const meterLatestValues = useMemo(() => {
