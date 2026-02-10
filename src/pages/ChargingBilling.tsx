@@ -8,6 +8,7 @@ import { useChargingTariffs, ChargingTariff } from "@/hooks/useChargingTariffs";
 import { useChargingInvoices } from "@/hooks/useChargingInvoices";
 import { useChargePoints } from "@/hooks/useChargePoints";
 import { useTenant } from "@/hooks/useTenant";
+import ChargingUsersTab from "@/components/charging/ChargingUsersTab";
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -250,12 +251,7 @@ const ChargingBilling = () => {
 
             {/* Users Tab */}
             <TabsContent value="users">
-              <Card>
-                <CardHeader><CardTitle className="flex items-center gap-2"><Users className="h-5 w-5" />Nutzer</CardTitle></CardHeader>
-                <CardContent>
-                  <p className="text-muted-foreground">Hier können berechtigte Nutzer für die Ladeinfrastruktur verwaltet werden. RFID-Tags und Autorisierungen werden in einem zukünftigen Update verfügbar sein.</p>
-                </CardContent>
-              </Card>
+              <ChargingUsersTab />
             </TabsContent>
 
             {/* Roaming Tab */}
