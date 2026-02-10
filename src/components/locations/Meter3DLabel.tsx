@@ -9,10 +9,10 @@ interface Meter3DLabelProps {
 }
 
 const energyTypeColors: Record<string, string> = {
-  strom: "border-yellow-500/40 bg-yellow-500/5",
-  gas: "border-orange-500/40 bg-orange-500/5",
-  waerme: "border-red-500/40 bg-red-500/5",
-  wasser: "border-blue-500/40 bg-blue-500/5",
+  strom: "border-yellow-500/40 bg-yellow-50 dark:bg-yellow-950",
+  gas: "border-orange-500/40 bg-orange-50 dark:bg-orange-950",
+  waerme: "border-red-500/40 bg-red-50 dark:bg-red-950",
+  wasser: "border-blue-500/40 bg-blue-50 dark:bg-blue-950",
 };
 
 const energyTypeIconColors: Record<string, string> = {
@@ -23,7 +23,7 @@ const energyTypeIconColors: Record<string, string> = {
 };
 
 export function Meter3DLabel({ meter, position, latestValue }: Meter3DLabelProps) {
-  const borderClass = energyTypeColors[meter.energy_type] || "border-border bg-card/95";
+  const borderClass = energyTypeColors[meter.energy_type] || "border-border bg-card";
   const iconClass = energyTypeIconColors[meter.energy_type] || "text-primary";
 
   return (
@@ -42,7 +42,7 @@ export function Meter3DLabel({ meter, position, latestValue }: Meter3DLabelProps
           userSelect: "none",
         }}
       >
-        <div className={`backdrop-blur-sm border rounded-lg px-3 py-2 min-w-[120px] text-center whitespace-nowrap ${borderClass}`}>
+        <div className={`border rounded-lg px-3 py-2 min-w-[120px] text-center whitespace-nowrap ${borderClass}`}>
           <div className="flex items-center justify-center gap-1 mb-0.5">
             <Gauge className={`h-3 w-3 ${iconClass}`} />
             <p className="text-xs font-medium text-muted-foreground truncate max-w-[120px]">
