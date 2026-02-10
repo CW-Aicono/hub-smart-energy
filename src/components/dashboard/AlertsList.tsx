@@ -2,6 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAlertRules } from "@/hooks/useAlertRules";
 import { AlertTriangle, Info, CheckCircle, Bell } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ENERGY_TYPE_LABELS } from "@/lib/energyTypeColors";
 
 interface AlertsListProps {
   locationId: string | null;
@@ -49,7 +50,7 @@ const AlertsList = ({ locationId }: AlertsListProps) => {
                 <div className="min-w-0">
                   <p className="text-sm font-medium">{rule.name}</p>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    {rule.energy_type} – Schwellwert: {rule.threshold_value} ({rule.threshold_type})
+                    {ENERGY_TYPE_LABELS[rule.energy_type] || rule.energy_type} – Schwellwert: {rule.threshold_value} ({rule.threshold_type === "above" ? "Über" : "Unter"})
                   </p>
                   <p className="text-xs text-muted-foreground mt-1">
                     {rule.is_active ? "Aktiv" : "Inaktiv"}
