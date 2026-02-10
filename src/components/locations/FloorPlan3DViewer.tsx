@@ -39,23 +39,18 @@ function CameraTracker({ onUpdate }: { onUpdate: (pos: { x: number; z: number },
   return null;
 }
 
-// Auto-centers and grounds a loaded 3D model
-function AutoCenterModel({ children }: { children: React.ReactNode }) {
-  const groupRef = useRef<THREE.Group>(null);
-
-  useEffect(() => {
-    if (!groupRef.current) return;
-    // Compute bounding box of the entire model
-    const box = new THREE.Box3().setFromObject(groupRef.current);
-    const center = box.getCenter(new THREE.Vector3());
-    const size = box.getSize(new THREE.Vector3());
-    
-    // Center horizontally, place on ground (y=0)
-    groupRef.current.position.set(-center.x, -box.min.y, -center.z);
-    groupRef.current.updateMatrixWorld(true);
-  }, []);
-
-  return <group ref={groupRef}>{children}</group>;
+// Centers and grounds a 3D object in place
+function centerAndGroundObject(obj: THREE.Object3D) {
+  obj.updateMatrixWorld(true);
+  const box = new THREE.Box3().setFromObject(obj);
+  const center = box.getCenter(new THREE.Vector3());
+  // Center horizontally, place bottom on ground (y=0)
+  obj.position.set(
+    obj.position.x - center.x,
+    obj.position.y - box.min.y,
+    obj.position.z - center.z
+  );
+  obj.updateMatrixWorld(true);
 }
 
 // Renders a GLB model
@@ -63,7 +58,7 @@ function GLBModel({ url }: { url: string }) {
   const { scene } = useGLTF(url);
   const cloned = useMemo(() => {
     const clone = scene.clone(true);
-    // Remove any cameras or lights embedded in the model
+    // Remove any cameras embedded in the model
     const toRemove: THREE.Object3D[] = [];
     clone.traverse((child) => {
       if (child instanceof THREE.Camera) {
@@ -71,15 +66,11 @@ function GLBModel({ url }: { url: string }) {
       }
     });
     toRemove.forEach((obj) => obj.removeFromParent());
-    // Ensure all transforms are applied
-    clone.updateMatrixWorld(true);
+    // Center and ground the model
+    centerAndGroundObject(clone);
     return clone;
   }, [scene]);
-  return (
-    <AutoCenterModel>
-      <primitive object={cloned} />
-    </AutoCenterModel>
-  );
+  return <primitive object={cloned} />;
 }
 
 // Renders an OBJ model with optional MTL
@@ -110,17 +101,15 @@ function OBJModel({ objUrl, mtlUrl }: { objUrl: string; mtlUrl?: string | null }
         });
       }
 
+      // Center and ground the loaded model
+      centerAndGroundObject(obj);
       setObject(obj);
     };
     loadModel();
   }, [objUrl, mtlUrl]);
 
   if (!object) return null;
-  return (
-    <AutoCenterModel>
-      <primitive object={object} />
-    </AutoCenterModel>
-  );
+  return <primitive object={object} />;
 }
 
 // Renders a 3DS model
@@ -130,16 +119,13 @@ function TDSModel({ url }: { url: string }) {
   useEffect(() => {
     const loader = new TDSLoader();
     loader.loadAsync(url).then((obj) => {
+      centerAndGroundObject(obj);
       setObject(obj);
     });
   }, [url]);
 
   if (!object) return null;
-  return (
-    <AutoCenterModel>
-      <primitive object={object} />
-    </AutoCenterModel>
-  );
+  return <primitive object={object} />;
 }
 
 // Renders uploaded 3D model (GLB, OBJ+MTL, or 3DS)
