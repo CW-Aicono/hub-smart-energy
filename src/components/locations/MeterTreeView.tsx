@@ -7,6 +7,16 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   ChevronRight,
   ChevronDown,
   Zap,
@@ -277,6 +287,7 @@ export const MeterTreeView = ({ meters, onUpdateParent, onSelectMeter }: MeterTr
 
   const [filterType, setFilterType] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const [pendingDrop, setPendingDrop] = useState<{ draggedId: string; targetId: string } | null>(null);
 
   // Search: find matching meter IDs and their ancestor IDs (to auto-expand)
   const { highlightedIds, searchExpandIds } = useMemo(() => {
@@ -347,6 +358,13 @@ export const MeterTreeView = ({ meters, onUpdateParent, onSelectMeter }: MeterTr
     [allMetersMap]
   );
 
+  const executeDrop = useCallback(
+    async (draggedId: string, targetId: string) => {
+      await onUpdateParent(draggedId, targetId);
+    },
+    [onUpdateParent]
+  );
+
   const handleDrop = useCallback(
     async (targetId: string, _position: "child") => {
       const { draggedId } = dragState;
@@ -365,9 +383,17 @@ export const MeterTreeView = ({ meters, onUpdateParent, onSelectMeter }: MeterTr
       }
 
       handleDragEnd();
-      await onUpdateParent(draggedId, targetId);
+
+      // Warnung bei unterschiedlicher Energieart
+      const targetMeter = allMetersMap.get(targetId);
+      if (draggedMeter && targetMeter && draggedMeter.energy_type !== targetMeter.energy_type) {
+        setPendingDrop({ draggedId, targetId });
+        return;
+      }
+
+      await executeDrop(draggedId, targetId);
     },
-    [dragState, wouldCreateCycle, onUpdateParent, handleDragEnd, allMetersMap]
+    [dragState, wouldCreateCycle, handleDragEnd, allMetersMap, executeDrop]
   );
 
   const handleDropRoot = useCallback(
@@ -486,6 +512,36 @@ export const MeterTreeView = ({ meters, onUpdateParent, onSelectMeter }: MeterTr
           </div>
         )}
       </div>
+
+      <AlertDialog open={!!pendingDrop} onOpenChange={(open) => { if (!open) setPendingDrop(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Unterschiedliche Energieart</AlertDialogTitle>
+            <AlertDialogDescription>
+              {pendingDrop && (() => {
+                const dragged = allMetersMap.get(pendingDrop.draggedId);
+                const target = allMetersMap.get(pendingDrop.targetId);
+                return (
+                  <>
+                    Der Zähler <strong>{dragged?.name}</strong> ({ENERGY_TYPE_LABELS[dragged?.energy_type ?? ""] ?? dragged?.energy_type}) hat eine andere Energieart als der übergeordnete Zähler <strong>{target?.name}</strong> ({ENERGY_TYPE_LABELS[target?.energy_type ?? ""] ?? target?.energy_type}). Möchten Sie die Zuordnung trotzdem vornehmen?
+                  </>
+                );
+              })()}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Abbrechen</AlertDialogCancel>
+            <AlertDialogAction onClick={async () => {
+              if (pendingDrop) {
+                await executeDrop(pendingDrop.draggedId, pendingDrop.targetId);
+                setPendingDrop(null);
+              }
+            }}>
+              Trotzdem zuordnen
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
