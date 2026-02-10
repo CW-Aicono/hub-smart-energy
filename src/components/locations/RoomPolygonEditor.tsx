@@ -188,6 +188,7 @@ export function RoomPolygonEditor({ floorId, floorPlanUrl }: RoomPolygonEditorPr
     setSaving(true);
     const { error } = await updateRoom(editingRoom.id, {
       polygon_points: editPoints,
+      color: editingRoom.color,
     } as any);
     setSaving(false);
     if (error) {
@@ -363,6 +364,19 @@ export function RoomPolygonEditor({ floorId, floorPlanUrl }: RoomPolygonEditorPr
               <p className="text-xs text-muted-foreground">
                 Ziehen Sie die Punkte an die gewünschte Position
               </p>
+              <div className="flex items-center gap-2">
+                <label className="text-xs text-muted-foreground">Farbe:</label>
+                <div className="flex gap-1 flex-wrap">
+                  {ROOM_COLORS.map((c) => (
+                    <button
+                      key={c}
+                      className={`w-5 h-5 rounded-full border-2 transition-transform ${editingRoom.color === c ? 'border-foreground scale-110' : 'border-transparent hover:scale-110'}`}
+                      style={{ backgroundColor: c }}
+                      onClick={() => setEditingRoom({ ...editingRoom, color: c })}
+                    />
+                  ))}
+                </div>
+              </div>
               <div className="flex gap-1">
                 <Button
                   size="sm"
