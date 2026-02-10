@@ -604,7 +604,7 @@ export function FloorPlan3DViewer({ floor, locationId, sensors = [], isAdmin = f
       )}
 
       {/* Status bar when walking */}
-      {isWalking && (
+      {isWalking && !compact && (
         <div className="bg-primary/10 border-b px-3 py-2 text-sm text-center flex-shrink-0">
           <span className="font-medium">
             {isLocked 
