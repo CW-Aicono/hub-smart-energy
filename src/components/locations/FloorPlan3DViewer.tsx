@@ -124,18 +124,13 @@ function OBJModel({ objUrl, mtlUrl }: { objUrl: string; mtlUrl?: string | null }
           });
         }
 
-        // CAD exports (Vectorworks etc.) typically use Z-up coordinate system
-        // Three.js uses Y-up, so we always rotate to correct orientation
-        // First: rotate X by -90° to convert Z-up to Y-up
-        // Then check if additional Y rotation is needed based on aspect ratio
+        // Auto-detect Z-up coordinate system (CAD exports) if no manual rotation set
         const tempBox = new THREE.Box3().setFromObject(obj);
         const tempSize = tempBox.getSize(new THREE.Vector3());
         
-        // Detect Z-up: model is flat in Y but tall in Z
         if (tempSize.z > tempSize.y * 1.5) {
+          // Z-up to Y-up conversion
           obj.rotation.x = -Math.PI / 2;
-          // Additional rotation to face camera correctly
-          obj.rotation.z = -Math.PI / 2;
           obj.updateMatrixWorld(true);
         }
 
@@ -192,24 +187,32 @@ function TDSModel({ url }: { url: string }) {
   return <primitive object={object} />;
 }
 
-// Renders uploaded 3D model (GLB, OBJ+MTL, or 3DS)
+// Renders uploaded 3D model (GLB, OBJ+MTL, or 3DS) with optional manual rotation
 function ModelViewer({ floor }: { floor: Floor }) {
   if (!floor.model_3d_url) return null;
 
   const url = floor.model_3d_url;
-  // Strip query params for extension check (cache-buster etc.)
   const pathOnly = url.split("?")[0].toLowerCase();
+  const manualRotation = floor.model_3d_rotation;
+
+  // Apply manual Y-axis rotation (degrees to radians)
+  const rotationY = manualRotation != null ? (manualRotation * Math.PI) / 180 : 0;
+
+  let modelElement: JSX.Element;
 
   if (pathOnly.endsWith(".glb")) {
-    return <GLBModel url={url} />;
+    modelElement = <GLBModel url={url} />;
+  } else if (pathOnly.endsWith(".3ds")) {
+    modelElement = <TDSModel url={url} />;
+  } else {
+    modelElement = <OBJModel objUrl={url} mtlUrl={floor.model_3d_mtl_url} />;
   }
 
-  if (pathOnly.endsWith(".3ds")) {
-    return <TDSModel url={url} />;
-  }
-
-  // Default to OBJ (covers .obj and unknown extensions)
-  return <OBJModel objUrl={url} mtlUrl={floor.model_3d_mtl_url} />;
+  return (
+    <group rotation={[0, rotationY, 0]}>
+      {modelElement}
+    </group>
+  );
 }
 
 function Scene({ 

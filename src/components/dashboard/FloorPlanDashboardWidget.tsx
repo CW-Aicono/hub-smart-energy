@@ -162,7 +162,7 @@ const FloorPlanDashboardWidget = ({ locationId }: FloorPlanDashboardWidgetProps)
         ) : selectedFloor && viewMode === "3d" ? (
           <Suspense fallback={<div className="flex items-center justify-center h-full"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>}>
             <FloorPlan3DViewer
-              floor={{ id: selectedFloor.id, location_id: selectedFloor.location_id, name: selectedFloor.name, floor_number: selectedFloor.floor_number, floor_plan_url: selectedFloor.floor_plan_url, description: null, area_sqm: null, model_3d_url: null, model_3d_mtl_url: null, created_at: "", updated_at: "" }}
+              floor={{ id: selectedFloor.id, location_id: selectedFloor.location_id, name: selectedFloor.name, floor_number: selectedFloor.floor_number, floor_plan_url: selectedFloor.floor_plan_url, description: null, area_sqm: null, model_3d_url: null, model_3d_mtl_url: null, model_3d_rotation: null, created_at: "", updated_at: "" }}
               locationId={selectedFloor.location_id}
               sensors={[]}
               isAdmin={true}
