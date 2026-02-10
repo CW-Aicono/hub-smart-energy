@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
+export type LabelSize = 'small' | 'medium' | 'large';
+
 export interface FloorSensorPosition {
   id: string;
   floor_id: string;
@@ -9,11 +11,12 @@ export interface FloorSensorPosition {
   sensor_name: string;
   position_x: number;
   position_y: number;
+  label_size: LabelSize;
   created_at: string;
   updated_at: string;
 }
 
-export type FloorSensorPositionInsert = Omit<FloorSensorPosition, "id" | "created_at" | "updated_at">;
+export type FloorSensorPositionInsert = Omit<FloorSensorPosition, "id" | "created_at" | "updated_at" | "label_size"> & { label_size?: LabelSize };
 
 interface UseFloorSensorPositionsReturn {
   positions: FloorSensorPosition[];
