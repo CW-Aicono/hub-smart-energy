@@ -710,6 +710,7 @@ export type Database = {
           capture_type: string
           created_at: string
           energy_type: string
+          floor_id: string | null
           id: string
           installation_date: string | null
           is_archived: boolean
@@ -720,6 +721,7 @@ export type Database = {
           name: string
           notes: string | null
           photo_url: string | null
+          room_id: string | null
           sensor_uuid: string | null
           tenant_id: string
           unit: string
@@ -729,6 +731,7 @@ export type Database = {
           capture_type?: string
           created_at?: string
           energy_type?: string
+          floor_id?: string | null
           id?: string
           installation_date?: string | null
           is_archived?: boolean
@@ -739,6 +742,7 @@ export type Database = {
           name: string
           notes?: string | null
           photo_url?: string | null
+          room_id?: string | null
           sensor_uuid?: string | null
           tenant_id: string
           unit?: string
@@ -748,6 +752,7 @@ export type Database = {
           capture_type?: string
           created_at?: string
           energy_type?: string
+          floor_id?: string | null
           id?: string
           installation_date?: string | null
           is_archived?: boolean
@@ -758,12 +763,20 @@ export type Database = {
           name?: string
           notes?: string | null
           photo_url?: string | null
+          room_id?: string | null
           sensor_uuid?: string | null
           tenant_id?: string
           unit?: string
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "meters_floor_id_fkey"
+            columns: ["floor_id"]
+            isOneToOne: false
+            referencedRelation: "floors"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "meters_location_id_fkey"
             columns: ["location_id"]
@@ -776,6 +789,13 @@ export type Database = {
             columns: ["location_integration_id"]
             isOneToOne: false
             referencedRelation: "location_integrations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meters_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "floor_rooms"
             referencedColumns: ["id"]
           },
           {
