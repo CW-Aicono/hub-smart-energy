@@ -42,11 +42,25 @@ function CameraTracker({ onUpdate }: { onUpdate: (pos: { x: number; z: number },
   return null;
 }
 
-// Centers and grounds a 3D object in place
+// Centers, grounds and auto-scales a 3D object to fit the scene
 function centerAndGroundObject(obj: THREE.Object3D) {
   obj.updateMatrixWorld(true);
   const box = new THREE.Box3().setFromObject(obj);
+  const size = box.getSize(new THREE.Vector3());
   const center = box.getCenter(new THREE.Vector3());
+  
+  // Auto-scale: if the model is very large (e.g. mm coordinates), scale it down
+  const maxDim = Math.max(size.x, size.y, size.z);
+  const targetSize = 20; // Target ~20 units across
+  if (maxDim > 100) {
+    const scale = targetSize / maxDim;
+    obj.scale.multiplyScalar(scale);
+    obj.updateMatrixWorld(true);
+    // Recompute after scaling
+    box.setFromObject(obj);
+    box.getCenter(center);
+  }
+  
   // Center horizontally, place bottom on ground (y=0)
   obj.position.set(
     obj.position.x - center.x,
@@ -80,10 +94,12 @@ function GLBModel({ url }: { url: string }) {
 function OBJModel({ objUrl, mtlUrl }: { objUrl: string; mtlUrl?: string | null }) {
   const [object, setObject] = useState<THREE.Group | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
     const loadModel = async () => {
+      setLoading(true);
       try {
         let materials: MTLLoader.MaterialCreator | undefined;
         if (mtlUrl) {
@@ -99,6 +115,7 @@ function OBJModel({ objUrl, mtlUrl }: { objUrl: string; mtlUrl?: string | null }
 
         const obj = await objLoader.loadAsync(objUrl);
 
+        // Apply default material if no MTL
         if (!mtlUrl) {
           obj.traverse((child) => {
             if (child instanceof THREE.Mesh) {
@@ -107,12 +124,30 @@ function OBJModel({ objUrl, mtlUrl }: { objUrl: string; mtlUrl?: string | null }
           });
         }
 
-        // Center and ground the loaded model
+        // Detect Z-up coordinate system (common in CAD exports like Vectorworks)
+        // Check if the model is much flatter in Y than in X/Z
+        const tempBox = new THREE.Box3().setFromObject(obj);
+        const tempSize = tempBox.getSize(new THREE.Vector3());
+        const isZUp = tempSize.z > tempSize.y * 2;
+        
+        if (isZUp) {
+          // Rotate from Z-up to Y-up
+          obj.rotation.x = -Math.PI / 2;
+          obj.updateMatrixWorld(true);
+        }
+
+        // Center and ground the loaded model (includes auto-scaling)
         centerAndGroundObject(obj);
-        if (!cancelled) setObject(obj);
+        if (!cancelled) {
+          setObject(obj);
+          setLoading(false);
+        }
       } catch (err) {
         console.error("Error loading OBJ model:", err);
-        if (!cancelled) setError(String(err));
+        if (!cancelled) {
+          setError(String(err));
+          setLoading(false);
+        }
       }
     };
     loadModel();
@@ -127,7 +162,14 @@ function OBJModel({ objUrl, mtlUrl }: { objUrl: string; mtlUrl?: string | null }
     );
   }
 
-  if (!object) return null;
+  if (loading || !object) {
+    return (
+      <Text position={[0, 1, 0]} fontSize={0.3} color="#6b7280" anchorX="center" anchorY="middle">
+        3D-Modell wird geladen...
+      </Text>
+    );
+  }
+
   return <primitive object={object} />;
 }
 
@@ -344,6 +386,7 @@ export function FloorPlan3DViewer({ floor, locationId, sensors = [], isAdmin = f
   const { rooms, loading: roomsLoading, refetch: refetchRooms } = useFloorRooms(floor.id);
   const { positions: sensorPositions, loading: positionsLoading } = useFloorSensorPositions(floor.id);
   const { meters, loading: metersLoading } = useMeters(locationId);
+  const { readings, loading: readingsLoading } = useMeterReadings();
   
   // Filter meters: assigned to this floor OR unassigned (show all location meters)
   const floorMeters = useMemo(() => 
@@ -351,12 +394,17 @@ export function FloorPlan3DViewer({ floor, locationId, sensors = [], isAdmin = f
     [meters, floor.id]
   );
 
-  // Get latest readings for floor meters
+  // Get latest reading value per meter
   const meterLatestValues = useMemo(() => {
     const values: Record<string, number | null> = {};
-    floorMeters.forEach(m => { values[m.id] = null; });
+    floorMeters.forEach(m => {
+      const meterReadings = readings
+        .filter(r => r.meter_id === m.id)
+        .sort((a, b) => b.reading_date.localeCompare(a.reading_date));
+      values[m.id] = meterReadings.length > 0 ? meterReadings[0].value : null;
+    });
     return values;
-  }, [floorMeters]);
+  }, [floorMeters, readings]);
 
   const [isWalking, setIsWalking] = useState(false);
   const [isLocked, setIsLocked] = useState(false);

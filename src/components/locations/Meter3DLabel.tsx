@@ -8,15 +8,23 @@ interface Meter3DLabelProps {
   latestValue?: number | null;
 }
 
-export function Meter3DLabel({ meter, position, latestValue }: Meter3DLabelProps) {
-  const energyTypeColors: Record<string, string> = {
-    strom: "text-yellow-500",
-    gas: "text-orange-500",
-    waerme: "text-red-500",
-    wasser: "text-blue-500",
-  };
+const energyTypeColors: Record<string, string> = {
+  strom: "border-yellow-500/40 bg-yellow-500/5",
+  gas: "border-orange-500/40 bg-orange-500/5",
+  waerme: "border-red-500/40 bg-red-500/5",
+  wasser: "border-blue-500/40 bg-blue-500/5",
+};
 
-  const colorClass = energyTypeColors[meter.energy_type] || "text-primary";
+const energyTypeIconColors: Record<string, string> = {
+  strom: "text-yellow-500",
+  gas: "text-orange-500",
+  waerme: "text-red-500",
+  wasser: "text-blue-500",
+};
+
+export function Meter3DLabel({ meter, position, latestValue }: Meter3DLabelProps) {
+  const borderClass = energyTypeColors[meter.energy_type] || "border-border bg-card/95";
+  const iconClass = energyTypeIconColors[meter.energy_type] || "text-primary";
 
   return (
     <Billboard
@@ -34,20 +42,16 @@ export function Meter3DLabel({ meter, position, latestValue }: Meter3DLabelProps
           userSelect: "none",
         }}
       >
-        <div className="bg-card/95 backdrop-blur-sm border border-border shadow-lg rounded-lg px-3 py-2 min-w-[120px] text-center whitespace-nowrap">
+        <div className={`backdrop-blur-sm border rounded-lg px-3 py-2 min-w-[120px] text-center whitespace-nowrap ${borderClass}`}>
           <div className="flex items-center justify-center gap-1 mb-0.5">
-            <Gauge className={`h-3 w-3 ${colorClass}`} />
+            <Gauge className={`h-3 w-3 ${iconClass}`} />
             <p className="text-xs font-medium text-muted-foreground truncate max-w-[120px]">
               {meter.name}
             </p>
           </div>
-          {latestValue != null ? (
-            <p className="text-lg font-mono font-bold text-primary">
-              {latestValue} {meter.unit}
-            </p>
-          ) : (
-            <p className="text-sm text-muted-foreground">—</p>
-          )}
+          <p className="text-lg font-mono font-bold text-primary">
+            {latestValue != null ? `${latestValue.toLocaleString("de-DE")} ${meter.unit}` : "—"}
+          </p>
           {meter.meter_number && (
             <p className="text-[10px] text-muted-foreground">Nr. {meter.meter_number}</p>
           )}
