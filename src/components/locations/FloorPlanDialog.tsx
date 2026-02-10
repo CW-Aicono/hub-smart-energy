@@ -306,6 +306,10 @@ export function FloorPlanDialog({ floor, locationId, open, onOpenChange }: Floor
                   <Image className="h-4 w-4" />
                   Ansicht
                 </TabsTrigger>
+                <TabsTrigger value="rooms" className="gap-2">
+                  <DoorOpen className="h-4 w-4" />
+                  Räume
+                </TabsTrigger>
                 <TabsTrigger value="edit" className="gap-2">
                   <MapPin className="h-4 w-4" />
                   Messgeräte bearbeiten
@@ -313,10 +317,6 @@ export function FloorPlanDialog({ floor, locationId, open, onOpenChange }: Floor
                 <TabsTrigger value="3d" className="gap-2">
                   <Box className="h-4 w-4" />
                   3D-Begehung
-                </TabsTrigger>
-                <TabsTrigger value="rooms" className="gap-2">
-                  <DoorOpen className="h-4 w-4" />
-                  Räume
                 </TabsTrigger>
               </TabsList>
 
