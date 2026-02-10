@@ -56,6 +56,24 @@ const CONTROL_TYPE_MAPPINGS: Record<string, StateMapping> = {
   TextState:      { primaryState: "textAndIcon", primaryUnit: "", sensorType: "text" },
 };
 
+// Mapping from Loxone /all output names to our internal state names
+const LOXONE_OUTPUT_TO_STATE: Record<string, string> = {
+  "Pf": "actual",       // Power (Leistung)
+  "Mr": "total",        // Meter reading total (Zählerstand)
+  "Rd": "totalDay",     // Reading day
+  "Rw": "totalWeek",    // Reading week
+  "Rm": "totalMonth",   // Reading month
+  "Ry": "totalYear",    // Reading year
+  "Rld": "totalDayLast",
+  "Rlw": "totalWeekLast",
+  "Rlm": "totalMonthLast",
+  "Rly": "totalYearLast",
+  "Ppwr": "Ppwr",       // Production power
+  "Gpwr": "Gpwr",       // Grid power
+  "consCurr": "consCurr",
+  "prodCurr": "prodCurr",
+};
+
 // States to never use as fallback
 const IGNORED_STATES = new Set(["jLocked", "locked"]);
 
@@ -114,26 +132,75 @@ async function resolveLoxoneCloudURL(serialNumber: string): Promise<string | nul
   }
 }
 
-// Fetch individual state value from Loxone
+// Fetch state value using control UUID (not state UUID!)
+// Loxone HTTP API: /jdev/sps/io/{controlUuid}/state returns primary value
 async function fetchStateValue(
   baseUrl: string,
   authHeader: string,
-  stateUuid: string
+  controlUuid: string
 ): Promise<number | string | null> {
   try {
-    const url = `${baseUrl}/jdev/sps/io/${stateUuid}/state`;
+    const url = `${baseUrl}/jdev/sps/io/${controlUuid}/state`;
+    console.log(`Fetching state: ${url}`);
     const response = await fetch(url, { method: "GET", headers: { Authorization: authHeader } });
-    if (!response.ok) return null;
+    if (!response.ok) {
+      console.warn(`State fetch failed for ${controlUuid}: HTTP ${response.status}`);
+      return null;
+    }
     const data = await response.json();
+    console.log(`State response for ${controlUuid}:`, JSON.stringify(data).substring(0, 200));
     if (data?.LL?.value !== undefined) {
       const val = data.LL.value;
       const numVal = parseFloat(val);
       return isNaN(numVal) ? val : numVal;
     }
     return null;
-  } catch {
+  } catch (err) {
+    console.error(`Error fetching state ${controlUuid}:`, err);
     return null;
   }
+}
+
+// Fetch all states of a control using /all endpoint
+async function fetchAllStates(
+  baseUrl: string,
+  authHeader: string,
+  controlUuid: string
+): Promise<Record<string, number | string | null>> {
+  const results: Record<string, number | string | null> = {};
+  try {
+    const url = `${baseUrl}/jdev/sps/io/${controlUuid}/all`;
+    console.log(`Fetching all states: ${url}`);
+    const response = await fetch(url, { method: "GET", headers: { Authorization: authHeader } });
+    if (!response.ok) {
+      console.warn(`All-states fetch failed for ${controlUuid}: HTTP ${response.status}`);
+      return results;
+    }
+    const data = await response.json();
+    console.log(`All-states response for ${controlUuid}: ${JSON.stringify(data).substring(0, 500)}`);
+    
+    if (data?.LL) {
+      const ll = data.LL;
+      // Primary value
+      if (ll.value !== undefined) {
+        const numVal = parseFloat(String(ll.value));
+        results["_primary"] = isNaN(numVal) ? String(ll.value) : numVal;
+      }
+      // Parse output0, output1, ... which contain { name, nr, value }
+      for (const key of Object.keys(ll)) {
+        if (key.startsWith("output")) {
+          const output = ll[key];
+          if (output?.name !== undefined && output?.value !== undefined) {
+            const numVal = parseFloat(String(output.value));
+            results[output.name] = isNaN(numVal) ? String(output.value) : numVal;
+          }
+        }
+      }
+    }
+  } catch (err) {
+    console.error(`Error fetching all states for ${controlUuid}:`, err);
+  }
+  return results;
 }
 
 // Update sync status in database
@@ -246,70 +313,65 @@ serve(async (req) => {
 
       console.log(`Loaded structure with ${Object.keys(controls).length} controls`);
 
-      // Collect state UUIDs to query using the mapping table
-      interface StateQuery {
-        controlUuid: string;
-        stateName: string;
-        stateUuid: string;
-        isPrimary: boolean;
-      }
+      // Collect control UUIDs that need state fetching
+      const controlUuids = Object.keys(controls);
 
-      const stateUuidsToQuery: StateQuery[] = [];
+      console.log(`Querying states for ${controlUuids.length} controls via /all endpoint...`);
 
-      for (const [uuid, control] of Object.entries(controls)) {
-        if (!control.states) continue;
-        const availableStates = Object.keys(control.states);
-        const controlType = control.type || "";
-
-        const { primary, secondary } = getStateMapping(controlType, availableStates);
-
-        if (primary && control.states[primary]) {
-          stateUuidsToQuery.push({
-            controlUuid: uuid,
-            stateName: primary,
-            stateUuid: control.states[primary],
-            isPrimary: true,
-          });
-        }
-
-        if (secondary && control.states[secondary]) {
-          stateUuidsToQuery.push({
-            controlUuid: uuid,
-            stateName: secondary,
-            stateUuid: control.states[secondary],
-            isPrimary: false,
-          });
-        }
-      }
-
-      console.log(`Querying ${stateUuidsToQuery.length} state values...`);
-
-      // Batch fetch state values
+      // Batch fetch all states using control UUIDs
       const stateResults: Record<string, StateValueResult> = {};
       const batchSize = 10;
 
-      for (let i = 0; i < stateUuidsToQuery.length; i += batchSize) {
-        const batch = stateUuidsToQuery.slice(i, i + batchSize);
+      for (let i = 0; i < controlUuids.length; i += batchSize) {
+        const batch = controlUuids.slice(i, i + batchSize);
         const results = await Promise.all(
-          batch.map(async (item) => {
-            const value = await fetchStateValue(baseUrl, authHeader, item.stateUuid);
-            return { ...item, value };
+          batch.map(async (controlUuid) => {
+            const allStates = await fetchAllStates(baseUrl, authHeader, controlUuid);
+            return { controlUuid, allStates };
           })
         );
 
-        for (const result of results) {
-          if (!stateResults[result.controlUuid]) {
-            stateResults[result.controlUuid] = { value: null, stateName: "" };
+        for (const { controlUuid, allStates } of results) {
+          const control = controls[controlUuid];
+          const controlType = control?.type || "";
+          const mapping = CONTROL_TYPE_MAPPINGS[controlType];
+
+          // Map Loxone output names to our state names
+          const mappedStates: Record<string, number | string | null> = {};
+          for (const [outputName, value] of Object.entries(allStates)) {
+            if (outputName === "_primary") continue;
+            const stateName = LOXONE_OUTPUT_TO_STATE[outputName] || outputName;
+            mappedStates[stateName] = value;
           }
 
-          if (result.isPrimary) {
-            stateResults[result.controlUuid].value = result.value;
-            stateResults[result.controlUuid].stateName = result.stateName;
+          // Determine primary and secondary values
+          let primaryStateName = "";
+          let primaryValue: number | string | null = null;
+          let secondaryStateName = "";
+          let secondaryValue: number | string | null = null;
+          let secondaryUnit = "";
+
+          if (mapping) {
+            primaryStateName = mapping.primaryState;
+            primaryValue = mappedStates[mapping.primaryState] ?? allStates["_primary"] ?? null;
+            if (mapping.secondaryState) {
+              secondaryStateName = mapping.secondaryState;
+              secondaryValue = mappedStates[mapping.secondaryState] ?? null;
+              secondaryUnit = mapping.secondaryUnit || "";
+            }
           } else {
-            stateResults[result.controlUuid].secondaryValue = result.value;
-            stateResults[result.controlUuid].secondaryStateName = result.stateName;
-            stateResults[result.controlUuid].secondaryUnit = result.stateName === "total" || result.stateName === "Mrc" ? "kWh" : "kW";
+            // Fallback: use _primary value
+            primaryValue = allStates["_primary"] ?? null;
+            primaryStateName = "value";
           }
+
+          stateResults[controlUuid] = {
+            value: primaryValue,
+            stateName: primaryStateName,
+            secondaryValue,
+            secondaryStateName,
+            secondaryUnit,
+          };
         }
       }
 
@@ -428,13 +490,45 @@ serve(async (req) => {
       const results = [];
       for (const { uuid: targetUuid, control: targetControl } of matchingControls) {
         console.log(`Found sensor: ${targetControl.name} (${targetControl.type})`);
+        
+        // Use control UUID to fetch state value and all states
+        const primaryValue = await fetchStateValue(baseUrl, authHeader, targetUuid);
+        const allStates = await fetchAllStates(baseUrl, authHeader, targetUuid);
+        
+        // Build reverse mapping: output name -> state name (e.g. "Pf" -> "actual")
+        const reverseOutputMap: Record<string, string> = {};
+        for (const [outputName, stateName] of Object.entries(LOXONE_OUTPUT_TO_STATE)) {
+          reverseOutputMap[outputName] = stateName;
+        }
+        
+        // Map allStates output names to state names and fill stateValues
         const stateValues: Record<string, { uuid: string; value: number | string | null }> = {};
         const states = targetControl.states || {};
+        
+        // Create forward map: state name -> output name
+        const stateToOutput: Record<string, string> = {};
+        for (const [outputName, stateName] of Object.entries(LOXONE_OUTPUT_TO_STATE)) {
+          stateToOutput[stateName] = outputName;
+        }
+        
         for (const [stateName, stateUuid] of Object.entries(states)) {
-          const value = await fetchStateValue(baseUrl, authHeader, stateUuid);
+          const outputName = stateToOutput[stateName];
+          const value = outputName && allStates[outputName] !== undefined 
+            ? allStates[outputName] 
+            : allStates[stateName] !== undefined 
+              ? allStates[stateName] 
+              : null;
           stateValues[stateName] = { uuid: stateUuid, value };
         }
-        results.push({ uuid: targetUuid, name: targetControl.name, type: targetControl.type, states: stateValues });
+        
+        results.push({ 
+          uuid: targetUuid, 
+          name: targetControl.name, 
+          type: targetControl.type, 
+          states: stateValues,
+          primaryValue,
+          allStatesRaw: allStates,
+        });
       }
 
       return new Response(
