@@ -3,11 +3,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2, Trash2, GripVertical, AlertCircle, Image, MapPin, Maximize2, Minimize2, Box, Gauge, DoorOpen } from "lucide-react";
+import { Loader2, Trash2, GripVertical, AlertCircle, Image, MapPin, Maximize2, Minimize2, Box, Gauge, DoorOpen, Minus, Square, Maximize } from "lucide-react";
 import { ENERGY_SENSOR_CLASSES } from "@/lib/energyTypeColors";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Floor } from "@/hooks/useFloors";
-import { useFloorSensorPositions, FloorSensorPosition, FloorSensorPositionInsert } from "@/hooks/useFloorSensorPositions";
+import { useFloorSensorPositions, FloorSensorPosition, FloorSensorPositionInsert, LabelSize } from "@/hooks/useFloorSensorPositions";
 import { useLocationIntegrations } from "@/hooks/useIntegrations";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useMeters } from "@/hooks/useMeters";
@@ -328,25 +328,35 @@ export function FloorPlanDialog({ floor, locationId, open, onOpenChange }: Floor
                     className="w-full h-full object-contain"
                   />
                   {/* Sensor Overlays */}
-                  {placedSensorsWithInfo.map((pos) => (
-                    <div
-                      key={pos.id}
-                      className="absolute transform -translate-x-1/2 -translate-y-1/2"
-                      style={{
-                        left: `${pos.position_x}%`,
-                        top: `${pos.position_y}%`,
-                      }}
-                    >
-                      <div className="bg-card/95 backdrop-blur-sm border shadow-lg rounded-lg px-2 py-1 min-w-[80px] text-center">
-                        <p className="text-[10px] font-medium text-muted-foreground truncate max-w-[100px]">
-                          {pos.sensor_name}
-                        </p>
-                        <p className="text-sm font-mono font-bold text-primary">
-                          {pos.sensorInfo ? `${pos.sensorInfo.value} ${pos.sensorInfo.unit}` : "—"}
-                        </p>
+                  {placedSensorsWithInfo.map((pos) => {
+                    const size = (pos as any).label_size as LabelSize || 'medium';
+                    const sizeClasses = {
+                      small: 'min-w-[60px] px-1 py-0.5',
+                      medium: 'min-w-[80px] px-2 py-1',
+                      large: 'min-w-[120px] px-3 py-2',
+                    };
+                    const textClasses = { small: 'text-[8px]', medium: 'text-[10px]', large: 'text-xs' };
+                    const valueClasses = { small: 'text-xs', medium: 'text-sm', large: 'text-base' };
+                    return (
+                      <div
+                        key={pos.id}
+                        className="absolute transform -translate-x-1/2 -translate-y-1/2"
+                        style={{
+                          left: `${pos.position_x}%`,
+                          top: `${pos.position_y}%`,
+                        }}
+                      >
+                        <div className={`bg-card/95 backdrop-blur-sm border shadow-lg rounded-lg text-center ${sizeClasses[size]}`}>
+                          <p className={`${textClasses[size]} font-medium text-muted-foreground truncate max-w-[100px]`}>
+                            {pos.sensor_name}
+                          </p>
+                          <p className={`${valueClasses[size]} font-mono font-bold text-primary`}>
+                            {pos.sensorInfo ? `${pos.sensorInfo.value} ${pos.sensorInfo.unit}` : "—"}
+                          </p>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                   <RoomOverlay2D rooms={floorRooms} />
                 </div>
               </TabsContent>
@@ -410,40 +420,76 @@ export function FloorPlanDialog({ floor, locationId, open, onOpenChange }: Floor
                     />
                     
                     {/* Placed Sensors */}
-                    {placedSensorsWithInfo.map((placed) => (
-                      <div
-                        key={placed.id}
-                        draggable
-                        onDragStart={(e) => handlePositionDragStart(e, placed)}
-                        className={`absolute transform -translate-x-1/2 -translate-y-1/2 group cursor-grab active:cursor-grabbing ${
-                          draggingPosition?.id === placed.id ? "opacity-50" : ""
-                        }`}
-                        style={{
-                          left: `${placed.position_x}%`,
-                          top: `${placed.position_y}%`,
-                        }}
-                      >
-                        <div className="bg-card border-2 border-primary shadow-lg rounded-lg px-2 py-1 min-w-[90px] text-center">
-                          <p className="text-xs font-medium truncate">{placed.sensor_name}</p>
-                          {placed.sensorInfo && (
-                            <p className="text-sm font-mono font-bold text-primary">
-                              {placed.sensorInfo.value} {placed.sensorInfo.unit}
-                            </p>
-                          )}
-                        </div>
-                        <Button
-                          variant="destructive"
-                          size="icon"
-                          className="absolute -top-2 -right-2 h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleRemoveSensor(placed.id, placed.sensor_name);
+                    {placedSensorsWithInfo.map((placed) => {
+                      const size = (placed as any).label_size as LabelSize || 'medium';
+                      const sizeClasses = {
+                        small: 'min-w-[60px] px-1 py-0.5',
+                        medium: 'min-w-[90px] px-2 py-1',
+                        large: 'min-w-[130px] px-3 py-2',
+                      };
+                      const textClasses = {
+                        small: 'text-[9px]',
+                        medium: 'text-xs',
+                        large: 'text-sm',
+                      };
+                      const valueClasses = {
+                        small: 'text-xs',
+                        medium: 'text-sm',
+                        large: 'text-base',
+                      };
+                      return (
+                        <div
+                          key={placed.id}
+                          draggable
+                          onDragStart={(e) => handlePositionDragStart(e, placed)}
+                          className={`absolute transform -translate-x-1/2 -translate-y-1/2 group cursor-grab active:cursor-grabbing ${
+                            draggingPosition?.id === placed.id ? "opacity-50" : ""
+                          }`}
+                          style={{
+                            left: `${placed.position_x}%`,
+                            top: `${placed.position_y}%`,
                           }}
                         >
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    ))}
+                          <div className={`bg-card border-2 border-primary shadow-lg rounded-lg text-center ${sizeClasses[size]}`}>
+                            <p className={`${textClasses[size]} font-medium truncate`}>{placed.sensor_name}</p>
+                            {placed.sensorInfo && (
+                              <p className={`${valueClasses[size]} font-mono font-bold text-primary`}>
+                                {placed.sensorInfo.value} {placed.sensorInfo.unit}
+                              </p>
+                            )}
+                          </div>
+                          {/* Size controls */}
+                          <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity bg-card border rounded-md shadow-sm p-0.5">
+                            {(['small', 'medium', 'large'] as LabelSize[]).map((s) => (
+                              <Button
+                                key={s}
+                                variant={size === s ? "default" : "ghost"}
+                                size="icon"
+                                className="h-5 w-5"
+                                title={s === 'small' ? 'Klein' : s === 'medium' ? 'Mittel' : 'Groß'}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  updatePosition(placed.id, { label_size: s } as any);
+                                }}
+                              >
+                                {s === 'small' ? <Minus className="h-2.5 w-2.5" /> : s === 'medium' ? <Square className="h-2.5 w-2.5" /> : <Maximize className="h-2.5 w-2.5" />}
+                              </Button>
+                            ))}
+                          </div>
+                          <Button
+                            variant="destructive"
+                            size="icon"
+                            className="absolute -top-2 -right-2 h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleRemoveSensor(placed.id, placed.sensor_name);
+                            }}
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      );
+                    })}
 
                     {/* Meter overlays – only in view mode, not in edit */}
 
