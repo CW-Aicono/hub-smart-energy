@@ -2301,6 +2301,49 @@ export const translations = {
     es: "Reiniciar la guía de configuración interactiva",
     nl: "Start de interactieve installatiegids opnieuw",
   },
+  // EV Charging
+  "nav.charging": {
+    de: "Ladeinfrastruktur",
+    en: "EV Charging",
+    es: "Carga de vehículos",
+    nl: "Laadinfrastructuur",
+  },
+  "nav.chargingPoints": {
+    de: "Ladepunkte",
+    en: "Charge Points",
+    es: "Puntos de carga",
+    nl: "Laadpunten",
+  },
+  "nav.chargingBilling": {
+    de: "Abrechnung",
+    en: "Billing",
+    es: "Facturación",
+    nl: "Facturering",
+  },
+  "charging.chargePoints": {
+    de: "Ladepunkte",
+    en: "Charge Points",
+    es: "Puntos de carga",
+    nl: "Laadpunten",
+  },
+  "charging.chargePointsDesc": {
+    de: "Übersicht und Verwaltung aller Ladepunkte",
+    en: "Overview and management of all charge points",
+    es: "Resumen y gestión de todos los puntos de carga",
+    nl: "Overzicht en beheer van alle laadpunten",
+  },
+  "charging.billing": {
+    de: "Abrechnung",
+    en: "Billing",
+    es: "Facturación",
+    nl: "Facturering",
+  },
+  "charging.billingDesc": {
+    de: "Ladevorgänge, Tarife und Rechnungen verwalten",
+    en: "Manage charging sessions, tariffs and invoices",
+    es: "Gestionar sesiones de carga, tarifas y facturas",
+    nl: "Beheer laadsessies, tarieven en facturen",
+  },
 } as const;
 
 export type TranslationKey = keyof typeof translations;

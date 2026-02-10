@@ -4,7 +4,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useTranslation } from "@/hooks/useTranslation";
 import { Button } from "@/components/ui/button";
-import { LayoutDashboard, LogOut, Shield, Settings, Users, ChevronDown, ChevronRight, MapPin, PanelLeftClose, PanelLeft, UserCircle, Key, HelpCircle, Plug, Palette, Database, Gauge, Download } from "lucide-react";
+import { LayoutDashboard, LogOut, Shield, Settings, Users, ChevronDown, ChevronRight, MapPin, PanelLeftClose, PanelLeft, UserCircle, Key, HelpCircle, Plug, Palette, Database, Gauge, Download, Zap, PlugZap, Receipt } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TenantLogo } from "@/components/tenant/TenantLogo";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -60,8 +60,11 @@ const DashboardSidebar = () => {
     if (location.pathname === "/settings" || location.pathname === "/settings/branding" || location.pathname === "/integrations") {
       setOpenMenus((prev) => prev.includes("/settings") ? prev : [...prev, "/settings"]);
     }
-    if (location.pathname === "/energy-data" || location.pathname === "/meters") {
+   if (location.pathname === "/energy-data" || location.pathname === "/meters") {
       setOpenMenus((prev) => prev.includes("/energy-data") ? prev : [...prev, "/energy-data"]);
+    }
+    if (location.pathname.startsWith("/charging")) {
+      setOpenMenus((prev) => prev.includes("/charging/points") ? prev : [...prev, "/charging/points"]);
     }
   }, [location.pathname]);
 
@@ -81,6 +84,15 @@ const DashboardSidebar = () => {
       children: [
         { to: "/meters", icon: Gauge, labelKey: "nav.meters" as TranslationKey },
         { to: "/energy-data", icon: Download, labelKey: "nav.exports" as TranslationKey },
+      ]
+    },
+    {
+      to: "/charging/points",
+      icon: Zap,
+      labelKey: "nav.charging" as TranslationKey,
+      children: [
+        { to: "/charging/points", icon: PlugZap, labelKey: "nav.chargingPoints" as TranslationKey },
+        { to: "/charging/billing", icon: Receipt, labelKey: "nav.chargingBilling" as TranslationKey },
       ]
     },
     ...(isAdmin ? [

@@ -10,6 +10,7 @@ export const ALL_MODULES = [
   { code: "reporting", label: "Berichte" },
   { code: "floor_plans", label: "Etagenpläne" },
   { code: "energy_monitoring", label: "Energiemonitoring" },
+  { code: "ev_charging", label: "Ladeinfrastruktur" },
 ] as const;
 
 export function useTenantModules(tenantId: string | null) {

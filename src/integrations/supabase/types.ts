@@ -87,6 +87,246 @@ export type Database = {
           },
         ]
       }
+      charge_points: {
+        Row: {
+          connector_count: number
+          created_at: string
+          firmware_version: string | null
+          id: string
+          last_heartbeat: string | null
+          location_id: string | null
+          max_power_kw: number
+          model: string | null
+          name: string
+          ocpp_id: string
+          status: string
+          tenant_id: string
+          updated_at: string
+          vendor: string | null
+        }
+        Insert: {
+          connector_count?: number
+          created_at?: string
+          firmware_version?: string | null
+          id?: string
+          last_heartbeat?: string | null
+          location_id?: string | null
+          max_power_kw?: number
+          model?: string | null
+          name: string
+          ocpp_id: string
+          status?: string
+          tenant_id: string
+          updated_at?: string
+          vendor?: string | null
+        }
+        Update: {
+          connector_count?: number
+          created_at?: string
+          firmware_version?: string | null
+          id?: string
+          last_heartbeat?: string | null
+          location_id?: string | null
+          max_power_kw?: number
+          model?: string | null
+          name?: string
+          ocpp_id?: string
+          status?: string
+          tenant_id?: string
+          updated_at?: string
+          vendor?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "charge_points_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "charge_points_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      charging_invoices: {
+        Row: {
+          created_at: string
+          currency: string
+          id: string
+          invoice_number: string | null
+          issued_at: string | null
+          session_id: string
+          status: string
+          tariff_id: string | null
+          tenant_id: string
+          total_amount: number
+          total_energy_kwh: number
+        }
+        Insert: {
+          created_at?: string
+          currency?: string
+          id?: string
+          invoice_number?: string | null
+          issued_at?: string | null
+          session_id: string
+          status?: string
+          tariff_id?: string | null
+          tenant_id: string
+          total_amount?: number
+          total_energy_kwh?: number
+        }
+        Update: {
+          created_at?: string
+          currency?: string
+          id?: string
+          invoice_number?: string | null
+          issued_at?: string | null
+          session_id?: string
+          status?: string
+          tariff_id?: string | null
+          tenant_id?: string
+          total_amount?: number
+          total_energy_kwh?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "charging_invoices_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "charging_sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "charging_invoices_tariff_id_fkey"
+            columns: ["tariff_id"]
+            isOneToOne: false
+            referencedRelation: "charging_tariffs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "charging_invoices_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      charging_sessions: {
+        Row: {
+          charge_point_id: string
+          connector_id: number
+          created_at: string
+          energy_kwh: number
+          id: string
+          id_tag: string | null
+          meter_start: number | null
+          meter_stop: number | null
+          start_time: string
+          status: string
+          stop_reason: string | null
+          stop_time: string | null
+          tenant_id: string
+          transaction_id: number | null
+        }
+        Insert: {
+          charge_point_id: string
+          connector_id?: number
+          created_at?: string
+          energy_kwh?: number
+          id?: string
+          id_tag?: string | null
+          meter_start?: number | null
+          meter_stop?: number | null
+          start_time?: string
+          status?: string
+          stop_reason?: string | null
+          stop_time?: string | null
+          tenant_id: string
+          transaction_id?: number | null
+        }
+        Update: {
+          charge_point_id?: string
+          connector_id?: number
+          created_at?: string
+          energy_kwh?: number
+          id?: string
+          id_tag?: string | null
+          meter_start?: number | null
+          meter_stop?: number | null
+          start_time?: string
+          status?: string
+          stop_reason?: string | null
+          stop_time?: string | null
+          tenant_id?: string
+          transaction_id?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "charging_sessions_charge_point_id_fkey"
+            columns: ["charge_point_id"]
+            isOneToOne: false
+            referencedRelation: "charge_points"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "charging_sessions_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      charging_tariffs: {
+        Row: {
+          base_fee: number
+          created_at: string
+          currency: string
+          id: string
+          is_active: boolean
+          name: string
+          price_per_kwh: number
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          base_fee?: number
+          created_at?: string
+          currency?: string
+          id?: string
+          is_active?: boolean
+          name: string
+          price_per_kwh?: number
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          base_fee?: number
+          created_at?: string
+          currency?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+          price_per_kwh?: number
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "charging_tariffs_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       custom_role_permissions: {
         Row: {
           created_at: string

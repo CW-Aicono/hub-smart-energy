@@ -1,0 +1,254 @@
+import { useState } from "react";
+import { Navigate } from "react-router-dom";
+import { useAuth } from "@/hooks/useAuth";
+import { useUserRole } from "@/hooks/useUserRole";
+import { useTranslation } from "@/hooks/useTranslation";
+import { useChargingSessions } from "@/hooks/useChargingSessions";
+import { useChargingTariffs, ChargingTariff } from "@/hooks/useChargingTariffs";
+import { useChargingInvoices } from "@/hooks/useChargingInvoices";
+import { useChargePoints } from "@/hooks/useChargePoints";
+import { useTenant } from "@/hooks/useTenant";
+import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Plus, Receipt, Euro, Zap, Clock, Trash2, Edit } from "lucide-react";
+import { format } from "date-fns";
+
+const ChargingBilling = () => {
+  const { user, loading: authLoading } = useAuth();
+  const { isAdmin } = useUserRole();
+  const { t } = useTranslation();
+  const { tenant } = useTenant();
+  const { sessions, isLoading: sessionsLoading } = useChargingSessions();
+  const { tariffs, isLoading: tariffsLoading, addTariff, updateTariff, deleteTariff } = useChargingTariffs();
+  const { invoices, createInvoice } = useChargingInvoices();
+  const { chargePoints } = useChargePoints();
+
+  const [tariffOpen, setTariffOpen] = useState(false);
+  const [editTariff, setEditTariff] = useState<ChargingTariff | null>(null);
+  const [tariffForm, setTariffForm] = useState({ name: "", price_per_kwh: "0.35", base_fee: "0", currency: "EUR" });
+
+  if (authLoading) return null;
+  if (!user) return <Navigate to="/auth" replace />;
+
+  const completedSessions = sessions.filter((s) => s.status === "completed");
+  const totalEnergy = completedSessions.reduce((sum, s) => sum + s.energy_kwh, 0);
+  const activeTariff = tariffs.find((t) => t.is_active);
+
+  const getCpName = (id: string) => chargePoints.find((cp) => cp.id === id)?.name || "—";
+
+  const resetTariffForm = () => setTariffForm({ name: "", price_per_kwh: "0.35", base_fee: "0", currency: "EUR" });
+
+  const handleAddTariff = () => {
+    if (!tenant?.id) return;
+    addTariff.mutate({
+      tenant_id: tenant.id,
+      name: tariffForm.name,
+      price_per_kwh: parseFloat(tariffForm.price_per_kwh),
+      base_fee: parseFloat(tariffForm.base_fee),
+      currency: tariffForm.currency,
+    });
+    setTariffOpen(false);
+    resetTariffForm();
+  };
+
+  const handleEditTariff = () => {
+    if (!editTariff) return;
+    updateTariff.mutate({
+      id: editTariff.id,
+      name: tariffForm.name,
+      price_per_kwh: parseFloat(tariffForm.price_per_kwh),
+      base_fee: parseFloat(tariffForm.base_fee),
+    });
+    setEditTariff(null);
+    resetTariffForm();
+  };
+
+  const openEditTariff = (t: ChargingTariff) => {
+    setTariffForm({ name: t.name, price_per_kwh: String(t.price_per_kwh), base_fee: String(t.base_fee), currency: t.currency });
+    setEditTariff(t);
+  };
+
+  const tariffFormFields = (
+    <div className="space-y-4">
+      <div><Label>Name</Label><Input value={tariffForm.name} onChange={(e) => setTariffForm({ ...tariffForm, name: e.target.value })} /></div>
+      <div className="grid grid-cols-2 gap-4">
+        <div><Label>Preis pro kWh (€)</Label><Input type="number" step="0.01" value={tariffForm.price_per_kwh} onChange={(e) => setTariffForm({ ...tariffForm, price_per_kwh: e.target.value })} /></div>
+        <div><Label>Grundgebühr (€)</Label><Input type="number" step="0.01" value={tariffForm.base_fee} onChange={(e) => setTariffForm({ ...tariffForm, base_fee: e.target.value })} /></div>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="flex min-h-screen bg-background">
+      <DashboardSidebar />
+      <main className="flex-1 overflow-auto">
+        <div className="p-4 md:p-8 space-y-6">
+          <div>
+            <h1 className="text-2xl font-bold text-foreground">{t("charging.billing" as any)}</h1>
+            <p className="text-muted-foreground">{t("charging.billingDesc" as any)}</p>
+          </div>
+
+          {/* Stats */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <Card><CardContent className="p-4 flex items-center gap-3"><Zap className="h-5 w-5 text-muted-foreground" /><div><p className="text-2xl font-bold">{totalEnergy.toFixed(1)}</p><p className="text-sm text-muted-foreground">kWh gesamt</p></div></CardContent></Card>
+            <Card><CardContent className="p-4 flex items-center gap-3"><Receipt className="h-5 w-5 text-muted-foreground" /><div><p className="text-2xl font-bold">{completedSessions.length}</p><p className="text-sm text-muted-foreground">Ladevorgänge</p></div></CardContent></Card>
+            <Card><CardContent className="p-4 flex items-center gap-3"><Euro className="h-5 w-5 text-muted-foreground" /><div><p className="text-2xl font-bold">{activeTariff ? `${activeTariff.price_per_kwh} €` : "—"}</p><p className="text-sm text-muted-foreground">Preis/kWh</p></div></CardContent></Card>
+            <Card><CardContent className="p-4 flex items-center gap-3"><Clock className="h-5 w-5 text-muted-foreground" /><div><p className="text-2xl font-bold">{sessions.filter((s) => s.status === "active").length}</p><p className="text-sm text-muted-foreground">Aktive Ladevorgänge</p></div></CardContent></Card>
+          </div>
+
+          <Tabs defaultValue="sessions">
+            <TabsList>
+              <TabsTrigger value="sessions">Ladevorgänge</TabsTrigger>
+              <TabsTrigger value="tariffs">Tarife</TabsTrigger>
+              <TabsTrigger value="invoices">Rechnungen</TabsTrigger>
+            </TabsList>
+
+            {/* Sessions Tab */}
+            <TabsContent value="sessions">
+              <Card>
+                <CardHeader><CardTitle>Ladevorgänge</CardTitle></CardHeader>
+                <CardContent>
+                  {sessionsLoading ? <p className="text-muted-foreground">Laden...</p> : sessions.length === 0 ? <p className="text-muted-foreground">Keine Ladevorgänge vorhanden.</p> : (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Ladepunkt</TableHead>
+                          <TableHead>Start</TableHead>
+                          <TableHead>Ende</TableHead>
+                          <TableHead>Energie</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead>ID-Tag</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {sessions.map((s) => (
+                          <TableRow key={s.id}>
+                            <TableCell className="font-medium">{getCpName(s.charge_point_id)}</TableCell>
+                            <TableCell>{format(new Date(s.start_time), "dd.MM.yyyy HH:mm")}</TableCell>
+                            <TableCell>{s.stop_time ? format(new Date(s.stop_time), "dd.MM.yyyy HH:mm") : "—"}</TableCell>
+                            <TableCell>{s.energy_kwh.toFixed(2)} kWh</TableCell>
+                            <TableCell><Badge variant={s.status === "active" ? "default" : s.status === "completed" ? "secondary" : "destructive"}>{s.status === "active" ? "Aktiv" : s.status === "completed" ? "Abgeschlossen" : "Fehler"}</Badge></TableCell>
+                            <TableCell className="font-mono text-sm">{s.id_tag || "—"}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            {/* Tariffs Tab */}
+            <TabsContent value="tariffs">
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between">
+                  <CardTitle>Tarife</CardTitle>
+                  {isAdmin && (
+                    <Dialog open={tariffOpen} onOpenChange={setTariffOpen}>
+                      <DialogTrigger asChild><Button size="sm" onClick={resetTariffForm}><Plus className="h-4 w-4 mr-2" />Tarif hinzufügen</Button></DialogTrigger>
+                      <DialogContent>
+                        <DialogHeader><DialogTitle>Neuer Tarif</DialogTitle></DialogHeader>
+                        {tariffFormFields}
+                        <Button onClick={handleAddTariff} disabled={!tariffForm.name}>Erstellen</Button>
+                      </DialogContent>
+                    </Dialog>
+                  )}
+                </CardHeader>
+                <CardContent>
+                  {tariffsLoading ? <p className="text-muted-foreground">Laden...</p> : tariffs.length === 0 ? <p className="text-muted-foreground">Keine Tarife vorhanden.</p> : (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Name</TableHead>
+                          <TableHead>Preis/kWh</TableHead>
+                          <TableHead>Grundgebühr</TableHead>
+                          <TableHead>Aktiv</TableHead>
+                          {isAdmin && <TableHead className="w-24">Aktionen</TableHead>}
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {tariffs.map((tariff) => (
+                          <TableRow key={tariff.id}>
+                            <TableCell className="font-medium">{tariff.name}</TableCell>
+                            <TableCell>{tariff.price_per_kwh} {tariff.currency}</TableCell>
+                            <TableCell>{tariff.base_fee} {tariff.currency}</TableCell>
+                            <TableCell>
+                              <Switch
+                                checked={tariff.is_active}
+                                onCheckedChange={(checked) => updateTariff.mutate({ id: tariff.id, is_active: checked })}
+                                disabled={!isAdmin}
+                              />
+                            </TableCell>
+                            {isAdmin && (
+                              <TableCell>
+                                <div className="flex gap-1">
+                                  <Button variant="ghost" size="icon" onClick={() => openEditTariff(tariff)}><Edit className="h-4 w-4" /></Button>
+                                  <Button variant="ghost" size="icon" onClick={() => deleteTariff.mutate(tariff.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                                </div>
+                              </TableCell>
+                            )}
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Dialog open={!!editTariff} onOpenChange={(open) => { if (!open) setEditTariff(null); }}>
+                <DialogContent>
+                  <DialogHeader><DialogTitle>Tarif bearbeiten</DialogTitle></DialogHeader>
+                  {tariffFormFields}
+                  <Button onClick={handleEditTariff} disabled={!tariffForm.name}>Speichern</Button>
+                </DialogContent>
+              </Dialog>
+            </TabsContent>
+
+            {/* Invoices Tab */}
+            <TabsContent value="invoices">
+              <Card>
+                <CardHeader><CardTitle>Rechnungen</CardTitle></CardHeader>
+                <CardContent>
+                  {invoices.length === 0 ? <p className="text-muted-foreground">Keine Rechnungen vorhanden.</p> : (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Rechnungsnr.</TableHead>
+                          <TableHead>Energie</TableHead>
+                          <TableHead>Betrag</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead>Erstellt</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {invoices.map((inv) => (
+                          <TableRow key={inv.id}>
+                            <TableCell className="font-mono">{inv.invoice_number || "—"}</TableCell>
+                            <TableCell>{inv.total_energy_kwh.toFixed(2)} kWh</TableCell>
+                            <TableCell>{inv.total_amount.toFixed(2)} {inv.currency}</TableCell>
+                            <TableCell><Badge variant={inv.status === "paid" ? "default" : inv.status === "issued" ? "secondary" : "outline"}>{inv.status === "paid" ? "Bezahlt" : inv.status === "issued" ? "Ausgestellt" : "Entwurf"}</Badge></TableCell>
+                            <TableCell>{format(new Date(inv.created_at), "dd.MM.yyyy")}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+          </Tabs>
+        </div>
+      </main>
+    </div>
+  );
+};
+
+export default ChargingBilling;
