@@ -79,37 +79,53 @@ function GLBModel({ url }: { url: string }) {
 // Renders an OBJ model with optional MTL
 function OBJModel({ objUrl, mtlUrl }: { objUrl: string; mtlUrl?: string | null }) {
   const [object, setObject] = useState<THREE.Group | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    let cancelled = false;
     const loadModel = async () => {
-      let materials: MTLLoader.MaterialCreator | undefined;
-      if (mtlUrl) {
-        const mtlLoader = new MTLLoader();
-        materials = await mtlLoader.loadAsync(mtlUrl);
-        materials.preload();
+      try {
+        let materials: MTLLoader.MaterialCreator | undefined;
+        if (mtlUrl) {
+          const mtlLoader = new MTLLoader();
+          materials = await mtlLoader.loadAsync(mtlUrl);
+          materials.preload();
+        }
+
+        const objLoader = new OBJLoader();
+        if (materials) {
+          objLoader.setMaterials(materials);
+        }
+
+        const obj = await objLoader.loadAsync(objUrl);
+
+        if (!mtlUrl) {
+          obj.traverse((child) => {
+            if (child instanceof THREE.Mesh) {
+              child.material = new THREE.MeshStandardMaterial({ color: 0xcccccc });
+            }
+          });
+        }
+
+        // Center and ground the loaded model
+        centerAndGroundObject(obj);
+        if (!cancelled) setObject(obj);
+      } catch (err) {
+        console.error("Error loading OBJ model:", err);
+        if (!cancelled) setError(String(err));
       }
-
-      const objLoader = new OBJLoader();
-      if (materials) {
-        objLoader.setMaterials(materials);
-      }
-
-      const obj = await objLoader.loadAsync(objUrl);
-
-      if (!mtlUrl) {
-        obj.traverse((child) => {
-          if (child instanceof THREE.Mesh) {
-            child.material = new THREE.MeshStandardMaterial({ color: 0xcccccc });
-          }
-        });
-      }
-
-      // Center and ground the loaded model
-      centerAndGroundObject(obj);
-      setObject(obj);
     };
     loadModel();
+    return () => { cancelled = true; };
   }, [objUrl, mtlUrl]);
+
+  if (error) {
+    return (
+      <Text position={[0, 1, 0]} fontSize={0.3} color="#ef4444" anchorX="center" anchorY="middle">
+        Fehler beim Laden des 3D-Modells
+      </Text>
+    );
+  }
 
   if (!object) return null;
   return <primitive object={object} />;
@@ -136,16 +152,18 @@ function ModelViewer({ floor }: { floor: Floor }) {
   if (!floor.model_3d_url) return null;
 
   const url = floor.model_3d_url;
-  const lower = url.toLowerCase();
+  // Strip query params for extension check (cache-buster etc.)
+  const pathOnly = url.split("?")[0].toLowerCase();
 
-  if (lower.endsWith(".glb")) {
+  if (pathOnly.endsWith(".glb")) {
     return <GLBModel url={url} />;
   }
 
-  if (lower.endsWith(".3ds")) {
+  if (pathOnly.endsWith(".3ds")) {
     return <TDSModel url={url} />;
   }
 
+  // Default to OBJ (covers .obj and unknown extensions)
   return <OBJModel objUrl={url} mtlUrl={floor.model_3d_mtl_url} />;
 }
 
@@ -267,26 +285,8 @@ function Scene({
             );
           })}
 
-          {/* Meter Labels */}
-          {floorMeters.map((meter, index) => {
-            // Position meters in the scene - use room position if assigned, otherwise spread them
-            const room = meter.room_id ? rooms.find(r => r.id === meter.room_id) : null;
-            const meterPos: [number, number, number] = room
-              ? [room.position_x + 1, 2.5, room.position_y]
-              : [sceneBounds.centerX + (index - floorMeters.length / 2) * 3, 2.5, sceneBounds.centerZ - 2];
-            
-            return (
-              <Meter3DLabel
-                key={`meter-${meter.id}`}
-                meter={meter}
-                position={meterPos}
-                latestValue={meterLatestValues[meter.id]}
-              />
-            );
-          })}
-
           {/* Empty state hint */}
-          {rooms.length === 0 && (
+          {rooms.length === 0 && floorMeters.length === 0 && (
             <Text
               position={[0, 1, 0]}
               fontSize={0.3}
@@ -299,6 +299,23 @@ function Scene({
           )}
         </>
       )}
+
+      {/* Meter Labels - always shown regardless of model/procedural mode */}
+      {floorMeters.map((meter, index) => {
+        const room = meter.room_id ? rooms.find(r => r.id === meter.room_id) : null;
+        const meterPos: [number, number, number] = room
+          ? [room.position_x + 1, 2.5, room.position_y]
+          : [(index - floorMeters.length / 2) * 3, 2.5, -2];
+        
+        return (
+          <Meter3DLabel
+            key={`meter-${meter.id}`}
+            meter={meter}
+            position={meterPos}
+            latestValue={meterLatestValues[meter.id]}
+          />
+        );
+      })}
       
       {/* Orbit Controls for normal viewing (not walking) */}
       {!isWalking && (
@@ -328,9 +345,9 @@ export function FloorPlan3DViewer({ floor, locationId, sensors = [], isAdmin = f
   const { positions: sensorPositions, loading: positionsLoading } = useFloorSensorPositions(floor.id);
   const { meters, loading: metersLoading } = useMeters(locationId);
   
-  // Filter meters assigned to this floor
+  // Filter meters: assigned to this floor OR unassigned (show all location meters)
   const floorMeters = useMemo(() => 
-    meters.filter(m => m.floor_id === floor.id && !m.is_archived),
+    meters.filter(m => !m.is_archived && (m.floor_id === floor.id || !m.floor_id)),
     [meters, floor.id]
   );
 
