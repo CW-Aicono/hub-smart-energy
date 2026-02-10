@@ -28,13 +28,13 @@ export const ENERGY_CHART_COLORS: Record<string, string> = {
 /** Hex colors for contexts that don't support CSS vars (e.g. PDF export SVGs) */
 export const ENERGY_HEX_COLORS: Record<string, string> = {
   strom: "#eab308",
-  gas: "#f97316",
+  gas: "#1e3a5f",
   waerme: "#ef4444",
-  wasser: "#3b82f6",
+  wasser: "#38bdf8",
   Strom: "#eab308",
-  Gas: "#f97316",
+  Gas: "#1e3a5f",
   "Wärme": "#ef4444",
-  Wasser: "#3b82f6",
+  Wasser: "#38bdf8",
 };
 
 /** Tailwind classes for icon/text color */
@@ -48,9 +48,9 @@ export const ENERGY_ICON_CLASSES: Record<string, string> = {
 /** Tailwind classes for card/label backgrounds and borders (floor plans, overlays) */
 export const ENERGY_CARD_CLASSES: Record<string, string> = {
   strom: "border-energy-strom/40 bg-yellow-50 dark:bg-yellow-950",
-  gas: "border-energy-gas/40 bg-orange-50 dark:bg-orange-950",
+  gas: "border-energy-gas/40 bg-blue-950/10 dark:bg-blue-950",
   waerme: "border-energy-waerme/40 bg-red-50 dark:bg-red-950",
-  wasser: "border-energy-wasser/40 bg-blue-50 dark:bg-blue-950",
+  wasser: "border-energy-wasser/40 bg-sky-50 dark:bg-sky-950",
 };
 
 /** Tailwind classes for text + border (sensor overlays in FloorPlanDialog) */
@@ -64,7 +64,7 @@ export const ENERGY_SENSOR_CLASSES: Record<string, string> = {
 /** Badge-style Tailwind classes for energy type badges in tables */
 export const ENERGY_BADGE_CLASSES: Record<string, string> = {
   strom: "border-energy-strom/40 text-energy-strom bg-yellow-50 dark:bg-yellow-950",
-  gas: "border-energy-gas/40 text-energy-gas bg-orange-50 dark:bg-orange-950",
+  gas: "border-energy-gas/40 text-energy-gas bg-blue-950/10 dark:bg-blue-950",
   waerme: "border-energy-waerme/40 text-energy-waerme bg-red-50 dark:bg-red-950",
-  wasser: "border-energy-wasser/40 text-energy-wasser bg-blue-50 dark:bg-blue-950",
+  wasser: "border-energy-wasser/40 text-energy-wasser bg-sky-50 dark:bg-sky-950",
 };
