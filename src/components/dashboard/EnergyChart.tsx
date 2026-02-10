@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import { useEnergyData } from "@/hooks/useEnergyData";
@@ -10,6 +11,12 @@ interface EnergyChartProps {
   locationId: string | null;
 }
 
+function getEnergyScale(maxValue: number): { divisor: number; unit: string } {
+  if (maxValue > 9999) return { divisor: 1_000, unit: "MWh" };
+  if (maxValue > 999) return { divisor: 1, unit: "kWh" };
+  return { divisor: 0.001, unit: "Wh" };
+}
+
 const EnergyChart = ({ locationId }: EnergyChartProps) => {
   const { locations } = useLocations();
   const { monthlyData, loading, hasData } = useEnergyData(locationId);
@@ -19,12 +26,31 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
     ? `Daten für: ${selectedLocation.name}` 
     : "Alle Liegenschaften";
 
+  // Determine dynamic unit based on max value across all energy types
+  const { scaledData, unit } = useMemo(() => {
+    const maxVal = monthlyData.reduce((max, d) => {
+      const vals = [d.strom || 0, d.gas || 0, d.waerme || 0];
+      return Math.max(max, ...vals);
+    }, 0);
+
+    const scale = getEnergyScale(maxVal);
+
+    const scaled = monthlyData.map((d) => ({
+      ...d,
+      strom: d.strom ? d.strom / scale.divisor : 0,
+      gas: d.gas ? d.gas / scale.divisor : 0,
+      waerme: d.waerme ? d.waerme / scale.divisor : 0,
+    }));
+
+    return { scaledData: scaled, unit: scale.unit };
+  }, [monthlyData]);
+
   if (loading) return <Card><CardContent className="p-6"><Skeleton className="h-[300px]" /></CardContent></Card>;
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="font-display text-lg">Energieverbrauch (kWh)</CardTitle>
+        <CardTitle className="font-display text-lg">Energieverbrauch ({unit})</CardTitle>
         <p className="text-sm text-muted-foreground">{subtitle}</p>
       </CardHeader>
       <CardContent>
@@ -34,10 +60,13 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
           </div>
         ) : (
           <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={monthlyData} barGap={2}>
+            <BarChart data={scaledData} barGap={2}>
               <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
               <XAxis dataKey="month" tick={{ fill: 'hsl(var(--muted-foreground))' }} />
-              <YAxis tick={{ fill: 'hsl(var(--muted-foreground))' }} />
+              <YAxis
+                tick={{ fill: 'hsl(var(--muted-foreground))' }}
+                tickFormatter={(v: number) => v.toLocaleString("de-DE", { maximumFractionDigits: 1 })}
+              />
               <Tooltip
                 contentStyle={{
                   backgroundColor: 'hsl(var(--card))',
@@ -45,7 +74,10 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
                   borderRadius: 'var(--radius)',
                   color: 'hsl(var(--card-foreground))',
                 }}
-                formatter={(value: number, name: string) => [formatEnergy(value), name]}
+                formatter={(value: number, name: string) => [
+                  `${value.toLocaleString("de-DE", { maximumFractionDigits: 2 })} ${unit}`,
+                  name,
+                ]}
               />
               <Legend />
               <Bar dataKey="strom" name="Strom" fill={ENERGY_CHART_COLORS.strom} radius={[2, 2, 0, 0]} />
