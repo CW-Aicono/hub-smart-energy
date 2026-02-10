@@ -46,9 +46,9 @@ export function FloorPlanDialog({ floor, locationId, open, onOpenChange }: Floor
   const { meters } = useMeters(locationId);
   const { readings } = useMeterReadings();
 
-  // Meters for this floor (or unassigned)
+  // Only meters explicitly assigned to this floor
   const floorMeters = useMemo(() => 
-    meters.filter(m => !m.is_archived && (m.floor_id === floor.id || !m.floor_id)),
+    meters.filter(m => !m.is_archived && m.floor_id === floor.id),
     [meters, floor.id]
   );
 
@@ -440,8 +440,7 @@ export function FloorPlanDialog({ floor, locationId, open, onOpenChange }: Floor
                       </div>
                     ))}
 
-                    {/* Meter overlays */}
-                    <MeterOverlay2D meters={floorMeters} latestValues={meterLatestValues} />
+                    {/* Meter overlays – only in view mode, not in edit */}
 
                     {/* Drag Preview */}
                     {dragPreview && (draggingSensor || draggingPosition) && (
