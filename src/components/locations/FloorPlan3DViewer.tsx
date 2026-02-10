@@ -484,6 +484,20 @@ export function FloorPlan3DViewer({ floor, locationId, sensors = [], isAdmin = f
   const startWalking = () => setIsWalking(true);
   const stopWalking = () => setIsWalking(false);
 
+  // Prevent page scrolling while in walkthrough mode
+  useEffect(() => {
+    if (!isWalking) return;
+    const prevent = (e: Event) => e.preventDefault();
+    document.body.style.overflow = "hidden";
+    document.addEventListener("wheel", prevent, { passive: false });
+    document.addEventListener("touchmove", prevent, { passive: false });
+    return () => {
+      document.body.style.overflow = "";
+      document.removeEventListener("wheel", prevent);
+      document.removeEventListener("touchmove", prevent);
+    };
+  }, [isWalking]);
+
   const handleRotationChange = useCallback((deg: number) => {
     setModelRotation(deg);
     // Debounce save to DB
