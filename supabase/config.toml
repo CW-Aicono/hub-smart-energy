@@ -11,3 +11,6 @@ verify_jwt = false
 
 [functions.meter-ocr]
 verify_jwt = false
+
+[functions.ocpp-central]
+verify_jwt = false
