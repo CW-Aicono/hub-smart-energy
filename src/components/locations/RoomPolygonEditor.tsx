@@ -3,7 +3,7 @@ import { FloorRoom, useFloorRooms } from "@/hooks/useFloorRooms";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { DoorOpen, Plus, Trash2, Pencil, Check, X, Undo2 } from "lucide-react";
+import { DoorOpen, Plus, Trash2, Pencil, Check, X, Undo2, Crosshair } from "lucide-react";
 import { toast } from "sonner";
 import { RoomOverlay2D } from "./RoomOverlay2D";
 
@@ -95,6 +95,19 @@ export function RoomPolygonEditor({ floorId, floorPlanUrl }: RoomPolygonEditorPr
     setIsDrawing(false);
     setDrawingPoints([]);
     setDrawingName("");
+    setPlacingRoom(null);
+  };
+
+  // State for placing an existing room
+  const [placingRoom, setPlacingRoom] = useState<FloorRoom | null>(null);
+
+  const startPlacingRoom = (room: FloorRoom) => {
+    setPlacingRoom(room);
+    setIsDrawing(true);
+    setDrawingPoints([]);
+    setDrawingName(room.name);
+    setSelectedRoom(null);
+    setEditingRoom(null);
   };
 
   // Click on the floor plan to add polygon point
@@ -111,27 +124,44 @@ export function RoomPolygonEditor({ floorId, floorPlanUrl }: RoomPolygonEditorPr
     setDrawingPoints((prev) => prev.slice(0, -1));
   };
 
-  // Save new polygon room
+  // Save new polygon room or place existing room
   const handleSaveDrawing = async () => {
-    if (drawingPoints.length < 3 || !drawingName.trim()) return;
+    if (drawingPoints.length < 3) return;
     setSaving(true);
-    const { error } = await addRoom({
-      floor_id: floorId,
-      name: drawingName.trim(),
-      position_x: 0,
-      position_y: 0,
-      width: 4,
-      depth: 4,
-      wall_height: 2.8,
-      color: ROOM_COLORS[rooms.length % ROOM_COLORS.length],
-      polygon_points: drawingPoints,
-    } as any);
-    setSaving(false);
-    if (error) {
-      toast.error("Raum konnte nicht erstellt werden");
+
+    if (placingRoom) {
+      // Placing an existing room
+      const { error } = await updateRoom(placingRoom.id, {
+        polygon_points: drawingPoints,
+      } as any);
+      setSaving(false);
+      if (error) {
+        toast.error("Fehler beim Platzieren");
+      } else {
+        toast.success(`Raum "${placingRoom.name}" platziert`);
+        cancelDrawing();
+      }
     } else {
-      toast.success(`Raum "${drawingName.trim()}" erstellt`);
-      cancelDrawing();
+      // Creating a new room
+      if (!drawingName.trim()) return;
+      const { error } = await addRoom({
+        floor_id: floorId,
+        name: drawingName.trim(),
+        position_x: 0,
+        position_y: 0,
+        width: 4,
+        depth: 4,
+        wall_height: 2.8,
+        color: ROOM_COLORS[rooms.length % ROOM_COLORS.length],
+        polygon_points: drawingPoints,
+      } as any);
+      setSaving(false);
+      if (error) {
+        toast.error("Raum konnte nicht erstellt werden");
+      } else {
+        toast.success(`Raum "${drawingName.trim()}" erstellt`);
+        cancelDrawing();
+      }
     }
   };
 
@@ -246,18 +276,34 @@ export function RoomPolygonEditor({ floorId, floorPlanUrl }: RoomPolygonEditorPr
                       </p>
                     </div>
                     <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-6 w-6"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          startEditRoom(room);
-                        }}
-                        title="Polygon bearbeiten"
-                      >
-                        <Pencil className="h-3 w-3" />
-                      </Button>
+                      {!hasPolygon && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 text-primary hover:text-primary"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            startPlacingRoom(room);
+                          }}
+                          title="Im Grundriss platzieren"
+                        >
+                          <Crosshair className="h-3 w-3" />
+                        </Button>
+                      )}
+                      {hasPolygon && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            startEditRoom(room);
+                          }}
+                          title="Polygon bearbeiten"
+                        >
+                          <Pencil className="h-3 w-3" />
+                        </Button>
+                      )}
                       <Button
                         variant="ghost"
                         size="icon"
@@ -279,13 +325,17 @@ export function RoomPolygonEditor({ floorId, floorPlanUrl }: RoomPolygonEditorPr
         <div className="p-2 border-t flex-shrink-0">
           {isDrawing ? (
             <div className="space-y-2">
-              <Input
-                value={drawingName}
-                onChange={(e) => setDrawingName(e.target.value)}
-                placeholder="Raumname"
-                className="h-8 text-sm"
-                autoFocus
-              />
+              {placingRoom ? (
+                <p className="text-xs font-medium">„{placingRoom.name}" platzieren</p>
+              ) : (
+                <Input
+                  value={drawingName}
+                  onChange={(e) => setDrawingName(e.target.value)}
+                  placeholder="Raumname"
+                  className="h-8 text-sm"
+                  autoFocus
+                />
+              )}
               <p className="text-xs text-muted-foreground">
                 {drawingPoints.length} Punkte – Klicken Sie auf den Grundriss
               </p>
@@ -294,7 +344,7 @@ export function RoomPolygonEditor({ floorId, floorPlanUrl }: RoomPolygonEditorPr
                   size="sm"
                   className="flex-1 h-7 text-xs"
                   onClick={handleSaveDrawing}
-                  disabled={drawingPoints.length < 3 || !drawingName.trim() || saving}
+                  disabled={drawingPoints.length < 3 || (!placingRoom && !drawingName.trim()) || saving}
                 >
                   <Check className="h-3 w-3 mr-1" />
                   Speichern
