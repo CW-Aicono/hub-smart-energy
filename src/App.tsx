@@ -34,6 +34,7 @@ import MobileApp from "./pages/MobileApp";
 import GettingStarted from "./pages/GettingStarted";
 import ChargingPoints from "./pages/ChargingPoints";
 import ChargingBilling from "./pages/ChargingBilling";
+import Automation from "./pages/Automation";
 import UpdateBanner from "./components/UpdateBanner";
 // Import Leaflet CSS globally
 import "leaflet/dist/leaflet.css";
@@ -76,6 +77,7 @@ const App = () => (
                   <Route path="/super-admin/support" element={<SuperAdminSupport />} />
                   <Route path="/charging/points" element={<ChargingPoints />} />
                   <Route path="/charging/billing" element={<ChargingBilling />} />
+                  <Route path="/automation" element={<Automation />} />
                   <Route path="/m" element={<MobileApp />} />
                   <Route path="/getting-started" element={<GettingStarted />} />
                   <Route path="*" element={<NotFound />} />
