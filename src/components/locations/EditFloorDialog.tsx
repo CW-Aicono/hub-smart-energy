@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Slider } from "@/components/ui/slider";
 import {
   Dialog,
   DialogContent,
@@ -15,7 +16,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Pencil } from "lucide-react";
+import { Pencil, RotateCw } from "lucide-react";
 
 interface EditFloorDialogProps {
   floor: Floor;
@@ -37,6 +38,8 @@ export function EditFloorDialog({ floor, locationId, onSuccess }: EditFloorDialo
   const [floorPlanFile, setFloorPlanFile] = useState<File | null>(null);
   const [model3dFile, setModel3dFile] = useState<File | null>(null);
   const [mtlFile, setMtlFile] = useState<File | null>(null);
+  const [modelRotation, setModelRotation] = useState<number>(floor.model_3d_rotation ?? 0);
+  const [useManualRotation, setUseManualRotation] = useState(floor.model_3d_rotation !== null);
 
   const isObjSelected = model3dFile?.name.toLowerCase().endsWith(".obj");
 
@@ -83,6 +86,7 @@ export function EditFloorDialog({ floor, locationId, onSuccess }: EditFloorDialo
         description: description.trim() || null,
         area_sqm: areaSqm ? parseFloat(areaSqm) : null,
         floor_plan_url: floorPlanUrl,
+        model_3d_rotation: useManualRotation ? modelRotation : null,
       });
 
       if (error) {
@@ -223,6 +227,65 @@ export function EditFloorDialog({ floor, locationId, onSuccess }: EditFloorDialo
                 accept=".mtl"
                 onChange={(e) => setMtlFile(e.target.files?.[0] || null)}
               />
+            </div>
+          )}
+
+          {/* 3D Model Rotation */}
+          {floor.model_3d_url && (
+            <div className="space-y-3 border rounded-lg p-3 bg-muted/30">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <RotateCw className="h-4 w-4 text-muted-foreground" />
+                  <Label className="text-sm font-medium">3D-Modell Rotation</Label>
+                </div>
+                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={useManualRotation}
+                    onChange={(e) => {
+                      setUseManualRotation(e.target.checked);
+                      if (!e.target.checked) setModelRotation(0);
+                    }}
+                    className="rounded border-input"
+                  />
+                  Manuell anpassen
+                </label>
+              </div>
+              {useManualRotation ? (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-3">
+                    <Slider
+                      value={[modelRotation]}
+                      onValueChange={(v) => setModelRotation(v[0])}
+                      min={0}
+                      max={360}
+                      step={15}
+                      className="flex-1"
+                    />
+                    <span className="text-sm font-mono text-muted-foreground w-12 text-right">
+                      {modelRotation}°
+                    </span>
+                  </div>
+                  <div className="flex gap-1">
+                    {[0, 90, 180, 270].map((deg) => (
+                      <Button
+                        key={deg}
+                        type="button"
+                        variant={modelRotation === deg ? "default" : "outline"}
+                        size="sm"
+                        className="text-xs h-7"
+                        onClick={() => setModelRotation(deg)}
+                      >
+                        {deg}°
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  Automatische Erkennung aktiv. Aktivieren Sie die manuelle Anpassung, falls das Modell falsch ausgerichtet ist.
+                </p>
+              )}
             </div>
           )}
 
