@@ -17,6 +17,61 @@ export interface Floor {
 
 export type FloorInsert = Omit<Floor, "id" | "created_at" | "updated_at" | "model_3d_url" | "model_3d_mtl_url">;
 
+type ProgressCallback = (progress: number) => void;
+
+/**
+ * Upload a file to Supabase Storage with XHR progress tracking.
+ * Returns the public URL on success.
+ */
+async function uploadWithProgress(
+  bucket: string,
+  path: string,
+  file: File,
+  onProgress?: ProgressCallback,
+): Promise<{ publicUrl: string | null; error: Error | null }> {
+  const { data: { session } } = await supabase.auth.getSession();
+  const token = session?.access_token;
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+  const anonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+
+  const url = `${supabaseUrl}/storage/v1/object/${bucket}/${path}`;
+
+  return new Promise((resolve) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", url, true);
+    xhr.setRequestHeader("Authorization", `Bearer ${token || anonKey}`);
+    xhr.setRequestHeader("apikey", anonKey);
+    xhr.setRequestHeader("x-upsert", "true");
+
+    if (onProgress) {
+      xhr.upload.addEventListener("progress", (e) => {
+        if (e.lengthComputable) {
+          onProgress(Math.round((e.loaded / e.total) * 100));
+        }
+      });
+    }
+
+    xhr.addEventListener("load", () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        const { data: { publicUrl } } = supabase.storage
+          .from(bucket)
+          .getPublicUrl(path);
+        // Cache-bust to ensure fresh file
+        const cacheBustedUrl = `${publicUrl}?t=${Date.now()}`;
+        resolve({ publicUrl: cacheBustedUrl, error: null });
+      } else {
+        resolve({ publicUrl: null, error: new Error(`Upload failed: ${xhr.status} ${xhr.statusText}`) });
+      }
+    });
+
+    xhr.addEventListener("error", () => {
+      resolve({ publicUrl: null, error: new Error("Network error during upload") });
+    });
+
+    xhr.send(file);
+  });
+}
+
 interface UseFloorsReturn {
   floors: Floor[];
   loading: boolean;
@@ -25,8 +80,8 @@ interface UseFloorsReturn {
   createFloor: (floor: FloorInsert) => Promise<{ data: Floor | null; error: Error | null }>;
   updateFloor: (id: string, updates: Partial<Floor>) => Promise<{ error: Error | null }>;
   deleteFloor: (id: string) => Promise<{ error: Error | null }>;
-  uploadFloorPlan: (file: File, locationId: string, floorId: string) => Promise<{ url: string | null; error: Error | null }>;
-  upload3DModel: (files: { main: File; mtl?: File }, locationId: string, floorId: string) => Promise<{ error: Error | null }>;
+  uploadFloorPlan: (file: File, locationId: string, floorId: string, onProgress?: ProgressCallback) => Promise<{ url: string | null; error: Error | null }>;
+  upload3DModel: (files: { main: File; mtl?: File }, locationId: string, floorId: string, onProgress?: ProgressCallback) => Promise<{ error: Error | null }>;
 }
 
 export function useFloors(locationId: string | undefined): UseFloorsReturn {
@@ -107,62 +162,78 @@ export function useFloors(locationId: string | undefined): UseFloorsReturn {
     return { error: deleteError as Error | null };
   };
 
-  const uploadFloorPlan = async (file: File, locationId: string, floorId: string) => {
+  const uploadFloorPlan = async (
+    file: File,
+    locationId: string,
+    floorId: string,
+    onProgress?: ProgressCallback,
+  ) => {
     const fileExt = file.name.split('.').pop();
     const filePath = `${locationId}/${floorId}.${fileExt}`;
 
-    const { error: uploadError } = await supabase.storage
-      .from('floor-plans')
-      .upload(filePath, file, { upsert: true });
+    const { publicUrl, error } = await uploadWithProgress(
+      'floor-plans',
+      filePath,
+      file,
+      onProgress,
+    );
 
-    if (uploadError) {
-      return { url: null, error: uploadError as Error };
-    }
-
-    const { data: { publicUrl } } = supabase.storage
-      .from('floor-plans')
-      .getPublicUrl(filePath);
-
-    return { url: publicUrl, error: null };
+    return { url: publicUrl, error };
   };
 
   const upload3DModel = async (
     files: { main: File; mtl?: File },
     locationId: string,
-    floorId: string
+    floorId: string,
+    onProgress?: ProgressCallback,
   ) => {
     const mainExt = files.main.name.split('.').pop()?.toLowerCase();
     const mainPath = `${locationId}/${floorId}.${mainExt}`;
 
-    // Upload main file (GLB or OBJ)
-    const { error: mainError } = await supabase.storage
-      .from('floor-3d-models')
-      .upload(mainPath, files.main, { upsert: true });
+    // Calculate total size for combined progress
+    const totalSize = files.main.size + (files.mtl?.size || 0);
+    let mainLoaded = 0;
+    let mtlLoaded = 0;
+
+    const reportCombinedProgress = () => {
+      if (onProgress && totalSize > 0) {
+        onProgress(Math.round(((mainLoaded + mtlLoaded) / totalSize) * 100));
+      }
+    };
+
+    // Upload main file
+    const { publicUrl: mainUrl, error: mainError } = await uploadWithProgress(
+      'floor-3d-models',
+      mainPath,
+      files.main,
+      (p) => {
+        mainLoaded = (p / 100) * files.main.size;
+        reportCombinedProgress();
+      },
+    );
 
     if (mainError) {
-      return { error: mainError as Error };
+      return { error: mainError };
     }
-
-    const { data: { publicUrl: mainUrl } } = supabase.storage
-      .from('floor-3d-models')
-      .getPublicUrl(mainPath);
 
     let mtlUrl: string | null = null;
 
     // Upload MTL file if provided
     if (files.mtl) {
       const mtlPath = `${locationId}/${floorId}.mtl`;
-      const { error: mtlError } = await supabase.storage
-        .from('floor-3d-models')
-        .upload(mtlPath, files.mtl, { upsert: true });
+      const { publicUrl: mtlPublicUrl, error: mtlError } = await uploadWithProgress(
+        'floor-3d-models',
+        mtlPath,
+        files.mtl,
+        (p) => {
+          mtlLoaded = (p / 100) * files.mtl!.size;
+          reportCombinedProgress();
+        },
+      );
 
       if (mtlError) {
-        return { error: mtlError as Error };
+        return { error: mtlError };
       }
-
-      const { data: { publicUrl: mtlPublicUrl } } = supabase.storage
-        .from('floor-3d-models')
-        .getPublicUrl(mtlPath);
 
       mtlUrl = mtlPublicUrl;
     }
