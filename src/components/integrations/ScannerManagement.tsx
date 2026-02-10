@@ -26,7 +26,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Plus, Smartphone, Trash2, Pencil, QrCode, Loader2, Copy, Check, Eye } from "lucide-react";
+import { Plus, Smartphone, Trash2, Pencil, QrCode, Loader2, Copy, Check, Eye, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { ScannerQrCode } from "./ScannerQrCode";
 
@@ -255,8 +255,20 @@ export function ScannerManagement() {
       )}
       {/* App Preview Dialog */}
       <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
-        <DialogContent className="sm:max-w-md p-0 overflow-hidden bg-transparent border-none shadow-none">
+        <DialogContent className="sm:max-w-[370px] p-0 overflow-hidden bg-transparent border-none shadow-none [&>button]:hidden" aria-describedby={undefined}>
+          <DialogTitle className="sr-only">App-Vorschau</DialogTitle>
           <div className="flex flex-col items-center">
+            {/* Close button */}
+            <div className="w-full flex justify-end mb-2 pr-1">
+              <Button
+                variant="secondary"
+                size="icon"
+                className="h-8 w-8 rounded-full shadow-lg"
+                onClick={() => setPreviewOpen(false)}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
             {/* Smartphone Frame */}
             <div className="relative mx-auto" style={{ width: 320 }}>
               {/* Phone bezel */}
