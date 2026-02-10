@@ -165,16 +165,17 @@ const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
     );
   }
 
-  // Layout constants — fixed viewBox, SVG scales to fit container
+  // Layout: viewBox grows with node count, container is fixed — SVG scales down
   const vbW = 700;
-  const vbH = 260;
   const maxNodes = Math.max(sourceNames.length, targetNames.length);
+  const nodeSlot = 48; // height per node including padding
+  const vbH = Math.max(200, maxNodes * nodeSlot + 30);
   const nodeW = 14;
   const srcX = 100;
   const tgtX = vbW - 100 - nodeW;
-  const padding = Math.max(2, Math.floor((vbH - 20) / maxNodes * 0.15));
-  const topY = 10;
-  const totalH = vbH - 20;
+  const padding = Math.max(4, nodeSlot * 0.15);
+  const topY = 15;
+  const totalH = vbH - 30;
 
   // Source values
   const sourceValues: Record<string, number> = {};
