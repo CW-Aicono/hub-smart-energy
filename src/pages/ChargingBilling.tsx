@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
+import { startOfDay, startOfWeek, startOfMonth, startOfQuarter, startOfYear } from "date-fns";
 import { Navigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
@@ -19,7 +20,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Receipt, Euro, Zap, Clock, Trash2, Edit, Users, Globe } from "lucide-react";
+import { Plus, Receipt, Euro, Zap, Clock, Trash2, Edit, Users, Globe, Calendar } from "lucide-react";
 import { format } from "date-fns";
 import { fmtNum, fmtCurrency, fmtKwh } from "@/lib/formatCharging";
 
@@ -36,11 +37,28 @@ const ChargingBilling = () => {
   const [tariffOpen, setTariffOpen] = useState(false);
   const [editTariff, setEditTariff] = useState<ChargingTariff | null>(null);
   const [tariffForm, setTariffForm] = useState({ name: "", price_per_kwh: "0.35", base_fee: "0", currency: "EUR" });
+  const [period, setPeriod] = useState<"day" | "week" | "month" | "quarter" | "year">("month");
+
+  const periodStart = useMemo(() => {
+    const now = new Date();
+    switch (period) {
+      case "day": return startOfDay(now);
+      case "week": return startOfWeek(now, { weekStartsOn: 1 });
+      case "month": return startOfMonth(now);
+      case "quarter": return startOfQuarter(now);
+      case "year": return startOfYear(now);
+    }
+  }, [period]);
+
+  const filteredSessions = useMemo(() =>
+    sessions.filter(s => new Date(s.start_time) >= periodStart),
+    [sessions, periodStart]
+  );
 
   if (authLoading) return null;
   if (!user) return <Navigate to="/auth" replace />;
 
-  const completedSessions = sessions.filter((s) => s.status === "completed");
+  const completedSessions = filteredSessions.filter((s) => s.status === "completed");
   const totalEnergy = completedSessions.reduce((sum, s) => sum + s.energy_kwh, 0);
   const activeTariff = tariffs.find((t) => t.is_active);
 
@@ -98,12 +116,36 @@ const ChargingBilling = () => {
             <p className="text-muted-foreground">{t("charging.billingDesc" as any)}</p>
           </div>
 
-          {/* Stats */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <Card><CardContent className="p-4 flex items-center gap-3"><Zap className="h-5 w-5 text-muted-foreground" /><div><p className="text-2xl font-bold">{fmtKwh(totalEnergy, 1)}</p><p className="text-sm text-muted-foreground">gesamt</p></div></CardContent></Card>
-            <Card><CardContent className="p-4 flex items-center gap-3"><Receipt className="h-5 w-5 text-muted-foreground" /><div><p className="text-2xl font-bold">{fmtNum(completedSessions.length, 0)}</p><p className="text-sm text-muted-foreground">Ladevorgänge</p></div></CardContent></Card>
-            <Card><CardContent className="p-4 flex items-center gap-3"><Euro className="h-5 w-5 text-muted-foreground" /><div><p className="text-2xl font-bold">{activeTariff ? fmtCurrency(activeTariff.price_per_kwh) : "—"}</p><p className="text-sm text-muted-foreground">Preis/kWh</p></div></CardContent></Card>
-            <Card><CardContent className="p-4 flex items-center gap-3"><Clock className="h-5 w-5 text-muted-foreground" /><div><p className="text-2xl font-bold">{fmtNum(sessions.filter((s) => s.status === "active").length, 0)}</p><p className="text-sm text-muted-foreground">Aktive Ladevorgänge</p></div></CardContent></Card>
+          {/* Period Filter + Stats */}
+          <div className="space-y-4">
+            <div className="flex items-center gap-2">
+              <Calendar className="h-4 w-4 text-muted-foreground" />
+              <div className="flex gap-1 bg-muted rounded-lg p-1">
+                {([
+                  { key: "day", label: "Tag" },
+                  { key: "week", label: "Woche" },
+                  { key: "month", label: "Monat" },
+                  { key: "quarter", label: "Quartal" },
+                  { key: "year", label: "Jahr" },
+                ] as const).map(({ key, label }) => (
+                  <Button
+                    key={key}
+                    variant={period === key ? "default" : "ghost"}
+                    size="sm"
+                    className="h-7 text-xs px-3"
+                    onClick={() => setPeriod(key)}
+                  >
+                    {label}
+                  </Button>
+                ))}
+              </div>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <Card><CardContent className="p-4 flex items-center gap-3"><Zap className="h-5 w-5 text-muted-foreground" /><div><p className="text-2xl font-bold">{fmtKwh(totalEnergy, 1)}</p><p className="text-sm text-muted-foreground">gesamt</p></div></CardContent></Card>
+              <Card><CardContent className="p-4 flex items-center gap-3"><Receipt className="h-5 w-5 text-muted-foreground" /><div><p className="text-2xl font-bold">{fmtNum(completedSessions.length, 0)}</p><p className="text-sm text-muted-foreground">Ladevorgänge</p></div></CardContent></Card>
+              <Card><CardContent className="p-4 flex items-center gap-3"><Euro className="h-5 w-5 text-muted-foreground" /><div><p className="text-2xl font-bold">{activeTariff ? fmtCurrency(activeTariff.price_per_kwh) : "—"}</p><p className="text-sm text-muted-foreground">Preis/kWh</p></div></CardContent></Card>
+              <Card><CardContent className="p-4 flex items-center gap-3"><Clock className="h-5 w-5 text-muted-foreground" /><div><p className="text-2xl font-bold">{fmtNum(filteredSessions.filter((s) => s.status === "active").length, 0)}</p><p className="text-sm text-muted-foreground">Aktive Ladevorgänge</p></div></CardContent></Card>
+            </div>
           </div>
 
           <Tabs defaultValue="sessions">
