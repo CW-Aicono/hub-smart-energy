@@ -35,7 +35,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, MapPin, LocateFixed, Loader2 } from "lucide-react";
+import { Plus, MapPin, LocateFixed, Loader2, AlertTriangle } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 const ENERGY_SOURCES = [
   { id: "strom", label: "Strom" },
@@ -103,6 +104,8 @@ export function AddLocationDialog({ parentId }: AddLocationDialogProps) {
   });
 
   const watchedType = form.watch("type");
+  const watchedIsMain = form.watch("is_main_location");
+  const currentMainLocation = locations.find(loc => loc.is_main_location);
 
   const onSubmit = async (data: LocationFormData) => {
     const locationData = {
@@ -529,19 +532,29 @@ export function AddLocationDialog({ parentId }: AddLocationDialogProps) {
               control={form.control}
               name="is_main_location"
               render={({ field }) => (
-                <FormItem className="flex items-center justify-between rounded-lg border p-4 border-primary/20 bg-primary/5">
-                  <div className="space-y-0.5">
-                    <FormLabel className="text-base">Hauptstandort</FormLabel>
-                    <FormDescription>
-                      Als Hauptstandort für Wetter-Widget und Berichte verwenden.
-                    </FormDescription>
+                <FormItem className="flex flex-col rounded-lg border p-4 border-primary/20 bg-primary/5">
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <FormLabel className="text-base">Hauptstandort</FormLabel>
+                      <FormDescription>
+                        Als Hauptstandort für Wetter-Widget und Berichte verwenden.
+                      </FormDescription>
+                    </div>
+                    <FormControl>
+                      <Switch
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                      />
+                    </FormControl>
                   </div>
-                  <FormControl>
-                    <Switch
-                      checked={field.value}
-                      onCheckedChange={field.onChange}
-                    />
-                  </FormControl>
+                  {watchedIsMain && currentMainLocation && (
+                    <Alert variant="default" className="mt-3 border-amber-500/30 bg-amber-500/10">
+                      <AlertTriangle className="h-4 w-4 text-amber-600" />
+                      <AlertDescription className="text-sm text-amber-800 dark:text-amber-300">
+                        Der aktuelle Hauptstandort <span className="font-semibold">„{currentMainLocation.name}"</span> wird dadurch ersetzt.
+                      </AlertDescription>
+                    </Alert>
+                  )}
                 </FormItem>
               )}
             />

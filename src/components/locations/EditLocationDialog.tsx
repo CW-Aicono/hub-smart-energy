@@ -34,7 +34,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Pencil, MapPin, LocateFixed, Loader2 } from "lucide-react";
+import { Pencil, MapPin, LocateFixed, Loader2, AlertTriangle } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 const ENERGY_SOURCES = [
   { id: "strom", labelKey: "energy.electricity" },
@@ -84,7 +85,7 @@ interface EditLocationDialogProps {
 
 export function EditLocationDialog({ location, onSuccess, trigger }: EditLocationDialogProps) {
   const [open, setOpen] = useState(false);
-  const { updateLocation } = useLocations();
+  const { locations, updateLocation } = useLocations();
   const { t } = useTranslation();
   const { geocodeAddress, isLoading: isGeocoding } = useGeocode();
   const { toast } = useToast();
@@ -109,6 +110,9 @@ export function EditLocationDialog({ location, onSuccess, trigger }: EditLocatio
       description: location.description || "",
     },
   });
+
+  const watchedIsMain = form.watch("is_main_location");
+  const currentMainLocation = locations.find(loc => loc.is_main_location && loc.id !== location.id);
 
   const handleOpen = () => {
     form.reset({
@@ -473,14 +477,24 @@ export function EditLocationDialog({ location, onSuccess, trigger }: EditLocatio
                 control={form.control}
                 name="is_main_location"
                 render={({ field }) => (
-                  <FormItem className="flex items-center justify-between rounded-lg border p-4 border-primary/20 bg-primary/5">
-                    <div className="space-y-0.5">
-                      <FormLabel className="text-base">{t("locations.mainLocation")}</FormLabel>
-                      <FormDescription>{t("locations.mainLocationDescription")}</FormDescription>
+                  <FormItem className="flex flex-col rounded-lg border p-4 border-primary/20 bg-primary/5">
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-0.5">
+                        <FormLabel className="text-base">{t("locations.mainLocation")}</FormLabel>
+                        <FormDescription>{t("locations.mainLocationDescription")}</FormDescription>
+                      </div>
+                      <FormControl>
+                        <Switch checked={field.value} onCheckedChange={field.onChange} />
+                      </FormControl>
                     </div>
-                    <FormControl>
-                      <Switch checked={field.value} onCheckedChange={field.onChange} />
-                    </FormControl>
+                    {watchedIsMain && currentMainLocation && (
+                      <Alert variant="default" className="mt-3 border-amber-500/30 bg-amber-500/10">
+                        <AlertTriangle className="h-4 w-4 text-amber-600" />
+                        <AlertDescription className="text-sm text-amber-800 dark:text-amber-300">
+                          Der aktuelle Hauptstandort <span className="font-semibold">„{currentMainLocation.name}"</span> wird dadurch ersetzt.
+                        </AlertDescription>
+                      </Alert>
+                    )}
                   </FormItem>
                 )}
               />
