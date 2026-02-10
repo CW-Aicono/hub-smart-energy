@@ -43,6 +43,7 @@ const ChargingPoints = () => {
 
   const [addOpen, setAddOpen] = useState(false);
   const [editCp, setEditCp] = useState<ChargePoint | null>(null);
+  const [statusFilter, setStatusFilter] = useState<string | null>(null);
   const [form, setForm] = useState({ name: "", ocpp_id: "", location_id: "", connector_count: "1", max_power_kw: "22" });
 
   if (authLoading) return null;
@@ -95,6 +96,10 @@ const ChargingPoints = () => {
   };
 
   const getActiveSession = (cpId: string) => sessions.find((s) => s.charge_point_id === cpId && s.status === "active");
+
+  const filteredChargePoints = statusFilter
+    ? chargePoints.filter((cp) => cp.status === statusFilter)
+    : chargePoints;
 
   const ocppHint = (
     <Alert className="mt-4">
@@ -175,13 +180,18 @@ const ChargingPoints = () => {
           </div>
 
           {/* Stats */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
             {Object.entries(statusConfig).map(([key, cfg]) => {
               const count = chargePoints.filter((cp) => cp.status === key).length;
+              const isActive = statusFilter === key;
               return (
-                <Card key={key}>
+                <Card
+                  key={key}
+                  className={`cursor-pointer transition-colors ${isActive ? "ring-2 ring-primary bg-primary/5" : "hover:bg-muted/50"}`}
+                  onClick={() => setStatusFilter(isActive ? null : key)}
+                >
                   <CardContent className="p-4 flex items-center gap-3">
-                    <cfg.icon className="h-5 w-5 text-muted-foreground" />
+                    <cfg.icon className={`h-5 w-5 ${isActive ? "text-primary" : "text-muted-foreground"}`} />
                     <div>
                       <p className="text-2xl font-bold">{count.toLocaleString("de-DE")}</p>
                       <p className="text-sm text-muted-foreground">{cfg.label}</p>
@@ -194,12 +204,16 @@ const ChargingPoints = () => {
 
           {/* Table */}
           <Card>
-            <CardHeader><CardTitle>Alle Ladepunkte</CardTitle></CardHeader>
+            <CardHeader>
+              <CardTitle>
+                {statusFilter ? `Ladepunkte: ${statusConfig[statusFilter]?.label}` : "Alle Ladepunkte"}
+              </CardTitle>
+            </CardHeader>
             <CardContent>
               {isLoading ? (
                 <p className="text-muted-foreground">Laden...</p>
-              ) : chargePoints.length === 0 ? (
-                <p className="text-muted-foreground">Keine Ladepunkte vorhanden.</p>
+              ) : filteredChargePoints.length === 0 ? (
+                <p className="text-muted-foreground">{statusFilter ? "Keine Ladepunkte mit diesem Status." : "Keine Ladepunkte vorhanden."}</p>
               ) : (
                 <Table>
                   <TableHeader>
@@ -214,7 +228,7 @@ const ChargingPoints = () => {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {chargePoints.map((cp) => {
+                    {filteredChargePoints.map((cp) => {
                       const cfg = statusConfig[cp.status] || statusConfig.offline;
                       const activeSession = getActiveSession(cp.id);
                       return (
