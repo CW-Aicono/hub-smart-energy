@@ -69,6 +69,24 @@ export function FloorPlanDialog({ floor, locationId, open, onOpenChange }: Floor
   }, [floorMeters, readings]);
 
   const energyTypeColors = ENERGY_SENSOR_CLASSES;
+
+  // Point-in-polygon test (ray casting) for auto-assigning sensors to rooms
+  const findRoomAtPosition = useCallback((px: number, py: number): string | null => {
+    for (const room of floorRooms) {
+      const pts = room.polygon_points;
+      if (!pts || !Array.isArray(pts) || pts.length < 3) continue;
+      let inside = false;
+      for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+        const xi = pts[i].x, yi = pts[i].y;
+        const xj = pts[j].x, yj = pts[j].y;
+        if ((yi > py) !== (yj > py) && px < ((xj - xi) * (py - yi)) / (yj - yi) + xi) {
+          inside = !inside;
+        }
+      }
+      if (inside) return room.id;
+    }
+    return null;
+  }, [floorRooms]);
   
   const [availableSensors, setAvailableSensors] = useState<(Sensor & { integrationId: string })[]>([]);
   const [loadingSensors, setLoadingSensors] = useState(false);
@@ -238,16 +256,22 @@ export function FloorPlanDialog({ floor, locationId, open, onOpenChange }: Floor
 
     // Moving existing sensor
     if (draggingPosition) {
+      const roomId = findRoomAtPosition(pos.x, pos.y);
       const { error } = await updatePosition(draggingPosition.id, {
         position_x: pos.x,
         position_y: pos.y,
-      });
+        room_id: roomId,
+      } as any);
       
       if (error) {
         toast.error("Fehler beim Verschieben des Sensors");
         console.error("Failed to update position:", error);
       } else {
-        toast.success(`${draggingPosition.sensor_name} verschoben`);
+        const roomName = roomId ? floorRooms.find(r => r.id === roomId)?.name : null;
+        toast.success(roomName 
+          ? `${draggingPosition.sensor_name} verschoben → ${roomName}`
+          : `${draggingPosition.sensor_name} verschoben`
+        );
       }
       resetDragState();
       return;
@@ -255,13 +279,15 @@ export function FloorPlanDialog({ floor, locationId, open, onOpenChange }: Floor
 
     // Adding new sensor
     if (draggingSensor) {
-      const positionData: FloorSensorPositionInsert = {
+      const roomId = findRoomAtPosition(pos.x, pos.y);
+      const positionData: any = {
         floor_id: floor.id,
         location_integration_id: draggingSensor.integrationId,
         sensor_uuid: draggingSensor.id,
         sensor_name: draggingSensor.name,
         position_x: pos.x,
         position_y: pos.y,
+        room_id: roomId,
       };
 
       const { error } = await addPosition(positionData);
@@ -270,7 +296,11 @@ export function FloorPlanDialog({ floor, locationId, open, onOpenChange }: Floor
         toast.error("Fehler beim Platzieren des Sensors");
         console.error("Failed to add position:", error);
       } else {
-        toast.success(`${draggingSensor.name} platziert`);
+        const roomName = roomId ? floorRooms.find(r => r.id === roomId)?.name : null;
+        toast.success(roomName
+          ? `${draggingSensor.name} platziert → ${roomName}`
+          : `${draggingSensor.name} platziert`
+        );
       }
     }
 
@@ -530,7 +560,8 @@ export function FloorPlanDialog({ floor, locationId, open, onOpenChange }: Floor
                       );
                     })}
 
-                    {/* Meter overlays – only in view mode, not in edit */}
+                    {/* Room overlay in edit mode */}
+                    <RoomOverlay2D rooms={floorRooms} />
 
                     {/* Drag Preview */}
                     {dragPreview && (draggingSensor || draggingPosition) && (
