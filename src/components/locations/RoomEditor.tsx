@@ -113,7 +113,7 @@ export function RoomEditor({ floor, onClose }: RoomEditorProps) {
         <div className="flex-1">
           <h3 className="font-medium">Räume bearbeiten – {floor.name}</h3>
           <p className="text-sm text-muted-foreground">
-            Definieren Sie rechteckige Räume für die 3D-Ansicht
+            Definieren Sie rechteckige Räume für die 2D-Ansicht
           </p>
         </div>
         <Button onClick={handleAddRoom} disabled={saving}>
