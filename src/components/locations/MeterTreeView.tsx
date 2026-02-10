@@ -1,8 +1,9 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { Meter } from "@/hooks/useMeters";
 import { useUserRole } from "@/hooks/useUserRole";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
@@ -18,6 +19,8 @@ import {
   SunMedium,
   GripVertical,
   AlertTriangle,
+  Search,
+  X,
 } from "lucide-react";
 
 interface MeterTreeViewProps {
@@ -110,6 +113,7 @@ function MeterTreeNode({
   toggleExpanded,
   onSelectMeter,
   isAdmin,
+  highlightedIds,
 }: {
   node: TreeNode;
   depth: number;
@@ -123,6 +127,7 @@ function MeterTreeNode({
   toggleExpanded: (id: string) => void;
   onSelectMeter?: (meter: Meter) => void;
   isAdmin: boolean;
+  highlightedIds: Set<string>;
 }) {
   const { meter } = node;
   const hasChildren = node.children.length > 0;
@@ -133,13 +138,14 @@ function MeterTreeNode({
   const typeMismatch = hasTypeMismatch(meter, parentMeter);
   const isDragged = dragState.draggedId === meter.id;
   const isDropTarget = dragState.dropTargetId === meter.id && dragState.draggedId !== meter.id;
+  const isHighlighted = highlightedIds.has(meter.id);
 
   return (
     <div>
       <div
         className={`flex items-center gap-1 py-1.5 px-2 rounded-md transition-colors group
           ${isDragged ? "opacity-40" : ""}
-          ${isDropTarget ? "bg-primary/10 ring-2 ring-primary/30" : "hover:bg-muted/50"}
+          ${isDropTarget ? "bg-primary/10 ring-2 ring-primary/30" : isHighlighted ? "bg-accent/50 ring-1 ring-accent" : "hover:bg-muted/50"}
           ${meter.is_archived ? "opacity-50" : ""}
         `}
         style={{ paddingLeft: `${depth * 24 + 8}px` }}
@@ -237,6 +243,7 @@ function MeterTreeNode({
               toggleExpanded={toggleExpanded}
               onSelectMeter={onSelectMeter}
               isAdmin={isAdmin}
+              highlightedIds={highlightedIds}
             />
           ))}
         </div>
@@ -269,6 +276,40 @@ export const MeterTreeView = ({ meters, onUpdateParent, onSelectMeter }: MeterTr
   });
 
   const [filterType, setFilterType] = useState<string>("all");
+  const [searchQuery, setSearchQuery] = useState("");
+
+  // Search: find matching meter IDs and their ancestor IDs (to auto-expand)
+  const { highlightedIds, searchExpandIds } = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return { highlightedIds: new Set<string>(), searchExpandIds: new Set<string>() };
+
+    const matched = new Set<string>();
+    const ancestors = new Set<string>();
+
+    activeMeters.forEach((m) => {
+      const searchable = [m.name, m.meter_number, m.energy_type, m.meter_function].filter(Boolean).join(" ").toLowerCase();
+      if (searchable.includes(q)) {
+        matched.add(m.id);
+        // Walk up to root and add all ancestors
+        let current: string | null | undefined = m.parent_meter_id;
+        while (current) {
+          ancestors.add(current);
+          const parent = allMetersMap.get(current);
+          current = parent?.parent_meter_id;
+        }
+      }
+    });
+
+    return { highlightedIds: matched, searchExpandIds: ancestors };
+  }, [searchQuery, activeMeters, allMetersMap]);
+
+  // Merge manual expanded + search-forced expanded
+  const effectiveExpandedIds = useMemo(() => {
+    if (searchQuery.trim()) {
+      return new Set([...expandedIds, ...searchExpandIds]);
+    }
+    return expandedIds;
+  }, [expandedIds, searchExpandIds, searchQuery]);
 
   const toggleExpanded = useCallback((id: string) => {
     setExpandedIds((prev) => {
@@ -352,6 +393,25 @@ export const MeterTreeView = ({ meters, onUpdateParent, onSelectMeter }: MeterTr
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-2 flex-wrap">
+        <div className="relative flex-1 min-w-[180px]">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+          <Input
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Zähler suchen…"
+            className="h-8 text-xs pl-8 pr-8"
+          />
+          {searchQuery && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="absolute right-0.5 top-1/2 -translate-y-1/2 h-7 w-7"
+              onClick={() => setSearchQuery("")}
+            >
+              <X className="h-3.5 w-3.5" />
+            </Button>
+          )}
+        </div>
         <Select value={filterType} onValueChange={setFilterType}>
           <SelectTrigger className="w-[160px] h-8 text-xs">
             <SelectValue placeholder="Alle Typen" />
@@ -366,6 +426,7 @@ export const MeterTreeView = ({ meters, onUpdateParent, onSelectMeter }: MeterTr
         </Select>
         <span className="text-xs text-muted-foreground">
           {filteredMeters.length} Zähler
+          {searchQuery.trim() && ` · ${highlightedIds.size} Treffer`}
         </span>
       </div>
 
@@ -402,10 +463,11 @@ export const MeterTreeView = ({ meters, onUpdateParent, onSelectMeter }: MeterTr
                 onDragOver={handleDragOver}
                 onDragEnd={handleDragEnd}
                 onDrop={handleDrop}
-                expandedIds={expandedIds}
+                expandedIds={effectiveExpandedIds}
                 toggleExpanded={toggleExpanded}
                 onSelectMeter={onSelectMeter}
                 isAdmin={isAdmin}
+                highlightedIds={highlightedIds}
               />
             ))}
           </div>
