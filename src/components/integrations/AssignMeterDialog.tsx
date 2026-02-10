@@ -33,7 +33,9 @@ interface AssignMeterSensor {
 interface AssignMeterDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  sensor: AssignMeterSensor;
+  /** Support single or multiple sensors */
+  sensor?: AssignMeterSensor;
+  sensors?: AssignMeterSensor[];
   locationIntegrationId: string;
   currentLocationId: string;
 }
@@ -53,15 +55,17 @@ export function AssignMeterDialog({
   open,
   onOpenChange,
   sensor,
+  sensors: sensorsProp,
   locationIntegrationId,
   currentLocationId,
 }: AssignMeterDialogProps) {
+  // Support both single sensor (legacy) and multiple sensors
+  const sensorList = sensorsProp || (sensor ? [sensor] : []);
+
   const { locations } = useLocations();
   const { addMeter } = useMeters();
 
-  const [name, setName] = useState(sensor.name);
   const [energyType, setEnergyType] = useState("strom");
-  const [unit, setUnit] = useState(sensor.unit || "kWh");
   const [selectedLocationId, setSelectedLocationId] = useState(currentLocationId);
   const [selectedFloorId, setSelectedFloorId] = useState<string>("");
   const [selectedRoomId, setSelectedRoomId] = useState<string>("");
@@ -69,7 +73,6 @@ export function AssignMeterDialog({
   const [rooms, setRooms] = useState<Room[]>([]);
   const [saving, setSaving] = useState(false);
 
-  // Build hierarchical location list: complexes with their children
   const locationOptions = locations.map((loc) => ({
     id: loc.id,
     name: loc.name,
@@ -121,49 +124,51 @@ export function AssignMeterDialog({
     fetchRooms();
   }, [selectedFloorId]);
 
-  // Reset form when sensor changes
   useEffect(() => {
-    setName(sensor.name);
-    setUnit(sensor.unit || "kWh");
     setSelectedLocationId(currentLocationId);
-  }, [sensor, currentLocationId]);
+  }, [currentLocationId]);
 
   const handleSubmit = async () => {
-    if (!name.trim() || !selectedLocationId) return;
+    if (!selectedLocationId || sensorList.length === 0) return;
     setSaving(true);
 
     try {
-      await addMeter({
-        name: name.trim(),
-        location_id: selectedLocationId,
-        energy_type: energyType,
-        unit,
-        capture_type: "automatic",
-        location_integration_id: locationIntegrationId,
-        sensor_uuid: sensor.id,
-      });
+      for (const s of sensorList) {
+        await addMeter({
+          name: s.name.trim(),
+          location_id: selectedLocationId,
+          energy_type: energyType,
+          unit: s.unit || "kWh",
+          capture_type: "automatic",
+          location_integration_id: locationIntegrationId,
+          sensor_uuid: s.id,
+        });
 
-      // If floor or room was selected, update the meter with those values
-      if (selectedFloorId || selectedRoomId) {
-        // Find the just-created meter by sensor_uuid
-        const { data: createdMeter } = await supabase
-          .from("meters")
-          .select("id")
-          .eq("sensor_uuid", sensor.id)
-          .eq("location_integration_id", locationIntegrationId)
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
+        // If floor or room was selected, update the meter
+        if (selectedFloorId || selectedRoomId) {
+          const { data: createdMeter } = await supabase
+            .from("meters")
+            .select("id")
+            .eq("sensor_uuid", s.id)
+            .eq("location_integration_id", locationIntegrationId)
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
 
-        if (createdMeter) {
-          const updates: Record<string, string | null> = {};
-          if (selectedFloorId) updates.floor_id = selectedFloorId;
-          if (selectedRoomId) updates.room_id = selectedRoomId;
-          await supabase.from("meters").update(updates).eq("id", createdMeter.id);
+          if (createdMeter) {
+            const updates: Record<string, string | null> = {};
+            if (selectedFloorId) updates.floor_id = selectedFloorId;
+            if (selectedRoomId) updates.room_id = selectedRoomId;
+            await supabase.from("meters").update(updates).eq("id", createdMeter.id);
+          }
         }
       }
 
-      toast.success(`Zähler "${name}" erfolgreich zugeordnet`);
+      const count = sensorList.length;
+      toast.success(count === 1
+        ? `Zähler "${sensorList[0].name}" erfolgreich zugeordnet`
+        : `${count} Zähler erfolgreich zugeordnet`
+      );
       onOpenChange(false);
     } catch (err) {
       console.error("Failed to assign meter:", err);
@@ -177,47 +182,43 @@ export function AssignMeterDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Zähler zuordnen</DialogTitle>
+          <DialogTitle>
+            {sensorList.length === 1 ? "Zähler zuordnen" : `${sensorList.length} Zähler zuordnen`}
+          </DialogTitle>
           <DialogDescription>
-            Ordnen Sie den Zähler „{sensor.name}" einer Messstelle zu.
+            {sensorList.length === 1
+              ? `Ordnen Sie den Zähler „${sensorList[0].name}" einer Messstelle zu.`
+              : `Ordnen Sie ${sensorList.length} ausgewählte Zähler dem Standort zu.`}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
-          {/* Name */}
-          <div>
-            <Label>Bezeichnung *</Label>
-            <Input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="z.B. Hauptzähler Strom"
-            />
-          </div>
+          {/* Sensor list preview for bulk */}
+          {sensorList.length > 1 && (
+            <div className="rounded-md border p-3 bg-muted/30 max-h-32 overflow-auto">
+              <p className="text-xs font-medium text-muted-foreground mb-1">Ausgewählte Zähler:</p>
+              <ul className="text-sm space-y-0.5">
+                {sensorList.map((s) => (
+                  <li key={s.id}>{s.name}</li>
+                ))}
+              </ul>
+            </div>
+          )}
 
-          {/* Energy type + Unit */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <Label>Energieart</Label>
-              <Select value={energyType} onValueChange={setEnergyType}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="strom">Strom</SelectItem>
-                  <SelectItem value="gas">Gas</SelectItem>
-                  <SelectItem value="waerme">Wärme</SelectItem>
-                  <SelectItem value="wasser">Wasser</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>Einheit</Label>
-              <Input
-                value={unit}
-                onChange={(e) => setUnit(e.target.value)}
-                placeholder="kWh"
-              />
-            </div>
+          {/* Energy type */}
+          <div>
+            <Label>Energieart</Label>
+            <Select value={energyType} onValueChange={setEnergyType}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="strom">Strom</SelectItem>
+                <SelectItem value="gas">Gas</SelectItem>
+                <SelectItem value="waerme">Wärme</SelectItem>
+                <SelectItem value="wasser">Wasser</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
           {/* Hierarchical assignment */}
@@ -294,8 +295,8 @@ export function AssignMeterDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Abbrechen
           </Button>
-          <Button onClick={handleSubmit} disabled={!name.trim() || !selectedLocationId || saving}>
-            {saving ? "Wird zugeordnet..." : "Zuordnen"}
+          <Button onClick={handleSubmit} disabled={!selectedLocationId || saving}>
+            {saving ? "Wird zugeordnet..." : sensorList.length === 1 ? "Zuordnen" : `${sensorList.length} Zuordnen`}
           </Button>
         </DialogFooter>
       </DialogContent>
