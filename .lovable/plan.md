@@ -1,60 +1,72 @@
 
-## Fix: Loxone Meter-Werte korrekt abrufen
+## 3D-Modell Upload: GLB + OBJ/MTL Unterstuetzung
 
-### Problem
-Alle Werte des Zählers "Außenbereich" kommen als `null` zurück, obwohl die Loxone Config eindeutig Werte zeigt (Pf=10,200kW, Mr=13051,8kWh, Rd=43,1kWh etc.).
+### Ziel
+Nutzer koennen 3D-Modelle ihrer Etagen hochladen. Unterstuetzte Formate: **GLB** (Einzeldatei) und **OBJ + MTL** (Geometrie + Material als Paar).
 
-### Ursache
-Die Funktion `fetchStateValue` in der Edge Function nutzt den falschen REST-API-Endpunkt:
-- **Aktuell (falsch):** `/jdev/sps/io/{uuid}/state`
-- **Korrekt:** `/jdev/sps/io/{uuid}`
+### Unterstuetzte Formate
+- **GLB** -- Einzeldatei mit Geometrie, Materialien und Texturen (empfohlen)
+- **OBJ + MTL** -- Zwei Dateien: OBJ fuer Geometrie, MTL fuer Materialien/Farben. Beide werden hochgeladen und beim Laden automatisch verknuepft
 
-Die Loxone REST API kennt keinen `/state`-Suffix. Zudem werden HTTP-Fehler und Parse-Fehler komplett verschluckt, was das Debugging unmöglich macht.
+### Aenderungen
 
-### Loesung
+#### 1. Storage Bucket + Datenbank (SQL-Migration)
+- Neuer Storage-Bucket `floor-3d-models` (oeffentlich lesbar)
+- RLS-Policies: authentifizierte Nutzer duerfen hochladen, alle duerfen lesen
+- Neue Spalte `model_3d_url` (TEXT, nullable) in Tabelle `floors` -- speichert die URL der Hauptdatei (GLB oder OBJ)
+- Neue Spalte `model_3d_mtl_url` (TEXT, nullable) in Tabelle `floors` -- speichert die URL der MTL-Datei (nur bei OBJ)
 
-**Datei: `supabase/functions/loxone-api/index.ts`**
+#### 2. Hook-Erweiterung (`src/hooks/useFloors.tsx`)
+- `Floor`-Interface um `model_3d_url` und `model_3d_mtl_url` erweitern
+- Neue Funktion `upload3DModel(files: {obj: File, mtl?: File} | {glb: File}, locationId, floorId)`:
+  - Laedt Dateien in `floor-3d-models/{locationId}/` hoch
+  - Aktualisiert `model_3d_url` und ggf. `model_3d_mtl_url` in der Datenbank
 
-1. **Endpunkt korrigieren:** `/jdev/sps/io/{stateUuid}/state` aendern zu `/jdev/sps/io/${stateUuid}`
-2. **Fehler-Logging hinzufuegen:** Bei fehlgeschlagenen Requests den HTTP-Status und die Antwort loggen, statt still `null` zurueckzugeben
-3. **Response-Parsing erweitern:** Neben `data.LL.value` auch alternative Antwortformate beruecksichtigen (z.B. numerische Werte direkt)
+#### 3. Upload-Button auf Etagen-Karten (`src/components/locations/FloorList.tsx`)
+- Neuer Button "3D-Plan hochladen" (nur fuer Admins, neben bestehendem Grundriss-Button)
+- Bei Klick oeffnet sich ein Dialog mit:
+  - Datei-Auswahl fuer Hauptdatei (`.glb, .obj`)
+  - Bedingte zweite Datei-Auswahl fuer MTL-Datei (erscheint nur wenn OBJ gewaehlt wurde)
+  - Upload-Fortschritt und Statusmeldung
+- Alternativ: Upload auch in AddFloorDialog und EditFloorDialog integrieren
 
-### Technische Details
+#### 4. Upload in Add/Edit Dialogen
+- **`src/components/locations/AddFloorDialog.tsx`**: Optionaler 3D-Modell-Upload beim Erstellen
+- **`src/components/locations/EditFloorDialog.tsx`**: 3D-Modell austauschen/hochladen beim Bearbeiten
+- Beide Dialoge erhalten ein Feld fuer die Hauptdatei (.glb/.obj) und ein bedingtes Feld fuer die MTL-Datei
 
-Aenderung in `fetchStateValue` (Zeilen 117-137):
+#### 5. 3D-Viewer Erweiterung (`src/components/locations/FloorPlan3DViewer.tsx`)
+- Neue Komponente `ModelViewer` innerhalb der Scene:
+  - Prüft `floor.model_3d_url` auf Dateiendung
+  - `.glb` --> Laden via `useGLTF` aus @react-three/drei
+  - `.obj` --> Laden via `OBJLoader` aus `three/examples/jsm/loaders/OBJLoader`
+    - Wenn `floor.model_3d_mtl_url` vorhanden: `MTLLoader` aus `three/examples/jsm/loaders/MTLLoader` nutzen, Materialien auf OBJ anwenden
+    - Wenn keine MTL: Standard-Material (helles Grau)
+- Wenn `model_3d_url` vorhanden: hochgeladenes Modell anzeigen, prozedurale Raeume ausblenden
+- Wenn nicht vorhanden: bisherige prozedurale Raeume als Fallback
 
-```typescript
-async function fetchStateValue(
-  baseUrl: string,
-  authHeader: string,
-  stateUuid: string
-): Promise<number | string | null> {
-  try {
-    const url = `${baseUrl}/jdev/sps/io/${stateUuid}`;  // ohne /state
-    const response = await fetch(url, { method: "GET", headers: { Authorization: authHeader } });
-    if (!response.ok) {
-      console.warn(`State fetch failed for ${stateUuid}: HTTP ${response.status}`);
-      return null;
-    }
-    const data = await response.json();
-    if (data?.LL?.value !== undefined) {
-      const val = data.LL.value;
-      const numVal = parseFloat(val);
-      return isNaN(numVal) ? val : numVal;
-    }
-    console.warn(`No LL.value in response for ${stateUuid}:`, JSON.stringify(data));
-    return null;
-  } catch (err) {
-    console.error(`Error fetching state ${stateUuid}:`, err);
-    return null;
-  }
-}
+### Ablauf fuer den Nutzer
+
+```text
+GLB-Upload:
+  Nutzer waehlt .glb Datei
+    --> Upload nach floor-3d-models/{locationId}/{floorId}.glb
+    --> URL in floors.model_3d_url gespeichert
+    --> 3D-Viewer zeigt Modell an
+
+OBJ+MTL-Upload:
+  Nutzer waehlt .obj Datei
+    --> Zweites Feld fuer .mtl erscheint
+    --> Nutzer waehlt .mtl Datei
+    --> Beide Dateien hochgeladen
+    --> URLs in floors.model_3d_url + model_3d_mtl_url
+    --> 3D-Viewer laedt OBJ mit MTL-Materialien
 ```
 
-### Erwartetes Ergebnis
-Nach dem Fix sollten die Werte des "Außenbereich"-Zählers korrekt zurueckkommen:
-- actual (Pf): 10,200 kW
-- total (Mr): 13051,8 kWh  
-- totalDay (Rd): 43,1 kWh
-- totalMonth (Rm): 718,5 kWh
-- totalYear (Ry): 2723,7 kWh
+### Betroffene Dateien
+- **Neu:** SQL-Migration (Bucket + Spalten)
+- **Bearbeiten:** `src/hooks/useFloors.tsx` -- Upload-Funktion, Interface
+- **Bearbeiten:** `src/components/locations/FloorList.tsx` -- Upload-Button
+- **Bearbeiten:** `src/components/locations/FloorPlan3DViewer.tsx` -- GLB/OBJ+MTL Rendering
+- **Bearbeiten:** `src/components/locations/AddFloorDialog.tsx` -- 3D-Upload-Felder
+- **Bearbeiten:** `src/components/locations/EditFloorDialog.tsx` -- 3D-Upload-Felder
