@@ -105,6 +105,14 @@ export function FloorPlanDialog({ floor, locationId, open, onOpenChange }: Floor
   }, []);
 
   useEffect(() => {
+    // Recalculate when tab changes (with small delay to ensure layout is ready)
+    if (activeTab === 'view') {
+      const timer = setTimeout(updateViewOverlay, 50);
+      return () => clearTimeout(timer);
+    }
+  }, [activeTab, updateViewOverlay]);
+
+  useEffect(() => {
     window.addEventListener('resize', updateViewOverlay);
     return () => window.removeEventListener('resize', updateViewOverlay);
   }, [updateViewOverlay]);
