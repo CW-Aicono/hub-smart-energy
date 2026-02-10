@@ -22,6 +22,7 @@ import { format } from "date-fns";
 import { fmtKwh, fmtKw } from "@/lib/formatCharging";
 
 const OCPP_ENDPOINT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ocpp-central`;
+const OCPP_WS_ENDPOINT_URL = `${import.meta.env.VITE_SUPABASE_URL?.replace("https://", "wss://")}/functions/v1/ocpp-ws-proxy`;
 
 const statusConfig: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline"; icon: typeof Zap }> = {
   available: { label: "Verfügbar", variant: "default", icon: Zap },
@@ -100,20 +101,29 @@ const ChargingPoints = () => {
       <Info className="h-4 w-4" />
       <AlertDescription className="space-y-2">
         <p className="font-medium">OCPP-Integrationshinweise</p>
-        <p className="text-sm">
-          Die Ladestation muss OCPP-Nachrichten per <strong>HTTP POST</strong> an den folgenden Endpunkt senden:
+
+        <p className="text-sm font-medium mt-2">Option 1: WebSocket (empfohlen)</p>
+        <p className="text-sm text-muted-foreground">
+          Für Ladestationen, die <code>ws://</code> oder <code>wss://</code> verwenden (Standard bei den meisten Herstellern):
+        </p>
+        <code className="block text-xs bg-muted p-2 rounded break-all select-all">
+          {OCPP_WS_ENDPOINT_URL}/{form.ocpp_id || "{OCPP_ID}"}
+        </code>
+        <p className="text-sm text-muted-foreground">
+          Subprotokoll: <strong>ocpp1.6</strong> — Kein externer Proxy nötig.
+        </p>
+
+        <p className="text-sm font-medium mt-2">Option 2: HTTP POST</p>
+        <p className="text-sm text-muted-foreground">
+          Alternativ können OCPP-Nachrichten direkt per HTTP POST gesendet werden:
         </p>
         <code className="block text-xs bg-muted p-2 rounded break-all select-all">
           {OCPP_ENDPOINT_URL}/{form.ocpp_id || "{OCPP_ID}"}
         </code>
-        <p className="text-sm text-muted-foreground">
-          Protokoll: <strong>OCPP 1.6 JSON</strong> über HTTP/HTTPS (kein WebSocket). 
-          Für Ladestationen die nur <code>ws://</code> oder <code>wss://</code> unterstützen, 
-          wird ein OCPP-Proxy benötigt, der WebSocket-Verbindungen in HTTP-Anfragen umwandelt.
-        </p>
-        <p className="text-sm text-muted-foreground">
-          Die <strong>OCPP-ID</strong> muss in der Ladestation als <em>ChargeBox Identity</em> konfiguriert werden 
-          und mit dem hier eingetragenen Wert übereinstimmen.
+
+        <p className="text-sm text-muted-foreground mt-2">
+          Protokoll: <strong>OCPP 1.6 JSON</strong>. Die <strong>OCPP-ID</strong> muss in der Ladestation 
+          als <em>ChargeBox Identity</em> konfiguriert werden und mit dem hier eingetragenen Wert übereinstimmen.
         </p>
       </AlertDescription>
     </Alert>
