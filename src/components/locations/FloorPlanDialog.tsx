@@ -136,14 +136,22 @@ export function FloorPlanDialog({ floor, locationId, open, onOpenChange }: Floor
     }
   }, [open, locationIntegrations, fetchAllSensors, isAdmin]);
 
+  // Only show sensors that are assigned as meters to this location
+  const assignedSensors = useMemo(() => {
+    const assignedUuids = new Set(
+      meters.filter(m => !m.is_archived && m.sensor_uuid).map(m => m.sensor_uuid!)
+    );
+    return availableSensors.filter(s => assignedUuids.has(s.id));
+  }, [availableSensors, meters]);
+
   // Filter out already placed sensors
-  const unplacedSensors = availableSensors.filter(
+  const unplacedSensors = assignedSensors.filter(
     (sensor) => !positions.some((p) => p.sensor_uuid === sensor.id)
   );
 
   // Get position info for placed sensors
   const placedSensorsWithInfo = positions.map((pos) => {
-    const sensor = availableSensors.find((s) => s.id === pos.sensor_uuid);
+    const sensor = assignedSensors.find((s) => s.id === pos.sensor_uuid);
     return { ...pos, sensorInfo: sensor };
   });
 
@@ -349,7 +357,7 @@ export function FloorPlanDialog({ floor, locationId, open, onOpenChange }: Floor
                     <div className="p-3 border-b bg-muted/50 flex-shrink-0">
                       <h3 className="font-medium text-sm">Verfügbare Sensoren</h3>
                       <p className="text-xs text-muted-foreground mt-1">
-                        {unplacedSensors.length} von {availableSensors.length}
+                        {unplacedSensors.length} von {assignedSensors.length}
                       </p>
                     </div>
                     <ScrollArea className="flex-1 min-h-0">
