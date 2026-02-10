@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useMeters, Meter } from "@/hooks/useMeters";
+import { useMeterReadings } from "@/hooks/useMeterReadings";
 import { useAlertRules, AlertRule } from "@/hooks/useAlertRules";
 import { useUserRole } from "@/hooks/useUserRole";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,6 +15,7 @@ import { EditMeterDialog } from "./EditMeterDialog";
 import { AddAlertRuleDialog } from "./AddAlertRuleDialog";
 import { EditAlertRuleDialog } from "./EditAlertRuleDialog";
 import { MeterTreeView } from "./MeterTreeView";
+import { MeterAggregationWidget } from "./MeterAggregationWidget";
 
 interface MeterManagementProps {
   locationId: string;
@@ -36,6 +38,7 @@ const TIME_UNIT_LABELS: Record<string, string> = {
 export const MeterManagement = ({ locationId }: MeterManagementProps) => {
   const { meters, loading: metersLoading, deleteMeter, updateMeter, archiveMeter, updateMeterParent } = useMeters(locationId);
   const { alertRules, loading: rulesLoading, deleteAlertRule, toggleAlertRule, updateAlertRule } = useAlertRules(locationId);
+  const { readings } = useMeterReadings();
   const { isAdmin } = useUserRole();
   const [meterDialogOpen, setMeterDialogOpen] = useState(false);
   const [alertDialogOpen, setAlertDialogOpen] = useState(false);
@@ -152,6 +155,7 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
               onUpdateParent={updateMeterParent}
               onSelectMeter={(meter) => setEditingMeter(meter)}
             />
+            <MeterAggregationWidget meters={meters} readings={readings} />
           </TabsContent>
 
           <TabsContent value="alerts" className="space-y-4">
