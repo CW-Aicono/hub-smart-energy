@@ -407,18 +407,7 @@ function Scene({
         );
       })}
       
-      {/* Orbit Controls for normal viewing (not walking), disabled while dragging */}
-      {!isWalking && (
-        <OrbitControls 
-          makeDefault
-          enabled={!isDraggingMeter}
-          target={[0, 0, 0]}
-          maxPolarAngle={Math.PI / 2}
-          minDistance={2}
-          maxDistance={100}
-          mouseButtons={{ LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.PAN }}
-        />
-      )}
+      {/* No OrbitControls when not walking - camera stays static so meters can be dragged */}
 
       {/* First Person Controls - only render when walking to prevent unwanted pointer lock */}
       {isWalking && (
@@ -492,8 +481,13 @@ export function FloorPlan3DViewer({ floor, locationId, sensors = [], isAdmin = f
     }, 500);
   }, [floor.id, updateFloor]);
 
+  const meterSaveTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const handleMeterPositionChange = useCallback((meterId: string, x: number, y: number, z: number) => {
-    updateMeter(meterId, { position_3d_x: x, position_3d_y: y, position_3d_z: z } as any);
+    // Debounce DB save to prevent re-renders on every interaction
+    if (meterSaveTimeout.current) clearTimeout(meterSaveTimeout.current);
+    meterSaveTimeout.current = setTimeout(() => {
+      updateMeter(meterId, { position_3d_x: x, position_3d_y: y, position_3d_z: z } as any);
+    }, 800);
   }, [updateMeter]);
 
   const loading = roomsLoading || positionsLoading || metersLoading;
