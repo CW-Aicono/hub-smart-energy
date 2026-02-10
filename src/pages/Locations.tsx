@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+
 import { Navigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
@@ -13,7 +14,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Map, List, Building2, ArrowUpAZ, ArrowDownAZ, Filter, Wifi, WifiOff, AlertCircle, GitBranch, ArrowLeft } from "lucide-react";
+import { Map, List, Building2, ArrowUpAZ, ArrowDownAZ, Filter, Wifi, WifiOff, AlertCircle, GitBranch, ArrowLeft, Search } from "lucide-react";
+import { Input } from "@/components/ui/input";
 
 const usageTypeLabels: Record<LocationUsageType, string> = {
   verwaltungsgebaeude: "Verwaltungsgebäude",
@@ -37,6 +39,7 @@ const Locations = () => {
   const [sortAscending, setSortAscending] = useState(true);
   const [viewMode, setViewMode] = useState<"list" | "tree">("list");
   const [treeLocationId, setTreeLocationId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
 
   // Handle clicking a location in list view - show its tree
   const handleLocationClick = (location: Location) => {
@@ -83,6 +86,17 @@ const Locations = () => {
   const filteredAndSortedLocations = useMemo(() => {
     let filtered = locations;
     
+    // Apply text search
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      filtered = filtered.filter((loc) =>
+        loc.name.toLowerCase().includes(q) ||
+        loc.city?.toLowerCase().includes(q) ||
+        loc.address?.toLowerCase().includes(q) ||
+        loc.postal_code?.toLowerCase().includes(q)
+      );
+    }
+    
     // Apply usage type filter
     if (usageFilter !== "all") {
       filtered = filtered.filter((loc) => loc.usage_type === usageFilter);
@@ -100,7 +114,7 @@ const Locations = () => {
     
     // Main location always first
     return mainLocation ? [mainLocation, ...otherLocations] : otherLocations;
-  }, [locations, usageFilter, sortAscending]);
+  }, [locations, usageFilter, sortAscending, searchQuery]);
 
   // Build hierarchy with filter applied
   const filteredHierarchicalLocations = useMemo(() => {
@@ -206,6 +220,15 @@ const Locations = () => {
             <CardContent>
               {/* Filter and Sort Controls */}
               <div className="flex flex-wrap items-center gap-3 mb-4">
+                <div className="relative flex-1 min-w-[200px] max-w-sm">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Standort suchen..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-9"
+                  />
+                </div>
                 <div className="flex items-center gap-2">
                   <Filter className="h-4 w-4 text-muted-foreground" />
                   <Select value={usageFilter} onValueChange={setUsageFilter}>

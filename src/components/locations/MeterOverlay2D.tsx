@@ -7,10 +7,10 @@ interface MeterOverlay2DProps {
 }
 
 const energyTypeColors: Record<string, string> = {
-  strom: "border-yellow-500/40 bg-yellow-500/5",
-  gas: "border-orange-500/40 bg-orange-500/5",
-  waerme: "border-red-500/40 bg-red-500/5",
-  wasser: "border-blue-500/40 bg-blue-500/5",
+  strom: "border-yellow-500/40 bg-yellow-50 dark:bg-yellow-950",
+  gas: "border-orange-500/40 bg-orange-50 dark:bg-orange-950",
+  waerme: "border-red-500/40 bg-red-50 dark:bg-red-950",
+  wasser: "border-blue-500/40 bg-blue-50 dark:bg-blue-950",
 };
 
 const energyTypeIconColors: Record<string, string> = {
@@ -27,13 +27,13 @@ export function MeterOverlay2D({ meters, latestValues }: MeterOverlay2DProps) {
     <div className="absolute bottom-2 left-2 right-2 flex flex-wrap gap-1.5 pointer-events-none z-10">
       {meters.map((meter) => {
         const value = latestValues[meter.id];
-        const borderClass = energyTypeColors[meter.energy_type] || "border-border bg-card/95";
+        const borderClass = energyTypeColors[meter.energy_type] || "border-border bg-card";
         const iconClass = energyTypeIconColors[meter.energy_type] || "text-primary";
 
         return (
           <div
             key={meter.id}
-            className={`backdrop-blur-sm border rounded-lg px-2 py-1 min-w-[100px] text-center ${borderClass}`}
+            className={`border rounded-lg px-2 py-1 min-w-[100px] text-center ${borderClass}`}
           >
             <div className="flex items-center justify-center gap-1 mb-0.5">
               <Gauge className={`h-3 w-3 ${iconClass}`} />

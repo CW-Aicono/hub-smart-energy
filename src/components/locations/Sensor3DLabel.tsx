@@ -44,7 +44,7 @@ export function Sensor3DLabel({
           userSelect: "none",
         }}
       >
-        <div className="bg-card/95 backdrop-blur-sm border shadow-lg rounded-lg px-3 py-2 min-w-[100px] text-center whitespace-nowrap">
+        <div className="bg-card border shadow-lg rounded-lg px-3 py-2 min-w-[100px] text-center whitespace-nowrap">
           <p className="text-xs font-medium text-muted-foreground truncate max-w-[120px]">
             {position.sensor_name}
           </p>
