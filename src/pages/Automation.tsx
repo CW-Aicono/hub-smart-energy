@@ -28,6 +28,10 @@ import {
   AlertTriangle,
   Sparkles,
   MapPin,
+  Building2,
+  Layers,
+  DoorOpen,
+  ChevronRight,
 } from "lucide-react";
 
 // Mock data for the vision page
@@ -43,6 +47,7 @@ const MOCK_AUTOMATIONS = [
     lastRun: "Heute, 22:00",
     savings: "~12% Heizkosten",
     color: "#ef4444",
+    scope: { location: "Hauptgebäude", floor: null, room: null },
   },
   {
     id: "2",
@@ -55,6 +60,7 @@ const MOCK_AUTOMATIONS = [
     lastRun: "Vor 15 Min.",
     savings: "~25% Stromkosten",
     color: "#f59e0b",
+    scope: { location: "Hauptgebäude", floor: "2. OG", room: "Besprechungsraum A" },
   },
   {
     id: "3",
@@ -67,6 +73,7 @@ const MOCK_AUTOMATIONS = [
     lastRun: "Vor 3 Min.",
     savings: "~8% Energieverbrauch",
     color: "#06b6d4",
+    scope: { location: "Hauptgebäude", floor: "1. OG", room: null },
   },
   {
     id: "4",
@@ -79,6 +86,20 @@ const MOCK_AUTOMATIONS = [
     lastRun: "Gestern, 14:32",
     savings: "~15% Spitzenlastkosten",
     color: "#8b5cf6",
+    scope: { location: "Nebengebäude", floor: null, room: null },
+  },
+  {
+    id: "5",
+    name: "Raumtemperatur Einzelsteuerung",
+    description: "Temperatur im Serverraum konstant auf 21°C halten, unabhängig von Gebäudeautomatik",
+    icon: Thermometer,
+    type: "threshold",
+    gateway: "Loxone Miniserver",
+    status: "active",
+    lastRun: "Vor 1 Min.",
+    savings: "~5% Kühlkosten",
+    color: "#10b981",
+    scope: { location: "Hauptgebäude", floor: "UG", room: "Serverraum" },
   },
 ];
 
@@ -273,7 +294,7 @@ const Automation = () => {
                               </Badge>
                             </div>
                             <p className="text-sm text-muted-foreground mt-0.5">{auto.description}</p>
-                            <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
+                            <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground flex-wrap">
                               <span className="flex items-center gap-1">
                                 <Server className="h-3 w-3" /> {auto.gateway}
                               </span>
@@ -283,6 +304,28 @@ const Automation = () => {
                               <span className="flex items-center gap-1 text-emerald-600 font-medium">
                                 <TrendingDown className="h-3 w-3" /> {auto.savings}
                               </span>
+                            </div>
+                            {/* Scope: Gebäude / Etage / Raum */}
+                            <div className="flex items-center gap-1 mt-2 text-xs">
+                              <Building2 className="h-3 w-3 text-muted-foreground shrink-0" />
+                              <span className="font-medium text-foreground">{auto.scope.location}</span>
+                              {auto.scope.floor && (
+                                <>
+                                  <ChevronRight className="h-3 w-3 text-muted-foreground" />
+                                  <Layers className="h-3 w-3 text-muted-foreground shrink-0" />
+                                  <span className="font-medium text-foreground">{auto.scope.floor}</span>
+                                </>
+                              )}
+                              {auto.scope.room && (
+                                <>
+                                  <ChevronRight className="h-3 w-3 text-muted-foreground" />
+                                  <DoorOpen className="h-3 w-3 text-muted-foreground shrink-0" />
+                                  <span className="font-medium text-foreground">{auto.scope.room}</span>
+                                </>
+                              )}
+                              {!auto.scope.floor && !auto.scope.room && (
+                                <span className="text-muted-foreground ml-1">(gesamtes Gebäude)</span>
+                              )}
                             </div>
                           </div>
                         </div>
