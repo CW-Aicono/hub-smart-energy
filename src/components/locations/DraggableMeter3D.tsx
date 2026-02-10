@@ -10,6 +10,7 @@ interface DraggableMeter3DProps {
   meter: Meter;
   position: [number, number, number];
   latestValue?: number | null;
+  latestUnit?: string;
   isAdmin?: boolean;
   onPositionChange: (meterId: string, x: number, y: number, z: number) => void;
   onDragStart?: () => void;
@@ -20,6 +21,7 @@ export function DraggableMeter3D({
   meter,
   position,
   latestValue,
+  latestUnit,
   isAdmin,
   onPositionChange,
   onDragStart,
@@ -152,7 +154,7 @@ export function DraggableMeter3D({
               </p>
             </div>
             <p className="text-lg font-mono font-bold text-primary">
-              {latestValue != null ? `${latestValue.toLocaleString("de-DE")} ${meter.unit}` : "—"}
+              {latestValue != null ? `${latestValue.toLocaleString("de-DE")} ${latestUnit || meter.unit}` : "—"}
             </p>
             {meter.meter_number && (
               <p className="text-[10px] text-muted-foreground">Nr. {meter.meter_number}</p>

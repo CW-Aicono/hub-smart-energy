@@ -260,7 +260,7 @@ function Scene({
   sensorPositions: FloorSensorPosition[];
   sensors: Sensor[];
   floorMeters: Meter[];
-  meterLatestValues: Record<string, number | null>;
+  meterLatestValues: Record<string, { value: number | null; unit: string }>;
   isWalking: boolean;
   rotationDeg: number;
   isAdmin: boolean;
@@ -398,7 +398,8 @@ function Scene({
             key={`meter-${meter.id}`}
             meter={meter}
             position={meterPos}
-            latestValue={meterLatestValues[meter.id]}
+            latestValue={meterLatestValues[meter.id]?.value}
+            latestUnit={meterLatestValues[meter.id]?.unit}
             isAdmin={isAdmin && !isWalking}
             onPositionChange={onMeterPositionChange}
             onDragStart={() => setIsDraggingMeter(true)}
@@ -436,17 +437,25 @@ export function FloorPlan3DViewer({ floor, locationId, sensors = [], isAdmin = f
     return meters.filter(m => !m.is_archived && m.floor_id === floor.id && m.sensor_uuid && placedSensorUuids.has(m.sensor_uuid));
   }, [meters, floor.id, sensorPositions]);
 
-  // Get latest reading value per meter
+  // Get meter values: prefer live sensor data from integrations, fall back to meter_readings
   const meterLatestValues = useMemo(() => {
-    const values: Record<string, number | null> = {};
+    const values: Record<string, { value: number | null; unit: string }> = {};
     floorMeters.forEach(m => {
-      const meterReadings = readings
-        .filter(r => r.meter_id === m.id)
-        .sort((a, b) => b.reading_date.localeCompare(a.reading_date));
-      values[m.id] = meterReadings.length > 0 ? meterReadings[0].value : null;
+      // Try live sensor value first (matched via sensor_uuid)
+      const liveSensor = m.sensor_uuid ? sensors.find(s => s.id === m.sensor_uuid) : null;
+      if (liveSensor && liveSensor.value !== undefined && liveSensor.value !== "") {
+        const parsed = parseFloat(String(liveSensor.value).replace(",", "."));
+        values[m.id] = { value: isNaN(parsed) ? null : parsed, unit: liveSensor.unit || m.unit };
+      } else {
+        // Fall back to latest meter reading
+        const meterReadings = readings
+          .filter(r => r.meter_id === m.id)
+          .sort((a, b) => b.reading_date.localeCompare(a.reading_date));
+        values[m.id] = { value: meterReadings.length > 0 ? meterReadings[0].value : null, unit: m.unit };
+      }
     });
     return values;
-  }, [floorMeters, readings]);
+  }, [floorMeters, readings, sensors]);
 
   const [isWalking, setIsWalking] = useState(false);
   const [isLocked, setIsLocked] = useState(false);
