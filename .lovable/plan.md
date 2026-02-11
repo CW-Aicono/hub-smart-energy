@@ -1,54 +1,89 @@
 
 
-# Wasserdaten im Sankey und anderen Grafiken anzeigen
+# Performance-Optimierung: Schnelleres Laden der Sensordaten
 
-## Ursache
+## Problem-Analyse
 
-Der Wasserzähler ("Wasserzähler Hausanschluss") ist ein **automatischer Zähler** -- es gibt keine manuellen Einträge in der Datenbank. Die Live-Werte werden zwar von der Loxone-API abgerufen, aber im zentralen Daten-Hook `useEnergyData` mit `parseFloat(sensor.value)` verarbeitet. Da Loxone den Wert als deutschen String liefert (z.B. `"12,34"`), gibt `parseFloat` entweder `NaN` oder einen abgeschnittenen Wert zuruck -- und bei `NaN` wird der Eintrag komplett verworfen.
+Das Dashboard laedt langsam, weil:
+- Mehrere Widgets unabhaengig die **gleiche** Loxone-API aufrufen (doppelte Netzwerk-Requests)
+- Die Edge Function fuer ~66 Sensoren **66 einzelne HTTP-Anfragen** an den Miniserver sendet (in 7 seriellen Batches)
+- Kein Caching existiert -- jeder Seitenbesuch loest alle Abfragen erneut aus
+- Die Loxone-Cloud-DNS-Aufloesung bei jedem Aufruf wiederholt wird
 
-Das gleiche Problem wurde bereits auf der LiveValues-Seite behoben (dort wird jetzt `sensor.rawValue` genutzt), aber der zentrale `useEnergyData`-Hook wurde noch nicht aktualisiert.
+## Loesungsplan
 
-## Loesung
+### 1. Frontend: Zentraler Sensor-Cache mit React Query
 
-### Datei: `src/hooks/useEnergyData.tsx`
+Statt dass `useEnergyData`, `useLiveSensorValues` und `FloorPlanDashboardWidget` jeweils eigene API-Aufrufe machen, wird ein **zentraler Hook** eingefuehrt, der die Daten einmalig laedt und per React Query cached.
 
-**Aenderung 1 -- rawValue statt value verwenden (Zeilen 92-103):**
+**Neuer Hook: `src/hooks/useLoxoneSensors.ts`**
+- Nutzt `@tanstack/react-query` mit `staleTime: 60000` (1 Min) und `refetchInterval: 300000` (5 Min)
+- Wird von einer Integration-ID getriggert
+- Alle Widgets greifen auf denselben Query-Cache zu -- **keine doppelten Requests mehr**
 
-Die Sensor-Wert-Auslese im `fetchLiveValues`-Callback muss das neue `rawValue`-Feld nutzen (das bereits in der Edge Function bereitgestellt wird), mit Fallback auf Komma-zu-Punkt-Konvertierung:
+**Anpassungen:**
+- `useEnergyData.tsx`: Nutzt `useLoxoneSensors` statt eigener `fetchLiveValues`-Logik
+- `useLiveSensorValues.ts`: Nutzt `useLoxoneSensors` statt eigener Edge-Function-Aufrufe
+- `FloorPlanDashboardWidget.tsx`: Bezieht Daten ueber `useLiveSensorValues` (das nun gecached ist)
 
-```text
-for (const meter of intMeters) {
-  const sensor = data.sensors?.find((s: any) => s.id === meter.sensor_uuid);
-  if (sensor) {
-    // Prefer rawValue (numeric), fall back to parsing value string
-    let numVal: number;
-    if (typeof sensor.rawValue === "number") {
-      numVal = sensor.rawValue;
-    } else if (typeof sensor.rawValue === "string") {
-      numVal = parseFloat(sensor.rawValue.replace(",", "."));
-    } else if (typeof sensor.value === "string") {
-      numVal = parseFloat(sensor.value.replace(",", "."));
-    } else {
-      numVal = typeof sensor.value === "number" ? sensor.value : NaN;
-    }
+### 2. Edge Function: Parallele Abfragen und DNS-Caching
 
-    if (!isNaN(numVal)) {
-      newLiveReadings.push({
-        meter_id: meter.id,
-        value: numVal,
-        reading_date: now,
+**`supabase/functions/loxone-api/index.ts`:**
+
+- **Batch-Groesse erhoehen**: Von 10 auf 20 parallele Requests (halbiert die seriellen Runden)
+- **DNS-URL cachen**: Die aufgeloeste Miniserver-URL wird fuer die Dauer des Function-Aufrufs gespeichert (statt mehrfach aufgeloest)
+- **Fehlerhafte Sensoren ueberspringen**: Der Sensor `15ea0aa5` verursacht wiederholt JSON-Fehler. Die Function faengt dies bereits ab, aber die Fehlermeldung wird reduziert (nur einmal loggen)
+
+### 3. Frontend: Deduplizierung der API-Aufrufe
+
+Aktuell senden `useEnergyData` und `useLiveSensorValues` separate `getSensors`-Requests fuer die **gleiche** Integration. Durch den zentralen Cache (Punkt 1) wird dies automatisch auf **einen einzigen Request** reduziert.
+
+## Erwartete Verbesserung
+
+| Metrik | Vorher | Nachher |
+|--------|--------|---------|
+| API-Aufrufe pro Seitenbesuch | 2-4x pro Integration | 1x pro Integration |
+| Serielle Batch-Runden | 7 (a 10 parallel) | 4 (a 20 parallel) |
+| Wiederholte DNS-Aufloesung | Bei jedem Request | 1x pro Function-Aufruf |
+| Cache-Dauer | Kein Cache | 1 Min stale, 5 Min Refresh |
+
+## Technische Details
+
+### Neuer zentraler Hook
+
+```typescript
+// src/hooks/useLoxoneSensors.ts
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+
+export function useLoxoneSensors(integrationId: string | undefined) {
+  return useQuery({
+    queryKey: ["loxone-sensors", integrationId],
+    queryFn: async () => {
+      const { data, error } = await supabase.functions.invoke("loxone-api", {
+        body: { locationIntegrationId: integrationId, action: "getSensors" },
       });
-    }
-  }
+      if (error || !data?.success) throw new Error("Failed to fetch sensors");
+      return data.sensors;
+    },
+    enabled: !!integrationId,
+    staleTime: 60_000,       // 1 Minute fresh
+    refetchInterval: 300_000, // Alle 5 Min neu laden
+  });
 }
 ```
 
-Das ist die einzige notwendige Aenderung. Sobald der Wert korrekt als Zahl geparst wird, fliesst er automatisch in alle abhaengigen Berechnungen ein (Sankey, Pie-Chart, Energiechart, Kostenubersicht).
+### Edge Function Batch-Optimierung
 
-### Zusammenfassung
+```typescript
+// Batch-Groesse von 10 auf 20 erhoehen
+const batchSize = 20; // vorher: 10
+```
 
-| Datei | Aenderung |
-|---|---|
-| `src/hooks/useEnergyData.tsx` | `rawValue` statt `value` beim Parsen der Live-Sensorwerte verwenden; Komma-Fallback fuer robustes Parsen |
+### Dateien die geaendert werden
 
-Keine weiteren Dateien betroffen -- der Fix im zentralen Hook wirkt sich automatisch auf alle Widgets aus (Sankey, Pie-Chart, Energiechart, Kostenubersicht).
+1. **Neu:** `src/hooks/useLoxoneSensors.ts` -- Zentraler gecachter Hook
+2. **Aendern:** `src/hooks/useEnergyData.tsx` -- Nutzt `useLoxoneSensors` statt eigene Fetches
+3. **Aendern:** `src/hooks/useLiveSensorValues.ts` -- Nutzt `useLoxoneSensors` statt eigene Fetches
+4. **Aendern:** `supabase/functions/loxone-api/index.ts` -- Batch-Groesse erhoehen
+
