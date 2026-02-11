@@ -56,6 +56,12 @@ export function FloorPlanDialog({ floor, locationId, open, onOpenChange }: Floor
     [meters, floor.id]
   );
 
+  // Only meters that have a sensor position placed on the floor plan
+  const placedFloorMeters = useMemo(() => {
+    const placedUuids = new Set(positions.map(p => p.sensor_uuid));
+    return floorMeters.filter(m => m.sensor_uuid && placedUuids.has(m.sensor_uuid));
+  }, [floorMeters, positions]);
+
   // Latest reading per meter
   const meterLatestValues = useMemo(() => {
     const values: Record<string, number | null> = {};
@@ -463,7 +469,7 @@ export function FloorPlanDialog({ floor, locationId, open, onOpenChange }: Floor
                       );
                     })}
                     <RoomOverlay2D rooms={floorRooms} />
-                    <MeterOverlay2D meters={floorMeters} latestValues={meterLatestValues} />
+                    <MeterOverlay2D meters={placedFloorMeters} latestValues={meterLatestValues} />
                   </div>
                 </div>
               </TabsContent>
@@ -688,7 +694,7 @@ export function FloorPlanDialog({ floor, locationId, open, onOpenChange }: Floor
                     </div>
                   ))}
                   <RoomOverlay2D rooms={floorRooms} />
-                  <MeterOverlay2D meters={floorMeters} latestValues={meterLatestValues} />
+                  <MeterOverlay2D meters={placedFloorMeters} latestValues={meterLatestValues} />
                 </div>
               </TabsContent>
 
