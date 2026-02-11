@@ -1,8 +1,9 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useTranslation } from "@/hooks/useTranslation";
+import { useModuleGuard } from "@/hooks/useModuleGuard";
 import { Button } from "@/components/ui/button";
 import { LayoutDashboard, LogOut, Shield, Settings, Users, ChevronDown, ChevronRight, MapPin, PanelLeftClose, PanelLeft, UserCircle, Key, HelpCircle, Plug, Palette, Database, Gauge, Download, Car, PlugZap, Receipt, Cpu, Activity } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -40,6 +41,7 @@ const DashboardSidebar = () => {
   const { isAdmin } = useUserRole();
   const { t } = useTranslation();
   const location = useLocation();
+  const { isNavItemVisible } = useModuleGuard();
   
   const [collapsed, setCollapsed] = useState(() => {
     const stored = localStorage.getItem(SIDEBAR_COLLAPSED_KEY);
@@ -119,6 +121,21 @@ const DashboardSidebar = () => {
     ] : []),
     { to: "/help", icon: HelpCircle, labelKey: "nav.helpAndSupport" as TranslationKey },
   ];
+
+  // Filter nav items based on active modules
+  const filteredNavItems = useMemo(() => {
+    return navItems
+      .filter((item) => isNavItemVisible(item.to))
+      .map((item) => {
+        if (item.children) {
+          const filteredChildren = item.children.filter((child) => isNavItemVisible(child.to));
+          if (filteredChildren.length === 0) return null;
+          return { ...item, children: filteredChildren };
+        }
+        return item;
+      })
+      .filter(Boolean) as NavItem[];
+  }, [navItems, isNavItemVisible]);
 
   const userInitials = user?.email
     ? user.email.substring(0, 2).toUpperCase()
@@ -267,7 +284,7 @@ const DashboardSidebar = () => {
         "flex-1 space-y-1 overflow-y-auto",
         collapsed ? "p-2" : "p-4"
       )}>
-        {navItems.map(renderNavItem)}
+        {filteredNavItems.map(renderNavItem)}
       </nav>
 
       {/* User section - fixed at bottom */}

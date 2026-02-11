@@ -7,6 +7,7 @@ import { AuthProvider } from "@/hooks/useAuth";
 import { TenantProvider } from "@/hooks/useTenant";
 import { TranslationProvider } from "@/hooks/useTranslation";
 import { ThemeProvider } from "@/hooks/useTheme";
+import ModuleGuard from "@/components/ModuleGuard";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import Admin from "./pages/Admin";
@@ -42,6 +43,10 @@ import "leaflet/dist/leaflet.css";
 
 const queryClient = new QueryClient();
 
+const M = ({ children }: { children: React.ReactNode }) => (
+  <ModuleGuard>{children}</ModuleGuard>
+);
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <AuthProvider>
@@ -58,14 +63,14 @@ const App = () => (
                   <Route path="/auth" element={<Auth />} />
                   <Route path="/admin" element={<Admin />} />
                   <Route path="/settings" element={<Settings />} />
-                  <Route path="/settings/branding" element={<Branding />} />
+                  <Route path="/settings/branding" element={<M><Branding /></M>} />
                   <Route path="/roles" element={<Roles />} />
-                  <Route path="/locations" element={<Locations />} />
-                  <Route path="/locations/:id" element={<LocationDetail />} />
-                  <Route path="/energy-data" element={<EnergyData />} />
-                  <Route path="/meters" element={<MetersOverview />} />
-                  <Route path="/live-values" element={<LiveValues />} />
-                  <Route path="/integrations" element={<Integrations />} />
+                  <Route path="/locations" element={<M><Locations /></M>} />
+                  <Route path="/locations/:id" element={<M><LocationDetail /></M>} />
+                  <Route path="/energy-data" element={<M><EnergyData /></M>} />
+                  <Route path="/meters" element={<M><MetersOverview /></M>} />
+                  <Route path="/live-values" element={<M><LiveValues /></M>} />
+                  <Route path="/integrations" element={<M><Integrations /></M>} />
                   <Route path="/profile" element={<Profile />} />
                   <Route path="/help" element={<Help />} />
                   <Route path="/super-admin" element={<SuperAdminDashboard />} />
@@ -77,9 +82,9 @@ const App = () => (
                   <Route path="/super-admin/map" element={<SuperAdminMap />} />
                   <Route path="/super-admin/billing" element={<SuperAdminBilling />} />
                   <Route path="/super-admin/support" element={<SuperAdminSupport />} />
-                  <Route path="/charging/points" element={<ChargingPoints />} />
-                  <Route path="/charging/billing" element={<ChargingBilling />} />
-                  <Route path="/automation" element={<Automation />} />
+                  <Route path="/charging/points" element={<M><ChargingPoints /></M>} />
+                  <Route path="/charging/billing" element={<M><ChargingBilling /></M>} />
+                  <Route path="/automation" element={<M><Automation /></M>} />
                   <Route path="/m" element={<MobileApp />} />
                   <Route path="/getting-started" element={<GettingStarted />} />
                   <Route path="*" element={<NotFound />} />
