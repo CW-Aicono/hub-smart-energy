@@ -577,9 +577,9 @@ export function AutomationRuleBuilder({
                         <button
                           type="button"
                           onClick={() => updateCondition(cond.id, { ...cond, connector: "AND" })}
-                          className={`px-4 py-1.5 text-xs font-semibold transition-colors ${
+                          className={`px-5 py-2 text-sm font-semibold rounded-l-full transition-colors ${
                             cond.connector !== "OR"
-                              ? "bg-green-500 text-white"
+                              ? "bg-primary text-primary-foreground"
                               : "text-muted-foreground hover:bg-muted"
                           }`}
                         >
@@ -588,9 +588,9 @@ export function AutomationRuleBuilder({
                         <button
                           type="button"
                           onClick={() => updateCondition(cond.id, { ...cond, connector: "OR" })}
-                          className={`px-4 py-1.5 text-xs font-semibold transition-colors ${
+                          className={`px-5 py-2 text-sm font-semibold rounded-r-full transition-colors ${
                             cond.connector === "OR"
-                              ? "bg-green-500 text-white"
+                              ? "bg-primary text-primary-foreground"
                               : "text-muted-foreground hover:bg-muted"
                           }`}
                         >
