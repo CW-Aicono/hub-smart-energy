@@ -9,11 +9,13 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Shield, User, UserPlus, UserCheck, UserX, Mail, Trash2 } from "lucide-react";
+import { Shield, User, UserPlus, UserCheck, UserX, Mail, Trash2, Pencil, Settings2 } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import SuperAdminInviteDialog from "@/components/super-admin/SuperAdminInviteDialog";
+import EditSAUserDialog from "@/components/super-admin/EditSAUserDialog";
+import TenantModulesDialog from "@/components/super-admin/TenantModulesDialog";
 
 interface PlatformUser {
   id: string;
@@ -23,6 +25,7 @@ interface PlatformUser {
   company_name: string | null;
   is_blocked: boolean;
   created_at: string;
+  tenant_id: string | null;
   tenant_name: string | null;
   role: "admin" | "user" | "super_admin";
 }
@@ -57,6 +60,7 @@ const SuperAdminUsers = () => {
           company_name: p.company_name,
           is_blocked: p.is_blocked,
           created_at: p.created_at,
+          tenant_id: p.tenant_id ?? null,
           tenant_name: p.tenants?.name ?? null,
           role: (userRole?.role as PlatformUser["role"]) ?? "user",
         };
@@ -150,14 +154,15 @@ const SuperAdminUsers = () => {
                     <TableHead>Rolle</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Erstellt</TableHead>
-                    <TableHead className="w-24">Aktionen</TableHead>
+                    <TableHead>Module</TableHead>
+                    <TableHead className="w-32">Aktionen</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {isLoading ? (
-                    <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Laden...</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Laden...</TableCell></TableRow>
                   ) : filtered.length === 0 ? (
-                    <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Keine Benutzer gefunden</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Keine Benutzer gefunden</TableCell></TableRow>
                   ) : (
                     filtered.map((u) => (
                       <TableRow key={u.id}>
@@ -198,22 +203,32 @@ const SuperAdminUsers = () => {
                           {new Date(u.created_at).toLocaleDateString("de-DE")}
                         </TableCell>
                         <TableCell>
-                          {(() => {
-                            const isLastSuperAdmin = u.role === "super_admin" && users.filter((x) => x.role === "super_admin" && !x.is_blocked).length <= 1;
-                            const isSelf = u.user_id === user?.id;
-                            const disabled = isLastSuperAdmin && isSelf;
-                            return (
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => toggleBlock.mutate({ userId: u.user_id, blocked: u.is_blocked })}
-                                title={disabled ? "Letzter Super-Admin kann nicht gesperrt werden" : u.is_blocked ? "Entsperren" : "Sperren"}
-                                disabled={disabled && !u.is_blocked}
-                              >
-                                {u.is_blocked ? <UserCheck className="h-4 w-4" /> : <UserX className="h-4 w-4" />}
-                              </Button>
-                            );
-                          })()}
+                          {u.tenant_id ? (
+                            <TenantModulesDialog tenantId={u.tenant_id} tenantName={u.tenant_name || "Mandant"} />
+                          ) : (
+                            <span className="text-muted-foreground text-xs">–</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-1">
+                            <EditSAUserDialog user={u} />
+                            {(() => {
+                              const isLastSuperAdmin = u.role === "super_admin" && users.filter((x) => x.role === "super_admin" && !x.is_blocked).length <= 1;
+                              const isSelf = u.user_id === user?.id;
+                              const disabled = isLastSuperAdmin && isSelf;
+                              return (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => toggleBlock.mutate({ userId: u.user_id, blocked: u.is_blocked })}
+                                  title={disabled ? "Letzter Super-Admin kann nicht gesperrt werden" : u.is_blocked ? "Entsperren" : "Sperren"}
+                                  disabled={disabled && !u.is_blocked}
+                                >
+                                  {u.is_blocked ? <UserCheck className="h-4 w-4" /> : <UserX className="h-4 w-4" />}
+                                </Button>
+                              );
+                            })()}
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))
