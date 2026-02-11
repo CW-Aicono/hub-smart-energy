@@ -9,24 +9,20 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Shield, User, UserPlus, UserCheck, UserX, Mail, Trash2, Pencil, Settings2 } from "lucide-react";
+import { Shield, User, UserCheck, UserX } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import SuperAdminInviteDialog from "@/components/super-admin/SuperAdminInviteDialog";
 import EditSAUserDialog from "@/components/super-admin/EditSAUserDialog";
-import TenantModulesDialog from "@/components/super-admin/TenantModulesDialog";
 
 interface PlatformUser {
   id: string;
   user_id: string;
   email: string | null;
   contact_person: string | null;
-  company_name: string | null;
   is_blocked: boolean;
   created_at: string;
-  tenant_id: string | null;
-  tenant_name: string | null;
   role: "admin" | "user" | "super_admin";
 }
 
@@ -42,7 +38,7 @@ const SuperAdminUsers = () => {
     queryFn: async () => {
       const { data: profiles, error: pErr } = await supabase
         .from("profiles")
-        .select("*, tenants(name)");
+        .select("*");
       if (pErr) throw pErr;
 
       const { data: roles, error: rErr } = await supabase
@@ -57,11 +53,8 @@ const SuperAdminUsers = () => {
           user_id: p.user_id,
           email: p.email,
           contact_person: p.contact_person,
-          company_name: p.company_name,
           is_blocked: p.is_blocked,
           created_at: p.created_at,
-          tenant_id: p.tenant_id ?? null,
-          tenant_name: p.tenants?.name ?? null,
           role: (userRole?.role as PlatformUser["role"]) ?? "user",
         };
       });
@@ -113,17 +106,7 @@ const SuperAdminUsers = () => {
     (u.contact_person?.toLowerCase() || "").includes(search.toLowerCase())
   );
 
-  const roleIcon = (role: string) => {
-    if (role === "super_admin") return <Shield className="h-3 w-3 text-destructive" />;
-    if (role === "admin") return <Shield className="h-3 w-3" />;
-    return <User className="h-3 w-3" />;
-  };
 
-  const roleLabel = (role: string) => {
-    if (role === "super_admin") return "Super-Admin";
-    if (role === "admin") return "Admin";
-    return "Benutzer";
-  };
 
   return (
     <div className="flex min-h-screen bg-background">
