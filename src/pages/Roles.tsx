@@ -14,8 +14,8 @@ const Roles = () => {
   const { isAdmin, loading: roleLoading } = useUserRole();
   const { 
     roles, 
-    permissions, 
-    permissionsByCategory, 
+    permissions: allPermissions, 
+    permissionsByCategory: allPermissionsByCategory, 
     rolePermissions, 
     loading: rolesLoading,
     createRole,
@@ -23,6 +23,15 @@ const Roles = () => {
     togglePermission,
   } = useCustomRoles();
   const { t } = useTranslation();
+
+  // Filter out super_admin permissions (not needed in tenant context)
+  const permissions = allPermissions.filter(p => !p.code.startsWith("sa_") && p.category !== "super_admin");
+  const permissionsByCategory = Object.fromEntries(
+    Object.entries(allPermissionsByCategory)
+      .filter(([cat]) => cat !== "super_admin")
+      .map(([cat, perms]) => [cat, perms.filter(p => !p.code.startsWith("sa_"))])
+      .filter(([, perms]) => (perms as any[]).length > 0)
+  );
 
   if (authLoading || roleLoading || rolesLoading) {
     return (
