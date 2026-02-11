@@ -4,6 +4,7 @@ import { Navigate, useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useLocations, Location, LocationUsageType } from "@/hooks/useLocations";
+import { useModuleGuard } from "@/hooks/useModuleGuard";
 import { useLocationStatus } from "@/hooks/useLocationStatus";
 import { useTranslation } from "@/hooks/useTranslation";
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
@@ -32,7 +33,20 @@ const usageTypeLabels: Record<LocationUsageType, string> = {
 const Locations = () => {
   const { user, loading: authLoading } = useAuth();
   const { isAdmin } = useUserRole();
-  const { locations, hierarchicalLocations, loading: locationsLoading, refetch } = useLocations();
+  const { locations: allLocations, hierarchicalLocations: allHierarchical, loading: locationsLoading, refetch } = useLocations();
+  const { locationsFullEnabled } = useModuleGuard();
+
+  // When locations module is disabled, only show main location
+  const locations = useMemo(() => {
+    if (locationsFullEnabled) return allLocations;
+    return allLocations.filter((l) => l.is_main_location);
+  }, [allLocations, locationsFullEnabled]);
+
+  const hierarchicalLocations = useMemo(() => {
+    if (locationsFullEnabled) return allHierarchical;
+    return allHierarchical.filter((l) => l.is_main_location);
+  }, [allHierarchical, locationsFullEnabled]);
+
   const locationIds = useMemo(() => locations.map((l) => l.id), [locations]);
   const { locationStatuses } = useLocationStatus(locationIds);
   const { t } = useTranslation();
@@ -204,7 +218,7 @@ const Locations = () => {
               {t("locations.subtitle")}
             </p>
           </div>
-          {isAdmin && <AddLocationDialog />}
+          {isAdmin && locationsFullEnabled && <AddLocationDialog />}
         </header>
         <div className="p-6 space-y-6">
           {/* Map Card */}
