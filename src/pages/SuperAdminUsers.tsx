@@ -198,14 +198,22 @@ const SuperAdminUsers = () => {
                           {new Date(u.created_at).toLocaleDateString("de-DE")}
                         </TableCell>
                         <TableCell>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => toggleBlock.mutate({ userId: u.user_id, blocked: u.is_blocked })}
-                            title={u.is_blocked ? "Entsperren" : "Sperren"}
-                          >
-                            {u.is_blocked ? <UserCheck className="h-4 w-4" /> : <UserX className="h-4 w-4" />}
-                          </Button>
+                          {(() => {
+                            const isLastSuperAdmin = u.role === "super_admin" && users.filter((x) => x.role === "super_admin" && !x.is_blocked).length <= 1;
+                            const isSelf = u.user_id === user?.id;
+                            const disabled = isLastSuperAdmin && isSelf;
+                            return (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => toggleBlock.mutate({ userId: u.user_id, blocked: u.is_blocked })}
+                                title={disabled ? "Letzter Super-Admin kann nicht gesperrt werden" : u.is_blocked ? "Entsperren" : "Sperren"}
+                                disabled={disabled && !u.is_blocked}
+                              >
+                                {u.is_blocked ? <UserCheck className="h-4 w-4" /> : <UserX className="h-4 w-4" />}
+                              </Button>
+                            );
+                          })()}
                         </TableCell>
                       </TableRow>
                     ))

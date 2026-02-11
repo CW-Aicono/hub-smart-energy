@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Shield, Crown, Users, CheckCircle2 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import CreateSAPermissionRoleDialog from "@/components/super-admin/CreateSAPermissionRoleDialog";
 
 const SA_CAPABILITIES = [
   { name: "Mandantenverwaltung", description: "Mandanten anlegen, bearbeiten, sperren und löschen" },
@@ -54,6 +55,20 @@ const SuperAdminRoles = () => {
     },
   });
 
+  // Fetch custom SA roles
+  const { data: customRoles = [], isLoading: rolesLoading } = useQuery({
+    queryKey: ["sa-custom-roles"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("custom_roles")
+        .select("*, custom_role_permissions(permission_id, permissions(name))")
+        .eq("is_system_role", true)
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
   if (authLoading || roleLoading) {
     return <div className="flex min-h-screen items-center justify-center bg-background"><div className="animate-pulse text-muted-foreground">Laden...</div></div>;
   }
@@ -64,9 +79,12 @@ const SuperAdminRoles = () => {
     <div className="flex min-h-screen bg-background">
       <SuperAdminSidebar />
       <main className="flex-1 overflow-auto">
-        <header className="border-b p-6">
-          <h1 className="text-2xl font-bold">Super-Admin Rollen & Rechte</h1>
-          <p className="text-sm text-muted-foreground mt-1">Verwaltung der Super-Admin-Zugänge und deren Berechtigungen</p>
+        <header className="border-b p-6 flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold">Super-Admin Rollen & Rechte</h1>
+            <p className="text-sm text-muted-foreground mt-1">Verwaltung der Super-Admin-Zugänge und deren Berechtigungen</p>
+          </div>
+          <CreateSAPermissionRoleDialog />
         </header>
         <div className="p-6 space-y-6">
           {/* Super-Admin Role Card */}
@@ -140,6 +158,53 @@ const SuperAdminRoles = () => {
               </Table>
             </CardContent>
           </Card>
+          {/* Custom SA Roles */}
+          {customRoles.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Shield className="h-5 w-5" />
+                  Benutzerdefinierte Rollen ({customRoles.length})
+                </CardTitle>
+                <CardDescription>Erstellte Super-Admin-Rollen mit spezifischen Berechtigungen</CardDescription>
+              </CardHeader>
+              <CardContent className="p-0">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Rolle</TableHead>
+                      <TableHead>Beschreibung</TableHead>
+                      <TableHead>Berechtigungen</TableHead>
+                      <TableHead>Erstellt</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {customRoles.map((role: any) => (
+                      <TableRow key={role.id}>
+                        <TableCell className="font-medium">{role.name}</TableCell>
+                        <TableCell className="text-muted-foreground text-sm">{role.description || "–"}</TableCell>
+                        <TableCell>
+                          <div className="flex flex-wrap gap-1">
+                            {role.custom_role_permissions?.map((crp: any) => (
+                              <Badge key={crp.permission_id} variant="secondary" className="text-xs">
+                                {crp.permissions?.name ?? crp.permission_id}
+                              </Badge>
+                            ))}
+                            {(!role.custom_role_permissions || role.custom_role_permissions.length === 0) && (
+                              <span className="text-xs text-muted-foreground">Keine</span>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-muted-foreground text-sm">
+                          {new Date(role.created_at).toLocaleDateString("de-DE")}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          )}
         </div>
       </main>
     </div>
