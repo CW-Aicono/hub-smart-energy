@@ -14,7 +14,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Map, List, Building2, ArrowUpAZ, ArrowDownAZ, Filter, Wifi, WifiOff, AlertCircle, GitBranch, ArrowLeft, Search } from "lucide-react";
+import { Map, List, Building2, Landmark, ArrowUpAZ, ArrowDownAZ, Filter, Wifi, WifiOff, AlertCircle, GitBranch, ArrowLeft, Search } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -353,7 +353,11 @@ const Locations = () => {
                         className="flex items-center gap-4 p-4 hover:bg-muted/50 cursor-pointer transition-colors"
                         onClick={() => handleLocationClick(location)}
                       >
-                        <Building2 className="h-5 w-5 text-muted-foreground flex-shrink-0" />
+                        {location.type === "gebaeudekomplex" ? (
+                          <Landmark className="h-5 w-5 text-muted-foreground flex-shrink-0" />
+                        ) : (
+                          <Building2 className="h-5 w-5 text-muted-foreground flex-shrink-0" />
+                        )}
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2">
                             <p className="font-medium text-base">{location.name}</p>
@@ -378,7 +382,7 @@ const Locations = () => {
                               className="flex items-center gap-4 p-3 pl-12 hover:bg-muted/50 cursor-pointer transition-colors border-t first:border-t-0"
                               onClick={() => handleLocationClick(child)}
                             >
-                              <Building2 className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                              <Building2 className="h-4 w-4 text-muted-foreground flex-shrink-0" /> {/* Children are always Einzelgebäude */}
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-2">
                                   <p className="font-medium text-sm">{child.name}</p>
