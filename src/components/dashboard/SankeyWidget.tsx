@@ -9,8 +9,7 @@ import { formatEnergy, formatEnergyByType } from "@/lib/formatEnergy";
 import { supabase } from "@/integrations/supabase/client";
 import { ENERGY_CHART_COLORS, ENERGY_TYPE_LABELS } from "@/lib/energyTypeColors";
 import { startOfDay, startOfWeek, startOfMonth, startOfQuarter, startOfYear } from "date-fns";
-
-type TimePeriod = "day" | "week" | "month" | "quarter" | "year" | "all";
+import { useDashboardFilter, TimePeriod } from "@/hooks/useDashboardFilter";
 
 const PERIOD_LABELS: Record<TimePeriod, string> = {
   day: "Tag",
@@ -64,12 +63,12 @@ const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
   const { readings, loading: energyLoading, hasData } = useEnergyData(locationId);
   const { meters } = useMeters();
   const svgRef = useRef<SVGSVGElement>(null);
-  const [tooltip, setTooltip] = useState<{ x: number; y: number; source: string; target: string; value: number; sourceType: string } | null>(null);
+  const { selectedPeriod: period, setSelectedPeriod: setPeriod } = useDashboardFilter();
 
-  // Fetch floors and rooms for specific location
+  // Local UI state
+  const [tooltip, setTooltip] = useState<{ x: number; y: number; source: string; target: string; value: number; sourceType: string } | null>(null);
   const [floors, setFloors] = useState<{ id: string; name: string }[]>([]);
   const [rooms, setRooms] = useState<{ id: string; floor_id: string; name: string }[]>([]);
-  const [period, setPeriod] = useState<TimePeriod>("day");
 
   useEffect(() => {
     if (!locationId) {

@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -8,8 +8,7 @@ import { Leaf } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatEnergy, formatEnergyByType } from "@/lib/formatEnergy";
 import { startOfDay, startOfWeek, startOfMonth, startOfQuarter, startOfYear } from "date-fns";
-
-type TimePeriod = "day" | "week" | "month" | "quarter" | "year" | "all";
+import { useDashboardFilter, TimePeriod } from "@/hooks/useDashboardFilter";
 
 const PERIOD_LABELS: Record<TimePeriod, string> = {
   day: "Tag",
@@ -39,7 +38,7 @@ interface SustainabilityKPIsProps {
 const SustainabilityKPIs = ({ locationId }: SustainabilityKPIsProps) => {
   const { readings, loading, hasData } = useEnergyData(locationId);
   const { meters } = useMeters();
-  const [period, setPeriod] = useState<TimePeriod>("day");
+  const { selectedPeriod: period, setSelectedPeriod: setPeriod } = useDashboardFilter();
 
   const meterMap = useMemo(() => {
     const map: Record<string, string> = {};
