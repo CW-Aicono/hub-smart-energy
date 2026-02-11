@@ -831,6 +831,75 @@ export type Database = {
           },
         ]
       }
+      location_automations: {
+        Row: {
+          action_type: string
+          action_value: string | null
+          actuator_control_type: string
+          actuator_name: string
+          actuator_uuid: string
+          created_at: string
+          description: string | null
+          id: string
+          is_active: boolean
+          last_executed_at: string | null
+          location_id: string
+          location_integration_id: string
+          name: string
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          action_type?: string
+          action_value?: string | null
+          actuator_control_type: string
+          actuator_name: string
+          actuator_uuid: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          last_executed_at?: string | null
+          location_id: string
+          location_integration_id: string
+          name: string
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          action_type?: string
+          action_value?: string | null
+          actuator_control_type?: string
+          actuator_name?: string
+          actuator_uuid?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          last_executed_at?: string | null
+          location_id?: string
+          location_integration_id?: string
+          name?: string
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "location_automations_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "location_automations_location_integration_id_fkey"
+            columns: ["location_integration_id"]
+            isOneToOne: false
+            referencedRelation: "location_integrations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       location_integrations: {
         Row: {
           config: Json | null

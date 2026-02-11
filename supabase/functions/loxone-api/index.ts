@@ -582,6 +582,40 @@ serve(async (req) => {
       );
     }
 
+    // ── ACTION: executeCommand ──
+    if (action === "executeCommand") {
+      const { controlUuid, commandValue } = requestBody;
+      if (!controlUuid) throw new Error("controlUuid ist erforderlich");
+      
+      // Default command: "pulse" (for Pushbutton), or specific value
+      const cmd = commandValue !== undefined ? commandValue : "pulse";
+      const cmdUrl = `${baseUrl}/jdev/sps/io/${controlUuid}/${cmd}`;
+      console.log(`Executing command: ${cmdUrl}`);
+      
+      const response = await fetch(cmdUrl, {
+        method: "GET",
+        headers: { Authorization: authHeader },
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Befehl fehlgeschlagen: HTTP ${response.status}`);
+      }
+      
+      const data = await response.json();
+      console.log(`Command response:`, JSON.stringify(data).substring(0, 300));
+      
+      // Check Loxone response code (200 = OK)
+      const code = data?.LL?.Code || data?.LL?.code;
+      if (code && String(code) !== "200") {
+        throw new Error(`Loxone meldet Fehler: Code ${code}`);
+      }
+      
+      return new Response(
+        JSON.stringify({ success: true, response: data }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     throw new Error(`Unbekannte Aktion: ${action}`);
   } catch (error) {
     console.error("Loxone API error:", error);

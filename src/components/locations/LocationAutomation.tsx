@@ -5,102 +5,55 @@ import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
+  DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   Cpu,
   ChevronDown,
   ChevronRight,
-  Moon,
-  Sun,
-  Lightbulb,
-  Thermometer,
-  Wind,
-  Zap,
-  TrendingDown,
-  Clock,
   Plus,
   Settings2,
-  Server,
   ToggleLeft,
   Gauge,
+  Lightbulb,
   DoorOpen,
   Activity,
+  Server,
   AlertTriangle,
+  Play,
+  Loader2,
+  Pencil,
+  Trash2,
+  Clock,
+  Thermometer,
+  CheckCircle2,
 } from "lucide-react";
 import { useLocationIntegrations } from "@/hooks/useIntegrations";
 import { useLoxoneSensors, LoxoneSensor } from "@/hooks/useLoxoneSensors";
-import { Input } from "@/components/ui/input";
-
-// ... keep existing code (AutomationScenario interface and DEMO_SCENARIOS)
-interface AutomationScenario {
-  id: string;
-  name: string;
-  description: string;
-  icon: React.ElementType;
-  isActive: boolean;
-  savingsPercent: number | null;
-  schedule: string | null;
-  scope: string;
-}
-
-const DEMO_SCENARIOS: AutomationScenario[] = [
-  {
-    id: "night-setback",
-    name: "Nachtabsenkung Heizung",
-    description: "Reduzierung der Raumtemperatur außerhalb der Nutzungszeiten auf 16°C",
-    icon: Moon,
-    isActive: true,
-    savingsPercent: 12,
-    schedule: "Mo–Fr 20:00–06:00, Sa–So ganztägig",
-    scope: "Gesamtes Gebäude",
-  },
-  {
-    id: "presence-light",
-    name: "Präsenzabhängige Beleuchtung",
-    description: "Automatische Abschaltung der Beleuchtung bei Abwesenheit nach 10 Minuten",
-    icon: Lightbulb,
-    isActive: true,
-    savingsPercent: 18,
-    schedule: "Permanent aktiv",
-    scope: "Alle Räume mit Präsenzmelder",
-  },
-  {
-    id: "summer-ventilation",
-    name: "Sommerliche Nachtlüftung",
-    description: "Automatische Fensterlüftung bei Außentemperatur < Innentemperatur (nachts)",
-    icon: Wind,
-    isActive: false,
-    savingsPercent: 8,
-    schedule: "Jun–Sep, 22:00–06:00",
-    scope: "Gesamtes Gebäude",
-  },
-  {
-    id: "peak-shaving",
-    name: "Lastspitzenvermeidung",
-    description: "Automatische Reduktion nicht-kritischer Verbraucher bei Überschreitung der Leistungsgrenze",
-    icon: Zap,
-    isActive: false,
-    savingsPercent: null,
-    schedule: "Permanent aktiv",
-    scope: "Hauptzähler",
-  },
-  {
-    id: "holiday-mode",
-    name: "Ferienbetrieb",
-    description: "Reduzierter Betrieb während Schulferien und Feiertagen",
-    icon: Sun,
-    isActive: false,
-    savingsPercent: 15,
-    schedule: "Laut Ferienkalender NRW",
-    scope: "Gesamtes Gebäude",
-  },
-];
+import { useLocationAutomations, LocationAutomationRecord } from "@/hooks/useLocationAutomations";
+import { toast } from "sonner";
+import { formatDistanceToNow } from "date-fns";
+import { de } from "date-fns/locale";
 
 // Icon mapping for sensor types
 function getSensorIcon(type: string) {
@@ -117,7 +70,6 @@ function getSensorIcon(type: string) {
   }
 }
 
-// Check if a sensor is an actuator (can be controlled)
 function isActuator(sensor: LoxoneSensor): boolean {
   const actuatorTypes = ["switch", "light", "blind", "button", "digital"];
   const actuatorControlTypes = [
@@ -129,6 +81,13 @@ function isActuator(sensor: LoxoneSensor): boolean {
   return actuatorTypes.includes(sensor.type) || actuatorControlTypes.includes(sensor.controlType);
 }
 
+const ACTION_TYPES = [
+  { value: "pulse", label: "Pulse (Taster)" },
+  { value: "On", label: "Einschalten" },
+  { value: "Off", label: "Ausschalten" },
+  { value: "toggle", label: "Umschalten (Toggle)" },
+];
+
 interface LocationAutomationProps {
   locationId: string;
 }
@@ -136,31 +95,29 @@ interface LocationAutomationProps {
 export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
   const [isOpen, setIsOpen] = useState(false);
   const [configOpen, setConfigOpen] = useState(false);
-  const [scenarios, setScenarios] = useState(DEMO_SCENARIOS);
+  const [addOpen, setAddOpen] = useState(false);
+  const [editAutomation, setEditAutomation] = useState<LocationAutomationRecord | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<LocationAutomationRecord | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
 
-  // Fetch connected integrations for this location
+  // Form state
+  const [formName, setFormName] = useState("");
+  const [formDesc, setFormDesc] = useState("");
+  const [formActuator, setFormActuator] = useState<LoxoneSensor | null>(null);
+  const [formActionType, setFormActionType] = useState("pulse");
+  const [saving, setSaving] = useState(false);
+
   const { locationIntegrations, loading: intLoading } = useLocationIntegrations(locationId);
   const loxoneIntegration = locationIntegrations.find(
     (li) => li.integration?.type?.startsWith("loxone") && li.is_enabled
   );
   const { data: sensors, isLoading: sensorsLoading } = useLoxoneSensors(loxoneIntegration?.id);
+  const {
+    automations, loading: autoLoading, executing,
+    createAutomation, updateAutomation, deleteAutomation, executeAutomation,
+  } = useLocationAutomations(locationId);
 
-  const activeCount = scenarios.filter((s) => s.isActive).length;
-  const totalSavings = scenarios
-    .filter((s) => s.isActive && s.savingsPercent)
-    .reduce((sum, s) => sum + (s.savingsPercent ?? 0), 0);
-
-  const toggleScenario = (id: string) => {
-    setScenarios((prev) =>
-      prev.map((s) => (s.id === id ? { ...s, isActive: !s.isActive } : s))
-    );
-  };
-
-  // Filter sensors to actuators (controllable devices)
-  const allSensors = sensors || [];
-  const actuators = allSensors.filter(isActuator);
-  const readOnly = allSensors.filter((s) => !isActuator(s));
+  const actuators = (sensors || []).filter(isActuator);
 
   const filteredActuators = searchTerm
     ? actuators.filter((s) =>
@@ -170,15 +127,6 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
       )
     : actuators;
 
-  const filteredReadOnly = searchTerm
-    ? readOnly.filter((s) =>
-        s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        s.room.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        s.controlType.toLowerCase().includes(searchTerm.toLowerCase())
-      )
-    : readOnly;
-
-  // Group by room
   const groupByRoom = (items: LoxoneSensor[]) => {
     const grouped: Record<string, LoxoneSensor[]> = {};
     items.forEach((s) => {
@@ -187,6 +135,90 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
       grouped[room].push(s);
     });
     return Object.entries(grouped).sort(([a], [b]) => a.localeCompare(b));
+  };
+
+  const openAddDialog = () => {
+    setFormName("");
+    setFormDesc("");
+    setFormActuator(null);
+    setFormActionType("pulse");
+    setAddOpen(true);
+  };
+
+  const openEditDialog = (auto: LocationAutomationRecord) => {
+    setFormName(auto.name);
+    setFormDesc(auto.description || "");
+    setFormActionType(auto.action_value || auto.action_type);
+    // Try to find actuator in loaded sensors
+    const found = actuators.find((s) => s.id === auto.actuator_uuid);
+    setFormActuator(found || null);
+    setEditAutomation(auto);
+  };
+
+  const handleSave = async () => {
+    if (!formName.trim()) { toast.error("Name ist erforderlich"); return; }
+    if (!formActuator && !editAutomation) { toast.error("Bitte einen Aktor auswählen"); return; }
+    if (!loxoneIntegration) return;
+
+    setSaving(true);
+    try {
+      if (editAutomation) {
+        const { error } = await updateAutomation(editAutomation.id, {
+          name: formName,
+          description: formDesc || undefined,
+          action_type: formActionType === "pulse" ? "pulse" : "command",
+          action_value: formActionType,
+          ...(formActuator ? {
+            actuator_uuid: formActuator.id,
+            actuator_name: formActuator.name,
+            actuator_control_type: formActuator.controlType,
+          } : {}),
+        });
+        if (error) throw error;
+        toast.success("Automation aktualisiert");
+        setEditAutomation(null);
+      } else {
+        if (!formActuator) return;
+        const { error } = await createAutomation({
+          location_id: locationId,
+          location_integration_id: loxoneIntegration.id,
+          name: formName,
+          description: formDesc || undefined,
+          actuator_uuid: formActuator.id,
+          actuator_name: formActuator.name,
+          actuator_control_type: formActuator.controlType,
+          action_type: formActionType === "pulse" ? "pulse" : "command",
+          action_value: formActionType,
+        });
+        if (error) throw error;
+        toast.success("Automation erstellt");
+        setAddOpen(false);
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Fehler beim Speichern");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleExecute = async (auto: LocationAutomationRecord) => {
+    const result = await executeAutomation(auto);
+    if (result.success) {
+      toast.success(`„${auto.name}" ausgeführt`);
+    } else {
+      toast.error(result.error || "Ausführung fehlgeschlagen");
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    const { error } = await deleteAutomation(deleteTarget.id);
+    if (error) {
+      toast.error("Fehler beim Löschen");
+    } else {
+      toast.success("Automation gelöscht");
+    }
+    setDeleteTarget(null);
   };
 
   return (
@@ -206,9 +238,9 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
                     <CardTitle className="flex items-center gap-2">
                       <Cpu className="h-5 w-5" />
                       Automation
-                      {activeCount > 0 && (
+                      {automations.length > 0 && (
                         <Badge variant="secondary" className="ml-1 text-xs">
-                          {activeCount} aktiv
+                          {automations.filter((a) => a.is_active).length} aktiv
                         </Badge>
                       )}
                     </CardTitle>
@@ -218,72 +250,114 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
                   </div>
                 </button>
               </CollapsibleTrigger>
-              {totalSavings > 0 && (
-                <Badge variant="outline" className="gap-1 text-xs bg-primary/10 text-primary border-primary/20">
-                  <TrendingDown className="h-3 w-3" />
-                  ~{totalSavings}% Einsparung
-                </Badge>
-              )}
             </div>
           </CardHeader>
 
           <CollapsibleContent>
             <CardContent className="space-y-3">
-              {scenarios.map((scenario) => {
-                const Icon = scenario.icon;
-                return (
-                  <div
-                    key={scenario.id}
-                    className={`flex items-start gap-4 p-4 rounded-lg border transition-colors ${
-                      scenario.isActive
-                        ? "bg-primary/5 border-primary/20"
-                        : "bg-muted/30 border-border"
-                    }`}
-                  >
+              {/* Saved automations */}
+              {autoLoading ? (
+                <div className="space-y-2">
+                  <Skeleton className="h-16 w-full" />
+                  <Skeleton className="h-16 w-full" />
+                </div>
+              ) : automations.length > 0 ? (
+                automations.map((auto) => {
+                  const Icon = getSensorIcon(
+                    auto.actuator_control_type === "Pushbutton" ? "button" :
+                    auto.actuator_control_type === "Switch" ? "switch" :
+                    auto.actuator_control_type === "Dimmer" ? "light" : "unknown"
+                  );
+                  const isExecuting = executing === auto.id;
+                  const actionLabel = ACTION_TYPES.find((a) => a.value === (auto.action_value || auto.action_type))?.label || auto.action_type;
+                  return (
                     <div
-                      className={`mt-0.5 rounded-lg p-2 ${
-                        scenario.isActive
-                          ? "bg-primary/10 text-primary"
-                          : "bg-muted text-muted-foreground"
+                      key={auto.id}
+                      className={`flex items-start gap-4 p-4 rounded-lg border transition-colors ${
+                        auto.is_active
+                          ? "bg-primary/5 border-primary/20"
+                          : "bg-muted/30 border-border"
                       }`}
                     >
-                      <Icon className="h-5 w-5" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <p className="font-medium text-sm">{scenario.name}</p>
-                        {scenario.isActive && scenario.savingsPercent && (
-                          <Badge variant="outline" className="text-xs gap-1 bg-primary/10 text-primary border-primary/20">
-                            <TrendingDown className="h-3 w-3" />
-                            ~{scenario.savingsPercent}%
-                          </Badge>
-                        )}
+                      <div
+                        className={`mt-0.5 rounded-lg p-2 ${
+                          auto.is_active ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"
+                        }`}
+                      >
+                        <Icon className="h-5 w-5" />
                       </div>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {scenario.description}
-                      </p>
-                      <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
-                        {scenario.schedule && (
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <p className="font-medium text-sm">{auto.name}</p>
+                          <Badge variant="outline" className="text-[10px]">{actionLabel}</Badge>
+                        </div>
+                        {auto.description && (
+                          <p className="text-xs text-muted-foreground mt-0.5">{auto.description}</p>
+                        )}
+                        <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
                           <span className="flex items-center gap-1">
-                            <Clock className="h-3 w-3" />
-                            {scenario.schedule}
+                            <Server className="h-3 w-3" />
+                            {auto.actuator_name}
                           </span>
-                        )}
-                        <span className="flex items-center gap-1">
-                          <Thermometer className="h-3 w-3" />
-                          {scenario.scope}
-                        </span>
+                          {auto.last_executed_at && (
+                            <span className="flex items-center gap-1">
+                              <Clock className="h-3 w-3" />
+                              {formatDistanceToNow(new Date(auto.last_executed_at), { addSuffix: true, locale: de })}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-8 w-8"
+                          onClick={() => handleExecute(auto)}
+                          disabled={isExecuting || !auto.is_active}
+                          title="Jetzt ausführen"
+                        >
+                          {isExecuting ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Play className="h-4 w-4" />
+                          )}
+                        </Button>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-8 w-8"
+                          onClick={() => openEditDialog(auto)}
+                          title="Bearbeiten"
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-8 w-8 text-destructive hover:text-destructive"
+                          onClick={() => setDeleteTarget(auto)}
+                          title="Löschen"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                        <Switch
+                          checked={auto.is_active}
+                          onCheckedChange={(checked) =>
+                            updateAutomation(auto.id, { is_active: checked })
+                          }
+                          className="ml-1"
+                        />
                       </div>
                     </div>
-                    <Switch
-                      checked={scenario.isActive}
-                      onCheckedChange={() => toggleScenario(scenario.id)}
-                      className="mt-1"
-                    />
-                  </div>
-                );
-              })}
+                  );
+                })
+              ) : (
+                <div className="text-center py-4 text-sm text-muted-foreground">
+                  Noch keine Automationen konfiguriert.
+                </div>
+              )}
 
+              {/* Action buttons */}
               <div className="flex gap-2 mt-2">
                 <Button
                   variant="outline"
@@ -299,7 +373,13 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
                     </Badge>
                   )}
                 </Button>
-                <Button variant="outline" size="sm" className="flex-1 gap-2" disabled>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="flex-1 gap-2"
+                  onClick={openAddDialog}
+                  disabled={!loxoneIntegration}
+                >
                   <Plus className="h-4 w-4" />
                   Automation hinzufügen
                 </Button>
@@ -309,7 +389,7 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
         </Card>
       </Collapsible>
 
-      {/* Konfiguration Dialog – Live Loxone Endpoints */}
+      {/* ── Konfiguration Dialog ── */}
       <Dialog open={configOpen} onOpenChange={setConfigOpen}>
         <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
@@ -338,46 +418,37 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
             </div>
           ) : (
             <div className="space-y-4 mt-2">
-              {/* Search */}
               <Input
                 placeholder="Suche nach Name, Raum oder Typ..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="h-9"
               />
-
-              {/* Stats */}
               <Badge variant="secondary" className="gap-1">
                 <ToggleLeft className="h-3 w-3" />
                 {actuators.length} Aktoren (steuerbar)
               </Badge>
-
-              {/* Actuators */}
               {filteredActuators.length > 0 ? (
                 <div className="space-y-2">
                   {groupByRoom(filteredActuators).map(([room, items]) => (
                     <div key={room} className="space-y-1">
                       <p className="text-xs font-medium text-muted-foreground px-1">{room}</p>
                       {items.map((sensor) => {
-                        const Icon = getSensorIcon(sensor.type);
+                        const SIcon = getSensorIcon(sensor.type);
                         return (
                           <div
                             key={sensor.id}
                             className="flex items-center gap-3 p-3 rounded-lg border bg-primary/5 border-primary/20"
                           >
                             <div className="rounded-lg p-2 bg-primary/10 text-primary">
-                              <Icon className="h-4 w-4" />
+                              <SIcon className="h-4 w-4" />
                             </div>
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2">
                                 <p className="font-medium text-sm truncate">{sensor.name}</p>
-                                <Badge variant="outline" className="text-[10px] shrink-0">
-                                  {sensor.controlType}
-                                </Badge>
+                                <Badge variant="outline" className="text-[10px] shrink-0">{sensor.controlType}</Badge>
                               </div>
-                              <p className="text-xs text-muted-foreground truncate">
-                                {sensor.category}
-                              </p>
+                              <p className="text-xs text-muted-foreground truncate">{sensor.category}</p>
                             </div>
                             <div className="text-right shrink-0">
                               <p className="text-sm font-mono font-medium">
@@ -400,6 +471,125 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* ── Add / Edit Automation Dialog ── */}
+      <Dialog open={addOpen || !!editAutomation} onOpenChange={(open) => { if (!open) { setAddOpen(false); setEditAutomation(null); } }}>
+        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Cpu className="h-5 w-5" />
+              {editAutomation ? "Automation bearbeiten" : "Neue Automation"}
+            </DialogTitle>
+            <DialogDescription>
+              {editAutomation
+                ? "Ändern Sie die Konfiguration dieser Automation."
+                : "Wählen Sie einen Aktor und konfigurieren Sie die Aktion."}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label>Name *</Label>
+              <Input
+                placeholder="z.B. Flurbeleuchtung schalten"
+                value={formName}
+                onChange={(e) => setFormName(e.target.value)}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Beschreibung</Label>
+              <Textarea
+                placeholder="Optionale Beschreibung..."
+                value={formDesc}
+                onChange={(e) => setFormDesc(e.target.value)}
+                rows={2}
+              />
+            </div>
+
+            {/* Actuator selection */}
+            <div className="space-y-2">
+              <Label>Aktor auswählen *</Label>
+              {sensorsLoading ? (
+                <Skeleton className="h-10 w-full" />
+              ) : actuators.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Keine Aktoren verfügbar.</p>
+              ) : (
+                <div className="max-h-48 overflow-y-auto border rounded-lg">
+                  {actuators.map((sensor) => {
+                    const SIcon = getSensorIcon(sensor.type);
+                    const isSelected = formActuator?.id === sensor.id;
+                    return (
+                      <button
+                        key={sensor.id}
+                        type="button"
+                        onClick={() => setFormActuator(sensor)}
+                        className={`flex items-center gap-3 w-full p-3 text-left transition-colors border-b last:border-b-0 ${
+                          isSelected
+                            ? "bg-primary/10 border-primary/20"
+                            : "hover:bg-muted/50"
+                        }`}
+                      >
+                        <div className={`rounded-md p-1.5 ${isSelected ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground"}`}>
+                          <SIcon className="h-4 w-4" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate">{sensor.name}</p>
+                          <p className="text-[11px] text-muted-foreground">{sensor.room} · {sensor.controlType}</p>
+                        </div>
+                        {isSelected && <CheckCircle2 className="h-4 w-4 text-primary shrink-0" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Action type */}
+            <div className="space-y-2">
+              <Label>Aktion</Label>
+              <Select value={formActionType} onValueChange={setFormActionType}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {ACTION_TYPES.map((at) => (
+                    <SelectItem key={at.value} value={at.value}>{at.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setAddOpen(false); setEditAutomation(null); }}>
+              Abbrechen
+            </Button>
+            <Button onClick={handleSave} disabled={saving}>
+              {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              {editAutomation ? "Speichern" : "Erstellen"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Delete Confirmation ── */}
+      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Automation löschen?</AlertDialogTitle>
+            <AlertDialogDescription>
+              „{deleteTarget?.name}" wird unwiderruflich gelöscht.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Abbrechen</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Löschen
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 };
