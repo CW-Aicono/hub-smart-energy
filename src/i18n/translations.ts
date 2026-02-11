@@ -20,6 +20,12 @@ export const translations = {
     es: "Datos de energía",
     nl: "Energiegegevens",
   },
+  "nav.liveValues": {
+    de: "Aktuelle Werte",
+    en: "Live Values",
+    es: "Valores actuales",
+    nl: "Actuele waarden",
+  },
   "nav.meters": {
     de: "Messstellen",
     en: "Meters",

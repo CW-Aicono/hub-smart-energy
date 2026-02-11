@@ -1,0 +1,318 @@
+import { useState, useEffect, useCallback, useMemo } from "react";
+import { Navigate } from "react-router-dom";
+import { useAuth } from "@/hooks/useAuth";
+import { useLocations } from "@/hooks/useLocations";
+import { useMeters } from "@/hooks/useMeters";
+import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Activity, RefreshCw, Search, Gauge, Zap, Flame, Droplets, Thermometer } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { formatEnergy } from "@/lib/formatEnergy";
+import { cn } from "@/lib/utils";
+
+const ENERGY_TYPE_CONFIG: Record<string, { label: string; icon: typeof Zap; colorClass: string }> = {
+  strom: { label: "Strom", icon: Zap, colorClass: "text-[hsl(var(--energy-strom))]" },
+  gas: { label: "Gas", icon: Flame, colorClass: "text-[hsl(var(--energy-gas))]" },
+  waerme: { label: "Wärme", icon: Thermometer, colorClass: "text-[hsl(var(--energy-waerme))]" },
+  wasser: { label: "Wasser", icon: Droplets, colorClass: "text-[hsl(var(--energy-wasser))]" },
+};
+
+interface MeterLiveValue {
+  meterId: string;
+  value: number | null;
+  loading: boolean;
+}
+
+const LiveValues = () => {
+  const { user, loading: authLoading } = useAuth();
+  const { locations, loading: locationsLoading } = useLocations();
+  const { meters, loading: metersLoading } = useMeters();
+
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedLocationId, setSelectedLocationId] = useState<string>("all");
+  const [selectedEnergyType, setSelectedEnergyType] = useState<string>("all");
+  const [selectedCaptureType, setSelectedCaptureType] = useState<string>("all");
+  const [liveValues, setLiveValues] = useState<Map<string, number>>(new Map());
+  const [manualValues, setManualValues] = useState<Map<string, { value: number; date: string }>>(new Map());
+  const [loadingLive, setLoadingLive] = useState(false);
+  const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
+
+  // Fetch latest manual readings for all meters
+  useEffect(() => {
+    if (!user) return;
+    const fetchLatestReadings = async () => {
+      const { data } = await supabase
+        .from("meter_readings")
+        .select("meter_id, value, reading_date")
+        .order("reading_date", { ascending: false });
+
+      if (data) {
+        const map = new Map<string, { value: number; date: string }>();
+        data.forEach((r: any) => {
+          if (!map.has(r.meter_id)) {
+            map.set(r.meter_id, { value: r.value, date: r.reading_date });
+          }
+        });
+        setManualValues(map);
+      }
+    };
+    fetchLatestReadings();
+  }, [user]);
+
+  // Fetch live values for automatic meters
+  const fetchLiveValues = useCallback(async () => {
+    const autoMeters = meters.filter(
+      (m) => !m.is_archived && m.capture_type === "automatic" && m.sensor_uuid && m.location_integration_id
+    );
+    if (autoMeters.length === 0) return;
+
+    setLoadingLive(true);
+    const newValues = new Map<string, number>();
+
+    // Group by integration
+    const byIntegration = new Map<string, typeof autoMeters>();
+    autoMeters.forEach((m) => {
+      const key = m.location_integration_id!;
+      const arr = byIntegration.get(key) || [];
+      arr.push(m);
+      byIntegration.set(key, arr);
+    });
+
+    for (const [integrationId, intMeters] of byIntegration) {
+      try {
+        const { data, error } = await supabase.functions.invoke("loxone-api", {
+          body: { locationIntegrationId: integrationId, action: "getSensors" },
+        });
+        if (error || !data?.success) continue;
+
+        for (const meter of intMeters) {
+          const sensor = data.sensors?.find((s: any) => s.id === meter.sensor_uuid);
+          if (sensor && sensor.value !== undefined) {
+            const numVal = typeof sensor.value === "string" ? parseFloat(sensor.value) : sensor.value;
+            if (!isNaN(numVal)) {
+              newValues.set(meter.id, numVal);
+            }
+          }
+        }
+      } catch (err) {
+        console.warn(`Failed to fetch live sensors for integration ${integrationId}:`, err);
+      }
+    }
+
+    setLiveValues(newValues);
+    setLastRefresh(new Date());
+    setLoadingLive(false);
+  }, [meters]);
+
+  useEffect(() => {
+    if (meters.length > 0) {
+      fetchLiveValues();
+      const interval = setInterval(fetchLiveValues, 300000);
+      return () => clearInterval(interval);
+    }
+  }, [fetchLiveValues, meters.length]);
+
+  // Filter meters
+  const filteredMeters = useMemo(() => {
+    return meters
+      .filter((m) => !m.is_archived)
+      .filter((m) => {
+        if (selectedLocationId !== "all" && m.location_id !== selectedLocationId) return false;
+        if (selectedEnergyType !== "all" && m.energy_type !== selectedEnergyType) return false;
+        if (selectedCaptureType !== "all" && m.capture_type !== selectedCaptureType) return false;
+        if (searchQuery) {
+          const q = searchQuery.toLowerCase();
+          const loc = locations.find((l) => l.id === m.location_id);
+          return (
+            m.name.toLowerCase().includes(q) ||
+            (m.meter_number || "").toLowerCase().includes(q) ||
+            (loc?.name || "").toLowerCase().includes(q)
+          );
+        }
+        return true;
+      });
+  }, [meters, selectedLocationId, selectedEnergyType, selectedCaptureType, searchQuery, locations]);
+
+  const getValue = (meter: typeof meters[0]): { value: number | null; source: "live" | "manual" | "none"; date?: string } => {
+    if (meter.capture_type === "automatic" && liveValues.has(meter.id)) {
+      return { value: liveValues.get(meter.id)!, source: "live" };
+    }
+    const manual = manualValues.get(meter.id);
+    if (manual) {
+      return { value: manual.value, source: "manual", date: manual.date };
+    }
+    return { value: null, source: "none" };
+  };
+
+  if (authLoading || locationsLoading || metersLoading) {
+    return (
+      <div className="flex min-h-screen bg-background">
+        <DashboardSidebar />
+        <main className="flex-1 overflow-auto p-6">
+          <Skeleton className="h-8 w-64 mb-6" />
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {[...Array(6)].map((_, i) => <Skeleton key={i} className="h-32" />)}
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  if (!user) return <Navigate to="/auth" replace />;
+
+  return (
+    <div className="flex min-h-screen bg-background">
+      <DashboardSidebar />
+      <main className="flex-1 overflow-auto">
+        <header className="border-b p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl font-display font-bold flex items-center gap-2">
+                <Activity className="h-6 w-6 text-primary" />
+                Aktuelle Werte
+              </h1>
+              <p className="text-sm text-muted-foreground mt-1">
+                Live-Übersicht aller Messstellen und deren aktuelle Werte
+              </p>
+            </div>
+            <div className="flex items-center gap-3">
+              {lastRefresh && (
+                <span className="text-xs text-muted-foreground">
+                  Aktualisiert: {lastRefresh.toLocaleTimeString("de-DE")}
+                </span>
+              )}
+              <Button variant="outline" size="sm" onClick={fetchLiveValues} disabled={loadingLive}>
+                <RefreshCw className={cn("h-4 w-4 mr-2", loadingLive && "animate-spin")} />
+                Aktualisieren
+              </Button>
+            </div>
+          </div>
+        </header>
+
+        <div className="p-6 space-y-6">
+          {/* Filters */}
+          <div className="flex flex-wrap gap-3">
+            <div className="relative flex-1 min-w-[200px] max-w-sm">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Zähler suchen..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-9"
+              />
+            </div>
+            <Select value={selectedLocationId} onValueChange={setSelectedLocationId}>
+              <SelectTrigger className="w-[200px]">
+                <SelectValue placeholder="Standort" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Alle Standorte</SelectItem>
+                {locations.map((loc) => (
+                  <SelectItem key={loc.id} value={loc.id}>{loc.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={selectedEnergyType} onValueChange={setSelectedEnergyType}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Energieart" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Alle Energiearten</SelectItem>
+                {Object.entries(ENERGY_TYPE_CONFIG).map(([key, cfg]) => (
+                  <SelectItem key={key} value={key}>{cfg.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={selectedCaptureType} onValueChange={setSelectedCaptureType}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Erfassung" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Alle Typen</SelectItem>
+                <SelectItem value="automatic">Automatisch</SelectItem>
+                <SelectItem value="manual">Manuell</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Summary */}
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Gauge className="h-4 w-4" />
+            <span>{filteredMeters.length} Messstelle{filteredMeters.length !== 1 ? "n" : ""}</span>
+          </div>
+
+          {/* Meter Cards */}
+          {filteredMeters.length === 0 ? (
+            <Card>
+              <CardContent className="py-12 text-center text-muted-foreground">
+                Keine Messstellen gefunden.
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {filteredMeters.map((meter) => {
+                const { value, source, date } = getValue(meter);
+                const config = ENERGY_TYPE_CONFIG[meter.energy_type] || ENERGY_TYPE_CONFIG.strom;
+                const Icon = config.icon;
+                const location = locations.find((l) => l.id === meter.location_id);
+
+                return (
+                  <Card key={meter.id} className="relative overflow-hidden">
+                    <CardHeader className="pb-2">
+                      <div className="flex items-start justify-between">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <Icon className={cn("h-4 w-4 shrink-0", config.colorClass)} />
+                          <CardTitle className="text-sm font-medium truncate">{meter.name}</CardTitle>
+                        </div>
+                        <Badge variant={source === "live" ? "default" : "secondary"} className="shrink-0 text-[10px] px-1.5 py-0">
+                          {source === "live" ? "Live" : source === "manual" ? "Manuell" : "–"}
+                        </Badge>
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-2">
+                        <div className="text-2xl font-bold tracking-tight">
+                          {value !== null ? (
+                            <>
+                              {meter.unit === "kWh" || meter.unit === "Wh"
+                                ? formatEnergy(value, meter.unit === "Wh" ? "Wh" : "Wh")
+                                : `${value.toLocaleString("de-DE", { maximumFractionDigits: 2 })} ${meter.unit}`}
+                            </>
+                          ) : (
+                            <span className="text-muted-foreground text-lg">Kein Wert</span>
+                          )}
+                        </div>
+                        <div className="space-y-1">
+                          <p className="text-xs text-muted-foreground truncate">
+                            {location?.name || "–"}
+                          </p>
+                          {meter.meter_number && (
+                            <p className="text-xs text-muted-foreground">
+                              Nr. {meter.meter_number}
+                            </p>
+                          )}
+                          {source === "manual" && date && (
+                            <p className="text-xs text-muted-foreground">
+                              Stand: {new Date(date).toLocaleDateString("de-DE")}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </main>
+    </div>
+  );
+};
+
+export default LiveValues;

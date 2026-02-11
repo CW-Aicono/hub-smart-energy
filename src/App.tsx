@@ -35,6 +35,7 @@ import GettingStarted from "./pages/GettingStarted";
 import ChargingPoints from "./pages/ChargingPoints";
 import ChargingBilling from "./pages/ChargingBilling";
 import Automation from "./pages/Automation";
+import LiveValues from "./pages/LiveValues";
 import UpdateBanner from "./components/UpdateBanner";
 // Import Leaflet CSS globally
 import "leaflet/dist/leaflet.css";
@@ -63,6 +64,7 @@ const App = () => (
                   <Route path="/locations/:id" element={<LocationDetail />} />
                   <Route path="/energy-data" element={<EnergyData />} />
                   <Route path="/meters" element={<MetersOverview />} />
+                  <Route path="/live-values" element={<LiveValues />} />
                   <Route path="/integrations" element={<Integrations />} />
                   <Route path="/profile" element={<Profile />} />
                   <Route path="/help" element={<Help />} />
