@@ -39,6 +39,7 @@ export function useEnergyData(locationId?: string | null) {
   const [readings, setReadings] = useState<ReadingRow[]>([]);
   const [liveReadings, setLiveReadings] = useState<ReadingRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [liveLoading, setLiveLoading] = useState(true);
 
   // Fetch manual readings from DB
   useEffect(() => {
@@ -65,10 +66,14 @@ export function useEnergyData(locationId?: string | null) {
 
   // Fetch live sensor values for automatic meters
   const fetchLiveValues = useCallback(async () => {
+    setLiveLoading(true);
     const activeAutoMeters = meters.filter(
       (m) => !m.is_archived && m.capture_type === "automatic" && m.sensor_uuid && m.location_integration_id
     );
-    if (activeAutoMeters.length === 0) return;
+    if (activeAutoMeters.length === 0) {
+      setLiveLoading(false);
+      return;
+    }
 
     // Group by integration
     const byIntegration = new Map<string, Meter[]>();
@@ -119,6 +124,7 @@ export function useEnergyData(locationId?: string | null) {
     }
 
     setLiveReadings(newLiveReadings);
+    setLiveLoading(false);
   }, [meters]);
 
   useEffect(() => {
@@ -241,6 +247,7 @@ export function useEnergyData(locationId?: string | null) {
   }, [filteredReadings, meterMap]);
 
   const hasData = filteredReadings.length > 0;
+  const isLoading = loading || liveLoading;
 
   return {
     monthlyData,
@@ -248,7 +255,7 @@ export function useEnergyData(locationId?: string | null) {
     energyDistribution,
     energyTotals,
     readings: filteredReadings,
-    loading,
+    loading: isLoading,
     hasData,
   };
 }
