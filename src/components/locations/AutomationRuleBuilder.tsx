@@ -572,19 +572,31 @@ export function AutomationRuleBuilder({
               {conditions.map((cond, idx) => (
                 <div key={cond.id}>
                   {idx > 0 && (
-                    <div className="flex items-center justify-center py-1">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const next = cond.connector === "AND" ? "OR" : "AND";
-                          updateCondition(cond.id, { ...cond, connector: next });
-                        }}
-                        className="inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-mono font-semibold transition-colors hover:bg-accent cursor-pointer select-none"
-                      >
-                        <span className={cond.connector === "AND" ? "text-foreground" : "text-muted-foreground"}>UND</span>
-                        <span className="mx-1.5 text-muted-foreground/40">/</span>
-                        <span className={cond.connector === "OR" ? "text-foreground" : "text-muted-foreground"}>ODER</span>
-                      </button>
+                    <div className="flex items-center justify-center py-1.5">
+                      <div className="inline-flex items-center rounded-full border overflow-hidden">
+                        <button
+                          type="button"
+                          onClick={() => updateCondition(cond.id, { ...cond, connector: "AND" })}
+                          className={`px-4 py-1.5 text-xs font-semibold transition-colors ${
+                            cond.connector !== "OR"
+                              ? "bg-green-500 text-white"
+                              : "text-muted-foreground hover:bg-muted"
+                          }`}
+                        >
+                          UND
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => updateCondition(cond.id, { ...cond, connector: "OR" })}
+                          className={`px-4 py-1.5 text-xs font-semibold transition-colors ${
+                            cond.connector === "OR"
+                              ? "bg-green-500 text-white"
+                              : "text-muted-foreground hover:bg-muted"
+                          }`}
+                        >
+                          ODER
+                        </button>
+                      </div>
                     </div>
                   )}
                   <ConditionCard
