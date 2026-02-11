@@ -9,6 +9,7 @@ import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
 import { FloorList } from "@/components/locations/FloorList";
 import { AddFloorDialog } from "@/components/locations/AddFloorDialog";
 import { LocationIntegrationsList } from "@/components/integrations/LocationIntegrationsList";
+import { LocationAutomation } from "@/components/locations/LocationAutomation";
 import { MeterManagement } from "@/components/locations/MeterManagement";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -215,20 +216,7 @@ const LocationDetail = () => {
           <MeterManagement locationId={location.id} />
 
           {/* Automation */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Cpu className="h-5 w-5" />
-                Automation
-              </CardTitle>
-              <CardDescription>
-                Automatisierte Steuerungsszenarien für diesen Standort
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground py-4">Noch keine Automationen konfiguriert.</p>
-            </CardContent>
-          </Card>
+          <LocationAutomation locationId={location.id} />
 
           {/* Integrations Card */}
           <LocationIntegrationsList locationId={location.id} />
