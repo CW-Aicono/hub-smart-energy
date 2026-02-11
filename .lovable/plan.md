@@ -1,36 +1,91 @@
 
-## Begehung im Dashboard ermöglichen
+# Aktuelle Werte: Live-Intervall, Tagesverbrauch und Wertformatierung
 
-### Problem
-Aktuell wird die First-Person-Begehung im Dashboard durch zwei Bedingungen blockiert:
-1. Die Controls-Bar mit dem "Begehung starten"-Button wird im `compact`-Modus nicht angezeigt
-2. Die `Floor3DControls` (WASD-Steuerung) werden nur gerendert, wenn `readOnly` **nicht** aktiv ist
+## Probleme
 
-### Loesung
+1. **Nachkommastellen alle ",00"**: Die Loxone Edge Function gibt `value` als **formatierten deutschen String** zuruck (z.B. `"85,58"`). In `LiveValues.tsx` wird darauf `parseFloat("85,58")` angewandt -- das stoppt beim Komma und liefert `85`, daher immer `,00`.
 
-**Datei: `src/components/locations/FloorPlan3DViewer.tsx`**
+2. **Intervall zu lang**: Aktuell 5 Minuten (300.000 ms).
 
-1. **Begehungs-Button auch im readOnly/compact-Modus anzeigen**: Ein schlanker, schwebender Button wird ueber dem 3D-Canvas eingeblendet, wenn `compact` aktiv ist -- damit der Benutzer die Begehung starten und beenden kann, ohne die volle Admin-Toolbar zu brauchen.
+3. **Tagesverbrauch fehlt**: Die Loxone-API liefert bereits `totalDay` (Loxone-Output "Rd"), aber dieser Wert wird im Sensor-Objekt nicht an das Frontend weitergegeben.
 
-2. **Floor3DControls auch im readOnly-Modus erlauben**: Die Bedingung wird von `!readOnly && isWalking` auf `isWalking` geaendert. Die Begehung ist rein lesend (nur Kamera-Bewegung), es werden keine Daten veraendert -- daher ist sie im readOnly-Modus unbedenklich.
+## Geplante Anderungen
 
-3. **OrbitControls bei Begehung deaktivieren**: Die bestehende Bedingung `readOnly && !isWalking` stellt bereits sicher, dass OrbitControls waehrend der Begehung ausgeschaltet werden.
+### 1. Edge Function erweitern (`supabase/functions/loxone-api/index.ts`)
 
-### Aenderungen im Detail
+- Dem Sensor-Objekt zwei neue Felder hinzufugen:
+  - `rawValue`: numerischer Rohwert (nicht formatiert) fur prazise Frontend-Anzeige
+  - `totalDay`: Tagesverbrauch als Zahl (aus dem "Rd"-Output / "totalDay"-State)
+- Bestehende Felder bleiben unverandert (Abwartskompatibilitat)
+
+### 2. LiveValues.tsx grundlich uberarbeiten
+
+**Datenabfrage:**
+- Intervall von 300.000 ms auf **30.000 ms** (30 Sekunden) reduzieren
+- Manueller Refresh-Button ist bereits vorhanden
+
+**Wertauslesen:**
+- Statt `parseFloat(sensor.value)` das neue `sensor.rawValue` verwenden (numerisch, kein Formatierungsproblem)
+- Zusatzlich `sensor.totalDay` fur den Tagesverbrauch speichern
+
+**Kachel-Anzeige (pro Meter):**
+- Aktueller Wert mit 2 Nachkommastellen
+- Bei Wasser/Gas: Label **"Durchfluss"** hinter dem aktuellen Wert
+- Neue Zeile: Tagesverbrauch in kWh (bzw. m3) mit Label **"Gesamt heute"**
+- Alle Werte mit `toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })`
+
+### 3. Technische Details
+
+**Edge Function -- neues Sensor-Objekt (Zeilen ~430-444):**
 
 ```text
-Zeile 422: !readOnly && isWalking  -->  isWalking
-           (erlaubt Begehung auch im Dashboard)
-
-Zeile 527-571: Zusaetzlicher schwebender Button im compact-Modus
-               (Play/Stop-Button unten links ueber dem Canvas)
-
-Zeile 607-615: Status-Bar auch im compact/readOnly-Modus anzeigen
-               (WASD-Hinweise)
+sensors.push({
+  ...bisherige Felder...,
+  rawValue: stateData?.value ?? null,        // NEU: numerischer Rohwert
+  totalDay: mappedStates["totalDay"] ?? null, // NEU: Tagesverbrauch
+});
 ```
 
-### Ergebnis
-- Im Dashboard erscheint ein schwebender "Begehung starten"-Button ueber dem 3D-Modell
-- Klick aktiviert die First-Person-Steuerung (WASD + Maus)
-- Ein "Beenden"-Button erscheint zum Verlassen
-- Keine Admin-Funktionen (Raum-Editor, Rotation, Meter-Verschiebung) werden freigeschaltet
+Dazu muss `mappedStates` aus dem `stateResults`-Objekt heraus zuganglich gemacht werden. Aktuell wird nur primary/secondary gespeichert -- `totalDay` muss ebenfalls in `stateResults` durchgereicht werden.
+
+**LiveValues.tsx -- State erweitern:**
+
+```text
+// Statt Map<string, number> wird Map<string, { value: number; totalDay: number | null }>
+const [liveValues, setLiveValues] = useState<Map<string, { value: number; totalDay: number | null }>>(new Map());
+
+// Intervall
+const interval = setInterval(fetchLiveValues, 30000); // 30 Sekunden
+
+// Sensor-Wert auslesen (rawValue statt value)
+const numVal = typeof sensor.rawValue === "number" ? sensor.rawValue : parseFloat(String(sensor.rawValue));
+const totalDay = typeof sensor.totalDay === "number" ? sensor.totalDay : null;
+newValues.set(meter.id, { value: numVal, totalDay });
+```
+
+**LiveValues.tsx -- Kachel-Rendering:**
+
+```text
+// Aktueller Wert
+<div className="text-2xl font-bold">
+  {formattedValue} {meter.unit}
+  {(meter.energy_type === "wasser" || meter.energy_type === "gas") && (
+    <span className="text-sm font-normal text-muted-foreground ml-1">Durchfluss</span>
+  )}
+</div>
+
+// Tagesverbrauch
+{totalDay !== null && (
+  <div className="text-sm text-muted-foreground">
+    {formattedTotalDay} {meter.unit}
+    <span className="ml-1">Gesamt heute</span>
+  </div>
+)}
+```
+
+### Zusammenfassung der Dateianderungen
+
+| Datei | Anderung |
+|---|---|
+| `supabase/functions/loxone-api/index.ts` | `rawValue` und `totalDay` zum Sensor-Objekt hinzufugen; `mappedStates` im stateResults durchreichen |
+| `src/pages/LiveValues.tsx` | Intervall auf 30s; `rawValue` statt `value` parsen; `totalDay` anzeigen; Labels "Durchfluss" und "Gesamt heute" |
