@@ -3,6 +3,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useSuperAdmin } from "@/hooks/useSuperAdmin";
 import { useTenantModules, ALL_MODULES } from "@/hooks/useTenantModules";
 import { useTenantLicense } from "@/hooks/useTenantLicense";
+import { useModulePrices } from "@/hooks/useModulePrices";
 import SuperAdminSidebar from "@/components/super-admin/SuperAdminSidebar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -11,7 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -25,6 +26,8 @@ const SuperAdminTenantDetail = () => {
   const { isSuperAdmin, loading: roleLoading } = useSuperAdmin();
   const { modules, toggleModule } = useTenantModules(id ?? null);
   const { license, upsertLicense } = useTenantLicense(id ?? null);
+  const { getPrice: getGlobalPrice } = useModulePrices();
+  const queryClient = useQueryClient();
 
   const [licenseForm, setLicenseForm] = useState<Record<string, string | number>>({});
 
@@ -60,6 +63,38 @@ const SuperAdminTenantDetail = () => {
     const mod = modules.find((m) => m.module_code === code);
     return mod ? mod.is_enabled : false;
   };
+
+  const getModulePriceOverride = (code: string): number | null => {
+    const mod = modules.find((m) => m.module_code === code);
+    return mod?.price_override != null ? Number(mod.price_override) : null;
+  };
+
+  const getEffectivePrice = (code: string): number => {
+    const override = getModulePriceOverride(code);
+    return override != null ? override : getGlobalPrice(code);
+  };
+
+  const updatePriceOverride = async (moduleCode: string, value: number | null) => {
+    if (!id) return;
+    const existing = modules.find((m) => m.module_code === moduleCode);
+    if (existing) {
+      await supabase
+        .from("tenant_modules")
+        .update({ price_override: value })
+        .eq("id", existing.id);
+    } else {
+      await supabase
+        .from("tenant_modules")
+        .insert({ tenant_id: id, module_code: moduleCode, is_enabled: false, price_override: value });
+    }
+    queryClient.invalidateQueries({ queryKey: ["tenant-modules", id] });
+    toast.success("Preis aktualisiert");
+  };
+
+  // Calculate total monthly cost
+  const totalMonthly = ALL_MODULES
+    .filter((m) => !("alwaysOn" in m) && getModuleEnabled(m.code))
+    .reduce((sum, m) => sum + getEffectivePrice(m.code), 0);
 
   const handleSaveLicense = () => {
     upsertLicense.mutate(licenseForm);
@@ -98,23 +133,84 @@ const SuperAdminTenantDetail = () => {
               <TabsTrigger value="users">Benutzer</TabsTrigger>
             </TabsList>
 
-            <TabsContent value="modules" className="mt-6">
+            <TabsContent value="modules" className="mt-6 space-y-6">
               <Card>
-                <CardHeader><CardTitle>Module freischalten</CardTitle></CardHeader>
-                <CardContent className="space-y-4">
-                  {ALL_MODULES.map((mod) => (
-                    <div key={mod.code} className="flex items-center justify-between">
-                      <Label className="text-base">{mod.label}</Label>
-                      {"alwaysOn" in mod ? (
-                        <Badge variant="secondary">Immer aktiv</Badge>
-                      ) : (
-                        <Switch
-                          checked={getModuleEnabled(mod.code)}
-                          onCheckedChange={(checked) => toggleModule.mutate({ moduleCode: mod.code, enabled: checked })}
-                        />
-                      )}
+                <CardHeader><CardTitle>Module freischalten & Preise</CardTitle></CardHeader>
+                <CardContent>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Modul</TableHead>
+                        <TableHead className="w-24 text-center">Aktiv</TableHead>
+                        <TableHead className="w-36 text-right">Globalpreis</TableHead>
+                        <TableHead className="w-44 text-right">Individueller Preis</TableHead>
+                        <TableHead className="w-32 text-right">Effektiv</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {ALL_MODULES.map((mod) => {
+                        const isAlwaysOn = "alwaysOn" in mod;
+                        const globalPrice = getGlobalPrice(mod.code);
+                        const override = getModulePriceOverride(mod.code);
+                        const effective = getEffectivePrice(mod.code);
+                        return (
+                          <TableRow key={mod.code}>
+                            <TableCell className="font-medium">{mod.label}</TableCell>
+                            <TableCell className="text-center">
+                              {isAlwaysOn ? (
+                                <Badge variant="secondary">Immer</Badge>
+                              ) : (
+                                <Switch
+                                  checked={getModuleEnabled(mod.code)}
+                                  onCheckedChange={(checked) => toggleModule.mutate({ moduleCode: mod.code, enabled: checked })}
+                                />
+                              )}
+                            </TableCell>
+                            <TableCell className="text-right text-muted-foreground">
+                              {isAlwaysOn ? "–" : `${globalPrice.toFixed(2)} €`}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              {isAlwaysOn ? "–" : (
+                                <div className="flex items-center justify-end gap-1">
+                                  <Input
+                                    type="number"
+                                    min={0}
+                                    step={0.01}
+                                    placeholder="Standard"
+                                    className="w-28 text-right h-8 text-sm"
+                                    defaultValue={override != null ? override : ""}
+                                    onBlur={(e) => {
+                                      const val = e.target.value.trim();
+                                      if (val === "") {
+                                        if (override != null) updatePriceOverride(mod.code, null);
+                                      } else {
+                                        const num = parseFloat(val);
+                                        if (!isNaN(num) && num !== override) updatePriceOverride(mod.code, num);
+                                      }
+                                    }}
+                                  />
+                                  <span className="text-xs text-muted-foreground">€</span>
+                                </div>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-right font-medium">
+                              {isAlwaysOn ? "–" : (
+                                <span className={override != null ? "text-primary" : ""}>
+                                  {effective.toFixed(2)} €
+                                </span>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                  <div className="flex justify-end mt-4 pt-4 border-t">
+                    <div className="text-right">
+                      <p className="text-sm text-muted-foreground">Monatliche Gesamtkosten (aktive Module)</p>
+                      <p className="text-xl font-bold">{totalMonthly.toFixed(2)} €</p>
                     </div>
-                  ))}
+                  </div>
                 </CardContent>
               </Card>
             </TabsContent>

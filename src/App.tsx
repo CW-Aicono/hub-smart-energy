@@ -28,6 +28,7 @@ import SuperAdminTenantDetail from "./pages/SuperAdminTenantDetail";
 import SuperAdminStatistics from "./pages/SuperAdminStatistics";
 import SuperAdminBilling from "./pages/SuperAdminBilling";
 import SuperAdminSupport from "./pages/SuperAdminSupport";
+import SuperAdminModulePricing from "./pages/SuperAdminModulePricing";
 import SuperAdminUsers from "./pages/SuperAdminUsers";
 import SuperAdminRoles from "./pages/SuperAdminRoles";
 import SuperAdminMap from "./pages/SuperAdminMap";
@@ -81,6 +82,7 @@ const App = () => (
                   <Route path="/super-admin/roles" element={<SuperAdminRoles />} />
                   <Route path="/super-admin/map" element={<SuperAdminMap />} />
                   <Route path="/super-admin/billing" element={<SuperAdminBilling />} />
+                  <Route path="/super-admin/module-pricing" element={<SuperAdminModulePricing />} />
                   <Route path="/super-admin/support" element={<SuperAdminSupport />} />
                   <Route path="/charging/points" element={<M><ChargingPoints /></M>} />
                   <Route path="/charging/billing" element={<M><ChargingBilling /></M>} />
