@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -9,8 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ENERGY_CHART_COLORS } from "@/lib/energyTypeColors";
 import { getEnergyUnit } from "@/lib/formatEnergy";
 import { startOfDay, startOfWeek, startOfMonth, startOfQuarter, startOfYear } from "date-fns";
-
-type TimePeriod = "day" | "week" | "month" | "quarter" | "year" | "all";
+import { useDashboardFilter, TimePeriod } from "@/hooks/useDashboardFilter";
 
 const PERIOD_LABELS: Record<TimePeriod, string> = {
   day: "Tag",
@@ -49,7 +48,7 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
   const { locations } = useLocations();
   const { readings, loading, hasData } = useEnergyData(locationId);
   const { meters } = useMeters();
-  const [period, setPeriod] = useState<TimePeriod>("day");
+  const { selectedPeriod: period, setSelectedPeriod: setPeriod } = useDashboardFilter();
   const selectedLocation = locationId ? locations.find((l) => l.id === locationId) : null;
 
   const subtitle = selectedLocation
