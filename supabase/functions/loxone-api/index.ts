@@ -321,7 +321,7 @@ serve(async (req) => {
 
       // Batch fetch all states using control UUIDs
       const stateResults: Record<string, StateValueResult> = {};
-      const batchSize = 10;
+      const batchSize = 20;
 
       for (let i = 0; i < controlUuids.length; i += batchSize) {
         const batch = controlUuids.slice(i, i + batchSize);

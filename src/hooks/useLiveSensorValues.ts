@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback } from "react";
+import { useMemo } from "react";
 import { useFloorSensorPositions, FloorSensorPosition } from "@/hooks/useFloorSensorPositions";
-import { supabase } from "@/integrations/supabase/client";
+import { useLoxoneSensors } from "@/hooks/useLoxoneSensors";
 
 export interface LiveSensorValue {
   id: string;
@@ -20,68 +20,58 @@ interface UseLiveSensorValuesReturn {
 
 export function useLiveSensorValues(floorId: string | undefined): UseLiveSensorValuesReturn {
   const { positions } = useFloorSensorPositions(floorId);
-  const [sensorValues, setSensorValues] = useState<LiveSensorValue[]>([]);
-  const [sensorValuesMap, setSensorValuesMap] = useState<Map<string, LiveSensorValue>>(new Map());
-  const [loadingValues, setLoadingValues] = useState(false);
-  const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
 
-  const fetchSensorValues = useCallback(async () => {
-    if (!positions.length) return;
+  // Group positions by integration
+  const integrationIds = useMemo(() => {
+    const ids = new Set<string>();
+    positions.forEach((pos) => ids.add(pos.location_integration_id));
+    return Array.from(ids);
+  }, [positions]);
 
-    setLoadingValues(true);
+  // Use centralized cached sensor queries
+  const sensorQueries = integrationIds.map((id) => useLoxoneSensors(id));
+
+  const { sensorValues, sensorValuesMap } = useMemo(() => {
     const allValues: LiveSensorValue[] = [];
     const valuesMap = new Map<string, LiveSensorValue>();
 
-    try {
-      // Group positions by integration
-      const byIntegration = new Map<string, FloorSensorPosition[]>();
-      positions.forEach((pos) => {
-        const existing = byIntegration.get(pos.location_integration_id) || [];
-        existing.push(pos);
-        byIntegration.set(pos.location_integration_id, existing);
-      });
-
-      for (const [integrationId, intPositions] of byIntegration) {
-        try {
-          const { data, error } = await supabase.functions.invoke("loxone-api", {
-            body: { locationIntegrationId: integrationId, action: "getSensors" },
-          });
-          if (error || !data?.success) continue;
-
-          for (const pos of intPositions) {
-            const sensor = data.sensors?.find((s: any) => s.id === pos.sensor_uuid);
-            if (sensor) {
-              const val: LiveSensorValue = {
-                id: sensor.id,
-                name: pos.sensor_name,
-                value: sensor.value,
-                unit: sensor.unit,
-              };
-              allValues.push(val);
-              valuesMap.set(pos.sensor_uuid, val);
-            }
-          }
-        } catch (err) {
-          console.warn(`Failed to fetch sensors for integration ${integrationId}:`, err);
-        }
+    // Build integration -> sensors map
+    const sensorsByIntegration = new Map<string, any[]>();
+    integrationIds.forEach((id, idx) => {
+      const query = sensorQueries[idx];
+      if (query.data) {
+        sensorsByIntegration.set(id, query.data);
       }
+    });
 
-      setSensorValues(allValues);
-      setSensorValuesMap(valuesMap);
-      setLastRefresh(new Date());
-    } finally {
-      setLoadingValues(false);
-    }
-  }, [positions]);
+    for (const pos of positions) {
+      const sensors = sensorsByIntegration.get(pos.location_integration_id);
+      if (!sensors) continue;
 
-  // Auto-fetch and refresh every 5 minutes
-  useEffect(() => {
-    if (positions.length > 0) {
-      fetchSensorValues();
-      const interval = setInterval(fetchSensorValues, 300000);
-      return () => clearInterval(interval);
+      const sensor = sensors.find((s: any) => s.id === pos.sensor_uuid);
+      if (sensor) {
+        const val: LiveSensorValue = {
+          id: sensor.id,
+          name: pos.sensor_name,
+          value: sensor.value,
+          unit: sensor.unit,
+        };
+        allValues.push(val);
+        valuesMap.set(pos.sensor_uuid, val);
+      }
     }
-  }, [positions, fetchSensorValues]);
+
+    return { sensorValues: allValues, sensorValuesMap: valuesMap };
+  }, [positions, integrationIds, sensorQueries]);
+
+  const loadingValues = sensorQueries.some((q) => q.isLoading);
+  const lastRefresh = sensorQueries.some((q) => q.data)
+    ? new Date(Math.max(...sensorQueries.filter((q) => q.dataUpdatedAt).map((q) => q.dataUpdatedAt)))
+    : null;
+
+  const refreshSensorValues = async () => {
+    await Promise.all(sensorQueries.map((q) => q.refetch()));
+  };
 
   return {
     positions,
@@ -89,6 +79,6 @@ export function useLiveSensorValues(floorId: string | undefined): UseLiveSensorV
     sensorValuesMap,
     loadingValues,
     lastRefresh,
-    refreshSensorValues: fetchSensorValues,
+    refreshSensorValues,
   };
 }

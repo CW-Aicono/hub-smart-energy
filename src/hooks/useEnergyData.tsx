@@ -1,8 +1,9 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
 import { useMeters } from "./useMeters";
 import { Meter } from "./useMeters";
+import { useLoxoneSensors } from "./useLoxoneSensors";
 
 export interface MonthlyEnergyData {
   month: string;
@@ -39,9 +40,7 @@ export function useEnergyData(locationId?: string | null) {
   const { user } = useAuth();
   const { meters } = useMeters();
   const [readings, setReadings] = useState<ReadingRow[]>([]);
-  const [liveReadings, setLiveReadings] = useState<ReadingRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [liveLoading, setLiveLoading] = useState(true);
 
   // Fetch manual readings from DB
   useEffect(() => {
@@ -66,84 +65,76 @@ export function useEnergyData(locationId?: string | null) {
     fetchReadings();
   }, [user]);
 
-  // Fetch live sensor values for automatic meters
-  const fetchLiveValues = useCallback(async () => {
-    setLiveLoading(true);
+  // Group automatic meters by integration ID
+  const integrationIds = useMemo(() => {
+    const ids = new Set<string>();
+    meters.forEach((m) => {
+      if (!m.is_archived && m.capture_type === "automatic" && m.sensor_uuid && m.location_integration_id) {
+        ids.add(m.location_integration_id);
+      }
+    });
+    return Array.from(ids);
+  }, [meters]);
+
+  // Use centralized cached sensor queries (one per integration)
+  const sensorQueries = integrationIds.map((id) => useLoxoneSensors(id));
+
+  // Build live readings from cached sensor data
+  const liveReadings = useMemo(() => {
     const activeAutoMeters = meters.filter(
       (m) => !m.is_archived && m.capture_type === "automatic" && m.sensor_uuid && m.location_integration_id
     );
-    if (activeAutoMeters.length === 0) {
-      setLiveLoading(false);
-      return;
-    }
-
-    // Group by integration
-    const byIntegration = new Map<string, Meter[]>();
-    activeAutoMeters.forEach((m) => {
-      const key = m.location_integration_id!;
-      const arr = byIntegration.get(key) || [];
-      arr.push(m);
-      byIntegration.set(key, arr);
-    });
+    if (activeAutoMeters.length === 0) return [];
 
     const now = new Date().toISOString();
     const newLiveReadings: ReadingRow[] = [];
 
-    for (const [integrationId, intMeters] of byIntegration) {
-      try {
-        const { data, error } = await supabase.functions.invoke("loxone-api", {
-          body: { locationIntegrationId: integrationId, action: "getSensors" },
-        });
-        if (error || !data?.success) continue;
+    // Build a map of integration ID -> sensors from query results
+    const sensorsByIntegration = new Map<string, any[]>();
+    integrationIds.forEach((id, idx) => {
+      const query = sensorQueries[idx];
+      if (query.data) {
+        sensorsByIntegration.set(id, query.data);
+      }
+    });
 
-      for (const meter of intMeters) {
-          const sensor = data.sensors?.find((s: any) => s.id === meter.sensor_uuid);
-          if (sensor) {
-            // Prefer rawValue (numeric), fall back to parsing value string
-            let numVal: number;
-            if (typeof sensor.rawValue === "number") {
-              numVal = sensor.rawValue;
-            } else if (typeof sensor.rawValue === "string") {
-              numVal = parseFloat(sensor.rawValue.replace(",", "."));
-            } else if (typeof sensor.value === "string") {
-              numVal = parseFloat(sensor.value.replace(",", "."));
-            } else {
-              numVal = typeof sensor.value === "number" ? sensor.value : NaN;
-            }
+    for (const meter of activeAutoMeters) {
+      const sensors = sensorsByIntegration.get(meter.location_integration_id!);
+      if (!sensors) continue;
 
-            if (!isNaN(numVal)) {
-              newLiveReadings.push({
-                meter_id: meter.id,
-                value: numVal,
-                reading_date: now,
-              });
-            }
-          }
+      const sensor = sensors.find((s: any) => s.id === meter.sensor_uuid);
+      if (sensor) {
+        let numVal: number;
+        if (typeof sensor.rawValue === "number") {
+          numVal = sensor.rawValue;
+        } else if (typeof sensor.rawValue === "string") {
+          numVal = parseFloat(sensor.rawValue.replace(",", "."));
+        } else if (typeof sensor.value === "string") {
+          numVal = parseFloat(sensor.value.replace(",", "."));
+        } else {
+          numVal = typeof sensor.value === "number" ? sensor.value : NaN;
         }
-      } catch (err) {
-        console.warn(`Failed to fetch live sensors for integration ${integrationId}:`, err);
+
+        if (!isNaN(numVal)) {
+          newLiveReadings.push({
+            meter_id: meter.id,
+            value: numVal,
+            reading_date: now,
+          });
+        }
       }
     }
 
-    setLiveReadings(newLiveReadings);
-    setLiveLoading(false);
-  }, [meters]);
+    return newLiveReadings;
+  }, [meters, integrationIds, sensorQueries]);
 
-  useEffect(() => {
-    if (meters.length > 0) {
-      fetchLiveValues();
-      const interval = setInterval(fetchLiveValues, 300000); // 5 min
-      return () => clearInterval(interval);
-    }
-  }, [fetchLiveValues, meters.length]);
+  const liveLoading = sensorQueries.some((q) => q.isLoading);
 
   // Combine manual readings + live readings for automatic meters
   const allReadings = useMemo(() => {
-    // For automatic meters, use live values instead of DB readings
     const autoMeterIds = new Set(
       meters.filter((m) => m.capture_type === "automatic" && !m.is_archived).map((m) => m.id)
     );
-    // Keep manual readings only for non-automatic meters
     const manualOnly = readings.filter((r) => !autoMeterIds.has(r.meter_id));
     return [...manualOnly, ...liveReadings];
   }, [readings, liveReadings, meters]);
