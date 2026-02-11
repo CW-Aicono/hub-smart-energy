@@ -297,9 +297,9 @@ const LiveValues = () => {
                             <span className="text-muted-foreground text-lg">Kein Wert</span>
                           )}
                         </div>
-                        {totalDay !== null && (
+                        {totalDay != null && totalDay !== undefined && (
                           <div className="text-sm text-muted-foreground font-medium">
-                            {totalDay.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {meter.unit === "kW" ? "kWh" : meter.unit}
+                            {Number(totalDay).toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {meter.unit === "kW" ? "kWh" : meter.unit}
                             <span className="ml-1 font-normal">Gesamt heute</span>
                           </div>
                         )}
