@@ -4,7 +4,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useTranslation } from "@/hooks/useTranslation";
 import { Button } from "@/components/ui/button";
-import { LayoutDashboard, LogOut, Shield, Settings, Users, ChevronDown, ChevronRight, MapPin, PanelLeftClose, PanelLeft, UserCircle, Key, HelpCircle, Plug, Palette, Database, Gauge, Download, Car, PlugZap, Receipt, Cpu } from "lucide-react";
+import { LayoutDashboard, LogOut, Shield, Settings, Users, ChevronDown, ChevronRight, MapPin, PanelLeftClose, PanelLeft, UserCircle, Key, HelpCircle, Plug, Palette, Database, Gauge, Download, Car, PlugZap, Receipt, Cpu, Activity } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TenantLogo } from "@/components/tenant/TenantLogo";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -60,7 +60,7 @@ const DashboardSidebar = () => {
     if (location.pathname === "/settings" || location.pathname === "/settings/branding" || location.pathname === "/integrations") {
       setOpenMenus((prev) => prev.includes("/settings") ? prev : [...prev, "/settings"]);
     }
-   if (location.pathname === "/energy-data" || location.pathname === "/meters") {
+   if (location.pathname === "/energy-data" || location.pathname === "/meters" || location.pathname === "/live-values") {
       setOpenMenus((prev) => prev.includes("/energy-data") ? prev : [...prev, "/energy-data"]);
     }
     if (location.pathname.startsWith("/charging")) {
@@ -82,6 +82,7 @@ const DashboardSidebar = () => {
       icon: Database, 
       labelKey: "nav.energyData" as TranslationKey,
       children: [
+        { to: "/live-values", icon: Activity, labelKey: "nav.liveValues" as TranslationKey },
         { to: "/meters", icon: Gauge, labelKey: "nav.meters" as TranslationKey },
         { to: "/energy-data", icon: Download, labelKey: "nav.exports" as TranslationKey },
       ]
