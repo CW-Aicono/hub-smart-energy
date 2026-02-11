@@ -149,7 +149,7 @@ const SuperAdminUsers = () => {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Benutzer</TableHead>
+                    <TableHead>Nutzername</TableHead>
                     <TableHead>Mandant</TableHead>
                     <TableHead>Rolle</TableHead>
                     <TableHead>Status</TableHead>
