@@ -48,7 +48,7 @@ const SIZE_CLASS: Record<WidgetSize, string> = {
 };
 
 const getLocationWidget = (locationId: string | null): string => {
-  return locationId ? "floor_plan_explorer" : "location_map";
+  return "location_map";
 };
 
 const DashboardContent = () => {
@@ -99,11 +99,6 @@ const DashboardContent = () => {
           <div className="flex flex-wrap gap-4">
             {visibleWidgets.length > 0 ? (
               visibleWidgets.map((widget) => {
-                // When a location is selected, location_map becomes floor_plan_explorer,
-                // so skip the standalone floor_plan_explorer to avoid duplicates
-                if (selectedLocationId && widget.widget_type === "floor_plan_explorer") return null;
-                // Also skip standalone floor_plan when location selected (covered by explorer)
-                if (selectedLocationId && widget.widget_type === "floor_plan") return null;
                 const widgetType = widget.widget_type === "location_map"
                   ? getLocationWidget(selectedLocationId)
                   : widget.widget_type;
