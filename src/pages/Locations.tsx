@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 
-import { Navigate } from "react-router-dom";
+import { Navigate, useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useLocations, Location, LocationUsageType } from "@/hooks/useLocations";
@@ -43,10 +43,11 @@ const Locations = () => {
   const [treeLocationId, setTreeLocationId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
 
-  // Handle clicking a location in list view - show its tree
+  const navigate = useNavigate();
+
+  // Handle clicking a location - navigate to detail page
   const handleLocationClick = (location: Location) => {
-    setTreeLocationId(location.id);
-    setSelectedLocation(location);
+    navigate(`/locations/${location.id}`);
   };
 
 
