@@ -2356,6 +2356,12 @@ export const translations = {
     es: "Automatización",
     nl: "Automatisering",
   },
+  "nav.multiLocationAutomation": {
+    de: "Multi-Location Automation",
+    en: "Multi-Location Automation",
+    es: "Automatización multi-ubicación",
+    nl: "Multi-locatie automatisering",
+  },
 } as const;
 
 export type TranslationKey = keyof typeof translations;

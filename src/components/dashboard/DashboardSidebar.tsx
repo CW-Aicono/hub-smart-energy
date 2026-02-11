@@ -96,7 +96,7 @@ const DashboardSidebar = () => {
         { to: "/charging/billing", icon: Receipt, labelKey: "nav.chargingBilling" as TranslationKey },
       ]
     },
-    { to: "/automation", icon: Cpu, labelKey: "nav.automation" as TranslationKey },
+    { to: "/automation", icon: Cpu, labelKey: "nav.multiLocationAutomation" as TranslationKey },
     ...(isAdmin ? [
       { 
         to: "/admin", 
