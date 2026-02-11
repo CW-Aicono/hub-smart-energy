@@ -19,12 +19,13 @@ import {
   QrCode,
   Camera,
   WifiOff,
+  Cpu,
 } from "lucide-react";
 
 interface UserManualContentProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  chapter: "gettingStarted" | "locationManagement" | "floorManagement" | "energyAnalysis" | "meterManagement" | "mobileApp";
+  chapter: "gettingStarted" | "locationManagement" | "floorManagement" | "energyAnalysis" | "meterManagement" | "mobileApp" | "automation";
 }
 
 const UserManualContent = ({ open, onOpenChange, chapter }: UserManualContentProps) => {
@@ -501,6 +502,90 @@ const UserManualContent = ({ open, onOpenChange, chapter }: UserManualContentPro
               Bei jeder Erfassung wird geprüft, ob der neue Zählerstand plausibel ist. 
               Ist der Wert niedriger als der letzte gespeicherte Stand, wird eine 
               Warnung angezeigt. Sie können den Wert dennoch speichern.
+            </p>
+          </section>
+        </div>
+      ),
+    },
+    automation: {
+      title: "Gebäudeautomation",
+      icon: <Cpu className="h-5 w-5" />,
+      content: (
+        <div className="space-y-6">
+          <section>
+            <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
+              <Cpu className="h-4 w-4 text-primary" />
+              Gebäudeautomation
+            </h3>
+            <p className="text-muted-foreground mb-4">
+              Steuern Sie Aktoren des Loxone Miniservers direkt aus Smart Energy Hub heraus. 
+              Erstellen Sie komplexe Automationsregeln mit Bedingungen und mehreren Aktionen.
+            </p>
+          </section>
+
+          <Separator />
+
+          <section>
+            <h4 className="font-semibold mb-2">Übersicht</h4>
+            <p className="text-sm text-muted-foreground">
+              Die Automationsverwaltung finden Sie in der Detailansicht eines Standorts unter 
+              dem Abschnitt <strong>„Automation"</strong>. Dort sehen Sie alle gespeicherten 
+              Automationen, deren Status und die letzte Ausführung.
+            </p>
+          </section>
+
+          <section>
+            <h4 className="font-semibold mb-2">Verfügbare Aktoren</h4>
+            <p className="text-sm text-muted-foreground">
+              Über den Button <strong>„Verfügbare Aktoren"</strong> sehen Sie alle steuerbaren 
+              Aktoren (Schalter, Dimmer, Jalousien etc.) des verbundenen Loxone Miniservers, 
+              gruppiert nach Räumen mit aktuellem Status.
+            </p>
+          </section>
+
+          <section>
+            <h4 className="font-semibold mb-2">Automation erstellen</h4>
+            <ol className="list-decimal list-inside text-sm text-muted-foreground space-y-2 ml-4">
+              <li>Klicken Sie auf <strong>„Automation hinzufügen"</strong></li>
+              <li>Vergeben Sie einen Namen und eine optionale Beschreibung</li>
+              <li>Fügen Sie <strong>Bedingungen</strong> hinzu (optional):
+                <ul className="list-disc list-inside ml-4 mt-1">
+                  <li><strong>Sensorwert:</strong> z.B. Temperatur &gt; 25°C</li>
+                  <li><strong>Uhrzeit:</strong> Zeitfenster (Von–Bis)</li>
+                  <li><strong>Wochentage:</strong> z.B. nur Mo–Fr</li>
+                  <li><strong>Aktor-Status:</strong> z.B. wenn Schalter X eingeschaltet ist</li>
+                </ul>
+              </li>
+              <li>Wählen Sie die <strong>Verknüpfung</strong> zwischen Bedingungen (UND/ODER) – individuell pro Bedingung einstellbar</li>
+              <li>Fügen Sie eine oder mehrere <strong>Aktionen</strong> hinzu (Aktor + Befehl)</li>
+              <li>Klicken Sie auf <strong>„Erstellen"</strong></li>
+            </ol>
+          </section>
+
+          <section>
+            <h4 className="font-semibold mb-2">Aktionstypen</h4>
+            <ul className="list-disc list-inside text-sm text-muted-foreground space-y-1 ml-4">
+              <li><strong>Pulse (Taster):</strong> Sendet einen kurzen Impuls</li>
+              <li><strong>Einschalten:</strong> Schaltet den Aktor dauerhaft ein</li>
+              <li><strong>Ausschalten:</strong> Schaltet den Aktor dauerhaft aus</li>
+              <li><strong>Umschalten (Toggle):</strong> Wechselt den aktuellen Zustand</li>
+            </ul>
+          </section>
+
+          <section>
+            <h4 className="font-semibold mb-2">Automation ausführen</h4>
+            <p className="text-sm text-muted-foreground">
+              Gespeicherte Automationen können jederzeit manuell über den <strong>▶-Button</strong> ausgeführt werden. 
+              Mehrere Aktionen innerhalb einer Automation werden nacheinander abgearbeitet. 
+              Die letzte Ausführungszeit wird automatisch protokolliert.
+            </p>
+          </section>
+
+          <section>
+            <h4 className="font-semibold mb-2">Berechtigungen</h4>
+            <p className="text-sm text-muted-foreground">
+              Unter <strong>Benutzerverwaltung → Rollen</strong> können folgende Automationsrechte 
+              vergeben werden: Anzeigen, Erstellen, Bearbeiten, Löschen und Ausführen.
             </p>
           </section>
         </div>

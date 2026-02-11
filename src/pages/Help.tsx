@@ -8,16 +8,16 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { BookOpen, HelpCircle, Mail, Phone, History, ExternalLink, Gauge, Smartphone, ShieldCheck, RefreshCw, Download, Rocket } from "lucide-react";
+import { BookOpen, HelpCircle, Mail, Phone, History, ExternalLink, Gauge, Smartphone, ShieldCheck, RefreshCw, Download, Rocket, Cpu } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { useTenant } from "@/hooks/useTenant";
 import { useUpdateCheck } from "@/hooks/useUpdateCheck";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
-const APP_VERSION = "1.0.4";
+const APP_VERSION = "1.0.5";
 
-type ManualChapter = "gettingStarted" | "locationManagement" | "floorManagement" | "energyAnalysis" | "meterManagement" | "mobileApp";
+type ManualChapter = "gettingStarted" | "locationManagement" | "floorManagement" | "energyAnalysis" | "meterManagement" | "mobileApp" | "automation";
 
 const Help = () => {
   const { user, loading } = useAuth();
@@ -85,9 +85,21 @@ const Help = () => {
     { questionKey: "help.faq10Question", answerKey: "help.faq10Answer" },
     { questionKey: "help.faq11Question", answerKey: "help.faq11Answer" },
     { questionKey: "help.faq12Question", answerKey: "help.faq12Answer" },
+    { questionKey: "help.faq13Question", answerKey: "help.faq13Answer" },
   ];
 
   const changelog = [
+    {
+      version: "1.0.5",
+      date: "2026-02-11",
+      changes: [
+        { type: "feature", textKey: "help.changelog105Feature1" },
+        { type: "feature", textKey: "help.changelog105Feature2" },
+        { type: "feature", textKey: "help.changelog105Feature3" },
+        { type: "feature", textKey: "help.changelog105Feature4" },
+        { type: "improvement", textKey: "help.changelog105Improvement1" },
+      ],
+    },
     {
       version: "1.0.4",
       date: "2026-02-09",
@@ -284,6 +296,17 @@ const Help = () => {
                   <div className="text-left">
                     <p className="font-medium">Mobile App</p>
                     <p className="text-xs text-muted-foreground">Zählerablesung per App, QR-Code und KI</p>
+                  </div>
+                </Button>
+                <Button 
+                  variant="outline" 
+                  className="justify-start gap-3 h-auto py-4 px-5"
+                  onClick={() => openManualChapter("automation")}
+                >
+                  <Cpu className="h-5 w-5 text-muted-foreground shrink-0" />
+                  <div className="text-left">
+                    <p className="font-medium">Gebäudeautomation</p>
+                    <p className="text-xs text-muted-foreground">Automationsregeln, Bedingungen und Aktoren</p>
                   </div>
                 </Button>
               </div>

@@ -1828,7 +1828,44 @@ export const translations = {
     es: "El reconocimiento IA captura decimales en las lecturas de medidores",
     nl: "AI-herkenning registreert decimalen bij meterstanden",
   },
-  // Version 1.0.3 changelog
+  // Version 1.0.5 changelog
+  "help.changelog105Feature1": {
+    de: "Automationsregeln mit Bedingungen (Sensorwert, Uhrzeit, Wochentage, Aktor-Status)",
+    en: "Automation rules with conditions (sensor value, time, weekdays, actuator status)",
+    es: "Reglas de automatización con condiciones (valor del sensor, hora, días de la semana, estado del actuador)",
+    nl: "Automatiseringsregels met voorwaarden (sensorwaarde, tijd, weekdagen, actuatorstatus)",
+  },
+  "help.changelog105Feature2": {
+    de: "Multi-Aktionen: Mehrere Aktoren gleichzeitig in einer Automation steuern",
+    en: "Multi-actions: Control multiple actuators simultaneously in one automation",
+    es: "Multi-acciones: Controlar múltiples actuadores simultáneamente en una automatización",
+    nl: "Multi-acties: Meerdere actuatoren tegelijk aansturen in één automatisering",
+  },
+  "help.changelog105Feature3": {
+    de: "Individuelle UND/ODER-Verknüpfung pro Bedingung konfigurierbar",
+    en: "Individual AND/OR logic configurable per condition",
+    es: "Lógica Y/O individual configurable por condición",
+    nl: "Individuele EN/OF-logica configureerbaar per voorwaarde",
+  },
+  "help.changelog105Feature4": {
+    de: "Berechtigungen für Automationen (Anzeigen, Erstellen, Bearbeiten, Löschen, Ausführen)",
+    en: "Permissions for automations (View, Create, Edit, Delete, Execute)",
+    es: "Permisos para automatizaciones (Ver, Crear, Editar, Eliminar, Ejecutar)",
+    nl: "Machtigingen voor automatiseringen (Bekijken, Aanmaken, Bewerken, Verwijderen, Uitvoeren)",
+  },
+  "help.changelog105Improvement1": {
+    de: "Vollständiger Regelbuilder als Sheet-Dialog für komplexe Automationen",
+    en: "Full rule builder as sheet dialog for complex automations",
+    es: "Constructor de reglas completo como diálogo para automatizaciones complejas",
+    nl: "Volledige regelbouwer als sheet-dialoog voor complexe automatiseringen",
+  },
+  // Version 1.0.4 changelog (kept for history)
+  "help.changelog104VersionLabel": {
+    de: "1.0.4",
+    en: "1.0.4",
+    es: "1.0.4",
+    nl: "1.0.4",
+  },
   "help.changelog103Feature1": {
     de: "Messstellen können archiviert und wiederhergestellt werden",
     en: "Meters can be archived and restored",
@@ -1937,6 +1974,19 @@ export const translations = {
     en: "Yes, under Energy Data → Exports both CSV and PDF exports are available. The PDF export opens a print-ready view that you can save as PDF or print directly.",
     es: "Sí, en Datos de energía → Exportaciones están disponibles exportaciones CSV y PDF. La exportación PDF abre una vista lista para imprimir que puede guardar como PDF o imprimir directamente.",
     nl: "Ja, onder Energiegegevens → Exports zijn CSV- en PDF-exports beschikbaar. De PDF-export opent een printklare weergave die u als PDF kunt opslaan of direct afdrukken.",
+  },
+  // FAQ 13 - Automation
+  "help.faq13Question": {
+    de: "Wie funktioniert die Gebäudeautomation?",
+    en: "How does building automation work?",
+    es: "¿Cómo funciona la automatización de edificios?",
+    nl: "Hoe werkt gebouwautomatisering?",
+  },
+  "help.faq13Answer": {
+    de: "Unter Standort-Detail → Automation können Sie Regeln erstellen, die Aktoren des Loxone Miniservers steuern. Jede Automation kann mehrere Bedingungen (Sensorwerte, Uhrzeiten, Wochentage, Aktor-Status) mit individueller UND/ODER-Logik kombinieren und mehrere Aktionen gleichzeitig ausführen. Gespeicherte Automationen können jederzeit manuell per Klick ausgelöst werden.",
+    en: "Under Location Detail → Automation you can create rules that control Loxone Miniserver actuators. Each automation can combine multiple conditions (sensor values, times, weekdays, actuator status) with individual AND/OR logic and execute multiple actions simultaneously. Saved automations can be manually triggered at any time.",
+    es: "En Detalle de ubicación → Automatización puede crear reglas que controlan actuadores del Loxone Miniserver. Cada automatización puede combinar múltiples condiciones con lógica Y/O individual y ejecutar múltiples acciones simultáneamente.",
+    nl: "Onder Locatiedetail → Automatisering kunt u regels maken die Loxone Miniserver-actuatoren aansturen. Elke automatisering kan meerdere voorwaarden combineren met individuele EN/OF-logica en meerdere acties tegelijk uitvoeren.",
   },
   // User management - activate user
   "users.activateUser": {
