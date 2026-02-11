@@ -36,10 +36,10 @@ export function Floor3DControls({
   const direction = useRef(new THREE.Vector3());
   const currentHeight = useRef(eyeHeight);
 
-  // Set initial camera height
+  // Initialize height ref from current camera position (preserve starting position)
   useEffect(() => {
-    camera.position.y = eyeHeight;
-  }, [camera, eyeHeight]);
+    currentHeight.current = camera.position.y;
+  }, [camera]);
 
   // Handle lock state changes
   useEffect(() => {
