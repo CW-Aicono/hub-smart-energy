@@ -5,59 +5,52 @@ import SuperAdminSidebar from "@/components/super-admin/SuperAdminSidebar";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Shield, Lock, User, Crown } from "lucide-react";
+import { Shield, Crown, Users, CheckCircle2 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
-const SYSTEM_ROLES = [
-  {
-    name: "Super-Admin",
-    description: "Plattform-weiter Zugriff: Mandanten, Abrechnung, Support, Statistiken. Kann alle Daten einsehen und verwalten.",
-    icon: Crown,
-    color: "destructive" as const,
-  },
-  {
-    name: "Administrator",
-    description: "Voller Zugriff innerhalb eines Mandanten: Standorte, Nutzer, Integrationen, Rollen und Einstellungen.",
-    icon: Shield,
-    color: "default" as const,
-  },
-  {
-    name: "Benutzer",
-    description: "Eingeschränkter Zugriff basierend auf zugewiesenen Berechtigungen. Standard-Rolle für neue Nutzer.",
-    icon: User,
-    color: "secondary" as const,
-  },
+const SA_CAPABILITIES = [
+  { name: "Mandantenverwaltung", description: "Mandanten anlegen, bearbeiten, sperren und löschen" },
+  { name: "Lizenzverwaltung", description: "Lizenzpläne zuweisen, verlängern und ändern" },
+  { name: "Plattform-Statistiken", description: "Zugriff auf plattformweite Nutzungs- und Verbrauchsstatistiken" },
+  { name: "Abrechnungsverwaltung", description: "Rechnungen einsehen, erstellen und verwalten" },
+  { name: "Support-Zugriff", description: "Remote-Support-Sitzungen für Mandanten starten und verwalten" },
+  { name: "Nutzerverwaltung", description: "Plattformweite Nutzerübersicht und Verwaltung" },
+  { name: "Kartenansicht", description: "Alle Mandanten-Standorte auf der Karte einsehen" },
+  { name: "Modulverwaltung", description: "Feature-Module für Mandanten aktivieren und deaktivieren" },
 ];
 
 const SuperAdminRoles = () => {
   const { user, loading: authLoading } = useAuth();
   const { isSuperAdmin, loading: roleLoading } = useSuperAdmin();
 
-  const { data: permissions = [] } = useQuery({
-    queryKey: ["sa-permissions"],
+  // Fetch all users with super_admin role
+  const { data: superAdmins = [], isLoading: adminsLoading } = useQuery({
+    queryKey: ["sa-super-admins"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("permissions").select("*").order("category");
+      const { data, error } = await supabase
+        .from("user_roles")
+        .select("user_id, created_at")
+        .eq("role", "super_admin");
       if (error) throw error;
-      return data;
-    },
-  });
 
-  const { data: rolePermissions = [] } = useQuery({
-    queryKey: ["sa-role-permissions"],
-    queryFn: async () => {
-      const { data, error } = await supabase.from("role_permissions").select("*, permissions(name, code, category)");
-      if (error) throw error;
-      return data;
-    },
-  });
+      // Fetch profile info for these users
+      if (!data || data.length === 0) return [];
+      const userIds = data.map((r) => r.user_id);
+      const { data: profiles } = await supabase
+        .from("profiles")
+        .select("user_id, email, contact_person")
+        .in("user_id", userIds);
 
-  const { data: customRoles = [] } = useQuery({
-    queryKey: ["sa-custom-roles"],
-    queryFn: async () => {
-      const { data, error } = await supabase.from("custom_roles").select("*, tenants(name)");
-      if (error) throw error;
-      return data;
+      return data.map((r) => {
+        const profile = profiles?.find((p) => p.user_id === r.user_id);
+        return {
+          user_id: r.user_id,
+          email: profile?.email ?? "–",
+          name: profile?.contact_person ?? "–",
+          since: r.created_at,
+        };
+      });
     },
   });
 
@@ -67,114 +60,78 @@ const SuperAdminRoles = () => {
   if (!user) return <Navigate to="/auth" replace />;
   if (!isSuperAdmin) return <Navigate to="/" replace />;
 
-  // Group permissions by category
-  const permissionsByCategory = permissions.reduce<Record<string, typeof permissions>>((acc, p) => {
-    (acc[p.category] ??= []).push(p);
-    return acc;
-  }, {});
-
-  // Group role_permissions by role
-  const adminPerms = rolePermissions.filter((rp: any) => rp.role === "admin");
-  const userPerms = rolePermissions.filter((rp: any) => rp.role === "user");
-
   return (
     <div className="flex min-h-screen bg-background">
       <SuperAdminSidebar />
       <main className="flex-1 overflow-auto">
         <header className="border-b p-6">
-          <h1 className="text-2xl font-bold">Rollen & Rechte</h1>
-          <p className="text-sm text-muted-foreground mt-1">Plattform-weite Rollen und Berechtigungsübersicht</p>
+          <h1 className="text-2xl font-bold">Super-Admin Rollen & Rechte</h1>
+          <p className="text-sm text-muted-foreground mt-1">Verwaltung der Super-Admin-Zugänge und deren Berechtigungen</p>
         </header>
         <div className="p-6 space-y-6">
-          {/* System Roles */}
-          <div className="grid gap-4 md:grid-cols-3">
-            {SYSTEM_ROLES.map((role) => (
-              <Card key={role.name}>
-                <CardHeader className="pb-3">
-                  <div className="flex items-center gap-2">
-                    <role.icon className="h-5 w-5" />
-                    <CardTitle className="text-base">{role.name}</CardTitle>
-                  </div>
-                  <Badge variant={role.color} className="w-fit">System-Rolle</Badge>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-sm text-muted-foreground">{role.description}</p>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-
-          {/* Permissions Overview */}
+          {/* Super-Admin Role Card */}
           <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Lock className="h-5 w-5" />
-                Berechtigungen ({permissions.length})
-              </CardTitle>
-              <CardDescription>Alle verfügbaren Berechtigungen gruppiert nach Kategorie</CardDescription>
+            <CardHeader className="pb-3">
+              <div className="flex items-center gap-2">
+                <Crown className="h-5 w-5 text-primary" />
+                <CardTitle>Super-Admin Rolle</CardTitle>
+              </div>
+              <CardDescription>
+                Die Super-Admin-Rolle gewährt plattformweiten Zugriff auf alle Verwaltungsfunktionen.
+                Diese Rolle kann nicht eingeschränkt werden – alle Super-Admins haben identische Rechte.
+              </CardDescription>
             </CardHeader>
             <CardContent>
-              {Object.entries(permissionsByCategory).map(([category, perms]) => (
-                <div key={category} className="mb-6 last:mb-0">
-                  <h3 className="text-sm font-semibold mb-2 capitalize">{category}</h3>
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Berechtigung</TableHead>
-                        <TableHead>Code</TableHead>
-                        <TableHead className="text-center">Admin</TableHead>
-                        <TableHead className="text-center">Benutzer</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {perms.map((p) => (
-                        <TableRow key={p.id}>
-                          <TableCell className="font-medium">{p.name}</TableCell>
-                          <TableCell className="text-muted-foreground font-mono text-xs">{p.code}</TableCell>
-                          <TableCell className="text-center">
-                            {adminPerms.some((rp: any) => rp.permission_id === p.id) ? "✓" : "–"}
-                          </TableCell>
-                          <TableCell className="text-center">
-                            {userPerms.some((rp: any) => rp.permission_id === p.id) ? "✓" : "–"}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              ))}
+              <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
+                <Shield className="h-4 w-4" />
+                Enthaltene Berechtigungen
+              </h3>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {SA_CAPABILITIES.map((cap) => (
+                  <div key={cap.name} className="flex items-start gap-2 p-2 rounded-md bg-muted/50">
+                    <CheckCircle2 className="h-4 w-4 text-primary mt-0.5 shrink-0" />
+                    <div>
+                      <p className="text-sm font-medium">{cap.name}</p>
+                      <p className="text-xs text-muted-foreground">{cap.description}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </CardContent>
           </Card>
 
-          {/* Custom Roles across tenants */}
+          {/* Super-Admin Users */}
           <Card>
             <CardHeader>
-              <CardTitle>Benutzerdefinierte Rollen ({customRoles.length})</CardTitle>
-              <CardDescription>Mandantenspezifische Rollen über die gesamte Plattform</CardDescription>
+              <CardTitle className="flex items-center gap-2">
+                <Users className="h-5 w-5" />
+                Super-Admins ({adminsLoading ? "…" : superAdmins.length})
+              </CardTitle>
+              <CardDescription>Alle Nutzer mit Super-Admin-Zugang auf der Plattform</CardDescription>
             </CardHeader>
             <CardContent className="p-0">
               <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead>Name</TableHead>
-                    <TableHead>Mandant</TableHead>
-                    <TableHead>Beschreibung</TableHead>
-                    <TableHead>Typ</TableHead>
+                    <TableHead>E-Mail</TableHead>
+                    <TableHead>Rolle</TableHead>
+                    <TableHead>Seit</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {customRoles.length === 0 ? (
-                    <TableRow><TableCell colSpan={4} className="text-center py-8 text-muted-foreground">Keine benutzerdefinierten Rollen</TableCell></TableRow>
+                  {adminsLoading ? (
+                    <TableRow><TableCell colSpan={4} className="text-center py-8 text-muted-foreground">Laden...</TableCell></TableRow>
+                  ) : superAdmins.length === 0 ? (
+                    <TableRow><TableCell colSpan={4} className="text-center py-8 text-muted-foreground">Keine Super-Admins gefunden</TableCell></TableRow>
                   ) : (
-                    customRoles.map((r: any) => (
-                      <TableRow key={r.id}>
-                        <TableCell className="font-medium">{r.name}</TableCell>
-                        <TableCell className="text-muted-foreground">{r.tenants?.name ?? "–"}</TableCell>
-                        <TableCell className="text-muted-foreground text-sm">{r.description || "–"}</TableCell>
-                        <TableCell>
-                          <Badge variant={r.is_system_role ? "secondary" : "outline"}>
-                            {r.is_system_role ? "System" : "Benutzerdefiniert"}
-                          </Badge>
+                    superAdmins.map((sa) => (
+                      <TableRow key={sa.user_id}>
+                        <TableCell className="font-medium">{sa.name}</TableCell>
+                        <TableCell className="text-muted-foreground">{sa.email}</TableCell>
+                        <TableCell><Badge variant="destructive">Super-Admin</Badge></TableCell>
+                        <TableCell className="text-muted-foreground text-sm">
+                          {new Date(sa.since).toLocaleDateString("de-DE")}
                         </TableCell>
                       </TableRow>
                     ))
