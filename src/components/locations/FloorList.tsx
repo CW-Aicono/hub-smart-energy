@@ -108,7 +108,7 @@ export function FloorList({ floors, loading, locationId, onRefresh }: FloorListP
 
             {isExpanded && (
               <div className="border-t">
-                <FloorRoomsList floorId={floor.id} />
+                <FloorRoomsList floorId={floor.id} locationId={locationId} />
               </div>
             )}
           </div>
