@@ -9,7 +9,7 @@ import { ChevronRight, ChevronDown, Building2, Building, MapPin, Star, Layers, W
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { EditLocationDialog } from "./EditLocationDialog";
-import { DeleteLocationDialog } from "./DeleteLocationDialog";
+import { ArchiveLocationDialog } from "./ArchiveLocationDialog";
 
 interface LocationTreeProps {
   locations: Location[];
@@ -277,12 +277,12 @@ function LocationNode({ location, level, selectedId, onSelect, onRefresh, isAdmi
           </Badge>
         </div>
         {isAdmin && (
-          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          <div className="flex items-center gap-1">
             <EditLocationDialog
               location={location}
               onSuccess={() => onRefresh?.()}
             />
-            <DeleteLocationDialog
+            <ArchiveLocationDialog
               location={location}
               onSuccess={() => onRefresh?.()}
             />
