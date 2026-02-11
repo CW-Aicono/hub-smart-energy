@@ -331,11 +331,15 @@ const Locations = () => {
                           <p className="font-medium text-base">{location.name}</p>
                           {getOnlineStatusBadge(location.id)}
                         </div>
-                        {location.city && (
-                          <p className="text-sm text-muted-foreground">
-                            {location.city}
-                          </p>
-                        )}
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                          {location.city && <span>{location.city}</span>}
+                          {location.city && (location.usage_type || location.type) && <span>·</span>}
+                          {location.usage_type && <span>{usageTypeLabels[location.usage_type]}</span>}
+                          {location.usage_type && location.type && <span>·</span>}
+                          {location.type && (
+                            <span>{t(`locations.types.${location.type}` as any)}</span>
+                          )}
+                        </div>
                       </div>
                     </div>
                   ))}
