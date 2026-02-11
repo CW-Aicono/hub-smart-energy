@@ -5,7 +5,7 @@ import { useUserRole } from "@/hooks/useUserRole";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { DoorOpen, Plus, Trash2, X, Check, Gauge, ChevronDown, ChevronRight } from "lucide-react";
+import { DoorOpen, Plus, Trash2, X, Check, Gauge, ChevronDown, ChevronRight, Pencil } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -25,13 +25,15 @@ interface FloorRoomsListProps {
 }
 
 export function FloorRoomsList({ floorId, locationId }: FloorRoomsListProps) {
-  const { rooms, loading, addRoom, deleteRoom } = useFloorRooms(floorId);
+  const { rooms, loading, addRoom, updateRoom, deleteRoom } = useFloorRooms(floorId);
   const { meters } = useMeters(locationId);
   const { isAdmin } = useUserRole();
   const [adding, setAdding] = useState(false);
   const [newName, setNewName] = useState("");
   const [saving, setSaving] = useState(false);
   const [expandedRooms, setExpandedRooms] = useState<Set<string>>(new Set());
+  const [editingRoomId, setEditingRoomId] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState("");
 
   const floorMeters = useMemo(() =>
     meters.filter(m => !m.is_archived && m.floor_id === floorId),
@@ -96,6 +98,20 @@ export function FloorRoomsList({ floorId, locationId }: FloorRoomsListProps) {
     }
   };
 
+  const handleRename = async (id: string) => {
+    if (!editingName.trim()) return;
+    setSaving(true);
+    const { error } = await updateRoom(id, { name: editingName.trim() });
+    setSaving(false);
+    if (error) {
+      toast.error("Raum konnte nicht umbenannt werden");
+    } else {
+      toast.success("Raumname aktualisiert");
+    }
+    setEditingRoomId(null);
+    setEditingName("");
+  };
+
   if (loading) {
     return <Skeleton className="h-8 w-full" />;
   }
@@ -126,19 +142,50 @@ export function FloorRoomsList({ floorId, locationId }: FloorRoomsListProps) {
                 </button>
               )}
               <DoorOpen className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-              <span className="flex-1 truncate">{room.name}</span>
-              {hasMeters && (
+              {editingRoomId === room.id ? (
+                <div className="flex items-center gap-1 flex-1" onClick={(e) => e.stopPropagation()}>
+                  <Input
+                    value={editingName}
+                    onChange={(e) => setEditingName(e.target.value)}
+                    className="h-6 text-sm py-0 px-2"
+                    autoFocus
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") handleRename(room.id);
+                      if (e.key === "Escape") { setEditingRoomId(null); setEditingName(""); }
+                    }}
+                  />
+                  <Button size="icon" className="h-6 w-6 shrink-0" onClick={() => handleRename(room.id)} disabled={!editingName.trim() || saving}>
+                    <Check className="h-3 w-3" />
+                  </Button>
+                  <Button size="icon" variant="ghost" className="h-6 w-6 shrink-0" onClick={() => { setEditingRoomId(null); setEditingName(""); }}>
+                    <X className="h-3 w-3" />
+                  </Button>
+                </div>
+              ) : (
+                <span className="flex-1 truncate">{room.name}</span>
+              )}
+              {hasMeters && editingRoomId !== room.id && (
                 <span className="text-xs text-muted-foreground">{roomMeters.length} Zähler</span>
               )}
-              {isAdmin && (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity text-destructive hover:text-destructive"
-                  onClick={(e) => { e.stopPropagation(); handleDelete(room.id, room.name); }}
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </Button>
+              {isAdmin && editingRoomId !== room.id && (
+                <>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                    onClick={(e) => { e.stopPropagation(); setEditingRoomId(room.id); setEditingName(room.name); }}
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity text-destructive hover:text-destructive"
+                    onClick={(e) => { e.stopPropagation(); handleDelete(room.id, room.name); }}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </>
               )}
             </div>
             {isExpanded && hasMeters && (
