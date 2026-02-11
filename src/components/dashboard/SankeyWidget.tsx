@@ -3,10 +3,35 @@ import { useLocations } from "@/hooks/useLocations";
 import { useEnergyData } from "@/hooks/useEnergyData";
 import { useMeters } from "@/hooks/useMeters";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useMemo, useState, useRef, useEffect } from "react";
 import { formatEnergy } from "@/lib/formatEnergy";
 import { supabase } from "@/integrations/supabase/client";
 import { ENERGY_CHART_COLORS, ENERGY_TYPE_LABELS } from "@/lib/energyTypeColors";
+import { startOfDay, startOfWeek, startOfMonth, startOfQuarter, startOfYear } from "date-fns";
+
+type TimePeriod = "day" | "week" | "month" | "quarter" | "year" | "all";
+
+const PERIOD_LABELS: Record<TimePeriod, string> = {
+  day: "Tag",
+  week: "Woche",
+  month: "Monat",
+  quarter: "Quartal",
+  year: "Jahr",
+  all: "Gesamt",
+};
+
+function getPeriodStart(period: TimePeriod): Date | null {
+  const now = new Date();
+  switch (period) {
+    case "day": return startOfDay(now);
+    case "week": return startOfWeek(now, { weekStartsOn: 1 });
+    case "month": return startOfMonth(now);
+    case "quarter": return startOfQuarter(now);
+    case "year": return startOfYear(now);
+    case "all": return null;
+  }
+}
 
 interface SankeyWidgetProps {
   locationId: string | null;
@@ -43,6 +68,7 @@ const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
   // Fetch floors and rooms for specific location
   const [floors, setFloors] = useState<{ id: string; name: string }[]>([]);
   const [rooms, setRooms] = useState<{ id: string; floor_id: string; name: string }[]>([]);
+  const [period, setPeriod] = useState<TimePeriod>("day");
 
   useEffect(() => {
     if (!locationId) {
@@ -85,11 +111,18 @@ const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
     return map;
   }, [meters]);
 
+  // Filter readings by selected time period
+  const filteredReadings = useMemo(() => {
+    const periodStart = getPeriodStart(period);
+    if (!periodStart) return readings;
+    return readings.filter((r) => new Date(r.reading_date) >= periodStart);
+  }, [readings, period]);
+
   // Compute flows
   const flows = useMemo((): FlowLink[] => {
     const flowMap: Record<string, number> = {};
 
-    readings.forEach((r) => {
+    filteredReadings.forEach((r) => {
       const meter = meterMap[r.meter_id];
       if (!meter) return;
       const energyType = meter.energy_type || "strom";
@@ -125,7 +158,7 @@ const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
         return { sourceName, targetName, sourceColor, value };
       })
       .filter((f) => f.value > 0);
-  }, [readings, meterMap, locationId, locations, floors, rooms]);
+  }, [filteredReadings, meterMap, locationId, locations, floors, rooms]);
 
   // Derive unique sources and targets
   const sourceNames = useMemo(() => [...new Set(flows.map((f) => f.sourceName))], [flows]);
@@ -145,7 +178,19 @@ const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
     return (
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle className="font-display text-lg">Energiefluss</CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle className="font-display text-lg">Energiefluss</CardTitle>
+            <Select value={period} onValueChange={(v) => setPeriod(v as TimePeriod)}>
+              <SelectTrigger className="w-[120px] h-8 text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {(Object.keys(PERIOD_LABELS) as TimePeriod[]).map((key) => (
+                  <SelectItem key={key} value={key}>{PERIOD_LABELS[key]}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
           <p className="text-sm text-muted-foreground">{subtitle}</p>
         </CardHeader>
         <CardContent>
@@ -264,7 +309,19 @@ const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
   return (
     <Card>
       <CardHeader className="pb-2">
-        <CardTitle className="font-display text-lg">Energiefluss</CardTitle>
+        <div className="flex items-center justify-between">
+          <CardTitle className="font-display text-lg">Energiefluss</CardTitle>
+          <Select value={period} onValueChange={(v) => setPeriod(v as TimePeriod)}>
+            <SelectTrigger className="w-[120px] h-8 text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {(Object.keys(PERIOD_LABELS) as TimePeriod[]).map((key) => (
+                <SelectItem key={key} value={key}>{PERIOD_LABELS[key]}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
         <p className="text-sm text-muted-foreground">{subtitle}</p>
       </CardHeader>
       <CardContent className="px-2 pb-2">
