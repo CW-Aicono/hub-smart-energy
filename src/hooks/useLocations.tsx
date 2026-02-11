@@ -87,6 +87,7 @@ export function useLocations(): UseLocationsReturn {
       const { data, error: fetchError } = await supabase
         .from("locations")
         .select("*")
+        .eq("is_archived", false)
         .order("name");
 
       if (fetchError) {
