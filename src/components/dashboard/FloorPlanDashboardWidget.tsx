@@ -1,13 +1,16 @@
-import { useState, useEffect, useCallback, lazy, Suspense } from "react";
+import { useState, useEffect, useCallback, useMemo, lazy, Suspense } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { Loader2, Layers, Box, Image } from "lucide-react";
+import { Loader2, Layers, Box, Image, ZoomIn, ZoomOut, RotateCcw, RefreshCw, Gauge } from "lucide-react";
 import { useLocations } from "@/hooks/useLocations";
 import { useLiveSensorValues } from "@/hooks/useLiveSensorValues";
+import { useMeters } from "@/hooks/useMeters";
+import { useMeterReadings } from "@/hooks/useMeterReadings";
+import { useFloorSensorPositions } from "@/hooks/useFloorSensorPositions";
+import { ENERGY_CARD_CLASSES, ENERGY_ICON_CLASSES } from "@/lib/energyTypeColors";
 import { supabase } from "@/integrations/supabase/client";
 import { TransformWrapper, TransformComponent, useControls } from "react-zoom-pan-pinch";
-import { ZoomIn, ZoomOut, RotateCcw } from "lucide-react";
 
 const FloorPlan3DViewer = lazy(() => import("@/components/locations/FloorPlan3DViewer").then(m => ({ default: m.FloorPlan3DViewer })));
 
@@ -51,7 +54,37 @@ const FloorPlanDashboardWidget = ({ locationId }: FloorPlanDashboardWidgetProps)
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<"2d" | "3d">("2d");
 
-  const { sensorValues } = useLiveSensorValues(selectedFloorId || undefined);
+  const { positions, sensorValuesMap, sensorValues, loadingValues, lastRefresh, refreshSensorValues } = useLiveSensorValues(selectedFloorId || undefined);
+  const { meters } = useMeters(locationId || undefined);
+  const { readings } = useMeterReadings();
+  const { positions: sensorPositions } = useFloorSensorPositions(selectedFloorId || undefined);
+
+  // Meters assigned to the selected floor that have sensor positions placed
+  const placedFloorMeters = useMemo(() => {
+    if (!selectedFloorId) return [];
+    const floorMeters = meters.filter(m => !m.is_archived && m.floor_id === selectedFloorId);
+    const placedUuids = new Set(sensorPositions.map(p => p.sensor_uuid));
+    return floorMeters.filter(m => m.sensor_uuid && placedUuids.has(m.sensor_uuid));
+  }, [meters, selectedFloorId, sensorPositions]);
+
+  // Latest reading per meter
+  const meterLatestValues = useMemo(() => {
+    const values: Record<string, number | null> = {};
+    placedFloorMeters.forEach(m => {
+      const meterReadings = readings
+        .filter(r => r.meter_id === m.id)
+        .sort((a, b) => b.reading_date.localeCompare(a.reading_date));
+      values[m.id] = meterReadings.length > 0 ? meterReadings[0].value : null;
+    });
+    return values;
+  }, [placedFloorMeters, readings]);
+
+  // Map sensor_uuid -> position for meter overlay
+  const meterPositionMap = useMemo(() => {
+    const map = new Map<string, { x: number; y: number }>();
+    sensorPositions.forEach(p => map.set(p.sensor_uuid, { x: p.position_x, y: p.position_y }));
+    return map;
+  }, [sensorPositions]);
 
   // Fetch all floors across all locations (or for selected location)
   const fetchFloors = useCallback(async () => {
@@ -140,6 +173,22 @@ const FloorPlanDashboardWidget = ({ locationId }: FloorPlanDashboardWidgetProps)
           </Select>
         </div>
         <div className="flex items-center gap-1 ml-2 flex-shrink-0">
+          {viewMode === "2d" && lastRefresh && (
+            <span className="text-[10px] text-muted-foreground mr-1">
+              {lastRefresh.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}
+            </span>
+          )}
+          {viewMode === "2d" && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7"
+              onClick={refreshSensorValues}
+              disabled={loadingValues || positions.length === 0}
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${loadingValues ? "animate-spin" : ""}`} />
+            </Button>
+          )}
           <Button
             variant={viewMode === "2d" ? "default" : "ghost"}
             size="icon"
@@ -164,7 +213,63 @@ const FloorPlanDashboardWidget = ({ locationId }: FloorPlanDashboardWidgetProps)
             <TransformWrapper initialScale={1} minScale={0.5} maxScale={4} centerOnInit wheel={{ step: 0.1 }}>
               <ZoomControls />
               <TransformComponent wrapperStyle={{ width: "100%", height: "100%" }} contentStyle={{ width: "100%", height: "100%", display: "flex", justifyContent: "center", alignItems: "center" }}>
-                <img src={selectedFloor.floor_plan_url} alt={selectedFloor.name} className="max-w-full max-h-full object-contain" draggable={false} />
+                <div className="relative inline-block">
+                  <img src={selectedFloor.floor_plan_url} alt={selectedFloor.name} className="max-w-full max-h-full object-contain" draggable={false} />
+
+                  {/* Sensor Overlays */}
+                  {positions.map((pos) => {
+                    const sensorValue = sensorValuesMap.get(pos.sensor_uuid);
+                    const scale = (pos as any).label_scale ?? 1.0;
+                    return (
+                      <div
+                        key={pos.id}
+                        className="absolute transform -translate-x-1/2 -translate-y-1/2 pointer-events-auto"
+                        style={{ left: `${pos.position_x}%`, top: `${pos.position_y}%` }}
+                      >
+                        <div
+                          className="bg-card/95 backdrop-blur-sm border shadow-lg rounded-lg px-2 py-1 min-w-[80px] text-center whitespace-nowrap"
+                          style={{ transform: `scale(${scale})`, transformOrigin: 'center center' }}
+                        >
+                          <p className="text-[10px] font-medium text-muted-foreground truncate max-w-[100px]">
+                            {pos.sensor_name}
+                          </p>
+                          <p className="text-sm font-mono font-bold text-primary">
+                            {sensorValue ? `${sensorValue.value} ${sensorValue.unit}` : "—"}
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                  {/* Meter Overlays */}
+                  {placedFloorMeters.map((meter) => {
+                    const pos = meterPositionMap.get(meter.sensor_uuid!);
+                    if (!pos) return null;
+                    if (sensorValuesMap.has(meter.sensor_uuid!)) return null;
+                    const value = meterLatestValues[meter.id];
+                    const borderClass = ENERGY_CARD_CLASSES[meter.energy_type] || "border-border bg-card";
+                    const iconClass = ENERGY_ICON_CLASSES[meter.energy_type] || "text-primary";
+                    return (
+                      <div
+                        key={meter.id}
+                        className="absolute transform -translate-x-1/2 -translate-y-1/2 pointer-events-auto"
+                        style={{ left: `${pos.x}%`, top: `${pos.y}%` }}
+                      >
+                        <div className={`border shadow-lg rounded-lg px-2 py-1 min-w-[80px] text-center whitespace-nowrap ${borderClass}`}>
+                          <div className="flex items-center justify-center gap-1">
+                            <Gauge className={`h-3 w-3 ${iconClass}`} />
+                            <p className="text-[10px] font-medium text-muted-foreground truncate max-w-[100px]">
+                              {meter.name}
+                            </p>
+                          </div>
+                          <p className="text-sm font-mono font-bold text-primary">
+                            {value != null ? `${value.toLocaleString("de-DE")} ${meter.unit}` : "—"}
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               </TransformComponent>
             </TransformWrapper>
           </div>
