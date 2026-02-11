@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Dialog,
   DialogContent,
@@ -26,14 +27,15 @@ import {
   Plus,
   Settings2,
   Server,
-  Plug,
-  Radio,
+  ToggleLeft,
   Gauge,
   DoorOpen,
-  Waves,
-  CheckCircle2,
-  XCircle,
+  Activity,
+  AlertTriangle,
 } from "lucide-react";
+import { useLocationIntegrations } from "@/hooks/useIntegrations";
+import { useLoxoneSensors, LoxoneSensor } from "@/hooks/useLoxoneSensors";
+import { Input } from "@/components/ui/input";
 
 // ... keep existing code (AutomationScenario interface and DEMO_SCENARIOS)
 interface AutomationScenario {
@@ -100,79 +102,32 @@ const DEMO_SCENARIOS: AutomationScenario[] = [
   },
 ];
 
-interface AutomationEndpoint {
-  id: string;
-  name: string;
-  type: string;
-  protocol: string;
-  icon: React.ElementType;
-  description: string;
-  available: boolean;
-  capabilities: string[];
+// Icon mapping for sensor types
+function getSensorIcon(type: string) {
+  switch (type) {
+    case "temperature": return Thermometer;
+    case "switch":
+    case "digital":
+    case "button": return ToggleLeft;
+    case "light": return Lightbulb;
+    case "blind": return DoorOpen;
+    case "power": return Gauge;
+    case "motion": return Activity;
+    default: return Server;
+  }
 }
 
-const DEMO_ENDPOINTS: AutomationEndpoint[] = [
-  {
-    id: "ep-loxone",
-    name: "Loxone Miniserver",
-    type: "Gateway",
-    protocol: "HTTP / WebSocket",
-    icon: Server,
-    description: "Zentrale Gebäudesteuerung mit Zugriff auf alle angeschlossenen Aktoren und Sensoren",
-    available: true,
-    capabilities: ["Heizung", "Beleuchtung", "Jalousien", "Lüftung", "Szenen"],
-  },
-  {
-    id: "ep-modbus",
-    name: "Modbus TCP Gateway",
-    type: "Protokoll",
-    protocol: "Modbus TCP",
-    icon: Plug,
-    description: "Industrielle Steuerung über Modbus-Register (Wärmepumpen, Lüftungsanlagen)",
-    available: false,
-    capabilities: ["Wärmepumpe", "RLT-Anlage", "Heizkreis"],
-  },
-  {
-    id: "ep-bacnet",
-    name: "BACnet/IP",
-    type: "Protokoll",
-    protocol: "BACnet/IP",
-    icon: Radio,
-    description: "Gebäudeautomationsprotokoll für HLK-Anlagen und Raumcontroller",
-    available: false,
-    capabilities: ["HLK", "Raumcontroller", "Brandmeldeanlage"],
-  },
-  {
-    id: "ep-meter",
-    name: "Intelligente Zähler",
-    type: "Messdaten",
-    protocol: "REST API",
-    icon: Gauge,
-    description: "Echtzeit-Verbrauchsdaten von Smart Metern für lastabhängige Steuerung",
-    available: true,
-    capabilities: ["Leistungsmessung", "Lastgang", "Peak-Erkennung"],
-  },
-  {
-    id: "ep-presence",
-    name: "Präsenzsensoren",
-    type: "Sensorik",
-    protocol: "MQTT / Loxone",
-    icon: DoorOpen,
-    description: "Raumbelegungserkennung für bedarfsgerechte Steuerung",
-    available: true,
-    capabilities: ["Raumbelegung", "Personenzählung", "Bewegungserkennung"],
-  },
-  {
-    id: "ep-weather",
-    name: "Wetterstation / API",
-    type: "Umgebungsdaten",
-    protocol: "REST API",
-    icon: Waves,
-    description: "Wetterdaten für prädiktive Steuerung (Temperatur, Sonneneinstrahlung, Wind)",
-    available: true,
-    capabilities: ["Außentemperatur", "Solarstrahlung", "Windgeschwindigkeit", "Vorhersage"],
-  },
-];
+// Check if a sensor is an actuator (can be controlled)
+function isActuator(sensor: LoxoneSensor): boolean {
+  const actuatorTypes = ["switch", "light", "blind", "button", "digital"];
+  const actuatorControlTypes = [
+    "Switch", "Dimmer", "Jalousie", "LightController", "LightControllerV2",
+    "Pushbutton", "IRoomController", "IRoomControllerV2", "Gate", "Ventilation",
+    "Daytimer", "Alarm", "CentralAlarm", "Intercom", "AalSmartAlarm",
+    "Sauna", "Pool", "Hourcounter",
+  ];
+  return actuatorTypes.includes(sensor.type) || actuatorControlTypes.includes(sensor.controlType);
+}
 
 interface LocationAutomationProps {
   locationId: string;
@@ -182,6 +137,14 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
   const [isOpen, setIsOpen] = useState(false);
   const [configOpen, setConfigOpen] = useState(false);
   const [scenarios, setScenarios] = useState(DEMO_SCENARIOS);
+  const [searchTerm, setSearchTerm] = useState("");
+
+  // Fetch connected integrations for this location
+  const { locationIntegrations, loading: intLoading } = useLocationIntegrations(locationId);
+  const loxoneIntegration = locationIntegrations.find(
+    (li) => li.integration?.type === "loxone" && li.is_enabled
+  );
+  const { data: sensors, isLoading: sensorsLoading } = useLoxoneSensors(loxoneIntegration?.id);
 
   const activeCount = scenarios.filter((s) => s.isActive).length;
   const totalSavings = scenarios
@@ -194,7 +157,37 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
     );
   };
 
-  const availableEndpoints = DEMO_ENDPOINTS.filter((e) => e.available).length;
+  // Filter sensors to actuators (controllable devices)
+  const allSensors = sensors || [];
+  const actuators = allSensors.filter(isActuator);
+  const readOnly = allSensors.filter((s) => !isActuator(s));
+
+  const filteredActuators = searchTerm
+    ? actuators.filter((s) =>
+        s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        s.room.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        s.controlType.toLowerCase().includes(searchTerm.toLowerCase())
+      )
+    : actuators;
+
+  const filteredReadOnly = searchTerm
+    ? readOnly.filter((s) =>
+        s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        s.room.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        s.controlType.toLowerCase().includes(searchTerm.toLowerCase())
+      )
+    : readOnly;
+
+  // Group by room
+  const groupByRoom = (items: LoxoneSensor[]) => {
+    const grouped: Record<string, LoxoneSensor[]> = {};
+    items.forEach((s) => {
+      const room = s.room || "Unbekannt";
+      if (!grouped[room]) grouped[room] = [];
+      grouped[room].push(s);
+    });
+    return Object.entries(grouped).sort(([a], [b]) => a.localeCompare(b));
+  };
 
   return (
     <>
@@ -300,9 +293,11 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
                 >
                   <Settings2 className="h-4 w-4" />
                   Konfiguration
-                  <Badge variant="secondary" className="ml-1 text-[10px]">
-                    {availableEndpoints}/{DEMO_ENDPOINTS.length}
-                  </Badge>
+                  {!intLoading && loxoneIntegration && (
+                    <Badge variant="secondary" className="ml-1 text-[10px]">
+                      {actuators.length} Aktoren
+                    </Badge>
+                  )}
                 </Button>
                 <Button variant="outline" size="sm" className="flex-1 gap-2" disabled>
                   <Plus className="h-4 w-4" />
@@ -314,72 +309,152 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
         </Card>
       </Collapsible>
 
-      {/* Konfiguration Dialog */}
+      {/* Konfiguration Dialog – Live Loxone Endpoints */}
       <Dialog open={configOpen} onOpenChange={setConfigOpen}>
         <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Settings2 className="h-5 w-5" />
-              Automation – Endpunkte & Schnittstellen
+              Verfügbare Endpunkte – Loxone Miniserver
             </DialogTitle>
             <DialogDescription>
-              Verfügbare Endpunkte, die als Datenquelle oder Steuerungsziel für Automationen genutzt werden können.
+              Alle Aktoren und Sensoren des verbundenen Miniservers, die für Automationen genutzt werden können.
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-3 mt-2">
-            {DEMO_ENDPOINTS.map((ep) => {
-              const Icon = ep.icon;
-              return (
-                <div
-                  key={ep.id}
-                  className={`flex items-start gap-4 p-4 rounded-lg border transition-colors ${
-                    ep.available
-                      ? "bg-primary/5 border-primary/20"
-                      : "bg-muted/30 border-border"
-                  }`}
-                >
-                  <div
-                    className={`mt-0.5 rounded-lg p-2.5 ${
-                      ep.available
-                        ? "bg-primary/10 text-primary"
-                        : "bg-muted text-muted-foreground"
-                    }`}
-                  >
-                    <Icon className="h-5 w-5" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <p className="font-medium text-sm">{ep.name}</p>
-                      <Badge variant="outline" className="text-[10px]">{ep.type}</Badge>
-                      <Badge variant="secondary" className="text-[10px]">{ep.protocol}</Badge>
+          {!loxoneIntegration ? (
+            <div className="flex flex-col items-center gap-3 py-8 text-center">
+              <AlertTriangle className="h-10 w-10 text-muted-foreground" />
+              <p className="text-sm text-muted-foreground">
+                Kein Loxone Miniserver mit diesem Standort verbunden.<br />
+                Verbinden Sie einen Miniserver unter „Integrationen".
+              </p>
+            </div>
+          ) : sensorsLoading || intLoading ? (
+            <div className="space-y-3 mt-2">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <Skeleton key={i} className="h-16 w-full rounded-lg" />
+              ))}
+            </div>
+          ) : (
+            <div className="space-y-4 mt-2">
+              {/* Search */}
+              <Input
+                placeholder="Suche nach Name, Raum oder Typ..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="h-9"
+              />
+
+              {/* Stats */}
+              <div className="flex gap-3">
+                <Badge variant="secondary" className="gap-1">
+                  <ToggleLeft className="h-3 w-3" />
+                  {actuators.length} Aktoren (steuerbar)
+                </Badge>
+                <Badge variant="outline" className="gap-1">
+                  <Activity className="h-3 w-3" />
+                  {readOnly.length} Sensoren (nur lesen)
+                </Badge>
+              </div>
+
+              {/* Actuators */}
+              {filteredActuators.length > 0 && (
+                <div className="space-y-2">
+                  <h3 className="text-sm font-semibold flex items-center gap-2">
+                    <ToggleLeft className="h-4 w-4 text-primary" />
+                    Steuerbare Aktoren
+                  </h3>
+                  {groupByRoom(filteredActuators).map(([room, items]) => (
+                    <div key={room} className="space-y-1">
+                      <p className="text-xs font-medium text-muted-foreground px-1">{room}</p>
+                      {items.map((sensor) => {
+                        const Icon = getSensorIcon(sensor.type);
+                        return (
+                          <div
+                            key={sensor.id}
+                            className="flex items-center gap-3 p-3 rounded-lg border bg-primary/5 border-primary/20"
+                          >
+                            <div className="rounded-lg p-2 bg-primary/10 text-primary">
+                              <Icon className="h-4 w-4" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2">
+                                <p className="font-medium text-sm truncate">{sensor.name}</p>
+                                <Badge variant="outline" className="text-[10px] shrink-0">
+                                  {sensor.controlType}
+                                </Badge>
+                              </div>
+                              <p className="text-xs text-muted-foreground truncate">
+                                {sensor.category}
+                              </p>
+                            </div>
+                            <div className="text-right shrink-0">
+                              <p className="text-sm font-mono font-medium">
+                                {sensor.value}{sensor.unit ? ` ${sensor.unit}` : ""}
+                              </p>
+                              <p className="text-[10px] text-muted-foreground">{sensor.status}</p>
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
-                    <p className="text-xs text-muted-foreground mt-1">{ep.description}</p>
-                    <div className="flex flex-wrap gap-1.5 mt-2">
-                      {ep.capabilities.map((cap) => (
-                        <Badge key={cap} variant="secondary" className="text-[10px] font-normal">
-                          {cap}
-                        </Badge>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0 mt-1">
-                    {ep.available ? (
-                      <Badge className="gap-1 bg-primary/10 text-primary border-primary/20 hover:bg-primary/10" variant="outline">
-                        <CheckCircle2 className="h-3 w-3" />
-                        Verbunden
-                      </Badge>
-                    ) : (
-                      <Badge variant="outline" className="gap-1 text-muted-foreground">
-                        <XCircle className="h-3 w-3" />
-                        Nicht verfügbar
-                      </Badge>
-                    )}
-                  </div>
+                  ))}
                 </div>
-              );
-            })}
-          </div>
+              )}
+
+              {/* Read-only Sensors */}
+              {filteredReadOnly.length > 0 && (
+                <div className="space-y-2">
+                  <h3 className="text-sm font-semibold flex items-center gap-2">
+                    <Activity className="h-4 w-4 text-muted-foreground" />
+                    Sensoren (nur lesen – als Trigger nutzbar)
+                  </h3>
+                  {groupByRoom(filteredReadOnly).map(([room, items]) => (
+                    <div key={room} className="space-y-1">
+                      <p className="text-xs font-medium text-muted-foreground px-1">{room}</p>
+                      {items.map((sensor) => {
+                        const Icon = getSensorIcon(sensor.type);
+                        return (
+                          <div
+                            key={sensor.id}
+                            className="flex items-center gap-3 p-3 rounded-lg border bg-muted/30 border-border"
+                          >
+                            <div className="rounded-lg p-2 bg-muted text-muted-foreground">
+                              <Icon className="h-4 w-4" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2">
+                                <p className="font-medium text-sm truncate">{sensor.name}</p>
+                                <Badge variant="outline" className="text-[10px] shrink-0">
+                                  {sensor.controlType}
+                                </Badge>
+                              </div>
+                              <p className="text-xs text-muted-foreground truncate">
+                                {sensor.category}
+                              </p>
+                            </div>
+                            <div className="text-right shrink-0">
+                              <p className="text-sm font-mono font-medium">
+                                {sensor.value}{sensor.unit ? ` ${sensor.unit}` : ""}
+                              </p>
+                              <p className="text-[10px] text-muted-foreground">{sensor.status}</p>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {filteredActuators.length === 0 && filteredReadOnly.length === 0 && (
+                <div className="text-center py-6 text-sm text-muted-foreground">
+                  {searchTerm ? "Keine Ergebnisse für diese Suche." : "Keine Endpunkte gefunden."}
+                </div>
+              )}
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </>
