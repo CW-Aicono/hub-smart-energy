@@ -142,7 +142,7 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
   // Fetch connected integrations for this location
   const { locationIntegrations, loading: intLoading } = useLocationIntegrations(locationId);
   const loxoneIntegration = locationIntegrations.find(
-    (li) => li.integration?.type === "loxone" && li.is_enabled
+    (li) => li.integration?.type?.startsWith("loxone") && li.is_enabled
   );
   const { data: sensors, isLoading: sensorsLoading } = useLoxoneSensors(loxoneIntegration?.id);
 
