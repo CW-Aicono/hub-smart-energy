@@ -5,6 +5,7 @@ import { useUserRole } from "@/hooks/useUserRole";
 import { useLocations, LocationUsageType } from "@/hooks/useLocations";
 import { useFloors } from "@/hooks/useFloors";
 import { useTranslation } from "@/hooks/useTranslation";
+import { useModuleGuard } from "@/hooks/useModuleGuard";
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
 import { FloorList } from "@/components/locations/FloorList";
 import { AddFloorDialog } from "@/components/locations/AddFloorDialog";
@@ -79,6 +80,7 @@ const LocationDetail = () => {
   const { locations, loading: locationsLoading } = useLocations();
   const { floors, loading: floorsLoading, refetch: refetchFloors } = useFloors(id);
   const { t } = useTranslation();
+  const { isModuleEnabled } = useModuleGuard();
 
   const location = locations.find((loc) => loc.id === id);
 
@@ -215,8 +217,10 @@ const LocationDetail = () => {
           {/* Meters & Alerts */}
           <MeterManagement locationId={location.id} />
 
-          {/* Automation */}
-          <LocationAutomation locationId={location.id} />
+          {/* Automation - only if building automation module is enabled */}
+          {isModuleEnabled("automation_building") && (
+            <LocationAutomation locationId={location.id} />
+          )}
 
           {/* Integrations Card */}
           <LocationIntegrationsList locationId={location.id} />

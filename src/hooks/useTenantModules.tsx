@@ -4,13 +4,14 @@ import { toast } from "@/hooks/use-toast";
 
 export const ALL_MODULES = [
   { code: "dashboard", label: "Dashboard", alwaysOn: true },
-  { code: "locations", label: "Standorte" },
+  { code: "locations", label: "Standortverwaltung (alle Liegenschaften)" },
   { code: "integrations", label: "Integrationen" },
   { code: "3d_viewer", label: "3D-Ansicht" },
   { code: "floor_plans", label: "Etagenpläne" },
   { code: "energy_monitoring", label: "Energiemonitoring" },
   { code: "reporting", label: "Berichte" },
-  { code: "automation", label: "Gebäudeautomation" },
+  { code: "automation_building", label: "Automation (Gebäudeebene)" },
+  { code: "automation_multi", label: "Multi-Location Automation" },
   { code: "ev_charging", label: "Ladeinfrastruktur" },
   { code: "alerts", label: "Alarmregeln" },
   { code: "meter_scanning", label: "Zähler-Scanning (OCR)" },
