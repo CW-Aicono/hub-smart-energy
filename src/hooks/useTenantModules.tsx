@@ -7,10 +7,14 @@ export const ALL_MODULES = [
   { code: "locations", label: "Standorte" },
   { code: "integrations", label: "Integrationen" },
   { code: "3d_viewer", label: "3D-Ansicht" },
-  { code: "reporting", label: "Berichte" },
   { code: "floor_plans", label: "Etagenpläne" },
   { code: "energy_monitoring", label: "Energiemonitoring" },
+  { code: "reporting", label: "Berichte" },
+  { code: "automation", label: "Gebäudeautomation" },
   { code: "ev_charging", label: "Ladeinfrastruktur" },
+  { code: "alerts", label: "Alarmregeln" },
+  { code: "meter_scanning", label: "Zähler-Scanning (OCR)" },
+  { code: "live_values", label: "Live-Sensorwerte" },
 ] as const;
 
 export function useTenantModules(tenantId: string | null) {
