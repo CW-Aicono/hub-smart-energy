@@ -42,6 +42,7 @@ import { toast } from "sonner";
 export interface AutomationCondition {
   id: string;
   type: "sensor_value" | "time" | "weekday" | "status";
+  connector?: "AND" | "OR"; // how this condition connects to the previous one
   sensor_uuid?: string;
   sensor_name?: string;
   operator?: ">" | "<" | "=" | ">=" | "<=";
@@ -460,7 +461,7 @@ export function AutomationRuleBuilder({
   }, [open, initialData]);
 
   const addCondition = (type: AutomationCondition["type"]) => {
-    const base: AutomationCondition = { id: uid(), type };
+    const base: AutomationCondition = { id: uid(), type, connector: "AND" };
     if (type === "sensor_value") { base.operator = ">"; }
     if (type === "weekday") { base.weekdays = [1, 2, 3, 4, 5]; }
     if (type === "time") { base.time_from = "08:00"; base.time_to = "18:00"; }
@@ -554,17 +555,6 @@ export function AutomationRuleBuilder({
                     <Badge variant="secondary" className="text-[10px]">{conditions.length}</Badge>
                   )}
                 </h3>
-                {conditions.length > 1 && (
-                  <Select value={logicOp} onValueChange={(v) => setLogicOp(v as "AND" | "OR")}>
-                    <SelectTrigger className="w-28 h-8 text-xs">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="AND" className="text-xs">UND (alle)</SelectItem>
-                      <SelectItem value="OR" className="text-xs">ODER (eine)</SelectItem>
-                    </SelectContent>
-                  </Select>
-                )}
               </div>
 
               {conditions.length === 0 && !addConditionOpen && (
@@ -583,9 +573,18 @@ export function AutomationRuleBuilder({
                 <div key={cond.id}>
                   {idx > 0 && (
                     <div className="flex items-center justify-center py-1">
-                      <Badge variant="outline" className="text-[10px] font-mono">
-                        {logicOp === "AND" ? "UND" : "ODER"}
-                      </Badge>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const next = cond.connector === "AND" ? "OR" : "AND";
+                          updateCondition(cond.id, { ...cond, connector: next });
+                        }}
+                        className="inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-mono font-semibold transition-colors hover:bg-accent cursor-pointer select-none"
+                      >
+                        <span className={cond.connector === "AND" ? "text-foreground" : "text-muted-foreground"}>UND</span>
+                        <span className="mx-1.5 text-muted-foreground/40">/</span>
+                        <span className={cond.connector === "OR" ? "text-foreground" : "text-muted-foreground"}>ODER</span>
+                      </button>
                     </div>
                   )}
                   <ConditionCard

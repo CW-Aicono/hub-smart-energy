@@ -107,11 +107,15 @@ function ConditionSummary({ auto }: { auto: LocationAutomationRecord }) {
           {label}
         </Badge>
       ))}
-      {auto.conditions.length > 1 && (
-        <Badge variant="outline" className="text-[10px] font-mono py-0">
-          {auto.logic_operator === "OR" ? "ODER" : "UND"}
-        </Badge>
-      )}
+      {auto.conditions.length > 1 && (() => {
+        const hasOr = auto.conditions.some((c) => c.connector === "OR");
+        const hasAnd = auto.conditions.some((c) => c.connector === "AND" || !c.connector);
+        return (
+          <Badge variant="outline" className="text-[10px] font-mono py-0">
+            {hasAnd && hasOr ? "UND+ODER" : hasOr ? "ODER" : "UND"}
+          </Badge>
+        );
+      })()}
     </div>
   );
 }
