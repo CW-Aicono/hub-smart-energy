@@ -32,7 +32,7 @@ export function FloorRoomsList({ floorId, locationId }: FloorRoomsListProps) {
   const [newName, setNewName] = useState("");
   const [saving, setSaving] = useState(false);
   const [expandedRooms, setExpandedRooms] = useState<Set<string>>(new Set());
-  const [unassignedExpanded, setUnassignedExpanded] = useState(true);
+  const [unassignedExpanded, setUnassignedExpanded] = useState(false);
   const [editingRoomId, setEditingRoomId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState("");
 
