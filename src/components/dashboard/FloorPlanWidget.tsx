@@ -53,9 +53,7 @@ const FloorPlanWidget = ({ locationId }: FloorPlanWidgetProps) => {
     if (!selectedFloorId) return [];
     const floorMeters = meters.filter(m => !m.is_archived && m.floor_id === selectedFloorId);
     const placedUuids = new Set(sensorPositions.map(p => p.sensor_uuid));
-    const placed = floorMeters.filter(m => m.sensor_uuid && placedUuids.has(m.sensor_uuid));
-    console.log("[FloorPlanWidget] locationId:", locationId, "selectedFloorId:", selectedFloorId, "meters:", meters.length, "floorMeters:", floorMeters.length, "sensorPositions:", sensorPositions.length, "placedUuids:", [...placedUuids], "placedFloorMeters:", placed.length);
-    return placed;
+    return floorMeters.filter(m => m.sensor_uuid && placedUuids.has(m.sensor_uuid));
   }, [meters, selectedFloorId, sensorPositions]);
 
   // Latest reading per meter
