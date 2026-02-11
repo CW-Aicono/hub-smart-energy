@@ -32,8 +32,6 @@ export function RoomPolygonEditor({ floorId, floorPlanUrl }: RoomPolygonEditorPr
   const [saving, setSaving] = useState(false);
   const [imgLoaded, setImgLoaded] = useState(false);
   const [overlayStyle, setOverlayStyle] = useState<React.CSSProperties>({});
-  const [renamingRoomId, setRenamingRoomId] = useState<string | null>(null);
-  const [renamingName, setRenamingName] = useState("");
 
   // Calculate the actual rendered image area within the object-contain container
   const updateOverlayStyle = useCallback(() => {
@@ -191,6 +189,7 @@ export function RoomPolygonEditor({ floorId, floorPlanUrl }: RoomPolygonEditorPr
     const { error } = await updateRoom(editingRoom.id, {
       polygon_points: editPoints,
       color: editingRoom.color,
+      name: editingRoom.name,
     } as any);
     setSaving(false);
     if (error) {
@@ -234,19 +233,6 @@ export function RoomPolygonEditor({ floorId, floorPlanUrl }: RoomPolygonEditorPr
     }
   };
 
-  const handleRenameRoom = async (roomId: string) => {
-    if (!renamingName.trim()) return;
-    setSaving(true);
-    const { error } = await updateRoom(roomId, { name: renamingName.trim() });
-    setSaving(false);
-    if (error) {
-      toast.error("Raum konnte nicht umbenannt werden");
-    } else {
-      toast.success("Raumname aktualisiert");
-    }
-    setRenamingRoomId(null);
-    setRenamingName("");
-  };
 
   const activePoints = editingRoom ? editPoints : isDrawing ? drawingPoints : [];
   const activeColor = editingRoom?.color || ROOM_COLORS[rooms.length % ROOM_COLORS.length];
@@ -287,49 +273,12 @@ export function RoomPolygonEditor({ floorId, floorPlanUrl }: RoomPolygonEditorPr
                       style={{ backgroundColor: room.color || "#3b82f6" }}
                     />
                     <div className="flex-1 min-w-0">
-                      {renamingRoomId === room.id ? (
-                        <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-                          <Input
-                            value={renamingName}
-                            onChange={(e) => setRenamingName(e.target.value)}
-                            className="h-6 text-xs py-0 px-1.5"
-                            autoFocus
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") handleRenameRoom(room.id);
-                              if (e.key === "Escape") { setRenamingRoomId(null); setRenamingName(""); }
-                            }}
-                          />
-                          <Button size="icon" className="h-5 w-5 shrink-0" onClick={(e) => { e.stopPropagation(); handleRenameRoom(room.id); }} disabled={!renamingName.trim() || saving}>
-                            <Check className="h-3 w-3" />
-                          </Button>
-                          <Button size="icon" variant="ghost" className="h-5 w-5 shrink-0" onClick={(e) => { e.stopPropagation(); setRenamingRoomId(null); setRenamingName(""); }}>
-                            <X className="h-3 w-3" />
-                          </Button>
-                        </div>
-                      ) : (
-                        <>
-                          <p className="text-sm font-medium truncate">{room.name}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {hasPolygon ? "Platziert" : "Nicht platziert"}
-                          </p>
-                        </>
-                      )}
+                      <p className="text-sm font-medium truncate">{room.name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {hasPolygon ? "Platziert" : "Nicht platziert"}
+                      </p>
                     </div>
-                    {renamingRoomId !== room.id && (
                     <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-6 w-6"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setRenamingRoomId(room.id);
-                          setRenamingName(room.name);
-                        }}
-                        title="Raum umbenennen"
-                      >
-                        <Pencil className="h-3 w-3" />
-                      </Button>
                       {!hasPolygon && (
                         <Button
                           variant="ghost"
@@ -370,7 +319,6 @@ export function RoomPolygonEditor({ floorId, floorPlanUrl }: RoomPolygonEditorPr
                         <Trash2 className="h-3 w-3" />
                       </Button>
                     </div>
-                    )}
                   </div>
                 );
               })
@@ -418,6 +366,14 @@ export function RoomPolygonEditor({ floorId, floorPlanUrl }: RoomPolygonEditorPr
               <p className="text-xs text-muted-foreground">
                 Ziehen Sie die Punkte an die gewünschte Position
               </p>
+              <div className="flex items-center gap-2">
+                <label className="text-xs text-muted-foreground shrink-0">Name:</label>
+                <Input
+                  value={editingRoom.name}
+                  onChange={(e) => setEditingRoom({ ...editingRoom, name: e.target.value })}
+                  className="h-7 text-xs"
+                />
+              </div>
               <div className="flex items-center gap-2">
                 <label className="text-xs text-muted-foreground">Farbe:</label>
                 <div className="flex gap-1 flex-wrap">
