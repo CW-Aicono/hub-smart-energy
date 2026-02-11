@@ -315,10 +315,10 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Settings2 className="h-5 w-5" />
-              Verfügbare Endpunkte – Loxone Miniserver
+              Verfügbare Aktoren – Loxone Miniserver
             </DialogTitle>
             <DialogDescription>
-              Alle Aktoren und Sensoren des verbundenen Miniservers, die für Automationen genutzt werden können.
+              Steuerbare Aktoren des verbundenen Miniservers, die für Automationen genutzt werden können.
             </DialogDescription>
           </DialogHeader>
 
@@ -347,24 +347,14 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
               />
 
               {/* Stats */}
-              <div className="flex gap-3">
-                <Badge variant="secondary" className="gap-1">
-                  <ToggleLeft className="h-3 w-3" />
-                  {actuators.length} Aktoren (steuerbar)
-                </Badge>
-                <Badge variant="outline" className="gap-1">
-                  <Activity className="h-3 w-3" />
-                  {readOnly.length} Sensoren (nur lesen)
-                </Badge>
-              </div>
+              <Badge variant="secondary" className="gap-1">
+                <ToggleLeft className="h-3 w-3" />
+                {actuators.length} Aktoren (steuerbar)
+              </Badge>
 
               {/* Actuators */}
-              {filteredActuators.length > 0 && (
+              {filteredActuators.length > 0 ? (
                 <div className="space-y-2">
-                  <h3 className="text-sm font-semibold flex items-center gap-2">
-                    <ToggleLeft className="h-4 w-4 text-primary" />
-                    Steuerbare Aktoren
-                  </h3>
                   {groupByRoom(filteredActuators).map(([room, items]) => (
                     <div key={room} className="space-y-1">
                       <p className="text-xs font-medium text-muted-foreground px-1">{room}</p>
@@ -401,56 +391,9 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
                     </div>
                   ))}
                 </div>
-              )}
-
-              {/* Read-only Sensors */}
-              {filteredReadOnly.length > 0 && (
-                <div className="space-y-2">
-                  <h3 className="text-sm font-semibold flex items-center gap-2">
-                    <Activity className="h-4 w-4 text-muted-foreground" />
-                    Sensoren (nur lesen – als Trigger nutzbar)
-                  </h3>
-                  {groupByRoom(filteredReadOnly).map(([room, items]) => (
-                    <div key={room} className="space-y-1">
-                      <p className="text-xs font-medium text-muted-foreground px-1">{room}</p>
-                      {items.map((sensor) => {
-                        const Icon = getSensorIcon(sensor.type);
-                        return (
-                          <div
-                            key={sensor.id}
-                            className="flex items-center gap-3 p-3 rounded-lg border bg-muted/30 border-border"
-                          >
-                            <div className="rounded-lg p-2 bg-muted text-muted-foreground">
-                              <Icon className="h-4 w-4" />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2">
-                                <p className="font-medium text-sm truncate">{sensor.name}</p>
-                                <Badge variant="outline" className="text-[10px] shrink-0">
-                                  {sensor.controlType}
-                                </Badge>
-                              </div>
-                              <p className="text-xs text-muted-foreground truncate">
-                                {sensor.category}
-                              </p>
-                            </div>
-                            <div className="text-right shrink-0">
-                              <p className="text-sm font-mono font-medium">
-                                {sensor.value}{sensor.unit ? ` ${sensor.unit}` : ""}
-                              </p>
-                              <p className="text-[10px] text-muted-foreground">{sensor.status}</p>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {filteredActuators.length === 0 && filteredReadOnly.length === 0 && (
+              ) : (
                 <div className="text-center py-6 text-sm text-muted-foreground">
-                  {searchTerm ? "Keine Ergebnisse für diese Suche." : "Keine Endpunkte gefunden."}
+                  {searchTerm ? "Keine Ergebnisse für diese Suche." : "Keine steuerbaren Aktoren gefunden."}
                 </div>
               )}
             </div>
