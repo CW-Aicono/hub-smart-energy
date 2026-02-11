@@ -25,7 +25,8 @@ import {
   Star,
   Layers,
   ChevronDown,
-  ChevronRight
+  ChevronRight,
+  Cpu
 } from "lucide-react";
 
 const usageTypeLabels: Record<LocationUsageType, string> = {
@@ -212,6 +213,22 @@ const LocationDetail = () => {
 
           {/* Meters & Alerts */}
           <MeterManagement locationId={location.id} />
+
+          {/* Automation */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Cpu className="h-5 w-5" />
+                Automation
+              </CardTitle>
+              <CardDescription>
+                Automatisierte Steuerungsszenarien für diesen Standort
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-muted-foreground py-4">Noch keine Automationen konfiguriert.</p>
+            </CardContent>
+          </Card>
 
           {/* Integrations Card */}
           <LocationIntegrationsList locationId={location.id} />
