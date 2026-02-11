@@ -17,6 +17,14 @@ export const ENERGY_TYPE_LABELS: Record<string, string> = {
   wasser: "Wasser",
 };
 
+/** Default display units per energy type */
+export const ENERGY_TYPE_UNITS: Record<string, string> = {
+  strom: "kWh",
+  gas: "m³",
+  waerme: "kWh",
+  wasser: "m³",
+};
+
 /** HSL CSS variable references for charts (Recharts fill/stroke) */
 export const ENERGY_CHART_COLORS: Record<string, string> = {
   strom: "hsl(var(--energy-strom))",

@@ -5,7 +5,7 @@ import { useMeters } from "@/hooks/useMeters";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useMemo, useState, useRef, useEffect } from "react";
-import { formatEnergy } from "@/lib/formatEnergy";
+import { formatEnergy, formatEnergyByType } from "@/lib/formatEnergy";
 import { supabase } from "@/integrations/supabase/client";
 import { ENERGY_CHART_COLORS, ENERGY_TYPE_LABELS } from "@/lib/energyTypeColors";
 import { startOfDay, startOfWeek, startOfMonth, startOfQuarter, startOfYear } from "date-fns";
@@ -40,6 +40,7 @@ interface SankeyWidgetProps {
 interface FlowLink {
   sourceName: string;
   sourceColor: string;
+  sourceType: string;
   targetName: string;
   value: number;
 }
@@ -63,7 +64,7 @@ const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
   const { readings, loading: energyLoading, hasData } = useEnergyData(locationId);
   const { meters } = useMeters();
   const svgRef = useRef<SVGSVGElement>(null);
-  const [tooltip, setTooltip] = useState<{ x: number; y: number; source: string; target: string; value: number } | null>(null);
+  const [tooltip, setTooltip] = useState<{ x: number; y: number; source: string; target: string; value: number; sourceType: string } | null>(null);
 
   // Fetch floors and rooms for specific location
   const [floors, setFloors] = useState<{ id: string; name: string }[]>([]);
@@ -148,14 +149,14 @@ const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
         }
       }
 
-      const key = `${sourceName}|||${targetName}|||${sourceColor}`;
+      const key = `${sourceName}|||${targetName}|||${sourceColor}|||${energyType}`;
       flowMap[key] = (flowMap[key] || 0) + r.value;
     });
 
     return Object.entries(flowMap)
       .map(([key, value]) => {
-        const [sourceName, targetName, sourceColor] = key.split("|||");
-        return { sourceName, targetName, sourceColor, value };
+        const [sourceName, targetName, sourceColor, sourceType] = key.split("|||");
+        return { sourceName, targetName, sourceColor, sourceType, value };
       })
       .filter((f) => f.value > 0);
   }, [filteredReadings, meterMap, locationId, locations, floors, rooms]);
@@ -167,6 +168,12 @@ const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
   const sourceColors = useMemo(() => {
     const map: Record<string, string> = {};
     flows.forEach((f) => { map[f.sourceName] = f.sourceColor; });
+    return map;
+  }, [flows]);
+
+  const sourceTypes = useMemo(() => {
+    const map: Record<string, string> = {};
+    flows.forEach((f) => { map[f.sourceName] = f.sourceType; });
     return map;
   }, [flows]);
 
@@ -273,7 +280,7 @@ const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
     const handleMouseMove = (e: React.MouseEvent) => {
       if (!svgRef.current) return;
       const rect = svgRef.current.getBoundingClientRect();
-      setTooltip({ x: e.clientX - rect.left, y: e.clientY - rect.top - 10, source: flow.sourceName, target: flow.targetName, value: flow.value });
+      setTooltip({ x: e.clientX - rect.left, y: e.clientY - rect.top - 10, source: flow.sourceName, target: flow.targetName, value: flow.value, sourceType: flow.sourceType });
     };
 
     // Only show inline label if the link band is tall enough
@@ -299,7 +306,7 @@ const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
             opacity={0.7}
             className="pointer-events-none"
           >
-            {formatEnergy(flow.value)}
+            {formatEnergyByType(flow.value, flow.sourceType)}
           </text>
         )}
       </g>
@@ -337,7 +344,7 @@ const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
                 <g key={`src-${i}`}>
                   <rect x={srcX} y={pos.y} width={nodeW} height={pos.h} rx={3} fill={color} opacity={0.9} />
                   <text x={srcX - 6} y={pos.y + pos.h / 2 - 6} textAnchor="end" dominantBaseline="middle" fill="hsl(var(--foreground))" fontSize={10} fontWeight={500}>{name}</text>
-                  <text x={srcX - 6} y={pos.y + pos.h / 2 + 6} textAnchor="end" dominantBaseline="middle" fill="hsl(var(--muted-foreground))" fontSize={8}>{formatEnergy(sourceValues[name])}</text>
+                  <text x={srcX - 6} y={pos.y + pos.h / 2 + 6} textAnchor="end" dominantBaseline="middle" fill="hsl(var(--muted-foreground))" fontSize={8}>{formatEnergyByType(sourceValues[name], sourceTypes[name] || "strom")}</text>
                 </g>
               );
             })}
@@ -359,7 +366,7 @@ const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
           {tooltip && (
             <div className="absolute pointer-events-none z-10 rounded-lg border bg-background px-3 py-2 text-xs shadow-lg" style={{ left: tooltip.x, top: tooltip.y, transform: "translate(-50%, -100%)" }}>
               <div className="font-semibold">{tooltip.source} → {tooltip.target}</div>
-              <div className="text-muted-foreground">{formatEnergy(tooltip.value)}</div>
+              <div className="text-muted-foreground">{formatEnergyByType(tooltip.value, tooltip.sourceType)}</div>
             </div>
           )}
         </div>
