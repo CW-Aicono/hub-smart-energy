@@ -366,7 +366,7 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
                   onClick={() => setConfigOpen(true)}
                 >
                   <Settings2 className="h-4 w-4" />
-                  Konfiguration
+                  Verfügbare Aktoren
                   {!intLoading && loxoneIntegration && (
                     <Badge variant="secondary" className="ml-1 text-[10px]">
                       {actuators.length} Aktoren
