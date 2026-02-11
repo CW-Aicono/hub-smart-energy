@@ -624,9 +624,9 @@ export function FloorPlanDialog({ floor, locationId, open, onOpenChange }: Floor
                                 {placed.sensorInfo.value} {placed.sensorInfo.unit}
                               </p>
                             )}
-                            {/* Resize handle - bottom left corner */}
+                            {/* Resize handle - bottom right corner */}
                             <div
-                              className="absolute -bottom-1 -left-1 w-4 h-4 cursor-nwse-resize opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center bg-primary rounded-full shadow-md"
+                              className="absolute -bottom-1 -right-1 w-4 h-4 cursor-nwse-resize opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center bg-primary rounded-full shadow-md"
                               onMouseDown={(e) => handleResizeStart(e, placed.id, scale)}
                               onTouchStart={(e) => handleResizeStart(e, placed.id, scale)}
                               draggable={false}
