@@ -1,10 +1,12 @@
-import { useMemo } from "react";
+import { useMemo, useState, useEffect, useCallback } from "react";
 import { Meter } from "@/hooks/useMeters";
 import { MeterReading } from "@/hooks/useMeterReadings";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { AlertTriangle, CheckCircle2, Minus, Zap, Flame, Droplets, Thermometer } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { formatEnergy } from "@/lib/formatEnergy";
 
 interface MeterAggregationWidgetProps {
   meters: Meter[];
@@ -43,6 +45,66 @@ function getLatestReading(meterId: string, readings: MeterReading[]): number | n
 
 export const MeterAggregationWidget = ({ meters, readings }: MeterAggregationWidgetProps) => {
   const activeMeters = meters.filter((m) => !m.is_archived);
+  const [liveValues, setLiveValues] = useState<Map<string, number>>(new Map());
+
+  // Fetch live sensor values for automatic meters
+  const fetchLiveValues = useCallback(async () => {
+    const automaticMeters = activeMeters.filter(
+      (m) => m.capture_type === "automatic" && m.sensor_uuid && m.location_integration_id
+    );
+    if (automaticMeters.length === 0) return;
+
+    // Group by integration
+    const byIntegration = new Map<string, Meter[]>();
+    automaticMeters.forEach((m) => {
+      const key = m.location_integration_id!;
+      const existing = byIntegration.get(key) || [];
+      existing.push(m);
+      byIntegration.set(key, existing);
+    });
+
+    const newValues = new Map<string, number>();
+
+    for (const [integrationId, intMeters] of byIntegration) {
+      try {
+        const { data, error } = await supabase.functions.invoke("loxone-api", {
+          body: { locationIntegrationId: integrationId, action: "getSensors" },
+        });
+        if (error || !data?.success) continue;
+
+        for (const meter of intMeters) {
+          const sensor = data.sensors?.find((s: any) => s.id === meter.sensor_uuid);
+          if (sensor && sensor.value !== undefined) {
+            const numVal = typeof sensor.value === "string" ? parseFloat(sensor.value) : sensor.value;
+            if (!isNaN(numVal)) {
+              newValues.set(meter.id, numVal);
+            }
+          }
+        }
+      } catch (err) {
+        console.warn(`Failed to fetch sensors for integration ${integrationId}:`, err);
+      }
+    }
+
+    setLiveValues(newValues);
+  }, [activeMeters]);
+
+  useEffect(() => {
+    fetchLiveValues();
+    const interval = setInterval(fetchLiveValues, 300000); // 5 min
+    return () => clearInterval(interval);
+  }, [fetchLiveValues]);
+
+  // Get value: prefer live for automatic meters, fall back to meter_readings
+  const getMeterValue = useCallback(
+    (meter: Meter): number | null => {
+      if (meter.capture_type === "automatic" && liveValues.has(meter.id)) {
+        return liveValues.get(meter.id)!;
+      }
+      return getLatestReading(meter.id, readings);
+    },
+    [liveValues, readings]
+  );
 
   const aggregations = useMemo<AggregationRow[]>(() => {
     // Find meters that have children
@@ -58,9 +120,9 @@ export const MeterAggregationWidget = ({ meters, readings }: MeterAggregationWid
         if (!parent) return null;
 
         const children = activeMeters.filter((m) => m.parent_meter_id === parentId);
-        const parentValue = getLatestReading(parent.id, readings);
+        const parentValue = getMeterValue(parent);
 
-        const childValues = children.map((c) => getLatestReading(c.id, readings));
+        const childValues = children.map((c) => getMeterValue(c));
         const hasAllChildValues = childValues.every((v) => v !== null);
         const childrenSum = hasAllChildValues
           ? childValues.reduce((sum, v) => sum! + v!, 0)
@@ -79,7 +141,7 @@ export const MeterAggregationWidget = ({ meters, readings }: MeterAggregationWid
         return { parent, children, parentValue, childrenSum, difference, coveragePercent };
       })
       .filter(Boolean) as AggregationRow[];
-  }, [activeMeters, readings]);
+  }, [activeMeters, getMeterValue]);
 
   if (aggregations.length === 0) {
     return (
