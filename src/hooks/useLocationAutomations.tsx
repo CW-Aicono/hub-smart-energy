@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "./useTenant";
+import type { AutomationCondition, AutomationAction } from "@/components/locations/AutomationRuleBuilder";
 
 export interface LocationAutomationRecord {
   id: string;
@@ -18,6 +19,11 @@ export interface LocationAutomationRecord {
   last_executed_at: string | null;
   created_at: string;
   updated_at: string;
+  // New complex fields
+  conditions: AutomationCondition[];
+  actions: AutomationAction[];
+  logic_operator: "AND" | "OR";
+  schedule: unknown | null;
 }
 
 interface CreateAutomationInput {
@@ -30,6 +36,10 @@ interface CreateAutomationInput {
   actuator_control_type: string;
   action_type: string;
   action_value?: string;
+  conditions?: AutomationCondition[];
+  actions?: AutomationAction[];
+  logic_operator?: string;
+  is_active?: boolean;
 }
 
 export function useLocationAutomations(locationId: string | undefined) {
@@ -46,7 +56,14 @@ export function useLocationAutomations(locationId: string | undefined) {
       .select("*")
       .eq("location_id", locationId)
       .order("created_at", { ascending: true });
-    if (!error && data) setAutomations(data as LocationAutomationRecord[]);
+    if (!error && data) {
+      setAutomations(data.map((d: any) => ({
+        ...d,
+        conditions: Array.isArray(d.conditions) ? d.conditions : [],
+        actions: Array.isArray(d.actions) ? d.actions : [],
+        logic_operator: d.logic_operator || "AND",
+      })) as LocationAutomationRecord[]);
+    }
     setLoading(false);
   }, [locationId]);
 
@@ -56,9 +73,9 @@ export function useLocationAutomations(locationId: string | undefined) {
     if (!tenant?.id) return { error: new Error("Kein Mandant") };
     const { data, error } = await supabase
       .from("location_automations")
-      .insert({ ...input, tenant_id: tenant.id })
+      .insert({ ...input, tenant_id: tenant.id } as any)
       .select()
-      .single();
+      .single() as { data: any; error: any };
     if (!error) await fetchAutomations();
     return { data: data as LocationAutomationRecord | null, error };
   };
@@ -66,7 +83,7 @@ export function useLocationAutomations(locationId: string | undefined) {
   const updateAutomation = async (id: string, updates: Partial<CreateAutomationInput & { is_active: boolean }>) => {
     const { error } = await supabase
       .from("location_automations")
-      .update(updates)
+      .update(updates as any)
       .eq("id", id);
     if (!error) await fetchAutomations();
     return { error };
@@ -84,18 +101,25 @@ export function useLocationAutomations(locationId: string | undefined) {
   const executeAutomation = async (automation: LocationAutomationRecord) => {
     setExecuting(automation.id);
     try {
-      const { data, error } = await supabase.functions.invoke("loxone-api", {
-        body: {
-          locationIntegrationId: automation.location_integration_id,
-          action: "executeCommand",
-          controlUuid: automation.actuator_uuid,
-          commandValue: automation.action_value || "pulse",
-        },
-      });
-      if (error || !data?.success) {
-        throw new Error(data?.error || "Ausführung fehlgeschlagen");
+      // Execute all actions (multi-action support)
+      const actionsToRun = automation.actions.length > 0
+        ? automation.actions
+        : [{ actuator_uuid: automation.actuator_uuid, action_type: automation.action_value || automation.action_type || "pulse", action_value: automation.action_value }];
+
+      for (const action of actionsToRun) {
+        const { data, error } = await supabase.functions.invoke("loxone-api", {
+          body: {
+            locationIntegrationId: automation.location_integration_id,
+            action: "executeCommand",
+            controlUuid: action.actuator_uuid,
+            commandValue: action.action_value || action.action_type || "pulse",
+          },
+        });
+        if (error || !data?.success) {
+          throw new Error(data?.error || "Ausführung fehlgeschlagen");
+        }
       }
-      // Update last_executed_at
+
       await supabase
         .from("location_automations")
         .update({ last_executed_at: new Date().toISOString() })

@@ -6,16 +6,12 @@ import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogFooter,
 } from "@/components/ui/dialog";
 import {
   AlertDialog,
@@ -46,16 +42,17 @@ import {
   Trash2,
   Clock,
   Thermometer,
-  CheckCircle2,
+  CalendarDays,
+  GitBranch,
 } from "lucide-react";
 import { useLocationIntegrations } from "@/hooks/useIntegrations";
 import { useLoxoneSensors, LoxoneSensor } from "@/hooks/useLoxoneSensors";
 import { useLocationAutomations, LocationAutomationRecord } from "@/hooks/useLocationAutomations";
+import { AutomationRuleBuilder, AutomationRuleData } from "@/components/locations/AutomationRuleBuilder";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
 import { de } from "date-fns/locale";
 
-// Icon mapping for sensor types
 function getSensorIcon(type: string) {
   switch (type) {
     case "temperature": return Thermometer;
@@ -92,20 +89,40 @@ interface LocationAutomationProps {
   locationId: string;
 }
 
+/** Summary badges for conditions */
+function ConditionSummary({ auto }: { auto: LocationAutomationRecord }) {
+  if (!auto.conditions || auto.conditions.length === 0) return null;
+  const icons: { icon: typeof Clock; label: string }[] = [];
+  const types = new Set(auto.conditions.map((c) => c.type));
+  if (types.has("sensor_value")) icons.push({ icon: Thermometer, label: "Sensorwert" });
+  if (types.has("time")) icons.push({ icon: Clock, label: "Uhrzeit" });
+  if (types.has("weekday")) icons.push({ icon: CalendarDays, label: "Wochentage" });
+  if (types.has("status")) icons.push({ icon: ToggleLeft, label: "Status" });
+
+  return (
+    <div className="flex items-center gap-1 flex-wrap">
+      {icons.map(({ icon: I, label }) => (
+        <Badge key={label} variant="outline" className="text-[10px] gap-1 py-0">
+          <I className="h-2.5 w-2.5" />
+          {label}
+        </Badge>
+      ))}
+      {auto.conditions.length > 1 && (
+        <Badge variant="outline" className="text-[10px] font-mono py-0">
+          {auto.logic_operator === "OR" ? "ODER" : "UND"}
+        </Badge>
+      )}
+    </div>
+  );
+}
+
 export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
   const [isOpen, setIsOpen] = useState(false);
   const [configOpen, setConfigOpen] = useState(false);
-  const [addOpen, setAddOpen] = useState(false);
+  const [ruleBuilderOpen, setRuleBuilderOpen] = useState(false);
   const [editAutomation, setEditAutomation] = useState<LocationAutomationRecord | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<LocationAutomationRecord | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
-
-  // Form state
-  const [formName, setFormName] = useState("");
-  const [formDesc, setFormDesc] = useState("");
-  const [formActuator, setFormActuator] = useState<LoxoneSensor | null>(null);
-  const [formActionType, setFormActionType] = useState("pulse");
-  const [saving, setSaving] = useState(false);
 
   const { locationIntegrations, loading: intLoading } = useLocationIntegrations(locationId);
   const loxoneIntegration = locationIntegrations.find(
@@ -118,6 +135,7 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
   } = useLocationAutomations(locationId);
 
   const actuators = (sensors || []).filter(isActuator);
+  const allSensors = sensors || [];
 
   const filteredActuators = searchTerm
     ? actuators.filter((s) =>
@@ -137,67 +155,56 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
     return Object.entries(grouped).sort(([a], [b]) => a.localeCompare(b));
   };
 
-  const openAddDialog = () => {
-    setFormName("");
-    setFormDesc("");
-    setFormActuator(null);
-    setFormActionType("pulse");
-    setAddOpen(true);
+  const openAddRule = () => {
+    setEditAutomation(null);
+    setRuleBuilderOpen(true);
   };
 
-  const openEditDialog = (auto: LocationAutomationRecord) => {
-    setFormName(auto.name);
-    setFormDesc(auto.description || "");
-    setFormActionType(auto.action_value || auto.action_type);
-    // Try to find actuator in loaded sensors
-    const found = actuators.find((s) => s.id === auto.actuator_uuid);
-    setFormActuator(found || null);
+  const openEditRule = (auto: LocationAutomationRecord) => {
     setEditAutomation(auto);
+    setRuleBuilderOpen(true);
   };
 
-  const handleSave = async () => {
-    if (!formName.trim()) { toast.error("Name ist erforderlich"); return; }
-    if (!formActuator && !editAutomation) { toast.error("Bitte einen Aktor auswählen"); return; }
-    if (!loxoneIntegration) return;
+  const handleSaveRule = async (data: AutomationRuleData) => {
+    if (!loxoneIntegration) throw new Error("Keine Integration");
 
-    setSaving(true);
-    try {
-      if (editAutomation) {
-        const { error } = await updateAutomation(editAutomation.id, {
-          name: formName,
-          description: formDesc || undefined,
-          action_type: formActionType === "pulse" ? "pulse" : "command",
-          action_value: formActionType,
-          ...(formActuator ? {
-            actuator_uuid: formActuator.id,
-            actuator_name: formActuator.name,
-            actuator_control_type: formActuator.controlType,
-          } : {}),
-        });
-        if (error) throw error;
-        toast.success("Automation aktualisiert");
-        setEditAutomation(null);
-      } else {
-        if (!formActuator) return;
-        const { error } = await createAutomation({
-          location_id: locationId,
-          location_integration_id: loxoneIntegration.id,
-          name: formName,
-          description: formDesc || undefined,
-          actuator_uuid: formActuator.id,
-          actuator_name: formActuator.name,
-          actuator_control_type: formActuator.controlType,
-          action_type: formActionType === "pulse" ? "pulse" : "command",
-          action_value: formActionType,
-        });
-        if (error) throw error;
-        toast.success("Automation erstellt");
-        setAddOpen(false);
-      }
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Fehler beim Speichern");
-    } finally {
-      setSaving(false);
+    // Use first action as primary actuator for backward compatibility
+    const primary = data.actions[0];
+
+    if (editAutomation) {
+      const { error } = await updateAutomation(editAutomation.id, {
+        name: data.name,
+        description: data.description || undefined,
+        actuator_uuid: primary.actuator_uuid,
+        actuator_name: primary.actuator_name,
+        actuator_control_type: primary.control_type,
+        action_type: primary.action_type === "pulse" ? "pulse" : "command",
+        action_value: primary.action_value || primary.action_type,
+        conditions: data.conditions,
+        actions: data.actions,
+        logic_operator: data.logic_operator,
+        is_active: data.is_active,
+      } as any);
+      if (error) throw error;
+      toast.success("Automation aktualisiert");
+    } else {
+      const { error } = await createAutomation({
+        location_id: locationId,
+        location_integration_id: loxoneIntegration.id,
+        name: data.name,
+        description: data.description || undefined,
+        actuator_uuid: primary.actuator_uuid,
+        actuator_name: primary.actuator_name,
+        actuator_control_type: primary.control_type,
+        action_type: primary.action_type === "pulse" ? "pulse" : "command",
+        action_value: primary.action_value || primary.action_type,
+        conditions: data.conditions,
+        actions: data.actions,
+        logic_operator: data.logic_operator,
+        is_active: data.is_active,
+      });
+      if (error) throw error;
+      toast.success("Automation erstellt");
     }
   };
 
@@ -255,7 +262,6 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
 
           <CollapsibleContent>
             <CardContent className="space-y-3">
-              {/* Saved automations */}
               {autoLoading ? (
                 <div className="space-y-2">
                   <Skeleton className="h-16 w-full" />
@@ -263,13 +269,17 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
                 </div>
               ) : automations.length > 0 ? (
                 automations.map((auto) => {
+                  const actionsCount = auto.actions?.length || 1;
+                  const primaryName = auto.actions?.length > 0
+                    ? auto.actions.map((a) => a.actuator_name).join(", ")
+                    : auto.actuator_name;
                   const Icon = getSensorIcon(
                     auto.actuator_control_type === "Pushbutton" ? "button" :
                     auto.actuator_control_type === "Switch" ? "switch" :
                     auto.actuator_control_type === "Dimmer" ? "light" : "unknown"
                   );
                   const isExecuting = executing === auto.id;
-                  const actionLabel = ACTION_TYPES.find((a) => a.value === (auto.action_value || auto.action_type))?.label || auto.action_type;
+
                   return (
                     <div
                       key={auto.id}
@@ -284,20 +294,27 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
                           auto.is_active ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"
                         }`}
                       >
-                        <Icon className="h-5 w-5" />
+                        {auto.conditions?.length > 0 ? (
+                          <GitBranch className="h-5 w-5" />
+                        ) : (
+                          <Icon className="h-5 w-5" />
+                        )}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
                           <p className="font-medium text-sm">{auto.name}</p>
-                          <Badge variant="outline" className="text-[10px]">{actionLabel}</Badge>
+                          {actionsCount > 1 && (
+                            <Badge variant="secondary" className="text-[10px]">{actionsCount} Aktionen</Badge>
+                          )}
                         </div>
                         {auto.description && (
                           <p className="text-xs text-muted-foreground mt-0.5">{auto.description}</p>
                         )}
+                        <ConditionSummary auto={auto} />
                         <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
                           <span className="flex items-center gap-1">
                             <Server className="h-3 w-3" />
-                            {auto.actuator_name}
+                            {primaryName}
                           </span>
                           {auto.last_executed_at && (
                             <span className="flex items-center gap-1">
@@ -326,7 +343,7 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
                           size="icon"
                           variant="ghost"
                           className="h-8 w-8"
-                          onClick={() => openEditDialog(auto)}
+                          onClick={() => openEditRule(auto)}
                           title="Bearbeiten"
                         >
                           <Pencil className="h-3.5 w-3.5" />
@@ -377,7 +394,7 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
                   variant="outline"
                   size="sm"
                   className="flex-1 gap-2"
-                  onClick={openAddDialog}
+                  onClick={openAddRule}
                   disabled={!loxoneIntegration}
                 >
                   <Plus className="h-4 w-4" />
@@ -389,7 +406,7 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
         </Card>
       </Collapsible>
 
-      {/* ── Konfiguration Dialog ── */}
+      {/* ── Verfügbare Aktoren Dialog ── */}
       <Dialog open={configOpen} onOpenChange={setConfigOpen}>
         <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
@@ -472,106 +489,31 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
         </DialogContent>
       </Dialog>
 
-      {/* ── Add / Edit Automation Dialog ── */}
-      <Dialog open={addOpen || !!editAutomation} onOpenChange={(open) => { if (!open) { setAddOpen(false); setEditAutomation(null); } }}>
-        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Cpu className="h-5 w-5" />
-              {editAutomation ? "Automation bearbeiten" : "Neue Automation"}
-            </DialogTitle>
-            <DialogDescription>
-              {editAutomation
-                ? "Ändern Sie die Konfiguration dieser Automation."
-                : "Wählen Sie einen Aktor und konfigurieren Sie die Aktion."}
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4 py-2">
-            <div className="space-y-2">
-              <Label>Name *</Label>
-              <Input
-                placeholder="z.B. Flurbeleuchtung schalten"
-                value={formName}
-                onChange={(e) => setFormName(e.target.value)}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label>Beschreibung</Label>
-              <Textarea
-                placeholder="Optionale Beschreibung..."
-                value={formDesc}
-                onChange={(e) => setFormDesc(e.target.value)}
-                rows={2}
-              />
-            </div>
-
-            {/* Actuator selection */}
-            <div className="space-y-2">
-              <Label>Aktor auswählen *</Label>
-              {sensorsLoading ? (
-                <Skeleton className="h-10 w-full" />
-              ) : actuators.length === 0 ? (
-                <p className="text-sm text-muted-foreground">Keine Aktoren verfügbar.</p>
-              ) : (
-                <div className="max-h-48 overflow-y-auto border rounded-lg">
-                  {actuators.map((sensor) => {
-                    const SIcon = getSensorIcon(sensor.type);
-                    const isSelected = formActuator?.id === sensor.id;
-                    return (
-                      <button
-                        key={sensor.id}
-                        type="button"
-                        onClick={() => setFormActuator(sensor)}
-                        className={`flex items-center gap-3 w-full p-3 text-left transition-colors border-b last:border-b-0 ${
-                          isSelected
-                            ? "bg-primary/10 border-primary/20"
-                            : "hover:bg-muted/50"
-                        }`}
-                      >
-                        <div className={`rounded-md p-1.5 ${isSelected ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground"}`}>
-                          <SIcon className="h-4 w-4" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium truncate">{sensor.name}</p>
-                          <p className="text-[11px] text-muted-foreground">{sensor.room} · {sensor.controlType}</p>
-                        </div>
-                        {isSelected && <CheckCircle2 className="h-4 w-4 text-primary shrink-0" />}
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-
-            {/* Action type */}
-            <div className="space-y-2">
-              <Label>Aktion</Label>
-              <Select value={formActionType} onValueChange={setFormActionType}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {ACTION_TYPES.map((at) => (
-                    <SelectItem key={at.value} value={at.value}>{at.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => { setAddOpen(false); setEditAutomation(null); }}>
-              Abbrechen
-            </Button>
-            <Button onClick={handleSave} disabled={saving}>
-              {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              {editAutomation ? "Speichern" : "Erstellen"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* ── Rule Builder Sheet ── */}
+      <AutomationRuleBuilder
+        open={ruleBuilderOpen}
+        onOpenChange={(open) => {
+          setRuleBuilderOpen(open);
+          if (!open) setEditAutomation(null);
+        }}
+        sensors={allSensors}
+        sensorsLoading={sensorsLoading}
+        initialData={editAutomation ? {
+          name: editAutomation.name,
+          description: editAutomation.description || "",
+          conditions: editAutomation.conditions,
+          actions: editAutomation.actions,
+          logic_operator: editAutomation.logic_operator,
+          is_active: editAutomation.is_active,
+          actuator_uuid: editAutomation.actuator_uuid,
+          actuator_name: editAutomation.actuator_name,
+          actuator_control_type: editAutomation.actuator_control_type,
+          action_type: editAutomation.action_type,
+          action_value: editAutomation.action_value,
+        } : undefined}
+        onSave={handleSaveRule}
+        isEdit={!!editAutomation}
+      />
 
       {/* ── Delete Confirmation ── */}
       <AlertDialog open={!!deleteTarget} onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}>
