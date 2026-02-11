@@ -89,10 +89,21 @@ export function useEnergyData(locationId?: string | null) {
         });
         if (error || !data?.success) continue;
 
-        for (const meter of intMeters) {
+      for (const meter of intMeters) {
           const sensor = data.sensors?.find((s: any) => s.id === meter.sensor_uuid);
-          if (sensor && sensor.value !== undefined) {
-            const numVal = typeof sensor.value === "string" ? parseFloat(sensor.value) : sensor.value;
+          if (sensor) {
+            // Prefer rawValue (numeric), fall back to parsing value string
+            let numVal: number;
+            if (typeof sensor.rawValue === "number") {
+              numVal = sensor.rawValue;
+            } else if (typeof sensor.rawValue === "string") {
+              numVal = parseFloat(sensor.rawValue.replace(",", "."));
+            } else if (typeof sensor.value === "string") {
+              numVal = parseFloat(sensor.value.replace(",", "."));
+            } else {
+              numVal = typeof sensor.value === "number" ? sensor.value : NaN;
+            }
+
             if (!isNaN(numVal)) {
               newLiveReadings.push({
                 meter_id: meter.id,
