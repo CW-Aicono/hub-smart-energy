@@ -25,6 +25,7 @@ const ENERGY_TYPE_CONFIG: Record<string, { label: string; icon: typeof Zap; colo
 interface MeterLiveValue {
   meterId: string;
   value: number | null;
+  totalDay: number | null;
   loading: boolean;
 }
 
@@ -37,7 +38,7 @@ const LiveValues = () => {
   const [selectedLocationId, setSelectedLocationId] = useState<string>("all");
   const [selectedEnergyType, setSelectedEnergyType] = useState<string>("all");
   const [selectedCaptureType, setSelectedCaptureType] = useState<string>("all");
-  const [liveValues, setLiveValues] = useState<Map<string, number>>(new Map());
+  const [liveValues, setLiveValues] = useState<Map<string, { value: number; totalDay: number | null }>>(new Map());
   const [manualValues, setManualValues] = useState<Map<string, { value: number; date: string }>>(new Map());
   const [loadingLive, setLoadingLive] = useState(false);
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
@@ -72,7 +73,7 @@ const LiveValues = () => {
     if (autoMeters.length === 0) return;
 
     setLoadingLive(true);
-    const newValues = new Map<string, number>();
+    const newValues = new Map<string, { value: number; totalDay: number | null }>();
 
     // Group by integration
     const byIntegration = new Map<string, typeof autoMeters>();
@@ -92,10 +93,16 @@ const LiveValues = () => {
 
         for (const meter of intMeters) {
           const sensor = data.sensors?.find((s: any) => s.id === meter.sensor_uuid);
-          if (sensor && sensor.value !== undefined) {
-            const numVal = typeof sensor.value === "string" ? parseFloat(sensor.value) : sensor.value;
+          if (sensor) {
+            // Use rawValue (numeric) instead of formatted value string
+            const numVal = typeof sensor.rawValue === "number"
+              ? sensor.rawValue
+              : (sensor.rawValue != null ? parseFloat(String(sensor.rawValue)) : NaN);
+            const totalDay = typeof sensor.totalDay === "number"
+              ? sensor.totalDay
+              : (sensor.totalDay != null ? parseFloat(String(sensor.totalDay)) : null);
             if (!isNaN(numVal)) {
-              newValues.set(meter.id, numVal);
+              newValues.set(meter.id, { value: numVal, totalDay: totalDay !== null && !isNaN(totalDay) ? totalDay : null });
             }
           }
         }
@@ -112,7 +119,7 @@ const LiveValues = () => {
   useEffect(() => {
     if (meters.length > 0) {
       fetchLiveValues();
-      const interval = setInterval(fetchLiveValues, 300000);
+      const interval = setInterval(fetchLiveValues, 30000);
       return () => clearInterval(interval);
     }
   }, [fetchLiveValues, meters.length]);
@@ -138,15 +145,16 @@ const LiveValues = () => {
       });
   }, [meters, selectedLocationId, selectedEnergyType, selectedCaptureType, searchQuery, locations]);
 
-  const getValue = (meter: typeof meters[0]): { value: number | null; source: "live" | "manual" | "none"; date?: string } => {
+  const getValue = (meter: typeof meters[0]): { value: number | null; totalDay: number | null; source: "live" | "manual" | "none"; date?: string } => {
     if (meter.capture_type === "automatic" && liveValues.has(meter.id)) {
-      return { value: liveValues.get(meter.id)!, source: "live" };
+      const live = liveValues.get(meter.id)!;
+      return { value: live.value, totalDay: live.totalDay, source: "live" };
     }
     const manual = manualValues.get(meter.id);
     if (manual) {
-      return { value: manual.value, source: "manual", date: manual.date };
+      return { value: manual.value, totalDay: null, source: "manual", date: manual.date };
     }
-    return { value: null, source: "none" };
+    return { value: null, totalDay: null, source: "none" };
   };
 
   if (authLoading || locationsLoading || metersLoading) {
@@ -256,10 +264,11 @@ const LiveValues = () => {
           ) : (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {filteredMeters.map((meter) => {
-                const { value, source, date } = getValue(meter);
+                const { value, totalDay, source, date } = getValue(meter);
                 const config = ENERGY_TYPE_CONFIG[meter.energy_type] || ENERGY_TYPE_CONFIG.strom;
                 const Icon = config.icon;
                 const location = locations.find((l) => l.id === meter.location_id);
+                const isFlowType = meter.energy_type === "wasser" || meter.energy_type === "gas";
 
                 return (
                   <Card key={meter.id} className="relative overflow-hidden">
@@ -279,12 +288,21 @@ const LiveValues = () => {
                         <div className="text-2xl font-bold tracking-tight">
                           {value !== null ? (
                             <>
-                              {`${value.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${meter.unit}`}
+                              {value.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {meter.unit}
+                              {isFlowType && (
+                                <span className="text-sm font-normal text-muted-foreground ml-1">Durchfluss</span>
+                              )}
                             </>
                           ) : (
                             <span className="text-muted-foreground text-lg">Kein Wert</span>
                           )}
                         </div>
+                        {totalDay !== null && (
+                          <div className="text-sm text-muted-foreground font-medium">
+                            {totalDay.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {meter.unit === "kW" ? "kWh" : meter.unit}
+                            <span className="ml-1 font-normal">Gesamt heute</span>
+                          </div>
+                        )}
                         <div className="space-y-1">
                           <p className="text-xs text-muted-foreground truncate">
                             {location?.name || "–"}

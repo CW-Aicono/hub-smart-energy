@@ -34,6 +34,7 @@ interface StateValueResult {
   secondaryValue?: number | string | null;
   secondaryStateName?: string;
   secondaryUnit?: string;
+  totalDay?: number | null;
 }
 
 // ── Control-type-specific state mapping table ──
@@ -365,12 +366,17 @@ serve(async (req) => {
             primaryStateName = "value";
           }
 
+          // Extract totalDay from mapped states (Loxone output "Rd")
+          const totalDayRaw = mappedStates["totalDay"] ?? null;
+          const totalDay = totalDayRaw !== null ? (typeof totalDayRaw === "number" ? totalDayRaw : parseFloat(String(totalDayRaw))) : null;
+
           stateResults[controlUuid] = {
             value: primaryValue,
             stateName: primaryStateName,
             secondaryValue,
             secondaryStateName,
             secondaryUnit,
+            totalDay: totalDay !== null && !isNaN(totalDay) ? totalDay : null,
           };
         }
       }
@@ -427,6 +433,13 @@ serve(async (req) => {
           }
         }
 
+        // Compute rawValue as a proper number (not German-formatted string)
+        let rawValue: number | null = null;
+        if (stateData?.value !== null && stateData?.value !== undefined) {
+          rawValue = typeof stateData.value === "number" ? stateData.value : parseFloat(String(stateData.value));
+          if (isNaN(rawValue)) rawValue = null;
+        }
+
         sensors.push({
           id: uuid,
           name: control.name || "Unbekannt",
@@ -435,12 +448,14 @@ serve(async (req) => {
           room: roomName,
           category: catName,
           value,
+          rawValue,
           unit,
           status: (stateData?.value !== null || stateData?.secondaryValue !== null) ? "online" : "offline",
           stateName: displayStateName,
           secondaryValue,
           secondaryStateName,
           secondaryUnit,
+          totalDay: stateData?.totalDay ?? null,
         });
       }
 
