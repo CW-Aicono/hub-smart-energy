@@ -28,6 +28,9 @@ interface NavItem {
 const navItems: NavItem[] = [
   { to: "/super-admin", icon: LayoutDashboard, label: "Dashboard" },
   { to: "/super-admin/tenants", icon: Building2, label: "Mandanten" },
+  { to: "/super-admin/map", icon: Map, label: "Karte" },
+  { to: "/super-admin/statistics", icon: BarChart3, label: "Statistiken" },
+  { to: "/super-admin/billing", icon: Receipt, label: "Abrechnung" },
   {
     to: "/super-admin/users",
     icon: Shield,
@@ -37,9 +40,6 @@ const navItems: NavItem[] = [
       { to: "/super-admin/roles", icon: ShieldCheck, label: "Rollen & Rechte" },
     ],
   },
-  { to: "/super-admin/map", icon: Map, label: "Karte" },
-  { to: "/super-admin/statistics", icon: BarChart3, label: "Statistiken" },
-  { to: "/super-admin/billing", icon: Receipt, label: "Abrechnung" },
   { to: "/super-admin/support", icon: HeadsetIcon, label: "Support" },
 ];
 
