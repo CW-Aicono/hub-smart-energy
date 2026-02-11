@@ -1,11 +1,12 @@
-import { useState, useEffect } from "react";
+import { useState, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { Location, LocationType } from "@/hooks/useLocations";
 import { useFloors, Floor } from "@/hooks/useFloors";
 import { useFloorRooms } from "@/hooks/useFloorRooms";
+import { useMeters, Meter } from "@/hooks/useMeters";
 import { useUserRole } from "@/hooks/useUserRole";
 import { LocationStatus } from "@/hooks/useLocationStatus";
-import { ChevronRight, ChevronDown, Building2, Building, MapPin, Star, Layers, Wifi, WifiOff, AlertCircle, DoorOpen } from "lucide-react";
+import { ChevronRight, ChevronDown, Building2, Building, MapPin, Star, Layers, Wifi, WifiOff, AlertCircle, DoorOpen, Gauge } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { EditLocationDialog } from "./EditLocationDialog";
@@ -34,6 +35,7 @@ interface LocationNodeProps {
 interface FloorNodeProps {
   floor: Floor;
   level: number;
+  locationId: string;
 }
 
 const typeIcons: Record<LocationType, typeof MapPin> = {
@@ -54,8 +56,19 @@ const typeColors: Record<LocationType, string> = {
   sonstiges: "bg-slate-100 text-slate-700 border-slate-200",
 };
 
-function RoomNode({ name, level, isLast }: { name: string; level: number; isLast: boolean }) {
+const energyTypeColors: Record<string, string> = {
+  strom: "text-amber-600",
+  gas: "text-blue-500",
+  waerme: "text-red-500",
+  wasser: "text-cyan-500",
+  solar: "text-yellow-500",
+  oel: "text-stone-600",
+  pellets: "text-orange-700",
+};
+
+function MeterNode({ meter, level, isLast }: { meter: Meter; level: number; isLast: boolean }) {
   const indent = level * 20 + 12;
+  const colorClass = energyTypeColors[meter.energy_type] || "text-muted-foreground";
   return (
     <div className="relative flex items-center gap-2 px-3 py-1 text-sm text-muted-foreground/80">
       <div
@@ -73,33 +86,128 @@ function RoomNode({ name, level, isLast }: { name: string; level: number; isLast
         />
       )}
       <div style={{ paddingLeft: `${indent + 20}px` }} className="flex items-center gap-2">
-        <DoorOpen className="h-3 w-3 flex-shrink-0" />
-        <span className="text-xs">{name}</span>
+        <Gauge className={cn("h-3 w-3 flex-shrink-0", colorClass)} />
+        <span className="text-xs">{meter.name}</span>
+        {meter.meter_number && (
+          <span className="text-xs text-muted-foreground/50">#{meter.meter_number}</span>
+        )}
       </div>
     </div>
   );
 }
 
-function FloorNode({ floor, level, isLast }: FloorNodeProps & { isLast: boolean }) {
+function RoomNode({ name, level, isLast, meters = [] }: { name: string; level: number; isLast: boolean; meters?: Meter[] }) {
   const indent = level * 20 + 12;
-  const { rooms } = useFloorRooms(floor.id);
-  const hasRooms = rooms.length > 0;
+  const hasMeters = meters.length > 0;
   const [expanded, setExpanded] = useState(false);
+  const isLastWithNoExpand = isLast && (!expanded || !hasMeters);
 
   return (
     <div className="relative">
-      <div className="flex items-center gap-2 px-3 py-1.5 text-sm text-muted-foreground">
-        {/* Tree connector lines */}
+      <div className="flex items-center gap-2 px-3 py-1 text-sm text-muted-foreground/80">
         <div
           className="absolute top-0 bottom-0 border-l border-border"
           style={{ left: `${indent}px` }}
         />
-        {/* Horizontal branch */}
         <div
           className="absolute border-t border-border"
           style={{ left: `${indent}px`, width: 16, top: '50%' }}
         />
-        {/* Hide vertical line below last item */}
+        {isLastWithNoExpand && (
+          <div
+            className="absolute bottom-0 bg-background"
+            style={{ left: `${indent - 1}px`, width: 3, top: '50%' }}
+          />
+        )}
+        <div style={{ paddingLeft: `${indent + 20}px` }} className="flex items-center gap-2">
+          {hasMeters ? (
+            <button
+              onClick={() => setExpanded(!expanded)}
+              className="p-0.5 hover:bg-muted-foreground/20 rounded -ml-5"
+            >
+              {expanded ? (
+                <ChevronDown className="h-3 w-3" />
+              ) : (
+                <ChevronRight className="h-3 w-3" />
+              )}
+            </button>
+          ) : null}
+          <DoorOpen className="h-3 w-3 flex-shrink-0" />
+          <span className="text-xs">{name}</span>
+          {hasMeters && (
+            <span className="text-xs text-muted-foreground/50">{meters.length} Zähler</span>
+          )}
+        </div>
+      </div>
+
+      {expanded && hasMeters && (
+        <div>
+          {meters.map((meter, idx) => (
+            <MeterNode
+              key={meter.id}
+              meter={meter}
+              level={level + 1}
+              isLast={idx === meters.length - 1}
+            />
+          ))}
+        </div>
+      )}
+
+      {isLast && expanded && hasMeters && (
+        <div
+          className="absolute bg-background"
+          style={{ left: `${indent - 1}px`, width: 3, bottom: 0, height: 0 }}
+        />
+      )}
+    </div>
+  );
+}
+
+function FloorNode({ floor, level, isLast, locationId }: FloorNodeProps & { isLast: boolean }) {
+  const indent = level * 20 + 12;
+  const { rooms } = useFloorRooms(floor.id);
+  const { meters } = useMeters(locationId);
+  const [expanded, setExpanded] = useState(false);
+
+  // Meters on this floor that are not archived
+  const floorMeters = useMemo(() =>
+    meters.filter(m => !m.is_archived && m.floor_id === floor.id),
+    [meters, floor.id]
+  );
+
+  // Meters grouped by room
+  const metersByRoom = useMemo(() => {
+    const map = new Map<string, Meter[]>();
+    floorMeters.forEach(m => {
+      if (m.room_id) {
+        const existing = map.get(m.room_id) || [];
+        existing.push(m);
+        map.set(m.room_id, existing);
+      }
+    });
+    return map;
+  }, [floorMeters]);
+
+  // Meters not assigned to any room
+  const unassignedMeters = useMemo(() =>
+    floorMeters.filter(m => !m.room_id),
+    [floorMeters]
+  );
+
+  const hasRooms = rooms.length > 0;
+  const hasContent = hasRooms || unassignedMeters.length > 0;
+
+  return (
+    <div className="relative">
+      <div className="flex items-center gap-2 px-3 py-1.5 text-sm text-muted-foreground">
+        <div
+          className="absolute top-0 bottom-0 border-l border-border"
+          style={{ left: `${indent}px` }}
+        />
+        <div
+          className="absolute border-t border-border"
+          style={{ left: `${indent}px`, width: 16, top: '50%' }}
+        />
         {isLast && !expanded && (
           <div
             className="absolute bottom-0 bg-background"
@@ -107,7 +215,7 @@ function FloorNode({ floor, level, isLast }: FloorNodeProps & { isLast: boolean 
           />
         )}
         <div style={{ paddingLeft: `${indent + 20}px` }} className="flex items-center gap-2">
-          {hasRooms ? (
+          {hasContent ? (
             <button
               onClick={() => setExpanded(!expanded)}
               className="p-0.5 hover:bg-muted-foreground/20 rounded -ml-5"
@@ -127,24 +235,41 @@ function FloorNode({ floor, level, isLast }: FloorNodeProps & { isLast: boolean 
           {hasRooms && (
             <span className="text-xs text-muted-foreground/60">{rooms.length} Räume</span>
           )}
+          {floorMeters.length > 0 && (
+            <span className="text-xs text-muted-foreground/60">{floorMeters.length} Zähler</span>
+          )}
         </div>
       </div>
 
-      {expanded && hasRooms && (
+      {expanded && hasContent && (
         <div>
-          {rooms.map((room, idx) => (
-            <RoomNode
-              key={room.id}
-              name={room.name}
+          {/* Rooms with their meters */}
+          {rooms.map((room, idx) => {
+            const roomMeters = metersByRoom.get(room.id) || [];
+            const isLastItem = idx === rooms.length - 1 && unassignedMeters.length === 0;
+            return (
+              <RoomNode
+                key={room.id}
+                name={room.name}
+                level={level + 2}
+                isLast={isLastItem}
+                meters={roomMeters}
+              />
+            );
+          })}
+          {/* Meters not assigned to a room - shown directly under floor */}
+          {unassignedMeters.map((meter, idx) => (
+            <MeterNode
+              key={meter.id}
+              meter={meter}
               level={level + 2}
-              isLast={idx === rooms.length - 1}
+              isLast={idx === unassignedMeters.length - 1}
             />
           ))}
         </div>
       )}
 
-      {/* Hide connector below last floor when expanded */}
-      {isLast && expanded && hasRooms && (
+      {isLast && expanded && hasContent && (
         <div
           className="absolute bg-background"
           style={{ left: `${indent - 1}px`, width: 3, bottom: 0, height: 0 }}
@@ -163,23 +288,15 @@ function LocationNode({ location, level, selectedId, onSelect, onRefresh, isAdmi
   const isSelected = selectedId === location.id;
   const Icon = typeIcons[location.type];
   
-  // For Einzelgebäude: show floors directly
-  // For Gebäudekomplex: children are buildings, those show floors
   const isEinzelgebaeude = location.type === "einzelgebaeude";
-  const isGebaeudekomplex = location.type === "gebaeudekomplex";
   const isChildOfComplex = level > 0;
   
-  // Show floors for Einzelgebäude or for buildings that are children of a complex
   const shouldShowFloors = isEinzelgebaeude || isChildOfComplex;
   const hasExpandableContent = hasChildren || (shouldShowFloors && hasFloors);
 
-  // Get online status
   const status = locationStatuses?.get(location.id);
   const getOnlineStatusBadge = () => {
-    if (!status || status.totalIntegrations === 0) {
-      return null;
-    }
-
+    if (!status || status.totalIntegrations === 0) return null;
     if (status.hasUnconfigured) {
       return (
         <Badge variant="outline" className="text-xs gap-1 bg-secondary/50 text-secondary-foreground border-border">
@@ -187,7 +304,6 @@ function LocationNode({ location, level, selectedId, onSelect, onRefresh, isAdmi
         </Badge>
       );
     }
-
     if (status.isOnline) {
       return (
         <Badge variant="outline" className="text-xs gap-1 bg-primary/10 text-primary border-primary/20">
@@ -195,7 +311,6 @@ function LocationNode({ location, level, selectedId, onSelect, onRefresh, isAdmi
         </Badge>
       );
     }
-
     return (
       <Badge variant="outline" className="text-xs gap-1 bg-destructive/10 text-destructive border-destructive/20">
         <WifiOff className="h-3 w-3" />
@@ -207,7 +322,6 @@ function LocationNode({ location, level, selectedId, onSelect, onRefresh, isAdmi
 
   return (
     <div className="relative">
-      {/* Tree connector lines for child nodes */}
       {level > 0 && (
         <>
           <div
@@ -218,7 +332,6 @@ function LocationNode({ location, level, selectedId, onSelect, onRefresh, isAdmi
             className="absolute border-t border-border"
             style={{ left: `${indent}px`, width: 16, top: '20px' }}
           />
-          {/* Hide vertical line below last sibling */}
           {isLast && (
             <div
               className="absolute bottom-0 bg-background"
@@ -292,7 +405,6 @@ function LocationNode({ location, level, selectedId, onSelect, onRefresh, isAdmi
       
       {expanded && (
         <>
-          {/* For Gebäudekomplex: show child buildings first */}
           {hasChildren && (
             <div>
               {location.children!.map((child, idx) => (
@@ -312,7 +424,6 @@ function LocationNode({ location, level, selectedId, onSelect, onRefresh, isAdmi
             </div>
           )}
           
-          {/* Show floors for Einzelgebäude or child buildings of complex */}
           {shouldShowFloors && hasFloors && (
             <div>
               {floors.map((floor, idx) => (
@@ -321,6 +432,7 @@ function LocationNode({ location, level, selectedId, onSelect, onRefresh, isAdmi
                   floor={floor}
                   level={level + 1}
                   isLast={idx === floors.length - 1}
+                  locationId={location.id}
                 />
               ))}
             </div>
