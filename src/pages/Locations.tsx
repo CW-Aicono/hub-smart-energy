@@ -84,38 +84,62 @@ const Locations = () => {
     );
   };
 
-  // Filter and sort locations
+  // Filter and sort locations, grouping children under parents
   const filteredAndSortedLocations = useMemo(() => {
     let filtered = locations;
     
-    // Apply text search
+    // Apply text search (include parent if any child matches)
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
-      filtered = filtered.filter((loc) =>
-        loc.name.toLowerCase().includes(q) ||
-        loc.city?.toLowerCase().includes(q) ||
-        loc.address?.toLowerCase().includes(q) ||
-        loc.postal_code?.toLowerCase().includes(q)
+      const matchingIds = new Set(
+        filtered
+          .filter((loc) =>
+            loc.name.toLowerCase().includes(q) ||
+            loc.city?.toLowerCase().includes(q) ||
+            loc.address?.toLowerCase().includes(q) ||
+            loc.postal_code?.toLowerCase().includes(q)
+          )
+          .map((loc) => loc.id)
       );
+      filtered.forEach((loc) => {
+        if (matchingIds.has(loc.id) && loc.parent_id) matchingIds.add(loc.parent_id);
+      });
+      filtered = filtered.filter((loc) => matchingIds.has(loc.id));
     }
     
     // Apply usage type filter
     if (usageFilter !== "all") {
-      filtered = filtered.filter((loc) => loc.usage_type === usageFilter);
+      const matchingIds = new Set(
+        filtered.filter((loc) => loc.usage_type === usageFilter).map((loc) => loc.id)
+      );
+      filtered.forEach((loc) => {
+        if (matchingIds.has(loc.id) && loc.parent_id) matchingIds.add(loc.parent_id);
+      });
+      filtered = filtered.filter((loc) => matchingIds.has(loc.id));
     }
     
-    // Separate main location and others
-    const mainLocation = filtered.find((loc) => loc.is_main_location);
-    const otherLocations = filtered.filter((loc) => !loc.is_main_location);
+    // Only top-level locations
+    const topLevel = filtered.filter((loc) => !loc.parent_id);
+    const mainLocation = topLevel.find((loc) => loc.is_main_location);
+    const otherLocations = topLevel.filter((loc) => !loc.is_main_location);
     
-    // Sort others alphabetically
     otherLocations.sort((a, b) => {
       const comparison = a.name.localeCompare(b.name, "de");
       return sortAscending ? comparison : -comparison;
     });
     
-    // Main location always first
-    return mainLocation ? [mainLocation, ...otherLocations] : otherLocations;
+    const sorted = mainLocation ? [mainLocation, ...otherLocations] : otherLocations;
+
+    // Attach children to each top-level location
+    return sorted.map((loc) => ({
+      ...loc,
+      _children: filtered
+        .filter((child) => child.parent_id === loc.id)
+        .sort((a, b) => {
+          const comparison = a.name.localeCompare(b.name, "de");
+          return sortAscending ? comparison : -comparison;
+        }),
+    }));
   }, [locations, usageFilter, sortAscending, searchQuery]);
 
   // Build hierarchy with filter applied
@@ -322,25 +346,55 @@ const Locations = () => {
                   {filteredAndSortedLocations.map((location) => (
                     <div
                       key={location.id}
-                      className="flex items-center gap-4 p-4 rounded-lg border hover:bg-muted/50 cursor-pointer transition-colors"
-                      onClick={() => handleLocationClick(location)}
+                      className="rounded-lg border overflow-hidden"
                     >
-                      <Building2 className="h-5 w-5 text-muted-foreground flex-shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <p className="font-medium text-base">{location.name}</p>
-                          {getOnlineStatusBadge(location.id)}
-                        </div>
-                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                          {location.city && <span>{location.city}</span>}
-                          {location.city && (location.usage_type || location.type) && <span>·</span>}
-                          {location.usage_type && <span>{usageTypeLabels[location.usage_type]}</span>}
-                          {location.usage_type && location.type && <span>·</span>}
-                          {location.type && (
-                            <span>{t(`locations.types.${location.type}` as any)}</span>
-                          )}
+                      <div
+                        className="flex items-center gap-4 p-4 hover:bg-muted/50 cursor-pointer transition-colors"
+                        onClick={() => handleLocationClick(location)}
+                      >
+                        <Building2 className="h-5 w-5 text-muted-foreground flex-shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <p className="font-medium text-base">{location.name}</p>
+                            {getOnlineStatusBadge(location.id)}
+                          </div>
+                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                            {location.city && <span>{location.city}</span>}
+                            {location.city && (location.usage_type || location.type) && <span>·</span>}
+                            {location.usage_type && <span>{usageTypeLabels[location.usage_type]}</span>}
+                            {location.usage_type && location.type && <span>·</span>}
+                            {location.type && (
+                              <span>{t(`locations.types.${location.type}` as any)}</span>
+                            )}
+                          </div>
                         </div>
                       </div>
+                      {location._children && location._children.length > 0 && (
+                        <div className="border-t bg-muted/20">
+                          {location._children.map((child: Location) => (
+                            <div
+                              key={child.id}
+                              className="flex items-center gap-4 p-3 pl-12 hover:bg-muted/50 cursor-pointer transition-colors border-t first:border-t-0"
+                              onClick={() => handleLocationClick(child)}
+                            >
+                              <Building2 className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <p className="font-medium text-sm">{child.name}</p>
+                                  {getOnlineStatusBadge(child.id)}
+                                </div>
+                                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                  {child.usage_type && <span>{usageTypeLabels[child.usage_type]}</span>}
+                                  {child.usage_type && child.type && <span>·</span>}
+                                  {child.type && (
+                                    <span>{t(`locations.types.${child.type}` as any)}</span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
