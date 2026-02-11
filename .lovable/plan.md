@@ -1,91 +1,54 @@
 
-# Aktuelle Werte: Live-Intervall, Tagesverbrauch und Wertformatierung
 
-## Probleme
+# Wasserdaten im Sankey und anderen Grafiken anzeigen
 
-1. **Nachkommastellen alle ",00"**: Die Loxone Edge Function gibt `value` als **formatierten deutschen String** zuruck (z.B. `"85,58"`). In `LiveValues.tsx` wird darauf `parseFloat("85,58")` angewandt -- das stoppt beim Komma und liefert `85`, daher immer `,00`.
+## Ursache
 
-2. **Intervall zu lang**: Aktuell 5 Minuten (300.000 ms).
+Der Wasserzähler ("Wasserzähler Hausanschluss") ist ein **automatischer Zähler** -- es gibt keine manuellen Einträge in der Datenbank. Die Live-Werte werden zwar von der Loxone-API abgerufen, aber im zentralen Daten-Hook `useEnergyData` mit `parseFloat(sensor.value)` verarbeitet. Da Loxone den Wert als deutschen String liefert (z.B. `"12,34"`), gibt `parseFloat` entweder `NaN` oder einen abgeschnittenen Wert zuruck -- und bei `NaN` wird der Eintrag komplett verworfen.
 
-3. **Tagesverbrauch fehlt**: Die Loxone-API liefert bereits `totalDay` (Loxone-Output "Rd"), aber dieser Wert wird im Sensor-Objekt nicht an das Frontend weitergegeben.
+Das gleiche Problem wurde bereits auf der LiveValues-Seite behoben (dort wird jetzt `sensor.rawValue` genutzt), aber der zentrale `useEnergyData`-Hook wurde noch nicht aktualisiert.
 
-## Geplante Anderungen
+## Loesung
 
-### 1. Edge Function erweitern (`supabase/functions/loxone-api/index.ts`)
+### Datei: `src/hooks/useEnergyData.tsx`
 
-- Dem Sensor-Objekt zwei neue Felder hinzufugen:
-  - `rawValue`: numerischer Rohwert (nicht formatiert) fur prazise Frontend-Anzeige
-  - `totalDay`: Tagesverbrauch als Zahl (aus dem "Rd"-Output / "totalDay"-State)
-- Bestehende Felder bleiben unverandert (Abwartskompatibilitat)
+**Aenderung 1 -- rawValue statt value verwenden (Zeilen 92-103):**
 
-### 2. LiveValues.tsx grundlich uberarbeiten
-
-**Datenabfrage:**
-- Intervall von 300.000 ms auf **30.000 ms** (30 Sekunden) reduzieren
-- Manueller Refresh-Button ist bereits vorhanden
-
-**Wertauslesen:**
-- Statt `parseFloat(sensor.value)` das neue `sensor.rawValue` verwenden (numerisch, kein Formatierungsproblem)
-- Zusatzlich `sensor.totalDay` fur den Tagesverbrauch speichern
-
-**Kachel-Anzeige (pro Meter):**
-- Aktueller Wert mit 2 Nachkommastellen
-- Bei Wasser/Gas: Label **"Durchfluss"** hinter dem aktuellen Wert
-- Neue Zeile: Tagesverbrauch in kWh (bzw. m3) mit Label **"Gesamt heute"**
-- Alle Werte mit `toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })`
-
-### 3. Technische Details
-
-**Edge Function -- neues Sensor-Objekt (Zeilen ~430-444):**
+Die Sensor-Wert-Auslese im `fetchLiveValues`-Callback muss das neue `rawValue`-Feld nutzen (das bereits in der Edge Function bereitgestellt wird), mit Fallback auf Komma-zu-Punkt-Konvertierung:
 
 ```text
-sensors.push({
-  ...bisherige Felder...,
-  rawValue: stateData?.value ?? null,        // NEU: numerischer Rohwert
-  totalDay: mappedStates["totalDay"] ?? null, // NEU: Tagesverbrauch
-});
+for (const meter of intMeters) {
+  const sensor = data.sensors?.find((s: any) => s.id === meter.sensor_uuid);
+  if (sensor) {
+    // Prefer rawValue (numeric), fall back to parsing value string
+    let numVal: number;
+    if (typeof sensor.rawValue === "number") {
+      numVal = sensor.rawValue;
+    } else if (typeof sensor.rawValue === "string") {
+      numVal = parseFloat(sensor.rawValue.replace(",", "."));
+    } else if (typeof sensor.value === "string") {
+      numVal = parseFloat(sensor.value.replace(",", "."));
+    } else {
+      numVal = typeof sensor.value === "number" ? sensor.value : NaN;
+    }
+
+    if (!isNaN(numVal)) {
+      newLiveReadings.push({
+        meter_id: meter.id,
+        value: numVal,
+        reading_date: now,
+      });
+    }
+  }
+}
 ```
 
-Dazu muss `mappedStates` aus dem `stateResults`-Objekt heraus zuganglich gemacht werden. Aktuell wird nur primary/secondary gespeichert -- `totalDay` muss ebenfalls in `stateResults` durchgereicht werden.
+Das ist die einzige notwendige Aenderung. Sobald der Wert korrekt als Zahl geparst wird, fliesst er automatisch in alle abhaengigen Berechnungen ein (Sankey, Pie-Chart, Energiechart, Kostenubersicht).
 
-**LiveValues.tsx -- State erweitern:**
+### Zusammenfassung
 
-```text
-// Statt Map<string, number> wird Map<string, { value: number; totalDay: number | null }>
-const [liveValues, setLiveValues] = useState<Map<string, { value: number; totalDay: number | null }>>(new Map());
-
-// Intervall
-const interval = setInterval(fetchLiveValues, 30000); // 30 Sekunden
-
-// Sensor-Wert auslesen (rawValue statt value)
-const numVal = typeof sensor.rawValue === "number" ? sensor.rawValue : parseFloat(String(sensor.rawValue));
-const totalDay = typeof sensor.totalDay === "number" ? sensor.totalDay : null;
-newValues.set(meter.id, { value: numVal, totalDay });
-```
-
-**LiveValues.tsx -- Kachel-Rendering:**
-
-```text
-// Aktueller Wert
-<div className="text-2xl font-bold">
-  {formattedValue} {meter.unit}
-  {(meter.energy_type === "wasser" || meter.energy_type === "gas") && (
-    <span className="text-sm font-normal text-muted-foreground ml-1">Durchfluss</span>
-  )}
-</div>
-
-// Tagesverbrauch
-{totalDay !== null && (
-  <div className="text-sm text-muted-foreground">
-    {formattedTotalDay} {meter.unit}
-    <span className="ml-1">Gesamt heute</span>
-  </div>
-)}
-```
-
-### Zusammenfassung der Dateianderungen
-
-| Datei | Anderung |
+| Datei | Aenderung |
 |---|---|
-| `supabase/functions/loxone-api/index.ts` | `rawValue` und `totalDay` zum Sensor-Objekt hinzufugen; `mappedStates` im stateResults durchreichen |
-| `src/pages/LiveValues.tsx` | Intervall auf 30s; `rawValue` statt `value` parsen; `totalDay` anzeigen; Labels "Durchfluss" und "Gesamt heute" |
+| `src/hooks/useEnergyData.tsx` | `rawValue` statt `value` beim Parsen der Live-Sensorwerte verwenden; Komma-Fallback fuer robustes Parsen |
+
+Keine weiteren Dateien betroffen -- der Fix im zentralen Hook wirkt sich automatisch auf alle Widgets aus (Sankey, Pie-Chart, Energiechart, Kostenubersicht).
