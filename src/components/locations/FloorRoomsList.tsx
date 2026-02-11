@@ -32,6 +32,7 @@ export function FloorRoomsList({ floorId, locationId }: FloorRoomsListProps) {
   const [newName, setNewName] = useState("");
   const [saving, setSaving] = useState(false);
   const [expandedRooms, setExpandedRooms] = useState<Set<string>>(new Set());
+  const [unassignedExpanded, setUnassignedExpanded] = useState(true);
   const [editingRoomId, setEditingRoomId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState("");
 
@@ -205,11 +206,31 @@ export function FloorRoomsList({ floorId, locationId }: FloorRoomsListProps) {
         );
       })}
 
-      {unassignedMeters.length > 0 && (
+      {unassignedMeters.length > 0 && rooms.length > 0 && (
         <div className="space-y-1 pt-1">
-          {rooms.length > 0 && (
-            <p className="text-xs text-muted-foreground/60 px-3">Ohne Raumzuordnung</p>
-          )}
+          <div
+            className="flex items-center gap-2 text-xs text-muted-foreground/60 px-3 cursor-pointer select-none"
+            onClick={() => setUnassignedExpanded(prev => !prev)}
+          >
+            <button className="p-0.5 hover:bg-muted-foreground/20 rounded shrink-0">
+              {unassignedExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+            </button>
+            <span>Ohne Raumzuordnung</span>
+            <span>{unassignedMeters.length} Zähler</span>
+          </div>
+          {unassignedExpanded && unassignedMeters.map(meter => (
+            <div key={meter.id} className="flex items-center gap-2 text-xs py-1 px-3 rounded bg-muted/20">
+              <Gauge className={cn("h-3 w-3 shrink-0", energyTypeColors[meter.energy_type] || "text-muted-foreground")} />
+              <span className="truncate">{meter.name}</span>
+              {meter.meter_number && (
+                <span className="text-muted-foreground/50">#{meter.meter_number}</span>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+      {unassignedMeters.length > 0 && rooms.length === 0 && (
+        <div className="space-y-1 pt-1">
           {unassignedMeters.map(meter => (
             <div key={meter.id} className="flex items-center gap-2 text-xs py-1 px-3 rounded bg-muted/20">
               <Gauge className={cn("h-3 w-3 shrink-0", energyTypeColors[meter.energy_type] || "text-muted-foreground")} />
