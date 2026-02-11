@@ -7,6 +7,7 @@ import { useMeters } from "@/hooks/useMeters";
 import { useLocations } from "@/hooks/useLocations";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ENERGY_CHART_COLORS } from "@/lib/energyTypeColors";
+import { getEnergyUnit } from "@/lib/formatEnergy";
 import { startOfDay, startOfWeek, startOfMonth, startOfQuarter, startOfYear } from "date-fns";
 
 type TimePeriod = "day" | "week" | "month" | "quarter" | "year" | "all";
@@ -140,10 +141,14 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
                   borderRadius: 'var(--radius)',
                   color: 'hsl(var(--card-foreground))',
                 }}
-                formatter={(value: number, name: string) => [
-                  `${value.toLocaleString("de-DE", { maximumFractionDigits: 2 })} ${unit}`,
-                  name,
-                ]}
+                formatter={(value: number, name: string) => {
+                  const typeKey = name === "Strom" ? "strom" : name === "Gas" ? "gas" : name === "Wärme" ? "waerme" : name === "Wasser" ? "wasser" : "strom";
+                  const displayUnit = getEnergyUnit(typeKey);
+                  return [
+                    `${value.toLocaleString("de-DE", { maximumFractionDigits: 2 })} ${displayUnit}`,
+                    name,
+                  ];
+                }}
               />
               <Legend />
               <Bar dataKey="strom" name="Strom" fill={ENERGY_CHART_COLORS.strom} radius={[2, 2, 0, 0]} />

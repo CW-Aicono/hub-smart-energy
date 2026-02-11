@@ -6,7 +6,7 @@ import { useEnergyData } from "@/hooks/useEnergyData";
 import { useMeters } from "@/hooks/useMeters";
 import { Leaf } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
-import { formatEnergy } from "@/lib/formatEnergy";
+import { formatEnergy, formatEnergyByType } from "@/lib/formatEnergy";
 import { startOfDay, startOfWeek, startOfMonth, startOfQuarter, startOfYear } from "date-fns";
 
 type TimePeriod = "day" | "week" | "month" | "quarter" | "year" | "all";
@@ -106,7 +106,7 @@ const SustainabilityKPIs = ({ locationId }: SustainabilityKPIsProps) => {
             <div>
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm font-medium">Strom</span>
-                <span className="text-sm text-muted-foreground">{formatEnergy(filteredTotals.strom)}</span>
+                <span className="text-sm text-muted-foreground">{formatEnergyByType(filteredTotals.strom, "strom")}</span>
               </div>
               <Progress value={totalConsumption > 0 ? (filteredTotals.strom / totalConsumption) * 100 : 0} className="h-2" />
             </div>
@@ -114,7 +114,7 @@ const SustainabilityKPIs = ({ locationId }: SustainabilityKPIsProps) => {
             <div>
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm font-medium">Gas</span>
-                <span className="text-sm text-muted-foreground">{formatEnergy(filteredTotals.gas)}</span>
+                <span className="text-sm text-muted-foreground">{formatEnergyByType(filteredTotals.gas, "gas")}</span>
               </div>
               <Progress value={totalConsumption > 0 ? (filteredTotals.gas / totalConsumption) * 100 : 0} className="h-2" />
             </div>
@@ -122,7 +122,7 @@ const SustainabilityKPIs = ({ locationId }: SustainabilityKPIsProps) => {
             <div>
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm font-medium">Wärme</span>
-                <span className="text-sm text-muted-foreground">{formatEnergy(filteredTotals.waerme)}</span>
+                <span className="text-sm text-muted-foreground">{formatEnergyByType(filteredTotals.waerme, "waerme")}</span>
               </div>
               <Progress value={totalConsumption > 0 ? (filteredTotals.waerme / totalConsumption) * 100 : 0} className="h-2" />
             </div>
@@ -130,7 +130,7 @@ const SustainabilityKPIs = ({ locationId }: SustainabilityKPIsProps) => {
             <div>
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm font-medium">Wasser</span>
-                <span className="text-sm text-muted-foreground">{formatEnergy(filteredTotals.wasser)}</span>
+                <span className="text-sm text-muted-foreground">{formatEnergyByType(filteredTotals.wasser, "wasser")}</span>
               </div>
               <Progress value={totalConsumption > 0 ? (filteredTotals.wasser / totalConsumption) * 100 : 0} className="h-2" />
             </div>

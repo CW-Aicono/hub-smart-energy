@@ -32,3 +32,41 @@ export function formatEnergy(value: number, baseUnit: "W" | "Wh" = "Wh"): string
 
   return `${formatted} ${unit}`;
 }
+
+/** Unit mapping per energy type */
+const ENERGY_BASE_UNITS: Record<string, string> = {
+  strom: "kWh",
+  gas: "m³",
+  waerme: "kWh",
+  wasser: "m³",
+};
+
+/**
+ * Formats a value with the correct unit for its energy type.
+ * For kWh-based types, applies dynamic scaling (Wh → kWh → MWh).
+ * For m³-based types, formats with German locale and m³ suffix.
+ *
+ * @param value - The raw numeric value
+ * @param energyType - "strom" | "gas" | "waerme" | "wasser"
+ * @returns Formatted string like "3,5 kWh" or "12,04 m³"
+ */
+export function formatEnergyByType(value: number, energyType: string): string {
+  const baseUnit = ENERGY_BASE_UNITS[energyType];
+  if (!baseUnit || baseUnit === "kWh") {
+    // Use dynamic scaling for electrical/heat energy
+    return formatEnergy(value);
+  }
+  // For m³ units (gas, water): simple locale formatting
+  const formatted = value.toLocaleString("de-DE", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  });
+  return `${formatted} ${baseUnit}`;
+}
+
+/**
+ * Returns the display unit string for an energy type.
+ */
+export function getEnergyUnit(energyType: string): string {
+  return ENERGY_BASE_UNITS[energyType] || "kWh";
+}
