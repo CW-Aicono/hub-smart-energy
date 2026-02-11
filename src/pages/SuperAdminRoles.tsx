@@ -9,6 +9,7 @@ import { Shield, Crown, Users, CheckCircle2 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import CreateSAPermissionRoleDialog from "@/components/super-admin/CreateSAPermissionRoleDialog";
+import EditSARoleDialog from "@/components/super-admin/EditSARoleDialog";
 
 const SA_CAPABILITIES = [
   { name: "Mandantenverwaltung", description: "Mandanten anlegen, bearbeiten, sperren und löschen" },
@@ -176,6 +177,7 @@ const SuperAdminRoles = () => {
                       <TableHead>Beschreibung</TableHead>
                       <TableHead>Berechtigungen</TableHead>
                       <TableHead>Erstellt</TableHead>
+                      <TableHead className="w-16">Aktionen</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -197,6 +199,9 @@ const SuperAdminRoles = () => {
                         </TableCell>
                         <TableCell className="text-muted-foreground text-sm">
                           {new Date(role.created_at).toLocaleDateString("de-DE")}
+                        </TableCell>
+                        <TableCell>
+                          <EditSARoleDialog role={role} />
                         </TableCell>
                       </TableRow>
                     ))}
