@@ -1,0 +1,1 @@
+ALTER TABLE public.floor_sensor_positions ADD COLUMN label_scale numeric NOT NULL DEFAULT 1.0;

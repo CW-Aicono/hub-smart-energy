@@ -202,6 +202,7 @@ const FloorPlanWidget = ({ locationId }: FloorPlanWidgetProps) => {
                    {/* Sensor Overlays - positioned relative to image */}
                   {positions.map((pos) => {
                     const sensorValue = sensorValuesMap.get(pos.sensor_uuid);
+                    const scale = (pos as any).label_scale ?? 1.0;
                     return (
                       <div
                         key={pos.id}
@@ -211,7 +212,10 @@ const FloorPlanWidget = ({ locationId }: FloorPlanWidgetProps) => {
                           top: `${pos.position_y}%`,
                         }}
                       >
-                        <div className="bg-card/95 backdrop-blur-sm border shadow-lg rounded-lg px-2 py-1 min-w-[80px] text-center whitespace-nowrap">
+                        <div
+                          className="bg-card/95 backdrop-blur-sm border shadow-lg rounded-lg px-2 py-1 min-w-[80px] text-center whitespace-nowrap"
+                          style={{ transform: `scale(${scale})`, transformOrigin: 'center center' }}
+                        >
                           <p className="text-[10px] font-medium text-muted-foreground truncate max-w-[100px]">
                             {pos.sensor_name}
                           </p>

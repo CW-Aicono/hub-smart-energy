@@ -4,7 +4,7 @@ import { TransformWrapper, TransformComponent, useControls } from "react-zoom-pa
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2, Trash2, GripVertical, AlertCircle, Image, MapPin, Maximize2, Minimize2, Box, Gauge, DoorOpen, Minus, Square, Maximize, ZoomIn, ZoomOut, RotateCcw } from "lucide-react";
+import { Loader2, Trash2, GripVertical, AlertCircle, Image, MapPin, Maximize2, Minimize2, Box, Gauge, DoorOpen, ZoomIn, ZoomOut, RotateCcw } from "lucide-react";
 import { ENERGY_SENSOR_CLASSES } from "@/lib/energyTypeColors";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Floor } from "@/hooks/useFloors";
@@ -105,6 +105,11 @@ export function FloorPlanDialog({ floor, locationId, open, onOpenChange }: Floor
   const [draggingSensor, setDraggingSensor] = useState<(Sensor & { integrationId: string }) | null>(null);
   const [draggingPosition, setDraggingPosition] = useState<FloorSensorPosition | null>(null);
   const [dragPreview, setDragPreview] = useState<{ x: number; y: number } | null>(null);
+
+  // Resize state
+  const [resizingId, setResizingId] = useState<string | null>(null);
+  const resizeStartRef = useRef<{ startX: number; startScale: number } | null>(null);
+  const resizeDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   
   const imageRef = useRef<HTMLImageElement>(null);
   const viewImageRef = useRef<HTMLImageElement>(null);
@@ -357,6 +362,44 @@ export function FloorPlanDialog({ floor, locationId, open, onOpenChange }: Floor
     setDragPreview(null);
   };
 
+  // Resize handlers for continuous label scaling
+  const handleResizeStart = useCallback((e: React.MouseEvent | React.TouchEvent, positionId: string, currentScale: number) => {
+    e.stopPropagation();
+    e.preventDefault();
+    setResizingId(positionId);
+    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+    resizeStartRef.current = { startX: clientX, startScale: currentScale };
+
+    const handleMove = (ev: MouseEvent | TouchEvent) => {
+      if (!resizeStartRef.current) return;
+      const cx = 'touches' in ev ? ev.touches[0].clientX : ev.clientX;
+      const dx = cx - resizeStartRef.current.startX;
+      const newScale = Math.max(0.4, Math.min(3.0, resizeStartRef.current.startScale + dx / 150));
+      // Optimistic local update via DOM
+      const el = document.querySelector(`[data-resize-id="${positionId}"]`) as HTMLElement;
+      if (el) el.style.transform = `scale(${newScale})`;
+      // Debounced DB save
+      if (resizeDebounceRef.current) clearTimeout(resizeDebounceRef.current);
+      resizeDebounceRef.current = setTimeout(() => {
+        updatePosition(positionId, { label_scale: newScale } as any);
+      }, 400);
+    };
+
+    const handleEnd = () => {
+      setResizingId(null);
+      resizeStartRef.current = null;
+      window.removeEventListener('mousemove', handleMove);
+      window.removeEventListener('mouseup', handleEnd);
+      window.removeEventListener('touchmove', handleMove);
+      window.removeEventListener('touchend', handleEnd);
+    };
+
+    window.addEventListener('mousemove', handleMove);
+    window.addEventListener('mouseup', handleEnd);
+    window.addEventListener('touchmove', handleMove);
+    window.addEventListener('touchend', handleEnd);
+  }, [updatePosition]);
+
   const handleRemoveSensor = async (positionId: string, sensorName: string) => {
     const { error } = await deletePosition(positionId);
     
@@ -459,14 +502,7 @@ export function FloorPlanDialog({ floor, locationId, open, onOpenChange }: Floor
                             />
                             {/* Sensor Overlays - inside zoomable area */}
                             {placedSensorsWithInfo.map((pos) => {
-                              const size = (pos as any).label_size as LabelSize || 'medium';
-                              const sizeClasses = {
-                                small: 'min-w-[60px] px-1 py-0.5',
-                                medium: 'min-w-[80px] px-2 py-1',
-                                large: 'min-w-[120px] px-3 py-2',
-                              };
-                              const textClasses = { small: 'text-[8px]', medium: 'text-[10px]', large: 'text-xs' };
-                              const valueClasses = { small: 'text-xs', medium: 'text-sm', large: 'text-base' };
+                              const scale = (pos as any).label_scale ?? 1.0;
                               return (
                                 <div
                                   key={pos.id}
@@ -476,11 +512,14 @@ export function FloorPlanDialog({ floor, locationId, open, onOpenChange }: Floor
                                     top: `${pos.position_y}%`,
                                   }}
                                 >
-                                  <div className={`bg-card/95 backdrop-blur-sm border shadow-lg rounded-lg text-center ${sizeClasses[size]}`}>
-                                    <p className={`${textClasses[size]} font-medium text-muted-foreground truncate max-w-[100px]`}>
+                                  <div
+                                    className="bg-card/95 backdrop-blur-sm border shadow-lg rounded-lg text-center min-w-[80px] px-2 py-1"
+                                    style={{ transform: `scale(${scale})`, transformOrigin: 'center center' }}
+                                  >
+                                    <p className="text-[10px] font-medium text-muted-foreground truncate max-w-[100px]">
                                       {pos.sensor_name}
                                     </p>
-                                    <p className={`${valueClasses[size]} font-mono font-bold text-primary`}>
+                                    <p className="text-sm font-mono font-bold text-primary">
                                       {pos.sensorInfo ? `${pos.sensorInfo.value} ${pos.sensorInfo.unit}` : "—"}
                                     </p>
                                   </div>
@@ -560,26 +599,11 @@ export function FloorPlanDialog({ floor, locationId, open, onOpenChange }: Floor
                     
                     {/* Placed Sensors */}
                     {placedSensorsWithInfo.map((placed) => {
-                      const size = (placed as any).label_size as LabelSize || 'medium';
-                      const sizeClasses = {
-                        small: 'min-w-[60px] px-1 py-0.5',
-                        medium: 'min-w-[90px] px-2 py-1',
-                        large: 'min-w-[130px] px-3 py-2',
-                      };
-                      const textClasses = {
-                        small: 'text-[9px]',
-                        medium: 'text-xs',
-                        large: 'text-sm',
-                      };
-                      const valueClasses = {
-                        small: 'text-xs',
-                        medium: 'text-sm',
-                        large: 'text-base',
-                      };
+                      const scale = (placed as any).label_scale ?? 1.0;
                       return (
                         <div
                           key={placed.id}
-                          draggable
+                          draggable={resizingId !== placed.id}
                           onDragStart={(e) => handlePositionDragStart(e, placed)}
                           className={`absolute transform -translate-x-1/2 -translate-y-1/2 group cursor-grab active:cursor-grabbing ${
                             draggingPosition?.id === placed.id ? "opacity-50" : ""
@@ -589,31 +613,28 @@ export function FloorPlanDialog({ floor, locationId, open, onOpenChange }: Floor
                             top: `${placed.position_y}%`,
                           }}
                         >
-                          <div className={`bg-card border-2 border-primary shadow-lg rounded-lg text-center ${sizeClasses[size]}`}>
-                            <p className={`${textClasses[size]} font-medium truncate`}>{placed.sensor_name}</p>
+                          <div
+                            data-resize-id={placed.id}
+                            className="bg-card border-2 border-primary shadow-lg rounded-lg text-center min-w-[80px] px-2 py-1 relative"
+                            style={{ transform: `scale(${scale})`, transformOrigin: 'center center' }}
+                          >
+                            <p className="text-xs font-medium truncate">{placed.sensor_name}</p>
                             {placed.sensorInfo && (
-                              <p className={`${valueClasses[size]} font-mono font-bold text-primary`}>
+                              <p className="text-sm font-mono font-bold text-primary">
                                 {placed.sensorInfo.value} {placed.sensorInfo.unit}
                               </p>
                             )}
-                          </div>
-                          {/* Size controls */}
-                          <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity bg-card border rounded-md shadow-sm p-0.5">
-                            {(['small', 'medium', 'large'] as LabelSize[]).map((s) => (
-                              <Button
-                                key={s}
-                                variant={size === s ? "default" : "ghost"}
-                                size="icon"
-                                className="h-5 w-5"
-                                title={s === 'small' ? 'Klein' : s === 'medium' ? 'Mittel' : 'Groß'}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  updatePosition(placed.id, { label_size: s } as any);
-                                }}
-                              >
-                                {s === 'small' ? <Minus className="h-2.5 w-2.5" /> : s === 'medium' ? <Square className="h-2.5 w-2.5" /> : <Maximize className="h-2.5 w-2.5" />}
-                              </Button>
-                            ))}
+                            {/* Resize handle - bottom left corner */}
+                            <div
+                              className="absolute -bottom-1 -left-1 w-4 h-4 cursor-nwse-resize opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center bg-primary rounded-full shadow-md"
+                              onMouseDown={(e) => handleResizeStart(e, placed.id, scale)}
+                              onTouchStart={(e) => handleResizeStart(e, placed.id, scale)}
+                              draggable={false}
+                            >
+                              <svg width="8" height="8" viewBox="0 0 8 8" className="text-primary-foreground">
+                                <path d="M7 1L1 7M7 4L4 7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                              </svg>
+                            </div>
                           </div>
                           <Button
                             variant="destructive"

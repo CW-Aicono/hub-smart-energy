@@ -625,6 +625,7 @@ export type Database = {
           created_at: string
           floor_id: string
           id: string
+          label_scale: number
           label_size: string
           location_integration_id: string
           position_x: number
@@ -639,6 +640,7 @@ export type Database = {
           created_at?: string
           floor_id: string
           id?: string
+          label_scale?: number
           label_size?: string
           location_integration_id: string
           position_x: number
@@ -653,6 +655,7 @@ export type Database = {
           created_at?: string
           floor_id?: string
           id?: string
+          label_scale?: number
           label_size?: string
           location_integration_id?: string
           position_x?: number
