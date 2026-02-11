@@ -194,10 +194,10 @@ const Automation = () => {
             <div>
               <h1 className="text-2xl font-display font-bold flex items-center gap-2">
                 <Cpu className="h-6 w-6 text-primary" />
-                Automation
+                Multi-Location Automation (MLA)
               </h1>
               <p className="text-sm text-muted-foreground mt-1">
-                Intelligente Gebäudesteuerung mit Automatismen und KI-Empfehlungen
+                Intelligente standortübergreifende Gebäudesteuerung mit Automatismen und KI-Empfehlungen
               </p>
             </div>
             <Button disabled>
