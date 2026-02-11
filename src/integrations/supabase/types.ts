@@ -835,9 +835,11 @@ export type Database = {
         Row: {
           action_type: string
           action_value: string | null
+          actions: Json
           actuator_control_type: string
           actuator_name: string
           actuator_uuid: string
+          conditions: Json
           created_at: string
           description: string | null
           id: string
@@ -845,16 +847,20 @@ export type Database = {
           last_executed_at: string | null
           location_id: string
           location_integration_id: string
+          logic_operator: string
           name: string
+          schedule: Json | null
           tenant_id: string
           updated_at: string
         }
         Insert: {
           action_type?: string
           action_value?: string | null
+          actions?: Json
           actuator_control_type: string
           actuator_name: string
           actuator_uuid: string
+          conditions?: Json
           created_at?: string
           description?: string | null
           id?: string
@@ -862,16 +868,20 @@ export type Database = {
           last_executed_at?: string | null
           location_id: string
           location_integration_id: string
+          logic_operator?: string
           name: string
+          schedule?: Json | null
           tenant_id: string
           updated_at?: string
         }
         Update: {
           action_type?: string
           action_value?: string | null
+          actions?: Json
           actuator_control_type?: string
           actuator_name?: string
           actuator_uuid?: string
+          conditions?: Json
           created_at?: string
           description?: string | null
           id?: string
@@ -879,7 +889,9 @@ export type Database = {
           last_executed_at?: string | null
           location_id?: string
           location_integration_id?: string
+          logic_operator?: string
           name?: string
+          schedule?: Json | null
           tenant_id?: string
           updated_at?: string
         }
