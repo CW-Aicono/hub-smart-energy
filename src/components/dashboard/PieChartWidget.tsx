@@ -100,7 +100,8 @@ const PieChartWidget = ({ locationId }: PieChartWidgetProps) => {
                   }}
                   formatter={(value: number, name: string, props: any) => {
                     const realValue = props?.payload?.value ?? value;
-                    return [`${realValue}%`, name];
+                    const totalValue = props?.payload?.totalValue ?? 0;
+                    return [`${totalValue.toLocaleString("de-DE")} kW · ${realValue}%`, name];
                   }}
                 />
                 <Legend
