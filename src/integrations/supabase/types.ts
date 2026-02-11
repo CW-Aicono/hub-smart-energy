@@ -1272,6 +1272,30 @@ export type Database = {
           },
         ]
       }
+      module_prices: {
+        Row: {
+          created_at: string
+          id: string
+          module_code: string
+          price_monthly: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          module_code: string
+          price_monthly?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          module_code?: string
+          price_monthly?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       permissions: {
         Row: {
           category: string
@@ -1615,6 +1639,7 @@ export type Database = {
           id: string
           is_enabled: boolean
           module_code: string
+          price_override: number | null
           tenant_id: string
           updated_at: string
         }
@@ -1625,6 +1650,7 @@ export type Database = {
           id?: string
           is_enabled?: boolean
           module_code: string
+          price_override?: number | null
           tenant_id: string
           updated_at?: string
         }
@@ -1635,6 +1661,7 @@ export type Database = {
           id?: string
           is_enabled?: boolean
           module_code?: string
+          price_override?: number | null
           tenant_id?: string
           updated_at?: string
         }

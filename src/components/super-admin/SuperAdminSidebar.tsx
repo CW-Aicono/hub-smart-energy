@@ -3,7 +3,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import {
   LayoutDashboard, LogOut, Building2, BarChart3, Receipt, HeadsetIcon,
-  ChevronDown, ChevronRight, PanelLeftClose, PanelLeft, Users, ShieldCheck, Map, Shield,
+  ChevronDown, ChevronRight, PanelLeftClose, PanelLeft, Users, ShieldCheck, Map, Shield, Euro,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -31,6 +31,7 @@ const navItems: NavItem[] = [
   { to: "/super-admin/map", icon: Map, label: "Karte" },
   { to: "/super-admin/statistics", icon: BarChart3, label: "Statistiken" },
   { to: "/super-admin/billing", icon: Receipt, label: "Abrechnung" },
+  { to: "/super-admin/module-pricing", icon: Euro, label: "Modulpreise" },
   {
     to: "/super-admin/users",
     icon: Shield,
