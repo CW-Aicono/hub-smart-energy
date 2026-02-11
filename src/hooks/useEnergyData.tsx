@@ -1,7 +1,8 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
 import { useMeters } from "./useMeters";
+import { Meter } from "./useMeters";
 
 export interface MonthlyEnergyData {
   month: string;
@@ -36,8 +37,10 @@ export function useEnergyData(locationId?: string | null) {
   const { user } = useAuth();
   const { meters } = useMeters();
   const [readings, setReadings] = useState<ReadingRow[]>([]);
+  const [liveReadings, setLiveReadings] = useState<ReadingRow[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Fetch manual readings from DB
   useEffect(() => {
     if (!user) return;
 
@@ -60,6 +63,72 @@ export function useEnergyData(locationId?: string | null) {
     fetchReadings();
   }, [user]);
 
+  // Fetch live sensor values for automatic meters
+  const fetchLiveValues = useCallback(async () => {
+    const activeAutoMeters = meters.filter(
+      (m) => !m.is_archived && m.capture_type === "automatic" && m.sensor_uuid && m.location_integration_id
+    );
+    if (activeAutoMeters.length === 0) return;
+
+    // Group by integration
+    const byIntegration = new Map<string, Meter[]>();
+    activeAutoMeters.forEach((m) => {
+      const key = m.location_integration_id!;
+      const arr = byIntegration.get(key) || [];
+      arr.push(m);
+      byIntegration.set(key, arr);
+    });
+
+    const now = new Date().toISOString();
+    const newLiveReadings: ReadingRow[] = [];
+
+    for (const [integrationId, intMeters] of byIntegration) {
+      try {
+        const { data, error } = await supabase.functions.invoke("loxone-api", {
+          body: { locationIntegrationId: integrationId, action: "getSensors" },
+        });
+        if (error || !data?.success) continue;
+
+        for (const meter of intMeters) {
+          const sensor = data.sensors?.find((s: any) => s.id === meter.sensor_uuid);
+          if (sensor && sensor.value !== undefined) {
+            const numVal = typeof sensor.value === "string" ? parseFloat(sensor.value) : sensor.value;
+            if (!isNaN(numVal)) {
+              newLiveReadings.push({
+                meter_id: meter.id,
+                value: numVal,
+                reading_date: now,
+              });
+            }
+          }
+        }
+      } catch (err) {
+        console.warn(`Failed to fetch live sensors for integration ${integrationId}:`, err);
+      }
+    }
+
+    setLiveReadings(newLiveReadings);
+  }, [meters]);
+
+  useEffect(() => {
+    if (meters.length > 0) {
+      fetchLiveValues();
+      const interval = setInterval(fetchLiveValues, 300000); // 5 min
+      return () => clearInterval(interval);
+    }
+  }, [fetchLiveValues, meters.length]);
+
+  // Combine manual readings + live readings for automatic meters
+  const allReadings = useMemo(() => {
+    // For automatic meters, use live values instead of DB readings
+    const autoMeterIds = new Set(
+      meters.filter((m) => m.capture_type === "automatic" && !m.is_archived).map((m) => m.id)
+    );
+    // Keep manual readings only for non-automatic meters
+    const manualOnly = readings.filter((r) => !autoMeterIds.has(r.meter_id));
+    return [...manualOnly, ...liveReadings];
+  }, [readings, liveReadings, meters]);
+
   // Build a meter_id -> energy_type + location_id map
   const meterMap = useMemo(() => {
     const map: Record<string, { energy_type: string; location_id: string }> = {};
@@ -71,9 +140,9 @@ export function useEnergyData(locationId?: string | null) {
 
   // Filter readings by location if specified
   const filteredReadings = useMemo(() => {
-    if (!locationId) return readings;
-    return readings.filter((r) => meterMap[r.meter_id]?.location_id === locationId);
-  }, [readings, locationId, meterMap]);
+    if (!locationId) return allReadings;
+    return allReadings.filter((r) => meterMap[r.meter_id]?.location_id === locationId);
+  }, [allReadings, locationId, meterMap]);
 
   // Monthly energy data grouped by energy type
   const monthlyData = useMemo((): MonthlyEnergyData[] => {
