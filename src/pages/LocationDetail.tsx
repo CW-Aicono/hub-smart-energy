@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Navigate, useParams, Link } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
@@ -12,6 +13,7 @@ import { MeterManagement } from "@/components/locations/MeterManagement";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Skeleton } from "@/components/ui/skeleton";
 import { 
   ArrowLeft, 
@@ -21,7 +23,9 @@ import {
   Phone, 
   User, 
   Star,
-  Layers
+  Layers,
+  ChevronDown,
+  ChevronRight
 } from "lucide-react";
 
 const usageTypeLabels: Record<LocationUsageType, string> = {
@@ -32,6 +36,38 @@ const usageTypeLabels: Record<LocationUsageType, string> = {
   sportstaette: "Sportstätte",
   jugendzentrum: "Jugendzentrum",
   sonstiges: "Sonstiges",
+};
+
+const FloorsCollapsible = ({ locationId, isAdmin, floors, floorsLoading, refetchFloors }: { locationId: string; isAdmin: boolean; floors: any[]; floorsLoading: boolean; refetchFloors: () => void }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  return (
+    <Collapsible open={isOpen} onOpenChange={setIsOpen}>
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CollapsibleTrigger asChild>
+            <button className="flex items-center gap-2 text-left group">
+              {isOpen ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <Layers className="h-5 w-5" />
+                  Etagen & Grundrisse
+                </CardTitle>
+                <CardDescription>
+                  Verwalten Sie die Etagen und deren Grundrisspläne für diesen Standort
+                </CardDescription>
+              </div>
+            </button>
+          </CollapsibleTrigger>
+          {isAdmin && <AddFloorDialog locationId={locationId} onSuccess={refetchFloors} />}
+        </CardHeader>
+        <CollapsibleContent>
+          <CardContent>
+            <FloorList floors={floors} loading={floorsLoading} locationId={locationId} onRefresh={refetchFloors} />
+          </CardContent>
+        </CollapsibleContent>
+      </Card>
+    </Collapsible>
+  );
 };
 
 const LocationDetail = () => {
@@ -172,28 +208,7 @@ const LocationDetail = () => {
           </div>
 
           {/* Floors Card */}
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <div>
-                <CardTitle className="flex items-center gap-2">
-                  <Layers className="h-5 w-5" />
-                  Etagen & Grundrisse
-                </CardTitle>
-                <CardDescription>
-                  Verwalten Sie die Etagen und deren Grundrisspläne für diesen Standort
-                </CardDescription>
-              </div>
-              {isAdmin && <AddFloorDialog locationId={location.id} onSuccess={refetchFloors} />}
-            </CardHeader>
-            <CardContent>
-              <FloorList 
-                floors={floors} 
-                loading={floorsLoading} 
-                locationId={location.id}
-                onRefresh={refetchFloors}
-              />
-            </CardContent>
-          </Card>
+          <FloorsCollapsible locationId={location.id} isAdmin={isAdmin} floors={floors} floorsLoading={floorsLoading} refetchFloors={refetchFloors} />
 
           {/* Meters & Alerts */}
           <MeterManagement locationId={location.id} />
