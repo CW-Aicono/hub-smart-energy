@@ -382,7 +382,7 @@ function Scene({
       {/* Meter Labels - always shown regardless of model/procedural mode */}
       {floorMeters.map((meter, index) => {
         const room = meter.room_id ? rooms.find(r => r.id === meter.room_id) : null;
-        const yPos = (meter as any).position_3d_y ?? 2.5;
+        const yPos = Math.max(0.5, (meter as any).position_3d_y ?? 2.5);
         const xPos = (meter as any).position_3d_x;
         const zPos = (meter as any).position_3d_z;
         const meterPos: [number, number, number] = (xPos != null && zPos != null)
@@ -695,14 +695,7 @@ export function FloorPlan3DViewer({ floor, locationId, sensors = [], isAdmin = f
               </div>
             )}
 
-            {/* Minimap overlay - hidden in readOnly/dashboard mode */}
-            {!readOnly && rooms.length > 0 && (
-              <Minimap3D
-                rooms={rooms}
-                cameraPosition={cameraPos}
-                cameraRotation={cameraRotY}
-              />
-            )}
+            {/* Minimap removed – not needed in location detail view */}
           </>
         )}
       </div>
