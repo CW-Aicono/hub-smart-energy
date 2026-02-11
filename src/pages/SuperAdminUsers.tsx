@@ -110,8 +110,7 @@ const SuperAdminUsers = () => {
 
   const filtered = users.filter((u) =>
     (u.email?.toLowerCase() || "").includes(search.toLowerCase()) ||
-    (u.contact_person?.toLowerCase() || "").includes(search.toLowerCase()) ||
-    (u.tenant_name?.toLowerCase() || "").includes(search.toLowerCase())
+    (u.contact_person?.toLowerCase() || "").includes(search.toLowerCase())
   );
 
   const roleIcon = (role: string) => {
@@ -139,8 +138,7 @@ const SuperAdminUsers = () => {
         </header>
         <div className="p-6">
           <Input
-            placeholder="Suchen nach E-Mail, Name oder Mandant..."
-            value={search}
+            placeholder="Suchen nach E-Mail oder Name..."
             onChange={(e) => setSearch(e.target.value)}
             className="max-w-sm mb-4"
           />
@@ -150,19 +148,17 @@ const SuperAdminUsers = () => {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Nutzername</TableHead>
-                    <TableHead>Mandant</TableHead>
                     <TableHead>Rolle</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Erstellt</TableHead>
-                    <TableHead>Module</TableHead>
                     <TableHead className="w-32">Aktionen</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {isLoading ? (
-                    <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Laden...</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">Laden...</TableCell></TableRow>
                   ) : filtered.length === 0 ? (
-                    <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Keine Benutzer gefunden</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">Keine Benutzer gefunden</TableCell></TableRow>
                   ) : (
                     filtered.map((u) => (
                       <TableRow key={u.id}>
@@ -172,7 +168,6 @@ const SuperAdminUsers = () => {
                             <p className="text-xs text-muted-foreground">{u.email}</p>
                           </div>
                         </TableCell>
-                        <TableCell className="text-muted-foreground">{u.tenant_name || "–"}</TableCell>
                         <TableCell>
                           <Select
                             value={u.role}
@@ -201,13 +196,6 @@ const SuperAdminUsers = () => {
                         </TableCell>
                         <TableCell className="text-muted-foreground">
                           {new Date(u.created_at).toLocaleDateString("de-DE")}
-                        </TableCell>
-                        <TableCell>
-                          {u.tenant_id ? (
-                            <TenantModulesDialog tenantId={u.tenant_id} tenantName={u.tenant_name || "Mandant"} />
-                          ) : (
-                            <span className="text-muted-foreground text-xs">–</span>
-                          )}
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-1">
