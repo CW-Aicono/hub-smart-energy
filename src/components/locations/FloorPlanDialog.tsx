@@ -102,6 +102,7 @@ export function FloorPlanDialog({ floor, locationId, open, onOpenChange }: Floor
   const imageRef = useRef<HTMLImageElement>(null);
   const viewImageRef = useRef<HTMLImageElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const viewContainerRef = useRef<HTMLDivElement>(null);
   const editOverlayRef = useRef<HTMLDivElement>(null);
   const [viewOverlayStyle, setViewOverlayStyle] = useState<React.CSSProperties>({ position: 'absolute', inset: 0 });
   const [editOverlayStyle, setEditOverlayStyle] = useState<React.CSSProperties>({ position: 'absolute', inset: 0 });
@@ -138,20 +139,36 @@ export function FloorPlanDialog({ floor, locationId, open, onOpenChange }: Floor
   useEffect(() => {
     if (activeTab === 'view') {
       updateViewOverlay();
-      const timer = setTimeout(updateViewOverlay, 100);
-      return () => clearTimeout(timer);
+      const t1 = setTimeout(updateViewOverlay, 100);
+      const t2 = setTimeout(updateViewOverlay, 300);
+      const t3 = setTimeout(updateViewOverlay, 600);
+      return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); };
     }
     if (activeTab === 'edit') {
       updateEditOverlay();
-      const timer = setTimeout(updateEditOverlay, 100);
-      return () => clearTimeout(timer);
+      const t1 = setTimeout(updateEditOverlay, 100);
+      const t2 = setTimeout(updateEditOverlay, 300);
+      const t3 = setTimeout(updateEditOverlay, 600);
+      return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); };
     }
   }, [activeTab, isFullscreen, updateViewOverlay, updateEditOverlay]);
 
+  // Use ResizeObserver for reliable recalculation on container size changes
   useEffect(() => {
     const handleResize = () => { updateViewOverlay(); updateEditOverlay(); };
     window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
+
+    const observer = new ResizeObserver(() => {
+      updateViewOverlay();
+      updateEditOverlay();
+    });
+    if (containerRef.current) observer.observe(containerRef.current);
+    if (viewContainerRef.current) observer.observe(viewContainerRef.current);
+
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      observer.disconnect();
+    };
   }, [updateViewOverlay, updateEditOverlay]);
 
   // Fetch sensors from all integrations
@@ -405,7 +422,7 @@ export function FloorPlanDialog({ floor, locationId, open, onOpenChange }: Floor
               </TabsList>
 
               <TabsContent value="view" className="flex-1 m-0 overflow-hidden">
-                <div className="relative w-full h-full border rounded-lg overflow-hidden bg-muted/10">
+                <div ref={viewContainerRef} className="relative w-full h-full border rounded-lg overflow-hidden bg-muted/10">
                   <img
                     ref={viewImageRef}
                     src={floor.floor_plan_url!}
@@ -446,6 +463,7 @@ export function FloorPlanDialog({ floor, locationId, open, onOpenChange }: Floor
                       );
                     })}
                     <RoomOverlay2D rooms={floorRooms} />
+                    <MeterOverlay2D meters={floorMeters} latestValues={meterLatestValues} />
                   </div>
                 </div>
               </TabsContent>
