@@ -9,7 +9,8 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
-import { Gauge, Plus, Pencil, Trash2, Archive, ArchiveRestore, Eye, EyeOff, Network } from "lucide-react";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Gauge, Plus, Pencil, Trash2, Archive, ArchiveRestore, Eye, EyeOff, Network, ChevronDown, ChevronRight } from "lucide-react";
 import { AddMeterDialog } from "./AddMeterDialog";
 import { EditMeterDialog } from "./EditMeterDialog";
 import { AddAlertRuleDialog } from "./AddAlertRuleDialog";
@@ -39,22 +40,30 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
   const [editingMeter, setEditingMeter] = useState<Meter | null>(null);
   const [editingRule, setEditingRule] = useState<AlertRule | null>(null);
   const [showArchived, setShowArchived] = useState(false);
+  const [isOpen, setIsOpen] = useState(false);
 
   const activeMeters = meters.filter((m) => !m.is_archived);
   const archivedMeters = meters.filter((m) => m.is_archived);
   const displayedMeters = showArchived ? archivedMeters : activeMeters;
 
   return (
+    <Collapsible open={isOpen} onOpenChange={setIsOpen}>
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Gauge className="h-5 w-5" />
-          Messstellen & Alarmierung
-        </CardTitle>
-        <CardDescription>
+        <CollapsibleTrigger asChild>
+          <button className="flex items-center gap-2 w-full text-left group">
+            {isOpen ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
+            <CardTitle className="flex items-center gap-2">
+              <Gauge className="h-5 w-5" />
+              Messstellen und Sensoren
+            </CardTitle>
+          </button>
+        </CollapsibleTrigger>
+        <CardDescription className="ml-6">
           Verwalten Sie Zähler und Alarmregeln für diesen Standort
         </CardDescription>
       </CardHeader>
+      <CollapsibleContent>
       <CardContent>
         <Tabs defaultValue="meters">
           <TabsList>
@@ -239,6 +248,8 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
           />
         )}
       </CardContent>
+      </CollapsibleContent>
     </Card>
+    </Collapsible>
   );
 };
