@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
 export type LabelSize = 'small' | 'medium' | 'large';
+export type LabelScale = number; // continuous scale factor, default 1.0
 
 export interface FloorSensorPosition {
   id: string;
@@ -12,6 +13,7 @@ export interface FloorSensorPosition {
   position_x: number;
   position_y: number;
   label_size: LabelSize;
+  label_scale: number;
   created_at: string;
   updated_at: string;
 }
