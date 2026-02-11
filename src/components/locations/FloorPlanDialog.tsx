@@ -1,9 +1,10 @@
 import { useState, useRef, useEffect, useCallback, lazy, Suspense, useMemo } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { TransformWrapper, TransformComponent, useControls } from "react-zoom-pan-pinch";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2, Trash2, GripVertical, AlertCircle, Image, MapPin, Maximize2, Minimize2, Box, Gauge, DoorOpen, Minus, Square, Maximize } from "lucide-react";
+import { Loader2, Trash2, GripVertical, AlertCircle, Image, MapPin, Maximize2, Minimize2, Box, Gauge, DoorOpen, Minus, Square, Maximize, ZoomIn, ZoomOut, RotateCcw } from "lucide-react";
 import { ENERGY_SENSOR_CLASSES } from "@/lib/energyTypeColors";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Floor } from "@/hooks/useFloors";
@@ -429,47 +430,69 @@ export function FloorPlanDialog({ floor, locationId, open, onOpenChange }: Floor
 
               <TabsContent value="view" className="flex-1 m-0 overflow-hidden">
                 <div ref={viewContainerRef} className="relative w-full h-full border rounded-lg overflow-hidden bg-muted/10">
-                  <img
-                    ref={viewImageRef}
-                    src={floor.floor_plan_url!}
-                    alt={floor.name}
-                    className="w-full h-full object-contain"
-                    onLoad={updateViewOverlay}
-                  />
-                  {/* Image-aligned overlay */}
-                  <div style={viewOverlayStyle}>
-                    {/* Sensor Overlays */}
-                    {placedSensorsWithInfo.map((pos) => {
-                      const size = (pos as any).label_size as LabelSize || 'medium';
-                      const sizeClasses = {
-                        small: 'min-w-[60px] px-1 py-0.5',
-                        medium: 'min-w-[80px] px-2 py-1',
-                        large: 'min-w-[120px] px-3 py-2',
-                      };
-                      const textClasses = { small: 'text-[8px]', medium: 'text-[10px]', large: 'text-xs' };
-                      const valueClasses = { small: 'text-xs', medium: 'text-sm', large: 'text-base' };
-                      return (
-                        <div
-                          key={pos.id}
-                          className="absolute transform -translate-x-1/2 -translate-y-1/2"
-                          style={{
-                            left: `${pos.position_x}%`,
-                            top: `${pos.position_y}%`,
-                          }}
-                        >
-                          <div className={`bg-card/95 backdrop-blur-sm border shadow-lg rounded-lg text-center ${sizeClasses[size]}`}>
-                            <p className={`${textClasses[size]} font-medium text-muted-foreground truncate max-w-[100px]`}>
-                              {pos.sensor_name}
-                            </p>
-                            <p className={`${valueClasses[size]} font-mono font-bold text-primary`}>
-                              {pos.sensorInfo ? `${pos.sensorInfo.value} ${pos.sensorInfo.unit}` : "—"}
-                            </p>
-                          </div>
+                  <TransformWrapper initialScale={1} minScale={0.5} maxScale={6} centerOnInit wheel={{ step: 0.1 }}>
+                    {({ zoomIn, zoomOut, resetTransform }) => (
+                      <>
+                        <div className="absolute bottom-3 right-3 flex flex-col gap-1 z-20">
+                          <Button variant="secondary" size="icon" className="h-8 w-8 bg-card/90 backdrop-blur-sm shadow-md" onClick={() => zoomIn()}>
+                            <ZoomIn className="h-4 w-4" />
+                          </Button>
+                          <Button variant="secondary" size="icon" className="h-8 w-8 bg-card/90 backdrop-blur-sm shadow-md" onClick={() => zoomOut()}>
+                            <ZoomOut className="h-4 w-4" />
+                          </Button>
+                          <Button variant="secondary" size="icon" className="h-8 w-8 bg-card/90 backdrop-blur-sm shadow-md" onClick={() => resetTransform()}>
+                            <RotateCcw className="h-4 w-4" />
+                          </Button>
                         </div>
-                      );
-                    })}
-                    <RoomOverlay2D rooms={floorRooms} />
-                  </div>
+                        <TransformComponent
+                          wrapperStyle={{ width: "100%", height: "100%" }}
+                          contentStyle={{ width: "100%", height: "100%", display: "flex", justifyContent: "center", alignItems: "center" }}
+                        >
+                          <div className="relative inline-block">
+                            <img
+                              ref={viewImageRef}
+                              src={floor.floor_plan_url!}
+                              alt={floor.name}
+                              className="max-w-full max-h-full object-contain"
+                              onLoad={updateViewOverlay}
+                              draggable={false}
+                            />
+                            {/* Sensor Overlays - inside zoomable area */}
+                            {placedSensorsWithInfo.map((pos) => {
+                              const size = (pos as any).label_size as LabelSize || 'medium';
+                              const sizeClasses = {
+                                small: 'min-w-[60px] px-1 py-0.5',
+                                medium: 'min-w-[80px] px-2 py-1',
+                                large: 'min-w-[120px] px-3 py-2',
+                              };
+                              const textClasses = { small: 'text-[8px]', medium: 'text-[10px]', large: 'text-xs' };
+                              const valueClasses = { small: 'text-xs', medium: 'text-sm', large: 'text-base' };
+                              return (
+                                <div
+                                  key={pos.id}
+                                  className="absolute transform -translate-x-1/2 -translate-y-1/2"
+                                  style={{
+                                    left: `${pos.position_x}%`,
+                                    top: `${pos.position_y}%`,
+                                  }}
+                                >
+                                  <div className={`bg-card/95 backdrop-blur-sm border shadow-lg rounded-lg text-center ${sizeClasses[size]}`}>
+                                    <p className={`${textClasses[size]} font-medium text-muted-foreground truncate max-w-[100px]`}>
+                                      {pos.sensor_name}
+                                    </p>
+                                    <p className={`${valueClasses[size]} font-mono font-bold text-primary`}>
+                                      {pos.sensorInfo ? `${pos.sensorInfo.value} ${pos.sensorInfo.unit}` : "—"}
+                                    </p>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                            <RoomOverlay2D rooms={floorRooms} />
+                          </div>
+                        </TransformComponent>
+                      </>
+                    )}
+                  </TransformWrapper>
                 </div>
               </TabsContent>
 
