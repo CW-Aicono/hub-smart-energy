@@ -2,8 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
 import { useMeters } from "./useMeters";
-import { Meter } from "./useMeters";
-import { useLoxoneSensors } from "./useLoxoneSensors";
+import { useLoxoneSensorsMulti } from "./useLoxoneSensors";
 
 export interface MonthlyEnergyData {
   month: string;
@@ -76,8 +75,8 @@ export function useEnergyData(locationId?: string | null) {
     return Array.from(ids);
   }, [meters]);
 
-  // Use centralized cached sensor queries (one per integration)
-  const sensorQueries = integrationIds.map((id) => useLoxoneSensors(id));
+  // Use centralized cached sensor queries (stable hook call)
+  const sensorQueries = useLoxoneSensorsMulti(integrationIds);
 
   // Build live readings from cached sensor data
   const liveReadings = useMemo(() => {
@@ -89,11 +88,10 @@ export function useEnergyData(locationId?: string | null) {
     const now = new Date().toISOString();
     const newLiveReadings: ReadingRow[] = [];
 
-    // Build a map of integration ID -> sensors from query results
     const sensorsByIntegration = new Map<string, any[]>();
     integrationIds.forEach((id, idx) => {
       const query = sensorQueries[idx];
-      if (query.data) {
+      if (query?.data) {
         sensorsByIntegration.set(id, query.data);
       }
     });

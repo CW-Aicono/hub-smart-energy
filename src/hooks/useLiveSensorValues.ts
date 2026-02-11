@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { useFloorSensorPositions, FloorSensorPosition } from "@/hooks/useFloorSensorPositions";
-import { useLoxoneSensors } from "@/hooks/useLoxoneSensors";
+import { useLoxoneSensorsMulti } from "@/hooks/useLoxoneSensors";
 
 export interface LiveSensorValue {
   id: string;
@@ -21,25 +21,24 @@ interface UseLiveSensorValuesReturn {
 export function useLiveSensorValues(floorId: string | undefined): UseLiveSensorValuesReturn {
   const { positions } = useFloorSensorPositions(floorId);
 
-  // Group positions by integration
+  // Group positions by integration (stable array)
   const integrationIds = useMemo(() => {
     const ids = new Set<string>();
     positions.forEach((pos) => ids.add(pos.location_integration_id));
     return Array.from(ids);
   }, [positions]);
 
-  // Use centralized cached sensor queries
-  const sensorQueries = integrationIds.map((id) => useLoxoneSensors(id));
+  // Use centralized cached sensor queries (stable hook call via useQueries)
+  const sensorQueries = useLoxoneSensorsMulti(integrationIds);
 
   const { sensorValues, sensorValuesMap } = useMemo(() => {
     const allValues: LiveSensorValue[] = [];
     const valuesMap = new Map<string, LiveSensorValue>();
 
-    // Build integration -> sensors map
     const sensorsByIntegration = new Map<string, any[]>();
     integrationIds.forEach((id, idx) => {
       const query = sensorQueries[idx];
-      if (query.data) {
+      if (query?.data) {
         sensorsByIntegration.set(id, query.data);
       }
     });
