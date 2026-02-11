@@ -16,7 +16,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { HeadsetIcon } from "lucide-react";
+import { HeadsetIcon, RotateCcw } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -173,6 +173,7 @@ const SuperAdminTenantDetail = () => {
                               {isAlwaysOn ? "–" : (
                                 <div className="flex items-center justify-end gap-1">
                                   <Input
+                                    key={`${mod.code}-${override}`}
                                     type="number"
                                     min={0}
                                     step={0.01}
@@ -190,6 +191,17 @@ const SuperAdminTenantDetail = () => {
                                     }}
                                   />
                                   <span className="text-xs text-muted-foreground">€</span>
+                                  {override != null && (
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-8 w-8 shrink-0"
+                                      title="Auf Standardpreis zurücksetzen"
+                                      onClick={() => updatePriceOverride(mod.code, null)}
+                                    >
+                                      <RotateCcw className="h-3.5 w-3.5" />
+                                    </Button>
+                                  )}
                                 </div>
                               )}
                             </TableCell>
