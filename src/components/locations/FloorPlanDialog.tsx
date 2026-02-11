@@ -469,7 +469,6 @@ export function FloorPlanDialog({ floor, locationId, open, onOpenChange }: Floor
                       );
                     })}
                     <RoomOverlay2D rooms={floorRooms} />
-                    <MeterOverlay2D meters={placedFloorMeters} latestValues={meterLatestValues} />
                   </div>
                 </div>
               </TabsContent>
@@ -694,7 +693,7 @@ export function FloorPlanDialog({ floor, locationId, open, onOpenChange }: Floor
                     </div>
                   ))}
                   <RoomOverlay2D rooms={floorRooms} />
-                  <MeterOverlay2D meters={placedFloorMeters} latestValues={meterLatestValues} />
+                  
                 </div>
               </TabsContent>
 
