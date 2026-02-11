@@ -211,8 +211,10 @@ const LocationDetail = () => {
             </Card>
           </div>
 
-          {/* Floors Card */}
-          <FloorsCollapsible locationId={location.id} isAdmin={isAdmin} floors={floors} floorsLoading={floorsLoading} refetchFloors={refetchFloors} />
+          {/* Floors Card - only if floor_plans module is enabled */}
+          {isModuleEnabled("floor_plans") && (
+            <FloorsCollapsible locationId={location.id} isAdmin={isAdmin} floors={floors} floorsLoading={floorsLoading} refetchFloors={refetchFloors} />
+          )}
 
           {/* Meters & Alerts */}
           <MeterManagement locationId={location.id} />
@@ -222,8 +224,10 @@ const LocationDetail = () => {
             <LocationAutomation locationId={location.id} />
           )}
 
-          {/* Integrations Card */}
-          <LocationIntegrationsList locationId={location.id} />
+          {/* Integrations Card - only if integrations module is enabled */}
+          {isModuleEnabled("integrations") && (
+            <LocationIntegrationsList locationId={location.id} />
+          )}
         </div>
       </main>
     </div>

@@ -1,8 +1,9 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useDashboardWidgets, WidgetSize } from "@/hooks/useDashboardWidgets";
 import { useTranslation } from "@/hooks/useTranslation";
+import { useModuleGuard } from "@/hooks/useModuleGuard";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { ZoomIn, ZoomOut } from "lucide-react";
 import { DashboardFilterProvider, useDashboardFilter } from "@/hooks/useDashboardFilter";
@@ -51,11 +52,35 @@ const getLocationWidget = (locationId: string | null): string => {
   return "location_map";
 };
 
+/** Maps widget types to module codes for filtering */
+const WIDGET_MODULE_MAP: Record<string, string> = {
+  floor_plan_explorer: "floor_plans",
+  floor_plan: "floor_plans",
+  alerts_list: "alerts",
+  forecast: "energy_monitoring",
+  anomaly: "energy_monitoring",
+  energy_chart: "energy_monitoring",
+  cost_overview: "energy_monitoring",
+  sustainability_kpis: "energy_monitoring",
+  pie_chart: "energy_monitoring",
+  sankey: "energy_monitoring",
+};
+
 const DashboardContent = () => {
   const { widgets, visibleWidgets, loading: widgetsLoading, toggleWidgetVisibility, reorderWidgets, updateWidgetSize } = useDashboardWidgets();
   const [expandedWidget, setExpandedWidget] = useState<string | null>(null);
   const { t } = useTranslation();
   const { selectedLocationId, setSelectedLocationId } = useDashboardFilter();
+  const { isModuleEnabled } = useModuleGuard();
+
+  // Filter visible widgets by active modules
+  const filteredVisibleWidgets = useMemo(() => {
+    return visibleWidgets.filter((w) => {
+      const moduleCode = WIDGET_MODULE_MAP[w.widget_type];
+      if (!moduleCode) return true;
+      return isModuleEnabled(moduleCode);
+    });
+  }, [visibleWidgets, isModuleEnabled]);
 
   if (widgetsLoading) {
     return (
@@ -97,8 +122,8 @@ const DashboardContent = () => {
         </header>
         <div className="p-6">
           <div className="flex flex-wrap gap-4">
-            {visibleWidgets.length > 0 ? (
-              visibleWidgets.map((widget) => {
+            {filteredVisibleWidgets.length > 0 ? (
+              filteredVisibleWidgets.map((widget) => {
                 const widgetType = widget.widget_type === "location_map"
                   ? getLocationWidget(selectedLocationId)
                   : widget.widget_type;
