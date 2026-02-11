@@ -279,9 +279,7 @@ const LiveValues = () => {
                         <div className="text-2xl font-bold tracking-tight">
                           {value !== null ? (
                             <>
-                              {meter.unit === "kWh" || meter.unit === "Wh"
-                                ? formatEnergy(value, meter.unit === "Wh" ? "Wh" : "Wh")
-                                : `${value.toLocaleString("de-DE", { maximumFractionDigits: 2 })} ${meter.unit}`}
+                              {`${value.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${meter.unit}`}
                             </>
                           ) : (
                             <span className="text-muted-foreground text-lg">Kein Wert</span>
