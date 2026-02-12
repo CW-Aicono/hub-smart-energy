@@ -207,9 +207,17 @@ export function Room3D({ room, showCeiling = true }: Room3DProps) {
     return [cx, cz] as [number, number];
   }, [worldPts]);
 
-  // Floor and ceiling shape (extruded in Y direction)
+  // Floor and ceiling geometry – built in XZ plane directly using BufferGeometry
+  // ShapeGeometry works in XY; rotating it can cause sign mismatches with walls.
+  // Instead we create the shape with Z negated so that after -PI/2 X-rotation it aligns correctly.
   const floorGeometry = useMemo(() => {
-    const shape = buildShape(worldPts);
+    // Shape in XY where Y = -worldZ (rotation -PI/2 maps shape-Y to +world-Z)
+    const shape = new THREE.Shape();
+    shape.moveTo(worldPts[0][0], -worldPts[0][1]);
+    for (let i = 1; i < worldPts.length; i++) {
+      shape.lineTo(worldPts[i][0], -worldPts[i][1]);
+    }
+    shape.closePath();
     return new THREE.ShapeGeometry(shape);
   }, [worldPts]);
 
@@ -220,13 +228,13 @@ export function Room3D({ room, showCeiling = true }: Room3DProps) {
   return (
     <group>
       {/* Floor */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.001, 0]} receiveShadow geometry={floorGeometry}>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.002, 0]} receiveShadow geometry={floorGeometry}>
         <meshStandardMaterial color={floorColorBase} roughness={0.7} metalness={0.0} />
       </mesh>
 
       {/* Ceiling */}
       {showCeiling && (
-        <mesh rotation={[Math.PI / 2, 0, 0]} position={[0, wall_height, 0]} receiveShadow geometry={floorGeometry}>
+        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, wall_height, 0]} receiveShadow geometry={floorGeometry}>
           <meshStandardMaterial color="#ffffff" roughness={0.9} side={THREE.DoubleSide} />
         </mesh>
       )}
