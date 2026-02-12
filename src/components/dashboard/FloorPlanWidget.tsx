@@ -190,13 +190,13 @@ const FloorPlanWidget = ({ locationId }: FloorPlanWidgetProps) => {
               <ZoomControls />
               <TransformComponent
                 wrapperStyle={{ width: "100%", height: "100%" }}
-                contentStyle={{ width: "100%", height: "100%" }}
+                contentStyle={{ width: "100%", height: "100%", display: "flex", justifyContent: "center", alignItems: "center" }}
               >
-                <div className="relative w-full h-full">
+                <div className="relative inline-block">
                   <img
                     src={selectedFloor.floor_plan_url}
                     alt={selectedFloor.name}
-                    className="w-full h-full object-contain"
+                    className="max-w-full max-h-[350px] object-contain"
                     draggable={false}
                   />
                   

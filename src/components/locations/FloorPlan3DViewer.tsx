@@ -237,6 +237,44 @@ function ModelViewer({ floor, rotationDeg }: { floor: Floor; rotationDeg: number
   );
 }
 
+/**
+ * Derive 3D room position and size from polygon_points when the room uses default position (0,0).
+ * Polygon coords are in percentage (0-100) of the floor plan image; we scale them to world units.
+ */
+function deriveRoomPosition(room: FloorRoom, index: number, totalRooms: number): FloorRoom {
+  const hasDefaultPos = room.position_x === 0 && room.position_y === 0;
+  const pts = room.polygon_points;
+
+  if (hasDefaultPos && pts && Array.isArray(pts) && pts.length >= 3) {
+    const xs = pts.map(p => p.x);
+    const ys = pts.map(p => p.y);
+    const minX = Math.min(...xs);
+    const maxX = Math.max(...xs);
+    const minY = Math.min(...ys);
+    const maxY = Math.max(...ys);
+
+    // Scale percentage coords to world units (100% ≈ 30 units)
+    const scale = 0.3;
+    const cx = ((minX + maxX) / 2) * scale - 15; // center around 0
+    const cy = ((minY + maxY) / 2) * scale - 15;
+    const w = Math.max(2, (maxX - minX) * scale);
+    const d = Math.max(2, (maxY - minY) * scale);
+
+    return { ...room, position_x: cx, position_y: cy, width: w, depth: d };
+  }
+
+  // If still default and no polygon, spread rooms so they don't overlap
+  if (hasDefaultPos && totalRooms > 1) {
+    const spacing = 5;
+    const cols = Math.ceil(Math.sqrt(totalRooms));
+    const col = index % cols;
+    const row = Math.floor(index / cols);
+    return { ...room, position_x: col * spacing, position_y: row * spacing };
+  }
+
+  return room;
+}
+
 function Scene({ 
   floor,
   rooms, 
@@ -327,25 +365,29 @@ function Scene({
         <ModelViewer floor={floor} rotationDeg={rotationDeg} />
       ) : (
         <>
-          {/* Rooms */}
-          {rooms.map((room) => (
-            <Room3D key={room.id} room={room} />
-          ))}
+          {/* Rooms - derive position from polygon_points when available */}
+          {rooms.map((room, index) => {
+            const derivedRoom = deriveRoomPosition(room, index, rooms.length);
+            return <Room3D key={room.id} room={derivedRoom} />;
+          })}
           
           {/* Room labels */}
-          {rooms.map((room) => (
-            <Text
-              key={`label-${room.id}`}
-              position={[room.position_x, 0.1, room.position_y]}
-              rotation={[-Math.PI / 2, 0, 0]}
-              fontSize={0.5}
-              color="#374151"
-              anchorX="center"
-              anchorY="middle"
-            >
-              {room.name}
-            </Text>
-          ))}
+          {rooms.map((room, index) => {
+            const derivedRoom = deriveRoomPosition(room, index, rooms.length);
+            return (
+              <Text
+                key={`label-${room.id}`}
+                position={[derivedRoom.position_x, 0.1, derivedRoom.position_y]}
+                rotation={[-Math.PI / 2, 0, 0]}
+                fontSize={0.5}
+                color="#374151"
+                anchorX="center"
+                anchorY="middle"
+              >
+                {room.name}
+              </Text>
+            );
+          })}
           
           {/* Sensor Labels */}
           {sensorPositions.map((pos) => {

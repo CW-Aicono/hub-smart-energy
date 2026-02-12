@@ -496,14 +496,14 @@ export function FloorPlanDialog({ floor, locationId, open, onOpenChange }: Floor
                         </div>
                         <TransformComponent
                           wrapperStyle={{ width: "100%", height: "100%" }}
-                          contentStyle={{ width: "100%", height: "100%" }}
+                          contentStyle={{ width: "100%", height: "100%", display: "flex", justifyContent: "center", alignItems: "center" }}
                         >
-                          <div className="relative w-full h-full">
+                          <div className="relative inline-block">
                             <img
                               ref={viewImageRef}
                               src={floor.floor_plan_url!}
                               alt={floor.name}
-                              className="w-full h-full object-contain"
+                              className="max-w-full max-h-full object-contain"
                               onLoad={updateViewOverlay}
                               draggable={false}
                             />
