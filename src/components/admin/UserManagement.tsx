@@ -25,6 +25,7 @@ interface UserWithRole {
   contact_person: string | null;
   is_blocked: boolean;
   role: "admin" | "user";
+  custom_role_id: string | null;
   created_at: string;
   status: "active" | "invited";
   expires_at?: string;
@@ -77,8 +78,8 @@ const UserManagement = () => {
     }
 
     // Combine registered users
-    const registeredUsers: UserWithRole[] = profiles.map((profile) => {
-      const userRole = roles?.find((r) => r.user_id === profile.user_id);
+    const registeredUsers: UserWithRole[] = profiles.map((profile: any) => {
+      const userRole = roles?.find((r: any) => r.user_id === profile.user_id);
       return {
         id: profile.id,
         user_id: profile.user_id,
@@ -87,20 +88,22 @@ const UserManagement = () => {
         contact_person: profile.contact_person,
         is_blocked: profile.is_blocked,
         role: (userRole?.role as "admin" | "user") ?? "user",
+        custom_role_id: profile.custom_role_id ?? null,
         created_at: profile.created_at,
         status: "active" as const,
       };
     });
 
     // Add pending invitations
-    const pendingInvitations: UserWithRole[] = (invitations || []).map((inv) => ({
+    const pendingInvitations: UserWithRole[] = (invitations || []).map((inv: any) => ({
       id: inv.id,
-      user_id: inv.id, // Use invitation id as user_id placeholder
+      user_id: inv.id,
       email: inv.email,
       company_name: null,
       contact_person: null,
       is_blocked: false,
       role: inv.role as "admin" | "user",
+      custom_role_id: null,
       created_at: inv.created_at,
       status: "invited" as const,
       expires_at: inv.expires_at,
@@ -151,26 +154,37 @@ const UserManagement = () => {
     }
   };
 
-  const updateUserRole = async (userId: string, newRole: "admin" | "user") => {
-    // Prevent last admin from demoting themselves
-    if (newRole !== "admin" && adminCount <= 1) {
-      const user = users.find(u => u.user_id === userId);
-      if (user?.role === "admin") {
-        toast({
-          title: t("common.error"),
-          description: t("users.cannotDemoteLastAdmin"),
-          variant: "destructive",
-        });
-        return;
-      }
+  const updateUserRole = async (userId: string, value: string) => {
+    // "admin" means system admin role; anything else is a custom_role_id
+    const isAdmin = value === "admin";
+    const currentUser = users.find(u => u.user_id === userId);
+
+    // Prevent last admin from losing admin
+    if (!isAdmin && currentUser?.role === "admin" && adminCount <= 1) {
+      toast({
+        title: t("common.error"),
+        description: t("users.cannotDemoteLastAdmin"),
+        variant: "destructive",
+      });
+      return;
     }
 
-    const { error } = await supabase
+    const newSystemRole = isAdmin ? "admin" : "user";
+    const newCustomRoleId = isAdmin ? null : value;
+
+    // Update system role
+    const { error: roleError } = await supabase
       .from("user_roles")
-      .update({ role: newRole })
+      .update({ role: newSystemRole })
       .eq("user_id", userId);
 
-    if (error) {
+    // Update custom_role_id on profile
+    const { error: profileError } = await supabase
+      .from("profiles")
+      .update({ custom_role_id: newCustomRoleId } as any)
+      .eq("user_id", userId);
+
+    if (roleError || profileError) {
       toast({
         title: t("common.error"),
         description: t("users.roleUpdateError"),
@@ -390,19 +404,25 @@ const UserManagement = () => {
                           ) : (
                             <>
                               <User className="h-3 w-3" />
-                              {customRoles.find(r => r.name.toLowerCase() === user.role)?.name || t("users.userRole")}
+                              {t("users.userRole")}
                             </>
                           )}
                         </div>
                       ) : (
                         <Select
-                          value={user.role}
-                          onValueChange={(value: "admin" | "user") =>
+                          value={user.role === "admin" ? "admin" : (user.custom_role_id || "no-role")}
+                          onValueChange={(value: string) =>
                             updateUserRole(user.user_id, value)
                           }
                         >
-                          <SelectTrigger className="w-[160px]">
-                            <SelectValue />
+                          <SelectTrigger className="w-[180px]">
+                            <SelectValue>
+                              {user.role === "admin"
+                                ? t("users.admin")
+                                : user.custom_role_id
+                                  ? customRoles.find(r => r.id === user.custom_role_id)?.name || "–"
+                                  : "–"}
+                            </SelectValue>
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="admin">
@@ -414,7 +434,7 @@ const UserManagement = () => {
                             {customRoles
                               .filter((role) => role.name.toLowerCase() !== "administrator")
                               .map((role) => (
-                              <SelectItem key={role.id} value={role.name.toLowerCase()}>
+                              <SelectItem key={role.id} value={role.id}>
                                 <div className="flex items-center gap-2">
                                   {role.is_system_role ? <Shield className="h-3 w-3" /> : <User className="h-3 w-3" />}
                                   {role.name}

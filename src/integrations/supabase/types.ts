@@ -1363,6 +1363,7 @@ export type Database = {
           company_name: string | null
           contact_person: string | null
           created_at: string
+          custom_role_id: string | null
           email: string | null
           id: string
           is_blocked: boolean
@@ -1374,6 +1375,7 @@ export type Database = {
           company_name?: string | null
           contact_person?: string | null
           created_at?: string
+          custom_role_id?: string | null
           email?: string | null
           id?: string
           is_blocked?: boolean
@@ -1385,6 +1387,7 @@ export type Database = {
           company_name?: string | null
           contact_person?: string | null
           created_at?: string
+          custom_role_id?: string | null
           email?: string | null
           id?: string
           is_blocked?: boolean
@@ -1393,6 +1396,13 @@ export type Database = {
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "profiles_custom_role_id_fkey"
+            columns: ["custom_role_id"]
+            isOneToOne: false
+            referencedRelation: "custom_roles"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "profiles_tenant_id_fkey"
             columns: ["tenant_id"]
