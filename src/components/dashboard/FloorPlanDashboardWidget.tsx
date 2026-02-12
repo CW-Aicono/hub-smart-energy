@@ -113,7 +113,11 @@ const FloorPlanDashboardWidget = ({ locationId }: FloorPlanDashboardWidgetProps)
         });
         setAllFloors(options);
         if (options.length > 0 && !selectedFloorId) {
-          setSelectedFloorId(options[0].id);
+          // Prefer floor 0 of the main location, then any floor 0, then first floor
+          const mainLoc = locations.find(l => l.is_main_location);
+          const mainFloor0 = mainLoc ? options.find(f => f.location_id === mainLoc.id && f.floor_number === 0) : null;
+          const anyFloor0 = options.find(f => f.floor_number === 0);
+          setSelectedFloorId((mainFloor0 || anyFloor0 || options[0]).id);
         }
       }
     } finally {
