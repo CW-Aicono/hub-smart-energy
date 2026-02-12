@@ -473,7 +473,14 @@ export function FloorPlanDialog({ floor, locationId, open, onOpenChange }: Floor
 
               <TabsContent value="view" className="flex-1 m-0 overflow-hidden">
                 <div ref={viewContainerRef} className="relative w-full h-full border rounded-lg overflow-hidden bg-muted/10">
-                  <TransformWrapper initialScale={1} minScale={0.5} maxScale={6} centerOnInit wheel={{ step: 0.1 }}>
+                  <TransformWrapper
+                    initialScale={1}
+                    minScale={0.5}
+                    maxScale={6}
+                    centerOnInit
+                    limitToBounds={false}
+                    wheel={{ step: 0.1 }}
+                  >
                     {({ zoomIn, zoomOut, resetTransform }) => (
                       <>
                         <div className="absolute bottom-3 right-3 flex flex-col gap-1 z-20">
@@ -489,14 +496,14 @@ export function FloorPlanDialog({ floor, locationId, open, onOpenChange }: Floor
                         </div>
                         <TransformComponent
                           wrapperStyle={{ width: "100%", height: "100%" }}
-                          contentStyle={{ width: "100%", height: "100%", display: "flex", justifyContent: "center", alignItems: "center" }}
+                          contentStyle={{ width: "100%", height: "100%" }}
                         >
-                          <div className="relative inline-block">
+                          <div className="relative w-full h-full">
                             <img
                               ref={viewImageRef}
                               src={floor.floor_plan_url!}
                               alt={floor.name}
-                              className="max-w-full max-h-full object-contain"
+                              className="w-full h-full object-contain"
                               onLoad={updateViewOverlay}
                               draggable={false}
                             />

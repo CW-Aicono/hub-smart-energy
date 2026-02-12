@@ -183,19 +183,20 @@ const FloorPlanWidget = ({ locationId }: FloorPlanWidgetProps) => {
               minScale={0.5}
               maxScale={4}
               centerOnInit
+              limitToBounds={false}
               wheel={{ step: 0.1 }}
               panning={{ velocityDisabled: true }}
             >
               <ZoomControls />
               <TransformComponent
                 wrapperStyle={{ width: "100%", height: "100%" }}
-                contentStyle={{ width: "100%", height: "100%", display: "flex", justifyContent: "center", alignItems: "center" }}
+                contentStyle={{ width: "100%", height: "100%" }}
               >
-                <div className="relative inline-block">
+                <div className="relative w-full h-full">
                   <img
                     src={selectedFloor.floor_plan_url}
                     alt={selectedFloor.name}
-                    className="max-w-full max-h-[350px] object-contain"
+                    className="w-full h-full object-contain"
                     draggable={false}
                   />
                   
