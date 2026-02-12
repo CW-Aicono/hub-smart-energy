@@ -1,15 +1,139 @@
+import { useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useEnergyData } from "@/hooks/useEnergyData";
+import { useEnergyPrices } from "@/hooks/useEnergyPrices";
+import { useMeters } from "@/hooks/useMeters";
+import { useDashboardFilter, TimePeriod } from "@/hooks/useDashboardFilter";
 import { Euro, TrendingDown, TrendingUp, ArrowDownRight } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
-import { formatEnergy } from "@/lib/formatEnergy";
+import { startOfDay, startOfWeek, startOfMonth, startOfQuarter, startOfYear, subDays, subWeeks, subMonths, subQuarters, subYears } from "date-fns";
 
 interface CostOverviewProps {
   locationId: string | null;
 }
 
+function getPeriodRange(period: TimePeriod): { start: Date; prevStart: Date; prevEnd: Date } {
+  const now = new Date();
+  let start: Date;
+  let prevStart: Date;
+  let prevEnd: Date;
+
+  switch (period) {
+    case "day":
+      start = startOfDay(now);
+      prevEnd = new Date(start.getTime() - 1);
+      prevStart = startOfDay(subDays(now, 1));
+      break;
+    case "week":
+      start = startOfWeek(now, { weekStartsOn: 1 });
+      prevEnd = new Date(start.getTime() - 1);
+      prevStart = startOfWeek(subWeeks(now, 1), { weekStartsOn: 1 });
+      break;
+    case "month":
+      start = startOfMonth(now);
+      prevEnd = new Date(start.getTime() - 1);
+      prevStart = startOfMonth(subMonths(now, 1));
+      break;
+    case "quarter":
+      start = startOfQuarter(now);
+      prevEnd = new Date(start.getTime() - 1);
+      prevStart = startOfQuarter(subQuarters(now, 1));
+      break;
+    case "year":
+      start = startOfYear(now);
+      prevEnd = new Date(start.getTime() - 1);
+      prevStart = startOfYear(subYears(now, 1));
+      break;
+    case "all":
+    default:
+      start = new Date(0);
+      prevStart = new Date(0);
+      prevEnd = new Date(0);
+      break;
+  }
+
+  return { start, prevStart, prevEnd };
+}
+
+const PERIOD_LABELS: Record<TimePeriod, string> = {
+  day: "Heute",
+  week: "Diese Woche",
+  month: "Laufender Monat",
+  quarter: "Laufendes Quartal",
+  year: "Laufendes Jahr",
+  all: "Gesamt",
+};
+
+const PREV_PERIOD_LABELS: Record<TimePeriod, string> = {
+  day: "Gestern",
+  week: "Letzte Woche",
+  month: "Letzter Monat",
+  quarter: "Letztes Quartal",
+  year: "Letztes Jahr",
+  all: "–",
+};
+
 const CostOverview = ({ locationId }: CostOverviewProps) => {
-  const { costOverview, loading } = useEnergyData(locationId);
+  const { readings, loading: dataLoading } = useEnergyData(locationId);
+  const { prices, loading: pricesLoading } = useEnergyPrices();
+  const { meters } = useMeters();
+  const { selectedPeriod } = useDashboardFilter();
+
+  const meterMap = useMemo(() => {
+    const map: Record<string, { energy_type: string; location_id: string }> = {};
+    meters.forEach((m) => {
+      map[m.id] = { energy_type: m.energy_type, location_id: m.location_id };
+    });
+    return map;
+  }, [meters]);
+
+  // Build a price lookup: location_id + energy_type -> price_per_unit
+  const priceLookup = useMemo(() => {
+    const lookup = new Map<string, number>();
+    const today = new Date().toISOString().split("T")[0];
+    // Group by location+energy, pick most recent valid
+    prices.forEach((p) => {
+      if (p.valid_from <= today && (!p.valid_until || p.valid_until >= today)) {
+        const key = `${p.location_id}:${p.energy_type}`;
+        if (!lookup.has(key)) {
+          lookup.set(key, Number(p.price_per_unit));
+        }
+      }
+    });
+    return lookup;
+  }, [prices]);
+
+  const costData = useMemo(() => {
+    const { start, prevStart, prevEnd } = getPeriodRange(selectedPeriod);
+
+    let currentCost = 0;
+    let prevCost = 0;
+    let currentConsumption = 0;
+
+    readings.forEach((r) => {
+      const date = new Date(r.reading_date);
+      const meta = meterMap[r.meter_id];
+      if (!meta) return;
+
+      const priceKey = `${meta.location_id}:${meta.energy_type}`;
+      const price = priceLookup.get(priceKey) || 0;
+
+      if (date >= start) {
+        currentCost += r.value * price;
+        currentConsumption += r.value;
+      } else if (selectedPeriod !== "all" && date >= prevStart && date <= prevEnd) {
+        prevCost += r.value * price;
+      }
+    });
+
+    const diff = prevCost - currentCost;
+    const diffPercent = prevCost > 0 ? Math.round((diff / prevCost) * 1000) / 10 : 0;
+    const hasPrices = priceLookup.size > 0;
+
+    return { currentCost, prevCost, diff, diffPercent, hasPrices, currentConsumption };
+  }, [readings, meterMap, priceLookup, selectedPeriod]);
+
+  const loading = dataLoading || pricesLoading;
 
   if (loading) {
     return (
@@ -21,25 +145,30 @@ const CostOverview = ({ locationId }: CostOverviewProps) => {
     );
   }
 
+  const formatCurrency = (value: number) =>
+    value.toLocaleString("de-DE", { style: "currency", currency: "EUR", minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
   const kpis = [
     {
-      label: "Aktuelle Ablesungen",
-      value: costOverview.currentMonth > 0 ? formatEnergy(costOverview.currentMonth) : "–",
+      label: "Kosten",
+      value: costData.hasPrices && costData.currentCost > 0 ? formatCurrency(costData.currentCost) : "–",
       icon: Euro,
-      subtitle: "Laufender Monat",
+      subtitle: PERIOD_LABELS[selectedPeriod],
     },
     {
-      label: "Vormonat",
-      value: costOverview.previousMonth > 0 ? formatEnergy(costOverview.previousMonth) : "–",
+      label: "Vorperiode",
+      value: costData.hasPrices && costData.prevCost > 0 ? formatCurrency(costData.prevCost) : "–",
       icon: TrendingUp,
-      subtitle: "Letzter Monat",
+      subtitle: PREV_PERIOD_LABELS[selectedPeriod],
     },
     {
       label: "Differenz",
-      value: costOverview.savings > 0 ? formatEnergy(costOverview.savings) : "–",
+      value: costData.hasPrices && costData.diff !== 0 ? formatCurrency(Math.abs(costData.diff)) : "–",
       icon: TrendingDown,
-      subtitle: costOverview.savingsPercent > 0 ? `${costOverview.savingsPercent}% weniger` : "Keine Daten",
-      positive: costOverview.savings > 0,
+      subtitle: costData.diffPercent !== 0
+        ? `${costData.diffPercent > 0 ? costData.diffPercent : Math.abs(costData.diffPercent)}% ${costData.diff > 0 ? "weniger" : "mehr"}`
+        : costData.hasPrices ? "Keine Veränderung" : "Keine Preise hinterlegt",
+      positive: costData.diff > 0,
     },
   ];
 
