@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } fro
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { Loader2, Layers, Box, Image, ZoomIn, ZoomOut, RotateCcw, RefreshCw, Gauge } from "lucide-react";
+import { Loader2, Layers, Box, Image, ZoomIn, ZoomOut, RotateCcw, RefreshCw, Gauge, Maximize2 } from "lucide-react";
 import { useLocations } from "@/hooks/useLocations";
 import { useLiveSensorValues } from "@/hooks/useLiveSensorValues";
 import { useMeters } from "@/hooks/useMeters";
@@ -16,6 +16,7 @@ const FloorPlan3DViewer = lazy(() => import("@/components/locations/FloorPlan3DV
 
 interface FloorPlanDashboardWidgetProps {
   locationId: string | null;
+  onExpand?: () => void;
 }
 
 interface FloorOption {
@@ -47,7 +48,7 @@ function ZoomControls() {
   );
 }
 
-const FloorPlanDashboardWidget = ({ locationId }: FloorPlanDashboardWidgetProps) => {
+const FloorPlanDashboardWidget = ({ locationId, onExpand }: FloorPlanDashboardWidgetProps) => {
   const { locations } = useLocations();
   const [allFloors, setAllFloors] = useState<FloorOption[]>([]);
   const [selectedFloorId, setSelectedFloorId] = useState<string | null>(null);
@@ -211,6 +212,17 @@ const FloorPlanDashboardWidget = ({ locationId }: FloorPlanDashboardWidgetProps)
           >
             <Box className="h-3.5 w-3.5" />
           </Button>
+          {onExpand && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7"
+              title="Vergrößern"
+              onClick={onExpand}
+            >
+              <Maximize2 className="h-3.5 w-3.5" />
+            </Button>
+          )}
         </div>
       </div>
       <CardContent className="flex-1 p-0 min-h-0 overflow-hidden" style={{ minHeight: 400, height: 400 }}>
