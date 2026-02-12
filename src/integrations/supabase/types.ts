@@ -529,6 +529,63 @@ export type Database = {
         }
         Relationships: []
       }
+      energy_prices: {
+        Row: {
+          created_at: string
+          currency: string
+          energy_type: string
+          id: string
+          location_id: string
+          price_per_unit: number
+          tenant_id: string
+          unit: string
+          updated_at: string
+          valid_from: string
+          valid_until: string | null
+        }
+        Insert: {
+          created_at?: string
+          currency?: string
+          energy_type?: string
+          id?: string
+          location_id: string
+          price_per_unit?: number
+          tenant_id: string
+          unit?: string
+          updated_at?: string
+          valid_from?: string
+          valid_until?: string | null
+        }
+        Update: {
+          created_at?: string
+          currency?: string
+          energy_type?: string
+          id?: string
+          location_id?: string
+          price_per_unit?: number
+          tenant_id?: string
+          unit?: string
+          updated_at?: string
+          valid_from?: string
+          valid_until?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "energy_prices_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "energy_prices_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       energy_readings: {
         Row: {
           created_at: string

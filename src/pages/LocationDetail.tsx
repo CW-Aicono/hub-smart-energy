@@ -12,6 +12,7 @@ import { AddFloorDialog } from "@/components/locations/AddFloorDialog";
 import { LocationIntegrationsList } from "@/components/integrations/LocationIntegrationsList";
 import { LocationAutomation } from "@/components/locations/LocationAutomation";
 import { MeterManagement } from "@/components/locations/MeterManagement";
+import { EnergyPriceManagement } from "@/components/locations/EnergyPriceManagement";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -218,6 +219,9 @@ const LocationDetail = () => {
 
           {/* Meters & Alerts */}
           <MeterManagement locationId={location.id} />
+
+          {/* Energy Prices */}
+          <EnergyPriceManagement locationId={location.id} />
 
           {/* Automation - only if building automation module is enabled */}
           {isModuleEnabled("automation_building") && (
