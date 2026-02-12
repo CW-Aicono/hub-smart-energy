@@ -2,6 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useLocations } from "@/hooks/useLocations";
 import { useEnergyData } from "@/hooks/useEnergyData";
 import { useMeters } from "@/hooks/useMeters";
+import { useEnergyPrices } from "@/hooks/useEnergyPrices";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useMemo, useState, useRef, useEffect } from "react";
@@ -10,6 +11,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { ENERGY_CHART_COLORS, ENERGY_TYPE_LABELS } from "@/lib/energyTypeColors";
 import { startOfDay, startOfWeek, startOfMonth, startOfQuarter, startOfYear } from "date-fns";
 import { useDashboardFilter, TimePeriod } from "@/hooks/useDashboardFilter";
+
+type SankeyViewMode = "leistung" | "kosten";
 
 const PERIOD_LABELS: Record<TimePeriod, string> = {
   day: "Tag",
@@ -62,8 +65,23 @@ const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
   const { locations } = useLocations();
   const { readings, loading: energyLoading, hasData } = useEnergyData(locationId);
   const { meters } = useMeters();
+  const { prices, loading: pricesLoading } = useEnergyPrices();
   const svgRef = useRef<SVGSVGElement>(null);
   const { selectedPeriod: period, setSelectedPeriod: setPeriod } = useDashboardFilter();
+  const [viewMode, setViewMode] = useState<SankeyViewMode>("leistung");
+
+  // Build price lookup: location_id:energy_type -> price_per_unit
+  const priceLookup = useMemo(() => {
+    const lookup = new Map<string, number>();
+    const today = new Date().toISOString().split("T")[0];
+    prices.forEach((p) => {
+      if (p.valid_from <= today && (!p.valid_until || p.valid_until >= today)) {
+        const key = `${p.location_id}:${p.energy_type}`;
+        if (!lookup.has(key)) lookup.set(key, Number(p.price_per_unit));
+      }
+    });
+    return lookup;
+  }, [prices]);
 
   // Local UI state
   const [tooltip, setTooltip] = useState<{ x: number; y: number; source: string; target: string; value: number; sourceType: string } | null>(null);
@@ -130,14 +148,19 @@ const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
       const sourceName = ENERGY_LABELS[energyType] || energyType;
       const sourceColor = ENERGY_COLORS[energyType] || ENERGY_COLORS.strom;
 
+      let rawValue = r.value;
+      if (viewMode === "kosten") {
+        const priceKey = `${meter.location_id}:${energyType}`;
+        const price = priceLookup.get(priceKey) || 0;
+        rawValue = rawValue * price;
+      }
+
       let targetName: string;
 
       if (!locationId) {
-        // All locations mode: target = location name
         const loc = locations.find((l) => l.id === meter.location_id);
         targetName = loc?.name || "Unbekannt";
       } else {
-        // Specific location: target = deepest hierarchy level
         if (meter.room_id) {
           const room = rooms.find((rm) => rm.id === meter.room_id);
           targetName = room?.name || "Raum";
@@ -150,7 +173,7 @@ const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
       }
 
       const key = `${sourceName}|||${targetName}|||${sourceColor}|||${energyType}`;
-      flowMap[key] = (flowMap[key] || 0) + r.value;
+      flowMap[key] = (flowMap[key] || 0) + rawValue;
     });
 
     return Object.entries(flowMap)
@@ -159,7 +182,15 @@ const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
         return { sourceName, targetName, sourceColor, sourceType, value };
       })
       .filter((f) => f.value > 0);
-  }, [filteredReadings, meterMap, locationId, locations, floors, rooms]);
+  }, [filteredReadings, meterMap, locationId, locations, floors, rooms, viewMode, priceLookup]);
+
+  // Format helper based on view mode
+  const formatValue = (value: number, sourceType?: string) => {
+    if (viewMode === "kosten") {
+      return value.toLocaleString("de-DE", { style: "currency", currency: "EUR", minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+    return sourceType ? formatEnergyByType(value, sourceType) : formatEnergy(value);
+  };
 
   // Derive unique sources and targets
   const sourceNames = useMemo(() => [...new Set(flows.map((f) => f.sourceName))], [flows]);
@@ -177,7 +208,7 @@ const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
     return map;
   }, [flows]);
 
-  const loading = energyLoading;
+  const loading = energyLoading || pricesLoading;
 
   if (loading) return <Card><CardContent className="p-6"><Skeleton className="h-[200px]" /></CardContent></Card>;
 
@@ -186,7 +217,18 @@ const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
       <Card>
         <CardHeader className="pb-2">
           <div className="flex items-center justify-between">
-            <CardTitle className="font-display text-lg">Energiefluss</CardTitle>
+            <div className="flex items-center gap-2">
+              <CardTitle className="font-display text-lg">Energiefluss</CardTitle>
+              <Select value={viewMode} onValueChange={(v) => setViewMode(v as SankeyViewMode)}>
+                <SelectTrigger className="w-[100px] h-7 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="leistung">Leistung</SelectItem>
+                  <SelectItem value="kosten">Kosten</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
             <Select value={period} onValueChange={(v) => setPeriod(v as TimePeriod)}>
               <SelectTrigger className="w-[120px] h-8 text-xs">
                 <SelectValue />
@@ -307,7 +349,7 @@ const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
             opacity={0.7}
             className="pointer-events-none"
           >
-            {formatEnergyByType(flow.value, flow.sourceType)}
+            {formatValue(flow.value, flow.sourceType)}
           </text>
         )}
       </g>
@@ -318,7 +360,18 @@ const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
     <Card>
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between">
-          <CardTitle className="font-display text-lg">Energiefluss</CardTitle>
+          <div className="flex items-center gap-2">
+            <CardTitle className="font-display text-lg">Energiefluss</CardTitle>
+            <Select value={viewMode} onValueChange={(v) => setViewMode(v as SankeyViewMode)}>
+              <SelectTrigger className="w-[100px] h-7 text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="leistung">Leistung</SelectItem>
+                <SelectItem value="kosten">Kosten</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
           <Select value={period} onValueChange={(v) => setPeriod(v as TimePeriod)}>
             <SelectTrigger className="w-[120px] h-8 text-xs">
               <SelectValue />
@@ -345,7 +398,7 @@ const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
                 <g key={`src-${i}`}>
                   <rect x={srcX} y={pos.y} width={nodeW} height={pos.h} rx={3} fill={color} opacity={0.9} />
                   <text x={srcX - 6} y={pos.y + pos.h / 2 - 6} textAnchor="end" dominantBaseline="middle" fill="hsl(var(--foreground))" fontSize={10} fontWeight={500}>{name}</text>
-                  <text x={srcX - 6} y={pos.y + pos.h / 2 + 6} textAnchor="end" dominantBaseline="middle" fill="hsl(var(--muted-foreground))" fontSize={8}>{formatEnergyByType(sourceValues[name], sourceTypes[name] || "strom")}</text>
+                  <text x={srcX - 6} y={pos.y + pos.h / 2 + 6} textAnchor="end" dominantBaseline="middle" fill="hsl(var(--muted-foreground))" fontSize={8}>{formatValue(sourceValues[name], sourceTypes[name] || "strom")}</text>
                 </g>
               );
             })}
@@ -365,7 +418,7 @@ const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
                 <g key={`tgt-${i}`} onMouseMove={handleTargetMouseMove} onMouseLeave={() => setTargetTooltip(null)} className="cursor-pointer">
                   <rect x={tgtX} y={pos.y} width={nodeW} height={pos.h} rx={3} fill={color} opacity={0.9} />
                   <text x={tgtX + nodeW + 6} y={pos.y + pos.h / 2 - 6} textAnchor="start" dominantBaseline="middle" fill="hsl(var(--foreground))" fontSize={10} fontWeight={500}>{name}</text>
-                  <text x={tgtX + nodeW + 6} y={pos.y + pos.h / 2 + 6} textAnchor="start" dominantBaseline="middle" fill="hsl(var(--muted-foreground))" fontSize={8}>{formatEnergy(val)}</text>
+                  <text x={tgtX + nodeW + 6} y={pos.y + pos.h / 2 + 6} textAnchor="start" dominantBaseline="middle" fill="hsl(var(--muted-foreground))" fontSize={8}>{formatValue(val)}</text>
                 </g>
               );
             })}
@@ -373,14 +426,14 @@ const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
           {tooltip && (
             <div className="absolute pointer-events-none z-10 rounded-lg border bg-background px-3 py-2 text-xs shadow-lg" style={{ left: tooltip.x, top: tooltip.y, transform: "translate(-50%, -100%)" }}>
               <div className="font-semibold">{tooltip.source} → {tooltip.target}</div>
-              <div className="text-muted-foreground">{formatEnergyByType(tooltip.value, tooltip.sourceType)}</div>
+              <div className="text-muted-foreground">{formatValue(tooltip.value, tooltip.sourceType)}</div>
             </div>
           )}
           {targetTooltip && (
             <div className="absolute pointer-events-none z-10 rounded-lg border bg-background px-3 py-2 text-xs shadow-lg" style={{ left: targetTooltip.x, top: targetTooltip.y, transform: "translate(-50%, -100%)" }}>
               <div className="font-semibold mb-1">{targetTooltip.name}</div>
               {targetTooltip.flows.map((f, i) => (
-                <div key={i} className="text-muted-foreground">{f.sourceName}: {formatEnergyByType(f.value, f.sourceType)}</div>
+                <div key={i} className="text-muted-foreground">{f.sourceName}: {formatValue(f.value, f.sourceType)}</div>
               ))}
             </div>
           )}
