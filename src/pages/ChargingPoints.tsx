@@ -59,7 +59,7 @@ const ChargingPoints = () => {
       ocpp_id: form.ocpp_id,
       location_id: form.location_id || null,
       connector_count: parseInt(form.connector_count) || 1,
-      max_power_kw: parseFloat(form.max_power_kw) || 22,
+      max_power_kw: Math.max(0.1, parseFloat(form.max_power_kw) || 22),
     });
     setAddOpen(false);
     resetForm();
@@ -73,7 +73,7 @@ const ChargingPoints = () => {
       ocpp_id: form.ocpp_id,
       location_id: form.location_id || null,
       connector_count: parseInt(form.connector_count) || 1,
-      max_power_kw: parseFloat(form.max_power_kw) || 22,
+      max_power_kw: Math.max(0.1, parseFloat(form.max_power_kw) || 22),
     });
     setEditCp(null);
     resetForm();
@@ -148,8 +148,8 @@ const ChargingPoints = () => {
         </Select>
       </div>
       <div className="grid grid-cols-2 gap-4">
-        <div><Label>Anschlüsse</Label><Input type="number" value={form.connector_count} onChange={(e) => setForm({ ...form, connector_count: e.target.value })} /></div>
-        <div><Label>Max. Leistung (kW)</Label><Input type="number" value={form.max_power_kw} onChange={(e) => setForm({ ...form, max_power_kw: e.target.value })} /></div>
+        <div><Label>Anschlüsse</Label><Input type="number" min="1" value={form.connector_count} onChange={(e) => setForm({ ...form, connector_count: e.target.value })} /></div>
+        <div><Label>Max. Leistung (kW)</Label><Input type="number" min="0.1" step="0.1" value={form.max_power_kw} onChange={(e) => { const v = e.target.value; if (v === "" || parseFloat(v) >= 0) setForm({ ...form, max_power_kw: v }); }} /></div>
       </div>
       {ocppHint}
     </div>
