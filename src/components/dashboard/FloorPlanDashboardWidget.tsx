@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, lazy, Suspense } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
@@ -54,6 +54,7 @@ const FloorPlanDashboardWidget = ({ locationId }: FloorPlanDashboardWidgetProps)
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<"2d" | "3d">("2d");
 
+  const transformRef = useRef<any>(null);
   const { positions, sensorValuesMap, sensorValues, loadingValues, lastRefresh, refreshSensorValues } = useLiveSensorValues(selectedFloorId || undefined);
   const { meters } = useMeters(locationId || undefined);
   const { readings } = useMeterReadings();
@@ -183,7 +184,8 @@ const FloorPlanDashboardWidget = ({ locationId }: FloorPlanDashboardWidgetProps)
               variant="ghost"
               size="icon"
               className="h-7 w-7"
-              onClick={refreshSensorValues}
+              title="Ansicht zurücksetzen und Daten aktualisieren"
+              onClick={() => { refreshSensorValues(); transformRef.current?.resetTransform(); }}
               disabled={loadingValues || positions.length === 0}
             >
               <RefreshCw className={`h-3.5 w-3.5 ${loadingValues ? "animate-spin" : ""}`} />
@@ -210,7 +212,7 @@ const FloorPlanDashboardWidget = ({ locationId }: FloorPlanDashboardWidgetProps)
       <CardContent className="flex-1 p-0 min-h-0 overflow-hidden" style={{ minHeight: 400, height: 400 }}>
         {selectedFloor && viewMode === "2d" && selectedFloor.floor_plan_url ? (
           <div className="relative w-full h-full">
-            <TransformWrapper initialScale={1} minScale={0.5} maxScale={4} centerOnInit wheel={{ step: 0.1 }}>
+            <TransformWrapper ref={transformRef} initialScale={1} minScale={0.5} maxScale={4} centerOnInit wheel={{ step: 0.1 }}>
               <ZoomControls />
               <TransformComponent wrapperStyle={{ width: "100%", height: "100%" }} contentStyle={{ width: "100%", height: "100%", display: "flex", justifyContent: "center", alignItems: "center" }}>
                 <div className="relative inline-block">
