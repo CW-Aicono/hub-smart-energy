@@ -405,30 +405,22 @@ const UserManagement = () => {
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
-                            {customRoles.map((role) => (
-                              <SelectItem key={role.id} value={role.name.toLowerCase() === "administrator" ? "admin" : role.name.toLowerCase()}>
+                            <SelectItem value="admin">
+                              <div className="flex items-center gap-2">
+                                <Shield className="h-3 w-3" />
+                                {t("users.admin")}
+                              </div>
+                            </SelectItem>
+                            {customRoles
+                              .filter((role) => role.name.toLowerCase() !== "administrator")
+                              .map((role) => (
+                              <SelectItem key={role.id} value={role.name.toLowerCase()}>
                                 <div className="flex items-center gap-2">
                                   {role.is_system_role ? <Shield className="h-3 w-3" /> : <User className="h-3 w-3" />}
                                   {role.name}
                                 </div>
                               </SelectItem>
                             ))}
-                            {customRoles.length === 0 && (
-                              <>
-                                <SelectItem value="admin">
-                                  <div className="flex items-center gap-2">
-                                    <Shield className="h-3 w-3" />
-                                    {t("users.admin")}
-                                  </div>
-                                </SelectItem>
-                                <SelectItem value="user">
-                                  <div className="flex items-center gap-2">
-                                    <User className="h-3 w-3" />
-                                    {t("users.userRole")}
-                                  </div>
-                                </SelectItem>
-                              </>
-                            )}
                           </SelectContent>
                         </Select>
                       )}
