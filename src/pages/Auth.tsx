@@ -7,9 +7,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { Zap } from "lucide-react";
+import { Zap, ArrowLeft } from "lucide-react";
 import { z } from "zod";
 import { supabase } from "@/integrations/supabase/client";
+
+type AuthView = "login" | "register" | "forgotPassword";
 
 interface InvitationData {
   id: string;
@@ -22,12 +24,15 @@ const Auth = () => {
   const { t } = useTranslation();
   const { toast } = useToast();
   const [searchParams] = useSearchParams();
-  const [isLogin, setIsLogin] = useState(true);
+  const [view, setView] = useState<AuthView>("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [invitation, setInvitation] = useState<InvitationData | null>(null);
   const [loadingInvitation, setLoadingInvitation] = useState(false);
+
+  const isLogin = view === "login";
+  const isForgotPassword = view === "forgotPassword";
 
   const inviteToken = searchParams.get("invite");
 
@@ -75,7 +80,7 @@ const Auth = () => {
 
       setInvitation({ id: data.id, email: data.email, role: data.role as "admin" | "user" });
       setEmail(data.email);
-      setIsLogin(false); // Switch to registration mode
+      setView("register");
       setLoadingInvitation(false);
     };
 
@@ -96,6 +101,25 @@ const Auth = () => {
   }
 
   if (user) return <Navigate to="/" replace />;
+
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email) {
+      toast({ title: t("common.error"), description: t("auth.emailPlaceholder"), variant: "destructive" });
+      return;
+    }
+    setSubmitting(true);
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/profile`,
+    });
+    setSubmitting(false);
+    if (error) {
+      toast({ title: t("common.error"), description: t("profile.passwordResetError"), variant: "destructive" });
+    } else {
+      toast({ title: t("profile.passwordResetSent"), description: t("profile.passwordResetSentDescription") });
+      setView("login");
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -129,13 +153,11 @@ const Auth = () => {
 
       // If this is an invitation registration, mark the invitation as accepted and assign the role
       if (invitation && data?.user) {
-        // Mark invitation as accepted
         await supabase
           .from("user_invitations")
           .update({ accepted_at: new Date().toISOString() })
           .eq("id", invitation.id);
 
-        // Assign the role from the invitation
         if (invitation.role === "admin") {
           await supabase
             .from("user_roles")
@@ -177,55 +199,101 @@ const Auth = () => {
               <span className="text-xl font-display font-bold">Smart Energy Hub</span>
             </div>
             <CardTitle className="text-2xl font-display">
-              {invitation 
-                ? t("auth.completeRegistration")
-                : isLogin ? t("auth.welcomeBack") : t("auth.createAccount")}
+              {isForgotPassword
+                ? t("auth.forgotPassword")
+                : invitation 
+                  ? t("auth.completeRegistration")
+                  : isLogin ? t("auth.welcomeBack") : t("auth.createAccount")}
             </CardTitle>
             <CardDescription>
-              {invitation 
-                ? t("auth.invitationDescription").replace("{email}", invitation.email)
-                : isLogin ? t("auth.loginSubtitle") : t("auth.registerSubtitle")}
+              {isForgotPassword
+                ? t("profile.passwordResetViaEmailDescription")
+                : invitation 
+                  ? t("auth.invitationDescription").replace("{email}", invitation.email)
+                  : isLogin ? t("auth.loginSubtitle") : t("auth.registerSubtitle")}
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="email">{t("auth.email")}</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder={t("auth.emailPlaceholder")}
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                  disabled={!!invitation}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="password">{t("auth.password")}</Label>
-                <Input
-                  id="password"
-                  type="password"
-                  placeholder="••••••••"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                />
-              </div>
-              <Button type="submit" className="w-full" disabled={submitting}>
-                {submitting ? t("common.loading") : isLogin ? t("auth.login") : t("auth.register")}
-              </Button>
-            </form>
-            {!invitation && (
-              <div className="mt-4 text-center text-sm text-muted-foreground">
-                {isLogin ? t("auth.noAccount") : t("auth.hasAccount")}{" "}
-                <button
-                  onClick={() => setIsLogin(!isLogin)}
-                  className="text-accent hover:underline font-medium"
-                >
-                  {isLogin ? t("auth.registerNow") : t("auth.loginNow")}
-                </button>
-              </div>
+            {isForgotPassword ? (
+              <form onSubmit={handleForgotPassword} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="email">{t("auth.email")}</Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    placeholder={t("auth.emailPlaceholder")}
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                  />
+                </div>
+                <Button type="submit" className="w-full" disabled={submitting}>
+                  {submitting ? t("common.loading") : t("profile.passwordResetViaEmail")}
+                </Button>
+                <div className="text-center">
+                  <button
+                    type="button"
+                    onClick={() => setView("login")}
+                    className="text-sm text-muted-foreground hover:text-foreground inline-flex items-center gap-1"
+                  >
+                    <ArrowLeft className="h-3 w-3" />
+                    {t("auth.loginNow")}
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <>
+                <form onSubmit={handleSubmit} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="email">{t("auth.email")}</Label>
+                    <Input
+                      id="email"
+                      type="email"
+                      placeholder={t("auth.emailPlaceholder")}
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      required
+                      disabled={!!invitation}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="password">{t("auth.password")}</Label>
+                      {isLogin && (
+                        <button
+                          type="button"
+                          onClick={() => setView("forgotPassword")}
+                          className="text-xs text-accent hover:underline font-medium"
+                        >
+                          {t("auth.forgotPassword")}
+                        </button>
+                      )}
+                    </div>
+                    <Input
+                      id="password"
+                      type="password"
+                      placeholder="••••••••"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      required
+                    />
+                  </div>
+                  <Button type="submit" className="w-full" disabled={submitting}>
+                    {submitting ? t("common.loading") : isLogin ? t("auth.login") : t("auth.register")}
+                  </Button>
+                </form>
+                {!invitation && (
+                  <div className="mt-4 text-center text-sm text-muted-foreground">
+                    {isLogin ? t("auth.noAccount") : t("auth.hasAccount")}{" "}
+                    <button
+                      onClick={() => setView(isLogin ? "register" : "login")}
+                      className="text-accent hover:underline font-medium"
+                    >
+                      {isLogin ? t("auth.registerNow") : t("auth.loginNow")}
+                    </button>
+                  </div>
+                )}
+              </>
             )}
           </CardContent>
         </Card>

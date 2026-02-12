@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useTranslation } from "@/hooks/useTranslation";
 import { useAuth } from "@/hooks/useAuth";
+import { useTenant } from "@/hooks/useTenant";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -32,6 +33,7 @@ interface UserWithRole {
 const UserManagement = () => {
   const { t } = useTranslation();
   const { user: currentUser } = useAuth();
+  const { tenant } = useTenant();
   const [users, setUsers] = useState<UserWithRole[]>([]);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
@@ -233,6 +235,7 @@ const UserManagement = () => {
           inviteLink,
           invitedByEmail: currentUser?.email,
           role,
+          tenantId: tenant?.id,
         },
       });
 

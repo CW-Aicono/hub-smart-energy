@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { useTenant } from "@/hooks/useTenant";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -11,6 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 
 const InviteUserDialog = () => {
   const { user } = useAuth();
+  const { tenant } = useTenant();
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
   const [email, setEmail] = useState("");
@@ -61,6 +63,7 @@ const InviteUserDialog = () => {
           inviteLink: link,
           invitedByEmail: inviterProfile?.email || user.email,
           role,
+          tenantId: tenant?.id,
         },
       });
 

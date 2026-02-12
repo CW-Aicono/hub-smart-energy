@@ -120,6 +120,8 @@ function buildReportHTML(
   logoUrl: string | null,
   energySummary: { label: string; value: number; color: string; icon: string }[],
   locationSummary: { name: string; count: number }[],
+  primaryColor = "#1e293b",
+  accentColor = "#334155",
 ): string {
   // KPI cards
   const totalReadings = rows.length;
@@ -212,7 +214,7 @@ function buildReportHTML(
 <div class="container">
 
   <!-- Header / Title bar with Logo -->
-  <table style="width:100%;background:linear-gradient(135deg,#1e293b 0%,#334155 100%);border-radius:12px;margin-bottom:24px;border-spacing:0">
+  <table style="width:100%;background:linear-gradient(135deg,${primaryColor || '#1e293b'} 0%,${accentColor || '#334155'} 100%);border-radius:12px;margin-bottom:24px;border-spacing:0">
     <tr>
       <td style="padding:24px 28px;vertical-align:middle">
         <div style="font-size:22px;font-weight:700;color:white;margin-bottom:4px">${reportTitle}</div>
@@ -317,10 +319,13 @@ serve(async (req) => {
       try {
         const { from, to } = getDateRange(schedule.frequency);
 
-        // Get tenant info (logo, name)
-        const { data: tenantData } = await supabase.from("tenants").select("name, logo_url").eq("id", schedule.tenant_id).single();
+        // Get tenant info (logo, name, branding)
+        const { data: tenantData } = await supabase.from("tenants").select("name, logo_url, branding").eq("id", schedule.tenant_id).single();
         const tenantName = tenantData?.name || "";
         const logoUrl = tenantData?.logo_url || null;
+        const tenantBranding = (tenantData?.branding as Record<string, string>) || {};
+        const primaryColor = tenantBranding.primaryColor || "#1e293b";
+        const accentColor = tenantBranding.accentColor || "#334155";
 
         // Get meters matching filters
         let meterQuery = supabase.from("meters").select("*").eq("tenant_id", schedule.tenant_id);
@@ -393,7 +398,7 @@ serve(async (req) => {
           .sort((a, b) => b.count - a.count);
 
         // Build HTML report
-        const htmlContent = buildReportHTML(rows, reportTitle, dateRange, tenantName, logoUrl, energySummary, locationSummary);
+        const htmlContent = buildReportHTML(rows, reportTitle, dateRange, tenantName, logoUrl, energySummary, locationSummary, primaryColor, accentColor);
 
         // Build CSV attachment
         const attachments: { filename: string; content: string }[] = [];
@@ -406,7 +411,7 @@ serve(async (req) => {
 
         if (resend && schedule.recipients.length > 0) {
           await resend.emails.send({
-            from: "Energiebericht <noreply@mailtest.my-ips.de>",
+            from: `${tenantName || "Energiebericht"} <noreply@mailtest.my-ips.de>`,
             to: schedule.recipients,
             subject: `${reportTitle} (${formatDateDE(from)} – ${formatDateDE(to)})`,
             html: htmlContent,
