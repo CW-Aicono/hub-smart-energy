@@ -56,6 +56,7 @@ const FUNCTION_LABELS: Record<string, string> = {
   consumption: "Verbrauch",
   generation: "Erzeugung",
   technical: "Technisch",
+  bidirectional: "Bidirektional",
   submeter: "Unterzähler",
 };
 
