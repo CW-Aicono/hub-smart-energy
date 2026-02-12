@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useTranslation } from "@/hooks/useTranslation";
 import { useAuth } from "@/hooks/useAuth";
 import { useTenant } from "@/hooks/useTenant";
+import { useCustomRoles } from "@/hooks/useCustomRoles";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -34,6 +35,7 @@ const UserManagement = () => {
   const { t } = useTranslation();
   const { user: currentUser } = useAuth();
   const { tenant } = useTenant();
+  const { roles: customRoles } = useCustomRoles();
   const [users, setUsers] = useState<UserWithRole[]>([]);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
@@ -388,7 +390,7 @@ const UserManagement = () => {
                           ) : (
                             <>
                               <User className="h-3 w-3" />
-                              {t("users.userRole")}
+                              {customRoles.find(r => r.name.toLowerCase() === user.role)?.name || t("users.userRole")}
                             </>
                           )}
                         </div>
@@ -399,22 +401,34 @@ const UserManagement = () => {
                             updateUserRole(user.user_id, value)
                           }
                         >
-                          <SelectTrigger className="w-[130px]">
+                          <SelectTrigger className="w-[160px]">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="admin">
-                              <div className="flex items-center gap-2">
-                                <Shield className="h-3 w-3" />
-                                {t("users.admin")}
-                              </div>
-                            </SelectItem>
-                            <SelectItem value="user">
-                              <div className="flex items-center gap-2">
-                                <User className="h-3 w-3" />
-                                {t("users.userRole")}
-                              </div>
-                            </SelectItem>
+                            {customRoles.map((role) => (
+                              <SelectItem key={role.id} value={role.name.toLowerCase() === "administrator" ? "admin" : role.name.toLowerCase()}>
+                                <div className="flex items-center gap-2">
+                                  {role.is_system_role ? <Shield className="h-3 w-3" /> : <User className="h-3 w-3" />}
+                                  {role.name}
+                                </div>
+                              </SelectItem>
+                            ))}
+                            {customRoles.length === 0 && (
+                              <>
+                                <SelectItem value="admin">
+                                  <div className="flex items-center gap-2">
+                                    <Shield className="h-3 w-3" />
+                                    {t("users.admin")}
+                                  </div>
+                                </SelectItem>
+                                <SelectItem value="user">
+                                  <div className="flex items-center gap-2">
+                                    <User className="h-3 w-3" />
+                                    {t("users.userRole")}
+                                  </div>
+                                </SelectItem>
+                              </>
+                            )}
                           </SelectContent>
                         </Select>
                       )}
