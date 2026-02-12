@@ -3,7 +3,7 @@ import { Canvas, useFrame, useLoader } from "@react-three/fiber";
 import { Environment, Grid, OrbitControls, Text, useGLTF } from "@react-three/drei";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
-import { Play, Square, Edit, Loader2, RotateCw } from "lucide-react";
+import { Play, Square, Edit, Loader2, RotateCw, Eye, EyeOff } from "lucide-react";
 import { Floor, useFloors } from "@/hooks/useFloors";
 import { FloorRoom, useFloorRooms } from "@/hooks/useFloorRooms";
 import { FloorSensorPosition, useFloorSensorPositions } from "@/hooks/useFloorSensorPositions";
@@ -286,6 +286,7 @@ function Scene({
   rotationDeg,
   isAdmin,
   readOnly,
+  showCeiling,
   onMeterPositionChange,
   onLockChange,
   onCameraUpdate,
@@ -300,6 +301,7 @@ function Scene({
   rotationDeg: number;
   isAdmin: boolean;
   readOnly: boolean;
+  showCeiling: boolean;
   onMeterPositionChange: (meterId: string, x: number, y: number, z: number) => void;
   onLockChange: (locked: boolean) => void;
   onCameraUpdate: (pos: { x: number; z: number }, rotY: number) => void;
@@ -368,7 +370,7 @@ function Scene({
           {/* Rooms - derive position from polygon_points when available */}
           {rooms.map((room, index) => {
             const derivedRoom = deriveRoomPosition(room, index, rooms.length);
-            return <Room3D key={room.id} room={derivedRoom} />;
+            return <Room3D key={room.id} room={derivedRoom} showCeiling={showCeiling} />;
           })}
           
           {/* Room labels */}
@@ -505,6 +507,7 @@ export function FloorPlan3DViewer({ floor, locationId, sensors = [], isAdmin = f
   const [isWalking, setIsWalking] = useState(false);
   const [isLocked, setIsLocked] = useState(false);
   const [showRoomEditor, setShowRoomEditor] = useState(false);
+  const [showCeiling, setShowCeiling] = useState(true);
   const [cameraPos, setCameraPos] = useState({ x: 0, z: 10 });
   const [cameraRotY, setCameraRotY] = useState(0);
   const [modelRotation, setModelRotation] = useState<number>(floor.model_3d_rotation ?? 0);
@@ -595,6 +598,17 @@ export function FloorPlan3DViewer({ floor, locationId, sensors = [], isAdmin = f
           </div>
           
           <div className="flex items-center gap-2">
+            {!floor.model_3d_url && (
+              <Button
+                variant={showCeiling ? "outline" : "default"}
+                size="sm"
+                onClick={() => setShowCeiling(!showCeiling)}
+                disabled={isWalking}
+              >
+                {showCeiling ? <EyeOff className="h-4 w-4 mr-2" /> : <Eye className="h-4 w-4 mr-2" />}
+                {showCeiling ? "Decke ausblenden" : "Decke einblenden"}
+              </Button>
+            )}
             {floor.model_3d_url && isAdmin && (
               <Button
                 variant={showRotationControls ? "default" : "outline"}
@@ -695,6 +709,7 @@ export function FloorPlan3DViewer({ floor, locationId, sensors = [], isAdmin = f
                   rotationDeg={modelRotation}
                   isAdmin={readOnly ? false : isAdmin}
                   readOnly={readOnly}
+                  showCeiling={showCeiling}
                   onMeterPositionChange={handleMeterPositionChange}
                   onLockChange={handleLockChange}
                   onCameraUpdate={handleCameraUpdate}
@@ -702,17 +717,30 @@ export function FloorPlan3DViewer({ floor, locationId, sensors = [], isAdmin = f
               </Suspense>
             </Canvas>
 
-            {/* Floating walkthrough button for compact/readOnly mode */}
+            {/* Floating buttons for compact/readOnly mode */}
             {compact && !isWalking && (
-              <Button
-                size="sm"
-                className="absolute bottom-3 left-3 z-10 shadow-lg"
-                onClick={startWalking}
-                disabled={loading}
-              >
-                <Play className="h-4 w-4 mr-1" />
-                Begehung
-              </Button>
+              <div className="absolute bottom-3 left-3 z-10 flex gap-2">
+                <Button
+                  size="sm"
+                  className="shadow-lg"
+                  onClick={startWalking}
+                  disabled={loading}
+                >
+                  <Play className="h-4 w-4 mr-1" />
+                  Begehung
+                </Button>
+                {!floor.model_3d_url && (
+                  <Button
+                    size="sm"
+                    variant={showCeiling ? "secondary" : "default"}
+                    className="shadow-lg"
+                    onClick={() => setShowCeiling(!showCeiling)}
+                  >
+                    {showCeiling ? <EyeOff className="h-4 w-4 mr-1" /> : <Eye className="h-4 w-4 mr-1" />}
+                    Decke
+                  </Button>
+                )}
+              </div>
             )}
             {compact && isWalking && (
               <Button

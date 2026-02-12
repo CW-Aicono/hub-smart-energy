@@ -4,6 +4,7 @@ import * as THREE from "three";
 
 interface Room3DProps {
   room: FloorRoom;
+  showCeiling?: boolean;
 }
 
 const WALL_THICKNESS = 0.12;
@@ -295,7 +296,7 @@ function CeilingLight({ height, position }: { height: number; position: [number,
 }
 
 // ─── Main Room3D ─────────────────────────────────────────────
-export function Room3D({ room }: Room3DProps) {
+export function Room3D({ room, showCeiling = true }: Room3DProps) {
   const { position_x, position_y, width, depth, wall_height, color, id } = room;
   const position: [number, number, number] = [position_x, 0, position_y];
 
@@ -362,10 +363,12 @@ export function Room3D({ room }: Room3DProps) {
       ))}
 
       {/* Ceiling */}
-      <mesh rotation={[Math.PI / 2, 0, 0]} position={[0, wall_height, 0]} receiveShadow>
-        <planeGeometry args={[width, depth]} />
-        <meshStandardMaterial color="#ffffff" roughness={0.9} side={THREE.DoubleSide} />
-      </mesh>
+      {showCeiling && (
+        <mesh rotation={[Math.PI / 2, 0, 0]} position={[0, wall_height, 0]} receiveShadow>
+          <planeGeometry args={[width, depth]} />
+          <meshStandardMaterial color="#ffffff" roughness={0.9} side={THREE.DoubleSide} />
+        </mesh>
+      )}
 
       {/* Ceiling light */}
       <CeilingLight height={wall_height} position={[0, 0, 0]} />
