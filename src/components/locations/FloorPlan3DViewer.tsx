@@ -238,41 +238,49 @@ function ModelViewer({ floor, rotationDeg }: { floor: Floor; rotationDeg: number
 }
 
 /**
- * Derive 3D room position and size from polygon_points when the room uses default position (0,0).
- * Polygon coords are in percentage (0-100) of the floor plan image; we scale them to world units.
+ * Derive centroid position for labels and scene bounds when room uses polygon_points.
+ * Room3D now handles polygon→3D conversion internally.
  */
-function deriveRoomPosition(room: FloorRoom, index: number, totalRooms: number): FloorRoom {
-  const hasDefaultPos = room.position_x === 0 && room.position_y === 0;
+function deriveRoomCenter(room: FloorRoom, index: number, totalRooms: number): { cx: number; cz: number } {
   const pts = room.polygon_points;
+  const SCALE = 0.3;
+  const OFFSET = 15;
 
-  if (hasDefaultPos && pts && Array.isArray(pts) && pts.length >= 3) {
-    const xs = pts.map(p => p.x);
-    const ys = pts.map(p => p.y);
-    const minX = Math.min(...xs);
-    const maxX = Math.max(...xs);
-    const minY = Math.min(...ys);
-    const maxY = Math.max(...ys);
-
-    // Scale percentage coords to world units (100% ≈ 30 units)
-    const scale = 0.3;
-    const cx = ((minX + maxX) / 2) * scale - 15; // center around 0
-    const cy = ((minY + maxY) / 2) * scale - 15;
-    const w = Math.max(2, (maxX - minX) * scale);
-    const d = Math.max(2, (maxY - minY) * scale);
-
-    return { ...room, position_x: cx, position_y: cy, width: w, depth: d };
+  if (pts && Array.isArray(pts) && pts.length >= 3) {
+    const cx = pts.reduce((s, p) => s + p.x, 0) / pts.length * SCALE - OFFSET;
+    const cz = pts.reduce((s, p) => s + p.y, 0) / pts.length * SCALE - OFFSET;
+    return { cx, cz };
   }
 
-  // If still default and no polygon, spread rooms so they don't overlap
-  if (hasDefaultPos && totalRooms > 1) {
-    const spacing = 5;
-    const cols = Math.ceil(Math.sqrt(totalRooms));
-    const col = index % cols;
-    const row = Math.floor(index / cols);
-    return { ...room, position_x: col * spacing, position_y: row * spacing };
+  // Rooms with explicit position
+  if (room.position_x !== 0 || room.position_y !== 0) {
+    return { cx: room.position_x, cz: room.position_y };
   }
 
-  return room;
+  // Spread rooms that have no polygon and no position
+  const spacing = 5;
+  const cols = Math.ceil(Math.sqrt(totalRooms));
+  const col = index % cols;
+  const row = Math.floor(index / cols);
+  return { cx: col * spacing, cz: row * spacing };
+}
+
+/** Derive scene bounds from rooms (polygon or position-based) */
+function deriveRoomBounds(room: FloorRoom, index: number, totalRooms: number): { minX: number; maxX: number; minZ: number; maxZ: number } {
+  const pts = room.polygon_points;
+  const SCALE = 0.3;
+  const OFFSET = 15;
+
+  if (pts && Array.isArray(pts) && pts.length >= 3) {
+    const xs = pts.map(p => p.x * SCALE - OFFSET);
+    const zs = pts.map(p => p.y * SCALE - OFFSET);
+    return { minX: Math.min(...xs), maxX: Math.max(...xs), minZ: Math.min(...zs), maxZ: Math.max(...zs) };
+  }
+
+  const center = deriveRoomCenter(room, index, totalRooms);
+  const hw = room.width / 2 || 2;
+  const hd = room.depth / 2 || 2;
+  return { minX: center.cx - hw, maxX: center.cx + hw, minZ: center.cz - hd, maxZ: center.cz + hd };
 }
 
 function Scene({ 
@@ -315,16 +323,12 @@ function Scene({
     
     let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
     
-    rooms.forEach(room => {
-      const left = room.position_x - room.width / 2;
-      const right = room.position_x + room.width / 2;
-      const back = room.position_y - room.depth / 2;
-      const front = room.position_y + room.depth / 2;
-      
-      minX = Math.min(minX, left);
-      maxX = Math.max(maxX, right);
-      minZ = Math.min(minZ, back);
-      maxZ = Math.max(maxZ, front);
+    rooms.forEach((room, index) => {
+      const bounds = deriveRoomBounds(room, index, rooms.length);
+      minX = Math.min(minX, bounds.minX);
+      maxX = Math.max(maxX, bounds.maxX);
+      minZ = Math.min(minZ, bounds.minZ);
+      maxZ = Math.max(maxZ, bounds.maxZ);
     });
     
     return {
@@ -367,19 +371,18 @@ function Scene({
         <ModelViewer floor={floor} rotationDeg={rotationDeg} />
       ) : (
         <>
-          {/* Rooms - derive position from polygon_points when available */}
-          {rooms.map((room, index) => {
-            const derivedRoom = deriveRoomPosition(room, index, rooms.length);
-            return <Room3D key={room.id} room={derivedRoom} showCeiling={showCeiling} />;
-          })}
+          {/* Rooms - render with polygon shapes */}
+          {rooms.map((room) => (
+            <Room3D key={room.id} room={room} showCeiling={showCeiling} />
+          ))}
           
-          {/* Room labels */}
+          {/* Room labels at centroid */}
           {rooms.map((room, index) => {
-            const derivedRoom = deriveRoomPosition(room, index, rooms.length);
+            const center = deriveRoomCenter(room, index, rooms.length);
             return (
               <Text
                 key={`label-${room.id}`}
-                position={[derivedRoom.position_x, 0.1, derivedRoom.position_y]}
+                position={[center.cx, 0.1, center.cz]}
                 rotation={[-Math.PI / 2, 0, 0]}
                 fontSize={0.5}
                 color="#374151"
