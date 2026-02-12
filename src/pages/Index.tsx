@@ -25,6 +25,7 @@ import AnomalyWidget from "@/components/dashboard/AnomalyWidget";
 
 interface WidgetProps {
   locationId: string | null;
+  onExpand?: () => void;
 }
 
 const WIDGET_COMPONENTS: Record<string, React.ComponentType<WidgetProps>> = {
@@ -135,7 +136,7 @@ const DashboardContent = () => {
                     className={`${sizeClass} min-w-0 relative group`}
                     style={{ flexBasis: sizeClass === "w-full" ? "100%" : sizeClass === "w-2/3" ? "calc(66.666% - 8px)" : "calc(33.333% - 11px)" }}
                   >
-                    {widget.widget_size !== "full" && (
+                    {widget.widget_size !== "full" && widgetType !== "floor_plan_explorer" && (
                       <button
                         onClick={() => setExpandedWidget(widgetType)}
                         className="absolute top-3 right-3 z-10 p-1.5 rounded-md bg-background/80 border border-border shadow-sm opacity-0 group-hover:opacity-100 transition-opacity hover:bg-muted"
@@ -144,7 +145,7 @@ const DashboardContent = () => {
                         <ZoomIn className="h-4 w-4 text-muted-foreground" />
                       </button>
                     )}
-                    <Component locationId={selectedLocationId} />
+                    <Component locationId={selectedLocationId} onExpand={widget.widget_size !== "full" ? () => setExpandedWidget(widgetType) : undefined} />
                   </div>
                 ) : null;
               })
