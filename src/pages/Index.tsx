@@ -199,7 +199,7 @@ const Index = () => {
     checkOnboarding();
   }, [user, onboardingChecked, navigate]);
 
-  if (loading || !onboardingChecked) {
+  if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <div className="animate-pulse text-muted-foreground">{t("common.loading")}</div>
@@ -208,6 +208,14 @@ const Index = () => {
   }
 
   if (!user) return <Navigate to="/auth" replace />;
+
+  if (!onboardingChecked) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <div className="animate-pulse text-muted-foreground">{t("common.loading")}</div>
+      </div>
+    );
+  }
 
   return (
     <DashboardFilterProvider>
