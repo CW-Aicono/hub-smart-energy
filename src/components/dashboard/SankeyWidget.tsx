@@ -67,6 +67,7 @@ const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
 
   // Local UI state
   const [tooltip, setTooltip] = useState<{ x: number; y: number; source: string; target: string; value: number; sourceType: string } | null>(null);
+  const [targetTooltip, setTargetTooltip] = useState<{ x: number; y: number; name: string; flows: { sourceName: string; sourceType: string; value: number }[] } | null>(null);
   const [floors, setFloors] = useState<{ id: string; name: string }[]>([]);
   const [rooms, setRooms] = useState<{ id: string; floor_id: string; name: string }[]>([]);
 
@@ -209,16 +210,17 @@ const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
   }
 
   // Layout: viewBox grows with node count, container is fixed — SVG scales down
-  const vbW = 700;
+  const vbW = 900;
   const maxNodes = Math.max(sourceNames.length, targetNames.length);
   const nodeSlot = 48;
-  const bottomMargin = 25; // space for label text below the last node
-  const vbH = Math.max(200, maxNodes * nodeSlot + bottomMargin + 10);
+  const bottomMargin = 30; // space for label text below the last node
+  const topMargin = 10;
+  const vbH = Math.max(220, maxNodes * nodeSlot + bottomMargin + topMargin + 10);
   const nodeW = 14;
-  const srcX = 100;
-  const tgtX = vbW - 100 - nodeW;
+  const srcX = 130;
+  const tgtX = vbW - 180 - nodeW;
   const padding = Math.max(4, nodeSlot * 0.15);
-  const topY = 5;
+  const topY = topMargin;
   const totalH = vbH - topY - bottomMargin;
 
   // Source values
@@ -353,8 +355,14 @@ const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
               const pos = tgtPositions[name];
               const color = TARGET_COLORS[i % TARGET_COLORS.length];
               const val = targetValues[name];
+              const targetFlows = flows.filter(f => f.targetName === name).map(f => ({ sourceName: f.sourceName, sourceType: f.sourceType, value: f.value }));
+              const handleTargetMouseMove = (e: React.MouseEvent) => {
+                if (!svgRef.current) return;
+                const rect = svgRef.current.getBoundingClientRect();
+                setTargetTooltip({ x: e.clientX - rect.left, y: e.clientY - rect.top - 10, name, flows: targetFlows });
+              };
               return (
-                <g key={`tgt-${i}`}>
+                <g key={`tgt-${i}`} onMouseMove={handleTargetMouseMove} onMouseLeave={() => setTargetTooltip(null)} className="cursor-pointer">
                   <rect x={tgtX} y={pos.y} width={nodeW} height={pos.h} rx={3} fill={color} opacity={0.9} />
                   <text x={tgtX + nodeW + 6} y={pos.y + pos.h / 2 - 6} textAnchor="start" dominantBaseline="middle" fill="hsl(var(--foreground))" fontSize={10} fontWeight={500}>{name}</text>
                   <text x={tgtX + nodeW + 6} y={pos.y + pos.h / 2 + 6} textAnchor="start" dominantBaseline="middle" fill="hsl(var(--muted-foreground))" fontSize={8}>{formatEnergy(val)}</text>
@@ -366,6 +374,14 @@ const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
             <div className="absolute pointer-events-none z-10 rounded-lg border bg-background px-3 py-2 text-xs shadow-lg" style={{ left: tooltip.x, top: tooltip.y, transform: "translate(-50%, -100%)" }}>
               <div className="font-semibold">{tooltip.source} → {tooltip.target}</div>
               <div className="text-muted-foreground">{formatEnergyByType(tooltip.value, tooltip.sourceType)}</div>
+            </div>
+          )}
+          {targetTooltip && (
+            <div className="absolute pointer-events-none z-10 rounded-lg border bg-background px-3 py-2 text-xs shadow-lg" style={{ left: targetTooltip.x, top: targetTooltip.y, transform: "translate(-50%, -100%)" }}>
+              <div className="font-semibold mb-1">{targetTooltip.name}</div>
+              {targetTooltip.flows.map((f, i) => (
+                <div key={i} className="text-muted-foreground">{f.sourceName}: {formatEnergyByType(f.value, f.sourceType)}</div>
+              ))}
             </div>
           )}
         </div>
