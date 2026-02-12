@@ -352,7 +352,7 @@ function Scene({
       {/* Environment for reflections */}
       <Environment preset="apartment" />
       
-      {/* Ground grid */}
+      {/* Ground grid - placed well below floor polygons to prevent z-fighting */}
       <Grid 
         args={[100, 100]} 
         cellSize={1} 
@@ -363,7 +363,7 @@ function Scene({
         sectionColor="#374151"
         fadeDistance={50}
         fadeStrength={1}
-        position={[sceneBounds.centerX, -0.01, sceneBounds.centerZ]}
+        position={[sceneBounds.centerX, -0.05, sceneBounds.centerZ]}
       />
       
       {/* 3D Model or procedural rooms */}
@@ -510,7 +510,19 @@ export function FloorPlan3DViewer({ floor, locationId, sensors = [], isAdmin = f
   const [isWalking, setIsWalking] = useState(false);
   const [isLocked, setIsLocked] = useState(false);
   const [showRoomEditor, setShowRoomEditor] = useState(false);
-  const [showCeiling, setShowCeiling] = useState(true);
+  const [showCeiling, setShowCeiling] = useState(() => {
+    const stored = localStorage.getItem(`floor3d_ceiling_${floor.id}`);
+    return stored !== null ? stored === 'true' : false;
+  });
+
+  // Persist ceiling preference
+  const handleCeilingToggle = useCallback(() => {
+    setShowCeiling(prev => {
+      const next = !prev;
+      localStorage.setItem(`floor3d_ceiling_${floor.id}`, String(next));
+      return next;
+    });
+  }, [floor.id]);
   const [cameraPos, setCameraPos] = useState({ x: 0, z: 10 });
   const [cameraRotY, setCameraRotY] = useState(0);
   const [modelRotation, setModelRotation] = useState<number>(floor.model_3d_rotation ?? 0);
@@ -605,7 +617,7 @@ export function FloorPlan3DViewer({ floor, locationId, sensors = [], isAdmin = f
               <Button
                 variant={showCeiling ? "outline" : "default"}
                 size="sm"
-                onClick={() => setShowCeiling(!showCeiling)}
+                onClick={handleCeilingToggle}
                 disabled={isWalking}
               >
                 {showCeiling ? <EyeOff className="h-4 w-4 mr-2" /> : <Eye className="h-4 w-4 mr-2" />}
@@ -737,7 +749,7 @@ export function FloorPlan3DViewer({ floor, locationId, sensors = [], isAdmin = f
                     size="sm"
                     variant={showCeiling ? "secondary" : "default"}
                     className="shadow-lg"
-                    onClick={() => setShowCeiling(!showCeiling)}
+                    onClick={handleCeilingToggle}
                   >
                     {showCeiling ? <EyeOff className="h-4 w-4 mr-1" /> : <Eye className="h-4 w-4 mr-1" />}
                     Decke
