@@ -257,27 +257,32 @@ const UserManagement = () => {
   };
 
   const activateInvitedUser = async (invitation: UserWithRole) => {
-    // This function creates a profile for an invited user and marks them as active
-    // The user will still need to complete signup, but they're now "activated" in the system
     try {
-      // First, mark the invitation as accepted
-      const { error: acceptError } = await supabase
-        .from("user_invitations")
-        .update({ accepted_at: new Date().toISOString() })
-        .eq("id", invitation.invitation_id);
+      const { data, error } = await supabase.functions.invoke("activate-invited-user", {
+        body: {
+          invitationId: invitation.invitation_id,
+          redirectTo: `${window.location.origin}/profile`,
+        },
+      });
 
-      if (acceptError) throw acceptError;
+      if (error) throw error;
+
+      const result = typeof data === "string" ? JSON.parse(data) : data;
+
+      if (!result.success) {
+        throw new Error(result.error || "Aktivierung fehlgeschlagen");
+      }
 
       toast({
         title: t("users.userActivated"),
-        description: t("users.userActivatedDescription"),
+        description: result.message || t("users.userActivatedDescription"),
       });
       fetchUsers();
     } catch (error) {
       console.error("Error activating user:", error);
       toast({
         title: t("common.error"),
-        description: t("users.activationError"),
+        description: error instanceof Error ? error.message : t("users.activationError"),
         variant: "destructive",
       });
     }
