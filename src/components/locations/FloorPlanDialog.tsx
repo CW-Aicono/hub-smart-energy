@@ -498,12 +498,12 @@ export function FloorPlanDialog({ floor, locationId, open, onOpenChange }: Floor
                           wrapperStyle={{ width: "100%", height: "100%" }}
                           contentStyle={{ width: "100%", height: "100%", display: "flex", justifyContent: "center", alignItems: "center" }}
                         >
-                          <div className="relative inline-block">
+                          <div className="relative inline-block" style={{ maxWidth: "100%", maxHeight: "100%" }}>
                             <img
                               ref={viewImageRef}
                               src={floor.floor_plan_url!}
                               alt={floor.name}
-                              className="max-w-full max-h-full object-contain"
+                              className="block max-w-full max-h-[calc(70vh-140px)] object-contain"
                               onLoad={updateViewOverlay}
                               draggable={false}
                             />
