@@ -26,6 +26,7 @@ import AnomalyWidget from "@/components/dashboard/AnomalyWidget";
 interface WidgetProps {
   locationId: string | null;
   onExpand?: () => void;
+  onCollapse?: () => void;
 }
 
 const WIDGET_COMPONENTS: Record<string, React.ComponentType<WidgetProps>> = {
@@ -159,17 +160,10 @@ const DashboardContent = () => {
         </div>
       {/* Expanded widget dialog */}
       <Dialog open={!!expandedWidget} onOpenChange={() => setExpandedWidget(null)}>
-        <DialogContent className="max-w-[90vw] w-full max-h-[90vh] overflow-auto p-6">
-          <button
-            onClick={() => setExpandedWidget(null)}
-            className="absolute top-4 right-12 p-1.5 rounded-md bg-background/80 border border-border shadow-sm hover:bg-muted"
-            title="Verkleinern"
-          >
-            <ZoomOut className="h-4 w-4 text-muted-foreground" />
-          </button>
+        <DialogContent className="max-w-[90vw] w-full max-h-[90vh] overflow-auto p-6" hideCloseButton>
           {expandedWidget && WIDGET_COMPONENTS[expandedWidget] && (() => {
             const ExpandedComponent = WIDGET_COMPONENTS[expandedWidget];
-            return <ExpandedComponent locationId={selectedLocationId} />;
+            return <ExpandedComponent locationId={selectedLocationId} onCollapse={() => setExpandedWidget(null)} />;
           })()}
         </DialogContent>
       </Dialog>
