@@ -35,9 +35,16 @@ function getPeriodStart(period: TimePeriod): Date | null {
 const MONTH_LABELS = ["Jan", "Feb", "Mär", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dez"];
 
 function getEnergyScale(maxValue: number): { divisor: number; unit: string } {
-  if (maxValue > 9999) return { divisor: 1_000, unit: "MWh" };
-  if (maxValue > 999) return { divisor: 1, unit: "kWh" };
+  if (maxValue >= 1_000_000) return { divisor: 1_000_000, unit: "GWh" };
+  if (maxValue >= 1_000) return { divisor: 1_000, unit: "MWh" };
+  if (maxValue >= 1) return { divisor: 1, unit: "kWh" };
   return { divisor: 0.001, unit: "Wh" };
+}
+
+function formatYAxisTick(value: number): string {
+  if (value >= 1_000_000) return `${(value / 1_000_000).toLocaleString("de-DE", { maximumFractionDigits: 1 })}M`;
+  if (value >= 1_000) return `${(value / 1_000).toLocaleString("de-DE", { maximumFractionDigits: 1 })}k`;
+  return value.toLocaleString("de-DE", { maximumFractionDigits: 1 });
 }
 
 interface EnergyChartProps {
@@ -126,12 +133,15 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
           </div>
         ) : (
           <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={scaledData} barGap={2}>
-              <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-              <XAxis dataKey="month" tick={{ fill: 'hsl(var(--muted-foreground))' }} />
+            <BarChart data={scaledData} barGap={2} margin={{ top: 5, right: 10, left: 5, bottom: 5 }}>
+              <CartesianGrid strokeDasharray="3 3" className="stroke-border" vertical={false} />
+              <XAxis dataKey="month" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }} tickLine={false} axisLine={false} />
               <YAxis
-                tick={{ fill: 'hsl(var(--muted-foreground))' }}
-                tickFormatter={(v: number) => v.toLocaleString("de-DE", { maximumFractionDigits: 1 })}
+                width={50}
+                tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }}
+                tickLine={false}
+                axisLine={false}
+                tickFormatter={formatYAxisTick}
               />
               <Tooltip
                 contentStyle={{
@@ -149,11 +159,11 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
                   ];
                 }}
               />
-              <Legend />
-              <Bar dataKey="strom" name="Strom" fill={ENERGY_CHART_COLORS.strom} radius={[2, 2, 0, 0]} />
-              <Bar dataKey="gas" name="Gas" fill={ENERGY_CHART_COLORS.gas} radius={[2, 2, 0, 0]} />
-              <Bar dataKey="waerme" name="Wärme" fill={ENERGY_CHART_COLORS.waerme} radius={[2, 2, 0, 0]} />
-              <Bar dataKey="wasser" name="Wasser" fill={ENERGY_CHART_COLORS.wasser} radius={[2, 2, 0, 0]} />
+              <Legend wrapperStyle={{ fontSize: 12 }} />
+              <Bar dataKey="strom" name="Strom" fill={ENERGY_CHART_COLORS.strom} radius={[3, 3, 0, 0]} />
+              <Bar dataKey="gas" name="Gas" fill={ENERGY_CHART_COLORS.gas} radius={[3, 3, 0, 0]} />
+              <Bar dataKey="waerme" name="Wärme" fill={ENERGY_CHART_COLORS.waerme} radius={[3, 3, 0, 0]} />
+              <Bar dataKey="wasser" name="Wasser" fill={ENERGY_CHART_COLORS.wasser} radius={[3, 3, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         )}
