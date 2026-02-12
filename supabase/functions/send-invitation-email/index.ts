@@ -43,7 +43,7 @@ const handler = async (req: Request): Promise<Response> => {
     const roleLabel = role === "admin" ? "Administrator" : "Benutzer";
 
     const emailResponse = await resend.emails.send({
-      from: "Einladung <onboarding@resend.dev>",
+      from: "Einladung <noreply@mailtest.my-ips.de>",
       to: [email],
       subject: "Sie wurden eingeladen",
       html: `

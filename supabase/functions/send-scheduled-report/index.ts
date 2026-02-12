@@ -406,7 +406,7 @@ serve(async (req) => {
 
         if (resend && schedule.recipients.length > 0) {
           await resend.emails.send({
-            from: "Energiebericht <onboarding@resend.dev>",
+            from: "Energiebericht <noreply@mailtest.my-ips.de>",
             to: schedule.recipients,
             subject: `${reportTitle} (${formatDateDE(from)} – ${formatDateDE(to)})`,
             html: htmlContent,
