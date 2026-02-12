@@ -3,7 +3,7 @@ import { TransformWrapper, TransformComponent, useControls } from "react-zoom-pa
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { Loader2, RefreshCw, Layers, ZoomIn, ZoomOut, RotateCcw, Gauge } from "lucide-react";
+import { Loader2, Layers, ZoomIn, ZoomOut, RotateCcw, Gauge } from "lucide-react";
 import { useLocations } from "@/hooks/useLocations";
 import { useFloors } from "@/hooks/useFloors";
 import { useLiveSensorValues } from "@/hooks/useLiveSensorValues";
@@ -37,15 +37,19 @@ function ZoomControls() {
 
 const FloorPlanWidget = ({ locationId }: FloorPlanWidgetProps) => {
   const { locations } = useLocations();
-  const { floors, loading: floorsLoading } = useFloors(locationId || undefined);
+
+  // If no location selected, fall back to the main location
+  const effectiveLocationId = locationId ?? locations.find(l => l.is_main_location)?.id ?? null;
+
+  const { floors, loading: floorsLoading } = useFloors(effectiveLocationId || undefined);
   const [selectedFloorId, setSelectedFloorId] = useState<string | null>(null);
 
-  const { positions, sensorValuesMap, loadingValues, lastRefresh, refreshSensorValues } = useLiveSensorValues(selectedFloorId || undefined);
-  const { meters } = useMeters(locationId || undefined);
+  const { positions, sensorValuesMap } = useLiveSensorValues(selectedFloorId || undefined);
+  const { meters } = useMeters(effectiveLocationId || undefined);
   const { readings } = useMeterReadings();
   const { positions: sensorPositions } = useFloorSensorPositions(selectedFloorId || undefined);
 
-  const selectedLocation = locationId ? locations.find((l) => l.id === locationId) : null;
+  const selectedLocation = effectiveLocationId ? locations.find((l) => l.id === effectiveLocationId) : null;
   const selectedFloor = floors.find((f) => f.id === selectedFloorId);
 
   // Meters assigned to the selected floor that have sensor positions placed
@@ -75,10 +79,11 @@ const FloorPlanWidget = ({ locationId }: FloorPlanWidgetProps) => {
     return map;
   }, [sensorPositions]);
 
-  // Auto-select first floor with floor plan when floors load
+  // Auto-select first floor (prefer floor_number 0) when floors load
   useEffect(() => {
     if (floors.length > 0 && !selectedFloorId) {
-      const floorWithPlan = floors.find((f) => f.floor_plan_url);
+      const groundFloor = floors.find((f) => f.floor_number === 0 && f.floor_plan_url);
+      const floorWithPlan = groundFloor || floors.find((f) => f.floor_plan_url);
       if (floorWithPlan) {
         setSelectedFloorId(floorWithPlan.id);
       } else {
@@ -90,17 +95,17 @@ const FloorPlanWidget = ({ locationId }: FloorPlanWidgetProps) => {
   // Reset floor selection when location changes
   useEffect(() => {
     setSelectedFloorId(null);
-  }, [locationId]);
+  }, [effectiveLocationId]);
 
-  // No location selected - show placeholder
-  if (!locationId) {
+  // No location available at all
+  if (!effectiveLocationId) {
     return (
       <Card className="overflow-hidden">
         <CardContent className="p-6">
           <div className="h-[350px] flex items-center justify-center text-muted-foreground">
             <div className="text-center">
               <Layers className="h-12 w-12 mx-auto mb-3 opacity-50" />
-              <p>Wählen Sie einen Standort aus, um den Grundriss anzuzeigen</p>
+              <p>Keine Liegenschaften vorhanden</p>
             </div>
           </div>
         </CardContent>
@@ -152,22 +157,6 @@ const FloorPlanWidget = ({ locationId }: FloorPlanWidgetProps) => {
                 ))}
               </SelectContent>
             </Select>
-          </div>
-          <div className="flex items-center gap-2">
-            {lastRefresh && (
-              <span className="text-xs text-muted-foreground">
-                Aktualisiert: {lastRefresh.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}
-              </span>
-            )}
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8"
-              onClick={refreshSensorValues}
-              disabled={loadingValues || positions.length === 0}
-            >
-              <RefreshCw className={`h-4 w-4 ${loadingValues ? "animate-spin" : ""}`} />
-            </Button>
           </div>
         </div>
 
