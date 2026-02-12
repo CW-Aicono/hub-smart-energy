@@ -1,89 +1,37 @@
 
 
-# Performance-Optimierung: Schnelleres Laden der Sensordaten
+## Reload-Button im Grundriss-Widget umfunktionieren
 
-## Problem-Analyse
+### Hintergrund
 
-Das Dashboard laedt langsam, weil:
-- Mehrere Widgets unabhaengig die **gleiche** Loxone-API aufrufen (doppelte Netzwerk-Requests)
-- Die Edge Function fuer ~66 Sensoren **66 einzelne HTTP-Anfragen** an den Miniserver sendet (in 7 seriellen Batches)
-- Kein Caching existiert -- jeder Seitenbesuch loest alle Abfragen erneut aus
-- Die Loxone-Cloud-DNS-Aufloesung bei jedem Aufruf wiederholt wird
+Der Reload-Button (kreisformige Pfeile) im `FloorPlanDashboardWidget` wurde ursprunglich zum **Aktualisieren der Live-Sensordaten** eingebaut. Er ladt die aktuellen Sensorwerte neu und zeigt daneben die letzte Aktualisierungszeit an.
 
-## Loesungsplan
+### Geplante Anderung
 
-### 1. Frontend: Zentraler Sensor-Cache mit React Query
+Da die Sensordaten ohnehin regelmasig aktualisiert werden, wird der Button so erweitert, dass er **sowohl die Sensordaten aktualisiert als auch die Zoom-/Pan-Ansicht auf den Ausgangszustand zurucksetzt**. So hat der Button eine klar sichtbare Wirkung.
 
-Statt dass `useEnergyData`, `useLiveSensorValues` und `FloorPlanDashboardWidget` jeweils eigene API-Aufrufe machen, wird ein **zentraler Hook** eingefuehrt, der die Daten einmalig laedt und per React Query cached.
+### Umsetzung
 
-**Neuer Hook: `src/hooks/useLoxoneSensors.ts`**
-- Nutzt `@tanstack/react-query` mit `staleTime: 60000` (1 Min) und `refetchInterval: 300000` (5 Min)
-- Wird von einer Integration-ID getriggert
-- Alle Widgets greifen auf denselben Query-Cache zu -- **keine doppelten Requests mehr**
+**Datei: `src/components/dashboard/FloorPlanDashboardWidget.tsx`**
 
-**Anpassungen:**
-- `useEnergyData.tsx`: Nutzt `useLoxoneSensors` statt eigener `fetchLiveValues`-Logik
-- `useLiveSensorValues.ts`: Nutzt `useLoxoneSensors` statt eigener Edge-Function-Aufrufe
-- `FloorPlanDashboardWidget.tsx`: Bezieht Daten ueber `useLiveSensorValues` (das nun gecached ist)
+1. Den `resetTransform`-Aufruf aus dem `TransformWrapper`-Kontext uber eine Ref (`useRef`) nach aussen verfugbar machen, damit er vom Header-Button aus erreichbar ist (aktuell ist `resetTransform` nur innerhalb der `ZoomControls`-Subkomponente verfugbar).
+2. Den `onClick`-Handler des Reload-Buttons anpassen: zusatzlich zu `refreshSensorValues()` wird `resetTransform()` aufgerufen.
+3. Optional: Tooltip hinzufugen ("Ansicht zurucksetzen und Daten aktualisieren").
 
-### 2. Edge Function: Parallele Abfragen und DNS-Caching
+### Technisches Detail
 
-**`supabase/functions/loxone-api/index.ts`:**
+Das `react-zoom-pan-pinch`-Paket bietet eine `useControls()`-Hook, die aber nur innerhalb von `TransformWrapper` funktioniert. Um `resetTransform` von ausserhalb (Header-Bereich) aufzurufen, wird die `ref`-Prop von `TransformWrapper` genutzt:
 
-- **Batch-Groesse erhoehen**: Von 10 auf 20 parallele Requests (halbiert die seriellen Runden)
-- **DNS-URL cachen**: Die aufgeloeste Miniserver-URL wird fuer die Dauer des Function-Aufrufs gespeichert (statt mehrfach aufgeloest)
-- **Fehlerhafte Sensoren ueberspringen**: Der Sensor `15ea0aa5` verursacht wiederholt JSON-Fehler. Die Function faengt dies bereits ab, aber die Fehlermeldung wird reduziert (nur einmal loggen)
+```tsx
+const transformRef = useRef(null);
 
-### 3. Frontend: Deduplizierung der API-Aufrufe
+<TransformWrapper ref={transformRef} ...>
 
-Aktuell senden `useEnergyData` und `useLiveSensorValues` separate `getSensors`-Requests fuer die **gleiche** Integration. Durch den zentralen Cache (Punkt 1) wird dies automatisch auf **einen einzigen Request** reduziert.
-
-## Erwartete Verbesserung
-
-| Metrik | Vorher | Nachher |
-|--------|--------|---------|
-| API-Aufrufe pro Seitenbesuch | 2-4x pro Integration | 1x pro Integration |
-| Serielle Batch-Runden | 7 (a 10 parallel) | 4 (a 20 parallel) |
-| Wiederholte DNS-Aufloesung | Bei jedem Request | 1x pro Function-Aufruf |
-| Cache-Dauer | Kein Cache | 1 Min stale, 5 Min Refresh |
-
-## Technische Details
-
-### Neuer zentraler Hook
-
-```typescript
-// src/hooks/useLoxoneSensors.ts
-import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
-
-export function useLoxoneSensors(integrationId: string | undefined) {
-  return useQuery({
-    queryKey: ["loxone-sensors", integrationId],
-    queryFn: async () => {
-      const { data, error } = await supabase.functions.invoke("loxone-api", {
-        body: { locationIntegrationId: integrationId, action: "getSensors" },
-      });
-      if (error || !data?.success) throw new Error("Failed to fetch sensors");
-      return data.sensors;
-    },
-    enabled: !!integrationId,
-    staleTime: 60_000,       // 1 Minute fresh
-    refetchInterval: 300_000, // Alle 5 Min neu laden
-  });
-}
+// Im onClick des Reload-Buttons:
+onClick={() => {
+  refreshSensorValues();
+  transformRef.current?.resetTransform();
+}}
 ```
 
-### Edge Function Batch-Optimierung
-
-```typescript
-// Batch-Groesse von 10 auf 20 erhoehen
-const batchSize = 20; // vorher: 10
-```
-
-### Dateien die geaendert werden
-
-1. **Neu:** `src/hooks/useLoxoneSensors.ts` -- Zentraler gecachter Hook
-2. **Aendern:** `src/hooks/useEnergyData.tsx` -- Nutzt `useLoxoneSensors` statt eigene Fetches
-3. **Aendern:** `src/hooks/useLiveSensorValues.ts` -- Nutzt `useLoxoneSensors` statt eigene Fetches
-4. **Aendern:** `supabase/functions/loxone-api/index.ts` -- Batch-Groesse erhoehen
-
+Dies betrifft nur die 2D-Ansicht, da der Button bereits auf `viewMode === "2d"` konditioniert ist.
