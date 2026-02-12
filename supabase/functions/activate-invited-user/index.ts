@@ -25,14 +25,14 @@ const handler = async (req: Request): Promise<Response> => {
     const { data: { user: callingUser }, error: authError } = await supabase.auth.getUser(token);
     if (authError || !callingUser) throw new Error("Not authenticated");
 
-    // Check if calling user is admin
-    const { data: callerRole } = await supabase
+    // Check if calling user is admin or super_admin
+    const { data: callerRoles } = await supabase
       .from("user_roles")
       .select("role")
-      .eq("user_id", callingUser.id)
-      .single();
+      .eq("user_id", callingUser.id);
 
-    if (callerRole?.role !== "admin" && callerRole?.role !== "super_admin") {
+    const roles = (callerRoles || []).map((r: { role: string }) => r.role);
+    if (!roles.includes("admin") && !roles.includes("super_admin")) {
       throw new Error("Insufficient permissions");
     }
 
