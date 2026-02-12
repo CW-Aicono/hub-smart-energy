@@ -254,6 +254,7 @@ export const AddMeterDialog = ({ locationId, open, onOpenChange }: AddMeterDialo
                   <SelectItem value="consumption">Verbrauch</SelectItem>
                   <SelectItem value="generation">Erzeugung (z.B. PV)</SelectItem>
                   <SelectItem value="technical">Technisch (z.B. Wärmepumpe)</SelectItem>
+                  <SelectItem value="bidirectional">Bidirektional (Bezug & Einspeisung)</SelectItem>
                   <SelectItem value="submeter">Unterzähler</SelectItem>
                 </SelectContent>
               </Select>
