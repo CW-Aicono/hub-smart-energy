@@ -82,6 +82,7 @@ function MobileLogin({ onLogin }: { onLogin: () => void }) {
 interface UnknownMeterPromptProps {
   meterNumber: string;
   reading: string;
+  onReadingChange: (v: string) => void;
   capturedImage: string | null;
   locations: { id: string; name: string }[];
   onCreateMeter: (locationId: string, energyType: string) => void;
@@ -96,9 +97,10 @@ const ENERGY_TYPE_OPTIONS = [
   { value: "waerme", label: "Wärme", unit: "kWh" },
 ];
 
-function UnknownMeterPrompt({ meterNumber, reading, capturedImage, locations, onCreateMeter, onDismiss, creating }: UnknownMeterPromptProps) {
+function UnknownMeterPrompt({ meterNumber, reading, onReadingChange, capturedImage, locations, onCreateMeter, onDismiss, creating }: UnknownMeterPromptProps) {
   const [selectedLocationId, setSelectedLocationId] = useState("");
   const [selectedEnergyType, setSelectedEnergyType] = useState("strom");
+  const allFilled = !!selectedLocationId && !!reading;
 
   return (
     <Card className="border-destructive/40 bg-muted">
@@ -120,6 +122,17 @@ function UnknownMeterPrompt({ meterNumber, reading, capturedImage, locations, on
 
         <div className="space-y-3 border-t pt-3">
           <p className="text-sm font-medium">Zähler jetzt anlegen?</p>
+          <div className="space-y-2">
+            <Label>Zählerstand</Label>
+            <Input
+              type="number"
+              step="any"
+              value={reading}
+              onChange={(e) => onReadingChange(e.target.value)}
+              className="h-12 text-lg font-mono"
+              placeholder="0"
+            />
+          </div>
           <div className="space-y-2">
             <Label>Messstelle zuordnen</Label>
             <Select value={selectedLocationId} onValueChange={setSelectedLocationId}>
@@ -159,14 +172,18 @@ function UnknownMeterPrompt({ meterNumber, reading, capturedImage, locations, on
           )}
 
           <div className="flex gap-3">
-            <Button variant="outline" className="flex-1 h-12" onClick={onDismiss} disabled={creating}>
+            <Button
+              variant="destructive"
+              className="flex-1 h-12"
+              onClick={onDismiss}
+              disabled={creating}
+            >
               Abbrechen
             </Button>
             <Button
-              variant="secondary"
-              className="flex-1 h-12"
+              className={`flex-1 h-12 ${allFilled ? "bg-green-600 hover:bg-green-700 text-white" : ""}`}
               onClick={() => onCreateMeter(selectedLocationId, selectedEnergyType)}
-              disabled={!selectedLocationId || creating}
+              disabled={!allFilled || creating}
             >
               {creating ? <Loader2 className="h-5 w-5 animate-spin" /> : (
                 <>
@@ -677,6 +694,7 @@ const MobileApp = () => {
           <UnknownMeterPrompt
             meterNumber={unknownMeterNumber}
             reading={reading}
+            onReadingChange={setReading}
             capturedImage={capturedImage}
             locations={locations.map((l) => ({ id: l.id, name: l.name }))}
             onCreateMeter={handleCreateUnknownMeter}
