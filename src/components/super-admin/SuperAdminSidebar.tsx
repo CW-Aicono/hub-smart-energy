@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import {
   LayoutDashboard, LogOut, Building2, BarChart3, Receipt, HeadsetIcon,
   ChevronDown, ChevronRight, PanelLeftClose, PanelLeft, Users, ShieldCheck, Shield, Euro,
-  Sun, Moon, Monitor, Globe, Palette, Check,
+  Sun, Moon, Monitor, Globe, Palette, Check, Server, PlugZap,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -67,6 +67,14 @@ export default function SuperAdminSidebar() {
         { to: "/super-admin/roles", icon: ShieldCheck, label: t("nav.roles_permissions") },
       ],
     },
+    {
+      to: "/super-admin/ocpp",
+      icon: Server,
+      label: t("nav.ocpp_backend"),
+      children: [
+        { to: "/super-admin/ocpp/integrations", icon: PlugZap, label: t("nav.ocpp_integrations") },
+      ],
+    },
     { to: "/super-admin/support", icon: HeadsetIcon, label: t("nav.support") },
   ];
 
@@ -74,6 +82,9 @@ export default function SuperAdminSidebar() {
   useEffect(() => {
     if (location.pathname === "/super-admin/users" || location.pathname === "/super-admin/roles") {
       setOpenMenus((prev) => prev.includes("/super-admin/users") ? prev : [...prev, "/super-admin/users"]);
+    }
+    if (location.pathname.startsWith("/super-admin/ocpp")) {
+      setOpenMenus((prev) => prev.includes("/super-admin/ocpp") ? prev : [...prev, "/super-admin/ocpp"]);
     }
   }, [location.pathname]);
 
