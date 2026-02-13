@@ -1,50 +1,82 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
+import {
+  BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
+} from "recharts";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Button } from "@/components/ui/button";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useEnergyData } from "@/hooks/useEnergyData";
 import { useMeters } from "@/hooks/useMeters";
 import { useLocations } from "@/hooks/useLocations";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ENERGY_CHART_COLORS } from "@/lib/energyTypeColors";
-import { getEnergyUnit } from "@/lib/formatEnergy";
-import { startOfDay, startOfWeek, startOfMonth, startOfQuarter, startOfYear } from "date-fns";
+import {
+  format, startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth,
+  startOfQuarter, endOfQuarter, startOfYear, endOfYear,
+  addDays, addWeeks, addMonths, addQuarters, addYears,
+  eachDayOfInterval, getISOWeek,
+} from "date-fns";
+import { de } from "date-fns/locale";
 import { useDashboardFilter, TimePeriod } from "@/hooks/useDashboardFilter";
 
-const PERIOD_LABELS: Record<TimePeriod, string> = {
+type ChartPeriod = "day" | "week" | "month" | "quarter" | "year";
+
+const PERIOD_LABELS: Record<ChartPeriod, string> = {
   day: "Tag",
   week: "Woche",
   month: "Monat",
   quarter: "Quartal",
   year: "Jahr",
-  all: "Gesamt",
 };
 
-function getPeriodStart(period: TimePeriod): Date | null {
+function getRefDate(period: ChartPeriod, offset: number): Date {
   const now = new Date();
   switch (period) {
-    case "day": return startOfDay(now);
-    case "week": return startOfWeek(now, { weekStartsOn: 1 });
-    case "month": return startOfMonth(now);
-    case "quarter": return startOfQuarter(now);
-    case "year": return startOfYear(now);
-    case "all": return null;
+    case "day": return addDays(now, offset);
+    case "week": return addWeeks(now, offset);
+    case "month": return addMonths(now, offset);
+    case "quarter": return addQuarters(now, offset);
+    case "year": return addYears(now, offset);
   }
 }
 
-const MONTH_LABELS = ["Jan", "Feb", "Mär", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dez"];
-
-function getEnergyScale(maxValue: number): { divisor: number; unit: string } {
-  if (maxValue >= 1_000_000) return { divisor: 1_000_000, unit: "GWh" };
-  if (maxValue >= 1_000) return { divisor: 1_000, unit: "MWh" };
-  if (maxValue >= 1) return { divisor: 1, unit: "kWh" };
-  return { divisor: 0.001, unit: "Wh" };
+function getPeriodRange(period: ChartPeriod, ref: Date): [Date, Date] {
+  switch (period) {
+    case "day": return [startOfDay(ref), endOfDay(ref)];
+    case "week": return [startOfWeek(ref, { weekStartsOn: 1 }), endOfWeek(ref, { weekStartsOn: 1 })];
+    case "month": return [startOfMonth(ref), endOfMonth(ref)];
+    case "quarter": return [startOfQuarter(ref), endOfQuarter(ref)];
+    case "year": return [startOfYear(ref), endOfYear(ref)];
+  }
 }
 
-function formatYAxisTick(value: number): string {
-  if (value >= 1_000_000) return `${(value / 1_000_000).toLocaleString("de-DE", { maximumFractionDigits: 1 })}M`;
-  if (value >= 1_000) return `${(value / 1_000).toLocaleString("de-DE", { maximumFractionDigits: 1 })}k`;
-  return value.toLocaleString("de-DE", { maximumFractionDigits: 1 });
+function getPeriodLabel(period: ChartPeriod, ref: Date): string {
+  switch (period) {
+    case "day": return format(ref, "EEEE, d. MMM yyyy", { locale: de });
+    case "week": return `KW ${getISOWeek(ref)}, ${format(ref, "yyyy")}`;
+    case "month": return format(ref, "MMMM yyyy", { locale: de });
+    case "quarter": {
+      const q = Math.floor(ref.getMonth() / 3) + 1;
+      return `Q${q} ${format(ref, "yyyy")}`;
+    }
+    case "year": return format(ref, "yyyy");
+  }
+}
+
+function getUnitForPeriod(period: ChartPeriod, energyType: string): string {
+  if (period === "day") {
+    if (energyType === "wasser") return "Liter";
+    if (energyType === "gas") return "m³";
+    return "kW";
+  }
+  if (energyType === "wasser") return "m³";
+  if (energyType === "gas") return "m³";
+  return "kWh";
+}
+
+function getChartUnitLabel(period: ChartPeriod): string {
+  return period === "day" ? "kW" : "kWh";
 }
 
 interface EnergyChartProps {
@@ -55,12 +87,14 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
   const { locations } = useLocations();
   const { readings, loading, hasData } = useEnergyData(locationId);
   const { meters } = useMeters();
-  const { selectedPeriod: period, setSelectedPeriod: setPeriod } = useDashboardFilter();
-  const selectedLocation = locationId ? locations.find((l) => l.id === locationId) : null;
+  const { selectedPeriod, setSelectedPeriod } = useDashboardFilter();
+  const [offset, setOffset] = useState(0);
 
-  const subtitle = selectedLocation
-    ? `Daten für: ${selectedLocation.name}`
-    : "Alle Liegenschaften";
+  // Map "all" to "year" for this chart
+  const period: ChartPeriod = selectedPeriod === "all" ? "year" : selectedPeriod;
+
+  const selectedLocation = locationId ? locations.find((l) => l.id === locationId) : null;
+  const subtitle = selectedLocation ? `Daten für: ${selectedLocation.name}` : "Alle Liegenschaften";
 
   const meterMap = useMemo(() => {
     const map: Record<string, string> = {};
@@ -68,63 +102,152 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
     return map;
   }, [meters]);
 
-  // Filter readings by period and build monthly buckets
-  const { scaledData, unit } = useMemo(() => {
-    const periodStart = getPeriodStart(period);
-    const buckets: Record<string, { strom: number; gas: number; waerme: number; wasser: number }> = {};
-    MONTH_LABELS.forEach((m) => { buckets[m] = { strom: 0, gas: 0, waerme: 0, wasser: 0 }; });
+  const refDate = getRefDate(period, offset);
+  const [rangeStart, rangeEnd] = getPeriodRange(period, refDate);
+  const periodLabel = getPeriodLabel(period, refDate);
+  const canGoForward = offset < 0;
 
-    readings.forEach((r) => {
-      if (periodStart && new Date(r.reading_date) < periodStart) return;
-      const date = new Date(r.reading_date);
-      const monthLabel = MONTH_LABELS[date.getMonth()];
-      const energyType = meterMap[r.meter_id] || "strom";
-      if (buckets[monthLabel] && energyType in buckets[monthLabel]) {
-        (buckets[monthLabel] as any)[energyType] += r.value;
-      }
+  const chartData = useMemo(() => {
+    const filtered = readings.filter((r) => {
+      const d = new Date(r.reading_date);
+      return d >= rangeStart && d <= rangeEnd;
     });
 
-    const monthlyData = MONTH_LABELS.map((m) => ({ month: m, ...buckets[m] }));
+    const emptyBucket = () => ({ strom: 0, gas: 0, waerme: 0, wasser: 0 });
 
-    const maxVal = monthlyData.reduce((max, d) => {
-      return Math.max(max, d.strom || 0, d.gas || 0, d.waerme || 0, d.wasser || 0);
-    }, 0);
+    const addToBucket = (bucket: any, r: { meter_id: string; value: number }) => {
+      const et = meterMap[r.meter_id] || "strom";
+      if (et in bucket) bucket[et] += r.value;
+    };
 
-    const scale = getEnergyScale(maxVal);
-    const scaled = monthlyData.map((d) => ({
-      ...d,
-      strom: d.strom ? d.strom / scale.divisor : 0,
-      gas: d.gas ? d.gas / scale.divisor : 0,
-      waerme: d.waerme ? d.waerme / scale.divisor : 0,
-      wasser: d.wasser ? d.wasser / scale.divisor : 0,
-    }));
+    if (period === "day") {
+      // 24 hourly buckets – values represent average power (kW) in each hour
+      const buckets = Array.from({ length: 24 }, (_, h) => ({
+        label: `${h}:00`,
+        ...emptyBucket(),
+      }));
+      filtered.forEach((r) => {
+        const hour = new Date(r.reading_date).getHours();
+        addToBucket(buckets[hour], r);
+      });
+      return buckets;
+    }
 
-    return { scaledData: scaled, unit: scale.unit };
-  }, [readings, meterMap, period]);
+    if (period === "week") {
+      const dayNames = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
+      const days = eachDayOfInterval({ start: rangeStart, end: rangeEnd });
+      return days.map((d, i) => {
+        const dateStr = format(d, "yyyy-MM-dd");
+        const bucket = { label: dayNames[i] || format(d, "EEE", { locale: de }), ...emptyBucket() };
+        filtered.forEach((r) => {
+          if (format(new Date(r.reading_date), "yyyy-MM-dd") === dateStr) {
+            addToBucket(bucket, r);
+          }
+        });
+        return bucket;
+      });
+    }
+
+    if (period === "month") {
+      const days = eachDayOfInterval({ start: rangeStart, end: rangeEnd });
+      return days.map((d) => {
+        const dateStr = format(d, "yyyy-MM-dd");
+        const bucket = { label: format(d, "d."), ...emptyBucket() };
+        filtered.forEach((r) => {
+          if (format(new Date(r.reading_date), "yyyy-MM-dd") === dateStr) {
+            addToBucket(bucket, r);
+          }
+        });
+        return bucket;
+      });
+    }
+
+    if (period === "quarter") {
+      // Group by ISO week
+      const weekMap = new Map<number, { label: string; strom: number; gas: number; waerme: number; wasser: number }>();
+      const days = eachDayOfInterval({ start: rangeStart, end: rangeEnd });
+      days.forEach((d) => {
+        const wk = getISOWeek(d);
+        if (!weekMap.has(wk)) {
+          weekMap.set(wk, { label: `KW${wk}`, ...emptyBucket() });
+        }
+      });
+      filtered.forEach((r) => {
+        const wk = getISOWeek(new Date(r.reading_date));
+        const bucket = weekMap.get(wk);
+        if (bucket) addToBucket(bucket, r);
+      });
+      return Array.from(weekMap.values());
+    }
+
+    // year – 12 monthly buckets
+    const monthLabels = ["Jan", "Feb", "Mär", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dez"];
+    const buckets = monthLabels.map((m) => ({ label: m, ...emptyBucket() }));
+    filtered.forEach((r) => {
+      const month = new Date(r.reading_date).getMonth();
+      addToBucket(buckets[month], r);
+    });
+    return buckets;
+  }, [readings, meterMap, period, rangeStart.toISOString(), rangeEnd.toISOString()]);
+
+  // Reset offset when period changes
+  const handlePeriodChange = (v: string) => {
+    setOffset(0);
+    if (v === "day" || v === "week" || v === "month" || v === "quarter" || v === "year") {
+      setSelectedPeriod(v as TimePeriod);
+    }
+  };
 
   if (loading) return <Card><CardContent className="p-6"><Skeleton className="h-[300px]" /></CardContent></Card>;
 
-  const periodSelect = (
-    <Select value={period} onValueChange={(v) => setPeriod(v as TimePeriod)}>
-      <SelectTrigger className="w-[120px] h-8 text-xs">
-        <SelectValue />
-      </SelectTrigger>
-      <SelectContent>
-        {(Object.keys(PERIOD_LABELS) as TimePeriod[]).map((key) => (
-          <SelectItem key={key} value={key}>{PERIOD_LABELS[key]}</SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
-  );
+  const unitLabel = getChartUnitLabel(period);
+  const isLineChart = period === "day";
+
+  const tooltipFormatter = (value: number, name: string) => {
+    const typeKey = name === "Strom" ? "strom" : name === "Gas" ? "gas" : name === "Wärme" ? "waerme" : "wasser";
+    const u = getUnitForPeriod(period, typeKey);
+    return [`${value.toLocaleString("de-DE", { maximumFractionDigits: 2 })} ${u}`, name];
+  };
+
+  const tooltipStyle = {
+    backgroundColor: 'hsl(var(--card))',
+    border: '1px solid hsl(var(--border))',
+    borderRadius: 'var(--radius)',
+    color: 'hsl(var(--card-foreground))',
+  };
+
+  const tickStyle = { fill: 'hsl(var(--muted-foreground))', fontSize: 11 };
 
   return (
     <Card>
       <CardHeader>
         <div className="flex items-center justify-between">
-          <CardTitle className="font-display text-lg">Energieverbrauch ({unit})</CardTitle>
-          {periodSelect}
+          <CardTitle className="font-display text-lg">
+            Energieverbrauch ({unitLabel})
+          </CardTitle>
+          <Select value={period} onValueChange={handlePeriodChange}>
+            <SelectTrigger className="w-[120px] h-8 text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {(Object.keys(PERIOD_LABELS) as ChartPeriod[]).map((key) => (
+                <SelectItem key={key} value={key}>{PERIOD_LABELS[key]}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
-        <p className="text-sm text-muted-foreground">{subtitle}</p>
+        <div className="flex items-center justify-between">
+          <p className="text-sm text-muted-foreground">{subtitle}</p>
+          <div className="flex items-center gap-1">
+            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setOffset((o) => o - 1)}>
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <span className="text-xs text-muted-foreground min-w-[160px] text-center">{periodLabel}</span>
+            <Button variant="ghost" size="icon" className="h-7 w-7" disabled={!canGoForward} onClick={() => setOffset((o) => o + 1)}>
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
       </CardHeader>
       <CardContent>
         {!hasData ? (
@@ -133,38 +256,31 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
           </div>
         ) : (
           <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={scaledData} barGap={2} margin={{ top: 5, right: 10, left: 5, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" className="stroke-border" vertical={false} />
-              <XAxis dataKey="month" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }} tickLine={false} axisLine={false} />
-              <YAxis
-                width={50}
-                tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }}
-                tickLine={false}
-                axisLine={false}
-                tickFormatter={formatYAxisTick}
-              />
-              <Tooltip
-                contentStyle={{
-                  backgroundColor: 'hsl(var(--card))',
-                  border: '1px solid hsl(var(--border))',
-                  borderRadius: 'var(--radius)',
-                  color: 'hsl(var(--card-foreground))',
-                }}
-                formatter={(value: number, name: string) => {
-                  const typeKey = name === "Strom" ? "strom" : name === "Gas" ? "gas" : name === "Wärme" ? "waerme" : name === "Wasser" ? "wasser" : "strom";
-                  const displayUnit = getEnergyUnit(typeKey);
-                  return [
-                    `${value.toLocaleString("de-DE", { maximumFractionDigits: 2 })} ${displayUnit}`,
-                    name,
-                  ];
-                }}
-              />
-              <Legend wrapperStyle={{ fontSize: 12 }} />
-              <Bar dataKey="strom" name="Strom" fill={ENERGY_CHART_COLORS.strom} radius={[3, 3, 0, 0]} />
-              <Bar dataKey="gas" name="Gas" fill={ENERGY_CHART_COLORS.gas} radius={[3, 3, 0, 0]} />
-              <Bar dataKey="waerme" name="Wärme" fill={ENERGY_CHART_COLORS.waerme} radius={[3, 3, 0, 0]} />
-              <Bar dataKey="wasser" name="Wasser" fill={ENERGY_CHART_COLORS.wasser} radius={[3, 3, 0, 0]} />
-            </BarChart>
+            {isLineChart ? (
+              <LineChart data={chartData} margin={{ top: 5, right: 10, left: 5, bottom: 5 }}>
+                <CartesianGrid strokeDasharray="3 3" className="stroke-border" vertical={false} />
+                <XAxis dataKey="label" tick={tickStyle} tickLine={false} axisLine={false} interval={2} />
+                <YAxis width={50} tick={tickStyle} tickLine={false} axisLine={false} />
+                <Tooltip contentStyle={tooltipStyle} formatter={tooltipFormatter} />
+                <Legend wrapperStyle={{ fontSize: 12 }} />
+                <Line type="monotone" dataKey="strom" name="Strom" stroke={ENERGY_CHART_COLORS.strom} strokeWidth={2} dot={false} />
+                <Line type="monotone" dataKey="gas" name="Gas" stroke={ENERGY_CHART_COLORS.gas} strokeWidth={2} dot={false} />
+                <Line type="monotone" dataKey="waerme" name="Wärme" stroke={ENERGY_CHART_COLORS.waerme} strokeWidth={2} dot={false} />
+                <Line type="monotone" dataKey="wasser" name="Wasser" stroke={ENERGY_CHART_COLORS.wasser} strokeWidth={2} dot={false} />
+              </LineChart>
+            ) : (
+              <BarChart data={chartData} barGap={2} margin={{ top: 5, right: 10, left: 5, bottom: 5 }}>
+                <CartesianGrid strokeDasharray="3 3" className="stroke-border" vertical={false} />
+                <XAxis dataKey="label" tick={tickStyle} tickLine={false} axisLine={false} />
+                <YAxis width={50} tick={tickStyle} tickLine={false} axisLine={false} />
+                <Tooltip contentStyle={tooltipStyle} formatter={tooltipFormatter} />
+                <Legend wrapperStyle={{ fontSize: 12 }} />
+                <Bar dataKey="strom" name="Strom" fill={ENERGY_CHART_COLORS.strom} radius={[3, 3, 0, 0]} />
+                <Bar dataKey="gas" name="Gas" fill={ENERGY_CHART_COLORS.gas} radius={[3, 3, 0, 0]} />
+                <Bar dataKey="waerme" name="Wärme" fill={ENERGY_CHART_COLORS.waerme} radius={[3, 3, 0, 0]} />
+                <Bar dataKey="wasser" name="Wasser" fill={ENERGY_CHART_COLORS.wasser} radius={[3, 3, 0, 0]} />
+              </BarChart>
+            )}
           </ResponsiveContainer>
         )}
       </CardContent>
