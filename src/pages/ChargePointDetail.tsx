@@ -72,35 +72,58 @@ const ChargePointDetail = () => {
     ? (periodSessions.filter((s) => s.status === "completed" || s.energy_kwh > 0).length / sessionCount * 100)
     : 0;
 
-  // Uptime approximation based on status
+  // Uptime: based on current status (simple real-time snapshot)
   const uptimePercent = useMemo(() => {
     if (!cp) return 0;
-    return cp.status === "available" || cp.status === "charging" ? 95 + Math.random() * 5 : cp.status === "faulted" ? 30 + Math.random() * 20 : 60 + Math.random() * 20;
+    return cp.status === "available" || cp.status === "charging" ? 100 : 0;
   }, [cp?.status]);
 
-  // Daily chart data
+  // Daily chart data – real data only
   const chartData = useMemo(() => {
+    const today = format(new Date(), "yyyy-MM-dd");
     const days: { day: string; date: string; available: number; charging: number; error: number }[] = [];
     for (let i = periodDays - 1; i >= 0; i--) {
       const d = subDays(new Date(), i);
       const dayLabel = format(d, "EEE", { locale: de });
       const dateLabel = format(d, "d. MMM", { locale: de });
-      const daySessions = periodSessions.filter((s) => format(new Date(s.start_time), "yyyy-MM-dd") === format(d, "yyyy-MM-dd"));
-      const chargingHours = daySessions.reduce((sum, s) => {
+      const dateStr = format(d, "yyyy-MM-dd");
+      const isToday = dateStr === today;
+
+      const daySessions = periodSessions.filter(
+        (s) => format(new Date(s.start_time), "yyyy-MM-dd") === dateStr
+      );
+
+      // Past days without sessions → empty (no fake data)
+      if (!isToday && daySessions.length === 0) {
+        days.push({ day: dayLabel, date: dateLabel, available: 0, charging: 0, error: 0 });
+        continue;
+      }
+
+      const hoursInDay = isToday ? new Date().getHours() + (new Date().getMinutes() / 60) : 24;
+
+      const chargingHours = Math.min(hoursInDay, daySessions.reduce((sum, s) => {
         const start = new Date(s.start_time);
         const end = s.stop_time ? new Date(s.stop_time) : new Date();
-        return sum + (end.getTime() - start.getTime()) / 3600000;
-      }, 0);
+        const dayStart = new Date(dateStr + "T00:00:00");
+        const dayEnd = isToday ? new Date() : new Date(dateStr + "T23:59:59.999");
+        const effectiveStart = start < dayStart ? dayStart : start;
+        const effectiveEnd = end > dayEnd ? dayEnd : end;
+        if (effectiveEnd <= effectiveStart) return sum;
+        return sum + (effectiveEnd.getTime() - effectiveStart.getTime()) / 3600000;
+      }, 0));
+
+      const errorHours = cp && cp.status === "faulted" ? hoursInDay : 0;
+
       days.push({
         day: dayLabel,
         date: dateLabel,
-        available: Math.max(0, 24 - chargingHours - (Math.random() * 2)),
-        charging: Math.min(24, chargingHours),
-        error: Math.random() < 0.15 ? Math.random() * 2 : 0,
+        available: Math.max(0, hoursInDay - chargingHours - errorHours),
+        charging: chargingHours,
+        error: errorHours,
       });
     }
     return days;
-  }, [periodSessions, periodDays]);
+  }, [periodSessions, periodDays, cp?.status]);
 
   if (authLoading) return null;
   if (!user) return <Navigate to="/auth" replace />;
