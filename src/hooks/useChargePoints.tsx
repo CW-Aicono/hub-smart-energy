@@ -86,6 +86,16 @@ export function useChargePoints() {
 
   const deleteChargePoint = useMutation({
     mutationFn: async (id: string) => {
+      // Find ocpp_id to delete logs
+      const cp = queryClient.getQueryData<ChargePoint[]>(["charge-points"])?.find(c => c.id === id);
+      if (cp) {
+        await supabase.from("ocpp_message_log").delete().eq("charge_point_id", cp.ocpp_id);
+      }
+      // Delete charging invoices linked to sessions of this charge point
+      const { data: sessionIds } = await supabase.from("charging_sessions").select("id").eq("charge_point_id", id);
+      if (sessionIds && sessionIds.length > 0) {
+        await supabase.from("charging_invoices").delete().in("session_id", sessionIds.map(s => s.id));
+      }
       const { error } = await supabase.from("charge_points").delete().eq("id", id);
       if (error) throw error;
     },

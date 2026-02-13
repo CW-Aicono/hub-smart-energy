@@ -298,7 +298,7 @@ const ChargingPoints = () => {
                                   <AlertDialogHeader>
                                     <AlertDialogTitle>Ladepunkt löschen?</AlertDialogTitle>
                                     <AlertDialogDescription>
-                                      Der Ladepunkt <strong>{cp.name}</strong> ({cp.ocpp_id}) wird unwiderruflich gelöscht. Alle zugehörigen Ladevorgänge und Logs gehen verloren.
+                                      Der Ladepunkt <strong>{cp.name}</strong> ({cp.ocpp_id}) wird unwiderruflich gelöscht. OCPP-Logs werden entfernt, Ladevorgänge bleiben erhalten.
                                     </AlertDialogDescription>
                                   </AlertDialogHeader>
                                   <AlertDialogFooter>
