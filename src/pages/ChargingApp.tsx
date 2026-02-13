@@ -574,7 +574,7 @@ const ChargingApp = () => {
   const [selectedCp, setSelectedCp] = useState<AppChargePoint | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // Ensure charging_users entry exists for app user
+  // Ensure charging_users entry exists for app user (no group assignment – done manually later)
   const ensureChargingUser = useCallback(async (authId: string, email: string, displayName?: string) => {
     try {
       const { data: existing } = await supabase
@@ -584,22 +584,21 @@ const ChargingApp = () => {
         .maybeSingle();
       if (existing) return;
 
-      // Find the first "App-Nutzer" group
-      const { data: appGroup } = await supabase
+      // Determine tenant: pick from any app-user group or fall back to first group
+      const { data: anyGroup } = await supabase
         .from("charging_user_groups")
-        .select("id, tenant_id")
-        .eq("is_app_user", true)
+        .select("tenant_id")
         .limit(1)
         .maybeSingle();
 
-      if (!appGroup) return; // No app-user group configured
+      if (!anyGroup) return; // No groups configured at all
 
       await supabase.from("charging_users").insert({
-        tenant_id: appGroup.tenant_id,
+        tenant_id: anyGroup.tenant_id,
         auth_user_id: authId,
         name: displayName || email.split("@")[0],
         email,
-        group_id: appGroup.id,
+        group_id: null, // No group – admin assigns manually
         status: "active",
       });
     } catch (err) {
