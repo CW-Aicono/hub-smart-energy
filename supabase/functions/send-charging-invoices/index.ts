@@ -40,8 +40,11 @@ function buildInvoiceHTML(
   tariffName: string,
   pricePerKwh: number,
   baseFee: number,
+  idleFeePerMinute: number,
+  idleFeeGraceMinutes: number,
   currency: string,
   totalEnergy: number,
+  totalIdleFee: number,
   totalAmount: number,
   period: { from: string; to: string; label: string },
   tenantName: string,
@@ -57,6 +60,8 @@ function buildInvoiceHTML(
     const endDate = s.stop_time ? new Date(s.stop_time) : null;
     const duration = endDate ? Math.round((endDate.getTime() - startDate.getTime()) / 60000) : 0;
     const durationStr = duration > 60 ? `${Math.floor(duration / 60)}h ${duration % 60}min` : `${duration}min`;
+    const idleMinutes = Math.max(0, duration - idleFeeGraceMinutes);
+    const sessionIdleFee = idleFeePerMinute > 0 && idleMinutes > 0 ? idleMinutes * idleFeePerMinute : 0;
     const bg = i % 2 === 0 ? "#ffffff" : "#f8fafc";
     return `<tr>
       <td style="padding:8px 12px;font-size:12px;color:#334155;border-bottom:1px solid #f1f5f9;background:${bg}">${startDate.toLocaleDateString("de-DE")}</td>
@@ -64,6 +69,7 @@ function buildInvoiceHTML(
       <td style="padding:8px 12px;font-size:12px;color:#334155;border-bottom:1px solid #f1f5f9;background:${bg}">${durationStr}</td>
       <td style="padding:8px 12px;font-size:12px;color:#334155;border-bottom:1px solid #f1f5f9;background:${bg};text-align:right">${formatDE(s.energy_kwh)} kWh</td>
       <td style="padding:8px 12px;font-size:12px;color:#334155;border-bottom:1px solid #f1f5f9;background:${bg};text-align:right">${formatDE(s.energy_kwh * pricePerKwh)} ${currencySymbol}</td>
+      ${idleFeePerMinute > 0 ? `<td style="padding:8px 12px;font-size:12px;color:${sessionIdleFee > 0 ? '#dc2626' : '#94a3b8'};border-bottom:1px solid #f1f5f9;background:${bg};text-align:right">${sessionIdleFee > 0 ? formatDE(sessionIdleFee) + ' ' + currencySymbol : '—'}</td>` : ""}
     </tr>`;
   }).join("");
 
@@ -150,6 +156,7 @@ function buildInvoiceHTML(
           <th style="padding:8px 12px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;color:#64748b;border-bottom:2px solid #e2e8f0;background:#f8fafc">Dauer</th>
           <th style="padding:8px 12px;text-align:right;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;color:#64748b;border-bottom:2px solid #e2e8f0;background:#f8fafc">Energie</th>
           <th style="padding:8px 12px;text-align:right;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;color:#64748b;border-bottom:2px solid #e2e8f0;background:#f8fafc">Betrag</th>
+          ${idleFeePerMinute > 0 ? `<th style="padding:8px 12px;text-align:right;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;color:#64748b;border-bottom:2px solid #e2e8f0;background:#f8fafc">Blockiergebühr</th>` : ""}
         </tr>
       </thead>
       <tbody>${sessionRows}</tbody>
@@ -158,13 +165,18 @@ function buildInvoiceHTML(
           <td colspan="3" style="padding:10px 12px;font-size:13px;border-top:2px solid #e2e8f0">Summe Energie</td>
           <td style="padding:10px 12px;font-size:13px;text-align:right;border-top:2px solid #e2e8f0">${formatDE(totalEnergy)} kWh</td>
           <td style="padding:10px 12px;font-size:13px;text-align:right;border-top:2px solid #e2e8f0">${formatDE(totalEnergy * pricePerKwh)} ${currencySymbol}</td>
+          ${idleFeePerMinute > 0 ? `<td style="padding:10px 12px;font-size:13px;text-align:right;border-top:2px solid #e2e8f0"></td>` : ""}
         </tr>
         ${baseFee > 0 ? `<tr style="background:#f8fafc">
-          <td colspan="4" style="padding:8px 12px;font-size:13px">Grundgebühr</td>
+          <td colspan="${idleFeePerMinute > 0 ? 5 : 4}" style="padding:8px 12px;font-size:13px">Grundgebühr</td>
           <td style="padding:8px 12px;font-size:13px;text-align:right">${formatDE(baseFee)} ${currencySymbol}</td>
         </tr>` : ""}
+        ${totalIdleFee > 0 ? `<tr style="background:#fef2f2">
+          <td colspan="${idleFeePerMinute > 0 ? 5 : 4}" style="padding:8px 12px;font-size:13px;color:#dc2626">Blockiergebühr (${formatDE(idleFeePerMinute, 2)} ${currencySymbol}/Min. ab ${idleFeeGraceMinutes} Min.)</td>
+          <td style="padding:8px 12px;font-size:13px;text-align:right;color:#dc2626">${formatDE(totalIdleFee)} ${currencySymbol}</td>
+        </tr>` : ""}
         <tr style="font-weight:700;background:#f0f9ff">
-          <td colspan="4" style="padding:12px;font-size:15px;border-top:2px solid #3b82f6;color:#1e40af">Gesamtbetrag</td>
+          <td colspan="${idleFeePerMinute > 0 ? 5 : 4}" style="padding:12px;font-size:15px;border-top:2px solid #3b82f6;color:#1e40af">Gesamtbetrag</td>
           <td style="padding:12px;font-size:15px;text-align:right;border-top:2px solid #3b82f6;color:#1e40af">${formatDE(totalAmount)} ${currencySymbol}</td>
         </tr>
       </tfoot>
@@ -245,6 +257,8 @@ serve(async (req) => {
         const tariff = tariffs?.[0];
         const pricePerKwh = tariff?.price_per_kwh ?? 0;
         const baseFee = tariff?.base_fee ?? 0;
+        const idleFeePerMinute = tariff?.idle_fee_per_minute ?? 0;
+        const idleFeeGraceMinutes = tariff?.idle_fee_grace_minutes ?? 60;
         const currency = tariff?.currency ?? "EUR";
         const tariffName = tariff?.name ?? "Standard";
 
@@ -296,7 +310,14 @@ serve(async (req) => {
         for (const [userId, { user, sessions: userSessionList }] of userSessions) {
           try {
             const totalEnergy = userSessionList.reduce((sum, s) => sum + (s.energy_kwh || 0), 0);
-            const totalAmount = totalEnergy * pricePerKwh + baseFee;
+            // Calculate idle fee per session
+            const totalIdleFee = idleFeePerMinute > 0 ? userSessionList.reduce((sum, s) => {
+              if (!s.stop_time) return sum;
+              const duration = Math.round((new Date(s.stop_time).getTime() - new Date(s.start_time).getTime()) / 60000);
+              const idleMinutes = Math.max(0, duration - idleFeeGraceMinutes);
+              return sum + idleMinutes * idleFeePerMinute;
+            }, 0) : 0;
+            const totalAmount = totalEnergy * pricePerKwh + baseFee + totalIdleFee;
             const invoiceNumber = generateInvoiceNumber(tenantIds.indexOf(tenantId) + 1, invoiceIndex, parseInt(year), parseInt(month));
 
             // Check if invoice already exists for this user/period
@@ -316,6 +337,7 @@ serve(async (req) => {
               tariff_id: tariff?.id ?? null,
               total_energy_kwh: totalEnergy,
               total_amount: totalAmount,
+              idle_fee_amount: totalIdleFee,
               currency,
               status: "issued",
               invoice_number: invoiceNumber,
@@ -334,8 +356,8 @@ serve(async (req) => {
             if (user.email && resend) {
               const htmlContent = buildInvoiceHTML(
                 invoiceNumber, user.name, user.email, userSessionList,
-                tariffName, pricePerKwh, baseFee, currency,
-                totalEnergy, totalAmount, period, tenantName, logoUrl,
+                tariffName, pricePerKwh, baseFee, idleFeePerMinute, idleFeeGraceMinutes, currency,
+                totalEnergy, totalIdleFee, totalAmount, period, tenantName, logoUrl,
                 primaryColor, accentColor,
               );
 

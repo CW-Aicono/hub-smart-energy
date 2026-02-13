@@ -9,6 +9,7 @@ export interface ChargingInvoice {
   tariff_id: string | null;
   total_energy_kwh: number;
   total_amount: number;
+  idle_fee_amount: number;
   currency: string;
   status: string;
   invoice_number: string | null;
