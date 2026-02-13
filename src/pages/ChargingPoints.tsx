@@ -18,9 +18,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Plus, PlugZap, Trash2, Zap, ZapOff, AlertTriangle, WifiOff, Info, Search, MapPin } from "lucide-react";
+import { Plus, PlugZap, Trash2, Zap, ZapOff, AlertTriangle, WifiOff, Info, Search, MapPin, ChevronDown } from "lucide-react";
 import { format } from "date-fns";
 import { fmtKwh, fmtKw } from "@/lib/formatCharging";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import ChargingOverviewStats from "@/components/charging/ChargingOverviewStats";
 
 const LazyChargePointsMap = lazy(() => import("@/components/charging/ChargePointsMap"));
 
@@ -244,83 +246,95 @@ const ChargingPoints = () => {
             })}
           </div>
 
-          {/* Table */}
-          <Card>
-            <CardHeader>
-              <CardTitle>
-                {statusFilter ? `Ladepunkte: ${statusConfig[statusFilter]?.label}` : "Alle Ladepunkte"}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {isLoading ? (
-                <p className="text-muted-foreground">Laden...</p>
-              ) : filteredChargePoints.length === 0 ? (
-                <p className="text-muted-foreground">{statusFilter ? "Keine Ladepunkte mit diesem Status." : "Keine Ladepunkte vorhanden."}</p>
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Name</TableHead>
-                      <TableHead>OCPP-ID</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Standort</TableHead>
-                      <TableHead>Leistung</TableHead>
-                      <TableHead>Letzter Heartbeat</TableHead>
-                      {isAdmin && <TableHead className="w-16"></TableHead>}
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredChargePoints.map((cp) => {
-                      const cfg = statusConfig[cp.status] || statusConfig.offline;
-                      const activeSession = getActiveSession(cp.id);
-                      return (
-                        <TableRow key={cp.id}>
-                          <TableCell className="font-medium cursor-pointer hover:text-primary transition-colors" onClick={() => navigate(`/charging/points/${cp.id}`)}>{cp.name}</TableCell>
-                          <TableCell className="font-mono text-sm">{cp.ocpp_id}</TableCell>
-                          <TableCell>
-                            <Badge variant={cfg.variant}>{cfg.label}</Badge>
-                            {activeSession && (
-                              <span className="ml-2 text-xs text-muted-foreground">
-                                {fmtKwh(activeSession.energy_kwh, 1)}
-                              </span>
-                            )}
-                          </TableCell>
-                          <TableCell>{cp.address || "—"}</TableCell>
-                          <TableCell>{fmtKw(cp.max_power_kw)}</TableCell>
-                          <TableCell className="text-sm text-muted-foreground">
-                            {cp.last_heartbeat ? format(new Date(cp.last_heartbeat), "dd.MM.yyyy HH:mm") : "—"}
-                          </TableCell>
-                          {isAdmin && (
-                            <TableCell>
-                              <AlertDialog>
-                                <AlertDialogTrigger asChild>
-                                  <Button variant="ghost" size="icon"><Trash2 className="h-4 w-4 text-destructive" /></Button>
-                                </AlertDialogTrigger>
-                                <AlertDialogContent>
-                                  <AlertDialogHeader>
-                                    <AlertDialogTitle>Ladepunkt löschen?</AlertDialogTitle>
-                                    <AlertDialogDescription>
-                                      Der Ladepunkt <strong>{cp.name}</strong> ({cp.ocpp_id}) wird unwiderruflich gelöscht. OCPP-Logs werden entfernt, Ladevorgänge bleiben erhalten.
-                                    </AlertDialogDescription>
-                                  </AlertDialogHeader>
-                                  <AlertDialogFooter>
-                                    <AlertDialogCancel>Abbrechen</AlertDialogCancel>
-                                    <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => deleteChargePoint.mutate(cp.id)}>
-                                      Endgültig löschen
-                                    </AlertDialogAction>
-                                  </AlertDialogFooter>
-                                </AlertDialogContent>
-                              </AlertDialog>
-                            </TableCell>
-                          )}
+          {/* Statistics */}
+          <ChargingOverviewStats chargePoints={chargePoints} sessions={sessions} />
+
+          {/* Table - collapsible */}
+          <Collapsible defaultOpen={false}>
+            <Card>
+              <CollapsibleTrigger asChild>
+                <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
+                  <div className="flex items-center justify-between">
+                    <CardTitle>
+                      {statusFilter ? `Ladepunkte: ${statusConfig[statusFilter]?.label}` : "Alle Ladepunkte"}
+                    </CardTitle>
+                    <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform duration-200 [[data-state=open]_&]:rotate-180" />
+                  </div>
+                </CardHeader>
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <CardContent>
+                  {isLoading ? (
+                    <p className="text-muted-foreground">Laden...</p>
+                  ) : filteredChargePoints.length === 0 ? (
+                    <p className="text-muted-foreground">{statusFilter ? "Keine Ladepunkte mit diesem Status." : "Keine Ladepunkte vorhanden."}</p>
+                  ) : (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Name</TableHead>
+                          <TableHead>OCPP-ID</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead>Standort</TableHead>
+                          <TableHead>Leistung</TableHead>
+                          <TableHead>Letzter Heartbeat</TableHead>
+                          {isAdmin && <TableHead className="w-16"></TableHead>}
                         </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              )}
-            </CardContent>
-          </Card>
+                      </TableHeader>
+                      <TableBody>
+                        {filteredChargePoints.map((cp) => {
+                          const cfg = statusConfig[cp.status] || statusConfig.offline;
+                          const activeSession = getActiveSession(cp.id);
+                          return (
+                            <TableRow key={cp.id}>
+                              <TableCell className="font-medium cursor-pointer hover:text-primary transition-colors" onClick={() => navigate(`/charging/points/${cp.id}`)}>{cp.name}</TableCell>
+                              <TableCell className="font-mono text-sm">{cp.ocpp_id}</TableCell>
+                              <TableCell>
+                                <Badge variant={cfg.variant}>{cfg.label}</Badge>
+                                {activeSession && (
+                                  <span className="ml-2 text-xs text-muted-foreground">
+                                    {fmtKwh(activeSession.energy_kwh, 1)}
+                                  </span>
+                                )}
+                              </TableCell>
+                              <TableCell>{cp.address || "—"}</TableCell>
+                              <TableCell>{fmtKw(cp.max_power_kw)}</TableCell>
+                              <TableCell className="text-sm text-muted-foreground">
+                                {cp.last_heartbeat ? format(new Date(cp.last_heartbeat), "dd.MM.yyyy HH:mm") : "—"}
+                              </TableCell>
+                              {isAdmin && (
+                                <TableCell>
+                                  <AlertDialog>
+                                    <AlertDialogTrigger asChild>
+                                      <Button variant="ghost" size="icon"><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                                    </AlertDialogTrigger>
+                                    <AlertDialogContent>
+                                      <AlertDialogHeader>
+                                        <AlertDialogTitle>Ladepunkt löschen?</AlertDialogTitle>
+                                        <AlertDialogDescription>
+                                          Der Ladepunkt <strong>{cp.name}</strong> ({cp.ocpp_id}) wird unwiderruflich gelöscht. OCPP-Logs werden entfernt, Ladevorgänge bleiben erhalten.
+                                        </AlertDialogDescription>
+                                      </AlertDialogHeader>
+                                      <AlertDialogFooter>
+                                        <AlertDialogCancel>Abbrechen</AlertDialogCancel>
+                                        <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => deleteChargePoint.mutate(cp.id)}>
+                                          Endgültig löschen
+                                        </AlertDialogAction>
+                                      </AlertDialogFooter>
+                                    </AlertDialogContent>
+                                  </AlertDialog>
+                                </TableCell>
+                              )}
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  )}
+                </CardContent>
+              </CollapsibleContent>
+            </Card>
+          </Collapsible>
 
           {/* Map */}
           <Card>
