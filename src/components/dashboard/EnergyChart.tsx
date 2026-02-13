@@ -83,12 +83,15 @@ interface EnergyChartProps {
   locationId: string | null;
 }
 
+const ENERGY_KEYS = ["strom", "gas", "waerme", "wasser"] as const;
+
 const EnergyChart = ({ locationId }: EnergyChartProps) => {
   const { locations } = useLocations();
   const { readings, loading, hasData } = useEnergyData(locationId);
   const { meters } = useMeters();
   const { selectedPeriod, setSelectedPeriod } = useDashboardFilter();
   const [offset, setOffset] = useState(0);
+  const [hiddenKeys, setHiddenKeys] = useState<Set<string>>(new Set());
 
   // Map "all" to "year" for this chart
   const period: ChartPeriod = selectedPeriod === "all" ? "year" : selectedPeriod;
@@ -203,6 +206,17 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
   const unitLabel = getChartUnitLabel(period);
   const isLineChart = period === "day";
 
+  const visibleKeys = ENERGY_KEYS.filter((k) => !hiddenKeys.has(k));
+
+  const handleLegendClick = (e: any) => {
+    const key = e.dataKey as string;
+    setHiddenKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  };
+
   const tooltipFormatter = (value: number, name: string) => {
     const typeKey = name === "Strom" ? "strom" : name === "Gas" ? "gas" : name === "Wärme" ? "waerme" : "wasser";
     const u = getUnitForPeriod(period, typeKey);
@@ -217,6 +231,11 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
   };
 
   const tickStyle = { fill: 'hsl(var(--muted-foreground))', fontSize: 11 };
+
+  const legendFormatter = (value: string, entry: any) => {
+    const hidden = hiddenKeys.has(entry.dataKey);
+    return <span style={{ color: hidden ? 'hsl(var(--muted-foreground))' : undefined, opacity: hidden ? 0.4 : 1, cursor: 'pointer' }}>{value}</span>;
+  };
 
   return (
     <Card>
@@ -260,25 +279,25 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
               <LineChart data={chartData} margin={{ top: 5, right: 10, left: 5, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" className="stroke-border" vertical={false} />
                 <XAxis dataKey="label" tick={tickStyle} tickLine={false} axisLine={false} interval={2} />
-                <YAxis width={50} tick={tickStyle} tickLine={false} axisLine={false} />
+                <YAxis width={50} tick={tickStyle} tickLine={false} axisLine={false} domain={visibleKeys.length === 0 ? [0, 1] : ['auto', 'auto']} />
                 <Tooltip contentStyle={tooltipStyle} formatter={tooltipFormatter} />
-                <Legend wrapperStyle={{ fontSize: 12 }} />
-                <Line type="monotone" dataKey="strom" name="Strom" stroke={ENERGY_CHART_COLORS.strom} strokeWidth={2} dot={false} />
-                <Line type="monotone" dataKey="gas" name="Gas" stroke={ENERGY_CHART_COLORS.gas} strokeWidth={2} dot={false} />
-                <Line type="monotone" dataKey="waerme" name="Wärme" stroke={ENERGY_CHART_COLORS.waerme} strokeWidth={2} dot={false} />
-                <Line type="monotone" dataKey="wasser" name="Wasser" stroke={ENERGY_CHART_COLORS.wasser} strokeWidth={2} dot={false} />
+                <Legend wrapperStyle={{ fontSize: 12, cursor: 'pointer' }} onClick={handleLegendClick} formatter={legendFormatter} />
+                <Line type="monotone" dataKey="strom" name="Strom" stroke={ENERGY_CHART_COLORS.strom} strokeWidth={2} dot={false} hide={hiddenKeys.has("strom")} />
+                <Line type="monotone" dataKey="gas" name="Gas" stroke={ENERGY_CHART_COLORS.gas} strokeWidth={2} dot={false} hide={hiddenKeys.has("gas")} />
+                <Line type="monotone" dataKey="waerme" name="Wärme" stroke={ENERGY_CHART_COLORS.waerme} strokeWidth={2} dot={false} hide={hiddenKeys.has("waerme")} />
+                <Line type="monotone" dataKey="wasser" name="Wasser" stroke={ENERGY_CHART_COLORS.wasser} strokeWidth={2} dot={false} hide={hiddenKeys.has("wasser")} />
               </LineChart>
             ) : (
               <BarChart data={chartData} barGap={2} margin={{ top: 5, right: 10, left: 5, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" className="stroke-border" vertical={false} />
                 <XAxis dataKey="label" tick={tickStyle} tickLine={false} axisLine={false} />
-                <YAxis width={50} tick={tickStyle} tickLine={false} axisLine={false} />
+                <YAxis width={50} tick={tickStyle} tickLine={false} axisLine={false} domain={visibleKeys.length === 0 ? [0, 1] : ['auto', 'auto']} />
                 <Tooltip contentStyle={tooltipStyle} formatter={tooltipFormatter} />
-                <Legend wrapperStyle={{ fontSize: 12 }} />
-                <Bar dataKey="strom" name="Strom" fill={ENERGY_CHART_COLORS.strom} radius={[3, 3, 0, 0]} />
-                <Bar dataKey="gas" name="Gas" fill={ENERGY_CHART_COLORS.gas} radius={[3, 3, 0, 0]} />
-                <Bar dataKey="waerme" name="Wärme" fill={ENERGY_CHART_COLORS.waerme} radius={[3, 3, 0, 0]} />
-                <Bar dataKey="wasser" name="Wasser" fill={ENERGY_CHART_COLORS.wasser} radius={[3, 3, 0, 0]} />
+                <Legend wrapperStyle={{ fontSize: 12, cursor: 'pointer' }} onClick={handleLegendClick} formatter={legendFormatter} />
+                <Bar dataKey="strom" name="Strom" fill={ENERGY_CHART_COLORS.strom} radius={[3, 3, 0, 0]} hide={hiddenKeys.has("strom")} />
+                <Bar dataKey="gas" name="Gas" fill={ENERGY_CHART_COLORS.gas} radius={[3, 3, 0, 0]} hide={hiddenKeys.has("gas")} />
+                <Bar dataKey="waerme" name="Wärme" fill={ENERGY_CHART_COLORS.waerme} radius={[3, 3, 0, 0]} hide={hiddenKeys.has("waerme")} />
+                <Bar dataKey="wasser" name="Wasser" fill={ENERGY_CHART_COLORS.wasser} radius={[3, 3, 0, 0]} hide={hiddenKeys.has("wasser")} />
               </BarChart>
             )}
           </ResponsiveContainer>
