@@ -760,39 +760,6 @@ const ChargePointDetail = () => {
                   </p>
                 </CardContent>
               </Card>
-
-              {/* Danger zone */}
-              {isAdmin && (
-                <Card className="border-destructive/30">
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-base text-destructive">Gefahrenzone</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-sm text-muted-foreground mb-3">Der Ladepunkt wird unwiderruflich gelöscht inkl. aller Ladevorgänge und Logs.</p>
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                        <Button variant="destructive">
-                          <Trash2 className="h-4 w-4 mr-2" /> Ladepunkt löschen
-                        </Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>Ladepunkt endgültig löschen?</AlertDialogTitle>
-                          <AlertDialogDescription>
-                            <strong>{cp.name}</strong> ({cp.ocpp_id}) wird unwiderruflich entfernt. Alle Ladevorgänge, Logs und Konfigurationen gehen verloren.
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>Abbrechen</AlertDialogCancel>
-                          <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={handleDelete}>
-                            Endgültig löschen
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
-                  </CardContent>
-                </Card>
-              )}
             </TabsContent>
           </Tabs>
         </div>
