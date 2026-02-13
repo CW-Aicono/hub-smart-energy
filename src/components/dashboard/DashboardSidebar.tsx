@@ -5,7 +5,7 @@ import { useUserRole } from "@/hooks/useUserRole";
 import { useTranslation } from "@/hooks/useTranslation";
 import { useModuleGuard } from "@/hooks/useModuleGuard";
 import { Button } from "@/components/ui/button";
-import { LayoutDashboard, LogOut, Shield, Settings, Users, ChevronDown, ChevronRight, MapPin, PanelLeftClose, PanelLeft, UserCircle, Key, HelpCircle, Plug, Palette, Database, Gauge, Download, Car, PlugZap, Receipt, Cpu, Activity } from "lucide-react";
+import { LayoutDashboard, LogOut, Shield, Settings, Users, ChevronDown, ChevronRight, MapPin, PanelLeftClose, PanelLeft, UserCircle, Key, HelpCircle, Plug, Palette, Database, Gauge, Download, Car, PlugZap, Receipt, Cpu, Activity, Mail } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TenantLogo } from "@/components/tenant/TenantLogo";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -115,6 +115,7 @@ const DashboardSidebar = () => {
         labelKey: "nav.settings" as TranslationKey,
         children: [
           { to: "/settings/branding", icon: Palette, labelKey: "nav.branding" as TranslationKey },
+          { to: "/settings", icon: Mail, labelKey: "nav.emailTemplates" as TranslationKey },
           { to: "/integrations", icon: Plug, labelKey: "nav.integrations" as TranslationKey },
         ]
       },
