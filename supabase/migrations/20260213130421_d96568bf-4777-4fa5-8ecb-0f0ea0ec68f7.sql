@@ -1,0 +1,1 @@
+ALTER TABLE public.meters ADD COLUMN IF NOT EXISTS meter_operator text DEFAULT null;

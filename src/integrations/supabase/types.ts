@@ -1264,6 +1264,7 @@ export type Database = {
           medium: string | null
           meter_function: string
           meter_number: string | null
+          meter_operator: string | null
           name: string
           notes: string | null
           parent_meter_id: string | null
@@ -1291,6 +1292,7 @@ export type Database = {
           medium?: string | null
           meter_function?: string
           meter_number?: string | null
+          meter_operator?: string | null
           name: string
           notes?: string | null
           parent_meter_id?: string | null
@@ -1318,6 +1320,7 @@ export type Database = {
           medium?: string | null
           meter_function?: string
           meter_number?: string | null
+          meter_operator?: string | null
           name?: string
           notes?: string | null
           parent_meter_id?: string | null
