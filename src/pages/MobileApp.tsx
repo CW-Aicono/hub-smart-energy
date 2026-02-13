@@ -85,7 +85,7 @@ interface UnknownMeterPromptProps {
   onReadingChange: (v: string) => void;
   capturedImage: string | null;
   locations: { id: string; name: string }[];
-  onCreateMeter: (locationId: string, energyType: string) => void;
+  onCreateMeter: (locationId: string, energyType: string, installationDate?: string, meterOperator?: string) => void;
   onDismiss: () => void;
   creating: boolean;
 }
@@ -100,6 +100,8 @@ const ENERGY_TYPE_OPTIONS = [
 function UnknownMeterPrompt({ meterNumber, reading, onReadingChange, capturedImage, locations, onCreateMeter, onDismiss, creating }: UnknownMeterPromptProps) {
   const [selectedLocationId, setSelectedLocationId] = useState("");
   const [selectedEnergyType, setSelectedEnergyType] = useState("strom");
+  const [installationDate, setInstallationDate] = useState("");
+  const [meterOperator, setMeterOperator] = useState("");
   const allFilled = !!selectedLocationId && !!reading;
 
   return (
@@ -171,6 +173,15 @@ function UnknownMeterPrompt({ meterNumber, reading, onReadingChange, capturedIma
             </div>
           )}
 
+          <div className="space-y-2">
+            <Label>Installationsdatum</Label>
+            <Input type="date" value={installationDate} onChange={(e) => setInstallationDate(e.target.value)} className="h-12 text-base" />
+          </div>
+          <div className="space-y-2">
+            <Label>Messstellenbetreiber</Label>
+            <Input value={meterOperator} onChange={(e) => setMeterOperator(e.target.value)} placeholder="z.B. Netzbetreiber GmbH" className="h-12 text-base" />
+          </div>
+
           <div className="flex gap-3">
             <Button
               variant="destructive"
@@ -182,7 +193,7 @@ function UnknownMeterPrompt({ meterNumber, reading, onReadingChange, capturedIma
             </Button>
             <Button
               className={`flex-1 h-12 ${allFilled ? "bg-green-600 hover:bg-green-700 text-white" : ""}`}
-              onClick={() => onCreateMeter(selectedLocationId, selectedEnergyType)}
+              onClick={() => onCreateMeter(selectedLocationId, selectedEnergyType, installationDate || undefined, meterOperator || undefined)}
               disabled={!allFilled || creating}
             >
               {creating ? <Loader2 className="h-5 w-5 animate-spin" /> : (
@@ -385,7 +396,7 @@ const MobileApp = () => {
   };
 
   // --- Create unknown meter ---
-  const handleCreateUnknownMeter = async (locationId: string, energyType: string = "strom") => {
+  const handleCreateUnknownMeter = async (locationId: string, energyType: string = "strom", installationDate?: string, meterOperator?: string) => {
     if (!unknownMeterNumber || !locationId) return;
     const selectedUnit = ENERGY_TYPE_OPTIONS.find(o => o.value === energyType)?.unit || "kWh";
     setCreatingMeter(true);
@@ -414,7 +425,9 @@ const MobileApp = () => {
         energy_type: energyType,
         unit: selectedUnit,
         capture_type: "manual",
-        notes: photoUrl ? `Foto: ${photoUrl}` : undefined,
+        photo_url: photoUrl,
+        installation_date: installationDate,
+        meter_operator: meterOperator,
       });
 
       // Refetch meters, then find the new meter and save the reading

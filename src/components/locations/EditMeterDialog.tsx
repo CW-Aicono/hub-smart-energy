@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Meter, MeterInsert } from "@/hooks/useMeters";
 import { useMeters } from "@/hooks/useMeters";
 import { useLocationIntegrations } from "@/hooks/useIntegrations";
@@ -12,7 +12,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
-import { AlertCircle, Layers, DoorOpen } from "lucide-react";
+import { AlertCircle, Layers, DoorOpen, Upload, Loader2, ImageIcon } from "lucide-react";
+import { toast } from "sonner";
 
 interface Floor {
   id: string;
@@ -57,6 +58,11 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
   const [meterFunction, setMeterFunction] = useState(meter.meter_function || "consumption");
   const [selectedFloorId, setSelectedFloorId] = useState(meter.floor_id || "");
   const [selectedRoomId, setSelectedRoomId] = useState(meter.room_id || "");
+  const [installationDate, setInstallationDate] = useState(meter.installation_date || "");
+  const [meterOperator, setMeterOperator] = useState((meter as any).meter_operator || "");
+  const [photoUrl, setPhotoUrl] = useState(meter.photo_url || "");
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const photoInputRef = useRef<HTMLInputElement>(null);
   const [floors, setFloors] = useState<Floor[]>([]);
   const [rooms, setRooms] = useState<Room[]>([]);
   // Available parents: all active meters except self and descendants
@@ -83,6 +89,9 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
     setMeterFunction(meter.meter_function || "consumption");
     setSelectedFloorId(meter.floor_id || "");
     setSelectedRoomId(meter.room_id || "");
+    setInstallationDate(meter.installation_date || "");
+    setMeterOperator((meter as any).meter_operator || "");
+    setPhotoUrl(meter.photo_url || "");
   }, [meter]);
 
   // Fetch floors for the location
@@ -159,6 +168,23 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
     fetchSensors();
   }, [selectedIntegration, captureType]);
 
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingPhoto(true);
+    try {
+      const fileName = `${meter.id}-${Date.now()}.${file.name.split(".").pop()}`;
+      const { data, error } = await supabase.storage.from("meter-photos").upload(fileName, file, { upsert: true });
+      if (error) throw error;
+      const { data: urlData } = supabase.storage.from("meter-photos").getPublicUrl(data.path);
+      setPhotoUrl(`${urlData.publicUrl}?t=${Date.now()}`);
+      toast.success("Foto hochgeladen");
+    } catch {
+      toast.error("Foto-Upload fehlgeschlagen");
+    }
+    setUploadingPhoto(false);
+  };
+
   const handleSubmit = async () => {
     if (!name.trim()) return;
     setSaving(true);
@@ -177,6 +203,9 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
       meter_function: meterFunction,
       floor_id: selectedFloorId || null,
       room_id: selectedRoomId || null,
+      installation_date: installationDate || undefined,
+      meter_operator: meterOperator || undefined,
+      photo_url: photoUrl || undefined,
     } as any);
     setSaving(false);
     onOpenChange(false);
@@ -349,6 +378,36 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+          </div>
+          {/* Photo, Installation Date, Operator */}
+          <div className="space-y-3 rounded-md border p-3 bg-muted/30">
+            <p className="text-sm font-medium text-muted-foreground">Zusatzinformationen</p>
+            <div>
+              <Label>Foto</Label>
+              {photoUrl && (
+                <div className="mt-1 mb-2 rounded-lg overflow-hidden border">
+                  <img src={photoUrl} alt="Zählerfoto" className="w-full h-32 object-cover" />
+                </div>
+              )}
+              <div className="flex gap-2 mt-1">
+                <Button type="button" variant="outline" size="sm" className="gap-1.5" onClick={() => photoInputRef.current?.click()} disabled={uploadingPhoto}>
+                  {uploadingPhoto ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                  {photoUrl ? "Foto ändern" : "Foto hochladen"}
+                </Button>
+                {photoUrl && (
+                  <Button type="button" variant="ghost" size="sm" onClick={() => setPhotoUrl("")}>Entfernen</Button>
+                )}
+              </div>
+              <input ref={photoInputRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoUpload} />
+            </div>
+            <div>
+              <Label>Installationsdatum</Label>
+              <Input type="date" value={installationDate} onChange={(e) => setInstallationDate(e.target.value)} className="mt-1" />
+            </div>
+            <div>
+              <Label>Messstellenbetreiber</Label>
+              <Input value={meterOperator} onChange={(e) => setMeterOperator(e.target.value)} placeholder="z.B. Netzbetreiber GmbH" className="mt-1" />
             </div>
           </div>
           <div>

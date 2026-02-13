@@ -30,6 +30,7 @@ export interface Meter {
   parent_meter_id: string | null;
   is_main_meter: boolean;
   meter_function: string;
+  meter_operator: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -46,6 +47,8 @@ export interface MeterInsert {
   capture_type?: string;
   location_integration_id?: string;
   sensor_uuid?: string;
+  meter_operator?: string;
+  photo_url?: string;
 }
 
 export function useMeters(locationId?: string) {
