@@ -35,12 +35,37 @@ export default function ChargingOverviewStats({ chargePoints, sessions }: Props)
     ? (chargePoints.filter((cp) => cp.status === "available" || cp.status === "charging").length / chargePoints.length * 100)
     : 0;
 
+  // Determine the earliest charge point creation date
+  const earliestCpDate = useMemo(() => {
+    if (chargePoints.length === 0) return new Date();
+    const dates = chargePoints.map((cp) => new Date(cp.created_at));
+    return new Date(Math.min(...dates.map((d) => d.getTime())));
+  }, [chargePoints]);
+
   const chartData = useMemo(() => {
+    const today = format(new Date(), "yyyy-MM-dd");
+    const earliestStr = format(earliestCpDate, "yyyy-MM-dd");
     const days: { day: string; available: number; charging: number; error: number }[] = [];
+
     for (let i = periodDays - 1; i >= 0; i--) {
       const d = subDays(new Date(), i);
       const dayLabel = format(d, "EEE", { locale: de });
       const dateStr = format(d, "yyyy-MM-dd");
+
+      // Only show data for days >= earliest charge point creation
+      if (dateStr < earliestStr) {
+        days.push({ day: dayLabel, available: 0, charging: 0, error: 0 });
+        continue;
+      }
+
+      // Count how many charge points existed on this day
+      const activeCps = chargePoints.filter(
+        (cp) => format(new Date(cp.created_at), "yyyy-MM-dd") <= dateStr
+      );
+      if (activeCps.length === 0) {
+        days.push({ day: dayLabel, available: 0, charging: 0, error: 0 });
+        continue;
+      }
 
       const daySessions = periodSessions.filter(
         (s) => format(new Date(s.start_time), "yyyy-MM-dd") === dateStr
@@ -52,9 +77,10 @@ export default function ChargingOverviewStats({ chargePoints, sessions }: Props)
         return sum + (end.getTime() - start.getTime()) / 3600000;
       }, 0);
 
-      // Scale to total connector-hours available per day
-      const totalHours = chargePoints.length * 24;
-      const errorHours = chargePoints.filter((cp) => cp.status === "faulted").length * (i === 0 ? new Date().getHours() : 24);
+      const isToday = dateStr === today;
+      const hoursInDay = isToday ? new Date().getHours() : 24;
+      const totalHours = activeCps.length * hoursInDay;
+      const errorHours = activeCps.filter((cp) => cp.status === "faulted").length * hoursInDay;
 
       days.push({
         day: dayLabel,
@@ -64,7 +90,7 @@ export default function ChargingOverviewStats({ chargePoints, sessions }: Props)
       });
     }
     return days;
-  }, [periodSessions, periodDays, chargePoints]);
+  }, [periodSessions, periodDays, chargePoints, earliestCpDate]);
 
   return (
     <Card>
