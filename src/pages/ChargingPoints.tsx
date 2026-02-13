@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, lazy, Suspense } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
@@ -21,6 +21,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Plus, PlugZap, Trash2, Zap, ZapOff, AlertTriangle, WifiOff, Info, Search, MapPin } from "lucide-react";
 import { format } from "date-fns";
 import { fmtKwh, fmtKw } from "@/lib/formatCharging";
+
+const LazyChargePointsMap = lazy(() => import("@/components/charging/ChargePointsMap"));
 
 const OCPP_ENDPOINT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ocpp-central`;
 const OCPP_WS_ENDPOINT_URL = `${import.meta.env.VITE_SUPABASE_URL?.replace("https://", "wss://")}/functions/v1/ocpp-ws-proxy`;
@@ -317,6 +319,21 @@ const ChargingPoints = () => {
                   </TableBody>
                 </Table>
               )}
+            </CardContent>
+          </Card>
+
+          {/* Map */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Standorte der Ladepunkte</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Suspense fallback={<div className="h-[400px] rounded-lg border bg-muted/50 flex items-center justify-center"><div className="animate-pulse text-muted-foreground">Karte wird geladen...</div></div>}>
+                <LazyChargePointsMap
+                  chargePoints={filteredChargePoints}
+                  onChargePointClick={(cp) => navigate(`/charging/points/${cp.id}`)}
+                />
+              </Suspense>
             </CardContent>
           </Card>
 
