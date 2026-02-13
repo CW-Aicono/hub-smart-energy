@@ -2,6 +2,7 @@ import { Navigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useSuperAdmin } from "@/hooks/useSuperAdmin";
 import { usePlatformStats } from "@/hooks/usePlatformStats";
+import { useSATranslation } from "@/hooks/useSATranslation";
 import SuperAdminSidebar from "@/components/super-admin/SuperAdminSidebar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
@@ -12,17 +13,18 @@ const SuperAdminStatistics = () => {
   const { user, loading: authLoading } = useAuth();
   const { isSuperAdmin, loading: roleLoading } = useSuperAdmin();
   const { tenantCount, userCount, locationCount } = usePlatformStats();
+  const { t } = useSATranslation();
 
   if (authLoading || roleLoading) {
-    return <div className="flex min-h-screen items-center justify-center bg-background"><div className="animate-pulse text-muted-foreground">Laden...</div></div>;
+    return <div className="flex min-h-screen items-center justify-center bg-background"><div className="animate-pulse text-muted-foreground">{t("common.loading")}</div></div>;
   }
   if (!user) return <Navigate to="/auth" replace />;
   if (!isSuperAdmin) return <Navigate to="/" replace />;
 
   const overviewData = [
-    { name: "Mandanten", value: tenantCount },
-    { name: "Benutzer", value: userCount },
-    { name: "Standorte", value: locationCount },
+    { name: t("dashboard.tenants"), value: tenantCount },
+    { name: t("dashboard.users"), value: userCount },
+    { name: t("dashboard.locations"), value: locationCount },
   ];
 
   return (
@@ -30,12 +32,12 @@ const SuperAdminStatistics = () => {
       <SuperAdminSidebar />
       <main className="flex-1 overflow-auto">
         <header className="border-b p-6">
-          <h1 className="text-2xl font-bold">Statistiken</h1>
-          <p className="text-sm text-muted-foreground mt-1">Plattform-weite Nutzungsdaten</p>
+          <h1 className="text-2xl font-bold">{t("statistics.title")}</h1>
+          <p className="text-sm text-muted-foreground mt-1">{t("statistics.subtitle")}</p>
         </header>
         <div className="p-6 grid gap-6 md:grid-cols-2">
           <Card>
-            <CardHeader><CardTitle>Übersicht</CardTitle></CardHeader>
+            <CardHeader><CardTitle>{t("statistics.overview")}</CardTitle></CardHeader>
             <CardContent className="h-64">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={overviewData}>
@@ -49,7 +51,7 @@ const SuperAdminStatistics = () => {
             </CardContent>
           </Card>
           <Card>
-            <CardHeader><CardTitle>Verteilung</CardTitle></CardHeader>
+            <CardHeader><CardTitle>{t("statistics.distribution")}</CardTitle></CardHeader>
             <CardContent className="h-64">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>

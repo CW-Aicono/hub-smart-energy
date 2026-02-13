@@ -2,6 +2,7 @@ import { Navigate } from "react-router-dom";
 import { useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useSuperAdmin } from "@/hooks/useSuperAdmin";
+import { useSATranslation } from "@/hooks/useSATranslation";
 import SuperAdminSidebar from "@/components/super-admin/SuperAdminSidebar";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -32,71 +33,42 @@ const SuperAdminUsers = () => {
   const [search, setSearch] = useState("");
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { t } = useSATranslation();
 
   const { data: users = [], isLoading } = useQuery({
     queryKey: ["super-admin-users"],
     queryFn: async () => {
-      const { data: profiles, error: pErr } = await supabase
-        .from("profiles")
-        .select("*");
+      const { data: profiles, error: pErr } = await supabase.from("profiles").select("*");
       if (pErr) throw pErr;
-
-      const { data: roles, error: rErr } = await supabase
-        .from("user_roles")
-        .select("*");
+      const { data: roles, error: rErr } = await supabase.from("user_roles").select("*");
       if (rErr) throw rErr;
-
       return (profiles || []).map((p: any): PlatformUser => {
         const userRole = roles?.find((r: any) => r.user_id === p.user_id);
-        return {
-          id: p.id,
-          user_id: p.user_id,
-          email: p.email,
-          contact_person: p.contact_person,
-          is_blocked: p.is_blocked,
-          created_at: p.created_at,
-          role: (userRole?.role as PlatformUser["role"]) ?? "user",
-        };
+        return { id: p.id, user_id: p.user_id, email: p.email, contact_person: p.contact_person, is_blocked: p.is_blocked, created_at: p.created_at, role: (userRole?.role as PlatformUser["role"]) ?? "user" };
       });
     },
   });
 
   const toggleBlock = useMutation({
     mutationFn: async ({ userId, blocked }: { userId: string; blocked: boolean }) => {
-      const { error } = await supabase
-        .from("profiles")
-        .update({ is_blocked: !blocked })
-        .eq("user_id", userId);
+      const { error } = await supabase.from("profiles").update({ is_blocked: !blocked }).eq("user_id", userId);
       if (error) throw error;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["super-admin-users"] });
-      toast({ title: "Status aktualisiert" });
-    },
-    onError: () => {
-      toast({ title: "Fehler", description: "Status konnte nicht geändert werden.", variant: "destructive" });
-    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["super-admin-users"] }); toast({ title: t("users.status_updated") }); },
+    onError: () => { toast({ title: t("error.generic"), description: t("error.status_change"), variant: "destructive" }); },
   });
 
   const updateRole = useMutation({
     mutationFn: async ({ userId, role }: { userId: string; role: "admin" | "user" | "super_admin" }) => {
-      const { error } = await supabase
-        .from("user_roles")
-        .update({ role })
-        .eq("user_id", userId);
+      const { error } = await supabase.from("user_roles").update({ role }).eq("user_id", userId);
       if (error) throw error;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["super-admin-users"] });
-      toast({ title: "Rolle aktualisiert" });
-    },
-    onError: () => {
-      toast({ title: "Fehler", description: "Rolle konnte nicht geändert werden.", variant: "destructive" });
-    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["super-admin-users"] }); toast({ title: t("users.role_updated") }); },
+    onError: () => { toast({ title: t("error.generic"), description: t("error.role_change"), variant: "destructive" }); },
   });
 
   if (authLoading || roleLoading) {
-    return <div className="flex min-h-screen items-center justify-center bg-background"><div className="animate-pulse text-muted-foreground">Laden...</div></div>;
+    return <div className="flex min-h-screen items-center justify-center bg-background"><div className="animate-pulse text-muted-foreground">{t("common.loading")}</div></div>;
   }
   if (!user) return <Navigate to="/auth" replace />;
   if (!isSuperAdmin) return <Navigate to="/" replace />;
@@ -106,42 +78,36 @@ const SuperAdminUsers = () => {
     (u.contact_person?.toLowerCase() || "").includes(search.toLowerCase())
   );
 
-
-
   return (
     <div className="flex min-h-screen bg-background">
       <SuperAdminSidebar />
       <main className="flex-1 overflow-auto">
         <header className="border-b p-6 flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold">Benutzerverwaltung</h1>
-            <p className="text-sm text-muted-foreground mt-1">Alle Plattform-Benutzer verwalten</p>
+            <h1 className="text-2xl font-bold">{t("users.title")}</h1>
+            <p className="text-sm text-muted-foreground mt-1">{t("users.subtitle")}</p>
           </div>
           <SuperAdminInviteDialog />
         </header>
         <div className="p-6">
-          <Input
-            placeholder="Suchen nach E-Mail oder Name..."
-            onChange={(e) => setSearch(e.target.value)}
-            className="max-w-sm mb-4"
-          />
+          <Input placeholder={t("users.search_placeholder")} onChange={(e) => setSearch(e.target.value)} className="max-w-sm mb-4" />
           <Card>
             <CardContent className="p-0">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Nutzername</TableHead>
-                    <TableHead>Rolle</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Erstellt</TableHead>
-                    <TableHead className="w-32">Aktionen</TableHead>
+                    <TableHead>{t("users.username")}</TableHead>
+                    <TableHead>{t("users.role")}</TableHead>
+                    <TableHead>{t("common.status")}</TableHead>
+                    <TableHead>{t("common.created")}</TableHead>
+                    <TableHead className="w-32">{t("common.actions")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {isLoading ? (
-                    <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">Laden...</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">{t("common.loading")}</TableCell></TableRow>
                   ) : filtered.length === 0 ? (
-                    <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">Keine Benutzer gefunden</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">{t("users.not_found")}</TableCell></TableRow>
                   ) : (
                     filtered.map((u) => (
                       <TableRow key={u.id}>
@@ -152,47 +118,32 @@ const SuperAdminUsers = () => {
                           </div>
                         </TableCell>
                         <TableCell>
-                          <Select
-                            value={u.role}
-                            onValueChange={(val: "admin" | "user" | "super_admin") => updateRole.mutate({ userId: u.user_id, role: val })}
-                          >
-                            <SelectTrigger className="w-[140px]">
-                              <SelectValue />
-                            </SelectTrigger>
+                          <Select value={u.role} onValueChange={(val: "admin" | "user" | "super_admin") => updateRole.mutate({ userId: u.user_id, role: val })}>
+                            <SelectTrigger className="w-[140px]"><SelectValue /></SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="user">
-                                <div className="flex items-center gap-2"><User className="h-3 w-3" /> Benutzer</div>
-                              </SelectItem>
-                              <SelectItem value="admin">
-                                <div className="flex items-center gap-2"><Shield className="h-3 w-3" /> Admin</div>
-                              </SelectItem>
-                              <SelectItem value="super_admin">
-                                <div className="flex items-center gap-2"><Shield className="h-3 w-3 text-destructive" /> Super-Admin</div>
-                              </SelectItem>
+                              <SelectItem value="user"><div className="flex items-center gap-2"><User className="h-3 w-3" /> {t("users.user")}</div></SelectItem>
+                              <SelectItem value="admin"><div className="flex items-center gap-2"><Shield className="h-3 w-3" /> {t("users.admin")}</div></SelectItem>
+                              <SelectItem value="super_admin"><div className="flex items-center gap-2"><Shield className="h-3 w-3 text-destructive" /> {t("users.super_admin")}</div></SelectItem>
                             </SelectContent>
                           </Select>
                         </TableCell>
                         <TableCell>
                           <Badge variant={u.is_blocked ? "destructive" : "default"}>
-                            {u.is_blocked ? "Gesperrt" : "Aktiv"}
+                            {u.is_blocked ? t("common.blocked") : t("common.active")}
                           </Badge>
                         </TableCell>
-                        <TableCell className="text-muted-foreground">
-                          {new Date(u.created_at).toLocaleDateString("de-DE")}
-                        </TableCell>
+                        <TableCell className="text-muted-foreground">{new Date(u.created_at).toLocaleDateString("de-DE")}</TableCell>
                         <TableCell>
                           <div className="flex items-center gap-1">
                             <EditSAUserDialog user={u} />
                             {(() => {
-                              const isLastSuperAdmin = u.role === "super_admin" && users.filter((x) => x.role === "super_admin" && !x.is_blocked).length <= 1;
+                              const isLastSA = u.role === "super_admin" && users.filter((x) => x.role === "super_admin" && !x.is_blocked).length <= 1;
                               const isSelf = u.user_id === user?.id;
-                              const disabled = isLastSuperAdmin && isSelf;
+                              const disabled = isLastSA && isSelf;
                               return (
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
+                                <Button variant="ghost" size="icon"
                                   onClick={() => toggleBlock.mutate({ userId: u.user_id, blocked: u.is_blocked })}
-                                  title={disabled ? "Letzter Super-Admin kann nicht gesperrt werden" : u.is_blocked ? "Entsperren" : "Sperren"}
+                                  title={disabled ? t("users.last_sa_warning") : u.is_blocked ? t("users.unlock") : t("users.lock")}
                                   disabled={disabled && !u.is_blocked}
                                 >
                                   {u.is_blocked ? <UserCheck className="h-4 w-4" /> : <UserX className="h-4 w-4" />}

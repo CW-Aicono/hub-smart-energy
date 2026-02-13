@@ -1,0 +1,210 @@
+export type SALanguage = "de" | "en" | "fr" | "pl";
+
+type SATranslations = Record<string, Record<SALanguage, string>>;
+
+export const saTranslations: SATranslations = {
+  // Common
+  "common.loading": { de: "Laden...", en: "Loading...", fr: "Chargement...", pl: "Ładowanie..." },
+  "common.search": { de: "Suchen...", en: "Search...", fr: "Rechercher...", pl: "Szukaj..." },
+  "common.actions": { de: "Aktionen", en: "Actions", fr: "Actions", pl: "Akcje" },
+  "common.save": { de: "Speichern", en: "Save", fr: "Enregistrer", pl: "Zapisz" },
+  "common.cancel": { de: "Abbrechen", en: "Cancel", fr: "Annuler", pl: "Anuluj" },
+  "common.delete": { de: "Löschen", en: "Delete", fr: "Supprimer", pl: "Usuń" },
+  "common.created": { de: "Erstellt", en: "Created", fr: "Créé", pl: "Utworzono" },
+  "common.name": { de: "Name", en: "Name", fr: "Nom", pl: "Nazwa" },
+  "common.email": { de: "E-Mail", en: "Email", fr: "E-mail", pl: "E-mail" },
+  "common.status": { de: "Status", en: "Status", fr: "Statut", pl: "Status" },
+  "common.active": { de: "Aktiv", en: "Active", fr: "Actif", pl: "Aktywny" },
+  "common.blocked": { de: "Gesperrt", en: "Blocked", fr: "Bloqué", pl: "Zablokowany" },
+  "common.none": { de: "Keine", en: "None", fr: "Aucun", pl: "Brak" },
+  "common.always": { de: "Immer", en: "Always", fr: "Toujours", pl: "Zawsze" },
+  "common.standard": { de: "Standard", en: "Default", fr: "Standard", pl: "Standard" },
+
+  // Sidebar
+  "nav.super_admin": { de: "Super-Admin", en: "Super Admin", fr: "Super Admin", pl: "Super Admin" },
+  "nav.dashboard": { de: "Dashboard", en: "Dashboard", fr: "Tableau de bord", pl: "Panel" },
+  "nav.tenants": { de: "Mandanten", en: "Tenants", fr: "Locataires", pl: "Najemcy" },
+  "nav.statistics": { de: "Statistiken", en: "Statistics", fr: "Statistiques", pl: "Statystyki" },
+  "nav.billing": { de: "Abrechnung", en: "Billing", fr: "Facturation", pl: "Rozliczenia" },
+  "nav.module_pricing": { de: "Modulpreise", en: "Module Pricing", fr: "Tarifs modules", pl: "Ceny modułów" },
+  "nav.user_management": { de: "Nutzerverwaltung", en: "User Management", fr: "Gestion des utilisateurs", pl: "Zarządzanie użytkownikami" },
+  "nav.users": { de: "Benutzer", en: "Users", fr: "Utilisateurs", pl: "Użytkownicy" },
+  "nav.roles_permissions": { de: "Rollen & Rechte", en: "Roles & Permissions", fr: "Rôles & droits", pl: "Role i uprawnienia" },
+  "nav.support": { de: "Support", en: "Support", fr: "Support", pl: "Wsparcie" },
+  "nav.to_customer_dashboard": { de: "← Zum Kunden-Dashboard", en: "← To Customer Dashboard", fr: "← Vers le tableau client", pl: "← Do panelu klienta" },
+  "nav.sign_out": { de: "Abmelden", en: "Sign Out", fr: "Déconnexion", pl: "Wyloguj" },
+
+  // Settings
+  "settings.color_preset": { de: "Farbschema", en: "Color Scheme", fr: "Schéma de couleurs", pl: "Schemat kolorów" },
+  "settings.theme_mode": { de: "Erscheinungsbild", en: "Appearance", fr: "Apparence", pl: "Wygląd" },
+  "settings.light": { de: "Hell", en: "Light", fr: "Clair", pl: "Jasny" },
+  "settings.dark": { de: "Dunkel", en: "Dark", fr: "Sombre", pl: "Ciemny" },
+  "settings.system": { de: "System", en: "System", fr: "Système", pl: "Systemowy" },
+  "settings.language": { de: "Sprache", en: "Language", fr: "Langue", pl: "Język" },
+
+  // Dashboard
+  "dashboard.title": { de: "Super-Admin Dashboard", en: "Super Admin Dashboard", fr: "Tableau de bord Super Admin", pl: "Panel Super Admin" },
+  "dashboard.subtitle": { de: "Plattform-Übersicht", en: "Platform Overview", fr: "Vue d'ensemble", pl: "Przegląd platformy" },
+  "dashboard.tenants": { de: "Mandanten", en: "Tenants", fr: "Locataires", pl: "Najemcy" },
+  "dashboard.users": { de: "Benutzer", en: "Users", fr: "Utilisateurs", pl: "Użytkownicy" },
+  "dashboard.locations": { de: "Standorte", en: "Locations", fr: "Sites", pl: "Lokalizacje" },
+  "dashboard.map": { de: "Standort-Karte", en: "Location Map", fr: "Carte des sites", pl: "Mapa lokalizacji" },
+  "dashboard.map_subtitle": { de: "Alle Kundenstandorte auf einen Blick", en: "All customer locations at a glance", fr: "Tous les sites clients en un coup d'œil", pl: "Wszystkie lokalizacje klientów na pierwszy rzut oka" },
+  "dashboard.locations_by_tenant": { de: "Standorte nach Mandant", en: "Locations by Tenant", fr: "Sites par locataire", pl: "Lokalizacje wg najemcy" },
+  "dashboard.no_geo_data": { de: "Keine Standorte mit Geodaten vorhanden", en: "No locations with geo data available", fr: "Aucun site avec données géo disponible", pl: "Brak lokalizacji z danymi geograficznymi" },
+  "dashboard.show_tenant": { de: "Mandant anzeigen", en: "Show Tenant", fr: "Afficher le locataire", pl: "Pokaż najemcę" },
+  "dashboard.main_location": { de: "Hauptstandort", en: "Main Location", fr: "Site principal", pl: "Lokalizacja główna" },
+  "dashboard.customize": { de: "Dashboard anpassen", en: "Customize Dashboard", fr: "Personnaliser", pl: "Dostosuj panel" },
+  "dashboard.show_widgets": { de: "Widgets anzeigen", en: "Show Widgets", fr: "Afficher les widgets", pl: "Pokaż widgety" },
+  "dashboard.drag_hint": { de: "Ziehen Sie die Widgets, um die Reihenfolge zu ändern.", en: "Drag widgets to change the order.", fr: "Glissez les widgets pour changer l'ordre.", pl: "Przeciągnij widgety, aby zmienić kolejność." },
+  "dashboard.reset_layout": { de: "Layout zurücksetzen", en: "Reset Layout", fr: "Réinitialiser", pl: "Resetuj układ" },
+
+  // Widget sizes
+  "size.full": { de: "Volle Breite", en: "Full Width", fr: "Pleine largeur", pl: "Pełna szerokość" },
+  "size.2/3": { de: "2/3 Breite", en: "2/3 Width", fr: "2/3 largeur", pl: "2/3 szerokości" },
+  "size.1/3": { de: "1/3 Breite", en: "1/3 Width", fr: "1/3 largeur", pl: "1/3 szerokości" },
+
+  // Tenants page
+  "tenants.title": { de: "Mandanten", en: "Tenants", fr: "Locataires", pl: "Najemcy" },
+  "tenants.subtitle": { de: "Alle Kunden-Systeme verwalten", en: "Manage all customer systems", fr: "Gérer tous les systèmes clients", pl: "Zarządzaj wszystkimi systemami klientów" },
+  "tenants.new": { de: "Neuer Mandant", en: "New Tenant", fr: "Nouveau locataire", pl: "Nowy najemca" },
+  "tenants.create_title": { de: "Neuen Mandanten anlegen", en: "Create New Tenant", fr: "Créer un nouveau locataire", pl: "Utwórz nowego najemcę" },
+  "tenants.slug": { de: "Slug (URL-Kennung)", en: "Slug (URL identifier)", fr: "Slug (identifiant URL)", pl: "Slug (identyfikator URL)" },
+  "tenants.contact_email": { de: "Kontakt-E-Mail", en: "Contact Email", fr: "E-mail de contact", pl: "E-mail kontaktowy" },
+  "tenants.creating": { de: "Erstelle...", en: "Creating...", fr: "Création...", pl: "Tworzenie..." },
+  "tenants.create": { de: "Mandant erstellen", en: "Create Tenant", fr: "Créer le locataire", pl: "Utwórz najemcę" },
+  "tenants.not_found": { de: "Keine Mandanten gefunden", en: "No tenants found", fr: "Aucun locataire trouvé", pl: "Nie znaleziono najemców" },
+
+  // Statistics page
+  "statistics.title": { de: "Statistiken", en: "Statistics", fr: "Statistiques", pl: "Statystyki" },
+  "statistics.subtitle": { de: "Plattform-weite Nutzungsdaten", en: "Platform-wide usage data", fr: "Données d'utilisation à l'échelle de la plateforme", pl: "Dane użytkowania platformy" },
+  "statistics.overview": { de: "Übersicht", en: "Overview", fr: "Vue d'ensemble", pl: "Przegląd" },
+  "statistics.distribution": { de: "Verteilung", en: "Distribution", fr: "Distribution", pl: "Rozkład" },
+
+  // Billing page
+  "billing.title": { de: "Abrechnung", en: "Billing", fr: "Facturation", pl: "Rozliczenia" },
+  "billing.subtitle": { de: "Lizenzen und Rechnungen verwalten", en: "Manage licenses and invoices", fr: "Gérer les licences et factures", pl: "Zarządzaj licencjami i fakturami" },
+  "billing.active_licenses": { de: "Aktive Lizenzen", en: "Active Licenses", fr: "Licences actives", pl: "Aktywne licencje" },
+  "billing.tenant": { de: "Mandant", en: "Tenant", fr: "Locataire", pl: "Najemca" },
+  "billing.plan": { de: "Plan", en: "Plan", fr: "Plan", pl: "Plan" },
+  "billing.price_month": { de: "Preis/Monat", en: "Price/Month", fr: "Prix/mois", pl: "Cena/miesiąc" },
+  "billing.cycle": { de: "Zyklus", en: "Cycle", fr: "Cycle", pl: "Cykl" },
+  "billing.monthly": { de: "Monatlich", en: "Monthly", fr: "Mensuel", pl: "Miesięcznie" },
+  "billing.yearly": { de: "Jährlich", en: "Yearly", fr: "Annuel", pl: "Rocznie" },
+  "billing.no_licenses": { de: "Keine Lizenzen", en: "No licenses", fr: "Aucune licence", pl: "Brak licencji" },
+  "billing.invoices": { de: "Rechnungen", en: "Invoices", fr: "Factures", pl: "Faktury" },
+  "billing.invoice_number": { de: "Nr.", en: "No.", fr: "N°", pl: "Nr" },
+  "billing.period": { de: "Zeitraum", en: "Period", fr: "Période", pl: "Okres" },
+  "billing.amount": { de: "Betrag", en: "Amount", fr: "Montant", pl: "Kwota" },
+  "billing.no_invoices": { de: "Keine Rechnungen", en: "No invoices", fr: "Aucune facture", pl: "Brak faktur" },
+
+  // Module pricing
+  "module_pricing.title": { de: "Modulpreise", en: "Module Pricing", fr: "Tarifs modules", pl: "Ceny modułów" },
+  "module_pricing.subtitle": { de: "Globale Standardpreise pro Modul (monatlich)", en: "Global default prices per module (monthly)", fr: "Tarifs par défaut par module (mensuel)", pl: "Globalne ceny domyślne na moduł (miesięcznie)" },
+  "module_pricing.monthly_defaults": { de: "Monatliche Standardpreise", en: "Monthly Default Prices", fr: "Tarifs mensuels par défaut", pl: "Domyślne ceny miesięczne" },
+  "module_pricing.hint": { de: "Diese Preise gelten als Standard für alle Mandanten. Individuelle Preise können in der Mandantenansicht überschrieben werden.", en: "These prices are the default for all tenants. Individual prices can be overridden in the tenant view.", fr: "Ces tarifs s'appliquent par défaut à tous les locataires. Des tarifs individuels peuvent être définis dans la vue locataire.", pl: "Te ceny są domyślne dla wszystkich najemców. Indywidualne ceny można nadpisać w widoku najemcy." },
+
+  // User management
+  "users.title": { de: "Benutzerverwaltung", en: "User Management", fr: "Gestion des utilisateurs", pl: "Zarządzanie użytkownikami" },
+  "users.subtitle": { de: "Alle Plattform-Benutzer verwalten", en: "Manage all platform users", fr: "Gérer tous les utilisateurs", pl: "Zarządzaj wszystkimi użytkownikami" },
+  "users.search_placeholder": { de: "Suchen nach E-Mail oder Name...", en: "Search by email or name...", fr: "Rechercher par e-mail ou nom...", pl: "Szukaj po e-mailu lub nazwie..." },
+  "users.username": { de: "Nutzername", en: "Username", fr: "Nom d'utilisateur", pl: "Nazwa użytkownika" },
+  "users.role": { de: "Rolle", en: "Role", fr: "Rôle", pl: "Rola" },
+  "users.user": { de: "Benutzer", en: "User", fr: "Utilisateur", pl: "Użytkownik" },
+  "users.admin": { de: "Admin", en: "Admin", fr: "Admin", pl: "Admin" },
+  "users.super_admin": { de: "Super-Admin", en: "Super Admin", fr: "Super Admin", pl: "Super Admin" },
+  "users.not_found": { de: "Keine Benutzer gefunden", en: "No users found", fr: "Aucun utilisateur trouvé", pl: "Nie znaleziono użytkowników" },
+  "users.status_updated": { de: "Status aktualisiert", en: "Status updated", fr: "Statut mis à jour", pl: "Status zaktualizowany" },
+  "users.role_updated": { de: "Rolle aktualisiert", en: "Role updated", fr: "Rôle mis à jour", pl: "Rola zaktualizowana" },
+  "users.last_sa_warning": { de: "Letzter Super-Admin kann nicht gesperrt werden", en: "Last Super Admin cannot be blocked", fr: "Le dernier Super Admin ne peut pas être bloqué", pl: "Ostatni Super Admin nie może być zablokowany" },
+  "users.unlock": { de: "Entsperren", en: "Unlock", fr: "Débloquer", pl: "Odblokuj" },
+  "users.lock": { de: "Sperren", en: "Lock", fr: "Bloquer", pl: "Zablokuj" },
+
+  // Roles page
+  "roles.title": { de: "Super-Admin Rollen & Rechte", en: "Super Admin Roles & Permissions", fr: "Rôles et droits Super Admin", pl: "Role i uprawnienia Super Admin" },
+  "roles.subtitle": { de: "Verwaltung der Super-Admin-Zugänge und deren Berechtigungen", en: "Management of Super Admin access and permissions", fr: "Gestion des accès et droits Super Admin", pl: "Zarządzanie dostępami i uprawnieniami Super Admin" },
+  "roles.sa_role": { de: "Super-Admin Rolle", en: "Super Admin Role", fr: "Rôle Super Admin", pl: "Rola Super Admin" },
+  "roles.sa_role_desc": { de: "Die Super-Admin-Rolle gewährt plattformweiten Zugriff auf alle Verwaltungsfunktionen. Diese Rolle kann nicht eingeschränkt werden – alle Super-Admins haben identische Rechte.", en: "The Super Admin role grants platform-wide access to all management functions. This role cannot be restricted – all Super Admins have identical permissions.", fr: "Le rôle Super Admin donne un accès complet à toutes les fonctions de gestion. Ce rôle ne peut pas être restreint.", pl: "Rola Super Admin daje dostęp do wszystkich funkcji zarządzania platformą. Ta rola nie może być ograniczona." },
+  "roles.permissions": { de: "Enthaltene Berechtigungen", en: "Included Permissions", fr: "Droits inclus", pl: "Zawarte uprawnienia" },
+  "roles.super_admins": { de: "Super-Admins", en: "Super Admins", fr: "Super Admins", pl: "Super Admini" },
+  "roles.sa_users_desc": { de: "Alle Nutzer mit Super-Admin-Zugang auf der Plattform", en: "All users with Super Admin access on the platform", fr: "Tous les utilisateurs avec accès Super Admin", pl: "Wszyscy użytkownicy z dostępem Super Admin" },
+  "roles.since": { de: "Seit", en: "Since", fr: "Depuis", pl: "Od" },
+  "roles.custom_roles": { de: "Benutzerdefinierte Rollen", en: "Custom Roles", fr: "Rôles personnalisés", pl: "Role niestandardowe" },
+  "roles.custom_roles_desc": { de: "Erstellte Super-Admin-Rollen mit spezifischen Berechtigungen", en: "Created Super Admin roles with specific permissions", fr: "Rôles Super Admin créés avec des droits spécifiques", pl: "Utworzone role Super Admin ze specyficznymi uprawnieniami" },
+  "roles.description": { de: "Beschreibung", en: "Description", fr: "Description", pl: "Opis" },
+  "roles.no_sa_found": { de: "Keine Super-Admins gefunden", en: "No Super Admins found", fr: "Aucun Super Admin trouvé", pl: "Nie znaleziono Super Adminów" },
+
+  // SA Capabilities
+  "cap.tenant_mgmt": { de: "Mandantenverwaltung", en: "Tenant Management", fr: "Gestion des locataires", pl: "Zarządzanie najemcami" },
+  "cap.tenant_mgmt_desc": { de: "Mandanten anlegen, bearbeiten, sperren und löschen", en: "Create, edit, block and delete tenants", fr: "Créer, modifier, bloquer et supprimer des locataires", pl: "Tworzenie, edycja, blokowanie i usuwanie najemców" },
+  "cap.license_mgmt": { de: "Lizenzverwaltung", en: "License Management", fr: "Gestion des licences", pl: "Zarządzanie licencjami" },
+  "cap.license_mgmt_desc": { de: "Lizenzpläne zuweisen, verlängern und ändern", en: "Assign, extend and modify license plans", fr: "Attribuer, prolonger et modifier les licences", pl: "Przypisywanie, przedłużanie i modyfikacja licencji" },
+  "cap.platform_stats": { de: "Plattform-Statistiken", en: "Platform Statistics", fr: "Statistiques de la plateforme", pl: "Statystyki platformy" },
+  "cap.platform_stats_desc": { de: "Zugriff auf plattformweite Nutzungs- und Verbrauchsstatistiken", en: "Access to platform-wide usage and consumption statistics", fr: "Accès aux statistiques d'utilisation de la plateforme", pl: "Dostęp do statystyk użytkowania platformy" },
+  "cap.billing_mgmt": { de: "Abrechnungsverwaltung", en: "Billing Management", fr: "Gestion de la facturation", pl: "Zarządzanie rozliczeniami" },
+  "cap.billing_mgmt_desc": { de: "Rechnungen einsehen, erstellen und verwalten", en: "View, create and manage invoices", fr: "Voir, créer et gérer les factures", pl: "Przeglądanie, tworzenie i zarządzanie fakturami" },
+  "cap.support_access": { de: "Support-Zugriff", en: "Support Access", fr: "Accès support", pl: "Dostęp do wsparcia" },
+  "cap.support_access_desc": { de: "Remote-Support-Sitzungen für Mandanten starten und verwalten", en: "Start and manage remote support sessions for tenants", fr: "Démarrer et gérer les sessions de support à distance", pl: "Uruchamianie i zarządzanie sesjami zdalnego wsparcia" },
+  "cap.user_mgmt": { de: "Nutzerverwaltung", en: "User Management", fr: "Gestion des utilisateurs", pl: "Zarządzanie użytkownikami" },
+  "cap.user_mgmt_desc": { de: "Plattformweite Nutzerübersicht und Verwaltung", en: "Platform-wide user overview and management", fr: "Vue d'ensemble et gestion des utilisateurs", pl: "Przegląd i zarządzanie użytkownikami platformy" },
+  "cap.map_view": { de: "Kartenansicht", en: "Map View", fr: "Vue cartographique", pl: "Widok mapy" },
+  "cap.map_view_desc": { de: "Alle Mandanten-Standorte auf der Karte einsehen", en: "View all tenant locations on the map", fr: "Voir tous les sites sur la carte", pl: "Wyświetlanie wszystkich lokalizacji na mapie" },
+  "cap.module_mgmt": { de: "Modulverwaltung", en: "Module Management", fr: "Gestion des modules", pl: "Zarządzanie modułami" },
+  "cap.module_mgmt_desc": { de: "Feature-Module für Mandanten aktivieren und deaktivieren", en: "Enable and disable feature modules for tenants", fr: "Activer et désactiver les modules", pl: "Włączanie i wyłączanie modułów funkcjonalnych" },
+
+  // Support page
+  "support.title": { de: "Support", en: "Support", fr: "Support", pl: "Wsparcie" },
+  "support.subtitle": { de: "Support-Sitzungen und Zugriffsprotokolle", en: "Support sessions and access logs", fr: "Sessions de support et journaux d'accès", pl: "Sesje wsparcia i dzienniki dostępu" },
+  "support.log": { de: "Support-Protokoll", en: "Support Log", fr: "Journal de support", pl: "Dziennik wsparcia" },
+  "support.reason": { de: "Grund", en: "Reason", fr: "Raison", pl: "Powód" },
+  "support.start": { de: "Beginn", en: "Start", fr: "Début", pl: "Początek" },
+  "support.end": { de: "Ende", en: "End", fr: "Fin", pl: "Koniec" },
+  "support.no_sessions": { de: "Keine Support-Sitzungen", en: "No support sessions", fr: "Aucune session de support", pl: "Brak sesji wsparcia" },
+
+  // Tenant Detail
+  "tenant_detail.remote_support": { de: "Remote-Support", en: "Remote Support", fr: "Support à distance", pl: "Zdalne wsparcie" },
+  "tenant_detail.modules": { de: "Module", en: "Modules", fr: "Modules", pl: "Moduły" },
+  "tenant_detail.license": { de: "Lizenz", en: "License", fr: "Licence", pl: "Licencja" },
+  "tenant_detail.modules_prices": { de: "Module freischalten & Preise", en: "Enable Modules & Pricing", fr: "Activer les modules et tarifs", pl: "Włącz moduły i cennik" },
+  "tenant_detail.global_price": { de: "Globalpreis", en: "Global Price", fr: "Prix global", pl: "Cena globalna" },
+  "tenant_detail.individual_price": { de: "Individueller Preis", en: "Individual Price", fr: "Prix individuel", pl: "Cena indywidualna" },
+  "tenant_detail.effective": { de: "Effektiv", en: "Effective", fr: "Effectif", pl: "Efektywna" },
+  "tenant_detail.monthly_total": { de: "Monatliche Gesamtkosten (aktive Module)", en: "Monthly total cost (active modules)", fr: "Coût mensuel total (modules actifs)", pl: "Miesięczny koszt całkowity (aktywne moduły)" },
+  "tenant_detail.reset_price": { de: "Auf Standardpreis zurücksetzen", en: "Reset to default price", fr: "Réinitialiser au prix par défaut", pl: "Przywróć cenę domyślną" },
+  "tenant_detail.license_billing": { de: "Lizenz & Abrechnung", en: "License & Billing", fr: "Licence & facturation", pl: "Licencja i rozliczenia" },
+  "tenant_detail.price_monthly": { de: "Preis/Monat (€)", en: "Price/Month (€)", fr: "Prix/mois (€)", pl: "Cena/miesiąc (€)" },
+  "tenant_detail.price_yearly": { de: "Preis/Jahr (€)", en: "Price/Year (€)", fr: "Prix/an (€)", pl: "Cena/rok (€)" },
+  "tenant_detail.max_users": { de: "Max. Benutzer", en: "Max Users", fr: "Max utilisateurs", pl: "Maks. użytkowników" },
+  "tenant_detail.max_locations": { de: "Max. Standorte", en: "Max Locations", fr: "Max sites", pl: "Maks. lokalizacji" },
+  "tenant_detail.billing_cycle": { de: "Abrechnungszyklus", en: "Billing Cycle", fr: "Cycle de facturation", pl: "Cykl rozliczeniowy" },
+  "tenant_detail.expired": { de: "Abgelaufen", en: "Expired", fr: "Expiré", pl: "Wygasła" },
+  "tenant_detail.cancelled": { de: "Gekündigt", en: "Cancelled", fr: "Annulé", pl: "Anulowana" },
+  "tenant_detail.saving": { de: "Speichere...", en: "Saving...", fr: "Enregistrement...", pl: "Zapisywanie..." },
+  "tenant_detail.save_license": { de: "Lizenz speichern", en: "Save License", fr: "Enregistrer la licence", pl: "Zapisz licencję" },
+  "tenant_detail.contact_person": { de: "Kontaktperson", en: "Contact Person", fr: "Personne de contact", pl: "Osoba kontaktowa" },
+  "tenant_detail.no_users": { de: "Keine Benutzer", en: "No users", fr: "Aucun utilisateur", pl: "Brak użytkowników" },
+  "tenant_detail.price_updated": { de: "Preis aktualisiert", en: "Price updated", fr: "Prix mis à jour", pl: "Cena zaktualizowana" },
+  "tenant_detail.address": { de: "Adresse", en: "Address", fr: "Adresse", pl: "Adres" },
+
+  // Location types
+  "location.einzelgebaeude": { de: "Einzelgebäude", en: "Single Building", fr: "Bâtiment unique", pl: "Pojedynczy budynek" },
+  "location.gebaeudekomplex": { de: "Komplex", en: "Complex", fr: "Complexe", pl: "Kompleks" },
+  "location.sonstiges": { de: "Sonstiges", en: "Other", fr: "Autre", pl: "Inne" },
+
+  // Error messages
+  "error.generic": { de: "Fehler", en: "Error", fr: "Erreur", pl: "Błąd" },
+  "error.status_change": { de: "Status konnte nicht geändert werden.", en: "Status could not be changed.", fr: "Le statut n'a pas pu être modifié.", pl: "Nie udało się zmienić statusu." },
+  "error.role_change": { de: "Rolle konnte nicht geändert werden.", en: "Role could not be changed.", fr: "Le rôle n'a pas pu être modifié.", pl: "Nie udało się zmienić roli." },
+};
+
+// Color preset names
+export const saColorPresetNames: Record<string, Record<SALanguage, string>> = {
+  default: { de: "Standard", en: "Default", fr: "Standard", pl: "Domyślny" },
+  ocean: { de: "Ozean", en: "Ocean", fr: "Océan", pl: "Ocean" },
+  forest: { de: "Wald", en: "Forest", fr: "Forêt", pl: "Las" },
+  sunset: { de: "Sonnenuntergang", en: "Sunset", fr: "Coucher de soleil", pl: "Zachód słońca" },
+  lavender: { de: "Lavendel", en: "Lavender", fr: "Lavande", pl: "Lawenda" },
+  slate: { de: "Schiefer", en: "Slate", fr: "Ardoise", pl: "Łupek" },
+  rose: { de: "Rose", en: "Rose", fr: "Rose", pl: "Róża" },
+  amber: { de: "Bernstein", en: "Amber", fr: "Ambre", pl: "Bursztyn" },
+};
