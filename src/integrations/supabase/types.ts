@@ -212,6 +212,7 @@ export type Database = {
           created_at: string
           currency: string
           id: string
+          idle_fee_amount: number
           invoice_number: string | null
           issued_at: string | null
           session_id: string
@@ -225,6 +226,7 @@ export type Database = {
           created_at?: string
           currency?: string
           id?: string
+          idle_fee_amount?: number
           invoice_number?: string | null
           issued_at?: string | null
           session_id: string
@@ -238,6 +240,7 @@ export type Database = {
           created_at?: string
           currency?: string
           id?: string
+          idle_fee_amount?: number
           invoice_number?: string | null
           issued_at?: string | null
           session_id?: string
@@ -343,6 +346,8 @@ export type Database = {
           created_at: string
           currency: string
           id: string
+          idle_fee_grace_minutes: number
+          idle_fee_per_minute: number
           is_active: boolean
           name: string
           price_per_kwh: number
@@ -354,6 +359,8 @@ export type Database = {
           created_at?: string
           currency?: string
           id?: string
+          idle_fee_grace_minutes?: number
+          idle_fee_per_minute?: number
           is_active?: boolean
           name: string
           price_per_kwh?: number
@@ -365,6 +372,8 @@ export type Database = {
           created_at?: string
           currency?: string
           id?: string
+          idle_fee_grace_minutes?: number
+          idle_fee_per_minute?: number
           is_active?: boolean
           name?: string
           price_per_kwh?: number

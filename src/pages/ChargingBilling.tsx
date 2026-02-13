@@ -36,7 +36,7 @@ const ChargingBilling = () => {
 
   const [tariffOpen, setTariffOpen] = useState(false);
   const [editTariff, setEditTariff] = useState<ChargingTariff | null>(null);
-  const [tariffForm, setTariffForm] = useState({ name: "", price_per_kwh: "0.35", base_fee: "0", currency: "EUR" });
+  const [tariffForm, setTariffForm] = useState({ name: "", price_per_kwh: "0.35", base_fee: "0", idle_fee_per_minute: "0", idle_fee_grace_minutes: "60", currency: "EUR" });
   const [period, setPeriod] = useState<"day" | "week" | "month" | "quarter" | "year">("month");
 
   const periodStart = useMemo(() => {
@@ -64,7 +64,7 @@ const ChargingBilling = () => {
 
   const getCpName = (id: string) => chargePoints.find((cp) => cp.id === id)?.name || "—";
 
-  const resetTariffForm = () => setTariffForm({ name: "", price_per_kwh: "0.35", base_fee: "0", currency: "EUR" });
+  const resetTariffForm = () => setTariffForm({ name: "", price_per_kwh: "0.35", base_fee: "0", idle_fee_per_minute: "0", idle_fee_grace_minutes: "60", currency: "EUR" });
 
   const handleAddTariff = () => {
     if (!tenant?.id) return;
@@ -73,8 +73,10 @@ const ChargingBilling = () => {
       name: tariffForm.name,
       price_per_kwh: parseFloat(tariffForm.price_per_kwh),
       base_fee: parseFloat(tariffForm.base_fee),
+      idle_fee_per_minute: parseFloat(tariffForm.idle_fee_per_minute),
+      idle_fee_grace_minutes: parseInt(tariffForm.idle_fee_grace_minutes),
       currency: tariffForm.currency,
-    });
+    } as any);
     setTariffOpen(false);
     resetTariffForm();
   };
@@ -86,13 +88,15 @@ const ChargingBilling = () => {
       name: tariffForm.name,
       price_per_kwh: parseFloat(tariffForm.price_per_kwh),
       base_fee: parseFloat(tariffForm.base_fee),
-    });
+      idle_fee_per_minute: parseFloat(tariffForm.idle_fee_per_minute),
+      idle_fee_grace_minutes: parseInt(tariffForm.idle_fee_grace_minutes),
+    } as any);
     setEditTariff(null);
     resetTariffForm();
   };
 
   const openEditTariff = (t: ChargingTariff) => {
-    setTariffForm({ name: t.name, price_per_kwh: String(t.price_per_kwh), base_fee: String(t.base_fee), currency: t.currency });
+    setTariffForm({ name: t.name, price_per_kwh: String(t.price_per_kwh), base_fee: String(t.base_fee), idle_fee_per_minute: String(t.idle_fee_per_minute || 0), idle_fee_grace_minutes: String(t.idle_fee_grace_minutes || 60), currency: t.currency });
     setEditTariff(t);
   };
 
@@ -102,6 +106,14 @@ const ChargingBilling = () => {
       <div className="grid grid-cols-2 gap-4">
         <div><Label>Preis pro kWh (€)</Label><Input type="number" step="0.01" value={tariffForm.price_per_kwh} onChange={(e) => setTariffForm({ ...tariffForm, price_per_kwh: e.target.value })} /></div>
         <div><Label>Grundgebühr (€)</Label><Input type="number" step="0.01" value={tariffForm.base_fee} onChange={(e) => setTariffForm({ ...tariffForm, base_fee: e.target.value })} /></div>
+      </div>
+      <div className="border-t pt-4">
+        <Label className="text-sm font-medium flex items-center gap-2 mb-3"><Clock className="h-4 w-4" />Blockiergebühr</Label>
+        <div className="grid grid-cols-2 gap-4">
+          <div><Label>Gebühr pro Minute (€)</Label><Input type="number" step="0.01" min="0" value={tariffForm.idle_fee_per_minute} onChange={(e) => setTariffForm({ ...tariffForm, idle_fee_per_minute: e.target.value })} /></div>
+          <div><Label>Freibetrag (Min.)</Label><Input type="number" step="1" min="0" value={tariffForm.idle_fee_grace_minutes} onChange={(e) => setTariffForm({ ...tariffForm, idle_fee_grace_minutes: e.target.value })} /></div>
+        </div>
+        <p className="text-xs text-muted-foreground mt-2">Nach Ablauf der Freibetragszeit wird pro Minute die Blockiergebühr berechnet.</p>
       </div>
     </div>
   );
@@ -213,9 +225,10 @@ const ChargingBilling = () => {
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          <TableHead>Name</TableHead>
+                           <TableHead>Name</TableHead>
                           <TableHead>Preis/kWh</TableHead>
                           <TableHead>Grundgebühr</TableHead>
+                          <TableHead>Blockiergebühr</TableHead>
                           <TableHead>Aktiv</TableHead>
                           {isAdmin && <TableHead className="w-24">Aktionen</TableHead>}
                         </TableRow>
@@ -226,6 +239,7 @@ const ChargingBilling = () => {
                             <TableCell className="font-medium">{tariff.name}</TableCell>
                             <TableCell>{fmtCurrency(tariff.price_per_kwh)}</TableCell>
                             <TableCell>{fmtCurrency(tariff.base_fee)}</TableCell>
+                            <TableCell>{tariff.idle_fee_per_minute > 0 ? <span className="text-sm">{fmtCurrency(tariff.idle_fee_per_minute)}/Min. <span className="text-muted-foreground">ab {tariff.idle_fee_grace_minutes} Min.</span></span> : <span className="text-muted-foreground">—</span>}</TableCell>
                             <TableCell>
                               <Switch
                                 checked={tariff.is_active}
@@ -269,7 +283,9 @@ const ChargingBilling = () => {
                         <TableRow>
                           <TableHead>Rechnungsnr.</TableHead>
                           <TableHead>Energie</TableHead>
-                          <TableHead>Betrag</TableHead>
+                          <TableHead>Ladekosten</TableHead>
+                          <TableHead>Blockiergebühr</TableHead>
+                          <TableHead>Gesamt</TableHead>
                           <TableHead>Status</TableHead>
                           <TableHead>Erstellt</TableHead>
                         </TableRow>
@@ -279,7 +295,9 @@ const ChargingBilling = () => {
                           <TableRow key={inv.id}>
                             <TableCell className="font-mono">{inv.invoice_number || "—"}</TableCell>
                             <TableCell>{fmtKwh(inv.total_energy_kwh)}</TableCell>
-                            <TableCell>{fmtCurrency(inv.total_amount)}</TableCell>
+                            <TableCell>{fmtCurrency(inv.total_amount - (inv.idle_fee_amount || 0))}</TableCell>
+                            <TableCell>{inv.idle_fee_amount > 0 ? fmtCurrency(inv.idle_fee_amount) : <span className="text-muted-foreground">—</span>}</TableCell>
+                            <TableCell className="font-medium">{fmtCurrency(inv.total_amount)}</TableCell>
                             <TableCell><Badge variant={inv.status === "paid" ? "default" : inv.status === "issued" ? "secondary" : "outline"}>{inv.status === "paid" ? "Bezahlt" : inv.status === "issued" ? "Ausgestellt" : "Entwurf"}</Badge></TableCell>
                             <TableCell>{format(new Date(inv.created_at), "dd.MM.yyyy")}</TableCell>
                           </TableRow>
