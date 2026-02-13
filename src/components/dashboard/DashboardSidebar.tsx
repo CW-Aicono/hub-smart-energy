@@ -281,9 +281,9 @@ const DashboardSidebar = () => {
 
       {/* Nav - scrollable */}
       <nav className={cn(
-        "flex-1 space-y-1 overflow-y-auto",
+        "flex-1 space-y-1 overflow-y-auto scrollbar-hide",
         collapsed ? "p-2" : "p-4"
-      )}>
+      )} style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}>
         {filteredNavItems.map(renderNavItem)}
       </nav>
 
