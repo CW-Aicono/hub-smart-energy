@@ -27,12 +27,12 @@ const LazyChargePointsMap = lazy(() => import("@/components/charging/ChargePoint
 const OCPP_ENDPOINT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ocpp-central`;
 const OCPP_WS_ENDPOINT_URL = `${import.meta.env.VITE_SUPABASE_URL?.replace("https://", "wss://")}/functions/v1/ocpp-ws-proxy`;
 
-const statusConfig: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline"; icon: typeof Zap }> = {
-  available: { label: "Verfügbar", variant: "default", icon: Zap },
-  charging: { label: "Lädt", variant: "secondary", icon: PlugZap },
-  faulted: { label: "Gestört", variant: "destructive", icon: AlertTriangle },
-  unavailable: { label: "Nicht verfügbar", variant: "outline", icon: ZapOff },
-  offline: { label: "Offline", variant: "outline", icon: WifiOff },
+const statusConfig: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline"; icon: typeof Zap; color: string }> = {
+  available: { label: "Verfügbar", variant: "default", icon: Zap, color: "text-green-500" },
+  charging: { label: "Lädt", variant: "secondary", icon: PlugZap, color: "text-blue-500" },
+  faulted: { label: "Fehler", variant: "destructive", icon: AlertTriangle, color: "text-red-500" },
+  unavailable: { label: "Nicht verfügbar", variant: "outline", icon: ZapOff, color: "text-yellow-500" },
+  offline: { label: "Offline", variant: "outline", icon: WifiOff, color: "text-orange-500" },
 };
 
 const ChargingPoints = () => {
@@ -233,7 +233,7 @@ const ChargingPoints = () => {
                   onClick={() => setStatusFilter(isActive ? null : key)}
                 >
                   <CardContent className="p-4 flex items-center gap-3">
-                    <cfg.icon className={`h-5 w-5 ${isActive ? "text-primary" : "text-muted-foreground"}`} />
+                    <cfg.icon className={`h-5 w-5 ${cfg.color}`} />
                     <div>
                       <p className="text-2xl font-bold">{count.toLocaleString("de-DE")}</p>
                       <p className="text-sm text-muted-foreground">{cfg.label}</p>
