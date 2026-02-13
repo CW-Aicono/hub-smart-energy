@@ -20,13 +20,16 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import {
   ArrowLeft, Zap, PlugZap, AlertTriangle, ZapOff, WifiOff, Camera,
   Trash2, Save, X, MapPin, Search, MoreHorizontal, RefreshCw, Play,
-  Square, Unlock, Power, Wrench, CheckCircle, Clock, BarChart3, Info, Settings
+  Square, Unlock, Power, Wrench, CheckCircle, Clock, BarChart3, Info, Settings,
+  Shield, Bell, BatteryCharging, Users, Calendar, Timer, Gauge
 } from "lucide-react";
 import { format, subDays, isAfter } from "date-fns";
 import { de } from "date-fns/locale";
 import { fmtKwh, fmtKw, fmtNum } from "@/lib/formatCharging";
 import { supabase } from "@/integrations/supabase/client";
 import OcppLogViewer from "@/components/charging/OcppLogViewer";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { Switch } from "@/components/ui/switch";
 import { toast } from "@/hooks/use-toast";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, Cell } from "recharts";
 
@@ -225,11 +228,12 @@ const ChargePointDetail = () => {
           {/* Tabs */}
           <Tabs defaultValue="overview">
             <TabsList>
-              <TabsTrigger value="overview">Übersicht</TabsTrigger>
+             <TabsTrigger value="overview">Übersicht</TabsTrigger>
               <TabsTrigger value="sessions">Ladevorgänge</TabsTrigger>
               <TabsTrigger value="ocpp-log">OCPP-Log</TabsTrigger>
               <TabsTrigger value="details">Details</TabsTrigger>
-              <TabsTrigger value="settings">Einstellungen</TabsTrigger>
+              <TabsTrigger value="energy">Energiemanagement</TabsTrigger>
+              <TabsTrigger value="access">Zugangssteuerung</TabsTrigger>
             </TabsList>
 
             <TabsContent value="overview" className="space-y-6 mt-6">
@@ -620,24 +624,175 @@ const ChargePointDetail = () => {
               </Card>
             </TabsContent>
 
-            {/* Settings tab */}
-            <TabsContent value="settings" className="mt-6">
+            {/* Energy Management tab */}
+            <TabsContent value="energy" className="mt-6 space-y-6">
               <Card>
                 <CardHeader>
-                  <CardTitle>Einstellungen</CardTitle>
+                  <CardTitle className="flex items-center gap-2">
+                    <Gauge className="h-5 w-5" />
+                    Lastmanagement
+                  </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  {isAdmin && (
-                    <div className="border border-destructive/20 rounded-lg p-4 space-y-3">
-                      <h3 className="font-medium text-destructive">Gefahrenzone</h3>
-                      <p className="text-sm text-muted-foreground">Der Ladepunkt wird unwiderruflich gelöscht.</p>
-                      <Button variant="destructive" onClick={handleDelete}>
-                        <Trash2 className="h-4 w-4 mr-2" /> Ladepunkt löschen
-                      </Button>
+                  <div className="flex items-center justify-between p-4 border rounded-lg">
+                    <div>
+                      <p className="font-medium">Dynamisches Lastmanagement</p>
+                      <p className="text-sm text-muted-foreground">Leistung automatisch an verfügbare Kapazität anpassen</p>
                     </div>
-                  )}
+                    <Switch disabled />
+                  </div>
+                  <div className="flex items-center justify-between p-4 border rounded-lg">
+                    <div>
+                      <p className="font-medium">Leistungsbegrenzung</p>
+                      <p className="text-sm text-muted-foreground">Maximale Ladeleistung auf einen festen Wert begrenzen</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Input type="number" className="w-20" defaultValue={cp.max_power_kw} disabled />
+                      <span className="text-sm text-muted-foreground">kW</span>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between p-4 border rounded-lg">
+                    <div>
+                      <p className="font-medium">PV-Überschussladen</p>
+                      <p className="text-sm text-muted-foreground">Laden priorisiert mit eigenem Solarstrom</p>
+                    </div>
+                    <Switch disabled />
+                  </div>
+                  <p className="text-xs text-muted-foreground flex items-center gap-1">
+                    <Info className="h-3 w-3" /> Diese Funktionen werden in einem zukünftigen Update verfügbar.
+                  </p>
                 </CardContent>
               </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Calendar className="h-5 w-5" />
+                    Ladezeitplan
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex items-center justify-between p-4 border rounded-lg">
+                    <div>
+                      <p className="font-medium">Zeitgesteuerte Verfügbarkeit</p>
+                      <p className="text-sm text-muted-foreground">Ladepunkt nur zu bestimmten Zeiten freigeben</p>
+                    </div>
+                    <Switch disabled />
+                  </div>
+                  <div className="flex items-center justify-between p-4 border rounded-lg">
+                    <div>
+                      <p className="font-medium">Günstig-Laden-Modus</p>
+                      <p className="text-sm text-muted-foreground">Laden automatisch in Niedrigtarifzeiten verschieben</p>
+                    </div>
+                    <Switch disabled />
+                  </div>
+                  <p className="text-xs text-muted-foreground flex items-center gap-1">
+                    <Info className="h-3 w-3" /> Diese Funktionen werden in einem zukünftigen Update verfügbar.
+                  </p>
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            {/* Access Control tab */}
+            <TabsContent value="access" className="mt-6 space-y-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Shield className="h-5 w-5" />
+                    Autorisierung
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex items-center justify-between p-4 border rounded-lg">
+                    <div>
+                      <p className="font-medium">Freies Laden erlauben</p>
+                      <p className="text-sm text-muted-foreground">Laden ohne RFID-Karte oder App-Autorisierung ermöglichen</p>
+                    </div>
+                    <Switch disabled />
+                  </div>
+                  <div className="flex items-center justify-between p-4 border rounded-lg">
+                    <div>
+                      <p className="font-medium">Nutzergruppen-Beschränkung</p>
+                      <p className="text-sm text-muted-foreground">Nur bestimmte Nutzergruppen für diesen Ladepunkt zulassen</p>
+                    </div>
+                    <Switch disabled />
+                  </div>
+                  <div className="flex items-center justify-between p-4 border rounded-lg">
+                    <div>
+                      <p className="font-medium">Maximale Ladedauer</p>
+                      <p className="text-sm text-muted-foreground">Ladevorgang nach Zeitlimit automatisch beenden</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Input type="number" className="w-20" defaultValue="480" disabled />
+                      <span className="text-sm text-muted-foreground">min</span>
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground flex items-center gap-1">
+                    <Info className="h-3 w-3" /> Diese Funktionen werden in einem zukünftigen Update verfügbar.
+                  </p>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Bell className="h-5 w-5" />
+                    Benachrichtigungen
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex items-center justify-between p-4 border rounded-lg">
+                    <div>
+                      <p className="font-medium">Störungsmeldung</p>
+                      <p className="text-sm text-muted-foreground">E-Mail bei Fehlerstatus oder Verbindungsabbruch senden</p>
+                    </div>
+                    <Switch disabled />
+                  </div>
+                  <div className="flex items-center justify-between p-4 border rounded-lg">
+                    <div>
+                      <p className="font-medium">Ladevorgang-Zusammenfassung</p>
+                      <p className="text-sm text-muted-foreground">Tägliche Zusammenfassung der Ladevorgänge per E-Mail</p>
+                    </div>
+                    <Switch disabled />
+                  </div>
+                  <p className="text-xs text-muted-foreground flex items-center gap-1">
+                    <Info className="h-3 w-3" /> Diese Funktionen werden in einem zukünftigen Update verfügbar.
+                  </p>
+                </CardContent>
+              </Card>
+
+              {/* Danger zone */}
+              {isAdmin && (
+                <Card className="border-destructive/30">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-base text-destructive">Gefahrenzone</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-sm text-muted-foreground mb-3">Der Ladepunkt wird unwiderruflich gelöscht inkl. aller Ladevorgänge und Logs.</p>
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button variant="destructive">
+                          <Trash2 className="h-4 w-4 mr-2" /> Ladepunkt löschen
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Ladepunkt endgültig löschen?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            <strong>{cp.name}</strong> ({cp.ocpp_id}) wird unwiderruflich entfernt. Alle Ladevorgänge, Logs und Konfigurationen gehen verloren.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Abbrechen</AlertDialogCancel>
+                          <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={handleDelete}>
+                            Endgültig löschen
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  </CardContent>
+                </Card>
+              )}
             </TabsContent>
           </Tabs>
         </div>
