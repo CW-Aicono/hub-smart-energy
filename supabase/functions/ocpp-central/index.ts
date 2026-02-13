@@ -55,7 +55,7 @@ async function handleBootNotification(
   return {
     status: "Accepted",
     currentTime: new Date().toISOString(),
-    interval: 300, // heartbeat interval in seconds
+    interval: 30, // heartbeat every 30s to keep WebSocket alive
   };
 }
 
