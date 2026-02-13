@@ -9,6 +9,7 @@ import { useChargingSessions } from "@/hooks/useChargingSessions";
 import { useLocations } from "@/hooks/useLocations";
 import { useTenant } from "@/hooks/useTenant";
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
+import ChargePointDetailDialog from "@/components/charging/ChargePointDetailDialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -18,7 +19,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Plus, PlugZap, Trash2, Edit, Zap, ZapOff, AlertTriangle, WifiOff, Info } from "lucide-react";
+import { Plus, PlugZap, Trash2, Zap, ZapOff, AlertTriangle, WifiOff, Info } from "lucide-react";
 import { format } from "date-fns";
 import { fmtKwh, fmtKw } from "@/lib/formatCharging";
 
@@ -44,7 +45,7 @@ const ChargingPoints = () => {
   const { chargerModels, vendors: knownVendors, getModelsForVendor } = useChargerModels();
 
   const [addOpen, setAddOpen] = useState(false);
-  const [editCp, setEditCp] = useState<ChargePoint | null>(null);
+  const [detailCp, setDetailCp] = useState<ChargePoint | null>(null);
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
   const [form, setForm] = useState({ name: "", ocpp_id: "", location_id: "", connector_count: "1", max_power_kw: "22", vendor: "", model: "" });
 
@@ -69,33 +70,8 @@ const ChargingPoints = () => {
     resetForm();
   };
 
-  const handleEdit = () => {
-    if (!editCp) return;
-    updateChargePoint.mutate({
-      id: editCp.id,
-      name: form.name,
-      ocpp_id: form.ocpp_id,
-      location_id: form.location_id || null,
-      connector_count: parseInt(form.connector_count) || 1,
-      max_power_kw: Math.max(0.1, parseFloat(form.max_power_kw) || 22),
-      vendor: form.vendor || null,
-      model: form.model || null,
-    });
-    setEditCp(null);
-    resetForm();
-  };
-
-  const openEdit = (cp: ChargePoint) => {
-    setForm({
-      name: cp.name,
-      ocpp_id: cp.ocpp_id,
-      location_id: cp.location_id || "",
-      connector_count: String(cp.connector_count),
-      max_power_kw: String(cp.max_power_kw),
-      vendor: cp.vendor || "",
-      model: cp.model || "",
-    });
-    setEditCp(cp);
+  const handleUpdate = (data: Partial<ChargePoint> & { id: string }) => {
+    updateChargePoint.mutate(data);
   };
 
   const getLocationName = (id: string | null) => {
@@ -276,7 +252,7 @@ const ChargingPoints = () => {
                       <TableHead>Standort</TableHead>
                       <TableHead>Leistung</TableHead>
                       <TableHead>Letzter Heartbeat</TableHead>
-                      {isAdmin && <TableHead className="w-24">Aktionen</TableHead>}
+                      {isAdmin && <TableHead className="w-16"></TableHead>}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -285,7 +261,7 @@ const ChargingPoints = () => {
                       const activeSession = getActiveSession(cp.id);
                       return (
                         <TableRow key={cp.id}>
-                          <TableCell className="font-medium">{cp.name}</TableCell>
+                          <TableCell className="font-medium cursor-pointer hover:text-primary transition-colors" onClick={() => setDetailCp(cp)}>{cp.name}</TableCell>
                           <TableCell className="font-mono text-sm">{cp.ocpp_id}</TableCell>
                           <TableCell>
                             <Badge variant={cfg.variant}>{cfg.label}</Badge>
@@ -302,10 +278,7 @@ const ChargingPoints = () => {
                           </TableCell>
                           {isAdmin && (
                             <TableCell>
-                              <div className="flex gap-1">
-                                <Button variant="ghost" size="icon" onClick={() => openEdit(cp)}><Edit className="h-4 w-4" /></Button>
-                                <Button variant="ghost" size="icon" onClick={() => deleteChargePoint.mutate(cp.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
-                              </div>
+                              <Button variant="ghost" size="icon" onClick={() => deleteChargePoint.mutate(cp.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
                             </TableCell>
                           )}
                         </TableRow>
@@ -317,14 +290,20 @@ const ChargingPoints = () => {
             </CardContent>
           </Card>
 
-          {/* Edit Dialog */}
-          <Dialog open={!!editCp} onOpenChange={(open) => { if (!open) setEditCp(null); }}>
-            <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-              <DialogHeader><DialogTitle>Ladepunkt bearbeiten</DialogTitle></DialogHeader>
-              {formFields}
-              <Button onClick={handleEdit} disabled={!form.name || !form.ocpp_id}>Speichern</Button>
-            </DialogContent>
-          </Dialog>
+          {/* Detail Dialog */}
+          {detailCp && (
+            <ChargePointDetailDialog
+              chargePoint={detailCp}
+              sessions={sessions}
+              locations={locations}
+              vendors={knownVendors}
+              getModelsForVendor={getModelsForVendor}
+              isAdmin={isAdmin}
+              onClose={() => setDetailCp(null)}
+              onUpdate={handleUpdate}
+              onDelete={(id) => deleteChargePoint.mutate(id)}
+            />
+          )}
         </div>
       </main>
     </div>

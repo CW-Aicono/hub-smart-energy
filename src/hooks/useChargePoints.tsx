@@ -16,6 +16,7 @@ export interface ChargePoint {
   firmware_version: string | null;
   vendor: string | null;
   model: string | null;
+  photo_url: string | null;
   created_at: string;
   updated_at: string;
 }
