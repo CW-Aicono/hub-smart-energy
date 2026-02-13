@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { Zap, PlugZap, AlertTriangle, ZapOff, WifiOff, Camera, Trash2, Edit, Save, X, Clock } from "lucide-react";
+import { Zap, PlugZap, AlertTriangle, ZapOff, WifiOff, Camera, Trash2, Edit, Save, X, Clock, MapPin, Search } from "lucide-react";
 import { format } from "date-fns";
 import { fmtKwh, fmtKw } from "@/lib/formatCharging";
 import { supabase } from "@/integrations/supabase/client";
@@ -27,7 +27,6 @@ const statusConfig: Record<string, { label: string; variant: "default" | "second
 interface Props {
   chargePoint: ChargePoint | null;
   sessions: ChargingSession[];
-  locations: { id: string; name: string }[];
   vendors: string[];
   getModelsForVendor: (vendor: string) => ChargerModel[];
   isAdmin: boolean;
@@ -39,7 +38,6 @@ interface Props {
 export default function ChargePointDetailDialog({
   chargePoint: cp,
   sessions,
-  locations,
   vendors,
   getModelsForVendor,
   isAdmin,
@@ -48,9 +46,11 @@ export default function ChargePointDetailDialog({
   onDelete,
 }: Props) {
   const [editing, setEditing] = useState(false);
-  const [form, setForm] = useState({ name: "", ocpp_id: "", location_id: "", connector_count: "1", max_power_kw: "22", vendor: "", model: "" });
+  const [form, setForm] = useState({ name: "", ocpp_id: "", address: "", connector_count: "1", max_power_kw: "22", vendor: "", model: "" });
+  const [coords, setCoords] = useState<{ lat: number | null; lng: number | null }>({ lat: null, lng: null });
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [geocoding, setGeocoding] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const startEdit = () => {
@@ -58,13 +58,14 @@ export default function ChargePointDetailDialog({
     setForm({
       name: cp.name,
       ocpp_id: cp.ocpp_id,
-      location_id: cp.location_id || "",
+      address: cp.address || "",
       connector_count: String(cp.connector_count),
       max_power_kw: String(cp.max_power_kw),
       vendor: cp.vendor || "",
       model: cp.model || "",
     });
-    setPhotoUrl((cp as any).photo_url || null);
+    setCoords({ lat: cp.latitude, lng: cp.longitude });
+    setPhotoUrl(cp.photo_url || null);
     setEditing(true);
   };
 
@@ -76,7 +77,9 @@ export default function ChargePointDetailDialog({
       id: cp.id,
       name: form.name,
       ocpp_id: form.ocpp_id,
-      location_id: form.location_id || null,
+      address: form.address || null,
+      latitude: coords.lat,
+      longitude: coords.lng,
       connector_count: parseInt(form.connector_count) || 1,
       max_power_kw: Math.max(0.1, parseFloat(form.max_power_kw) || 22),
       vendor: form.vendor || null,
@@ -84,6 +87,31 @@ export default function ChargePointDetailDialog({
       photo_url: photoUrl,
     } as any);
     setEditing(false);
+  };
+
+  const geocodeAddress = async () => {
+    if (!form.address.trim()) return;
+    setGeocoding(true);
+    try {
+      const query = encodeURIComponent(form.address);
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&q=${query}&limit=1`,
+        { headers: { "Accept-Language": "de", "User-Agent": "SmartEnergyHub/1.0" } }
+      );
+      const data = await res.json();
+      if (data.length > 0) {
+        const lat = parseFloat(data[0].lat);
+        const lng = parseFloat(data[0].lon);
+        setCoords({ lat, lng });
+        toast({ title: "Koordinaten ermittelt", description: `${lat.toFixed(5)}, ${lng.toFixed(5)}` });
+      } else {
+        toast({ title: "Adresse nicht gefunden", variant: "destructive" });
+      }
+    } catch {
+      toast({ title: "Geocoding-Fehler", variant: "destructive" });
+    } finally {
+      setGeocoding(false);
+    }
   };
 
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -96,8 +124,9 @@ export default function ChargePointDetailDialog({
     if (error) {
       toast({ title: "Upload fehlgeschlagen", description: error.message, variant: "destructive" });
     } else {
-      const { data: urlData } = supabase.storage.from("meter-photos").getPublicUrl(path);
-      setPhotoUrl(urlData.publicUrl);
+      // Bucket is private, use signed URL
+      const { data: signedData } = await supabase.storage.from("meter-photos").createSignedUrl(path, 60 * 60 * 24 * 365);
+      setPhotoUrl(signedData?.signedUrl || null);
     }
     setUploading(false);
   };
@@ -109,8 +138,7 @@ export default function ChargePointDetailDialog({
   const cpSessions = sessions
     .filter((s) => s.charge_point_id === cp.id)
     .slice(0, 5);
-  const getLocationName = (id: string | null) => locations.find((l) => l.id === id)?.name || "—";
-  const currentPhoto = editing ? photoUrl : (cp as any).photo_url;
+  const currentPhoto = editing ? photoUrl : cp.photo_url;
 
   return (
     <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
@@ -158,11 +186,23 @@ export default function ChargePointDetailDialog({
               <div><Label>OCPP-ID</Label><Input value={form.ocpp_id} onChange={(e) => setForm({ ...form, ocpp_id: e.target.value })} /></div>
             </div>
             <div>
-              <Label>Standort</Label>
-              <Select value={form.location_id} onValueChange={(v) => setForm({ ...form, location_id: v })}>
-                <SelectTrigger><SelectValue placeholder="Standort wählen" /></SelectTrigger>
-                <SelectContent>{locations.map((l) => <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>)}</SelectContent>
-              </Select>
+              <Label>Adresse / Standort</Label>
+              <div className="flex gap-2">
+                <Input
+                  value={form.address}
+                  onChange={(e) => setForm({ ...form, address: e.target.value })}
+                  placeholder="z.B. Musterstraße 1, 12345 Berlin"
+                  className="flex-1"
+                />
+                <Button variant="outline" size="icon" onClick={geocodeAddress} disabled={geocoding || !form.address.trim()}>
+                  <Search className="h-4 w-4" />
+                </Button>
+              </div>
+              {coords.lat && coords.lng && (
+                <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
+                  <MapPin className="h-3 w-3" /> {coords.lat.toFixed(5)}, {coords.lng.toFixed(5)}
+                </p>
+              )}
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div><Label>Anschlüsse</Label><Input type="number" min="1" value={form.connector_count} onChange={(e) => setForm({ ...form, connector_count: e.target.value })} /></div>
@@ -201,13 +241,18 @@ export default function ChargePointDetailDialog({
           <div className="space-y-3">
             <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
               <div><span className="text-muted-foreground">OCPP-ID:</span> <span className="font-mono">{cp.ocpp_id}</span></div>
-              <div><span className="text-muted-foreground">Standort:</span> {getLocationName(cp.location_id)}</div>
+              <div><span className="text-muted-foreground">Standort:</span> {cp.address || "—"}</div>
               <div><span className="text-muted-foreground">Hersteller:</span> {cp.vendor || "—"}</div>
               <div><span className="text-muted-foreground">Modell:</span> {cp.model || "—"}</div>
               <div><span className="text-muted-foreground">Anschlüsse:</span> {cp.connector_count}</div>
               <div><span className="text-muted-foreground">Max. Leistung:</span> {fmtKw(cp.max_power_kw)}</div>
               <div><span className="text-muted-foreground">Firmware:</span> {cp.firmware_version || "—"}</div>
               <div><span className="text-muted-foreground">Letzter Heartbeat:</span> {cp.last_heartbeat ? format(new Date(cp.last_heartbeat), "dd.MM.yyyy HH:mm") : "—"}</div>
+              {cp.latitude && cp.longitude && (
+                <div className="col-span-2 flex items-center gap-1 text-muted-foreground">
+                  <MapPin className="h-3 w-3" /> {cp.latitude.toFixed(5)}, {cp.longitude.toFixed(5)}
+                </div>
+              )}
             </div>
             {isAdmin && (
               <div className="flex gap-2 justify-end">

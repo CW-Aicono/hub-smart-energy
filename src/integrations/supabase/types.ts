@@ -89,12 +89,15 @@ export type Database = {
       }
       charge_points: {
         Row: {
+          address: string | null
           connector_count: number
           created_at: string
           firmware_version: string | null
           id: string
           last_heartbeat: string | null
+          latitude: number | null
           location_id: string | null
+          longitude: number | null
           max_power_kw: number
           model: string | null
           name: string
@@ -106,12 +109,15 @@ export type Database = {
           vendor: string | null
         }
         Insert: {
+          address?: string | null
           connector_count?: number
           created_at?: string
           firmware_version?: string | null
           id?: string
           last_heartbeat?: string | null
+          latitude?: number | null
           location_id?: string | null
+          longitude?: number | null
           max_power_kw?: number
           model?: string | null
           name: string
@@ -123,12 +129,15 @@ export type Database = {
           vendor?: string | null
         }
         Update: {
+          address?: string | null
           connector_count?: number
           created_at?: string
           firmware_version?: string | null
           id?: string
           last_heartbeat?: string | null
+          latitude?: number | null
           location_id?: string | null
+          longitude?: number | null
           max_power_kw?: number
           model?: string | null
           name?: string
