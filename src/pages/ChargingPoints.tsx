@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Navigate } from "react-router-dom";
+import { Navigate, useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useTranslation } from "@/hooks/useTranslation";
@@ -8,7 +8,6 @@ import { useChargerModels } from "@/hooks/useChargerModels";
 import { useChargingSessions } from "@/hooks/useChargingSessions";
 import { useTenant } from "@/hooks/useTenant";
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
-import ChargePointDetailDialog from "@/components/charging/ChargePointDetailDialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -34,16 +33,16 @@ const statusConfig: Record<string, { label: string; variant: "default" | "second
 };
 
 const ChargingPoints = () => {
+  const navigate = useNavigate();
   const { user, loading: authLoading } = useAuth();
   const { isAdmin } = useUserRole();
   const { t } = useTranslation();
   const { tenant } = useTenant();
-  const { chargePoints, isLoading, addChargePoint, updateChargePoint, deleteChargePoint } = useChargePoints();
+  const { chargePoints, isLoading, addChargePoint, deleteChargePoint } = useChargePoints();
   const { sessions } = useChargingSessions();
   const { chargerModels, vendors: knownVendors, getModelsForVendor } = useChargerModels();
 
   const [addOpen, setAddOpen] = useState(false);
-  const [detailCp, setDetailCp] = useState<ChargePoint | null>(null);
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
   const [form, setForm] = useState({ name: "", ocpp_id: "", address: "", connector_count: "1", max_power_kw: "22", vendor: "", model: "" });
   const [addCoords, setAddCoords] = useState<{ lat: number | null; lng: number | null }>({ lat: null, lng: null });
@@ -72,9 +71,6 @@ const ChargingPoints = () => {
     resetForm();
   };
 
-  const handleUpdate = (data: Partial<ChargePoint> & { id: string }) => {
-    updateChargePoint.mutate(data);
-  };
 
   const geocodeAddAddress = async () => {
     if (!form.address.trim()) return;
@@ -276,7 +272,7 @@ const ChargingPoints = () => {
                       const activeSession = getActiveSession(cp.id);
                       return (
                         <TableRow key={cp.id}>
-                          <TableCell className="font-medium cursor-pointer hover:text-primary transition-colors" onClick={() => setDetailCp(cp)}>{cp.name}</TableCell>
+                          <TableCell className="font-medium cursor-pointer hover:text-primary transition-colors" onClick={() => navigate(`/charging/points/${cp.id}`)}>{cp.name}</TableCell>
                           <TableCell className="font-mono text-sm">{cp.ocpp_id}</TableCell>
                           <TableCell>
                             <Badge variant={cfg.variant}>{cfg.label}</Badge>
@@ -305,19 +301,6 @@ const ChargingPoints = () => {
             </CardContent>
           </Card>
 
-          {/* Detail Dialog */}
-          {detailCp && (
-            <ChargePointDetailDialog
-              chargePoint={detailCp}
-              sessions={sessions}
-              vendors={knownVendors}
-              getModelsForVendor={getModelsForVendor}
-              isAdmin={isAdmin}
-              onClose={() => setDetailCp(null)}
-              onUpdate={handleUpdate}
-              onDelete={(id) => deleteChargePoint.mutate(id)}
-            />
-          )}
         </div>
       </main>
     </div>

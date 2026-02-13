@@ -35,6 +35,7 @@ import SuperAdminRoles from "./pages/SuperAdminRoles";
 import MobileApp from "./pages/MobileApp";
 import GettingStarted from "./pages/GettingStarted";
 import ChargingPoints from "./pages/ChargingPoints";
+import ChargePointDetail from "./pages/ChargePointDetail";
 import ChargingBilling from "./pages/ChargingBilling";
 import Automation from "./pages/Automation";
 import EmailTemplates from "./pages/EmailTemplates";
@@ -92,6 +93,7 @@ const App = () => (
                   <Route path="/super-admin/support" element={<SA><SuperAdminSupport /></SA>} />
                   <Route path="/super-admin/ocpp/integrations" element={<SA><SuperAdminOcppIntegrations /></SA>} />
                   <Route path="/charging/points" element={<M><ChargingPoints /></M>} />
+                  <Route path="/charging/points/:id" element={<M><ChargePointDetail /></M>} />
                   <Route path="/charging/billing" element={<M><ChargingBilling /></M>} />
                   <Route path="/automation" element={<M><Automation /></M>} />
                   <Route path="/m" element={<MobileApp />} />
