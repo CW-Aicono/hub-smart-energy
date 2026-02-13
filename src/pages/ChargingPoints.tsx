@@ -6,7 +6,6 @@ import { useTranslation } from "@/hooks/useTranslation";
 import { useChargePoints, ChargePoint } from "@/hooks/useChargePoints";
 import { useChargerModels } from "@/hooks/useChargerModels";
 import { useChargingSessions } from "@/hooks/useChargingSessions";
-import { useLocations } from "@/hooks/useLocations";
 import { useTenant } from "@/hooks/useTenant";
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
 import ChargePointDetailDialog from "@/components/charging/ChargePointDetailDialog";
@@ -19,7 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Plus, PlugZap, Trash2, Zap, ZapOff, AlertTriangle, WifiOff, Info } from "lucide-react";
+import { Plus, PlugZap, Trash2, Zap, ZapOff, AlertTriangle, WifiOff, Info, Search, MapPin } from "lucide-react";
 import { format } from "date-fns";
 import { fmtKwh, fmtKw } from "@/lib/formatCharging";
 
@@ -41,18 +40,19 @@ const ChargingPoints = () => {
   const { tenant } = useTenant();
   const { chargePoints, isLoading, addChargePoint, updateChargePoint, deleteChargePoint } = useChargePoints();
   const { sessions } = useChargingSessions();
-  const { locations } = useLocations();
   const { chargerModels, vendors: knownVendors, getModelsForVendor } = useChargerModels();
 
   const [addOpen, setAddOpen] = useState(false);
   const [detailCp, setDetailCp] = useState<ChargePoint | null>(null);
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
-  const [form, setForm] = useState({ name: "", ocpp_id: "", location_id: "", connector_count: "1", max_power_kw: "22", vendor: "", model: "" });
+  const [form, setForm] = useState({ name: "", ocpp_id: "", address: "", connector_count: "1", max_power_kw: "22", vendor: "", model: "" });
+  const [addCoords, setAddCoords] = useState<{ lat: number | null; lng: number | null }>({ lat: null, lng: null });
+  const [addGeocoding, setAddGeocoding] = useState(false);
 
   if (authLoading) return null;
   if (!user) return <Navigate to="/auth" replace />;
 
-  const resetForm = () => setForm({ name: "", ocpp_id: "", location_id: "", connector_count: "1", max_power_kw: "22", vendor: "", model: "" });
+  const resetForm = () => { setForm({ name: "", ocpp_id: "", address: "", connector_count: "1", max_power_kw: "22", vendor: "", model: "" }); setAddCoords({ lat: null, lng: null }); };
 
   const handleAdd = () => {
     if (!tenant?.id) return;
@@ -60,12 +60,14 @@ const ChargingPoints = () => {
       tenant_id: tenant.id,
       name: form.name,
       ocpp_id: form.ocpp_id,
-      location_id: form.location_id || null,
+      address: form.address || null,
+      latitude: addCoords.lat,
+      longitude: addCoords.lng,
       connector_count: parseInt(form.connector_count) || 1,
       max_power_kw: Math.max(0.1, parseFloat(form.max_power_kw) || 22),
       vendor: form.vendor || null,
       model: form.model || null,
-    });
+    } as any);
     setAddOpen(false);
     resetForm();
   };
@@ -74,9 +76,17 @@ const ChargingPoints = () => {
     updateChargePoint.mutate(data);
   };
 
-  const getLocationName = (id: string | null) => {
-    if (!id) return "—";
-    return locations.find((l) => l.id === id)?.name || "—";
+  const geocodeAddAddress = async () => {
+    if (!form.address.trim()) return;
+    setAddGeocoding(true);
+    try {
+      const query = encodeURIComponent(form.address);
+      const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${query}&limit=1`, { headers: { "Accept-Language": "de", "User-Agent": "SmartEnergyHub/1.0" } });
+      const data = await res.json();
+      if (data.length > 0) {
+        setAddCoords({ lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) });
+      }
+    } catch { /* ignore */ } finally { setAddGeocoding(false); }
   };
 
   const getActiveSession = (cpId: string) => sessions.find((s) => s.charge_point_id === cpId && s.status === "active");
@@ -123,13 +133,18 @@ const ChargingPoints = () => {
       <div><Label>Name</Label><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
       <div><Label>OCPP-ID (ChargeBox Identity)</Label><Input value={form.ocpp_id} onChange={(e) => setForm({ ...form, ocpp_id: e.target.value })} placeholder="z.B. CP001" /></div>
       <div>
-        <Label>Standort</Label>
-        <Select value={form.location_id} onValueChange={(v) => setForm({ ...form, location_id: v })}>
-          <SelectTrigger><SelectValue placeholder="Standort wählen" /></SelectTrigger>
-          <SelectContent>
-            {locations.map((l) => (<SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>))}
-          </SelectContent>
-        </Select>
+        <Label>Adresse / Standort</Label>
+        <div className="flex gap-2">
+          <Input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} placeholder="z.B. Musterstraße 1, 12345 Berlin" className="flex-1" />
+          <Button type="button" variant="outline" size="icon" onClick={geocodeAddAddress} disabled={addGeocoding || !form.address.trim()}>
+            <Search className="h-4 w-4" />
+          </Button>
+        </div>
+        {addCoords.lat && addCoords.lng && (
+          <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
+            <MapPin className="h-3 w-3" /> {addCoords.lat.toFixed(5)}, {addCoords.lng.toFixed(5)}
+          </p>
+        )}
       </div>
       <div className="grid grid-cols-2 gap-4">
         <div><Label>Anschlüsse</Label><Input type="number" min="1" value={form.connector_count} onChange={(e) => setForm({ ...form, connector_count: e.target.value })} /></div>
@@ -271,7 +286,7 @@ const ChargingPoints = () => {
                               </span>
                             )}
                           </TableCell>
-                          <TableCell>{getLocationName(cp.location_id)}</TableCell>
+                          <TableCell>{cp.address || "—"}</TableCell>
                           <TableCell>{fmtKw(cp.max_power_kw)}</TableCell>
                           <TableCell className="text-sm text-muted-foreground">
                             {cp.last_heartbeat ? format(new Date(cp.last_heartbeat), "dd.MM.yyyy HH:mm") : "—"}
@@ -295,7 +310,6 @@ const ChargingPoints = () => {
             <ChargePointDetailDialog
               chargePoint={detailCp}
               sessions={sessions}
-              locations={locations}
               vendors={knownVendors}
               getModelsForVendor={getModelsForVendor}
               isAdmin={isAdmin}

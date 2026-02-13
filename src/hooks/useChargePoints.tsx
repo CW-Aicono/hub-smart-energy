@@ -17,6 +17,9 @@ export interface ChargePoint {
   vendor: string | null;
   model: string | null;
   photo_url: string | null;
+  address: string | null;
+  latitude: number | null;
+  longitude: number | null;
   created_at: string;
   updated_at: string;
 }
