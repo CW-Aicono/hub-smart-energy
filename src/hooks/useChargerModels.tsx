@@ -9,6 +9,8 @@ export interface ChargerModel {
   protocol: string;
   notes: string | null;
   is_active: boolean;
+  power_kw: number | null;
+  charging_type: string;
   created_at: string;
   updated_at: string;
 }

@@ -36,12 +36,17 @@ const SuperAdminOcppIntegrations = () => {
   const [editModel, setEditModel] = useState<ChargerModel | null>(null);
   const [form, setForm] = useState(emptyForm);
   const [filterVendor, setFilterVendor] = useState<string | null>(null);
+  const [filterType, setFilterType] = useState<string | null>(null);
 
   if (loading) return null;
   if (!user) return <Navigate to="/auth" replace />;
 
   const vendors = [...new Set(chargerModels.map(m => m.vendor))].sort();
-  const filtered = filterVendor ? chargerModels.filter(m => m.vendor === filterVendor) : chargerModels;
+  const filtered = chargerModels
+    .filter(m => !filterType || m.charging_type === filterType)
+    .filter(m => !filterVendor || m.vendor === filterVendor);
+  const acCount = chargerModels.filter(m => m.charging_type === 'AC').length;
+  const dcCount = chargerModels.filter(m => m.charging_type === 'DC').length;
 
   const resetForm = () => setForm(emptyForm);
 
@@ -152,6 +157,20 @@ const SuperAdminOcppIntegrations = () => {
 
             <TabsContent value="models" className="mt-6 space-y-4">
               {/* Vendor filter */}
+              {/* Type filter */}
+              <div className="flex gap-2 flex-wrap">
+                <Badge variant={filterType === null ? "default" : "outline"} className="cursor-pointer" onClick={() => setFilterType(null)}>
+                  Alle ({chargerModels.length})
+                </Badge>
+                <Badge variant={filterType === 'AC' ? "default" : "outline"} className="cursor-pointer" onClick={() => setFilterType(filterType === 'AC' ? null : 'AC')}>
+                  AC-Ladestationen ({acCount})
+                </Badge>
+                <Badge variant={filterType === 'DC' ? "default" : "outline"} className="cursor-pointer" onClick={() => setFilterType(filterType === 'DC' ? null : 'DC')}>
+                  DC-Schnellladestationen ({dcCount})
+                </Badge>
+              </div>
+
+              {/* Vendor filter */}
               {vendors.length > 0 && (
                 <div className="flex gap-2 flex-wrap">
                   <Badge
@@ -159,7 +178,7 @@ const SuperAdminOcppIntegrations = () => {
                     className="cursor-pointer"
                     onClick={() => setFilterVendor(null)}
                   >
-                    Alle ({chargerModels.length})
+                    Alle Hersteller
                   </Badge>
                   {vendors.map((v) => (
                     <Badge
@@ -195,6 +214,8 @@ const SuperAdminOcppIntegrations = () => {
                         <TableRow>
                           <TableHead>Hersteller</TableHead>
                           <TableHead>Modell</TableHead>
+                          <TableHead>Typ</TableHead>
+                          <TableHead>Leistung</TableHead>
                           <TableHead>Protokoll</TableHead>
                           <TableHead>Status</TableHead>
                           <TableHead>Hinweise</TableHead>
@@ -206,6 +227,10 @@ const SuperAdminOcppIntegrations = () => {
                           <TableRow key={m.id}>
                             <TableCell className="font-medium">{m.vendor}</TableCell>
                             <TableCell>{m.model}</TableCell>
+                            <TableCell>
+                              <Badge variant={m.charging_type === 'DC' ? 'default' : 'secondary'}>{m.charging_type}</Badge>
+                            </TableCell>
+                            <TableCell>{m.power_kw ? `${m.power_kw} kW` : '—'}</TableCell>
                             <TableCell>
                               <Badge variant="outline">{PROTOCOLS.find(p => p.value === m.protocol)?.label || m.protocol}</Badge>
                             </TableCell>

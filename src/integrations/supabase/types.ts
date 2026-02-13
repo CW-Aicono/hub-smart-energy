@@ -167,31 +167,37 @@ export type Database = {
       }
       charger_models: {
         Row: {
+          charging_type: string
           created_at: string
           id: string
           is_active: boolean
           model: string
           notes: string | null
+          power_kw: number | null
           protocol: string
           updated_at: string
           vendor: string
         }
         Insert: {
+          charging_type?: string
           created_at?: string
           id?: string
           is_active?: boolean
           model: string
           notes?: string | null
+          power_kw?: number | null
           protocol?: string
           updated_at?: string
           vendor: string
         }
         Update: {
+          charging_type?: string
           created_at?: string
           id?: string
           is_active?: boolean
           model?: string
           notes?: string | null
+          power_kw?: number | null
           protocol?: string
           updated_at?: string
           vendor?: string
