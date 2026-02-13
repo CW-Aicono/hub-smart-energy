@@ -13,24 +13,7 @@ function createSupabase() {
   return createClient(supabaseUrl, serviceKey);
 }
 
-async function logOcppMessage(
-  supabase: ReturnType<typeof createSupabase>,
-  chargePointId: string,
-  direction: "incoming" | "outgoing",
-  messageType: string | null,
-  rawMessage: unknown
-) {
-  try {
-    await supabase.from("ocpp_message_log").insert({
-      charge_point_id: chargePointId,
-      direction,
-      message_type: messageType,
-      raw_message: rawMessage,
-    });
-  } catch (e) {
-    console.error("[ocpp-central] Failed to log message:", e);
-  }
-}
+// Logging is handled by ocpp-ws-proxy – no duplicate logging here.
 
 // OCPP 1.6 JSON message types
 const CALL = 2;
@@ -336,12 +319,11 @@ Deno.serve(async (req) => {
     const rawMessage = await req.json();
     const msg = parseOcppMessage(rawMessage);
 
-    // Log incoming CALL
-    await logOcppMessage(supabase, chargePointId, "incoming", msg.action || `TYPE_${msg.messageTypeId}`, rawMessage);
+    // Logging handled by ocpp-ws-proxy
 
     if (msg.messageTypeId !== CALL) {
       const errResp = [CALLERROR, msg.uniqueId, "NotSupported", "Only CALL messages supported", {}];
-      await logOcppMessage(supabase, chargePointId, "outgoing", "CALLERROR:NotSupported", errResp);
+      // No duplicate logging
       return new Response(
         JSON.stringify(errResp),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -371,7 +353,7 @@ Deno.serve(async (req) => {
         break;
       default: {
         const notImpl = [CALLERROR, msg.uniqueId, "NotImplemented", `Action ${msg.action} not implemented`, {}];
-        await logOcppMessage(supabase, chargePointId, "outgoing", `CALLERROR:NotImplemented`, notImpl);
+        // No duplicate logging
         return new Response(
           JSON.stringify(notImpl),
           { headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -380,7 +362,7 @@ Deno.serve(async (req) => {
     }
 
     const responseMsg = [CALLRESULT, msg.uniqueId, result];
-    await logOcppMessage(supabase, chargePointId, "outgoing", `CALLRESULT:${msg.action}`, responseMsg);
+    // No duplicate logging
 
     return new Response(
       JSON.stringify(responseMsg),
