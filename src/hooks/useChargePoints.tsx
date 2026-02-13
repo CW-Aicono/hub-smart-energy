@@ -12,6 +12,7 @@ export interface ChargePoint {
   status: string;
   connector_count: number;
   max_power_kw: number;
+  connector_type: string;
   last_heartbeat: string | null;
   firmware_version: string | null;
   vendor: string | null;

@@ -28,6 +28,7 @@ import { de } from "date-fns/locale";
 import { fmtKwh, fmtKw, fmtNum } from "@/lib/formatCharging";
 import { supabase } from "@/integrations/supabase/client";
 import OcppLogViewer from "@/components/charging/OcppLogViewer";
+import ChargePointQrCode from "@/components/charging/ChargePointQrCode";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "@/hooks/use-toast";
@@ -245,6 +246,7 @@ const ChargePointDetail = () => {
                   {cfg.label}
                 </Badge>
               </div>
+              <ChargePointQrCode ocppId={cp.ocpp_id} name={cp.name} address={cp.address} variant="button" />
             </div>
           </div>
 
