@@ -99,6 +99,7 @@ export type Database = {
           model: string | null
           name: string
           ocpp_id: string
+          photo_url: string | null
           status: string
           tenant_id: string
           updated_at: string
@@ -115,6 +116,7 @@ export type Database = {
           model?: string | null
           name: string
           ocpp_id: string
+          photo_url?: string | null
           status?: string
           tenant_id: string
           updated_at?: string
@@ -131,6 +133,7 @@ export type Database = {
           model?: string | null
           name?: string
           ocpp_id?: string
+          photo_url?: string | null
           status?: string
           tenant_id?: string
           updated_at?: string
