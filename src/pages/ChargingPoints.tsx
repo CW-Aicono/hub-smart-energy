@@ -44,12 +44,12 @@ const ChargingPoints = () => {
   const [addOpen, setAddOpen] = useState(false);
   const [editCp, setEditCp] = useState<ChargePoint | null>(null);
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
-  const [form, setForm] = useState({ name: "", ocpp_id: "", location_id: "", connector_count: "1", max_power_kw: "22" });
+  const [form, setForm] = useState({ name: "", ocpp_id: "", location_id: "", connector_count: "1", max_power_kw: "22", vendor: "", model: "" });
 
   if (authLoading) return null;
   if (!user) return <Navigate to="/auth" replace />;
 
-  const resetForm = () => setForm({ name: "", ocpp_id: "", location_id: "", connector_count: "1", max_power_kw: "22" });
+  const resetForm = () => setForm({ name: "", ocpp_id: "", location_id: "", connector_count: "1", max_power_kw: "22", vendor: "", model: "" });
 
   const handleAdd = () => {
     if (!tenant?.id) return;
@@ -60,6 +60,8 @@ const ChargingPoints = () => {
       location_id: form.location_id || null,
       connector_count: parseInt(form.connector_count) || 1,
       max_power_kw: Math.max(0.1, parseFloat(form.max_power_kw) || 22),
+      vendor: form.vendor || null,
+      model: form.model || null,
     });
     setAddOpen(false);
     resetForm();
@@ -74,6 +76,8 @@ const ChargingPoints = () => {
       location_id: form.location_id || null,
       connector_count: parseInt(form.connector_count) || 1,
       max_power_kw: Math.max(0.1, parseFloat(form.max_power_kw) || 22),
+      vendor: form.vendor || null,
+      model: form.model || null,
     });
     setEditCp(null);
     resetForm();
@@ -86,6 +90,8 @@ const ChargingPoints = () => {
       location_id: cp.location_id || "",
       connector_count: String(cp.connector_count),
       max_power_kw: String(cp.max_power_kw),
+      vendor: cp.vendor || "",
+      model: cp.model || "",
     });
     setEditCp(cp);
   };
@@ -150,6 +156,10 @@ const ChargingPoints = () => {
       <div className="grid grid-cols-2 gap-4">
         <div><Label>Anschlüsse</Label><Input type="number" min="1" value={form.connector_count} onChange={(e) => setForm({ ...form, connector_count: e.target.value })} /></div>
         <div><Label>Max. Leistung (kW)</Label><Input type="number" min="0.1" step="0.1" value={form.max_power_kw} onChange={(e) => { const v = e.target.value; if (v === "" || parseFloat(v) >= 0) setForm({ ...form, max_power_kw: v }); }} /></div>
+      </div>
+      <div className="grid grid-cols-2 gap-4">
+        <div><Label>Hersteller</Label><Input value={form.vendor} onChange={(e) => setForm({ ...form, vendor: e.target.value })} placeholder="z.B. ABB, Alfen, Keba" /></div>
+        <div><Label>Modell</Label><Input value={form.model} onChange={(e) => setForm({ ...form, model: e.target.value })} placeholder="z.B. Terra AC W22-T-RD-M-0" /></div>
       </div>
       {ocppHint}
     </div>
