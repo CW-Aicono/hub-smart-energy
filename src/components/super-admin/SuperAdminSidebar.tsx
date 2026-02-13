@@ -288,9 +288,6 @@ export default function SuperAdminSidebar() {
             </DropdownMenuSub>
 
             <DropdownMenuSeparator />
-            <DropdownMenuItem asChild>
-              <a href="/" className="cursor-pointer">{t("nav.to_customer_dashboard")}</a>
-            </DropdownMenuItem>
             <DropdownMenuItem onClick={signOut} className="text-destructive focus:text-destructive">
               <LogOut className="h-4 w-4 mr-2" /> {t("nav.sign_out")}
             </DropdownMenuItem>
