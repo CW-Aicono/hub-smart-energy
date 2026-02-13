@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
 export interface OcppLogEntry {
@@ -13,6 +13,13 @@ export interface OcppLogEntry {
 export function useOcppLogs(chargePointId?: string) {
   const [logs, setLogs] = useState<OcppLogEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  const [paused, setPaused] = useState(false);
+  const pausedRef = useRef(false);
+
+  // Keep ref in sync
+  useEffect(() => {
+    pausedRef.current = paused;
+  }, [paused]);
 
   const fetchLogs = useCallback(async () => {
     let query = supabase
@@ -35,7 +42,6 @@ export function useOcppLogs(chargePointId?: string) {
   useEffect(() => {
     fetchLogs();
 
-    // Realtime subscription
     const channel = supabase
       .channel(`ocpp-logs-${chargePointId || "all"}`)
       .on(
@@ -47,7 +53,9 @@ export function useOcppLogs(chargePointId?: string) {
           ...(chargePointId ? { filter: `charge_point_id=eq.${chargePointId}` } : {}),
         },
         (payload: any) => {
-          setLogs((prev) => [payload.new as OcppLogEntry, ...prev].slice(0, 500));
+          if (!pausedRef.current) {
+            setLogs((prev) => [payload.new as OcppLogEntry, ...prev].slice(0, 500));
+          }
         }
       )
       .subscribe();
@@ -57,5 +65,5 @@ export function useOcppLogs(chargePointId?: string) {
     };
   }, [chargePointId, fetchLogs]);
 
-  return { logs, loading, refetch: fetchLogs };
+  return { logs, loading, paused, setPaused, refetch: fetchLogs };
 }

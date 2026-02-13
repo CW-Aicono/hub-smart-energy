@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { RefreshCw, ChevronDown, ChevronRight, ArrowDownUp, Filter } from "lucide-react";
+import { RefreshCw, ChevronDown, ChevronRight, ArrowDownUp, Pause, Play } from "lucide-react";
 import { format } from "date-fns";
 
 interface OcppLogViewerProps {
@@ -14,7 +14,7 @@ interface OcppLogViewerProps {
 }
 
 const OcppLogViewer = ({ chargePointId, showCpColumn = false }: OcppLogViewerProps) => {
-  const { logs, loading, refetch } = useOcppLogs(chargePointId);
+  const { logs, loading, paused, setPaused, refetch } = useOcppLogs(chargePointId);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [filterText, setFilterText] = useState("");
   const [directionFilter, setDirectionFilter] = useState<"all" | "incoming" | "outgoing">("all");
@@ -69,6 +69,15 @@ const OcppLogViewer = ({ chargePointId, showCpColumn = false }: OcppLogViewerPro
             onChange={(e) => setFilterText(e.target.value)}
             className="w-40 h-8 text-xs"
           />
+          <Button
+            variant={paused ? "default" : "outline"}
+            size="icon"
+            className="h-8 w-8"
+            onClick={() => setPaused(!paused)}
+            title={paused ? "Fortsetzen" : "Pausieren"}
+          >
+            {paused ? <Play className="h-3.5 w-3.5" /> : <Pause className="h-3.5 w-3.5" />}
+          </Button>
           <Button variant="outline" size="icon" className="h-8 w-8" onClick={refetch}>
             <RefreshCw className="h-3.5 w-3.5" />
           </Button>
