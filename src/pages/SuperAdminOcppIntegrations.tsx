@@ -14,8 +14,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Plus, Edit, Trash2, PlugZap } from "lucide-react";
 import SuperAdminSidebar from "@/components/super-admin/SuperAdminSidebar";
+import OcppLogViewer from "@/components/charging/OcppLogViewer";
 
 const PROTOCOLS = [
   { value: "ocpp1.6", label: "OCPP 1.6 JSON" },
@@ -142,89 +144,102 @@ const SuperAdminOcppIntegrations = () => {
             </Dialog>
           </div>
 
-          {/* Vendor filter */}
-          {vendors.length > 0 && (
-            <div className="flex gap-2 flex-wrap">
-              <Badge
-                variant={filterVendor === null ? "default" : "outline"}
-                className="cursor-pointer"
-                onClick={() => setFilterVendor(null)}
-              >
-                Alle ({chargerModels.length})
-              </Badge>
-              {vendors.map((v) => (
-                <Badge
-                  key={v}
-                  variant={filterVendor === v ? "default" : "outline"}
-                  className="cursor-pointer"
-                  onClick={() => setFilterVendor(filterVendor === v ? null : v)}
-                >
-                  {v} ({chargerModels.filter(m => m.vendor === v).length})
-                </Badge>
-              ))}
-            </div>
-          )}
+          <Tabs defaultValue="models">
+            <TabsList>
+              <TabsTrigger value="models">Ladestationsmodelle</TabsTrigger>
+              <TabsTrigger value="ocpp-log">OCPP-Nachrichtenlog</TabsTrigger>
+            </TabsList>
 
-          <Card style={{ backgroundColor: `hsl(var(--sa-card))`, borderColor: `hsl(var(--sa-border))` }}>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <PlugZap className="h-5 w-5" />
-                Ladestationsmodelle
-              </CardTitle>
-              <CardDescription>
-                Hier hinterlegte Modelle stehen im User-Backend bei der Einrichtung von Ladepunkten als Dropdown zur Verfügung.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {isLoading ? (
-                <p style={{ color: `hsl(var(--sa-muted-foreground))` }}>Laden...</p>
-              ) : filtered.length === 0 ? (
-                <p style={{ color: `hsl(var(--sa-muted-foreground))` }}>Keine Modelle vorhanden.</p>
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Hersteller</TableHead>
-                      <TableHead>Modell</TableHead>
-                      <TableHead>Protokoll</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Hinweise</TableHead>
-                      <TableHead className="w-24">Aktionen</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filtered.map((m) => (
-                      <TableRow key={m.id}>
-                        <TableCell className="font-medium">{m.vendor}</TableCell>
-                        <TableCell>{m.model}</TableCell>
-                        <TableCell>
-                          <Badge variant="outline">{PROTOCOLS.find(p => p.value === m.protocol)?.label || m.protocol}</Badge>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant={m.is_active ? "default" : "secondary"}>
-                            {m.is_active ? "Aktiv" : "Inaktiv"}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-sm max-w-[200px] truncate" title={m.notes || ""}>
-                          {m.notes || "—"}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex gap-1">
-                            <Button variant="ghost" size="icon" onClick={() => openEdit(m)}>
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                            <Button variant="ghost" size="icon" onClick={() => deleteModel.mutate(m.id)}>
-                              <Trash2 className="h-4 w-4 text-destructive" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+            <TabsContent value="models" className="mt-6 space-y-4">
+              {/* Vendor filter */}
+              {vendors.length > 0 && (
+                <div className="flex gap-2 flex-wrap">
+                  <Badge
+                    variant={filterVendor === null ? "default" : "outline"}
+                    className="cursor-pointer"
+                    onClick={() => setFilterVendor(null)}
+                  >
+                    Alle ({chargerModels.length})
+                  </Badge>
+                  {vendors.map((v) => (
+                    <Badge
+                      key={v}
+                      variant={filterVendor === v ? "default" : "outline"}
+                      className="cursor-pointer"
+                      onClick={() => setFilterVendor(filterVendor === v ? null : v)}
+                    >
+                      {v} ({chargerModels.filter(m => m.vendor === v).length})
+                    </Badge>
+                  ))}
+                </div>
               )}
-            </CardContent>
-          </Card>
+
+              <Card style={{ backgroundColor: `hsl(var(--sa-card))`, borderColor: `hsl(var(--sa-border))` }}>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <PlugZap className="h-5 w-5" />
+                    Ladestationsmodelle
+                  </CardTitle>
+                  <CardDescription>
+                    Hier hinterlegte Modelle stehen im User-Backend bei der Einrichtung von Ladepunkten als Dropdown zur Verfügung.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {isLoading ? (
+                    <p style={{ color: `hsl(var(--sa-muted-foreground))` }}>Laden...</p>
+                  ) : filtered.length === 0 ? (
+                    <p style={{ color: `hsl(var(--sa-muted-foreground))` }}>Keine Modelle vorhanden.</p>
+                  ) : (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Hersteller</TableHead>
+                          <TableHead>Modell</TableHead>
+                          <TableHead>Protokoll</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead>Hinweise</TableHead>
+                          <TableHead className="w-24">Aktionen</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {filtered.map((m) => (
+                          <TableRow key={m.id}>
+                            <TableCell className="font-medium">{m.vendor}</TableCell>
+                            <TableCell>{m.model}</TableCell>
+                            <TableCell>
+                              <Badge variant="outline">{PROTOCOLS.find(p => p.value === m.protocol)?.label || m.protocol}</Badge>
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant={m.is_active ? "default" : "secondary"}>
+                                {m.is_active ? "Aktiv" : "Inaktiv"}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-sm max-w-[200px] truncate" title={m.notes || ""}>
+                              {m.notes || "—"}
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex gap-1">
+                                <Button variant="ghost" size="icon" onClick={() => openEdit(m)}>
+                                  <Edit className="h-4 w-4" />
+                                </Button>
+                                <Button variant="ghost" size="icon" onClick={() => deleteModel.mutate(m.id)}>
+                                  <Trash2 className="h-4 w-4 text-destructive" />
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="ocpp-log" className="mt-6">
+              <OcppLogViewer showCpColumn />
+            </TabsContent>
+          </Tabs>
 
           {/* Edit Dialog */}
           <Dialog open={!!editModel} onOpenChange={(open) => { if (!open) setEditModel(null); }}>

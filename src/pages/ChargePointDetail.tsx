@@ -26,6 +26,7 @@ import { format, subDays, isAfter } from "date-fns";
 import { de } from "date-fns/locale";
 import { fmtKwh, fmtKw, fmtNum } from "@/lib/formatCharging";
 import { supabase } from "@/integrations/supabase/client";
+import OcppLogViewer from "@/components/charging/OcppLogViewer";
 import { toast } from "@/hooks/use-toast";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, Cell } from "recharts";
 
@@ -226,6 +227,7 @@ const ChargePointDetail = () => {
             <TabsList>
               <TabsTrigger value="overview">Übersicht</TabsTrigger>
               <TabsTrigger value="sessions">Ladevorgänge</TabsTrigger>
+              <TabsTrigger value="ocpp-log">OCPP-Log</TabsTrigger>
               <TabsTrigger value="details">Details</TabsTrigger>
               <TabsTrigger value="settings">Einstellungen</TabsTrigger>
             </TabsList>
@@ -492,6 +494,11 @@ const ChargePointDetail = () => {
                   )}
                 </CardContent>
               </Card>
+            </TabsContent>
+
+            {/* OCPP Log tab */}
+            <TabsContent value="ocpp-log" className="mt-6">
+              <OcppLogViewer chargePointId={cp.ocpp_id} />
             </TabsContent>
 
             {/* Details tab */}
