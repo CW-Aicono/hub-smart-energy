@@ -6,15 +6,26 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { PlugZap, Zap, ZapOff, AlertTriangle, WifiOff } from "lucide-react";
 
-const defaultIcon = new Icon({
-  iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
-  iconRetinaUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
-  shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-  popupAnchor: [1, -34],
-  shadowSize: [41, 41],
-});
+const statusColors: Record<string, string> = {
+  available: "#22c55e",   // grün
+  charging: "#3b82f6",    // blau
+  faulted: "#ef4444",     // rot
+  unavailable: "#eab308", // gelb
+  offline: "#f97316",     // orange
+};
+
+function createColoredIcon(color: string) {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 25 41" width="25" height="41">
+    <path d="M12.5 0C5.6 0 0 5.6 0 12.5C0 21.9 12.5 41 12.5 41S25 21.9 25 12.5C25 5.6 19.4 0 12.5 0Z" fill="${color}" stroke="#333" stroke-width="1"/>
+    <circle cx="12.5" cy="12.5" r="5" fill="white"/>
+  </svg>`;
+  return new Icon({
+    iconUrl: `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`,
+    iconSize: [25, 41],
+    iconAnchor: [12, 41],
+    popupAnchor: [1, -34],
+  });
+}
 
 interface ChargePointForMap {
   id: string;
@@ -36,7 +47,7 @@ interface ChargePointsMapProps {
 const statusConfig: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
   available: { label: "Verfügbar", variant: "default" },
   charging: { label: "Lädt", variant: "secondary" },
-  faulted: { label: "Gestört", variant: "destructive" },
+  faulted: { label: "Fehler", variant: "destructive" },
   unavailable: { label: "Nicht verfügbar", variant: "outline" },
   offline: { label: "Offline", variant: "outline" },
 };
@@ -105,7 +116,7 @@ export default function ChargePointsMap({ chargePoints, onChargePointClick, clas
             <Marker
               key={cp.id}
               position={[cp.latitude!, cp.longitude!]}
-              icon={defaultIcon}
+              icon={createColoredIcon(statusColors[cp.status] || statusColors.offline)}
               eventHandlers={{ click: () => onChargePointClick?.(cp) }}
             >
               <Popup>
