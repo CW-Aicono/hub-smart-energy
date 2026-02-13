@@ -153,6 +153,39 @@ export type Database = {
           },
         ]
       }
+      charger_models: {
+        Row: {
+          created_at: string
+          id: string
+          is_active: boolean
+          model: string
+          notes: string | null
+          protocol: string
+          updated_at: string
+          vendor: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          model: string
+          notes?: string | null
+          protocol?: string
+          updated_at?: string
+          vendor: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          model?: string
+          notes?: string | null
+          protocol?: string
+          updated_at?: string
+          vendor?: string
+        }
+        Relationships: []
+      }
       charging_invoices: {
         Row: {
           created_at: string

@@ -39,6 +39,7 @@ import ChargingBilling from "./pages/ChargingBilling";
 import Automation from "./pages/Automation";
 import EmailTemplates from "./pages/EmailTemplates";
 import LiveValues from "./pages/LiveValues";
+import SuperAdminOcppIntegrations from "./pages/SuperAdminOcppIntegrations";
 import UpdateBanner from "./components/UpdateBanner";
 // Import Leaflet CSS globally
 import "leaflet/dist/leaflet.css";
@@ -89,6 +90,7 @@ const App = () => (
                   <Route path="/super-admin/billing" element={<SA><SuperAdminBilling /></SA>} />
                   <Route path="/super-admin/module-pricing" element={<SA><SuperAdminModulePricing /></SA>} />
                   <Route path="/super-admin/support" element={<SA><SuperAdminSupport /></SA>} />
+                  <Route path="/super-admin/ocpp/integrations" element={<SA><SuperAdminOcppIntegrations /></SA>} />
                   <Route path="/charging/points" element={<M><ChargingPoints /></M>} />
                   <Route path="/charging/billing" element={<M><ChargingBilling /></M>} />
                   <Route path="/automation" element={<M><Automation /></M>} />

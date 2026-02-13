@@ -191,6 +191,12 @@ export const saTranslations: SATranslations = {
   "location.gebaeudekomplex": { de: "Komplex", en: "Complex", fr: "Complexe", pl: "Kompleks" },
   "location.sonstiges": { de: "Sonstiges", en: "Other", fr: "Autre", pl: "Inne" },
 
+  // OCPP Backend
+  "nav.ocpp_backend": { de: "OCPP-Backend", en: "OCPP Backend", fr: "Backend OCPP", pl: "Backend OCPP" },
+  "nav.ocpp_integrations": { de: "Integrationen", en: "Integrations", fr: "Intégrations", pl: "Integracje" },
+  "ocpp.integrations_title": { de: "OCPP Integrationen", en: "OCPP Integrations", fr: "Intégrations OCPP", pl: "Integracje OCPP" },
+  "ocpp.integrations_subtitle": { de: "Ladestationsmodelle und herstellerspezifische Konfigurationen", en: "Charger models and vendor-specific configurations", fr: "Modèles de bornes et configurations spécifiques", pl: "Modele ładowarek i konfiguracje specyficzne dla producenta" },
+
   // Error messages
   "error.generic": { de: "Fehler", en: "Error", fr: "Erreur", pl: "Błąd" },
   "error.status_change": { de: "Status konnte nicht geändert werden.", en: "Status could not be changed.", fr: "Le statut n'a pas pu être modifié.", pl: "Nie udało się zmienić statusu." },

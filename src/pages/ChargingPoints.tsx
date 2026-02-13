@@ -4,6 +4,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useTranslation } from "@/hooks/useTranslation";
 import { useChargePoints, ChargePoint } from "@/hooks/useChargePoints";
+import { useChargerModels } from "@/hooks/useChargerModels";
 import { useChargingSessions } from "@/hooks/useChargingSessions";
 import { useLocations } from "@/hooks/useLocations";
 import { useTenant } from "@/hooks/useTenant";
@@ -40,6 +41,7 @@ const ChargingPoints = () => {
   const { chargePoints, isLoading, addChargePoint, updateChargePoint, deleteChargePoint } = useChargePoints();
   const { sessions } = useChargingSessions();
   const { locations } = useLocations();
+  const { chargerModels, vendors: knownVendors, getModelsForVendor } = useChargerModels();
 
   const [addOpen, setAddOpen] = useState(false);
   const [editCp, setEditCp] = useState<ChargePoint | null>(null);
@@ -158,8 +160,36 @@ const ChargingPoints = () => {
         <div><Label>Max. Leistung (kW)</Label><Input type="number" min="0.1" step="0.1" value={form.max_power_kw} onChange={(e) => { const v = e.target.value; if (v === "" || parseFloat(v) >= 0) setForm({ ...form, max_power_kw: v }); }} /></div>
       </div>
       <div className="grid grid-cols-2 gap-4">
-        <div><Label>Hersteller</Label><Input value={form.vendor} onChange={(e) => setForm({ ...form, vendor: e.target.value })} placeholder="z.B. ABB, Alfen, Keba" /></div>
-        <div><Label>Modell</Label><Input value={form.model} onChange={(e) => setForm({ ...form, model: e.target.value })} placeholder="z.B. Terra AC W22-T-RD-M-0" /></div>
+        <div>
+          <Label>Hersteller</Label>
+          {knownVendors.length > 0 ? (
+            <Select value={form.vendor} onValueChange={(v) => setForm({ ...form, vendor: v, model: "" })}>
+              <SelectTrigger><SelectValue placeholder="Hersteller wählen" /></SelectTrigger>
+              <SelectContent>
+                {knownVendors.map((v) => (
+                  <SelectItem key={v} value={v}>{v}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : (
+            <Input value={form.vendor} onChange={(e) => setForm({ ...form, vendor: e.target.value })} placeholder="z.B. ABB, Alfen, Keba" />
+          )}
+        </div>
+        <div>
+          <Label>Modell</Label>
+          {form.vendor && getModelsForVendor(form.vendor).length > 0 ? (
+            <Select value={form.model} onValueChange={(v) => setForm({ ...form, model: v })}>
+              <SelectTrigger><SelectValue placeholder="Modell wählen" /></SelectTrigger>
+              <SelectContent>
+                {getModelsForVendor(form.vendor).map((m) => (
+                  <SelectItem key={m.id} value={m.model}>{m.model}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : (
+            <Input value={form.model} onChange={(e) => setForm({ ...form, model: e.target.value })} placeholder={form.vendor ? "Kein hinterlegtes Modell" : "Erst Hersteller wählen"} />
+          )}
+        </div>
       </div>
       {ocppHint}
     </div>
