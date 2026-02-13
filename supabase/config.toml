@@ -17,3 +17,6 @@ verify_jwt = false
 
 [functions.activate-invited-user]
 verify_jwt = false
+
+[functions.send-charging-invoices]
+verify_jwt = false
