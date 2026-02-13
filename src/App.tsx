@@ -8,6 +8,7 @@ import { TenantProvider } from "@/hooks/useTenant";
 import { TranslationProvider } from "@/hooks/useTranslation";
 import { ThemeProvider } from "@/hooks/useTheme";
 import ModuleGuard from "@/components/ModuleGuard";
+import { SuperAdminWrapper } from "@/components/super-admin/SuperAdminWrapper";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import Admin from "./pages/Admin";
@@ -31,7 +32,6 @@ import SuperAdminSupport from "./pages/SuperAdminSupport";
 import SuperAdminModulePricing from "./pages/SuperAdminModulePricing";
 import SuperAdminUsers from "./pages/SuperAdminUsers";
 import SuperAdminRoles from "./pages/SuperAdminRoles";
-import SuperAdminMap from "./pages/SuperAdminMap";
 import MobileApp from "./pages/MobileApp";
 import GettingStarted from "./pages/GettingStarted";
 import ChargingPoints from "./pages/ChargingPoints";
@@ -46,6 +46,10 @@ const queryClient = new QueryClient();
 
 const M = ({ children }: { children: React.ReactNode }) => (
   <ModuleGuard>{children}</ModuleGuard>
+);
+
+const SA = ({ children }: { children: React.ReactNode }) => (
+  <SuperAdminWrapper>{children}</SuperAdminWrapper>
 );
 
 const App = () => (
@@ -74,16 +78,15 @@ const App = () => (
                   <Route path="/integrations" element={<M><Integrations /></M>} />
                   <Route path="/profile" element={<Profile />} />
                   <Route path="/help" element={<Help />} />
-                  <Route path="/super-admin" element={<SuperAdminDashboard />} />
-                  <Route path="/super-admin/tenants" element={<SuperAdminTenants />} />
-                  <Route path="/super-admin/tenants/:id" element={<SuperAdminTenantDetail />} />
-                  <Route path="/super-admin/statistics" element={<SuperAdminStatistics />} />
-                  <Route path="/super-admin/users" element={<SuperAdminUsers />} />
-                  <Route path="/super-admin/roles" element={<SuperAdminRoles />} />
-                  <Route path="/super-admin/map" element={<SuperAdminMap />} />
-                  <Route path="/super-admin/billing" element={<SuperAdminBilling />} />
-                  <Route path="/super-admin/module-pricing" element={<SuperAdminModulePricing />} />
-                  <Route path="/super-admin/support" element={<SuperAdminSupport />} />
+                  <Route path="/super-admin" element={<SA><SuperAdminDashboard /></SA>} />
+                  <Route path="/super-admin/tenants" element={<SA><SuperAdminTenants /></SA>} />
+                  <Route path="/super-admin/tenants/:id" element={<SA><SuperAdminTenantDetail /></SA>} />
+                  <Route path="/super-admin/statistics" element={<SA><SuperAdminStatistics /></SA>} />
+                  <Route path="/super-admin/users" element={<SA><SuperAdminUsers /></SA>} />
+                  <Route path="/super-admin/roles" element={<SA><SuperAdminRoles /></SA>} />
+                  <Route path="/super-admin/billing" element={<SA><SuperAdminBilling /></SA>} />
+                  <Route path="/super-admin/module-pricing" element={<SA><SuperAdminModulePricing /></SA>} />
+                  <Route path="/super-admin/support" element={<SA><SuperAdminSupport /></SA>} />
                   <Route path="/charging/points" element={<M><ChargingPoints /></M>} />
                   <Route path="/charging/billing" element={<M><ChargingBilling /></M>} />
                   <Route path="/automation" element={<M><Automation /></M>} />
