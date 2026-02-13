@@ -470,25 +470,53 @@ const ChargePointDetail = () => {
                         <TableRow>
                           <TableHead>Start</TableHead>
                           <TableHead>Ende</TableHead>
+                          <TableHead>Dauer</TableHead>
                           <TableHead>Energie</TableHead>
                           <TableHead>RFID</TableHead>
                           <TableHead>Status</TableHead>
+                          <TableHead>Grund</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {sessions.map((s) => (
-                          <TableRow key={s.id}>
-                            <TableCell className="text-sm">{format(new Date(s.start_time), "dd.MM.yyyy HH:mm")}</TableCell>
-                            <TableCell className="text-sm">{s.stop_time ? format(new Date(s.stop_time), "dd.MM.yyyy HH:mm") : "—"}</TableCell>
-                            <TableCell>{fmtKwh(s.energy_kwh)}</TableCell>
-                            <TableCell className="font-mono text-sm">{s.id_tag || "—"}</TableCell>
-                            <TableCell>
-                              <Badge variant={s.status === "active" ? "secondary" : "outline"}>
-                                {s.status === "active" ? "Lädt" : "Beendet"}
-                              </Badge>
-                            </TableCell>
-                          </TableRow>
-                        ))}
+                        {sessions.map((s) => {
+                          const start = new Date(s.start_time);
+                          const end = s.stop_time ? new Date(s.stop_time) : null;
+                          const durationMs = end ? end.getTime() - start.getTime() : Date.now() - start.getTime();
+                          const durationMin = Math.round(durationMs / 60000);
+                          const hours = Math.floor(durationMin / 60);
+                          const mins = durationMin % 60;
+                          const durationStr = hours > 0 ? `${hours} h ${mins} min` : `${mins} min`;
+
+                          const statusLabel = s.status === "active" ? "Lädt" : "Beendet";
+                          const statusVariant = s.status === "active" ? "secondary" as const : "outline" as const;
+
+                          const reasonMap: Record<string, string> = {
+                            Local: "Lokal",
+                            Remote: "Fernsteuerung",
+                            EVDisconnected: "Kabel getrennt",
+                            PowerLoss: "Stromausfall",
+                            Reboot: "Neustart",
+                            HardReset: "Hard-Reset",
+                            SoftReset: "Soft-Reset",
+                            Other: "Sonstiges",
+                          };
+
+                          return (
+                            <TableRow key={s.id}>
+                              <TableCell className="text-sm">{format(start, "dd.MM.yyyy HH:mm")}</TableCell>
+                              <TableCell className="text-sm">{end ? format(end, "dd.MM.yyyy HH:mm") : "—"}</TableCell>
+                              <TableCell className="text-sm">{durationStr}</TableCell>
+                              <TableCell>{fmtKwh(s.energy_kwh)}</TableCell>
+                              <TableCell className="font-mono text-sm">{s.id_tag || "—"}</TableCell>
+                              <TableCell>
+                                <Badge variant={statusVariant}>{statusLabel}</Badge>
+                              </TableCell>
+                              <TableCell className="text-sm text-muted-foreground">
+                                {s.stop_reason ? (reasonMap[s.stop_reason] || s.stop_reason) : "—"}
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
                       </TableBody>
                     </Table>
                   )}
