@@ -3,9 +3,9 @@ import { useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useTranslation } from "@/hooks/useTranslation";
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
-import { BrandingSettings } from "@/components/settings/BrandingSettings";
+import { EmailTemplateSettings } from "@/components/settings/EmailTemplateSettings";
 
-const Settings = () => {
+const EmailTemplates = () => {
   const { user, loading: authLoading } = useAuth();
   const { isAdmin, loading: roleLoading } = useUserRole();
   const { t } = useTranslation();
@@ -26,17 +26,17 @@ const Settings = () => {
       <DashboardSidebar />
       <main className="flex-1 overflow-auto">
         <header className="border-b p-6">
-          <h1 className="text-2xl font-display font-bold">{t("settings.title")}</h1>
+          <h1 className="text-2xl font-display font-bold">Mailvorlagen</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            {t("settings.subtitle")}
+            E-Mail-Vorlagen für automatische Benachrichtigungen verwalten
           </p>
         </header>
         <div className="p-6 space-y-6">
-          <BrandingSettings />
+          <EmailTemplateSettings />
         </div>
       </main>
     </div>
   );
 };
 
-export default Settings;
+export default EmailTemplates;
