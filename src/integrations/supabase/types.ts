@@ -1448,6 +1448,33 @@ export type Database = {
         }
         Relationships: []
       }
+      ocpp_message_log: {
+        Row: {
+          charge_point_id: string
+          created_at: string
+          direction: string
+          id: string
+          message_type: string | null
+          raw_message: Json
+        }
+        Insert: {
+          charge_point_id: string
+          created_at?: string
+          direction: string
+          id?: string
+          message_type?: string | null
+          raw_message: Json
+        }
+        Update: {
+          charge_point_id?: string
+          created_at?: string
+          direction?: string
+          id?: string
+          message_type?: string | null
+          raw_message?: Json
+        }
+        Relationships: []
+      }
       permissions: {
         Row: {
           category: string

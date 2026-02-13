@@ -20,3 +20,6 @@ verify_jwt = false
 
 [functions.send-charging-invoices]
 verify_jwt = false
+
+[functions.ocpp-ws-proxy]
+verify_jwt = false

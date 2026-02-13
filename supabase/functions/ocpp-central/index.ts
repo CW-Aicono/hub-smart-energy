@@ -13,6 +13,25 @@ function createSupabase() {
   return createClient(supabaseUrl, serviceKey);
 }
 
+async function logOcppMessage(
+  supabase: ReturnType<typeof createSupabase>,
+  chargePointId: string,
+  direction: "incoming" | "outgoing",
+  messageType: string | null,
+  rawMessage: unknown
+) {
+  try {
+    await supabase.from("ocpp_message_log").insert({
+      charge_point_id: chargePointId,
+      direction,
+      message_type: messageType,
+      raw_message: rawMessage,
+    });
+  } catch (e) {
+    console.error("[ocpp-central] Failed to log message:", e);
+  }
+}
+
 // OCPP 1.6 JSON message types
 const CALL = 2;
 const CALLRESULT = 3;
@@ -317,9 +336,14 @@ Deno.serve(async (req) => {
     const rawMessage = await req.json();
     const msg = parseOcppMessage(rawMessage);
 
+    // Log incoming CALL
+    await logOcppMessage(supabase, chargePointId, "incoming", msg.action || `TYPE_${msg.messageTypeId}`, rawMessage);
+
     if (msg.messageTypeId !== CALL) {
+      const errResp = [CALLERROR, msg.uniqueId, "NotSupported", "Only CALL messages supported", {}];
+      await logOcppMessage(supabase, chargePointId, "outgoing", "CALLERROR:NotSupported", errResp);
       return new Response(
-        JSON.stringify([CALLERROR, msg.uniqueId, "NotSupported", "Only CALL messages supported", {}]),
+        JSON.stringify(errResp),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -345,15 +369,21 @@ Deno.serve(async (req) => {
       case "MeterValues":
         result = await handleMeterValues(supabase, chargePointId, msg.payload!);
         break;
-      default:
+      default: {
+        const notImpl = [CALLERROR, msg.uniqueId, "NotImplemented", `Action ${msg.action} not implemented`, {}];
+        await logOcppMessage(supabase, chargePointId, "outgoing", `CALLERROR:NotImplemented`, notImpl);
         return new Response(
-          JSON.stringify([CALLERROR, msg.uniqueId, "NotImplemented", `Action ${msg.action} not implemented`, {}]),
+          JSON.stringify(notImpl),
           { headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
+      }
     }
 
+    const responseMsg = [CALLRESULT, msg.uniqueId, result];
+    await logOcppMessage(supabase, chargePointId, "outgoing", `CALLRESULT:${msg.action}`, responseMsg);
+
     return new Response(
-      JSON.stringify([CALLRESULT, msg.uniqueId, result]),
+      JSON.stringify(responseMsg),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
