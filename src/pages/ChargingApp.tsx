@@ -574,22 +574,59 @@ const ChargingApp = () => {
   const [selectedCp, setSelectedCp] = useState<AppChargePoint | null>(null);
   const [loading, setLoading] = useState(false);
 
+  // Ensure charging_users entry exists for app user
+  const ensureChargingUser = useCallback(async (authId: string, email: string, displayName?: string) => {
+    try {
+      const { data: existing } = await supabase
+        .from("charging_users")
+        .select("id")
+        .eq("auth_user_id", authId)
+        .maybeSingle();
+      if (existing) return;
+
+      // Find the first "App-Nutzer" group
+      const { data: appGroup } = await supabase
+        .from("charging_user_groups")
+        .select("id, tenant_id")
+        .eq("is_app_user", true)
+        .limit(1)
+        .maybeSingle();
+
+      if (!appGroup) return; // No app-user group configured
+
+      await supabase.from("charging_users").insert({
+        tenant_id: appGroup.tenant_id,
+        auth_user_id: authId,
+        name: displayName || email.split("@")[0],
+        email,
+        group_id: appGroup.id,
+        status: "active",
+      });
+    } catch (err) {
+      console.error("Failed to create charging user entry:", err);
+    }
+  }, []);
+
   // Auth listener
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user) {
         setUser({ id: session.user.id, email: session.user.email || "" });
+        ensureChargingUser(session.user.id, session.user.email || "", session.user.user_metadata?.display_name);
       } else {
         setUser(null);
       }
       setAuthLoading(false);
     });
     supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user) setUser({ id: session.user.id, email: session.user.email || "" });
+      if (session?.user) {
+        setUser({ id: session.user.id, email: session.user.email || "" });
+        ensureChargingUser(session.user.id, session.user.email || "", session.user.user_metadata?.display_name);
+      }
       setAuthLoading(false);
     });
     return () => subscription.unsubscribe();
-  }, []);
+  }, [ensureChargingUser]);
 
   // Load data when authenticated
   useEffect(() => {
