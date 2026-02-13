@@ -59,7 +59,7 @@ const DashboardSidebar = () => {
     if (location.pathname === "/admin" || location.pathname === "/roles") {
       setOpenMenus((prev) => prev.includes("/admin") ? prev : [...prev, "/admin"]);
     }
-    if (location.pathname === "/settings" || location.pathname === "/settings/branding" || location.pathname === "/integrations") {
+    if (location.pathname === "/settings" || location.pathname === "/settings/branding" || location.pathname === "/settings/email-templates" || location.pathname === "/integrations") {
       setOpenMenus((prev) => prev.includes("/settings") ? prev : [...prev, "/settings"]);
     }
    if (location.pathname === "/energy-data" || location.pathname === "/meters" || location.pathname === "/live-values") {
@@ -115,7 +115,7 @@ const DashboardSidebar = () => {
         labelKey: "nav.settings" as TranslationKey,
         children: [
           { to: "/settings/branding", icon: Palette, labelKey: "nav.branding" as TranslationKey },
-          { to: "/settings", icon: Mail, labelKey: "nav.emailTemplates" as TranslationKey },
+          { to: "/settings/email-templates", icon: Mail, labelKey: "nav.emailTemplates" as TranslationKey },
           { to: "/integrations", icon: Plug, labelKey: "nav.integrations" as TranslationKey },
         ]
       },

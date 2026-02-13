@@ -37,6 +37,7 @@ import GettingStarted from "./pages/GettingStarted";
 import ChargingPoints from "./pages/ChargingPoints";
 import ChargingBilling from "./pages/ChargingBilling";
 import Automation from "./pages/Automation";
+import EmailTemplates from "./pages/EmailTemplates";
 import LiveValues from "./pages/LiveValues";
 import UpdateBanner from "./components/UpdateBanner";
 // Import Leaflet CSS globally
@@ -69,6 +70,7 @@ const App = () => (
                   <Route path="/admin" element={<Admin />} />
                   <Route path="/settings" element={<Settings />} />
                   <Route path="/settings/branding" element={<M><Branding /></M>} />
+                  <Route path="/settings/email-templates" element={<M><EmailTemplates /></M>} />
                   <Route path="/roles" element={<Roles />} />
                   <Route path="/locations" element={<M><Locations /></M>} />
                   <Route path="/locations/:id" element={<M><LocationDetail /></M>} />
