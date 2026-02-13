@@ -264,7 +264,7 @@ export type Database = {
       }
       charging_sessions: {
         Row: {
-          charge_point_id: string
+          charge_point_id: string | null
           connector_id: number
           created_at: string
           energy_kwh: number
@@ -280,7 +280,7 @@ export type Database = {
           transaction_id: number | null
         }
         Insert: {
-          charge_point_id: string
+          charge_point_id?: string | null
           connector_id?: number
           created_at?: string
           energy_kwh?: number
@@ -296,7 +296,7 @@ export type Database = {
           transaction_id?: number | null
         }
         Update: {
-          charge_point_id?: string
+          charge_point_id?: string | null
           connector_id?: number
           created_at?: string
           energy_kwh?: number
