@@ -7,6 +7,7 @@ export interface ChargingUserGroup {
   tenant_id: string;
   name: string;
   description: string | null;
+  is_app_user: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -15,6 +16,7 @@ export interface ChargingUser {
   id: string;
   tenant_id: string;
   group_id: string | null;
+  auth_user_id: string | null;
   name: string;
   email: string | null;
   rfid_tag: string | null;

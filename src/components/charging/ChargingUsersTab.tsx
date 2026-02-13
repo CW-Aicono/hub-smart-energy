@@ -14,11 +14,12 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { Plus, MoreHorizontal, Edit, Trash2, Ban, Archive, Users, FolderOpen, Check } from "lucide-react";
+import { Plus, MoreHorizontal, Edit, Trash2, Ban, Archive, Users, FolderOpen, Check, Smartphone } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 import { format } from "date-fns";
 
 const emptyUserForm = { name: "", email: "", rfid_tag: "", phone: "", group_id: "", notes: "" };
-const emptyGroupForm = { name: "", description: "" };
+const emptyGroupForm = { name: "", description: "", is_app_user: false };
 
 const ChargingUsersTab = () => {
   const { tenant } = useTenant();
@@ -31,7 +32,7 @@ const ChargingUsersTab = () => {
   const [userForm, setUserForm] = useState(emptyUserForm);
 
   const [groupDialogOpen, setGroupDialogOpen] = useState(false);
-  const [editingGroup, setEditingGroup] = useState<{ id: string; name: string; description: string | null } | null>(null);
+  const [editingGroup, setEditingGroup] = useState<{ id: string; name: string; description: string | null; is_app_user: boolean } | null>(null);
   const [groupForm, setGroupForm] = useState(emptyGroupForm);
 
   const [deleteTarget, setDeleteTarget] = useState<{ type: "user" | "group"; id: string; name: string } | null>(null);
@@ -100,8 +101,8 @@ const ChargingUsersTab = () => {
     setGroupDialogOpen(true);
   };
 
-  const openEditGroup = (g: { id: string; name: string; description: string | null }) => {
-    setGroupForm({ name: g.name, description: g.description || "" });
+  const openEditGroup = (g: { id: string; name: string; description: string | null; is_app_user: boolean }) => {
+    setGroupForm({ name: g.name, description: g.description || "", is_app_user: g.is_app_user });
     setEditingGroup(g);
     setGroupDialogOpen(true);
   };
@@ -109,9 +110,9 @@ const ChargingUsersTab = () => {
   const handleSaveGroup = () => {
     if (!tenant?.id) return;
     if (editingGroup) {
-      updateGroup.mutate({ id: editingGroup.id, name: groupForm.name, description: groupForm.description || undefined });
+      updateGroup.mutate({ id: editingGroup.id, name: groupForm.name, description: groupForm.description || undefined, is_app_user: groupForm.is_app_user } as any);
     } else {
-      addGroup.mutate({ tenant_id: tenant.id, name: groupForm.name, description: groupForm.description || undefined });
+      addGroup.mutate({ tenant_id: tenant.id, name: groupForm.name, description: groupForm.description || undefined, is_app_user: groupForm.is_app_user } as any);
     }
     setGroupDialogOpen(false);
   };
@@ -242,6 +243,7 @@ const ChargingUsersTab = () => {
                     <TableRow>
                       <TableHead>Name</TableHead>
                       <TableHead>Beschreibung</TableHead>
+                      <TableHead>App-Nutzer</TableHead>
                       <TableHead>Nutzer</TableHead>
                       <TableHead>Erstellt</TableHead>
                       {isAdmin && <TableHead className="w-24">Aktionen</TableHead>}
@@ -254,6 +256,13 @@ const ChargingUsersTab = () => {
                         <TableRow key={g.id}>
                           <TableCell className="font-medium">{g.name}</TableCell>
                           <TableCell>{g.description || "—"}</TableCell>
+                          <TableCell>
+                            {g.is_app_user ? (
+                              <Badge variant="default" className="gap-1"><Smartphone className="h-3 w-3" />App-Nutzer</Badge>
+                            ) : (
+                              <span className="text-muted-foreground">—</span>
+                            )}
+                          </TableCell>
                           <TableCell>{memberCount}</TableCell>
                           <TableCell>{format(new Date(g.created_at), "dd.MM.yyyy")}</TableCell>
                           {isAdmin && (
@@ -337,7 +346,11 @@ const ChargingUsersTab = () => {
             </div>
             <div>
               <Label>Beschreibung</Label>
-              <Textarea value={groupForm.description} onChange={(e) => setGroupForm({ ...groupForm, description: e.target.value })} rows={2} />
+             <Textarea value={groupForm.description} onChange={(e) => setGroupForm({ ...groupForm, description: e.target.value })} rows={2} />
+            </div>
+            <div className="flex items-center justify-between">
+              <Label>App-Nutzer Gruppe</Label>
+              <Switch checked={groupForm.is_app_user} onCheckedChange={(v) => setGroupForm({ ...groupForm, is_app_user: v })} />
             </div>
           </div>
           <DialogFooter>

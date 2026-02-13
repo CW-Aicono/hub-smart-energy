@@ -18,7 +18,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Plus, PlugZap, Trash2, Zap, ZapOff, AlertTriangle, WifiOff, Info, Search, MapPin, ChevronDown } from "lucide-react";
+import { Plus, PlugZap, Trash2, Zap, ZapOff, AlertTriangle, WifiOff, Info, Search, MapPin, ChevronDown, QrCode } from "lucide-react";
+import ChargePointQrCode from "@/components/charging/ChargePointQrCode";
 import { format } from "date-fns";
 import { fmtKwh, fmtKw } from "@/lib/formatCharging";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -278,6 +279,7 @@ const ChargingPoints = () => {
                           <TableHead>Standort</TableHead>
                           <TableHead>Leistung</TableHead>
                           <TableHead>Letzter Heartbeat</TableHead>
+                          <TableHead className="w-12">QR</TableHead>
                           {isAdmin && <TableHead className="w-16"></TableHead>}
                         </TableRow>
                       </TableHeader>
@@ -301,6 +303,9 @@ const ChargingPoints = () => {
                               <TableCell>{fmtKw(cp.max_power_kw)}</TableCell>
                               <TableCell className="text-sm text-muted-foreground">
                                 {cp.last_heartbeat ? format(new Date(cp.last_heartbeat), "dd.MM.yyyy HH:mm") : "—"}
+                              </TableCell>
+                              <TableCell>
+                                <ChargePointQrCode ocppId={cp.ocpp_id} name={cp.name} address={cp.address} />
                               </TableCell>
                               {isAdmin && (
                                 <TableCell>

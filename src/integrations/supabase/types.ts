@@ -91,6 +91,7 @@ export type Database = {
         Row: {
           address: string | null
           connector_count: number
+          connector_type: string
           created_at: string
           firmware_version: string | null
           id: string
@@ -111,6 +112,7 @@ export type Database = {
         Insert: {
           address?: string | null
           connector_count?: number
+          connector_type?: string
           created_at?: string
           firmware_version?: string | null
           id?: string
@@ -131,6 +133,7 @@ export type Database = {
         Update: {
           address?: string | null
           connector_count?: number
+          connector_type?: string
           created_at?: string
           firmware_version?: string | null
           id?: string
@@ -383,6 +386,7 @@ export type Database = {
           created_at: string
           description: string | null
           id: string
+          is_app_user: boolean
           name: string
           tenant_id: string
           updated_at: string
@@ -391,6 +395,7 @@ export type Database = {
           created_at?: string
           description?: string | null
           id?: string
+          is_app_user?: boolean
           name: string
           tenant_id: string
           updated_at?: string
@@ -399,6 +404,7 @@ export type Database = {
           created_at?: string
           description?: string | null
           id?: string
+          is_app_user?: boolean
           name?: string
           tenant_id?: string
           updated_at?: string
@@ -415,6 +421,7 @@ export type Database = {
       }
       charging_users: {
         Row: {
+          auth_user_id: string | null
           created_at: string
           email: string | null
           group_id: string | null
@@ -428,6 +435,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          auth_user_id?: string | null
           created_at?: string
           email?: string | null
           group_id?: string | null
@@ -441,6 +449,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          auth_user_id?: string | null
           created_at?: string
           email?: string | null
           group_id?: string | null
