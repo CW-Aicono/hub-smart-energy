@@ -1,10 +1,12 @@
-import { useMemo } from "react";
-import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
+import { useMemo, useState, useCallback } from "react";
+import { MapContainer, TileLayer, Marker, Popup, useMap, Circle } from "react-leaflet";
 import { Icon, LatLngBounds } from "leaflet";
 import { useEffect } from "react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { PlugZap, Zap, ZapOff, AlertTriangle, WifiOff } from "lucide-react";
+import { PlugZap, Zap, ZapOff, AlertTriangle, WifiOff, LocateFixed, Loader2 } from "lucide-react";
+import { toast } from "sonner";
 
 const statusColors: Record<string, string> = {
   available: "#22c55e",   // grün
@@ -42,6 +44,7 @@ interface ChargePointsMapProps {
   chargePoints: ChargePointForMap[];
   onChargePointClick?: (cp: ChargePointForMap) => void;
   className?: string;
+  showLocateButton?: boolean;
 }
 
 const statusConfig: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
@@ -51,6 +54,16 @@ const statusConfig: Record<string, { label: string; variant: "default" | "second
   unavailable: { label: "Nicht verfügbar", variant: "outline" },
   offline: { label: "Offline", variant: "outline" },
 };
+
+function LocateUserControl({ userPos }: { userPos: [number, number] | null }) {
+  const map = useMap();
+  useEffect(() => {
+    if (userPos) {
+      map.setView(userPos, 15, { animate: true });
+    }
+  }, [userPos, map]);
+  return null;
+}
 
 function MapController({ points }: { points: ChargePointForMap[] }) {
   const map = useMap();
@@ -69,7 +82,28 @@ function MapController({ points }: { points: ChargePointForMap[] }) {
   return null;
 }
 
-export default function ChargePointsMap({ chargePoints, onChargePointClick, className }: ChargePointsMapProps) {
+export default function ChargePointsMap({ chargePoints, onChargePointClick, className, showLocateButton = false }: ChargePointsMapProps) {
+  const [userPos, setUserPos] = useState<[number, number] | null>(null);
+  const [locating, setLocating] = useState(false);
+
+  const handleLocate = useCallback(() => {
+    if (!navigator.geolocation) {
+      toast.error("Geolocation wird nicht unterstützt");
+      return;
+    }
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setUserPos([pos.coords.latitude, pos.coords.longitude]);
+        setLocating(false);
+      },
+      () => {
+        toast.error("Standort konnte nicht ermittelt werden");
+        setLocating(false);
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  }, []);
   const validPoints = useMemo(
     () => chargePoints.filter((cp) => cp.latitude != null && cp.longitude != null),
     [chargePoints]
@@ -110,6 +144,13 @@ export default function ChargePointsMap({ chargePoints, onChargePointClick, clas
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
         <MapController points={validPoints} />
+        {userPos && <LocateUserControl userPos={userPos} />}
+        {userPos && (
+          <>
+            <Circle center={userPos} radius={12} pathOptions={{ color: "#3b82f6", fillColor: "#3b82f6", fillOpacity: 0.9, weight: 2 }} />
+            <Circle center={userPos} radius={80} pathOptions={{ color: "#3b82f6", fillColor: "#3b82f6", fillOpacity: 0.15, weight: 1 }} />
+          </>
+        )}
         {validPoints.map((cp) => {
           const cfg = statusConfig[cp.status] || statusConfig.offline;
           return (
@@ -135,6 +176,25 @@ export default function ChargePointsMap({ chargePoints, onChargePointClick, clas
           );
         })}
       </MapContainer>
+
+      {/* Map control buttons */}
+      {showLocateButton && (
+        <div className="absolute bottom-3 right-3 z-[1000] flex flex-col gap-2">
+          <Button
+            size="icon"
+            variant="secondary"
+            className="h-10 w-10 rounded-full shadow-lg bg-background/95 backdrop-blur-sm border"
+            onClick={handleLocate}
+            disabled={locating}
+          >
+            {locating ? (
+              <Loader2 className="h-5 w-5 animate-spin" />
+            ) : (
+              <LocateFixed className={cn("h-5 w-5", userPos && "text-primary")} />
+            )}
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

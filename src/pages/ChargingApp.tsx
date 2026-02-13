@@ -266,7 +266,7 @@ function MapTab({ chargePoints, onSelect }: { chargePoints: AppChargePoint[]; on
       <div className="flex-1 relative" style={{ minHeight: "300px" }}>
         {filtered.some((cp) => cp.latitude && cp.longitude) ? (
           <Suspense fallback={<div className="flex items-center justify-center h-full"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>}>
-            <LazyMap chargePoints={filtered as any} />
+            <LazyMap chargePoints={filtered as any} showLocateButton />
           </Suspense>
         ) : (
           <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
