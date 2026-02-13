@@ -809,7 +809,7 @@ const MobileApp = () => {
                         <SelectValue placeholder="Zähler wählen" />
                       </SelectTrigger>
                       <SelectContent>
-                        {meters.map((m) => (
+                        {meters.filter((m) => m.capture_type === "manual" && !m.is_archived).map((m) => (
                           <SelectItem key={m.id} value={m.id}>
                             {m.name} {m.meter_number ? `(${m.meter_number})` : ""}
                           </SelectItem>
