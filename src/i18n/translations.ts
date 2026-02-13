@@ -80,6 +80,12 @@ export const translations = {
     es: "Marca",
     nl: "Branding",
   },
+  "nav.emailTemplates": {
+    de: "Mailvorlagen",
+    en: "Email Templates",
+    es: "Plantillas de correo",
+    nl: "E-mailsjablonen",
+  },
   "nav.myProfile": {
     de: "Mein Profil",
     en: "My Profile",
