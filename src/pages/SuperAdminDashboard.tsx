@@ -17,7 +17,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { cn } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import LocationsMapContent from "@/components/locations/LocationsMapContent";
+import { LocationsMap } from "@/components/locations/LocationsMap";
 
 const SA_WIDGETS_KEY = "sa-dashboard-widgets";
 
@@ -198,7 +198,7 @@ const SuperAdminDashboard = () => {
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="relative">
-              <LocationsMapContent
+              <LocationsMap
                 locations={locations as any}
                 onLocationClick={(loc: any) => {
                   const found = locations.find((l) => l.id === loc.id);
