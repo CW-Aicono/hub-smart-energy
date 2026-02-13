@@ -98,6 +98,46 @@ async function handleStatusNotification(
   return {};
 }
 
+async function handleAuthorize(
+  supabase: ReturnType<typeof createSupabase>,
+  chargePointId: string,
+  payload: Record<string, unknown>
+) {
+  const idTag = payload.idTag as string;
+  const status = await validateIdTag(supabase, chargePointId, idTag);
+  return { idTagInfo: { status } };
+}
+
+async function validateIdTag(
+  supabase: ReturnType<typeof createSupabase>,
+  chargePointId: string,
+  idTag: string | null | undefined
+): Promise<string> {
+  if (!idTag) return "Accepted"; // No tag = free charging
+
+  // Find the charge point's tenant
+  const { data: cp } = await supabase
+    .from("charge_points")
+    .select("tenant_id")
+    .eq("ocpp_id", chargePointId)
+    .single();
+
+  if (!cp) return "Invalid";
+
+  // Check if the RFID tag belongs to an active charging user in this tenant
+  const { data: user } = await supabase
+    .from("charging_users")
+    .select("id, status")
+    .eq("tenant_id", cp.tenant_id)
+    .eq("rfid_tag", idTag)
+    .single();
+
+  if (!user) return "Invalid"; // Unknown tag
+  if (user.status !== "active") return "Blocked"; // User is blocked/archived
+
+  return "Accepted";
+}
+
 async function handleStartTransaction(
   supabase: ReturnType<typeof createSupabase>,
   chargePointId: string,
@@ -114,6 +154,13 @@ async function handleStartTransaction(
     return { idTagInfo: { status: "Invalid" } };
   }
 
+  // Validate RFID tag
+  const idTag = payload.idTag as string | undefined;
+  const authStatus = await validateIdTag(supabase, chargePointId, idTag);
+  if (authStatus !== "Accepted") {
+    return { idTagInfo: { status: authStatus } };
+  }
+
   // Generate transaction id
   const transactionId = Math.floor(Math.random() * 2147483647);
 
@@ -122,7 +169,7 @@ async function handleStartTransaction(
     charge_point_id: cp.id,
     connector_id: (payload.connectorId as number) || 1,
     transaction_id: transactionId,
-    id_tag: (payload.idTag as string) || null,
+    id_tag: idTag || null,
     start_time: (payload.timestamp as string) || new Date().toISOString(),
     meter_start: (payload.meterStart as number) || 0,
     status: "active",
@@ -335,6 +382,9 @@ Deno.serve(async (req) => {
     switch (msg.action) {
       case "BootNotification":
         result = await handleBootNotification(supabase, chargePointId, msg.payload!);
+        break;
+      case "Authorize":
+        result = await handleAuthorize(supabase, chargePointId, msg.payload!);
         break;
       case "Heartbeat":
         result = await handleHeartbeat(supabase, chargePointId);
