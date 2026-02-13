@@ -73,18 +73,8 @@ Deno.serve((req) => {
 
   console.log(`[ocpp-ws-proxy] WebSocket connected: chargePointId=${chargePointId}`);
 
-  let keepAliveTimer: number | undefined;
-
   socket.onopen = () => {
     console.log(`[ocpp-ws-proxy] Socket open for ${chargePointId}`);
-    // Send WebSocket ping every 20s to keep the connection alive
-    keepAliveTimer = setInterval(() => {
-      if (socket.readyState === WebSocket.OPEN) {
-        try {
-          socket.send(""); // empty frame as keep-alive
-        } catch { /* ignore */ }
-      }
-    }, 20_000);
   };
 
   socket.onmessage = async (event) => {
@@ -141,12 +131,10 @@ Deno.serve((req) => {
   };
 
   socket.onclose = (event) => {
-    if (keepAliveTimer) clearInterval(keepAliveTimer);
     console.log(`[ocpp-ws-proxy] Socket closed for ${chargePointId}: code=${event.code} reason=${event.reason}`);
   };
 
   socket.onerror = (error) => {
-    if (keepAliveTimer) clearInterval(keepAliveTimer);
     console.error(`[ocpp-ws-proxy] Socket error for ${chargePointId}:`, error);
   };
 
