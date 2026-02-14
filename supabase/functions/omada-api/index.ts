@@ -16,41 +16,63 @@ interface OmadaTokenResponse {
   };
 }
 
-async function discoverOmadaId(baseUrl: string): Promise<string | null> {
-  try {
-    const resp = await fetch(`${baseUrl}/api/info`);
-    if (resp.ok) {
-      const data = await resp.json();
-      return data?.result?.omadacId || null;
-    }
-  } catch (_) { /* ignore */ }
-  return null;
-}
-
-async function getAccessToken(
+async function tryGetAccessToken(
   baseUrl: string,
   omadaId: string,
   clientId: string,
   clientSecret: string
-): Promise<string> {
-  const tokenUrl = `${baseUrl}/openapi/authorize/token?grant_type=client_credentials&omadacId=${omadaId}`;
-  const resp = await fetch(tokenUrl, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ omadacId: omadaId, client_id: clientId, client_secret: clientSecret }),
-  });
-  const contentType = resp.headers.get("content-type") || "";
-  if (!contentType.includes("application/json")) {
-    const text = await resp.text();
-    throw new Error(`Omada API returned non-JSON response (${resp.status}). Check your API URL. Response: ${text.substring(0, 200)}`);
+): Promise<{ token: string; omadaId: string } | { error: string }> {
+  // Try multiple token URL patterns used by different Omada API versions
+  const attempts = [
+    // Pattern 1: omadacId in both query and body (v1 standard)
+    {
+      url: `${baseUrl}/openapi/authorize/token?grant_type=client_credentials&omadacId=${omadaId}`,
+      body: { omadacId: omadaId, client_id: clientId, client_secret: clientSecret },
+    },
+    // Pattern 2: omadacId only in query string
+    {
+      url: `${baseUrl}/openapi/authorize/token?grant_type=client_credentials&omadacId=${omadaId}`,
+      body: { client_id: clientId, client_secret: clientSecret },
+    },
+    // Pattern 3: no omadacId in query (cloud northbound pattern)
+    {
+      url: `${baseUrl}/openapi/authorize/token?grant_type=client_credentials`,
+      body: { omadacId: omadaId, client_id: clientId, client_secret: clientSecret },
+    },
+  ];
+
+  const errors: string[] = [];
+
+  for (const attempt of attempts) {
+    try {
+      const resp = await fetch(attempt.url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(attempt.body),
+      });
+      const contentType = resp.headers.get("content-type") || "";
+      if (!contentType.includes("application/json")) {
+        const text = await resp.text();
+        errors.push(`Non-JSON (${resp.status}): ${text.substring(0, 100)}`);
+        continue;
+      }
+      const data: OmadaTokenResponse = await resp.json();
+      if (data.errorCode === 0 && data.result?.accessToken) {
+        console.log(`Auth succeeded with URL pattern: ${attempt.url}`);
+        return { token: data.result.accessToken, omadaId };
+      }
+      errors.push(`Code ${data.errorCode}: ${data.msg}`);
+    } catch (e) {
+      errors.push(`Fetch error: ${e.message}`);
+    }
   }
-  const data: OmadaTokenResponse = await resp.json();
-  if (data.errorCode !== 0) throw new Error(`Omada auth error (code ${data.errorCode}): ${data.msg}`);
-  return data.result.accessToken;
+
+  return { error: `All auth attempts failed. Details: ${errors.join(" | ")}` };
 }
 
 async function omadaGet(baseUrl: string, path: string, token: string, omadaId: string) {
   const url = `${baseUrl}/openapi/v1/${omadaId}${path}`;
+  console.log(`GET ${url}`);
   const resp = await fetch(url, {
     headers: {
       Authorization: `AccessToken=${token}`,
@@ -93,46 +115,42 @@ Deno.serve(async (req) => {
 
     const config = (li.config || {}) as Record<string, string>;
     const baseUrl = (config.api_url || "").replace(/\/$/, "");
-    let omadaId = config.omada_id || "";
+    const omadaId = config.omada_id || "";
     const clientId = config.client_id || "";
     const clientSecret = config.client_secret || "";
 
-    if (!baseUrl || !clientId || !clientSecret) {
+    if (!baseUrl || !omadaId || !clientId || !clientSecret) {
       return new Response(
-        JSON.stringify({ success: false, error: "Missing Omada configuration (api_url, client_id, client_secret)" }),
+        JSON.stringify({ success: false, error: "Missing Omada configuration (api_url, omada_id, client_id, client_secret)" }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 400 }
       );
     }
 
-    // Auto-discover omadaId if not provided or if auth fails
-    if (!omadaId) {
-      const discovered = await discoverOmadaId(baseUrl);
-      if (discovered) omadaId = discovered;
+    // Try with configured omadaId first, then with device_id if available
+    const idsToTry = [omadaId];
+    if (config.device_id && config.device_id !== omadaId) {
+      idsToTry.push(config.device_id);
     }
 
-    if (!omadaId) {
+    let authResult: { token: string; omadaId: string } | { error: string } = { error: "No IDs to try" };
+    for (const id of idsToTry) {
+      console.log(`Trying omadaId: ${id}`);
+      authResult = await tryGetAccessToken(baseUrl, id, clientId, clientSecret);
+      if ("token" in authResult) break;
+    }
+    console.log(`Auth result: ${"token" in authResult ? "success" : authResult.error}`);
+
+    if ("error" in authResult) {
       return new Response(
-        JSON.stringify({ success: false, error: "Missing omada_id and auto-discovery failed. Please provide the Controller ID." }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 400 }
+        JSON.stringify({ success: false, error: authResult.error }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 500 }
       );
     }
 
-    let token: string;
-    try {
-      token = await getAccessToken(baseUrl, omadaId, clientId, clientSecret);
-    } catch (e) {
-      // If auth fails with provided ID, try auto-discovery
-      const discovered = await discoverOmadaId(baseUrl);
-      if (discovered && discovered !== omadaId) {
-        omadaId = discovered;
-        token = await getAccessToken(baseUrl, omadaId, clientId, clientSecret);
-      } else {
-        throw e;
-      }
-    }
+    const { token, omadaId: resolvedOmadaId } = authResult;
 
     // Get sites first
-    const sitesData = await omadaGet(baseUrl, "/sites", token, omadaId);
+    const sitesData = await omadaGet(baseUrl, "/sites", token, resolvedOmadaId);
     const sites = sitesData?.result?.data || [];
 
     if (action === "getSensors" || action === "getDevices") {
@@ -142,7 +160,7 @@ Deno.serve(async (req) => {
         const siteId = site.siteId || site.id;
 
         // Fetch APs
-        const aps = await omadaGet(baseUrl, `/sites/${siteId}/aps`, token, omadaId);
+        const aps = await omadaGet(baseUrl, `/sites/${siteId}/aps`, token, resolvedOmadaId);
         for (const ap of aps?.result?.data || []) {
           allDevices.push({
             uuid: `ap_${ap.mac}`,
@@ -156,7 +174,7 @@ Deno.serve(async (req) => {
         }
 
         // Fetch Switches
-        const switches = await omadaGet(baseUrl, `/sites/${siteId}/switches`, token, omadaId);
+        const switches = await omadaGet(baseUrl, `/sites/${siteId}/switches`, token, resolvedOmadaId);
         for (const sw of switches?.result?.data || []) {
           allDevices.push({
             uuid: `sw_${sw.mac}`,
@@ -170,7 +188,7 @@ Deno.serve(async (req) => {
         }
 
         // Fetch Gateways
-        const gateways = await omadaGet(baseUrl, `/sites/${siteId}/gateways`, token, omadaId);
+        const gateways = await omadaGet(baseUrl, `/sites/${siteId}/gateways`, token, resolvedOmadaId);
         for (const gw of gateways?.result?.data || []) {
           allDevices.push({
             uuid: `gw_${gw.mac}`,
