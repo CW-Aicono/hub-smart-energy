@@ -636,29 +636,43 @@ function QrScannerTab({ onScanned }: { onScanned: (data: string) => void }) {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
       streamRef.current = stream;
-      // First set scanning=true so the <video> element renders
       setScanning(true);
     } catch {
-      setError("Kamera-Zugriff nicht möglich");
+      setError("Kamera-Zugriff nicht möglich. Bitte erlauben Sie den Kamera-Zugriff in den Einstellungen.");
     }
   }, []);
 
   // Once scanning is true and video element is in the DOM, attach stream and start frame scanning
   useEffect(() => {
-    if (scanning && videoRef.current && streamRef.current) {
+    if (!scanning || !streamRef.current) return;
+
+    // Use a small delay to ensure the video element is mounted in the DOM on iOS
+    const timer = setTimeout(() => {
       const video = videoRef.current;
+      if (!video || !streamRef.current) return;
+
       video.srcObject = streamRef.current;
-      video.play().then(() => startFrameScan(video)).catch(() => {
-        setError("Video konnte nicht gestartet werden");
-      });
-    }
+      // setAttribute is more reliable on iOS Safari than property assignment
+      video.setAttribute("playsinline", "true");
+      video.setAttribute("webkit-playsinline", "true");
+      video.muted = true;
+
+      const playPromise = video.play();
+      if (playPromise !== undefined) {
+        playPromise.then(() => startFrameScan(video)).catch(() => {
+          setError("Video konnte nicht gestartet werden. Bitte tippen Sie auf 'Scanner öffnen'.");
+          setScanning(false);
+        });
+      }
+    }, 100);
+
+    return () => clearTimeout(timer);
   }, [scanning, startFrameScan]);
 
-  // Auto-start scanner when tab is shown
+  // Cleanup on unmount
   useEffect(() => {
-    startScan();
     return () => stopScan();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [stopScan]);
 
   return (
     <div className="flex flex-col items-center justify-center h-full p-6 space-y-6">
