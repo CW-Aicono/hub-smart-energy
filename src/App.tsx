@@ -42,6 +42,7 @@ import EmailTemplates from "./pages/EmailTemplates";
 import LiveValues from "./pages/LiveValues";
 import NetworkInfrastructure from "./pages/NetworkInfrastructure";
 import SuperAdminOcppIntegrations from "./pages/SuperAdminOcppIntegrations";
+import SuperAdminOcppControl from "./pages/SuperAdminOcppControl";
 import ChargingApp from "./pages/ChargingApp";
 import ChargingAppAdmin from "./pages/ChargingAppAdmin";
 import UpdateBanner from "./components/UpdateBanner";
@@ -95,6 +96,7 @@ const App = () => (
                   <Route path="/super-admin/module-pricing" element={<SA><SuperAdminModulePricing /></SA>} />
                   <Route path="/super-admin/support" element={<SA><SuperAdminSupport /></SA>} />
                   <Route path="/super-admin/ocpp/integrations" element={<SA><SuperAdminOcppIntegrations /></SA>} />
+                  <Route path="/super-admin/ocpp/control" element={<SA><SuperAdminOcppControl /></SA>} />
                   <Route path="/charging/points" element={<M><ChargingPoints /></M>} />
                   <Route path="/charging/points/:id" element={<M><ChargePointDetail /></M>} />
                   <Route path="/charging/billing" element={<M><ChargingBilling /></M>} />

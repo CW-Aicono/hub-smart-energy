@@ -73,6 +73,7 @@ export default function SuperAdminSidebar() {
       label: t("nav.ocpp_backend"),
       children: [
         { to: "/super-admin/ocpp/integrations", icon: PlugZap, label: t("nav.ocpp_integrations") },
+        { to: "/super-admin/ocpp/control", icon: Server, label: "OCPP Control" },
       ],
     },
     { to: "/super-admin/support", icon: HeadsetIcon, label: t("nav.support") },
