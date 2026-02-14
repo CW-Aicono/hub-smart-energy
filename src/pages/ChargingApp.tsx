@@ -277,7 +277,7 @@ function MapTab({ chargePoints, onStartCharge, initialCpId, onInitialCpHandled }
       <div className="absolute inset-0">
         {filtered.some((cp) => cp.latitude && cp.longitude) ? (
           <Suspense fallback={<div className="flex items-center justify-center h-full"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>}>
-            <LazyMap chargePoints={filtered as any} onChargePointClick={(cp: any) => handleCpClick(cp as AppChargePoint)} className="!h-full !rounded-none !border-0 [&_.leaflet-control-zoom]:!hidden" />
+            <LazyMap chargePoints={filtered as any} onChargePointClick={(cp: any) => handleCpClick(cp as AppChargePoint)} externalUserPos={userPos} className="!h-full !rounded-none !border-0 [&_.leaflet-control-zoom]:!hidden" />
           </Suspense>
         ) : (
           <div className="flex items-center justify-center h-full text-muted-foreground text-sm bg-muted/30">
@@ -287,7 +287,7 @@ function MapTab({ chargePoints, onStartCharge, initialCpId, onInitialCpHandled }
       </div>
 
       {/* Bottom controls: search bar with action buttons */}
-      {!drawerOpen && <div className="absolute bottom-4 left-3 right-3 z-[1000] flex items-center gap-2">
+      {!drawerOpen && !filterOpen && <div className="absolute bottom-4 left-3 right-3 z-[1000] flex items-center gap-2">
         <div className="relative flex-1">
           <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input

@@ -48,6 +48,7 @@ interface ChargePointsMapProps {
   onVisiblePointsChange?: (visibleIds: Set<string>) => void;
   className?: string;
   showLocateButton?: boolean;
+  externalUserPos?: [number, number] | null;
 }
 
 const statusConfig: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
@@ -111,9 +112,14 @@ function BoundsTracker({ points, onVisiblePointsChange }: { points: ChargePointF
   return null;
 }
 
-export default function ChargePointsMap({ chargePoints, onChargePointClick, onVisiblePointsChange, className, showLocateButton = false }: ChargePointsMapProps) {
-  const [userPos, setUserPos] = useState<[number, number] | null>(null);
+export default function ChargePointsMap({ chargePoints, onChargePointClick, onVisiblePointsChange, className, showLocateButton = false, externalUserPos }: ChargePointsMapProps) {
+  const [userPos, setUserPos] = useState<[number, number] | null>(externalUserPos || null);
   const [locating, setLocating] = useState(false);
+
+  // Sync external user position
+  useEffect(() => {
+    if (externalUserPos) setUserPos(externalUserPos);
+  }, [externalUserPos]);
 
   const handleLocate = useCallback(() => {
     if (!navigator.geolocation) {
