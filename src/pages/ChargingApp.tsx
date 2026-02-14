@@ -687,9 +687,43 @@ const ChargingApp = () => {
     }
   };
 
-  const handleStartCharge = (cpId: string) => {
-    // In production, this would send a RemoteStartTransaction via OCPP
-    toast.success("Ladevorgang wird gestartet…");
+  const handleStartCharge = async (cpId: string) => {
+    const cp = chargePoints.find((c) => c.id === cpId);
+    if (!cp) { toast.error("Ladepunkt nicht gefunden"); return; }
+
+    toast.loading("Ladevorgang wird gestartet…", { id: "remote-start" });
+
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+
+      const res = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ocpp-central/command/RemoteStartTransaction`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${token || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+          },
+          body: JSON.stringify({
+            chargePointId: cp.ocpp_id,
+            idTag: user?.email?.substring(0, 20) || "APP_USER",
+            connectorId: 1,
+          }),
+        }
+      );
+
+      const result = await res.json();
+
+      if (result.status === "Accepted") {
+        toast.success("Ladebefehl wurde an die Wallbox gesendet", { id: "remote-start" });
+      } else {
+        toast.error(result.message || "Ladevorgang konnte nicht gestartet werden", { id: "remote-start" });
+      }
+    } catch (err) {
+      console.error("Remote start failed:", err);
+      toast.error("Verbindungsfehler – bitte erneut versuchen", { id: "remote-start" });
+    }
   };
 
   const handleLogout = async () => {
