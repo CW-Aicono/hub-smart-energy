@@ -48,6 +48,7 @@ interface AppSession {
 
 interface AppInvoice {
   id: string;
+  session_id: string;
   invoice_number: string | null;
   total_energy_kwh: number;
   total_amount: number;
@@ -56,6 +57,12 @@ interface AppInvoice {
   status: string;
   issued_at: string | null;
   created_at: string;
+}
+
+interface AppTenantInfo {
+  name: string;
+  logo_url: string | null;
+  branding: Record<string, string>;
 }
 
 interface AppTariff {
@@ -842,7 +849,14 @@ function HistoryTab({ sessions, chargePoints, tariff }: { sessions: AppSession[]
 }
 
 // ---- Invoices Tab ----
-function InvoicesTab({ invoices }: { invoices: AppInvoice[] }) {
+function InvoicesTab({ invoices, sessions, chargePoints, tariff, tenantInfo, userEmail }: {
+  invoices: AppInvoice[];
+  sessions: AppSession[];
+  chargePoints: AppChargePoint[];
+  tariff: AppTariff | null;
+  tenantInfo: AppTenantInfo | null;
+  userEmail: string;
+}) {
   const [selectedInvoice, setSelectedInvoice] = useState<AppInvoice | null>(null);
 
   if (invoices.length === 0) {
@@ -854,35 +868,188 @@ function InvoicesTab({ invoices }: { invoices: AppInvoice[] }) {
     );
   }
 
+  const getCpName = (id: string | null) => chargePoints.find((cp) => cp.id === id)?.name || "—";
+
   const handlePrint = (inv: AppInvoice) => {
-    const printContent = `
-      <html><head><title>Rechnung ${inv.invoice_number}</title>
-      <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-      <style>body{font-family:system-ui,sans-serif;padding:20px;color:#1e293b;margin:0}
-      h1{font-size:20px;margin-bottom:8px}
-      table{width:100%;border-collapse:collapse;margin-top:20px}
-      th,td{padding:8px 12px;text-align:left;border-bottom:1px solid #e2e8f0;font-size:14px}
-      th{background:#f8fafc;font-size:12px;text-transform:uppercase;color:#64748b}
-      .total{font-size:18px;font-weight:700;margin-top:20px;text-align:right}
-      .meta{color:#64748b;font-size:13px}
-      .back-btn{display:block;margin:16px auto 24px;padding:12px 32px;font-size:16px;font-weight:600;
-        background:#0f172a;color:#fff;border:none;border-radius:12px;cursor:pointer;
-        -webkit-tap-highlight-color:transparent}
-      .back-btn:active{opacity:0.8}
-      @media print{.back-btn{display:none !important}}
-      </style></head><body>
-      <button class="back-btn" onclick="window.close();history.back();">← Zurück zur App</button>
-      <h1>Laderechnung ${inv.invoice_number || "Entwurf"}</h1>
-      <p class="meta">Erstellt: ${format(new Date(inv.created_at), "dd.MM.yyyy")}</p>
-      ${inv.issued_at ? `<p class="meta">Ausgestellt: ${format(new Date(inv.issued_at), "dd.MM.yyyy")}</p>` : ""}
-      <table>
-        <tr><th>Position</th><th style="text-align:right">Betrag</th></tr>
-        <tr><td>Energie: ${inv.total_energy_kwh.toLocaleString("de-DE", { minimumFractionDigits: 2 })} kWh</td><td style="text-align:right">${fmtCurrency(inv.total_amount - inv.idle_fee_amount)}</td></tr>
-        ${inv.idle_fee_amount > 0 ? `<tr><td>Blockiergebühr</td><td style="text-align:right">${fmtCurrency(inv.idle_fee_amount)}</td></tr>` : ""}
-      </table>
-      <div class="total">Gesamt: ${fmtCurrency(inv.total_amount)}</div>
-      </body></html>
-    `;
+    const currencySymbol = inv.currency === "EUR" ? "€" : inv.currency;
+    const invoiceDate = inv.issued_at ? format(new Date(inv.issued_at), "dd.MM.yyyy") : format(new Date(inv.created_at), "dd.MM.yyyy");
+    const tenantName = tenantInfo?.name || "Ladeinfrastruktur-Betreiber";
+    const logoUrl = tenantInfo?.logo_url || null;
+    const primaryColor = tenantInfo?.branding?.primary_color || "#1e293b";
+    const accentColor = tenantInfo?.branding?.accent_color || "#334155";
+    const pricePerKwh = tariff?.price_per_kwh ?? 0;
+    const baseFee = tariff?.base_fee ?? 0;
+    const idleFeePerMinute = tariff?.idle_fee_per_minute ?? 0;
+    const idleFeeGraceMinutes = tariff?.idle_fee_grace_minutes ?? 60;
+
+    // Find related sessions for this invoice (match by session_id or approximate by date range)
+    const relatedSessions = sessions.filter(s => s.status === "completed");
+
+    // Build session rows
+    const sessionRows = relatedSessions.slice(0, 50).map((s, i) => {
+      const startDate = new Date(s.start_time);
+      const endDate = s.stop_time ? new Date(s.stop_time) : null;
+      const duration = endDate ? Math.round((endDate.getTime() - startDate.getTime()) / 60000) : 0;
+      const durationStr = duration > 60 ? `${Math.floor(duration / 60)}h ${duration % 60}min` : `${duration}min`;
+      const energyCost = s.energy_kwh * pricePerKwh;
+      const idleMinutes = idleFeePerMinute > 0 ? Math.max(0, duration - idleFeeGraceMinutes) : 0;
+      const sessionIdleFee = idleMinutes * idleFeePerMinute;
+      const bg = i % 2 === 0 ? "#ffffff" : "#f8fafc";
+      return `<tr>
+        <td style="padding:8px 12px;font-size:12px;color:#334155;border-bottom:1px solid #f1f5f9;background:${bg}">${i + 1}</td>
+        <td style="padding:8px 12px;font-size:12px;color:#334155;border-bottom:1px solid #f1f5f9;background:${bg}">${startDate.toLocaleDateString("de-DE")}</td>
+        <td style="padding:8px 12px;font-size:12px;color:#334155;border-bottom:1px solid #f1f5f9;background:${bg}">${startDate.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}${endDate ? " – " + endDate.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" }) : ""}</td>
+        <td style="padding:8px 12px;font-size:12px;color:#334155;border-bottom:1px solid #f1f5f9;background:${bg}">${getCpName(s.charge_point_id)}</td>
+        <td style="padding:8px 12px;font-size:12px;color:#334155;border-bottom:1px solid #f1f5f9;background:${bg}">${durationStr}</td>
+        <td style="padding:8px 12px;font-size:12px;color:#334155;border-bottom:1px solid #f1f5f9;background:${bg};text-align:right">${s.energy_kwh.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kWh</td>
+        <td style="padding:8px 12px;font-size:12px;color:#334155;border-bottom:1px solid #f1f5f9;background:${bg};text-align:right">${energyCost.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currencySymbol}</td>
+        ${idleFeePerMinute > 0 ? `<td style="padding:8px 12px;font-size:12px;color:${sessionIdleFee > 0 ? '#dc2626' : '#94a3b8'};border-bottom:1px solid #f1f5f9;background:${bg};text-align:right">${sessionIdleFee > 0 ? sessionIdleFee.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " " + currencySymbol : "—"}</td>` : ""}
+      </tr>`;
+    }).join("");
+
+    const netAmount = inv.total_amount;
+    const vatRate = 0.19;
+    const vatAmount = netAmount * vatRate;
+    const grossAmount = netAmount + vatAmount;
+
+    const printContent = `<!DOCTYPE html>
+<html lang="de"><head><meta charset="UTF-8"/><title>Rechnung ${inv.invoice_number}</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<style>
+  @media print { body { margin: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; } .no-print { display: none !important; } @page { margin: 12mm 15mm; size: A4; } }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: #1e293b; margin: 0; padding: 0; background: #fff; }
+  .container { max-width: 750px; margin: 0 auto; padding: 32px; }
+</style></head><body>
+<div class="container">
+
+  <!-- Back button (mobile) -->
+  <div class="no-print" style="text-align:center;margin-bottom:20px">
+    <button onclick="window.close();history.back();" style="padding:12px 32px;font-size:16px;font-weight:600;background:#0f172a;color:#fff;border:none;border-radius:12px;cursor:pointer">← Zurück zur App</button>
+  </div>
+
+  <!-- Header with logo -->
+  <table style="width:100%;margin-bottom:32px;border-spacing:0">
+    <tr>
+      <td style="vertical-align:top">
+        ${logoUrl ? `<img src="${logoUrl}" alt="Logo" style="max-height:60px;max-width:180px;object-fit:contain;margin-bottom:8px" />` : ""}
+        <div style="font-size:16px;font-weight:700;color:${primaryColor}">${tenantName}</div>
+      </td>
+      <td style="vertical-align:top;text-align:right">
+        <div style="font-size:24px;font-weight:800;color:${primaryColor};margin-bottom:4px">RECHNUNG</div>
+        <div style="font-size:13px;color:#64748b">${inv.invoice_number || "Entwurf"}</div>
+      </td>
+    </tr>
+  </table>
+
+  <!-- Sender / Recipient -->
+  <table style="width:100%;margin-bottom:28px;border-spacing:0">
+    <tr>
+      <td style="vertical-align:top;width:50%">
+        <div style="font-size:10px;text-transform:uppercase;color:#94a3b8;letter-spacing:0.5px;margin-bottom:6px;font-weight:600">Rechnungssteller</div>
+        <div style="font-size:14px;font-weight:600">${tenantName}</div>
+        <div style="font-size:12px;color:#64748b;margin-top:2px">Ladeinfrastruktur-Betreiber</div>
+      </td>
+      <td style="vertical-align:top;width:50%">
+        <div style="font-size:10px;text-transform:uppercase;color:#94a3b8;letter-spacing:0.5px;margin-bottom:6px;font-weight:600">Rechnungsempfänger</div>
+        <div style="font-size:14px;font-weight:600">${userEmail}</div>
+      </td>
+    </tr>
+  </table>
+
+  <!-- Invoice details -->
+  <table style="width:100%;margin-bottom:28px;border-spacing:0;background:#f8fafc;border-radius:10px;border:1px solid #e2e8f0">
+    <tr>
+      <td style="padding:14px 20px;border-right:1px solid #e2e8f0">
+        <div style="font-size:10px;text-transform:uppercase;color:#94a3b8;letter-spacing:0.5px;margin-bottom:4px">Rechnungsdatum</div>
+        <div style="font-size:13px;font-weight:600">${invoiceDate}</div>
+      </td>
+      <td style="padding:14px 20px;border-right:1px solid #e2e8f0">
+        <div style="font-size:10px;text-transform:uppercase;color:#94a3b8;letter-spacing:0.5px;margin-bottom:4px">Rechnungsnummer</div>
+        <div style="font-size:13px;font-weight:600">${inv.invoice_number || "—"}</div>
+      </td>
+      <td style="padding:14px 20px;border-right:1px solid #e2e8f0">
+        <div style="font-size:10px;text-transform:uppercase;color:#94a3b8;letter-spacing:0.5px;margin-bottom:4px">Tarif</div>
+        <div style="font-size:13px;font-weight:600">${pricePerKwh.toLocaleString("de-DE", { minimumFractionDigits: 4 })} ${currencySymbol}/kWh</div>
+      </td>
+      <td style="padding:14px 20px">
+        <div style="font-size:10px;text-transform:uppercase;color:#94a3b8;letter-spacing:0.5px;margin-bottom:4px">Status</div>
+        <div style="font-size:13px;font-weight:600;color:${inv.status === "paid" ? "#16a34a" : "#f59e0b"}">${inv.status === "paid" ? "Bezahlt" : inv.status === "issued" ? "Offen" : "Entwurf"}</div>
+      </td>
+    </tr>
+  </table>
+
+  <!-- Sessions Table -->
+  <div style="margin-bottom:24px">
+    <div style="font-size:14px;font-weight:700;color:#1e293b;margin-bottom:10px">Einzelne Ladevorgänge</div>
+    <table style="width:100%;border-collapse:collapse;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08)">
+      <thead>
+        <tr>
+          <th style="padding:8px 12px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;color:#64748b;border-bottom:2px solid #e2e8f0;background:#f8fafc">Nr.</th>
+          <th style="padding:8px 12px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;color:#64748b;border-bottom:2px solid #e2e8f0;background:#f8fafc">Datum</th>
+          <th style="padding:8px 12px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;color:#64748b;border-bottom:2px solid #e2e8f0;background:#f8fafc">Zeitraum</th>
+          <th style="padding:8px 12px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;color:#64748b;border-bottom:2px solid #e2e8f0;background:#f8fafc">Ladepunkt</th>
+          <th style="padding:8px 12px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;color:#64748b;border-bottom:2px solid #e2e8f0;background:#f8fafc">Dauer</th>
+          <th style="padding:8px 12px;text-align:right;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;color:#64748b;border-bottom:2px solid #e2e8f0;background:#f8fafc">Energie</th>
+          <th style="padding:8px 12px;text-align:right;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;color:#64748b;border-bottom:2px solid #e2e8f0;background:#f8fafc">Betrag</th>
+          ${idleFeePerMinute > 0 ? `<th style="padding:8px 12px;text-align:right;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;color:#64748b;border-bottom:2px solid #e2e8f0;background:#f8fafc">Blockiergeb.</th>` : ""}
+        </tr>
+      </thead>
+      <tbody>${sessionRows}</tbody>
+    </table>
+  </div>
+
+  <!-- Totals -->
+  <table style="width:100%;border-collapse:collapse;margin-bottom:28px">
+    <tr>
+      <td style="padding:8px 16px;font-size:13px;color:#64748b">Energiekosten (${inv.total_energy_kwh.toLocaleString("de-DE", { minimumFractionDigits: 2 })} kWh × ${pricePerKwh.toLocaleString("de-DE", { minimumFractionDigits: 4 })} ${currencySymbol})</td>
+      <td style="padding:8px 16px;font-size:13px;text-align:right">${(inv.total_amount - inv.idle_fee_amount - baseFee).toLocaleString("de-DE", { minimumFractionDigits: 2 })} ${currencySymbol}</td>
+    </tr>
+    ${baseFee > 0 ? `<tr>
+      <td style="padding:8px 16px;font-size:13px;color:#64748b">Grundgebühr</td>
+      <td style="padding:8px 16px;font-size:13px;text-align:right">${baseFee.toLocaleString("de-DE", { minimumFractionDigits: 2 })} ${currencySymbol}</td>
+    </tr>` : ""}
+    ${inv.idle_fee_amount > 0 ? `<tr>
+      <td style="padding:8px 16px;font-size:13px;color:#dc2626">Blockiergebühr</td>
+      <td style="padding:8px 16px;font-size:13px;text-align:right;color:#dc2626">${inv.idle_fee_amount.toLocaleString("de-DE", { minimumFractionDigits: 2 })} ${currencySymbol}</td>
+    </tr>` : ""}
+    <tr style="border-top:1px solid #e2e8f0">
+      <td style="padding:8px 16px;font-size:13px;color:#64748b">Zwischensumme (netto)</td>
+      <td style="padding:8px 16px;font-size:13px;text-align:right;font-weight:600">${netAmount.toLocaleString("de-DE", { minimumFractionDigits: 2 })} ${currencySymbol}</td>
+    </tr>
+    <tr>
+      <td style="padding:8px 16px;font-size:13px;color:#64748b">MwSt. (19%)</td>
+      <td style="padding:8px 16px;font-size:13px;text-align:right">${vatAmount.toLocaleString("de-DE", { minimumFractionDigits: 2 })} ${currencySymbol}</td>
+    </tr>
+    <tr style="border-top:2px solid ${primaryColor}">
+      <td style="padding:12px 16px;font-size:16px;font-weight:800;color:${primaryColor}">Gesamtbetrag (brutto)</td>
+      <td style="padding:12px 16px;font-size:16px;font-weight:800;text-align:right;color:${primaryColor}">${grossAmount.toLocaleString("de-DE", { minimumFractionDigits: 2 })} ${currencySymbol}</td>
+    </tr>
+  </table>
+
+  <!-- Payment info -->
+  <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:16px 20px;margin-bottom:28px">
+    <div style="font-size:12px;font-weight:700;color:#1e293b;margin-bottom:8px">Zahlungsinformationen</div>
+    <div style="font-size:12px;color:#64748b;line-height:1.6">
+      Bitte überweisen Sie den Gesamtbetrag unter Angabe der Rechnungsnummer <strong>${inv.invoice_number || "—"}</strong> auf das folgende Konto:<br/>
+      <strong>Kontoinhaber:</strong> ${tenantName}<br/>
+      <strong>Verwendungszweck:</strong> ${inv.invoice_number || "Laderechnung"}
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div style="border-top:1px solid #e2e8f0;padding-top:16px;text-align:center">
+    <div style="font-size:11px;color:#94a3b8">
+      ${tenantName} · Rechnung ${inv.invoice_number || "Entwurf"} · Erstellt am ${format(new Date(inv.created_at), "dd.MM.yyyy")}
+    </div>
+    <div style="font-size:10px;color:#cbd5e1;margin-top:4px">Vielen Dank für die Nutzung unserer Ladeinfrastruktur.</div>
+  </div>
+
+  <!-- Print button -->
+  <div class="no-print" style="text-align:center;margin-top:20px">
+    <button onclick="window.print()" style="padding:10px 24px;font-size:14px;font-weight:600;background:${primaryColor};color:#fff;border:none;border-radius:8px;cursor:pointer">Als PDF drucken</button>
+  </div>
+
+</div></body></html>`;
     const w = window.open("", "_blank");
     if (w) { w.document.write(printContent); w.document.close(); }
   };
@@ -1049,6 +1216,7 @@ const ChargingApp = () => {
   const [sessions, setSessions] = useState<AppSession[]>([]);
   const [invoices, setInvoices] = useState<AppInvoice[]>([]);
   const [tariff, setTariff] = useState<AppTariff | null>(null);
+  const [tenantInfo, setTenantInfo] = useState<AppTenantInfo | null>(null);
   const [initialCpOcppId, setInitialCpOcppId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -1113,13 +1281,37 @@ const ChargingApp = () => {
       const [cpRes, sessRes, invRes, tariffRes] = await Promise.all([
         supabase.from("charge_points").select("id, ocpp_id, name, status, address, latitude, longitude, max_power_kw, connector_type, connector_count, vendor, model").order("name"),
         supabase.from("charging_sessions").select("id, charge_point_id, start_time, stop_time, energy_kwh, status, stop_reason").order("start_time", { ascending: false }).limit(100),
-        supabase.from("charging_invoices").select("id, invoice_number, total_energy_kwh, total_amount, idle_fee_amount, currency, status, issued_at, created_at").order("created_at", { ascending: false }).limit(50),
+        supabase.from("charging_invoices").select("id, session_id, invoice_number, total_energy_kwh, total_amount, idle_fee_amount, currency, status, issued_at, created_at").order("created_at", { ascending: false }).limit(50),
         supabase.from("charging_tariffs").select("price_per_kwh, base_fee, idle_fee_per_minute, idle_fee_grace_minutes, currency").eq("is_active", true).limit(1),
       ]);
       if (cpRes.data) setChargePoints(cpRes.data as AppChargePoint[]);
       if (sessRes.data) setSessions(sessRes.data as AppSession[]);
       if (invRes.data) setInvoices(invRes.data as AppInvoice[]);
       if (tariffRes.data && tariffRes.data.length > 0) setTariff(tariffRes.data[0] as AppTariff);
+
+      // Load tenant info (name, logo, branding)
+      try {
+        const { data: chargingUser } = await supabase
+          .from("charging_users")
+          .select("tenant_id")
+          .eq("auth_user_id", user.id)
+          .maybeSingle();
+        if (chargingUser?.tenant_id) {
+          const { data: tenant } = await supabase
+            .from("tenants")
+            .select("name, logo_url, branding")
+            .eq("id", chargingUser.tenant_id)
+            .single();
+          if (tenant) {
+            setTenantInfo({
+              name: tenant.name || "",
+              logo_url: tenant.logo_url || null,
+              branding: (tenant.branding as Record<string, string>) || {},
+            });
+          }
+        }
+      } catch { /* ignore */ }
+
       setLoading(false);
     };
     loadData();
@@ -1228,7 +1420,7 @@ const ChargingApp = () => {
             {tab === "map" && <div className="flex-1 flex flex-col" style={{ minHeight: 0 }}><MapTab chargePoints={chargePoints} onStartCharge={handleStartCharge} initialCpId={initialCpOcppId} onInitialCpHandled={() => setInitialCpOcppId(null)} /></div>}
             {tab === "qr" && <QrScannerTab onScanned={handleQrScanned} />}
             {tab === "history" && <HistoryTab sessions={sessions} chargePoints={chargePoints} tariff={tariff} />}
-            {tab === "invoices" && <InvoicesTab invoices={invoices} />}
+            {tab === "invoices" && <InvoicesTab invoices={invoices} sessions={sessions} chargePoints={chargePoints} tariff={tariff} tenantInfo={tenantInfo} userEmail={user.email} />}
             {tab === "profile" && <ProfileTab email={user.email} onLogout={handleLogout} />}
           </>
         )}
