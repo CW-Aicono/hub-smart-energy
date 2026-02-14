@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { supabase } from "@/integrations/supabase/client";
 import { Navigate } from "react-router-dom";
 import { ScannerManagement } from "@/components/integrations/ScannerManagement";
 import { useAuth } from "@/hooks/useAuth";
@@ -161,20 +162,33 @@ const Integrations = () => {
     const gatewayDef = getGatewayDefinition(integration.type);
     const gatewayLabel = gatewayDef?.label || integration.type;
 
-    // Check if required config fields are actually filled
+    // Credentials live in location_integrations, not in integrations table
+    const { data: locIntegrations } = await supabase
+      .from("location_integrations")
+      .select("id, config")
+      .eq("integration_id", integration.id)
+      .limit(1);
+
+    if (!locIntegrations?.length) {
+      setTestingId(null);
+      toast({
+        title: "Kein Standort verknüpft",
+        description: `Die Integration "${integration.name}" ist noch keinem Standort zugewiesen. Bitte weisen Sie sie zuerst einem Standort zu und konfigurieren Sie die Zugangsdaten.`,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const locConfig = locIntegrations[0].config as Record<string, unknown> | null;
     const requiredFields = gatewayDef?.configFields.filter(f => f.required) || [];
-    const missingFields = requiredFields.filter(f => !config?.[f.name]);
+    const missingFields = requiredFields.filter(f => !locConfig?.[f.name]);
 
     if (missingFields.length > 0) {
       setTestingId(null);
-      const { error } = await updateIntegration(integration.id, {
-        config: {
-          ...config,
-          connection_status: "disconnected",
-          last_tested_at: new Date().toISOString(),
-        },
+      await updateIntegration(integration.id, {
+        config: { ...config, connection_status: "disconnected", last_tested_at: new Date().toISOString() },
       });
-      if (!error) refetch();
+      refetch();
       toast({
         title: "Verbindungstest fehlgeschlagen",
         description: `Fehlende Konfiguration für ${gatewayLabel}: ${missingFields.map(f => f.label).join(", ")}`,
@@ -183,32 +197,42 @@ const Integrations = () => {
       return;
     }
 
-    // Simulate connection test
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    // Call edge function to truly test the connection
+    try {
+      const edgeFunction = gatewayDef?.edgeFunctionName || "loxone-api";
+      const { data, error: fnError } = await supabase.functions.invoke(edgeFunction, {
+        body: { locationIntegrationId: locIntegrations[0].id, action: "getSensors" },
+      });
 
-    const newStatus = "connected";
-    const { error } = await updateIntegration(integration.id, {
-      config: {
-        ...config,
-        connection_status: newStatus,
-        last_tested_at: new Date().toISOString(),
-      },
-    });
+      const success = !fnError && data?.success;
+      const newStatus = success ? "connected" : "disconnected";
 
-    setTestingId(null);
+      await updateIntegration(integration.id, {
+        config: { ...config, connection_status: newStatus, last_tested_at: new Date().toISOString() },
+      });
+      setTestingId(null);
+      refetch();
 
-    if (error) {
+      if (success) {
+        toast({ title: "Verbindung erfolgreich", description: `Die Verbindung zum ${gatewayLabel} wurde hergestellt.` });
+      } else {
+        toast({
+          title: "Verbindungstest fehlgeschlagen",
+          description: data?.error || `Keine Verbindung zum ${gatewayLabel} möglich.`,
+          variant: "destructive",
+        });
+      }
+    } catch {
+      await updateIntegration(integration.id, {
+        config: { ...config, connection_status: "disconnected", last_tested_at: new Date().toISOString() },
+      });
+      setTestingId(null);
+      refetch();
       toast({
         title: "Verbindungstest fehlgeschlagen",
         description: `Die Verbindung zum ${gatewayLabel} konnte nicht getestet werden.`,
         variant: "destructive",
       });
-    } else {
-      toast({
-        title: "Verbindung erfolgreich",
-        description: `Die Verbindung zum ${gatewayLabel} wurde hergestellt.`,
-      });
-      refetch();
     }
   };
 
