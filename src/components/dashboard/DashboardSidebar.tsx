@@ -297,24 +297,17 @@ const DashboardSidebar = () => {
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             {collapsed ? (
-              <Tooltip delayDuration={0}>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="w-full h-10 text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent/50"
-                  >
-                    <Avatar className="h-8 w-8">
-                      <AvatarFallback className="bg-sidebar-primary text-sidebar-primary-foreground text-xs">
-                        {userInitials}
-                      </AvatarFallback>
-                    </Avatar>
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="right" className="bg-popover">
-                  {user?.email}
-                </TooltipContent>
-              </Tooltip>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="w-full h-10 text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent/50"
+              >
+                <Avatar className="h-8 w-8">
+                  <AvatarFallback className="bg-sidebar-primary text-sidebar-primary-foreground text-xs">
+                    {userInitials}
+                  </AvatarFallback>
+                </Avatar>
+              </Button>
             ) : (
               <Button
                 variant="ghost"
