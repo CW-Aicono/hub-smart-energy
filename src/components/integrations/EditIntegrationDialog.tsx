@@ -1,36 +1,19 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
+  Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import {
-  Form,
-  FormControl,
-  FormDescription,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
+  Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, Settings } from "lucide-react";
-import { LocationIntegration, LoxoneConfig } from "@/hooks/useIntegrations";
-
-const loxoneConfigSchema = z.object({
-  serial_number: z.string().min(1, "Seriennummer ist erforderlich"),
-  username: z.string().min(1, "Benutzername ist erforderlich"),
-  password: z.string().min(1, "Passwort ist erforderlich"),
-});
-
-type LoxoneFormData = z.infer<typeof loxoneConfigSchema>;
+import { LocationIntegration } from "@/hooks/useIntegrations";
+import { getGatewayDefinition } from "@/lib/gatewayRegistry";
 
 interface EditIntegrationDialogProps {
   locationIntegration: LocationIntegration | null;
@@ -48,36 +31,48 @@ export function EditIntegrationDialog({
   const [isSaving, setIsSaving] = useState(false);
   const { toast } = useToast();
 
-  const config = locationIntegration?.config as LoxoneConfig | undefined;
+  const integrationType = locationIntegration?.integration?.type;
+  const gatewayDef = integrationType ? getGatewayDefinition(integrationType) : undefined;
+  const config = locationIntegration?.config as Record<string, string> | undefined;
 
-  const form = useForm<LoxoneFormData>({
-    resolver: zodResolver(loxoneConfigSchema),
-    defaultValues: {
-      serial_number: "",
-      username: "",
-      password: "",
-    },
+  // Build dynamic zod schema from gateway definition
+  const formSchema = useMemo(() => {
+    const shape: Record<string, z.ZodTypeAny> = {};
+    if (gatewayDef) {
+      for (const field of gatewayDef.configFields) {
+        shape[field.name] = field.required
+          ? z.string().min(1, `${field.label} ist erforderlich`)
+          : z.string().optional();
+      }
+    }
+    return z.object(shape);
+  }, [gatewayDef]);
+
+  const form = useForm<Record<string, string>>({
+    resolver: zodResolver(formSchema),
+    defaultValues: {},
   });
 
   useEffect(() => {
-    if (locationIntegration && config) {
-      form.reset({
-        serial_number: config.serial_number || "",
-        username: config.username || "",
-        password: config.password || "",
-      });
+    if (locationIntegration && config && gatewayDef) {
+      const vals: Record<string, string> = {};
+      for (const field of gatewayDef.configFields) {
+        vals[field.name] = config[field.name] || "";
+      }
+      form.reset(vals);
     }
-  }, [locationIntegration, config, form]);
+  }, [locationIntegration, config, gatewayDef, form]);
 
-  const onSubmit = async (data: LoxoneFormData) => {
+  const onSubmit = async (data: Record<string, string>) => {
     if (!locationIntegration) return;
 
     setIsSaving(true);
-    const newConfig: LoxoneConfig = {
-      serial_number: data.serial_number,
-      username: data.username,
-      password: data.password,
-    };
+    const newConfig: Record<string, string> = {};
+    if (gatewayDef) {
+      for (const field of gatewayDef.configFields) {
+        newConfig[field.name] = data[field.name] || "";
+      }
+    }
 
     const { error } = await onUpdate(locationIntegration.id, { config: newConfig });
     setIsSaving(false);
@@ -99,7 +94,7 @@ export function EditIntegrationDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[450px]">
+      <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Settings className="h-5 w-5" />
@@ -112,59 +107,33 @@ export function EditIntegrationDialog({
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <FormField
-              control={form.control}
-              name="serial_number"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Seriennummer</FormLabel>
-                  <FormControl>
-                    <Input placeholder="504F94A0XXXX" {...field} />
-                  </FormControl>
-                  <FormDescription>
-                    Die Seriennummer des Loxone Miniservers
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <div className="grid grid-cols-2 gap-4">
+            {gatewayDef?.configFields.map((fieldDef) => (
               <FormField
+                key={fieldDef.name}
                 control={form.control}
-                name="username"
+                name={fieldDef.name}
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Benutzername</FormLabel>
+                    <FormLabel>{fieldDef.label}</FormLabel>
                     <FormControl>
-                      <Input placeholder="admin" {...field} />
+                      <Input
+                        type={fieldDef.type === "password" ? "password" : "text"}
+                        placeholder={fieldDef.placeholder}
+                        {...field}
+                        value={field.value || ""}
+                      />
                     </FormControl>
+                    {fieldDef.description && (
+                      <FormDescription>{fieldDef.description}</FormDescription>
+                    )}
                     <FormMessage />
                   </FormItem>
                 )}
               />
-
-              <FormField
-                control={form.control}
-                name="password"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Passwort</FormLabel>
-                    <FormControl>
-                      <Input type="password" placeholder="••••••••" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
+            ))}
 
             <div className="flex gap-2 justify-end pt-4">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => onOpenChange(false)}
-              >
+              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                 Abbrechen
               </Button>
               <Button type="submit" disabled={isSaving}>

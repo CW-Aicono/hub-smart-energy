@@ -23,6 +23,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AssignMeterDialog } from "./AssignMeterDialog";
 import { useMeters } from "@/hooks/useMeters";
+import { getGatewayDefinition, getEdgeFunctionName } from "@/lib/gatewayRegistry";
 
 interface Sensor {
   id: string;
@@ -47,7 +48,7 @@ interface SensorsDialogProps {
   locationId?: string;
 }
 
-const METER_CONTROL_TYPES = new Set(["Meter", "EFM", "EnergyManager2", "Fronius"]);
+const METER_CONTROL_TYPES = new Set(["Meter", "EFM", "EnergyManager2", "Fronius", "access_point", "switch", "gateway"]);
 
 const getStatusBadge = (status: Sensor["status"]) => {
   switch (status) {
@@ -71,9 +72,13 @@ export function SensorsDialog({ locationIntegration, open, onOpenChange, locatio
   const { meters } = useMeters(effectiveLocationId);
 
   const integrationName = locationIntegration?.integration?.name || "Integration";
+  const integrationType = locationIntegration?.integration?.type || "";
+  const edgeFunctionName = getEdgeFunctionName(integrationType);
 
-  // Filter for meter-type controls only
-  const meterSensors = sensors.filter((s) => METER_CONTROL_TYPES.has(s.controlType || ""));
+  // For non-Loxone gateways, show all sensors; for Loxone filter to meter types
+  const meterSensors = integrationType === "loxone_miniserver"
+    ? sensors.filter((s) => METER_CONTROL_TYPES.has(s.controlType || ""))
+    : sensors;
 
   // Set of sensor UUIDs already assigned to this location
   const assignedSensorIds = useMemo(() => {
@@ -93,7 +98,7 @@ export function SensorsDialog({ locationIntegration, open, onOpenChange, locatio
     setError(null);
 
     try {
-      const { data, error: fnError } = await supabase.functions.invoke("loxone-api", {
+      const { data, error: fnError } = await supabase.functions.invoke(edgeFunctionName, {
         body: {
           locationIntegrationId: locationIntegration.id,
           action: "getSensors",
@@ -106,7 +111,7 @@ export function SensorsDialog({ locationIntegration, open, onOpenChange, locatio
       setSensors(data.sensors || []);
     } catch (err) {
       console.error("Failed to fetch sensors:", err);
-      setError(err instanceof Error ? err.message : "Verbindung zum Miniserver fehlgeschlagen");
+      setError(err instanceof Error ? err.message : "Verbindung fehlgeschlagen");
       setSensors([]);
     } finally {
       setLoading(false);
@@ -185,7 +190,7 @@ export function SensorsDialog({ locationIntegration, open, onOpenChange, locatio
               <div className="flex items-center justify-center py-12">
                 <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
                 <span className="ml-2 text-muted-foreground">
-                  Lade Zähler vom Miniserver...
+                  Lade Geräte von {integrationName}...
                 </span>
               </div>
             ) : meterSensors.length === 0 && !error ? (
