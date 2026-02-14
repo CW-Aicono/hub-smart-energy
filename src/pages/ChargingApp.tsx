@@ -387,51 +387,61 @@ function QrScannerTab({ onScanned }: { onScanned: (data: string) => void }) {
   const [error, setError] = useState<string | null>(null);
   const animRef = useRef<number>(0);
 
-  const startScan = useCallback(async () => {
-    setError(null);
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
-      streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play();
-      }
-      setScanning(true);
-
-      const scanFrame = async () => {
-        if (!videoRef.current || videoRef.current.readyState !== 4) {
-          animRef.current = requestAnimationFrame(scanFrame);
-          return;
-        }
-        const canvas = document.createElement("canvas");
-        canvas.width = videoRef.current.videoWidth;
-        canvas.height = videoRef.current.videoHeight;
-        const ctx = canvas.getContext("2d");
-        if (ctx) {
-          ctx.drawImage(videoRef.current, 0, 0);
-          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-          const { default: jsQR } = await import("jsqr");
-          const code = jsQR(imageData.data, imageData.width, imageData.height);
-          if (code?.data) {
-            stopScan();
-            onScanned(code.data);
-            return;
-          }
-        }
-        animRef.current = requestAnimationFrame(scanFrame);
-      };
-      animRef.current = requestAnimationFrame(scanFrame);
-    } catch {
-      setError("Kamera-Zugriff nicht möglich");
-    }
-  }, [onScanned]);
-
   const stopScan = useCallback(() => {
     cancelAnimationFrame(animRef.current);
     streamRef.current?.getTracks().forEach((t) => t.stop());
     streamRef.current = null;
     setScanning(false);
   }, []);
+
+  const startFrameScan = useCallback((video: HTMLVideoElement) => {
+    const scanFrame = async () => {
+      if (!video || video.readyState !== 4) {
+        animRef.current = requestAnimationFrame(scanFrame);
+        return;
+      }
+      const canvas = document.createElement("canvas");
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const ctx = canvas.getContext("2d");
+      if (ctx) {
+        ctx.drawImage(video, 0, 0);
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const { default: jsQR } = await import("jsqr");
+        const code = jsQR(imageData.data, imageData.width, imageData.height);
+        if (code?.data) {
+          stopScan();
+          onScanned(code.data);
+          return;
+        }
+      }
+      animRef.current = requestAnimationFrame(scanFrame);
+    };
+    animRef.current = requestAnimationFrame(scanFrame);
+  }, [onScanned, stopScan]);
+
+  const startScan = useCallback(async () => {
+    setError(null);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+      streamRef.current = stream;
+      // First set scanning=true so the <video> element renders
+      setScanning(true);
+    } catch {
+      setError("Kamera-Zugriff nicht möglich");
+    }
+  }, []);
+
+  // Once scanning is true and video element is in the DOM, attach stream and start frame scanning
+  useEffect(() => {
+    if (scanning && videoRef.current && streamRef.current) {
+      const video = videoRef.current;
+      video.srcObject = streamRef.current;
+      video.play().then(() => startFrameScan(video)).catch(() => {
+        setError("Video konnte nicht gestartet werden");
+      });
+    }
+  }, [scanning, startFrameScan]);
 
   // Auto-start scanner when tab is shown
   useEffect(() => {
@@ -451,7 +461,7 @@ function QrScannerTab({ onScanned }: { onScanned: (data: string) => void }) {
 
       {scanning ? (
         <div className="relative w-full max-w-xs aspect-square rounded-2xl overflow-hidden border-2 border-primary">
-          <video ref={videoRef} className="w-full h-full object-cover" playsInline muted />
+          <video ref={videoRef} className="w-full h-full object-cover" playsInline muted autoPlay />
           <div className="absolute inset-0 border-[3px] border-primary/30 rounded-2xl" />
           <div className="absolute top-1/2 left-4 right-4 h-0.5 bg-primary/50 animate-pulse" />
           <Button variant="secondary" size="sm" className="absolute bottom-3 left-1/2 -translate-x-1/2" onClick={stopScan}>
