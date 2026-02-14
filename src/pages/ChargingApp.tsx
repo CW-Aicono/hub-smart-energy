@@ -51,9 +51,19 @@ interface AppInvoice {
   invoice_number: string | null;
   total_energy_kwh: number;
   total_amount: number;
+  idle_fee_amount: number;
   currency: string;
   status: string;
+  issued_at: string | null;
   created_at: string;
+}
+
+interface AppTariff {
+  price_per_kwh: number;
+  base_fee: number;
+  idle_fee_per_minute: number;
+  idle_fee_grace_minutes: number;
+  currency: string;
 }
 
 // ---- Auth Screen ----
@@ -681,7 +691,7 @@ function QrScannerTab({ onScanned }: { onScanned: (data: string) => void }) {
 }
 
 // ---- History Tab ----
-function HistoryTab({ sessions, chargePoints }: { sessions: AppSession[]; chargePoints: AppChargePoint[] }) {
+function HistoryTab({ sessions, chargePoints, tariff }: { sessions: AppSession[]; chargePoints: AppChargePoint[]; tariff: AppTariff | null }) {
   const getCpName = (id: string | null) => chargePoints.find((cp) => cp.id === id)?.name || "Unbekannt";
 
   if (sessions.length === 0) {
@@ -719,58 +729,76 @@ function HistoryTab({ sessions, chargePoints }: { sessions: AppSession[]; charge
     return `${h} Std. ${m > 0 ? `${m} Min.` : ""}`.trim();
   };
 
-  const renderSessionRow = (s: AppSession, isActive: boolean) => (
-    <div key={s.id} className={`flex items-center gap-3 p-4 ${isActive ? "bg-blue-500/5 border border-blue-500/20 rounded-lg mx-3 mb-2" : "border-b"}`}>
-      <div className={`h-10 w-10 rounded-full flex items-center justify-center shrink-0 ${
-        isActive ? "bg-blue-500/10 text-blue-500 animate-pulse" :
-        s.status === "completed" ? "bg-primary/10 text-primary" :
-        "bg-muted text-muted-foreground"
-      }`}>
-        {isActive ? <BatteryCharging className="h-5 w-5" /> : <PlugZap className="h-5 w-5" />}
+  const calcCost = (s: AppSession): number | null => {
+    if (!tariff) return null;
+    const energyCost = s.energy_kwh * tariff.price_per_kwh;
+    let idleFee = 0;
+    if (tariff.idle_fee_per_minute > 0 && s.stop_time) {
+      const mins = Math.round((new Date(s.stop_time).getTime() - new Date(s.start_time).getTime()) / 60000);
+      const idleMins = Math.max(0, mins - tariff.idle_fee_grace_minutes);
+      idleFee = idleMins * tariff.idle_fee_per_minute;
+    }
+    return energyCost + idleFee;
+  };
+
+  const renderSessionRow = (s: AppSession, isActive: boolean) => {
+    const cost = calcCost(s);
+    return (
+      <div key={s.id} className={`flex items-center gap-3 p-4 ${isActive ? "bg-blue-500/5 border border-blue-500/20 rounded-lg mx-3 mb-2" : "border-b"}`}>
+        <div className={`h-10 w-10 rounded-full flex items-center justify-center shrink-0 ${
+          isActive ? "bg-blue-500/10 text-blue-500 animate-pulse" :
+          s.status === "completed" ? "bg-primary/10 text-primary" :
+          "bg-muted text-muted-foreground"
+        }`}>
+          {isActive ? <BatteryCharging className="h-5 w-5" /> : <PlugZap className="h-5 w-5" />}
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="font-medium text-sm">{getCpName(s.charge_point_id)}</p>
+          <p className="text-xs text-muted-foreground">{format(new Date(s.start_time), "dd.MM.yyyy HH:mm")}</p>
+          {isActive && (
+            <div className="flex items-center gap-2 mt-1">
+              <Badge variant="secondary" className="text-[10px] px-1.5 py-0 bg-blue-500/10 text-blue-600 border-0">
+                <Clock className="h-3 w-3 mr-0.5" /> {renderDuration(s)}
+              </Badge>
+            </div>
+          )}
+        </div>
+        <div className="text-right shrink-0">
+          <p className="text-sm font-bold">{fmtKwh(s.energy_kwh)}</p>
+          {!isActive && s.stop_time && <p className="text-xs text-muted-foreground">{renderDuration(s)}</p>}
+          {cost !== null && !isActive && <p className="text-xs font-semibold text-primary">{fmtCurrency(cost)}</p>}
+          {isActive && cost !== null && <p className="text-xs font-semibold text-blue-600">~{fmtCurrency(cost)}</p>}
+          {isActive && <Badge className="text-[10px] bg-blue-500 border-0 mt-0.5">Lädt…</Badge>}
+        </div>
       </div>
-      <div className="flex-1 min-w-0">
-        <p className="font-medium text-sm">{getCpName(s.charge_point_id)}</p>
-        <p className="text-xs text-muted-foreground">{format(new Date(s.start_time), "dd.MM.yyyy HH:mm")}</p>
-        {isActive && (
-          <div className="flex items-center gap-2 mt-1">
-            <Badge variant="secondary" className="text-[10px] px-1.5 py-0 bg-blue-500/10 text-blue-600 border-0">
-              <Clock className="h-3 w-3 mr-0.5" /> {renderDuration(s)}
-            </Badge>
-          </div>
-        )}
-      </div>
-      <div className="text-right shrink-0">
-        <p className="text-sm font-bold">{fmtKwh(s.energy_kwh)}</p>
-        {!isActive && s.stop_time && <p className="text-xs text-muted-foreground">{renderDuration(s)}</p>}
-        {isActive && <Badge className="text-[10px] bg-blue-500 border-0">Lädt…</Badge>}
-      </div>
-    </div>
-  );
+    );
+  };
 
   return (
     <div className="overflow-auto h-full">
-      <h2 className="text-lg font-semibold px-4 pt-4 pb-2">Meine Ladevorgänge</h2>
+      <h2 className="text-lg font-semibold px-4 pt-4 pb-2 text-center">Meine Ladevorgänge</h2>
 
       {activeSessions.length > 0 && (
-        <div className="mb-2">
+        <div className="mb-1">
           {activeSessions.map((s) => renderSessionRow(s, true))}
+        </div>
+      )}
+
+      {activeSessions.length > 0 && completedSessions.length > 0 && (
+        <div className="flex items-center gap-3 px-4 py-2">
+          <div className="flex-1 h-px bg-border" />
+          <span className="text-xs text-muted-foreground font-medium">Abgeschlossen</span>
+          <div className="flex-1 h-px bg-border" />
         </div>
       )}
 
       {grouped.map((group, gi) => (
         <div key={group.key}>
-          {gi > 0 && (
-            <div className="flex items-center gap-3 px-4 py-2">
-              <div className="flex-1 h-px bg-border" />
-              <span className="text-xs text-muted-foreground font-medium">{group.label}</span>
-              <div className="flex-1 h-px bg-border" />
-            </div>
-          )}
-          {gi === 0 && grouped.length > 1 && (
-            <div className="px-4 pb-1">
-              <span className="text-xs text-muted-foreground font-medium">{group.label}</span>
-            </div>
-          )}
+          <div className="flex items-center gap-3 px-4 py-2">
+            <div className="flex-1 h-px bg-border" />
+            <span className="text-xs text-muted-foreground font-medium">{group.label}</span>
+            <div className="flex-1 h-px bg-border" />
+          </div>
           {group.items.map((s) => renderSessionRow(s, false))}
         </div>
       ))}
@@ -780,6 +808,8 @@ function HistoryTab({ sessions, chargePoints }: { sessions: AppSession[]; charge
 
 // ---- Invoices Tab ----
 function InvoicesTab({ invoices }: { invoices: AppInvoice[] }) {
+  const [selectedInvoice, setSelectedInvoice] = useState<AppInvoice | null>(null);
+
   if (invoices.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-full p-6 text-center">
@@ -789,25 +819,120 @@ function InvoicesTab({ invoices }: { invoices: AppInvoice[] }) {
     );
   }
 
+  const handlePrint = (inv: AppInvoice) => {
+    const printContent = `
+      <html><head><title>Rechnung ${inv.invoice_number}</title>
+      <style>body{font-family:system-ui,sans-serif;padding:40px;color:#1e293b}
+      h1{font-size:20px;margin-bottom:8px}
+      table{width:100%;border-collapse:collapse;margin-top:20px}
+      th,td{padding:8px 12px;text-align:left;border-bottom:1px solid #e2e8f0;font-size:14px}
+      th{background:#f8fafc;font-size:12px;text-transform:uppercase;color:#64748b}
+      .total{font-size:18px;font-weight:700;margin-top:20px;text-align:right}
+      .meta{color:#64748b;font-size:13px}
+      </style></head><body>
+      <h1>Laderechnung ${inv.invoice_number || "Entwurf"}</h1>
+      <p class="meta">Erstellt: ${format(new Date(inv.created_at), "dd.MM.yyyy")}</p>
+      ${inv.issued_at ? `<p class="meta">Ausgestellt: ${format(new Date(inv.issued_at), "dd.MM.yyyy")}</p>` : ""}
+      <table>
+        <tr><th>Position</th><th style="text-align:right">Betrag</th></tr>
+        <tr><td>Energie: ${inv.total_energy_kwh.toLocaleString("de-DE", { minimumFractionDigits: 2 })} kWh</td><td style="text-align:right">${fmtCurrency(inv.total_amount - inv.idle_fee_amount)}</td></tr>
+        ${inv.idle_fee_amount > 0 ? `<tr><td>Blockiergebühr</td><td style="text-align:right">${fmtCurrency(inv.idle_fee_amount)}</td></tr>` : ""}
+      </table>
+      <div class="total">Gesamt: ${fmtCurrency(inv.total_amount)}</div>
+      </body></html>
+    `;
+    const w = window.open("", "_blank");
+    if (w) { w.document.write(printContent); w.document.close(); w.print(); }
+  };
+
+  const handleShare = async (inv: AppInvoice) => {
+    const text = `Laderechnung ${inv.invoice_number || "Entwurf"}\nBetrag: ${fmtCurrency(inv.total_amount)}\nEnergie: ${fmtKwh(inv.total_energy_kwh)}\nDatum: ${format(new Date(inv.created_at), "dd.MM.yyyy")}`;
+    if (navigator.share) {
+      try { await navigator.share({ title: `Rechnung ${inv.invoice_number}`, text }); } catch { /* cancelled */ }
+    } else {
+      await navigator.clipboard.writeText(text);
+      toast.success("In Zwischenablage kopiert");
+    }
+  };
+
   return (
     <div className="overflow-auto h-full">
+      <h2 className="text-lg font-semibold px-4 pt-4 pb-2 text-center">Meine Rechnungen</h2>
       {invoices.map((inv) => (
-        <div key={inv.id} className="flex items-center gap-3 p-4 border-b">
+        <div key={inv.id} className="flex items-center gap-3 p-4 border-b cursor-pointer active:bg-muted/50 transition-colors" onClick={() => setSelectedInvoice(inv)}>
           <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center shrink-0">
             <Receipt className="h-5 w-5 text-muted-foreground" />
           </div>
           <div className="flex-1 min-w-0">
             <p className="font-medium text-sm">{inv.invoice_number || "Entwurf"}</p>
-            <p className="text-xs text-muted-foreground">{format(new Date(inv.created_at), "dd.MM.yyyy")}</p>
+            <p className="text-xs text-muted-foreground">
+              {inv.issued_at ? format(new Date(inv.issued_at), "dd.MM.yyyy") : format(new Date(inv.created_at), "dd.MM.yyyy")}
+            </p>
+            <p className="text-xs text-muted-foreground">{fmtKwh(inv.total_energy_kwh)}</p>
           </div>
-          <div className="text-right shrink-0">
-            <p className="text-sm font-bold">{fmtCurrency(inv.total_amount)}</p>
-            <Badge variant={inv.status === "paid" ? "default" : "secondary"} className="text-xs">
-              {inv.status === "paid" ? "Bezahlt" : inv.status === "issued" ? "Offen" : "Entwurf"}
-            </Badge>
+          <div className="text-right shrink-0 flex items-center gap-2">
+            <div>
+              <p className="text-sm font-bold">{fmtCurrency(inv.total_amount)}</p>
+              <Badge variant={inv.status === "paid" ? "default" : "secondary"} className="text-xs">
+                {inv.status === "paid" ? "Bezahlt" : inv.status === "issued" ? "Offen" : "Entwurf"}
+              </Badge>
+            </div>
+            <ChevronRight className="h-4 w-4 text-muted-foreground" />
           </div>
         </div>
       ))}
+
+      {/* Invoice detail drawer */}
+      <Drawer open={!!selectedInvoice} onOpenChange={(open) => { if (!open) setSelectedInvoice(null); }}>
+        <DrawerContent>
+          {selectedInvoice && (
+            <div className="px-4 pb-6 pt-2">
+              <DrawerHeader className="p-0 mb-4">
+                <DrawerTitle>Rechnung {selectedInvoice.invoice_number || "Entwurf"}</DrawerTitle>
+                <DrawerDescription>
+                  {selectedInvoice.issued_at ? format(new Date(selectedInvoice.issued_at), "dd.MM.yyyy") : format(new Date(selectedInvoice.created_at), "dd.MM.yyyy")}
+                </DrawerDescription>
+              </DrawerHeader>
+
+              <div className="space-y-3 mb-6">
+                <div className="flex justify-between items-center py-2 border-b">
+                  <span className="text-sm text-muted-foreground">Energie</span>
+                  <span className="text-sm font-medium">{fmtKwh(selectedInvoice.total_energy_kwh)}</span>
+                </div>
+                <div className="flex justify-between items-center py-2 border-b">
+                  <span className="text-sm text-muted-foreground">Energiekosten</span>
+                  <span className="text-sm font-medium">{fmtCurrency(selectedInvoice.total_amount - selectedInvoice.idle_fee_amount)}</span>
+                </div>
+                {selectedInvoice.idle_fee_amount > 0 && (
+                  <div className="flex justify-between items-center py-2 border-b">
+                    <span className="text-sm text-muted-foreground">Blockiergebühr</span>
+                    <span className="text-sm font-medium text-destructive">{fmtCurrency(selectedInvoice.idle_fee_amount)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between items-center py-2 border-b border-primary/30">
+                  <span className="text-sm font-semibold">Gesamtbetrag</span>
+                  <span className="text-base font-bold text-primary">{fmtCurrency(selectedInvoice.total_amount)}</span>
+                </div>
+                <div className="flex justify-between items-center py-2">
+                  <span className="text-sm text-muted-foreground">Status</span>
+                  <Badge variant={selectedInvoice.status === "paid" ? "default" : "secondary"}>
+                    {selectedInvoice.status === "paid" ? "Bezahlt" : selectedInvoice.status === "issued" ? "Offen" : "Entwurf"}
+                  </Badge>
+                </div>
+              </div>
+
+              <div className="flex gap-2">
+                <Button className="flex-1" variant="outline" onClick={() => handlePrint(selectedInvoice)}>
+                  <Receipt className="h-4 w-4 mr-2" /> Drucken
+                </Button>
+                <Button className="flex-1" variant="outline" onClick={() => handleShare(selectedInvoice)}>
+                  <Mail className="h-4 w-4 mr-2" /> Teilen
+                </Button>
+              </div>
+            </div>
+          )}
+        </DrawerContent>
+      </Drawer>
     </div>
   );
 }
@@ -881,6 +1006,7 @@ const ChargingApp = () => {
   const [chargePoints, setChargePoints] = useState<AppChargePoint[]>([]);
   const [sessions, setSessions] = useState<AppSession[]>([]);
   const [invoices, setInvoices] = useState<AppInvoice[]>([]);
+  const [tariff, setTariff] = useState<AppTariff | null>(null);
   const [initialCpOcppId, setInitialCpOcppId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -942,14 +1068,16 @@ const ChargingApp = () => {
     if (!user) return;
     const loadData = async () => {
       setLoading(true);
-      const [cpRes, sessRes, invRes] = await Promise.all([
+      const [cpRes, sessRes, invRes, tariffRes] = await Promise.all([
         supabase.from("charge_points").select("id, ocpp_id, name, status, address, latitude, longitude, max_power_kw, connector_type, connector_count, vendor, model").order("name"),
         supabase.from("charging_sessions").select("id, charge_point_id, start_time, stop_time, energy_kwh, status, stop_reason").order("start_time", { ascending: false }).limit(100),
-        supabase.from("charging_invoices").select("id, invoice_number, total_energy_kwh, total_amount, currency, status, created_at").order("created_at", { ascending: false }).limit(50),
+        supabase.from("charging_invoices").select("id, invoice_number, total_energy_kwh, total_amount, idle_fee_amount, currency, status, issued_at, created_at").order("created_at", { ascending: false }).limit(50),
+        supabase.from("charging_tariffs").select("price_per_kwh, base_fee, idle_fee_per_minute, idle_fee_grace_minutes, currency").eq("is_active", true).limit(1),
       ]);
       if (cpRes.data) setChargePoints(cpRes.data as AppChargePoint[]);
       if (sessRes.data) setSessions(sessRes.data as AppSession[]);
       if (invRes.data) setInvoices(invRes.data as AppInvoice[]);
+      if (tariffRes.data && tariffRes.data.length > 0) setTariff(tariffRes.data[0] as AppTariff);
       setLoading(false);
     };
     loadData();
@@ -1057,7 +1185,7 @@ const ChargingApp = () => {
           <>
             {tab === "map" && <div className="flex-1 flex flex-col" style={{ minHeight: 0 }}><MapTab chargePoints={chargePoints} onStartCharge={handleStartCharge} initialCpId={initialCpOcppId} onInitialCpHandled={() => setInitialCpOcppId(null)} /></div>}
             {tab === "qr" && <QrScannerTab onScanned={handleQrScanned} />}
-            {tab === "history" && <HistoryTab sessions={sessions} chargePoints={chargePoints} />}
+            {tab === "history" && <HistoryTab sessions={sessions} chargePoints={chargePoints} tariff={tariff} />}
             {tab === "invoices" && <InvoicesTab invoices={invoices} />}
             {tab === "profile" && <ProfileTab email={user.email} onLogout={handleLogout} />}
           </>
