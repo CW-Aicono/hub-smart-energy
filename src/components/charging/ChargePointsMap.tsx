@@ -176,24 +176,35 @@ export default function ChargePointsMap({ chargePoints, onChargePointClick, clas
                     <p>{cp.max_power_kw} kW</p>
                     {cp.address && <p className="text-muted-foreground">{cp.address}</p>}
                   </div>
-                  {cp.latitude && cp.longitude && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="w-full mt-2 gap-1.5 text-xs"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-                        const url = isIOS
-                          ? `maps://maps.apple.com/?daddr=${cp.latitude},${cp.longitude}&dirflg=d`
-                          : `https://www.google.com/maps/dir/?api=1&destination=${cp.latitude},${cp.longitude}`;
-                        window.open(url, "_blank");
-                      }}
-                    >
-                      <Navigation className="h-3.5 w-3.5" />
-                      Navigation starten
-                    </Button>
-                  )}
+                  {cp.latitude && cp.longitude && (() => {
+                    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+                    const googleUrl = `https://www.google.com/maps/dir/?api=1&destination=${cp.latitude},${cp.longitude}`;
+                    const appleUrl = `maps://maps.apple.com/?daddr=${cp.latitude},${cp.longitude}&dirflg=d`;
+                    return (
+                      <div className="flex gap-1.5 mt-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="flex-1 gap-1 text-xs"
+                          onClick={(e) => { e.stopPropagation(); window.open(googleUrl, "_blank"); }}
+                        >
+                          <Navigation className="h-3.5 w-3.5" />
+                          Google Maps
+                        </Button>
+                        {isIOS && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="flex-1 gap-1 text-xs"
+                            onClick={(e) => { e.stopPropagation(); window.open(appleUrl, "_blank"); }}
+                          >
+                            <Navigation className="h-3.5 w-3.5" />
+                            Apple Karten
+                          </Button>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </div>
               </Popup>
             </Marker>
