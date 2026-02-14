@@ -1,62 +1,62 @@
+# Zwei separate PWAs: Lade-App und Meter Mate
 
-# Charger-Modell-Katalog erweitern
+## Problem
 
-## Ziel
-Vorbefuellung der `charger_models`-Tabelle mit gaengigen, oeffentlich dokumentierten OCPP-kompatiblen Wallbox-Modellen, damit diese im User-Backend sofort zur Auswahl stehen.
+Aktuell gibt es nur eine einzige `manifest.json` mit `start_url: "/m"`. Wenn beide Apps auf dem iPhone installiert werden, verwenden sie dasselbe Manifest und landen daher immer bei der Meter-Mate-App.
 
-## Neue Modelle (ca. 30 Eintraege)
+## Losung
 
-| Hersteller | Modell | Protokoll | Hinweise |
-|---|---|---|---|
-| ABB | Terra AC W7-T-RD-M | ocpp1.6 | SIM/LAN, FW >= 1.6.6 empfohlen |
-| ABB | Terra AC W11-T-RD-M | ocpp1.6 | SIM/LAN, FW >= 1.6.6 empfohlen |
-| ABB | Terra AC W22-T-RD-M | ocpp1.6 | SIM/LAN, FW >= 1.6.6 empfohlen |
-| Alfen | Eve Single S-Line | ocpp1.6 | LAN/SIM, Smart Charging faehig |
-| Alfen | Eve Single Pro-Line | ocpp1.6 | LAN/SIM, MID-Zaehler optional |
-| Alfen | Eve Double Pro-Line | ocpp1.6 | Dual-Socket, Load Balancing |
-| Easee | Home | ocpp1.6 | Cloud-OCPP, Aktivierung ueber Easee Portal |
-| Easee | Charge | ocpp1.6 | Cloud-OCPP, Aktivierung ueber Easee Portal |
-| EVBox | Elvi | ocpp1.6 | WiFi/LAN, Konfiguration ueber EVSE-Portal |
-| EVBox | BusinessLine | ocpp1.6 | LAN/SIM, fuer gewerblichen Einsatz |
-| go-e | Charger Gemini | ocpp1.6 | WiFi, Konfiguration ueber go-e App |
-| go-e | Charger Gemini Flex | ocpp1.6 | Mobile Variante, WiFi |
-| Heidelberg | Energy Control | ocpp1.6 | Benoetigt externen OCPP-Gateway |
-| KEBA | KeContact P30 x-series | ocpp1.6 | LAN, Master-faehig fuer c-series |
-| KEBA | KeContact P30 c-series | ocpp1.6 | Nur als Slave ueber x-series Master |
-| Mennekes | Amtron Charge Control | ocpp1.6 | LAN, eichrechtskonform moeglich |
-| Mennekes | Amtron Xtra 11/22 | ocpp1.6 | LAN/SIM |
-| NRGkick | NRGkick Smart | ocpp1.6 | Mobile Wallbox, WiFi, OCPP ueber App aktivieren |
-| Schneider Electric | EVlink Pro AC | ocpp1.6 | LAN/SIM, Smart Charging |
-| Wallbox | Pulsar Plus | ocpp1.6 | WiFi/BT, OCPP ueber myWallbox Portal |
-| Wallbox | Pulsar Pro | ocpp1.6 | WiFi/BT/LAN, Power Sharing |
-| Wallbox | Commander 2 | ocpp1.6 | Touchscreen, WiFi/LAN/SIM |
-| Webasto | Unite | ocpp1.6 | LAN/SIM, MID-Zaehler integriert |
-| Webasto | Live | ocpp1.6 | WiFi/LAN |
-| Zaptec | Go | ocpp1.6 | Aktivierung ueber Zaptec Portal erforderlich |
-| Zaptec | Pro | ocpp1.6 | LAN/SIM, fuer gewerblichen Einsatz |
-| DUOSIDA | DSD1-EU 7kW | ocpp1.6 | ws:// nutzen, nur 2.4 GHz WiFi, Heartbeat 30s empfohlen |
-| DUOSIDA | DSD1-EU 22kW | ocpp1.6 | ws:// nutzen, nur 2.4 GHz WiFi, Heartbeat 30s empfohlen |
+Zwei separate Manifest-Dateien erstellen, die jeweils uber eine eigene Route eingebunden werden.
 
-## Umsetzung
+## Schritte
 
-### Schritt 1: Datenbank-Migration
-Eine SQL-Migration mit INSERT-Statements fuer alle oben genannten Modelle. Bestehende Eintraege (Entratek) bleiben unberuehrt.
+### 1. Neues Manifest fur die Lade-App erstellen
+
+Eine neue Datei `public/manifest-ev.json` mit:
+
+- `name`: "SmartCharge" (o.a.)
+- `start_url`: "/ev"
+- `display`: "standalone"
+- Eigene Icons (vorerst dieselben, spater austauschbar)
+
+### 2. Bestehendes Manifest anpassen
+
+`public/manifest.json` bleibt fur Meter Mate mit `start_url: "/m"` -- hier andert sich nichts.
+
+### 3. Manifest dynamisch pro Route einbinden
+
+Da eine HTML-Datei nur ein `<link rel="manifest">` haben kann, muss das Manifest dynamisch gesetzt werden:
+
+- Aus `index.html` den statischen `<link rel="manifest">` entfernen
+- In den Einstiegskomponenten (`ChargingApp` fur `/ev`, `MobileApp` fur `/m`) per `useEffect` das passende Manifest-Tag im `<head>` setzen
+- Fur alle anderen Routen (Desktop-App) wird kein Manifest oder das Standard-Manifest geladen
+
+### 4. Apple-Meta-Tags pro App anpassen
+
+- `apple-mobile-web-app-title` dynamisch setzen ("Meter Mate" vs. "Smart Charging")
+- Optional: Unterschiedliche `apple-touch-icon`-Referenzen
+
+## Technische Details
 
 ```text
-INSERT INTO charger_models (vendor, model, protocol, notes, is_active)
-VALUES
-  ('ABB', 'Terra AC W7-T-RD-M', 'ocpp1.6', 'SIM/LAN, FW >= 1.6.6 empfohlen', true),
-  ('ABB', 'Terra AC W11-T-RD-M', 'ocpp1.6', ...),
-  ... (alle Modelle aus der Tabelle oben)
+public/
+  manifest.json        --> start_url: "/m"  (Meter Mate)
+  manifest-ev.json     --> start_url: "/ev" (Lade-App)
+  icon-192.png
+  icon-512.png
+
+index.html
+  - Kein statisches <link rel="manifest"> mehr
+
+src/pages/MobileApp.tsx
+  - useEffect: setzt <link rel="manifest" href="/manifest.json">
+  - setzt apple-mobile-web-app-title = "Meter Mate"
+
+src/pages/ChargingApp.tsx
+  - useEffect: setzt <link rel="manifest" href="/manifest-ev.json">
+  - setzt apple-mobile-web-app-title = "Smart Charging"
 ```
 
-### Schritt 2: Keine Code-Aenderungen noetig
-Die bestehende `useChargerModels`-Hook und die Super-Admin-UI laden automatisch alle Eintraege aus der Tabelle. Die neuen Modelle erscheinen sofort:
-- Im Super-Admin unter "OCPP-Backend > Integrationen" in der Modelltabelle
-- Im User-Backend bei der Einrichtung neuer Ladepunkte in den Hersteller/Modell-Dropdowns
+### Wichtig
 
-### Hinweise
-- Alle Modelle werden als `is_active = true` angelegt und koennen einzeln deaktiviert werden
-- Die Hinweise enthalten jeweils die wichtigsten Konfigurationsbesonderheiten
-- DUOSIDA-Modelle enthalten den bereits bekannten Hinweis zu ws:// und 2.4 GHz
-- Spaeter koennen weitere Modelle jederzeit ueber die Super-Admin-UI hinzugefuegt werden
+Nach der Anderung mussen beide Apps auf dem iPhone **neu installiert** werden (alte vom Homescreen loschen, Seite erneut offnen, "Zum Home-Bildschirm" wahlen), damit das jeweilige Manifest korrekt ubernommen wird.
