@@ -26,6 +26,26 @@ const OcppLogViewer = ({ chargePointId, showCpColumn = false }: OcppLogViewerPro
     new Set(logs.map((l) => l.message_type).filter(Boolean) as string[])
   ).sort();
 
+  // Detect Preparing→Available timeout (no StartTransaction in between)
+  const timeoutIds = new Set<string>();
+  for (let i = 0; i < logs.length; i++) {
+    const log = logs[i];
+    // Look for StatusNotification → Available
+    if (log.message_type === "StatusNotification" && JSON.stringify(log.raw_message).includes('"Available"')) {
+      // Search forward (older entries) for the matching Preparing without a StartTransaction in between
+      for (let j = i + 1; j < logs.length; j++) {
+        const prev = logs[j];
+        if (prev.charge_point_id !== log.charge_point_id) continue;
+        if (prev.message_type === "StartTransaction") break; // transaction started, not a timeout
+        if (prev.message_type === "StatusNotification" && JSON.stringify(prev.raw_message).includes('"Preparing"')) {
+          timeoutIds.add(log.id);
+          break;
+        }
+        if (prev.message_type === "StatusNotification") break; // other status change
+      }
+    }
+  }
+
   const filtered = logs.filter((l) => {
     if (directionFilter !== "all" && l.direction !== directionFilter) return false;
     if (messageTypeFilter !== "all" && l.message_type !== messageTypeFilter) return false;
@@ -141,7 +161,14 @@ const OcppLogViewer = ({ chargePointId, showCpColumn = false }: OcppLogViewerPro
                       {showCpColumn && (
                         <TableCell className="font-mono text-xs">{log.charge_point_id}</TableCell>
                       )}
-                      <TableCell>{messageTypeBadge(log.message_type)}</TableCell>
+                      <TableCell className="flex items-center gap-2">
+                        {messageTypeBadge(log.message_type)}
+                        {timeoutIds.has(log.id) && (
+                          <Badge className="bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/30 text-xs whitespace-nowrap">
+                            ⏱ Timeout – kein Fahrzeug
+                          </Badge>
+                        )}
+                      </TableCell>
                     </TableRow>
                     {expandedId === log.id && (
                       <TableRow key={`${log.id}-detail`}>
