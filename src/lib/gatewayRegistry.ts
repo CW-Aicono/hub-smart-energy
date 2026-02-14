@@ -95,6 +95,19 @@ export const GATEWAY_DEFINITIONS: Record<string, GatewayDefinition> = {
       { name: "client_id", label: "Client ID", placeholder: "client-id", type: "text", description: "Client-Kennung für die API-Registrierung", required: true },
     ],
   },
+  omada_cloud: {
+    type: "omada_cloud",
+    label: "TP-Link Omada",
+    icon: "network",
+    description: "TP-Link Omada Cloud Controller für Netzwerkinfrastruktur",
+    edgeFunctionName: "omada-api",
+    configFields: [
+      { name: "api_url", label: "API URL", placeholder: "https://euw1-omada-northbound.tplinkcloud.com", type: "url", description: "Omada Open API Endpunkt (regional)", required: true },
+      { name: "omada_id", label: "Omada Controller ID", placeholder: "xxxxxxxxxxxxxxxxxx", type: "text", description: "Controller-ID aus dem Omada Cloud Portal", required: true },
+      { name: "client_id", label: "Client ID", placeholder: "client-id", type: "text", description: "OAuth2 Client ID aus der Omada Open API Verwaltung", required: true },
+      { name: "client_secret", label: "Client Secret", placeholder: "••••••••", type: "password", description: "OAuth2 Client Secret", required: true },
+    ],
+  },
 };
 
 /** Get ordered list of gateway types for dropdowns */

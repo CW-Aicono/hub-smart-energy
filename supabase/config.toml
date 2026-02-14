@@ -38,3 +38,6 @@ verify_jwt = false
 
 [functions.homematic-api]
 verify_jwt = false
+
+[functions.omada-api]
+verify_jwt = false

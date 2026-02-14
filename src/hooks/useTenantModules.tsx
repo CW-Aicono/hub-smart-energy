@@ -15,6 +15,7 @@ export const ALL_MODULES = [
   { code: "alerts", label: "Alarmregeln" },
   { code: "meter_scanning", label: "Zähler-Scanning (OCR)" },
   { code: "live_values", label: "Live-Sensorwerte" },
+  { code: "network_infra", label: "Netzwerkinfrastruktur" },
 ] as const;
 
 export function useTenantModules(tenantId: string | null) {

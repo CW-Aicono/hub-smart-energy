@@ -14,6 +14,7 @@ const ROUTE_MODULE_MAP: Record<string, string> = {
   "/charging/points": "ev_charging",
   "/charging/billing": "ev_charging",
   "/automation": "automation_multi",
+  "/network": "network_infra",
   "/settings/branding": "integrations",
 };
 
@@ -28,6 +29,7 @@ const NAV_MODULE_MAP: Record<string, string> = {
   "/charging/points": "ev_charging",
   "/charging/billing": "ev_charging",
   "/automation": "automation_multi",
+  "/network": "network_infra",
 };
 
 export function useModuleGuard() {
