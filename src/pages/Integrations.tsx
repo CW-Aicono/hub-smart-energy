@@ -157,12 +157,35 @@ const Integrations = () => {
 
   const handleTestConnection = async (integration: Integration) => {
     setTestingId(integration.id);
-    const config = integration.config as { serial_number?: string } | null;
-    
-    // Simulate connection test - in real implementation this would call an API
+    const config = integration.config as Record<string, unknown> | null;
+    const gatewayDef = getGatewayDefinition(integration.type);
+    const gatewayLabel = gatewayDef?.label || integration.type;
+
+    // Check if required config fields are actually filled
+    const requiredFields = gatewayDef?.configFields.filter(f => f.required) || [];
+    const missingFields = requiredFields.filter(f => !config?.[f.name]);
+
+    if (missingFields.length > 0) {
+      setTestingId(null);
+      const { error } = await updateIntegration(integration.id, {
+        config: {
+          ...config,
+          connection_status: "disconnected",
+          last_tested_at: new Date().toISOString(),
+        },
+      });
+      if (!error) refetch();
+      toast({
+        title: "Verbindungstest fehlgeschlagen",
+        description: `Fehlende Konfiguration für ${gatewayLabel}: ${missingFields.map(f => f.label).join(", ")}`,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Simulate connection test
     await new Promise(resolve => setTimeout(resolve, 2000));
-    
-    // For now, we'll simulate a successful connection
+
     const newStatus = "connected";
     const { error } = await updateIntegration(integration.id, {
       config: {
@@ -177,13 +200,13 @@ const Integrations = () => {
     if (error) {
       toast({
         title: "Verbindungstest fehlgeschlagen",
-        description: "Die Verbindung konnte nicht getestet werden.",
+        description: `Die Verbindung zum ${gatewayLabel} konnte nicht getestet werden.`,
         variant: "destructive",
       });
     } else {
       toast({
         title: "Verbindung erfolgreich",
-        description: `Die Verbindung zum Miniserver wurde hergestellt.`,
+        description: `Die Verbindung zum ${gatewayLabel} wurde hergestellt.`,
       });
       refetch();
     }
