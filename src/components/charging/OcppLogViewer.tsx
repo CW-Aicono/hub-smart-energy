@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { RefreshCw, ChevronDown, ChevronRight, ArrowDownUp, Pause, Play } from "lucide-react";
 import { format } from "date-fns";
 
@@ -18,9 +19,16 @@ const OcppLogViewer = ({ chargePointId, showCpColumn = false }: OcppLogViewerPro
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [filterText, setFilterText] = useState("");
   const [directionFilter, setDirectionFilter] = useState<"all" | "incoming" | "outgoing">("all");
+  const [messageTypeFilter, setMessageTypeFilter] = useState<string>("all");
+
+  // Collect unique message types for the dropdown
+  const messageTypes = Array.from(
+    new Set(logs.map((l) => l.message_type).filter(Boolean) as string[])
+  ).sort();
 
   const filtered = logs.filter((l) => {
     if (directionFilter !== "all" && l.direction !== directionFilter) return false;
+    if (messageTypeFilter !== "all" && l.message_type !== messageTypeFilter) return false;
     if (filterText) {
       const search = filterText.toLowerCase();
       return (
@@ -52,6 +60,17 @@ const OcppLogViewer = ({ chargePointId, showCpColumn = false }: OcppLogViewerPro
       <CardHeader className="flex flex-row items-center justify-between pb-3">
         <CardTitle className="text-base">OCPP-Nachrichtenlog</CardTitle>
         <div className="flex items-center gap-2">
+          <Select value={messageTypeFilter} onValueChange={setMessageTypeFilter}>
+            <SelectTrigger className="h-8 w-44 text-xs">
+              <SelectValue placeholder="Nachrichtentyp" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Alle Typen</SelectItem>
+              {messageTypes.map((mt) => (
+                <SelectItem key={mt} value={mt}>{mt}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <div className="flex border rounded-md overflow-hidden">
             {(["all", "incoming", "outgoing"] as const).map((d) => (
               <button
@@ -64,7 +83,7 @@ const OcppLogViewer = ({ chargePointId, showCpColumn = false }: OcppLogViewerPro
             ))}
           </div>
           <Input
-            placeholder="Filter..."
+            placeholder="Suche..."
             value={filterText}
             onChange={(e) => setFilterText(e.target.value)}
             className="w-40 h-8 text-xs"
