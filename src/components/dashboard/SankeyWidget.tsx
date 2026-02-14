@@ -301,7 +301,8 @@ const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
   const tgtOffsets: Record<string, number> = {};
   targetNames.forEach((n) => { tgtOffsets[n] = 0; });
 
-  const linkElements = flows.map((flow, i) => {
+  // Collect link label info first, then resolve overlaps
+  const linkData = flows.map((flow, i) => {
     const srcPos = srcPositions[flow.sourceName];
     const tgtPos = tgtPositions[flow.targetName];
     if (!srcPos || !tgtPos) return null;
@@ -317,6 +318,31 @@ const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
 
     const x1 = srcX + nodeW;
     const x2 = tgtX;
+    const showLabel = Math.min(linkHSrc, linkHTgt) > 14;
+    const labelX = (x1 + x2) / 2;
+    const labelY = (sy + ty) / 2 + (linkHSrc + linkHTgt) / 4;
+
+    return { flow, i, sy, ty, linkHSrc, linkHTgt, x1, x2, showLabel, labelX, labelY };
+  }).filter(Boolean) as { flow: FlowLink; i: number; sy: number; ty: number; linkHSrc: number; linkHTgt: number; x1: number; x2: number; showLabel: boolean; labelX: number; labelY: number }[];
+
+  // Resolve overlapping inline labels by shifting horizontally
+  const labelPositions = linkData
+    .filter(d => d.showLabel)
+    .sort((a, b) => a.labelY - b.labelY);
+
+  const minYGap = 12;
+  for (let i = 1; i < labelPositions.length; i++) {
+    const prev = labelPositions[i - 1];
+    const curr = labelPositions[i];
+    if (Math.abs(curr.labelY - prev.labelY) < minYGap && Math.abs(curr.labelX - prev.labelX) < 60) {
+      // Shift one left, one right
+      prev.labelX -= 50;
+      curr.labelX += 50;
+    }
+  }
+
+  const linkElements = linkData.map((d) => {
+    const { flow, i: idx, sy, ty, linkHSrc, linkHTgt, x1, x2, showLabel, labelX, labelY } = d;
     const cx1 = x1 + (x2 - x1) * 0.35;
     const cx2 = x1 + (x2 - x1) * 0.65;
 
@@ -326,11 +352,8 @@ const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
       setTooltip({ x: e.clientX - rect.left, y: e.clientY - rect.top - 10, source: flow.sourceName, target: flow.targetName, value: flow.value, sourceType: flow.sourceType });
     };
 
-    // Only show inline label if the link band is tall enough
-    const showLabel = Math.min(linkHSrc, linkHTgt) > 14;
-
     return (
-      <g key={`link-${i}`} onMouseMove={handleMouseMove} onMouseLeave={() => setTooltip(null)} className="cursor-pointer">
+      <g key={`link-${idx}`} onMouseMove={handleMouseMove} onMouseLeave={() => setTooltip(null)} className="cursor-pointer">
         <path
           d={`M${x1},${sy} C${cx1},${sy} ${cx2},${ty} ${x2},${ty} L${x2},${ty + linkHTgt} C${cx2},${ty + linkHTgt} ${cx1},${sy + linkHSrc} ${x1},${sy + linkHSrc} Z`}
           fill={flow.sourceColor}
@@ -339,8 +362,8 @@ const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
         />
         {showLabel && (
           <text
-            x={(x1 + x2) / 2}
-            y={(sy + ty) / 2 + (linkHSrc + linkHTgt) / 4}
+            x={labelX}
+            y={labelY}
             textAnchor="middle"
             dominantBaseline="middle"
             fill="hsl(var(--foreground))"
