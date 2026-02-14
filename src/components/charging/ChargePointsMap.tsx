@@ -1,5 +1,5 @@
 import { useMemo, useState, useCallback } from "react";
-import { MapContainer, TileLayer, Marker, Popup, useMap, Circle } from "react-leaflet";
+import { MapContainer, TileLayer, Marker, Popup, useMap, useMapEvents, Circle } from "react-leaflet";
 import { Icon, LatLngBounds } from "leaflet";
 import { useEffect } from "react";
 import { Badge } from "@/components/ui/badge";
@@ -45,6 +45,7 @@ interface ChargePointForMap {
 interface ChargePointsMapProps {
   chargePoints: ChargePointForMap[];
   onChargePointClick?: (cp: ChargePointForMap) => void;
+  onVisiblePointsChange?: (visibleIds: Set<string>) => void;
   className?: string;
   showLocateButton?: boolean;
 }
@@ -84,7 +85,33 @@ function MapController({ points }: { points: ChargePointForMap[] }) {
   return null;
 }
 
-export default function ChargePointsMap({ chargePoints, onChargePointClick, className, showLocateButton = false }: ChargePointsMapProps) {
+function BoundsTracker({ points, onVisiblePointsChange }: { points: ChargePointForMap[]; onVisiblePointsChange?: (visibleIds: Set<string>) => void }) {
+  const map = useMapEvents({
+    moveend: () => reportVisible(),
+    zoomend: () => reportVisible(),
+  });
+
+  const reportVisible = useCallback(() => {
+    if (!onVisiblePointsChange) return;
+    const bounds = map.getBounds();
+    const visible = new Set<string>();
+    points.forEach((p) => {
+      if (p.latitude != null && p.longitude != null && bounds.contains([p.latitude, p.longitude])) {
+        visible.add(p.id);
+      }
+    });
+    onVisiblePointsChange(visible);
+  }, [map, points, onVisiblePointsChange]);
+
+  useEffect(() => {
+    const timer = setTimeout(reportVisible, 200);
+    return () => clearTimeout(timer);
+  }, [reportVisible]);
+
+  return null;
+}
+
+export default function ChargePointsMap({ chargePoints, onChargePointClick, onVisiblePointsChange, className, showLocateButton = false }: ChargePointsMapProps) {
   const [userPos, setUserPos] = useState<[number, number] | null>(null);
   const [locating, setLocating] = useState(false);
 
@@ -146,6 +173,7 @@ export default function ChargePointsMap({ chargePoints, onChargePointClick, clas
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
         <MapController points={validPoints} />
+        <BoundsTracker points={validPoints} onVisiblePointsChange={onVisiblePointsChange} />
         {userPos && <LocateUserControl userPos={userPos} />}
         {userPos && (
           <>
