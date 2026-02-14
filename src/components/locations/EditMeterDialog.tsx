@@ -115,6 +115,17 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
     }
   }, [meter]);
 
+  // Auto-set unit when energy type changes (user interaction, not initial load)
+  const initialEnergyTypeRef = useRef(meter.energy_type);
+  useEffect(() => {
+    // Only auto-set if user actively changed the energy type (not on initial render)
+    if (energyType === initialEnergyTypeRef.current) return;
+    initialEnergyTypeRef.current = energyType;
+    if (energyType === "gas") setUnit("m³");
+    else if (energyType === "wasser") setUnit("m³");
+    else setUnit("kWh");
+  }, [energyType]);
+
   // Fetch floors for the location
   useEffect(() => {
     if (!meter.location_id) { setFloors([]); return; }
