@@ -16,9 +16,10 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { Server, Trash2, Pencil, CheckCircle2, XCircle, Clock, Loader2, Gauge } from "lucide-react";
-import { LocationIntegration, LoxoneConfig } from "@/hooks/useIntegrations";
+import { LocationIntegration } from "@/hooks/useIntegrations";
 import { SensorsDialog } from "./SensorsDialog";
 import { EditIntegrationDialog } from "./EditIntegrationDialog";
+import { getGatewayDefinition } from "@/lib/gatewayRegistry";
 
 interface IntegrationCardProps {
   locationIntegration: LocationIntegration;
@@ -34,7 +35,8 @@ export function IntegrationCard({ locationIntegration, onUpdate, onDelete }: Int
   const { toast } = useToast();
 
   const integration = locationIntegration.integration;
-  const config = locationIntegration.config as LoxoneConfig;
+  const config = locationIntegration.config as Record<string, unknown>;
+  const gatewayDef = integration ? getGatewayDefinition(integration.type) : undefined;
 
   const handleToggleEnabled = async (enabled: boolean) => {
     setIsToggling(true);
@@ -74,11 +76,26 @@ export function IntegrationCard({ locationIntegration, onUpdate, onDelete }: Int
     }
   };
 
-  // Check if configuration is complete
-  const isConfigured = config?.serial_number && config?.username && config?.password;
+  // Check if all required config fields have values
+  const isConfigured = (() => {
+    if (!gatewayDef || !config) return false;
+    return gatewayDef.configFields
+      .filter((f) => f.required)
+      .every((f) => {
+        const val = config[f.name];
+        return val && String(val).length > 0;
+      });
+  })();
+
+  // Build a subtitle from the first non-password config field
+  const configSubtitle = (() => {
+    if (!gatewayDef || !config) return "Nicht konfiguriert";
+    const firstField = gatewayDef.configFields.find((f) => f.type !== "password" && config[f.name]);
+    if (!firstField) return "Nicht konfiguriert";
+    return `${firstField.label}: ${config[firstField.name]}`;
+  })();
 
   const getSyncStatusBadge = () => {
-    // If not configured, always show "not configured"
     if (!isConfigured) {
       return (
         <Badge variant="outline" className="gap-1 bg-muted text-muted-foreground border-border">
@@ -135,7 +152,7 @@ export function IntegrationCard({ locationIntegration, onUpdate, onDelete }: Int
                   {getSyncStatusBadge()}
                 </div>
                 <p className="text-sm text-muted-foreground">
-                  {config?.serial_number ? `SN: ${config.serial_number}` : "Nicht konfiguriert"}
+                  {configSubtitle}
                 </p>
                 {integration?.description && (
                   <p className="text-xs text-muted-foreground">{integration.description}</p>

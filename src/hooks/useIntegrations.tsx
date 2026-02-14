@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "./useTenant";
+import { getEdgeFunctionName } from "@/lib/gatewayRegistry";
 
 export interface IntegrationCategory {
   id: string;
