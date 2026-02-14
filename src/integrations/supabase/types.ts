@@ -1320,10 +1320,12 @@ export type Database = {
       }
       meters: {
         Row: {
+          brennwert: number | null
           capture_type: string
           created_at: string
           energy_type: string
           floor_id: string | null
+          gas_type: string | null
           id: string
           installation_date: string | null
           is_archived: boolean
@@ -1346,12 +1348,15 @@ export type Database = {
           tenant_id: string
           unit: string
           updated_at: string
+          zustandszahl: number | null
         }
         Insert: {
+          brennwert?: number | null
           capture_type?: string
           created_at?: string
           energy_type?: string
           floor_id?: string | null
+          gas_type?: string | null
           id?: string
           installation_date?: string | null
           is_archived?: boolean
@@ -1374,12 +1379,15 @@ export type Database = {
           tenant_id: string
           unit?: string
           updated_at?: string
+          zustandszahl?: number | null
         }
         Update: {
+          brennwert?: number | null
           capture_type?: string
           created_at?: string
           energy_type?: string
           floor_id?: string | null
+          gas_type?: string | null
           id?: string
           installation_date?: string | null
           is_archived?: boolean
@@ -1402,6 +1410,7 @@ export type Database = {
           tenant_id?: string
           unit?: string
           updated_at?: string
+          zustandszahl?: number | null
         }
         Relationships: [
           {

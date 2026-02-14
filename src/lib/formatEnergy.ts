@@ -70,3 +70,39 @@ export function formatEnergyByType(value: number, energyType: string): string {
 export function getEnergyUnit(energyType: string): string {
   return ENERGY_BASE_UNITS[energyType] || "kWh";
 }
+
+/** Default calorific values (Brennwert) in kWh/m³ */
+const DEFAULT_BRENNWERT: Record<string, number> = {
+  H: 11.5,
+  L: 8.9,
+};
+
+/**
+ * Converts a gas volume (m³) to energy (kWh).
+ * Formula: kWh = m³ × Brennwert × Zustandszahl
+ */
+export function gasM3ToKWh(
+  m3: number,
+  gasType: string | null,
+  brennwert: number | null,
+  zustandszahl: number | null,
+): number {
+  const bw = brennwert ?? DEFAULT_BRENNWERT[gasType || "H"] ?? 11.5;
+  const zz = zustandszahl ?? 0.9636; // typical default
+  return m3 * bw * zz;
+}
+
+/**
+ * Formats a gas value showing both m³ and the kWh equivalent.
+ */
+export function formatGasDual(
+  m3: number,
+  gasType: string | null,
+  brennwert: number | null,
+  zustandszahl: number | null,
+): { m3Str: string; kwhStr: string } {
+  const m3Str = m3.toLocaleString("de-DE", { minimumFractionDigits: 0, maximumFractionDigits: 2 }) + " m³";
+  const kwh = gasM3ToKWh(m3, gasType, brennwert, zustandszahl);
+  const kwhStr = formatEnergy(kwh);
+  return { m3Str, kwhStr };
+}
