@@ -195,10 +195,10 @@ function ChargingAppAuth({ onAuth }: { onAuth: () => void }) {
 const LazyMap = lazy(() => import("@/components/charging/ChargePointsMap"));
 
 function MapTab({ chargePoints, onSelect }: { chargePoints: AppChargePoint[]; onSelect: (cp: AppChargePoint) => void }) {
-  const [filterOpen, setFilterOpen] = useState(false);
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [minPower, setMinPower] = useState(0);
   const [connectorFilter, setConnectorFilter] = useState<string>("all");
+  const [showPowerSlider, setShowPowerSlider] = useState(false);
 
   const filtered = useMemo(() => {
     return chargePoints.filter((cp) => {
@@ -211,58 +211,11 @@ function MapTab({ chargePoints, onSelect }: { chargePoints: AppChargePoint[]; on
   }, [chargePoints, typeFilter, minPower, connectorFilter]);
 
   const connectorTypes = [...new Set(chargePoints.map((cp) => cp.connector_type).filter(Boolean))];
+  const hasActiveFilter = typeFilter !== "all" || minPower > 0 || connectorFilter !== "all";
 
   return (
     <div className="flex flex-col h-full">
-      {/* Filter bar */}
-      <div className="p-3 flex items-center gap-2 bg-background border-b">
-        <Sheet open={filterOpen} onOpenChange={setFilterOpen}>
-          <SheetTrigger asChild>
-            <Button variant="outline" size="sm" className="gap-1.5">
-              <Filter className="h-4 w-4" />
-              Filter
-              {(typeFilter !== "all" || minPower > 0 || connectorFilter !== "all") && (
-                <Badge variant="secondary" className="ml-1 h-5 w-5 p-0 flex items-center justify-center text-xs">!</Badge>
-              )}
-            </Button>
-          </SheetTrigger>
-          <SheetContent side="bottom" className="h-auto max-h-[70vh]">
-            <SheetHeader><SheetTitle>Ladestationen filtern</SheetTitle></SheetHeader>
-            <div className="space-y-6 py-4">
-              <div className="space-y-2">
-                <Label className="text-sm font-medium">Ladetyp</Label>
-                <div className="flex gap-2">
-                  {["all", "AC", "DC"].map((t) => (
-                    <Button key={t} variant={typeFilter === t ? "default" : "outline"} size="sm" onClick={() => setTypeFilter(t)}>
-                      {t === "all" ? "Alle" : t}
-                    </Button>
-                  ))}
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label className="text-sm font-medium">Mindestleistung: {minPower} kW</Label>
-                <Slider value={[minPower]} onValueChange={([v]) => setMinPower(v)} min={0} max={350} step={5} />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-sm font-medium">Steckertyp</Label>
-                <Select value={connectorFilter} onValueChange={setConnectorFilter}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Alle Typen</SelectItem>
-                    {connectorTypes.map((ct) => <SelectItem key={ct} value={ct}>{ct}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <Button className="w-full" onClick={() => setFilterOpen(false)}>
-                {filtered.length} Stationen anzeigen
-              </Button>
-            </div>
-          </SheetContent>
-        </Sheet>
-        <Badge variant="secondary">{filtered.length} Stationen</Badge>
-      </div>
-
-      {/* Map */}
+      {/* Map with overlay filters */}
       <div className="flex-1 relative" style={{ minHeight: "300px" }}>
         {filtered.some((cp) => cp.latitude && cp.longitude) ? (
           <Suspense fallback={<div className="flex items-center justify-center h-full"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>}>
@@ -273,6 +226,68 @@ function MapTab({ chargePoints, onSelect }: { chargePoints: AppChargePoint[]; on
             Keine Ladestationen mit Koordinaten verfügbar
           </div>
         )}
+
+        {/* Filter overlay on map */}
+        <div className="absolute top-3 left-3 right-14 z-[1000] flex flex-col gap-2">
+          {/* Row 1: Type + Connector chips */}
+          <div className="flex gap-1.5 flex-wrap">
+            {["all", "AC", "DC"].map((t) => (
+              <Button
+                key={t}
+                variant={typeFilter === t ? "default" : "secondary"}
+                size="sm"
+                className="h-8 text-xs shadow-md rounded-full px-3"
+                onClick={() => setTypeFilter(t)}
+              >
+                {t === "all" ? "Alle" : t}
+              </Button>
+            ))}
+            <Separator orientation="vertical" className="h-8 mx-0.5" />
+            {connectorTypes.map((ct) => (
+              <Button
+                key={ct}
+                variant={connectorFilter === ct ? "default" : "secondary"}
+                size="sm"
+                className="h-8 text-xs shadow-md rounded-full px-3"
+                onClick={() => setConnectorFilter(connectorFilter === ct ? "all" : ct)}
+              >
+                {ct}
+              </Button>
+            ))}
+          </div>
+
+          {/* Row 2: Power filter */}
+          <div className="flex items-center gap-2">
+            <Button
+              variant={minPower > 0 ? "default" : "secondary"}
+              size="sm"
+              className="h-8 text-xs shadow-md rounded-full px-3 gap-1"
+              onClick={() => setShowPowerSlider(!showPowerSlider)}
+            >
+              <Zap className="h-3 w-3" />
+              {minPower > 0 ? `≥ ${minPower} kW` : "Leistung"}
+            </Button>
+            {hasActiveFilter && (
+              <Button
+                variant="secondary"
+                size="sm"
+                className="h-8 text-xs shadow-md rounded-full px-3"
+                onClick={() => { setTypeFilter("all"); setMinPower(0); setConnectorFilter("all"); setShowPowerSlider(false); }}
+              >
+                <X className="h-3 w-3 mr-1" /> Reset
+              </Button>
+            )}
+            <Badge variant="secondary" className="shadow-md text-xs h-6">{filtered.length}</Badge>
+          </div>
+
+          {/* Power slider dropdown */}
+          {showPowerSlider && (
+            <div className="bg-background/95 backdrop-blur-sm rounded-xl shadow-lg border p-3 max-w-[250px]">
+              <Label className="text-xs font-medium">Mindestleistung: {minPower} kW</Label>
+              <Slider value={[minPower]} onValueChange={([v]) => setMinPower(v)} min={0} max={350} step={5} className="mt-2" />
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Station list */}
