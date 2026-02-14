@@ -124,7 +124,22 @@ async function validateIdTag(
 
   if (!cp) return "Invalid";
 
-  // Check if the RFID tag belongs to an active charging user in this tenant
+  // App user: idTag format "APP:<auth_user_id>"
+  if (idTag.startsWith("APP:")) {
+    const authUserId = idTag.substring(4);
+    const { data: appUser } = await supabase
+      .from("charging_users")
+      .select("id, status")
+      .eq("tenant_id", cp.tenant_id)
+      .eq("auth_user_id", authUserId)
+      .single();
+
+    if (!appUser) return "Invalid"; // Not registered as charging user
+    if (appUser.status !== "active") return "Blocked";
+    return "Accepted";
+  }
+
+  // RFID tag lookup
   const { data: user } = await supabase
     .from("charging_users")
     .select("id, status")
@@ -132,8 +147,8 @@ async function validateIdTag(
     .eq("rfid_tag", idTag)
     .single();
 
-  if (!user) return "Invalid"; // Unknown tag
-  if (user.status !== "active") return "Blocked"; // User is blocked/archived
+  if (!user) return "Invalid";
+  if (user.status !== "active") return "Blocked";
 
   return "Accepted";
 }
