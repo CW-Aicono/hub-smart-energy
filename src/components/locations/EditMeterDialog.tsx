@@ -14,6 +14,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { AlertCircle, Layers, DoorOpen, Upload, Loader2, ImageIcon } from "lucide-react";
 import { toast } from "sonner";
+import { VirtualMeterFormulaBuilder, VirtualMeterSource } from "./VirtualMeterFormulaBuilder";
 
 interface Floor {
   id: string;
@@ -47,7 +48,7 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
   const [unit, setUnit] = useState(meter.unit);
   const [medium, setMedium] = useState(meter.medium || "");
   const [notes, setNotes] = useState(meter.notes || "");
-  const [captureType, setCaptureType] = useState<"manual" | "automatic">(meter.capture_type as "manual" | "automatic");
+  const [captureType, setCaptureType] = useState<"manual" | "automatic" | "virtual">(meter.capture_type as "manual" | "automatic" | "virtual");
   const [selectedIntegration, setSelectedIntegration] = useState(meter.location_integration_id || "");
   const [selectedSensor, setSelectedSensor] = useState(meter.sensor_uuid || "");
   const [sensors, setSensors] = useState<SensorOption[]>([]);
@@ -62,6 +63,7 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
   const [meterOperator, setMeterOperator] = useState((meter as any).meter_operator || "");
   const [photoUrl, setPhotoUrl] = useState(meter.photo_url || "");
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [virtualSources, setVirtualSources] = useState<VirtualMeterSource[]>([]);
   const photoInputRef = useRef<HTMLInputElement>(null);
   const [floors, setFloors] = useState<Floor[]>([]);
   const [rooms, setRooms] = useState<Room[]>([]);
@@ -81,7 +83,7 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
     setUnit(meter.unit);
     setMedium(meter.medium || "");
     setNotes(meter.notes || "");
-    setCaptureType(meter.capture_type as "manual" | "automatic");
+    setCaptureType(meter.capture_type as "manual" | "automatic" | "virtual");
     setSelectedIntegration(meter.location_integration_id || "");
     setSelectedSensor(meter.sensor_uuid || "");
     setParentMeterId(meter.parent_meter_id || "none");
@@ -92,6 +94,19 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
     setInstallationDate(meter.installation_date || "");
     setMeterOperator((meter as any).meter_operator || "");
     setPhotoUrl(meter.photo_url || "");
+    // Load virtual sources
+    if (meter.capture_type === "virtual") {
+      supabase
+        .from("virtual_meter_sources")
+        .select("source_meter_id, operator")
+        .eq("virtual_meter_id", meter.id)
+        .order("sort_order")
+        .then(({ data }) => {
+          setVirtualSources((data as VirtualMeterSource[]) || []);
+        });
+    } else {
+      setVirtualSources([]);
+    }
   }, [meter]);
 
   // Fetch floors for the location
@@ -207,6 +222,24 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
       meter_operator: meterOperator || undefined,
       photo_url: photoUrl || undefined,
     } as any);
+
+    // Update virtual sources
+    if (captureType === "virtual") {
+      await supabase.from("virtual_meter_sources").delete().eq("virtual_meter_id", meter.id);
+      if (virtualSources.length > 0) {
+        const rows = virtualSources.map((s, i) => ({
+          virtual_meter_id: meter.id,
+          source_meter_id: s.source_meter_id,
+          operator: s.operator,
+          sort_order: i,
+        }));
+        await supabase.from("virtual_meter_sources").insert(rows as any);
+      }
+    } else {
+      // Clean up old virtual sources if switching away from virtual
+      await supabase.from("virtual_meter_sources").delete().eq("virtual_meter_id", meter.id);
+    }
+
     setSaving(false);
     onOpenChange(false);
   };
@@ -222,8 +255,8 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
             <Label className="mb-2 block">Erfassungsart *</Label>
             <RadioGroup
               value={captureType}
-              onValueChange={(v) => setCaptureType(v as "manual" | "automatic")}
-              className="flex gap-6"
+              onValueChange={(v) => setCaptureType(v as "manual" | "automatic" | "virtual")}
+              className="flex flex-wrap gap-x-6 gap-y-2"
             >
               <div className="flex items-center gap-2">
                 <RadioGroupItem value="manual" id="edit-capture-manual" />
@@ -233,8 +266,21 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
                 <RadioGroupItem value="automatic" id="edit-capture-automatic" />
                 <Label htmlFor="edit-capture-automatic" className="cursor-pointer font-normal">Automatische Erfassung</Label>
               </div>
+              <div className="flex items-center gap-2">
+                <RadioGroupItem value="virtual" id="edit-capture-virtual" />
+                <Label htmlFor="edit-capture-virtual" className="cursor-pointer font-normal">Virtueller Zähler</Label>
+              </div>
             </RadioGroup>
           </div>
+
+          {/* Virtual: Formula builder */}
+          {captureType === "virtual" && (
+            <VirtualMeterFormulaBuilder
+              sources={virtualSources}
+              onSourcesChange={setVirtualSources}
+              availableMeters={allMeters.filter((m) => !m.is_archived && m.id !== meter.id)}
+            />
+          )}
 
           {captureType === "automatic" && (
             <div className="space-y-3 rounded-md border p-3 bg-muted/30">

@@ -12,6 +12,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { AlertCircle } from "lucide-react";
+import { VirtualMeterFormulaBuilder, VirtualMeterSource } from "./VirtualMeterFormulaBuilder";
 
 interface AddMeterDialogProps {
   locationId: string;
@@ -35,7 +36,7 @@ export const AddMeterDialog = ({ locationId, open, onOpenChange }: AddMeterDialo
   const [unit, setUnit] = useState("kWh");
   const [medium, setMedium] = useState("");
   const [notes, setNotes] = useState("");
-  const [captureType, setCaptureType] = useState<"manual" | "automatic">("manual");
+  const [captureType, setCaptureType] = useState<"manual" | "automatic" | "virtual">("manual");
   const [selectedIntegration, setSelectedIntegration] = useState("");
   const [sensors, setSensors] = useState<SensorOption[]>([]);
   const [sensorsLoading, setSensorsLoading] = useState(false);
@@ -43,6 +44,7 @@ export const AddMeterDialog = ({ locationId, open, onOpenChange }: AddMeterDialo
   const [parentMeterId, setParentMeterId] = useState("");
   const [isMainMeter, setIsMainMeter] = useState(false);
   const [meterFunction, setMeterFunction] = useState("consumption");
+  const [virtualSources, setVirtualSources] = useState<VirtualMeterSource[]>([]);
 
   const activeMeters = meters.filter((m) => !m.is_archived);
 
@@ -98,18 +100,24 @@ export const AddMeterDialog = ({ locationId, open, onOpenChange }: AddMeterDialo
 
   const handleSubmit = async () => {
     if (!name.trim()) return;
-    await addMeter({
-      name: name.trim(),
-      location_id: locationId,
-      meter_number: meterNumber || undefined,
-      energy_type: energyType,
-      unit,
-      medium: medium || undefined,
-      notes: notes || undefined,
-      capture_type: captureType,
-      location_integration_id: captureType === "automatic" && selectedIntegration ? selectedIntegration : undefined,
-      sensor_uuid: captureType === "automatic" && selectedSensor ? selectedSensor : undefined,
-    } as any, parentMeterId && parentMeterId !== "none" ? parentMeterId : null, isMainMeter, meterFunction);
+    await addMeter(
+      {
+        name: name.trim(),
+        location_id: locationId,
+        meter_number: meterNumber || undefined,
+        energy_type: energyType,
+        unit,
+        medium: medium || undefined,
+        notes: notes || undefined,
+        capture_type: captureType,
+        location_integration_id: captureType === "automatic" && selectedIntegration ? selectedIntegration : undefined,
+        sensor_uuid: captureType === "automatic" && selectedSensor ? selectedSensor : undefined,
+      } as any,
+      parentMeterId && parentMeterId !== "none" ? parentMeterId : null,
+      isMainMeter,
+      meterFunction,
+      captureType === "virtual" ? virtualSources : undefined,
+    );
     resetAndClose();
   };
 
@@ -127,6 +135,7 @@ export const AddMeterDialog = ({ locationId, open, onOpenChange }: AddMeterDialo
     setParentMeterId("");
     setIsMainMeter(false);
     setMeterFunction("consumption");
+    setVirtualSources([]);
     onOpenChange(false);
   };
 
@@ -142,8 +151,8 @@ export const AddMeterDialog = ({ locationId, open, onOpenChange }: AddMeterDialo
             <Label className="mb-2 block">Erfassungsart *</Label>
             <RadioGroup
               value={captureType}
-              onValueChange={(v) => setCaptureType(v as "manual" | "automatic")}
-              className="flex gap-6"
+              onValueChange={(v) => setCaptureType(v as "manual" | "automatic" | "virtual")}
+              className="flex flex-wrap gap-x-6 gap-y-2"
             >
               <div className="flex items-center gap-2">
                 <RadioGroupItem value="manual" id="capture-manual" />
@@ -157,8 +166,23 @@ export const AddMeterDialog = ({ locationId, open, onOpenChange }: AddMeterDialo
                   Automatische Erfassung
                 </Label>
               </div>
+              <div className="flex items-center gap-2">
+                <RadioGroupItem value="virtual" id="capture-virtual" />
+                <Label htmlFor="capture-virtual" className="cursor-pointer font-normal">
+                  Virtueller Zähler
+                </Label>
+              </div>
             </RadioGroup>
           </div>
+
+          {/* Virtual: Formula builder */}
+          {captureType === "virtual" && (
+            <VirtualMeterFormulaBuilder
+              sources={virtualSources}
+              onSourcesChange={setVirtualSources}
+              availableMeters={activeMeters}
+            />
+          )}
 
           {/* Automatic: Integration + Sensor selection */}
           {captureType === "automatic" && (
@@ -281,7 +305,11 @@ export const AddMeterDialog = ({ locationId, open, onOpenChange }: AddMeterDialo
           <Button variant="outline" onClick={resetAndClose}>Abbrechen</Button>
           <Button
             onClick={handleSubmit}
-            disabled={!name.trim() || (captureType === "automatic" && (!selectedIntegration || !selectedSensor))}
+            disabled={
+              !name.trim() ||
+              (captureType === "automatic" && (!selectedIntegration || !selectedSensor)) ||
+              (captureType === "virtual" && virtualSources.length < 2)
+            }
           >
             Anlegen
           </Button>
