@@ -58,6 +58,8 @@ export const AddMeterDialog = ({ locationId, open, onOpenChange }: AddMeterDialo
     else setUnit("kWh");
   }, [energyType]);
 
+  const unitOptions = energyType === "gas" ? ["m³", "kWh"] : null;
+
   const enabledIntegrations = locationIntegrations.filter((li) => li.is_enabled);
 
   // Fetch sensors when an integration is selected
@@ -273,7 +275,18 @@ export const AddMeterDialog = ({ locationId, open, onOpenChange }: AddMeterDialo
             </div>
             <div>
               <Label>Einheit</Label>
-              <Input value={unit} onChange={(e) => setUnit(e.target.value)} placeholder="kWh" />
+              {unitOptions ? (
+                <Select value={unit} onValueChange={setUnit}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {unitOptions.map((u) => (
+                      <SelectItem key={u} value={u}>{u}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <Input value={unit} onChange={(e) => setUnit(e.target.value)} placeholder="kWh" />
+              )}
             </div>
           </div>
           <div>
