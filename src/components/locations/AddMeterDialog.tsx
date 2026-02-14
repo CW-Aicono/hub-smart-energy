@@ -45,8 +45,18 @@ export const AddMeterDialog = ({ locationId, open, onOpenChange }: AddMeterDialo
   const [isMainMeter, setIsMainMeter] = useState(false);
   const [meterFunction, setMeterFunction] = useState("consumption");
   const [virtualSources, setVirtualSources] = useState<VirtualMeterSource[]>([]);
+  const [gasType, setGasType] = useState("H");
+  const [zustandszahl, setZustandszahl] = useState("0,9636");
+  const [brennwert, setBrenwert] = useState("");
 
   const activeMeters = meters.filter((m) => !m.is_archived);
+
+  // Auto-set unit when energy type changes
+  useEffect(() => {
+    if (energyType === "gas") setUnit("m³");
+    else if (energyType === "wasser") setUnit("m³");
+    else setUnit("kWh");
+  }, [energyType]);
 
   const enabledIntegrations = locationIntegrations.filter((li) => li.is_enabled);
 
@@ -100,6 +110,8 @@ export const AddMeterDialog = ({ locationId, open, onOpenChange }: AddMeterDialo
 
   const handleSubmit = async () => {
     if (!name.trim()) return;
+    const parsedZustandszahl = zustandszahl ? parseFloat(zustandszahl.replace(",", ".")) : undefined;
+    const parsedBrennwert = brennwert ? parseFloat(brennwert.replace(",", ".")) : undefined;
     await addMeter(
       {
         name: name.trim(),
@@ -112,6 +124,7 @@ export const AddMeterDialog = ({ locationId, open, onOpenChange }: AddMeterDialo
         capture_type: captureType,
         location_integration_id: captureType === "automatic" && selectedIntegration ? selectedIntegration : undefined,
         sensor_uuid: captureType === "automatic" && selectedSensor ? selectedSensor : undefined,
+        ...(energyType === "gas" ? { gas_type: gasType, zustandszahl: parsedZustandszahl, brennwert: parsedBrennwert || undefined } : {}),
       } as any,
       parentMeterId && parentMeterId !== "none" ? parentMeterId : null,
       isMainMeter,
@@ -136,6 +149,9 @@ export const AddMeterDialog = ({ locationId, open, onOpenChange }: AddMeterDialo
     setIsMainMeter(false);
     setMeterFunction("consumption");
     setVirtualSources([]);
+    setGasType("H");
+    setZustandszahl("0,9636");
+    setBrenwert("");
     onOpenChange(false);
   };
 
@@ -264,6 +280,34 @@ export const AddMeterDialog = ({ locationId, open, onOpenChange }: AddMeterDialo
             <Label>Medium</Label>
             <Input value={medium} onChange={(e) => setMedium(e.target.value)} placeholder="z.B. Fernwärme" />
           </div>
+          {/* Gas-specific fields */}
+          {energyType === "gas" && (
+            <div className="space-y-3 rounded-md border p-3 bg-muted/30">
+              <p className="text-sm font-medium text-muted-foreground">Gas-Parameter</p>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label>Gasart *</Label>
+                  <Select value={gasType} onValueChange={setGasType}>
+                    <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="H">H-Gas (hochkalorisch)</SelectItem>
+                      <SelectItem value="L">L-Gas (niederkalorisch)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>Zustandszahl</Label>
+                  <Input value={zustandszahl} onChange={(e) => setZustandszahl(e.target.value)} placeholder="0,9636" className="mt-1" />
+                  <p className="text-xs text-muted-foreground mt-0.5">In der Regel &lt; 1</p>
+                </div>
+              </div>
+              <div>
+                <Label>Brennwert (kWh/m³)</Label>
+                <Input value={brennwert} onChange={(e) => setBrenwert(e.target.value)} placeholder={gasType === "H" ? "11,5" : "8,9"} className="mt-1" />
+                <p className="text-xs text-muted-foreground mt-0.5">Leer = Standardwert ({gasType === "H" ? "11,5" : "8,9"} kWh/m³)</p>
+              </div>
+            </div>
+          )}
           {/* Hierarchy */}
           <div className="space-y-3 rounded-md border p-3 bg-muted/30">
             <div className="flex items-center justify-between">

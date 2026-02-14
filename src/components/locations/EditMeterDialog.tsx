@@ -64,6 +64,9 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
   const [photoUrl, setPhotoUrl] = useState(meter.photo_url || "");
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [virtualSources, setVirtualSources] = useState<VirtualMeterSource[]>([]);
+  const [gasType, setGasType] = useState((meter as any).gas_type || "H");
+  const [zustandszahl, setZustandszahl] = useState((meter as any).zustandszahl != null ? String((meter as any).zustandszahl).replace(".", ",") : "0,9636");
+  const [brennwertVal, setBrennwertVal] = useState((meter as any).brennwert != null ? String((meter as any).brennwert).replace(".", ",") : "");
   const photoInputRef = useRef<HTMLInputElement>(null);
   const [floors, setFloors] = useState<Floor[]>([]);
   const [rooms, setRooms] = useState<Room[]>([]);
@@ -94,6 +97,9 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
     setInstallationDate(meter.installation_date || "");
     setMeterOperator((meter as any).meter_operator || "");
     setPhotoUrl(meter.photo_url || "");
+    setGasType((meter as any).gas_type || "H");
+    setZustandszahl((meter as any).zustandszahl != null ? String((meter as any).zustandszahl).replace(".", ",") : "0,9636");
+    setBrennwertVal((meter as any).brennwert != null ? String((meter as any).brennwert).replace(".", ",") : "");
     // Load virtual sources
     if (meter.capture_type === "virtual") {
       supabase
@@ -221,6 +227,11 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
       installation_date: installationDate || undefined,
       meter_operator: meterOperator || undefined,
       photo_url: photoUrl || undefined,
+      ...(energyType === "gas" ? {
+        gas_type: gasType,
+        zustandszahl: zustandszahl ? parseFloat(zustandszahl.replace(",", ".")) : null,
+        brennwert: brennwertVal ? parseFloat(brennwertVal.replace(",", ".")) : null,
+      } : { gas_type: null, zustandszahl: null, brennwert: null }),
     } as any);
 
     // Update virtual sources
@@ -358,6 +369,34 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
             <Label>Medium</Label>
             <Input value={medium} onChange={(e) => setMedium(e.target.value)} />
           </div>
+          {/* Gas-specific fields */}
+          {energyType === "gas" && (
+            <div className="space-y-3 rounded-md border p-3 bg-muted/30">
+              <p className="text-sm font-medium text-muted-foreground">Gas-Parameter</p>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label>Gasart *</Label>
+                  <Select value={gasType} onValueChange={setGasType}>
+                    <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="H">H-Gas (hochkalorisch)</SelectItem>
+                      <SelectItem value="L">L-Gas (niederkalorisch)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>Zustandszahl</Label>
+                  <Input value={zustandszahl} onChange={(e) => setZustandszahl(e.target.value)} placeholder="0,9636" className="mt-1" />
+                  <p className="text-xs text-muted-foreground mt-0.5">In der Regel &lt; 1</p>
+                </div>
+              </div>
+              <div>
+                <Label>Brennwert (kWh/m³)</Label>
+                <Input value={brennwertVal} onChange={(e) => setBrennwertVal(e.target.value)} placeholder={gasType === "H" ? "11,5" : "8,9"} className="mt-1" />
+                <p className="text-xs text-muted-foreground mt-0.5">Leer = Standardwert ({gasType === "H" ? "11,5" : "8,9"} kWh/m³)</p>
+              </div>
+            </div>
+          )}
           {/* Floor & Room assignment */}
           {floors.length > 0 && (
             <div className="space-y-3 rounded-md border p-3 bg-muted/30">

@@ -31,6 +31,9 @@ export interface Meter {
   is_main_meter: boolean;
   meter_function: string;
   meter_operator: string | null;
+  gas_type: string | null;
+  zustandszahl: number | null;
+  brennwert: number | null;
   created_at: string;
   updated_at: string;
 }

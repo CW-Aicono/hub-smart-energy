@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 import { Activity, RefreshCw, Search, Gauge, Zap, Flame, Droplets, Thermometer } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { formatEnergy } from "@/lib/formatEnergy";
+import { formatEnergy, formatGasDual } from "@/lib/formatEnergy";
 import { cn } from "@/lib/utils";
 
 const ENERGY_TYPE_CONFIG: Record<string, { label: string; icon: typeof Zap; colorClass: string }> = {
@@ -347,19 +347,48 @@ const LiveValues = () => {
                         <div className="text-2xl font-bold tracking-tight">
                           {value !== null ? (
                             <>
-                              {value.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {meter.unit}
-                              {isFlowType && (
-                                <span className="text-sm font-normal text-muted-foreground ml-1">Durchfluss</span>
+                              {meter.energy_type === "gas" ? (
+                                <>
+                                  {value.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} m³
+                                  {isFlowType && (
+                                    <span className="text-sm font-normal text-muted-foreground ml-1">Durchfluss</span>
+                                  )}
+                                </>
+                              ) : (
+                                <>
+                                  {value.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {meter.unit}
+                                  {isFlowType && (
+                                    <span className="text-sm font-normal text-muted-foreground ml-1">Durchfluss</span>
+                                  )}
+                                </>
                               )}
                             </>
                           ) : (
                             <span className="text-muted-foreground text-lg">Kein Wert</span>
                           )}
                         </div>
+                        {/* Gas: show kWh equivalent */}
+                        {meter.energy_type === "gas" && value !== null && (
+                          <div className="text-sm text-muted-foreground font-medium">
+                            ≈ {formatGasDual(value, (meter as any).gas_type, (meter as any).brennwert, (meter as any).zustandszahl).kwhStr}
+                          </div>
+                        )}
                         {totalDay != null && totalDay !== undefined && (
                           <div className="text-sm text-muted-foreground font-medium">
-                            {Number(totalDay).toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {meter.unit === "kW" ? "kWh" : meter.unit}
-                            <span className="ml-1 font-normal">Gesamt heute</span>
+                            {meter.energy_type === "gas" ? (
+                              <>
+                                {Number(totalDay).toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} m³
+                                <span className="ml-1 font-normal">Gesamt heute</span>
+                                <span className="ml-2 text-xs">
+                                  (≈ {formatGasDual(Number(totalDay), (meter as any).gas_type, (meter as any).brennwert, (meter as any).zustandszahl).kwhStr})
+                                </span>
+                              </>
+                            ) : (
+                              <>
+                                {Number(totalDay).toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {meter.unit === "kW" ? "kWh" : meter.unit}
+                                <span className="ml-1 font-normal">Gesamt heute</span>
+                              </>
+                            )}
                           </div>
                         )}
                         <div className="space-y-1">
