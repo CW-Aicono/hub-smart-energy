@@ -286,90 +286,10 @@ function MapTab({ chargePoints, onStartCharge, initialCpId, onInitialCpHandled }
         )}
       </div>
 
-      {/* Filter button above locate button - bottom right */}
-      <div className="absolute bottom-3 right-3 z-[1000] flex flex-col gap-2">
-        <Popover open={filterOpen} onOpenChange={setFilterOpen}>
-          <PopoverTrigger asChild>
-            <Button
-              size="icon"
-              variant="secondary"
-              className={`h-10 w-10 rounded-full shadow-lg bg-background/95 backdrop-blur-sm border ${hasActiveFilter ? "ring-2 ring-primary" : ""}`}
-            >
-              <Filter className={`h-5 w-5 ${hasActiveFilter ? "text-primary" : ""}`} />
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent side="left" align="end" className="w-64 p-4 space-y-4">
-            <div className="flex items-center justify-between">
-              <p className="text-sm font-semibold">Filter</p>
-              {hasActiveFilter && (
-                <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => { setTypeFilter("all"); setMinPower(0); setConnectorFilter("all"); }}>
-                  Zurücksetzen
-                </Button>
-              )}
-            </div>
-
-            {/* Type filter */}
-            <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">Typ</Label>
-              <div className="flex gap-1.5">
-                {["all", "AC", "DC"].map((t) => (
-                  <Button key={t} variant={typeFilter === t ? "default" : "outline"} size="sm" className="flex-1 h-8 text-xs" onClick={() => setTypeFilter(t)}>
-                    {t === "all" ? "Alle" : t}
-                  </Button>
-                ))}
-              </div>
-            </div>
-
-            {/* Power filter - fixed steps */}
-            <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">Ladeleistung</Label>
-              <div className="grid grid-cols-2 gap-1.5">
-                {[{ label: "Alle", value: 0 }, { label: "50+ kW", value: 50 }, { label: "100+ kW", value: 100 }, { label: "150+ kW", value: 150 }].map((opt) => (
-                  <Button key={opt.value} variant={minPower === opt.value ? "default" : "outline"} size="sm" className="h-8 text-xs" onClick={() => setMinPower(opt.value)}>
-                    {opt.label}
-                  </Button>
-                ))}
-              </div>
-            </div>
-
-            {/* Connector filter */}
-            {connectorTypes.length > 0 && (
-              <div className="space-y-1.5">
-                <Label className="text-xs text-muted-foreground">Steckertyp</Label>
-                <div className="flex flex-wrap gap-1.5">
-                  <Button variant={connectorFilter === "all" ? "default" : "outline"} size="sm" className="h-8 text-xs" onClick={() => setConnectorFilter("all")}>Alle</Button>
-                  {connectorTypes.map((ct) => (
-                    <Button key={ct} variant={connectorFilter === ct ? "default" : "outline"} size="sm" className="h-8 text-xs" onClick={() => setConnectorFilter(ct)}>
-                      {ct}
-                    </Button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            <div className="text-xs text-muted-foreground text-center pt-1">
-              {filtered.filter(cp => cp.latitude && cp.longitude).length} Stationen
-            </div>
-          </PopoverContent>
-        </Popover>
-        <Button
-          size="icon"
-          variant="secondary"
-          className="h-10 w-10 rounded-full shadow-lg bg-background/95 backdrop-blur-sm border"
-          onClick={handleLocate}
-          disabled={locating}
-        >
-          {locating ? (
-            <Loader2 className="h-5 w-5 animate-spin" />
-          ) : (
-            <LocateFixed className={`h-5 w-5 ${userPos ? "text-primary" : ""}`} />
-          )}
-        </Button>
-      </div>
-
-      {/* Search bar at the bottom */}
-      <div className="absolute bottom-4 left-3 right-3 z-[1000]">
-        <div className="relative">
+      {/* Bottom controls: search bar with buttons to the right */}
+      <div className="absolute bottom-4 left-3 right-3 z-[1000] flex items-end gap-2">
+        {/* Search bar */}
+        <div className="relative flex-1">
           <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder="Ladestation suchen…"
@@ -382,6 +302,80 @@ function MapTab({ chargePoints, onStartCharge, initialCpId, onInitialCpHandled }
               <X className="h-4 w-4" />
             </button>
           )}
+        </div>
+
+        {/* Action buttons stacked vertically */}
+        <div className="flex flex-col gap-2 shrink-0">
+          <Popover open={filterOpen} onOpenChange={setFilterOpen}>
+            <PopoverTrigger asChild>
+              <Button
+                size="icon"
+                variant="secondary"
+                className={`h-10 w-10 rounded-full shadow-lg bg-background/95 backdrop-blur-sm border ${hasActiveFilter ? "ring-2 ring-primary" : ""}`}
+              >
+                <Filter className={`h-5 w-5 ${hasActiveFilter ? "text-primary" : ""}`} />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent side="top" align="end" className="w-64 p-4 space-y-4">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-semibold">Filter</p>
+                {hasActiveFilter && (
+                  <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => { setTypeFilter("all"); setMinPower(0); setConnectorFilter("all"); }}>
+                    Zurücksetzen
+                  </Button>
+                )}
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">Typ</Label>
+                <div className="flex gap-1.5">
+                  {["all", "AC", "DC"].map((t) => (
+                    <Button key={t} variant={typeFilter === t ? "default" : "outline"} size="sm" className="flex-1 h-8 text-xs" onClick={() => setTypeFilter(t)}>
+                      {t === "all" ? "Alle" : t}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">Ladeleistung</Label>
+                <div className="grid grid-cols-2 gap-1.5">
+                  {[{ label: "Alle", value: 0 }, { label: "50+ kW", value: 50 }, { label: "100+ kW", value: 100 }, { label: "150+ kW", value: 150 }].map((opt) => (
+                    <Button key={opt.value} variant={minPower === opt.value ? "default" : "outline"} size="sm" className="h-8 text-xs" onClick={() => setMinPower(opt.value)}>
+                      {opt.label}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+              {connectorTypes.length > 0 && (
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground">Steckertyp</Label>
+                  <div className="flex flex-wrap gap-1.5">
+                    <Button variant={connectorFilter === "all" ? "default" : "outline"} size="sm" className="h-8 text-xs" onClick={() => setConnectorFilter("all")}>Alle</Button>
+                    {connectorTypes.map((ct) => (
+                      <Button key={ct} variant={connectorFilter === ct ? "default" : "outline"} size="sm" className="h-8 text-xs" onClick={() => setConnectorFilter(ct)}>
+                        {ct}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              <div className="text-xs text-muted-foreground text-center pt-1">
+                {filtered.filter(cp => cp.latitude && cp.longitude).length} Stationen
+              </div>
+            </PopoverContent>
+          </Popover>
+          <Button
+            size="icon"
+            variant="secondary"
+            className="h-10 w-10 rounded-full shadow-lg bg-background/95 backdrop-blur-sm border"
+            onClick={handleLocate}
+            disabled={locating}
+          >
+            {locating ? (
+              <Loader2 className="h-5 w-5 animate-spin" />
+            ) : (
+              <LocateFixed className={`h-5 w-5 ${userPos ? "text-primary" : ""}`} />
+            )}
+          </Button>
         </div>
       </div>
 
