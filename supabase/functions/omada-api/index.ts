@@ -22,52 +22,75 @@ async function tryGetAccessToken(
   clientId: string,
   clientSecret: string
 ): Promise<{ token: string; omadaId: string } | { error: string }> {
-  // Try multiple token URL patterns used by different Omada API versions
-  const attempts = [
-    // Pattern 1: omadacId in both query and body (v1 standard)
+  // Build list of attempts with different URL patterns AND content types
+  const jsonAttempts = [
     {
+      label: "JSON+query+body",
       url: `${baseUrl}/openapi/authorize/token?grant_type=client_credentials&omadacId=${omadaId}`,
-      body: { omadacId: omadaId, client_id: clientId, client_secret: clientSecret },
+      contentType: "application/json",
+      body: JSON.stringify({ omadacId: omadaId, client_id: clientId, client_secret: clientSecret }),
     },
-    // Pattern 2: omadacId only in query string
     {
+      label: "JSON+query-only",
       url: `${baseUrl}/openapi/authorize/token?grant_type=client_credentials&omadacId=${omadaId}`,
-      body: { client_id: clientId, client_secret: clientSecret },
+      contentType: "application/json",
+      body: JSON.stringify({ client_id: clientId, client_secret: clientSecret }),
     },
-    // Pattern 3: no omadacId in query (cloud northbound pattern)
     {
+      label: "JSON+body-only",
       url: `${baseUrl}/openapi/authorize/token?grant_type=client_credentials`,
-      body: { omadacId: omadaId, client_id: clientId, client_secret: clientSecret },
+      contentType: "application/json",
+      body: JSON.stringify({ omadacId: omadaId, client_id: clientId, client_secret: clientSecret }),
     },
   ];
 
+  // Some OC200 firmware versions (1.x) expect form-urlencoded
+  const formAttempts = [
+    {
+      label: "FORM+query+body",
+      url: `${baseUrl}/openapi/authorize/token?grant_type=client_credentials&omadacId=${omadaId}`,
+      contentType: "application/x-www-form-urlencoded",
+      body: new URLSearchParams({ omadacId: omadaId, client_id: clientId, client_secret: clientSecret }).toString(),
+    },
+    {
+      label: "FORM+body-only",
+      url: `${baseUrl}/openapi/authorize/token?grant_type=client_credentials`,
+      contentType: "application/x-www-form-urlencoded",
+      body: new URLSearchParams({ omadacId: omadaId, client_id: clientId, client_secret: clientSecret }).toString(),
+    },
+  ];
+
+  const allAttempts = [...jsonAttempts, ...formAttempts];
   const errors: string[] = [];
 
-  for (const attempt of attempts) {
+  for (const attempt of allAttempts) {
     try {
+      console.log(`Auth attempt [${attempt.label}]: ${attempt.url}`);
       const resp = await fetch(attempt.url, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(attempt.body),
+        headers: { "Content-Type": attempt.contentType },
+        body: attempt.body,
       });
       const contentType = resp.headers.get("content-type") || "";
+      const rawText = await resp.text();
+      
       if (!contentType.includes("application/json")) {
-        const text = await resp.text();
-        errors.push(`Non-JSON (${resp.status}): ${text.substring(0, 100)}`);
+        errors.push(`[${attempt.label}] Non-JSON (${resp.status}): ${rawText.substring(0, 120)}`);
         continue;
       }
-      const data: OmadaTokenResponse = await resp.json();
+      
+      const data: OmadaTokenResponse = JSON.parse(rawText);
       if (data.errorCode === 0 && data.result?.accessToken) {
-        console.log(`Auth succeeded with URL pattern: ${attempt.url}`);
+        console.log(`Auth succeeded with [${attempt.label}]`);
         return { token: data.result.accessToken, omadaId };
       }
-      errors.push(`Code ${data.errorCode}: ${data.msg}`);
+      errors.push(`[${attempt.label}] Code ${data.errorCode}: ${data.msg}`);
     } catch (e) {
-      errors.push(`Fetch error: ${e.message}`);
+      errors.push(`[${attempt.label}] Fetch error: ${e.message}`);
     }
   }
 
-  return { error: `All auth attempts failed. Details: ${errors.join(" | ")}` };
+  return { error: `All auth attempts failed (${allAttempts.length} patterns). Details:\n${errors.join("\n")}` };
 }
 
 async function omadaGet(baseUrl: string, path: string, token: string, omadaId: string) {
