@@ -279,17 +279,33 @@ async function handleRemoteCommand(
 
   switch (command) {
     case "RemoteStartTransaction": {
-      // In a real implementation, this would send via WebSocket to the charge point
-      // For HTTP-based approach, we just record the intent
       const { data: cp } = await supabase
         .from("charge_points")
-        .select("id, tenant_id")
+        .select("id, tenant_id, status")
         .eq("ocpp_id", chargePointOcppId)
         .single();
 
       if (!cp) return { status: "Rejected", message: "Charge point not found" };
+      if (cp.status !== "available") return { status: "Rejected", message: "Charge point not available" };
 
-      return { status: "Accepted", message: "Remote start requested" };
+      const idTag = (body.idTag as string) || "APP_USER";
+      const connectorId = (body.connectorId as number) || 1;
+
+      // Queue command for WebSocket proxy to pick up
+      const { data: cmd, error } = await supabase
+        .from("pending_ocpp_commands")
+        .insert({
+          charge_point_ocpp_id: chargePointOcppId,
+          command: "RemoteStartTransaction",
+          payload: { idTag, connectorId },
+          status: "pending",
+        })
+        .select("id")
+        .single();
+
+      if (error) return { status: "Rejected", message: "Failed to queue command" };
+
+      return { status: "Accepted", commandId: cmd.id, message: "Remote start queued" };
     }
     case "RemoteStopTransaction": {
       const transactionId = body.transactionId as number;
@@ -297,26 +313,22 @@ async function handleRemoteCommand(
 
       const { data: session } = await supabase
         .from("charging_sessions")
-        .select("*")
+        .select("*, charge_points!inner(ocpp_id)")
         .eq("transaction_id", transactionId)
         .eq("status", "active")
         .single();
 
       if (!session) return { status: "Rejected", message: "No active session" };
 
+      // Queue command for WebSocket proxy
       await supabase
-        .from("charging_sessions")
-        .update({
-          stop_time: new Date().toISOString(),
-          stop_reason: "Remote",
-          status: "completed",
-        })
-        .eq("id", session.id);
-
-      await supabase
-        .from("charge_points")
-        .update({ status: "available" })
-        .eq("id", session.charge_point_id);
+        .from("pending_ocpp_commands")
+        .insert({
+          charge_point_ocpp_id: (session as any).charge_points.ocpp_id,
+          command: "RemoteStopTransaction",
+          payload: { transactionId },
+          status: "pending",
+        });
 
       return { status: "Accepted" };
     }
@@ -325,6 +337,15 @@ async function handleRemoteCommand(
         .from("charge_points")
         .update({ status: "offline" })
         .eq("ocpp_id", chargePointOcppId);
+
+      await supabase
+        .from("pending_ocpp_commands")
+        .insert({
+          charge_point_ocpp_id: chargePointOcppId,
+          command: "Reset",
+          payload: { type: (body.type as string) || "Soft" },
+          status: "pending",
+        });
 
       return { status: "Accepted" };
     }
