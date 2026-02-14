@@ -114,8 +114,8 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
                       <TableCell className="font-medium">{m.name}</TableCell>
                       <TableCell>{m.meter_number || "–"}</TableCell>
                       <TableCell>
-                        <Badge variant={m.capture_type === "automatic" ? "default" : "secondary"}>
-                          {m.capture_type === "automatic" ? "Automatisch" : "Manuell"}
+                        <Badge variant={m.capture_type === "automatic" ? "default" : m.capture_type === "virtual" ? "outline" : "secondary"}>
+                          {m.capture_type === "automatic" ? "Automatisch" : m.capture_type === "virtual" ? "Virtuell" : "Manuell"}
                         </Badge>
                       </TableCell>
                       <TableCell>
