@@ -50,14 +50,14 @@ const ChargingPoints = () => {
 
   const [addOpen, setAddOpen] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
-  const [form, setForm] = useState({ name: "", ocpp_id: "", address: "", connector_count: "1", max_power_kw: "22", vendor: "", model: "" });
+  const [form, setForm] = useState({ name: "", ocpp_id: "", address: "", connector_count: "1", max_power_kw: "22", vendor: "", model: "", connector_type: "Type2" });
   const [addCoords, setAddCoords] = useState<{ lat: number | null; lng: number | null }>({ lat: null, lng: null });
   const [addGeocoding, setAddGeocoding] = useState(false);
 
   if (authLoading) return null;
   if (!user) return <Navigate to="/auth" replace />;
 
-  const resetForm = () => { setForm({ name: "", ocpp_id: "", address: "", connector_count: "1", max_power_kw: "22", vendor: "", model: "" }); setAddCoords({ lat: null, lng: null }); };
+  const resetForm = () => { setForm({ name: "", ocpp_id: "", address: "", connector_count: "1", max_power_kw: "22", vendor: "", model: "", connector_type: "Type2" }); setAddCoords({ lat: null, lng: null }); };
 
   const handleAdd = () => {
     if (!tenant?.id) return;
@@ -72,6 +72,7 @@ const ChargingPoints = () => {
       max_power_kw: Math.max(0.1, parseFloat(form.max_power_kw) || 22),
       vendor: form.vendor || null,
       model: form.model || null,
+      connector_type: form.connector_type || "Type2",
     } as any);
     setAddOpen(false);
     resetForm();
@@ -148,9 +149,21 @@ const ChargingPoints = () => {
           </p>
         )}
       </div>
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-3 gap-4">
         <div><Label>Anschlüsse</Label><Input type="number" min="1" value={form.connector_count} onChange={(e) => setForm({ ...form, connector_count: e.target.value })} /></div>
         <div><Label>Max. Leistung (kW)</Label><Input type="number" min="0.1" step="0.1" value={form.max_power_kw} onChange={(e) => { const v = e.target.value; if (v === "" || parseFloat(v) >= 0) setForm({ ...form, max_power_kw: v }); }} /></div>
+        <div>
+          <Label>Steckertyp</Label>
+          <Select value={form.connector_type} onValueChange={(v) => setForm({ ...form, connector_type: v })}>
+            <SelectTrigger><SelectValue placeholder="Steckertyp wählen" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="Type2">Typ 2</SelectItem>
+              <SelectItem value="CCS">CCS</SelectItem>
+              <SelectItem value="CHAdeMO">CHAdeMO</SelectItem>
+              <SelectItem value="Other">Sonstige</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
       </div>
       <div className="grid grid-cols-2 gap-4">
         <div>

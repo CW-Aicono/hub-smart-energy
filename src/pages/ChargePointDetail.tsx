@@ -54,7 +54,7 @@ const ChargePointDetail = () => {
   const { vendors: knownVendors, getModelsForVendor } = useChargerModels();
 
   const [editing, setEditing] = useState(false);
-  const [form, setForm] = useState({ name: "", ocpp_id: "", address: "", connector_count: "1", max_power_kw: "22", vendor: "", model: "" });
+  const [form, setForm] = useState({ name: "", ocpp_id: "", address: "", connector_count: "1", max_power_kw: "22", vendor: "", model: "", connector_type: "Type2" });
   const [coords, setCoords] = useState<{ lat: number | null; lng: number | null }>({ lat: null, lng: null });
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -162,6 +162,7 @@ const ChargePointDetail = () => {
       max_power_kw: String(cp.max_power_kw),
       vendor: cp.vendor || "",
       model: cp.model || "",
+      connector_type: cp.connector_type || "Type2",
     });
     setCoords({ lat: cp.latitude, lng: cp.longitude });
     setPhotoUrl(cp.photo_url || null);
@@ -180,6 +181,7 @@ const ChargePointDetail = () => {
       max_power_kw: Math.max(0.1, parseFloat(form.max_power_kw) || 22),
       vendor: form.vendor || null,
       model: form.model || null,
+      connector_type: form.connector_type || "Type2",
       photo_url: photoUrl,
     } as any);
     setEditing(false);
@@ -597,9 +599,21 @@ const ChargePointDetail = () => {
                           </p>
                         )}
                       </div>
-                      <div className="grid grid-cols-2 gap-4">
+                      <div className="grid grid-cols-3 gap-4">
                         <div><Label>Anschlüsse</Label><Input type="number" min="1" value={form.connector_count} onChange={(e) => setForm({ ...form, connector_count: e.target.value })} /></div>
                         <div><Label>Max. Leistung (kW)</Label><Input type="number" min="0.1" step="0.1" value={form.max_power_kw} onChange={(e) => { const v = e.target.value; if (v === "" || parseFloat(v) >= 0) setForm({ ...form, max_power_kw: v }); }} /></div>
+                        <div>
+                          <Label>Steckertyp</Label>
+                          <Select value={form.connector_type} onValueChange={(v) => setForm({ ...form, connector_type: v })}>
+                            <SelectTrigger><SelectValue placeholder="Steckertyp wählen" /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="Type2">Typ 2</SelectItem>
+                              <SelectItem value="CCS">CCS</SelectItem>
+                              <SelectItem value="CHAdeMO">CHAdeMO</SelectItem>
+                              <SelectItem value="Other">Sonstige</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
                       </div>
                       <div className="grid grid-cols-2 gap-4">
                         <div>
@@ -649,6 +663,7 @@ const ChargePointDetail = () => {
                       <div><span className="text-muted-foreground">Standort:</span></div><div className="font-medium">{cp.address || "—"}</div>
                       <div><span className="text-muted-foreground">Hersteller:</span></div><div className="font-medium">{cp.vendor || "—"}</div>
                       <div><span className="text-muted-foreground">Modell:</span></div><div className="font-medium">{cp.model || "—"}</div>
+                      <div><span className="text-muted-foreground">Steckertyp:</span></div><div className="font-medium">{cp.connector_type === "Type2" ? "Typ 2" : cp.connector_type === "Other" ? "Sonstige" : cp.connector_type}</div>
                       <div><span className="text-muted-foreground">Anschlüsse:</span></div><div className="font-medium">{cp.connector_count}</div>
                       <div><span className="text-muted-foreground">Max. Leistung:</span></div><div className="font-medium">{fmtKw(cp.max_power_kw)}</div>
                       <div><span className="text-muted-foreground">Firmware:</span></div><div className="font-medium">{cp.firmware_version || "—"}</div>
