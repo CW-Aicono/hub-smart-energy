@@ -67,6 +67,8 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
   const [gasType, setGasType] = useState((meter as any).gas_type || "H");
   const [zustandszahl, setZustandszahl] = useState((meter as any).zustandszahl != null ? String((meter as any).zustandszahl).replace(".", ",") : "0,9636");
   const [brennwertVal, setBrennwertVal] = useState((meter as any).brennwert != null ? String((meter as any).brennwert).replace(".", ",") : "");
+  const [sourceUnitPower, setSourceUnitPower] = useState((meter as any).source_unit_power || "kW");
+  const [sourceUnitEnergy, setSourceUnitEnergy] = useState((meter as any).source_unit_energy || "kWh");
   const photoInputRef = useRef<HTMLInputElement>(null);
   const [floors, setFloors] = useState<Floor[]>([]);
   const [rooms, setRooms] = useState<Room[]>([]);
@@ -100,6 +102,8 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
     setGasType((meter as any).gas_type || "H");
     setZustandszahl((meter as any).zustandszahl != null ? String((meter as any).zustandszahl).replace(".", ",") : "0,9636");
     setBrennwertVal((meter as any).brennwert != null ? String((meter as any).brennwert).replace(".", ",") : "");
+    setSourceUnitPower((meter as any).source_unit_power || "kW");
+    setSourceUnitEnergy((meter as any).source_unit_energy || "kWh");
     // Load virtual sources
     if (meter.capture_type === "virtual") {
       supabase
@@ -243,6 +247,8 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
         zustandszahl: zustandszahl ? parseFloat(zustandszahl.replace(",", ".")) : null,
         brennwert: brennwertVal ? parseFloat(brennwertVal.replace(",", ".")) : null,
       } : { gas_type: null, zustandszahl: null, brennwert: null }),
+      source_unit_power: captureType === "automatic" ? sourceUnitPower : null,
+      source_unit_energy: captureType === "automatic" ? sourceUnitEnergy : null,
     } as any);
 
     // Update virtual sources
@@ -345,6 +351,35 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
                       </SelectContent>
                     </Select>
                   )}
+                </div>
+              )}
+              {/* Source units for automatic meters */}
+              {selectedIntegration && (
+                <div className="space-y-3 pt-2 border-t">
+                  <p className="text-xs font-medium text-muted-foreground">Einheiten des Gateways</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <Label className="text-xs">Leistung</Label>
+                      <Select value={sourceUnitPower} onValueChange={setSourceUnitPower}>
+                        <SelectTrigger className="mt-1 h-8 text-xs"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="W">W (Watt)</SelectItem>
+                          <SelectItem value="kW">kW (Kilowatt)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label className="text-xs">Energie (Tageswerte)</Label>
+                      <Select value={sourceUnitEnergy} onValueChange={setSourceUnitEnergy}>
+                        <SelectTrigger className="mt-1 h-8 text-xs"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Wh">Wh (Wattstunden)</SelectItem>
+                          <SelectItem value="kWh">kWh (Kilowattstunden)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground">Welche Einheiten liefert Ihr Gateway? In der Loxone Config unter den Ausgängen des Zählers sichtbar.</p>
                 </div>
               )}
             </div>
