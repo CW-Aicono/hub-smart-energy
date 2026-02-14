@@ -254,10 +254,10 @@ const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
   // Layout: viewBox grows with node count, container is fixed — SVG scales down
   const vbW = 900;
   const maxNodes = Math.max(sourceNames.length, targetNames.length);
-  const nodeSlot = 48;
+  const nodeSlot = 56;
   const bottomMargin = 30; // space for label text below the last node
   const topMargin = 10;
-  const vbH = Math.max(220, maxNodes * nodeSlot + bottomMargin + topMargin + 10);
+  const vbH = Math.max(260, maxNodes * nodeSlot + bottomMargin + topMargin + 10);
   const nodeW = 14;
   const srcX = 130;
   const tgtX = vbW - 180 - nodeW;
@@ -392,7 +392,7 @@ const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
 
             {/* Source nodes */}
             {(() => {
-              const minLabelSpacing = 24;
+              const minLabelSpacing = 30;
               const srcLabelYs: number[] = [];
               sourceNames.forEach((name) => {
                 const pos = srcPositions[name];
@@ -417,7 +417,7 @@ const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
 
             {/* Target nodes */}
             {(() => {
-              const minLabelSpacing = 24;
+              const minLabelSpacing = 30;
               const tgtLabelYs: number[] = [];
               targetNames.forEach((name) => {
                 const pos = tgtPositions[name];
