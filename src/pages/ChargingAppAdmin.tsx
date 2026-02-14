@@ -1,21 +1,33 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
 import { useChargingUsers, useChargingUserGroups } from "@/hooks/useChargingUsers";
 import { useTenant } from "@/hooks/useTenant";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Smartphone, Users, ExternalLink, Check, Ban, Archive, Loader2 } from "lucide-react";
+import { Smartphone, Users, ExternalLink, Check, Ban, Archive, Loader2, Copy, Link, QrCode } from "lucide-react";
 import { format } from "date-fns";
+import QRCode from "qrcode";
+
+const APP_URL = `${window.location.origin}/ev`;
 
 const ChargingAppAdmin = () => {
   const { tenant } = useTenant();
   const { users, isLoading } = useChargingUsers();
   const { groups } = useChargingUserGroups();
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const qrCanvasRef = useRef<HTMLCanvasElement>(null);
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    if (qrCanvasRef.current) {
+      QRCode.toCanvas(qrCanvasRef.current, APP_URL, { width: 180, margin: 2 });
+    }
+  }, []);
 
   // Only show users that have auth_user_id (= app users)
   const appUsers = users.filter((u) => u.auth_user_id);
@@ -58,26 +70,59 @@ const ChargingAppAdmin = () => {
             </TabsList>
 
             <TabsContent value="preview">
-              <div className="flex flex-col items-center gap-4">
-                <div className="flex items-center gap-2">
-                  <Button variant="outline" size="sm" asChild>
-                    <a href="/ev" target="_blank" rel="noopener noreferrer" className="gap-1.5">
-                      <ExternalLink className="h-4 w-4" />
-                      App in neuem Tab öffnen
-                    </a>
-                  </Button>
+              <div className="flex flex-col lg:flex-row gap-6">
+                {/* Left: Link & QR */}
+                <div className="space-y-4 lg:w-72 shrink-0">
+                  <Card>
+                    <CardContent className="p-4 space-y-3">
+                      <h3 className="font-semibold text-sm flex items-center gap-1.5"><Link className="h-4 w-4" /> App-Link</h3>
+                      <div className="flex items-center gap-2">
+                        <Input value={APP_URL} readOnly className="text-xs font-mono" />
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          className="shrink-0"
+                          onClick={() => {
+                            navigator.clipboard.writeText(APP_URL);
+                            setCopied(true);
+                            setTimeout(() => setCopied(false), 2000);
+                          }}
+                        >
+                          {copied ? <Check className="h-4 w-4 text-primary" /> : <Copy className="h-4 w-4" />}
+                        </Button>
+                      </div>
+                      <Button variant="outline" size="sm" asChild className="w-full gap-1.5">
+                        <a href="/ev" target="_blank" rel="noopener noreferrer">
+                          <ExternalLink className="h-4 w-4" />
+                          App in neuem Tab öffnen
+                        </a>
+                      </Button>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardContent className="p-4 space-y-3">
+                      <h3 className="font-semibold text-sm flex items-center gap-1.5"><QrCode className="h-4 w-4" /> QR-Code</h3>
+                      <div className="flex justify-center">
+                        <canvas ref={qrCanvasRef} />
+                      </div>
+                      <p className="text-xs text-muted-foreground text-center">Scannen zum Öffnen der Lade-App</p>
+                    </CardContent>
+                  </Card>
                 </div>
-                {/* Phone mockup */}
-                <div className="relative mx-auto" style={{ width: 375, height: 740 }}>
-                  <div className="absolute inset-0 rounded-[2.5rem] border-[8px] border-foreground/80 bg-background shadow-2xl overflow-hidden">
-                    {/* Notch */}
-                    <div className="absolute top-0 left-1/2 -translate-x-1/2 w-32 h-6 bg-foreground/80 rounded-b-2xl z-10" />
-                    <iframe
-                      src="/ev"
-                      className="w-full h-full border-0"
-                      title="Lade-App Vorschau"
-                      style={{ borderRadius: "1.8rem" }}
-                    />
+
+                {/* Right: Phone mockup */}
+                <div className="flex-1 flex justify-center">
+                  <div className="relative" style={{ width: 375, height: 740 }}>
+                    <div className="absolute inset-0 rounded-[2.5rem] border-[8px] border-foreground/80 bg-background shadow-2xl overflow-hidden">
+                      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-32 h-6 bg-foreground/80 rounded-b-2xl z-10" />
+                      <iframe
+                        src="/ev"
+                        className="w-full h-full border-0"
+                        title="Lade-App Vorschau"
+                        style={{ borderRadius: "1.8rem" }}
+                      />
+                    </div>
                   </div>
                 </div>
               </div>
