@@ -778,13 +778,34 @@ function HistoryTab({ sessions, chargePoints, tariff }: { sessions: AppSession[]
     <div className="overflow-auto h-full">
       <h2 className="text-lg font-semibold px-4 pt-4 pb-2 text-center">Meine Ladevorgänge</h2>
 
-      {activeSessions.length > 0 && (
+      {activeSessions.length > 0 ? (
         <div className="mb-1">
           {activeSessions.map((s) => renderSessionRow(s, true))}
         </div>
+      ) : (
+        <div className="flex flex-col items-center py-6 px-4">
+          <div className="h-16 w-16 rounded-full bg-muted flex items-center justify-center mb-3">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" className="h-10 w-10 text-muted-foreground" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              {/* Car body */}
+              <rect x="4" y="28" width="32" height="14" rx="3" />
+              <path d="M8 28l4-10h16l4 10" />
+              <circle cx="12" cy="44" r="3" />
+              <circle cx="32" cy="44" r="3" />
+              {/* Charger */}
+              <rect x="48" y="18" width="10" height="24" rx="2" />
+              <path d="M53 18v-6" />
+              <path d="M50 12h6" />
+              {/* Cable */}
+              <path d="M48 32h-6c-2 0-3 1-3 3v4" strokeDasharray="3 2" />
+              {/* Lightning bolt */}
+              <path d="M51 24l4-3h-3l4-3" />
+            </svg>
+          </div>
+          <p className="text-sm text-muted-foreground font-medium">Keine aktiven Ladevorgänge</p>
+        </div>
       )}
 
-      {activeSessions.length > 0 && completedSessions.length > 0 && (
+      {completedSessions.length > 0 && (
         <div className="flex items-center gap-3 px-4 py-2">
           <div className="flex-1 h-px bg-border" />
           <span className="text-xs text-muted-foreground font-medium">Abgeschlossen</span>
@@ -1169,8 +1190,8 @@ const ChargingApp = () => {
 
   const tabs: { key: Tab; icon: typeof Map; label: string }[] = [
     { key: "map", icon: Map, label: "Karte" },
-    { key: "qr", icon: QrCode, label: "Scannen" },
     { key: "history", icon: History, label: "Historie" },
+    { key: "qr", icon: QrCode, label: "Scannen" },
     { key: "invoices", icon: Receipt, label: "Rechnungen" },
     { key: "profile", icon: User, label: "Profil" },
   ];
