@@ -391,37 +391,61 @@ const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
             {linkElements}
 
             {/* Source nodes */}
-            {sourceNames.map((name, i) => {
-              const pos = srcPositions[name];
-              const color = sourceColors[name] || ENERGY_COLORS.strom;
-              return (
-                <g key={`src-${i}`}>
-                  <rect x={srcX} y={pos.y} width={nodeW} height={pos.h} rx={3} fill={color} opacity={0.9} />
-                  <text x={srcX - 6} y={pos.y + pos.h / 2 - 6} textAnchor="end" dominantBaseline="middle" fill="hsl(var(--foreground))" fontSize={10} fontWeight={500}>{name}</text>
-                  <text x={srcX - 6} y={pos.y + pos.h / 2 + 6} textAnchor="end" dominantBaseline="middle" fill="hsl(var(--muted-foreground))" fontSize={8}>{formatValue(sourceValues[name], sourceTypes[name] || "strom")}</text>
-                </g>
-              );
-            })}
+            {(() => {
+              const minLabelSpacing = 24;
+              const srcLabelYs: number[] = [];
+              sourceNames.forEach((name) => {
+                const pos = srcPositions[name];
+                let labelY = pos.y + pos.h / 2;
+                const lastY = srcLabelYs.length > 0 ? srcLabelYs[srcLabelYs.length - 1] : -Infinity;
+                if (labelY - lastY < minLabelSpacing) labelY = lastY + minLabelSpacing;
+                srcLabelYs.push(labelY);
+              });
+              return sourceNames.map((name, i) => {
+                const pos = srcPositions[name];
+                const color = sourceColors[name] || ENERGY_COLORS.strom;
+                const labelY = srcLabelYs[i];
+                return (
+                  <g key={`src-${i}`}>
+                    <rect x={srcX} y={pos.y} width={nodeW} height={pos.h} rx={3} fill={color} opacity={0.9} />
+                    <text x={srcX - 6} y={labelY - 6} textAnchor="end" dominantBaseline="middle" fill="hsl(var(--foreground))" fontSize={10} fontWeight={500}>{name}</text>
+                    <text x={srcX - 6} y={labelY + 6} textAnchor="end" dominantBaseline="middle" fill="hsl(var(--muted-foreground))" fontSize={8}>{formatValue(sourceValues[name], sourceTypes[name] || "strom")}</text>
+                  </g>
+                );
+              });
+            })()}
 
             {/* Target nodes */}
-            {targetNames.map((name, i) => {
-              const pos = tgtPositions[name];
-              const color = TARGET_COLORS[i % TARGET_COLORS.length];
-              const val = targetValues[name];
-              const targetFlows = flows.filter(f => f.targetName === name).map(f => ({ sourceName: f.sourceName, sourceType: f.sourceType, value: f.value }));
-              const handleTargetMouseMove = (e: React.MouseEvent) => {
-                if (!svgRef.current) return;
-                const rect = svgRef.current.getBoundingClientRect();
-                setTargetTooltip({ x: e.clientX - rect.left, y: e.clientY - rect.top - 10, name, flows: targetFlows });
-              };
-              return (
-                <g key={`tgt-${i}`} onMouseMove={handleTargetMouseMove} onMouseLeave={() => setTargetTooltip(null)} className="cursor-pointer">
-                  <rect x={tgtX} y={pos.y} width={nodeW} height={pos.h} rx={3} fill={color} opacity={0.9} />
-                  <text x={tgtX + nodeW + 6} y={pos.y + pos.h / 2 - 6} textAnchor="start" dominantBaseline="middle" fill="hsl(var(--foreground))" fontSize={10} fontWeight={500}>{name}</text>
-                  <text x={tgtX + nodeW + 6} y={pos.y + pos.h / 2 + 6} textAnchor="start" dominantBaseline="middle" fill="hsl(var(--muted-foreground))" fontSize={8}>{formatValue(val)}</text>
-                </g>
-              );
-            })}
+            {(() => {
+              const minLabelSpacing = 24;
+              const tgtLabelYs: number[] = [];
+              targetNames.forEach((name) => {
+                const pos = tgtPositions[name];
+                let labelY = pos.y + pos.h / 2;
+                const lastY = tgtLabelYs.length > 0 ? tgtLabelYs[tgtLabelYs.length - 1] : -Infinity;
+                if (labelY - lastY < minLabelSpacing) labelY = lastY + minLabelSpacing;
+                tgtLabelYs.push(labelY);
+              });
+              return targetNames.map((name, i) => {
+                const pos = tgtPositions[name];
+                const color = TARGET_COLORS[i % TARGET_COLORS.length];
+                const val = targetValues[name];
+                const labelY = tgtLabelYs[i];
+                const targetFlows = flows.filter(f => f.targetName === name).map(f => ({ sourceName: f.sourceName, sourceType: f.sourceType, value: f.value }));
+                const handleTargetMouseMove = (e: React.MouseEvent) => {
+                  if (!svgRef.current) return;
+                  const rect = svgRef.current.getBoundingClientRect();
+                  setTargetTooltip({ x: e.clientX - rect.left, y: e.clientY - rect.top - 10, name, flows: targetFlows });
+                };
+                return (
+                  <g key={`tgt-${i}`} onMouseMove={handleTargetMouseMove} onMouseLeave={() => setTargetTooltip(null)} className="cursor-pointer">
+                    <rect x={tgtX} y={pos.y} width={nodeW} height={pos.h} rx={3} fill={color} opacity={0.9} />
+                    <text x={tgtX + nodeW + 6} y={labelY - 6} textAnchor="start" dominantBaseline="middle" fill="hsl(var(--foreground))" fontSize={10} fontWeight={500}>{name}</text>
+                    <text x={tgtX + nodeW + 6} y={labelY + 6} textAnchor="start" dominantBaseline="middle" fill="hsl(var(--muted-foreground))" fontSize={8}>{formatValue(val)}</text>
+                  </g>
+                );
+              });
+            })()}
           </svg>
           {tooltip && (
             <div className="absolute pointer-events-none z-10 rounded-lg border bg-background px-3 py-2 text-xs shadow-lg" style={{ left: tooltip.x, top: tooltip.y, transform: "translate(-50%, -100%)" }}>
