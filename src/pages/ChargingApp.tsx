@@ -212,7 +212,7 @@ function MapTab({ chargePoints, onStartCharge, initialCpId, onInitialCpHandled }
       if (typeFilter === "AC" && cp.max_power_kw > 43) return false;
       if (typeFilter === "DC" && cp.max_power_kw <= 43) return false;
       if (cp.max_power_kw < minPower) return false;
-      if (connectorFilter !== "all" && cp.connector_type !== connectorFilter) return false;
+      if (connectorFilter !== "all" && !cp.connector_type.split(",").includes(connectorFilter)) return false;
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
         if (
@@ -225,7 +225,7 @@ function MapTab({ chargePoints, onStartCharge, initialCpId, onInitialCpHandled }
     });
   }, [chargePoints, typeFilter, minPower, connectorFilter, searchQuery]);
 
-  const connectorTypes = [...new Set(chargePoints.map((cp) => cp.connector_type).filter(Boolean))];
+  const connectorTypes = [...new Set(chargePoints.flatMap((cp) => cp.connector_type.split(",")).filter(Boolean))];
   const hasActiveFilter = typeFilter !== "all" || minPower > 0 || connectorFilter !== "all";
 
   const handleLocate = useCallback(() => {
@@ -383,7 +383,7 @@ function MapTab({ chargePoints, onStartCharge, initialCpId, onInitialCpHandled }
                   <Button variant={connectorFilter === "all" ? "default" : "outline"} size="sm" className="h-9" onClick={() => setConnectorFilter("all")}>Alle</Button>
                   {connectorTypes.map((ct) => (
                     <Button key={ct} variant={connectorFilter === ct ? "default" : "outline"} size="sm" className="h-9" onClick={() => setConnectorFilter(ct)}>
-                      {ct}
+                      {ct === "Type2" ? "Typ 2" : ct === "Other" ? "Sonstige" : ct}
                     </Button>
                   ))}
                 </div>
@@ -441,7 +441,7 @@ function MapTab({ chargePoints, onStartCharge, initialCpId, onInitialCpHandled }
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="font-medium text-sm truncate">{cp.name}</p>
-                        <p className="text-xs text-muted-foreground">{fmtKw(cp.max_power_kw)} · {cp.connector_type}</p>
+                        <p className="text-xs text-muted-foreground">{fmtKw(cp.max_power_kw)} · {cp.connector_type.split(",").map(t => t === "Type2" ? "Typ 2" : t === "Other" ? "Sonstige" : t).join(", ")}</p>
                       </div>
                       <Badge variant={isAvailable ? "default" : "secondary"} className="shrink-0">
                         {statusLabel[cp.status] || cp.status}
@@ -490,7 +490,13 @@ function MapTab({ chargePoints, onStartCharge, initialCpId, onInitialCpHandled }
                 </div>
                 <div className="bg-muted/50 rounded-xl p-3 text-center">
                   <p className="text-xs text-muted-foreground">Stecker</p>
-                  <p className="text-sm font-semibold mt-0.5">{selectedCp.connector_type}</p>
+                  <div className="flex flex-wrap gap-1 justify-center mt-1">
+                    {selectedCp.connector_type.split(",").filter(Boolean).map((t) => (
+                      <Badge key={t} variant="outline" className="text-xs">
+                        {t === "Type2" ? "Typ 2" : t === "Other" ? "Sonstige" : t}
+                      </Badge>
+                    ))}
+                  </div>
                 </div>
                 <div className="bg-muted/50 rounded-xl p-3 text-center">
                   <p className="text-xs text-muted-foreground">Anschlüsse</p>

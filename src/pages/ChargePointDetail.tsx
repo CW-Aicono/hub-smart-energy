@@ -32,6 +32,7 @@ import OcppLogViewer from "@/components/charging/OcppLogViewer";
 import ChargePointQrCode from "@/components/charging/ChargePointQrCode";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "@/hooks/use-toast";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, Cell } from "recharts";
 
@@ -55,6 +56,21 @@ const ChargePointDetail = () => {
 
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({ name: "", ocpp_id: "", address: "", connector_count: "1", max_power_kw: "22", vendor: "", model: "", connector_type: "Type2" });
+  const CONNECTOR_OPTIONS = [
+    { value: "Type2", label: "Typ 2" },
+    { value: "CCS", label: "CCS" },
+    { value: "CHAdeMO", label: "CHAdeMO" },
+    { value: "Other", label: "Sonstige" },
+  ];
+  const toggleConnectorType = (val: string) => {
+    const current = form.connector_type ? form.connector_type.split(",").filter(Boolean) : [];
+    const next = current.includes(val) ? current.filter((v) => v !== val) : [...current, val];
+    setForm({ ...form, connector_type: next.join(",") });
+  };
+  const formatConnectorTypes = (ct: string) => {
+    const map: Record<string, string> = { Type2: "Typ 2", CCS: "CCS", CHAdeMO: "CHAdeMO", Other: "Sonstige" };
+    return ct.split(",").filter(Boolean).map((v) => map[v] || v).join(", ");
+  };
   const [coords, setCoords] = useState<{ lat: number | null; lng: number | null }>({ lat: null, lng: null });
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -599,20 +615,22 @@ const ChargePointDetail = () => {
                           </p>
                         )}
                       </div>
-                      <div className="grid grid-cols-3 gap-4">
+                      <div className="grid grid-cols-2 gap-4">
                         <div><Label>Anschlüsse</Label><Input type="number" min="1" value={form.connector_count} onChange={(e) => setForm({ ...form, connector_count: e.target.value })} /></div>
                         <div><Label>Max. Leistung (kW)</Label><Input type="number" min="0.1" step="0.1" value={form.max_power_kw} onChange={(e) => { const v = e.target.value; if (v === "" || parseFloat(v) >= 0) setForm({ ...form, max_power_kw: v }); }} /></div>
-                        <div>
-                          <Label>Steckertyp</Label>
-                          <Select value={form.connector_type} onValueChange={(v) => setForm({ ...form, connector_type: v })}>
-                            <SelectTrigger><SelectValue placeholder="Steckertyp wählen" /></SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="Type2">Typ 2</SelectItem>
-                              <SelectItem value="CCS">CCS</SelectItem>
-                              <SelectItem value="CHAdeMO">CHAdeMO</SelectItem>
-                              <SelectItem value="Other">Sonstige</SelectItem>
-                            </SelectContent>
-                          </Select>
+                      </div>
+                      <div>
+                        <Label>Steckertypen</Label>
+                        <div className="flex flex-wrap gap-3 mt-2">
+                          {CONNECTOR_OPTIONS.map((opt) => {
+                            const selected = form.connector_type.split(",").includes(opt.value);
+                            return (
+                              <label key={opt.value} className="flex items-center gap-2 cursor-pointer">
+                                <Checkbox checked={selected} onCheckedChange={() => toggleConnectorType(opt.value)} />
+                                <span className="text-sm">{opt.label}</span>
+                              </label>
+                            );
+                          })}
                         </div>
                       </div>
                       <div className="grid grid-cols-2 gap-4">
@@ -663,7 +681,7 @@ const ChargePointDetail = () => {
                       <div><span className="text-muted-foreground">Standort:</span></div><div className="font-medium">{cp.address || "—"}</div>
                       <div><span className="text-muted-foreground">Hersteller:</span></div><div className="font-medium">{cp.vendor || "—"}</div>
                       <div><span className="text-muted-foreground">Modell:</span></div><div className="font-medium">{cp.model || "—"}</div>
-                      <div><span className="text-muted-foreground">Steckertyp:</span></div><div className="font-medium">{cp.connector_type === "Type2" ? "Typ 2" : cp.connector_type === "Other" ? "Sonstige" : cp.connector_type}</div>
+                      <div><span className="text-muted-foreground">Steckertypen:</span></div><div className="font-medium">{formatConnectorTypes(cp.connector_type)}</div>
                       <div><span className="text-muted-foreground">Anschlüsse:</span></div><div className="font-medium">{cp.connector_count}</div>
                       <div><span className="text-muted-foreground">Max. Leistung:</span></div><div className="font-medium">{fmtKw(cp.max_power_kw)}</div>
                       <div><span className="text-muted-foreground">Firmware:</span></div><div className="font-medium">{cp.firmware_version || "—"}</div>
