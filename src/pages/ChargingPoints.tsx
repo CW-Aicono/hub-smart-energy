@@ -19,6 +19,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Plus, PlugZap, Trash2, Zap, ZapOff, AlertTriangle, WifiOff, Info, Search, MapPin, ChevronDown, QrCode } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import ChargePointQrCode from "@/components/charging/ChargePointQrCode";
 import { format } from "date-fns";
 import { fmtKwh, fmtKw } from "@/lib/formatCharging";
@@ -51,6 +52,17 @@ const ChargingPoints = () => {
   const [addOpen, setAddOpen] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
   const [form, setForm] = useState({ name: "", ocpp_id: "", address: "", connector_count: "1", max_power_kw: "22", vendor: "", model: "", connector_type: "Type2" });
+  const CONNECTOR_OPTIONS = [
+    { value: "Type2", label: "Typ 2" },
+    { value: "CCS", label: "CCS" },
+    { value: "CHAdeMO", label: "CHAdeMO" },
+    { value: "Other", label: "Sonstige" },
+  ];
+  const toggleConnectorType = (val: string) => {
+    const current = form.connector_type ? form.connector_type.split(",").filter(Boolean) : [];
+    const next = current.includes(val) ? current.filter((v) => v !== val) : [...current, val];
+    setForm({ ...form, connector_type: next.join(",") });
+  };
   const [addCoords, setAddCoords] = useState<{ lat: number | null; lng: number | null }>({ lat: null, lng: null });
   const [addGeocoding, setAddGeocoding] = useState(false);
 
@@ -149,20 +161,22 @@ const ChargingPoints = () => {
           </p>
         )}
       </div>
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 gap-4">
         <div><Label>Anschlüsse</Label><Input type="number" min="1" value={form.connector_count} onChange={(e) => setForm({ ...form, connector_count: e.target.value })} /></div>
         <div><Label>Max. Leistung (kW)</Label><Input type="number" min="0.1" step="0.1" value={form.max_power_kw} onChange={(e) => { const v = e.target.value; if (v === "" || parseFloat(v) >= 0) setForm({ ...form, max_power_kw: v }); }} /></div>
-        <div>
-          <Label>Steckertyp</Label>
-          <Select value={form.connector_type} onValueChange={(v) => setForm({ ...form, connector_type: v })}>
-            <SelectTrigger><SelectValue placeholder="Steckertyp wählen" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="Type2">Typ 2</SelectItem>
-              <SelectItem value="CCS">CCS</SelectItem>
-              <SelectItem value="CHAdeMO">CHAdeMO</SelectItem>
-              <SelectItem value="Other">Sonstige</SelectItem>
-            </SelectContent>
-          </Select>
+      </div>
+      <div>
+        <Label>Steckertypen</Label>
+        <div className="flex flex-wrap gap-3 mt-2">
+          {CONNECTOR_OPTIONS.map((opt) => {
+            const selected = form.connector_type.split(",").includes(opt.value);
+            return (
+              <label key={opt.value} className="flex items-center gap-2 cursor-pointer">
+                <Checkbox checked={selected} onCheckedChange={() => toggleConnectorType(opt.value)} />
+                <span className="text-sm">{opt.label}</span>
+              </label>
+            );
+          })}
         </div>
       </div>
       <div className="grid grid-cols-2 gap-4">
