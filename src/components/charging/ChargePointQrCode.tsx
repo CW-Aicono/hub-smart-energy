@@ -18,13 +18,17 @@ export default function ChargePointQrCode({ ocppId, name, address, variant = "ic
   const appUrl = `${window.location.origin}/ev?cp=${encodeURIComponent(ocppId)}`;
 
   useEffect(() => {
-    if (open && canvasRef.current) {
-      QRCode.toCanvas(canvasRef.current, appUrl, {
-        width: 280,
-        margin: 2,
-        color: { dark: "#000000", light: "#ffffff" },
-      });
-    }
+    if (!open) return;
+    const timer = setTimeout(() => {
+      if (canvasRef.current) {
+        QRCode.toCanvas(canvasRef.current, appUrl, {
+          width: 280,
+          margin: 2,
+          color: { dark: "#000000", light: "#ffffff" },
+        });
+      }
+    }, 100);
+    return () => clearTimeout(timer);
   }, [open, appUrl]);
 
   const handlePrint = () => {
