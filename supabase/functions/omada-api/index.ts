@@ -28,6 +28,11 @@ async function getAccessToken(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ omadacId: omadaId, client_id: clientId, client_secret: clientSecret }),
   });
+  const contentType = resp.headers.get("content-type") || "";
+  if (!contentType.includes("application/json")) {
+    const text = await resp.text();
+    throw new Error(`Omada API returned non-JSON response (${resp.status}). Check your API URL. Response: ${text.substring(0, 200)}`);
+  }
   const data: OmadaTokenResponse = await resp.json();
   if (data.errorCode !== 0) throw new Error(`Omada auth error: ${data.msg}`);
   return data.result.accessToken;
@@ -41,6 +46,11 @@ async function omadaGet(baseUrl: string, path: string, token: string, omadaId: s
       "Content-Type": "application/json",
     },
   });
+  const contentType = resp.headers.get("content-type") || "";
+  if (!contentType.includes("application/json")) {
+    const text = await resp.text();
+    throw new Error(`Omada API returned non-JSON for ${path} (${resp.status}): ${text.substring(0, 200)}`);
+  }
   return resp.json();
 }
 
