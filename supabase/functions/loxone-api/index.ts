@@ -61,11 +61,23 @@ const CONTROL_TYPE_MAPPINGS: Record<string, StateMapping> = {
 const LOXONE_OUTPUT_TO_STATE: Record<string, string> = {
   "Pf": "actual",       // Power (Leistung)
   "Mr": "total",        // Meter reading total (Zählerstand)
+  "Mrc": "total",       // Meter reading consumption total
+  "Mrd": "total",       // Meter reading delivery total
   "Rd": "totalDay",     // Reading day
+  "Rdc": "totalDay",    // Reading day consumption
+  "Rdd": "totalDay",    // Reading day delivery
   "Rw": "totalWeek",    // Reading week
+  "Rwc": "totalWeek",   // Reading week consumption
+  "Rwd": "totalWeek",   // Reading week delivery
   "Rm": "totalMonth",   // Reading month
+  "Rmc": "totalMonth",  // Reading month consumption
+  "Rmd": "totalMonth",  // Reading month delivery
   "Ry": "totalYear",    // Reading year
+  "Ryc": "totalYear",   // Reading year consumption
+  "Ryd": "totalYear",   // Reading year delivery
   "Rld": "totalDayLast",
+  "Rldc": "totalDayLast",
+  "Rldd": "totalDayLast",
   "Rlw": "totalWeekLast",
   "Rlm": "totalMonthLast",
   "Rly": "totalYearLast",
