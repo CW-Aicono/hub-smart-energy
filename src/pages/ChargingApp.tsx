@@ -7,15 +7,14 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Slider } from "@/components/ui/slider";
-import { Separator } from "@/components/ui/separator";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerDescription } from "@/components/ui/drawer";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Zap, Map, QrCode, History, Receipt, User, LogOut, Loader2, ArrowLeft,
   Filter, Navigation, PlugZap, AlertTriangle, ZapOff, WifiOff, Check,
-  ScanLine, X, MapPin, BatteryCharging, Clock, ChevronRight, Mail, Lock, Eye, EyeOff
+  ScanLine, X, MapPin, BatteryCharging, Clock, ChevronRight, Mail, Lock, Eye, EyeOff, LocateFixed
 } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
@@ -196,11 +195,13 @@ function ChargingAppAuth({ onAuth }: { onAuth: () => void }) {
 const LazyMap = lazy(() => import("@/components/charging/ChargePointsMap"));
 
 function MapTab({ chargePoints, onStartCharge, initialCpId, onInitialCpHandled }: { chargePoints: AppChargePoint[]; onStartCharge: (cpId: string) => void; initialCpId?: string | null; onInitialCpHandled?: () => void }) {
+  const [userPos, setUserPos] = useState<[number, number] | null>(null);
+  const [locating, setLocating] = useState(false);
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [minPower, setMinPower] = useState(0);
   const [connectorFilter, setConnectorFilter] = useState<string>("all");
-  const [showPowerSlider, setShowPowerSlider] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [filterOpen, setFilterOpen] = useState(false);
   const [selectedCp, setSelectedCp] = useState<AppChargePoint | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
 
@@ -224,6 +225,16 @@ function MapTab({ chargePoints, onStartCharge, initialCpId, onInitialCpHandled }
 
   const connectorTypes = [...new Set(chargePoints.map((cp) => cp.connector_type).filter(Boolean))];
   const hasActiveFilter = typeFilter !== "all" || minPower > 0 || connectorFilter !== "all";
+
+  const handleLocate = useCallback(() => {
+    if (!navigator.geolocation) { toast.error("Geolocation wird nicht unterstützt"); return; }
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => { setUserPos([pos.coords.latitude, pos.coords.longitude]); setLocating(false); },
+      () => { toast.error("Standort konnte nicht ermittelt werden"); setLocating(false); },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  }, []);
 
   const handleCpClick = useCallback((cp: AppChargePoint) => {
     setSelectedCp(cp);
@@ -266,7 +277,7 @@ function MapTab({ chargePoints, onStartCharge, initialCpId, onInitialCpHandled }
       <div className="absolute inset-0">
         {filtered.some((cp) => cp.latitude && cp.longitude) ? (
           <Suspense fallback={<div className="flex items-center justify-center h-full"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>}>
-            <LazyMap chargePoints={filtered as any} showLocateButton onChargePointClick={(cp: any) => handleCpClick(cp as AppChargePoint)} className="!h-full !rounded-none !border-0" />
+            <LazyMap chargePoints={filtered as any} onChargePointClick={(cp: any) => handleCpClick(cp as AppChargePoint)} className="!h-full !rounded-none !border-0" />
           </Suspense>
         ) : (
           <div className="flex items-center justify-center h-full text-muted-foreground text-sm bg-muted/30">
@@ -275,63 +286,85 @@ function MapTab({ chargePoints, onStartCharge, initialCpId, onInitialCpHandled }
         )}
       </div>
 
-      {/* Filter overlay on map */}
-      <div className="absolute top-3 left-3 right-14 z-[1000] flex flex-col gap-2">
-        <div className="flex gap-1.5 flex-wrap">
-          {["all", "AC", "DC"].map((t) => (
+      {/* Filter button above locate button - bottom right */}
+      <div className="absolute bottom-3 right-3 z-[1000] flex flex-col gap-2">
+        <Popover open={filterOpen} onOpenChange={setFilterOpen}>
+          <PopoverTrigger asChild>
             <Button
-              key={t}
-              variant={typeFilter === t ? "default" : "secondary"}
-              size="sm"
-              className="h-8 text-xs shadow-md rounded-full px-3"
-              onClick={() => setTypeFilter(t)}
-            >
-              {t === "all" ? "Alle" : t}
-            </Button>
-          ))}
-          <Separator orientation="vertical" className="h-8 mx-0.5" />
-          {connectorTypes.map((ct) => (
-            <Button
-              key={ct}
-              variant={connectorFilter === ct ? "default" : "secondary"}
-              size="sm"
-              className="h-8 text-xs shadow-md rounded-full px-3"
-              onClick={() => setConnectorFilter(connectorFilter === ct ? "all" : ct)}
-            >
-              {ct}
-            </Button>
-          ))}
-        </div>
-
-        <div className="flex items-center gap-2">
-          <Button
-            variant={minPower > 0 ? "default" : "secondary"}
-            size="sm"
-            className="h-8 text-xs shadow-md rounded-full px-3 gap-1"
-            onClick={() => setShowPowerSlider(!showPowerSlider)}
-          >
-            <Zap className="h-3 w-3" />
-            {minPower > 0 ? `≥ ${minPower} kW` : "Leistung"}
-          </Button>
-          {hasActiveFilter && (
-            <Button
+              size="icon"
               variant="secondary"
-              size="sm"
-              className="h-8 text-xs shadow-md rounded-full px-3"
-              onClick={() => { setTypeFilter("all"); setMinPower(0); setConnectorFilter("all"); setShowPowerSlider(false); }}
+              className={`h-10 w-10 rounded-full shadow-lg bg-background/95 backdrop-blur-sm border ${hasActiveFilter ? "ring-2 ring-primary" : ""}`}
             >
-              <X className="h-3 w-3 mr-1" /> Reset
+              <Filter className={`h-5 w-5 ${hasActiveFilter ? "text-primary" : ""}`} />
             </Button>
-          )}
-          <Badge variant="secondary" className="shadow-md text-xs h-6">{filtered.filter(cp => cp.latitude && cp.longitude).length}</Badge>
-        </div>
+          </PopoverTrigger>
+          <PopoverContent side="left" align="end" className="w-64 p-4 space-y-4">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-semibold">Filter</p>
+              {hasActiveFilter && (
+                <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => { setTypeFilter("all"); setMinPower(0); setConnectorFilter("all"); }}>
+                  Zurücksetzen
+                </Button>
+              )}
+            </div>
 
-        {showPowerSlider && (
-          <div className="bg-background/95 backdrop-blur-sm rounded-xl shadow-lg border p-3 max-w-[250px]">
-            <Label className="text-xs font-medium">Mindestleistung: {minPower} kW</Label>
-            <Slider value={[minPower]} onValueChange={([v]) => setMinPower(v)} min={0} max={350} step={5} className="mt-2" />
-          </div>
-        )}
+            {/* Type filter */}
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Typ</Label>
+              <div className="flex gap-1.5">
+                {["all", "AC", "DC"].map((t) => (
+                  <Button key={t} variant={typeFilter === t ? "default" : "outline"} size="sm" className="flex-1 h-8 text-xs" onClick={() => setTypeFilter(t)}>
+                    {t === "all" ? "Alle" : t}
+                  </Button>
+                ))}
+              </div>
+            </div>
+
+            {/* Power filter - fixed steps */}
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Ladeleistung</Label>
+              <div className="grid grid-cols-2 gap-1.5">
+                {[{ label: "Alle", value: 0 }, { label: "50+ kW", value: 50 }, { label: "100+ kW", value: 100 }, { label: "150+ kW", value: 150 }].map((opt) => (
+                  <Button key={opt.value} variant={minPower === opt.value ? "default" : "outline"} size="sm" className="h-8 text-xs" onClick={() => setMinPower(opt.value)}>
+                    {opt.label}
+                  </Button>
+                ))}
+              </div>
+            </div>
+
+            {/* Connector filter */}
+            {connectorTypes.length > 0 && (
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">Steckertyp</Label>
+                <div className="flex flex-wrap gap-1.5">
+                  <Button variant={connectorFilter === "all" ? "default" : "outline"} size="sm" className="h-8 text-xs" onClick={() => setConnectorFilter("all")}>Alle</Button>
+                  {connectorTypes.map((ct) => (
+                    <Button key={ct} variant={connectorFilter === ct ? "default" : "outline"} size="sm" className="h-8 text-xs" onClick={() => setConnectorFilter(ct)}>
+                      {ct}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="text-xs text-muted-foreground text-center pt-1">
+              {filtered.filter(cp => cp.latitude && cp.longitude).length} Stationen
+            </div>
+          </PopoverContent>
+        </Popover>
+        <Button
+          size="icon"
+          variant="secondary"
+          className="h-10 w-10 rounded-full shadow-lg bg-background/95 backdrop-blur-sm border"
+          onClick={handleLocate}
+          disabled={locating}
+        >
+          {locating ? (
+            <Loader2 className="h-5 w-5 animate-spin" />
+          ) : (
+            <LocateFixed className={`h-5 w-5 ${userPos ? "text-primary" : ""}`} />
+          )}
+        </Button>
       </div>
 
       {/* Search bar at the bottom */}
