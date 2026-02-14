@@ -78,19 +78,39 @@ export function useMeters(locationId?: string) {
     fetchMeters();
   }, [fetchMeters]);
 
-  const addMeter = async (meter: MeterInsert, parentMeterId?: string | null, isMainMeter?: boolean, meterFunction?: string) => {
+  const addMeter = async (
+    meter: MeterInsert,
+    parentMeterId?: string | null,
+    isMainMeter?: boolean,
+    meterFunction?: string,
+    virtualSources?: { source_meter_id: string; operator: "+" | "-" }[],
+  ) => {
     if (!tenantId) return;
-    const { error } = await supabase.from("meters").insert({
+    const { data: inserted, error } = await supabase.from("meters").insert({
       ...meter,
       tenant_id: tenantId,
       parent_meter_id: parentMeterId || null,
       is_main_meter: isMainMeter || false,
       meter_function: meterFunction || "consumption",
-    } as any);
+    } as any).select("id").single();
     if (error) {
       toast.error("Zähler konnte nicht angelegt werden");
       console.error(error);
     } else {
+      // Save virtual meter sources if applicable
+      if (virtualSources && virtualSources.length > 0 && inserted?.id) {
+        const rows = virtualSources.map((s, i) => ({
+          virtual_meter_id: inserted.id,
+          source_meter_id: s.source_meter_id,
+          operator: s.operator,
+          sort_order: i,
+        }));
+        const { error: srcErr } = await supabase.from("virtual_meter_sources").insert(rows as any);
+        if (srcErr) {
+          console.error("Error saving virtual sources:", srcErr);
+          toast.error("Formel konnte nicht gespeichert werden");
+        }
+      }
       toast.success("Zähler angelegt");
       fetchMeters();
     }

@@ -2056,6 +2056,48 @@ export type Database = {
         }
         Relationships: []
       }
+      virtual_meter_sources: {
+        Row: {
+          created_at: string
+          id: string
+          operator: string
+          sort_order: number
+          source_meter_id: string
+          virtual_meter_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          operator?: string
+          sort_order?: number
+          source_meter_id: string
+          virtual_meter_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          operator?: string
+          sort_order?: number
+          source_meter_id?: string
+          virtual_meter_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "virtual_meter_sources_source_meter_id_fkey"
+            columns: ["source_meter_id"]
+            isOneToOne: false
+            referencedRelation: "meters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "virtual_meter_sources_virtual_meter_id_fkey"
+            columns: ["virtual_meter_id"]
+            isOneToOne: false
+            referencedRelation: "meters"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
