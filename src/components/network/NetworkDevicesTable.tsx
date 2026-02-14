@@ -7,8 +7,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Wifi, Router, Cable, Search, Pencil } from "lucide-react";
-import type { NetworkDevice } from "@/data/networkDemoData";
+import { Wifi, Router, Cable, Search, Pencil, ArrowUp, ArrowDown } from "lucide-react";
+import { type NetworkDevice, formatBytes, formatRate } from "@/data/networkDemoData";
 
 interface Props {
   devices: NetworkDevice[];
@@ -109,6 +109,9 @@ export default function NetworkDevicesTable({ devices, onUpdateDevice }: Props) 
                   <TableHead>Status</TableHead>
                   <TableHead className="text-right">Clients</TableHead>
                   <TableHead className="text-right">PoE (W)</TableHead>
+                  <TableHead className="text-right">Traffic ↑</TableHead>
+                  <TableHead className="text-right">Traffic ↓</TableHead>
+                  <TableHead className="text-right">Rate</TableHead>
                   <TableHead className="text-right">Ports</TableHead>
                   <TableHead className="text-right">Uptime</TableHead>
                   <TableHead />
@@ -129,6 +132,16 @@ export default function NetworkDevicesTable({ devices, onUpdateDevice }: Props) 
                     </TableCell>
                     <TableCell className="text-right">{d.clients ?? "–"}</TableCell>
                     <TableCell className="text-right">{d.poeConsumption ? `${d.poeConsumption}` : "–"}</TableCell>
+                    <TableCell className="text-right text-xs">{d.traffic ? formatBytes(d.traffic.txBytes) : "–"}</TableCell>
+                    <TableCell className="text-right text-xs">{d.traffic ? formatBytes(d.traffic.rxBytes) : "–"}</TableCell>
+                    <TableCell className="text-right text-xs">
+                      {d.traffic && d.traffic.txRate > 0 ? (
+                        <span className="flex items-center justify-end gap-1">
+                          <ArrowUp className="h-3 w-3 text-muted-foreground" />{formatRate(d.traffic.txRate)}
+                          <ArrowDown className="h-3 w-3 text-muted-foreground ml-1" />{formatRate(d.traffic.rxRate)}
+                        </span>
+                      ) : "–"}
+                    </TableCell>
                     <TableCell className="text-right">
                       {d.ports ? `${d.portsUsed ?? 0}/${d.ports}` : "–"}
                     </TableCell>
@@ -142,7 +155,7 @@ export default function NetworkDevicesTable({ devices, onUpdateDevice }: Props) 
                 ))}
                 {filtered.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={11} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={13} className="text-center py-8 text-muted-foreground">
                       Keine Geräte gefunden.
                     </TableCell>
                   </TableRow>
@@ -194,6 +207,33 @@ export default function NetworkDevicesTable({ devices, onUpdateDevice }: Props) 
                   <p className="text-sm mt-1">{editDevice.uptime}</p>
                 </div>
               </div>
+              {editDevice.traffic && (
+                <div className="border-t border-border pt-4">
+                  <Label className="text-muted-foreground text-xs">Traffic-Statistiken</Label>
+                  <div className="grid grid-cols-2 gap-3 mt-2">
+                    <div className="flex items-center gap-1.5 text-sm">
+                      <ArrowUp className="h-3.5 w-3.5 text-muted-foreground" />
+                      <span className="text-muted-foreground">Upload:</span>
+                      <span className="font-medium">{formatBytes(editDevice.traffic.txBytes)}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 text-sm">
+                      <ArrowDown className="h-3.5 w-3.5 text-muted-foreground" />
+                      <span className="text-muted-foreground">Download:</span>
+                      <span className="font-medium">{formatBytes(editDevice.traffic.rxBytes)}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 text-sm">
+                      <ArrowUp className="h-3.5 w-3.5 text-muted-foreground" />
+                      <span className="text-muted-foreground">Aktuell:</span>
+                      <span className="font-medium">{formatRate(editDevice.traffic.txRate)}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 text-sm">
+                      <ArrowDown className="h-3.5 w-3.5 text-muted-foreground" />
+                      <span className="text-muted-foreground">Aktuell:</span>
+                      <span className="font-medium">{formatRate(editDevice.traffic.rxRate)}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
           <DialogFooter>

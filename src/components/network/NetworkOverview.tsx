@@ -1,7 +1,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Globe, Wifi, Router, Cable, Activity } from "lucide-react";
-import type { NetworkDevice } from "@/data/networkDemoData";
+import { Globe, Wifi, Router, Cable, Activity, ArrowUp, ArrowDown } from "lucide-react";
+import { type NetworkDevice, formatBytes, formatRate } from "@/data/networkDemoData";
 
 interface Props {
   devices: NetworkDevice[];
@@ -11,6 +11,11 @@ export default function NetworkOverview({ devices }: Props) {
   const gateways = devices.filter((d) => d.type === "gateway");
   const aps = devices.filter((d) => d.type === "access_point");
   const switches = devices.filter((d) => d.type === "switch");
+
+  const totalTxRate = devices.reduce((s, d) => s + (d.traffic?.txRate ?? 0), 0);
+  const totalRxRate = devices.reduce((s, d) => s + (d.traffic?.rxRate ?? 0), 0);
+  const totalTx = devices.reduce((s, d) => s + (d.traffic?.txBytes ?? 0), 0);
+  const totalRx = devices.reduce((s, d) => s + (d.traffic?.rxBytes ?? 0), 0);
 
   return (
     <div className="space-y-4">
@@ -57,6 +62,36 @@ export default function NetworkOverview({ devices }: Props) {
               <DevicePin x="82%" y="72%" device={aps[3]} />
               <DevicePin x="18%" y="72%" device={switches[0]} />
               <DevicePin x="12%" y="12%" device={gateways[0]} />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Traffic overview */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Activity className="h-5 w-5" />
+            Traffic-Übersicht
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="space-y-1">
+              <p className="text-xs text-muted-foreground flex items-center gap-1"><ArrowUp className="h-3 w-3" /> Upload gesamt</p>
+              <p className="text-lg font-bold text-foreground">{formatBytes(totalTx)}</p>
+            </div>
+            <div className="space-y-1">
+              <p className="text-xs text-muted-foreground flex items-center gap-1"><ArrowDown className="h-3 w-3" /> Download gesamt</p>
+              <p className="text-lg font-bold text-foreground">{formatBytes(totalRx)}</p>
+            </div>
+            <div className="space-y-1">
+              <p className="text-xs text-muted-foreground flex items-center gap-1"><ArrowUp className="h-3 w-3" /> Upload aktuell</p>
+              <p className="text-lg font-bold text-foreground">{formatRate(totalTxRate)}</p>
+            </div>
+            <div className="space-y-1">
+              <p className="text-xs text-muted-foreground flex items-center gap-1"><ArrowDown className="h-3 w-3" /> Download aktuell</p>
+              <p className="text-lg font-bold text-foreground">{formatRate(totalRxRate)}</p>
             </div>
           </div>
         </CardContent>
@@ -109,6 +144,12 @@ function DevicePin({ x, y, device }: { x: string; y: string; device?: NetworkDev
           {device.poeConsumption !== undefined && device.poeConsumption > 0 && (
             <p className="flex items-center gap-1"><Activity className="h-3 w-3" /> {device.poeConsumption} W PoE</p>
           )}
+          {device.traffic && (device.traffic.txRate > 0 || device.traffic.rxRate > 0) && (
+            <p className="flex items-center gap-1 text-muted-foreground">
+              <ArrowUp className="h-3 w-3" />{formatRate(device.traffic.txRate)}
+              <ArrowDown className="h-3 w-3 ml-1" />{formatRate(device.traffic.rxRate)}
+            </p>
+          )}
         </div>
       </div>
     </div>
@@ -117,6 +158,8 @@ function DevicePin({ x, y, device }: { x: string; y: string; device?: NetworkDev
 
 function DeviceGroupCard({ icon, title, devices }: { icon: React.ReactNode; title: string; devices: NetworkDevice[] }) {
   const online = devices.filter((d) => d.status === "online").length;
+  const groupTx = devices.reduce((s, d) => s + (d.traffic?.txBytes ?? 0), 0);
+  const groupRx = devices.reduce((s, d) => s + (d.traffic?.rxBytes ?? 0), 0);
   return (
     <Card>
       <CardContent className="pt-6">
@@ -129,14 +172,27 @@ function DeviceGroupCard({ icon, title, devices }: { icon: React.ReactNode; titl
         </div>
         <div className="space-y-2">
           {devices.map((d) => (
-            <div key={d.id} className="flex items-center justify-between text-sm">
-              <span className="text-foreground">{d.name}</span>
-              <span className={`text-xs ${d.status === "online" ? "text-green-600 dark:text-green-400" : "text-muted-foreground"}`}>
-                {d.status === "online" ? "●" : "○"} {d.status === "online" ? "Online" : "Offline"}
-              </span>
+            <div key={d.id} className="flex items-center justify-between text-sm gap-2">
+              <span className="text-foreground truncate">{d.name}</span>
+              <div className="flex items-center gap-2 shrink-0">
+                {d.traffic && d.traffic.txRate > 0 && (
+                  <span className="text-xs text-muted-foreground flex items-center gap-0.5">
+                    <ArrowUp className="h-3 w-3" />{formatRate(d.traffic.txRate)}
+                  </span>
+                )}
+                <span className={`text-xs ${d.status === "online" ? "text-green-600 dark:text-green-400" : "text-muted-foreground"}`}>
+                  {d.status === "online" ? "●" : "○"}
+                </span>
+              </div>
             </div>
           ))}
         </div>
+        {(groupTx > 0 || groupRx > 0) && (
+          <div className="mt-3 pt-3 border-t border-border flex items-center gap-4 text-xs text-muted-foreground">
+            <span className="flex items-center gap-1"><ArrowUp className="h-3 w-3" /> {formatBytes(groupTx)}</span>
+            <span className="flex items-center gap-1"><ArrowDown className="h-3 w-3" /> {formatBytes(groupRx)}</span>
+          </div>
+        )}
       </CardContent>
     </Card>
   );
