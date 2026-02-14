@@ -1865,6 +1865,43 @@ export const translations = {
     es: "Constructor de reglas completo como diálogo para automatizaciones complejas",
     nl: "Volledige regelbouwer als sheet-dialoog voor complexe automatiseringen",
   },
+  // Version 1.0.6 changelog
+  "help.changelog106Feature1": {
+    de: "Mobile Lade-App (SmartCharge) als eigenständige PWA mit Karte, QR-Scanner und Ladehistorie",
+    en: "Mobile charging app (SmartCharge) as standalone PWA with map, QR scanner, and charging history",
+    es: "Aplicación móvil de carga (SmartCharge) como PWA independiente con mapa, escáner QR e historial de carga",
+    nl: "Mobiele laad-app (SmartCharge) als zelfstandige PWA met kaart, QR-scanner en laadgeschiedenis",
+  },
+  "help.changelog106Feature2": {
+    de: "Ladevorgang-Historie mit Überschrift, aktiven Sessions und Monatstrennern",
+    en: "Charging history with heading, active sessions, and monthly separators",
+    es: "Historial de carga con encabezado, sesiones activas y separadores mensuales",
+    nl: "Laadgeschiedenis met kop, actieve sessies en maandscheidingen",
+  },
+  "help.changelog106Feature3": {
+    de: "Zwei separate PWA-Manifeste für SmartCharge (/ev) und Meter Mate (/m)",
+    en: "Two separate PWA manifests for SmartCharge (/ev) and Meter Mate (/m)",
+    es: "Dos manifiestos PWA separados para SmartCharge (/ev) y Meter Mate (/m)",
+    nl: "Twee afzonderlijke PWA-manifesten voor SmartCharge (/ev) en Meter Mate (/m)",
+  },
+  "help.changelog106Feature4": {
+    de: "OCPP-Log: Automatische Timeout-Erkennung (Preparing → Available ohne Transaktion)",
+    en: "OCPP log: Automatic timeout detection (Preparing → Available without transaction)",
+    es: "Registro OCPP: Detección automática de timeout (Preparing → Available sin transacción)",
+    nl: "OCPP-log: Automatische timeout-detectie (Preparing → Available zonder transactie)",
+  },
+  "help.changelog106Improvement1": {
+    de: "Handbuchkapitel für Ladeinfrastruktur und E-Mobilität ergänzt",
+    en: "Manual chapter for charging infrastructure and e-mobility added",
+    es: "Capítulo del manual para infraestructura de carga y e-movilidad añadido",
+    nl: "Handboek-hoofdstuk voor laadinfrastructuur en e-mobiliteit toegevoegd",
+  },
+  "help.changelog106Improvement2": {
+    de: "FAQ um Ladeinfrastruktur, Lade-App und Tarifkonfiguration erweitert",
+    en: "FAQ expanded with charging infrastructure, charging app, and tariff configuration",
+    es: "FAQ ampliado con infraestructura de carga, aplicación de carga y configuración de tarifas",
+    nl: "FAQ uitgebreid met laadinfrastructuur, laad-app en tariefconfiguratie",
+  },
   // Version 1.0.4 changelog (kept for history)
   "help.changelog104VersionLabel": {
     de: "1.0.4",
@@ -1993,6 +2030,45 @@ export const translations = {
     en: "Under Location Detail → Automation you can create rules that control Loxone Miniserver actuators. Each automation can combine multiple conditions (sensor values, times, weekdays, actuator status) with individual AND/OR logic and execute multiple actions simultaneously. Saved automations can be manually triggered at any time.",
     es: "En Detalle de ubicación → Automatización puede crear reglas que controlan actuadores del Loxone Miniserver. Cada automatización puede combinar múltiples condiciones con lógica Y/O individual y ejecutar múltiples acciones simultáneamente.",
     nl: "Onder Locatiedetail → Automatisering kunt u regels maken die Loxone Miniserver-actuatoren aansturen. Elke automatisering kan meerdere voorwaarden combineren met individuele EN/OF-logica en meerdere acties tegelijk uitvoeren.",
+  },
+  // FAQ 14 - EV Charging
+  "help.faq14Question": {
+    de: "Wie verwalte ich Ladepunkte für E-Fahrzeuge?",
+    en: "How do I manage charge points for electric vehicles?",
+    es: "¿Cómo gestiono puntos de carga para vehículos eléctricos?",
+    nl: "Hoe beheer ik laadpunten voor elektrische voertuigen?",
+  },
+  "help.faq14Answer": {
+    de: "Unter Ladeinfrastruktur → Ladepunkte legen Sie Ladepunkte mit OCPP-ID, Standort, Leistung und Steckertyp an. Die Verbindung erfolgt automatisch per OCPP 1.6J. Auf der Detailseite sehen Sie Performance-Statistiken, Ladehistorie und können Ladevorgänge remote starten.",
+    en: "Under Charging Infrastructure → Charge Points, create charge points with OCPP ID, location, power, and connector type. Connection is automatic via OCPP 1.6J. The detail page shows performance statistics, charging history, and allows remote start of charging sessions.",
+    es: "En Infraestructura de carga → Puntos de carga, cree puntos de carga con ID OCPP, ubicación, potencia y tipo de conector. La conexión es automática por OCPP 1.6J.",
+    nl: "Onder Laadinfrastructuur → Laadpunten maakt u laadpunten aan met OCPP-ID, locatie, vermogen en connectortype. De verbinding is automatisch via OCPP 1.6J.",
+  },
+  // FAQ 15 - SmartCharge App
+  "help.faq15Question": {
+    de: "Wie funktioniert die SmartCharge Lade-App?",
+    en: "How does the SmartCharge charging app work?",
+    es: "¿Cómo funciona la aplicación de carga SmartCharge?",
+    nl: "Hoe werkt de SmartCharge laad-app?",
+  },
+  "help.faq15Answer": {
+    de: "Die SmartCharge App ist unter /ev erreichbar und als PWA installierbar. Nutzer sehen verfügbare Ladepunkte auf einer Karte, können per QR-Code oder Klick einen Ladevorgang starten und ihre Ladehistorie sowie Rechnungen einsehen. Aktive Ladevorgänge werden mit Dauer und geladenen kWh live angezeigt.",
+    en: "The SmartCharge app is accessible at /ev and can be installed as a PWA. Users see available charge points on a map, can start charging via QR code or tap, and view their charging history and invoices. Active sessions show live duration and kWh charged.",
+    es: "La app SmartCharge está disponible en /ev y se puede instalar como PWA. Los usuarios ven puntos de carga en un mapa y pueden iniciar la carga por código QR.",
+    nl: "De SmartCharge-app is beschikbaar op /ev en kan als PWA worden geïnstalleerd. Gebruikers zien laadpunten op een kaart en kunnen laden starten via QR-code.",
+  },
+  // FAQ 16 - Charging Tariffs
+  "help.faq16Question": {
+    de: "Wie konfiguriere ich Ladetarife und die Blockiergebühr?",
+    en: "How do I configure charging tariffs and idle fees?",
+    es: "¿Cómo configuro tarifas de carga y tarifas de inactividad?",
+    nl: "Hoe configureer ik laadtarieven en inactiviteitskosten?",
+  },
+  "help.faq16Answer": {
+    de: "Unter Ladeinfrastruktur → Abrechnung → Tarife erstellen Sie Tarife mit Grundgebühr, Preis pro kWh und einer optionalen Blockiergebühr (Idle Fee). Die Blockiergebühr wird nach Ablauf eines konfigurierbaren Freizeitraums pro Minute berechnet und separat auf der Rechnung ausgewiesen.",
+    en: "Under Charging Infrastructure → Billing → Tariffs, create tariffs with base fee, price per kWh, and an optional idle fee. The idle fee is charged per minute after a configurable grace period and shown separately on the invoice.",
+    es: "En Infraestructura de carga → Facturación → Tarifas, cree tarifas con cuota base, precio por kWh y una tarifa de inactividad opcional.",
+    nl: "Onder Laadinfrastructuur → Facturering → Tarieven maakt u tarieven aan met basisbedrag, prijs per kWh en een optionele inactiviteitskost.",
   },
   // User management - activate user
   "users.activateUser": {
