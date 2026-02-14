@@ -204,6 +204,8 @@ function MapTab({ chargePoints, onStartCharge, initialCpId, onInitialCpHandled }
   const [filterOpen, setFilterOpen] = useState(false);
   const [selectedCp, setSelectedCp] = useState<AppChargePoint | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [locationGroup, setLocationGroup] = useState<AppChargePoint[] | null>(null);
+  const [locationDrawerOpen, setLocationDrawerOpen] = useState(false);
 
   const filtered = useMemo(() => {
     return chargePoints.filter((cp) => {
@@ -237,9 +239,24 @@ function MapTab({ chargePoints, onStartCharge, initialCpId, onInitialCpHandled }
   }, []);
 
   const handleCpClick = useCallback((cp: AppChargePoint) => {
-    setSelectedCp(cp);
-    setDrawerOpen(true);
-  }, []);
+    // Check if multiple charge points share the same coordinates
+    const colocated = chargePoints.filter(
+      (other) =>
+        other.latitude != null &&
+        other.longitude != null &&
+        cp.latitude != null &&
+        cp.longitude != null &&
+        Math.abs(other.latitude - cp.latitude) < 0.0001 &&
+        Math.abs(other.longitude - cp.longitude) < 0.0001
+    );
+    if (colocated.length > 1) {
+      setLocationGroup(colocated);
+      setLocationDrawerOpen(true);
+    } else {
+      setSelectedCp(cp);
+      setDrawerOpen(true);
+    }
+  }, [chargePoints]);
 
   // Handle deep-link / QR initial charge point
   useEffect(() => {
@@ -287,7 +304,7 @@ function MapTab({ chargePoints, onStartCharge, initialCpId, onInitialCpHandled }
       </div>
 
       {/* Bottom controls: search bar with action buttons */}
-      {!drawerOpen && !filterOpen && <div className="absolute bottom-4 left-3 right-3 z-[1000] flex items-center gap-2">
+      {!drawerOpen && !filterOpen && !locationDrawerOpen && <div className="absolute bottom-4 left-3 right-3 z-[1000] flex items-center gap-2">
         <div className="relative flex-1">
           <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
@@ -376,6 +393,66 @@ function MapTab({ chargePoints, onStartCharge, initialCpId, onInitialCpHandled }
               {filtered.filter(cp => cp.latitude && cp.longitude).length} Stationen gefunden
             </div>
           </div>
+        </DrawerContent>
+      </Drawer>
+
+      {/* Location group drawer – when multiple charge points share same location */}
+      <Drawer open={locationDrawerOpen} onOpenChange={setLocationDrawerOpen}>
+        <DrawerContent className="max-h-[70vh]">
+          {locationGroup && locationGroup.length > 0 && (
+            <div className="px-4 pb-6 pt-2">
+              <DrawerHeader className="p-0 mb-3">
+                <div className="flex items-center gap-3">
+                  <div className="h-12 w-12 rounded-full bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                    <MapPin className="h-6 w-6" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <DrawerTitle className="text-left">Ladestandort</DrawerTitle>
+                    <DrawerDescription className="text-left">
+                      {locationGroup[0].address || "Adresse nicht verfügbar"}
+                    </DrawerDescription>
+                  </div>
+                  <Badge variant="secondary">{locationGroup.length} Ladepunkte</Badge>
+                </div>
+              </DrawerHeader>
+
+              <div className="space-y-2">
+                {locationGroup.map((cp) => {
+                  const isAvailable = cp.status === "available";
+                  return (
+                    <button
+                      key={cp.id}
+                      className="w-full flex items-center gap-3 p-3 rounded-xl bg-muted/50 hover:bg-muted transition-colors text-left"
+                      onClick={() => {
+                        setLocationDrawerOpen(false);
+                        setTimeout(() => {
+                          setSelectedCp(cp);
+                          setDrawerOpen(true);
+                        }, 200);
+                      }}
+                    >
+                      <div className={`h-10 w-10 rounded-full flex items-center justify-center shrink-0 ${
+                        isAvailable ? "bg-primary/10 text-primary" :
+                        cp.status === "charging" ? "bg-blue-500/10 text-blue-500" :
+                        cp.status === "faulted" ? "bg-destructive/10 text-destructive" :
+                        "bg-muted text-muted-foreground"
+                      }`}>
+                        <PlugZap className="h-5 w-5" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-sm truncate">{cp.name}</p>
+                        <p className="text-xs text-muted-foreground">{fmtKw(cp.max_power_kw)} · {cp.connector_type}</p>
+                      </div>
+                      <Badge variant={isAvailable ? "default" : "secondary"} className="shrink-0">
+                        {statusLabel[cp.status] || cp.status}
+                      </Badge>
+                      <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </DrawerContent>
       </Drawer>
 
