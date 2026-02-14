@@ -103,6 +103,7 @@ export function formatGasDual(
 ): { m3Str: string; kwhStr: string } {
   const m3Str = m3.toLocaleString("de-DE", { minimumFractionDigits: 0, maximumFractionDigits: 2 }) + " m³";
   const kwh = gasM3ToKWh(m3, gasType, brennwert, zustandszahl);
-  const kwhStr = formatEnergy(kwh);
+  // gasM3ToKWh returns kWh, so multiply by 1000 to get Wh (base unit for formatEnergy)
+  const kwhStr = formatEnergy(kwh * 1000);
   return { m3Str, kwhStr };
 }
