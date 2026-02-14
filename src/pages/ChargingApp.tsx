@@ -311,7 +311,7 @@ function MapTab({ chargePoints, onStartCharge, initialCpId, onInitialCpHandled }
               <Button
                 size="icon"
                 variant="secondary"
-                className={`h-10 w-10 rounded-full shadow-lg bg-background/95 backdrop-blur-sm border ${hasActiveFilter ? "ring-2 ring-primary" : ""}`}
+                className={`h-12 w-12 rounded-full shadow-lg bg-background/95 backdrop-blur-sm border ${hasActiveFilter ? "ring-2 ring-primary" : ""}`}
               >
                 <Filter className={`h-5 w-5 ${hasActiveFilter ? "text-primary" : ""}`} />
               </Button>
@@ -366,7 +366,7 @@ function MapTab({ chargePoints, onStartCharge, initialCpId, onInitialCpHandled }
           <Button
             size="icon"
             variant="secondary"
-            className="h-10 w-10 rounded-full shadow-lg bg-background/95 backdrop-blur-sm border"
+            className="h-12 w-12 rounded-full shadow-lg bg-background/95 backdrop-blur-sm border"
             onClick={handleLocate}
             disabled={locating}
           >
