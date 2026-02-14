@@ -362,7 +362,17 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
             </div>
             <div>
               <Label>Einheit</Label>
-              <Input value={unit} onChange={(e) => setUnit(e.target.value)} />
+              {energyType === "gas" ? (
+                <Select value={unit} onValueChange={setUnit}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="m³">m³</SelectItem>
+                    <SelectItem value="kWh">kWh</SelectItem>
+                  </SelectContent>
+                </Select>
+              ) : (
+                <Input value={unit} onChange={(e) => setUnit(e.target.value)} />
+              )}
             </div>
           </div>
           <div>
