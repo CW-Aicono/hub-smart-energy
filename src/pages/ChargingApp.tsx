@@ -433,7 +433,11 @@ function QrScannerTab({ onScanned }: { onScanned: (data: string) => void }) {
     setScanning(false);
   }, []);
 
-  useEffect(() => () => stopScan(), [stopScan]);
+  // Auto-start scanner when tab is shown
+  useEffect(() => {
+    startScan();
+    return () => stopScan();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="flex flex-col items-center justify-center h-full p-6 space-y-6">
