@@ -11,6 +11,7 @@ import { Slider } from "@/components/ui/slider";
 import { Separator } from "@/components/ui/separator";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerDescription } from "@/components/ui/drawer";
 import {
   Zap, Map, QrCode, History, Receipt, User, LogOut, Loader2, ArrowLeft,
   Filter, Navigation, PlugZap, AlertTriangle, ZapOff, WifiOff, Check,
@@ -194,12 +195,14 @@ function ChargingAppAuth({ onAuth }: { onAuth: () => void }) {
 // ---- Map Tab ----
 const LazyMap = lazy(() => import("@/components/charging/ChargePointsMap"));
 
-function MapTab({ chargePoints, onSelect }: { chargePoints: AppChargePoint[]; onSelect: (cp: AppChargePoint) => void }) {
+function MapTab({ chargePoints, onStartCharge, initialCpId, onInitialCpHandled }: { chargePoints: AppChargePoint[]; onStartCharge: (cpId: string) => void; initialCpId?: string | null; onInitialCpHandled?: () => void }) {
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [minPower, setMinPower] = useState(0);
   const [connectorFilter, setConnectorFilter] = useState<string>("all");
   const [showPowerSlider, setShowPowerSlider] = useState(false);
-  const [visibleIds, setVisibleIds] = useState<Set<string> | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedCp, setSelectedCp] = useState<AppChargePoint | null>(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
   const filtered = useMemo(() => {
     return chargePoints.filter((cp) => {
@@ -207,127 +210,215 @@ function MapTab({ chargePoints, onSelect }: { chargePoints: AppChargePoint[]; on
       if (typeFilter === "DC" && cp.max_power_kw <= 43) return false;
       if (cp.max_power_kw < minPower) return false;
       if (connectorFilter !== "all" && cp.connector_type !== connectorFilter) return false;
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        if (
+          !cp.name.toLowerCase().includes(q) &&
+          !(cp.address || "").toLowerCase().includes(q) &&
+          !cp.connector_type.toLowerCase().includes(q)
+        ) return false;
+      }
       return true;
     });
-  }, [chargePoints, typeFilter, minPower, connectorFilter]);
-
-  // Points visible on the map (intersection of filtered + map bounds)
-  const visibleFiltered = useMemo(() => {
-    if (!visibleIds) return filtered;
-    return filtered.filter((cp) => visibleIds.has(cp.id));
-  }, [filtered, visibleIds]);
-
-  const handleVisiblePointsChange = useCallback((ids: Set<string>) => {
-    setVisibleIds(ids);
-  }, []);
+  }, [chargePoints, typeFilter, minPower, connectorFilter, searchQuery]);
 
   const connectorTypes = [...new Set(chargePoints.map((cp) => cp.connector_type).filter(Boolean))];
   const hasActiveFilter = typeFilter !== "all" || minPower > 0 || connectorFilter !== "all";
 
+  const handleCpClick = useCallback((cp: AppChargePoint) => {
+    setSelectedCp(cp);
+    setDrawerOpen(true);
+  }, []);
+
+  // Handle deep-link / QR initial charge point
+  useEffect(() => {
+    if (initialCpId && chargePoints.length > 0) {
+      const found = chargePoints.find((cp) => cp.ocpp_id === initialCpId || cp.id === initialCpId);
+      if (found) {
+        setSelectedCp(found);
+        setDrawerOpen(true);
+      }
+      onInitialCpHandled?.();
+    }
+  }, [initialCpId, chargePoints, onInitialCpHandled]);
+
+
+  const statusLabel: Record<string, string> = {
+    available: "Verfügbar", charging: "Belegt", faulted: "Gestört", unavailable: "Nicht verfügbar", offline: "Offline",
+  };
+
+  const openNavigation = (cp: AppChargePoint) => {
+    if (!cp.latitude || !cp.longitude) return;
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+    const googleUrl = `https://www.google.com/maps/dir/?api=1&destination=${cp.latitude},${cp.longitude}`;
+    const appleUrl = `maps://maps.apple.com/?daddr=${cp.latitude},${cp.longitude}&dirflg=d`;
+    if (isIOS) {
+      // Show both options on iOS
+      window.open(appleUrl, "_blank");
+    } else {
+      window.open(googleUrl, "_blank");
+    }
+  };
+
   return (
-    <div className="flex flex-col h-full">
-      {/* Map with overlay filters */}
-      <div className="flex-1 relative" style={{ minHeight: "300px" }}>
+    <div className="relative h-full w-full">
+      {/* Fullscreen map */}
+      <div className="absolute inset-0">
         {filtered.some((cp) => cp.latitude && cp.longitude) ? (
           <Suspense fallback={<div className="flex items-center justify-center h-full"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>}>
-            <LazyMap chargePoints={filtered as any} showLocateButton onVisiblePointsChange={handleVisiblePointsChange} />
+            <LazyMap chargePoints={filtered as any} showLocateButton onChargePointClick={(cp: any) => handleCpClick(cp as AppChargePoint)} className="!h-full !rounded-none !border-0" />
           </Suspense>
         ) : (
-          <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
+          <div className="flex items-center justify-center h-full text-muted-foreground text-sm bg-muted/30">
             Keine Ladestationen mit Koordinaten verfügbar
           </div>
         )}
+      </div>
 
-        {/* Filter overlay on map */}
-        <div className="absolute top-3 left-3 right-14 z-[1000] flex flex-col gap-2">
-          {/* Row 1: Type + Connector chips */}
-          <div className="flex gap-1.5 flex-wrap">
-            {["all", "AC", "DC"].map((t) => (
-              <Button
-                key={t}
-                variant={typeFilter === t ? "default" : "secondary"}
-                size="sm"
-                className="h-8 text-xs shadow-md rounded-full px-3"
-                onClick={() => setTypeFilter(t)}
-              >
-                {t === "all" ? "Alle" : t}
-              </Button>
-            ))}
-            <Separator orientation="vertical" className="h-8 mx-0.5" />
-            {connectorTypes.map((ct) => (
-              <Button
-                key={ct}
-                variant={connectorFilter === ct ? "default" : "secondary"}
-                size="sm"
-                className="h-8 text-xs shadow-md rounded-full px-3"
-                onClick={() => setConnectorFilter(connectorFilter === ct ? "all" : ct)}
-              >
-                {ct}
-              </Button>
-            ))}
-          </div>
-
-          {/* Row 2: Power filter */}
-          <div className="flex items-center gap-2">
+      {/* Filter overlay on map */}
+      <div className="absolute top-3 left-3 right-14 z-[1000] flex flex-col gap-2">
+        <div className="flex gap-1.5 flex-wrap">
+          {["all", "AC", "DC"].map((t) => (
             <Button
-              variant={minPower > 0 ? "default" : "secondary"}
+              key={t}
+              variant={typeFilter === t ? "default" : "secondary"}
               size="sm"
-              className="h-8 text-xs shadow-md rounded-full px-3 gap-1"
-              onClick={() => setShowPowerSlider(!showPowerSlider)}
+              className="h-8 text-xs shadow-md rounded-full px-3"
+              onClick={() => setTypeFilter(t)}
             >
-              <Zap className="h-3 w-3" />
-              {minPower > 0 ? `≥ ${minPower} kW` : "Leistung"}
+              {t === "all" ? "Alle" : t}
             </Button>
-            {hasActiveFilter && (
-              <Button
-                variant="secondary"
-                size="sm"
-                className="h-8 text-xs shadow-md rounded-full px-3"
-                onClick={() => { setTypeFilter("all"); setMinPower(0); setConnectorFilter("all"); setShowPowerSlider(false); }}
-              >
-                <X className="h-3 w-3 mr-1" /> Reset
-              </Button>
-            )}
-            <Badge variant="secondary" className="shadow-md text-xs h-6">{visibleFiltered.length}</Badge>
-          </div>
+          ))}
+          <Separator orientation="vertical" className="h-8 mx-0.5" />
+          {connectorTypes.map((ct) => (
+            <Button
+              key={ct}
+              variant={connectorFilter === ct ? "default" : "secondary"}
+              size="sm"
+              className="h-8 text-xs shadow-md rounded-full px-3"
+              onClick={() => setConnectorFilter(connectorFilter === ct ? "all" : ct)}
+            >
+              {ct}
+            </Button>
+          ))}
+        </div>
 
-          {/* Power slider dropdown */}
-          {showPowerSlider && (
-            <div className="bg-background/95 backdrop-blur-sm rounded-xl shadow-lg border p-3 max-w-[250px]">
-              <Label className="text-xs font-medium">Mindestleistung: {minPower} kW</Label>
-              <Slider value={[minPower]} onValueChange={([v]) => setMinPower(v)} min={0} max={350} step={5} className="mt-2" />
-            </div>
+        <div className="flex items-center gap-2">
+          <Button
+            variant={minPower > 0 ? "default" : "secondary"}
+            size="sm"
+            className="h-8 text-xs shadow-md rounded-full px-3 gap-1"
+            onClick={() => setShowPowerSlider(!showPowerSlider)}
+          >
+            <Zap className="h-3 w-3" />
+            {minPower > 0 ? `≥ ${minPower} kW` : "Leistung"}
+          </Button>
+          {hasActiveFilter && (
+            <Button
+              variant="secondary"
+              size="sm"
+              className="h-8 text-xs shadow-md rounded-full px-3"
+              onClick={() => { setTypeFilter("all"); setMinPower(0); setConnectorFilter("all"); setShowPowerSlider(false); }}
+            >
+              <X className="h-3 w-3 mr-1" /> Reset
+            </Button>
+          )}
+          <Badge variant="secondary" className="shadow-md text-xs h-6">{filtered.filter(cp => cp.latitude && cp.longitude).length}</Badge>
+        </div>
+
+        {showPowerSlider && (
+          <div className="bg-background/95 backdrop-blur-sm rounded-xl shadow-lg border p-3 max-w-[250px]">
+            <Label className="text-xs font-medium">Mindestleistung: {minPower} kW</Label>
+            <Slider value={[minPower]} onValueChange={([v]) => setMinPower(v)} min={0} max={350} step={5} className="mt-2" />
+          </div>
+        )}
+      </div>
+
+      {/* Search bar at the bottom */}
+      <div className="absolute bottom-4 left-3 right-3 z-[1000]">
+        <div className="relative">
+          <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Ladestation suchen…"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="h-12 pl-10 pr-10 rounded-full shadow-lg border bg-background/95 backdrop-blur-sm text-base"
+          />
+          {searchQuery && (
+            <button onClick={() => setSearchQuery("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+              <X className="h-4 w-4" />
+            </button>
           )}
         </div>
       </div>
 
-      {/* Station list */}
-      <div className="max-h-[35vh] overflow-auto border-t">
-        {visibleFiltered.map((cp) => (
-          <button
-            key={cp.id}
-            onClick={() => onSelect(cp)}
-            className="w-full flex items-center gap-3 p-3 border-b hover:bg-muted/50 text-left transition-colors"
-          >
-            <div className={`h-10 w-10 rounded-full flex items-center justify-center shrink-0 ${
-              cp.status === "available" ? "bg-primary/10 text-primary" :
-              cp.status === "charging" ? "bg-blue-500/10 text-blue-500" :
-              "bg-muted text-muted-foreground"
-            }`}>
-              <Zap className="h-5 w-5" />
+      {/* Station info drawer */}
+      <Drawer open={drawerOpen} onOpenChange={setDrawerOpen}>
+        <DrawerContent className="max-h-[70vh]">
+          {selectedCp && (
+            <div className="px-4 pb-6 pt-2">
+              <DrawerHeader className="p-0 mb-3">
+                <div className="flex items-center gap-3">
+                  <div className={`h-12 w-12 rounded-full flex items-center justify-center shrink-0 ${
+                    selectedCp.status === "available" ? "bg-primary/10 text-primary" :
+                    selectedCp.status === "charging" ? "bg-blue-500/10 text-blue-500" :
+                    selectedCp.status === "faulted" ? "bg-destructive/10 text-destructive" :
+                    "bg-muted text-muted-foreground"
+                  }`}>
+                    <PlugZap className="h-6 w-6" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <DrawerTitle className="text-left">{selectedCp.name}</DrawerTitle>
+                    {selectedCp.address && (
+                      <DrawerDescription className="text-left">{selectedCp.address}</DrawerDescription>
+                    )}
+                  </div>
+                  <Badge variant={selectedCp.status === "available" ? "default" : "secondary"}>
+                    {statusLabel[selectedCp.status] || selectedCp.status}
+                  </Badge>
+                </div>
+              </DrawerHeader>
+
+              <div className="grid grid-cols-3 gap-2 mb-4">
+                <div className="bg-muted/50 rounded-xl p-3 text-center">
+                  <p className="text-xs text-muted-foreground">Leistung</p>
+                  <p className="text-lg font-bold">{fmtKw(selectedCp.max_power_kw)}</p>
+                </div>
+                <div className="bg-muted/50 rounded-xl p-3 text-center">
+                  <p className="text-xs text-muted-foreground">Stecker</p>
+                  <p className="text-sm font-semibold mt-0.5">{selectedCp.connector_type}</p>
+                </div>
+                <div className="bg-muted/50 rounded-xl p-3 text-center">
+                  <p className="text-xs text-muted-foreground">Anschlüsse</p>
+                  <p className="text-lg font-bold">{selectedCp.connector_count}</p>
+                </div>
+              </div>
+
+              {selectedCp.vendor && (
+                <p className="text-sm text-muted-foreground mb-4">
+                  {selectedCp.vendor}{selectedCp.model ? ` — ${selectedCp.model}` : ""}
+                </p>
+              )}
+
+              <div className="flex gap-3">
+                {selectedCp.latitude && selectedCp.longitude && (
+                  <Button variant="outline" className="flex-1 h-12" onClick={() => openNavigation(selectedCp)}>
+                    <Navigation className="h-4 w-4 mr-2" /> Navigation
+                  </Button>
+                )}
+                <Button
+                  className="flex-1 h-12"
+                  disabled={selectedCp.status !== "available"}
+                  onClick={() => { onStartCharge(selectedCp.id); setDrawerOpen(false); }}
+                >
+                  <PlugZap className="h-4 w-4 mr-2" />
+                  {selectedCp.status === "available" ? "Laden starten" : "Nicht verfügbar"}
+                </Button>
+              </div>
             </div>
-            <div className="flex-1 min-w-0">
-              <p className="font-medium text-sm truncate">{cp.name}</p>
-              <p className="text-xs text-muted-foreground truncate">{cp.address || "Kein Standort"}</p>
-            </div>
-            <div className="text-right shrink-0">
-              <p className="text-sm font-medium">{fmtKw(cp.max_power_kw)}</p>
-              <p className="text-xs text-muted-foreground">{cp.connector_type}</p>
-            </div>
-            <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
-          </button>
-        ))}
-      </div>
+          )}
+        </DrawerContent>
+      </Drawer>
     </div>
   );
 }
@@ -611,7 +702,7 @@ const ChargingApp = () => {
   const [chargePoints, setChargePoints] = useState<AppChargePoint[]>([]);
   const [sessions, setSessions] = useState<AppSession[]>([]);
   const [invoices, setInvoices] = useState<AppInvoice[]>([]);
-  const [selectedCp, setSelectedCp] = useState<AppChargePoint | null>(null);
+  const [initialCpOcppId, setInitialCpOcppId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   // Ensure charging_users entry exists for app user (no group assignment – done manually later)
@@ -685,12 +776,12 @@ const ChargingApp = () => {
     loadData();
   }, [user]);
 
-  // Handle QR scanned or deep link
+  // Handle deep link
   useEffect(() => {
     const cpParam = searchParams.get("cp");
     if (cpParam && chargePoints.length > 0) {
-      const found = chargePoints.find((cp) => cp.ocpp_id === cpParam || cp.id === cpParam);
-      if (found) { setSelectedCp(found); setTab("map"); }
+      setInitialCpOcppId(cpParam);
+      setTab("map");
     }
   }, [searchParams, chargePoints]);
 
@@ -704,7 +795,7 @@ const ChargingApp = () => {
 
     const found = chargePoints.find((cp) => cp.ocpp_id === ocppId || cp.id === ocppId);
     if (found) {
-      setSelectedCp(found);
+      setInitialCpOcppId(ocppId);
       setTab("map");
       toast.success(`Ladestation "${found.name}" erkannt`);
     } else {
@@ -768,14 +859,6 @@ const ChargingApp = () => {
     return <ChargingAppAuth onAuth={() => {}} />;
   }
 
-  // Station detail view
-  if (selectedCp) {
-    return (
-      <div className="min-h-screen bg-background flex flex-col" style={{ paddingTop: "env(safe-area-inset-top)", paddingBottom: "env(safe-area-inset-bottom)" }}>
-        <StationDetail cp={selectedCp} onBack={() => setSelectedCp(null)} onStartCharge={handleStartCharge} />
-      </div>
-    );
-  }
 
   const tabs: { key: Tab; icon: typeof Map; label: string }[] = [
     { key: "map", icon: Map, label: "Karte" },
@@ -793,7 +876,7 @@ const ChargingApp = () => {
           <div className="flex-1 flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
         ) : (
           <>
-            {tab === "map" && <MapTab chargePoints={chargePoints} onSelect={setSelectedCp} />}
+            {tab === "map" && <MapTab chargePoints={chargePoints} onStartCharge={handleStartCharge} initialCpId={initialCpOcppId} onInitialCpHandled={() => setInitialCpOcppId(null)} />}
             {tab === "qr" && <QrScannerTab onScanned={handleQrScanned} />}
             {tab === "history" && <HistoryTab sessions={sessions} chargePoints={chargePoints} />}
             {tab === "invoices" && <InvoicesTab invoices={invoices} />}
