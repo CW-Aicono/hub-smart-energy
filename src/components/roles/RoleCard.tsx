@@ -18,6 +18,7 @@ import {
 import { Shield, ChevronDown, ChevronRight, Trash2, Lock } from "lucide-react";
 import { CustomRole, Permission } from "@/hooks/useCustomRoles";
 import { toast } from "sonner";
+import { useTranslation } from "@/hooks/useTranslation";
 
 interface RoleCardProps {
   role: CustomRole;
@@ -29,19 +30,25 @@ interface RoleCardProps {
   isAdmin?: boolean;
 }
 
-const CATEGORY_LABELS: Record<string, string> = {
-  locations: "Standorte",
-  floors: "Etagen & Grundrisse",
-  energy: "Energiedaten",
-  meters: "Messstellen",
-  alerts: "Alarmregeln",
-  scanners: "Scanner",
-  integrations: "Integrationen",
-  reports: "Berichte",
-  users: "Benutzerverwaltung",
-  roles: "Rollenverwaltung",
-  settings: "Einstellungen",
-  dashboard: "Dashboard",
+const CATEGORY_LABELS: Record<string, Record<string, string>> = {
+  locations: { de: "Standorte", en: "Locations", es: "Ubicaciones", nl: "Locaties" },
+  floors: { de: "Etagen & Grundrisse", en: "Floors & Floor Plans", es: "Plantas y planos", nl: "Verdiepingen & Plattegronden" },
+  energy: { de: "Energiedaten", en: "Energy Data", es: "Datos de energía", nl: "Energiegegevens" },
+  meters: { de: "Messstellen", en: "Meters", es: "Contadores", nl: "Meters" },
+  alerts: { de: "Alarmregeln", en: "Alert Rules", es: "Reglas de alarma", nl: "Alarmregels" },
+  scanners: { de: "Scanner", en: "Scanners", es: "Escáneres", nl: "Scanners" },
+  integrations: { de: "Integrationen", en: "Integrations", es: "Integraciones", nl: "Integraties" },
+  reports: { de: "Berichte", en: "Reports", es: "Informes", nl: "Rapporten" },
+  users: { de: "Benutzerverwaltung", en: "User Management", es: "Gestión de usuarios", nl: "Gebruikersbeheer" },
+  roles: { de: "Rollenverwaltung", en: "Role Management", es: "Gestión de roles", nl: "Rollenbeheer" },
+  settings: { de: "Einstellungen", en: "Settings", es: "Configuración", nl: "Instellingen" },
+  dashboard: { de: "Dashboard", en: "Dashboard", es: "Panel de control", nl: "Dashboard" },
+  automation: { de: "Automation", en: "Automation", es: "Automatización", nl: "Automatisering" },
+  charging: { de: "Ladeinfrastruktur", en: "Charging Infrastructure", es: "Infraestructura de carga", nl: "Laadinfrastructuur" },
+  network: { de: "Netzwerkinfrastruktur", en: "Network Infrastructure", es: "Infraestructura de red", nl: "Netwerkinfrastructuur" },
+  email_templates: { de: "E-Mail-Vorlagen", en: "Email Templates", es: "Plantillas de correo", nl: "E-mailsjablonen" },
+  energy_prices: { de: "Energiepreise", en: "Energy Prices", es: "Precios de energía", nl: "Energieprijzen" },
+  live_values: { de: "Live-Sensorwerte", en: "Live Sensor Values", es: "Valores de sensores en vivo", nl: "Live sensorwaarden" },
 };
 
 export function RoleCard({
@@ -55,6 +62,7 @@ export function RoleCard({
 }: RoleCardProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
+  const { language } = useTranslation();
 
   const toggleCategory = (category: string) => {
     setExpandedCategories((prev) => {
@@ -155,7 +163,7 @@ export function RoleCard({
                   <CollapsibleTrigger asChild>
                     <Button variant="ghost" className="w-full justify-between p-2 h-auto">
                       <span className="font-medium">
-                        {CATEGORY_LABELS[category] || category}
+                        {CATEGORY_LABELS[category]?.[language] || CATEGORY_LABELS[category]?.de || category}
                       </span>
                       <div className="flex items-center gap-2">
                         <Badge variant="secondary" className="text-xs">
