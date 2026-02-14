@@ -2382,6 +2382,12 @@ export const translations = {
     es: "Facturación",
     nl: "Facturering",
   },
+  "nav.chargingApp": {
+    de: "Lade-App",
+    en: "Charging App",
+    es: "App de carga",
+    nl: "Laad-app",
+  },
   "charging.chargePoints": {
     de: "Ladepunkte",
     en: "Charge Points",
