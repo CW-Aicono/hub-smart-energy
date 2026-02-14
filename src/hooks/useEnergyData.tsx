@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
 import { useMeters } from "./useMeters";
@@ -39,29 +39,41 @@ export function useEnergyData(locationId?: string | null) {
   const { user } = useAuth();
   const { meters } = useMeters();
   const [readings, setReadings] = useState<ReadingRow[]>([]);
+  const [virtualSources, setVirtualSources] = useState<{ virtual_meter_id: string; source_meter_id: string; operator: string; sort_order: number }[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Fetch manual readings from DB
+  // Fetch manual readings and virtual sources from DB
   useEffect(() => {
     if (!user) return;
 
-    const fetchReadings = async () => {
+    const fetchData = async () => {
       setLoading(true);
-      const { data, error } = await supabase
-        .from("meter_readings")
-        .select("value, reading_date, meter_id")
-        .order("reading_date", { ascending: true });
+      const [readingsRes, sourcesRes] = await Promise.all([
+        supabase
+          .from("meter_readings")
+          .select("value, reading_date, meter_id")
+          .order("reading_date", { ascending: true }),
+        supabase
+          .from("virtual_meter_sources")
+          .select("virtual_meter_id, source_meter_id, operator, sort_order")
+          .order("sort_order"),
+      ]);
 
-      if (error) {
-        console.error("Error fetching readings:", error);
+      if (readingsRes.error) {
+        console.error("Error fetching readings:", readingsRes.error);
         setReadings([]);
       } else {
-        setReadings((data ?? []) as ReadingRow[]);
+        setReadings((readingsRes.data ?? []) as ReadingRow[]);
       }
+
+      if (!sourcesRes.error && sourcesRes.data) {
+        setVirtualSources(sourcesRes.data);
+      }
+
       setLoading(false);
     };
 
-    fetchReadings();
+    fetchData();
   }, [user]);
 
   // Group automatic meters by integration ID
@@ -128,14 +140,57 @@ export function useEnergyData(locationId?: string | null) {
 
   const liveLoading = sensorQueries.some((q) => q.isLoading);
 
-  // Combine manual readings + live readings for automatic meters
+  // Combine manual readings + live readings + virtual meter readings
   const allReadings = useMemo(() => {
     const autoMeterIds = new Set(
       meters.filter((m) => m.capture_type === "automatic" && !m.is_archived).map((m) => m.id)
     );
     const manualOnly = readings.filter((r) => !autoMeterIds.has(r.meter_id));
-    return [...manualOnly, ...liveReadings];
-  }, [readings, liveReadings, meters]);
+    const combined = [...manualOnly, ...liveReadings];
+
+    // Compute virtual meter readings from sources
+    const virtualMeterIds = new Set(virtualSources.map((s) => s.virtual_meter_id));
+    const readingsByMeter = new Map<string, ReadingRow[]>();
+    combined.forEach((r) => {
+      const arr = readingsByMeter.get(r.meter_id) || [];
+      arr.push(r);
+      readingsByMeter.set(r.meter_id, arr);
+    });
+
+    const virtualReadings: ReadingRow[] = [];
+    for (const vmId of virtualMeterIds) {
+      const sources = virtualSources
+        .filter((s) => s.virtual_meter_id === vmId)
+        .sort((a, b) => a.sort_order - b.sort_order);
+
+      // Use latest value from each source
+      let total: number | null = null;
+      let allResolved = true;
+      for (const src of sources) {
+        const srcReadings = readingsByMeter.get(src.source_meter_id);
+        if (!srcReadings || srcReadings.length === 0) {
+          allResolved = false;
+          break;
+        }
+        const latestVal = srcReadings[srcReadings.length - 1].value;
+        if (total === null) {
+          total = src.operator === "-" ? -latestVal : latestVal;
+        } else {
+          total = src.operator === "-" ? total - latestVal : total + latestVal;
+        }
+      }
+
+      if (allResolved && total !== null) {
+        virtualReadings.push({
+          meter_id: vmId,
+          value: total,
+          reading_date: new Date().toISOString(),
+        });
+      }
+    }
+
+    return [...combined, ...virtualReadings];
+  }, [readings, liveReadings, meters, virtualSources]);
 
   // Build a meter_id -> energy_type + location_id map
   const meterMap = useMemo(() => {

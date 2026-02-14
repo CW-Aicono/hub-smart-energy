@@ -40,8 +40,22 @@ const LiveValues = () => {
   const [selectedCaptureType, setSelectedCaptureType] = useState<string>("all");
   const [liveValues, setLiveValues] = useState<Map<string, { value: number; totalDay: number | null }>>(new Map());
   const [manualValues, setManualValues] = useState<Map<string, { value: number; date: string }>>(new Map());
+  const [virtualSources, setVirtualSources] = useState<{ virtual_meter_id: string; source_meter_id: string; operator: string; sort_order: number }[]>([]);
   const [loadingLive, setLoadingLive] = useState(false);
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
+
+  // Fetch virtual meter sources
+  useEffect(() => {
+    if (!user) return;
+    const fetchVirtualSources = async () => {
+      const { data } = await supabase
+        .from("virtual_meter_sources")
+        .select("virtual_meter_id, source_meter_id, operator, sort_order")
+        .order("sort_order");
+      if (data) setVirtualSources(data);
+    };
+    fetchVirtualSources();
+  }, [user]);
 
   // Fetch latest manual readings for all meters
   useEffect(() => {
@@ -145,7 +159,51 @@ const LiveValues = () => {
       });
   }, [meters, selectedLocationId, selectedEnergyType, selectedCaptureType, searchQuery, locations]);
 
-  const getValue = (meter: typeof meters[0]): { value: number | null; totalDay: number | null; source: "live" | "manual" | "none"; date?: string } => {
+  // Helper to get a source meter's current value (live or manual)
+  const getSourceValue = useCallback((meterId: string): number | null => {
+    if (liveValues.has(meterId)) return liveValues.get(meterId)!.value;
+    const manual = manualValues.get(meterId);
+    if (manual) return manual.value;
+    return null;
+  }, [liveValues, manualValues]);
+
+  // Compute virtual meter values
+  const virtualValues = useMemo(() => {
+    const map = new Map<string, number>();
+    const virtualMeterIds = new Set(virtualSources.map((s) => s.virtual_meter_id));
+
+    for (const vmId of virtualMeterIds) {
+      const sources = virtualSources
+        .filter((s) => s.virtual_meter_id === vmId)
+        .sort((a, b) => a.sort_order - b.sort_order);
+
+      let total: number | null = null;
+      let allResolved = true;
+
+      for (const src of sources) {
+        const val = getSourceValue(src.source_meter_id);
+        if (val === null) {
+          allResolved = false;
+          break;
+        }
+        if (total === null) {
+          total = src.operator === "-" ? -val : val;
+        } else {
+          total = src.operator === "-" ? total - val : total + val;
+        }
+      }
+
+      if (allResolved && total !== null) {
+        map.set(vmId, total);
+      }
+    }
+    return map;
+  }, [virtualSources, getSourceValue]);
+
+  const getValue = (meter: typeof meters[0]): { value: number | null; totalDay: number | null; source: "live" | "manual" | "virtual" | "none"; date?: string } => {
+    if (meter.capture_type === "virtual" && virtualValues.has(meter.id)) {
+      return { value: virtualValues.get(meter.id)!, totalDay: null, source: "virtual" };
+    }
     if (meter.capture_type === "automatic" && liveValues.has(meter.id)) {
       const live = liveValues.get(meter.id)!;
       return { value: live.value, totalDay: live.totalDay, source: "live" };
@@ -244,6 +302,7 @@ const LiveValues = () => {
                 <SelectItem value="all">Alle Typen</SelectItem>
                 <SelectItem value="automatic">Automatisch</SelectItem>
                 <SelectItem value="manual">Manuell</SelectItem>
+                <SelectItem value="virtual">Virtuell</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -278,8 +337,8 @@ const LiveValues = () => {
                           <Icon className={cn("h-4 w-4 shrink-0", config.colorClass)} />
                           <CardTitle className="text-sm font-medium truncate">{meter.name}</CardTitle>
                         </div>
-                        <Badge variant={source === "live" ? "default" : "secondary"} className="shrink-0 text-[10px] px-1.5 py-0">
-                          {source === "live" ? "Live" : source === "manual" ? "Manuell" : "–"}
+                        <Badge variant={source === "live" ? "default" : source === "virtual" ? "outline" : "secondary"} className="shrink-0 text-[10px] px-1.5 py-0">
+                          {source === "live" ? "Live" : source === "virtual" ? "Virtuell" : source === "manual" ? "Manuell" : "–"}
                         </Badge>
                       </div>
                     </CardHeader>
