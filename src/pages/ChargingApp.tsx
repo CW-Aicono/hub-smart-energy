@@ -272,7 +272,7 @@ function MapTab({ chargePoints, onStartCharge, initialCpId, onInitialCpHandled }
   };
 
   return (
-    <div className="relative h-full w-full">
+    <div className="relative flex-1 w-full" style={{ minHeight: 0 }}>
       {/* Fullscreen map */}
       <div className="absolute inset-0">
         {filtered.some((cp) => cp.latitude && cp.longitude) ? (
@@ -909,7 +909,7 @@ const ChargingApp = () => {
           <div className="flex-1 flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
         ) : (
           <>
-            {tab === "map" && <MapTab chargePoints={chargePoints} onStartCharge={handleStartCharge} initialCpId={initialCpOcppId} onInitialCpHandled={() => setInitialCpOcppId(null)} />}
+            {tab === "map" && <div className="flex-1 flex flex-col" style={{ minHeight: 0 }}><MapTab chargePoints={chargePoints} onStartCharge={handleStartCharge} initialCpId={initialCpOcppId} onInitialCpHandled={() => setInitialCpOcppId(null)} /></div>}
             {tab === "qr" && <QrScannerTab onScanned={handleQrScanned} />}
             {tab === "history" && <HistoryTab sessions={sessions} chargePoints={chargePoints} />}
             {tab === "invoices" && <InvoicesTab invoices={invoices} />}
