@@ -61,23 +61,23 @@ const CONTROL_TYPE_MAPPINGS: Record<string, StateMapping> = {
 const LOXONE_OUTPUT_TO_STATE: Record<string, string> = {
   "Pf": "actual",       // Power (Leistung)
   "Mr": "total",        // Meter reading total (Zählerstand)
-  "Mrc": "total",       // Meter reading consumption total
-  "Mrd": "total",       // Meter reading delivery total
-  "Rd": "totalDay",     // Reading day
-  "Rdc": "totalDay",    // Reading day consumption
-  "Rdd": "totalDay",    // Reading day delivery
-  "Rw": "totalWeek",    // Reading week
-  "Rwc": "totalWeek",   // Reading week consumption
-  "Rwd": "totalWeek",   // Reading week delivery
-  "Rm": "totalMonth",   // Reading month
-  "Rmc": "totalMonth",  // Reading month consumption
-  "Rmd": "totalMonth",  // Reading month delivery
-  "Ry": "totalYear",    // Reading year
-  "Ryc": "totalYear",   // Reading year consumption
-  "Ryd": "totalYear",   // Reading year delivery
+  "Mrc": "totalConsumption",  // Meter reading consumption total
+  "Mrd": "totalDelivery",     // Meter reading delivery total
+  "Rd": "totalDay",           // Reading day (basic Meter)
+  "Rdc": "totalDayConsumption", // Reading day consumption
+  "Rdd": "totalDayDelivery",   // Reading day delivery
+  "Rw": "totalWeek",
+  "Rwc": "totalWeekConsumption",
+  "Rwd": "totalWeekDelivery",
+  "Rm": "totalMonth",
+  "Rmc": "totalMonthConsumption",
+  "Rmd": "totalMonthDelivery",
+  "Ry": "totalYear",
+  "Ryc": "totalYearConsumption",
+  "Ryd": "totalYearDelivery",
   "Rld": "totalDayLast",
-  "Rldc": "totalDayLast",
-  "Rldd": "totalDayLast",
+  "Rldc": "totalDayLastConsumption",
+  "Rldd": "totalDayLastDelivery",
   "Rlw": "totalWeekLast",
   "Rlm": "totalMonthLast",
   "Rly": "totalYearLast",
@@ -369,7 +369,12 @@ serve(async (req) => {
             primaryValue = mappedStates[mapping.primaryState] ?? allStates["_primary"] ?? null;
             if (mapping.secondaryState) {
               secondaryStateName = mapping.secondaryState;
-              secondaryValue = mappedStates[mapping.secondaryState] ?? null;
+              // For "total", also check consumption/delivery variants
+              if (mapping.secondaryState === "total") {
+                secondaryValue = mappedStates["total"] ?? mappedStates["totalConsumption"] ?? mappedStates["totalDelivery"] ?? null;
+              } else {
+                secondaryValue = mappedStates[mapping.secondaryState] ?? null;
+              }
               secondaryUnit = mapping.secondaryUnit || "";
             }
           } else {
@@ -378,9 +383,13 @@ serve(async (req) => {
             primaryStateName = "value";
           }
 
-          // Extract totalDay from mapped states
-          // Priority: Rd/Rdc/Rdd (mapped to "totalDay"), then Cd (consumption day for EFM/EnergyManager2)
-          const totalDayRaw = mappedStates["totalDay"] ?? mappedStates["Cd"] ?? allStates["Cd"] ?? null;
+          // Extract totalDay with priority: consumption > basic > delivery > Cd fallback
+          const totalDayRaw = mappedStates["totalDayConsumption"]
+            ?? mappedStates["totalDay"]
+            ?? mappedStates["totalDayDelivery"]
+            ?? mappedStates["Cd"]
+            ?? allStates["Cd"]
+            ?? null;
           const totalDay = totalDayRaw !== null ? (typeof totalDayRaw === "number" ? totalDayRaw : parseFloat(String(totalDayRaw))) : null;
 
           stateResults[controlUuid] = {
