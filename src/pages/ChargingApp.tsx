@@ -693,32 +693,87 @@ function HistoryTab({ sessions, chargePoints }: { sessions: AppSession[]; charge
     );
   }
 
+  const activeSessions = sessions.filter((s) => s.status === "active");
+  const completedSessions = sessions.filter((s) => s.status !== "active");
+
+  // Group completed sessions by month
+  const grouped: { key: string; label: string; items: AppSession[] }[] = [];
+  let lastMonthKey = "";
+  for (const s of completedSessions) {
+    const d = new Date(s.start_time);
+    const monthKey = `${d.getFullYear()}-${String(d.getMonth()).padStart(2, "0")}`;
+    if (monthKey !== lastMonthKey) {
+      const label = d.toLocaleDateString("de-DE", { month: "long", year: "numeric" });
+      grouped.push({ key: monthKey, label, items: [] });
+      lastMonthKey = monthKey;
+    }
+    grouped[grouped.length - 1].items.push(s);
+  }
+
+  const renderDuration = (s: AppSession) => {
+    const end = s.stop_time ? new Date(s.stop_time) : new Date();
+    const mins = Math.round((end.getTime() - new Date(s.start_time).getTime()) / 60000);
+    if (mins < 60) return `${mins} Min.`;
+    const h = Math.floor(mins / 60);
+    const m = mins % 60;
+    return `${h} Std. ${m > 0 ? `${m} Min.` : ""}`.trim();
+  };
+
+  const renderSessionRow = (s: AppSession, isActive: boolean) => (
+    <div key={s.id} className={`flex items-center gap-3 p-4 ${isActive ? "bg-blue-500/5 border border-blue-500/20 rounded-lg mx-3 mb-2" : "border-b"}`}>
+      <div className={`h-10 w-10 rounded-full flex items-center justify-center shrink-0 ${
+        isActive ? "bg-blue-500/10 text-blue-500 animate-pulse" :
+        s.status === "completed" ? "bg-primary/10 text-primary" :
+        "bg-muted text-muted-foreground"
+      }`}>
+        {isActive ? <BatteryCharging className="h-5 w-5" /> : <PlugZap className="h-5 w-5" />}
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="font-medium text-sm">{getCpName(s.charge_point_id)}</p>
+        <p className="text-xs text-muted-foreground">{format(new Date(s.start_time), "dd.MM.yyyy HH:mm")}</p>
+        {isActive && (
+          <div className="flex items-center gap-2 mt-1">
+            <Badge variant="secondary" className="text-[10px] px-1.5 py-0 bg-blue-500/10 text-blue-600 border-0">
+              <Clock className="h-3 w-3 mr-0.5" /> {renderDuration(s)}
+            </Badge>
+          </div>
+        )}
+      </div>
+      <div className="text-right shrink-0">
+        <p className="text-sm font-bold">{fmtKwh(s.energy_kwh)}</p>
+        {!isActive && s.stop_time && <p className="text-xs text-muted-foreground">{renderDuration(s)}</p>}
+        {isActive && <Badge className="text-[10px] bg-blue-500 border-0">Lädt…</Badge>}
+      </div>
+    </div>
+  );
+
   return (
     <div className="overflow-auto h-full">
-      {sessions.map((s) => {
-        const duration = s.stop_time
-          ? Math.round((new Date(s.stop_time).getTime() - new Date(s.start_time).getTime()) / 60000)
-          : null;
-        return (
-          <div key={s.id} className="flex items-center gap-3 p-4 border-b">
-            <div className={`h-10 w-10 rounded-full flex items-center justify-center shrink-0 ${
-              s.status === "completed" ? "bg-primary/10 text-primary" :
-              s.status === "active" ? "bg-blue-500/10 text-blue-500" :
-              "bg-muted text-muted-foreground"
-            }`}>
-              <PlugZap className="h-5 w-5" />
+      <h2 className="text-lg font-semibold px-4 pt-4 pb-2">Meine Ladevorgänge</h2>
+
+      {activeSessions.length > 0 && (
+        <div className="mb-2">
+          {activeSessions.map((s) => renderSessionRow(s, true))}
+        </div>
+      )}
+
+      {grouped.map((group, gi) => (
+        <div key={group.key}>
+          {gi > 0 && (
+            <div className="flex items-center gap-3 px-4 py-2">
+              <div className="flex-1 h-px bg-border" />
+              <span className="text-xs text-muted-foreground font-medium">{group.label}</span>
+              <div className="flex-1 h-px bg-border" />
             </div>
-            <div className="flex-1 min-w-0">
-              <p className="font-medium text-sm">{getCpName(s.charge_point_id)}</p>
-              <p className="text-xs text-muted-foreground">{format(new Date(s.start_time), "dd.MM.yyyy HH:mm")}</p>
+          )}
+          {gi === 0 && grouped.length > 1 && (
+            <div className="px-4 pb-1">
+              <span className="text-xs text-muted-foreground font-medium">{group.label}</span>
             </div>
-            <div className="text-right shrink-0">
-              <p className="text-sm font-bold">{fmtKwh(s.energy_kwh)}</p>
-              {duration !== null && <p className="text-xs text-muted-foreground">{duration} Min.</p>}
-            </div>
-          </div>
-        );
-      })}
+          )}
+          {group.items.map((s) => renderSessionRow(s, false))}
+        </div>
+      ))}
     </div>
   );
 }
