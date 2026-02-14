@@ -40,6 +40,7 @@ const LiveValues = () => {
   const [selectedCaptureType, setSelectedCaptureType] = useState<string>("all");
   const [liveValues, setLiveValues] = useState<Map<string, { value: number; totalDay: number | null }>>(new Map());
   const [manualValues, setManualValues] = useState<Map<string, { value: number; date: string }>>(new Map());
+  const [manualDailyTotals, setManualDailyTotals] = useState<Map<string, number>>(new Map());
   const [virtualSources, setVirtualSources] = useState<{ virtual_meter_id: string; source_meter_id: string; operator: string; sort_order: number }[]>([]);
   const [loadingLive, setLoadingLive] = useState(false);
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
@@ -57,7 +58,7 @@ const LiveValues = () => {
     fetchVirtualSources();
   }, [user]);
 
-  // Fetch latest manual readings for all meters
+  // Fetch latest manual readings + compute daily totals for manual meters
   useEffect(() => {
     if (!user) return;
     const fetchLatestReadings = async () => {
@@ -74,6 +75,27 @@ const LiveValues = () => {
           }
         });
         setManualValues(map);
+
+        // Compute daily consumption: latest reading - previous reading for each meter
+        const dailyMap = new Map<string, number>();
+        const byMeter = new Map<string, { value: number; reading_date: string }[]>();
+        data.forEach((r: any) => {
+          const arr = byMeter.get(r.meter_id) || [];
+          arr.push({ value: r.value, reading_date: r.reading_date });
+          byMeter.set(r.meter_id, arr);
+        });
+        for (const [meterId, readings] of byMeter) {
+          // readings are sorted desc by date already
+          if (readings.length >= 2) {
+            const latest = readings[0];
+            const previous = readings[1];
+            const diff = latest.value - previous.value;
+            if (diff >= 0) {
+              dailyMap.set(meterId, diff);
+            }
+          }
+        }
+        setManualDailyTotals(dailyMap);
       }
     };
     fetchLatestReadings();
@@ -210,7 +232,8 @@ const LiveValues = () => {
     }
     const manual = manualValues.get(meter.id);
     if (manual) {
-      return { value: manual.value, totalDay: null, source: "manual", date: manual.date };
+      const dailyTotal = manualDailyTotals.get(meter.id) ?? null;
+      return { value: manual.value, totalDay: dailyTotal, source: "manual", date: manual.date };
     }
     return { value: null, totalDay: null, source: "none" };
   };
@@ -378,15 +401,23 @@ const LiveValues = () => {
                             {meter.energy_type === "gas" ? (
                               <>
                                 {Number(totalDay).toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} m³
-                                <span className="ml-1 font-normal">Gesamt heute</span>
+                                <span className="ml-1 font-normal">{source === "manual" ? "Verbrauch" : "Gesamt heute"}</span>
                                 <span className="ml-2 text-xs">
                                   (≈ {formatGasDual(Number(totalDay), (meter as any).gas_type, (meter as any).brennwert, (meter as any).zustandszahl).kwhStr})
                                 </span>
                               </>
+                            ) : meter.energy_type === "wasser" ? (
+                              <>
+                                {Number(totalDay).toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} m³
+                                <span className="ml-1 font-normal">{source === "manual" ? "Verbrauch" : "Gesamt heute"}</span>
+                              </>
                             ) : (
                               <>
-                                {Number(totalDay).toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {meter.unit === "kW" ? "kWh" : meter.unit}
-                                <span className="ml-1 font-normal">Gesamt heute</span>
+                                {source === "manual"
+                                  ? formatEnergy(Number(totalDay) * (meter.unit === "kWh" ? 1000 : 1))
+                                  : formatEnergy(Number(totalDay))
+                                }
+                                <span className="ml-1 font-normal">{source === "manual" ? "Verbrauch" : "Gesamt heute"}</span>
                               </>
                             )}
                           </div>
