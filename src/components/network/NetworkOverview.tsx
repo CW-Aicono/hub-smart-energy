@@ -19,6 +19,36 @@ export default function NetworkOverview({ devices }: Props) {
 
   return (
     <div className="space-y-4">
+      {/* Traffic overview */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Activity className="h-5 w-5" />
+            Traffic-Übersicht
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="space-y-1">
+              <p className="text-xs text-muted-foreground flex items-center gap-1"><ArrowUp className="h-3 w-3" /> Upload gesamt</p>
+              <p className="text-lg font-bold text-foreground">{formatBytes(totalTx)}</p>
+            </div>
+            <div className="space-y-1">
+              <p className="text-xs text-muted-foreground flex items-center gap-1"><ArrowDown className="h-3 w-3" /> Download gesamt</p>
+              <p className="text-lg font-bold text-foreground">{formatBytes(totalRx)}</p>
+            </div>
+            <div className="space-y-1">
+              <p className="text-xs text-muted-foreground flex items-center gap-1"><ArrowUp className="h-3 w-3" /> Upload aktuell</p>
+              <p className="text-lg font-bold text-foreground">{formatRate(totalTxRate)}</p>
+            </div>
+            <div className="space-y-1">
+              <p className="text-xs text-muted-foreground flex items-center gap-1"><ArrowDown className="h-3 w-3" /> Download aktuell</p>
+              <p className="text-lg font-bold text-foreground">{formatRate(totalRxRate)}</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Floor plan placement hint */}
       <Card>
         <CardHeader>
@@ -62,36 +92,6 @@ export default function NetworkOverview({ devices }: Props) {
               <DevicePin x="82%" y="72%" device={aps[3]} />
               <DevicePin x="18%" y="72%" device={switches[0]} />
               <DevicePin x="12%" y="12%" device={gateways[0]} />
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Traffic overview */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Activity className="h-5 w-5" />
-            Traffic-Übersicht
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="space-y-1">
-              <p className="text-xs text-muted-foreground flex items-center gap-1"><ArrowUp className="h-3 w-3" /> Upload gesamt</p>
-              <p className="text-lg font-bold text-foreground">{formatBytes(totalTx)}</p>
-            </div>
-            <div className="space-y-1">
-              <p className="text-xs text-muted-foreground flex items-center gap-1"><ArrowDown className="h-3 w-3" /> Download gesamt</p>
-              <p className="text-lg font-bold text-foreground">{formatBytes(totalRx)}</p>
-            </div>
-            <div className="space-y-1">
-              <p className="text-xs text-muted-foreground flex items-center gap-1"><ArrowUp className="h-3 w-3" /> Upload aktuell</p>
-              <p className="text-lg font-bold text-foreground">{formatRate(totalTxRate)}</p>
-            </div>
-            <div className="space-y-1">
-              <p className="text-xs text-muted-foreground flex items-center gap-1"><ArrowDown className="h-3 w-3" /> Download aktuell</p>
-              <p className="text-lg font-bold text-foreground">{formatRate(totalRxRate)}</p>
             </div>
           </div>
         </CardContent>
