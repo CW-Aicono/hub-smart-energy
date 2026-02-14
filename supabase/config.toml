@@ -23,3 +23,18 @@ verify_jwt = false
 
 [functions.ocpp-ws-proxy]
 verify_jwt = false
+
+[functions.shelly-api]
+verify_jwt = false
+
+[functions.abb-api]
+verify_jwt = false
+
+[functions.siemens-api]
+verify_jwt = false
+
+[functions.tuya-api]
+verify_jwt = false
+
+[functions.homematic-api]
+verify_jwt = false

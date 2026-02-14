@@ -1,7 +1,8 @@
 import { useQuery, useQueries } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { getEdgeFunctionName } from "@/lib/gatewayRegistry";
 
-export interface LoxoneSensor {
+export interface GatewaySensor {
   id: string;
   name: string;
   type: string;
@@ -19,29 +20,33 @@ export interface LoxoneSensor {
   totalDay: number | null;
 }
 
-async function fetchSensors(integrationId: string): Promise<LoxoneSensor[]> {
-  const { data, error } = await supabase.functions.invoke("loxone-api", {
+// Re-export as LoxoneSensor for backwards-compat
+export type LoxoneSensor = GatewaySensor;
+
+async function fetchSensors(integrationId: string, integrationType?: string): Promise<GatewaySensor[]> {
+  const edgeFunction = integrationType ? getEdgeFunctionName(integrationType) : "loxone-api";
+  const { data, error } = await supabase.functions.invoke(edgeFunction, {
     body: { locationIntegrationId: integrationId, action: "getSensors" },
   });
-  if (error || !data?.success) throw new Error("Failed to fetch sensors");
-  return data.sensors as LoxoneSensor[];
+  if (error || !data?.success) throw new Error(data?.error || "Failed to fetch sensors");
+  return data.sensors as GatewaySensor[];
 }
 
-export function useLoxoneSensors(integrationId: string | undefined) {
-  return useQuery<LoxoneSensor[]>({
-    queryKey: ["loxone-sensors", integrationId],
-    queryFn: () => fetchSensors(integrationId!),
+export function useLoxoneSensors(integrationId: string | undefined, integrationType?: string) {
+  return useQuery<GatewaySensor[]>({
+    queryKey: ["gateway-sensors", integrationId],
+    queryFn: () => fetchSensors(integrationId!, integrationType),
     enabled: !!integrationId,
     staleTime: 60_000,
     refetchInterval: 300_000,
   });
 }
 
-export function useLoxoneSensorsMulti(integrationIds: string[]) {
+export function useLoxoneSensorsMulti(integrationIds: string[], integrationTypes?: (string | undefined)[]) {
   return useQueries({
-    queries: integrationIds.map((id) => ({
-      queryKey: ["loxone-sensors", id],
-      queryFn: () => fetchSensors(id),
+    queries: integrationIds.map((id, idx) => ({
+      queryKey: ["gateway-sensors", id],
+      queryFn: () => fetchSensors(id, integrationTypes?.[idx]),
       staleTime: 60_000,
       refetchInterval: 300_000,
       enabled: !!id,

@@ -174,7 +174,7 @@ interface UseLocationIntegrationsReturn {
   addIntegration: (locationId: string, integrationId: string, config: LoxoneConfig | Record<string, unknown>) => Promise<{ data: LocationIntegration | null; error: Error | null }>;
   updateIntegration: (id: string, updates: Partial<LocationIntegration>) => Promise<{ error: Error | null }>;
   removeIntegration: (id: string) => Promise<{ error: Error | null }>;
-  testConnection: (config: LoxoneConfig) => Promise<{ success: boolean; error: string | null }>;
+  testConnection: (config: Record<string, unknown>) => Promise<{ success: boolean; error: string | null }>;
 }
 
 export function useLocationIntegrations(locationId: string | undefined): UseLocationIntegrationsReturn {
@@ -264,13 +264,14 @@ export function useLocationIntegrations(locationId: string | undefined): UseLoca
     return { error: deleteError as Error | null };
   };
 
-  const testConnection = async (config: LoxoneConfig): Promise<{ success: boolean; error: string | null }> => {
-    // Validate required fields for Cloud DNS connection
-    if (!config.serial_number || !config.username || !config.password) {
-      return { success: false, error: "Seriennummer, Benutzername und Passwort müssen ausgefüllt werden" };
+  const testConnection = async (config: Record<string, unknown>): Promise<{ success: boolean; error: string | null }> => {
+    // Validate that at least one config value is provided
+    const hasValues = Object.values(config).some(v => v && String(v).length > 0);
+    if (!hasValues) {
+      return { success: false, error: "Bitte füllen Sie die Konfigurationsfelder aus" };
     }
     
-    // In a real implementation, this would make an API call to test the Loxone connection
+    // In a real implementation, this would make an API call to test the connection
     return { success: true, error: null };
   };
 

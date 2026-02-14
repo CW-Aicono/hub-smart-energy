@@ -11,27 +11,13 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
+  Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger,
 } from "@/components/ui/dialog";
 import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
+  Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage,
 } from "@/components/ui/form";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -41,20 +27,14 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { Plus, Server, Trash2, Loader2, Plug, Pencil, Wifi, WifiOff } from "lucide-react";
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { getGatewayTypes, getGatewayDefinition, type GatewayDefinition } from "@/lib/gatewayRegistry";
 
 const integrationSchema = z.object({
   name: z.string().min(1, "Name ist erforderlich"),
-  serial_number: z.string().min(1, "Seriennummer ist erforderlich"),
+  type: z.string().min(1, "Gateway-Typ ist erforderlich"),
   category: z.string().min(1, "Kategorie ist erforderlich"),
   description: z.string().optional(),
 });
@@ -76,7 +56,7 @@ const Integrations = () => {
     resolver: zodResolver(integrationSchema),
     defaultValues: {
       name: "",
-      serial_number: "",
+      type: "",
       category: "",
       description: "",
     },
@@ -85,17 +65,16 @@ const Integrations = () => {
   // Reset form when editing integration changes
   useEffect(() => {
     if (editingIntegration) {
-      const config = editingIntegration.config as { serial_number?: string } | null;
       form.reset({
         name: editingIntegration.name,
-        serial_number: config?.serial_number || "",
+        type: editingIntegration.type,
         category: editingIntegration.category,
         description: editingIntegration.description || "",
       });
     } else {
       form.reset({
         name: "",
-        serial_number: "",
+        type: "",
         category: categories[0]?.slug || "",
         description: "",
       });
@@ -103,57 +82,42 @@ const Integrations = () => {
   }, [editingIntegration, categories, form]);
 
   const onSubmit = async (data: IntegrationFormData) => {
+    const gatewayDef = getGatewayDefinition(data.type);
     const configData = {
-      serial_number: data.serial_number,
       connection_status: "disconnected",
     };
 
     if (editingIntegration) {
-      // Update existing integration
       const { error } = await updateIntegration(editingIntegration.id, {
         name: data.name,
+        type: data.type,
         category: data.category,
         description: data.description || null,
         config: configData,
       });
 
       if (error) {
-        toast({
-          title: "Fehler",
-          description: "Die Integration konnte nicht aktualisiert werden.",
-          variant: "destructive",
-        });
+        toast({ title: "Fehler", description: "Die Integration konnte nicht aktualisiert werden.", variant: "destructive" });
       } else {
-        toast({
-          title: "Integration aktualisiert",
-          description: "Die Integration wurde erfolgreich aktualisiert.",
-        });
+        toast({ title: "Integration aktualisiert", description: "Die Integration wurde erfolgreich aktualisiert." });
         setEditingIntegration(null);
         setDialogOpen(false);
       }
     } else {
-      // Create new integration
       const { error } = await createIntegration({
         name: data.name,
-        type: "loxone_miniserver",
+        type: data.type,
         category: data.category,
         description: data.description || null,
-        icon: "server",
+        icon: gatewayDef?.icon || "server",
         config: configData,
         is_active: true,
       });
 
       if (error) {
-        toast({
-          title: "Fehler",
-          description: "Die Integration konnte nicht erstellt werden.",
-          variant: "destructive",
-        });
+        toast({ title: "Fehler", description: "Die Integration konnte nicht erstellt werden.", variant: "destructive" });
       } else {
-        toast({
-          title: "Integration erstellt",
-          description: "Die Integration wurde erfolgreich erstellt.",
-        });
+        toast({ title: "Integration erstellt", description: "Die Integration wurde erfolgreich erstellt." });
         form.reset();
         setDialogOpen(false);
       }
@@ -312,8 +276,35 @@ const Integrations = () => {
                         <FormItem>
                           <FormLabel>Name</FormLabel>
                           <FormControl>
-                            <Input placeholder="Loxone Miniserver" {...field} />
+                            <Input placeholder="z.B. Büro Miniserver" {...field} />
                           </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="type"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Gateway-Typ</FormLabel>
+                          <Select onValueChange={field.onChange} value={field.value}>
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Gateway-Typ auswählen" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {getGatewayTypes().map((gw) => (
+                                <SelectItem key={gw.type} value={gw.type}>
+                                  {gw.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          {field.value && getGatewayDefinition(field.value) && (
+                            <FormDescription>{getGatewayDefinition(field.value)!.description}</FormDescription>
+                          )}
                           <FormMessage />
                         </FormItem>
                       )}
@@ -338,19 +329,6 @@ const Integrations = () => {
                               ))}
                             </SelectContent>
                           </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="serial_number"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Seriennummer</FormLabel>
-                          <FormControl>
-                            <Input placeholder="504F94A0XXXX" {...field} />
-                          </FormControl>
                           <FormMessage />
                         </FormItem>
                       )}
@@ -499,9 +477,9 @@ const Integrations = () => {
                             <p className="text-sm text-muted-foreground mb-3">{integration.description}</p>
                           )}
                           <div className="flex items-center gap-2 text-xs text-muted-foreground mb-3">
-                            <span>Seriennummer:</span>
+                            <span>Typ:</span>
                             <code className="bg-muted px-1.5 py-0.5 rounded">
-                              {(integration.config as { serial_number?: string })?.serial_number || "–"}
+                              {getGatewayDefinition(integration.type)?.label || integration.type}
                             </code>
                           </div>
                           <Button
