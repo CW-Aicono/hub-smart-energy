@@ -718,7 +718,7 @@ const ChargingApp = () => {
           },
           body: JSON.stringify({
             chargePointId: cp.ocpp_id,
-            idTag: user?.email?.substring(0, 20) || "APP_USER",
+            idTag: `APP:${user?.id}`,
             connectorId: 1,
           }),
         }
