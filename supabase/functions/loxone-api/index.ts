@@ -378,8 +378,9 @@ serve(async (req) => {
             primaryStateName = "value";
           }
 
-          // Extract totalDay from mapped states (Loxone output "Rd")
-          const totalDayRaw = mappedStates["totalDay"] ?? null;
+          // Extract totalDay from mapped states
+          // Priority: Rd/Rdc/Rdd (mapped to "totalDay"), then Cd (consumption day for EFM/EnergyManager2)
+          const totalDayRaw = mappedStates["totalDay"] ?? mappedStates["Cd"] ?? allStates["Cd"] ?? null;
           const totalDay = totalDayRaw !== null ? (typeof totalDayRaw === "number" ? totalDayRaw : parseFloat(String(totalDayRaw))) : null;
 
           stateResults[controlUuid] = {
