@@ -40,6 +40,7 @@ import ChargingBilling from "./pages/ChargingBilling";
 import Automation from "./pages/Automation";
 import EmailTemplates from "./pages/EmailTemplates";
 import LiveValues from "./pages/LiveValues";
+import NetworkInfrastructure from "./pages/NetworkInfrastructure";
 import SuperAdminOcppIntegrations from "./pages/SuperAdminOcppIntegrations";
 import ChargingApp from "./pages/ChargingApp";
 import ChargingAppAdmin from "./pages/ChargingAppAdmin";
@@ -99,6 +100,7 @@ const App = () => (
                   <Route path="/charging/billing" element={<M><ChargingBilling /></M>} />
                   <Route path="/charging/app" element={<M><ChargingAppAdmin /></M>} />
                   <Route path="/automation" element={<M><Automation /></M>} />
+                  <Route path="/network" element={<M><NetworkInfrastructure /></M>} />
                   <Route path="/ev" element={<ChargingApp />} />
                   <Route path="/m" element={<MobileApp />} />
                   <Route path="/getting-started" element={<GettingStarted />} />

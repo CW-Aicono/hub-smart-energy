@@ -2500,6 +2500,12 @@ export const translations = {
     es: "Automatización multi-ubicación",
     nl: "Multi-locatie automatisering",
   },
+  "nav.networkInfrastructure": {
+    de: "Netzwerkinfrastruktur",
+    en: "Network Infrastructure",
+    es: "Infraestructura de red",
+    nl: "Netwerkinfrastructuur",
+  },
 } as const;
 
 export type TranslationKey = keyof typeof translations;
