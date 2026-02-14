@@ -5,7 +5,7 @@ import { useEffect } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { PlugZap, Zap, ZapOff, AlertTriangle, WifiOff, LocateFixed, Loader2 } from "lucide-react";
+import { PlugZap, Zap, ZapOff, AlertTriangle, WifiOff, LocateFixed, Loader2, Navigation } from "lucide-react";
 import { toast } from "sonner";
 
 const statusColors: Record<string, string> = {
@@ -38,6 +38,8 @@ interface ChargePointForMap {
   latitude?: number | null;
   longitude?: number | null;
   max_power_kw: number;
+  connector_type?: string;
+  connector_count?: number;
 }
 
 interface ChargePointsMapProps {
@@ -167,9 +169,31 @@ export default function ChargePointsMap({ chargePoints, onChargePointClick, clas
                     <span className="font-semibold">{cp.name}</span>
                   </div>
                   <Badge variant={cfg.variant} className="mb-1">{cfg.label}</Badge>
-                  <p className="text-xs text-muted-foreground font-mono">{cp.ocpp_id}</p>
-                  {cp.address && <p className="text-xs text-muted-foreground mt-1">{cp.address}</p>}
-                  <p className="text-xs mt-1">{cp.max_power_kw} kW</p>
+                  <div className="text-xs space-y-0.5 mt-1">
+                    {cp.connector_type && (
+                      <p>Stecker: <span className="font-medium">{cp.connector_type}</span>{cp.connector_count && cp.connector_count > 1 ? ` (×${cp.connector_count})` : ""}</p>
+                    )}
+                    <p>{cp.max_power_kw} kW</p>
+                    {cp.address && <p className="text-muted-foreground">{cp.address}</p>}
+                  </div>
+                  {cp.latitude && cp.longitude && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="w-full mt-2 gap-1.5 text-xs"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+                        const url = isIOS
+                          ? `maps://maps.apple.com/?daddr=${cp.latitude},${cp.longitude}&dirflg=d`
+                          : `https://www.google.com/maps/dir/?api=1&destination=${cp.latitude},${cp.longitude}`;
+                        window.open(url, "_blank");
+                      }}
+                    >
+                      <Navigation className="h-3.5 w-3.5" />
+                      Navigation starten
+                    </Button>
+                  )}
                 </div>
               </Popup>
             </Marker>
