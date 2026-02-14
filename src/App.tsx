@@ -42,6 +42,7 @@ import EmailTemplates from "./pages/EmailTemplates";
 import LiveValues from "./pages/LiveValues";
 import SuperAdminOcppIntegrations from "./pages/SuperAdminOcppIntegrations";
 import ChargingApp from "./pages/ChargingApp";
+import ChargingAppAdmin from "./pages/ChargingAppAdmin";
 import UpdateBanner from "./components/UpdateBanner";
 // Import Leaflet CSS globally
 import "leaflet/dist/leaflet.css";
@@ -96,6 +97,7 @@ const App = () => (
                   <Route path="/charging/points" element={<M><ChargingPoints /></M>} />
                   <Route path="/charging/points/:id" element={<M><ChargePointDetail /></M>} />
                   <Route path="/charging/billing" element={<M><ChargingBilling /></M>} />
+                  <Route path="/charging/app" element={<M><ChargingAppAdmin /></M>} />
                   <Route path="/automation" element={<M><Automation /></M>} />
                   <Route path="/ev" element={<ChargingApp />} />
                   <Route path="/m" element={<MobileApp />} />
