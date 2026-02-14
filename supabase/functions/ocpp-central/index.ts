@@ -78,7 +78,7 @@ async function handleStatusNotification(
 ) {
   const statusMap: Record<string, string> = {
     Available: "available",
-    Preparing: "available",
+    Preparing: "unavailable",
     Charging: "charging",
     SuspendedEVSE: "charging",
     SuspendedEV: "charging",
@@ -301,7 +301,7 @@ async function handleRemoteCommand(
         .single();
 
       if (!cp) return { status: "Rejected", message: "Charge point not found" };
-      if (cp.status !== "available") return { status: "Rejected", message: "Charge point not available" };
+      if (cp.status !== "available" && cp.status !== "unavailable") return { status: "Rejected", message: "Charge point not available" };
 
       const idTag = (body.idTag as string) || "APP_USER";
       const connectorId = (body.connectorId as number) || 1;
