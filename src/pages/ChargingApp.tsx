@@ -857,14 +857,21 @@ function InvoicesTab({ invoices }: { invoices: AppInvoice[] }) {
   const handlePrint = (inv: AppInvoice) => {
     const printContent = `
       <html><head><title>Rechnung ${inv.invoice_number}</title>
-      <style>body{font-family:system-ui,sans-serif;padding:40px;color:#1e293b}
+      <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      <style>body{font-family:system-ui,sans-serif;padding:20px;color:#1e293b;margin:0}
       h1{font-size:20px;margin-bottom:8px}
       table{width:100%;border-collapse:collapse;margin-top:20px}
       th,td{padding:8px 12px;text-align:left;border-bottom:1px solid #e2e8f0;font-size:14px}
       th{background:#f8fafc;font-size:12px;text-transform:uppercase;color:#64748b}
       .total{font-size:18px;font-weight:700;margin-top:20px;text-align:right}
       .meta{color:#64748b;font-size:13px}
+      .back-btn{display:block;margin:16px auto 24px;padding:12px 32px;font-size:16px;font-weight:600;
+        background:#0f172a;color:#fff;border:none;border-radius:12px;cursor:pointer;
+        -webkit-tap-highlight-color:transparent}
+      .back-btn:active{opacity:0.8}
+      @media print{.back-btn{display:none !important}}
       </style></head><body>
+      <button class="back-btn" onclick="window.close();history.back();">← Zurück zur App</button>
       <h1>Laderechnung ${inv.invoice_number || "Entwurf"}</h1>
       <p class="meta">Erstellt: ${format(new Date(inv.created_at), "dd.MM.yyyy")}</p>
       ${inv.issued_at ? `<p class="meta">Ausgestellt: ${format(new Date(inv.issued_at), "dd.MM.yyyy")}</p>` : ""}
@@ -877,7 +884,7 @@ function InvoicesTab({ invoices }: { invoices: AppInvoice[] }) {
       </body></html>
     `;
     const w = window.open("", "_blank");
-    if (w) { w.document.write(printContent); w.document.close(); w.print(); }
+    if (w) { w.document.write(printContent); w.document.close(); }
   };
 
   const handleShare = async (inv: AppInvoice) => {
