@@ -809,6 +809,20 @@ const ChargingApp = () => {
   const [user, setUser] = useState<{ id: string; email: string } | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [tab, setTab] = useState<Tab>("map");
+
+  // Set PWA manifest & Apple meta for this app
+  useEffect(() => {
+    let link = document.querySelector("link[rel='manifest']") as HTMLLinkElement | null;
+    if (!link) {
+      link = document.createElement("link");
+      link.rel = "manifest";
+      document.head.appendChild(link);
+    }
+    link.href = "/manifest-ev.json";
+
+    const meta = document.querySelector('meta[name="apple-mobile-web-app-title"]');
+    if (meta) meta.setAttribute("content", "SmartCharge");
+  }, []);
   const [chargePoints, setChargePoints] = useState<AppChargePoint[]>([]);
   const [sessions, setSessions] = useState<AppSession[]>([]);
   const [invoices, setInvoices] = useState<AppInvoice[]>([]);

@@ -312,6 +312,20 @@ function ReadingConfirmation({
 // --- Main Mobile App ---
 const MobileApp = () => {
   const { user, loading: authLoading, signOut } = useAuth();
+
+  // Set PWA manifest & Apple meta for this app
+  useEffect(() => {
+    let link = document.querySelector("link[rel='manifest']") as HTMLLinkElement | null;
+    if (!link) {
+      link = document.createElement("link");
+      link.rel = "manifest";
+      document.head.appendChild(link);
+    }
+    link.href = "/manifest.json";
+
+    const meta = document.querySelector('meta[name="apple-mobile-web-app-title"]');
+    if (meta) meta.setAttribute("content", "Meter Mate");
+  }, []);
   const { meters, loading: metersLoading, addMeter, refetch: refetchMeters } = useMeters();
   const { locations, loading: locationsLoading } = useLocations();
   const { addReading, getLastReading } = useMeterReadings();
