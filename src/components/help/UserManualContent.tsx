@@ -25,7 +25,7 @@ import {
 interface UserManualContentProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  chapter: "gettingStarted" | "locationManagement" | "floorManagement" | "energyAnalysis" | "meterManagement" | "mobileApp" | "automation";
+  chapter: "gettingStarted" | "locationManagement" | "floorManagement" | "energyAnalysis" | "meterManagement" | "mobileApp" | "automation" | "evCharging";
 }
 
 const UserManualContent = ({ open, onOpenChange, chapter }: UserManualContentProps) => {
@@ -587,6 +587,87 @@ const UserManualContent = ({ open, onOpenChange, chapter }: UserManualContentPro
               Unter <strong>Benutzerverwaltung → Rollen</strong> können folgende Automationsrechte 
               vergeben werden: Anzeigen, Erstellen, Bearbeiten, Löschen und Ausführen.
             </p>
+          </section>
+        </div>
+      ),
+    },
+    evCharging: {
+      title: "Ladeinfrastruktur (E-Mobilität)",
+      icon: <Zap className="h-5 w-5" />,
+      content: (
+        <div className="space-y-6">
+          <section>
+            <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
+              <Zap className="h-4 w-4 text-primary" />
+              Ladeinfrastruktur verwalten
+            </h3>
+            <p className="text-muted-foreground mb-4">
+              Verwalten Sie Ihre Ladepunkte, Tarife und Abrechnungen zentral. Nutzer können 
+              über die mobile Lade-App (SmartCharge) Ladevorgänge starten und ihre Historie einsehen.
+            </p>
+          </section>
+
+          <Separator />
+
+          <section>
+            <h4 className="font-semibold mb-2">Ladepunkte anlegen</h4>
+            <ol className="list-decimal list-inside text-sm text-muted-foreground space-y-2 ml-4">
+              <li>Navigieren Sie zu <strong>Ladeinfrastruktur → Ladepunkte</strong></li>
+              <li>Klicken Sie auf <strong>„Ladepunkt anlegen"</strong></li>
+              <li>Geben Sie Name, OCPP-ID, Standort, Leistung und Steckertyp ein</li>
+              <li>Der Ladepunkt verbindet sich automatisch per OCPP 1.6J</li>
+            </ol>
+          </section>
+
+          <section>
+            <h4 className="font-semibold mb-2">Ladepunkt-Details</h4>
+            <p className="text-sm text-muted-foreground mb-2">
+              Auf der Detailseite eines Ladepunkts finden Sie:
+            </p>
+            <ul className="list-disc list-inside text-sm text-muted-foreground space-y-1 ml-4">
+              <li><strong>Performance-Statistiken:</strong> Verfügbarkeit, Auslastung, Sessions und Energie</li>
+              <li><strong>Remote-Steuerung:</strong> Ladevorgang per Klick starten</li>
+              <li><strong>Ladehistorie:</strong> Alle vergangenen Ladevorgänge mit Dauer und Energie</li>
+              <li><strong>OCPP-Protokoll:</strong> Live-Nachrichtenlog mit Pause-Funktion und Timeout-Erkennung</li>
+              <li><strong>Foto-Management:</strong> Bild des Ladepunkts hochladen</li>
+            </ul>
+          </section>
+
+          <section>
+            <h4 className="font-semibold mb-2">Tarife und Abrechnung</h4>
+            <p className="text-sm text-muted-foreground mb-2">
+              Unter <strong>Ladeinfrastruktur → Abrechnung</strong> verwalten Sie:
+            </p>
+            <ul className="list-disc list-inside text-sm text-muted-foreground space-y-1 ml-4">
+              <li><strong>Tarife:</strong> Grundgebühr, Preis/kWh und Blockiergebühr (Idle Fee nach Freizeitraum)</li>
+              <li><strong>Rechnungen:</strong> Automatischer monatlicher Versand gebrandeter Rechnungen</li>
+              <li><strong>Ladenutzer:</strong> Nutzergruppen, RFID-Tags und App-Zugänge</li>
+            </ul>
+          </section>
+
+          <section>
+            <h4 className="font-semibold mb-2">Mobile Lade-App (SmartCharge)</h4>
+            <p className="text-sm text-muted-foreground mb-2">
+              Die App ist unter <strong>/ev</strong> erreichbar und als PWA installierbar:
+            </p>
+            <ul className="list-disc list-inside text-sm text-muted-foreground space-y-1 ml-4">
+              <li><strong>Karte:</strong> Fullscreen-Karte mit allen verfügbaren Ladepunkten und Statusfiltern</li>
+              <li><strong>QR-Scan:</strong> Ladepunkt per QR-Code identifizieren und Ladevorgang starten</li>
+              <li><strong>Historie:</strong> Übersicht aller Ladevorgänge mit aktiven Sessions oben</li>
+              <li><strong>Rechnungen:</strong> Einsicht in alle Abrechnungen</li>
+              <li><strong>Navigation:</strong> Direkte Routenführung zum Ladepunkt (Apple Maps / Google Maps)</li>
+            </ul>
+          </section>
+
+          <section>
+            <h4 className="font-semibold mb-2">Status-Farbschema</h4>
+            <ul className="list-disc list-inside text-sm text-muted-foreground space-y-1 ml-4">
+              <li><span className="text-green-600 font-medium">Grün:</span> Verfügbar</li>
+              <li><span className="text-blue-600 font-medium">Blau:</span> Lädt</li>
+              <li><span className="text-red-600 font-medium">Rot:</span> Fehler</li>
+              <li><span className="text-yellow-600 font-medium">Gelb:</span> Nicht verfügbar</li>
+              <li><span className="text-orange-600 font-medium">Orange:</span> Offline</li>
+            </ul>
           </section>
         </div>
       ),

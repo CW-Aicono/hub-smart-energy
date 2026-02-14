@@ -8,16 +8,16 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { BookOpen, HelpCircle, Mail, Phone, History, ExternalLink, Gauge, Smartphone, ShieldCheck, RefreshCw, Download, Rocket, Cpu } from "lucide-react";
+import { BookOpen, HelpCircle, Mail, Phone, History, ExternalLink, Gauge, Smartphone, ShieldCheck, RefreshCw, Download, Rocket, Cpu, Zap } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { useTenant } from "@/hooks/useTenant";
 import { useUpdateCheck } from "@/hooks/useUpdateCheck";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
-const APP_VERSION = "1.0.5";
+const APP_VERSION = "1.0.6";
 
-type ManualChapter = "gettingStarted" | "locationManagement" | "floorManagement" | "energyAnalysis" | "meterManagement" | "mobileApp" | "automation";
+type ManualChapter = "gettingStarted" | "locationManagement" | "floorManagement" | "energyAnalysis" | "meterManagement" | "mobileApp" | "automation" | "evCharging";
 
 const Help = () => {
   const { user, loading } = useAuth();
@@ -86,9 +86,24 @@ const Help = () => {
     { questionKey: "help.faq11Question", answerKey: "help.faq11Answer" },
     { questionKey: "help.faq12Question", answerKey: "help.faq12Answer" },
     { questionKey: "help.faq13Question", answerKey: "help.faq13Answer" },
+    { questionKey: "help.faq14Question", answerKey: "help.faq14Answer" },
+    { questionKey: "help.faq15Question", answerKey: "help.faq15Answer" },
+    { questionKey: "help.faq16Question", answerKey: "help.faq16Answer" },
   ];
 
   const changelog = [
+    {
+      version: "1.0.6",
+      date: "2026-02-14",
+      changes: [
+        { type: "feature", textKey: "help.changelog106Feature1" },
+        { type: "feature", textKey: "help.changelog106Feature2" },
+        { type: "feature", textKey: "help.changelog106Feature3" },
+        { type: "feature", textKey: "help.changelog106Feature4" },
+        { type: "improvement", textKey: "help.changelog106Improvement1" },
+        { type: "improvement", textKey: "help.changelog106Improvement2" },
+      ],
+    },
     {
       version: "1.0.5",
       date: "2026-02-11",
@@ -307,6 +322,17 @@ const Help = () => {
                   <div className="text-left">
                     <p className="font-medium">Gebäudeautomation</p>
                     <p className="text-xs text-muted-foreground">Automationsregeln, Bedingungen und Aktoren</p>
+                  </div>
+                </Button>
+                <Button 
+                  variant="outline" 
+                  className="justify-start gap-3 h-auto py-4 px-5"
+                  onClick={() => openManualChapter("evCharging")}
+                >
+                  <Zap className="h-5 w-5 text-muted-foreground shrink-0" />
+                  <div className="text-left">
+                    <p className="font-medium">Ladeinfrastruktur</p>
+                    <p className="text-xs text-muted-foreground">Ladepunkte, Tarife, Abrechnung und Lade-App</p>
                   </div>
                 </Button>
               </div>
