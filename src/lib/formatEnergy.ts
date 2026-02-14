@@ -13,10 +13,10 @@ export function formatEnergy(value: number, baseUnit: "W" | "Wh" = "Wh"): string
   let scaled: number;
   let unit: string;
 
-  if (abs > 9999) {
+  if (abs >= 1_000_000) {
     scaled = value / 1_000_000;
     unit = `M${baseUnit}`;
-  } else if (abs > 999) {
+  } else if (abs >= 1_000) {
     scaled = value / 1_000;
     unit = `k${baseUnit}`;
   } else {
