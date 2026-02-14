@@ -16,6 +16,17 @@ interface OmadaTokenResponse {
   };
 }
 
+async function discoverOmadaId(baseUrl: string): Promise<string | null> {
+  try {
+    const resp = await fetch(`${baseUrl}/api/info`);
+    if (resp.ok) {
+      const data = await resp.json();
+      return data?.result?.omadacId || null;
+    }
+  } catch (_) { /* ignore */ }
+  return null;
+}
+
 async function getAccessToken(
   baseUrl: string,
   omadaId: string,
@@ -34,7 +45,7 @@ async function getAccessToken(
     throw new Error(`Omada API returned non-JSON response (${resp.status}). Check your API URL. Response: ${text.substring(0, 200)}`);
   }
   const data: OmadaTokenResponse = await resp.json();
-  if (data.errorCode !== 0) throw new Error(`Omada auth error: ${data.msg}`);
+  if (data.errorCode !== 0) throw new Error(`Omada auth error (code ${data.errorCode}): ${data.msg}`);
   return data.result.accessToken;
 }
 
@@ -82,18 +93,43 @@ Deno.serve(async (req) => {
 
     const config = (li.config || {}) as Record<string, string>;
     const baseUrl = (config.api_url || "").replace(/\/$/, "");
-    const omadaId = config.omada_id || "";
+    let omadaId = config.omada_id || "";
     const clientId = config.client_id || "";
     const clientSecret = config.client_secret || "";
 
-    if (!baseUrl || !omadaId || !clientId || !clientSecret) {
+    if (!baseUrl || !clientId || !clientSecret) {
       return new Response(
-        JSON.stringify({ success: false, error: "Missing Omada configuration (api_url, omada_id, client_id, client_secret)" }),
+        JSON.stringify({ success: false, error: "Missing Omada configuration (api_url, client_id, client_secret)" }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 400 }
       );
     }
 
-    const token = await getAccessToken(baseUrl, omadaId, clientId, clientSecret);
+    // Auto-discover omadaId if not provided or if auth fails
+    if (!omadaId) {
+      const discovered = await discoverOmadaId(baseUrl);
+      if (discovered) omadaId = discovered;
+    }
+
+    if (!omadaId) {
+      return new Response(
+        JSON.stringify({ success: false, error: "Missing omada_id and auto-discovery failed. Please provide the Controller ID." }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 400 }
+      );
+    }
+
+    let token: string;
+    try {
+      token = await getAccessToken(baseUrl, omadaId, clientId, clientSecret);
+    } catch (e) {
+      // If auth fails with provided ID, try auto-discovery
+      const discovered = await discoverOmadaId(baseUrl);
+      if (discovered && discovered !== omadaId) {
+        omadaId = discovered;
+        token = await getAccessToken(baseUrl, omadaId, clientId, clientSecret);
+      } else {
+        throw e;
+      }
+    }
 
     // Get sites first
     const sitesData = await omadaGet(baseUrl, "/sites", token, omadaId);
