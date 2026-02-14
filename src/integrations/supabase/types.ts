@@ -1345,6 +1345,8 @@ export type Database = {
           position_3d_z: number | null
           room_id: string | null
           sensor_uuid: string | null
+          source_unit_energy: string | null
+          source_unit_power: string | null
           tenant_id: string
           unit: string
           updated_at: string
@@ -1376,6 +1378,8 @@ export type Database = {
           position_3d_z?: number | null
           room_id?: string | null
           sensor_uuid?: string | null
+          source_unit_energy?: string | null
+          source_unit_power?: string | null
           tenant_id: string
           unit?: string
           updated_at?: string
@@ -1407,6 +1411,8 @@ export type Database = {
           position_3d_z?: number | null
           room_id?: string | null
           sensor_uuid?: string | null
+          source_unit_energy?: string | null
+          source_unit_power?: string | null
           tenant_id?: string
           unit?: string
           updated_at?: string

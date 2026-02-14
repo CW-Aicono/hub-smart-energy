@@ -379,7 +379,19 @@ const LiveValues = () => {
                                 </>
                               ) : (
                                 <>
-                                  {value.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {meter.unit}
+                              {(() => {
+                                    // For automatic meters, scale power value based on source_unit_power
+                                    if (source === "live") {
+                                      const srcPower = (meter as any).source_unit_power || "kW";
+                                      const displayUnit = meter.unit || "kWh";
+                                      // Convert to kW for display if source is W
+                                      if (srcPower === "W") {
+                                        return `${(value / 1000).toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kW`;
+                                      }
+                                      return `${value.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kW`;
+                                    }
+                                    return `${value.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${meter.unit}`;
+                                  })()}
                                   {isFlowType && (
                                     <span className="text-sm font-normal text-muted-foreground ml-1">Durchfluss</span>
                                   )}
@@ -413,10 +425,15 @@ const LiveValues = () => {
                               </>
                             ) : (
                               <>
-                                {source === "manual"
-                                  ? formatEnergy(Number(totalDay) * (meter.unit === "kWh" ? 1000 : 1))
-                                  : formatEnergy(Number(totalDay) * 1000)
-                                }
+                                {(() => {
+                                  if (source === "manual") {
+                                    return formatEnergy(Number(totalDay) * (meter.unit === "kWh" ? 1000 : 1));
+                                  }
+                                  // Automatic: scale based on source_unit_energy setting
+                                  const srcEnergy = (meter as any).source_unit_energy || "kWh";
+                                  const factor = srcEnergy === "Wh" ? 1 : 1000; // Wh is already base, kWh needs *1000
+                                  return formatEnergy(Number(totalDay) * factor);
+                                })()}
                                 <span className="ml-1 font-normal">{source === "manual" ? "Verbrauch" : "Gesamt heute"}</span>
                               </>
                             )}

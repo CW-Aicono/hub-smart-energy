@@ -48,6 +48,8 @@ export const AddMeterDialog = ({ locationId, open, onOpenChange }: AddMeterDialo
   const [gasType, setGasType] = useState("H");
   const [zustandszahl, setZustandszahl] = useState("0,9636");
   const [brennwert, setBrenwert] = useState("");
+  const [sourceUnitPower, setSourceUnitPower] = useState("kW");
+  const [sourceUnitEnergy, setSourceUnitEnergy] = useState("kWh");
 
   const activeMeters = meters.filter((m) => !m.is_archived);
 
@@ -127,6 +129,7 @@ export const AddMeterDialog = ({ locationId, open, onOpenChange }: AddMeterDialo
         location_integration_id: captureType === "automatic" && selectedIntegration ? selectedIntegration : undefined,
         sensor_uuid: captureType === "automatic" && selectedSensor ? selectedSensor : undefined,
         ...(energyType === "gas" ? { gas_type: gasType, zustandszahl: parsedZustandszahl, brennwert: parsedBrennwert || undefined } : {}),
+        ...(captureType === "automatic" ? { source_unit_power: sourceUnitPower, source_unit_energy: sourceUnitEnergy } : {}),
       } as any,
       parentMeterId && parentMeterId !== "none" ? parentMeterId : null,
       isMainMeter,
@@ -154,6 +157,8 @@ export const AddMeterDialog = ({ locationId, open, onOpenChange }: AddMeterDialo
     setGasType("H");
     setZustandszahl("0,9636");
     setBrenwert("");
+    setSourceUnitPower("kW");
+    setSourceUnitEnergy("kWh");
     onOpenChange(false);
   };
 
@@ -247,6 +252,35 @@ export const AddMeterDialog = ({ locationId, open, onOpenChange }: AddMeterDialo
                       </SelectContent>
                     </Select>
                   )}
+                </div>
+              )}
+              {/* Source units */}
+              {selectedIntegration && (
+                <div className="space-y-3 pt-2 border-t">
+                  <p className="text-xs font-medium text-muted-foreground">Einheiten des Gateways</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <Label className="text-xs">Leistung</Label>
+                      <Select value={sourceUnitPower} onValueChange={setSourceUnitPower}>
+                        <SelectTrigger className="mt-1 h-8 text-xs"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="W">W (Watt)</SelectItem>
+                          <SelectItem value="kW">kW (Kilowatt)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label className="text-xs">Energie (Tageswerte)</Label>
+                      <Select value={sourceUnitEnergy} onValueChange={setSourceUnitEnergy}>
+                        <SelectTrigger className="mt-1 h-8 text-xs"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Wh">Wh (Wattstunden)</SelectItem>
+                          <SelectItem value="kWh">kWh (Kilowattstunden)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground">Welche Einheiten liefert Ihr Gateway? In der Loxone Config unter den Ausgängen des Zählers sichtbar.</p>
                 </div>
               )}
             </div>
