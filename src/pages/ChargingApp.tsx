@@ -199,6 +199,7 @@ function MapTab({ chargePoints, onSelect }: { chargePoints: AppChargePoint[]; on
   const [minPower, setMinPower] = useState(0);
   const [connectorFilter, setConnectorFilter] = useState<string>("all");
   const [showPowerSlider, setShowPowerSlider] = useState(false);
+  const [visibleIds, setVisibleIds] = useState<Set<string> | null>(null);
 
   const filtered = useMemo(() => {
     return chargePoints.filter((cp) => {
@@ -210,6 +211,16 @@ function MapTab({ chargePoints, onSelect }: { chargePoints: AppChargePoint[]; on
     });
   }, [chargePoints, typeFilter, minPower, connectorFilter]);
 
+  // Points visible on the map (intersection of filtered + map bounds)
+  const visibleFiltered = useMemo(() => {
+    if (!visibleIds) return filtered;
+    return filtered.filter((cp) => visibleIds.has(cp.id));
+  }, [filtered, visibleIds]);
+
+  const handleVisiblePointsChange = useCallback((ids: Set<string>) => {
+    setVisibleIds(ids);
+  }, []);
+
   const connectorTypes = [...new Set(chargePoints.map((cp) => cp.connector_type).filter(Boolean))];
   const hasActiveFilter = typeFilter !== "all" || minPower > 0 || connectorFilter !== "all";
 
@@ -219,7 +230,7 @@ function MapTab({ chargePoints, onSelect }: { chargePoints: AppChargePoint[]; on
       <div className="flex-1 relative" style={{ minHeight: "300px" }}>
         {filtered.some((cp) => cp.latitude && cp.longitude) ? (
           <Suspense fallback={<div className="flex items-center justify-center h-full"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>}>
-            <LazyMap chargePoints={filtered as any} showLocateButton />
+            <LazyMap chargePoints={filtered as any} showLocateButton onVisiblePointsChange={handleVisiblePointsChange} />
           </Suspense>
         ) : (
           <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
@@ -277,7 +288,7 @@ function MapTab({ chargePoints, onSelect }: { chargePoints: AppChargePoint[]; on
                 <X className="h-3 w-3 mr-1" /> Reset
               </Button>
             )}
-            <Badge variant="secondary" className="shadow-md text-xs h-6">{filtered.length}</Badge>
+            <Badge variant="secondary" className="shadow-md text-xs h-6">{visibleFiltered.length}</Badge>
           </div>
 
           {/* Power slider dropdown */}
@@ -292,7 +303,7 @@ function MapTab({ chargePoints, onSelect }: { chargePoints: AppChargePoint[]; on
 
       {/* Station list */}
       <div className="max-h-[35vh] overflow-auto border-t">
-        {filtered.map((cp) => (
+        {visibleFiltered.map((cp) => (
           <button
             key={cp.id}
             onClick={() => onSelect(cp)}
