@@ -53,9 +53,9 @@ export const VirtualMeterFormulaBuilder = ({
     return types[meter.energy_type] || meter.energy_type;
   };
 
-  // Build formula preview
+  // Build formula preview: Source1 − Source2 − Source3 = Virtueller Zähler
   const formulaPreview = sources.length > 0
-    ? sources.map((s, i) => `${i === 0 && s.operator === "+" ? "" : s.operator === "+" ? " + " : " − "}${getMeterName(s.source_meter_id)}`).join("")
+    ? sources.map((s, i) => `${i === 0 && s.operator === "+" ? "" : s.operator === "+" ? " + " : " − "}${getMeterName(s.source_meter_id)}`).join("") + " = Virtueller Zähler"
     : "Noch keine Quellzähler ausgewählt";
 
   return (
