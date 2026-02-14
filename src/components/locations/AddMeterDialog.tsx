@@ -294,7 +294,7 @@ export const AddMeterDialog = ({ locationId, open, onOpenChange }: AddMeterDialo
             <Input value={medium} onChange={(e) => setMedium(e.target.value)} placeholder="z.B. Fernwärme" />
           </div>
           {/* Gas-specific fields */}
-          {energyType === "gas" && (
+          {energyType === "gas" && unit === "m³" && (
             <div className="space-y-3 rounded-md border p-3 bg-muted/30">
               <p className="text-sm font-medium text-muted-foreground">Gas-Parameter</p>
               <div className="grid grid-cols-2 gap-4">
