@@ -415,7 +415,7 @@ const LiveValues = () => {
                               <>
                                 {source === "manual"
                                   ? formatEnergy(Number(totalDay) * (meter.unit === "kWh" ? 1000 : 1))
-                                  : formatEnergy(Number(totalDay))
+                                  : formatEnergy(Number(totalDay) * 1000)
                                 }
                                 <span className="ml-1 font-normal">{source === "manual" ? "Verbrauch" : "Gesamt heute"}</span>
                               </>
