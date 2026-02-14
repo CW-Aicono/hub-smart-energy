@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { useParams, useNavigate, Navigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
@@ -77,6 +77,8 @@ const ChargePointDetail = () => {
   const [geocoding, setGeocoding] = useState(false);
   const [statsPeriod, setStatsPeriod] = useState("7");
   const fileRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => { window.scrollTo(0, 0); }, [id]);
 
   const cp = chargePoints.find((c) => c.id === id);
   const ocppMeter = useOcppMeterValue(cp?.ocpp_id);
