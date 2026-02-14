@@ -27,6 +27,7 @@ import { format, subDays, isAfter } from "date-fns";
 import { de } from "date-fns/locale";
 import { fmtKwh, fmtKw, fmtNum } from "@/lib/formatCharging";
 import { supabase } from "@/integrations/supabase/client";
+import { useOcppMeterValue } from "@/hooks/useOcppMeterValue";
 import OcppLogViewer from "@/components/charging/OcppLogViewer";
 import ChargePointQrCode from "@/components/charging/ChargePointQrCode";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
@@ -62,6 +63,7 @@ const ChargePointDetail = () => {
   const fileRef = useRef<HTMLInputElement>(null);
 
   const cp = chargePoints.find((c) => c.id === id);
+  const ocppMeter = useOcppMeterValue(cp?.ocpp_id);
 
   // Stats calculations
   const periodDays = parseInt(statsPeriod);
@@ -300,8 +302,15 @@ const ChargePointDetail = () => {
                       {/* KPI row */}
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                         <div className="border rounded-lg p-3">
-                          <p className="text-xs text-muted-foreground">kWh gesamt</p>
-                          <p className="text-xl font-bold">{fmtNum(totalKwh)}</p>
+                          <p className="text-xs text-muted-foreground">kWh gesamt (Zähler)</p>
+                          <p className="text-xl font-bold">
+                            {ocppMeter.value != null ? fmtNum(ocppMeter.value) : fmtNum(totalKwh)}
+                          </p>
+                          {ocppMeter.timestamp && (
+                            <p className="text-[10px] text-muted-foreground mt-0.5">
+                              Stand: {format(new Date(ocppMeter.timestamp), "dd.MM. HH:mm")}
+                            </p>
+                          )}
                         </div>
                         <div className="border rounded-lg p-3">
                           <p className="text-xs text-muted-foreground">Ladevorgänge</p>
