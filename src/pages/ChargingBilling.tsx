@@ -43,7 +43,7 @@ const ChargingBilling = () => {
     const now = new Date();
     switch (period) {
       case "day": return startOfDay(now);
-      case "week": return startOfWeek(now, { weekStartsOn: 1 });
+      case "week": return startOfWeek(now, { weekStartsOn: tenant?.week_start_day ?? 1 });
       case "month": return startOfMonth(now);
       case "quarter": return startOfQuarter(now);
       case "year": return startOfYear(now);

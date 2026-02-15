@@ -8,6 +8,7 @@ import { Leaf } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatEnergy, formatEnergyByType } from "@/lib/formatEnergy";
 import { startOfDay, startOfWeek, startOfMonth, startOfQuarter, startOfYear } from "date-fns";
+import { useWeekStartDay } from "@/hooks/useWeekStartDay";
 import { useDashboardFilter, TimePeriod } from "@/hooks/useDashboardFilter";
 
 const PERIOD_LABELS: Record<TimePeriod, string> = {
@@ -19,11 +20,11 @@ const PERIOD_LABELS: Record<TimePeriod, string> = {
   all: "Gesamt",
 };
 
-function getPeriodStart(period: TimePeriod): Date | null {
+function getPeriodStart(period: TimePeriod, weekStartsOn: 0|1|2|3|4|5|6 = 1): Date | null {
   const now = new Date();
   switch (period) {
     case "day": return startOfDay(now);
-    case "week": return startOfWeek(now, { weekStartsOn: 1 });
+    case "week": return startOfWeek(now, { weekStartsOn });
     case "month": return startOfMonth(now);
     case "quarter": return startOfQuarter(now);
     case "year": return startOfYear(now);
@@ -39,7 +40,7 @@ const SustainabilityKPIs = ({ locationId }: SustainabilityKPIsProps) => {
   const { readings, livePeriodTotals, loading, hasData } = useEnergyData(locationId);
   const { meters } = useMeters();
   const { selectedPeriod: period, setSelectedPeriod: setPeriod } = useDashboardFilter();
-
+  const weekStartsOn = useWeekStartDay();
   const meterMap = useMemo(() => {
     const map: Record<string, string> = {};
     meters.forEach((m) => { map[m.id] = m.energy_type; });
@@ -48,7 +49,7 @@ const SustainabilityKPIs = ({ locationId }: SustainabilityKPIsProps) => {
 
   const filteredTotals = useMemo(() => {
     const totals = { strom: 0, gas: 0, waerme: 0, wasser: 0 };
-    const periodStart = getPeriodStart(period);
+    const periodStart = getPeriodStart(period, weekStartsOn);
     readings.forEach((r) => {
       if (periodStart && new Date(r.reading_date) < periodStart) return;
       const energyType = meterMap[r.meter_id] || "strom";

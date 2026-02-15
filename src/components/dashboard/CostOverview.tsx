@@ -7,12 +7,13 @@ import { useDashboardFilter, TimePeriod } from "@/hooks/useDashboardFilter";
 import { Euro, TrendingDown, TrendingUp, ArrowDownRight } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { startOfDay, startOfWeek, startOfMonth, startOfQuarter, startOfYear, subDays, subWeeks, subMonths, subQuarters, subYears } from "date-fns";
+import { useWeekStartDay } from "@/hooks/useWeekStartDay";
 
 interface CostOverviewProps {
   locationId: string | null;
 }
 
-function getPeriodRange(period: TimePeriod): { start: Date; prevStart: Date; prevEnd: Date } {
+function getPeriodRange(period: TimePeriod, weekStartsOn: 0|1|2|3|4|5|6 = 1): { start: Date; prevStart: Date; prevEnd: Date } {
   const now = new Date();
   let start: Date;
   let prevStart: Date;
@@ -25,9 +26,9 @@ function getPeriodRange(period: TimePeriod): { start: Date; prevStart: Date; pre
       prevStart = startOfDay(subDays(now, 1));
       break;
     case "week":
-      start = startOfWeek(now, { weekStartsOn: 1 });
+      start = startOfWeek(now, { weekStartsOn });
       prevEnd = new Date(start.getTime() - 1);
-      prevStart = startOfWeek(subWeeks(now, 1), { weekStartsOn: 1 });
+      prevStart = startOfWeek(subWeeks(now, 1), { weekStartsOn });
       break;
     case "month":
       start = startOfMonth(now);
@@ -78,6 +79,7 @@ const CostOverview = ({ locationId }: CostOverviewProps) => {
   const { prices, loading: pricesLoading } = useEnergyPrices();
   const { meters } = useMeters();
   const { selectedPeriod } = useDashboardFilter();
+  const weekStartsOn = useWeekStartDay();
 
   const meterMap = useMemo(() => {
     const map: Record<string, { energy_type: string; location_id: string }> = {};
@@ -104,7 +106,7 @@ const CostOverview = ({ locationId }: CostOverviewProps) => {
   }, [prices]);
 
   const costData = useMemo(() => {
-    const { start, prevStart, prevEnd } = getPeriodRange(selectedPeriod);
+    const { start, prevStart, prevEnd } = getPeriodRange(selectedPeriod, weekStartsOn);
 
     let currentCost = 0;
     let prevCost = 0;

@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useMemo } from "react";
 import { useDashboardFilter, TimePeriod } from "@/hooks/useDashboardFilter";
 import { startOfDay, startOfWeek, startOfMonth, startOfQuarter, startOfYear } from "date-fns";
+import { useWeekStartDay } from "@/hooks/useWeekStartDay";
 
 interface PieChartWidgetProps {
   locationId: string | null;
@@ -45,11 +46,11 @@ const PERIOD_TOTAL_KEY: Record<TimePeriod, "totalDay" | "totalWeek" | "totalMont
   all: null,
 };
 
-function getPeriodStart(period: TimePeriod): Date | null {
+function getPeriodStart(period: TimePeriod, weekStartsOn: 0|1|2|3|4|5|6 = 1): Date | null {
   const now = new Date();
   switch (period) {
     case "day": return startOfDay(now);
-    case "week": return startOfWeek(now, { weekStartsOn: 1 });
+    case "week": return startOfWeek(now, { weekStartsOn });
     case "month": return startOfMonth(now);
     case "quarter": return startOfQuarter(now);
     case "year": return startOfYear(now);
@@ -62,6 +63,7 @@ const PieChartWidget = ({ locationId }: PieChartWidgetProps) => {
   const { readings, livePeriodTotals, loading, hasData } = useEnergyData(locationId);
   const { meters } = useMeters(locationId || undefined);
   const { selectedPeriod, setSelectedPeriod } = useDashboardFilter();
+  const weekStartsOn = useWeekStartDay();
   const selectedLocation = locationId ? locations.find((l) => l.id === locationId) : null;
   const subtitle = selectedLocation ? `Daten für: ${selectedLocation.name}` : "Alle Liegenschaften";
 
@@ -85,7 +87,7 @@ const PieChartWidget = ({ locationId }: PieChartWidgetProps) => {
   const chartData = useMemo(() => {
     const totals: Record<string, number> = { strom: 0, gas: 0, waerme: 0, wasser: 0 };
     const periodKey = PERIOD_TOTAL_KEY[selectedPeriod];
-    const periodStart = getPeriodStart(selectedPeriod);
+    const periodStart = getPeriodStart(selectedPeriod, weekStartsOn);
 
     // Manual readings filtered by period
     const autoMeterIds = new Set(

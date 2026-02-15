@@ -19,6 +19,7 @@ import {
 } from "date-fns";
 import { de } from "date-fns/locale";
 import { useDashboardFilter, TimePeriod } from "@/hooks/useDashboardFilter";
+import { useWeekStartDay } from "@/hooks/useWeekStartDay";
 
 type ChartPeriod = "day" | "week" | "month" | "quarter" | "year";
 
@@ -41,10 +42,10 @@ function getRefDate(period: ChartPeriod, offset: number): Date {
   }
 }
 
-function getPeriodRange(period: ChartPeriod, ref: Date): [Date, Date] {
+function getPeriodRange(period: ChartPeriod, ref: Date, weekStartsOn: 0|1|2|3|4|5|6 = 1): [Date, Date] {
   switch (period) {
     case "day": return [startOfDay(ref), endOfDay(ref)];
-    case "week": return [startOfWeek(ref, { weekStartsOn: 1 }), endOfWeek(ref, { weekStartsOn: 1 })];
+    case "week": return [startOfWeek(ref, { weekStartsOn }), endOfWeek(ref, { weekStartsOn })];
     case "month": return [startOfMonth(ref), endOfMonth(ref)];
     case "quarter": return [startOfQuarter(ref), endOfQuarter(ref)];
     case "year": return [startOfYear(ref), endOfYear(ref)];
@@ -106,7 +107,8 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
   }, [meters]);
 
   const refDate = getRefDate(period, offset);
-  const [rangeStart, rangeEnd] = getPeriodRange(period, refDate);
+  const weekStartsOn = useWeekStartDay();
+  const [rangeStart, rangeEnd] = getPeriodRange(period, refDate, weekStartsOn);
   const periodLabel = getPeriodLabel(period, refDate);
   const canGoForward = offset < 0;
 

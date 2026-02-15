@@ -75,10 +75,10 @@ export const translations = {
     nl: "Integraties",
   },
   "nav.branding": {
-    de: "Branding",
-    en: "Branding",
-    es: "Marca",
-    nl: "Branding",
+    de: "Individualisierung",
+    en: "Customization",
+    es: "Personalización",
+    nl: "Aanpassing",
   },
   "nav.emailTemplates": {
     de: "Mailvorlagen",
