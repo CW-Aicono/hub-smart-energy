@@ -47,6 +47,7 @@ const WIDGET_COMPONENTS: Record<string, React.ComponentType<WidgetProps>> = {
 const SIZE_CLASS: Record<WidgetSize, string> = {
   "full": "w-full",
   "2/3": "w-2/3",
+  "1/2": "w-1/2",
   "1/3": "w-1/3",
 };
 
