@@ -87,7 +87,7 @@ const ENERGY_KEYS = ["strom", "gas", "waerme", "wasser"] as const;
 
 const EnergyChart = ({ locationId }: EnergyChartProps) => {
   const { locations } = useLocations();
-  const { readings, loading, hasData } = useEnergyData(locationId);
+  const { readings, livePeriodTotals, loading, hasData } = useEnergyData(locationId);
   const { meters } = useMeters();
   const { selectedPeriod, setSelectedPeriod } = useDashboardFilter();
   const [offset, setOffset] = useState(0);
@@ -100,8 +100,8 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
   const subtitle = selectedLocation ? `Daten für: ${selectedLocation.name}` : "Alle Liegenschaften";
 
   const meterMap = useMemo(() => {
-    const map: Record<string, string> = {};
-    meters.forEach((m) => { map[m.id] = m.energy_type; });
+    const map: Record<string, { energy_type: string; capture_type: string; location_id: string }> = {};
+    meters.forEach((m) => { map[m.id] = { energy_type: m.energy_type, capture_type: m.capture_type, location_id: m.location_id }; });
     return map;
   }, [meters]);
 
@@ -111,6 +111,81 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
   const canGoForward = offset < 0;
 
   const chartData = useMemo(() => {
+    // For non-day periods at offset 0, inject Loxone period totals for automatic meters
+    const isCurrentPeriod = offset === 0;
+    const useLoxoneTotals = isCurrentPeriod && period !== "day" && Object.keys(livePeriodTotals).length > 0;
+
+    // Determine which period total field to use
+    const periodTotalKey = period === "week" ? "totalWeek" : period === "month" ? "totalMonth" : period === "year" ? "totalYear" : null;
+
+    // For current period with Loxone totals: show a single aggregated bar
+    if (useLoxoneTotals && periodTotalKey && period !== "quarter") {
+      const totals = { strom: 0, gas: 0, waerme: 0, wasser: 0 };
+
+      // Add Loxone period totals for automatic meters
+      for (const [meterId, pt] of Object.entries(livePeriodTotals)) {
+        const info = meterMap[meterId];
+        if (!info) continue;
+        if (locationId && info.location_id !== locationId) continue;
+        const val = pt[periodTotalKey as keyof typeof pt];
+        if (val != null && info.energy_type in totals) {
+          (totals as any)[info.energy_type] += val;
+        }
+      }
+
+      // Add manual meter readings for the period
+      const [rs, re] = [rangeStart, rangeEnd];
+      readings.forEach((r) => {
+        const info = meterMap[r.meter_id];
+        if (!info || info.capture_type === "automatic") return;
+        const d = new Date(r.reading_date);
+        if (d >= rs && d <= re && info.energy_type in totals) {
+          (totals as any)[info.energy_type] += r.value;
+        }
+      });
+
+      return [{ label: periodLabel, ...totals }];
+    }
+
+    // Quarter with Loxone totals: use totalMonth for current period
+    if (useLoxoneTotals && period === "quarter") {
+      const monthLabels = ["Jan", "Feb", "Mär", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dez"];
+      const startMonth = rangeStart.getMonth();
+      const buckets = [0, 1, 2].map((i) => {
+        const monthIdx = startMonth + i;
+        return { label: monthLabels[monthIdx] || `M${monthIdx + 1}`, strom: 0, gas: 0, waerme: 0, wasser: 0 };
+      });
+
+      // For the current month, use live totalMonth; for past months, use totalMonth proportionally
+      // Since we only have current period totals, show totalMonth as the current month bucket
+      const currentMonthIdx = new Date().getMonth() - startMonth;
+
+      for (const [meterId, pt] of Object.entries(livePeriodTotals)) {
+        const info = meterMap[meterId];
+        if (!info) continue;
+        if (locationId && info.location_id !== locationId) continue;
+        if (pt.totalMonth != null && currentMonthIdx >= 0 && currentMonthIdx < 3 && info.energy_type in buckets[currentMonthIdx]) {
+          (buckets[currentMonthIdx] as any)[info.energy_type] += pt.totalMonth;
+        }
+      }
+
+      // Add manual readings distributed by month
+      readings.forEach((r) => {
+        const info = meterMap[r.meter_id];
+        if (!info || info.capture_type === "automatic") return;
+        const d = new Date(r.reading_date);
+        if (d >= rangeStart && d <= rangeEnd) {
+          const mi = d.getMonth() - startMonth;
+          if (mi >= 0 && mi < 3 && info.energy_type in buckets[mi]) {
+            (buckets[mi] as any)[info.energy_type] += r.value;
+          }
+        }
+      });
+
+      return buckets;
+    }
+
+    // Default: existing logic using individual readings
     const filtered = readings.filter((r) => {
       const d = new Date(r.reading_date);
       return d >= rangeStart && d <= rangeEnd;
@@ -119,19 +194,16 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
     const emptyBucket = () => ({ strom: 0, gas: 0, waerme: 0, wasser: 0 });
 
     const addToBucket = (bucket: any, r: { meter_id: string; value: number }) => {
-      const et = meterMap[r.meter_id] || "strom";
+      const info = meterMap[r.meter_id];
+      const et = info?.energy_type || "strom";
       if (et in bucket) bucket[et] += r.value;
     };
 
     if (period === "day") {
-      // 96 fifteen-minute buckets
       const buckets = Array.from({ length: 96 }, (_, i) => {
         const h = Math.floor(i / 4);
         const m = (i % 4) * 15;
-        return {
-          label: `${h}:${m.toString().padStart(2, "0")}`,
-          ...emptyBucket(),
-        };
+        return { label: `${h}:${m.toString().padStart(2, "0")}`, ...emptyBucket() };
       });
       filtered.forEach((r) => {
         const d = new Date(r.reading_date);
@@ -148,9 +220,7 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
         const dateStr = format(d, "yyyy-MM-dd");
         const bucket = { label: dayNames[i] || format(d, "EEE", { locale: de }), ...emptyBucket() };
         filtered.forEach((r) => {
-          if (format(new Date(r.reading_date), "yyyy-MM-dd") === dateStr) {
-            addToBucket(bucket, r);
-          }
+          if (format(new Date(r.reading_date), "yyyy-MM-dd") === dateStr) addToBucket(bucket, r);
         });
         return bucket;
       });
@@ -162,23 +232,18 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
         const dateStr = format(d, "yyyy-MM-dd");
         const bucket = { label: format(d, "d."), ...emptyBucket() };
         filtered.forEach((r) => {
-          if (format(new Date(r.reading_date), "yyyy-MM-dd") === dateStr) {
-            addToBucket(bucket, r);
-          }
+          if (format(new Date(r.reading_date), "yyyy-MM-dd") === dateStr) addToBucket(bucket, r);
         });
         return bucket;
       });
     }
 
     if (period === "quarter") {
-      // Group by ISO week
       const weekMap = new Map<number, { label: string; strom: number; gas: number; waerme: number; wasser: number }>();
       const days = eachDayOfInterval({ start: rangeStart, end: rangeEnd });
       days.forEach((d) => {
         const wk = getISOWeek(d);
-        if (!weekMap.has(wk)) {
-          weekMap.set(wk, { label: `KW${wk}`, ...emptyBucket() });
-        }
+        if (!weekMap.has(wk)) weekMap.set(wk, { label: `KW${wk}`, ...emptyBucket() });
       });
       filtered.forEach((r) => {
         const wk = getISOWeek(new Date(r.reading_date));
@@ -188,7 +253,7 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
       return Array.from(weekMap.values());
     }
 
-    // year – 12 monthly buckets
+    // year
     const monthLabels = ["Jan", "Feb", "Mär", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dez"];
     const buckets = monthLabels.map((m) => ({ label: m, ...emptyBucket() }));
     filtered.forEach((r) => {
@@ -196,7 +261,7 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
       addToBucket(buckets[month], r);
     });
     return buckets;
-  }, [readings, meterMap, period, rangeStart.toISOString(), rangeEnd.toISOString()]);
+  }, [readings, meterMap, period, rangeStart.toISOString(), rangeEnd.toISOString(), livePeriodTotals, offset, periodLabel, locationId]);
 
   // Reset offset when period changes
   const handlePeriodChange = (v: string) => {
