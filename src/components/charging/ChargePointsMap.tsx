@@ -171,7 +171,9 @@ export default function ChargePointsMap({ chargePoints, onChargePointClick, onVi
         center={defaultCenter}
         zoom={validPoints.length === 1 ? 14 : 6}
         className="h-full w-full"
-        scrollWheelZoom
+        scrollWheelZoom={false}
+        dragging={false}
+        touchZoom={false}
         style={{ height: "100%", width: "100%" }}
       >
         <TileLayer
