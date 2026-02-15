@@ -1226,6 +1226,60 @@ export type Database = {
           },
         ]
       }
+      meter_period_totals: {
+        Row: {
+          created_at: string | null
+          energy_type: string
+          id: string
+          meter_id: string
+          period_start: string
+          period_type: string
+          source: string
+          tenant_id: string
+          total_value: number
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          energy_type: string
+          id?: string
+          meter_id: string
+          period_start: string
+          period_type: string
+          source?: string
+          tenant_id: string
+          total_value: number
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          energy_type?: string
+          id?: string
+          meter_id?: string
+          period_start?: string
+          period_type?: string
+          source?: string
+          tenant_id?: string
+          total_value?: number
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meter_period_totals_meter_id_fkey"
+            columns: ["meter_id"]
+            isOneToOne: false
+            referencedRelation: "meters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meter_period_totals_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       meter_readings: {
         Row: {
           capture_method: string

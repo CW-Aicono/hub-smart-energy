@@ -18,6 +18,9 @@ export interface GatewaySensor {
   secondaryStateName: string;
   secondaryUnit: string;
   totalDay: number | null;
+  totalWeek: number | null;
+  totalMonth: number | null;
+  totalYear: number | null;
 }
 
 // Re-export as LoxoneSensor for backwards-compat

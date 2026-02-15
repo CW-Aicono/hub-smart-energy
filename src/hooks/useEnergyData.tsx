@@ -90,15 +90,16 @@ export function useEnergyData(locationId?: string | null) {
   // Use centralized cached sensor queries (stable hook call)
   const sensorQueries = useLoxoneSensorsMulti(integrationIds);
 
-  // Build live readings from cached sensor data
-  const liveReadings = useMemo(() => {
+  // Build live readings and period totals from cached sensor data
+  const { liveReadings, livePeriodTotals } = useMemo(() => {
     const activeAutoMeters = meters.filter(
       (m) => !m.is_archived && m.capture_type === "automatic" && m.sensor_uuid && m.location_integration_id
     );
-    if (activeAutoMeters.length === 0) return [];
+    if (activeAutoMeters.length === 0) return { liveReadings: [] as ReadingRow[], livePeriodTotals: {} as Record<string, { totalDay: number | null; totalWeek: number | null; totalMonth: number | null; totalYear: number | null }> };
 
     const now = new Date().toISOString();
     const newLiveReadings: ReadingRow[] = [];
+    const periodTotals: Record<string, { totalDay: number | null; totalWeek: number | null; totalMonth: number | null; totalYear: number | null }> = {};
 
     const sensorsByIntegration = new Map<string, any[]>();
     integrationIds.forEach((id, idx) => {
@@ -132,10 +133,18 @@ export function useEnergyData(locationId?: string | null) {
             reading_date: now,
           });
         }
+
+        // Extract period totals
+        periodTotals[meter.id] = {
+          totalDay: sensor.totalDay ?? null,
+          totalWeek: sensor.totalWeek ?? null,
+          totalMonth: sensor.totalMonth ?? null,
+          totalYear: sensor.totalYear ?? null,
+        };
       }
     }
 
-    return newLiveReadings;
+    return { liveReadings: newLiveReadings, livePeriodTotals: periodTotals };
   }, [meters, integrationIds, sensorQueries]);
 
   const liveLoading = sensorQueries.some((q) => q.isLoading);
@@ -301,6 +310,7 @@ export function useEnergyData(locationId?: string | null) {
     energyDistribution,
     energyTotals,
     readings: filteredReadings,
+    livePeriodTotals,
     loading: isLoading,
     hasData,
   };
