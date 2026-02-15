@@ -373,9 +373,18 @@ serve(async (req) => {
             primaryValue = mappedStates[mapping.primaryState] ?? allStates["_primary"] ?? null;
             if (mapping.secondaryState) {
               secondaryStateName = mapping.secondaryState;
-              // For "total", also check consumption/delivery variants
+              // For "total" (Zählerstand), pick direction based on available totals
               if (mapping.secondaryState === "total") {
-                secondaryValue = mappedStates["total"] ?? mappedStates["totalConsumption"] ?? mappedStates["totalDelivery"] ?? null;
+                const delDay = mappedStates["totalDayDelivery"] != null ? Number(mappedStates["totalDayDelivery"]) : 0;
+                const consDay = mappedStates["totalDayConsumption"] != null ? Number(mappedStates["totalDayConsumption"]) : 0;
+                const delYear = mappedStates["totalYearDelivery"] != null ? Number(mappedStates["totalYearDelivery"]) : 0;
+                const consYear = mappedStates["totalYearConsumption"] != null ? Number(mappedStates["totalYearConsumption"]) : 0;
+                const isGen = (typeof primaryValue === "number" && primaryValue < 0) || (delDay > consDay) || (delYear > consYear);
+                if (isGen) {
+                  secondaryValue = mappedStates["totalDelivery"] ?? mappedStates["total"] ?? mappedStates["totalConsumption"] ?? null;
+                } else {
+                  secondaryValue = mappedStates["totalConsumption"] ?? mappedStates["total"] ?? mappedStates["totalDelivery"] ?? null;
+                }
               } else {
                 secondaryValue = mappedStates[mapping.secondaryState] ?? null;
               }
@@ -387,11 +396,19 @@ serve(async (req) => {
             primaryStateName = "value";
           }
 
-          // Extract totalDay: if power is negative (generation), prefer delivery (Rdd)
+          // Determine meter direction: generator vs consumer
+          // Use instantaneous power AND compare delivery vs consumption totals
+          // to avoid misclassification when power is 0 (e.g. solar at night)
           const isNegativePower = typeof primaryValue === "number" && primaryValue < 0;
+          const deliveryDay = mappedStates["totalDayDelivery"] != null ? Number(mappedStates["totalDayDelivery"]) : 0;
+          const consumptionDay = mappedStates["totalDayConsumption"] != null ? Number(mappedStates["totalDayConsumption"]) : 0;
+          const deliveryYear = mappedStates["totalYearDelivery"] != null ? Number(mappedStates["totalYearDelivery"]) : 0;
+          const consumptionYear = mappedStates["totalYearConsumption"] != null ? Number(mappedStates["totalYearConsumption"]) : 0;
+          // A meter is a generator if power is negative OR delivery totals exceed consumption totals
+          const isGenerator = isNegativePower || (deliveryDay > consumptionDay) || (deliveryYear > consumptionYear);
+
           let totalDayRaw: number | string | null;
-          if (isNegativePower) {
-            // Generator / solar: prefer Rdd (delivery) over Rdc (consumption)
+          if (isGenerator) {
             totalDayRaw = mappedStates["totalDayDelivery"]
               ?? mappedStates["totalDay"]
               ?? mappedStates["totalDayConsumption"]
@@ -399,7 +416,6 @@ serve(async (req) => {
               ?? allStates["Cd"]
               ?? null;
           } else {
-            // Consumer: prefer Rdc (consumption) as before
             totalDayRaw = mappedStates["totalDayConsumption"]
               ?? mappedStates["totalDay"]
               ?? mappedStates["totalDayDelivery"]
@@ -410,25 +426,25 @@ serve(async (req) => {
           const totalDay = totalDayRaw !== null ? (typeof totalDayRaw === "number" ? totalDayRaw : parseFloat(String(totalDayRaw))) : null;
 
           // totalWeek
-          const totalWeekRaw = isNegativePower
+          const totalWeekRaw = isGenerator
             ? (mappedStates["totalWeekDelivery"] ?? mappedStates["totalWeek"] ?? mappedStates["totalWeekConsumption"] ?? null)
             : (mappedStates["totalWeekConsumption"] ?? mappedStates["totalWeek"] ?? mappedStates["totalWeekDelivery"] ?? null);
           const totalWeek = totalWeekRaw !== null ? (typeof totalWeekRaw === "number" ? totalWeekRaw : parseFloat(String(totalWeekRaw))) : null;
 
           // totalMonth
-          const totalMonthRaw = isNegativePower
+          const totalMonthRaw = isGenerator
             ? (mappedStates["totalMonthDelivery"] ?? mappedStates["totalMonth"] ?? mappedStates["totalMonthConsumption"] ?? null)
             : (mappedStates["totalMonthConsumption"] ?? mappedStates["totalMonth"] ?? mappedStates["totalMonthDelivery"] ?? null);
           const totalMonth = totalMonthRaw !== null ? (typeof totalMonthRaw === "number" ? totalMonthRaw : parseFloat(String(totalMonthRaw))) : null;
 
           // totalYear
-          const totalYearRaw = isNegativePower
+          const totalYearRaw = isGenerator
             ? (mappedStates["totalYearDelivery"] ?? mappedStates["totalYear"] ?? mappedStates["totalYearConsumption"] ?? null)
             : (mappedStates["totalYearConsumption"] ?? mappedStates["totalYear"] ?? mappedStates["totalYearDelivery"] ?? null);
           const totalYear = totalYearRaw !== null ? (typeof totalYearRaw === "number" ? totalYearRaw : parseFloat(String(totalYearRaw))) : null;
 
           // totalMonthLast (Rlm) for archiving completed months
-          const totalMonthLastRaw = isNegativePower
+          const totalMonthLastRaw = isGenerator
             ? (mappedStates["totalMonthLastDelivery"] ?? mappedStates["totalMonthLast"] ?? null)
             : (mappedStates["totalMonthLastConsumption"] ?? mappedStates["totalMonthLast"] ?? null);
           const totalMonthLast = totalMonthLastRaw !== null ? (typeof totalMonthLastRaw === "number" ? totalMonthLastRaw : parseFloat(String(totalMonthLastRaw))) : null;
