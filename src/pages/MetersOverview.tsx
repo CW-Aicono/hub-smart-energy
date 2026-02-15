@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { MeterQrCode } from "@/components/integrations/MeterQrCode";
 import { EditMeterDialog } from "@/components/locations/EditMeterDialog";
 import { Navigate } from "react-router-dom";
@@ -7,6 +7,9 @@ import { useLocations } from "@/hooks/useLocations";
 import { useMeters, Meter } from "@/hooks/useMeters";
 import { useMeterReadings } from "@/hooks/useMeterReadings";
 import { useUserRole } from "@/hooks/useUserRole";
+import { useLoxoneSensorsMulti } from "@/hooks/useLoxoneSensors";
+import { useIntegrations } from "@/hooks/useIntegrations";
+import { formatEnergy } from "@/lib/formatEnergy";
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
 import { AddMeterReadingDialog } from "@/components/meters/AddMeterReadingDialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -26,6 +29,31 @@ const MetersOverview = () => {
   const { meters, loading: metersLoading, updateMeter, archiveMeter, deleteMeter } = useMeters();
   const { readings, loading: readingsLoading, addReading } = useMeterReadings();
   const { isAdmin } = useUserRole();
+
+  // Collect unique integration IDs from automatic meters for live sensor queries
+  const autoIntegrationIds = useMemo(() => {
+    const ids = new Set<string>();
+    meters.forEach((m) => {
+      if (m.capture_type === "automatic" && m.location_integration_id) {
+        ids.add(m.location_integration_id);
+      }
+    });
+    return Array.from(ids);
+  }, [meters]);
+
+  const sensorQueries = useLoxoneSensorsMulti(autoIntegrationIds);
+
+  // Build a map: sensor_uuid -> sensor data
+  const sensorMap = useMemo(() => {
+    const map = new Map<string, any>();
+    autoIntegrationIds.forEach((intId, idx) => {
+      const q = sensorQueries[idx];
+      if (q?.data) {
+        q.data.forEach((s) => map.set(`${intId}::${s.id}`, s));
+      }
+    });
+    return map;
+  }, [autoIntegrationIds, sensorQueries]);
 
   const [selectedLocationId, setSelectedLocationId] = useState<string>("all");
   const [readingDialogMeter, setReadingDialogMeter] = useState<Meter | null>(null);
@@ -191,16 +219,38 @@ const MetersOverview = () => {
                             </Badge>
                           </TableCell>
                           <TableCell>
-                            {lastReading ? (
-                              <span className="text-sm">
-                                {lastReading.value.toLocaleString("de-DE")} {m.unit}
-                                <span className="text-muted-foreground ml-1 text-xs">
-                                  ({format(new Date(lastReading.reading_date), "dd.MM.yy", { locale: de })})
+                            {(() => {
+                              // For automatic meters: show live meter reading from gateway
+                              if (!isManual && m.location_integration_id && m.sensor_uuid) {
+                                const sensor = sensorMap.get(`${m.location_integration_id}::${m.sensor_uuid}`);
+                                if (sensor) {
+                                  // Use secondaryValue (Mr/Mrc/Mrd = absolute meter reading)
+                                  const rawVal = sensor.secondaryValue != null && sensor.secondaryValue !== ""
+                                    ? (typeof sensor.secondaryValue === "number" ? sensor.secondaryValue : parseFloat(String(sensor.secondaryValue).replace(/\./g, "").replace(",", ".")))
+                                    : null;
+                                  if (rawVal != null && !isNaN(rawVal)) {
+                                    const unit = sensor.secondaryUnit || m.unit;
+                                    return (
+                                      <span className="text-sm">
+                                        {rawVal.toLocaleString("de-DE", { maximumFractionDigits: 2 })} {unit}
+                                        <span className="text-muted-foreground ml-1 text-xs">(live)</span>
+                                      </span>
+                                    );
+                                  }
+                                }
+                              }
+                              // Fallback: last manual reading
+                              return lastReading ? (
+                                <span className="text-sm">
+                                  {lastReading.value.toLocaleString("de-DE")} {m.unit}
+                                  <span className="text-muted-foreground ml-1 text-xs">
+                                    ({format(new Date(lastReading.reading_date), "dd.MM.yy", { locale: de })})
+                                  </span>
                                 </span>
-                              </span>
-                            ) : (
-                              <span className="text-xs text-muted-foreground">–</span>
-                            )}
+                              ) : (
+                                <span className="text-xs text-muted-foreground">–</span>
+                              );
+                            })()}
                           </TableCell>
                           <TableCell>
                             <div className="flex gap-1">
