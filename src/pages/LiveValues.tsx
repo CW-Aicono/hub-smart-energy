@@ -189,9 +189,15 @@ const LiveValues = () => {
     return null;
   }, [liveValues, manualValues]);
 
-  // Compute virtual meter values
+  // Helper to get a source meter's totalDay value
+  const getSourceTotalDay = useCallback((meterId: string): number | null => {
+    if (liveValues.has(meterId)) return liveValues.get(meterId)!.totalDay ?? null;
+    return manualDailyTotals.get(meterId) ?? null;
+  }, [liveValues, manualDailyTotals]);
+
+  // Compute virtual meter values (instantaneous + daily total)
   const virtualValues = useMemo(() => {
-    const map = new Map<string, number>();
+    const map = new Map<string, { value: number; totalDay: number | null }>();
     const virtualMeterIds = new Set(virtualSources.map((s) => s.virtual_meter_id));
 
     for (const vmId of virtualMeterIds) {
@@ -200,7 +206,9 @@ const LiveValues = () => {
         .sort((a, b) => a.sort_order - b.sort_order);
 
       let total: number | null = null;
+      let totalDay: number | null = null;
       let allResolved = true;
+      let allDayResolved = true;
 
       for (const src of sources) {
         const val = getSourceValue(src.source_meter_id);
@@ -213,18 +221,31 @@ const LiveValues = () => {
         } else {
           total = src.operator === "-" ? total - val : total + val;
         }
+
+        // Accumulate daily totals from sources
+        const dayVal = getSourceTotalDay(src.source_meter_id);
+        if (dayVal === null) {
+          allDayResolved = false;
+        } else if (allDayResolved) {
+          if (totalDay === null) {
+            totalDay = src.operator === "-" ? -dayVal : dayVal;
+          } else {
+            totalDay = src.operator === "-" ? totalDay - dayVal : totalDay + dayVal;
+          }
+        }
       }
 
       if (allResolved && total !== null) {
-        map.set(vmId, total);
+        map.set(vmId, { value: total, totalDay: allDayResolved ? totalDay : null });
       }
     }
     return map;
-  }, [virtualSources, getSourceValue]);
+  }, [virtualSources, getSourceValue, getSourceTotalDay]);
 
   const getValue = (meter: typeof meters[0]): { value: number | null; totalDay: number | null; source: "live" | "manual" | "virtual" | "none"; date?: string } => {
     if (meter.capture_type === "virtual" && virtualValues.has(meter.id)) {
-      return { value: virtualValues.get(meter.id)!, totalDay: null, source: "virtual" };
+      const vv = virtualValues.get(meter.id)!;
+      return { value: vv.value, totalDay: vv.totalDay, source: "virtual" };
     }
     if (meter.capture_type === "automatic" && liveValues.has(meter.id)) {
       const live = liveValues.get(meter.id)!;
