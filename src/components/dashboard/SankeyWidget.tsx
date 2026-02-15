@@ -6,7 +6,7 @@ import { useEnergyPrices } from "@/hooks/useEnergyPrices";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useMemo, useState, useRef, useEffect } from "react";
-import { formatEnergy, formatEnergyByType } from "@/lib/formatEnergy";
+import { formatEnergy, formatEnergyByType, gasM3ToKWh } from "@/lib/formatEnergy";
 import { supabase } from "@/integrations/supabase/client";
 import { ENERGY_CHART_COLORS, ENERGY_TYPE_LABELS } from "@/lib/energyTypeColors";
 import { startOfDay, startOfWeek, startOfMonth, startOfQuarter, startOfYear } from "date-fns";
@@ -125,9 +125,9 @@ const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
 
   // Build meter lookup
   const meterMap = useMemo(() => {
-    const map: Record<string, { energy_type: string; location_id: string; floor_id: string | null; room_id: string | null }> = {};
+    const map: Record<string, { energy_type: string; location_id: string; floor_id: string | null; room_id: string | null; capture_type: string; gas_type: string | null; brennwert: number | null; zustandszahl: number | null; unit: string }> = {};
     meters.forEach((m) => {
-      map[m.id] = { energy_type: m.energy_type, location_id: m.location_id, floor_id: m.floor_id || null, room_id: m.room_id || null };
+      map[m.id] = { energy_type: m.energy_type, location_id: m.location_id, floor_id: m.floor_id || null, room_id: m.room_id || null, capture_type: m.capture_type, gas_type: m.gas_type ?? null, brennwert: m.brennwert ?? null, zustandszahl: m.zustandszahl ?? null, unit: m.unit };
     });
     return map;
   }, [meters]);
@@ -142,6 +142,12 @@ const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
   // Compute flows
   const flows = useMemo((): FlowLink[] => {
     const flowMap: Record<string, number> = {};
+
+    const convertGasToKwh = (meterId: string, rawValue: number): number => {
+      const m = meterMap[meterId];
+      if (!m || m.energy_type !== "gas" || m.unit !== "m³") return rawValue;
+      return gasM3ToKWh(rawValue, m.gas_type, m.brennwert, m.zustandszahl);
+    };
 
     const addFlow = (energyType: string, locId: string, floorId: string | null, roomId: string | null, rawValue: number) => {
       const sourceName = ENERGY_LABELS[energyType] || energyType;
@@ -174,14 +180,16 @@ const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
       flowMap[key] = (flowMap[key] || 0) + val;
     };
 
-    // Manual meter readings
+    // Manual meter readings only (skip automatic meters — they use livePeriodTotals)
     filteredReadings.forEach((r) => {
       const meter = meterMap[r.meter_id];
       if (!meter) return;
-      addFlow(meter.energy_type || "strom", meter.location_id, meter.floor_id, meter.room_id, r.value);
+      if (meter.capture_type === "automatic") return;
+      const value = convertGasToKwh(r.meter_id, r.value);
+      addFlow(meter.energy_type || "strom", meter.location_id, meter.floor_id, meter.room_id, value);
     });
 
-    // Auto meter period totals
+    // Auto meter period totals (totalDay for day view, etc.)
     const ptKey = period === "day" ? "totalDay" : period === "week" ? "totalWeek" : period === "month" ? "totalMonth" : period === "quarter" ? "totalMonth" : period === "year" ? "totalYear" : "totalYear";
     meters.filter(m => !m.is_archived && m.capture_type === "automatic").forEach(m => {
       if (locationId && m.location_id !== locationId) return;
@@ -189,7 +197,8 @@ const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
       if (!pt) return;
       const val = pt[ptKey as keyof typeof pt];
       if (val == null || val <= 0) return;
-      addFlow(m.energy_type || "strom", m.location_id, m.floor_id || null, m.room_id || null, val);
+      const converted = convertGasToKwh(m.id, val);
+      addFlow(m.energy_type || "strom", m.location_id, m.floor_id || null, m.room_id || null, converted);
     });
 
     return Object.entries(flowMap)
@@ -204,6 +213,10 @@ const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
   const formatValue = (value: number, sourceType?: string) => {
     if (viewMode === "kosten") {
       return value.toLocaleString("de-DE", { style: "currency", currency: "EUR", minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+    // Gas is already converted to kWh, so display as kWh (like strom/waerme)
+    if (sourceType === "gas") {
+      return formatEnergy(value);
     }
     return sourceType ? formatEnergyByType(value, sourceType) : formatEnergy(value);
   };
