@@ -77,7 +77,7 @@ function LocationsMapContent({ locations, onLocationClick, className }: Location
         className="h-full w-full"
         scrollWheelZoom={!isTouchDevice}
         dragging={!isTouchDevice}
-        touchZoom={false}
+        touchZoom={true}
         style={{ height: "100%", width: "100%" }}
         whenReady={() => setMapReady(true)}
       >
