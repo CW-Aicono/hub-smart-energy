@@ -36,7 +36,7 @@ interface SustainabilityKPIsProps {
 }
 
 const SustainabilityKPIs = ({ locationId }: SustainabilityKPIsProps) => {
-  const { readings, loading, hasData } = useEnergyData(locationId);
+  const { readings, livePeriodTotals, loading, hasData } = useEnergyData(locationId);
   const { meters } = useMeters();
   const { selectedPeriod: period, setSelectedPeriod: setPeriod } = useDashboardFilter();
 
@@ -56,8 +56,21 @@ const SustainabilityKPIs = ({ locationId }: SustainabilityKPIsProps) => {
         (totals as any)[energyType] += r.value;
       }
     });
+
+    // Add auto meter period totals
+    const ptKey = period === "day" ? "totalDay" : period === "week" ? "totalWeek" : period === "month" ? "totalMonth" : period === "quarter" ? "totalMonth" : period === "year" ? "totalYear" : "totalYear";
+    meters.forEach(m => {
+      if (m.is_archived || m.capture_type !== "automatic") return;
+      const pt = livePeriodTotals[m.id];
+      if (!pt) return;
+      const val = pt[ptKey as keyof typeof pt];
+      if (val == null) return;
+      const energyType = m.energy_type || "strom";
+      if (energyType in totals) (totals as any)[energyType] += val;
+    });
+
     return totals;
-  }, [readings, meterMap, period]);
+  }, [readings, meterMap, period, livePeriodTotals, meters]);
 
   if (loading) return <Card><CardContent className="p-6"><Skeleton className="h-[200px]" /></CardContent></Card>;
 

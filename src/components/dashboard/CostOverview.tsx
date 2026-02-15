@@ -74,7 +74,7 @@ const PREV_PERIOD_LABELS: Record<TimePeriod, string> = {
 };
 
 const CostOverview = ({ locationId }: CostOverviewProps) => {
-  const { readings, loading: dataLoading } = useEnergyData(locationId);
+  const { readings, livePeriodTotals, loading: dataLoading } = useEnergyData(locationId);
   const { prices, loading: pricesLoading } = useEnergyPrices();
   const { meters } = useMeters();
   const { selectedPeriod } = useDashboardFilter();
@@ -126,12 +126,28 @@ const CostOverview = ({ locationId }: CostOverviewProps) => {
       }
     });
 
+    // Add auto meter period totals for current period
+    const ptKey = selectedPeriod === "day" ? "totalDay" : selectedPeriod === "week" ? "totalWeek" : selectedPeriod === "month" ? "totalMonth" : selectedPeriod === "quarter" ? "totalMonth" : "totalYear";
+    meters.forEach(m => {
+      if (m.is_archived || m.capture_type !== "automatic") return;
+      const pt = livePeriodTotals[m.id];
+      if (!pt) return;
+      const val = pt[ptKey as keyof typeof pt];
+      if (val == null) return;
+      const meta = meterMap[m.id];
+      if (!meta) return;
+      const priceKey = `${meta.location_id}:${meta.energy_type}`;
+      const price = priceLookup.get(priceKey) || 0;
+      currentCost += val * price;
+      currentConsumption += val;
+    });
+
     const diff = prevCost - currentCost;
     const diffPercent = prevCost > 0 ? Math.round((diff / prevCost) * 1000) / 10 : 0;
     const hasPrices = priceLookup.size > 0;
 
     return { currentCost, prevCost, diff, diffPercent, hasPrices, currentConsumption };
-  }, [readings, meterMap, priceLookup, selectedPeriod]);
+  }, [readings, meterMap, priceLookup, selectedPeriod, livePeriodTotals, meters]);
 
   const loading = dataLoading || pricesLoading;
 

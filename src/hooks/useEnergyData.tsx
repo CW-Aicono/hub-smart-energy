@@ -115,26 +115,7 @@ export function useEnergyData(locationId?: string | null) {
 
       const sensor = sensors.find((s: any) => s.id === meter.sensor_uuid);
       if (sensor) {
-        let numVal: number;
-        if (typeof sensor.rawValue === "number") {
-          numVal = sensor.rawValue;
-        } else if (typeof sensor.rawValue === "string") {
-          numVal = parseFloat(sensor.rawValue.replace(",", "."));
-        } else if (typeof sensor.value === "string") {
-          numVal = parseFloat(sensor.value.replace(",", "."));
-        } else {
-          numVal = typeof sensor.value === "number" ? sensor.value : NaN;
-        }
-
-        if (!isNaN(numVal)) {
-          newLiveReadings.push({
-            meter_id: meter.id,
-            value: numVal,
-            reading_date: now,
-          });
-        }
-
-        // Extract period totals
+        // Only extract period totals – no instantaneous power in readings
         periodTotals[meter.id] = {
           totalDay: sensor.totalDay ?? null,
           totalWeek: sensor.totalWeek ?? null,
@@ -143,6 +124,8 @@ export function useEnergyData(locationId?: string | null) {
         };
       }
     }
+
+    return { liveReadings: [] as ReadingRow[], livePeriodTotals: periodTotals };
 
     return { liveReadings: newLiveReadings, livePeriodTotals: periodTotals };
   }, [meters, integrationIds, sensorQueries]);
@@ -232,8 +215,18 @@ export function useEnergyData(locationId?: string | null) {
       }
     });
 
+    // Add auto meter totalMonth for current month
+    const currentMonthLabel = MONTH_LABELS[new Date().getMonth()];
+    meters.filter(m => !m.is_archived && m.capture_type === "automatic").forEach(m => {
+      if (locationId && meterMap[m.id]?.location_id !== locationId) return;
+      const pt = livePeriodTotals[m.id];
+      if (pt?.totalMonth != null && buckets[currentMonthLabel] && m.energy_type in buckets[currentMonthLabel]) {
+        (buckets[currentMonthLabel] as any)[m.energy_type] += pt.totalMonth;
+      }
+    });
+
     return MONTH_LABELS.map((m) => ({ month: m, ...buckets[m] }));
-  }, [filteredReadings, meterMap]);
+  }, [filteredReadings, meterMap, livePeriodTotals, meters, locationId]);
 
   // Cost overview based on current vs previous month
   const costOverview = useMemo((): CostOverviewData => {
@@ -255,11 +248,18 @@ export function useEnergyData(locationId?: string | null) {
       }
     });
 
+    // Add auto meter totalMonth for current month
+    meters.filter(m => !m.is_archived && m.capture_type === "automatic").forEach(m => {
+      if (locationId && meterMap[m.id]?.location_id !== locationId) return;
+      const pt = livePeriodTotals[m.id];
+      if (pt?.totalMonth != null) currentTotal += pt.totalMonth;
+    });
+
     const savings = prevTotal - currentTotal;
     const savingsPercent = prevTotal > 0 ? Math.round((savings / prevTotal) * 1000) / 10 : 0;
 
     return { currentMonth: currentTotal, previousMonth: prevTotal, savings: Math.max(savings, 0), savingsPercent };
-  }, [filteredReadings]);
+  }, [filteredReadings, livePeriodTotals, meters, meterMap, locationId]);
 
   // Energy distribution for pie chart
   const energyDistribution = useMemo((): EnergyDistribution[] => {
@@ -268,6 +268,15 @@ export function useEnergyData(locationId?: string | null) {
       const energyType = meterMap[r.meter_id]?.energy_type || "strom";
       if (energyType in totals) {
         (totals as any)[energyType] += r.value;
+      }
+    });
+
+    // Add auto meter totals from live period data (use totalMonth as default)
+    meters.filter(m => !m.is_archived && m.capture_type === "automatic").forEach(m => {
+      if (locationId && meterMap[m.id]?.location_id !== locationId) return;
+      const pt = livePeriodTotals[m.id];
+      if (pt?.totalMonth != null && m.energy_type in totals) {
+        (totals as any)[m.energy_type] += pt.totalMonth;
       }
     });
 
@@ -287,7 +296,7 @@ export function useEnergyData(locationId?: string | null) {
       { name: "Wärme", value: Math.round((totals.waerme / total) * 100), totalValue: Math.round(totals.waerme * 100) / 100, unit: "kWh", color: "hsl(var(--energy-waerme))" },
       { name: "Wasser", value: Math.round((totals.wasser / total) * 100), totalValue: Math.round(totals.wasser * 100) / 100, unit: "m³", color: "hsl(var(--energy-wasser))" },
     ];
-  }, [filteredReadings, meterMap]);
+  }, [filteredReadings, meterMap, livePeriodTotals, meters, locationId]);
 
   // Total by energy type for Sankey
   const energyTotals = useMemo(() => {
@@ -298,10 +307,20 @@ export function useEnergyData(locationId?: string | null) {
         (totals as any)[energyType] += r.value;
       }
     });
-    return totals;
-  }, [filteredReadings, meterMap]);
 
-  const hasData = filteredReadings.length > 0;
+    // Add auto meter totals from live period data
+    meters.filter(m => !m.is_archived && m.capture_type === "automatic").forEach(m => {
+      if (locationId && meterMap[m.id]?.location_id !== locationId) return;
+      const pt = livePeriodTotals[m.id];
+      if (pt?.totalMonth != null && m.energy_type in totals) {
+        (totals as any)[m.energy_type] += pt.totalMonth;
+      }
+    });
+
+    return totals;
+  }, [filteredReadings, meterMap, livePeriodTotals, meters, locationId]);
+
+  const hasData = filteredReadings.length > 0 || Object.keys(livePeriodTotals).length > 0;
   const isLoading = loading || liveLoading;
 
   return {
