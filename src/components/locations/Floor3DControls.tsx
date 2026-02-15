@@ -6,6 +6,7 @@ import * as THREE from "three";
 interface Floor3DControlsProps {
   enabled: boolean;
   onLockChange?: (locked: boolean) => void;
+  onMovingChange?: (moving: boolean) => void;
   moveSpeed?: number;
   eyeHeight?: number;
 }
@@ -16,6 +17,7 @@ const EYE_HEIGHT = 1.7;
 export function Floor3DControls({ 
   enabled, 
   onLockChange, 
+  onMovingChange,
   moveSpeed = MOVE_SPEED,
   eyeHeight = EYE_HEIGHT 
 }: Floor3DControlsProps) {
@@ -140,6 +142,9 @@ export function Floor3DControls({
   // Movement logic
   useFrame((_, delta) => {
     if (!enabled || !controlsRef.current?.isLocked) return;
+
+    const moving = keys.forward || keys.backward || keys.left || keys.right || keys.up || keys.down;
+    onMovingChange?.(moving);
 
     // Damping for horizontal movement
     velocity.current.x -= velocity.current.x * 10.0 * delta;

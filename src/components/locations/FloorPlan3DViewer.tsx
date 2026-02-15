@@ -297,6 +297,7 @@ function Scene({
   showCeiling,
   onMeterPositionChange,
   onLockChange,
+  onMovingChange,
   onCameraUpdate,
 }: { 
   floor: Floor;
@@ -312,6 +313,7 @@ function Scene({
   showCeiling: boolean;
   onMeterPositionChange: (meterId: string, x: number, y: number, z: number) => void;
   onLockChange: (locked: boolean) => void;
+  onMovingChange: (moving: boolean) => void;
   onCameraUpdate: (pos: { x: number; z: number }, rotY: number) => void;
 }) {
   const [isDraggingMeter, setIsDraggingMeter] = useState(false);
@@ -465,6 +467,7 @@ function Scene({
         <Floor3DControls 
           enabled={isWalking} 
           onLockChange={onLockChange}
+          onMovingChange={onMovingChange}
         />
       )}
 
@@ -509,6 +512,7 @@ export function FloorPlan3DViewer({ floor, locationId, sensors = [], isAdmin = f
 
   const [isWalking, setIsWalking] = useState(false);
   const [isLocked, setIsLocked] = useState(false);
+  const [isMoving, setIsMoving] = useState(false);
   const [showRoomEditor, setShowRoomEditor] = useState(false);
   const [showCeiling, setShowCeiling] = useState(() => {
     const stored = localStorage.getItem(`floor3d_ceiling_${floor.id}`);
@@ -685,7 +689,7 @@ export function FloorPlan3DViewer({ floor, locationId, sensors = [], isAdmin = f
 
       {/* Status bar when walking */}
       {isWalking && !compact && (
-        <div className="bg-primary/10 border-b px-3 py-2 text-sm text-center flex-shrink-0">
+        <div className={`bg-primary/10 border-b px-3 py-2 text-sm text-center flex-shrink-0 transition-opacity duration-300 ${isMoving ? "opacity-0" : "opacity-100"}`}>
           <span className="font-medium">
             {isLocked 
               ? "WASD = Bewegen | Leertaste = Hoch | Shift = Runter | Mausrad = Höhe | ESC = Beenden" 
@@ -727,6 +731,7 @@ export function FloorPlan3DViewer({ floor, locationId, sensors = [], isAdmin = f
                   showCeiling={showCeiling}
                   onMeterPositionChange={handleMeterPositionChange}
                   onLockChange={handleLockChange}
+                  onMovingChange={setIsMoving}
                   onCameraUpdate={handleCameraUpdate}
                 />
               </Suspense>
@@ -771,7 +776,7 @@ export function FloorPlan3DViewer({ floor, locationId, sensors = [], isAdmin = f
 
             {/* Status bar when walking */}
             {isWalking && compact && (
-              <div className="absolute top-0 left-0 right-0 bg-primary/10 backdrop-blur-sm px-3 py-2 text-sm text-center z-10">
+              <div className={`absolute top-0 left-0 right-0 bg-primary/10 backdrop-blur-sm px-3 py-2 text-sm text-center z-10 transition-opacity duration-300 ${isMoving ? "opacity-0" : "opacity-100"}`}>
                 <span className="font-medium">
                   {isLocked 
                     ? "WASD = Bewegen | Leertaste = Hoch | Shift = Runter | Mausrad = Höhe | ESC = Beenden" 
