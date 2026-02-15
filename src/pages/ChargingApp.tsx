@@ -34,6 +34,7 @@ interface AppChargePoint {
   connector_count: number;
   vendor: string | null;
   model: string | null;
+  isAppCompatible?: boolean;
 }
 
 interface AppSession {
@@ -217,18 +218,71 @@ function MapTab({ chargePoints, onStartCharge, initialCpId, onInitialCpHandled }
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [minPower, setMinPower] = useState(0);
   const [connectorFilter, setConnectorFilter] = useState<string>("all");
+  const [compatFilter, setCompatFilter] = useState<string>("all"); // "all" | "app" | "public"
   const [searchQuery, setSearchQuery] = useState("");
   const [filterOpen, setFilterOpen] = useState(false);
   const [selectedCp, setSelectedCp] = useState<AppChargePoint | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [locationGroup, setLocationGroup] = useState<AppChargePoint[] | null>(null);
   const [locationDrawerOpen, setLocationDrawerOpen] = useState(false);
+  const [publicPoints, setPublicPoints] = useState<AppChargePoint[]>([]);
+  const [publicLoading, setPublicLoading] = useState(false);
+  const publicFetchedRef = useRef(false);
+
+  // Fetch public charge points from OpenChargeMap
+  useEffect(() => {
+    if (publicFetchedRef.current) return;
+    // Determine center: use own charge points or default to Germany center
+    let lat = 51.1657;
+    let lng = 10.4515;
+    const withCoords = chargePoints.filter(cp => cp.latitude && cp.longitude);
+    if (withCoords.length > 0) {
+      lat = withCoords.reduce((s, cp) => s + (cp.latitude || 0), 0) / withCoords.length;
+      lng = withCoords.reduce((s, cp) => s + (cp.longitude || 0), 0) / withCoords.length;
+    }
+    publicFetchedRef.current = true;
+    setPublicLoading(true);
+
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+    fetch(`${supabaseUrl}/functions/v1/openchargemap?latitude=${lat}&longitude=${lng}&distance=30&maxresults=150`, {
+      headers: { "Authorization": `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}` },
+    })
+      .then(r => r.json())
+      .then(data => {
+        if (Array.isArray(data)) {
+          // Filter out points that overlap with own charge points (within ~50m)
+          const ownCoords = chargePoints
+            .filter(cp => cp.latitude && cp.longitude)
+            .map(cp => ({ lat: cp.latitude!, lng: cp.longitude! }));
+          const filtered = data.filter((p: AppChargePoint) => {
+            if (!p.latitude || !p.longitude) return false;
+            return !ownCoords.some(o =>
+              Math.abs(o.lat - p.latitude!) < 0.0005 && Math.abs(o.lng - p.longitude!) < 0.0005
+            );
+          });
+          setPublicPoints(filtered);
+        }
+      })
+      .catch(err => console.error("Failed to load public charge points:", err))
+      .finally(() => setPublicLoading(false));
+  }, [chargePoints]);
+
+  // Merge own + public charge points
+  const allPoints = useMemo(() => {
+    const own = chargePoints.map(cp => ({ ...cp, isAppCompatible: true }));
+    const pub = publicPoints.map(cp => ({ ...cp, isAppCompatible: false }));
+    return [...own, ...pub];
+  }, [chargePoints, publicPoints]);
 
   const filtered = useMemo(() => {
-    return chargePoints.filter((cp) => {
+    return allPoints.filter((cp) => {
+      // Compatibility filter
+      if (compatFilter === "app" && !cp.isAppCompatible) return false;
+      if (compatFilter === "public" && cp.isAppCompatible) return false;
+      // Type filter
       if (typeFilter === "AC" && cp.max_power_kw > 43) return false;
       if (typeFilter === "DC" && cp.max_power_kw <= 43) return false;
-      if (cp.max_power_kw < minPower) return false;
+      if (cp.max_power_kw > 0 && cp.max_power_kw < minPower) return false;
       if (connectorFilter !== "all" && !cp.connector_type.split(",").includes(connectorFilter)) return false;
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
@@ -240,10 +294,10 @@ function MapTab({ chargePoints, onStartCharge, initialCpId, onInitialCpHandled }
       }
       return true;
     });
-  }, [chargePoints, typeFilter, minPower, connectorFilter, searchQuery]);
+  }, [allPoints, typeFilter, minPower, connectorFilter, compatFilter, searchQuery]);
 
-  const connectorTypes = [...new Set(chargePoints.flatMap((cp) => cp.connector_type.split(",")).filter(Boolean))];
-  const hasActiveFilter = typeFilter !== "all" || minPower > 0 || connectorFilter !== "all";
+  const connectorTypes = [...new Set(allPoints.flatMap((cp) => cp.connector_type.split(",")).filter(Boolean))];
+  const hasActiveFilter = typeFilter !== "all" || minPower > 0 || connectorFilter !== "all" || compatFilter !== "all";
 
   const handleLocate = useCallback(() => {
     if (!navigator.geolocation) { toast.error("Geolocation wird nicht unterstützt"); return; }
@@ -257,7 +311,7 @@ function MapTab({ chargePoints, onStartCharge, initialCpId, onInitialCpHandled }
 
   const handleCpClick = useCallback((cp: AppChargePoint) => {
     // Check if multiple charge points share the same coordinates
-    const colocated = chargePoints.filter(
+    const colocated = allPoints.filter(
       (other) =>
         other.latitude != null &&
         other.longitude != null &&
@@ -273,7 +327,7 @@ function MapTab({ chargePoints, onStartCharge, initialCpId, onInitialCpHandled }
       setSelectedCp(cp);
       setDrawerOpen(true);
     }
-  }, [chargePoints]);
+  }, [allPoints]);
 
   // Handle deep-link / QR initial charge point
   useEffect(() => {
@@ -367,7 +421,7 @@ function MapTab({ chargePoints, onStartCharge, initialCpId, onInitialCpHandled }
               <div className="flex items-center justify-between">
                 <DrawerTitle>Filter</DrawerTitle>
                 {hasActiveFilter && (
-                  <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => { setTypeFilter("all"); setMinPower(0); setConnectorFilter("all"); }}>
+                  <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => { setTypeFilter("all"); setMinPower(0); setConnectorFilter("all"); setCompatFilter("all"); }}>
                     Zurücksetzen
                   </Button>
                 )}
@@ -406,8 +460,23 @@ function MapTab({ chargePoints, onStartCharge, initialCpId, onInitialCpHandled }
                 </div>
               </div>
             )}
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Kompatibilität</Label>
+              <div className="flex gap-1.5">
+                {[
+                  { key: "all", label: "Alle" },
+                  { key: "app", label: "App-kompatibel" },
+                  { key: "public", label: "Öffentlich" },
+                ].map((opt) => (
+                  <Button key={opt.key} variant={compatFilter === opt.key ? "default" : "outline"} size="sm" className="flex-1 h-9" onClick={() => setCompatFilter(opt.key)}>
+                    {opt.label}
+                  </Button>
+                ))}
+              </div>
+            </div>
             <div className="text-sm text-muted-foreground text-center pt-2">
               {filtered.filter(cp => cp.latitude && cp.longitude).length} Stationen gefunden
+              {publicLoading && " (öffentliche werden geladen…)"}
             </div>
           </div>
         </DrawerContent>
@@ -527,20 +596,26 @@ function MapTab({ chargePoints, onStartCharge, initialCpId, onInitialCpHandled }
                 </p>
               )}
 
+              {!selectedCp.isAppCompatible && (
+                <Badge variant="secondary" className="mb-3">Öffentliche Ladestation – kein App-Laden möglich</Badge>
+              )}
+
               <div className="flex gap-3">
                 {selectedCp.latitude && selectedCp.longitude && (
                   <Button variant="outline" className="flex-1 h-12" onClick={() => openNavigation(selectedCp)}>
                     <Navigation className="h-4 w-4 mr-2" /> Navigation
                   </Button>
                 )}
-                <Button
-                  className="flex-1 h-12"
-                  disabled={selectedCp.status !== "available"}
-                  onClick={() => { onStartCharge(selectedCp.id); setDrawerOpen(false); }}
-                >
-                  <PlugZap className="h-4 w-4 mr-2" />
-                  {selectedCp.status === "available" ? "Laden starten" : "Nicht verfügbar"}
-                </Button>
+                {selectedCp.isAppCompatible !== false && (
+                  <Button
+                    className="flex-1 h-12"
+                    disabled={selectedCp.status !== "available"}
+                    onClick={() => { onStartCharge(selectedCp.id); setDrawerOpen(false); }}
+                  >
+                    <PlugZap className="h-4 w-4 mr-2" />
+                    {selectedCp.status === "available" ? "Laden starten" : "Nicht verfügbar"}
+                  </Button>
+                )}
               </div>
             </div>
           )}
