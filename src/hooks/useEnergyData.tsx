@@ -115,17 +115,25 @@ export function useEnergyData(locationId?: string | null) {
 
       const sensor = sensors.find((s: any) => s.id === meter.sensor_uuid);
       if (sensor) {
-        // Only extract period totals – no instantaneous power in readings
+        // Extract period totals
         periodTotals[meter.id] = {
           totalDay: sensor.totalDay ?? null,
           totalWeek: sensor.totalWeek ?? null,
           totalMonth: sensor.totalMonth ?? null,
           totalYear: sensor.totalYear ?? null,
         };
+
+        // Create a live reading from instantaneous power for intraday charts
+        const power = sensor.rawValue;
+        if (power != null && !isNaN(power)) {
+          newLiveReadings.push({
+            meter_id: meter.id,
+            value: Math.abs(power),
+            reading_date: now,
+          });
+        }
       }
     }
-
-    return { liveReadings: [] as ReadingRow[], livePeriodTotals: periodTotals };
 
     return { liveReadings: newLiveReadings, livePeriodTotals: periodTotals };
   }, [meters, integrationIds, sensorQueries]);
