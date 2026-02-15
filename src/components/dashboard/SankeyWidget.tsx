@@ -63,7 +63,7 @@ const TARGET_COLORS = [
 
 const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
   const { locations } = useLocations();
-  const { readings, loading: energyLoading, hasData } = useEnergyData(locationId);
+  const { readings, livePeriodTotals, loading: energyLoading, hasData } = useEnergyData(locationId);
   const { meters } = useMeters();
   const { prices, loading: pricesLoading } = useEnergyPrices();
   const svgRef = useRef<SVGSVGElement>(null);
@@ -141,31 +141,27 @@ const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
   const flows = useMemo((): FlowLink[] => {
     const flowMap: Record<string, number> = {};
 
-    filteredReadings.forEach((r) => {
-      const meter = meterMap[r.meter_id];
-      if (!meter) return;
-      const energyType = meter.energy_type || "strom";
+    const addFlow = (energyType: string, locId: string, floorId: string | null, roomId: string | null, rawValue: number) => {
       const sourceName = ENERGY_LABELS[energyType] || energyType;
       const sourceColor = ENERGY_COLORS[energyType] || ENERGY_COLORS.strom;
 
-      let rawValue = r.value;
+      let val = rawValue;
       if (viewMode === "kosten") {
-        const priceKey = `${meter.location_id}:${energyType}`;
+        const priceKey = `${locId}:${energyType}`;
         const price = priceLookup.get(priceKey) || 0;
-        rawValue = rawValue * price;
+        val = val * price;
       }
 
       let targetName: string;
-
       if (!locationId) {
-        const loc = locations.find((l) => l.id === meter.location_id);
+        const loc = locations.find((l) => l.id === locId);
         targetName = loc?.name || "Unbekannt";
       } else {
-        if (meter.room_id) {
-          const room = rooms.find((rm) => rm.id === meter.room_id);
+        if (roomId) {
+          const room = rooms.find((rm) => rm.id === roomId);
           targetName = room?.name || "Raum";
-        } else if (meter.floor_id) {
-          const floor = floors.find((f) => f.id === meter.floor_id);
+        } else if (floorId) {
+          const floor = floors.find((f) => f.id === floorId);
           targetName = floor?.name || "Etage";
         } else {
           targetName = "Sonstige";
@@ -173,7 +169,25 @@ const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
       }
 
       const key = `${sourceName}|||${targetName}|||${sourceColor}|||${energyType}`;
-      flowMap[key] = (flowMap[key] || 0) + rawValue;
+      flowMap[key] = (flowMap[key] || 0) + val;
+    };
+
+    // Manual meter readings
+    filteredReadings.forEach((r) => {
+      const meter = meterMap[r.meter_id];
+      if (!meter) return;
+      addFlow(meter.energy_type || "strom", meter.location_id, meter.floor_id, meter.room_id, r.value);
+    });
+
+    // Auto meter period totals
+    const ptKey = period === "day" ? "totalDay" : period === "week" ? "totalWeek" : period === "month" ? "totalMonth" : period === "quarter" ? "totalMonth" : period === "year" ? "totalYear" : "totalYear";
+    meters.filter(m => !m.is_archived && m.capture_type === "automatic").forEach(m => {
+      if (locationId && m.location_id !== locationId) return;
+      const pt = livePeriodTotals[m.id];
+      if (!pt) return;
+      const val = pt[ptKey as keyof typeof pt];
+      if (val == null || val <= 0) return;
+      addFlow(m.energy_type || "strom", m.location_id, m.floor_id || null, m.room_id || null, val);
     });
 
     return Object.entries(flowMap)
@@ -182,7 +196,7 @@ const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
         return { sourceName, targetName, sourceColor, sourceType, value };
       })
       .filter((f) => f.value > 0);
-  }, [filteredReadings, meterMap, locationId, locations, floors, rooms, viewMode, priceLookup]);
+  }, [filteredReadings, meterMap, locationId, locations, floors, rooms, viewMode, priceLookup, livePeriodTotals, meters, period]);
 
   // Format helper based on view mode
   const formatValue = (value: number, sourceType?: string) => {
