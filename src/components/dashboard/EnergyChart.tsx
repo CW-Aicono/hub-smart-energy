@@ -124,14 +124,19 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
     };
 
     if (period === "day") {
-      // 24 hourly buckets – values represent average power (kW) in each hour
-      const buckets = Array.from({ length: 24 }, (_, h) => ({
-        label: `${h}:00`,
-        ...emptyBucket(),
-      }));
+      // 96 fifteen-minute buckets
+      const buckets = Array.from({ length: 96 }, (_, i) => {
+        const h = Math.floor(i / 4);
+        const m = (i % 4) * 15;
+        return {
+          label: `${h}:${m.toString().padStart(2, "0")}`,
+          ...emptyBucket(),
+        };
+      });
       filtered.forEach((r) => {
-        const hour = new Date(r.reading_date).getHours();
-        addToBucket(buckets[hour], r);
+        const d = new Date(r.reading_date);
+        const idx = d.getHours() * 4 + Math.floor(d.getMinutes() / 15);
+        addToBucket(buckets[Math.min(idx, 95)], r);
       });
       return buckets;
     }
@@ -278,7 +283,7 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
             {isLineChart ? (
               <LineChart data={chartData} margin={{ top: 5, right: 10, left: 5, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" className="stroke-border" vertical={false} />
-                <XAxis dataKey="label" tick={tickStyle} tickLine={false} axisLine={false} interval={2} />
+                <XAxis dataKey="label" tick={tickStyle} tickLine={false} axisLine={false} interval={3} tickFormatter={(v: string) => v.endsWith(":00") ? v : ""} />
                 <YAxis width={50} tick={tickStyle} tickLine={false} axisLine={false} domain={visibleKeys.length === 0 ? [0, 1] : ['auto', 'auto']} />
                 <Tooltip contentStyle={tooltipStyle} formatter={tooltipFormatter} />
                 <Legend wrapperStyle={{ fontSize: 12, cursor: 'pointer' }} onClick={handleLegendClick} formatter={legendFormatter} />
