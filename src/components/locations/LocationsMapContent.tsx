@@ -23,11 +23,25 @@ interface LocationsMapContentProps {
   className?: string;
 }
 
-function MapController({ locations }: { locations: Location[] }) {
+function MapController({ locations, isTouchDevice }: { locations: Location[]; isTouchDevice: boolean }) {
   const map = useMap();
 
   useEffect(() => {
-    // Force tile redraw after mount
+    if (!isTouchDevice) {
+      const handleWheel = (e: WheelEvent) => {
+        if (e.ctrlKey || e.metaKey) {
+          map.scrollWheelZoom.enable();
+        } else {
+          map.scrollWheelZoom.disable();
+        }
+      };
+      const container = map.getContainer();
+      container.addEventListener("wheel", handleWheel, { passive: true });
+      return () => container.removeEventListener("wheel", handleWheel);
+    }
+  }, [map, isTouchDevice]);
+
+  useEffect(() => {
     const timer = setTimeout(() => {
       map.invalidateSize();
       
@@ -75,7 +89,7 @@ function LocationsMapContent({ locations, onLocationClick, className }: Location
         center={defaultCenter}
         zoom={locations.length === 1 ? 14 : 6}
         className="h-full w-full"
-        scrollWheelZoom={!isTouchDevice}
+        scrollWheelZoom={false}
         dragging={!isTouchDevice}
         touchZoom={true}
         style={{ height: "100%", width: "100%" }}
@@ -86,7 +100,7 @@ function LocationsMapContent({ locations, onLocationClick, className }: Location
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
 
-        {mapReady && <MapController locations={locations} />}
+        {mapReady && <MapController locations={locations} isTouchDevice={isTouchDevice} />}
 
         {locations.map((location) => (
           <Marker
