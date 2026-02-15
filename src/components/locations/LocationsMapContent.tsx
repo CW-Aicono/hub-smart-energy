@@ -74,7 +74,9 @@ function LocationsMapContent({ locations, onLocationClick, className }: Location
         center={defaultCenter}
         zoom={locations.length === 1 ? 14 : 6}
         className="h-full w-full"
-        scrollWheelZoom={true}
+        scrollWheelZoom={false}
+        dragging={false}
+        touchZoom={false}
         style={{ height: "100%", width: "100%" }}
         whenReady={() => setMapReady(true)}
       >
