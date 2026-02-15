@@ -2017,6 +2017,35 @@ export type Database = {
         }
         Relationships: []
       }
+      user_location_access: {
+        Row: {
+          created_at: string
+          id: string
+          location_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          location_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          location_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_location_access_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_preferences: {
         Row: {
           color_scheme: string
@@ -2127,6 +2156,10 @@ export type Database = {
         Returns: Database["public"]["Enums"]["app_role"]
       }
       get_user_tenant_id: { Args: never; Returns: string }
+      has_location_access: {
+        Args: { _location_id: string; _user_id: string }
+        Returns: boolean
+      }
       has_permission: {
         Args: { _permission_code: string; _user_id: string }
         Returns: boolean

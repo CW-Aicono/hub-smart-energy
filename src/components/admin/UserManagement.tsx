@@ -9,10 +9,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { UserCheck, UserX, Shield, User, Mail, Clock, Send, Trash2, CalendarClock, CheckCircle } from "lucide-react";
+import { UserCheck, UserX, Shield, User, Mail, Clock, Send, Trash2, CalendarClock, CheckCircle, MapPin } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import EditUserDialog from "./EditUserDialog";
+import EditUserLocationsDialog from "./EditUserLocationsDialog";
 import DeleteUserDialog from "./DeleteUserDialog";
 import { format } from "date-fns";
 import { de } from "date-fns/locale";
@@ -555,6 +556,12 @@ const UserManagement = () => {
                               adminCount={adminCount}
                               onSuccess={fetchUsers}
                             />
+                            {user.role !== "admin" && (
+                              <EditUserLocationsDialog
+                                userId={user.user_id}
+                                userName={user.contact_person || t("users.unknown")}
+                              />
+                            )}
                           </>
                         )}
                       </div>

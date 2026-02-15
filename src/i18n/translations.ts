@@ -2506,6 +2506,36 @@ export const translations = {
     es: "Infraestructura de red",
     nl: "Netwerkinfrastructuur",
   },
+  "users.manageLocations": {
+    de: "Standorte verwalten",
+    en: "Manage locations",
+    es: "Gestionar ubicaciones",
+    nl: "Locaties beheren",
+  },
+  "users.locationAccess": {
+    de: "Standortzugriff",
+    en: "Location access",
+    es: "Acceso a ubicaciones",
+    nl: "Locatietoegang",
+  },
+  "users.locationAccessDescription": {
+    de: "Wählen Sie die Standorte, auf die dieser Nutzer zugreifen darf.",
+    en: "Select the locations this user can access.",
+    es: "Seleccione las ubicaciones a las que este usuario puede acceder.",
+    nl: "Selecteer de locaties waartoe deze gebruiker toegang heeft.",
+  },
+  "users.locationAccessUpdated": {
+    de: "Standortzugriff aktualisiert",
+    en: "Location access updated",
+    es: "Acceso a ubicación actualizado",
+    nl: "Locatietoegang bijgewerkt",
+  },
+  "users.locationAccessError": {
+    de: "Fehler beim Aktualisieren des Standortzugriffs",
+    en: "Error updating location access",
+    es: "Error al actualizar el acceso a la ubicación",
+    nl: "Fout bij bijwerken locatietoegang",
+  },
 } as const;
 
 export type TranslationKey = keyof typeof translations;
