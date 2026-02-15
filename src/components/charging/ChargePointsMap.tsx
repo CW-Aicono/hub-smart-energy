@@ -69,8 +69,24 @@ function LocateUserControl({ userPos }: { userPos: [number, number] | null }) {
   return null;
 }
 
-function MapController({ points }: { points: ChargePointForMap[] }) {
+function MapController({ points, isTouchDevice }: { points: ChargePointForMap[]; isTouchDevice: boolean }) {
   const map = useMap();
+
+  useEffect(() => {
+    if (!isTouchDevice) {
+      const handleWheel = (e: WheelEvent) => {
+        if (e.ctrlKey || e.metaKey) {
+          map.scrollWheelZoom.enable();
+        } else {
+          map.scrollWheelZoom.disable();
+        }
+      };
+      const container = map.getContainer();
+      container.addEventListener("wheel", handleWheel, { passive: true });
+      return () => container.removeEventListener("wheel", handleWheel);
+    }
+  }, [map, isTouchDevice]);
+
   useEffect(() => {
     const timer = setTimeout(() => {
       map.invalidateSize();
@@ -172,7 +188,7 @@ export default function ChargePointsMap({ chargePoints, onChargePointClick, onVi
         center={defaultCenter}
         zoom={validPoints.length === 1 ? 14 : 6}
         className="h-full w-full"
-        scrollWheelZoom={!isTouchDevice}
+        scrollWheelZoom={false}
         dragging={!isTouchDevice}
         touchZoom={true}
         style={{ height: "100%", width: "100%" }}
@@ -181,7 +197,7 @@ export default function ChargePointsMap({ chargePoints, onChargePointClick, onVi
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
-        <MapController points={validPoints} />
+        <MapController points={validPoints} isTouchDevice={isTouchDevice} />
         <BoundsTracker points={validPoints} onVisiblePointsChange={onVisiblePointsChange} />
         {userPos && <LocateUserControl userPos={userPos} />}
         {userPos && (
