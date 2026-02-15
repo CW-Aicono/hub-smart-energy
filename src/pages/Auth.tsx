@@ -147,6 +147,7 @@ const Auth = () => {
         setSubmitting(false);
         let message = error.message;
         if (message.includes("already registered")) message = t("auth.emailAlreadyRegistered");
+        if (message.includes("weak") || message.includes("easy to guess")) message = t("auth.passwordTooWeak");
         toast({ title: t("common.error"), description: message, variant: "destructive" });
         return;
       }

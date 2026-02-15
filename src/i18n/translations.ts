@@ -1462,6 +1462,12 @@ export const translations = {
     es: "Este correo electrónico ya está registrado",
     nl: "Dit e-mailadres is al geregistreerd",
   },
+  "auth.passwordTooWeak": {
+    de: "Das Passwort ist zu schwach und leicht zu erraten. Bitte wählen Sie ein anderes.",
+    en: "Password is known to be weak and easy to guess, please choose a different one.",
+    es: "La contraseña es demasiado débil y fácil de adivinar. Por favor, elija otra.",
+    nl: "Het wachtwoord is te zwak en makkelijk te raden. Kies alstublieft een ander wachtwoord.",
+  },
   "auth.appDescription": {
     de: "Ihr intelligentes B2B-Dashboard für Energiemanagement. Verbrauch analysieren, Kosten optimieren und Nachhaltigkeitsziele erreichen.",
     en: "Your intelligent B2B dashboard for energy management. Analyze consumption, optimize costs and achieve sustainability goals.",
