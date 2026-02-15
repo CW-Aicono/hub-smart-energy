@@ -34,6 +34,7 @@ const WIDGET_LABELS: Record<string, string> = {
 const SIZE_LABELS: Record<WidgetSize, string> = {
   "full": "Volle Breite",
   "2/3": "2/3 Breite",
+  "1/2": "1/2 Breite",
   "1/3": "1/3 Breite",
 };
 
