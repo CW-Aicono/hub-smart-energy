@@ -41,7 +41,7 @@ const LiveValues = () => {
   const [selectedLocationId, setSelectedLocationId] = useState<string>("all");
   const [selectedEnergyType, setSelectedEnergyType] = useState<string>("all");
   const [selectedCaptureType, setSelectedCaptureType] = useState<string>("all");
-  const [liveValues, setLiveValues] = useState<Map<string, { value: number; totalDay: number | null; totalWeek: number | null; totalMonth: number | null; totalYear: number | null }>>(new Map());
+  const [liveValues, setLiveValues] = useState<Map<string, { value: number; totalDay: number | null; totalWeek: number | null; totalMonth: number | null; totalYear: number | null; meterReading: number | null; meterReadingUnit: string }>>(new Map());
   const [manualValues, setManualValues] = useState<Map<string, { value: number; date: string }>>(new Map());
   const [manualDailyTotals, setManualDailyTotals] = useState<Map<string, number>>(new Map());
   const [virtualSources, setVirtualSources] = useState<{ virtual_meter_id: string; source_meter_id: string; operator: string; sort_order: number }[]>([]);
@@ -112,7 +112,7 @@ const LiveValues = () => {
     if (autoMeters.length === 0) return;
 
     setLoadingLive(true);
-    const newValues = new Map<string, { value: number; totalDay: number | null; totalWeek: number | null; totalMonth: number | null; totalYear: number | null }>();
+    const newValues = new Map<string, { value: number; totalDay: number | null; totalWeek: number | null; totalMonth: number | null; totalYear: number | null; meterReading: number | null; meterReadingUnit: string }>();
 
     // Group by integration
     const byIntegration = new Map<string, typeof autoMeters>();
@@ -143,6 +143,13 @@ const LiveValues = () => {
             const totalWeek = typeof sensor.totalWeek === "number" ? sensor.totalWeek : (sensor.totalWeek != null ? parseFloat(String(sensor.totalWeek)) : null);
             const totalMonth = typeof sensor.totalMonth === "number" ? sensor.totalMonth : (sensor.totalMonth != null ? parseFloat(String(sensor.totalMonth)) : null);
             const totalYear = typeof sensor.totalYear === "number" ? sensor.totalYear : (sensor.totalYear != null ? parseFloat(String(sensor.totalYear)) : null);
+            // Extract meter reading (Zählerstand / Mr / Mrc / Mrd) from secondaryValue
+            const meterReadingRaw = sensor.secondaryValue != null && sensor.secondaryValue !== ""
+              ? (typeof sensor.secondaryValue === "number" ? sensor.secondaryValue : parseFloat(String(sensor.secondaryValue).replace(/\./g, "").replace(",", ".")))
+              : null;
+            const meterReading = meterReadingRaw !== null && !isNaN(meterReadingRaw) ? meterReadingRaw : null;
+            const meterReadingUnit = sensor.secondaryUnit || "kWh";
+
             if (!isNaN(numVal)) {
               newValues.set(meter.id, {
                 value: numVal,
@@ -150,6 +157,8 @@ const LiveValues = () => {
                 totalWeek: totalWeek !== null && !isNaN(totalWeek as number) ? totalWeek : null,
                 totalMonth: totalMonth !== null && !isNaN(totalMonth as number) ? totalMonth : null,
                 totalYear: totalYear !== null && !isNaN(totalYear as number) ? totalYear : null,
+                meterReading,
+                meterReadingUnit,
               });
             }
           }
@@ -209,7 +218,7 @@ const LiveValues = () => {
 
   // Compute virtual meter values (instantaneous + daily total)
   const virtualValues = useMemo(() => {
-    const map = new Map<string, { value: number; totalDay: number | null; totalWeek: number | null; totalMonth: number | null; totalYear: number | null }>();
+    const map = new Map<string, { value: number; totalDay: number | null; totalWeek: number | null; totalMonth: number | null; totalYear: number | null; meterReading: number | null; meterReadingUnit: string }>();
     const virtualMeterIds = new Set(virtualSources.map((s) => s.virtual_meter_id));
 
     for (const vmId of virtualMeterIds) {
@@ -248,27 +257,27 @@ const LiveValues = () => {
       }
 
       if (allResolved && total !== null) {
-        map.set(vmId, { value: total, totalDay: allDayResolved ? totalDay : null, totalWeek: null, totalMonth: null, totalYear: null });
+        map.set(vmId, { value: total, totalDay: allDayResolved ? totalDay : null, totalWeek: null, totalMonth: null, totalYear: null, meterReading: null, meterReadingUnit: "" });
       }
     }
     return map;
   }, [virtualSources, getSourceValue, getSourceTotalDay]);
 
-  const getValue = (meter: typeof meters[0]): { value: number | null; totalDay: number | null; totalMonth: number | null; totalYear: number | null; source: "live" | "manual" | "virtual" | "none"; date?: string } => {
+  const getValue = (meter: typeof meters[0]): { value: number | null; totalDay: number | null; totalMonth: number | null; totalYear: number | null; meterReading: number | null; meterReadingUnit: string; source: "live" | "manual" | "virtual" | "none"; date?: string } => {
     if (meter.capture_type === "virtual" && virtualValues.has(meter.id)) {
       const vv = virtualValues.get(meter.id)!;
-      return { value: vv.value, totalDay: vv.totalDay, totalMonth: null, totalYear: null, source: "virtual" };
+      return { value: vv.value, totalDay: vv.totalDay, totalMonth: null, totalYear: null, meterReading: null, meterReadingUnit: "", source: "virtual" };
     }
     if (meter.capture_type === "automatic" && liveValues.has(meter.id)) {
       const live = liveValues.get(meter.id)!;
-      return { value: live.value, totalDay: live.totalDay, totalMonth: live.totalMonth, totalYear: live.totalYear, source: "live" };
+      return { value: live.value, totalDay: live.totalDay, totalMonth: live.totalMonth, totalYear: live.totalYear, meterReading: live.meterReading, meterReadingUnit: live.meterReadingUnit, source: "live" };
     }
     const manual = manualValues.get(meter.id);
     if (manual) {
       const dailyTotal = manualDailyTotals.get(meter.id) ?? null;
-      return { value: manual.value, totalDay: dailyTotal, totalMonth: null, totalYear: null, source: "manual", date: manual.date };
+      return { value: manual.value, totalDay: dailyTotal, totalMonth: null, totalYear: null, meterReading: null, meterReadingUnit: "", source: "manual", date: manual.date };
     }
-    return { value: null, totalDay: null, totalMonth: null, totalYear: null, source: "none" };
+    return { value: null, totalDay: null, totalMonth: null, totalYear: null, meterReading: null, meterReadingUnit: "", source: "none" };
   };
 
   if (authLoading || locationsLoading || metersLoading) {
@@ -379,7 +388,7 @@ const LiveValues = () => {
           ) : (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {filteredMeters.map((meter) => {
-                const { value, totalDay, totalMonth, totalYear, source, date } = getValue(meter);
+                const { value, totalDay, totalMonth, totalYear, meterReading, meterReadingUnit, source, date } = getValue(meter);
                 const config = ENERGY_TYPE_CONFIG[meter.energy_type] || ENERGY_TYPE_CONFIG.strom;
                 const Icon = config.icon;
                 const location = locations.find((l) => l.id === meter.location_id);
@@ -470,6 +479,15 @@ const LiveValues = () => {
                                 <span className="ml-1 font-normal">{source === "manual" ? "Verbrauch" : "Gesamt heute"}</span>
                               </>
                             )}
+                          </div>
+                        )}
+                        {/* Meter reading (Zählerstand) for automatic meters */}
+                        {source === "live" && meterReading != null && (
+                          <div className="text-sm text-muted-foreground">
+                            <span className="font-medium">
+                              {Number(meterReading).toLocaleString("de-DE", { minimumFractionDigits: 0, maximumFractionDigits: 2 })} {meterReadingUnit}
+                            </span>
+                            <span className="ml-1 font-normal">Zählerstand</span>
                           </div>
                         )}
                         {/* Period totals for automatic meters */}
