@@ -35,6 +35,10 @@ interface StateValueResult {
   secondaryStateName?: string;
   secondaryUnit?: string;
   totalDay?: number | null;
+  totalWeek?: number | null;
+  totalMonth?: number | null;
+  totalYear?: number | null;
+  totalMonthLast?: number | null;
 }
 
 // ── Control-type-specific state mapping table ──
@@ -405,6 +409,30 @@ serve(async (req) => {
           }
           const totalDay = totalDayRaw !== null ? (typeof totalDayRaw === "number" ? totalDayRaw : parseFloat(String(totalDayRaw))) : null;
 
+          // totalWeek
+          const totalWeekRaw = isNegativePower
+            ? (mappedStates["totalWeekDelivery"] ?? mappedStates["totalWeek"] ?? mappedStates["totalWeekConsumption"] ?? null)
+            : (mappedStates["totalWeekConsumption"] ?? mappedStates["totalWeek"] ?? mappedStates["totalWeekDelivery"] ?? null);
+          const totalWeek = totalWeekRaw !== null ? (typeof totalWeekRaw === "number" ? totalWeekRaw : parseFloat(String(totalWeekRaw))) : null;
+
+          // totalMonth
+          const totalMonthRaw = isNegativePower
+            ? (mappedStates["totalMonthDelivery"] ?? mappedStates["totalMonth"] ?? mappedStates["totalMonthConsumption"] ?? null)
+            : (mappedStates["totalMonthConsumption"] ?? mappedStates["totalMonth"] ?? mappedStates["totalMonthDelivery"] ?? null);
+          const totalMonth = totalMonthRaw !== null ? (typeof totalMonthRaw === "number" ? totalMonthRaw : parseFloat(String(totalMonthRaw))) : null;
+
+          // totalYear
+          const totalYearRaw = isNegativePower
+            ? (mappedStates["totalYearDelivery"] ?? mappedStates["totalYear"] ?? mappedStates["totalYearConsumption"] ?? null)
+            : (mappedStates["totalYearConsumption"] ?? mappedStates["totalYear"] ?? mappedStates["totalYearDelivery"] ?? null);
+          const totalYear = totalYearRaw !== null ? (typeof totalYearRaw === "number" ? totalYearRaw : parseFloat(String(totalYearRaw))) : null;
+
+          // totalMonthLast (Rlm) for archiving completed months
+          const totalMonthLastRaw = isNegativePower
+            ? (mappedStates["totalMonthLastDelivery"] ?? mappedStates["totalMonthLast"] ?? null)
+            : (mappedStates["totalMonthLastConsumption"] ?? mappedStates["totalMonthLast"] ?? null);
+          const totalMonthLast = totalMonthLastRaw !== null ? (typeof totalMonthLastRaw === "number" ? totalMonthLastRaw : parseFloat(String(totalMonthLastRaw))) : null;
+
           stateResults[controlUuid] = {
             value: primaryValue,
             stateName: primaryStateName,
@@ -412,6 +440,10 @@ serve(async (req) => {
             secondaryStateName,
             secondaryUnit,
             totalDay: totalDay !== null && !isNaN(totalDay) ? totalDay : null,
+            totalWeek: totalWeek !== null && !isNaN(totalWeek) ? totalWeek : null,
+            totalMonth: totalMonth !== null && !isNaN(totalMonth) ? totalMonth : null,
+            totalYear: totalYear !== null && !isNaN(totalYear) ? totalYear : null,
+            totalMonthLast: totalMonthLast !== null && !isNaN(totalMonthLast) ? totalMonthLast : null,
           };
         }
       }
@@ -491,6 +523,9 @@ serve(async (req) => {
           secondaryStateName,
           secondaryUnit,
           totalDay: stateData?.totalDay ?? null,
+          totalWeek: stateData?.totalWeek ?? null,
+          totalMonth: stateData?.totalMonth ?? null,
+          totalYear: stateData?.totalYear ?? null,
         });
       }
 
@@ -504,6 +539,64 @@ serve(async (req) => {
       });
 
       console.log(`Parsed ${sensors.length} sensors with values`);
+
+      // Auto-save completed month totals (totalMonthLast / Rlm) for quarterly calculation
+      try {
+        // Find meters linked to this integration to map sensor UUIDs -> meter IDs
+        const { data: linkedMeters } = await supabase
+          .from("meters")
+          .select("id, sensor_uuid, energy_type, tenant_id")
+          .eq("location_integration_id", locationIntegrationId)
+          .eq("capture_type", "automatic")
+          .eq("is_archived", false);
+
+        if (linkedMeters && linkedMeters.length > 0) {
+          const now = new Date();
+          // Previous month's first day
+          const prevMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+          const periodStart = prevMonthDate.toISOString().split("T")[0]; // YYYY-MM-DD
+
+          const upserts: Array<{
+            tenant_id: string;
+            meter_id: string;
+            period_type: string;
+            period_start: string;
+            total_value: number;
+            energy_type: string;
+            source: string;
+          }> = [];
+
+          for (const meter of linkedMeters) {
+            if (!meter.sensor_uuid) continue;
+            const stateData = stateResults[meter.sensor_uuid];
+            if (stateData?.totalMonthLast != null && stateData.totalMonthLast > 0) {
+              upserts.push({
+                tenant_id: meter.tenant_id,
+                meter_id: meter.id,
+                period_type: "month",
+                period_start: periodStart,
+                total_value: stateData.totalMonthLast,
+                energy_type: meter.energy_type,
+                source: "loxone",
+              });
+            }
+          }
+
+          if (upserts.length > 0) {
+            const { error: upsertError } = await supabase
+              .from("meter_period_totals")
+              .upsert(upserts, { onConflict: "meter_id,period_type,period_start" });
+            if (upsertError) {
+              console.error("Error upserting period totals:", upsertError);
+            } else {
+              console.log(`Upserted ${upserts.length} monthly period totals for ${periodStart}`);
+            }
+          }
+        }
+      } catch (archiveErr) {
+        console.error("Error archiving monthly totals:", archiveErr);
+      }
+
       await updateSyncStatus(supabase, locationIntegrationId, "success");
 
       return new Response(
