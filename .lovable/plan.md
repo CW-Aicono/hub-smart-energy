@@ -1,62 +1,34 @@
-# Zwei separate PWAs: Lade-App und Meter Mate
 
-## Problem
+## Karten-Kacheln: Touch-Gesten deaktivieren
 
-Aktuell gibt es nur eine einzige `manifest.json` mit `start_url: "/m"`. Wenn beide Apps auf dem iPhone installiert werden, verwenden sie dasselbe Manifest und landen daher immer bei der Meter-Mate-App.
+**Problem:** Auf Mobilgeraeten fangen die Leaflet-Karten Touch-Gesten ab (Ziehen, Pinch-Zoom), sodass die Seite nicht mehr gescrollt werden kann.
 
-## Losung
+**Loesung:** Touch-Interaktionen auf den Karten standardmaessig deaktivieren. Nutzer koennen die Karte weiterhin ueber die Zoom-Buttons (+/−) bedienen, aber Wisch- und Pinch-Gesten scrollen die Seite statt die Karte zu zoomen/verschieben.
 
-Zwei separate Manifest-Dateien erstellen, die jeweils uber eine eigene Route eingebunden werden.
+---
 
-## Schritte
+### Betroffene Komponenten
 
-### 1. Neues Manifest fur die Lade-App erstellen
+1. **`src/components/locations/LocationsMapContent.tsx`** (Dashboard-Karte, Standort-Karte)
+   - `scrollWheelZoom`, `dragging` und `touchZoom` auf `false` setzen
+   - Zoom-Steuerung ueber die eingebauten Leaflet-Buttons bleibt aktiv
 
-Eine neue Datei `public/manifest-ev.json` mit:
+2. **`src/components/charging/ChargePointsMap.tsx`** (Ladepunkte-Karte)
+   - Gleiche Aenderungen: Touch-/Scroll-Interaktionen deaktivieren
 
-- `name`: "SmartCharge" (o.a.)
-- `start_url`: "/ev"
-- `display`: "standalone"
-- Eigene Icons (vorerst dieselben, spater austauschbar)
+3. **`src/components/dashboard/LocationMapWidget.tsx`** (Dashboard-Widget)
+   - Keine direkte Aenderung noetig, nutzt `LocationsMapContent`
 
-### 2. Bestehendes Manifest anpassen
+### Technische Details
 
-`public/manifest.json` bleibt fur Meter Mate mit `start_url: "/m"` -- hier andert sich nichts.
+In beiden `MapContainer`-Komponenten werden folgende Props gesetzt:
 
-### 3. Manifest dynamisch pro Route einbinden
-
-Da eine HTML-Datei nur ein `<link rel="manifest">` haben kann, muss das Manifest dynamisch gesetzt werden:
-
-- Aus `index.html` den statischen `<link rel="manifest">` entfernen
-- In den Einstiegskomponenten (`ChargingApp` fur `/ev`, `MobileApp` fur `/m`) per `useEffect` das passende Manifest-Tag im `<head>` setzen
-- Fur alle anderen Routen (Desktop-App) wird kein Manifest oder das Standard-Manifest geladen
-
-### 4. Apple-Meta-Tags pro App anpassen
-
-- `apple-mobile-web-app-title` dynamisch setzen ("Meter Mate" vs. "Smart Charging")
-- Optional: Unterschiedliche `apple-touch-icon`-Referenzen
-
-## Technische Details
-
-```text
-public/
-  manifest.json        --> start_url: "/m"  (Meter Mate)
-  manifest-ev.json     --> start_url: "/ev" (Lade-App)
-  icon-192.png
-  icon-512.png
-
-index.html
-  - Kein statisches <link rel="manifest"> mehr
-
-src/pages/MobileApp.tsx
-  - useEffect: setzt <link rel="manifest" href="/manifest.json">
-  - setzt apple-mobile-web-app-title = "Meter Mate"
-
-src/pages/ChargingApp.tsx
-  - useEffect: setzt <link rel="manifest" href="/manifest-ev.json">
-  - setzt apple-mobile-web-app-title = "Smart Charging"
+```
+scrollWheelZoom={false}
+dragging={false}
+touchZoom={false}
 ```
 
-### Wichtig
+Damit werden Maus-Scroll-Zoom, Touch-Drag und Pinch-Zoom deaktiviert. Die +/− Zoom-Buttons von Leaflet bleiben weiterhin funktional, sodass Nutzer bei Bedarf zoomen koennen.
 
-Nach der Anderung mussen beide Apps auf dem iPhone **neu installiert** werden (alte vom Homescreen loschen, Seite erneut offnen, "Zum Home-Bildschirm" wahlen), damit das jeweilige Manifest korrekt ubernommen wird.
+Optional kann ein "Interaktiv"-Button hinzugefuegt werden, der die Karte bei Bedarf freischaltet -- das waere aber ein separater Schritt.
