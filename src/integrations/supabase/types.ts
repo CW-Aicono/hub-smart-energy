@@ -2005,6 +2005,7 @@ export type Database = {
           report_settings: Json | null
           slug: string
           updated_at: string
+          week_start_day: number
         }
         Insert: {
           address?: string | null
@@ -2020,6 +2021,7 @@ export type Database = {
           report_settings?: Json | null
           slug: string
           updated_at?: string
+          week_start_day?: number
         }
         Update: {
           address?: string | null
@@ -2035,6 +2037,7 @@ export type Database = {
           report_settings?: Json | null
           slug?: string
           updated_at?: string
+          week_start_day?: number
         }
         Relationships: []
       }

@@ -11,6 +11,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { ENERGY_CHART_COLORS, ENERGY_TYPE_LABELS } from "@/lib/energyTypeColors";
 import { startOfDay, startOfWeek, startOfMonth, startOfQuarter, startOfYear } from "date-fns";
 import { useDashboardFilter, TimePeriod } from "@/hooks/useDashboardFilter";
+import { useWeekStartDay } from "@/hooks/useWeekStartDay";
 
 type SankeyViewMode = "leistung" | "kosten";
 
@@ -23,11 +24,11 @@ const PERIOD_LABELS: Record<TimePeriod, string> = {
   all: "Gesamt",
 };
 
-function getPeriodStart(period: TimePeriod): Date | null {
+function getPeriodStart(period: TimePeriod, weekStartsOn: 0|1|2|3|4|5|6 = 1): Date | null {
   const now = new Date();
   switch (period) {
     case "day": return startOfDay(now);
-    case "week": return startOfWeek(now, { weekStartsOn: 1 });
+    case "week": return startOfWeek(now, { weekStartsOn });
     case "month": return startOfMonth(now);
     case "quarter": return startOfQuarter(now);
     case "year": return startOfYear(now);
@@ -68,6 +69,7 @@ const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
   const { prices, loading: pricesLoading } = useEnergyPrices();
   const svgRef = useRef<SVGSVGElement>(null);
   const { selectedPeriod: period, setSelectedPeriod: setPeriod } = useDashboardFilter();
+  const weekStartsOn = useWeekStartDay();
   const [viewMode, setViewMode] = useState<SankeyViewMode>("leistung");
 
   // Build price lookup: location_id:energy_type -> price_per_unit
@@ -132,7 +134,7 @@ const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
 
   // Filter readings by selected time period
   const filteredReadings = useMemo(() => {
-    const periodStart = getPeriodStart(period);
+    const periodStart = getPeriodStart(period, weekStartsOn);
     if (!periodStart) return readings;
     return readings.filter((r) => new Date(r.reading_date) >= periodStart);
   }, [readings, period]);
