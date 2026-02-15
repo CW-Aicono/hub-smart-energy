@@ -113,6 +113,7 @@ function BoundsTracker({ points, onVisiblePointsChange }: { points: ChargePointF
 }
 
 export default function ChargePointsMap({ chargePoints, onChargePointClick, onVisiblePointsChange, className, showLocateButton = false, externalUserPos }: ChargePointsMapProps) {
+  const isTouchDevice = "ontouchstart" in window || navigator.maxTouchPoints > 0;
   const [userPos, setUserPos] = useState<[number, number] | null>(externalUserPos || null);
   const [locating, setLocating] = useState(false);
 
@@ -171,8 +172,8 @@ export default function ChargePointsMap({ chargePoints, onChargePointClick, onVi
         center={defaultCenter}
         zoom={validPoints.length === 1 ? 14 : 6}
         className="h-full w-full"
-        scrollWheelZoom={false}
-        dragging={false}
+        scrollWheelZoom={!isTouchDevice}
+        dragging={!isTouchDevice}
         touchZoom={false}
         style={{ height: "100%", width: "100%" }}
       >

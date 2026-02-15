@@ -53,6 +53,7 @@ const typeLabels: Record<string, string> = {
 
 function LocationsMapContent({ locations, onLocationClick, className }: LocationsMapContentProps) {
   const [mapReady, setMapReady] = useState(false);
+  const isTouchDevice = "ontouchstart" in window || navigator.maxTouchPoints > 0;
 
   const defaultCenter: [number, number] = useMemo(() => {
     if (locations.length > 0) {
@@ -74,8 +75,8 @@ function LocationsMapContent({ locations, onLocationClick, className }: Location
         center={defaultCenter}
         zoom={locations.length === 1 ? 14 : 6}
         className="h-full w-full"
-        scrollWheelZoom={false}
-        dragging={false}
+        scrollWheelZoom={!isTouchDevice}
+        dragging={!isTouchDevice}
         touchZoom={false}
         style={{ height: "100%", width: "100%" }}
         whenReady={() => setMapReady(true)}
