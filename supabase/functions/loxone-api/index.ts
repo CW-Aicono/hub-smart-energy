@@ -383,13 +383,26 @@ serve(async (req) => {
             primaryStateName = "value";
           }
 
-          // Extract totalDay with priority: consumption > basic > delivery > Cd fallback
-          const totalDayRaw = mappedStates["totalDayConsumption"]
-            ?? mappedStates["totalDay"]
-            ?? mappedStates["totalDayDelivery"]
-            ?? mappedStates["Cd"]
-            ?? allStates["Cd"]
-            ?? null;
+          // Extract totalDay: if power is negative (generation), prefer delivery (Rdd)
+          const isNegativePower = typeof primaryValue === "number" && primaryValue < 0;
+          let totalDayRaw: number | string | null;
+          if (isNegativePower) {
+            // Generator / solar: prefer Rdd (delivery) over Rdc (consumption)
+            totalDayRaw = mappedStates["totalDayDelivery"]
+              ?? mappedStates["totalDay"]
+              ?? mappedStates["totalDayConsumption"]
+              ?? mappedStates["Cd"]
+              ?? allStates["Cd"]
+              ?? null;
+          } else {
+            // Consumer: prefer Rdc (consumption) as before
+            totalDayRaw = mappedStates["totalDayConsumption"]
+              ?? mappedStates["totalDay"]
+              ?? mappedStates["totalDayDelivery"]
+              ?? mappedStates["Cd"]
+              ?? allStates["Cd"]
+              ?? null;
+          }
           const totalDay = totalDayRaw !== null ? (typeof totalDayRaw === "number" ? totalDayRaw : parseFloat(String(totalDayRaw))) : null;
 
           stateResults[controlUuid] = {
