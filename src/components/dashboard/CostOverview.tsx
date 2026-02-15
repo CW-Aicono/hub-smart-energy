@@ -132,6 +132,7 @@ const CostOverview = ({ locationId }: CostOverviewProps) => {
     const ptKey = selectedPeriod === "day" ? "totalDay" : selectedPeriod === "week" ? "totalWeek" : selectedPeriod === "month" ? "totalMonth" : selectedPeriod === "quarter" ? "totalMonth" : "totalYear";
     meters.forEach(m => {
       if (m.is_archived || m.capture_type !== "automatic") return;
+      if (locationId && m.location_id !== locationId) return;
       const pt = livePeriodTotals[m.id];
       if (!pt) return;
       const val = pt[ptKey as keyof typeof pt];
@@ -149,7 +150,7 @@ const CostOverview = ({ locationId }: CostOverviewProps) => {
     const hasPrices = priceLookup.size > 0;
 
     return { currentCost, prevCost, diff, diffPercent, hasPrices, currentConsumption };
-  }, [readings, meterMap, priceLookup, selectedPeriod, livePeriodTotals, meters]);
+  }, [readings, meterMap, priceLookup, selectedPeriod, livePeriodTotals, meters, locationId]);
 
   const loading = dataLoading || pricesLoading;
 
