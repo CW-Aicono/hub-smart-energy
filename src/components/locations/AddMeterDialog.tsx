@@ -276,9 +276,6 @@ export const AddMeterDialog = ({ locationId, open, onOpenChange }: AddMeterDialo
           <div>
             <Label>Name *</Label>
             <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="z.B. Hauptzähler Strom" />
-            {captureType === "automatic" && selectedSensor && (
-              <p className="text-xs text-muted-foreground mt-1">Loxone: {sensors.find((s) => s.uuid === selectedSensor)?.name || selectedSensor}</p>
-            )}
           </div>
           <div>
             <Label>Zählernummer</Label>
