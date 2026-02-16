@@ -377,6 +377,42 @@ async function handleRemoteCommand(
 
       return { status: "Accepted" };
     }
+    case "UnlockConnector": {
+      const connectorId = (body.connectorId as number) || 1;
+
+      await supabase
+        .from("pending_ocpp_commands")
+        .insert({
+          charge_point_ocpp_id: chargePointOcppId,
+          command: "UnlockConnector",
+          payload: { connectorId },
+          status: "pending",
+        });
+
+      return { status: "Accepted" };
+    }
+    case "ChangeAvailability": {
+      const connectorId = (body.connectorId as number) || 0;
+      const availType = (body.type as string) || "Inoperative";
+
+      await supabase
+        .from("pending_ocpp_commands")
+        .insert({
+          charge_point_ocpp_id: chargePointOcppId,
+          command: "ChangeAvailability",
+          payload: { connectorId, type: availType },
+          status: "pending",
+        });
+
+      if (availType === "Inoperative") {
+        await supabase
+          .from("charge_points")
+          .update({ status: "unavailable" })
+          .eq("ocpp_id", chargePointOcppId);
+      }
+
+      return { status: "Accepted" };
+    }
     default:
       return { status: "NotSupported" };
   }
