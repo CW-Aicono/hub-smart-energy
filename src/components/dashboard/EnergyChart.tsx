@@ -22,6 +22,7 @@ import {
 import { de } from "date-fns/locale";
 import { useDashboardFilter, TimePeriod } from "@/hooks/useDashboardFilter";
 import { useWeekStartDay } from "@/hooks/useWeekStartDay";
+import { useLocationEnergySources } from "@/hooks/useLocationEnergySources";
 
 type ChartPeriod = "day" | "week" | "month" | "quarter" | "year";
 
@@ -95,6 +96,8 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
   const [hiddenKeys, setHiddenKeys] = useState<Set<string>>(new Set());
   const [powerReadings, setPowerReadings] = useState<Array<{ meter_id: string; power_value: number; recorded_at: string }>>([]);
   const [powerLoading, setPowerLoading] = useState(false);
+  const allowedTypes = useLocationEnergySources(locationId);
+  const visibleEnergyKeys = useMemo(() => ENERGY_KEYS.filter(k => allowedTypes.has(k)), [allowedTypes]);
 
   // Map "all" to "year" for this chart
   const period: ChartPeriod = selectedPeriod === "all" ? "year" : selectedPeriod;
@@ -445,10 +448,10 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
                 <YAxis width={50} tick={tickStyle} tickLine={false} axisLine={false} domain={visibleKeys.length === 0 ? [0, 1] : ['auto', 'auto']} />
                 <Tooltip contentStyle={tooltipStyle} formatter={tooltipFormatter} />
                 <Legend wrapperStyle={{ fontSize: 12, cursor: 'pointer' }} onClick={handleLegendClick} formatter={legendFormatter} />
-                <Line type="monotone" dataKey="strom" name="Strom" stroke={ENERGY_CHART_COLORS.strom} strokeWidth={2} dot={false} hide={hiddenKeys.has("strom")} />
-                <Line type="monotone" dataKey="gas" name="Gas" stroke={ENERGY_CHART_COLORS.gas} strokeWidth={2} dot={false} hide={hiddenKeys.has("gas")} />
-                <Line type="monotone" dataKey="waerme" name="Wärme" stroke={ENERGY_CHART_COLORS.waerme} strokeWidth={2} dot={false} hide={hiddenKeys.has("waerme")} />
-                <Line type="monotone" dataKey="wasser" name="Wasser" stroke={ENERGY_CHART_COLORS.wasser} strokeWidth={2} dot={false} hide={hiddenKeys.has("wasser")} />
+                {visibleEnergyKeys.includes("strom") && <Line type="monotone" dataKey="strom" name="Strom" stroke={ENERGY_CHART_COLORS.strom} strokeWidth={2} dot={false} hide={hiddenKeys.has("strom")} />}
+                {visibleEnergyKeys.includes("gas") && <Line type="monotone" dataKey="gas" name="Gas" stroke={ENERGY_CHART_COLORS.gas} strokeWidth={2} dot={false} hide={hiddenKeys.has("gas")} />}
+                {visibleEnergyKeys.includes("waerme") && <Line type="monotone" dataKey="waerme" name="Wärme" stroke={ENERGY_CHART_COLORS.waerme} strokeWidth={2} dot={false} hide={hiddenKeys.has("waerme")} />}
+                {visibleEnergyKeys.includes("wasser") && <Line type="monotone" dataKey="wasser" name="Wasser" stroke={ENERGY_CHART_COLORS.wasser} strokeWidth={2} dot={false} hide={hiddenKeys.has("wasser")} />}
               </LineChart>
             ) : (
               <BarChart data={chartData} barGap={2} margin={{ top: 5, right: 10, left: 5, bottom: 5 }}>
@@ -457,10 +460,10 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
                 <YAxis width={50} tick={tickStyle} tickLine={false} axisLine={false} domain={visibleKeys.length === 0 ? [0, 1] : ['auto', 'auto']} />
                 <Tooltip contentStyle={tooltipStyle} formatter={tooltipFormatter} />
                 <Legend wrapperStyle={{ fontSize: 12, cursor: 'pointer' }} onClick={handleLegendClick} formatter={legendFormatter} />
-                <Bar dataKey="strom" name="Strom" fill={ENERGY_CHART_COLORS.strom} radius={[3, 3, 0, 0]} hide={hiddenKeys.has("strom")} />
-                <Bar dataKey="gas" name="Gas" fill={ENERGY_CHART_COLORS.gas} radius={[3, 3, 0, 0]} hide={hiddenKeys.has("gas")} />
-                <Bar dataKey="waerme" name="Wärme" fill={ENERGY_CHART_COLORS.waerme} radius={[3, 3, 0, 0]} hide={hiddenKeys.has("waerme")} />
-                <Bar dataKey="wasser" name="Wasser" fill={ENERGY_CHART_COLORS.wasser} radius={[3, 3, 0, 0]} hide={hiddenKeys.has("wasser")} />
+                {visibleEnergyKeys.includes("strom") && <Bar dataKey="strom" name="Strom" fill={ENERGY_CHART_COLORS.strom} radius={[3, 3, 0, 0]} hide={hiddenKeys.has("strom")} />}
+                {visibleEnergyKeys.includes("gas") && <Bar dataKey="gas" name="Gas" fill={ENERGY_CHART_COLORS.gas} radius={[3, 3, 0, 0]} hide={hiddenKeys.has("gas")} />}
+                {visibleEnergyKeys.includes("waerme") && <Bar dataKey="waerme" name="Wärme" fill={ENERGY_CHART_COLORS.waerme} radius={[3, 3, 0, 0]} hide={hiddenKeys.has("waerme")} />}
+                {visibleEnergyKeys.includes("wasser") && <Bar dataKey="wasser" name="Wasser" fill={ENERGY_CHART_COLORS.wasser} radius={[3, 3, 0, 0]} hide={hiddenKeys.has("wasser")} />}
               </BarChart>
             )}
           </ResponsiveContainer>

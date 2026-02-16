@@ -12,6 +12,7 @@ import { ENERGY_CHART_COLORS, ENERGY_TYPE_LABELS } from "@/lib/energyTypeColors"
 import { startOfDay, startOfWeek, startOfMonth, startOfQuarter, startOfYear } from "date-fns";
 import { useDashboardFilter, TimePeriod } from "@/hooks/useDashboardFilter";
 import { useWeekStartDay } from "@/hooks/useWeekStartDay";
+import { useLocationEnergySources } from "@/hooks/useLocationEnergySources";
 
 type SankeyViewMode = "leistung" | "kosten";
 
@@ -71,6 +72,7 @@ const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
   const { selectedPeriod: period, setSelectedPeriod: setPeriod } = useDashboardFilter();
   const weekStartsOn = useWeekStartDay();
   const [viewMode, setViewMode] = useState<SankeyViewMode>("leistung");
+  const allowedTypes = useLocationEnergySources(locationId);
 
   // Build price lookup: location_id:energy_type -> price_per_unit
   const priceLookup = useMemo(() => {
@@ -202,6 +204,7 @@ const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
       if (!meter) return;
       if (!meter.is_main_meter) return;
       if (meter.capture_type === "automatic") return;
+      if (!allowedTypes.has(meter.energy_type || "strom")) return;
       const value = toBaseUnit(r.meter_id, r.value);
       addFlow(meter.energy_type || "strom", meter.location_id, meter.floor_id, meter.room_id, value);
     });
@@ -210,6 +213,7 @@ const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
     const ptKey = period === "day" ? "totalDay" : period === "week" ? "totalWeek" : period === "month" ? "totalMonth" : period === "quarter" ? "totalMonth" : period === "year" ? "totalYear" : "totalYear";
     meters.filter(m => !m.is_archived && m.capture_type === "automatic" && m.is_main_meter).forEach(m => {
       if (locationId && m.location_id !== locationId) return;
+      if (!allowedTypes.has(m.energy_type || "strom")) return;
       const pt = livePeriodTotals[m.id];
       if (!pt) return;
       const val = pt[ptKey as keyof typeof pt];
@@ -224,7 +228,7 @@ const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
         return { sourceName, targetName, sourceColor, sourceType, value };
       })
       .filter((f) => f.value > 0);
-  }, [filteredReadings, meterMap, locationId, locations, floors, rooms, viewMode, priceLookup, livePeriodTotals, meters, period]);
+  }, [filteredReadings, meterMap, locationId, locations, floors, rooms, viewMode, priceLookup, livePeriodTotals, meters, period, allowedTypes]);
 
   // Format helper based on view mode
   const formatValue = (value: number, sourceType?: string) => {

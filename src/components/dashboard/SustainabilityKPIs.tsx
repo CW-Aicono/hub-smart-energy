@@ -11,6 +11,7 @@ import { gasM3ToKWh } from "@/lib/formatEnergy";
 import { startOfDay, startOfWeek, startOfMonth, startOfQuarter, startOfYear } from "date-fns";
 import { useWeekStartDay } from "@/hooks/useWeekStartDay";
 import { useDashboardFilter, TimePeriod } from "@/hooks/useDashboardFilter";
+import { useLocationEnergySources } from "@/hooks/useLocationEnergySources";
 
 const PERIOD_LABELS: Record<TimePeriod, string> = {
   day: "Tag",
@@ -51,6 +52,7 @@ const SustainabilityKPIs = ({ locationId }: SustainabilityKPIsProps) => {
   const { meters } = useMeters(locationId || undefined);
   const { selectedPeriod: period, setSelectedPeriod: setPeriod } = useDashboardFilter();
   const weekStartsOn = useWeekStartDay();
+  const allowedTypes = useLocationEnergySources(locationId);
 
   // Build meter metadata map
   const meterMap = useMemo(() => {
@@ -174,37 +176,45 @@ const SustainabilityKPIs = ({ locationId }: SustainabilityKPIsProps) => {
               </div>
             </div>
 
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-medium">Strom</span>
-                <span className="text-sm text-muted-foreground">{formatEnergy(filteredTotals.strom)}</span>
+            {allowedTypes.has("strom") && (
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-medium">Strom</span>
+                  <span className="text-sm text-muted-foreground">{formatEnergy(filteredTotals.strom)}</span>
+                </div>
+                <Progress value={totalWhBased > 0 ? (filteredTotals.strom / totalWhBased) * 100 : 0} className="h-2" />
               </div>
-              <Progress value={totalWhBased > 0 ? (filteredTotals.strom / totalWhBased) * 100 : 0} className="h-2" />
-            </div>
+            )}
 
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-medium">Gas</span>
-                <span className="text-sm text-muted-foreground">{formatEnergy(filteredTotals.gas)}</span>
+            {allowedTypes.has("gas") && (
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-medium">Gas</span>
+                  <span className="text-sm text-muted-foreground">{formatEnergy(filteredTotals.gas)}</span>
+                </div>
+                <Progress value={totalWhBased > 0 ? (filteredTotals.gas / totalWhBased) * 100 : 0} className="h-2" />
               </div>
-              <Progress value={totalWhBased > 0 ? (filteredTotals.gas / totalWhBased) * 100 : 0} className="h-2" />
-            </div>
+            )}
 
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-medium">Wärme</span>
-                <span className="text-sm text-muted-foreground">{formatEnergy(filteredTotals.waerme)}</span>
+            {allowedTypes.has("waerme") && (
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-medium">Wärme</span>
+                  <span className="text-sm text-muted-foreground">{formatEnergy(filteredTotals.waerme)}</span>
+                </div>
+                <Progress value={totalWhBased > 0 ? (filteredTotals.waerme / totalWhBased) * 100 : 0} className="h-2" />
               </div>
-              <Progress value={totalWhBased > 0 ? (filteredTotals.waerme / totalWhBased) * 100 : 0} className="h-2" />
-            </div>
+            )}
 
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-medium">Wasser</span>
-                <span className="text-sm text-muted-foreground">{fmtWater(filteredTotals.wasser)}</span>
+            {allowedTypes.has("wasser") && (
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-medium">Wasser</span>
+                  <span className="text-sm text-muted-foreground">{fmtWater(filteredTotals.wasser)}</span>
+                </div>
+                <Progress value={0} className="h-2" />
               </div>
-              <Progress value={0} className="h-2" />
-            </div>
+            )}
           </>
         )}
       </CardContent>
