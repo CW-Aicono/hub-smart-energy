@@ -125,9 +125,9 @@ const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
 
   // Build meter lookup
   const meterMap = useMemo(() => {
-    const map: Record<string, { energy_type: string; location_id: string; floor_id: string | null; room_id: string | null; capture_type: string; gas_type: string | null; brennwert: number | null; zustandszahl: number | null; unit: string }> = {};
+    const map: Record<string, { energy_type: string; location_id: string; floor_id: string | null; room_id: string | null; capture_type: string; gas_type: string | null; brennwert: number | null; zustandszahl: number | null; unit: string; source_unit_energy: string | null }> = {};
     meters.forEach((m) => {
-      map[m.id] = { energy_type: m.energy_type, location_id: m.location_id, floor_id: m.floor_id || null, room_id: m.room_id || null, capture_type: m.capture_type, gas_type: m.gas_type ?? null, brennwert: m.brennwert ?? null, zustandszahl: m.zustandszahl ?? null, unit: m.unit };
+      map[m.id] = { energy_type: m.energy_type, location_id: m.location_id, floor_id: m.floor_id || null, room_id: m.room_id || null, capture_type: m.capture_type, gas_type: m.gas_type ?? null, brennwert: m.brennwert ?? null, zustandszahl: m.zustandszahl ?? null, unit: m.unit, source_unit_energy: (m as any).source_unit_energy ?? null };
     });
     return map;
   }, [meters]);
@@ -143,10 +143,24 @@ const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
   const flows = useMemo((): FlowLink[] => {
     const flowMap: Record<string, number> = {};
 
-    const convertGasToKwh = (meterId: string, rawValue: number): number => {
+    // Convert a period total to Wh (base unit for formatEnergy).
+    // Gas meters: totalDay is in m³ → convert to kWh via gasM3ToKWh, then ×1000 → Wh.
+    // Other meters: totalDay is in kWh (default source_unit_energy) → ×1000 → Wh.
+    // If source_unit_energy is "Wh", the value is already in Wh.
+    const toBaseUnit = (meterId: string, rawValue: number): number => {
       const m = meterMap[meterId];
-      if (!m || m.energy_type !== "gas" || m.unit !== "m³") return rawValue;
-      return gasM3ToKWh(rawValue, m.gas_type, m.brennwert, m.zustandszahl);
+      if (!m) return rawValue;
+
+      // Gas with m³ unit: convert volume to energy
+      if (m.energy_type === "gas" && m.unit === "m³") {
+        const kWh = gasM3ToKWh(rawValue, m.gas_type, m.brennwert, m.zustandszahl);
+        return kWh * 1000; // kWh → Wh
+      }
+
+      // Source unit determines scaling
+      if (m.source_unit_energy === "Wh") return rawValue;
+      // Default: gateway reports kWh
+      return rawValue * 1000; // kWh → Wh
     };
 
     const addFlow = (energyType: string, locId: string, floorId: string | null, roomId: string | null, rawValue: number) => {
@@ -157,7 +171,8 @@ const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
       if (viewMode === "kosten") {
         const priceKey = `${locId}:${energyType}`;
         const price = priceLookup.get(priceKey) || 0;
-        val = val * price;
+        // rawValue is in Wh, price is per kWh → convert to kWh first
+        val = (rawValue / 1000) * price;
       }
 
       let targetName: string;
@@ -185,7 +200,7 @@ const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
       const meter = meterMap[r.meter_id];
       if (!meter) return;
       if (meter.capture_type === "automatic") return;
-      const value = convertGasToKwh(r.meter_id, r.value);
+      const value = toBaseUnit(r.meter_id, r.value);
       addFlow(meter.energy_type || "strom", meter.location_id, meter.floor_id, meter.room_id, value);
     });
 
@@ -197,7 +212,7 @@ const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
       if (!pt) return;
       const val = pt[ptKey as keyof typeof pt];
       if (val == null || val <= 0) return;
-      const converted = convertGasToKwh(m.id, val);
+      const converted = toBaseUnit(m.id, val);
       addFlow(m.energy_type || "strom", m.location_id, m.floor_id || null, m.room_id || null, converted);
     });
 
