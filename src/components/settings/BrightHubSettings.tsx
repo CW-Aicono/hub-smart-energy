@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
-import { Loader2, CloudUpload, Eye, EyeOff } from "lucide-react";
+import { Loader2, CloudUpload, Eye, EyeOff, Copy, Check } from "lucide-react";
 
 interface BrightHubSettingsProps {
   locationId: string;
@@ -15,16 +15,19 @@ export const BrightHubSettings = ({ locationId }: BrightHubSettingsProps) => {
   const { settings, loading, saveSettings } = useBrightHubSettings(locationId);
   const [apiKey, setApiKey] = useState("");
   const [webhookSecret, setWebhookSecret] = useState("");
+  const [webhookUrl, setWebhookUrl] = useState("");
   const [isEnabled, setIsEnabled] = useState(false);
   const [autoSync, setAutoSync] = useState(false);
   const [saving, setSaving] = useState(false);
   const [showApiKey, setShowApiKey] = useState(false);
   const [showSecret, setShowSecret] = useState(false);
+  const [copiedField, setCopiedField] = useState<string | null>(null);
 
   useEffect(() => {
     if (settings) {
       setApiKey(settings.api_key);
       setWebhookSecret(settings.webhook_secret);
+      setWebhookUrl(settings.webhook_url);
       setIsEnabled(settings.is_enabled);
       setAutoSync(settings.auto_sync_readings);
     }
@@ -35,6 +38,7 @@ export const BrightHubSettings = ({ locationId }: BrightHubSettingsProps) => {
     await saveSettings({
       api_key: apiKey.trim(),
       webhook_secret: webhookSecret.trim(),
+      webhook_url: webhookUrl.trim(),
       is_enabled: isEnabled,
       auto_sync_readings: autoSync,
     });
@@ -91,6 +95,33 @@ export const BrightHubSettings = ({ locationId }: BrightHubSettingsProps) => {
             </Button>
           </div>
           <p className="text-xs text-muted-foreground">Wird in BrightHub unter Einstellungen → API generiert</p>
+        </div>
+
+        <div className="space-y-2">
+          <Label>Webhook-URL</Label>
+          <div className="relative">
+            <Input
+              type="text"
+              placeholder="https://... Webhook-URL von BrightHub"
+              value={webhookUrl}
+              onChange={(e) => setWebhookUrl(e.target.value)}
+              className="pr-10"
+            />
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 p-0"
+              onClick={() => {
+                navigator.clipboard.writeText(webhookUrl);
+                setCopiedField("url");
+                setTimeout(() => setCopiedField(null), 2000);
+              }}
+            >
+              {copiedField === "url" ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
+            </Button>
+          </div>
+          <p className="text-xs text-muted-foreground">Die Webhook-URL wird von BrightHub bereitgestellt</p>
         </div>
 
         <div className="space-y-2">

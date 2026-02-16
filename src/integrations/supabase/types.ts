@@ -98,6 +98,7 @@ export type Database = {
           tenant_id: string
           updated_at: string
           webhook_secret: string
+          webhook_url: string
         }
         Insert: {
           api_key?: string
@@ -109,6 +110,7 @@ export type Database = {
           tenant_id: string
           updated_at?: string
           webhook_secret?: string
+          webhook_url?: string
         }
         Update: {
           api_key?: string
@@ -120,6 +122,7 @@ export type Database = {
           tenant_id?: string
           updated_at?: string
           webhook_secret?: string
+          webhook_url?: string
         }
         Relationships: [
           {
