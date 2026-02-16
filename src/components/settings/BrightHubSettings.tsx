@@ -59,7 +59,7 @@ export const BrightHubSettings = ({ locationId }: BrightHubSettingsProps) => {
           BrightHub Synchronisation
         </CardTitle>
         <CardDescription>
-          Verbinden Sie diesen Standort mit der BrightHub Energiemanagement-Plattform.
+          Verbinden Sie diesen Standort mit der BrightHub Eventmanagement-Plattform.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
