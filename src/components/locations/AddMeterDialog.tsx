@@ -239,7 +239,11 @@ export const AddMeterDialog = ({ locationId, open, onOpenChange }: AddMeterDialo
                   ) : sensors.length === 0 ? (
                     <p className="text-sm text-muted-foreground mt-1">Keine Sensoren gefunden.</p>
                   ) : (
-                    <Select value={selectedSensor} onValueChange={setSelectedSensor}>
+                    <Select value={selectedSensor} onValueChange={(val) => {
+                      setSelectedSensor(val);
+                      const sensor = sensors.find((s) => s.uuid === val);
+                      if (sensor && !name) setName(sensor.name);
+                    }}>
                       <SelectTrigger className="mt-1"><SelectValue placeholder="Sensor auswählen" /></SelectTrigger>
                       <SelectContent>
                         {sensors.map((s) => (
@@ -272,6 +276,9 @@ export const AddMeterDialog = ({ locationId, open, onOpenChange }: AddMeterDialo
           <div>
             <Label>Name *</Label>
             <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="z.B. Hauptzähler Strom" />
+            {captureType === "automatic" && selectedSensor && (
+              <p className="text-xs text-muted-foreground mt-1">Loxone: {sensors.find((s) => s.uuid === selectedSensor)?.name || selectedSensor}</p>
+            )}
           </div>
           <div>
             <Label>Zählernummer</Label>

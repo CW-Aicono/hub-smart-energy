@@ -371,6 +371,9 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
           <div>
             <Label>Name *</Label>
             <Input value={name} onChange={(e) => setName(e.target.value)} />
+            {captureType === "automatic" && selectedSensor && (
+              <p className="text-xs text-muted-foreground mt-1">Loxone: {sensorDisplayName}</p>
+            )}
           </div>
           <div>
             <Label>Zählernummer</Label>
