@@ -556,9 +556,8 @@ serve(async (req) => {
 
       console.log(`Parsed ${sensors.length} sensors with values`);
 
-      // Auto-save completed month totals (totalMonthLast / Rlm) for quarterly calculation
+      // Auto-save instantaneous power readings for time-series charts
       try {
-        // Find meters linked to this integration to map sensor UUIDs -> meter IDs
         const { data: linkedMeters } = await supabase
           .from("meters")
           .select("id, sensor_uuid, energy_type, tenant_id")
@@ -568,11 +567,11 @@ serve(async (req) => {
 
         if (linkedMeters && linkedMeters.length > 0) {
           const now = new Date();
-          // Previous month's first day
+          // Previous month's first day for monthly archiving
           const prevMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-          const periodStart = prevMonthDate.toISOString().split("T")[0]; // YYYY-MM-DD
+          const periodStart = prevMonthDate.toISOString().split("T")[0];
 
-          const upserts: Array<{
+          const monthUpserts: Array<{
             tenant_id: string;
             meter_id: string;
             period_type: string;
@@ -582,11 +581,21 @@ serve(async (req) => {
             source: string;
           }> = [];
 
+          const powerInserts: Array<{
+            tenant_id: string;
+            meter_id: string;
+            power_value: number;
+            energy_type: string;
+            recorded_at: string;
+          }> = [];
+
           for (const meter of linkedMeters) {
             if (!meter.sensor_uuid) continue;
             const stateData = stateResults[meter.sensor_uuid];
+
+            // Archive completed month total (Rlm)
             if (stateData?.totalMonthLast != null && stateData.totalMonthLast > 0) {
-              upserts.push({
+              monthUpserts.push({
                 tenant_id: meter.tenant_id,
                 meter_id: meter.id,
                 period_type: "month",
@@ -596,21 +605,46 @@ serve(async (req) => {
                 source: "loxone",
               });
             }
+
+            // Store instantaneous power reading for time-series
+            if (stateData?.value != null) {
+              const powerVal = typeof stateData.value === "number" ? stateData.value : parseFloat(String(stateData.value));
+              if (!isNaN(powerVal)) {
+                powerInserts.push({
+                  tenant_id: meter.tenant_id,
+                  meter_id: meter.id,
+                  power_value: Math.abs(powerVal),
+                  energy_type: meter.energy_type,
+                  recorded_at: now.toISOString(),
+                });
+              }
+            }
           }
 
-          if (upserts.length > 0) {
+          if (monthUpserts.length > 0) {
             const { error: upsertError } = await supabase
               .from("meter_period_totals")
-              .upsert(upserts, { onConflict: "meter_id,period_type,period_start" });
+              .upsert(monthUpserts, { onConflict: "meter_id,period_type,period_start" });
             if (upsertError) {
               console.error("Error upserting period totals:", upsertError);
             } else {
-              console.log(`Upserted ${upserts.length} monthly period totals for ${periodStart}`);
+              console.log(`Upserted ${monthUpserts.length} monthly period totals for ${periodStart}`);
+            }
+          }
+
+          if (powerInserts.length > 0) {
+            const { error: powerError } = await supabase
+              .from("meter_power_readings")
+              .insert(powerInserts);
+            if (powerError) {
+              console.error("Error inserting power readings:", powerError);
+            } else {
+              console.log(`Inserted ${powerInserts.length} power readings`);
             }
           }
         }
       } catch (archiveErr) {
-        console.error("Error archiving monthly totals:", archiveErr);
+        console.error("Error archiving data:", archiveErr);
       }
 
       await updateSyncStatus(supabase, locationIntegrationId, "success");
