@@ -12,6 +12,7 @@ import { AddFloorDialog } from "@/components/locations/AddFloorDialog";
 import { LocationIntegrationsList } from "@/components/integrations/LocationIntegrationsList";
 import { LocationAutomation } from "@/components/locations/LocationAutomation";
 import { MeterManagement } from "@/components/locations/MeterManagement";
+import { BrightHubSettings } from "@/components/settings/BrightHubSettings";
 import { EnergyPriceManagement } from "@/components/locations/EnergyPriceManagement";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -231,6 +232,11 @@ const LocationDetail = () => {
           {/* Integrations Card - only if integrations module is enabled */}
           {isModuleEnabled("integrations") && (
             <LocationIntegrationsList locationId={location.id} />
+          )}
+
+          {/* BrightHub API - only if brighthub_api module is enabled */}
+          {isModuleEnabled("brighthub_api") && (
+            <BrightHubSettings locationId={location.id} />
           )}
         </div>
       </main>

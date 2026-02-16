@@ -7,8 +7,12 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Loader2, CloudUpload, Eye, EyeOff } from "lucide-react";
 
-export const BrightHubSettings = () => {
-  const { settings, loading, saveSettings } = useBrightHubSettings();
+interface BrightHubSettingsProps {
+  locationId: string;
+}
+
+export const BrightHubSettings = ({ locationId }: BrightHubSettingsProps) => {
+  const { settings, loading, saveSettings } = useBrightHubSettings(locationId);
   const [apiKey, setApiKey] = useState("");
   const [webhookSecret, setWebhookSecret] = useState("");
   const [isEnabled, setIsEnabled] = useState(false);
@@ -55,14 +59,14 @@ export const BrightHubSettings = () => {
           BrightHub Synchronisation
         </CardTitle>
         <CardDescription>
-          Verbinden Sie Ihr Projekt mit der BrightHub Energiemanagement-Plattform, um Zähler und Verbrauchsdaten automatisch zu synchronisieren.
+          Verbinden Sie diesen Standort mit der BrightHub Energiemanagement-Plattform.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
         <div className="flex items-center justify-between">
           <div>
             <Label>BrightHub aktivieren</Label>
-            <p className="text-sm text-muted-foreground">Synchronisation mit BrightHub ein-/ausschalten</p>
+            <p className="text-sm text-muted-foreground">Synchronisation für diesen Standort ein-/ausschalten</p>
           </div>
           <Switch checked={isEnabled} onCheckedChange={setIsEnabled} />
         </div>
