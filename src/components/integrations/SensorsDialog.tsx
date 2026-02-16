@@ -69,7 +69,8 @@ export function SensorsDialog({ locationIntegration, open, onOpenChange, locatio
   const [showAssignDialog, setShowAssignDialog] = useState(false);
 
   const effectiveLocationId = locationId || locationIntegration?.location_id || "";
-  const { meters } = useMeters(effectiveLocationId);
+  // Fetch ALL meters (no location filter) so we can detect sensor assignments across locations
+  const { meters } = useMeters();
 
   const integrationName = locationIntegration?.integration?.name || "Integration";
   const integrationType = locationIntegration?.integration?.type || "";
@@ -81,15 +82,16 @@ export function SensorsDialog({ locationIntegration, open, onOpenChange, locatio
     : sensors;
 
   // Set of sensor UUIDs already assigned to this location
+  // Check ALL meters globally – a sensor_uuid must only be assigned once across the entire system
   const assignedSensorIds = useMemo(() => {
     const ids = new Set<string>();
     meters.forEach((m) => {
-      if (m.sensor_uuid && m.location_integration_id === locationIntegration?.id) {
+      if (m.sensor_uuid) {
         ids.add(m.sensor_uuid);
       }
     });
     return ids;
-  }, [meters, locationIntegration?.id]);
+  }, [meters]);
 
   const fetchSensors = async () => {
     if (!locationIntegration) return;
