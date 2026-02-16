@@ -5,7 +5,7 @@ import { useEffect } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { PlugZap, Zap, ZapOff, AlertTriangle, WifiOff, LocateFixed, Loader2, Navigation } from "lucide-react";
+import { PlugZap, Zap, ZapOff, AlertTriangle, WifiOff, LocateFixed, Loader2, Navigation, Move, Check } from "lucide-react";
 import { toast } from "sonner";
 
 const statusColors: Record<string, string> = {
@@ -46,8 +46,10 @@ interface ChargePointsMapProps {
   chargePoints: ChargePointForMap[];
   onChargePointClick?: (cp: ChargePointForMap) => void;
   onVisiblePointsChange?: (visibleIds: Set<string>) => void;
+  onPositionChange?: (cpId: string, lat: number, lng: number) => void;
   className?: string;
   showLocateButton?: boolean;
+  showEditPositionButton?: boolean;
   externalUserPos?: [number, number] | null;
 }
 
@@ -128,10 +130,11 @@ function BoundsTracker({ points, onVisiblePointsChange }: { points: ChargePointF
   return null;
 }
 
-export default function ChargePointsMap({ chargePoints, onChargePointClick, onVisiblePointsChange, className, showLocateButton = false, externalUserPos }: ChargePointsMapProps) {
+export default function ChargePointsMap({ chargePoints, onChargePointClick, onVisiblePointsChange, onPositionChange, className, showLocateButton = false, showEditPositionButton = false, externalUserPos }: ChargePointsMapProps) {
   const isTouchDevice = "ontouchstart" in window || navigator.maxTouchPoints > 0;
   const [userPos, setUserPos] = useState<[number, number] | null>(externalUserPos || null);
   const [locating, setLocating] = useState(false);
+  const [editMode, setEditMode] = useState(false);
 
   // Sync external user position
   useEffect(() => {
@@ -213,7 +216,16 @@ export default function ChargePointsMap({ chargePoints, onChargePointClick, onVi
               key={cp.id}
               position={[cp.latitude!, cp.longitude!]}
               icon={createColoredIcon(statusColors[cp.status] || statusColors.offline)}
-              eventHandlers={{ click: () => onChargePointClick?.(cp) }}
+              draggable={editMode}
+              eventHandlers={{
+                click: () => { if (!editMode) onChargePointClick?.(cp); },
+                dragend: (e) => {
+                  const marker = e.target;
+                  const pos = marker.getLatLng();
+                  onPositionChange?.(cp.id, pos.lat, pos.lng);
+                  toast.success(`Position von "${cp.name}" aktualisiert`);
+                },
+              }}
             >
               <Popup>
                 <div className="min-w-[180px]">
@@ -265,9 +277,39 @@ export default function ChargePointsMap({ chargePoints, onChargePointClick, onVi
         })}
       </MapContainer>
 
+      {/* Edit mode banner */}
+      {editMode && (
+        <div className="absolute top-3 left-1/2 -translate-x-1/2 z-[1000] bg-primary text-primary-foreground px-4 py-2 rounded-full shadow-lg text-sm font-medium flex items-center gap-2">
+          <Move className="h-4 w-4" />
+          Marker verschieben, dann Bearbeitung beenden
+        </div>
+      )}
+
       {/* Map control buttons */}
-      {showLocateButton && (
-        <div className="absolute bottom-3 right-3 z-[1000] flex flex-col gap-2">
+      <div className="absolute bottom-3 right-3 z-[1000] flex flex-col gap-2">
+        {showEditPositionButton && (
+          <Button
+            size={editMode ? "default" : "icon"}
+            variant={editMode ? "default" : "secondary"}
+            className={cn(
+              "shadow-lg backdrop-blur-sm border",
+              editMode
+                ? "rounded-full gap-2 bg-primary text-primary-foreground hover:bg-primary/90"
+                : "h-10 w-10 rounded-full bg-background/95"
+            )}
+            onClick={() => setEditMode((v) => !v)}
+          >
+            {editMode ? (
+              <>
+                <Check className="h-4 w-4" />
+                Fertig
+              </>
+            ) : (
+              <Move className="h-5 w-5" />
+            )}
+          </Button>
+        )}
+        {showLocateButton && (
           <Button
             size="icon"
             variant="secondary"
@@ -281,8 +323,8 @@ export default function ChargePointsMap({ chargePoints, onChargePointClick, onVi
               <LocateFixed className={cn("h-5 w-5", userPos && "text-primary")} />
             )}
           </Button>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }

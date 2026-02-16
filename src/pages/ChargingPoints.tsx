@@ -45,7 +45,7 @@ const ChargingPoints = () => {
   const { isAdmin } = useUserRole();
   const { t } = useTranslation();
   const { tenant } = useTenant();
-  const { chargePoints, isLoading, addChargePoint, deleteChargePoint } = useChargePoints();
+  const { chargePoints, isLoading, addChargePoint, updateChargePoint, deleteChargePoint } = useChargePoints();
   const { sessions } = useChargingSessions();
   const { chargerModels, vendors: knownVendors, getModelsForVendor } = useChargerModels();
 
@@ -378,6 +378,10 @@ const ChargingPoints = () => {
                 <LazyChargePointsMap
                   chargePoints={filteredChargePoints}
                   onChargePointClick={(cp) => navigate(`/charging/points/${cp.id}`)}
+                  showEditPositionButton={true}
+                  onPositionChange={(cpId, lat, lng) => {
+                    updateChargePoint.mutate({ id: cpId, latitude: lat, longitude: lng });
+                  }}
                 />
               </Suspense>
             </CardContent>
