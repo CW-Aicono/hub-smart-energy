@@ -29,6 +29,7 @@ const WIDGET_LABELS: Record<string, string> = {
   sankey: "Sankey-Diagramm",
   forecast: "Jahresprognose",
   anomaly: "KI-Anomalie-Erkennung",
+  weather_normalization: "Witterungsbereinigung",
 };
 
 const SIZE_LABELS: Record<WidgetSize, string> = {

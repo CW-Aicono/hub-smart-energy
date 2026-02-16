@@ -2247,6 +2247,60 @@ export type Database = {
           },
         ]
       }
+      weather_degree_days: {
+        Row: {
+          avg_temperature: number
+          cooling_degree_days: number
+          created_at: string
+          heating_degree_days: number
+          id: string
+          location_id: string
+          month: string
+          reference_temperature: number
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          avg_temperature?: number
+          cooling_degree_days?: number
+          created_at?: string
+          heating_degree_days?: number
+          id?: string
+          location_id: string
+          month: string
+          reference_temperature?: number
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          avg_temperature?: number
+          cooling_degree_days?: number
+          created_at?: string
+          heating_degree_days?: number
+          id?: string
+          location_id?: string
+          month?: string
+          reference_temperature?: number
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "weather_degree_days_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "weather_degree_days_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
