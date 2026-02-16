@@ -76,8 +76,9 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
 
   const enabledIntegrations = locationIntegrations.filter((li) => li.is_enabled);
 
-  // Resolve sensor display name from fetched list or meter name as fallback
-  const sensorDisplayName = sensors.find((s) => s.uuid === selectedSensor)?.name || meter.name || selectedSensor;
+  // Resolve sensor display name from fetched list – only if actually found
+  const matchedSensor = sensors.find((s) => s.uuid === selectedSensor);
+  const sensorDisplayName = matchedSensor?.name || meter.name || selectedSensor;
 
   // Reset form when meter changes
   useEffect(() => {
@@ -371,8 +372,8 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
           <div>
             <Label>Name *</Label>
             <Input value={name} onChange={(e) => setName(e.target.value)} />
-            {captureType === "automatic" && selectedSensor && (
-              <p className="text-xs text-muted-foreground mt-1">Loxone: {sensorDisplayName}</p>
+            {captureType === "automatic" && selectedSensor && matchedSensor && (
+              <p className="text-xs text-muted-foreground mt-1">Loxone: {matchedSensor.name}</p>
             )}
           </div>
           <div>
