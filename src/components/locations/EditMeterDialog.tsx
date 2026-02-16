@@ -76,9 +76,7 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
 
   const enabledIntegrations = locationIntegrations.filter((li) => li.is_enabled);
 
-  // Resolve sensor display name from fetched list – only if actually found
-  const matchedSensor = sensors.find((s) => s.uuid === selectedSensor);
-  const sensorDisplayName = matchedSensor?.name || meter.name || selectedSensor;
+  // Available parents: all active meters except self and descendants
 
   // Reset form when meter changes
   useEffect(() => {
@@ -337,7 +335,7 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
                   {sensorsLoading ? (
                     <Skeleton className="h-9 w-full mt-1" />
                   ) : sensors.length === 0 && selectedSensor ? (
-                    <p className="text-sm mt-1">{sensorDisplayName}</p>
+                    <p className="text-sm mt-1">{sensors.find((s) => s.uuid === selectedSensor)?.name || meter.name || selectedSensor}</p>
                   ) : sensors.length === 0 ? (
                     <p className="text-sm text-muted-foreground mt-1">Keine Sensoren gefunden.</p>
                   ) : (
@@ -372,9 +370,6 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
           <div>
             <Label>Name *</Label>
             <Input value={name} onChange={(e) => setName(e.target.value)} />
-            {captureType === "automatic" && selectedSensor && matchedSensor && (
-              <p className="text-xs text-muted-foreground mt-1">Loxone: {matchedSensor.name}</p>
-            )}
           </div>
           <div>
             <Label>Zählernummer</Label>
