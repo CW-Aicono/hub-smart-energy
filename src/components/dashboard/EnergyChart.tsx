@@ -255,10 +255,10 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
     };
 
     if (period === "day") {
-      const buckets = Array.from({ length: 96 }, (_, i) => {
-        const h = Math.floor(i / 4);
-        const m = (i % 4) * 15;
-        return { label: `${h}:${m.toString().padStart(2, "0")}`, ...emptyBucket() };
+      const buckets = Array.from({ length: 288 }, (_, i) => {
+        const h = Math.floor(i / 12);
+        const m = (i % 12) * 5;
+        return { label: `${h}:${m.toString().padStart(2, "0")} Uhr`, ...emptyBucket() };
       });
 
       // Use power readings from DB for automatic main meters
@@ -266,10 +266,10 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
         const info = meterMap[pr.meter_id];
         if (!info) return;
         const d = new Date(pr.recorded_at);
-        const idx = d.getHours() * 4 + Math.floor(d.getMinutes() / 15);
+        const idx = d.getHours() * 12 + Math.floor(d.getMinutes() / 5);
         const et = info.energy_type || "strom";
-        if (et in buckets[Math.min(idx, 95)]) {
-          (buckets[Math.min(idx, 95)] as any)[et] += pr.power_value;
+        if (et in buckets[Math.min(idx, 287)]) {
+          (buckets[Math.min(idx, 287)] as any)[et] += pr.power_value;
         }
       });
 
@@ -279,8 +279,8 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
         if (!info || !info.is_main_meter) return;
         if (info.capture_type === "automatic") return; // already handled via powerReadings
         const d = new Date(r.reading_date);
-        const idx = d.getHours() * 4 + Math.floor(d.getMinutes() / 15);
-        addToBucket(buckets[Math.min(idx, 95)], r);
+        const idx = d.getHours() * 12 + Math.floor(d.getMinutes() / 5);
+        addToBucket(buckets[Math.min(idx, 287)], r);
       });
       return buckets;
     }
@@ -420,7 +420,7 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
             {isLineChart ? (
               <LineChart data={chartData} margin={{ top: 5, right: 10, left: 5, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" className="stroke-border" vertical={false} />
-                <XAxis dataKey="label" tick={tickStyle} tickLine={false} axisLine={false} interval={3} tickFormatter={(v: string) => v.endsWith(":00") ? v : ""} />
+                <XAxis dataKey="label" tick={tickStyle} tickLine={false} axisLine={false} interval={11} tickFormatter={(v: string) => v.endsWith(":00 Uhr") ? v.replace(" Uhr", "") : ""} />
                 <YAxis width={50} tick={tickStyle} tickLine={false} axisLine={false} domain={visibleKeys.length === 0 ? [0, 1] : ['auto', 'auto']} />
                 <Tooltip contentStyle={tooltipStyle} formatter={tooltipFormatter} />
                 <Legend wrapperStyle={{ fontSize: 12, cursor: 'pointer' }} onClick={handleLegendClick} formatter={legendFormatter} />
