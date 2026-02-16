@@ -76,6 +76,7 @@ const ChargePointDetail = () => {
   const [uploading, setUploading] = useState(false);
   const [geocoding, setGeocoding] = useState(false);
   const [statsPeriod, setStatsPeriod] = useState("7");
+  const [remoteLoading, setRemoteLoading] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { window.scrollTo(0, 0); }, [id]);
@@ -238,8 +239,67 @@ const ChargePointDetail = () => {
     setUploading(false);
   };
 
-  const remoteAction = (action: string) => {
-    toast({ title: "Fernbefehl gesendet", description: `${action} wird ausgeführt…` });
+
+
+  const callOcppCommand = async (endpoint: string, body: Record<string, unknown>) => {
+    const { data: { session: authSession } } = await supabase.auth.getSession();
+    const token = authSession?.access_token;
+    const res = await fetch(
+      `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ocpp-central/command/${endpoint}`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+        },
+        body: JSON.stringify(body),
+      }
+    );
+    return res.json();
+  };
+
+  const remoteAction = async (action: string) => {
+    if (!cp) return;
+    setRemoteLoading(action);
+    try {
+      let result: any;
+      switch (action) {
+        case "Ladestation neu starten":
+          result = await callOcppCommand("Reset", { chargePointId: cp.ocpp_id, type: "Soft" });
+          break;
+        case "Ladevorgang starten":
+          result = await callOcppCommand("RemoteStartTransaction", { chargePointId: cp.ocpp_id, idTag: "ADMIN", connectorId: 1 });
+          break;
+        case "Ladevorgang stoppen": {
+          const activeSession = sessions.find((s) => s.status === "active" && s.transaction_id);
+          if (!activeSession?.transaction_id) {
+            toast({ title: "Fehler", description: "Kein aktiver Ladevorgang gefunden", variant: "destructive" });
+            return;
+          }
+          result = await callOcppCommand("RemoteStopTransaction", { transactionId: activeSession.transaction_id });
+          break;
+        }
+        case "Kabel entriegeln":
+          result = await callOcppCommand("UnlockConnector", { chargePointId: cp.ocpp_id, connectorId: 1 });
+          break;
+        case "Auf inaktiv setzen":
+          result = await callOcppCommand("ChangeAvailability", { chargePointId: cp.ocpp_id, connectorId: 0, type: "Inoperative" });
+          break;
+        default:
+          toast({ title: "Nicht unterstützt", description: action, variant: "destructive" });
+          return;
+      }
+      if (result?.status === "Accepted") {
+        toast({ title: "Fernbefehl gesendet", description: `${action} wird ausgeführt…` });
+      } else {
+        toast({ title: "Fehler", description: result?.message || "Befehl abgelehnt", variant: "destructive" });
+      }
+    } catch (e: any) {
+      toast({ title: "Fehler", description: e.message, variant: "destructive" });
+    } finally {
+      setRemoteLoading(null);
+    }
   };
 
   const handleDelete = () => {
