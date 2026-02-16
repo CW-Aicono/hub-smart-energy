@@ -430,6 +430,7 @@ export type Database = {
       }
       charging_users: {
         Row: {
+          app_tag: string | null
           auth_user_id: string | null
           created_at: string
           email: string | null
@@ -444,6 +445,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          app_tag?: string | null
           auth_user_id?: string | null
           created_at?: string
           email?: string | null
@@ -458,6 +460,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          app_tag?: string | null
           auth_user_id?: string | null
           created_at?: string
           email?: string | null

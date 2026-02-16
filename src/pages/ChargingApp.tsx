@@ -1429,6 +1429,15 @@ const ChargingApp = () => {
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData?.session?.access_token;
 
+      // Fetch the short OCPP-compliant app_tag for this user
+      const { data: chargingUser } = await supabase
+        .from("charging_users")
+        .select("app_tag")
+        .eq("auth_user_id", user?.id)
+        .single();
+
+      const idTag = chargingUser?.app_tag || `APP${user?.id?.replace(/-/g, "").substring(0, 17)}`;
+
       const res = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ocpp-central/command/RemoteStartTransaction`,
         {
@@ -1439,7 +1448,7 @@ const ChargingApp = () => {
           },
           body: JSON.stringify({
             chargePointId: cp.ocpp_id,
-            idTag: `APP:${user?.id}`,
+            idTag,
             connectorId: 1,
           }),
         }

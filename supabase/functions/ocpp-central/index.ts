@@ -124,16 +124,29 @@ async function validateIdTag(
 
   if (!cp) return "Invalid";
 
-  // App user: idTag format "APP:<auth_user_id>"
-  if (idTag.startsWith("APP:")) {
-    const authUserId = idTag.substring(4);
-    const { data: appUser } = await supabase
-      .from("charging_users")
-      .select("id, status")
-      .eq("tenant_id", cp.tenant_id)
-      .eq("auth_user_id", authUserId)
-      .single();
+  // App user: short app_tag format "APPxxxxxxxx" (OCPP-compliant, max 20 chars)
+  if (idTag.startsWith("APP")) {
+    // Support both new short format (APP12345678) and legacy long format (APP:uuid)
+    const isLegacy = idTag.startsWith("APP:");
+    let query;
+    if (isLegacy) {
+      const authUserId = idTag.substring(4);
+      query = supabase
+        .from("charging_users")
+        .select("id, status")
+        .eq("tenant_id", cp.tenant_id)
+        .eq("auth_user_id", authUserId)
+        .single();
+    } else {
+      query = supabase
+        .from("charging_users")
+        .select("id, status")
+        .eq("tenant_id", cp.tenant_id)
+        .eq("app_tag", idTag)
+        .single();
+    }
 
+    const { data: appUser } = await query;
     if (!appUser) return "Invalid"; // Not registered as charging user
     if (appUser.status !== "active") return "Blocked";
     return "Accepted";
