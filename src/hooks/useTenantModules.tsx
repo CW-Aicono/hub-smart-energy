@@ -16,6 +16,7 @@ export const ALL_MODULES = [
   { code: "meter_scanning", label: "Zähler-Scanning (OCR)" },
   { code: "live_values", label: "Live-Sensorwerte" },
   { code: "network_infra", label: "Netzwerkinfrastruktur" },
+  { code: "brighthub_api", label: "BrightHub API" },
 ] as const;
 
 export function useTenantModules(tenantId: string | null) {

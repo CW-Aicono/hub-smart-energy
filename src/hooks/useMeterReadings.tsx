@@ -82,19 +82,28 @@ export function useMeterReadings(meterId?: string) {
     toast.success("Zählerstand erfasst");
     fetchReadings();
 
-    // Auto-sync to BrightHub if enabled
+    // Auto-sync to BrightHub if enabled (check per-location settings)
     try {
-      const { data: bhSettings } = await supabase
-        .from("brighthub_settings")
-        .select("is_enabled, auto_sync_readings")
-        .eq("tenant_id", tenantId)
-        .maybeSingle();
-      if (bhSettings?.is_enabled && bhSettings?.auto_sync_readings) {
-        sendWebhookEvent(tenantId, "reading.created", {
-          meter_id: data.meter_id,
-          reading_date: data.reading_date,
-          value: data.value,
-        }).catch((err) => console.warn("BrightHub webhook failed:", err));
+      // Get meter's location_id first
+      const { data: meter } = await supabase
+        .from("meters")
+        .select("location_id")
+        .eq("id", data.meter_id)
+        .single();
+      if (meter?.location_id) {
+        const { data: bhSettings } = await supabase
+          .from("brighthub_settings")
+          .select("is_enabled, auto_sync_readings")
+          .eq("tenant_id", tenantId)
+          .eq("location_id", meter.location_id)
+          .maybeSingle();
+        if (bhSettings?.is_enabled && bhSettings?.auto_sync_readings) {
+          sendWebhookEvent(tenantId, "reading.created", {
+            meter_id: data.meter_id,
+            reading_date: data.reading_date,
+            value: data.value,
+          }).catch((err) => console.warn("BrightHub webhook failed:", err));
+        }
       }
     } catch (e) {
       console.warn("BrightHub auto-sync check failed:", e);

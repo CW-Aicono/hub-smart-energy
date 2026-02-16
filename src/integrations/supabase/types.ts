@@ -94,6 +94,7 @@ export type Database = {
           created_at: string
           id: string
           is_enabled: boolean
+          location_id: string | null
           tenant_id: string
           updated_at: string
           webhook_secret: string
@@ -104,6 +105,7 @@ export type Database = {
           created_at?: string
           id?: string
           is_enabled?: boolean
+          location_id?: string | null
           tenant_id: string
           updated_at?: string
           webhook_secret?: string
@@ -114,15 +116,23 @@ export type Database = {
           created_at?: string
           id?: string
           is_enabled?: boolean
+          location_id?: string | null
           tenant_id?: string
           updated_at?: string
           webhook_secret?: string
         }
         Relationships: [
           {
+            foreignKeyName: "brighthub_settings_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "brighthub_settings_tenant_id_fkey"
             columns: ["tenant_id"]
-            isOneToOne: true
+            isOneToOne: false
             referencedRelation: "tenants"
             referencedColumns: ["id"]
           },
