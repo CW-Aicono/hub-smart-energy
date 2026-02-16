@@ -71,7 +71,7 @@ function LocateUserControl({ userPos }: { userPos: [number, number] | null }) {
   return null;
 }
 
-function MapController({ points, isTouchDevice }: { points: ChargePointForMap[]; isTouchDevice: boolean }) {
+function MapController({ points, isTouchDevice, editMode }: { points: ChargePointForMap[]; isTouchDevice: boolean; editMode: boolean }) {
   const map = useMap();
 
   useEffect(() => {
@@ -92,7 +92,7 @@ function MapController({ points, isTouchDevice }: { points: ChargePointForMap[];
   useEffect(() => {
     const timer = setTimeout(() => {
       map.invalidateSize();
-      if (points.length > 0) {
+      if (!editMode && points.length > 0) {
         const bounds = new LatLngBounds(
           points.map((p) => [p.latitude!, p.longitude!])
         );
@@ -100,7 +100,7 @@ function MapController({ points, isTouchDevice }: { points: ChargePointForMap[];
       }
     }, 100);
     return () => clearTimeout(timer);
-  }, [points, map]);
+  }, [points, map, editMode]);
   return null;
 }
 
@@ -200,7 +200,7 @@ export default function ChargePointsMap({ chargePoints, onChargePointClick, onVi
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
-        <MapController points={validPoints} isTouchDevice={isTouchDevice} />
+        <MapController points={validPoints} isTouchDevice={isTouchDevice} editMode={editMode} />
         <BoundsTracker points={validPoints} onVisiblePointsChange={onVisiblePointsChange} />
         {userPos && <LocateUserControl userPos={userPos} />}
         {userPos && (
