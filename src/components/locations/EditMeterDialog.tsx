@@ -245,7 +245,7 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
         brennwert: brennwertVal ? parseFloat(brennwertVal.replace(",", ".")) : null,
       } : { gas_type: null, zustandszahl: null, brennwert: null }),
       source_unit_power: captureType === "automatic" ? sourceUnit : null,
-      source_unit_energy: captureType === "automatic" ? (sourceUnit === "kW" ? "kWh" : "Wh") : null,
+      source_unit_energy: captureType === "automatic" ? (sourceUnit === "m³" ? "m³" : sourceUnit === "kW" ? "kWh" : "Wh") : null,
     } as any);
 
     // Update virtual sources
@@ -359,6 +359,7 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
                     <SelectContent>
                       <SelectItem value="kW">kW / kWh</SelectItem>
                       <SelectItem value="W">W / Wh</SelectItem>
+                      <SelectItem value="m³">m³</SelectItem>
                     </SelectContent>
                   </Select>
                   <p className="text-xs text-muted-foreground">Welche Einheiten liefert Ihr Gateway? In der Loxone Config unter den Ausgängen des Zählers sichtbar.</p>
