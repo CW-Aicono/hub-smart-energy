@@ -277,11 +277,32 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
       filtered.forEach((r) => {
         const info = meterMap[r.meter_id];
         if (!info || !info.is_main_meter) return;
-        if (info.capture_type === "automatic") return; // already handled via powerReadings
+        if (info.capture_type === "automatic") return;
         const d = new Date(r.reading_date);
         const idx = d.getHours() * 12 + Math.floor(d.getMinutes() / 5);
         addToBucket(buckets[Math.min(idx, 287)], r);
       });
+
+      // Interpolate gaps per energy type
+      for (const key of ENERGY_KEYS) {
+        const points: Array<{ idx: number; val: number }> = [];
+        buckets.forEach((b, i) => {
+          const v = (b as any)[key] as number;
+          if (v > 0) points.push({ idx: i, val: v });
+        });
+        for (let p = 0; p < points.length - 1; p++) {
+          const start = points[p];
+          const end = points[p + 1];
+          const gap = end.idx - start.idx;
+          if (gap > 1 && gap <= 12) { // interpolate gaps up to 1 hour
+            for (let g = 1; g < gap; g++) {
+              const t = g / gap;
+              (buckets[start.idx + g] as any)[key] = start.val + (end.val - start.val) * t;
+            }
+          }
+        }
+      }
+
       return buckets;
     }
 
