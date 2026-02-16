@@ -8,6 +8,7 @@ import { Euro, TrendingDown, TrendingUp, ArrowDownRight } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { startOfDay, startOfWeek, startOfMonth, startOfQuarter, startOfYear, subDays, subWeeks, subMonths, subQuarters, subYears } from "date-fns";
 import { useWeekStartDay } from "@/hooks/useWeekStartDay";
+import { gasM3ToKWh } from "@/lib/formatEnergy";
 
 interface CostOverviewProps {
   locationId: string | null;
@@ -82,9 +83,9 @@ const CostOverview = ({ locationId }: CostOverviewProps) => {
   const weekStartsOn = useWeekStartDay();
 
   const meterMap = useMemo(() => {
-    const map: Record<string, { energy_type: string; location_id: string; is_main_meter: boolean }> = {};
+    const map: Record<string, { energy_type: string; location_id: string; is_main_meter: boolean; unit: string; gas_type: string | null; brennwert: number | null; zustandszahl: number | null }> = {};
     meters.forEach((m) => {
-      map[m.id] = { energy_type: m.energy_type, location_id: m.location_id, is_main_meter: m.is_main_meter };
+      map[m.id] = { energy_type: m.energy_type, location_id: m.location_id, is_main_meter: m.is_main_meter, unit: m.unit, gas_type: m.gas_type ?? null, brennwert: m.brennwert ?? null, zustandszahl: m.zustandszahl ?? null };
     });
     return map;
   }, [meters]);
@@ -117,14 +118,19 @@ const CostOverview = ({ locationId }: CostOverviewProps) => {
       const meta = meterMap[r.meter_id];
       if (!meta || !meta.is_main_meter) return;
 
+      let consumptionVal = r.value;
+      if (meta.energy_type === "gas" && meta.unit === "m³") {
+        consumptionVal = gasM3ToKWh(consumptionVal, meta.gas_type, meta.brennwert, meta.zustandszahl);
+      }
+
       const priceKey = `${meta.location_id}:${meta.energy_type}`;
       const price = priceLookup.get(priceKey) || 0;
 
       if (date >= start) {
-        currentCost += r.value * price;
-        currentConsumption += r.value;
+        currentCost += consumptionVal * price;
+        currentConsumption += consumptionVal;
       } else if (selectedPeriod !== "all" && date >= prevStart && date <= prevEnd) {
-        prevCost += r.value * price;
+        prevCost += consumptionVal * price;
       }
     });
 
@@ -135,14 +141,18 @@ const CostOverview = ({ locationId }: CostOverviewProps) => {
       if (locationId && m.location_id !== locationId) return;
       const pt = livePeriodTotals[m.id];
       if (!pt) return;
-      const val = pt[ptKey as keyof typeof pt];
-      if (val == null) return;
+      const rawVal = pt[ptKey as keyof typeof pt];
+      if (rawVal == null) return;
       const meta = meterMap[m.id];
       if (!meta) return;
+      let consumptionVal = rawVal;
+      if (meta.energy_type === "gas" && meta.unit === "m³") {
+        consumptionVal = gasM3ToKWh(consumptionVal, meta.gas_type, meta.brennwert, meta.zustandszahl);
+      }
       const priceKey = `${meta.location_id}:${meta.energy_type}`;
       const price = priceLookup.get(priceKey) || 0;
-      currentCost += val * price;
-      currentConsumption += val;
+      currentCost += consumptionVal * price;
+      currentConsumption += consumptionVal;
     });
 
     const diff = prevCost - currentCost;
