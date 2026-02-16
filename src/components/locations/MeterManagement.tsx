@@ -77,8 +77,8 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
 
           <TabsContent value="meters" className="space-y-4">
             <div className="flex items-center justify-between">
-              {archivedMeters.length > 0 && (
-                <Button variant="ghost" size="sm" className="gap-1.5 text-xs" onClick={() => setShowArchived(!showArchived)}>
+              {(archivedMeters.length > 0 || showArchived) && (
+                <Button variant={showArchived ? "outline" : "ghost"} size="sm" className="gap-1.5 text-xs" onClick={() => setShowArchived(!showArchived)}>
                   {showArchived ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
                   {showArchived ? `Aktive anzeigen (${activeMeters.length})` : `Archiv anzeigen (${archivedMeters.length})`}
                 </Button>
