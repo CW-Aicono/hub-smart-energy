@@ -87,6 +87,47 @@ export type Database = {
           },
         ]
       }
+      brighthub_settings: {
+        Row: {
+          api_key: string
+          auto_sync_readings: boolean
+          created_at: string
+          id: string
+          is_enabled: boolean
+          tenant_id: string
+          updated_at: string
+          webhook_secret: string
+        }
+        Insert: {
+          api_key?: string
+          auto_sync_readings?: boolean
+          created_at?: string
+          id?: string
+          is_enabled?: boolean
+          tenant_id: string
+          updated_at?: string
+          webhook_secret?: string
+        }
+        Update: {
+          api_key?: string
+          auto_sync_readings?: boolean
+          created_at?: string
+          id?: string
+          is_enabled?: boolean
+          tenant_id?: string
+          updated_at?: string
+          webhook_secret?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "brighthub_settings_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: true
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       charge_points: {
         Row: {
           address: string | null

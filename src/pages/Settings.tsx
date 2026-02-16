@@ -4,6 +4,7 @@ import { useUserRole } from "@/hooks/useUserRole";
 import { useTranslation } from "@/hooks/useTranslation";
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
 import { BrandingSettings } from "@/components/settings/BrandingSettings";
+import { BrightHubSettings } from "@/components/settings/BrightHubSettings";
 
 const Settings = () => {
   const { user, loading: authLoading } = useAuth();
@@ -33,6 +34,7 @@ const Settings = () => {
         </header>
         <div className="p-6 space-y-6">
           <BrandingSettings />
+          <BrightHubSettings />
         </div>
       </main>
     </div>
