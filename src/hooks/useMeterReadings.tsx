@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
 import { useTenant } from "./useTenant";
 import { toast } from "sonner";
+import { sendWebhookEvent } from "@/lib/brighthubApi";
 
 export interface MeterReading {
   id: string;
@@ -80,6 +81,25 @@ export function useMeterReadings(meterId?: string) {
     }
     toast.success("Zählerstand erfasst");
     fetchReadings();
+
+    // Auto-sync to BrightHub if enabled
+    try {
+      const { data: bhSettings } = await supabase
+        .from("brighthub_settings")
+        .select("is_enabled, auto_sync_readings")
+        .eq("tenant_id", tenantId)
+        .maybeSingle();
+      if (bhSettings?.is_enabled && bhSettings?.auto_sync_readings) {
+        sendWebhookEvent(tenantId, "reading.created", {
+          meter_id: data.meter_id,
+          reading_date: data.reading_date,
+          value: data.value,
+        }).catch((err) => console.warn("BrightHub webhook failed:", err));
+      }
+    } catch (e) {
+      console.warn("BrightHub auto-sync check failed:", e);
+    }
+
     return true;
   };
 
