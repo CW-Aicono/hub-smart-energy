@@ -128,7 +128,7 @@ export const AddMeterDialog = ({ locationId, open, onOpenChange }: AddMeterDialo
         location_integration_id: captureType === "automatic" && selectedIntegration ? selectedIntegration : undefined,
         sensor_uuid: captureType === "automatic" && selectedSensor ? selectedSensor : undefined,
         ...(energyType === "gas" ? { gas_type: gasType, zustandszahl: parsedZustandszahl, brennwert: parsedBrennwert || undefined } : {}),
-        ...(captureType === "automatic" ? { source_unit_power: sourceUnit, source_unit_energy: sourceUnit === "kW" ? "kWh" : "Wh" } : {}),
+        ...(captureType === "automatic" ? { source_unit_power: sourceUnit, source_unit_energy: sourceUnit === "m³" ? "m³" : sourceUnit === "kW" ? "kWh" : "Wh" } : {}),
       } as any,
       parentMeterId && parentMeterId !== "none" ? parentMeterId : null,
       isMainMeter,
@@ -265,6 +265,7 @@ export const AddMeterDialog = ({ locationId, open, onOpenChange }: AddMeterDialo
                     <SelectContent>
                       <SelectItem value="kW">kW / kWh</SelectItem>
                       <SelectItem value="W">W / Wh</SelectItem>
+                      <SelectItem value="m³">m³</SelectItem>
                     </SelectContent>
                   </Select>
                   <p className="text-xs text-muted-foreground">Welche Einheiten liefert Ihr Gateway? In der Loxone Config unter den Ausgängen des Zählers sichtbar.</p>
