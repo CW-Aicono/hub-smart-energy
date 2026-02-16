@@ -15,9 +15,9 @@ import { useUpdateCheck } from "@/hooks/useUpdateCheck";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
-const APP_VERSION = "1.0.6";
+const APP_VERSION = "1.0.7";
 
-type ManualChapter = "gettingStarted" | "locationManagement" | "floorManagement" | "energyAnalysis" | "meterManagement" | "mobileApp" | "automation" | "evCharging";
+type ManualChapter = "gettingStarted" | "locationManagement" | "floorManagement" | "energyAnalysis" | "meterManagement" | "mobileApp" | "automation" | "evCharging" | "integrations";
 
 const Help = () => {
   const { user, loading } = useAuth();
@@ -89,9 +89,22 @@ const Help = () => {
     { questionKey: "help.faq14Question", answerKey: "help.faq14Answer" },
     { questionKey: "help.faq15Question", answerKey: "help.faq15Answer" },
     { questionKey: "help.faq16Question", answerKey: "help.faq16Answer" },
+    { questionKey: "help.faq17Question", answerKey: "help.faq17Answer" },
+    { questionKey: "help.faq18Question", answerKey: "help.faq18Answer" },
   ];
 
   const changelog = [
+    {
+      version: "1.0.7",
+      date: "2026-02-16",
+      changes: [
+        { type: "feature", textKey: "help.changelog107Feature1" },
+        { type: "feature", textKey: "help.changelog107Feature2" },
+        { type: "feature", textKey: "help.changelog107Feature3" },
+        { type: "improvement", textKey: "help.changelog107Improvement1" },
+        { type: "improvement", textKey: "help.changelog107Improvement2" },
+      ],
+    },
     {
       version: "1.0.6",
       date: "2026-02-14",
@@ -333,6 +346,17 @@ const Help = () => {
                   <div className="text-left">
                     <p className="font-medium">Ladeinfrastruktur</p>
                     <p className="text-xs text-muted-foreground">Ladepunkte, Tarife, Abrechnung und Lade-App</p>
+                  </div>
+                </Button>
+                <Button 
+                  variant="outline" 
+                  className="justify-start gap-3 h-auto py-4 px-5"
+                  onClick={() => openManualChapter("integrations")}
+                >
+                  <ExternalLink className="h-5 w-5 text-muted-foreground shrink-0" />
+                  <div className="text-left">
+                    <p className="font-medium">Integrationen & Sync</p>
+                    <p className="text-xs text-muted-foreground">BrightHub, Gateways und Datensynchronisation</p>
                   </div>
                 </Button>
               </div>

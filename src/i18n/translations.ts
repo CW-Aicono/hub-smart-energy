@@ -1871,6 +1871,37 @@ export const translations = {
     es: "Constructor de reglas completo como diálogo para automatizaciones complejas",
     nl: "Volledige regelbouwer als sheet-dialoog voor complexe automatiseringen",
   },
+  // Version 1.0.7 changelog
+  "help.changelog107Feature1": {
+    de: "BrightHub-Integration: Automatische Zähler-Synchronisation (täglich) und Messwerte-Sync (alle 15 Min.)",
+    en: "BrightHub integration: Automatic meter sync (daily) and readings sync (every 15 min.)",
+    es: "Integración BrightHub: Sincronización automática de medidores (diaria) y lecturas (cada 15 min.)",
+    nl: "BrightHub-integratie: Automatische metersynchronisatie (dagelijks) en meetwaarden-sync (elke 15 min.)",
+  },
+  "help.changelog107Feature2": {
+    de: "Zwei getrennte Sync-Aktionen: sync_meters für Zählerliste und bulk_readings für Messwerte",
+    en: "Two separate sync actions: sync_meters for meter list and bulk_readings for readings",
+    es: "Dos acciones de sincronización separadas: sync_meters para lista de medidores y bulk_readings para lecturas",
+    nl: "Twee afzonderlijke sync-acties: sync_meters voor meterlijst en bulk_readings voor meetwaarden",
+  },
+  "help.changelog107Feature3": {
+    de: "Manuelle Sync-Buttons für Zähler und Messwerte in den BrightHub-Einstellungen",
+    en: "Manual sync buttons for meters and readings in BrightHub settings",
+    es: "Botones de sincronización manual para medidores y lecturas en la configuración de BrightHub",
+    nl: "Handmatige sync-knoppen voor meters en meetwaarden in BrightHub-instellingen",
+  },
+  "help.changelog107Improvement1": {
+    de: "Zähler-Matching über UUID statt Name – Umbenennungen erzeugen keine Duplikate mehr",
+    en: "Meter matching via UUID instead of name – renaming no longer creates duplicates",
+    es: "Coincidencia de medidores por UUID en lugar de nombre – renombrar ya no crea duplicados",
+    nl: "Meter-matching via UUID i.p.v. naam – hernoemen maakt geen duplicaten meer",
+  },
+  "help.changelog107Improvement2": {
+    de: "Handbuchkapitel für Integrationen und BrightHub-Synchronisation ergänzt",
+    en: "Manual chapter for integrations and BrightHub synchronization added",
+    es: "Capítulo del manual para integraciones y sincronización BrightHub añadido",
+    nl: "Handboek-hoofdstuk voor integraties en BrightHub-synchronisatie toegevoegd",
+  },
   // Version 1.0.6 changelog
   "help.changelog106Feature1": {
     de: "Mobile Lade-App (SmartCharge) als eigenständige PWA mit Karte, QR-Scanner und Ladehistorie",
@@ -2075,6 +2106,32 @@ export const translations = {
     en: "Under Charging Infrastructure → Billing → Tariffs, create tariffs with base fee, price per kWh, and an optional idle fee. The idle fee is charged per minute after a configurable grace period and shown separately on the invoice.",
     es: "En Infraestructura de carga → Facturación → Tarifas, cree tarifas con cuota base, precio por kWh y una tarifa de inactividad opcional.",
     nl: "Onder Laadinfrastructuur → Facturering → Tarieven maakt u tarieven aan met basisbedrag, prijs per kWh en een optionele inactiviteitskost.",
+  },
+  // FAQ 17 - BrightHub Sync
+  "help.faq17Question": {
+    de: "Wie funktioniert die BrightHub-Synchronisation?",
+    en: "How does the BrightHub synchronization work?",
+    es: "¿Cómo funciona la sincronización con BrightHub?",
+    nl: "Hoe werkt de BrightHub-synchronisatie?",
+  },
+  "help.faq17Answer": {
+    de: "Unter Einstellungen → BrightHub aktivieren Sie die Synchronisation mit einem API-Key. Zähler werden 1x täglich automatisch synchronisiert, Messwerte alle 15 Minuten. Über die manuellen Sync-Buttons können Sie die Synchronisation jederzeit auslösen. Die Zähler-Zuordnung erfolgt über die UUID, sodass Umbenennungen keine Duplikate erzeugen.",
+    en: "Under Settings → BrightHub, enable synchronization with an API key. Meters are synced automatically once daily, readings every 15 minutes. Use the manual sync buttons to trigger synchronization anytime. Meter matching uses UUIDs, so renaming won't create duplicates.",
+    es: "En Configuración → BrightHub, active la sincronización con una clave API. Los medidores se sincronizan automáticamente una vez al día, las lecturas cada 15 minutos.",
+    nl: "Onder Instellingen → BrightHub activeert u de synchronisatie met een API-sleutel. Meters worden dagelijks automatisch gesynchroniseerd, meetwaarden elke 15 minuten.",
+  },
+  // FAQ 18 - Integration allgemein
+  "help.faq18Question": {
+    de: "Welche Gateways und Integrationen werden unterstützt?",
+    en: "Which gateways and integrations are supported?",
+    es: "¿Qué pasarelas e integraciones se admiten?",
+    nl: "Welke gateways en integraties worden ondersteund?",
+  },
+  "help.faq18Answer": {
+    de: "Smart Energy Hub unterstützt Loxone Miniserver, Shelly, Tuya, Siemens, ABB, HomeMatic und TP-Link Omada. Zusätzlich können Daten über die BrightHub-Schnittstelle mit externen Energieplattformen synchronisiert werden. Weitere Integrationen können unter Integrationen → Hinzufügen konfiguriert werden.",
+    en: "Smart Energy Hub supports Loxone Miniserver, Shelly, Tuya, Siemens, ABB, HomeMatic, and TP-Link Omada. Additionally, data can be synced with external energy platforms via the BrightHub interface. More integrations can be configured under Integrations → Add.",
+    es: "Smart Energy Hub es compatible con Loxone Miniserver, Shelly, Tuya, Siemens, ABB, HomeMatic y TP-Link Omada. Además, los datos se pueden sincronizar con plataformas externas a través de BrightHub.",
+    nl: "Smart Energy Hub ondersteunt Loxone Miniserver, Shelly, Tuya, Siemens, ABB, HomeMatic en TP-Link Omada. Daarnaast kunnen gegevens worden gesynchroniseerd met externe energieplatformen via BrightHub.",
   },
   // User management - activate user
   "users.activateUser": {
