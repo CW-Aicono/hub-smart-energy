@@ -98,7 +98,7 @@ export function useMeterReadings(meterId?: string) {
           .eq("location_id", meter.location_id)
           .maybeSingle();
         if (bhSettings?.is_enabled && bhSettings?.auto_sync_readings) {
-          sendWebhookEvent(tenantId, "reading.created", {
+          sendWebhookEvent(tenantId, meter.location_id, "reading.created", {
             meter_id: data.meter_id,
             reading_date: data.reading_date,
             value: data.value,

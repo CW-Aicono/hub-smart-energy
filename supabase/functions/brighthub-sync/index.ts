@@ -99,14 +99,19 @@ Deno.serve(async (req) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const { action, body: actionBody, tenantId } = await req.json();
+    const { action, body: actionBody, tenantId, locationId } = await req.json();
 
-    // Get BrightHub settings for the tenant
-    const { data: settings, error: settingsErr } = await supabase
+    // Get BrightHub settings for the tenant + location
+    let query = supabase
       .from("brighthub_settings")
       .select("*")
-      .eq("tenant_id", tenantId)
-      .single();
+      .eq("tenant_id", tenantId);
+
+    if (locationId) {
+      query = query.eq("location_id", locationId);
+    }
+
+    const { data: settings, error: settingsErr } = await query.maybeSingle();
 
     if (settingsErr || !settings) {
       return new Response(
