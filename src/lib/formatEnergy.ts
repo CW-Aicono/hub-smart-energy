@@ -79,7 +79,8 @@ const DEFAULT_BRENNWERT: Record<string, number> = {
 
 /**
  * Converts a gas volume (m³) to energy (kWh).
- * Formula: kWh = m³ × Brennwert × Zustandszahl
+ * If brennwert is configured: kWh = m³ × Brennwert × Zustandszahl
+ * If no brennwert: uses default factor 10 (1 m³ ≈ 10 kWh)
  */
 export function gasM3ToKWh(
   m3: number,
@@ -87,9 +88,12 @@ export function gasM3ToKWh(
   brennwert: number | null,
   zustandszahl: number | null,
 ): number {
-  const bw = brennwert ?? DEFAULT_BRENNWERT[gasType || "H"] ?? 11.5;
-  const zz = zustandszahl ?? 0.9636; // typical default
-  return m3 * bw * zz;
+  if (brennwert != null && brennwert > 0) {
+    const zz = zustandszahl ?? 0.9636;
+    return m3 * brennwert * zz;
+  }
+  // Default: 1 m³ ≈ 10 kWh
+  return m3 * 10;
 }
 
 /**

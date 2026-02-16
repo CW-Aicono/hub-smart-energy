@@ -12,6 +12,7 @@ import { useLocations } from "@/hooks/useLocations";
 import { supabase } from "@/integrations/supabase/client";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ENERGY_CHART_COLORS } from "@/lib/energyTypeColors";
+import { gasM3ToKWh } from "@/lib/formatEnergy";
 import {
   format, startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth,
   startOfQuarter, endOfQuarter, startOfYear, endOfYear,
@@ -69,11 +70,9 @@ function getPeriodLabel(period: ChartPeriod, ref: Date): string {
 function getUnitForPeriod(period: ChartPeriod, energyType: string): string {
   if (period === "day") {
     if (energyType === "wasser") return "Liter";
-    if (energyType === "gas") return "m³";
     return "kW";
   }
   if (energyType === "wasser") return "m³";
-  if (energyType === "gas") return "m³";
   return "kWh";
 }
 
@@ -104,8 +103,8 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
   const subtitle = selectedLocation ? `Daten für: ${selectedLocation.name}` : "Alle Liegenschaften";
 
   const meterMap = useMemo(() => {
-    const map: Record<string, { energy_type: string; capture_type: string; location_id: string; is_main_meter: boolean }> = {};
-    meters.forEach((m) => { map[m.id] = { energy_type: m.energy_type, capture_type: m.capture_type, location_id: m.location_id, is_main_meter: m.is_main_meter }; });
+    const map: Record<string, { energy_type: string; capture_type: string; location_id: string; is_main_meter: boolean; unit: string; gas_type: string | null; brennwert: number | null; zustandszahl: number | null }> = {};
+    meters.forEach((m) => { map[m.id] = { energy_type: m.energy_type, capture_type: m.capture_type, location_id: m.location_id, is_main_meter: m.is_main_meter, unit: m.unit, gas_type: m.gas_type ?? null, brennwert: m.brennwert ?? null, zustandszahl: m.zustandszahl ?? null }; });
     return map;
   }, [meters]);
 
@@ -171,9 +170,10 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
         const info = meterMap[meterId];
         if (!info || !info.is_main_meter) continue;
         if (locationId && info.location_id !== locationId) continue;
-        const val = pt[periodTotalKey as keyof typeof pt];
-        if (val != null && info.energy_type in totals) {
-          (totals as any)[info.energy_type] += val;
+        const rawVal = pt[periodTotalKey as keyof typeof pt];
+        if (rawVal != null && info.energy_type in totals) {
+          const converted = info.energy_type === "gas" && info.unit === "m³" ? gasM3ToKWh(rawVal, info.gas_type, info.brennwert, info.zustandszahl) : rawVal;
+          (totals as any)[info.energy_type] += converted;
         }
       }
 
@@ -184,7 +184,8 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
         if (!info || info.capture_type === "automatic" || !info.is_main_meter) return;
         const d = new Date(r.reading_date);
         if (d >= rs && d <= re && info.energy_type in totals) {
-          (totals as any)[info.energy_type] += r.value;
+          const converted = info.energy_type === "gas" && info.unit === "m³" ? gasM3ToKWh(r.value, info.gas_type, info.brennwert, info.zustandszahl) : r.value;
+          (totals as any)[info.energy_type] += converted;
         }
       });
 
@@ -209,7 +210,8 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
         if (!info || !info.is_main_meter) continue;
         if (locationId && info.location_id !== locationId) continue;
         if (pt.totalMonth != null && currentMonthIdx >= 0 && currentMonthIdx < 3 && info.energy_type in buckets[currentMonthIdx]) {
-          (buckets[currentMonthIdx] as any)[info.energy_type] += pt.totalMonth;
+          const converted = info.energy_type === "gas" && info.unit === "m³" ? gasM3ToKWh(pt.totalMonth, info.gas_type, info.brennwert, info.zustandszahl) : pt.totalMonth;
+          (buckets[currentMonthIdx] as any)[info.energy_type] += converted;
         }
       }
 
@@ -221,7 +223,8 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
         if (d >= rangeStart && d <= rangeEnd) {
           const mi = d.getMonth() - startMonth;
           if (mi >= 0 && mi < 3 && info.energy_type in buckets[mi]) {
-            (buckets[mi] as any)[info.energy_type] += r.value;
+            const converted = info.energy_type === "gas" && info.unit === "m³" ? gasM3ToKWh(r.value, info.gas_type, info.brennwert, info.zustandszahl) : r.value;
+            (buckets[mi] as any)[info.energy_type] += converted;
           }
         }
       });
@@ -237,10 +240,18 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
 
     const emptyBucket = () => ({ strom: 0, gas: 0, waerme: 0, wasser: 0 });
 
+    const convertGas = (meterId: string, value: number): number => {
+      const info = meterMap[meterId];
+      if (info?.energy_type === "gas" && info.unit === "m³") {
+        return gasM3ToKWh(value, info.gas_type, info.brennwert, info.zustandszahl);
+      }
+      return value;
+    };
+
     const addToBucket = (bucket: any, r: { meter_id: string; value: number }) => {
       const info = meterMap[r.meter_id];
       const et = info?.energy_type || "strom";
-      if (et in bucket) bucket[et] += r.value;
+      if (et in bucket) bucket[et] += convertGas(r.meter_id, r.value);
     };
 
     if (period === "day") {
