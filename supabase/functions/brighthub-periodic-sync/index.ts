@@ -6,19 +6,66 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type",
 };
 
-async function computeSignature(body: string, secret: string): Promise<string> {
-  const encoder = new TextEncoder();
-  const key = await crypto.subtle.importKey(
-    "raw",
-    encoder.encode(secret),
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign"]
-  );
-  const sig = await crypto.subtle.sign("HMAC", key, encoder.encode(body));
-  return Array.from(new Uint8Array(sig))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
+const BRIGHTHUB_API_URL =
+  "https://jcewrsouppdsvaipdpsy.supabase.co/functions/v1/energy-api";
+
+async function callBrightHub(
+  action: string,
+  body: Record<string, unknown>,
+  apiKey: string,
+  maxRetries = 3
+) {
+  let lastError: Error | null = null;
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      const response = await fetch(`${BRIGHTHUB_API_URL}?action=${action}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-energy-api-key": apiKey,
+        },
+        body: JSON.stringify(body),
+      });
+      const result = await response.json();
+      if (!result.success) throw new Error(result.error || "BrightHub API error");
+      return result;
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error(String(err));
+      if (attempt < maxRetries - 1) {
+        await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)));
+      }
+    }
+  }
+  throw lastError;
+}
+
+function mapEnergyType(energyType: string): string {
+  const map: Record<string, string> = {
+    electricity: "electricity",
+    strom: "electricity",
+    gas: "gas",
+    water: "water",
+    wasser: "water",
+    district_heating: "district_heating",
+    fernwaerme: "district_heating",
+    fernwärme: "district_heating",
+  };
+  return map[energyType?.toLowerCase()] || "other";
+}
+
+function mapUnit(unit: string): string {
+  const allowed = ["kWh", "MWh", "m³", "Liter", "GJ"];
+  if (allowed.includes(unit)) return unit;
+  // Common aliases
+  const map: Record<string, string> = {
+    kwh: "kWh",
+    mwh: "MWh",
+    "m3": "m³",
+    liter: "Liter",
+    l: "Liter",
+    gj: "GJ",
+  };
+  return map[unit?.toLowerCase()] || "kWh";
 }
 
 Deno.serve(async (req) => {
@@ -31,12 +78,28 @@ Deno.serve(async (req) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Get all enabled BrightHub settings with auto_sync
-    const { data: allSettings, error: settingsErr } = await supabase
+    // Accept optional action + locationId for manual triggers
+    let action = "all";
+    let targetLocationId: string | null = null;
+    try {
+      const body = await req.json();
+      if (body.action) action = body.action;
+      if (body.locationId) targetLocationId = body.locationId;
+    } catch {
+      // No body = cron call, run all
+    }
+
+    // Get all enabled BrightHub settings
+    let settingsQuery = supabase
       .from("brighthub_settings")
       .select("*")
-      .eq("is_enabled", true)
-      .eq("auto_sync_readings", true);
+      .eq("is_enabled", true);
+
+    if (targetLocationId) {
+      settingsQuery = settingsQuery.eq("location_id", targetLocationId);
+    }
+
+    const { data: allSettings, error: settingsErr } = await settingsQuery;
 
     if (settingsErr) {
       console.error("Error fetching brighthub_settings:", settingsErr);
@@ -48,125 +111,146 @@ Deno.serve(async (req) => {
 
     if (!allSettings || allSettings.length === 0) {
       return new Response(
-        JSON.stringify({ success: true, message: "No enabled BrightHub locations found", sent: 0 }),
+        JSON.stringify({ success: true, message: "No enabled BrightHub locations found", results: [] }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    let totalSent = 0;
-    const errors: string[] = [];
+    const results: unknown[] = [];
 
     for (const settings of allSettings) {
-      if (!settings.api_key || !settings.webhook_secret || !settings.location_id) {
-        continue;
-      }
+      if (!settings.api_key || !settings.location_id) continue;
+
+      const locationResult: Record<string, unknown> = {
+        location_id: settings.location_id,
+      };
 
       try {
-        // Get all meters for this location
-        const { data: meters } = await supabase
-          .from("meters")
-          .select("id, name, energy_type, unit, meter_number")
-          .eq("location_id", settings.location_id)
-          .eq("is_archived", false);
+        // ── SYNC METERS ──
+        if (action === "all" || action === "sync_meters") {
+          const { data: meters } = await supabase
+            .from("meters")
+            .select("id, name, energy_type, unit, meter_number, notes, is_archived")
+            .eq("location_id", settings.location_id)
+            .eq("is_archived", false);
 
-        if (!meters || meters.length === 0) continue;
+          if (meters && meters.length > 0) {
+            const metersPayload = meters.map((m) => ({
+              external_id: m.id,
+              name: m.name,
+              type: mapEnergyType(m.energy_type),
+              unit: mapUnit(m.unit),
+              location_description: m.notes || undefined,
+            }));
 
-        const readingsPayload: unknown[] = [];
+            const meterResult = await callBrightHub(
+              "sync_meters",
+              { meters: metersPayload },
+              settings.api_key
+            );
 
-        for (const meter of meters) {
-          // Try meter_power_readings first (live/automatic meters)
-          const { data: powerReading } = await supabase
-            .from("meter_power_readings")
-            .select("power_value, recorded_at, energy_type")
-            .eq("meter_id", meter.id)
-            .order("recorded_at", { ascending: false })
-            .limit(1)
-            .maybeSingle();
+            locationResult.meters = {
+              sent: metersPayload.length,
+              summary: meterResult.summary || meterResult.data,
+            };
 
-          if (powerReading) {
-            readingsPayload.push({
-              meter_id: meter.id,
-              meter_name: meter.name,
-              meter_number: meter.meter_number,
-              energy_type: meter.energy_type,
-              unit: meter.unit,
-              value: powerReading.power_value,
-              reading_date: powerReading.recorded_at,
-              source: "power_reading",
-            });
-            continue;
-          }
-
-          // Fallback to meter_readings (manual)
-          const { data: reading } = await supabase
-            .from("meter_readings")
-            .select("value, reading_date")
-            .eq("meter_id", meter.id)
-            .order("reading_date", { ascending: false })
-            .limit(1)
-            .maybeSingle();
-
-          if (reading) {
-            readingsPayload.push({
-              meter_id: meter.id,
-              meter_name: meter.name,
-              meter_number: meter.meter_number,
-              energy_type: meter.energy_type,
-              unit: meter.unit,
-              value: reading.value,
-              reading_date: reading.reading_date,
-              source: "manual_reading",
-            });
-          }
-        }
-
-        if (readingsPayload.length === 0) continue;
-
-        // Send each reading as individual webhook
-        const webhookUrl = settings.webhook_url || undefined;
-        const FALLBACK_URL = "https://jcewrsouppdsvaipdpsy.supabase.co/functions/v1/energy-api?action=webhook";
-        const url = webhookUrl || FALLBACK_URL;
-
-        for (const reading of readingsPayload) {
-          const body = JSON.stringify({
-            event: "reading.created",
-            data: reading,
-          });
-
-          const signature = await computeSignature(body, settings.webhook_secret);
-
-          const response = await fetch(url, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "x-energy-api-key": settings.api_key,
-              "x-energy-webhook-signature": signature,
-            },
-            body,
-          });
-
-          if (!response.ok) {
-            const errText = await response.text();
-            errors.push(`Location ${settings.location_id}, meter ${(reading as any).meter_id}: HTTP ${response.status} - ${errText}`);
+            // Update last_meter_sync_at
+            await supabase
+              .from("brighthub_settings")
+              .update({ last_meter_sync_at: new Date().toISOString() } as any)
+              .eq("id", settings.id);
           } else {
-            totalSent++;
+            locationResult.meters = { sent: 0, message: "No meters found" };
           }
         }
-        console.log(`Sent ${readingsPayload.length} readings for location ${settings.location_id}`);
+
+        // ── SYNC READINGS ──
+        if (action === "all" || action === "sync_readings") {
+          const { data: meters } = await supabase
+            .from("meters")
+            .select("id, name, energy_type, unit")
+            .eq("location_id", settings.location_id)
+            .eq("is_archived", false);
+
+          if (!meters || meters.length === 0) {
+            locationResult.readings = { sent: 0, message: "No meters found" };
+          } else {
+            const readings: { meter_id: string; reading_date: string; value: number }[] = [];
+            const sinceDate = settings.last_reading_sync_at || "2000-01-01T00:00:00Z";
+
+            for (const meter of meters) {
+              // Try power readings (live/automatic)
+              const { data: powerReadings } = await supabase
+                .from("meter_power_readings")
+                .select("power_value, recorded_at")
+                .eq("meter_id", meter.id)
+                .gt("recorded_at", sinceDate)
+                .order("recorded_at", { ascending: false })
+                .limit(1);
+
+              if (powerReadings && powerReadings.length > 0) {
+                for (const pr of powerReadings) {
+                  readings.push({
+                    meter_id: meter.id,
+                    reading_date: pr.recorded_at.substring(0, 10),
+                    value: pr.power_value,
+                  });
+                }
+                continue;
+              }
+
+              // Fallback to manual readings
+              const { data: manualReadings } = await supabase
+                .from("meter_readings")
+                .select("value, reading_date, notes")
+                .eq("meter_id", meter.id)
+                .gt("reading_date", sinceDate)
+                .order("reading_date", { ascending: false })
+                .limit(1);
+
+              if (manualReadings && manualReadings.length > 0) {
+                for (const mr of manualReadings) {
+                  readings.push({
+                    meter_id: meter.id,
+                    reading_date: mr.reading_date.substring(0, 10),
+                    value: mr.value,
+                  });
+                }
+              }
+            }
+
+            if (readings.length > 0) {
+              // Send in chunks of 1000
+              for (let i = 0; i < readings.length; i += 1000) {
+                const chunk = readings.slice(i, i + 1000);
+                await callBrightHub("bulk_readings", { readings: chunk }, settings.api_key);
+              }
+
+              locationResult.readings = { sent: readings.length };
+
+              // Update last_reading_sync_at
+              await supabase
+                .from("brighthub_settings")
+                .update({ last_reading_sync_at: new Date().toISOString() } as any)
+                .eq("id", settings.id);
+            } else {
+              locationResult.readings = { sent: 0, message: "No new readings" };
+            }
+          }
+        }
       } catch (locErr) {
         const msg = locErr instanceof Error ? locErr.message : String(locErr);
-        errors.push(`Location ${settings.location_id}: ${msg}`);
+        locationResult.error = msg;
         console.error(`Error syncing location ${settings.location_id}:`, msg);
       }
+
+      results.push(locationResult);
     }
 
+    console.log("brighthub-periodic-sync results:", JSON.stringify(results));
+
     return new Response(
-      JSON.stringify({
-        success: true,
-        sent: totalSent,
-        locations: allSettings.length,
-        errors: errors.length > 0 ? errors : undefined,
-      }),
+      JSON.stringify({ success: true, results }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err) {
