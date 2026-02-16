@@ -10,6 +10,7 @@ import { useDashboardFilter, TimePeriod } from "@/hooks/useDashboardFilter";
 import { startOfDay, startOfWeek, startOfMonth, startOfQuarter, startOfYear } from "date-fns";
 import { useWeekStartDay } from "@/hooks/useWeekStartDay";
 import { gasM3ToKWh } from "@/lib/formatEnergy";
+import { useLocationEnergySources } from "@/hooks/useLocationEnergySources";
 
 interface PieChartWidgetProps {
   locationId: string | null;
@@ -67,6 +68,7 @@ const PieChartWidget = ({ locationId }: PieChartWidgetProps) => {
   const weekStartsOn = useWeekStartDay();
   const selectedLocation = locationId ? locations.find((l) => l.id === locationId) : null;
   const subtitle = selectedLocation ? `Daten für: ${selectedLocation.name}` : "Alle Liegenschaften";
+  const allowedTypes = useLocationEnergySources(locationId);
 
   // Determine which energy types have active meters configured
   const configuredTypes = useMemo(() => {
@@ -134,6 +136,7 @@ const PieChartWidget = ({ locationId }: PieChartWidgetProps) => {
 
     const allTypes = ["strom", "gas", "waerme", "wasser"];
     const distribution = allTypes
+      .filter(key => allowedTypes.has(key))
       .filter(key => configuredTypes.size === 0 || configuredTypes.has(key))
       .map(key => ({
         name: ENERGY_LABELS[key],
