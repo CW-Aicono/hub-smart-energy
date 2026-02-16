@@ -125,9 +125,9 @@ const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
 
   // Build meter lookup
   const meterMap = useMemo(() => {
-    const map: Record<string, { energy_type: string; location_id: string; floor_id: string | null; room_id: string | null; capture_type: string; gas_type: string | null; brennwert: number | null; zustandszahl: number | null; unit: string; source_unit_energy: string | null }> = {};
+    const map: Record<string, { energy_type: string; location_id: string; floor_id: string | null; room_id: string | null; capture_type: string; gas_type: string | null; brennwert: number | null; zustandszahl: number | null; unit: string; source_unit_energy: string | null; is_main_meter: boolean }> = {};
     meters.forEach((m) => {
-      map[m.id] = { energy_type: m.energy_type, location_id: m.location_id, floor_id: m.floor_id || null, room_id: m.room_id || null, capture_type: m.capture_type, gas_type: m.gas_type ?? null, brennwert: m.brennwert ?? null, zustandszahl: m.zustandszahl ?? null, unit: m.unit, source_unit_energy: (m as any).source_unit_energy ?? null };
+      map[m.id] = { energy_type: m.energy_type, location_id: m.location_id, floor_id: m.floor_id || null, room_id: m.room_id || null, capture_type: m.capture_type, gas_type: m.gas_type ?? null, brennwert: m.brennwert ?? null, zustandszahl: m.zustandszahl ?? null, unit: m.unit, source_unit_energy: (m as any).source_unit_energy ?? null, is_main_meter: m.is_main_meter };
     });
     return map;
   }, [meters]);
@@ -195,18 +195,20 @@ const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
       flowMap[key] = (flowMap[key] || 0) + val;
     };
 
-    // Manual meter readings only (skip automatic meters — they use livePeriodTotals)
+    // Only use main meters (Hauptzähler) for the Sankey diagram
+    // Manual main meter readings (skip automatic meters — they use livePeriodTotals)
     filteredReadings.forEach((r) => {
       const meter = meterMap[r.meter_id];
       if (!meter) return;
+      if (!meter.is_main_meter) return;
       if (meter.capture_type === "automatic") return;
       const value = toBaseUnit(r.meter_id, r.value);
       addFlow(meter.energy_type || "strom", meter.location_id, meter.floor_id, meter.room_id, value);
     });
 
-    // Auto meter period totals (totalDay for day view, etc.)
+    // Auto main meter period totals (totalDay for day view, etc.)
     const ptKey = period === "day" ? "totalDay" : period === "week" ? "totalWeek" : period === "month" ? "totalMonth" : period === "quarter" ? "totalMonth" : period === "year" ? "totalYear" : "totalYear";
-    meters.filter(m => !m.is_archived && m.capture_type === "automatic").forEach(m => {
+    meters.filter(m => !m.is_archived && m.capture_type === "automatic" && m.is_main_meter).forEach(m => {
       if (locationId && m.location_id !== locationId) return;
       const pt = livePeriodTotals[m.id];
       if (!pt) return;
