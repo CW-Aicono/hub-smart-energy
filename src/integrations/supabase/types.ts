@@ -1280,6 +1280,51 @@ export type Database = {
           },
         ]
       }
+      meter_power_readings: {
+        Row: {
+          created_at: string | null
+          energy_type: string
+          id: string
+          meter_id: string
+          power_value: number
+          recorded_at: string
+          tenant_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          energy_type: string
+          id?: string
+          meter_id: string
+          power_value: number
+          recorded_at?: string
+          tenant_id: string
+        }
+        Update: {
+          created_at?: string | null
+          energy_type?: string
+          id?: string
+          meter_id?: string
+          power_value?: number
+          recorded_at?: string
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meter_power_readings_meter_id_fkey"
+            columns: ["meter_id"]
+            isOneToOne: false
+            referencedRelation: "meters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meter_power_readings_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       meter_readings: {
         Row: {
           capture_method: string

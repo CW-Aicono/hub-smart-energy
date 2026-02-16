@@ -82,9 +82,9 @@ const CostOverview = ({ locationId }: CostOverviewProps) => {
   const weekStartsOn = useWeekStartDay();
 
   const meterMap = useMemo(() => {
-    const map: Record<string, { energy_type: string; location_id: string }> = {};
+    const map: Record<string, { energy_type: string; location_id: string; is_main_meter: boolean }> = {};
     meters.forEach((m) => {
-      map[m.id] = { energy_type: m.energy_type, location_id: m.location_id };
+      map[m.id] = { energy_type: m.energy_type, location_id: m.location_id, is_main_meter: m.is_main_meter };
     });
     return map;
   }, [meters]);
@@ -115,7 +115,7 @@ const CostOverview = ({ locationId }: CostOverviewProps) => {
     readings.forEach((r) => {
       const date = new Date(r.reading_date);
       const meta = meterMap[r.meter_id];
-      if (!meta) return;
+      if (!meta || !meta.is_main_meter) return;
 
       const priceKey = `${meta.location_id}:${meta.energy_type}`;
       const price = priceLookup.get(priceKey) || 0;
@@ -131,7 +131,7 @@ const CostOverview = ({ locationId }: CostOverviewProps) => {
     // Add auto meter period totals for current period
     const ptKey = selectedPeriod === "day" ? "totalDay" : selectedPeriod === "week" ? "totalWeek" : selectedPeriod === "month" ? "totalMonth" : selectedPeriod === "quarter" ? "totalMonth" : "totalYear";
     meters.forEach(m => {
-      if (m.is_archived || m.capture_type !== "automatic") return;
+      if (m.is_archived || m.capture_type !== "automatic" || !m.is_main_meter) return;
       if (locationId && m.location_id !== locationId) return;
       const pt = livePeriodTotals[m.id];
       if (!pt) return;

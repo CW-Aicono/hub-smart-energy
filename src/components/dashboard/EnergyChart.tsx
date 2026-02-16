@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
@@ -9,6 +9,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useEnergyData } from "@/hooks/useEnergyData";
 import { useMeters } from "@/hooks/useMeters";
 import { useLocations } from "@/hooks/useLocations";
+import { supabase } from "@/integrations/supabase/client";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ENERGY_CHART_COLORS } from "@/lib/energyTypeColors";
 import {
@@ -93,6 +94,8 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
   const { selectedPeriod, setSelectedPeriod } = useDashboardFilter();
   const [offset, setOffset] = useState(0);
   const [hiddenKeys, setHiddenKeys] = useState<Set<string>>(new Set());
+  const [powerReadings, setPowerReadings] = useState<Array<{ meter_id: string; power_value: number; recorded_at: string }>>([]);
+  const [powerLoading, setPowerLoading] = useState(false);
 
   // Map "all" to "year" for this chart
   const period: ChartPeriod = selectedPeriod === "all" ? "year" : selectedPeriod;
@@ -101,8 +104,8 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
   const subtitle = selectedLocation ? `Daten für: ${selectedLocation.name}` : "Alle Liegenschaften";
 
   const meterMap = useMemo(() => {
-    const map: Record<string, { energy_type: string; capture_type: string; location_id: string }> = {};
-    meters.forEach((m) => { map[m.id] = { energy_type: m.energy_type, capture_type: m.capture_type, location_id: m.location_id }; });
+    const map: Record<string, { energy_type: string; capture_type: string; location_id: string; is_main_meter: boolean }> = {};
+    meters.forEach((m) => { map[m.id] = { energy_type: m.energy_type, capture_type: m.capture_type, location_id: m.location_id, is_main_meter: m.is_main_meter }; });
     return map;
   }, [meters]);
 
@@ -112,8 +115,47 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
   const periodLabel = getPeriodLabel(period, refDate);
   const canGoForward = offset < 0;
 
+  // Fetch power readings from DB for day view
+  useEffect(() => {
+    if (period !== "day") {
+      setPowerReadings([]);
+      return;
+    }
+    const fetchPower = async () => {
+      setPowerLoading(true);
+      // Get main meter IDs for the location
+      const mainMeterIds = meters
+        .filter(m => !m.is_archived && m.is_main_meter && m.capture_type === "automatic")
+        .filter(m => !locationId || m.location_id === locationId)
+        .map(m => m.id);
+
+      if (mainMeterIds.length === 0) {
+        setPowerReadings([]);
+        setPowerLoading(false);
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from("meter_power_readings")
+        .select("meter_id, power_value, recorded_at")
+        .in("meter_id", mainMeterIds)
+        .gte("recorded_at", rangeStart.toISOString())
+        .lte("recorded_at", rangeEnd.toISOString())
+        .order("recorded_at", { ascending: true });
+
+      if (error) {
+        console.error("Error fetching power readings:", error);
+        setPowerReadings([]);
+      } else {
+        setPowerReadings((data ?? []) as Array<{ meter_id: string; power_value: number; recorded_at: string }>);
+      }
+      setPowerLoading(false);
+    };
+    fetchPower();
+  }, [period, rangeStart.toISOString(), rangeEnd.toISOString(), meters, locationId]);
+
   const chartData = useMemo(() => {
-    // For non-day periods at offset 0, inject Loxone period totals for automatic meters
+    // For non-day periods at offset 0, inject Loxone period totals for automatic main meters
     const isCurrentPeriod = offset === 0;
     const useLoxoneTotals = isCurrentPeriod && period !== "day" && Object.keys(livePeriodTotals).length > 0;
 
@@ -124,10 +166,10 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
     if (useLoxoneTotals && periodTotalKey && period !== "quarter") {
       const totals = { strom: 0, gas: 0, waerme: 0, wasser: 0 };
 
-      // Add Loxone period totals for automatic meters
+      // Add Loxone period totals for automatic main meters only
       for (const [meterId, pt] of Object.entries(livePeriodTotals)) {
         const info = meterMap[meterId];
-        if (!info) continue;
+        if (!info || !info.is_main_meter) continue;
         if (locationId && info.location_id !== locationId) continue;
         const val = pt[periodTotalKey as keyof typeof pt];
         if (val != null && info.energy_type in totals) {
@@ -135,11 +177,11 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
         }
       }
 
-      // Add manual meter readings for the period
+      // Add manual main meter readings for the period
       const [rs, re] = [rangeStart, rangeEnd];
       readings.forEach((r) => {
         const info = meterMap[r.meter_id];
-        if (!info || info.capture_type === "automatic") return;
+        if (!info || info.capture_type === "automatic" || !info.is_main_meter) return;
         const d = new Date(r.reading_date);
         if (d >= rs && d <= re && info.energy_type in totals) {
           (totals as any)[info.energy_type] += r.value;
@@ -164,7 +206,7 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
 
       for (const [meterId, pt] of Object.entries(livePeriodTotals)) {
         const info = meterMap[meterId];
-        if (!info) continue;
+        if (!info || !info.is_main_meter) continue;
         if (locationId && info.location_id !== locationId) continue;
         if (pt.totalMonth != null && currentMonthIdx >= 0 && currentMonthIdx < 3 && info.energy_type in buckets[currentMonthIdx]) {
           (buckets[currentMonthIdx] as any)[info.energy_type] += pt.totalMonth;
@@ -207,7 +249,24 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
         const m = (i % 4) * 15;
         return { label: `${h}:${m.toString().padStart(2, "0")}`, ...emptyBucket() };
       });
+
+      // Use power readings from DB for automatic main meters
+      powerReadings.forEach((pr) => {
+        const info = meterMap[pr.meter_id];
+        if (!info) return;
+        const d = new Date(pr.recorded_at);
+        const idx = d.getHours() * 4 + Math.floor(d.getMinutes() / 15);
+        const et = info.energy_type || "strom";
+        if (et in buckets[Math.min(idx, 95)]) {
+          (buckets[Math.min(idx, 95)] as any)[et] += pr.power_value;
+        }
+      });
+
+      // Also add manual main meter readings
       filtered.forEach((r) => {
+        const info = meterMap[r.meter_id];
+        if (!info || !info.is_main_meter) return;
+        if (info.capture_type === "automatic") return; // already handled via powerReadings
         const d = new Date(r.reading_date);
         const idx = d.getHours() * 4 + Math.floor(d.getMinutes() / 15);
         addToBucket(buckets[Math.min(idx, 95)], r);
@@ -263,7 +322,7 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
       addToBucket(buckets[month], r);
     });
     return buckets;
-  }, [readings, meterMap, period, rangeStart.toISOString(), rangeEnd.toISOString(), livePeriodTotals, offset, periodLabel, locationId]);
+  }, [readings, meterMap, period, rangeStart.toISOString(), rangeEnd.toISOString(), livePeriodTotals, offset, periodLabel, locationId, powerReadings]);
 
   // Reset offset when period changes
   const handlePeriodChange = (v: string) => {
@@ -273,7 +332,7 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
     }
   };
 
-  if (loading) return <Card><CardContent className="p-6"><Skeleton className="h-[300px]" /></CardContent></Card>;
+  if (loading || powerLoading) return <Card><CardContent className="p-6"><Skeleton className="h-[300px]" /></CardContent></Card>;
 
   const unitLabel = getChartUnitLabel(period);
   const isLineChart = period === "day";

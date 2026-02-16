@@ -76,9 +76,9 @@ const PieChartWidget = ({ locationId }: PieChartWidgetProps) => {
 
   // Build a meter_id -> energy_type map
   const meterMap = useMemo(() => {
-    const map: Record<string, { energy_type: string; location_id: string }> = {};
+    const map: Record<string, { energy_type: string; location_id: string; is_main_meter: boolean; capture_type: string }> = {};
     meters.forEach((m) => {
-      map[m.id] = { energy_type: m.energy_type, location_id: m.location_id };
+      map[m.id] = { energy_type: m.energy_type, location_id: m.location_id, is_main_meter: m.is_main_meter, capture_type: m.capture_type };
     });
     return map;
   }, [meters]);
@@ -97,6 +97,8 @@ const PieChartWidget = ({ locationId }: PieChartWidgetProps) => {
     readings
       .filter((r) => !autoMeterIds.has(r.meter_id))
       .filter((r) => {
+        const meta = meterMap[r.meter_id];
+        if (!meta || !meta.is_main_meter) return false;
         if (!periodStart) return true;
         return new Date(r.reading_date) >= periodStart;
       })
@@ -108,7 +110,7 @@ const PieChartWidget = ({ locationId }: PieChartWidgetProps) => {
       });
 
     // Auto meters: use livePeriodTotals with the correct period key
-    meters.filter(m => !m.is_archived && m.capture_type === "automatic").forEach(m => {
+    meters.filter(m => !m.is_archived && m.capture_type === "automatic" && m.is_main_meter).forEach(m => {
       if (locationId && meterMap[m.id]?.location_id !== locationId) return;
       const pt = livePeriodTotals[m.id];
       if (!pt) return;
