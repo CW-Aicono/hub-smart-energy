@@ -9,76 +9,49 @@ const corsHeaders = {
 const BRIGHTHUB_API_URL =
   "https://jcewrsouppdsvaipdpsy.supabase.co/functions/v1/energy-api";
 
-async function computeSignature(body: string, secret: string): Promise<string> {
-  const encoder = new TextEncoder();
-  const key = await crypto.subtle.importKey(
-    "raw",
-    encoder.encode(secret),
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign"]
-  );
-  const sig = await crypto.subtle.sign("HMAC", key, encoder.encode(body));
-  return Array.from(new Uint8Array(sig))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
+function mapEnergyType(energyType: string): string {
+  const map: Record<string, string> = {
+    electricity: "electricity",
+    strom: "electricity",
+    gas: "gas",
+    water: "water",
+    wasser: "water",
+    district_heating: "district_heating",
+    fernwaerme: "district_heating",
+    fernwärme: "district_heating",
+  };
+  return map[energyType?.toLowerCase()] || "other";
+}
+
+function mapUnit(unit: string): string {
+  const allowed = ["kWh", "MWh", "m³", "Liter", "GJ"];
+  if (allowed.includes(unit)) return unit;
+  const map: Record<string, string> = {
+    kwh: "kWh", mwh: "MWh", "m3": "m³", liter: "Liter", l: "Liter", gj: "GJ",
+  };
+  return map[unit?.toLowerCase()] || "kWh";
 }
 
 async function callBrightHub(
   action: string,
   body: Record<string, unknown>,
-  apiKey: string
-) {
-  const response = await fetch(`${BRIGHTHUB_API_URL}?action=${action}`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-energy-api-key": apiKey,
-    },
-    body: JSON.stringify(body),
-  });
-  const result = await response.json();
-  if (!result.success) throw new Error(result.error || "BrightHub API error");
-  return result.data;
-}
-
-async function sendWebhook(
-  event: string,
-  data: unknown,
   apiKey: string,
-  webhookSecret: string,
-  webhookUrl?: string
-) {
-  const url = webhookUrl || `${BRIGHTHUB_API_URL}?action=webhook`;
-  const body = JSON.stringify({ event, data });
-  const signature = await computeSignature(body, webhookSecret);
-
-  const response = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-energy-api-key": apiKey,
-      "x-energy-webhook-signature": signature,
-    },
-    body,
-  });
-  const result = await response.json();
-  if (!result.success) throw new Error(result.error || "Webhook error");
-  return result.data;
-}
-
-async function sendWithRetry(
-  event: string,
-  data: unknown,
-  apiKey: string,
-  webhookSecret: string,
-  webhookUrl?: string,
   maxRetries = 3
 ) {
   let lastError: Error | null = null;
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
-      return await sendWebhook(event, data, apiKey, webhookSecret, webhookUrl);
+      const response = await fetch(`${BRIGHTHUB_API_URL}?action=${action}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-energy-api-key": apiKey,
+        },
+        body: JSON.stringify(body),
+      });
+      const result = await response.json();
+      if (!result.success) throw new Error(result.error || "BrightHub API error");
+      return result;
     } catch (err) {
       lastError = err instanceof Error ? err : new Error(String(err));
       if (attempt < maxRetries - 1) {
@@ -99,19 +72,15 @@ Deno.serve(async (req) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const { action, body: actionBody, tenantId, locationId } = await req.json();
+    const { action, tenantId, locationId } = await req.json();
 
     // Get BrightHub settings for the tenant + location
-    let query = supabase
+    const { data: settings, error: settingsErr } = await supabase
       .from("brighthub_settings")
       .select("*")
-      .eq("tenant_id", tenantId);
-
-    if (locationId) {
-      query = query.eq("location_id", locationId);
-    }
-
-    const { data: settings, error: settingsErr } = await query.maybeSingle();
+      .eq("tenant_id", tenantId)
+      .eq("location_id", locationId)
+      .maybeSingle();
 
     if (settingsErr || !settings) {
       return new Response(
@@ -129,25 +98,115 @@ Deno.serve(async (req) => {
 
     let result: unknown;
 
-    if (action === "webhook") {
-      // Webhook send
-      const { event, data: webhookData } = actionBody;
-      if (!settings.webhook_secret) {
+    if (action === "sync_meters") {
+      // Fetch all active meters for the location
+      const { data: meters } = await supabase
+        .from("meters")
+        .select("id, name, energy_type, unit, meter_number, notes")
+        .eq("location_id", locationId)
+        .eq("is_archived", false);
+
+      if (!meters || meters.length === 0) {
         return new Response(
-          JSON.stringify({ success: false, error: "Webhook-Secret fehlt" }),
-          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          JSON.stringify({ success: true, data: { sent: 0, message: "Keine Zähler gefunden" } }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
-      result = await sendWithRetry(
-        event,
-        webhookData,
-        settings.api_key,
-        settings.webhook_secret,
-        settings.webhook_url || undefined
-      );
+
+      const metersPayload = meters.map((m) => ({
+        external_id: m.id,
+        name: m.name,
+        type: mapEnergyType(m.energy_type),
+        unit: mapUnit(m.unit),
+        location_description: m.notes || undefined,
+      }));
+
+      const apiResult = await callBrightHub("sync_meters", { meters: metersPayload }, settings.api_key);
+
+      // Update last_meter_sync_at
+      await supabase
+        .from("brighthub_settings")
+        .update({ last_meter_sync_at: new Date().toISOString() } as any)
+        .eq("id", settings.id);
+
+      result = { sent: metersPayload.length, summary: apiResult.summary || apiResult.data };
+
+    } else if (action === "sync_readings") {
+      // Fetch readings since last sync
+      const sinceDate = settings.last_reading_sync_at || "2000-01-01T00:00:00Z";
+
+      const { data: meters } = await supabase
+        .from("meters")
+        .select("id")
+        .eq("location_id", locationId)
+        .eq("is_archived", false);
+
+      if (!meters || meters.length === 0) {
+        return new Response(
+          JSON.stringify({ success: true, data: { sent: 0, message: "Keine Zähler gefunden" } }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      const readings: { meter_id: string; reading_date: string; value: number }[] = [];
+
+      for (const meter of meters) {
+        const { data: powerReadings } = await supabase
+          .from("meter_power_readings")
+          .select("power_value, recorded_at")
+          .eq("meter_id", meter.id)
+          .gt("recorded_at", sinceDate)
+          .order("recorded_at", { ascending: false })
+          .limit(1);
+
+        if (powerReadings && powerReadings.length > 0) {
+          for (const pr of powerReadings) {
+            readings.push({
+              meter_id: meter.id,
+              reading_date: pr.recorded_at.substring(0, 10),
+              value: pr.power_value,
+            });
+          }
+          continue;
+        }
+
+        const { data: manualReadings } = await supabase
+          .from("meter_readings")
+          .select("value, reading_date")
+          .eq("meter_id", meter.id)
+          .gt("reading_date", sinceDate)
+          .order("reading_date", { ascending: false })
+          .limit(1);
+
+        if (manualReadings && manualReadings.length > 0) {
+          for (const mr of manualReadings) {
+            readings.push({
+              meter_id: meter.id,
+              reading_date: mr.reading_date.substring(0, 10),
+              value: mr.value,
+            });
+          }
+        }
+      }
+
+      if (readings.length > 0) {
+        const apiResult = await callBrightHub("bulk_readings", { readings }, settings.api_key);
+        result = { sent: readings.length, data: apiResult.data, count: apiResult.count };
+      } else {
+        result = { sent: 0, message: "Keine neuen Messwerte" };
+      }
+
+      // Update last_reading_sync_at
+      await supabase
+        .from("brighthub_settings")
+        .update({ last_reading_sync_at: new Date().toISOString() } as any)
+        .eq("id", settings.id);
+
     } else {
-      // Regular API call
-      result = await callBrightHub(action, actionBody || {}, settings.api_key);
+      return new Response(
+        JSON.stringify({ success: false, error: `Unbekannte Aktion: ${action}` }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
     return new Response(

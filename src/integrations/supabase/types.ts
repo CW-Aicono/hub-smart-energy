@@ -94,6 +94,8 @@ export type Database = {
           created_at: string
           id: string
           is_enabled: boolean
+          last_meter_sync_at: string | null
+          last_reading_sync_at: string | null
           location_id: string | null
           tenant_id: string
           updated_at: string
@@ -106,6 +108,8 @@ export type Database = {
           created_at?: string
           id?: string
           is_enabled?: boolean
+          last_meter_sync_at?: string | null
+          last_reading_sync_at?: string | null
           location_id?: string | null
           tenant_id: string
           updated_at?: string
@@ -118,6 +122,8 @@ export type Database = {
           created_at?: string
           id?: string
           is_enabled?: boolean
+          last_meter_sync_at?: string | null
+          last_reading_sync_at?: string | null
           location_id?: string | null
           tenant_id?: string
           updated_at?: string

@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
 import { useTenant } from "./useTenant";
 import { toast } from "sonner";
-import { sendWebhookEvent } from "@/lib/brighthubApi";
+import { syncReadings } from "@/lib/brighthubApi";
 
 export interface MeterReading {
   id: string;
@@ -98,11 +98,8 @@ export function useMeterReadings(meterId?: string) {
           .eq("location_id", meter.location_id)
           .maybeSingle();
         if (bhSettings?.is_enabled && bhSettings?.auto_sync_readings) {
-          sendWebhookEvent(tenantId, meter.location_id, "reading.created", {
-            meter_id: data.meter_id,
-            reading_date: data.reading_date,
-            value: data.value,
-          }).catch((err) => console.warn("BrightHub webhook failed:", err));
+          syncReadings(tenantId, meter.location_id)
+            .catch((err) => console.warn("BrightHub sync failed:", err));
         }
       }
     } catch (e) {
