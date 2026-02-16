@@ -10,6 +10,7 @@ export interface BrightHubSettings {
   location_id: string | null;
   api_key: string;
   webhook_secret: string;
+  webhook_url: string;
   is_enabled: boolean;
   auto_sync_readings: boolean;
   created_at: string;
@@ -42,6 +43,7 @@ export function useBrightHubSettings(locationId?: string) {
   const saveSettings = async (values: {
     api_key: string;
     webhook_secret: string;
+    webhook_url: string;
     is_enabled: boolean;
     auto_sync_readings: boolean;
   }) => {

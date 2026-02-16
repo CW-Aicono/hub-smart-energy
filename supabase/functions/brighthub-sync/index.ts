@@ -46,12 +46,14 @@ async function sendWebhook(
   event: string,
   data: unknown,
   apiKey: string,
-  webhookSecret: string
+  webhookSecret: string,
+  webhookUrl?: string
 ) {
+  const url = webhookUrl || `${BRIGHTHUB_API_URL}?action=webhook`;
   const body = JSON.stringify({ event, data });
   const signature = await computeSignature(body, webhookSecret);
 
-  const response = await fetch(`${BRIGHTHUB_API_URL}?action=webhook`, {
+  const response = await fetch(url, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -70,12 +72,13 @@ async function sendWithRetry(
   data: unknown,
   apiKey: string,
   webhookSecret: string,
+  webhookUrl?: string,
   maxRetries = 3
 ) {
   let lastError: Error | null = null;
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
-      return await sendWebhook(event, data, apiKey, webhookSecret);
+      return await sendWebhook(event, data, apiKey, webhookSecret, webhookUrl);
     } catch (err) {
       lastError = err instanceof Error ? err : new Error(String(err));
       if (attempt < maxRetries - 1) {
@@ -134,7 +137,8 @@ Deno.serve(async (req) => {
         event,
         webhookData,
         settings.api_key,
-        settings.webhook_secret
+        settings.webhook_secret,
+        settings.webhook_url || undefined
       );
     } else {
       // Regular API call

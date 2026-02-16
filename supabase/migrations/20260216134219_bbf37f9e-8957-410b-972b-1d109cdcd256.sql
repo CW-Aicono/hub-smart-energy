@@ -1,0 +1,1 @@
+ALTER TABLE public.brighthub_settings ADD COLUMN webhook_url text NOT NULL DEFAULT '';
