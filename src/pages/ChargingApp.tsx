@@ -40,6 +40,7 @@ interface AppChargePoint {
 interface AppSession {
   id: string;
   charge_point_id: string | null;
+  transaction_id: number | null;
   start_time: string;
   stop_time: string | null;
   energy_kwh: number;
@@ -787,7 +788,7 @@ function QrScannerTab({ onScanned }: { onScanned: (data: string) => void }) {
 }
 
 // ---- History Tab ----
-function HistoryTab({ sessions, chargePoints, tariff }: { sessions: AppSession[]; chargePoints: AppChargePoint[]; tariff: AppTariff | null }) {
+function HistoryTab({ sessions, chargePoints, tariff, onStopCharge }: { sessions: AppSession[]; chargePoints: AppChargePoint[]; tariff: AppTariff | null; onStopCharge: (session: AppSession) => void }) {
   const getCpName = (id: string | null) => chargePoints.find((cp) => cp.id === id)?.name || "Unbekannt";
 
   if (sessions.length === 0) {
@@ -866,6 +867,17 @@ function HistoryTab({ sessions, chargePoints, tariff }: { sessions: AppSession[]
           {isActive && cost !== null && <p className="text-xs font-semibold text-blue-600">~{fmtCurrency(cost)}</p>}
           {isActive && <Badge className="text-[10px] bg-blue-500 border-0 mt-0.5">Lädt…</Badge>}
         </div>
+        {isActive && (
+          <Button
+            variant="destructive"
+            size="sm"
+            className="shrink-0 ml-1 text-xs h-8 px-3"
+            onClick={(e) => { e.stopPropagation(); onStopCharge(s); }}
+          >
+            <ZapOff className="h-3.5 w-3.5 mr-1" />
+            Stopp
+          </Button>
+        )}
       </div>
     );
   };
@@ -1355,7 +1367,7 @@ const ChargingApp = () => {
       setLoading(true);
       const [cpRes, sessRes, invRes, tariffRes] = await Promise.all([
         supabase.from("charge_points").select("id, ocpp_id, name, status, address, latitude, longitude, max_power_kw, connector_type, connector_count, vendor, model").order("name"),
-        supabase.from("charging_sessions").select("id, charge_point_id, start_time, stop_time, energy_kwh, status, stop_reason").order("start_time", { ascending: false }).limit(100),
+        supabase.from("charging_sessions").select("id, charge_point_id, transaction_id, start_time, stop_time, energy_kwh, status, stop_reason").order("start_time", { ascending: false }).limit(100),
         supabase.from("charging_invoices").select("id, session_id, invoice_number, total_energy_kwh, total_amount, idle_fee_amount, currency, status, issued_at, created_at").order("created_at", { ascending: false }).limit(50),
         supabase.from("charging_tariffs").select("price_per_kwh, base_fee, idle_fee_per_minute, idle_fee_grace_minutes, currency").eq("is_active", true).limit(1),
       ]);
@@ -1467,6 +1479,43 @@ const ChargingApp = () => {
     }
   };
 
+  const handleStopCharge = async (session: AppSession) => {
+    if (!session.transaction_id) {
+      toast.error("Kein Transaktions-ID vorhanden");
+      return;
+    }
+
+    toast.loading("Ladevorgang wird beendet…", { id: "remote-stop" });
+
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+
+      const res = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ocpp-central/command/RemoteStopTransaction`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${token || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+          },
+          body: JSON.stringify({ transactionId: session.transaction_id }),
+        }
+      );
+
+      const result = await res.json();
+
+      if (result.status === "Accepted") {
+        toast.success("Stopp-Befehl wurde an die Wallbox gesendet", { id: "remote-stop" });
+      } else {
+        toast.error(result.message || "Ladevorgang konnte nicht beendet werden", { id: "remote-stop" });
+      }
+    } catch (err) {
+      console.error("Remote stop failed:", err);
+      toast.error("Verbindungsfehler – bitte erneut versuchen", { id: "remote-stop" });
+    }
+  };
+
   const handleLogout = async () => {
     await supabase.auth.signOut();
     setUser(null);
@@ -1503,7 +1552,7 @@ const ChargingApp = () => {
           <>
             {tab === "map" && <div className="flex-1 flex flex-col" style={{ minHeight: 0 }}><MapTab chargePoints={chargePoints} onStartCharge={handleStartCharge} initialCpId={initialCpOcppId} onInitialCpHandled={() => setInitialCpOcppId(null)} /></div>}
             {tab === "qr" && <QrScannerTab onScanned={handleQrScanned} />}
-            {tab === "history" && <HistoryTab sessions={sessions} chargePoints={chargePoints} tariff={tariff} />}
+            {tab === "history" && <HistoryTab sessions={sessions} chargePoints={chargePoints} tariff={tariff} onStopCharge={handleStopCharge} />}
             {tab === "invoices" && <InvoicesTab invoices={invoices} sessions={sessions} chargePoints={chargePoints} tariff={tariff} tenantInfo={tenantInfo} userEmail={user.email} />}
             {tab === "profile" && <ProfileTab email={user.email} onLogout={handleLogout} />}
           </>
