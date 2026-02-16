@@ -85,6 +85,7 @@ Deno.serve(async (req) => {
 
           if (powerReading) {
             readingsPayload.push({
+              meter_id: meter.id,
               meter_name: meter.name,
               meter_number: meter.meter_number,
               energy_type: meter.energy_type,
@@ -107,6 +108,7 @@ Deno.serve(async (req) => {
 
           if (reading) {
             readingsPayload.push({
+              meter_id: meter.id,
               meter_name: meter.name,
               meter_number: meter.meter_number,
               energy_type: meter.energy_type,
