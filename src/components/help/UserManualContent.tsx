@@ -20,12 +20,14 @@ import {
   Camera,
   WifiOff,
   Cpu,
+  RefreshCw,
+  Link,
 } from "lucide-react";
 
 interface UserManualContentProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  chapter: "gettingStarted" | "locationManagement" | "floorManagement" | "energyAnalysis" | "meterManagement" | "mobileApp" | "automation" | "evCharging";
+  chapter: "gettingStarted" | "locationManagement" | "floorManagement" | "energyAnalysis" | "meterManagement" | "mobileApp" | "automation" | "evCharging" | "integrations";
 }
 
 const UserManualContent = ({ open, onOpenChange, chapter }: UserManualContentProps) => {
@@ -668,6 +670,92 @@ const UserManualContent = ({ open, onOpenChange, chapter }: UserManualContentPro
               <li><span className="text-yellow-600 font-medium">Gelb:</span> Nicht verfügbar</li>
               <li><span className="text-orange-600 font-medium">Orange:</span> Offline</li>
             </ul>
+          </section>
+        </div>
+      ),
+    },
+    integrations: {
+      title: "Integrationen & Datensynchronisation",
+      icon: <Link className="h-5 w-5" />,
+      content: (
+        <div className="space-y-6">
+          <section>
+            <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
+              <Link className="h-4 w-4 text-primary" />
+              Integrationen & Datensynchronisation
+            </h3>
+            <p className="text-muted-foreground mb-4">
+              Verbinden Sie externe Systeme und synchronisieren Sie Zähler- und Verbrauchsdaten 
+              automatisch mit Drittplattformen wie BrightHub.
+            </p>
+          </section>
+
+          <Separator />
+
+          <section>
+            <h4 className="font-semibold mb-2">Gateway-Integrationen</h4>
+            <p className="text-sm text-muted-foreground mb-2">
+              Unter <strong>Integrationen</strong> verwalten Sie Ihre Gateways und externen Systeme:
+            </p>
+            <ul className="list-disc list-inside text-sm text-muted-foreground space-y-1 ml-4">
+              <li><strong>Loxone Miniserver:</strong> Sensoren, Aktoren und Gebäudeautomation</li>
+              <li><strong>Shelly:</strong> Smart-Home-Schalter und Energiemessung</li>
+              <li><strong>Tuya:</strong> IoT-Geräte und Smart Plugs</li>
+              <li><strong>Siemens / ABB:</strong> Industrielle Energiezähler</li>
+              <li><strong>HomeMatic:</strong> Heizungs- und Raumsensoren</li>
+              <li><strong>TP-Link Omada:</strong> Netzwerkinfrastruktur</li>
+            </ul>
+          </section>
+
+          <section>
+            <h4 className="font-semibold mb-2">BrightHub-Synchronisation</h4>
+            <p className="text-sm text-muted-foreground mb-2">
+              BrightHub ist eine externe Energieplattform, mit der Zähler und Messwerte 
+              automatisch synchronisiert werden können.
+            </p>
+            <ol className="list-decimal list-inside text-sm text-muted-foreground space-y-2 ml-4">
+              <li>Navigieren Sie zu <strong>Einstellungen → BrightHub</strong></li>
+              <li>Aktivieren Sie die Integration und hinterlegen Sie den API-Key</li>
+              <li>Konfigurieren Sie die Synchronisation</li>
+            </ol>
+          </section>
+
+          <section>
+            <h4 className="font-semibold mb-2">Zähler-Sync (täglich)</h4>
+            <p className="text-sm text-muted-foreground mb-2">
+              Einmal täglich (02:00 UTC) werden alle Zähler automatisch synchronisiert:
+            </p>
+            <ul className="list-disc list-inside text-sm text-muted-foreground space-y-1 ml-4">
+              <li>Neue Zähler werden in BrightHub angelegt</li>
+              <li>Umbenennungen werden übernommen (Matching über UUID)</li>
+              <li>Nicht mehr vorhandene Zähler werden archiviert</li>
+              <li>Manuelle Synchronisation per Button jederzeit möglich</li>
+            </ul>
+          </section>
+
+          <section>
+            <h4 className="font-semibold mb-2">Messwerte-Sync (alle 15 Min.)</h4>
+            <p className="text-sm text-muted-foreground mb-2">
+              Neue Messwerte werden alle 15 Minuten automatisch übertragen:
+            </p>
+            <ul className="list-disc list-inside text-sm text-muted-foreground space-y-1 ml-4">
+              <li>Nur seit dem letzten Sync erfasste Werte werden gesendet</li>
+              <li>Sowohl automatische (Sensor) als auch manuelle Ablesungen</li>
+              <li>Maximal 1000 Werte pro Übertragung (Batching bei mehr Daten)</li>
+              <li>Kosten- und CO₂-Daten werden mitgesendet (falls vorhanden)</li>
+            </ul>
+          </section>
+
+          <section>
+            <h4 className="font-semibold mb-2 flex items-center gap-2">
+              <RefreshCw className="h-4 w-4" />
+              Sync-Status prüfen
+            </h4>
+            <p className="text-sm text-muted-foreground">
+              In den BrightHub-Einstellungen sehen Sie den Zeitpunkt der letzten Zähler- 
+              und Messwerte-Synchronisation. Über die manuellen Sync-Buttons können Sie 
+              die Synchronisation jederzeit auslösen und den Status überprüfen.
+            </p>
           </section>
         </div>
       ),
