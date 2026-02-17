@@ -202,6 +202,61 @@ Deno.serve(async (req) => {
         .update({ last_reading_sync_at: new Date().toISOString() } as any)
         .eq("id", settings.id);
 
+    } else if (action === "sync_intraday") {
+      // Fetch all power readings since last intraday sync
+      const sinceDate = settings.last_intraday_sync_at || "2000-01-01T00:00:00Z";
+
+      const { data: meters } = await supabase
+        .from("meters")
+        .select("id")
+        .eq("location_id", locationId)
+        .eq("is_archived", false);
+
+      if (!meters || meters.length === 0) {
+        return new Response(
+          JSON.stringify({ success: true, data: { sent: 0, message: "Keine Zähler gefunden" } }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      const intradayReadings: { meter_id: string; timestamp: string; power_value: number }[] = [];
+
+      for (const meter of meters) {
+        const { data: pwr } = await supabase
+          .from("meter_power_readings")
+          .select("power_value, recorded_at")
+          .eq("meter_id", meter.id)
+          .gt("recorded_at", sinceDate)
+          .order("recorded_at", { ascending: true })
+          .limit(5000);
+
+        if (pwr && pwr.length > 0) {
+          for (const r of pwr) {
+            intradayReadings.push({
+              meter_id: meter.id,
+              timestamp: r.recorded_at,
+              power_value: r.power_value,
+            });
+          }
+        }
+      }
+
+      if (intradayReadings.length > 0) {
+        for (let i = 0; i < intradayReadings.length; i += 5000) {
+          const chunk = intradayReadings.slice(i, i + 5000);
+          await callBrightHub("bulk_intraday", { readings: chunk }, settings.api_key);
+        }
+        result = { sent: intradayReadings.length };
+      } else {
+        result = { sent: 0, message: "Keine neuen Leistungswerte" };
+      }
+
+      // Update last_intraday_sync_at
+      await supabase
+        .from("brighthub_settings")
+        .update({ last_intraday_sync_at: new Date().toISOString() } as any)
+        .eq("id", settings.id);
+
     } else {
       return new Response(
         JSON.stringify({ success: false, error: `Unbekannte Aktion: ${action}` }),
