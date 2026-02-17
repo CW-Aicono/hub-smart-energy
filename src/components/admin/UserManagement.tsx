@@ -67,10 +67,11 @@ const UserManagement = () => {
       console.error("Error fetching roles:", rolesError);
     }
 
-    // Fetch pending invitations
+    // Fetch pending invitations – explicitly filter by tenant_id for defense-in-depth
     const { data: invitations, error: invitationsError } = await supabase
       .from("user_invitations")
       .select("*")
+      .eq("tenant_id", tenant?.id)
       .is("accepted_at", null)
       .gt("expires_at", new Date().toISOString());
 
