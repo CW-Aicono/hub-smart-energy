@@ -91,7 +91,7 @@ const handler = async (req: Request): Promise<Response> => {
       }
 
       // Generate password-reset link
-      const appUrl = redirectTo || `${supabaseUrl.replace('.supabase.co', '.lovable.app')}/set-password`;
+      const appUrl = redirectTo || `https://hub-smart-energy.lovable.app/set-password`;
       const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
         type: "recovery",
         email,
@@ -161,7 +161,7 @@ const handler = async (req: Request): Promise<Response> => {
       .update({ accepted_at: new Date().toISOString() })
       .eq("id", invitationId);
 
-    const appUrl = redirectTo || `${supabaseUrl.replace('.supabase.co', '.lovable.app')}/set-password`;
+    const appUrl = redirectTo || `https://hub-smart-energy.lovable.app/set-password`;
     const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
       type: "recovery",
       email: invitation.email,
