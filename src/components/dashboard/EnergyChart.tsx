@@ -334,6 +334,30 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
         }
       });
 
+      // Find the last real data point for each energy key and null-out everything after it.
+      // This prevents dashed lines from being drawn into future (no-data) time slots.
+      const isToday = offset === 0 && (() => {
+        const now = new Date();
+        const ref = getRefDate("day", offset);
+        return ref.toDateString() === now.toDateString();
+      })();
+
+      if (isToday) {
+        for (const key of ENERGY_KEYS) {
+          // Find the highest index with a real reading
+          const realSet = realIndices[key];
+          let lastRealIdx = -1;
+          if (realSet && realSet.size > 0) {
+            lastRealIdx = Math.max(...realSet);
+          }
+          // Null out all values after the last real data point
+          for (let i = lastRealIdx + 1; i < buckets.length; i++) {
+            (buckets[i] as any)[key] = null;
+            (buckets[i] as any)[`real_${key}`] = null;
+          }
+        }
+      }
+
       return buckets;
     }
 
