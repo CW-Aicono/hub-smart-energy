@@ -56,3 +56,6 @@ verify_jwt = false
 
 [functions.loxone-periodic-sync]
 verify_jwt = false
+
+[functions.gateway-periodic-sync]
+verify_jwt = false
