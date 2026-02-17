@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Cookie, X, ChevronDown, ChevronUp } from "lucide-react";
+import { Cookie, ChevronDown, ChevronUp } from "lucide-react";
 
 const COOKIE_CONSENT_KEY = "cookie_consent";
 
@@ -94,14 +94,6 @@ const CookieConsent = () => {
               )}
             </div>
 
-            {/* Close/reject on mobile */}
-            <button
-              onClick={handleReject}
-              className="md:hidden shrink-0 text-muted-foreground hover:text-foreground transition-colors"
-              aria-label="Ablehnen"
-            >
-              <X className="h-5 w-5" />
-            </button>
           </div>
 
           {/* Action buttons */}
@@ -112,12 +104,18 @@ const CookieConsent = () => {
               onClick={handleReject}
               className="text-muted-foreground"
             >
-              Nur notwendige Cookies
+              Alle ablehnen
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleReject}
+            >
+              Nur notwendige
             </Button>
             <Button
               size="sm"
               onClick={handleAccept}
-              className="bg-primary text-primary-foreground hover:bg-primary/90"
             >
               Alle akzeptieren
             </Button>
