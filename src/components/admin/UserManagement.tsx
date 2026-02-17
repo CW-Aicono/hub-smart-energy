@@ -278,7 +278,7 @@ const UserManagement = () => {
       const { data, error } = await supabase.functions.invoke("activate-invited-user", {
         body: {
           invitationId: invitation.invitation_id,
-          redirectTo: `${window.location.origin}/profile`,
+          redirectTo: `https://ems-pro.aicono.org/set-password`,
         },
       });
 

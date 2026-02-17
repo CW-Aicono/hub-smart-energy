@@ -2161,6 +2161,7 @@ export type Database = {
           id: string
           invited_by: string | null
           role: Database["public"]["Enums"]["app_role"]
+          tenant_id: string | null
           token: string
         }
         Insert: {
@@ -2171,6 +2172,7 @@ export type Database = {
           id?: string
           invited_by?: string | null
           role?: Database["public"]["Enums"]["app_role"]
+          tenant_id?: string | null
           token?: string
         }
         Update: {
@@ -2181,9 +2183,18 @@ export type Database = {
           id?: string
           invited_by?: string | null
           role?: Database["public"]["Enums"]["app_role"]
+          tenant_id?: string | null
           token?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "user_invitations_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       user_location_access: {
         Row: {
