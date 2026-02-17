@@ -1,37 +1,64 @@
 
-## Cookie Consent Banner – Klarere Ablehnen-Option
+## Permanentes Server-Polling für Loxone-Leistungsdaten
 
-### Problem
+### Ursache
 
-Der aktuelle Banner hat bereits eine Ablehnen-Funktion ("Nur notwendige Cookies"), aber der Begriff ist rechtlich und nutzerseitig nicht eindeutig genug. Laut DSGVO/TTDSG muss das Ablehnen genauso prominent und einfach sein wie das Akzeptieren.
+Das Tages-Verlaufschart zeigt Lücken, weil die `meter_power_readings`-Tabelle aktuell nur dann befüllt wird, wenn ein Browser die App geöffnet hat. Der React-Code ruft alle 5 Minuten über die `loxone-api`-Funktion das Gateway ab, und diese Funktion schreibt dabei die Momentanwerte in die Datenbank. Sobald niemand die App nutzt, gibt es kein Polling und keine Datenpunkte.
+
+Es gibt zwar bereits `pg_cron` und `pg_net` in der Datenbank sowie laufende Cron-Jobs (für BrightHub), aber keinen Job für die Loxone-Datensicherung.
 
 ### Lösung
 
-Den Cookie-Banner in `src/components/CookieConsent.tsx` überarbeiten:
+Einen neuen automatischen Hintergrundprozess einrichten, der alle 5 Minuten serverseitig Loxone-Daten abruft und sichert – unabhängig davon, ob jemand die App geöffnet hat.
 
-1. **Drei klare Buttons** in gleichwertiger Prominenz:
-   - "Alle ablehnen" (neu, klar benannt)
-   - "Nur notwendige" (bleibt als mittlere Option)
-   - "Alle akzeptieren"
+#### Schritt 1: Neue Edge Function `loxone-periodic-sync`
 
-   Alternativ zwei gleichwertige Buttons: "Alle ablehnen" | "Alle akzeptieren" (mit optionalem Link zu individuellen Einstellungen).
+Eine neue, schlanke Edge Function wird erstellt, die:
 
-2. **Empfohlene Umsetzung – 3 gleichwertige Optionen:**
-   ```
-   [ Alle ablehnen ]  [ Nur notwendige ]  [ Alle akzeptieren ]
-   ```
-   Alle drei Buttons sind gleich groß und gleich prominent dargestellt (nur die Farbe unterscheidet sie leicht).
+1. Alle aktiven Loxone-Integrationen aus der Datenbank liest (Tabelle `location_integrations` mit `integration_type = 'loxone'`)
+2. Für jede Integration die `getSensors`-Logik der bestehenden `loxone-api`-Funktion aufruft (welche bereits intern Leistungswerte in `meter_power_readings` schreibt)
+3. Ohne Benutzerauthentifizierung lauffähig ist (Service-Role-Key)
 
-3. **Logik bleibt identisch**: "Alle ablehnen" und "Nur notwendige" speichern beide `rejected` in localStorage, da es inhaltlich dasselbe ist – keine optionalen Cookies werden gesetzt.
+Die bestehende `loxone-api`-Funktion enthält bereits die gesamte Logik zum Abrufen der Sensordaten und zum Schreiben in `meter_power_readings`. Die neue Funktion ist nur ein Orchestrator, der alle Integrationen sequentiell aufruft.
 
-4. **Mobile X-Button** wird ebenfalls zu "Alle ablehnen" umbenannt (oder entfernt zugunsten der Buttons).
+#### Schritt 2: Cron-Job via Migration
 
-### Technische Änderungen
+Ein neuer `pg_cron`-Job wird angelegt, der die neue Funktion alle 5 Minuten aufruft:
 
-Nur eine Datei wird geändert:
+```sql
+SELECT cron.schedule(
+  'loxone-power-readings-sync',
+  '*/5 * * * *',
+  $$
+  SELECT net.http_post(
+    url:='https://xnveugycurplszevdxtw.supabase.co/functions/v1/loxone-periodic-sync',
+    headers:='{"Content-Type": "application/json", "Authorization": "Bearer <service_role_key>"}'::jsonb,
+    body:='{}'::jsonb
+  );
+  $$
+);
+```
 
-- **`src/components/CookieConsent.tsx`**: Button-Leiste anpassen – einen dritten Button "Alle ablehnen" hinzufügen, Reihenfolge und Styling angleichen.
+### Technische Details
 
-### Keine weiteren Abhängigkeiten
+**Betroffene Dateien:**
+- Neu: `supabase/functions/loxone-periodic-sync/index.ts`
+- Neu: Datenbank-Migration für den Cron-Job
 
-Keine Datenbankänderungen, keine neuen Pakete, keine weiteren Dateien betroffen.
+**Datenfluss nach der Änderung:**
+
+```text
+pg_cron (alle 5 Min)
+    └── loxone-periodic-sync (Edge Function)
+          └── liest alle aktiven Loxone-Integrationen aus DB
+                └── ruft für jede Integration loxone-api auf (getSensors)
+                      └── loxone-api schreibt meter_power_readings ──> Tages-Chart
+```
+
+**Kein Datenverlust, keine Breaking Changes:**
+- Die bestehende Client-seitige Polling-Logik bleibt unverändert – sie liefert weiterhin Live-Werte für die UI
+- Die neue Hintergrundprozess schreibt dieselbe Tabelle, erzeugt also konsistente Datenpunkte
+- Duplikate sind kein Problem, da das Chart Datenpunkte pro Zeitfenster aggregiert
+
+**Lücken in der Vergangenheit:**
+Vergangene Datenlücken (z. B. heute früh 3:00–7:00 Uhr) können nicht rückwirkend befüllt werden, da der Loxone Miniserver keine historischen Momentanwerte liefert (nur aggregierte Tages-/Wochen-/Monatswerte). Ab Einrichtung des Cron-Jobs ist der Verlauf lückenlos.
