@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Label } from "@/components/ui/label";
 import { Plus, Trash2, ExternalLink, Building2, User, Mail, AlertCircle } from "lucide-react";
 import { useState } from "react";
@@ -24,6 +25,8 @@ const SuperAdminTenants = () => {
   const { toast } = useToast();
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
+  const [confirmName, setConfirmName] = useState("");
 
   // Form state
   const [newName, setNewName] = useState("");
@@ -218,7 +221,7 @@ const SuperAdminTenants = () => {
                             <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); navigate(`/super-admin/tenants/${tenant.id}`); }}>
                               <ExternalLink className="h-4 w-4" />
                             </Button>
-                            <Button variant="ghost" size="icon" className="text-destructive" onClick={(e) => { e.stopPropagation(); deleteTenant.mutate(tenant.id); }}>
+                            <Button variant="ghost" size="icon" className="text-destructive" onClick={(e) => { e.stopPropagation(); setDeleteTarget({ id: tenant.id, name: tenant.name }); setConfirmName(""); }}>
                               <Trash2 className="h-4 w-4" />
                             </Button>
                           </div>
@@ -232,6 +235,47 @@ const SuperAdminTenants = () => {
           </Card>
         </div>
       </main>
+
+      {/* Double-confirm delete dialog */}
+      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => { if (!open) { setDeleteTarget(null); setConfirmName(""); } }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Mandant unwiderruflich löschen?</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3">
+                <p>
+                  Der Mandant <strong>{deleteTarget?.name}</strong> und alle zugehörigen Daten werden dauerhaft gelöscht. Diese Aktion kann nicht rückgängig gemacht werden.
+                </p>
+                <p className="text-sm">
+                  Bitte geben Sie zur Bestätigung den Namen des Mandanten ein:
+                </p>
+                <Input
+                  value={confirmName}
+                  onChange={(e) => setConfirmName(e.target.value)}
+                  placeholder={deleteTarget?.name}
+                  className="mt-1"
+                />
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Abbrechen</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={confirmName !== deleteTarget?.name}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90 disabled:opacity-50"
+              onClick={() => {
+                if (deleteTarget) {
+                  deleteTenant.mutate(deleteTarget.id);
+                  setDeleteTarget(null);
+                  setConfirmName("");
+                }
+              }}
+            >
+              Endgültig löschen
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
