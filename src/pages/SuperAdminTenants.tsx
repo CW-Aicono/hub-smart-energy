@@ -82,8 +82,16 @@ const SuperAdminTenants = () => {
         },
       });
 
-      if (inviteError) throw new Error(inviteError.message);
-      const result = typeof inviteData === "string" ? JSON.parse(inviteData) : inviteData;
+      // Parse error from response body if available
+      let result = typeof inviteData === "string" ? JSON.parse(inviteData) : inviteData;
+      if (inviteError) {
+        // Try to get actual error message from response body
+        const bodyText = (inviteError as { context?: { text?: string } })?.context?.text;
+        if (bodyText) {
+          try { result = JSON.parse(bodyText); } catch { /* ignore */ }
+        }
+        if (!result?.error) throw new Error(inviteError.message);
+      }
       if (!result?.success) throw new Error(result?.error || "Einladung fehlgeschlagen");
 
       toast({
