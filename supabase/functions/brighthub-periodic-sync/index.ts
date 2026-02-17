@@ -156,19 +156,21 @@ Deno.serve(async (req) => {
         if (action === "all" || action === "sync_meters") {
           const { data: meters } = await supabase
             .from("meters")
-            .select("id, name, energy_type, unit, meter_number, notes, is_archived")
+            .select("id, name, energy_type, unit, meter_number, notes, room_id, floor_rooms(name)")
             .eq("location_id", settings.location_id)
             .eq("is_archived", false);
 
           if (meters && meters.length > 0) {
-            const metersPayload = meters.map((m) => {
+            const metersPayload = (meters as any[]).map((m) => {
+              const roomName = m.floor_rooms?.name || null;
+              const locationDescription = roomName || m.notes || undefined;
               const entry: Record<string, unknown> = {
                 external_id: m.id,
                 name: m.name,
                 type: mapEnergyType(m.energy_type),
                 unit: mapUnit(m.unit),
               };
-              if (m.notes) entry.location_description = m.notes;
+              if (locationDescription) entry.location_description = locationDescription;
               const costPerUnit = priceMap.get(m.energy_type);
               if (costPerUnit !== undefined) entry.cost_per_unit = costPerUnit;
               return entry;
@@ -199,7 +201,7 @@ Deno.serve(async (req) => {
         if (action === "all" || action === "sync_readings") {
           const { data: meters } = await supabase
             .from("meters")
-            .select("id, energy_type, notes")
+            .select("id, energy_type, notes, room_id, floor_rooms(name)")
             .eq("location_id", settings.location_id)
             .eq("is_archived", false);
 
@@ -209,9 +211,10 @@ Deno.serve(async (req) => {
             const readings: Record<string, unknown>[] = [];
             const sinceDate = settings.last_reading_sync_at || "2000-01-01T00:00:00Z";
 
-            for (const meter of meters) {
+            for (const meter of (meters as any[])) {
               const costPerUnit = priceMap.get(meter.energy_type);
-              const locationDescription = meter.notes || undefined;
+              const roomName = meter.floor_rooms?.name || null;
+              const locationDescription = roomName || meter.notes || undefined;
 
               const { data: powerReadings } = await supabase
                 .from("meter_power_readings")
@@ -280,7 +283,7 @@ Deno.serve(async (req) => {
         if (action === "all" || action === "sync_intraday") {
           const { data: meters } = await supabase
             .from("meters")
-            .select("id, energy_type, notes")
+            .select("id, energy_type, notes, room_id, floor_rooms(name)")
             .eq("location_id", settings.location_id)
             .eq("is_archived", false);
 
@@ -290,9 +293,10 @@ Deno.serve(async (req) => {
             const sinceDate = settings.last_intraday_sync_at || "2000-01-01T00:00:00Z";
             const intradayReadings: Record<string, unknown>[] = [];
 
-            for (const meter of meters) {
+            for (const meter of (meters as any[])) {
               const costPerUnit = priceMap.get(meter.energy_type);
-              const locationDescription = meter.notes || undefined;
+              const roomName = meter.floor_rooms?.name || null;
+              const locationDescription = roomName || meter.notes || undefined;
 
               const { data: pwr } = await supabase
                 .from("meter_power_readings")
