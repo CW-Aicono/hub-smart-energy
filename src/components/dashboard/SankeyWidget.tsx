@@ -90,6 +90,7 @@ const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
   // Local UI state
   const [tooltip, setTooltip] = useState<{ x: number; y: number; source: string; target: string; value: number; sourceType: string } | null>(null);
   const [targetTooltip, setTargetTooltip] = useState<{ x: number; y: number; name: string; flows: { sourceName: string; sourceType: string; value: number }[] } | null>(null);
+  const [sourceTooltip, setSourceTooltip] = useState<{ x: number; y: number; name: string; sourceType: string; flows: { targetName: string; value: number }[] } | null>(null);
   const [floors, setFloors] = useState<{ id: string; name: string }[]>([]);
   const [rooms, setRooms] = useState<{ id: string; floor_id: string; name: string }[]>([]);
 
@@ -478,8 +479,14 @@ const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
                 const pos = srcPositions[name];
                 const color = sourceColors[name] || ENERGY_COLORS.strom;
                 const labelY = srcLabelYs[i];
+                const srcFlows = flows.filter(f => f.sourceName === name).map(f => ({ targetName: f.targetName, value: f.value }));
+                const handleSourceMouseMove = (e: React.MouseEvent) => {
+                  if (!svgRef.current) return;
+                  const rect = svgRef.current.getBoundingClientRect();
+                  setSourceTooltip({ x: e.clientX - rect.left, y: e.clientY - rect.top - 10, name, sourceType: sourceTypes[name] || "strom", flows: srcFlows });
+                };
                 return (
-                  <g key={`src-${i}`}>
+                  <g key={`src-${i}`} onMouseMove={handleSourceMouseMove} onMouseLeave={() => setSourceTooltip(null)} className="cursor-pointer">
                     <rect x={srcX} y={pos.y} width={nodeW} height={pos.h} rx={3} fill={color} opacity={0.9} />
                     <text x={srcX - 6} y={labelY - 6} textAnchor="end" dominantBaseline="middle" fill="hsl(var(--foreground))" fontSize={10} fontWeight={500}>{name}</text>
                     <text x={srcX - 6} y={labelY + 6} textAnchor="end" dominantBaseline="middle" fill="hsl(var(--muted-foreground))" fontSize={8}>{formatValue(sourceValues[name], sourceTypes[name] || "strom")}</text>
@@ -532,6 +539,20 @@ const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
               {targetTooltip.flows.map((f, i) => (
                 <div key={i} className="text-muted-foreground">{f.sourceName}: {formatValue(f.value, f.sourceType)}</div>
               ))}
+            </div>
+          )}
+          {sourceTooltip && (
+            <div className="absolute pointer-events-none z-10 rounded-lg border bg-background px-3 py-2 text-xs shadow-lg min-w-[160px]" style={{ left: sourceTooltip.x, top: sourceTooltip.y, transform: "translate(-10%, -100%)" }}>
+              <div className="font-semibold mb-1">{sourceTooltip.name}</div>
+              {sourceTooltip.flows
+                .slice()
+                .sort((a, b) => b.value - a.value)
+                .map((f, i) => (
+                  <div key={i} className="flex justify-between gap-4 text-muted-foreground">
+                    <span>{f.targetName}</span>
+                    <span className="font-medium text-foreground">{formatValue(f.value, sourceTooltip.sourceType)}</span>
+                  </div>
+                ))}
             </div>
           )}
         </div>
