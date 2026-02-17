@@ -129,7 +129,8 @@ Deno.serve(async (req) => {
         .update({ last_meter_sync_at: new Date().toISOString() } as any)
         .eq("id", settings.id);
 
-      result = { sent: metersPayload.length, summary: apiResult.summary || apiResult.data };
+      // New response format: { success, count, meters_created }
+      result = { sent: metersPayload.length, count: apiResult.count, meters_created: apiResult.meters_created };
 
     } else if (action === "sync_readings") {
       // Fetch readings since last sync
@@ -190,8 +191,15 @@ Deno.serve(async (req) => {
       }
 
       if (readings.length > 0) {
-        const apiResult = await callBrightHub("bulk_readings", { readings }, settings.api_key);
-        result = { sent: readings.length, data: apiResult.data, count: apiResult.count };
+        let totalCount = 0;
+        // Chunk into max 1,000 per call as per API spec
+        for (let i = 0; i < readings.length; i += 1000) {
+          const chunk = readings.slice(i, i + 1000);
+          const apiResult = await callBrightHub("bulk_readings", { readings: chunk }, settings.api_key);
+          // New response format: { success, count, meters_created }
+          totalCount += apiResult.count ?? chunk.length;
+        }
+        result = { sent: readings.length, count: totalCount };
       } else {
         result = { sent: 0, message: "Keine neuen Messwerte" };
       }
@@ -242,11 +250,15 @@ Deno.serve(async (req) => {
       }
 
       if (intradayReadings.length > 0) {
+        let totalCount = 0;
+        // Chunk into max 5,000 per call as per API spec
         for (let i = 0; i < intradayReadings.length; i += 5000) {
           const chunk = intradayReadings.slice(i, i + 5000);
-          await callBrightHub("bulk_intraday", { readings: chunk }, settings.api_key);
+          const apiResult = await callBrightHub("bulk_intraday", { readings: chunk }, settings.api_key);
+          // New response format: { success, count, meters_created }
+          totalCount += apiResult.count ?? chunk.length;
         }
-        result = { sent: intradayReadings.length };
+        result = { sent: intradayReadings.length, count: totalCount };
       } else {
         result = { sent: 0, message: "Keine neuen Leistungswerte" };
       }

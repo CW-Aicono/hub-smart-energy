@@ -148,9 +148,11 @@ Deno.serve(async (req) => {
               settings.api_key
             );
 
+            // New response format: { success, count, meters_created }
             locationResult.meters = {
               sent: metersPayload.length,
-              summary: meterResult.summary || meterResult.data,
+              count: meterResult.count,
+              meters_created: meterResult.meters_created,
             };
 
             await supabase
@@ -216,11 +218,15 @@ Deno.serve(async (req) => {
             }
 
             if (readings.length > 0) {
+              let totalCount = 0;
+              // Chunk into max 1,000 per call as per API spec
               for (let i = 0; i < readings.length; i += 1000) {
                 const chunk = readings.slice(i, i + 1000);
-                await callBrightHub("bulk_readings", { readings: chunk }, settings.api_key);
+                const apiResult = await callBrightHub("bulk_readings", { readings: chunk }, settings.api_key);
+                // New response format: { success, count, meters_created }
+                totalCount += apiResult.count ?? chunk.length;
               }
-              locationResult.readings = { sent: readings.length };
+              locationResult.readings = { sent: readings.length, count: totalCount };
               await supabase
                 .from("brighthub_settings")
                 .update({ last_reading_sync_at: new Date().toISOString() } as any)
@@ -266,11 +272,15 @@ Deno.serve(async (req) => {
             }
 
             if (intradayReadings.length > 0) {
+              let totalCount = 0;
+              // Chunk into max 5,000 per call as per API spec
               for (let i = 0; i < intradayReadings.length; i += 5000) {
                 const chunk = intradayReadings.slice(i, i + 5000);
-                await callBrightHub("bulk_intraday", { readings: chunk }, settings.api_key);
+                const apiResult = await callBrightHub("bulk_intraday", { readings: chunk }, settings.api_key);
+                // New response format: { success, count, meters_created }
+                totalCount += apiResult.count ?? chunk.length;
               }
-              locationResult.intraday = { sent: intradayReadings.length };
+              locationResult.intraday = { sent: intradayReadings.length, count: totalCount };
               await supabase
                 .from("brighthub_settings")
                 .update({ last_intraday_sync_at: new Date().toISOString() } as any)
