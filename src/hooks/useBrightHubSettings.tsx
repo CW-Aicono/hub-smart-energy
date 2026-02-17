@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
 import { useTenant } from "./useTenant";
 import { toast } from "sonner";
+import { getT } from "@/i18n/getT";
 
 export interface BrightHubSettings {
   id: string;
@@ -53,14 +54,14 @@ export function useBrightHubSettings(locationId?: string) {
         .from("brighthub_settings")
         .update(values as any)
         .eq("id", settings.id);
-      if (error) { toast.error("Einstellungen konnten nicht gespeichert werden"); return false; }
+      if (error) { toast.error(getT()("brightHub.errorSave")); return false; }
     } else {
       const { error } = await supabase
         .from("brighthub_settings")
         .insert({ ...values, tenant_id: tenantId, location_id: locationId } as any);
-      if (error) { toast.error("Einstellungen konnten nicht gespeichert werden"); return false; }
+      if (error) { toast.error(getT()("brightHub.errorSave")); return false; }
     }
-    toast.success("BrightHub-Einstellungen gespeichert");
+    toast.success(getT()("brightHub.saved"));
     fetchSettings();
     return true;
   };

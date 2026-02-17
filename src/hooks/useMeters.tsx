@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
 import { useTenant } from "./useTenant";
 import { toast } from "sonner";
+import { getT } from "@/i18n/getT";
 
 const useTenantId = () => {
   const { tenant } = useTenant();
@@ -97,7 +98,7 @@ export function useMeters(locationId?: string) {
       meter_function: meterFunction || "consumption",
     } as any).select("id").single();
     if (error) {
-      toast.error("Zähler konnte nicht angelegt werden");
+      toast.error(getT()("meter.errorCreate"));
       console.error(error);
     } else {
       // Save virtual meter sources if applicable
@@ -111,10 +112,10 @@ export function useMeters(locationId?: string) {
         const { error: srcErr } = await supabase.from("virtual_meter_sources").insert(rows as any);
         if (srcErr) {
           console.error("Error saving virtual sources:", srcErr);
-          toast.error("Formel konnte nicht gespeichert werden");
+          toast.error(getT()("meter.errorFormula"));
         }
       }
-      toast.success("Zähler angelegt");
+      toast.success(getT()("meter.created"));
       fetchMeters();
     }
   };
@@ -128,10 +129,10 @@ export function useMeters(locationId?: string) {
     }
     const { error } = await supabase.from("meters").update(cleanedUpdates as any).eq("id", id);
     if (error) {
-      toast.error("Zähler konnte nicht aktualisiert werden");
+      toast.error(getT()("meter.errorUpdate"));
       console.error(error);
     } else {
-      toast.success("Zähler aktualisiert");
+      toast.success(getT()("meter.updated"));
       fetchMeters();
     }
   };
@@ -139,10 +140,10 @@ export function useMeters(locationId?: string) {
   const deleteMeter = async (id: string) => {
     const { error } = await supabase.from("meters").delete().eq("id", id);
     if (error) {
-      toast.error("Zähler konnte nicht gelöscht werden");
+      toast.error(getT()("meter.errorDelete"));
       console.error(error);
     } else {
-      toast.success("Zähler gelöscht");
+      toast.success(getT()("meter.deleted"));
       fetchMeters();
     }
   };
@@ -150,10 +151,10 @@ export function useMeters(locationId?: string) {
   const archiveMeter = async (id: string, archived: boolean) => {
     const { error } = await supabase.from("meters").update({ is_archived: archived } as any).eq("id", id);
     if (error) {
-      toast.error(archived ? "Zähler konnte nicht archiviert werden" : "Zähler konnte nicht wiederhergestellt werden");
+      toast.error(archived ? getT()("meter.errorArchive") : getT()("meter.errorRestore"));
       console.error(error);
     } else {
-      toast.success(archived ? "Zähler archiviert" : "Zähler wiederhergestellt");
+      toast.success(archived ? getT()("meter.archived") : getT()("meter.restored"));
       fetchMeters();
     }
   };
@@ -164,10 +165,10 @@ export function useMeters(locationId?: string) {
       .update({ parent_meter_id: parentMeterId } as any)
       .eq("id", meterId);
     if (error) {
-      toast.error("Zähler konnte nicht verschoben werden");
+      toast.error(getT()("meter.errorMove"));
       console.error(error);
     } else {
-      toast.success("Zählerstruktur aktualisiert");
+      toast.success(getT()("meter.moved"));
       fetchMeters();
     }
   };

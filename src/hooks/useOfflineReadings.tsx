@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
 import { useTenant } from "./useTenant";
 import { toast } from "sonner";
+import { getT } from "@/i18n/getT";
 
 const QUEUE_KEY = "offline_meter_readings";
 
@@ -104,11 +105,14 @@ export function useOfflineReadings() {
     syncingRef.current = false;
     setSyncing(false);
 
+    const t = getT();
     if (successCount > 0) {
-      toast.success(`${successCount} Zählerstand${successCount > 1 ? "e" : ""} synchronisiert`);
+      const label = successCount > 1 ? t("offlineReading.synced_many") : t("offlineReading.synced_one");
+      toast.success(`${successCount} ${label}`);
     }
     if (failed.length > 0) {
-      toast.error(`${failed.length} Ablesung${failed.length > 1 ? "en" : ""} konnte${failed.length > 1 ? "n" : ""} nicht übermittelt werden`);
+      const label = failed.length > 1 ? t("offlineReading.errorSync_many") : t("offlineReading.errorSync_one");
+      toast.error(`${failed.length} ${label}`);
     }
   }, [tenantId, user]);
 
