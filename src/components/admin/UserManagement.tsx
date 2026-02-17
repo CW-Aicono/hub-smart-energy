@@ -47,10 +47,11 @@ const UserManagement = () => {
   const fetchUsers = async () => {
     setLoading(true);
     
-    // Fetch profiles with email
+    // Fetch profiles with email – filter by tenant_id for explicit tenant isolation
     const { data: profiles, error: profilesError } = await supabase
       .from("profiles")
-      .select("*");
+      .select("*")
+      .eq("tenant_id", tenant?.id);
 
     if (profilesError) {
       console.error("Error fetching profiles:", profilesError);
