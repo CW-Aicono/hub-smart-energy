@@ -1,5 +1,11 @@
 project_id = "xnveugycurplszevdxtw"
 
+[functions.delete-user]
+verify_jwt = false
+
+[functions.invite-tenant-admin]
+verify_jwt = false
+
 [functions.loxone-api]
 verify_jwt = false
 

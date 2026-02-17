@@ -36,10 +36,85 @@ const handler = async (req: Request): Promise<Response> => {
       throw new Error("Insufficient permissions");
     }
 
-    const { invitationId, redirectTo } = await req.json();
+    // Get caller's tenant_id
+    const { data: callerProfile } = await supabase
+      .from("profiles")
+      .select("tenant_id")
+      .eq("user_id", callingUser.id)
+      .single();
+    const tenantId = callerProfile?.tenant_id;
+
+    const body = await req.json();
+    const { redirectTo } = body;
+
+    // ── MODE 1: Direct invite (new flow – no invitation record needed) ──
+    if (body.directInvite) {
+      const { email, name, role, tenantId: overrideTenantId } = body;
+      if (!email) throw new Error("Missing email");
+
+      const effectiveTenantId = overrideTenantId || tenantId;
+
+      const tempPassword = crypto.randomUUID() + "Aa1!";
+      const { data: newUserData, error: createError } = await supabase.auth.admin.createUser({
+        email,
+        password: tempPassword,
+        email_confirm: true,
+      });
+
+      if (createError) {
+        if (createError.message?.includes("already")) {
+          throw new Error("Ein Benutzer mit dieser E-Mail existiert bereits.");
+        }
+        throw new Error(`Benutzer konnte nicht erstellt werden: ${createError.message}`);
+      }
+
+      const newUserId = newUserData.user.id;
+
+      // Wait for trigger
+      await new Promise(resolve => setTimeout(resolve, 600));
+
+      // Update profile with tenant + name
+      await supabase
+        .from("profiles")
+        .update({
+          tenant_id: effectiveTenantId || null,
+          contact_person: name || null,
+        })
+        .eq("user_id", newUserId);
+
+      // Set role
+      if (role === "admin") {
+        await supabase
+          .from("user_roles")
+          .update({ role: "admin" })
+          .eq("user_id", newUserId);
+      }
+
+      // Generate password-reset link
+      const appUrl = redirectTo || `${supabaseUrl.replace('.supabase.co', '.lovable.app')}/profile`;
+      const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
+        type: "recovery",
+        email,
+        options: { redirectTo: appUrl },
+      });
+
+      if (linkError || !linkData?.properties?.action_link) {
+        throw new Error("Passwort-Link konnte nicht generiert werden");
+      }
+
+      // Send email
+      const emailSent = await sendInvitationEmail(supabase, email, name, linkData.properties.action_link, effectiveTenantId, role || "user");
+
+      return new Response(
+        JSON.stringify({ success: true, userId: newUserId, emailSent }),
+        { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
+    }
+
+    // ── MODE 2: Legacy invitation record flow ──
+    const { invitationId } = body;
     if (!invitationId) throw new Error("Missing invitationId");
 
-    // Fetch the invitation
     const { data: invitation, error: invError } = await supabase
       .from("user_invitations")
       .select("*")
@@ -49,27 +124,14 @@ const handler = async (req: Request): Promise<Response> => {
     if (invError || !invitation) throw new Error("Invitation not found");
     if (invitation.accepted_at) throw new Error("Invitation already accepted");
 
-    // Get the caller's tenant_id for assigning to the new user
-    const { data: callerProfile } = await supabase
-      .from("profiles")
-      .select("tenant_id")
-      .eq("user_id", callingUser.id)
-      .single();
-
-    const tenantId = callerProfile?.tenant_id;
-
-    // Generate a secure temporary password
     const tempPassword = crypto.randomUUID() + "Aa1!";
-
-    // Create the user via admin API
     const { data: newUserData, error: createError } = await supabase.auth.admin.createUser({
       email: invitation.email,
       password: tempPassword,
-      email_confirm: true, // Auto-confirm the email since admin is activating
+      email_confirm: true,
     });
 
     if (createError) {
-      // Check if user already exists
       if (createError.message?.includes("already been registered") || createError.message?.includes("already exists")) {
         throw new Error("Ein Benutzer mit dieser E-Mail existiert bereits.");
       }
@@ -78,19 +140,15 @@ const handler = async (req: Request): Promise<Response> => {
 
     const newUserId = newUserData.user.id;
 
-    // The handle_new_user trigger should auto-create the profile,
-    // but we need to update it with the tenant_id
-    if (tenantId) {
-      // Wait briefly for the trigger to create the profile
-      await new Promise(resolve => setTimeout(resolve, 500));
+    await new Promise(resolve => setTimeout(resolve, 500));
 
+    if (tenantId) {
       await supabase
         .from("profiles")
         .update({ tenant_id: tenantId })
         .eq("user_id", newUserId);
     }
 
-    // Assign the invited role
     if (invitation.role === "admin") {
       await supabase
         .from("user_roles")
@@ -98,81 +156,21 @@ const handler = async (req: Request): Promise<Response> => {
         .eq("user_id", newUserId);
     }
 
-    // Mark invitation as accepted
     await supabase
       .from("user_invitations")
       .update({ accepted_at: new Date().toISOString() })
       .eq("id", invitationId);
 
-    // Send password reset email so user can set their own password
-    // We use the admin generateLink method to get a recovery link
+    const appUrl = redirectTo || `${supabaseUrl.replace('.supabase.co', '.lovable.app')}/profile`;
     const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
       type: "recovery",
       email: invitation.email,
-      options: {
-        redirectTo: redirectTo || `${supabaseUrl.replace('.supabase.co', '.lovable.app')}/profile`,
-      },
+      options: { redirectTo: appUrl },
     });
 
-    // Send the recovery email via Resend
     let emailSent = false;
     if (!linkError && linkData?.properties?.action_link) {
-      const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
-      if (RESEND_API_KEY) {
-        try {
-          // Get tenant branding for the email
-          let tenantName = "Smart Energy Hub";
-          let primaryColor = "#1a365d";
-          let accentColor = "#2d8a6e";
-
-          if (tenantId) {
-            const { data: tenant } = await supabase
-              .from("tenants")
-              .select("name, branding")
-              .eq("id", tenantId)
-              .single();
-            if (tenant) {
-              tenantName = tenant.name || tenantName;
-              const branding = (tenant.branding as Record<string, string>) || {};
-              primaryColor = branding.primaryColor || primaryColor;
-              accentColor = branding.accentColor || accentColor;
-            }
-          }
-
-          const { Resend } = await import("npm:resend@2.0.0");
-          const resend = new Resend(RESEND_API_KEY);
-
-          await resend.emails.send({
-            from: `${tenantName} <noreply@mailtest.my-ips.de>`,
-            to: [invitation.email],
-            subject: `Ihr Konto wurde erstellt – ${tenantName}`,
-            html: `<!DOCTYPE html>
-<html>
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
-<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
-  <div style="background: linear-gradient(135deg, ${primaryColor} 0%, ${accentColor} 100%); padding: 30px; border-radius: 10px 10px 0 0;">
-    <h1 style="color: white; margin: 0; font-size: 24px;">Ihr Konto wurde erstellt</h1>
-    <div style="color:rgba(255,255,255,0.7);font-size:13px;margin-top:4px">${tenantName}</div>
-  </div>
-  <div style="background: #f9fafb; padding: 30px; border-radius: 0 0 10px 10px; border: 1px solid #e5e7eb; border-top: none;">
-    <p>Hallo,</p>
-    <p>Ihr Konto bei <strong>${tenantName}</strong> wurde von einem Administrator erstellt.</p>
-    <p>Bitte klicken Sie auf den folgenden Button, um Ihr Passwort festzulegen:</p>
-    <a href="${linkData.properties.action_link}" style="display: inline-block; background: ${primaryColor}; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; font-weight: 500; margin: 10px 0;">
-      Passwort festlegen
-    </a>
-    <p style="font-size: 14px; color: #6b7280; margin-top: 20px;">
-      Dieser Link ist 24 Stunden gültig.
-    </p>
-  </div>
-</body>
-</html>`,
-          });
-          emailSent = true;
-        } catch (emailErr) {
-          console.error("Error sending activation email:", emailErr);
-        }
-      }
+      emailSent = await sendInvitationEmail(supabase, invitation.email, null, linkData.properties.action_link, tenantId, invitation.role);
     }
 
     return new Response(
@@ -195,5 +193,76 @@ const handler = async (req: Request): Promise<Response> => {
     );
   }
 };
+
+async function sendInvitationEmail(
+  // deno-lint-ignore no-explicit-any
+  supabase: any,
+  email: string,
+  name: string | null | undefined,
+  actionLink: string,
+  tenantId: string | null | undefined,
+  role: string,
+): Promise<boolean> {
+  const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
+  if (!RESEND_API_KEY) return false;
+
+  try {
+    let tenantName = "Smart Energy Hub";
+    let primaryColor = "#1a365d";
+    let accentColor = "#2d8a6e";
+
+    if (tenantId) {
+      const { data: tenant } = await supabase
+        .from("tenants")
+        .select("name, branding")
+        .eq("id", tenantId)
+        .single();
+      if (tenant) {
+        tenantName = tenant.name || tenantName;
+        const branding = (tenant.branding as Record<string, string>) || {};
+        primaryColor = branding.primaryColor || primaryColor;
+        accentColor = branding.accentColor || accentColor;
+      }
+    }
+
+    const { Resend } = await import("npm:resend@2.0.0");
+    const resend = new Resend(RESEND_API_KEY);
+    const roleLabel = role === "admin" ? "Administrator" : "Benutzer";
+
+    await resend.emails.send({
+      from: `${tenantName} <noreply@mailtest.my-ips.de>`,
+      to: [email],
+      subject: `Ihr Konto wurde erstellt – ${tenantName}`,
+      html: `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+  <div style="background: linear-gradient(135deg, ${primaryColor} 0%, ${accentColor} 100%); padding: 30px; border-radius: 10px 10px 0 0;">
+    <h1 style="color: white; margin: 0; font-size: 24px;">Sie wurden eingeladen!</h1>
+    <div style="color:rgba(255,255,255,0.7);font-size:13px;margin-top:4px">${tenantName} – ${roleLabel}</div>
+  </div>
+  <div style="background: #f9fafb; padding: 30px; border-radius: 0 0 10px 10px; border: 1px solid #e5e7eb; border-top: none;">
+    <p>Hallo${name ? ` ${name}` : ""},</p>
+    <p>Für Sie wurde ein Konto bei <strong>${tenantName}</strong> erstellt.</p>
+    <p>Bitte klicken Sie auf den folgenden Button, um ein Passwort zu vergeben und sich anzumelden:</p>
+    <a href="${actionLink}" style="display: inline-block; background: ${primaryColor}; color: white; padding: 14px 32px; text-decoration: none; border-radius: 6px; font-weight: 600; font-size: 16px; margin: 16px 0;">
+      Passwort festlegen &amp; Anmelden
+    </a>
+    <p style="font-size: 14px; color: #6b7280; margin-top: 24px;">
+      Dieser Link ist <strong>7 Tage</strong> gültig.
+    </p>
+    <p style="font-size: 12px; color: #9ca3af; margin-top: 12px;">
+      Falls Sie diese E-Mail nicht erwartet haben, können Sie sie ignorieren.
+    </p>
+  </div>
+</body>
+</html>`,
+    });
+    return true;
+  } catch (emailErr) {
+    console.error("Error sending invitation email:", emailErr);
+    return false;
+  }
+}
 
 serve(handler);

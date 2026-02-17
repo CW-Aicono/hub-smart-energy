@@ -10,8 +10,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Plus, Trash2, ExternalLink } from "lucide-react";
+import { Plus, Trash2, ExternalLink, Building2, User, Mail, AlertCircle } from "lucide-react";
 import { useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
 
 const SuperAdminTenants = () => {
   const { user, loading: authLoading } = useAuth();
@@ -19,11 +21,17 @@ const SuperAdminTenants = () => {
   const { tenants, isLoading, createTenant, deleteTenant } = useTenants();
   const { t } = useSATranslation();
   const navigate = useNavigate();
+  const { toast } = useToast();
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
+
+  // Form state
   const [newName, setNewName] = useState("");
   const [newSlug, setNewSlug] = useState("");
   const [newEmail, setNewEmail] = useState("");
+  const [adminEmail, setAdminEmail] = useState("");
+  const [adminName, setAdminName] = useState("");
+  const [creating, setCreating] = useState(false);
 
   if (authLoading || roleLoading) {
     return <div className="flex min-h-screen items-center justify-center bg-background"><div className="animate-pulse text-muted-foreground">{t("common.loading")}</div></div>;
@@ -36,12 +44,70 @@ const SuperAdminTenants = () => {
     tnt.slug.toLowerCase().includes(search.toLowerCase())
   );
 
-  const handleCreate = () => {
-    if (!newName || !newSlug) return;
-    createTenant.mutate(
-      { name: newName, slug: newSlug, contact_email: newEmail || undefined },
-      { onSuccess: () => { setDialogOpen(false); setNewName(""); setNewSlug(""); setNewEmail(""); } }
-    );
+  const slugify = (str: string) =>
+    str.toLowerCase().replace(/[äöü]/g, c => ({ ä: "ae", ö: "oe", ü: "ue" }[c] || c))
+      .replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "").replace(/-+/g, "-");
+
+  const handleNameChange = (value: string) => {
+    setNewName(value);
+    if (!newSlug || newSlug === slugify(newName)) {
+      setNewSlug(slugify(value));
+    }
+  };
+
+  const handleCreate = async () => {
+    if (!newName || !newSlug || !adminEmail) return;
+    setCreating(true);
+
+    try {
+      // 1. Create tenant
+      const { data: tenant, error: tenantError } = await supabase
+        .from("tenants")
+        .insert({ name: newName, slug: newSlug, contact_email: newEmail || adminEmail })
+        .select()
+        .single();
+
+      if (tenantError) throw new Error(tenantError.message);
+
+      // 2. Invite tenant admin via edge function
+      const { data: inviteData, error: inviteError } = await supabase.functions.invoke("invite-tenant-admin", {
+        body: {
+          tenantId: tenant.id,
+          adminEmail,
+          adminName: adminName || undefined,
+          redirectTo: `${window.location.origin}/profile`,
+        },
+      });
+
+      if (inviteError) throw new Error(inviteError.message);
+      const result = typeof inviteData === "string" ? JSON.parse(inviteData) : inviteData;
+      if (!result?.success) throw new Error(result?.error || "Einladung fehlgeschlagen");
+
+      toast({
+        title: "Mandant angelegt",
+        description: `Eine Einladungsmail wurde an ${adminEmail} gesendet.`,
+      });
+      setDialogOpen(false);
+      resetForm();
+      // Refresh by navigating to the same page
+      window.location.reload();
+    } catch (err: unknown) {
+      toast({
+        title: "Fehler",
+        description: err instanceof Error ? err.message : "Unbekannter Fehler",
+        variant: "destructive",
+      });
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const resetForm = () => {
+    setNewName("");
+    setNewSlug("");
+    setNewEmail("");
+    setAdminEmail("");
+    setAdminName("");
   };
 
   return (
@@ -53,27 +119,69 @@ const SuperAdminTenants = () => {
             <h1 className="text-2xl font-bold">{t("tenants.title")}</h1>
             <p className="text-sm text-muted-foreground mt-1">{t("tenants.subtitle")}</p>
           </div>
-          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+          <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) resetForm(); }}>
             <DialogTrigger asChild>
               <Button><Plus className="h-4 w-4 mr-2" /> {t("tenants.new")}</Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="max-w-lg">
               <DialogHeader><DialogTitle>{t("tenants.create_title")}</DialogTitle></DialogHeader>
-              <div className="space-y-4 pt-4">
-                <div className="space-y-2">
-                  <Label>{t("common.name")}</Label>
-                  <Input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Firma GmbH" />
+              <div className="space-y-5 pt-2">
+
+                {/* Tenant section */}
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2 text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+                    <Building2 className="h-4 w-4" />
+                    Mandant
+                  </div>
+                  <div className="space-y-2">
+                    <Label>{t("common.name")} *</Label>
+                    <Input value={newName} onChange={(e) => handleNameChange(e.target.value)} placeholder="Firma GmbH" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>{t("tenants.slug")} *</Label>
+                    <Input value={newSlug} onChange={(e) => setNewSlug(e.target.value)} placeholder="firma-gmbh" />
+                    <p className="text-xs text-muted-foreground">Eindeutiger Bezeichner (wird automatisch befüllt)</p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>{t("tenants.contact_email")}</Label>
+                    <Input value={newEmail} onChange={(e) => setNewEmail(e.target.value)} placeholder="info@firma.de" type="email" />
+                    <p className="text-xs text-muted-foreground">Allgemeine Kontaktadresse des Mandanten (optional)</p>
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  <Label>{t("tenants.slug")}</Label>
-                  <Input value={newSlug} onChange={(e) => setNewSlug(e.target.value)} placeholder="firma-gmbh" />
+
+                <div className="border-t" />
+
+                {/* Admin section */}
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2 text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+                    <User className="h-4 w-4" />
+                    Administrator-Account
+                  </div>
+                  <div className="flex items-start gap-2 p-3 bg-accent/10 rounded-lg border border-accent/20">
+                    <AlertCircle className="h-4 w-4 text-accent mt-0.5 shrink-0" />
+                    <p className="text-xs text-muted-foreground">
+                      Nach dem Anlegen wird automatisch eine Einladungsmail an den Administrator gesendet. Der Administrator vergibt sich darüber selbst ein Passwort.
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="flex items-center gap-1">
+                      <Mail className="h-3.5 w-3.5" />
+                      E-Mail des Administrators *
+                    </Label>
+                    <Input value={adminEmail} onChange={(e) => setAdminEmail(e.target.value)} placeholder="admin@firma.de" type="email" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Name des Administrators</Label>
+                    <Input value={adminName} onChange={(e) => setAdminName(e.target.value)} placeholder="Max Mustermann" />
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  <Label>{t("tenants.contact_email")}</Label>
-                  <Input value={newEmail} onChange={(e) => setNewEmail(e.target.value)} placeholder="info@firma.de" type="email" />
-                </div>
-                <Button onClick={handleCreate} disabled={createTenant.isPending} className="w-full">
-                  {createTenant.isPending ? t("tenants.creating") : t("tenants.create")}
+
+                <Button
+                  onClick={handleCreate}
+                  disabled={creating || !newName || !newSlug || !adminEmail}
+                  className="w-full"
+                >
+                  {creating ? "Wird angelegt..." : "Mandant anlegen & Einladung senden"}
                 </Button>
               </div>
             </DialogContent>
