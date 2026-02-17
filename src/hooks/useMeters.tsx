@@ -1,14 +1,9 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
-import { useTenant } from "./useTenant";
+import { useTenantQuery } from "./useTenantQuery";
 import { toast } from "sonner";
 import { getT } from "@/i18n/getT";
-
-const useTenantId = () => {
-  const { tenant } = useTenant();
-  return tenant?.id ?? null;
-};
 
 export interface Meter {
   id: string;
@@ -57,7 +52,7 @@ export interface MeterInsert {
 
 export function useMeters(locationId?: string) {
   const { user } = useAuth();
-  const tenantId = useTenantId();
+  const { tenantId, insert: tenantInsert } = useTenantQuery();
   const [meters, setMeters] = useState<Meter[]>([]);
   const [loading, setLoading] = useState(true);
 

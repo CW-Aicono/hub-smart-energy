@@ -1,14 +1,9 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
-import { useTenant } from "./useTenant";
+import { useTenantQuery } from "./useTenantQuery";
 import { toast } from "sonner";
 import { getT } from "@/i18n/getT";
-
-const useTenantId = () => {
-  const { tenant } = useTenant();
-  return tenant?.id ?? null;
-};
 
 export interface AlertRule {
   id: string;
@@ -42,7 +37,7 @@ export interface AlertRuleInsert {
 
 export function useAlertRules(locationId?: string) {
   const { user } = useAuth();
-  const tenantId = useTenantId();
+  const { tenantId, ready, insert: tenantInsert } = useTenantQuery();
   const [alertRules, setAlertRules] = useState<AlertRule[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -68,12 +63,9 @@ export function useAlertRules(locationId?: string) {
   }, [fetchAlertRules]);
 
   const addAlertRule = async (rule: AlertRuleInsert) => {
-    if (!tenantId) return;
+    if (!ready) return;
     const t = getT();
-    const { error } = await supabase.from("alert_rules").insert({
-      ...rule,
-      tenant_id: tenantId,
-    } as any);
+    const { error } = await tenantInsert("alert_rules", { ...rule } as any);
     if (error) {
       toast.error(t("alertRule.errorCreate"));
       console.error(error);

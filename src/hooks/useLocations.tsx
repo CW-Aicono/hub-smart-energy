@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "./useTenant";
+import { useTenantQuery } from "./useTenantQuery";
 
 export type LocationType = "einzelgebaeude" | "gebaeudekomplex" | "sonstiges";
 export type LocationUsageType = "verwaltungsgebaeude" | "universitaet" | "schule" | "kindertageseinrichtung" | "sportstaette" | "jugendzentrum" | "sonstiges";
@@ -69,6 +70,7 @@ function buildHierarchy(locations: Location[]): Location[] {
 
 export function useLocations(): UseLocationsReturn {
   const { tenant } = useTenant();
+  const { ready, insert: tenantInsert } = useTenantQuery();
   const [locations, setLocations] = useState<Location[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -107,14 +109,9 @@ export function useLocations(): UseLocationsReturn {
   }, [fetchLocations]);
 
   const createLocation = async (location: LocationInsert) => {
-    if (!tenant) return { error: new Error("No tenant") };
+    if (!ready) return { error: new Error("No tenant") };
 
-    const { error: insertError } = await supabase
-      .from("locations")
-      .insert({
-        ...location,
-        tenant_id: tenant.id,
-      } as any);
+    const { error: insertError } = await tenantInsert("locations", location as any);
 
     if (!insertError) {
       await fetchLocations();

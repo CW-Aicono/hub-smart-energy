@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "./useTenant";
+import { useTenantQuery } from "./useTenantQuery";
 import { getEdgeFunctionName } from "@/lib/gatewayRegistry";
 import { getT } from "@/i18n/getT";
 
@@ -60,6 +61,7 @@ interface UseIntegrationsReturn {
 
 export function useIntegrations(): UseIntegrationsReturn {
   const { tenant } = useTenant();
+  const { ready, insert: tenantInsert } = useTenantQuery();
   const [integrations, setIntegrations] = useState<Integration[]>([]);
   const [categories, setCategories] = useState<IntegrationCategory[]>([]);
   const [loading, setLoading] = useState(true);
@@ -112,14 +114,9 @@ export function useIntegrations(): UseIntegrationsReturn {
   }, [fetchIntegrations]);
 
   const createIntegration = async (integration: Omit<Integration, "id" | "tenant_id" | "created_at" | "updated_at">) => {
-    if (!tenant) return { data: null, error: new Error("No tenant") };
+    if (!ready) return { data: null, error: new Error("No tenant") };
 
-    const { data, error: insertError } = await supabase
-      .from("integrations")
-      .insert({
-        ...integration,
-        tenant_id: tenant.id,
-      } as any)
+    const { data, error: insertError } = await (tenantInsert("integrations", integration as any) as any)
       .select()
       .single();
 
