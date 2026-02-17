@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
+import { useTranslation } from "@/hooks/useTranslation";
 
 interface GeocodeResult {
   latitude: number;
@@ -16,6 +17,7 @@ interface NominatimResponse {
 export function useGeocode() {
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
+  const { t } = useTranslation();
 
   const geocodeAddress = async (
     address: string,
@@ -27,8 +29,8 @@ export function useGeocode() {
     const parts = [address, postalCode, city, country].filter(Boolean);
     if (parts.length < 2) {
       toast({
-        title: "Unvollständige Adresse",
-        description: "Bitte geben Sie mindestens Stadt und Straße ein.",
+        title: t("geocode.incompleteAddress"),
+        description: t("geocode.incompleteAddressDesc"),
         variant: "destructive",
       });
       return null;
@@ -56,8 +58,8 @@ export function useGeocode() {
 
       if (data.length === 0) {
         toast({
-          title: "Adresse nicht gefunden",
-          description: "Die Adresse konnte nicht geocodiert werden. Bitte prüfen Sie die Eingabe.",
+          title: t("geocode.notFound"),
+          description: t("geocode.notFoundDesc"),
           variant: "destructive",
         });
         return null;
@@ -70,7 +72,7 @@ export function useGeocode() {
       };
 
       toast({
-        title: "Koordinaten ermittelt",
+        title: t("geocode.success"),
         description: `${result.latitude.toFixed(6)}, ${result.longitude.toFixed(6)}`,
       });
 
@@ -78,8 +80,8 @@ export function useGeocode() {
     } catch (error) {
       console.error("Geocoding error:", error);
       toast({
-        title: "Fehler",
-        description: "Die Koordinaten konnten nicht ermittelt werden.",
+        title: t("common.error"),
+        description: t("geocode.error"),
         variant: "destructive",
       });
       return null;

@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "./useTenant";
 import { getEdgeFunctionName } from "@/lib/gatewayRegistry";
+import { getT } from "@/i18n/getT";
 
 export interface IntegrationCategory {
   id: string;
@@ -269,7 +270,8 @@ export function useLocationIntegrations(locationId: string | undefined): UseLoca
     // Validate that at least one config value is provided
     const hasValues = Object.values(config).some(v => v && String(v).length > 0);
     if (!hasValues) {
-      return { success: false, error: "Bitte füllen Sie die Konfigurationsfelder aus" };
+      const t = getT();
+      return { success: false, error: t("integration.configRequired") };
     }
     
     // In a real implementation, this would make an API call to test the connection

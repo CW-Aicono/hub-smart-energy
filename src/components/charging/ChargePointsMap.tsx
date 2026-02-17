@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { PlugZap, Zap, ZapOff, AlertTriangle, WifiOff, LocateFixed, Loader2, Navigation, Move, Check } from "lucide-react";
 import { toast } from "sonner";
+import { useTranslation } from "@/hooks/useTranslation";
 
 const statusColors: Record<string, string> = {
   available: "#22c55e",   // grün
@@ -53,12 +54,12 @@ interface ChargePointsMapProps {
   externalUserPos?: [number, number] | null;
 }
 
-const statusConfig: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
-  available: { label: "Verfügbar", variant: "default" },
-  charging: { label: "Lädt", variant: "secondary" },
-  faulted: { label: "Fehler", variant: "destructive" },
-  unavailable: { label: "Nicht verfügbar", variant: "outline" },
-  offline: { label: "Offline", variant: "outline" },
+const statusVariantMap: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
+  available: "default",
+  charging: "secondary",
+  faulted: "destructive",
+  unavailable: "outline",
+  offline: "outline",
 };
 
 function LocateUserControl({ userPos }: { userPos: [number, number] | null }) {
@@ -131,6 +132,7 @@ function BoundsTracker({ points, onVisiblePointsChange }: { points: ChargePointF
 }
 
 export default function ChargePointsMap({ chargePoints, onChargePointClick, onVisiblePointsChange, onPositionChange, className, showLocateButton = false, showEditPositionButton = false, externalUserPos }: ChargePointsMapProps) {
+  const { t } = useTranslation();
   const isTouchDevice = "ontouchstart" in window || navigator.maxTouchPoints > 0;
   const [userPos, setUserPos] = useState<[number, number] | null>(externalUserPos || null);
   const [locating, setLocating] = useState(false);
@@ -143,7 +145,7 @@ export default function ChargePointsMap({ chargePoints, onChargePointClick, onVi
 
   const handleLocate = useCallback(() => {
     if (!navigator.geolocation) {
-      toast.error("Geolocation wird nicht unterstützt");
+      toast.error(t("chargePointMap.locateError"));
       return;
     }
     setLocating(true);
@@ -153,7 +155,7 @@ export default function ChargePointsMap({ chargePoints, onChargePointClick, onVi
         setLocating(false);
       },
       () => {
-        toast.error("Standort konnte nicht ermittelt werden");
+        toast.error(t("geocode.error"));
         setLocating(false);
       },
       { enableHighAccuracy: true, timeout: 10000 }
@@ -210,7 +212,9 @@ export default function ChargePointsMap({ chargePoints, onChargePointClick, onVi
           </>
         )}
         {validPoints.map((cp) => {
-          const cfg = statusConfig[cp.status] || statusConfig.offline;
+          const statusKey = `chargePointStatus.${cp.status}` as any;
+          const statusLabel = t(statusKey) || cp.status;
+          const cfgVariant = statusVariantMap[cp.status] || statusVariantMap.offline;
           return (
             <Marker
               key={cp.id}
@@ -223,7 +227,7 @@ export default function ChargePointsMap({ chargePoints, onChargePointClick, onVi
                   const marker = e.target;
                   const pos = marker.getLatLng();
                   onPositionChange?.(cp.id, pos.lat, pos.lng);
-                  toast.success(`Position von "${cp.name}" aktualisiert`);
+                  toast.success(`"${cp.name}" – ${t("chargePointMap.positionUpdated")}`);
                 },
               }}
             >
@@ -233,7 +237,7 @@ export default function ChargePointsMap({ chargePoints, onChargePointClick, onVi
                     <PlugZap className="h-4 w-4 text-primary" />
                     <span className="font-semibold">{cp.name}</span>
                   </div>
-                  <Badge variant={cfg.variant} className="mb-1">{cfg.label}</Badge>
+                  <Badge variant={cfgVariant} className="mb-1">{statusLabel}</Badge>
                   <div className="text-xs space-y-0.5 mt-1">
                     {cp.connector_type && (
                       <p>Stecker: <span className="font-medium">{cp.connector_type}</span>{cp.connector_count && cp.connector_count > 1 ? ` (×${cp.connector_count})` : ""}</p>

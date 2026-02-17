@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { useTranslation } from "@/hooks/useTranslation";
 
 interface AddMeterReadingDialogProps {
   open: boolean;
@@ -29,6 +30,7 @@ export const AddMeterReadingDialog = ({
   lastReading,
   onSubmit,
 }: AddMeterReadingDialogProps) => {
+  const { t } = useTranslation();
   const [date, setDate] = useState<Date>(new Date());
   const [value, setValue] = useState("");
   const [notes, setNotes] = useState("");
@@ -59,7 +61,7 @@ export const AddMeterReadingDialog = ({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Zählerstand erfassen</DialogTitle>
+          <DialogTitle>{t("meterReadingDialog.title")}</DialogTitle>
           <DialogDescription>
             {meterName}
           </DialogDescription>
@@ -68,7 +70,7 @@ export const AddMeterReadingDialog = ({
         <div className="space-y-4">
           {/* Date picker */}
           <div className="space-y-2">
-            <Label>Ablesedatum</Label>
+            <Label>{t("meterReadingDialog.readingDate")}</Label>
             <Popover>
               <PopoverTrigger asChild>
                 <Button
@@ -95,7 +97,7 @@ export const AddMeterReadingDialog = ({
           {/* Last reading info */}
           {lastReading && (
             <div className="rounded-md border p-3 bg-muted/50">
-              <p className="text-xs text-muted-foreground">Letzter Zählerstand</p>
+              <p className="text-xs text-muted-foreground">{t("meterReadingDialog.lastReading")}</p>
               <p className="text-sm font-medium">
                 {lastReading.value.toLocaleString("de-DE")} {meterUnit}
                 <span className="text-muted-foreground font-normal ml-2">
@@ -107,7 +109,7 @@ export const AddMeterReadingDialog = ({
 
           {/* Value input */}
           <div className="space-y-2">
-            <Label>Neuer Zählerstand ({meterUnit})</Label>
+            <Label>{t("meterReadingDialog.newReading")} ({meterUnit})</Label>
             <Input
               type="text"
               inputMode="decimal"
@@ -123,16 +125,16 @@ export const AddMeterReadingDialog = ({
             <Alert variant="destructive">
               <AlertTriangle className="h-4 w-4" />
               <AlertDescription>
-                Der neue Zählerstand ({numericValue.toLocaleString("de-DE")} {meterUnit}) ist kleiner als der letzte ({lastReading!.value.toLocaleString("de-DE")} {meterUnit}). Bitte prüfen Sie die Eingabe.
+                {numericValue.toLocaleString("de-DE")} {meterUnit} {t("meterReadingDialog.warningLower")} ({lastReading!.value.toLocaleString("de-DE")} {meterUnit}). {t("meterReadingDialog.checkInput")}
               </AlertDescription>
             </Alert>
           )}
 
           {/* Notes */}
           <div className="space-y-2">
-            <Label>Bemerkung (optional)</Label>
+            <Label>{t("meterReadingDialog.notes")}</Label>
             <Textarea
-              placeholder="z.B. Zählerwechsel, Korrektur..."
+              placeholder={t("meterReadingDialog.notesPlaceholder")}
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               rows={2}
@@ -142,10 +144,10 @@ export const AddMeterReadingDialog = ({
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Abbrechen
+            {t("common.cancel")}
           </Button>
           <Button onClick={handleSubmit} disabled={!isValid || submitting}>
-            {submitting ? "Speichern..." : "Zählerstand speichern"}
+            {submitting ? t("meterReadingDialog.saving") : t("meterReadingDialog.save")}
           </Button>
         </DialogFooter>
       </DialogContent>

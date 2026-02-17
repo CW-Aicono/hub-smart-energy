@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
+import { getT } from "@/i18n/getT";
 
 export function useTenants() {
   const queryClient = useQueryClient();
@@ -29,10 +30,12 @@ export function useTenants() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["super-admin-tenants"] });
-      toast({ title: "Mandant erstellt" });
+      const t = getT();
+      toast({ title: t("tenant.created") });
     },
     onError: (e: Error) => {
-      toast({ title: "Fehler", description: e.message, variant: "destructive" });
+      const t = getT();
+      toast({ title: t("common.error"), description: e.message, variant: "destructive" });
     },
   });
 
@@ -43,10 +46,12 @@ export function useTenants() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["super-admin-tenants"] });
-      toast({ title: "Mandant gelöscht" });
+      const t = getT();
+      toast({ title: t("tenant.deleted") });
     },
     onError: (e: Error) => {
-      toast({ title: "Fehler", description: e.message, variant: "destructive" });
+      const t = getT();
+      toast({ title: t("common.error"), description: e.message, variant: "destructive" });
     },
   });
 

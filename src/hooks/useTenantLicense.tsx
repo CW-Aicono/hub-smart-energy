@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
+import { getT } from "@/i18n/getT";
 
 export function useTenantLicense(tenantId: string | null) {
   const queryClient = useQueryClient();
@@ -39,10 +40,12 @@ export function useTenantLicense(tenantId: string | null) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["tenant-license", tenantId] });
-      toast({ title: "Lizenz gespeichert" });
+      const t = getT();
+      toast({ title: t("license.saved") });
     },
     onError: (e: Error) => {
-      toast({ title: "Fehler", description: e.message, variant: "destructive" });
+      const t = getT();
+      toast({ title: t("common.error"), description: e.message, variant: "destructive" });
     },
   });
 

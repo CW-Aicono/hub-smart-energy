@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
+import { getT } from "@/i18n/getT";
 
 export interface ModulePrice {
   id: string;
@@ -35,10 +36,12 @@ export function useModulePrices() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["module-prices"] });
-      toast({ title: "Preis gespeichert" });
+      const t = getT();
+      toast({ title: t("modulePrice.saved") });
     },
     onError: (e: Error) => {
-      toast({ title: "Fehler", description: e.message, variant: "destructive" });
+      const t = getT();
+      toast({ title: t("common.error"), description: e.message, variant: "destructive" });
     },
   });
 

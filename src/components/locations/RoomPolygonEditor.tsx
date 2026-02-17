@@ -6,6 +6,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { DoorOpen, Plus, Trash2, Pencil, Check, X, Undo2, Crosshair } from "lucide-react";
 import { toast } from "sonner";
 import { RoomOverlay2D } from "./RoomOverlay2D";
+import { useTranslation } from "@/hooks/useTranslation";
 
 interface PolygonPoint {
   x: number;
@@ -18,6 +19,7 @@ interface RoomPolygonEditorProps {
 }
 
 export function RoomPolygonEditor({ floorId, floorPlanUrl }: RoomPolygonEditorProps) {
+  const { t } = useTranslation();
   const { rooms, loading, addRoom, updateRoom, deleteRoom } = useFloorRooms(floorId);
   const imageRef = useRef<HTMLImageElement>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
@@ -136,9 +138,9 @@ export function RoomPolygonEditor({ floorId, floorPlanUrl }: RoomPolygonEditorPr
       } as any);
       setSaving(false);
       if (error) {
-        toast.error("Fehler beim Platzieren");
+        toast.error(t("room.errorPlace"));
       } else {
-        toast.success(`Raum "${placingRoom.name}" platziert`);
+        toast.success(`"${placingRoom.name}" ${t("room.placed")}`);
         cancelDrawing();
       }
     } else {
@@ -157,9 +159,9 @@ export function RoomPolygonEditor({ floorId, floorPlanUrl }: RoomPolygonEditorPr
       } as any);
       setSaving(false);
       if (error) {
-        toast.error("Raum konnte nicht erstellt werden");
+        toast.error(t("room.errorCreate"));
       } else {
-        toast.success(`Raum "${drawingName.trim()}" erstellt`);
+        toast.success(`"${drawingName.trim()}" ${t("room.created")}`);
         cancelDrawing();
       }
     }
@@ -193,9 +195,9 @@ export function RoomPolygonEditor({ floorId, floorPlanUrl }: RoomPolygonEditorPr
     } as any);
     setSaving(false);
     if (error) {
-      toast.error("Fehler beim Speichern");
+      toast.error(t("room.errorSave"));
     } else {
-      toast.success("Raum aktualisiert");
+      toast.success(t("room.updated"));
       cancelEdit();
     }
   };
@@ -225,9 +227,9 @@ export function RoomPolygonEditor({ floorId, floorPlanUrl }: RoomPolygonEditorPr
   const handleDeleteRoom = async (room: FloorRoom) => {
     const { error } = await deleteRoom(room.id);
     if (error) {
-      toast.error("Fehler beim Löschen");
+      toast.error(t("room.errorDelete"));
     } else {
-      toast.success(`Raum "${room.name}" gelöscht`);
+      toast.success(`"${room.name}" ${t("room.deleted")}`);
       if (selectedRoom?.id === room.id) setSelectedRoom(null);
       if (editingRoom?.id === room.id) cancelEdit();
     }
@@ -242,16 +244,16 @@ export function RoomPolygonEditor({ floorId, floorPlanUrl }: RoomPolygonEditorPr
       {/* Room list sidebar */}
       <div className="w-56 flex-shrink-0 border rounded-lg bg-muted/30 flex flex-col h-full">
         <div className="p-3 border-b bg-muted/50 flex-shrink-0">
-          <h3 className="font-medium text-sm">Räume</h3>
-          <p className="text-xs text-muted-foreground mt-1">{rooms.length} Räume</p>
+          <h3 className="font-medium text-sm">{t("room.listHeader")}</h3>
+          <p className="text-xs text-muted-foreground mt-1">{rooms.length} {t("room.listHeader")}</p>
         </div>
         <ScrollArea className="flex-1 min-h-0">
           <div className="p-2 space-y-1">
             {loading ? (
-              <p className="text-sm text-muted-foreground text-center py-8">Laden…</p>
+              <p className="text-sm text-muted-foreground text-center py-8">{t("room.loading")}</p>
             ) : rooms.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-8">
-                Noch keine Räume
+                {t("room.empty")}
               </p>
             ) : (
               rooms.map((room) => {
@@ -350,7 +352,7 @@ export function RoomPolygonEditor({ floorId, floorPlanUrl }: RoomPolygonEditorPr
                   disabled={drawingPoints.length < 3 || (!placingRoom && !drawingName.trim()) || saving}
                 >
                   <Check className="h-3 w-3 mr-1" />
-                  Speichern
+                  {t("common.save")}
                 </Button>
                 <Button size="sm" variant="ghost" className="h-7" onClick={undoLastPoint} disabled={drawingPoints.length === 0}>
                   <Undo2 className="h-3 w-3" />
@@ -362,9 +364,9 @@ export function RoomPolygonEditor({ floorId, floorPlanUrl }: RoomPolygonEditorPr
             </div>
           ) : editingRoom ? (
             <div className="space-y-2">
-              <p className="text-xs font-medium">{editingRoom.name} bearbeiten</p>
+              <p className="text-xs font-medium">{editingRoom.name} {t("room.editSuffix")}</p>
               <p className="text-xs text-muted-foreground">
-                Ziehen Sie die Punkte an die gewünschte Position
+                {t("room.dragHint")}
               </p>
               <div className="flex items-center gap-2">
                 <label className="text-xs text-muted-foreground shrink-0">Name:</label>

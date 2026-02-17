@@ -3101,6 +3101,82 @@ export const translations = {
     es: "No se pudo detener la sesión de carga",
     nl: "Kon laadsessie niet stoppen",
   },
+
+  // meter
+  "meter.created": { de: "Zähler angelegt", en: "Meter created", es: "Contador creado", nl: "Meter aangemaakt" },
+  "meter.updated": { de: "Zähler aktualisiert", en: "Meter updated", es: "Contador actualizado", nl: "Meter bijgewerkt" },
+  "meter.deleted": { de: "Zähler gelöscht", en: "Meter deleted", es: "Contador eliminado", nl: "Meter verwijderd" },
+  "meter.archived": { de: "Zähler archiviert", en: "Meter archived", es: "Contador archivado", nl: "Meter gearchiveerd" },
+  "meter.restored": { de: "Zähler wiederhergestellt", en: "Meter restored", es: "Contador restaurado", nl: "Meter hersteld" },
+  "meter.moved": { de: "Zählerstruktur aktualisiert", en: "Meter structure updated", es: "Estructura del contador actualizada", nl: "Meterstructuur bijgewerkt" },
+  "meter.errorCreate": { de: "Zähler konnte nicht angelegt werden", en: "Could not create meter", es: "No se pudo crear el contador", nl: "Meter kon niet worden aangemaakt" },
+  "meter.errorUpdate": { de: "Zähler konnte nicht aktualisiert werden", en: "Could not update meter", es: "No se pudo actualizar el contador", nl: "Meter kon niet worden bijgewerkt" },
+  "meter.errorDelete": { de: "Zähler konnte nicht gelöscht werden", en: "Could not delete meter", es: "No se pudo eliminar el contador", nl: "Meter kon niet worden verwijderd" },
+  "meter.errorArchive": { de: "Zähler konnte nicht archiviert werden", en: "Could not archive meter", es: "No se pudo archivar el contador", nl: "Meter kon niet worden gearchiveerd" },
+  "meter.errorRestore": { de: "Zähler konnte nicht wiederhergestellt werden", en: "Could not restore meter", es: "No se pudo restaurar el contador", nl: "Meter kon niet worden hersteld" },
+  "meter.errorMove": { de: "Zähler konnte nicht verschoben werden", en: "Could not move meter", es: "No se pudo mover el contador", nl: "Meter kon niet worden verplaatst" },
+  "meter.errorFormula": { de: "Formel konnte nicht gespeichert werden", en: "Could not save formula", es: "No se pudo guardar la fórmula", nl: "Formule kon niet worden opgeslagen" },
+
+  // offline readings
+  "offlineReading.synced_one": { de: "Zählerstand synchronisiert", en: "Meter reading synced", es: "Lectura del contador sincronizada", nl: "Meterstand gesynchroniseerd" },
+  "offlineReading.synced_many": { de: "Zählerstände synchronisiert", en: "Meter readings synced", es: "Lecturas del contador sincronizadas", nl: "Meterstanden gesynchroniseerd" },
+  "offlineReading.errorSync_one": { de: "Ablesung konnte nicht übermittelt werden", en: "Reading could not be submitted", es: "La lectura no pudo enviarse", nl: "Meterstand kon niet worden ingediend" },
+  "offlineReading.errorSync_many": { de: "Ablesungen konnten nicht übermittelt werden", en: "Readings could not be submitted", es: "Las lecturas no pudieron enviarse", nl: "Meterstanden konden niet worden ingediend" },
+
+  // geocode
+  "geocode.incompleteAddress": { de: "Unvollständige Adresse", en: "Incomplete address", es: "Dirección incompleta", nl: "Onvolledig adres" },
+  "geocode.incompleteAddressDesc": { de: "Bitte geben Sie mindestens Stadt und Straße ein.", en: "Please enter at least city and street.", es: "Por favor ingrese al menos ciudad y calle.", nl: "Voer minimaal stad en straat in." },
+  "geocode.notFound": { de: "Adresse nicht gefunden", en: "Address not found", es: "Dirección no encontrada", nl: "Adres niet gevonden" },
+  "geocode.notFoundDesc": { de: "Die Adresse konnte nicht geocodiert werden. Bitte prüfen Sie die Eingabe.", en: "The address could not be geocoded. Please check the input.", es: "La dirección no pudo ser geocodificada. Por favor revise los datos.", nl: "Het adres kon niet worden gegeocodeerd. Controleer de invoer." },
+  "geocode.success": { de: "Koordinaten ermittelt", en: "Coordinates found", es: "Coordenadas encontradas", nl: "Coördinaten gevonden" },
+  "geocode.error": { de: "Die Koordinaten konnten nicht ermittelt werden.", en: "Could not determine coordinates.", es: "No se pudieron determinar las coordenadas.", nl: "Coördinaten konden niet worden bepaald." },
+
+  // brighthub
+  "brightHub.saved": { de: "BrightHub-Einstellungen gespeichert", en: "BrightHub settings saved", es: "Configuración de BrightHub guardada", nl: "BrightHub-instellingen opgeslagen" },
+  "brightHub.errorSave": { de: "Einstellungen konnten nicht gespeichert werden", en: "Settings could not be saved", es: "La configuración no pudo guardarse", nl: "Instellingen konden niet worden opgeslagen" },
+
+  // license
+  "license.saved": { de: "Lizenz gespeichert", en: "License saved", es: "Licencia guardada", nl: "Licentie opgeslagen" },
+
+  // module prices
+  "modulePrice.saved": { de: "Preis gespeichert", en: "Price saved", es: "Precio guardado", nl: "Prijs opgeslagen" },
+
+  // tenants (super admin)
+  "tenant.created": { de: "Mandant erstellt", en: "Tenant created", es: "Inquilino creado", nl: "Tenant aangemaakt" },
+  "tenant.deleted": { de: "Mandant gelöscht", en: "Tenant deleted", es: "Inquilino eliminado", nl: "Tenant verwijderd" },
+
+  // integrations
+  "integration.configRequired": { de: "Bitte füllen Sie die Konfigurationsfelder aus", en: "Please fill in the configuration fields", es: "Por favor complete los campos de configuración", nl: "Vul de configuratievelden in" },
+
+  // charging map status
+  "chargePointStatus.available": { de: "Verfügbar", en: "Available", es: "Disponible", nl: "Beschikbaar" },
+  "chargePointStatus.charging": { de: "Lädt", en: "Charging", es: "Cargando", nl: "Aan het laden" },
+  "chargePointStatus.faulted": { de: "Fehler", en: "Faulted", es: "Error", nl: "Fout" },
+  "chargePointStatus.unavailable": { de: "Nicht verfügbar", en: "Unavailable", es: "No disponible", nl: "Niet beschikbaar" },
+  "chargePointStatus.offline": { de: "Offline", en: "Offline", es: "Sin conexión", nl: "Offline" },
+  "chargePointMap.locateError": { de: "Geolocation wird nicht unterstützt", en: "Geolocation is not supported", es: "La geolocalización no es compatible", nl: "Geolocatie wordt niet ondersteund" },
+  "chargePointMap.positionUpdated": { de: "Position aktualisiert", en: "Position updated", es: "Posición actualizada", nl: "Positie bijgewerkt" },
+
+  // room polygon editor (extra keys beyond room.updated/deleted/errorSave/errorDelete defined above)
+  "room.placed": { de: "platziert", en: "placed", es: "colocado", nl: "geplaatst" },
+  "room.errorPlace": { de: "Fehler beim Platzieren", en: "Error placing room", es: "Error al colocar sala", nl: "Fout bij plaatsen van ruimte" },
+  "room.listHeader": { de: "Räume", en: "Rooms", es: "Salas", nl: "Ruimtes" },
+  "room.loading": { de: "Laden…", en: "Loading…", es: "Cargando…", nl: "Laden…" },
+  "room.empty": { de: "Noch keine Räume", en: "No rooms yet", es: "Sin salas aún", nl: "Nog geen ruimtes" },
+  "room.editSuffix": { de: "bearbeiten", en: "edit", es: "editar", nl: "bewerken" },
+  "room.dragHint": { de: "Ziehen Sie die Punkte an die gewünschte Position", en: "Drag the points to the desired position", es: "Arrastra los puntos a la posición deseada", nl: "Sleep de punten naar de gewenste positie" },
+
+  // meter reading dialog
+  "meterReadingDialog.title": { de: "Zählerstand erfassen", en: "Record meter reading", es: "Registrar lectura del contador", nl: "Meterstand registreren" },
+  "meterReadingDialog.readingDate": { de: "Ablesedatum", en: "Reading date", es: "Fecha de lectura", nl: "Afleesdatum" },
+  "meterReadingDialog.lastReading": { de: "Letzter Zählerstand", en: "Last reading", es: "Última lectura", nl: "Laatste meterstand" },
+  "meterReadingDialog.newReading": { de: "Neuer Zählerstand", en: "New reading", es: "Nueva lectura", nl: "Nieuwe meterstand" },
+  "meterReadingDialog.warningLower": { de: "ist kleiner als der letzte", en: "is lower than the last reading", es: "es menor que la última lectura", nl: "is lager dan de laatste meterstand" },
+  "meterReadingDialog.checkInput": { de: "Bitte prüfen Sie die Eingabe.", en: "Please check the input.", es: "Por favor verifique los datos.", nl: "Controleer de invoer." },
+  "meterReadingDialog.notes": { de: "Bemerkung (optional)", en: "Note (optional)", es: "Observación (opcional)", nl: "Opmerking (optioneel)" },
+  "meterReadingDialog.notesPlaceholder": { de: "z.B. Zählerwechsel, Korrektur...", en: "e.g. meter replacement, correction...", es: "p.ej. cambio de contador, corrección...", nl: "bijv. meterwisseling, correctie..." },
+  "meterReadingDialog.saving": { de: "Speichern...", en: "Saving...", es: "Guardando...", nl: "Opslaan..." },
+  "meterReadingDialog.save": { de: "Zählerstand speichern", en: "Save reading", es: "Guardar lectura", nl: "Meterstand opslaan" },
 } as const;
 
 export type TranslationKey = keyof typeof translations;
