@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/integrations/supabase/client";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useTranslation } from "@/hooks/useTranslation";
 import { useModuleGuard } from "@/hooks/useModuleGuard";
@@ -42,11 +43,24 @@ const DashboardSidebar = () => {
   const { t } = useTranslation();
   const location = useLocation();
   const { isNavItemVisible } = useModuleGuard();
+  const [displayName, setDisplayName] = useState<string | null>(null);
   
   const [collapsed, setCollapsed] = useState(() => {
     const stored = localStorage.getItem(SIDEBAR_COLLAPSED_KEY);
     return stored === "true";
   });
+
+  useEffect(() => {
+    if (!user) return;
+    supabase
+      .from("profiles")
+      .select("contact_person")
+      .eq("user_id", user.id)
+      .single()
+      .then(({ data }) => {
+        setDisplayName(data?.contact_person || null);
+      });
+  }, [user]);
 
   const [openMenus, setOpenMenus] = useState<string[]>([]);
 
@@ -140,7 +154,10 @@ const DashboardSidebar = () => {
       .filter(Boolean) as NavItem[];
   }, [navItems, isNavItemVisible]);
 
-  const userInitials = user?.email
+  const userDisplayName = displayName || user?.email || "";
+  const userInitials = displayName
+    ? displayName.split(" ").map((n) => n[0]).join("").substring(0, 2).toUpperCase()
+    : user?.email
     ? user.email.substring(0, 2).toUpperCase()
     : "??";
 
@@ -320,7 +337,7 @@ const DashboardSidebar = () => {
                   </AvatarFallback>
                 </Avatar>
                 <div className="flex-1 text-left overflow-hidden">
-                  <p className="text-sm font-medium truncate">{user?.email}</p>
+                  <p className="text-sm font-medium truncate">{userDisplayName}</p>
                   <p className="text-xs text-sidebar-foreground/50">
                     {isAdmin ? t("users.admin") : t("users.userRole")}
                   </p>
