@@ -56,7 +56,6 @@ function mapEnergyType(energyType: string): string {
 function mapUnit(unit: string): string {
   const allowed = ["kWh", "MWh", "m³", "Liter", "GJ"];
   if (allowed.includes(unit)) return unit;
-  // Common aliases
   const map: Record<string, string> = {
     kwh: "kWh",
     mwh: "MWh",
@@ -154,7 +153,6 @@ Deno.serve(async (req) => {
               summary: meterResult.summary || meterResult.data,
             };
 
-            // Update last_meter_sync_at
             await supabase
               .from("brighthub_settings")
               .update({ last_meter_sync_at: new Date().toISOString() } as any)
@@ -164,7 +162,7 @@ Deno.serve(async (req) => {
           }
         }
 
-        // ── SYNC READINGS ──
+        // ── SYNC READINGS (daily consumption) ──
         if (action === "all" || action === "sync_readings") {
           const { data: meters } = await supabase
             .from("meters")
@@ -179,7 +177,6 @@ Deno.serve(async (req) => {
             const sinceDate = settings.last_reading_sync_at || "2000-01-01T00:00:00Z";
 
             for (const meter of meters) {
-              // Try power readings (live/automatic)
               const { data: powerReadings } = await supabase
                 .from("meter_power_readings")
                 .select("power_value, recorded_at")
@@ -199,7 +196,6 @@ Deno.serve(async (req) => {
                 continue;
               }
 
-              // Fallback to manual readings
               const { data: manualReadings } = await supabase
                 .from("meter_readings")
                 .select("value, reading_date, notes")
@@ -220,21 +216,67 @@ Deno.serve(async (req) => {
             }
 
             if (readings.length > 0) {
-              // Send in chunks of 1000
               for (let i = 0; i < readings.length; i += 1000) {
                 const chunk = readings.slice(i, i + 1000);
                 await callBrightHub("bulk_readings", { readings: chunk }, settings.api_key);
               }
-
               locationResult.readings = { sent: readings.length };
-
-              // Update last_reading_sync_at
               await supabase
                 .from("brighthub_settings")
                 .update({ last_reading_sync_at: new Date().toISOString() } as any)
                 .eq("id", settings.id);
             } else {
               locationResult.readings = { sent: 0, message: "No new readings" };
+            }
+          }
+        }
+
+        // ── SYNC INTRADAY (power readings in kW) ──
+        if (action === "all" || action === "sync_intraday") {
+          const { data: meters } = await supabase
+            .from("meters")
+            .select("id")
+            .eq("location_id", settings.location_id)
+            .eq("is_archived", false);
+
+          if (!meters || meters.length === 0) {
+            locationResult.intraday = { sent: 0, message: "No meters found" };
+          } else {
+            const sinceDate = settings.last_intraday_sync_at || "2000-01-01T00:00:00Z";
+            const intradayReadings: { meter_id: string; timestamp: string; power_value: number }[] = [];
+
+            for (const meter of meters) {
+              const { data: pwr } = await supabase
+                .from("meter_power_readings")
+                .select("power_value, recorded_at")
+                .eq("meter_id", meter.id)
+                .gt("recorded_at", sinceDate)
+                .order("recorded_at", { ascending: true })
+                .limit(5000);
+
+              if (pwr && pwr.length > 0) {
+                for (const r of pwr) {
+                  intradayReadings.push({
+                    meter_id: meter.id,
+                    timestamp: r.recorded_at,
+                    power_value: r.power_value,
+                  });
+                }
+              }
+            }
+
+            if (intradayReadings.length > 0) {
+              for (let i = 0; i < intradayReadings.length; i += 5000) {
+                const chunk = intradayReadings.slice(i, i + 5000);
+                await callBrightHub("bulk_intraday", { readings: chunk }, settings.api_key);
+              }
+              locationResult.intraday = { sent: intradayReadings.length };
+              await supabase
+                .from("brighthub_settings")
+                .update({ last_intraday_sync_at: new Date().toISOString() } as any)
+                .eq("id", settings.id);
+            } else {
+              locationResult.intraday = { sent: 0, message: "No new power readings" };
             }
           }
         }

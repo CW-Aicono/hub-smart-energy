@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useBrightHubSettings } from "@/hooks/useBrightHubSettings";
-import { syncMeters, syncReadings } from "@/lib/brighthubApi";
+import { syncMeters, syncReadings, syncIntraday } from "@/lib/brighthubApi";
 import { useTenant } from "@/hooks/useTenant";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -33,6 +33,7 @@ export const BrightHubSettings = ({ locationId }: BrightHubSettingsProps) => {
   const [open, setOpen] = useState(false);
   const [syncingMeters, setSyncingMeters] = useState(false);
   const [syncingReadings, setSyncingReadings] = useState(false);
+  const [syncingIntraday, setSyncingIntraday] = useState(false);
 
   useEffect(() => {
     if (settings) {
@@ -89,6 +90,22 @@ export const BrightHubSettings = ({ locationId }: BrightHubSettingsProps) => {
       });
     } finally {
       setSyncingReadings(false);
+    }
+  };
+
+  const handleSyncIntraday = async () => {
+    if (!tenantId) return;
+    setSyncingIntraday(true);
+    try {
+      const result = await syncIntraday(tenantId, locationId);
+      toast.success(`Leistungsdaten synchronisiert: ${result.sent} gesendet`);
+      refetch();
+    } catch (err) {
+      toast.error("Leistungsdaten-Sync fehlgeschlagen", {
+        description: err instanceof Error ? err.message : "Unbekannter Fehler",
+      });
+    } finally {
+      setSyncingIntraday(false);
     }
   };
 
@@ -182,7 +199,7 @@ export const BrightHubSettings = ({ locationId }: BrightHubSettingsProps) => {
               <div className="border-t pt-4 space-y-4">
                 <h4 className="text-sm font-medium">Manuelle Synchronisation</h4>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <Button
                     variant="outline"
                     onClick={handleSyncMeters}
@@ -201,10 +218,19 @@ export const BrightHubSettings = ({ locationId }: BrightHubSettingsProps) => {
                     {syncingReadings ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Zap className="mr-2 h-4 w-4" />}
                     Messwerte synchronisieren
                   </Button>
+                  <Button
+                    variant="outline"
+                    onClick={handleSyncIntraday}
+                    disabled={syncingIntraday}
+                    className="w-full"
+                  >
+                    {syncingIntraday ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Zap className="mr-2 h-4 w-4" />}
+                    Leistungsdaten (kW)
+                  </Button>
                 </div>
 
                 {/* Last sync timestamps */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
                   <div className="rounded-md bg-muted/50 p-3">
                     <p className="text-muted-foreground text-xs">Letzter Zähler-Sync</p>
                     <p className="font-medium">{formatDate((settings as any).last_meter_sync_at)}</p>
@@ -212,6 +238,10 @@ export const BrightHubSettings = ({ locationId }: BrightHubSettingsProps) => {
                   <div className="rounded-md bg-muted/50 p-3">
                     <p className="text-muted-foreground text-xs">Letzter Messwerte-Sync</p>
                     <p className="font-medium">{formatDate((settings as any).last_reading_sync_at)}</p>
+                  </div>
+                  <div className="rounded-md bg-muted/50 p-3">
+                    <p className="text-muted-foreground text-xs">Letzter Leistungsdaten-Sync</p>
+                    <p className="font-medium">{formatDate((settings as any).last_intraday_sync_at)}</p>
                   </div>
                 </div>
               </div>

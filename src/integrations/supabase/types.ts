@@ -94,6 +94,7 @@ export type Database = {
           created_at: string
           id: string
           is_enabled: boolean
+          last_intraday_sync_at: string | null
           last_meter_sync_at: string | null
           last_reading_sync_at: string | null
           location_id: string | null
@@ -108,6 +109,7 @@ export type Database = {
           created_at?: string
           id?: string
           is_enabled?: boolean
+          last_intraday_sync_at?: string | null
           last_meter_sync_at?: string | null
           last_reading_sync_at?: string | null
           location_id?: string | null
@@ -122,6 +124,7 @@ export type Database = {
           created_at?: string
           id?: string
           is_enabled?: boolean
+          last_intraday_sync_at?: string | null
           last_meter_sync_at?: string | null
           last_reading_sync_at?: string | null
           location_id?: string | null

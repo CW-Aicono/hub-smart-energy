@@ -16,3 +16,7 @@ export const syncMeters = (tenantId: string, locationId: string) =>
 /** Sync new readings for a location to BrightHub (bulk_readings action) */
 export const syncReadings = (tenantId: string, locationId: string) =>
   invoke("sync_readings", tenantId, locationId);
+
+/** Sync intraday power readings (kW) to BrightHub (bulk_intraday action) */
+export const syncIntraday = (tenantId: string, locationId: string) =>
+  invoke("sync_intraday", tenantId, locationId);
