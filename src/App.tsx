@@ -21,6 +21,7 @@ import EnergyData from "./pages/EnergyData";
 import MetersOverview from "./pages/MetersOverview";
 import Integrations from "./pages/Integrations";
 import Profile from "./pages/Profile";
+import SetPassword from "./pages/SetPassword";
 import Help from "./pages/Help";
 import NotFound from "./pages/NotFound";
 import SuperAdminDashboard from "./pages/SuperAdminDashboard";
@@ -85,6 +86,7 @@ const App = () => (
                   <Route path="/live-values" element={<M><LiveValues /></M>} />
                   <Route path="/integrations" element={<M><Integrations /></M>} />
                   <Route path="/profile" element={<Profile />} />
+                  <Route path="/set-password" element={<SetPassword />} />
                   <Route path="/help" element={<Help />} />
                   <Route path="/super-admin" element={<SA><SuperAdminDashboard /></SA>} />
                   <Route path="/super-admin/tenants" element={<SA><SuperAdminTenants /></SA>} />
