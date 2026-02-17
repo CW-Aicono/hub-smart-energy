@@ -44,7 +44,6 @@ const DeleteUserDialog = ({
 
   const isLastAdmin = isAdmin && adminCount <= 1;
   const isSelf = currentUser?.id === userId;
-  // Cannot delete if: last admin trying to delete themselves
   const cannotDelete = isLastAdmin && isSelf;
 
   const handleDelete = async () => {
@@ -59,29 +58,31 @@ const DeleteUserDialog = ({
 
     setLoading(true);
 
-    // Delete user role first
-    await supabase.from("user_roles").delete().eq("user_id", userId);
-
-    // Delete profile
-    const { error } = await supabase
-      .from("profiles")
-      .delete()
-      .eq("user_id", userId);
-
-    setLoading(false);
-
-    if (error) {
-      toast({
-        title: t("common.error"),
-        description: t("users.deleteError"),
-        variant: "destructive",
+    try {
+      // Delete via edge function using service role (also deletes auth user → cascades to profile + roles)
+      const { data, error } = await supabase.functions.invoke("delete-user", {
+        body: { userId },
       });
-    } else {
+
+      if (error) throw error;
+
+      const result = typeof data === "string" ? JSON.parse(data) : data;
+      if (!result?.success) throw new Error(result?.error || "Löschen fehlgeschlagen");
+
       toast({
         title: t("common.success"),
         description: t("users.userDeleted"),
       });
       onSuccess();
+    } catch (err: unknown) {
+      console.error("Error deleting user:", err);
+      toast({
+        title: t("common.error"),
+        description: err instanceof Error ? err.message : t("users.deleteError"),
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
     }
   };
 

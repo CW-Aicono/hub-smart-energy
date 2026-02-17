@@ -7,7 +7,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { UserPlus, Shield, User, Mail, Copy, Check } from "lucide-react";
+import { UserPlus, Shield, User, Mail, AlertCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 const InviteUserDialog = () => {
@@ -16,92 +16,54 @@ const InviteUserDialog = () => {
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
   const [email, setEmail] = useState("");
+  const [name, setName] = useState("");
   const [role, setRole] = useState<"admin" | "user">("user");
   const [loading, setLoading] = useState(false);
-  const [inviteLink, setInviteLink] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
+  const [done, setDone] = useState(false);
 
   const handleInvite = async () => {
     if (!email || !user) return;
-
     setLoading(true);
-    
-    const { data, error } = await supabase
-      .from("user_invitations")
-      .insert({
-        email,
-        role,
-        invited_by: user.id,
-      })
-      .select()
-      .single();
 
-    if (error) {
-      toast({
-        title: "Fehler",
-        description: "Einladung konnte nicht erstellt werden.",
-        variant: "destructive",
-      });
-      setLoading(false);
-      return;
-    }
-
-    const link = `${window.location.origin}/auth?invite=${data.token}`;
-    setInviteLink(link);
-
-    // Send invitation email
     try {
-      const { data: inviterProfile } = await supabase
-        .from("profiles")
-        .select("email")
-        .eq("user_id", user.id)
-        .single();
-
-      const { error: emailError } = await supabase.functions.invoke("send-invitation-email", {
+      // Create auth user directly and send password-set email via edge function
+      const { data, error } = await supabase.functions.invoke("activate-invited-user", {
         body: {
+          // We reuse activate-invited-user but pass email directly for new invites
+          directInvite: true,
           email,
-          inviteLink: link,
-          invitedByEmail: inviterProfile?.email || user.email,
+          name: name || undefined,
           role,
           tenantId: tenant?.id,
+          redirectTo: `${window.location.origin}/profile`,
         },
       });
 
-      if (emailError) {
-        console.error("Failed to send invitation email:", emailError);
-        toast({
-          title: "Einladung erstellt",
-          description: "Der Link wurde generiert, aber die E-Mail konnte nicht gesendet werden.",
-        });
-      } else {
-        toast({
-          title: "Einladung gesendet",
-          description: `Eine Einladungsmail wurde an ${email} gesendet.`,
-        });
-      }
-    } catch (emailErr) {
-      console.error("Error sending invitation email:", emailErr);
+      if (error) throw error;
+      const result = typeof data === "string" ? JSON.parse(data) : data;
+      if (!result?.success) throw new Error(result?.error || "Einladung fehlgeschlagen");
+
+      setDone(true);
       toast({
-        title: "Einladung erstellt",
-        description: "Der Link wurde generiert, aber die E-Mail konnte nicht gesendet werden.",
+        title: "Einladung gesendet",
+        description: `Eine Einladungsmail mit Passwort-Link wurde an ${email} gesendet.`,
       });
+    } catch (err: unknown) {
+      toast({
+        title: "Fehler",
+        description: err instanceof Error ? err.message : "Einladung konnte nicht erstellt werden.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
     }
-
-    setLoading(false);
-  };
-
-  const copyToClipboard = async () => {
-    if (!inviteLink) return;
-    await navigator.clipboard.writeText(inviteLink);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
   };
 
   const resetDialog = () => {
     setEmail("");
+    setName("");
     setRole("user");
-    setInviteLink(null);
-    setCopied(false);
+    setDone(false);
   };
 
   return (
@@ -119,14 +81,20 @@ const InviteUserDialog = () => {
         <DialogHeader>
           <DialogTitle>Neuen Nutzer einladen</DialogTitle>
           <DialogDescription>
-            Erstellen Sie einen Einladungslink für einen neuen Benutzer.
+            Der eingeladene Nutzer erhält eine E-Mail und vergibt sich selbst ein Passwort.
           </DialogDescription>
         </DialogHeader>
 
-        {!inviteLink ? (
+        {!done ? (
           <div className="space-y-4 py-4">
+            <div className="flex items-start gap-2 p-3 bg-accent/10 rounded-lg border border-accent/20">
+              <AlertCircle className="h-4 w-4 text-accent mt-0.5 shrink-0" />
+              <p className="text-xs text-muted-foreground">
+                Nach dem Senden erhält der Nutzer eine E-Mail mit einem Link zum Passwort setzen. Der Link ist 7 Tage gültig.
+              </p>
+            </div>
             <div className="space-y-2">
-              <Label htmlFor="email">E-Mail-Adresse</Label>
+              <Label htmlFor="email">E-Mail-Adresse *</Label>
               <div className="relative">
                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
@@ -138,6 +106,15 @@ const InviteUserDialog = () => {
                   className="pl-10"
                 />
               </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="name">Name (optional)</Label>
+              <Input
+                id="name"
+                placeholder="Max Mustermann"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+              />
             </div>
             <div className="space-y-2">
               <Label>Rolle</Label>
@@ -163,40 +140,21 @@ const InviteUserDialog = () => {
             </div>
           </div>
         ) : (
-          <div className="space-y-4 py-4">
-            <div className="p-4 bg-muted rounded-lg">
-              <Label className="text-xs text-muted-foreground mb-2 block">
-                Einladungslink
-              </Label>
-              <div className="flex items-center gap-2">
-                <Input
-                  readOnly
-                  value={inviteLink}
-                  className="text-sm"
-                />
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={copyToClipboard}
-                >
-                  {copied ? (
-                    <Check className="h-4 w-4 text-primary" />
-                  ) : (
-                    <Copy className="h-4 w-4" />
-                  )}
-                </Button>
-              </div>
-              <p className="text-xs text-muted-foreground mt-2">
-                Dieser Link ist 7 Tage gültig.
-              </p>
+          <div className="py-6 text-center space-y-3">
+            <div className="h-12 w-12 rounded-full bg-accent/20 flex items-center justify-center mx-auto">
+              <Mail className="h-6 w-6 text-accent" />
             </div>
+            <p className="font-medium">Einladung gesendet!</p>
+            <p className="text-sm text-muted-foreground">
+              Eine E-Mail mit dem Link zum Passwort setzen wurde an <strong>{email}</strong> versendet.
+            </p>
           </div>
         )}
 
         <DialogFooter>
-          {!inviteLink ? (
+          {!done ? (
             <Button onClick={handleInvite} disabled={!email || loading}>
-              {loading ? "Erstelle..." : "Einladung erstellen"}
+              {loading ? "Wird gesendet..." : "Einladung senden"}
             </Button>
           ) : (
             <Button variant="outline" onClick={() => setOpen(false)}>

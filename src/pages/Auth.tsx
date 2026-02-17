@@ -11,16 +11,10 @@ import { Zap, ArrowLeft } from "lucide-react";
 import { z } from "zod";
 import { supabase } from "@/integrations/supabase/client";
 
-type AuthView = "login" | "register" | "forgotPassword";
-
-interface InvitationData {
-  id: string;
-  email: string;
-  role: "admin" | "user";
-}
+type AuthView = "login" | "forgotPassword";
 
 const Auth = () => {
-  const { user, loading, signIn, signUp } = useAuth();
+  const { user, loading, signIn } = useAuth();
   const { t } = useTranslation();
   const { toast } = useToast();
   const [searchParams] = useSearchParams();
@@ -28,71 +22,27 @@ const Auth = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [invitation, setInvitation] = useState<InvitationData | null>(null);
-  const [loadingInvitation, setLoadingInvitation] = useState(false);
 
-  const isLogin = view === "login";
-  const isForgotPassword = view === "forgotPassword";
-
+  // If there's an invite token in the URL, redirect to the password-set page
   const inviteToken = searchParams.get("invite");
 
-  // Check for invitation token
   useEffect(() => {
-    const checkInvitation = async () => {
-      if (!inviteToken) return;
-
-      setLoadingInvitation(true);
-      const { data, error } = await supabase
-        .from("user_invitations")
-        .select("id, email, role, expires_at, accepted_at")
-        .eq("token", inviteToken)
-        .single();
-
-      if (error || !data) {
-        toast({
-          title: t("common.error"),
-          description: t("auth.invalidInvitation"),
-          variant: "destructive",
-        });
-        setLoadingInvitation(false);
-        return;
-      }
-
-      if (data.accepted_at) {
-        toast({
-          title: t("common.error"),
-          description: t("auth.invitationAlreadyUsed"),
-          variant: "destructive",
-        });
-        setLoadingInvitation(false);
-        return;
-      }
-
-      if (new Date(data.expires_at) < new Date()) {
-        toast({
-          title: t("common.error"),
-          description: t("auth.invitationExpired"),
-          variant: "destructive",
-        });
-        setLoadingInvitation(false);
-        return;
-      }
-
-      setInvitation({ id: data.id, email: data.email, role: data.role as "admin" | "user" });
-      setEmail(data.email);
-      setView("register");
-      setLoadingInvitation(false);
-    };
-
-    checkInvitation();
-  }, [inviteToken, t, toast]);
+    // Invite tokens are now handled via the activate-invited-user flow
+    // Users receive a direct password-reset link, so no invite token handling needed here
+    if (inviteToken) {
+      toast({
+        title: "Hinweis",
+        description: "Bitte nutzen Sie den Einladungslink aus Ihrer E-Mail, um Ihr Passwort zu setzen.",
+      });
+    }
+  }, [inviteToken]);
 
   const authSchema = z.object({
     email: z.string().email(t("auth.invalidCredentials")),
     password: z.string().min(6, t("auth.password")),
   });
 
-  if (loading || loadingInvitation) {
+  if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <div className="animate-pulse text-muted-foreground">{t("common.loading")}</div>
@@ -121,7 +71,7 @@ const Auth = () => {
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     const result = authSchema.safeParse({ email, password });
     if (!result.success) {
@@ -130,45 +80,12 @@ const Auth = () => {
     }
 
     setSubmitting(true);
-    
-    if (isLogin) {
-      const { error } = await signIn(email, password);
-      setSubmitting(false);
-      if (error) {
-        let message = error.message;
-        if (message.includes("Invalid login")) message = t("auth.invalidCredentials");
-        toast({ title: t("common.error"), description: message, variant: "destructive" });
-      }
-    } else {
-      // Registration flow
-      const { error, data } = await signUp(email, password);
-      
-      if (error) {
-        setSubmitting(false);
-        let message = error.message;
-        if (message.includes("already registered")) message = t("auth.emailAlreadyRegistered");
-        if (message.includes("weak") || message.includes("easy to guess")) message = t("auth.passwordTooWeak");
-        toast({ title: t("common.error"), description: message, variant: "destructive" });
-        return;
-      }
-
-      // If this is an invitation registration, mark the invitation as accepted and assign the role
-      if (invitation && data?.user) {
-        await supabase
-          .from("user_invitations")
-          .update({ accepted_at: new Date().toISOString() })
-          .eq("id", invitation.id);
-
-        if (invitation.role === "admin") {
-          await supabase
-            .from("user_roles")
-            .update({ role: "admin" })
-            .eq("user_id", data.user.id);
-        }
-      }
-
-      setSubmitting(false);
-      toast({ title: t("auth.registrationSuccess"), description: t("auth.confirmEmail") });
+    const { error } = await signIn(email, password);
+    setSubmitting(false);
+    if (error) {
+      let message = error.message;
+      if (message.includes("Invalid login")) message = t("auth.invalidCredentials");
+      toast({ title: t("common.error"), description: message, variant: "destructive" });
     }
   };
 
@@ -200,22 +117,16 @@ const Auth = () => {
               <span className="text-xl font-display font-bold">Smart Energy Hub</span>
             </div>
             <CardTitle className="text-2xl font-display">
-              {isForgotPassword
-                ? t("auth.forgotPassword")
-                : invitation 
-                  ? t("auth.completeRegistration")
-                  : isLogin ? t("auth.welcomeBack") : t("auth.createAccount")}
+              {view === "forgotPassword" ? t("auth.forgotPassword") : t("auth.welcomeBack")}
             </CardTitle>
             <CardDescription>
-              {isForgotPassword
+              {view === "forgotPassword"
                 ? t("profile.passwordResetViaEmailDescription")
-                : invitation 
-                  ? t("auth.invitationDescription").replace("{email}", invitation.email)
-                  : isLogin ? t("auth.loginSubtitle") : t("auth.registerSubtitle")}
+                : t("auth.loginSubtitle")}
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {isForgotPassword ? (
+            {view === "forgotPassword" ? (
               <form onSubmit={handleForgotPassword} className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="email">{t("auth.email")}</Label>
@@ -243,58 +154,42 @@ const Auth = () => {
                 </div>
               </form>
             ) : (
-              <>
-                <form onSubmit={handleSubmit} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="email">{t("auth.email")}</Label>
-                    <Input
-                      id="email"
-                      type="email"
-                      placeholder={t("auth.emailPlaceholder")}
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      required
-                      disabled={!!invitation}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <Label htmlFor="password">{t("auth.password")}</Label>
-                      {isLogin && (
-                        <button
-                          type="button"
-                          onClick={() => setView("forgotPassword")}
-                          className="text-xs text-accent hover:underline font-medium"
-                        >
-                          {t("auth.forgotPassword")}
-                        </button>
-                      )}
-                    </div>
-                    <Input
-                      id="password"
-                      type="password"
-                      placeholder="••••••••"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      required
-                    />
-                  </div>
-                  <Button type="submit" className="w-full" disabled={submitting}>
-                    {submitting ? t("common.loading") : isLogin ? t("auth.login") : t("auth.register")}
-                  </Button>
-                </form>
-                {!invitation && (
-                  <div className="mt-4 text-center text-sm text-muted-foreground">
-                    {isLogin ? t("auth.noAccount") : t("auth.hasAccount")}{" "}
+              <form onSubmit={handleLogin} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="email">{t("auth.email")}</Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    placeholder={t("auth.emailPlaceholder")}
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="password">{t("auth.password")}</Label>
                     <button
-                      onClick={() => setView(isLogin ? "register" : "login")}
-                      className="text-accent hover:underline font-medium"
+                      type="button"
+                      onClick={() => setView("forgotPassword")}
+                      className="text-xs text-accent hover:underline font-medium"
                     >
-                      {isLogin ? t("auth.registerNow") : t("auth.loginNow")}
+                      {t("auth.forgotPassword")}
                     </button>
                   </div>
-                )}
-              </>
+                  <Input
+                    id="password"
+                    type="password"
+                    placeholder="••••••••"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                  />
+                </div>
+                <Button type="submit" className="w-full" disabled={submitting}>
+                  {submitting ? t("common.loading") : t("auth.login")}
+                </Button>
+              </form>
             )}
           </CardContent>
         </Card>
