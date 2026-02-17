@@ -118,8 +118,10 @@ const UserManagement = () => {
   };
 
   useEffect(() => {
-    fetchUsers();
-  }, []);
+    if (tenant?.id) {
+      fetchUsers();
+    }
+  }, [tenant?.id]);
 
   const isLastAdminSelf = (userId: string, role: string) => {
     return role === "admin" && adminCount <= 1 && currentUser?.id === userId;
