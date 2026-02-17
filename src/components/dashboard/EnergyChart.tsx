@@ -258,21 +258,34 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
     };
 
     if (period === "day") {
+      // Each bucket tracks value + whether the point is real or gap-interpolated
       const buckets = Array.from({ length: 288 }, (_, i) => {
         const h = Math.floor(i / 12);
         const m = (i % 12) * 5;
-        return { label: `${h}:${m.toString().padStart(2, "0")} Uhr`, ...emptyBucket() };
+        return {
+          label: `${h}:${m.toString().padStart(2, "0")} Uhr`,
+          ...emptyBucket(),
+          // real_* mirrors the energy value but is null for gap slots
+          real_strom: null as number | null,
+          real_gas: null as number | null,
+          real_waerme: null as number | null,
+          real_wasser: null as number | null,
+        };
       });
+
+      // Track which indices actually received a real reading
+      const realIndices: Record<string, Set<number>> = { strom: new Set(), gas: new Set(), waerme: new Set(), wasser: new Set() };
 
       // Use power readings from DB for automatic main meters
       powerReadings.forEach((pr) => {
         const info = meterMap[pr.meter_id];
         if (!info) return;
         const d = new Date(pr.recorded_at);
-        const idx = d.getHours() * 12 + Math.floor(d.getMinutes() / 5);
+        const idx = Math.min(d.getHours() * 12 + Math.floor(d.getMinutes() / 5), 287);
         const et = info.energy_type || "strom";
-        if (et in buckets[Math.min(idx, 287)]) {
-          (buckets[Math.min(idx, 287)] as any)[et] += pr.power_value;
+        if (et in buckets[idx]) {
+          (buckets[idx] as any)[et] += pr.power_value;
+          realIndices[et]?.add(idx);
         }
       });
 
@@ -282,11 +295,13 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
         if (!info || !info.is_main_meter) return;
         if (info.capture_type === "automatic") return;
         const d = new Date(r.reading_date);
-        const idx = d.getHours() * 12 + Math.floor(d.getMinutes() / 5);
-        addToBucket(buckets[Math.min(idx, 287)], r);
+        const idx = Math.min(d.getHours() * 12 + Math.floor(d.getMinutes() / 5), 287);
+        addToBucket(buckets[idx], r);
+        const et = info.energy_type || "strom";
+        realIndices[et]?.add(idx);
       });
 
-      // Interpolate gaps per energy type
+      // Interpolate small gaps (≤ 12 slots = 1 hour) and mark them as gap (not real)
       for (const key of ENERGY_KEYS) {
         const points: Array<{ idx: number; val: number }> = [];
         buckets.forEach((b, i) => {
@@ -297,14 +312,27 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
           const start = points[p];
           const end = points[p + 1];
           const gap = end.idx - start.idx;
-          if (gap > 1 && gap <= 12) { // interpolate gaps up to 1 hour
+          if (gap > 1 && gap <= 12) {
             for (let g = 1; g < gap; g++) {
               const t = g / gap;
               (buckets[start.idx + g] as any)[key] = start.val + (end.val - start.val) * t;
+              // gap-interpolated: do NOT add to realIndices
             }
           }
         }
       }
+
+      // Populate real_* fields: only set where we have an actual data point
+      buckets.forEach((b, i) => {
+        for (const key of ENERGY_KEYS) {
+          const realKey = `real_${key}` as const;
+          if (realIndices[key]?.has(i)) {
+            (b as any)[realKey] = (b as any)[key];
+          } else {
+            (b as any)[realKey] = null;
+          }
+        }
+      });
 
       return buckets;
     }
@@ -446,12 +474,44 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
                 <CartesianGrid strokeDasharray="3 3" className="stroke-border" vertical={false} />
                 <XAxis dataKey="label" tick={tickStyle} tickLine={false} axisLine={false} interval={11} tickFormatter={(v: string) => v.endsWith(":00 Uhr") ? v.replace(" Uhr", "") : ""} />
                 <YAxis width={50} tick={tickStyle} tickLine={false} axisLine={false} domain={visibleKeys.length === 0 ? [0, 1] : ['auto', 'auto']} />
-                <Tooltip contentStyle={tooltipStyle} formatter={tooltipFormatter} />
-                <Legend wrapperStyle={{ fontSize: 12, cursor: 'pointer' }} onClick={handleLegendClick} formatter={legendFormatter} />
-                {visibleEnergyKeys.includes("strom") && <Line type="monotone" dataKey="strom" name="Strom" stroke={ENERGY_CHART_COLORS.strom} strokeWidth={2} dot={false} hide={hiddenKeys.has("strom")} />}
-                {visibleEnergyKeys.includes("gas") && <Line type="monotone" dataKey="gas" name="Gas" stroke={ENERGY_CHART_COLORS.gas} strokeWidth={2} dot={false} hide={hiddenKeys.has("gas")} />}
-                {visibleEnergyKeys.includes("waerme") && <Line type="monotone" dataKey="waerme" name="Wärme" stroke={ENERGY_CHART_COLORS.waerme} strokeWidth={2} dot={false} hide={hiddenKeys.has("waerme")} />}
-                {visibleEnergyKeys.includes("wasser") && <Line type="monotone" dataKey="wasser" name="Wasser" stroke={ENERGY_CHART_COLORS.wasser} strokeWidth={2} dot={false} hide={hiddenKeys.has("wasser")} />}
+                <Tooltip
+                  contentStyle={tooltipStyle}
+                  formatter={(value, name, item) => {
+                    const dk = (item as any)?.dataKey as string | undefined;
+                    // Skip gap (dashed) lines and real_* duplicate keys in tooltip
+                    if (dk && (dk.startsWith("real_") || (typeof name === "string" && name.startsWith("__gap_")))) return ["", ""];
+                    return tooltipFormatter(value as number, name as string);
+                  }}
+                  itemSorter={(item) => ((item as any)?.dataKey as string ?? "").startsWith("real_") ? 1 : 0}
+                />
+                <Legend wrapperStyle={{ fontSize: 12, cursor: 'pointer' }} onClick={handleLegendClick} formatter={(value, entry) => {
+                  // hide real_* duplicate entries from legend; show only named energy type lines
+                  const dk = (entry as any).dataKey as string | undefined;
+                  if (dk && dk.startsWith("real_")) return null;
+                  return legendFormatter(value, entry);
+                }} />
+                {/* Strom: dashed = full line (gaps included), solid = real data only */}
+                {visibleEnergyKeys.includes("strom") && !hiddenKeys.has("strom") && <>
+                  <Line type="monotone" dataKey="strom" name="__gap_strom" stroke={ENERGY_CHART_COLORS.strom} strokeWidth={1.5} strokeDasharray="4 4" dot={false} connectNulls={false} legendType="none" />
+                  <Line type="monotone" dataKey="real_strom" name="Strom" stroke={ENERGY_CHART_COLORS.strom} strokeWidth={2.5} dot={false} connectNulls={false} legendType="line" />
+                </>}
+                {visibleEnergyKeys.includes("gas") && !hiddenKeys.has("gas") && <>
+                  <Line type="monotone" dataKey="gas" name="__gap_gas" stroke={ENERGY_CHART_COLORS.gas} strokeWidth={1.5} strokeDasharray="4 4" dot={false} connectNulls={false} legendType="none" />
+                  <Line type="monotone" dataKey="real_gas" name="Gas" stroke={ENERGY_CHART_COLORS.gas} strokeWidth={2.5} dot={false} connectNulls={false} legendType="line" />
+                </>}
+                {visibleEnergyKeys.includes("waerme") && !hiddenKeys.has("waerme") && <>
+                  <Line type="monotone" dataKey="waerme" name="__gap_waerme" stroke={ENERGY_CHART_COLORS.waerme} strokeWidth={1.5} strokeDasharray="4 4" dot={false} connectNulls={false} legendType="none" />
+                  <Line type="monotone" dataKey="real_waerme" name="Wärme" stroke={ENERGY_CHART_COLORS.waerme} strokeWidth={2.5} dot={false} connectNulls={false} legendType="line" />
+                </>}
+                {visibleEnergyKeys.includes("wasser") && !hiddenKeys.has("wasser") && <>
+                  <Line type="monotone" dataKey="wasser" name="__gap_wasser" stroke={ENERGY_CHART_COLORS.wasser} strokeWidth={1.5} strokeDasharray="4 4" dot={false} connectNulls={false} legendType="none" />
+                  <Line type="monotone" dataKey="real_wasser" name="Wasser" stroke={ENERGY_CHART_COLORS.wasser} strokeWidth={2.5} dot={false} connectNulls={false} legendType="line" />
+                </>}
+                {/* Invisible lines for hidden keys so legend stays interactive */}
+                {visibleEnergyKeys.includes("strom") && hiddenKeys.has("strom") && <Line type="monotone" dataKey="strom" name="Strom" stroke={ENERGY_CHART_COLORS.strom} strokeWidth={0} dot={false} legendType="line" />}
+                {visibleEnergyKeys.includes("gas") && hiddenKeys.has("gas") && <Line type="monotone" dataKey="gas" name="Gas" stroke={ENERGY_CHART_COLORS.gas} strokeWidth={0} dot={false} legendType="line" />}
+                {visibleEnergyKeys.includes("waerme") && hiddenKeys.has("waerme") && <Line type="monotone" dataKey="waerme" name="Wärme" stroke={ENERGY_CHART_COLORS.waerme} strokeWidth={0} dot={false} legendType="line" />}
+                {visibleEnergyKeys.includes("wasser") && hiddenKeys.has("wasser") && <Line type="monotone" dataKey="wasser" name="Wasser" stroke={ENERGY_CHART_COLORS.wasser} strokeWidth={0} dot={false} legendType="line" />}
               </LineChart>
             ) : (
               <BarChart data={chartData} barGap={2} margin={{ top: 5, right: 10, left: 5, bottom: 5 }}>
