@@ -113,9 +113,25 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
     setError(null);
 
     try {
+      // First get the user's tenant_id from their profile, then fetch that specific tenant.
+      // Using .single() on an unfiltered query fails when the user is a super_admin
+      // and can see multiple tenants via RLS.
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("tenant_id")
+        .eq("user_id", user.id)
+        .single();
+
+      if (!profile?.tenant_id) {
+        setTenant(null);
+        setLoading(false);
+        return;
+      }
+
       const { data, error: fetchError } = await supabase
         .from("tenants")
         .select("*")
+        .eq("id", profile.tenant_id)
         .single();
 
       if (fetchError) {
