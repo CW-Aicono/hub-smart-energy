@@ -67,6 +67,30 @@ function mapUnit(unit: string): string {
   return map[unit?.toLowerCase()] || "kWh";
 }
 
+/** Fetch a map of energy_type -> current price_per_unit for a location */
+async function fetchEnergyPriceMap(
+  supabase: ReturnType<typeof createClient>,
+  locationId: string
+): Promise<Map<string, number>> {
+  const today = new Date().toISOString().substring(0, 10);
+  const { data: prices } = await supabase
+    .from("energy_prices")
+    .select("energy_type, price_per_unit, valid_from, valid_until")
+    .eq("location_id", locationId)
+    .lte("valid_from", today)
+    .or(`valid_until.is.null,valid_until.gte.${today}`);
+
+  const priceMap = new Map<string, number>();
+  if (prices) {
+    for (const p of prices) {
+      if (!priceMap.has(p.energy_type)) {
+        priceMap.set(p.energy_type, p.price_per_unit);
+      }
+    }
+  }
+  return priceMap;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -124,6 +148,9 @@ Deno.serve(async (req) => {
         location_id: settings.location_id,
       };
 
+      // Pre-fetch current energy prices for this location
+      const priceMap = await fetchEnergyPriceMap(supabase, settings.location_id);
+
       try {
         // ── SYNC METERS ──
         if (action === "all" || action === "sync_meters") {
@@ -134,13 +161,18 @@ Deno.serve(async (req) => {
             .eq("is_archived", false);
 
           if (meters && meters.length > 0) {
-            const metersPayload = meters.map((m) => ({
-              external_id: m.id,
-              name: m.name,
-              type: mapEnergyType(m.energy_type),
-              unit: mapUnit(m.unit),
-              location_description: m.notes || undefined,
-            }));
+            const metersPayload = meters.map((m) => {
+              const entry: Record<string, unknown> = {
+                external_id: m.id,
+                name: m.name,
+                type: mapEnergyType(m.energy_type),
+                unit: mapUnit(m.unit),
+              };
+              if (m.notes) entry.location_description = m.notes;
+              const costPerUnit = priceMap.get(m.energy_type);
+              if (costPerUnit !== undefined) entry.cost_per_unit = costPerUnit;
+              return entry;
+            });
 
             const meterResult = await callBrightHub(
               "sync_meters",
@@ -148,7 +180,6 @@ Deno.serve(async (req) => {
               settings.api_key
             );
 
-            // New response format: { success, count, meters_created }
             locationResult.meters = {
               sent: metersPayload.length,
               count: meterResult.count,
@@ -168,17 +199,20 @@ Deno.serve(async (req) => {
         if (action === "all" || action === "sync_readings") {
           const { data: meters } = await supabase
             .from("meters")
-            .select("id, name, energy_type, unit")
+            .select("id, energy_type, notes")
             .eq("location_id", settings.location_id)
             .eq("is_archived", false);
 
           if (!meters || meters.length === 0) {
             locationResult.readings = { sent: 0, message: "No meters found" };
           } else {
-            const readings: { meter_id: string; reading_date: string; value: number }[] = [];
+            const readings: Record<string, unknown>[] = [];
             const sinceDate = settings.last_reading_sync_at || "2000-01-01T00:00:00Z";
 
             for (const meter of meters) {
+              const costPerUnit = priceMap.get(meter.energy_type);
+              const locationDescription = meter.notes || undefined;
+
               const { data: powerReadings } = await supabase
                 .from("meter_power_readings")
                 .select("power_value, recorded_at")
@@ -189,18 +223,21 @@ Deno.serve(async (req) => {
 
               if (powerReadings && powerReadings.length > 0) {
                 for (const pr of powerReadings) {
-                  readings.push({
+                  const entry: Record<string, unknown> = {
                     meter_id: meter.id,
                     reading_date: pr.recorded_at.substring(0, 10),
                     value: pr.power_value,
-                  });
+                  };
+                  if (locationDescription) entry.location_description = locationDescription;
+                  if (costPerUnit !== undefined) entry.cost_per_unit = costPerUnit;
+                  readings.push(entry);
                 }
                 continue;
               }
 
               const { data: manualReadings } = await supabase
                 .from("meter_readings")
-                .select("value, reading_date, notes")
+                .select("value, reading_date")
                 .eq("meter_id", meter.id)
                 .gt("reading_date", sinceDate)
                 .order("reading_date", { ascending: false })
@@ -208,11 +245,14 @@ Deno.serve(async (req) => {
 
               if (manualReadings && manualReadings.length > 0) {
                 for (const mr of manualReadings) {
-                  readings.push({
+                  const entry: Record<string, unknown> = {
                     meter_id: meter.id,
                     reading_date: mr.reading_date.substring(0, 10),
                     value: mr.value,
-                  });
+                  };
+                  if (locationDescription) entry.location_description = locationDescription;
+                  if (costPerUnit !== undefined) entry.cost_per_unit = costPerUnit;
+                  readings.push(entry);
                 }
               }
             }
@@ -223,7 +263,6 @@ Deno.serve(async (req) => {
               for (let i = 0; i < readings.length; i += 1000) {
                 const chunk = readings.slice(i, i + 1000);
                 const apiResult = await callBrightHub("bulk_readings", { readings: chunk }, settings.api_key);
-                // New response format: { success, count, meters_created }
                 totalCount += apiResult.count ?? chunk.length;
               }
               locationResult.readings = { sent: readings.length, count: totalCount };
@@ -241,7 +280,7 @@ Deno.serve(async (req) => {
         if (action === "all" || action === "sync_intraday") {
           const { data: meters } = await supabase
             .from("meters")
-            .select("id")
+            .select("id, energy_type, notes")
             .eq("location_id", settings.location_id)
             .eq("is_archived", false);
 
@@ -249,9 +288,12 @@ Deno.serve(async (req) => {
             locationResult.intraday = { sent: 0, message: "No meters found" };
           } else {
             const sinceDate = settings.last_intraday_sync_at || "2000-01-01T00:00:00Z";
-            const intradayReadings: { meter_id: string; timestamp: string; power_value: number }[] = [];
+            const intradayReadings: Record<string, unknown>[] = [];
 
             for (const meter of meters) {
+              const costPerUnit = priceMap.get(meter.energy_type);
+              const locationDescription = meter.notes || undefined;
+
               const { data: pwr } = await supabase
                 .from("meter_power_readings")
                 .select("power_value, recorded_at")
@@ -262,11 +304,14 @@ Deno.serve(async (req) => {
 
               if (pwr && pwr.length > 0) {
                 for (const r of pwr) {
-                  intradayReadings.push({
+                  const entry: Record<string, unknown> = {
                     meter_id: meter.id,
                     timestamp: r.recorded_at,
                     power_value: r.power_value,
-                  });
+                  };
+                  if (locationDescription) entry.location_description = locationDescription;
+                  if (costPerUnit !== undefined) entry.cost_per_unit = costPerUnit;
+                  intradayReadings.push(entry);
                 }
               }
             }
@@ -277,7 +322,6 @@ Deno.serve(async (req) => {
               for (let i = 0; i < intradayReadings.length; i += 5000) {
                 const chunk = intradayReadings.slice(i, i + 5000);
                 const apiResult = await callBrightHub("bulk_intraday", { readings: chunk }, settings.api_key);
-                // New response format: { success, count, meters_created }
                 totalCount += apiResult.count ?? chunk.length;
               }
               locationResult.intraday = { sent: intradayReadings.length, count: totalCount };
