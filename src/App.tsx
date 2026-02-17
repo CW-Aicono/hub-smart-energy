@@ -47,6 +47,7 @@ import SuperAdminOcppControl from "./pages/SuperAdminOcppControl";
 import ChargingApp from "./pages/ChargingApp";
 import ChargingAppAdmin from "./pages/ChargingAppAdmin";
 import UpdateBanner from "./components/UpdateBanner";
+import CookieConsent from "./components/CookieConsent";
 // Import Leaflet CSS globally
 import "leaflet/dist/leaflet.css";
 
@@ -70,6 +71,7 @@ const App = () => (
               <Toaster />
               <Sonner />
               <UpdateBanner />
+              <CookieConsent />
               <BrowserRouter>
                 <Routes>
                   <Route path="/" element={<Index />} />
