@@ -2377,7 +2377,51 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      charging_users_public: {
+        Row: {
+          created_at: string | null
+          group_id: string | null
+          id: string | null
+          name: string | null
+          status: string | null
+          tenant_id: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          group_id?: string | null
+          id?: string | null
+          name?: string | null
+          status?: string | null
+          tenant_id?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          group_id?: string | null
+          id?: string | null
+          name?: string | null
+          status?: string | null
+          tenant_id?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "charging_users_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "charging_user_groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "charging_users_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       bootstrap_user_role: {
