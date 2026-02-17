@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
+import { getT } from "@/i18n/getT";
 
 export interface ChargerModel {
   id: string;
@@ -43,11 +44,13 @@ export function useChargerModels() {
       return data;
     },
     onSuccess: () => {
+      const t = getT();
       queryClient.invalidateQueries({ queryKey: ["charger-models"] });
-      toast({ title: "Modell erstellt" });
+      toast({ title: t("chargerModel.created") });
     },
     onError: (e: Error) => {
-      toast({ title: "Fehler", description: e.message, variant: "destructive" });
+      const t = getT();
+      toast({ title: t("common.error"), description: e.message, variant: "destructive" });
     },
   });
 
@@ -57,11 +60,13 @@ export function useChargerModels() {
       if (error) throw error;
     },
     onSuccess: () => {
+      const t = getT();
       queryClient.invalidateQueries({ queryKey: ["charger-models"] });
-      toast({ title: "Modell aktualisiert" });
+      toast({ title: t("chargerModel.updated") });
     },
     onError: (e: Error) => {
-      toast({ title: "Fehler", description: e.message, variant: "destructive" });
+      const t = getT();
+      toast({ title: t("common.error"), description: e.message, variant: "destructive" });
     },
   });
 
@@ -71,11 +76,13 @@ export function useChargerModels() {
       if (error) throw error;
     },
     onSuccess: () => {
+      const t = getT();
       queryClient.invalidateQueries({ queryKey: ["charger-models"] });
-      toast({ title: "Modell gelöscht" });
+      toast({ title: t("chargerModel.deleted") });
     },
     onError: (e: Error) => {
-      toast({ title: "Fehler", description: e.message, variant: "destructive" });
+      const t = getT();
+      toast({ title: t("common.error"), description: e.message, variant: "destructive" });
     },
   });
 

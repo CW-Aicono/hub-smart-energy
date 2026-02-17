@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
+import { getT } from "@/i18n/getT";
 
 export const ALL_MODULES = [
   { code: "dashboard", label: "Dashboard", alwaysOn: true },
@@ -57,11 +58,13 @@ export function useTenantModules(tenantId: string | null) {
       }
     },
     onSuccess: () => {
+      const t = getT();
       queryClient.invalidateQueries({ queryKey: ["tenant-modules", tenantId] });
-      toast({ title: "Modul aktualisiert" });
+      toast({ title: t("module.updated") });
     },
     onError: (e: Error) => {
-      toast({ title: "Fehler", description: e.message, variant: "destructive" });
+      const t = getT();
+      toast({ title: t("common.error"), description: e.message, variant: "destructive" });
     },
   });
 

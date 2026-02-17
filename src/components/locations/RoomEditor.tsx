@@ -8,6 +8,7 @@ import { ArrowLeft, Plus, Trash2, Save, Loader2 } from "lucide-react";
 import { Floor } from "@/hooks/useFloors";
 import { FloorRoom, FloorRoomInsert, useFloorRooms } from "@/hooks/useFloorRooms";
 import { toast } from "sonner";
+import { useTranslation } from "@/hooks/useTranslation";
 
 interface RoomEditorProps {
   floor: Floor;
@@ -46,8 +47,8 @@ export function RoomEditor({ floor, onClose }: RoomEditorProps) {
   const handleAddRoom = async () => {
     setSaving(true);
     
-    // Calculate position for new room (offset from existing rooms)
     const offsetX = rooms.length * 5;
+    const { t } = useTranslation();
     
     const { error } = await addRoom({
       ...DEFAULT_ROOM,
@@ -56,24 +57,17 @@ export function RoomEditor({ floor, onClose }: RoomEditorProps) {
       position_x: offsetX,
     });
 
-    if (error) {
-      toast.error("Fehler beim Erstellen des Raums");
-    } else {
-      toast.success("Raum erstellt");
-    }
+    if (error) { toast.error(t("room.errorCreate")); } else { toast.success(t("room.created")); }
     setSaving(false);
   };
 
   const handleSaveRoom = async () => {
     if (!selectedRoom) return;
-    
+    const { t } = useTranslation();
     setSaving(true);
     const { error } = await updateRoom(selectedRoom.id, editValues);
-    
-    if (error) {
-      toast.error("Fehler beim Speichern");
-    } else {
-      toast.success("Änderungen gespeichert");
+    if (error) { toast.error(t("room.errorSave")); } else {
+      toast.success(t("room.updated"));
       setSelectedRoom(null);
       setEditValues({});
     }
@@ -82,14 +76,11 @@ export function RoomEditor({ floor, onClose }: RoomEditorProps) {
 
   const handleDeleteRoom = async (roomId: string, roomName: string) => {
     if (!confirm(`Raum "${roomName}" wirklich löschen?`)) return;
-    
+    const { t } = useTranslation();
     setSaving(true);
     const { error } = await deleteRoom(roomId);
-    
-    if (error) {
-      toast.error("Fehler beim Löschen");
-    } else {
-      toast.success("Raum gelöscht");
+    if (error) { toast.error(t("room.errorDelete")); } else {
+      toast.success(t("room.deleted"));
       if (selectedRoom?.id === roomId) {
         setSelectedRoom(null);
         setEditValues({});

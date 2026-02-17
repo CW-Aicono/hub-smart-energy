@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
 import { useTenant } from "./useTenant";
 import { toast } from "sonner";
+import { getT } from "@/i18n/getT";
 
 const useTenantId = () => {
   const { tenant } = useTenant();
@@ -68,37 +69,40 @@ export function useAlertRules(locationId?: string) {
 
   const addAlertRule = async (rule: AlertRuleInsert) => {
     if (!tenantId) return;
+    const t = getT();
     const { error } = await supabase.from("alert_rules").insert({
       ...rule,
       tenant_id: tenantId,
     } as any);
     if (error) {
-      toast.error("Alarmregel konnte nicht angelegt werden");
+      toast.error(t("alertRule.errorCreate"));
       console.error(error);
     } else {
-      toast.success("Alarmregel angelegt");
+      toast.success(t("alertRule.created"));
       fetchAlertRules();
     }
   };
 
   const updateAlertRule = async (id: string, updates: Partial<AlertRuleInsert>) => {
+    const t = getT();
     const { error } = await supabase.from("alert_rules").update(updates as any).eq("id", id);
     if (error) {
-      toast.error("Alarmregel konnte nicht aktualisiert werden");
+      toast.error(t("alertRule.errorUpdate"));
       console.error(error);
     } else {
-      toast.success("Alarmregel aktualisiert");
+      toast.success(t("alertRule.updated"));
       fetchAlertRules();
     }
   };
 
   const deleteAlertRule = async (id: string) => {
+    const t = getT();
     const { error } = await supabase.from("alert_rules").delete().eq("id", id);
     if (error) {
-      toast.error("Alarmregel konnte nicht gelöscht werden");
+      toast.error(t("alertRule.errorDelete"));
       console.error(error);
     } else {
-      toast.success("Alarmregel gelöscht");
+      toast.success(t("alertRule.deleted"));
       fetchAlertRules();
     }
   };

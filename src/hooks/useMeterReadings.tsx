@@ -4,6 +4,7 @@ import { useAuth } from "./useAuth";
 import { useTenant } from "./useTenant";
 import { toast } from "sonner";
 import { syncReadings } from "@/lib/brighthubApi";
+import { getT } from "@/i18n/getT";
 
 export interface MeterReading {
   id: string;
@@ -68,6 +69,7 @@ export function useMeterReadings(meterId?: string) {
     notes?: string;
   }) => {
     if (!tenantId || !user) return;
+    const t = getT();
     const { error } = await supabase.from("meter_readings").insert({
       ...data,
       tenant_id: tenantId,
@@ -75,16 +77,15 @@ export function useMeterReadings(meterId?: string) {
       capture_method: data.capture_method || "manual",
     } as any);
     if (error) {
-      toast.error("Zählerstand konnte nicht gespeichert werden");
+      toast.error(t("meterReading.errorSave"));
       console.error(error);
       return false;
     }
-    toast.success("Zählerstand erfasst");
+    toast.success(t("meterReading.created"));
     fetchReadings();
 
     // Auto-sync to BrightHub if enabled (check per-location settings)
     try {
-      // Get meter's location_id first
       const { data: meter } = await supabase
         .from("meters")
         .select("location_id")

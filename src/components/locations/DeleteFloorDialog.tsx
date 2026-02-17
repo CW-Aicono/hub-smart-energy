@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import { Trash2 } from "lucide-react";
+import { useTranslation } from "@/hooks/useTranslation";
 
 interface DeleteFloorDialogProps {
   floor: Floor;
@@ -24,23 +25,18 @@ export function DeleteFloorDialog({ floor, onSuccess }: DeleteFloorDialogProps) 
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const { deleteFloor } = useFloors(floor.location_id);
+  const { t } = useTranslation();
 
   const handleDelete = async () => {
     setLoading(true);
-
     try {
       const { error } = await deleteFloor(floor.id);
-
-      if (error) {
-        toast.error("Fehler beim Löschen der Etage");
-        return;
-      }
-
-      toast.success("Etage erfolgreich gelöscht");
+      if (error) { toast.error(t("common.errorDelete")); return; }
+      toast.success(t("floor.deleted"));
       setOpen(false);
       onSuccess?.();
-    } catch (err) {
-      toast.error("Unerwarteter Fehler");
+    } catch {
+      toast.error(t("common.error"));
     } finally {
       setLoading(false);
     }

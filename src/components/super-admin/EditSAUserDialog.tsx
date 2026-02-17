@@ -7,6 +7,7 @@ import { Pencil } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { getT } from "@/i18n/getT";
 
 interface EditSAUserDialogProps {
   user: {
@@ -36,12 +37,14 @@ const EditSAUserDialog = ({ user }: EditSAUserDialogProps) => {
       if (error) throw error;
     },
     onSuccess: () => {
+      const t = getT();
       queryClient.invalidateQueries({ queryKey: ["super-admin-users"] });
-      toast({ title: "Benutzer aktualisiert" });
+      toast({ title: t("saUser.updated") });
       setOpen(false);
     },
     onError: (e: Error) => {
-      toast({ title: "Fehler", description: e.message, variant: "destructive" });
+      const t = getT();
+      toast({ title: t("common.error"), description: e.message, variant: "destructive" });
     },
   });
 
