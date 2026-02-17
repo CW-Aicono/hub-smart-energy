@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
-import { useTenant } from "./useTenant";
+import { useTenantQuery } from "./useTenantQuery";
 import { toast } from "sonner";
 import { syncReadings } from "@/lib/brighthubApi";
 import { getT } from "@/i18n/getT";
@@ -21,8 +21,7 @@ export interface MeterReading {
 
 export function useMeterReadings(meterId?: string) {
   const { user } = useAuth();
-  const { tenant } = useTenant();
-  const tenantId = tenant?.id ?? null;
+  const { tenantId, ready, insert: tenantInsert } = useTenantQuery();
   const [readings, setReadings] = useState<MeterReading[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -68,11 +67,10 @@ export function useMeterReadings(meterId?: string) {
     capture_method?: string;
     notes?: string;
   }) => {
-    if (!tenantId || !user) return;
+    if (!ready || !user) return;
     const t = getT();
-    const { error } = await supabase.from("meter_readings").insert({
+    const { error } = await tenantInsert("meter_readings", {
       ...data,
-      tenant_id: tenantId,
       created_by: user.id,
       capture_method: data.capture_method || "manual",
     } as any);

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
+import { useTenantQuery } from "./useTenantQuery";
 import { toast } from "@/hooks/use-toast";
 import { getT } from "@/i18n/getT";
 
@@ -20,6 +21,7 @@ export interface EnergyPrice {
 
 export function useEnergyPrices(locationId?: string) {
   const { user } = useAuth();
+  const { ready, insert: tenantInsert } = useTenantQuery();
   const [prices, setPrices] = useState<EnergyPrice[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -43,11 +45,14 @@ export function useEnergyPrices(locationId?: string) {
     fetchPrices();
   }, [fetchPrices]);
 
-  const addPrice = async (price: { location_id: string; energy_type: string; price_per_unit: number; unit: string; valid_from: string; tenant_id: string }) => {
+  const addPrice = async (price: { location_id: string; energy_type: string; price_per_unit: number; unit: string; valid_from: string; tenant_id?: string }) => {
+    if (!ready) return false;
     const t = getT();
-    const { error } = await supabase.from("energy_prices").insert(price);
+    // Strip manually passed tenant_id – tenantInsert injects it automatically
+    const { tenant_id: _ignored, ...rest } = price;
+    const { error } = await tenantInsert("energy_prices", rest as any);
     if (error) {
-      toast({ title: t("common.error"), description: error.message, variant: "destructive" });
+      toast({ title: t("common.error"), description: (error as Error).message, variant: "destructive" });
       return false;
     }
     toast({ title: t("energyPrice.created") });
