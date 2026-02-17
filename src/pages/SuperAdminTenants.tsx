@@ -78,7 +78,7 @@ const SuperAdminTenants = () => {
           tenantId: tenant.id,
           adminEmail,
           adminName: adminName || undefined,
-          redirectTo: `https://hub-smart-energy.lovable.app/set-password`,
+          redirectTo: `https://ems-pro.aicono.org/set-password`,
         },
       });
 
