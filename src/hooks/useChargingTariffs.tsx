@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
+import { getT } from "@/i18n/getT";
 
 export interface ChargingTariff {
   id: string;
@@ -35,10 +36,14 @@ export function useChargingTariffs() {
       return data;
     },
     onSuccess: () => {
+      const t = getT();
       queryClient.invalidateQueries({ queryKey: ["charging-tariffs"] });
-      toast({ title: "Tarif erstellt" });
+      toast({ title: t("tariff.created") });
     },
-    onError: (e: Error) => toast({ title: "Fehler", description: e.message, variant: "destructive" }),
+    onError: (e: Error) => {
+      const t = getT();
+      toast({ title: t("common.error"), description: e.message, variant: "destructive" });
+    },
   });
 
   const updateTariff = useMutation({
@@ -47,10 +52,14 @@ export function useChargingTariffs() {
       if (error) throw error;
     },
     onSuccess: () => {
+      const t = getT();
       queryClient.invalidateQueries({ queryKey: ["charging-tariffs"] });
-      toast({ title: "Tarif aktualisiert" });
+      toast({ title: t("tariff.updated") });
     },
-    onError: (e: Error) => toast({ title: "Fehler", description: e.message, variant: "destructive" }),
+    onError: (e: Error) => {
+      const t = getT();
+      toast({ title: t("common.error"), description: e.message, variant: "destructive" });
+    },
   });
 
   const deleteTariff = useMutation({
@@ -59,10 +68,14 @@ export function useChargingTariffs() {
       if (error) throw error;
     },
     onSuccess: () => {
+      const t = getT();
       queryClient.invalidateQueries({ queryKey: ["charging-tariffs"] });
-      toast({ title: "Tarif gelöscht" });
+      toast({ title: t("tariff.deleted") });
     },
-    onError: (e: Error) => toast({ title: "Fehler", description: e.message, variant: "destructive" }),
+    onError: (e: Error) => {
+      const t = getT();
+      toast({ title: t("common.error"), description: e.message, variant: "destructive" });
+    },
   });
 
   return { tariffs, isLoading, addTariff, updateTariff, deleteTariff };

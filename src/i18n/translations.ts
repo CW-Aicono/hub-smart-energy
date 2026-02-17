@@ -2599,6 +2599,508 @@ export const translations = {
     es: "Error al actualizar el acceso a la ubicación",
     nl: "Fout bij bijwerken locatietoegang",
   },
+
+  // ── Generic CRUD toasts (new keys – common.error/saved already exist above) ─
+  "common.created": {
+    de: "Erstellt",
+    en: "Created",
+    es: "Creado",
+    nl: "Aangemaakt",
+  },
+  "common.updated": {
+    de: "Aktualisiert",
+    en: "Updated",
+    es: "Actualizado",
+    nl: "Bijgewerkt",
+  },
+  "common.deleted": {
+    de: "Gelöscht",
+    en: "Deleted",
+    es: "Eliminado",
+    nl: "Verwijderd",
+  },
+  "common.errorCreate": {
+    de: "Fehler beim Erstellen",
+    en: "Error creating",
+    es: "Error al crear",
+    nl: "Fout bij aanmaken",
+  },
+  "common.errorUpdate": {
+    de: "Fehler beim Aktualisieren",
+    en: "Error updating",
+    es: "Error al actualizar",
+    nl: "Fout bij bijwerken",
+  },
+  "common.errorDelete": {
+    de: "Fehler beim Löschen",
+    en: "Error deleting",
+    es: "Error al eliminar",
+    nl: "Fout bij verwijderen",
+  },
+  "common.errorSave": {
+    de: "Fehler beim Speichern",
+    en: "Error saving",
+    es: "Error al guardar",
+    nl: "Fout bij opslaan",
+  },
+  "common.copiedToClipboard": {
+    de: "In Zwischenablage kopiert",
+    en: "Copied to clipboard",
+    es: "Copiado al portapapeles",
+    nl: "Gekopieerd naar klembord",
+  },
+  "common.latestVersion": {
+    de: "Sie verwenden bereits die neueste Version.",
+    en: "You are already on the latest version.",
+    es: "Ya está usando la última versión.",
+    nl: "U gebruikt al de nieuwste versie.",
+  },
+
+  // ── Module ────────────────────────────────────────────────────────────────
+  "module.updated": {
+    de: "Modul aktualisiert",
+    en: "Module updated",
+    es: "Módulo actualizado",
+    nl: "Module bijgewerkt",
+  },
+
+  // ── Charger models ────────────────────────────────────────────────────────
+  "chargerModel.created": {
+    de: "Modell erstellt",
+    en: "Model created",
+    es: "Modelo creado",
+    nl: "Model aangemaakt",
+  },
+  "chargerModel.updated": {
+    de: "Modell aktualisiert",
+    en: "Model updated",
+    es: "Modelo actualizado",
+    nl: "Model bijgewerkt",
+  },
+  "chargerModel.deleted": {
+    de: "Modell gelöscht",
+    en: "Model deleted",
+    es: "Modelo eliminado",
+    nl: "Model verwijderd",
+  },
+
+  // ── Charging tariffs ──────────────────────────────────────────────────────
+  "tariff.created": {
+    de: "Tarif erstellt",
+    en: "Tariff created",
+    es: "Tarifa creada",
+    nl: "Tarief aangemaakt",
+  },
+  "tariff.updated": {
+    de: "Tarif aktualisiert",
+    en: "Tariff updated",
+    es: "Tarifa actualizada",
+    nl: "Tarief bijgewerkt",
+  },
+  "tariff.deleted": {
+    de: "Tarif gelöscht",
+    en: "Tariff deleted",
+    es: "Tarifa eliminada",
+    nl: "Tarief verwijderd",
+  },
+
+  // ── Charge points ─────────────────────────────────────────────────────────
+  "chargePoint.created": {
+    de: "Ladepunkt erstellt",
+    en: "Charge point created",
+    es: "Punto de carga creado",
+    nl: "Laadpunt aangemaakt",
+  },
+  "chargePoint.updated": {
+    de: "Ladepunkt aktualisiert",
+    en: "Charge point updated",
+    es: "Punto de carga actualizado",
+    nl: "Laadpunt bijgewerkt",
+  },
+  "chargePoint.deleted": {
+    de: "Ladepunkt gelöscht",
+    en: "Charge point deleted",
+    es: "Punto de carga eliminado",
+    nl: "Laadpunt verwijderd",
+  },
+
+  // ── Charging users / groups ───────────────────────────────────────────────
+  "chargingUser.groupCreated": {
+    de: "Gruppe erstellt",
+    en: "Group created",
+    es: "Grupo creado",
+    nl: "Groep aangemaakt",
+  },
+  "chargingUser.groupUpdated": {
+    de: "Gruppe aktualisiert",
+    en: "Group updated",
+    es: "Grupo actualizado",
+    nl: "Groep bijgewerkt",
+  },
+  "chargingUser.groupDeleted": {
+    de: "Gruppe gelöscht",
+    en: "Group deleted",
+    es: "Grupo eliminado",
+    nl: "Groep verwijderd",
+  },
+  "chargingUser.created": {
+    de: "Nutzer erstellt",
+    en: "User created",
+    es: "Usuario creado",
+    nl: "Gebruiker aangemaakt",
+  },
+  "chargingUser.updated": {
+    de: "Nutzer aktualisiert",
+    en: "User updated",
+    es: "Usuario actualizado",
+    nl: "Gebruiker bijgewerkt",
+  },
+  "chargingUser.deleted": {
+    de: "Nutzer gelöscht",
+    en: "User deleted",
+    es: "Usuario eliminado",
+    nl: "Gebruiker verwijderd",
+  },
+
+  // ── Alert rules ───────────────────────────────────────────────────────────
+  "alertRule.created": {
+    de: "Alarmregel angelegt",
+    en: "Alert rule created",
+    es: "Regla de alerta creada",
+    nl: "Waarschuwingsregel aangemaakt",
+  },
+  "alertRule.updated": {
+    de: "Alarmregel aktualisiert",
+    en: "Alert rule updated",
+    es: "Regla de alerta actualizada",
+    nl: "Waarschuwingsregel bijgewerkt",
+  },
+  "alertRule.deleted": {
+    de: "Alarmregel gelöscht",
+    en: "Alert rule deleted",
+    es: "Regla de alerta eliminada",
+    nl: "Waarschuwingsregel verwijderd",
+  },
+  "alertRule.errorCreate": {
+    de: "Alarmregel konnte nicht angelegt werden",
+    en: "Could not create alert rule",
+    es: "No se pudo crear la regla de alerta",
+    nl: "Kon waarschuwingsregel niet aanmaken",
+  },
+  "alertRule.errorUpdate": {
+    de: "Alarmregel konnte nicht aktualisiert werden",
+    en: "Could not update alert rule",
+    es: "No se pudo actualizar la regla de alerta",
+    nl: "Kon waarschuwingsregel niet bijwerken",
+  },
+  "alertRule.errorDelete": {
+    de: "Alarmregel konnte nicht gelöscht werden",
+    en: "Could not delete alert rule",
+    es: "No se pudo eliminar la regla de alerta",
+    nl: "Kon waarschuwingsregel niet verwijderen",
+  },
+
+  // ── Meter readings ────────────────────────────────────────────────────────
+  "meterReading.created": {
+    de: "Zählerstand erfasst",
+    en: "Meter reading recorded",
+    es: "Lectura del contador registrada",
+    nl: "Meterstand vastgelegd",
+  },
+  "meterReading.errorSave": {
+    de: "Zählerstand konnte nicht gespeichert werden",
+    en: "Could not save meter reading",
+    es: "No se pudo guardar la lectura del contador",
+    nl: "Kon meterstand niet opslaan",
+  },
+
+  // ── Energy prices ─────────────────────────────────────────────────────────
+  "energyPrice.created": {
+    de: "Energiepreis gespeichert",
+    en: "Energy price saved",
+    es: "Precio de energía guardado",
+    nl: "Energieprijs opgeslagen",
+  },
+  "energyPrice.updated": {
+    de: "Energiepreis aktualisiert",
+    en: "Energy price updated",
+    es: "Precio de energía actualizado",
+    nl: "Energieprijs bijgewerkt",
+  },
+  "energyPrice.deleted": {
+    de: "Energiepreis gelöscht",
+    en: "Energy price deleted",
+    es: "Precio de energía eliminado",
+    nl: "Energieprijs verwijderd",
+  },
+
+  // ── Email templates ───────────────────────────────────────────────────────
+  "emailTemplate.saved": {
+    de: "Vorlage gespeichert",
+    en: "Template saved",
+    es: "Plantilla guardada",
+    nl: "Sjabloon opgeslagen",
+  },
+  "emailTemplate.deleted": {
+    de: "Vorlage gelöscht",
+    en: "Template deleted",
+    es: "Plantilla eliminada",
+    nl: "Sjabloon verwijderd",
+  },
+
+  // ── Report schedules ──────────────────────────────────────────────────────
+  "reportSchedule.created": {
+    de: "Report-Template erstellt",
+    en: "Report template created",
+    es: "Plantilla de informe creada",
+    nl: "Rapportsjabloon aangemaakt",
+  },
+  "reportSchedule.updated": {
+    de: "Report-Template aktualisiert",
+    en: "Report template updated",
+    es: "Plantilla de informe actualizada",
+    nl: "Rapportsjabloon bijgewerkt",
+  },
+  "reportSchedule.deleted": {
+    de: "Report-Template gelöscht",
+    en: "Report template deleted",
+    es: "Plantilla de informe eliminada",
+    nl: "Rapportsjabloon verwijderd",
+  },
+  "reportSchedule.errorCreate": {
+    de: "Report-Template konnte nicht erstellt werden",
+    en: "Could not create report template",
+    es: "No se pudo crear la plantilla de informe",
+    nl: "Kon rapportsjabloon niet aanmaken",
+  },
+
+  // ── Roles ─────────────────────────────────────────────────────────────────
+  "role.created": {
+    de: "Rolle erfolgreich erstellt",
+    en: "Role created successfully",
+    es: "Rol creado con éxito",
+    nl: "Rol succesvol aangemaakt",
+  },
+  "role.deleted": {
+    de: "Rolle erfolgreich gelöscht",
+    en: "Role deleted successfully",
+    es: "Rol eliminado con éxito",
+    nl: "Rol succesvol verwijderd",
+  },
+  "role.errorCreate": {
+    de: "Fehler beim Erstellen der Rolle",
+    en: "Error creating role",
+    es: "Error al crear el rol",
+    nl: "Fout bij aanmaken rol",
+  },
+  "role.errorDelete": {
+    de: "Fehler beim Löschen der Rolle",
+    en: "Error deleting role",
+    es: "Error al eliminar el rol",
+    nl: "Fout bij verwijderen rol",
+  },
+
+  // ── Rooms / Floor ─────────────────────────────────────────────────────────
+  "room.created": {
+    de: "Raum erstellt",
+    en: "Room created",
+    es: "Sala creada",
+    nl: "Ruimte aangemaakt",
+  },
+  "room.updated": {
+    de: "Änderungen gespeichert",
+    en: "Changes saved",
+    es: "Cambios guardados",
+    nl: "Wijzigingen opgeslagen",
+  },
+  "room.deleted": {
+    de: "Raum gelöscht",
+    en: "Room deleted",
+    es: "Sala eliminada",
+    nl: "Ruimte verwijderd",
+  },
+  "room.nameUpdated": {
+    de: "Raumname aktualisiert",
+    en: "Room name updated",
+    es: "Nombre de sala actualizado",
+    nl: "Ruimtenaam bijgewerkt",
+  },
+  "room.errorCreate": {
+    de: "Fehler beim Erstellen des Raums",
+    en: "Error creating room",
+    es: "Error al crear la sala",
+    nl: "Fout bij aanmaken ruimte",
+  },
+  "room.errorSave": {
+    de: "Fehler beim Speichern",
+    en: "Error saving",
+    es: "Error al guardar",
+    nl: "Fout bij opslaan",
+  },
+  "room.errorDelete": {
+    de: "Fehler beim Löschen",
+    en: "Error deleting",
+    es: "Error al eliminar",
+    nl: "Fout bij verwijderen",
+  },
+  "room.errorRename": {
+    de: "Raum konnte nicht umbenannt werden",
+    en: "Could not rename room",
+    es: "No se pudo renombrar la sala",
+    nl: "Kon ruimte niet hernoemen",
+  },
+  "floor.created": {
+    de: "Etage erfolgreich erstellt",
+    en: "Floor created successfully",
+    es: "Planta creada con éxito",
+    nl: "Verdieping succesvol aangemaakt",
+  },
+  "floor.updated": {
+    de: "Etage erfolgreich aktualisiert",
+    en: "Floor updated successfully",
+    es: "Planta actualizada con éxito",
+    nl: "Verdieping succesvol bijgewerkt",
+  },
+  "floor.deleted": {
+    de: "Etage erfolgreich gelöscht",
+    en: "Floor deleted successfully",
+    es: "Planta eliminada con éxito",
+    nl: "Verdieping succesvol verwijderd",
+  },
+
+  // ── Automation ────────────────────────────────────────────────────────────
+  "automation.created": {
+    de: "Automation erstellt",
+    en: "Automation created",
+    es: "Automatización creada",
+    nl: "Automatisering aangemaakt",
+  },
+  "automation.updated": {
+    de: "Automation aktualisiert",
+    en: "Automation updated",
+    es: "Automatización actualizada",
+    nl: "Automatisering bijgewerkt",
+  },
+  "automation.deleted": {
+    de: "Automation gelöscht",
+    en: "Automation deleted",
+    es: "Automatización eliminada",
+    nl: "Automatisering verwijderd",
+  },
+  "automation.errorDelete": {
+    de: "Fehler beim Löschen",
+    en: "Error deleting",
+    es: "Error al eliminar",
+    nl: "Fout bij verwijderen",
+  },
+
+  // ── Super-admin user ──────────────────────────────────────────────────────
+  "saUser.updated": {
+    de: "Benutzer aktualisiert",
+    en: "User updated",
+    es: "Usuario actualizado",
+    nl: "Gebruiker bijgewerkt",
+  },
+
+  // ── Integrations page ─────────────────────────────────────────────────────
+  "integration.created": {
+    de: "Integration erstellt",
+    en: "Integration created",
+    es: "Integración creada",
+    nl: "Integratie aangemaakt",
+  },
+  "integration.updated": {
+    de: "Integration aktualisiert",
+    en: "Integration updated",
+    es: "Integración actualizada",
+    nl: "Integratie bijgewerkt",
+  },
+  "integration.errorCreate": {
+    de: "Die Integration konnte nicht erstellt werden.",
+    en: "Could not create the integration.",
+    es: "No se pudo crear la integración.",
+    nl: "Kon de integratie niet aanmaken.",
+  },
+  "integration.errorUpdate": {
+    de: "Die Integration konnte nicht aktualisiert werden.",
+    en: "Could not update the integration.",
+    es: "No se pudo actualizar la integración.",
+    nl: "Kon de integratie niet bijwerken.",
+  },
+  "integration.createdDesc": {
+    de: "Die Integration wurde erfolgreich erstellt.",
+    en: "The integration was created successfully.",
+    es: "La integración se creó correctamente.",
+    nl: "De integratie is succesvol aangemaakt.",
+  },
+  "integration.updatedDesc": {
+    de: "Die Integration wurde erfolgreich aktualisiert.",
+    en: "The integration was updated successfully.",
+    es: "La integración se actualizó correctamente.",
+    nl: "De integratie is succesvol bijgewerkt.",
+  },
+  "integration.connectionSuccess": {
+    de: "Verbindung erfolgreich",
+    en: "Connection successful",
+    es: "Conexión exitosa",
+    nl: "Verbinding geslaagd",
+  },
+  "integration.connectionSuccessDesc": {
+    de: "Die Verbindung wurde hergestellt.",
+    en: "The connection was established.",
+    es: "La conexión fue establecida.",
+    nl: "De verbinding is tot stand gebracht.",
+  },
+
+  // ── Charging app ──────────────────────────────────────────────────────────
+  "chargingApp.registrationSuccess": {
+    de: "Registrierung erfolgreich! Bitte E-Mail bestätigen.",
+    en: "Registration successful! Please confirm your email.",
+    es: "¡Registro exitoso! Por favor confirma tu correo.",
+    nl: "Registratie geslaagd! Bevestig uw e-mail.",
+  },
+  "chargingApp.resetLinkSent": {
+    de: "Rücksetz-Link gesendet!",
+    en: "Reset link sent!",
+    es: "¡Enlace de restablecimiento enviado!",
+    nl: "Resetlink verzonden!",
+  },
+  "chargingApp.errorSend": {
+    de: "Fehler beim Senden",
+    en: "Error sending",
+    es: "Error al enviar",
+    nl: "Fout bij verzenden",
+  },
+  "chargingApp.passwordChanged": {
+    de: "Passwort geändert",
+    en: "Password changed",
+    es: "Contraseña cambiada",
+    nl: "Wachtwoord gewijzigd",
+  },
+  "chargingApp.startCommandSent": {
+    de: "Ladebefehl wurde an die Wallbox gesendet",
+    en: "Start command sent to charge point",
+    es: "Comando de inicio enviado al cargador",
+    nl: "Startcommando verzonden naar laadpunt",
+  },
+  "chargingApp.stopCommandSent": {
+    de: "Stopp-Befehl wurde an die Wallbox gesendet",
+    en: "Stop command sent to charge point",
+    es: "Comando de parada enviado al cargador",
+    nl: "Stopcommando verzonden naar laadpunt",
+  },
+  "chargingApp.errorStart": {
+    de: "Ladevorgang konnte nicht gestartet werden",
+    en: "Could not start charging session",
+    es: "No se pudo iniciar la sesión de carga",
+    nl: "Kon laadsessie niet starten",
+  },
+  "chargingApp.errorStop": {
+    de: "Ladevorgang konnte nicht beendet werden",
+    en: "Could not stop charging session",
+    es: "No se pudo detener la sesión de carga",
+    nl: "Kon laadsessie niet stoppen",
+  },
 } as const;
 
 export type TranslationKey = keyof typeof translations;

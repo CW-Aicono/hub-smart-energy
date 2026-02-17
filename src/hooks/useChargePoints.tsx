@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { useEffect } from "react";
+import { getT } from "@/i18n/getT";
 
 export interface ChargePoint {
   id: string;
@@ -63,11 +64,13 @@ export function useChargePoints() {
       return data;
     },
     onSuccess: () => {
+      const t = getT();
       queryClient.invalidateQueries({ queryKey: ["charge-points"] });
-      toast({ title: "Ladepunkt erstellt" });
+      toast({ title: t("chargePoint.created") });
     },
     onError: (e: Error) => {
-      toast({ title: "Fehler", description: e.message, variant: "destructive" });
+      const t = getT();
+      toast({ title: t("common.error"), description: e.message, variant: "destructive" });
     },
   });
 
@@ -77,11 +80,13 @@ export function useChargePoints() {
       if (error) throw error;
     },
     onSuccess: () => {
+      const t = getT();
       queryClient.invalidateQueries({ queryKey: ["charge-points"] });
-      toast({ title: "Ladepunkt aktualisiert" });
+      toast({ title: t("chargePoint.updated") });
     },
     onError: (e: Error) => {
-      toast({ title: "Fehler", description: e.message, variant: "destructive" });
+      const t = getT();
+      toast({ title: t("common.error"), description: e.message, variant: "destructive" });
     },
   });
 
@@ -101,11 +106,13 @@ export function useChargePoints() {
       if (error) throw error;
     },
     onSuccess: () => {
+      const t = getT();
       queryClient.invalidateQueries({ queryKey: ["charge-points"] });
-      toast({ title: "Ladepunkt gelöscht" });
+      toast({ title: t("chargePoint.deleted") });
     },
     onError: (e: Error) => {
-      toast({ title: "Fehler", description: e.message, variant: "destructive" });
+      const t = getT();
+      toast({ title: t("common.error"), description: e.message, variant: "destructive" });
     },
   });
 

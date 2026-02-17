@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
+import { getT } from "@/i18n/getT";
 
 export interface EmailTemplate {
   id: string;
@@ -87,10 +88,14 @@ export function useEmailTemplates() {
       return data;
     },
     onSuccess: () => {
+      const t = getT();
       queryClient.invalidateQueries({ queryKey: ["email-templates"] });
-      toast({ title: "Vorlage gespeichert" });
+      toast({ title: t("emailTemplate.saved") });
     },
-    onError: (e: Error) => toast({ title: "Fehler", description: e.message, variant: "destructive" }),
+    onError: (e: Error) => {
+      const t = getT();
+      toast({ title: t("common.error"), description: e.message, variant: "destructive" });
+    },
   });
 
   const deleteTemplate = useMutation({
@@ -99,10 +104,14 @@ export function useEmailTemplates() {
       if (error) throw error;
     },
     onSuccess: () => {
+      const t = getT();
       queryClient.invalidateQueries({ queryKey: ["email-templates"] });
-      toast({ title: "Vorlage gelöscht" });
+      toast({ title: t("emailTemplate.deleted") });
     },
-    onError: (e: Error) => toast({ title: "Fehler", description: e.message, variant: "destructive" }),
+    onError: (e: Error) => {
+      const t = getT();
+      toast({ title: t("common.error"), description: e.message, variant: "destructive" });
+    },
   });
 
   return { templates, isLoading, upsertTemplate, deleteTemplate, DEFAULT_TEMPLATES };

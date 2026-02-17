@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { getT } from "@/i18n/getT";
 
 export interface ChargingUserGroup {
   id: string;
@@ -48,8 +49,8 @@ export function useChargingUserGroups() {
       const { error } = await supabase.from("charging_user_groups").insert(g);
       if (error) throw error;
     },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: key }); toast.success("Gruppe erstellt"); },
-    onError: () => toast.error("Fehler beim Erstellen"),
+    onSuccess: () => { const t = getT(); qc.invalidateQueries({ queryKey: key }); toast.success(t("chargingUser.groupCreated")); },
+    onError: () => { const t = getT(); toast.error(t("common.errorCreate")); },
   });
 
   const updateGroup = useMutation({
@@ -57,8 +58,8 @@ export function useChargingUserGroups() {
       const { error } = await supabase.from("charging_user_groups").update(rest).eq("id", id);
       if (error) throw error;
     },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: key }); toast.success("Gruppe aktualisiert"); },
-    onError: () => toast.error("Fehler beim Aktualisieren"),
+    onSuccess: () => { const t = getT(); qc.invalidateQueries({ queryKey: key }); toast.success(t("chargingUser.groupUpdated")); },
+    onError: () => { const t = getT(); toast.error(t("common.errorUpdate")); },
   });
 
   const deleteGroup = useMutation({
@@ -66,8 +67,8 @@ export function useChargingUserGroups() {
       const { error } = await supabase.from("charging_user_groups").delete().eq("id", id);
       if (error) throw error;
     },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: key }); toast.success("Gruppe gelöscht"); },
-    onError: () => toast.error("Fehler beim Löschen"),
+    onSuccess: () => { const t = getT(); qc.invalidateQueries({ queryKey: key }); toast.success(t("chargingUser.groupDeleted")); },
+    onError: () => { const t = getT(); toast.error(t("common.errorDelete")); },
   });
 
   return { groups, isLoading, addGroup, updateGroup, deleteGroup };
@@ -102,8 +103,8 @@ export function useChargingUsers() {
       const { error } = await supabase.from("charging_users").insert(u);
       if (error) throw error;
     },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: key }); toast.success("Nutzer erstellt"); },
-    onError: () => toast.error("Fehler beim Erstellen"),
+    onSuccess: () => { const t = getT(); qc.invalidateQueries({ queryKey: key }); toast.success(t("chargingUser.created")); },
+    onError: () => { const t = getT(); toast.error(t("common.errorCreate")); },
   });
 
   const updateUser = useMutation({
@@ -120,8 +121,8 @@ export function useChargingUsers() {
       const { error } = await supabase.from("charging_users").update(rest).eq("id", id);
       if (error) throw error;
     },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: key }); toast.success("Nutzer aktualisiert"); },
-    onError: () => toast.error("Fehler beim Aktualisieren"),
+    onSuccess: () => { const t = getT(); qc.invalidateQueries({ queryKey: key }); toast.success(t("chargingUser.updated")); },
+    onError: () => { const t = getT(); toast.error(t("common.errorUpdate")); },
   });
 
   const deleteUser = useMutation({
@@ -129,8 +130,8 @@ export function useChargingUsers() {
       const { error } = await supabase.from("charging_users").delete().eq("id", id);
       if (error) throw error;
     },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: key }); toast.success("Nutzer gelöscht"); },
-    onError: () => toast.error("Fehler beim Löschen"),
+    onSuccess: () => { const t = getT(); qc.invalidateQueries({ queryKey: key }); toast.success(t("chargingUser.deleted")); },
+    onError: () => { const t = getT(); toast.error(t("common.errorDelete")); },
   });
 
   return { users, isLoading, addUser, updateUser, deleteUser };

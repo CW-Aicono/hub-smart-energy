@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
 import { useTenant } from "./useTenant";
 import { toast } from "sonner";
+import { getT } from "@/i18n/getT";
 
 export interface ReportSchedule {
   id: string;
@@ -53,29 +54,32 @@ export function useReportSchedules() {
 
   const createSchedule = async (input: ReportScheduleInsert) => {
     if (!tenant || !user) return false;
+    const t = getT();
     const { error } = await supabase.from("report_schedules").insert({
       ...input,
       tenant_id: tenant.id,
       created_by: user.id,
     } as any);
-    if (error) { toast.error("Report-Template konnte nicht erstellt werden"); console.error(error); return false; }
-    toast.success("Report-Template erstellt");
+    if (error) { toast.error(t("reportSchedule.errorCreate")); console.error(error); return false; }
+    toast.success(t("reportSchedule.created"));
     fetchSchedules();
     return true;
   };
 
   const updateSchedule = async (id: string, updates: Partial<ReportScheduleInsert> & { is_active?: boolean }) => {
+    const t = getT();
     const { error } = await supabase.from("report_schedules").update(updates as any).eq("id", id);
-    if (error) { toast.error("Fehler beim Aktualisieren"); console.error(error); return false; }
-    toast.success("Report-Template aktualisiert");
+    if (error) { toast.error(t("common.errorUpdate")); console.error(error); return false; }
+    toast.success(t("reportSchedule.updated"));
     fetchSchedules();
     return true;
   };
 
   const deleteSchedule = async (id: string) => {
+    const t = getT();
     const { error } = await supabase.from("report_schedules").delete().eq("id", id);
-    if (error) { toast.error("Fehler beim Löschen"); console.error(error); return false; }
-    toast.success("Report-Template gelöscht");
+    if (error) { toast.error(t("common.errorDelete")); console.error(error); return false; }
+    toast.success(t("reportSchedule.deleted"));
     fetchSchedules();
     return true;
   };
