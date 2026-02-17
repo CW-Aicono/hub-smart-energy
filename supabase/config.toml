@@ -53,3 +53,6 @@ verify_jwt = false
 
 [functions.brighthub-sync]
 verify_jwt = false
+
+[functions.loxone-periodic-sync]
+verify_jwt = false
