@@ -53,8 +53,10 @@ const handler = async (req: Request): Promise<Response> => {
     const primaryColor = branding.primaryColor || "#1a365d";
     const accentColor = branding.accentColor || "#2d8a6e";
 
-    // Create auth user directly (email confirmed)
+    // Create auth user or find existing one
     const tempPassword = crypto.randomUUID() + "Aa1!";
+    let newUserId: string;
+
     const { data: newUserData, error: createError } = await supabase.auth.admin.createUser({
       email: adminEmail,
       password: tempPassword,
@@ -62,16 +64,21 @@ const handler = async (req: Request): Promise<Response> => {
     });
 
     if (createError) {
-      if (createError.message?.includes("already") ) {
-        throw new Error("Ein Benutzer mit dieser E-Mail existiert bereits.");
+      if (createError.message?.includes("already")) {
+        // User already exists in auth – find them and reassign to new tenant
+        const { data: listData, error: listError } = await supabase.auth.admin.listUsers();
+        if (listError) throw new Error(`Benutzer konnte nicht gefunden werden: ${listError.message}`);
+        const existingUser = listData.users.find((u) => u.email === adminEmail);
+        if (!existingUser) throw new Error("Benutzer mit dieser E-Mail konnte nicht gefunden werden.");
+        newUserId = existingUser.id;
+      } else {
+        throw new Error(`Benutzer konnte nicht erstellt werden: ${createError.message}`);
       }
-      throw new Error(`Benutzer konnte nicht erstellt werden: ${createError.message}`);
+    } else {
+      newUserId = newUserData.user.id;
+      // Wait briefly for handle_new_user trigger
+      await new Promise(resolve => setTimeout(resolve, 600));
     }
-
-    const newUserId = newUserData.user.id;
-
-    // Wait briefly for handle_new_user trigger
-    await new Promise(resolve => setTimeout(resolve, 600));
 
     // Set tenant and display name on profile
     await supabase
@@ -82,7 +89,7 @@ const handler = async (req: Request): Promise<Response> => {
       })
       .eq("user_id", newUserId);
 
-    // Set role to admin
+    // Set role to admin (upsert to handle existing role)
     await supabase
       .from("user_roles")
       .update({ role: "admin" })
