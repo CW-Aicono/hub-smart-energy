@@ -106,8 +106,10 @@ export function useLocations(): UseLocationsReturn {
   }, [tenant]);
 
   useEffect(() => {
-    fetchLocations();
-  }, [fetchLocations]);
+    if (tenant) {
+      fetchLocations();
+    }
+  }, [fetchLocations, tenant]);
 
   const createLocation = async (location: LocationInsert) => {
     if (!ready) return { error: new Error("No tenant") };
