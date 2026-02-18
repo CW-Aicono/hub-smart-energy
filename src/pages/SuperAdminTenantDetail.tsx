@@ -17,9 +17,116 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { HeadsetIcon, RotateCcw } from "lucide-react";
+import { HeadsetIcon, RotateCcw, UserPlus, Mail, Shield, User, Copy, Check } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
+import {
+  Dialog, DialogContent, DialogDescription, DialogFooter,
+  DialogHeader, DialogTitle, DialogTrigger,
+} from "@/components/ui/dialog";
+
+interface InviteTenantAdminDialogProps {
+  tenantId: string;
+  tenantName: string;
+  onSuccess: () => void;
+}
+
+const InviteTenantAdminDialog = ({ tenantId, tenantName, onSuccess }: InviteTenantAdminDialogProps) => {
+  const { user } = useAuth();
+  const [open, setOpen] = useState(false);
+  const [email, setEmail] = useState("");
+  const [role, setRole] = useState<"admin" | "user">("admin");
+  const [loading, setLoading] = useState(false);
+  const [inviteLink, setInviteLink] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  const handleInvite = async () => {
+    if (!email || !user) return;
+    setLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("invite-tenant-admin", {
+        body: { adminEmail: email, role, tenantId },
+      });
+      if (error) throw error;
+      if (data?.success === false) throw new Error(data.error);
+      toast.success(`Einladung an ${email} gesendet`);
+      setInviteLink("sent"); // signal success
+      onSuccess();
+    } catch (err: any) {
+      toast.error("Einladung fehlgeschlagen: " + (err?.message ?? "Unbekannter Fehler"));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const copyToClipboard = async () => {
+    if (!inviteLink) return;
+    await navigator.clipboard.writeText(inviteLink);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const reset = () => { setEmail(""); setRole("admin"); setInviteLink(null); setCopied(false); };
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) reset(); }}>
+      <DialogTrigger asChild>
+        <Button size="sm"><UserPlus className="h-4 w-4 mr-2" />Admin einladen</Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Mandanten-Admin einladen</DialogTitle>
+          <DialogDescription>Neuen Benutzer für <strong>{tenantName}</strong> einladen.</DialogDescription>
+        </DialogHeader>
+        {!inviteLink ? (
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>E-Mail-Adresse</Label>
+              <div className="relative">
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input type="email" placeholder="admin@firma.de" value={email}
+                  onChange={(e) => setEmail(e.target.value)} className="pl-10"
+                  onKeyDown={(e) => e.key === "Enter" && handleInvite()} />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Rolle</Label>
+              <Select value={role} onValueChange={(v: any) => setRole(v)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="admin"><div className="flex items-center gap-2"><Shield className="h-4 w-4" />Administrator</div></SelectItem>
+                  <SelectItem value="user"><div className="flex items-center gap-2"><User className="h-4 w-4" />Benutzer</div></SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-4 py-4">
+            <div className="p-4 bg-muted rounded-lg flex items-start gap-3">
+              <Check className="h-5 w-5 text-primary mt-0.5 shrink-0" />
+              <div>
+                <p className="font-medium text-sm">Einladung erfolgreich gesendet</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Eine E-Mail mit dem Passwort-Setzungs-Link wurde an <strong>{email}</strong> versandt.
+                  Der Link ist 7 Tage gültig.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+        <DialogFooter>
+          {!inviteLink ? (
+            <Button onClick={handleInvite} disabled={!email || loading}>
+              {loading ? "Wird eingeladen..." : "Einladung senden"}
+            </Button>
+          ) : (
+            <Button variant="outline" onClick={() => setOpen(false)}>Schließen</Button>
+          )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+};
 
 const SuperAdminTenantDetail = () => {
   const { id } = useParams<{ id: string }>();
@@ -236,7 +343,16 @@ const SuperAdminTenantDetail = () => {
 
             <TabsContent value="users" className="mt-6">
               <Card>
-                <CardHeader><CardTitle>{t("nav.users")} ({users.length})</CardTitle></CardHeader>
+                <CardHeader className="flex flex-row items-center justify-between">
+                  <CardTitle>{t("nav.users")} ({users.length})</CardTitle>
+                  {tenant && (
+                    <InviteTenantAdminDialog
+                      tenantId={tenant.id}
+                      tenantName={tenant.name}
+                      onSuccess={() => queryClient.invalidateQueries({ queryKey: ["tenant-users", id] })}
+                    />
+                  )}
+                </CardHeader>
                 <CardContent className="p-0">
                   <Table>
                     <TableHeader>
