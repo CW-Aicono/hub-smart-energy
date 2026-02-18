@@ -31,6 +31,25 @@ export interface Task {
   updated_at: string;
 }
 
+export interface TaskHistory {
+  id: string;
+  task_id: string;
+  tenant_id: string;
+  actor_id: string | null;
+  actor_name: string | null;
+  action: string;
+  old_value: string | null;
+  new_value: string | null;
+  comment: string | null;
+  created_at: string;
+}
+
+export interface TenantUser {
+  user_id: string;
+  email: string;
+  contact_person: string | null;
+}
+
 export interface CreateTaskInput {
   title: string;
   description?: string;
@@ -65,9 +84,23 @@ export const useTasks = () => {
     },
   });
 
+  // Load all users of this tenant for assignment dropdown
+  const { data: tenantUsers = [] } = useQuery({
+    queryKey: ["tenant-users-for-tasks", tenant?.id],
+    enabled: !!tenant?.id,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("user_id, email, contact_person")
+        .eq("tenant_id", tenant!.id);
+      if (error) throw error;
+      return data as TenantUser[];
+    },
+  });
+
   const createTask = useMutation({
     mutationFn: async (input: CreateTaskInput) => {
-      const { error } = await supabase.from("tasks").insert({
+      const { data, error } = await supabase.from("tasks").insert({
         tenant_id: tenant!.id,
         title: input.title,
         description: input.description ?? null,
@@ -84,8 +117,20 @@ export const useTasks = () => {
         due_date: input.due_date ?? null,
         created_by: user?.id ?? null,
         created_by_name: user?.email ?? null,
-      });
+      }).select().single();
       if (error) throw error;
+      // Write history entry
+      if (data) {
+        await supabase.from("task_history").insert({
+          task_id: data.id,
+          tenant_id: tenant!.id,
+          actor_id: user?.id ?? null,
+          actor_name: user?.email ?? null,
+          action: "created",
+          new_value: input.title,
+        });
+      }
+      return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["tasks", tenant?.id] });
@@ -97,16 +142,43 @@ export const useTasks = () => {
   });
 
   const updateTask = useMutation({
-    mutationFn: async ({ id, ...updates }: Partial<Task> & { id: string }) => {
+    mutationFn: async ({
+      id,
+      historyAction,
+      historyOldValue,
+      historyNewValue,
+      historyComment,
+      ...updates
+    }: Partial<Task> & {
+      id: string;
+      historyAction?: string;
+      historyOldValue?: string;
+      historyNewValue?: string;
+      historyComment?: string;
+    }) => {
       const { error } = await supabase
         .from("tasks")
         .update(updates)
         .eq("id", id)
         .eq("tenant_id", tenant!.id);
       if (error) throw error;
+
+      if (historyAction) {
+        await supabase.from("task_history").insert({
+          task_id: id,
+          tenant_id: tenant!.id,
+          actor_id: user?.id ?? null,
+          actor_name: user?.email ?? null,
+          action: historyAction,
+          old_value: historyOldValue ?? null,
+          new_value: historyNewValue ?? null,
+          comment: historyComment ?? null,
+        });
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["tasks", tenant?.id] });
+      queryClient.invalidateQueries({ queryKey: ["task-history"] });
     },
     onError: () => {
       toast({ title: "Fehler beim Aktualisieren", variant: "destructive" });
@@ -131,5 +203,42 @@ export const useTasks = () => {
     },
   });
 
-  return { tasks, isLoading, createTask, updateTask, deleteTask };
+  const addComment = useMutation({
+    mutationFn: async ({ taskId, comment }: { taskId: string; comment: string }) => {
+      const { error } = await supabase.from("task_history").insert({
+        task_id: taskId,
+        tenant_id: tenant!.id,
+        actor_id: user?.id ?? null,
+        actor_name: user?.email ?? null,
+        action: "comment",
+        comment,
+      });
+      if (error) throw error;
+    },
+    onSuccess: (_, { taskId }) => {
+      queryClient.invalidateQueries({ queryKey: ["task-history", taskId] });
+    },
+    onError: () => {
+      toast({ title: "Fehler beim Speichern des Kommentars", variant: "destructive" });
+    },
+  });
+
+  return { tasks, isLoading, tenantUsers, createTask, updateTask, deleteTask, addComment };
+};
+
+export const useTaskHistory = (taskId: string) => {
+  const { tenant } = useTenant();
+  return useQuery({
+    queryKey: ["task-history", taskId],
+    enabled: !!tenant?.id && !!taskId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("task_history")
+        .select("*")
+        .eq("task_id", taskId)
+        .order("created_at", { ascending: true });
+      if (error) throw error;
+      return data as TaskHistory[];
+    },
+  });
 };
