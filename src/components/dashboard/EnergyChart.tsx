@@ -519,8 +519,8 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
                   contentStyle={tooltipStyle}
                   formatter={(value, name, item) => {
                     const nameStr = typeof name === "string" ? name : "";
-                    // Hide gap (dashed interpolated) lines from tooltip
-                    if (nameStr.startsWith("__gap_")) return ["", ""];
+                    // Completely suppress gap (dashed interpolated) lines from tooltip
+                    if (nameStr.startsWith("__gap_")) return null;
                     // real_* lines carry the display name (e.g. "Strom") — show them
                     return tooltipFormatter(value as number, nameStr);
                   }}
