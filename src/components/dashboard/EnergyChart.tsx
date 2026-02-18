@@ -353,24 +353,22 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
         }
       });
 
-      // Find the last real data point for each energy key and null-out everything after it.
-      // This prevents dashed lines from being drawn into future (no-data) time slots.
+      // Cut off future buckets: for today, null everything after the current time.
+      // We use the current clock time as the cut-off (not the last stored data point),
+      // so that data gaps caused by spike-detection don't truncate the visible chart too early.
       const isToday = offset === 0 && (() => {
-        const now = new Date();
+        const nowCheck = new Date();
         const ref = getRefDate("day", offset);
-        return ref.toDateString() === now.toDateString();
+        return ref.toDateString() === nowCheck.toDateString();
       })();
 
       if (isToday) {
+        const nowForCutoff = new Date();
+        // The bucket index corresponding to the current time
+        const currentIdx = nowForCutoff.getHours() * 12 + Math.floor(nowForCutoff.getMinutes() / 5);
         for (const key of ENERGY_KEYS) {
-          // Find the highest index with a real reading
-          const realSet = realIndices[key];
-          let lastRealIdx = -1;
-          if (realSet && realSet.size > 0) {
-            lastRealIdx = Math.max(...realSet);
-          }
-          // Null out all values after the last real data point
-          for (let i = lastRealIdx + 1; i < buckets.length; i++) {
+          // Null out all buckets after current time (true future)
+          for (let i = currentIdx + 1; i < buckets.length; i++) {
             (buckets[i] as any)[key] = null;
             (buckets[i] as any)[`real_${key}`] = null;
           }
@@ -462,7 +460,10 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
   const visibleKeys = ENERGY_KEYS.filter((k) => !hiddenKeys.has(k));
 
   const handleLegendClick = (e: any) => {
-    const key = e.dataKey as string;
+    // dataKey can be "strom", "real_strom", "__gap_strom" — normalise to base key
+    const rawKey = (e.dataKey ?? e.value ?? "") as string;
+    const key = rawKey.replace(/^real_/, "").replace(/^__gap_/, "");
+    if (!ENERGY_KEYS.includes(key as any)) return;
     setHiddenKeys((prev) => {
       const next = new Set(prev);
       if (next.has(key)) next.delete(key); else next.add(key);
