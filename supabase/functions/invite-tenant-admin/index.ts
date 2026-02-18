@@ -97,7 +97,7 @@ const handler = async (req: Request): Promise<Response> => {
       .eq("user_id", newUserId);
 
     // Generate password-reset link (user sets their own password)
-    const appUrl = redirectTo || `https://ems-pro.aicono.org/set-password`;
+    const appUrl = redirectTo || `https://hub-smart-energy.lovable.app/set-password`;
     const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
       type: "recovery",
       email: adminEmail,
