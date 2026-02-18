@@ -509,9 +509,10 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
                   itemSorter={(item) => ((item as any)?.dataKey as string ?? "").startsWith("real_") ? 1 : 0}
                 />
                 <Legend wrapperStyle={{ fontSize: 12, cursor: 'pointer' }} onClick={handleLegendClick} formatter={(value, entry) => {
-                  // hide real_* duplicate entries from legend; show only named energy type lines
-                  const dk = (entry as any).dataKey as string | undefined;
-                  if (dk && dk.startsWith("real_")) return null;
+                  // Only show legend entries for the named real_* lines (they carry the display name like "Strom")
+                  // The gap lines (dataKey starts with "strom", "gas", etc. but name starts with "__gap_") must be hidden
+                  const name = (entry as any).name as string | undefined;
+                  if (name && name.startsWith("__gap_")) return null;
                   return legendFormatter(value, entry);
                 }} />
                 {/* Strom: dashed = full line (gaps included), solid = real data only */}
