@@ -6,6 +6,7 @@ import { useChargePoints, ChargePoint } from "@/hooks/useChargePoints";
 import { useChargerModels } from "@/hooks/useChargerModels";
 import { useChargingSessions } from "@/hooks/useChargingSessions";
 import { useTenant } from "@/hooks/useTenant";
+import { useTasks } from "@/hooks/useTasks";
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -51,6 +52,7 @@ const ChargePointDetail = () => {
   const { isAdmin } = useUserRole();
   const { tenant } = useTenant();
   const { chargePoints, updateChargePoint, deleteChargePoint } = useChargePoints();
+  const { createTask } = useTasks();
   const { sessions } = useChargingSessions(id);
   const { vendors: knownVendors, getModelsForVendor } = useChargerModels();
 
@@ -306,6 +308,75 @@ const ChargePointDetail = () => {
     deleteChargePoint.mutate(cp.id);
     navigate("/charging/points");
   };
+
+// ---- FaultTaskToggle sub-component ----
+interface FaultTaskToggleProps {
+  cp: ChargePoint;
+  createTask: ReturnType<typeof useTasks>["createTask"];
+}
+
+const FaultTaskToggle = ({ cp, createTask }: FaultTaskToggleProps) => {
+  const [creating, setCreating] = useState(false);
+
+  const isFaulted = cp.status === "faulted" || cp.status === "offline";
+
+  const handleCreateFaultTask = async () => {
+    if (creating) return;
+    setCreating(true);
+    const statusLabel = cp.status === "faulted" ? "Störung (Faulted)" : "Verbindung getrennt (Offline)";
+    const detail = cp.last_heartbeat
+      ? `Letzter Heartbeat: ${format(new Date(cp.last_heartbeat), "dd.MM.yyyy HH:mm", { locale: de })}`
+      : "Kein Heartbeat empfangen";
+
+    await createTask.mutateAsync({
+      title: `Störung an Ladesäule: ${cp.name}`,
+      description: `Status: ${statusLabel}\n${detail}\nOCPP-ID: ${cp.ocpp_id}${cp.address ? `\nStandort: ${cp.address}` : ""}`,
+      priority: cp.status === "faulted" ? "high" : "medium",
+      source_type: "charging",
+      source_id: cp.id,
+      source_label: cp.name,
+    });
+    setCreating(false);
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-start justify-between p-4 border rounded-lg gap-4">
+        <div className="flex-1 min-w-0">
+          <p className="font-medium">Störungsmeldung als Aufgabe</p>
+          <p className="text-sm text-muted-foreground">
+            Bei Fehlerstatus oder Verbindungsabbruch wird automatisch eine Aufgabe in der Aufgabenverwaltung erstellt – direkt verknüpft mit diesem Ladepunkt.
+          </p>
+        </div>
+        <Button
+          size="sm"
+          variant={isFaulted ? "destructive" : "outline"}
+          onClick={handleCreateFaultTask}
+          disabled={creating || createTask.isPending}
+          className="shrink-0 gap-1.5"
+        >
+          {creating || createTask.isPending ? (
+            <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <AlertTriangle className="h-3.5 w-3.5" />
+          )}
+          {isFaulted ? "Störungsaufgabe erstellen" : "Aufgabe melden"}
+        </Button>
+      </div>
+      {isFaulted && (
+        <div className="flex items-start gap-2 rounded-md bg-destructive/10 border border-destructive/20 px-3 py-2 text-sm text-destructive">
+          <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+          <span>
+            Diese Ladesäule ist aktuell <strong>{cp.status === "faulted" ? "gestört" : "offline"}</strong>.
+            {cp.last_heartbeat && ` Letzter Kontakt: ${format(new Date(cp.last_heartbeat), "dd.MM.yyyy HH:mm", { locale: de })}`}
+          </span>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ---- Main Page ----
 
   return (
     <div className="flex min-h-screen bg-background">
@@ -870,23 +941,7 @@ const ChargePointDetail = () => {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <div className="flex items-center justify-between p-4 border rounded-lg">
-                    <div>
-                      <p className="font-medium">Störungsmeldung</p>
-                      <p className="text-sm text-muted-foreground">E-Mail bei Fehlerstatus oder Verbindungsabbruch senden</p>
-                    </div>
-                    <Switch disabled />
-                  </div>
-                  <div className="flex items-center justify-between p-4 border rounded-lg">
-                    <div>
-                      <p className="font-medium">Ladevorgang-Zusammenfassung</p>
-                      <p className="text-sm text-muted-foreground">Tägliche Zusammenfassung der Ladevorgänge per E-Mail</p>
-                    </div>
-                    <Switch disabled />
-                  </div>
-                  <p className="text-xs text-muted-foreground flex items-center gap-1">
-                    <Info className="h-3 w-3" /> Diese Funktionen werden in einem zukünftigen Update verfügbar.
-                  </p>
+                  <FaultTaskToggle cp={cp} createTask={createTask} />
                 </CardContent>
               </Card>
             </TabsContent>
