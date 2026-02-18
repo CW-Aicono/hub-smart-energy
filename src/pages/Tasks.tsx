@@ -10,17 +10,9 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Plus, Search, CheckCircle2, Circle, ArrowRight, AlertTriangle, ListChecks, Zap, PlugZap, ExternalLink } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 
-const STATUS_TABS = [
-  { value: "all", label: "Alle" },
-  { value: "open", label: "Offen" },
-  { value: "in_progress", label: "In Bearbeitung" },
-  { value: "done", label: "Erledigt" },
-  { value: "cancelled", label: "Abgebrochen" },
-];
 
 const Tasks = () => {
   const { user, loading: authLoading } = useAuth();
@@ -118,22 +110,6 @@ const Tasks = () => {
               </SelectContent>
             </Select>
           </div>
-
-          {/* Status Tabs */}
-          <Tabs value={statusFilter} onValueChange={setStatusFilter}>
-            <TabsList>
-              {STATUS_TABS.map((tab) => (
-                <TabsTrigger key={tab.value} value={tab.value} className="gap-1.5">
-                  {tab.label}
-                  {tab.value !== "all" && (
-                    <Badge variant="secondary" className="text-xs py-0 h-4 min-w-4 px-1">
-                      {tasks.filter((t) => t.status === tab.value).length}
-                    </Badge>
-                  )}
-                </TabsTrigger>
-              ))}
-            </TabsList>
-          </Tabs>
 
           {/* Task List */}
           {isLoading ? (
