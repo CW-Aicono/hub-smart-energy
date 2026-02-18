@@ -277,6 +277,10 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
       // Track which indices actually received a real reading
       const realIndices: Record<string, Set<number>> = { strom: new Set(), gas: new Set(), waerme: new Set(), wasser: new Set() };
 
+      // Use accumulator + count to compute average per bucket (prevents fake peaks when
+      // multiple readings land in the same 5-min slot due to sync timing jitter)
+      const bucketAccum: Record<number, Partial<Record<string, { sum: number; count: number }>>> = {};
+
       // Use power readings from DB for automatic main meters
       powerReadings.forEach((pr) => {
         const info = meterMap[pr.meter_id];
@@ -284,11 +288,22 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
         const d = new Date(pr.recorded_at);
         const idx = Math.min(d.getHours() * 12 + Math.floor(d.getMinutes() / 5), 287);
         const et = info.energy_type || "strom";
-        if (et in buckets[idx]) {
-          (buckets[idx] as any)[et] += pr.power_value;
-          realIndices[et]?.add(idx);
-        }
+        if (!bucketAccum[idx]) bucketAccum[idx] = {};
+        if (!bucketAccum[idx][et]) bucketAccum[idx][et] = { sum: 0, count: 0 };
+        bucketAccum[idx][et]!.sum += pr.power_value;
+        bucketAccum[idx][et]!.count += 1;
       });
+
+      // Write averages into buckets
+      for (const [idxStr, etMap] of Object.entries(bucketAccum)) {
+        const idx = Number(idxStr);
+        for (const [et, accum] of Object.entries(etMap)) {
+          if (et in buckets[idx]) {
+            (buckets[idx] as any)[et] = accum!.sum / accum!.count;
+            realIndices[et]?.add(idx);
+          }
+        }
+      }
 
       // Also add manual main meter readings
       filtered.forEach((r) => {
