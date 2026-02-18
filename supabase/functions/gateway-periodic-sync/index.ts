@@ -7,6 +7,7 @@ const corsHeaders = {
 };
 
 // Maps integration type to edge function name
+// Note: loxone/loxone_miniserver are handled by loxone-periodic-sync
 const GATEWAY_EDGE_FUNCTIONS: Record<string, string> = {
   shelly_cloud: "shelly-api",
   abb_free_at_home: "abb-api",
