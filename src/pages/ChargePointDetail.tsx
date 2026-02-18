@@ -86,6 +86,49 @@ const ChargePointDetail = () => {
   const cp = chargePoints.find((c) => c.id === id);
   const ocppMeter = useOcppMeterValue(cp?.ocpp_id);
 
+  // Auto-create fault task when status changes to faulted/offline
+  const prevStatusRef = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    if (!cp || !tenant?.id) return;
+
+    const prevStatus = prevStatusRef.current;
+    const currStatus = cp.status;
+
+    // Only trigger when status *changes into* faulted/offline (not on initial mount)
+    const isFaultState = currStatus === "faulted" || currStatus === "offline";
+    const wasOk = prevStatus !== undefined && prevStatus !== "faulted" && prevStatus !== "offline";
+
+    prevStatusRef.current = currStatus;
+
+    if (!isFaultState || !wasOk) return;
+
+    // Duplicate guard: don't create if an open task already exists for this charge point
+    supabase
+      .from("tasks")
+      .select("id")
+      .eq("tenant_id", tenant.id)
+      .eq("source_id", cp.id)
+      .eq("source_type", "charging")
+      .in("status", ["open", "in_progress"])
+      .limit(1)
+      .then(({ data }) => {
+        if (data && data.length > 0) return;
+        const statusLabel = currStatus === "faulted" ? "Störung (Faulted)" : "Verbindung getrennt (Offline)";
+        const detail = cp.last_heartbeat
+          ? `Letzter Heartbeat: ${format(new Date(cp.last_heartbeat), "dd.MM.yyyy HH:mm", { locale: de })}`
+          : "Kein Heartbeat empfangen";
+        createTask.mutate({
+          title: `Störung an Ladesäule: ${cp.name}`,
+          description: `Status: ${statusLabel}\n${detail}\nOCPP-ID: ${cp.ocpp_id}${cp.address ? `\nStandort: ${cp.address}` : ""}`,
+          priority: currStatus === "faulted" ? "high" : "medium",
+          source_type: "charging",
+          source_id: cp.id,
+          source_label: cp.name,
+        });
+      });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cp?.status, cp?.id, tenant?.id]);
+
   // Stats calculations
   const periodDays = parseInt(statsPeriod);
   const cutoff = subDays(new Date(), periodDays);
@@ -309,66 +352,41 @@ const ChargePointDetail = () => {
     navigate("/charging/points");
   };
 
-// ---- FaultTaskToggle sub-component ----
-interface FaultTaskToggleProps {
+// ---- FaultStatus sub-component (display only) ----
+interface FaultStatusProps {
   cp: ChargePoint;
-  createTask: ReturnType<typeof useTasks>["createTask"];
 }
 
-const FaultTaskToggle = ({ cp, createTask }: FaultTaskToggleProps) => {
-  const [creating, setCreating] = useState(false);
-
+const FaultStatus = ({ cp }: FaultStatusProps) => {
   const isFaulted = cp.status === "faulted" || cp.status === "offline";
-
-  const handleCreateFaultTask = async () => {
-    if (creating) return;
-    setCreating(true);
-    const statusLabel = cp.status === "faulted" ? "Störung (Faulted)" : "Verbindung getrennt (Offline)";
-    const detail = cp.last_heartbeat
-      ? `Letzter Heartbeat: ${format(new Date(cp.last_heartbeat), "dd.MM.yyyy HH:mm", { locale: de })}`
-      : "Kein Heartbeat empfangen";
-
-    await createTask.mutateAsync({
-      title: `Störung an Ladesäule: ${cp.name}`,
-      description: `Status: ${statusLabel}\n${detail}\nOCPP-ID: ${cp.ocpp_id}${cp.address ? `\nStandort: ${cp.address}` : ""}`,
-      priority: cp.status === "faulted" ? "high" : "medium",
-      source_type: "charging",
-      source_id: cp.id,
-      source_label: cp.name,
-    });
-    setCreating(false);
-  };
 
   return (
     <div className="space-y-3">
-      <div className="flex items-start justify-between p-4 border rounded-lg gap-4">
+      <div className="flex items-start gap-3 p-4 border rounded-lg">
+        <div className={`mt-0.5 rounded-full p-1.5 ${isFaulted ? "bg-destructive/10 text-destructive" : "bg-primary/10 text-primary"}`}>
+          {isFaulted ? <AlertTriangle className="h-4 w-4" /> : <CheckCircle className="h-4 w-4" />}
+        </div>
         <div className="flex-1 min-w-0">
-          <p className="font-medium">Störungsmeldung als Aufgabe</p>
+          <p className="font-medium">Automatische Störungsmeldung</p>
           <p className="text-sm text-muted-foreground">
             Bei Fehlerstatus oder Verbindungsabbruch wird automatisch eine Aufgabe in der Aufgabenverwaltung erstellt – direkt verknüpft mit diesem Ladepunkt.
           </p>
-        </div>
-        <Button
-          size="sm"
-          variant={isFaulted ? "destructive" : "outline"}
-          onClick={handleCreateFaultTask}
-          disabled={creating || createTask.isPending}
-          className="shrink-0 gap-1.5"
-        >
-          {creating || createTask.isPending ? (
-            <RefreshCw className="h-3.5 w-3.5 animate-spin" />
-          ) : (
-            <AlertTriangle className="h-3.5 w-3.5" />
+          {isFaulted && cp.last_heartbeat && (
+            <p className="text-sm text-muted-foreground mt-1">
+              Letzter Kontakt: {format(new Date(cp.last_heartbeat), "dd.MM.yyyy HH:mm", { locale: de })}
+            </p>
           )}
-          {isFaulted ? "Störungsaufgabe erstellen" : "Aufgabe melden"}
-        </Button>
+        </div>
+        <div className={`shrink-0 text-xs font-medium px-2 py-1 rounded-full ${isFaulted ? "bg-destructive/10 text-destructive" : "bg-primary/10 text-primary"}`}>
+          {isFaulted ? "Aktiv" : "OK"}
+        </div>
       </div>
       {isFaulted && (
         <div className="flex items-start gap-2 rounded-md bg-destructive/10 border border-destructive/20 px-3 py-2 text-sm text-destructive">
           <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
           <span>
-            Diese Ladesäule ist aktuell <strong>{cp.status === "faulted" ? "gestört" : "offline"}</strong>.
-            {cp.last_heartbeat && ` Letzter Kontakt: ${format(new Date(cp.last_heartbeat), "dd.MM.yyyy HH:mm", { locale: de })}`}
+            Störungsaufgabe wurde automatisch angelegt. Status:{" "}
+            <strong>{cp.status === "faulted" ? "Gestört (Faulted)" : "Offline"}</strong>.
           </span>
         </div>
       )}
@@ -941,7 +959,7 @@ const FaultTaskToggle = ({ cp, createTask }: FaultTaskToggleProps) => {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <FaultTaskToggle cp={cp} createTask={createTask} />
+                  <FaultStatus cp={cp} />
                 </CardContent>
               </Card>
             </TabsContent>
