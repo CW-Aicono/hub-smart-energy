@@ -163,12 +163,6 @@ const ChargePointDetail = () => {
         (s) => format(new Date(s.start_time), "yyyy-MM-dd") === dateStr
       );
 
-      // Past days without sessions → empty (no fake data)
-      if (!isToday && daySessions.length === 0) {
-        days.push({ day: dayLabel, date: dateLabel, available: 0, charging: 0, error: 0 });
-        continue;
-      }
-
       const hoursInDay = isToday ? new Date().getHours() + (new Date().getMinutes() / 60) : 24;
 
       const chargingHours = Math.min(hoursInDay, daySessions.reduce((sum, s) => {
@@ -182,7 +176,8 @@ const ChargePointDetail = () => {
         return sum + (effectiveEnd.getTime() - effectiveStart.getTime()) / 3600000;
       }, 0));
 
-      const errorHours = cp && cp.status === "faulted" ? hoursInDay : 0;
+      // Only apply error hours for today's live status – historic status is unknown
+      const errorHours = isToday && cp && cp.status === "faulted" ? hoursInDay : 0;
 
       days.push({
         day: dayLabel,
