@@ -32,9 +32,9 @@ serve(async (req) => {
       });
     }
 
-    // Filter only Loxone integrations
+    // Filter only Loxone integrations (type can be "loxone" or "loxone_miniserver")
     const loxoneIntegrations = (locationIntegrations || []).filter(
-      (li: any) => li.integration?.type === "loxone"
+      (li: any) => li.integration?.type === "loxone" || li.integration?.type === "loxone_miniserver"
     );
 
     console.log(`Found ${loxoneIntegrations.length} active Loxone integrations`);
