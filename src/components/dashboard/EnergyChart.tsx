@@ -535,19 +535,19 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
                 }} />
                 {/* Strom: dashed = full line (gaps included), solid = real data only */}
                 {visibleEnergyKeys.includes("strom") && !hiddenKeys.has("strom") && <>
-                  <Line type="monotone" dataKey="strom" name="__gap_strom" stroke={ENERGY_CHART_COLORS.strom} strokeWidth={1.5} strokeDasharray="4 4" dot={false} connectNulls={false} legendType="none" />
+                  <Line type="monotone" dataKey="strom" name="__gap_strom" stroke={ENERGY_CHART_COLORS.strom} strokeWidth={1.5} strokeDasharray="4 4" dot={false} connectNulls={false} legendType="none" tooltipType="none" />
                   <Line type="monotone" dataKey="real_strom" name="Strom" stroke={ENERGY_CHART_COLORS.strom} strokeWidth={2.5} dot={false} connectNulls={false} legendType="line" />
                 </>}
                 {visibleEnergyKeys.includes("gas") && !hiddenKeys.has("gas") && <>
-                  <Line type="monotone" dataKey="gas" name="__gap_gas" stroke={ENERGY_CHART_COLORS.gas} strokeWidth={1.5} strokeDasharray="4 4" dot={false} connectNulls={false} legendType="none" />
+                  <Line type="monotone" dataKey="gas" name="__gap_gas" stroke={ENERGY_CHART_COLORS.gas} strokeWidth={1.5} strokeDasharray="4 4" dot={false} connectNulls={false} legendType="none" tooltipType="none" />
                   <Line type="monotone" dataKey="real_gas" name="Gas" stroke={ENERGY_CHART_COLORS.gas} strokeWidth={2.5} dot={false} connectNulls={false} legendType="line" />
                 </>}
                 {visibleEnergyKeys.includes("waerme") && !hiddenKeys.has("waerme") && <>
-                  <Line type="monotone" dataKey="waerme" name="__gap_waerme" stroke={ENERGY_CHART_COLORS.waerme} strokeWidth={1.5} strokeDasharray="4 4" dot={false} connectNulls={false} legendType="none" />
+                  <Line type="monotone" dataKey="waerme" name="__gap_waerme" stroke={ENERGY_CHART_COLORS.waerme} strokeWidth={1.5} strokeDasharray="4 4" dot={false} connectNulls={false} legendType="none" tooltipType="none" />
                   <Line type="monotone" dataKey="real_waerme" name="Wärme" stroke={ENERGY_CHART_COLORS.waerme} strokeWidth={2.5} dot={false} connectNulls={false} legendType="line" />
                 </>}
                 {visibleEnergyKeys.includes("wasser") && !hiddenKeys.has("wasser") && <>
-                  <Line type="monotone" dataKey="wasser" name="__gap_wasser" stroke={ENERGY_CHART_COLORS.wasser} strokeWidth={1.5} strokeDasharray="4 4" dot={false} connectNulls={false} legendType="none" />
+                  <Line type="monotone" dataKey="wasser" name="__gap_wasser" stroke={ENERGY_CHART_COLORS.wasser} strokeWidth={1.5} strokeDasharray="4 4" dot={false} connectNulls={false} legendType="none" tooltipType="none" />
                   <Line type="monotone" dataKey="real_wasser" name="Wasser" stroke={ENERGY_CHART_COLORS.wasser} strokeWidth={2.5} dot={false} connectNulls={false} legendType="line" />
                 </>}
                 {/* Invisible lines for hidden keys so legend stays interactive */}
