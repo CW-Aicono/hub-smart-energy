@@ -150,6 +150,39 @@ export type Database = {
           },
         ]
       }
+      charge_point_groups: {
+        Row: {
+          access_settings: Json
+          created_at: string
+          description: string | null
+          energy_settings: Json
+          id: string
+          name: string
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          access_settings?: Json
+          created_at?: string
+          description?: string | null
+          energy_settings?: Json
+          id?: string
+          name: string
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          access_settings?: Json
+          created_at?: string
+          description?: string | null
+          energy_settings?: Json
+          id?: string
+          name?: string
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       charge_points: {
         Row: {
           address: string | null
@@ -157,6 +190,7 @@ export type Database = {
           connector_type: string
           created_at: string
           firmware_version: string | null
+          group_id: string | null
           id: string
           last_heartbeat: string | null
           latitude: number | null
@@ -178,6 +212,7 @@ export type Database = {
           connector_type?: string
           created_at?: string
           firmware_version?: string | null
+          group_id?: string | null
           id?: string
           last_heartbeat?: string | null
           latitude?: number | null
@@ -199,6 +234,7 @@ export type Database = {
           connector_type?: string
           created_at?: string
           firmware_version?: string | null
+          group_id?: string | null
           id?: string
           last_heartbeat?: string | null
           latitude?: number | null
@@ -215,6 +251,13 @@ export type Database = {
           vendor?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "charge_points_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "charge_point_groups"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "charge_points_location_id_fkey"
             columns: ["location_id"]
