@@ -61,17 +61,24 @@ const handler = async (req: Request): Promise<Response> => {
         email_confirm: true,
       });
 
+      let newUserId: string;
+
       if (createError) {
-        if (createError.message?.includes("already")) {
-          throw new Error("Ein Benutzer mit dieser E-Mail existiert bereits.");
+        if (createError.message?.toLowerCase().includes("already") || createError.message?.toLowerCase().includes("exists")) {
+          // User already exists – find them and reuse
+          const { data: listData, error: listError } = await supabase.auth.admin.listUsers();
+          if (listError) throw new Error(`Benutzer konnte nicht gefunden werden: ${listError.message}`);
+          const existingUser = listData.users.find((u: { email: string }) => u.email?.toLowerCase() === email.toLowerCase());
+          if (!existingUser) throw new Error("Benutzer mit dieser E-Mail konnte nicht gefunden werden.");
+          newUserId = existingUser.id;
+        } else {
+          throw new Error(`Benutzer konnte nicht erstellt werden: ${createError.message}`);
         }
-        throw new Error(`Benutzer konnte nicht erstellt werden: ${createError.message}`);
+      } else {
+        newUserId = newUserData.user.id;
+        // Wait for trigger
+        await new Promise(resolve => setTimeout(resolve, 600));
       }
-
-      const newUserId = newUserData.user.id;
-
-      // Wait for trigger
-      await new Promise(resolve => setTimeout(resolve, 600));
 
       // Update profile with tenant + name
       await supabase
