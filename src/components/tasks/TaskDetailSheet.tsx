@@ -20,10 +20,10 @@ import { format } from "date-fns";
 import { de } from "date-fns/locale";
 
 const PRIORITY_CONFIG = {
-  low: { label: "Niedrig", color: "bg-secondary text-secondary-foreground border-border" },
-  medium: { label: "Mittel", color: "bg-muted text-muted-foreground border-border" },
-  high: { label: "Hoch", color: "bg-primary/10 text-primary border-primary/20" },
-  critical: { label: "Kritisch", color: "bg-destructive/15 text-destructive border-destructive/20" },
+  low: { label: "Niedrig", dot: "🟢", color: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20" },
+  medium: { label: "Mittel", dot: "🔵", color: "bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/20" },
+  high: { label: "Hoch", dot: "🟠", color: "bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-500/20" },
+  critical: { label: "Kritisch", dot: "🔴", color: "bg-destructive/15 text-destructive border-destructive/20" },
 };
 
 const STATUS_CONFIG: Record<TaskStatus, { label: string; icon: React.ElementType; color: string }> = {
