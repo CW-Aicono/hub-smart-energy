@@ -127,12 +127,12 @@ export function ChargePointGroupsManager({ isAdmin }: { isAdmin: boolean }) {
                       </Badge>
                     )}
                     {group.access_settings.free_charging && (
-                      <Badge variant="outline" className="gap-1 text-xs text-emerald-600 border-emerald-300">
+                      <Badge variant="outline" className="gap-1 text-xs text-accent border-accent/30">
                         <Shield className="h-3 w-3" /> Freies Laden
                       </Badge>
                     )}
                   </div>
-                  <Button variant="outline" size="sm" className="w-full" onClick={() => handleOpenDetail(group)}>
+                  <Button size="sm" className="w-full" onClick={() => handleOpenDetail(group)}>
                     <Pencil className="h-3.5 w-3.5 mr-1.5" /> Konfigurieren
                   </Button>
                 </CardContent>
