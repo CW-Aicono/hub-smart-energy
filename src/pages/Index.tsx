@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
+import { useSuperAdmin } from "@/hooks/useSuperAdmin";
 import { useDashboardWidgets, WidgetSize } from "@/hooks/useDashboardWidgets";
 import { useTranslation } from "@/hooks/useTranslation";
 import { useModuleGuard } from "@/hooks/useModuleGuard";
@@ -178,6 +179,7 @@ const DashboardContent = () => {
 
 const Index = () => {
   const { user, loading } = useAuth();
+  const { isSuperAdmin, loading: superAdminLoading } = useSuperAdmin();
   const { t } = useTranslation();
   const navigate = useNavigate();
   const [onboardingChecked, setOnboardingChecked] = useState(false);
@@ -198,7 +200,7 @@ const Index = () => {
     checkOnboarding();
   }, [user, onboardingChecked, navigate]);
 
-  if (loading) {
+  if (loading || superAdminLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <div className="animate-pulse text-muted-foreground">{t("common.loading")}</div>
@@ -207,6 +209,9 @@ const Index = () => {
   }
 
   if (!user) return <Navigate to="/auth" replace />;
+
+  // Super-Admins have no tenant context — redirect them to their dedicated area
+  if (isSuperAdmin) return <Navigate to="/super-admin" replace />;
 
   if (!onboardingChecked) {
     return (
