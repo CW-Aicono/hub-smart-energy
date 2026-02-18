@@ -17,7 +17,54 @@ const handler = async (req: Request): Promise<Response> => {
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, serviceKey);
 
-    // Verify calling user is authenticated and is admin
+    const body = await req.json();
+
+    // ── MODE: Retrieve invite action_link by token (no auth needed) ──
+    // Called from /accept-invite page when user clicks the button
+    if (body.getInviteLink) {
+      const { tokenId } = body;
+      if (!tokenId) throw new Error("Missing tokenId");
+
+      const { data: tokenRow, error: tokenError } = await supabase
+        .from("invite_tokens")
+        .select("*")
+        .eq("id", tokenId)
+        .single();
+
+      if (tokenError || !tokenRow) {
+        return new Response(
+          JSON.stringify({ success: false, error: "Einladungslink nicht gefunden oder abgelaufen." }),
+          { status: 404, headers: { "Content-Type": "application/json", ...corsHeaders } }
+        );
+      }
+
+      if (tokenRow.used_at) {
+        return new Response(
+          JSON.stringify({ success: false, error: "Dieser Einladungslink wurde bereits verwendet." }),
+          { status: 410, headers: { "Content-Type": "application/json", ...corsHeaders } }
+        );
+      }
+
+      if (new Date(tokenRow.expires_at) < new Date()) {
+        return new Response(
+          JSON.stringify({ success: false, error: "Dieser Einladungslink ist abgelaufen." }),
+          { status: 410, headers: { "Content-Type": "application/json", ...corsHeaders } }
+        );
+      }
+
+      // Mark as used
+      await supabase
+        .from("invite_tokens")
+        .update({ used_at: new Date().toISOString() })
+        .eq("id", tokenId);
+
+      return new Response(
+        JSON.stringify({ success: true, actionLink: tokenRow.action_link, email: tokenRow.email }),
+        { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
+    }
+
+    // ── All other modes require authentication ──
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) throw new Error("Not authenticated");
 
@@ -44,7 +91,6 @@ const handler = async (req: Request): Promise<Response> => {
       .single();
     const tenantId = callerProfile?.tenant_id;
 
-    const body = await req.json();
     const { redirectTo } = body;
 
     // ── MODE 1: Direct invite (new flow – no invitation record needed) ──
@@ -98,19 +144,34 @@ const handler = async (req: Request): Promise<Response> => {
       }
 
       // Generate password-reset link
-      const appUrl = redirectTo || `https://hub-smart-energy.lovable.app/set-password`;
+      const appSetPasswordUrl = redirectTo || `https://hub-smart-energy.lovable.app/set-password`;
       const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
         type: "recovery",
         email,
-        options: { redirectTo: appUrl },
+        options: { redirectTo: appSetPasswordUrl },
       });
 
       if (linkError || !linkData?.properties?.action_link) {
         throw new Error("Passwort-Link konnte nicht generiert werden");
       }
 
+      // Store action_link in DB and send UUID-based URL to protect against email scanners
+      const { data: tokenRow, error: tokenInsertError } = await supabase
+        .from("invite_tokens")
+        .insert({ action_link: linkData.properties.action_link, email })
+        .select("id")
+        .single();
+
+      if (tokenInsertError || !tokenRow) {
+        throw new Error("Invite-Token konnte nicht gespeichert werden");
+      }
+
+      // The email gets a link to our own page, not directly to Supabase
+      const appOrigin = new URL(appSetPasswordUrl).origin;
+      const safeInviteUrl = `${appOrigin}/accept-invite?t=${tokenRow.id}`;
+
       // Send email
-      const emailSent = await sendInvitationEmail(supabase, email, name, linkData.properties.action_link, effectiveTenantId, role || "user");
+      const emailSent = await sendInvitationEmail(supabase, email, name, safeInviteUrl, effectiveTenantId, role || "user");
 
       return new Response(
         JSON.stringify({ success: true, userId: newUserId, emailSent }),
@@ -168,16 +229,27 @@ const handler = async (req: Request): Promise<Response> => {
       .update({ accepted_at: new Date().toISOString() })
       .eq("id", invitationId);
 
-    const appUrl = redirectTo || `https://hub-smart-energy.lovable.app/set-password`;
+    const appSetPasswordUrl = redirectTo || `https://hub-smart-energy.lovable.app/set-password`;
     const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
       type: "recovery",
       email: invitation.email,
-      options: { redirectTo: appUrl },
+      options: { redirectTo: appSetPasswordUrl },
     });
 
     let emailSent = false;
     if (!linkError && linkData?.properties?.action_link) {
-      emailSent = await sendInvitationEmail(supabase, invitation.email, null, linkData.properties.action_link, tenantId, invitation.role);
+      // Store action_link in DB and send UUID-based URL
+      const { data: tokenRow } = await supabase
+        .from("invite_tokens")
+        .insert({ action_link: linkData.properties.action_link, email: invitation.email })
+        .select("id")
+        .single();
+
+      if (tokenRow) {
+        const appOrigin = new URL(appSetPasswordUrl).origin;
+        const safeInviteUrl = `${appOrigin}/accept-invite?t=${tokenRow.id}`;
+        emailSent = await sendInvitationEmail(supabase, invitation.email, null, safeInviteUrl, tenantId, invitation.role);
+      }
     }
 
     return new Response(

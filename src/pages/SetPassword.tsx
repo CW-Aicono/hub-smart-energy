@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { Zap, Eye, EyeOff, CheckCircle } from "lucide-react";
+import { Zap, Eye, EyeOff, CheckCircle, AlertCircle } from "lucide-react";
 
 const SetPassword = () => {
   const navigate = useNavigate();
@@ -17,8 +17,24 @@ const SetPassword = () => {
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
   const [sessionReady, setSessionReady] = useState(false);
+  const [linkError, setLinkError] = useState<string | null>(null);
 
   useEffect(() => {
+    // Check for error in URL hash (e.g. token already consumed by email scanners)
+    const hash = window.location.hash;
+    const params = new URLSearchParams(hash.replace("#", "?").replace(/^\\?/, ""));
+    const errorCode = params.get("error_code") || params.get("error");
+    const errorDesc = params.get("error_description");
+
+    if (errorCode) {
+      if (errorCode === "otp_expired" || errorCode.includes("expired") || errorCode.includes("not_found")) {
+        setLinkError("Der Einladungslink ist abgelaufen oder wurde bereits verwendet. Bitte fordern Sie einen neuen Link an.");
+      } else {
+        setLinkError(errorDesc || "Der Link ist ungültig. Bitte fordern Sie einen neuen Einladungslink an.");
+      }
+      return;
+    }
+
     // Supabase exchanges the recovery token from the URL hash automatically
     // and fires an onAuthStateChange with event "PASSWORD_RECOVERY"
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
@@ -32,7 +48,20 @@ const SetPassword = () => {
       if (session) setSessionReady(true);
     });
 
-    return () => subscription.unsubscribe();
+    // Timeout: if after 10s no session, show error
+    const timeout = setTimeout(() => {
+      setSessionReady((ready) => {
+        if (!ready) {
+          setLinkError("Die Sitzung konnte nicht gestartet werden. Der Link ist möglicherweise abgelaufen. Bitte fordern Sie einen neuen Einladungslink an.");
+        }
+        return ready;
+      });
+    }, 10000);
+
+    return () => {
+      subscription.unsubscribe();
+      clearTimeout(timeout);
+    };
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -117,6 +146,18 @@ const SetPassword = () => {
                 <p className="text-center text-muted-foreground">
                   Sie werden in Kürze weitergeleitet …
                 </p>
+              </div>
+            ) : linkError ? (
+              <div className="flex flex-col items-center gap-4 py-6">
+                <AlertCircle className="h-16 w-16 text-destructive" />
+                <p className="text-center text-muted-foreground text-sm">{linkError}</p>
+                <button
+                  type="button"
+                  onClick={() => navigate("/auth")}
+                  className="text-sm text-accent hover:underline font-medium"
+                >
+                  Zur Anmeldeseite
+                </button>
               </div>
             ) : !sessionReady ? (
               <div className="flex flex-col items-center gap-4 py-8">
