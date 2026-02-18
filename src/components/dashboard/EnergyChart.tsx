@@ -164,8 +164,9 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
     // Determine which period total field to use
     const periodTotalKey = period === "week" ? "totalWeek" : period === "month" ? "totalMonth" : period === "year" ? "totalYear" : null;
 
-    // For current period with Loxone totals: show a single aggregated bar
-    if (useLoxoneTotals && periodTotalKey && period !== "quarter") {
+    // For current period with Loxone totals (month/year only): show a single aggregated bar
+    // Week is excluded here – it falls through to the 7-day breakdown below
+    if (useLoxoneTotals && periodTotalKey && period !== "quarter" && period !== "week") {
       const totals = { strom: 0, gas: 0, waerme: 0, wasser: 0 };
 
       // Add Loxone period totals for automatic main meters only
@@ -364,12 +365,28 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
     if (period === "week") {
       const dayNames = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
       const days = eachDayOfInterval({ start: rangeStart, end: rangeEnd });
+      const todayStr = format(new Date(), "yyyy-MM-dd");
       return days.map((d, i) => {
         const dateStr = format(d, "yyyy-MM-dd");
         const bucket = { label: dayNames[i] || format(d, "EEE", { locale: de }), ...emptyBucket() };
+        // Add manual readings for this day
         filtered.forEach((r) => {
           if (format(new Date(r.reading_date), "yyyy-MM-dd") === dateStr) addToBucket(bucket, r);
         });
+        // For today: inject live totalDay from automatic main meters
+        if (dateStr === todayStr) {
+          for (const [meterId, pt] of Object.entries(livePeriodTotals)) {
+            const info = meterMap[meterId];
+            if (!info || !info.is_main_meter) continue;
+            if (locationId && info.location_id !== locationId) continue;
+            if (pt.totalDay != null && info.energy_type in bucket) {
+              const converted = info.energy_type === "gas" && info.unit === "m³"
+                ? gasM3ToKWh(pt.totalDay, info.gas_type, info.brennwert, info.zustandszahl)
+                : pt.totalDay;
+              (bucket as any)[info.energy_type] += converted;
+            }
+          }
+        }
         return bucket;
       });
     }
