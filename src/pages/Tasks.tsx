@@ -22,6 +22,34 @@ const Tasks = () => {
   const [statusFilter, setStatusFilter] = useState("all");
   const [priorityFilter, setPriorityFilter] = useState("all");
   const [sourceFilter, setSourceFilter] = useState("all");
+  const [overdueFilter, setOverdueFilter] = useState(false);
+  const [externalFilter, setExternalFilter] = useState(false);
+
+  // Unified toggle: activating one group resets all others
+  const toggleStatus = (val: string) => {
+    setPriorityFilter("all");
+    setOverdueFilter(false);
+    setExternalFilter(false);
+    setStatusFilter((prev) => (prev === val ? "all" : val));
+  };
+  const togglePriority = (val: string) => {
+    setStatusFilter("all");
+    setOverdueFilter(false);
+    setExternalFilter(false);
+    setPriorityFilter((prev) => (prev === val ? "all" : val));
+  };
+  const toggleOverdue = () => {
+    setStatusFilter("all");
+    setPriorityFilter("all");
+    setExternalFilter(false);
+    setOverdueFilter((prev) => !prev);
+  };
+  const toggleExternal = () => {
+    setStatusFilter("all");
+    setPriorityFilter("all");
+    setOverdueFilter(false);
+    setExternalFilter((prev) => !prev);
+  };
 
   if (authLoading) {
     return (
@@ -40,7 +68,13 @@ const Tasks = () => {
     const matchStatus = statusFilter === "all" || t.status === statusFilter;
     const matchPriority = priorityFilter === "all" || t.priority === priorityFilter;
     const matchSource = sourceFilter === "all" || t.source_type === sourceFilter;
-    return matchSearch && matchStatus && matchPriority && matchSource;
+    const matchOverdue = !overdueFilter || (
+      t.due_date && t.status !== "done" && t.status !== "cancelled" && new Date(t.due_date) < new Date()
+    );
+    const matchExternal = !externalFilter || (
+      t.external_contact_name && t.status !== "done" && t.status !== "cancelled"
+    );
+    return matchSearch && matchStatus && matchPriority && matchSource && matchOverdue && matchExternal;
   });
 
   const countOpen = tasks.filter((t) => t.status === "open").length;
@@ -75,12 +109,12 @@ const Tasks = () => {
 
           {/* KPI Cards */}
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-            <KpiCard icon={<Circle className="h-4 w-4 text-muted-foreground" />} label="Offen" value={countOpen} onClick={() => setStatusFilter(statusFilter === "open" ? "all" : "open")} active={statusFilter === "open"} />
-            <KpiCard icon={<ArrowRight className="h-4 w-4 text-primary" />} label="In Bearbeitung" value={countInProgress} onClick={() => setStatusFilter(statusFilter === "in_progress" ? "all" : "in_progress")} active={statusFilter === "in_progress"} />
-            <KpiCard icon={<CheckCircle2 className="h-4 w-4 text-success" />} label="Erledigt" value={countDone} onClick={() => setStatusFilter(statusFilter === "done" ? "all" : "done")} active={statusFilter === "done"} />
-            <KpiCard icon={<AlertTriangle className="h-4 w-4 text-destructive" />} label="Kritisch" value={countCritical} variant={countCritical > 0 ? "destructive" : "default"} onClick={() => setPriorityFilter(priorityFilter === "critical" ? "all" : "critical")} active={priorityFilter === "critical"} />
-            <KpiCard icon={<Zap className="h-4 w-4 text-warning" />} label="Überfällig" value={countOverdue} variant={countOverdue > 0 ? "warning" : "default"} />
-            <KpiCard icon={<ExternalLink className="h-4 w-4 text-secondary-foreground" />} label="Extern offen" value={countExternal} />
+            <KpiCard icon={<Circle className="h-4 w-4 text-muted-foreground" />} label="Offen" value={countOpen} onClick={() => toggleStatus("open")} active={statusFilter === "open"} />
+            <KpiCard icon={<ArrowRight className="h-4 w-4 text-primary" />} label="In Bearbeitung" value={countInProgress} onClick={() => toggleStatus("in_progress")} active={statusFilter === "in_progress"} />
+            <KpiCard icon={<CheckCircle2 className="h-4 w-4 text-success" />} label="Erledigt" value={countDone} onClick={() => toggleStatus("done")} active={statusFilter === "done"} />
+            <KpiCard icon={<AlertTriangle className="h-4 w-4 text-destructive" />} label="Kritisch" value={countCritical} variant={countCritical > 0 ? "destructive" : "default"} onClick={() => togglePriority("critical")} active={priorityFilter === "critical"} />
+            <KpiCard icon={<Zap className="h-4 w-4 text-warning" />} label="Überfällig" value={countOverdue} variant={countOverdue > 0 ? "warning" : "default"} onClick={toggleOverdue} active={overdueFilter} />
+            <KpiCard icon={<ExternalLink className="h-4 w-4 text-secondary-foreground" />} label="Extern offen" value={countExternal} onClick={toggleExternal} active={externalFilter} />
           </div>
 
           {/* Filters */}
@@ -119,7 +153,7 @@ const Tasks = () => {
               ))}
             </div>
           ) : filtered.length === 0 ? (
-            <EmptyState hasFilters={search !== "" || statusFilter !== "all" || priorityFilter !== "all"} onCreateTask={() => setCreateOpen(true)} />
+            <EmptyState hasFilters={search !== "" || statusFilter !== "all" || priorityFilter !== "all" || overdueFilter || externalFilter} onCreateTask={() => setCreateOpen(true)} />
           ) : (
             <div className="space-y-3">
               {filtered.map((task) => (

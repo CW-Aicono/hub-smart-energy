@@ -285,6 +285,41 @@ export const TaskDetailSheet = ({ task, open, onOpenChange }: TaskDetailSheetPro
               </Select>
             </div>
 
+            {/* Due date */}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
+                <CalendarDays className="h-3.5 w-3.5" /> Fälligkeitsdatum
+              </Label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="date"
+                  defaultValue={task.due_date ? task.due_date.slice(0, 10) : ""}
+                  onChange={(e) => {
+                    updateTask.mutate({
+                      id: task.id,
+                      due_date: e.target.value || null,
+                    });
+                  }}
+                  className="flex h-9 w-48 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                />
+                {task.due_date && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="text-xs text-muted-foreground h-7 px-2"
+                    onClick={() => updateTask.mutate({ id: task.id, due_date: null })}
+                  >
+                    <X className="h-3.5 w-3.5 mr-1" /> Entfernen
+                  </Button>
+                )}
+              </div>
+              {isOverdue && (
+                <p className="text-xs text-destructive flex items-center gap-1">
+                  <AlertTriangle className="h-3 w-3" /> Fälligkeit überschritten
+                </p>
+              )}
+            </div>
+
             <Separator />
 
             {/* Transfer / Assignment */}
