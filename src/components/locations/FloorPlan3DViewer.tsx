@@ -494,11 +494,15 @@ export function FloorPlan3DViewer({ floor, locationId, sensors = [], isAdmin = f
   const meterLatestValues = useMemo(() => {
     const values: Record<string, { value: number | null; unit: string }> = {};
     floorMeters.forEach(m => {
+      // Determine correct display unit for live/instantaneous values
+      const isFlowType = m.energy_type === "wasser" || m.energy_type === "gas";
+      const liveUnit = isFlowType ? "m³/h" : ((m as any).source_unit_power || "kW");
+
       // Try live sensor value first (matched via sensor_uuid)
       const liveSensor = m.sensor_uuid ? sensors.find(s => s.id === m.sensor_uuid) : null;
       if (liveSensor && liveSensor.value !== undefined && liveSensor.value !== "") {
         const parsed = parseFloat(String(liveSensor.value).replace(",", "."));
-        values[m.id] = { value: isNaN(parsed) ? null : parsed, unit: liveSensor.unit || m.unit };
+        values[m.id] = { value: isNaN(parsed) ? null : parsed, unit: liveUnit };
       } else {
         // Fall back to latest meter reading
         const meterReadings = readings
