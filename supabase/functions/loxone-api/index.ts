@@ -589,6 +589,41 @@ serve(async (req) => {
             recorded_at: string;
           }> = [];
 
+          // Spike-Detection: Fetch the last few power readings per meter to compute a baseline.
+          // A new reading is considered a spike if it is > SPIKE_FACTOR × median of recent readings.
+          // We use the last 6 readings (~30 min) as baseline window.
+          const SPIKE_FACTOR = 3.0;    // value must be ≤ 3× the recent median to be accepted
+          const SPIKE_BASELINE_MIN = 5; // only apply spike filter when baseline ≥ 5 kW (avoids false positives near zero)
+
+          const meterIds = linkedMeters.map((m: any) => m.id).filter(Boolean);
+          let recentReadingsMap: Record<string, number[]> = {};
+
+          if (meterIds.length > 0) {
+            const windowStart = new Date(now.getTime() - 35 * 60 * 1000).toISOString(); // 35-min window
+            const { data: recentRows } = await supabase
+              .from("meter_power_readings")
+              .select("meter_id, power_value")
+              .in("meter_id", meterIds)
+              .gte("recorded_at", windowStart)
+              .order("recorded_at", { ascending: false });
+
+            if (recentRows) {
+              for (const row of recentRows) {
+                if (!recentReadingsMap[row.meter_id]) recentReadingsMap[row.meter_id] = [];
+                if (recentReadingsMap[row.meter_id].length < 6) {
+                  recentReadingsMap[row.meter_id].push(Number(row.power_value));
+                }
+              }
+            }
+          }
+
+          const computeMedian = (vals: number[]): number => {
+            if (vals.length === 0) return 0;
+            const sorted = [...vals].sort((a, b) => a - b);
+            const mid = Math.floor(sorted.length / 2);
+            return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
+          };
+
           for (const meter of linkedMeters) {
             if (!meter.sensor_uuid) continue;
             const stateData = stateResults[meter.sensor_uuid];
@@ -606,17 +641,29 @@ serve(async (req) => {
               });
             }
 
-            // Store instantaneous power reading for time-series
+            // Store instantaneous power reading for time-series (with spike filter)
             if (stateData?.value != null) {
               const powerVal = typeof stateData.value === "number" ? stateData.value : parseFloat(String(stateData.value));
               if (!isNaN(powerVal)) {
-                powerInserts.push({
-                  tenant_id: meter.tenant_id,
-                  meter_id: meter.id,
-                  power_value: Math.abs(powerVal),
-                  energy_type: meter.energy_type,
-                  recorded_at: now.toISOString(),
-                });
+                const absVal = Math.abs(powerVal);
+                const recentVals = recentReadingsMap[meter.id] ?? [];
+                const median = computeMedian(recentVals);
+                const isSpike = recentVals.length >= 3 && median >= SPIKE_BASELINE_MIN && absVal > median * SPIKE_FACTOR;
+
+                if (isSpike) {
+                  console.warn(
+                    `Spike-Detection: Skipping power reading for meter ${meter.id} ` +
+                    `(value=${absVal.toFixed(2)}, median=${median.toFixed(2)}, factor=${(absVal / median).toFixed(2)}×)`
+                  );
+                } else {
+                  powerInserts.push({
+                    tenant_id: meter.tenant_id,
+                    meter_id: meter.id,
+                    power_value: absVal,
+                    energy_type: meter.energy_type,
+                    recorded_at: now.toISOString(),
+                  });
+                }
               }
             }
           }
