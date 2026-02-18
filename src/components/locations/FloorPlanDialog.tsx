@@ -251,7 +251,14 @@ export function FloorPlanDialog({ floor, locationId, open, onOpenChange }: Floor
   // Get position info for placed sensors
   const placedSensorsWithInfo = positions.map((pos) => {
     const sensor = assignedSensors.find((s) => s.id === pos.sensor_uuid);
-    return { ...pos, sensorInfo: sensor };
+    // Find the meter linked to this sensor to determine correct unit
+    const linkedMeter = meters.find((m) => m.sensor_uuid === pos.sensor_uuid);
+    const isFlowType = linkedMeter?.energy_type === "wasser" || linkedMeter?.energy_type === "gas";
+    // For water/gas meters the live value is a flow rate – override sensor unit to m³/h
+    const correctedSensorInfo = sensor && isFlowType
+      ? { ...sensor, unit: "m³/h" }
+      : sensor;
+    return { ...pos, sensorInfo: correctedSensorInfo };
   });
 
   const calculatePosition = (e: React.DragEvent | React.MouseEvent) => {
