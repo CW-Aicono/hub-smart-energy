@@ -1070,6 +1070,33 @@ export type Database = {
           },
         ]
       }
+      invite_tokens: {
+        Row: {
+          action_link: string
+          created_at: string
+          email: string
+          expires_at: string
+          id: string
+          used_at: string | null
+        }
+        Insert: {
+          action_link: string
+          created_at?: string
+          email: string
+          expires_at?: string
+          id?: string
+          used_at?: string | null
+        }
+        Update: {
+          action_link?: string
+          created_at?: string
+          email?: string
+          expires_at?: string
+          id?: string
+          used_at?: string | null
+        }
+        Relationships: []
+      }
       location_automations: {
         Row: {
           action_type: string
