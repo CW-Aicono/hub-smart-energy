@@ -19,6 +19,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Plus, PlugZap, Trash2, Zap, ZapOff, AlertTriangle, WifiOff, Info, Search, MapPin, ChevronDown, QrCode } from "lucide-react";
+import { ChargePointGroupsManager } from "@/components/charging/ChargePointGroupsManager";
 import { Checkbox } from "@/components/ui/checkbox";
 import ChargePointQrCode from "@/components/charging/ChargePointQrCode";
 import { format } from "date-fns";
@@ -276,6 +277,9 @@ const ChargingPoints = () => {
 
           {/* Statistics */}
           <ChargingOverviewStats chargePoints={chargePoints} sessions={sessions} />
+
+          {/* Groups Manager */}
+          <ChargePointGroupsManager isAdmin={isAdmin} />
 
           {/* Table - collapsible */}
           <Collapsible defaultOpen={false}>

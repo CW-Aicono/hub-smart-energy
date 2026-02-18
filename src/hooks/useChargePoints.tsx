@@ -8,6 +8,7 @@ export interface ChargePoint {
   id: string;
   tenant_id: string;
   location_id: string | null;
+  group_id: string | null;
   ocpp_id: string;
   name: string;
   status: string;

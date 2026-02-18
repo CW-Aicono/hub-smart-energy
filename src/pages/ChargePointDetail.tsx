@@ -7,6 +7,7 @@ import { useChargerModels } from "@/hooks/useChargerModels";
 import { useChargingSessions } from "@/hooks/useChargingSessions";
 import { useTenant } from "@/hooks/useTenant";
 import { useTasks } from "@/hooks/useTasks";
+import { useChargePointGroups } from "@/hooks/useChargePointGroups";
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -22,7 +23,7 @@ import {
   ArrowLeft, Zap, PlugZap, AlertTriangle, ZapOff, WifiOff, Camera,
   Trash2, Save, X, MapPin, Search, MoreHorizontal, RefreshCw, Play,
   Square, Unlock, Power, Wrench, CheckCircle, Clock, BarChart3, Info, Settings,
-  Shield, Bell, BatteryCharging, Users, Calendar, Timer, Gauge
+  Shield, Bell, BatteryCharging, Users, Calendar, Timer, Gauge, ExternalLink
 } from "lucide-react";
 import { format, subDays, isAfter } from "date-fns";
 import { de } from "date-fns/locale";
@@ -52,6 +53,7 @@ const ChargePointDetail = () => {
   const { isAdmin } = useUserRole();
   const { tenant } = useTenant();
   const { chargePoints, updateChargePoint, deleteChargePoint } = useChargePoints();
+  const { groups, assignChargePointToGroup } = useChargePointGroups();
   const { createTask } = useTasks();
   const { sessions } = useChargingSessions(id);
   const { vendors: knownVendors, getModelsForVendor } = useChargerModels();
@@ -84,6 +86,7 @@ const ChargePointDetail = () => {
   useEffect(() => { window.scrollTo(0, 0); }, [id]);
 
   const cp = chargePoints.find((c) => c.id === id);
+  const cpGroup = cp?.group_id ? groups.find((g) => g.id === cp.group_id) ?? null : null;
   const ocppMeter = useOcppMeterValue(cp?.ocpp_id);
 
   // Auto-create fault task when status changes to faulted/offline
@@ -410,12 +413,19 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
               {cp.address && (
                 <p className="text-sm text-muted-foreground">{cp.address}</p>
               )}
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 flex-wrap">
                 <h1 className="text-2xl font-bold text-foreground">{cp.name}</h1>
                 <Badge variant={cfg.variant} className="gap-1">
                   <StatusIcon className="h-3 w-3" />
                   {cfg.label}
                 </Badge>
+                {cpGroup && (
+                  <Badge variant="outline" className="gap-1 text-xs cursor-pointer hover:bg-muted/50"
+                    onClick={() => navigate("/charging/points")}>
+                    <Users className="h-3 w-3" />
+                    {cpGroup.name}
+                  </Badge>
+                )}
               </div>
               <ChargePointQrCode ocppId={cp.ocpp_id} name={cp.name} address={cp.address} variant="button" />
             </div>
@@ -844,124 +854,202 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
 
             {/* Energy Management tab */}
             <TabsContent value="energy" className="mt-6 space-y-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Gauge className="h-5 w-5" />
-                    Lastmanagement
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="flex items-center justify-between p-4 border rounded-lg">
-                    <div>
-                      <p className="font-medium">Dynamisches Lastmanagement</p>
-                      <p className="text-sm text-muted-foreground">Leistung automatisch an verfügbare Kapazität anpassen</p>
+              {cpGroup ? (
+                <Card>
+                  <CardContent className="py-8">
+                    <div className="flex flex-col items-center gap-3 text-center">
+                      <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
+                        <Users className="h-6 w-6 text-primary" />
+                      </div>
+                      <div>
+                        <p className="font-semibold text-base">Energiemanagement wird durch Gruppe gesteuert</p>
+                        <p className="text-sm text-muted-foreground mt-1">
+                          Dieser Ladepunkt gehört zur Gruppe <strong>„{cpGroup.name}"</strong>. Die Energiemanagement-Einstellungen werden zentral für alle Ladepunkte der Gruppe verwaltet.
+                        </p>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3 w-full max-w-md mt-2">
+                        <div className="border rounded-lg p-3 text-left">
+                          <p className="text-xs text-muted-foreground">Dynamisches Lastmanagement</p>
+                          <p className="font-medium text-sm">{cpGroup.energy_settings.dynamic_load_management ? "Aktiv" : "Inaktiv"}</p>
+                        </div>
+                        <div className="border rounded-lg p-3 text-left">
+                          <p className="text-xs text-muted-foreground">PV-Überschussladen</p>
+                          <p className="font-medium text-sm">{cpGroup.energy_settings.pv_surplus_charging ? "Aktiv" : "Inaktiv"}</p>
+                        </div>
+                        <div className="border rounded-lg p-3 text-left">
+                          <p className="text-xs text-muted-foreground">Leistungsbegrenzung</p>
+                          <p className="font-medium text-sm">{cpGroup.energy_settings.power_limit_kw ? `${cpGroup.energy_settings.power_limit_kw} kW` : "Keine"}</p>
+                        </div>
+                        <div className="border rounded-lg p-3 text-left">
+                          <p className="text-xs text-muted-foreground">Günstig-Laden-Modus</p>
+                          <p className="font-medium text-sm">{cpGroup.energy_settings.cheap_charging_mode ? "Aktiv" : "Inaktiv"}</p>
+                        </div>
+                      </div>
+                      <Button variant="outline" size="sm" className="gap-1.5" onClick={() => navigate("/charging/points")}>
+                        <ExternalLink className="h-3.5 w-3.5" /> Zur Gruppenkonfiguration
+                      </Button>
                     </div>
-                    <Switch disabled />
-                  </div>
-                  <div className="flex items-center justify-between p-4 border rounded-lg">
-                    <div>
-                      <p className="font-medium">Leistungsbegrenzung</p>
-                      <p className="text-sm text-muted-foreground">Maximale Ladeleistung auf einen festen Wert begrenzen</p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Input type="number" className="w-20" defaultValue={cp.max_power_kw} disabled />
-                      <span className="text-sm text-muted-foreground">kW</span>
-                    </div>
-                  </div>
-                  <div className="flex items-center justify-between p-4 border rounded-lg">
-                    <div>
-                      <p className="font-medium">PV-Überschussladen</p>
-                      <p className="text-sm text-muted-foreground">Laden priorisiert mit eigenem Solarstrom</p>
-                    </div>
-                    <Switch disabled />
-                  </div>
-                  <p className="text-xs text-muted-foreground flex items-center gap-1">
-                    <Info className="h-3 w-3" /> Diese Funktionen werden in einem zukünftigen Update verfügbar.
-                  </p>
-                </CardContent>
-              </Card>
+                  </CardContent>
+                </Card>
+              ) : (
+                <>
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <Gauge className="h-5 w-5" />
+                        Lastmanagement
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="flex items-center justify-between p-4 border rounded-lg">
+                        <div>
+                          <p className="font-medium">Dynamisches Lastmanagement</p>
+                          <p className="text-sm text-muted-foreground">Leistung automatisch an verfügbare Kapazität anpassen</p>
+                        </div>
+                        <Switch disabled />
+                      </div>
+                      <div className="flex items-center justify-between p-4 border rounded-lg">
+                        <div>
+                          <p className="font-medium">Leistungsbegrenzung</p>
+                          <p className="text-sm text-muted-foreground">Maximale Ladeleistung auf einen festen Wert begrenzen</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Input type="number" className="w-20" defaultValue={cp.max_power_kw} disabled />
+                          <span className="text-sm text-muted-foreground">kW</span>
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between p-4 border rounded-lg">
+                        <div>
+                          <p className="font-medium">PV-Überschussladen</p>
+                          <p className="text-sm text-muted-foreground">Laden priorisiert mit eigenem Solarstrom</p>
+                        </div>
+                        <Switch disabled />
+                      </div>
+                      <p className="text-xs text-muted-foreground flex items-center gap-1">
+                        <Info className="h-3 w-3" /> Diese Funktionen werden in einem zukünftigen Update verfügbar. Alternativ können Sie eine Gruppe erstellen und die Einstellungen dort verwalten.
+                      </p>
+                    </CardContent>
+                  </Card>
 
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Calendar className="h-5 w-5" />
-                    Ladezeitplan
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="flex items-center justify-between p-4 border rounded-lg">
-                    <div>
-                      <p className="font-medium">Zeitgesteuerte Verfügbarkeit</p>
-                      <p className="text-sm text-muted-foreground">Ladepunkt nur zu bestimmten Zeiten freigeben</p>
-                    </div>
-                    <Switch disabled />
-                  </div>
-                  <div className="flex items-center justify-between p-4 border rounded-lg">
-                    <div>
-                      <p className="font-medium">Günstig-Laden-Modus</p>
-                      <p className="text-sm text-muted-foreground">Laden automatisch in Niedrigtarifzeiten verschieben</p>
-                    </div>
-                    <Switch disabled />
-                  </div>
-                  <p className="text-xs text-muted-foreground flex items-center gap-1">
-                    <Info className="h-3 w-3" /> Diese Funktionen werden in einem zukünftigen Update verfügbar.
-                  </p>
-                </CardContent>
-              </Card>
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <Calendar className="h-5 w-5" />
+                        Ladezeitplan
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="flex items-center justify-between p-4 border rounded-lg">
+                        <div>
+                          <p className="font-medium">Zeitgesteuerte Verfügbarkeit</p>
+                          <p className="text-sm text-muted-foreground">Ladepunkt nur zu bestimmten Zeiten freigeben</p>
+                        </div>
+                        <Switch disabled />
+                      </div>
+                      <div className="flex items-center justify-between p-4 border rounded-lg">
+                        <div>
+                          <p className="font-medium">Günstig-Laden-Modus</p>
+                          <p className="text-sm text-muted-foreground">Laden automatisch in Niedrigtarifzeiten verschieben</p>
+                        </div>
+                        <Switch disabled />
+                      </div>
+                      <p className="text-xs text-muted-foreground flex items-center gap-1">
+                        <Info className="h-3 w-3" /> Diese Funktionen werden in einem zukünftigen Update verfügbar.
+                      </p>
+                    </CardContent>
+                  </Card>
+                </>
+              )}
             </TabsContent>
 
             {/* Access Control tab */}
             <TabsContent value="access" className="mt-6 space-y-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Shield className="h-5 w-5" />
-                    Autorisierung
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="flex items-center justify-between p-4 border rounded-lg">
-                    <div>
-                      <p className="font-medium">Freies Laden erlauben</p>
-                      <p className="text-sm text-muted-foreground">Laden ohne RFID-Karte oder App-Autorisierung ermöglichen</p>
+              {cpGroup ? (
+                <Card>
+                  <CardContent className="py-8">
+                    <div className="flex flex-col items-center gap-3 text-center">
+                      <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
+                        <Users className="h-6 w-6 text-primary" />
+                      </div>
+                      <div>
+                        <p className="font-semibold text-base">Zugangssteuerung wird durch Gruppe gesteuert</p>
+                        <p className="text-sm text-muted-foreground mt-1">
+                          Dieser Ladepunkt gehört zur Gruppe <strong>„{cpGroup.name}"</strong>. Die Zugangseinstellungen werden zentral für alle Ladepunkte der Gruppe verwaltet.
+                        </p>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3 w-full max-w-md mt-2">
+                        <div className="border rounded-lg p-3 text-left">
+                          <p className="text-xs text-muted-foreground">Freies Laden</p>
+                          <p className="font-medium text-sm">{cpGroup.access_settings.free_charging ? "Erlaubt" : "Nicht erlaubt"}</p>
+                        </div>
+                        <div className="border rounded-lg p-3 text-left">
+                          <p className="text-xs text-muted-foreground">Nutzergruppen-Beschränkung</p>
+                          <p className="font-medium text-sm">{cpGroup.access_settings.user_group_restriction ? "Aktiv" : "Inaktiv"}</p>
+                        </div>
+                        <div className="border rounded-lg p-3 text-left col-span-2">
+                          <p className="text-xs text-muted-foreground">Maximale Ladedauer</p>
+                          <p className="font-medium text-sm">{cpGroup.access_settings.max_charging_duration_min} min</p>
+                        </div>
+                      </div>
+                      <Button variant="outline" size="sm" className="gap-1.5" onClick={() => navigate("/charging/points")}>
+                        <ExternalLink className="h-3.5 w-3.5" /> Zur Gruppenkonfiguration
+                      </Button>
                     </div>
-                    <Switch disabled />
-                  </div>
-                  <div className="flex items-center justify-between p-4 border rounded-lg">
-                    <div>
-                      <p className="font-medium">Nutzergruppen-Beschränkung</p>
-                      <p className="text-sm text-muted-foreground">Nur bestimmte Nutzergruppen für diesen Ladepunkt zulassen</p>
-                    </div>
-                    <Switch disabled />
-                  </div>
-                  <div className="flex items-center justify-between p-4 border rounded-lg">
-                    <div>
-                      <p className="font-medium">Maximale Ladedauer</p>
-                      <p className="text-sm text-muted-foreground">Ladevorgang nach Zeitlimit automatisch beenden</p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Input type="number" className="w-20" defaultValue="480" disabled />
-                      <span className="text-sm text-muted-foreground">min</span>
-                    </div>
-                  </div>
-                  <p className="text-xs text-muted-foreground flex items-center gap-1">
-                    <Info className="h-3 w-3" /> Diese Funktionen werden in einem zukünftigen Update verfügbar.
-                  </p>
-                </CardContent>
-              </Card>
+                  </CardContent>
+                </Card>
+              ) : (
+                <>
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <Shield className="h-5 w-5" />
+                        Autorisierung
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="flex items-center justify-between p-4 border rounded-lg">
+                        <div>
+                          <p className="font-medium">Freies Laden erlauben</p>
+                          <p className="text-sm text-muted-foreground">Laden ohne RFID-Karte oder App-Autorisierung ermöglichen</p>
+                        </div>
+                        <Switch disabled />
+                      </div>
+                      <div className="flex items-center justify-between p-4 border rounded-lg">
+                        <div>
+                          <p className="font-medium">Nutzergruppen-Beschränkung</p>
+                          <p className="text-sm text-muted-foreground">Nur bestimmte Nutzergruppen für diesen Ladepunkt zulassen</p>
+                        </div>
+                        <Switch disabled />
+                      </div>
+                      <div className="flex items-center justify-between p-4 border rounded-lg">
+                        <div>
+                          <p className="font-medium">Maximale Ladedauer</p>
+                          <p className="text-sm text-muted-foreground">Ladevorgang nach Zeitlimit automatisch beenden</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Input type="number" className="w-20" defaultValue="480" disabled />
+                          <span className="text-sm text-muted-foreground">min</span>
+                        </div>
+                      </div>
+                      <p className="text-xs text-muted-foreground flex items-center gap-1">
+                        <Info className="h-3 w-3" /> Diese Funktionen werden in einem zukünftigen Update verfügbar. Alternativ können Sie eine Gruppe erstellen und die Einstellungen dort verwalten.
+                      </p>
+                    </CardContent>
+                  </Card>
 
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Bell className="h-5 w-5" />
-                    Benachrichtigungen
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <FaultStatus cp={cp} />
-                </CardContent>
-              </Card>
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <Bell className="h-5 w-5" />
+                        Benachrichtigungen
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <FaultStatus cp={cp} />
+                    </CardContent>
+                  </Card>
+                </>
+              )}
             </TabsContent>
           </Tabs>
         </div>
