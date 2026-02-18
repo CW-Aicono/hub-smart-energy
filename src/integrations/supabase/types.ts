@@ -1954,6 +1954,75 @@ export type Database = {
           },
         ]
       }
+      tasks: {
+        Row: {
+          assigned_to: string | null
+          assigned_to_name: string | null
+          completed_at: string | null
+          created_at: string
+          created_by: string | null
+          created_by_name: string | null
+          description: string | null
+          due_date: string | null
+          external_contact_email: string | null
+          external_contact_name: string | null
+          external_contact_phone: string | null
+          id: string
+          priority: string
+          source_id: string | null
+          source_label: string | null
+          source_type: string
+          status: string
+          tenant_id: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          assigned_to?: string | null
+          assigned_to_name?: string | null
+          completed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          created_by_name?: string | null
+          description?: string | null
+          due_date?: string | null
+          external_contact_email?: string | null
+          external_contact_name?: string | null
+          external_contact_phone?: string | null
+          id?: string
+          priority?: string
+          source_id?: string | null
+          source_label?: string | null
+          source_type?: string
+          status?: string
+          tenant_id: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          assigned_to?: string | null
+          assigned_to_name?: string | null
+          completed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          created_by_name?: string | null
+          description?: string | null
+          due_date?: string | null
+          external_contact_email?: string | null
+          external_contact_name?: string | null
+          external_contact_phone?: string | null
+          id?: string
+          priority?: string
+          source_id?: string | null
+          source_label?: string | null
+          source_type?: string
+          status?: string
+          tenant_id?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       tenant_invoices: {
         Row: {
           amount: number
