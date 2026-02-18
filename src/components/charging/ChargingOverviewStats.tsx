@@ -49,12 +49,6 @@ export default function ChargingOverviewStats({ chargePoints, sessions }: Props)
         (s) => format(new Date(s.start_time), "yyyy-MM-dd") === dateStr
       );
 
-      // Past days without sessions → empty bar (no fake "available" hours)
-      if (!isToday && daySessions.length === 0) {
-        days.push({ day: dayLabel, available: 0, charging: 0, error: 0 });
-        continue;
-      }
-
       const cpCount = chargePoints.length;
       if (cpCount === 0) {
         days.push({ day: dayLabel, available: 0, charging: 0, error: 0 });
@@ -76,7 +70,11 @@ export default function ChargingOverviewStats({ chargePoints, sessions }: Props)
         return sum + (effectiveEnd.getTime() - effectiveStart.getTime()) / 3600000;
       }, 0));
 
-      const errorHours = chargePoints.filter((cp) => cp.status === "faulted").length * hoursInDay;
+      // Only count error hours for currently faulted charge points (live status as best available proxy)
+      // Past days without sessions are still counted as "available", not empty.
+      const errorHours = isToday
+        ? chargePoints.filter((cp) => cp.status === "faulted").length * hoursInDay
+        : 0;
 
       days.push({
         day: dayLabel,
