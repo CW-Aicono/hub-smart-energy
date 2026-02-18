@@ -2569,6 +2569,12 @@ export const translations = {
     es: "Infraestructura de red",
     nl: "Netwerkinfrastructuur",
   },
+  "nav.tasks": {
+    de: "Aufgabenverwaltung",
+    en: "Task Management",
+    es: "Gestión de tareas",
+    nl: "Taakbeheer",
+  },
   "users.manageLocations": {
     de: "Standorte verwalten",
     en: "Manage locations",
