@@ -169,7 +169,7 @@ Deno.serve(async (req) => {
       result = { sent: metersPayload.length, count: apiResult.count, meters_created: apiResult.meters_created };
 
     } else if (action === "sync_readings") {
-      // Fetch readings since last sync
+      // Fetch ALL manual meter readings since last sync (cumulative kWh values)
       const sinceDate = settings.last_reading_sync_at || "2000-01-01T00:00:00Z";
 
       const { data: meters } = await supabase
@@ -189,38 +189,17 @@ Deno.serve(async (req) => {
 
       for (const meter of (meters as any[])) {
         const costPerUnit = priceMap.get(meter.energy_type);
-        const roomName = meter.floor_rooms?.name || null;
+        const roomName = (meter as any).floor_rooms?.name || null;
         const locationDescription = roomName || meter.notes || undefined;
 
-        const { data: powerReadings } = await supabase
-          .from("meter_power_readings")
-          .select("power_value, recorded_at")
-          .eq("meter_id", meter.id)
-          .gt("recorded_at", sinceDate)
-          .order("recorded_at", { ascending: false })
-          .limit(1);
-
-        if (powerReadings && powerReadings.length > 0) {
-          for (const pr of powerReadings) {
-            const entry: Record<string, unknown> = {
-              meter_id: meter.id,
-              reading_date: pr.recorded_at.substring(0, 10),
-              value: pr.power_value,
-            };
-            if (locationDescription) entry.location_description = locationDescription;
-            if (costPerUnit !== undefined) entry.cost_per_unit = costPerUnit;
-            readings.push(entry);
-          }
-          continue;
-        }
-
+        // Fetch ALL manual readings since last sync (not just the most recent one)
         const { data: manualReadings } = await supabase
           .from("meter_readings")
           .select("value, reading_date")
           .eq("meter_id", meter.id)
           .gt("reading_date", sinceDate)
-          .order("reading_date", { ascending: false })
-          .limit(1);
+          .order("reading_date", { ascending: true })
+          .limit(1000);
 
         if (manualReadings && manualReadings.length > 0) {
           for (const mr of manualReadings) {
