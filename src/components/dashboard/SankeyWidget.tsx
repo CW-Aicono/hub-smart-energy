@@ -154,8 +154,11 @@ const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
       const m = meterMap[meterId];
       if (!m) return rawValue;
 
-      // Gas with m³ unit: convert volume to energy
-      if (m.energy_type === "gas" && m.unit === "m³") {
+      // Water: values are in m³ — no conversion needed, pass through as-is
+      if (m.energy_type === "wasser") return rawValue;
+
+      // Gas with m³ unit: convert volume to energy (kWh) → then to Wh for unified display
+      if (m.energy_type === "gas") {
         const kWh = gasM3ToKWh(rawValue, m.gas_type, m.brennwert, m.zustandszahl);
         return kWh * 1000; // kWh → Wh
       }
@@ -236,7 +239,11 @@ const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
     if (viewMode === "kosten") {
       return value.toLocaleString("de-DE", { style: "currency", currency: "EUR", minimumFractionDigits: 2, maximumFractionDigits: 2 });
     }
-    // Gas is already converted to kWh, so display as kWh (like strom/waerme)
+    // Water: value is in m³, display directly
+    if (sourceType === "wasser") {
+      return value.toLocaleString("de-DE", { minimumFractionDigits: 0, maximumFractionDigits: 2 }) + " m³";
+    }
+    // Gas is already converted to Wh (via gasM3ToKWh), display as energy
     if (sourceType === "gas") {
       return formatEnergy(value);
     }
