@@ -36,8 +36,9 @@ const handler = async (req: Request): Promise<Response> => {
       throw new Error("Insufficient permissions");
     }
 
-    const { tenantId, adminEmail, adminName, redirectTo } = await req.json();
+    const { tenantId, adminEmail, adminName, role, redirectTo } = await req.json();
     if (!tenantId || !adminEmail) throw new Error("Missing tenantId or adminEmail");
+    const assignedRole = role === "user" ? "user" : "admin";
 
     // Get tenant info for branding
     const { data: tenant } = await supabase
@@ -89,10 +90,10 @@ const handler = async (req: Request): Promise<Response> => {
       })
       .eq("user_id", newUserId);
 
-    // Set role to admin (upsert to handle existing role)
+    // Set role (upsert to handle existing role)
     await supabase
       .from("user_roles")
-      .update({ role: "admin" })
+      .update({ role: assignedRole })
       .eq("user_id", newUserId);
 
     // Generate password-reset link (user sets their own password)
