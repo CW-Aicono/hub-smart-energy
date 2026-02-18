@@ -269,20 +269,40 @@ export const TaskDetailSheet = ({ task, open, onOpenChange }: TaskDetailSheetPro
               )}
             </div>
 
-            {/* Status */}
-            <div className="space-y-1.5">
-              <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Status</Label>
-              <Select value={task.status} onValueChange={(v) => handleStatusChange(v as TaskStatus)}>
-                <SelectTrigger className="w-48">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="open">⬜ Offen</SelectItem>
-                  <SelectItem value="in_progress">🔵 In Bearbeitung</SelectItem>
-                  <SelectItem value="done">✅ Erledigt</SelectItem>
-                  <SelectItem value="cancelled">❌ Abgebrochen</SelectItem>
-                </SelectContent>
-              </Select>
+            {/* Status + Priority row */}
+            <div className="flex gap-4 flex-wrap">
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Status</Label>
+                <Select value={task.status} onValueChange={(v) => handleStatusChange(v as TaskStatus)}>
+                  <SelectTrigger className="w-44">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="open">⬜ Offen</SelectItem>
+                    <SelectItem value="in_progress">🔵 In Bearbeitung</SelectItem>
+                    <SelectItem value="done">✅ Erledigt</SelectItem>
+                    <SelectItem value="cancelled">❌ Abgebrochen</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Priorität</Label>
+                <Select
+                  value={task.priority}
+                  onValueChange={(v) => updateTask.mutate({ id: task.id, priority: v as Task["priority"] })}
+                >
+                  <SelectTrigger className="w-44">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="low">🟢 Niedrig</SelectItem>
+                    <SelectItem value="medium">🔵 Mittel</SelectItem>
+                    <SelectItem value="high">🟠 Hoch</SelectItem>
+                    <SelectItem value="critical">🔴 Kritisch</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
             {/* Due date */}
