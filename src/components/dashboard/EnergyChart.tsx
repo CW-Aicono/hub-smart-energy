@@ -501,12 +501,13 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
                 <Tooltip
                   contentStyle={tooltipStyle}
                   formatter={(value, name, item) => {
-                    const dk = (item as any)?.dataKey as string | undefined;
-                    // Skip gap (dashed) lines and real_* duplicate keys in tooltip
-                    if (dk && (dk.startsWith("real_") || (typeof name === "string" && name.startsWith("__gap_")))) return ["", ""];
-                    return tooltipFormatter(value as number, name as string);
+                    const nameStr = typeof name === "string" ? name : "";
+                    // Hide gap (dashed interpolated) lines from tooltip
+                    if (nameStr.startsWith("__gap_")) return ["", ""];
+                    // real_* lines carry the display name (e.g. "Strom") — show them
+                    return tooltipFormatter(value as number, nameStr);
                   }}
-                  itemSorter={(item) => ((item as any)?.dataKey as string ?? "").startsWith("real_") ? 1 : 0}
+                  itemSorter={(item) => ((item as any)?.dataKey as string ?? "").startsWith("real_") ? -1 : 1}
                 />
                 <Legend wrapperStyle={{ fontSize: 12, cursor: 'pointer' }} onClick={handleLegendClick} formatter={(value, entry) => {
                   // Only show legend entries for the named real_* lines (they carry the display name like "Strom")
