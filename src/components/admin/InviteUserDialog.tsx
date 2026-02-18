@@ -35,7 +35,7 @@ const InviteUserDialog = () => {
           name: name || undefined,
           role,
           tenantId: tenant?.id,
-          redirectTo: `https://ems-pro.aicono.org/set-password`,
+          redirectTo: `${window.location.origin}/set-password`,
         },
       });
 
