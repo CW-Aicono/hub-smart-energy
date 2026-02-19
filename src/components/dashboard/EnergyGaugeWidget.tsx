@@ -10,44 +10,6 @@ import { ENERGY_TYPE_LABELS, ENERGY_HEX_COLORS } from "@/lib/energyTypeColors";
 import { supabase } from "@/integrations/supabase/client";
 import { startOfDay, endOfDay } from "date-fns";
 
-interface EnergyValue {
-  meter_id: string;
-  recorded_at: string;
-  power_value: number;
-}
-
-interface MeterWithLocation extends Meter {
-  location_id: string | null;
-  location_integration_id: string | null;
-}
-
-interface Meter {
-  id: string;
-  name: string;
-  energy_type: string;
-  capture_type: string;
-  is_main_meter: boolean;
-  is_archived: boolean;
-  sensor_uuid: string | null;
-}
-
-interface LoxoneSensor {
-  uuid: string;
-  name: string;
-  room: string;
-  category: string;
-  details: any;
-  states: any;
-  last_updated: string;
-  device_uuid: string;
-  type: string;
-  sub_type: string;
-  unit: string;
-  rawValue: number;
-  textValue: string;
-  is_favorite: boolean;
-}
-
 interface EnergyGaugeWidgetProps {
   locationId: string | null;
 }
@@ -60,6 +22,7 @@ interface GaugeData {
   maxScale: number;
   unit: string;
   color: string;
+  hidePeak?: boolean;
 }
 
 function getPowerUnit(energyType: string): string {
@@ -77,15 +40,18 @@ function autoScale(value: number, peak: number): number {
 }
 
 function AnalogGauge({ data }: { data: GaugeData }) {
-  const { currentValue, peakValue, maxScale, unit, label, color } = data;
+  const { currentValue, peakValue, maxScale, unit, label, color, hidePeak } = data;
 
   const startAngle = -225;
   const endAngle = 45;
   const sweep = endAngle - startAngle;
 
-  const cx = 100;
-  const cy = 100;
-  const r = 78;
+  // Use a viewBox with generous padding so glow filters don't clip
+  const pad = 16;
+  const size = 200;
+  const cx = size / 2;
+  const cy = size / 2;
+  const r = 72;
 
   const valueAngle = startAngle + (Math.min(currentValue, maxScale) / maxScale) * sweep;
   const peakAngle = startAngle + (Math.min(peakValue, maxScale) / maxScale) * sweep;
@@ -105,18 +71,18 @@ function AnalogGauge({ data }: { data: GaugeData }) {
     const frac = i / numTicks;
     const angle = startAngle + frac * sweep;
     const isMajor = i % 2 === 0;
-    const inner = arcPoint(angle, r - (isMajor ? 12 : 7));
+    const inner = arcPoint(angle, r - (isMajor ? 11 : 6));
     const outer = arcPoint(angle, r);
-    const labelPt = arcPoint(angle, r - 21);
+    const labelPt = arcPoint(angle, r - 19);
     const tickVal = Math.round((frac * maxScale) * 100) / 100;
     return { inner, outer, labelPt, tickVal, isMajor };
   });
 
-  const needleLen = r - 18;
+  const needleLen = r - 16;
   const needleTip = arcPoint(valueAngle, needleLen);
-  const needleTail = arcPoint(valueAngle + 180, 14);
-  const needleBase1 = arcPoint(valueAngle + 90, 3);
-  const needleBase2 = arcPoint(valueAngle - 90, 3);
+  const needleTail = arcPoint(valueAngle + 180, 12);
+  const needleBase1 = arcPoint(valueAngle + 90, 2.5);
+  const needleBase2 = arcPoint(valueAngle - 90, 2.5);
 
   const peakOuter = arcPoint(peakAngle, r + 2);
   const peakInner = arcPoint(peakAngle, r - 5);
@@ -132,12 +98,17 @@ function AnalogGauge({ data }: { data: GaugeData }) {
     return v.toLocaleString("de-DE", { maximumFractionDigits: 1 });
   };
 
+  const vbX = -pad;
+  const vbY = -pad;
+  const vbW = size + pad * 2;
+  const vbH = size * 0.78 + pad * 2;
+
   return (
-    <div className="flex flex-col items-center flex-1 min-w-[140px] max-w-[200px]">
-      <svg viewBox="0 0 200 155" className="w-full">
+    <div className="flex flex-col items-center flex-1 min-w-[120px] max-w-[210px]">
+      <svg viewBox={`${vbX} ${vbY} ${vbW} ${vbH}`} className="w-full">
         <defs>
-          <filter id={`glow-${data.energyType}`}>
-            <feDropShadow dx="0" dy="0" stdDeviation="3" floodColor={color} floodOpacity="0.4" />
+          <filter id={`glow-${data.energyType}`} x="-30%" y="-30%" width="160%" height="160%">
+            <feDropShadow dx="0" dy="0" stdDeviation="4" floodColor={color} floodOpacity="0.45" />
           </filter>
           <linearGradient id={`needle-${data.energyType}`} x1="0%" y1="0%" x2="100%" y2="100%">
             <stop offset="0%" stopColor="hsl(var(--foreground))" />
@@ -148,20 +119,13 @@ function AnalogGauge({ data }: { data: GaugeData }) {
         {/* Background arc */}
         <path
           d={`M ${arcStart.x} ${arcStart.y} A ${r} ${r} 0 1 1 ${arcEnd.x} ${arcEnd.y}`}
-          fill="none"
-          stroke="hsl(var(--border))"
-          strokeWidth={6}
-          strokeLinecap="round"
-          opacity={0.35}
+          fill="none" stroke="hsl(var(--border))" strokeWidth={6} strokeLinecap="round" opacity={0.35}
         />
         {/* Value arc */}
         {currentValue > 0 && (
           <path
             d={`M ${arcStart.x} ${arcStart.y} A ${r} ${r} 0 ${valueAngle - startAngle > 180 ? 1 : 0} 1 ${valEnd.x} ${valEnd.y}`}
-            fill="none"
-            stroke={color}
-            strokeWidth={6}
-            strokeLinecap="round"
+            fill="none" stroke={color} strokeWidth={6} strokeLinecap="round"
             filter={`url(#glow-${data.energyType})`}
             style={{ transition: "all 1s cubic-bezier(0.4,0,0.2,1)" }}
           />
@@ -171,18 +135,16 @@ function AnalogGauge({ data }: { data: GaugeData }) {
         {ticks.map((t, i) => (
           <g key={i}>
             <line
-              x1={t.inner.x} y1={t.inner.y}
-              x2={t.outer.x} y2={t.outer.y}
+              x1={t.inner.x} y1={t.inner.y} x2={t.outer.x} y2={t.outer.y}
               stroke="hsl(var(--foreground))"
-              strokeWidth={t.isMajor ? 1.5 : 0.6}
+              strokeWidth={t.isMajor ? 1.4 : 0.6}
               opacity={t.isMajor ? 0.5 : 0.2}
             />
             {t.isMajor && (
               <text
                 x={t.labelPt.x} y={t.labelPt.y}
                 textAnchor="middle" dominantBaseline="middle"
-                fill="hsl(var(--muted-foreground))"
-                fontSize={8} fontWeight={500}
+                fill="hsl(var(--muted-foreground))" fontSize={8} fontWeight={500}
               >
                 {fmtTick(t.tickVal)}
               </text>
@@ -190,11 +152,10 @@ function AnalogGauge({ data }: { data: GaugeData }) {
           </g>
         ))}
 
-        {/* Peak */}
-        {peakValue > 0 && (
+        {/* Peak marker */}
+        {!hidePeak && peakValue > 0 && (
           <line
-            x1={peakInner.x} y1={peakInner.y}
-            x2={peakOuter.x} y2={peakOuter.y}
+            x1={peakInner.x} y1={peakInner.y} x2={peakOuter.x} y2={peakOuter.y}
             stroke="#ef4444" strokeWidth={2.5} strokeLinecap="round" opacity={0.85}
           >
             <title>Peak: {peakValue.toLocaleString("de-DE", { maximumFractionDigits: 1 })} {unit}</title>
@@ -204,26 +165,25 @@ function AnalogGauge({ data }: { data: GaugeData }) {
         {/* Needle */}
         <polygon
           points={`${needleTip.x},${needleTip.y} ${needleBase1.x},${needleBase1.y} ${needleTail.x},${needleTail.y} ${needleBase2.x},${needleBase2.y}`}
-          fill={`url(#needle-${data.energyType})`}
-          opacity={0.9}
+          fill={`url(#needle-${data.energyType})`} opacity={0.9}
           style={{ transition: "all 1s cubic-bezier(0.4,0,0.2,1)" }}
         />
 
         {/* Hub */}
-        <circle cx={cx} cy={cy} r={8} fill="hsl(var(--muted))" stroke="hsl(var(--border))" strokeWidth={1} />
-        <circle cx={cx} cy={cy} r={4.5} fill="hsl(var(--foreground))" opacity={0.6} />
-        <circle cx={cx} cy={cy} r={2} fill="hsl(var(--background))" />
+        <circle cx={cx} cy={cy} r={7} fill="hsl(var(--muted))" stroke="hsl(var(--border))" strokeWidth={1} />
+        <circle cx={cx} cy={cy} r={4} fill="hsl(var(--foreground))" opacity={0.6} />
+        <circle cx={cx} cy={cy} r={1.8} fill="hsl(var(--background))" />
 
         {/* Readout */}
-        <text x={cx} y={cy + 30} textAnchor="middle" fill="hsl(var(--foreground))" fontSize={20} fontWeight={700} fontFamily="'SF Mono', 'Cascadia Code', monospace">
+        <text x={cx} y={cy + 26} textAnchor="middle" fill="hsl(var(--foreground))" fontSize={18} fontWeight={700} fontFamily="'SF Mono', 'Cascadia Code', monospace">
           {displayValue}
         </text>
-        <text x={cx} y={cy + 43} textAnchor="middle" fill="hsl(var(--muted-foreground))" fontSize={9} fontWeight={500}>
+        <text x={cx} y={cy + 38} textAnchor="middle" fill="hsl(var(--muted-foreground))" fontSize={8} fontWeight={500}>
           {displayUnit}
         </text>
       </svg>
       <span className="text-sm font-semibold tracking-wide -mt-2" style={{ color }}>{label}</span>
-      {peakValue > 0 && (
+      {!hidePeak && peakValue > 0 && (
         <span className="text-[10px] text-muted-foreground flex items-center gap-1 mt-0.5">
           <span className="text-destructive">▲</span>
           {peakValue.toLocaleString("de-DE", { maximumFractionDigits: 1 })} {unit}
@@ -231,6 +191,27 @@ function AnalogGauge({ data }: { data: GaugeData }) {
       )}
     </div>
   );
+}
+
+/** Compute a simple eco score 0–100 based on current power draw relative to daily peaks */
+function computeEcoScore(
+  gaugeData: GaugeData[]
+): number {
+  const energyGauges = gaugeData.filter((g) => !g.hidePeak);
+  if (energyGauges.length === 0) return 100;
+
+  let totalRatio = 0;
+  let count = 0;
+  for (const g of energyGauges) {
+    const ref = Math.max(g.peakValue, g.maxScale * 0.5, 1);
+    const ratio = Math.min(g.currentValue / ref, 1);
+    totalRatio += ratio;
+    count++;
+  }
+
+  // Lower usage = higher eco score
+  const avgRatio = totalRatio / count;
+  return Math.round((1 - avgRatio) * 100);
 }
 
 const EnergyGaugeWidget = ({ locationId }: EnergyGaugeWidgetProps) => {
@@ -323,6 +304,19 @@ const EnergyGaugeWidget = ({ locationId }: EnergyGaugeWidgetProps) => {
     });
   }, [activeMeters, integrationIds, sensorQueries, allowedTypes, dailyPeaks]);
 
+  const ecoScore = useMemo(() => computeEcoScore(gaugeData), [gaugeData]);
+
+  const ecoGauge: GaugeData = {
+    energyType: "eco",
+    label: "Öko-Score",
+    currentValue: ecoScore,
+    peakValue: 0,
+    maxScale: 100,
+    unit: "%",
+    color: ecoScore >= 70 ? "#22c55e" : ecoScore >= 40 ? "#eab308" : "#ef4444",
+    hidePeak: true,
+  };
+
   const isLoading = sensorQueries.some((q) => q.isLoading);
 
   if (isLoading) {
@@ -373,17 +367,18 @@ const EnergyGaugeWidget = ({ locationId }: EnergyGaugeWidgetProps) => {
         </div>
       </CardHeader>
       <CardContent className="pt-0 pb-3">
-        {/* Cockpit instrument panel */}
         <div className="
           rounded-[50px] border border-border/50
           bg-gradient-to-b from-background via-muted/20 to-muted/40
           shadow-[inset_0_1px_0_rgba(255,255,255,0.08),inset_0_-2px_6px_rgba(0,0,0,0.06),0_2px_8px_rgba(0,0,0,0.08)]
-          px-6 py-5
+          px-4 py-4
         ">
           <div className="flex items-start justify-around">
             {gaugeData.map((g) => (
               <AnalogGauge key={g.energyType} data={g} />
             ))}
+            {/* Eco gauge always last */}
+            <AnalogGauge data={ecoGauge} />
           </div>
         </div>
       </CardContent>
