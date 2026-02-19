@@ -489,20 +489,22 @@ async function loxoneWsAuth(
     return false;
   }
 
-  // lxcommunicator Referenz: salt und key werden DIREKT aus der getkey2-Response verwendet.
-  //   salt → direkt als String in "password:salt"
-  //   key  → Buffer.from(key, "hex") → binärer HMAC-Key
-  // KEIN doppeltes Hex-Decoding!
-  const hmacKeyBuf = Buffer.from(key2Value!, "hex");
-  log("info", `[Loxone] getkey2: salt="${saltValue!.substring(0, 20)}..." key="${key2Value!.substring(0, 8)}..." (hmacKey=${hmacKeyBuf.length}B) hashAlg=${hashAlgValue}`);
+  // Da getkey2 UNVERSCHLÜSSELT gesendet wird, kommen salt und key HEX-KODIERT zurück.
+  // Doppeltes Hex-Decoding nötig:
+  //   salt: hex-decode → UTF8 → UUID-String (z.B. "2031943c-024e-...")
+  //   key:  hex-decode → UTF8 → 40-Char-Hex-String → hex-decode → 20 Bytes HMAC-Key
+  const actualSalt   = Buffer.from(saltValue!, "hex").toString("utf8");
+  const actualKeyHex = Buffer.from(key2Value!, "hex").toString("utf8");
+  const hmacKeyBuf   = Buffer.from(actualKeyHex, "hex");
+  log("info", `[Loxone] getkey2: salt="${actualSalt.substring(0, 20)}..." key="${actualKeyHex.substring(0, 8)}..." (hmacKey=${hmacKeyBuf.length}B) hashAlg=${hashAlgValue}`);
 
-  // Hash gemäß hashAlg vom Miniserver (lxcommunicator TokenHandler._otHash):
+  // Hash gemäß hashAlg (lxcommunicator TokenHandler._otHash):
   //   pwHash = HASH(password:salt) → uppercase hex
   //   hash   = HMAC-HASH(user:pwHash, key) → hex
   const useAlg = hashAlgValue.toUpperCase() === "SHA256" ? "sha256" : "sha1";
   function buildHash(algorithm: "sha1" | "sha256"): string {
     const pwHash = crypto.createHash(algorithm)
-      .update(`${password}:${saltValue!}`)
+      .update(`${password}:${actualSalt}`)
       .digest("hex")
       .toUpperCase();
     return crypto.createHmac(algorithm, hmacKeyBuf)
@@ -577,7 +579,7 @@ async function loxoneWsAuth(
       ws.on("message", onMsg);
       ws.on("close", onClose);
       const encrypted = loxoneAesEncrypt(jwtCmd, aesKey, aesIv);
-      ws.send(`jdev/sys/enc/${encodeURIComponent(encrypted)}`);
+      ws.send(`jdev/sys/fenc/${encodeURIComponent(encrypted)}`);
     });
 
     return { ok, token: tok, validUntil: vu };
