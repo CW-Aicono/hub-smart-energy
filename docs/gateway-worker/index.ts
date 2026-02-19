@@ -270,21 +270,19 @@ async function loxoneWsAuth(
       return false;
     }
 
-    // Loxone liefert einen RSA Public Key als Base64-kodiertes X.509-Zertifikat.
-    // Node 20 / OpenSSL 3.x kann ein "CERTIFICATE"-PEM nicht direkt als Key nutzen —
-    // deshalb parsen wir es als X509Certificate und extrahieren den Public Key daraus.
+    // Loxone liefert den RSA Public Key als Base64-kodiertes SPKI (SubjectPublicKeyInfo),
+    // NICHT als X.509-Zertifikat. Korrekte PEM-Header: BEGIN PUBLIC KEY (PKCS#8/SPKI).
     if (rawKey.startsWith("-----BEGIN CERTIFICATE-----")) {
-      // Bereits vollständiges PEM-Zertifikat
+      // Seltener Fall: echter X.509-Zertifikat → Public Key extrahieren
       const cert = new crypto.X509Certificate(rawKey);
       publicKeyObj = cert.publicKey;
     } else if (rawKey.startsWith("-----")) {
-      // Anderes PEM-Format (z.B. PUBLIC KEY) — direkt laden
+      // Bereits ein vollständiges PEM (z.B. BEGIN PUBLIC KEY) — direkt laden
       publicKeyObj = crypto.createPublicKey(rawKey);
     } else {
-      // Nur Base64 ohne Header → X.509-Zertifikat
-      const pemCert = `-----BEGIN CERTIFICATE-----\n${rawKey}\n-----END CERTIFICATE-----`;
-      const cert = new crypto.X509Certificate(pemCert);
-      publicKeyObj = cert.publicKey;
+      // Roher Base64 SPKI-Key ohne Header → BEGIN PUBLIC KEY wrapper
+      const pemKey = `-----BEGIN PUBLIC KEY-----\n${rawKey}\n-----END PUBLIC KEY-----`;
+      publicKeyObj = crypto.createPublicKey(pemKey);
     }
   } catch (err) {
     log("warn", `[Loxone] getPublicKey failed for ${baseUrl}: ${err instanceof Error ? err.message : err}`);
