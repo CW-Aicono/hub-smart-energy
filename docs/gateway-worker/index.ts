@@ -435,7 +435,9 @@ async function loxoneWsAuth(
 
   // ── Schritt 3: Neues Token anfordern ──────────────────────────────────────
   // getkey2: Salt + Challenge für Passwort-Hashing
-  // WICHTIG: getkey2 wird verschlüsselt gesendet (via fenc) und die Antwort kommt ebenfalls verschlüsselt zurück.
+  // WICHTIG: Nach dem Key-Exchange ist der Kanal verschlüsselt!
+  // lxcommunicator sendet getkey2 VERSCHLÜSSELT via fenc.
+  // Die Antwort kommt ebenfalls verschlüsselt zurück.
   let key2Value: string;
   let saltValue: string;
   let hashAlgValue: string = "SHA1"; // Default für ältere Firmware
@@ -443,31 +445,39 @@ async function loxoneWsAuth(
   const key2Ok = await new Promise<boolean>((resolve) => {
     const timeout = setTimeout(() => {
       log("warn", `[Loxone] getkey2 timeout for ${serialNumber}`);
+      ws.removeListener("message", onMsg);
       resolve(false);
     }, 8000);
     const onMsg = (data: WebSocket.RawData) => {
-      // Loxone sends getkey2 response as a binary-flagged frame containing plain JSON text.
-      // After fenc, the LL.value is AES-encrypted — try to decrypt it.
       const msg = data.toString();
-      log("debug", `[Loxone] getkey2 frame: ${msg.substring(0, 120)}`);
-      let parsed: any;
-      try { parsed = JSON.parse(msg); } catch (_e) {
-        // Not JSON — might be binary header, skip
+      log("debug", `[Loxone] getkey2 raw frame (${Buffer.isBuffer(data) ? "bin" : "txt"}, ${msg.length}B): ${msg.substring(0, 120)}`);
+
+      // Versuch 1: Direkt als JSON parsen (falls Miniserver Klartext-JSON schickt)
+      // Versuch 2: AES-Entschlüsselung (verschlüsselte Antwort auf fenc-Befehl)
+      let decrypted = msg;
+      try {
+        if (!msg.startsWith("{") && !msg.startsWith("[")) {
+          decrypted = loxoneAesDecrypt(msg, aesKey, aesIv);
+          log("debug", `[Loxone] getkey2 decrypted: ${decrypted.substring(0, 120)}`);
+        }
+      } catch (_e) {
+        // Nicht entschlüsselbar — könnte ein binärer Header-Frame sein, überspringen
         return;
       }
+
+      let parsed: any;
+      try { parsed = JSON.parse(decrypted); } catch (_e) { return; }
       const ll = parsed?.LL;
       if (!ll) return;
       if (typeof ll.control === "string" && ll.control.includes("getkey2")) {
         clearTimeout(timeout);
         ws.removeListener("message", onMsg);
 
-        // getkey2 response is plain JSON (not encrypted), value is an object directly
         let val = ll.value;
 
         if (typeof val === "object" && val.key && val.salt) {
           key2Value = val.key as string;
           saltValue = val.salt as string;
-          // Loxone Config 10.3+: hashAlg field specifies the hashing algorithm
           if (val.hashAlg) {
             hashAlgValue = val.hashAlg as string;
           }
@@ -479,9 +489,10 @@ async function loxoneWsAuth(
       }
     };
     ws.on("message", onMsg);
-    // getkey2 wird UNVERSCHLÜSSELT gesendet (nur getjwt wird via fenc verschlüsselt)
+    // Nach Key-Exchange: ALLE Befehle verschlüsselt via fenc senden!
     log("info", `[Loxone] Sending getkey2 for ${serialNumber} (user: ${username})`);
-    ws.send(`jdev/sys/getkey2/${username}`);
+    const encKey2 = loxoneAesEncrypt(`jdev/sys/getkey2/${username}`, aesKey, aesIv);
+    ws.send(`jdev/sys/fenc/${encKey2}`);
   });
 
   if (!key2Ok) {
@@ -489,15 +500,14 @@ async function loxoneWsAuth(
     return false;
   }
 
-  // Da getkey2 UNVERSCHLÜSSELT gesendet wird, kommen salt und key HEX-KODIERT zurück.
-  // Hex-Decode → UTF8 ergibt die eigentlichen Klartext-Strings.
-  const actualSalt   = Buffer.from(saltValue!, "hex").toString("utf8");
-  const actualKeyHex = Buffer.from(key2Value!, "hex").toString("utf8");
-  // WICHTIG: lxcommunicator verwendet den Key-String DIREKT als HMAC-Schlüssel (UTF8-Bytes),
-  // NICHT hex-dekodiert! CryptoJS.HmacSHA256(msg, keyString) interpretiert keyString als UTF8.
-  // D.h. der 40-Zeichen-Hex-String wird als 40 UTF8-Bytes verwendet.
-  const hmacKeyBuf   = Buffer.from(actualKeyHex, "utf8");
-  log("info", `[Loxone] getkey2: salt="${actualSalt.substring(0, 20)}..." key="${actualKeyHex.substring(0, 8)}..." (hmacKey=${hmacKeyBuf.length}B) hashAlg=${hashAlgValue}`);
+  // Da getkey2 jetzt VERSCHLÜSSELT gesendet wird, kommen salt und key als Klartext zurück
+  // (nach AES-Entschlüsselung). KEIN Hex-Decoding nötig!
+  // lxcommunicator verwendet die Werte direkt: this._key = result.key; this._salt = result.salt;
+  const actualSalt = saltValue!;
+  const actualKey  = key2Value!;
+  // CryptoJS.HmacSHA256(msg, keyString) interpretiert keyString als UTF8-Bytes
+  const hmacKeyBuf = Buffer.from(actualKey, "utf8");
+  log("info", `[Loxone] getkey2: salt="${actualSalt.substring(0, 20)}..." key="${actualKey.substring(0, 8)}..." (hmacKey=${hmacKeyBuf.length}B) hashAlg=${hashAlgValue}`);
 
   // Hash gemäß hashAlg (lxcommunicator TokenHandler._otHash):
   //   pwHash = HASH(password:salt) → uppercase hex
