@@ -913,7 +913,7 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
                             detail = timeStr;
                           }
                           return (
-                            <div className={`border rounded-lg p-3 text-left col-span-2 ${isActive ? "border-primary/30 bg-primary/5" : ""}`}>
+                            <div className={`border rounded-lg p-3 text-left ${isActive ? "border-primary/30 bg-primary/5" : ""}`}>
                               <p className="text-xs text-muted-foreground">Leistungsbegrenzung (Gruppe)</p>
                               <p className={`font-medium text-sm ${isActive ? "text-primary" : ""}`}>{label}</p>
                               {detail && <p className="text-xs text-muted-foreground mt-0.5">{detail}</p>}
