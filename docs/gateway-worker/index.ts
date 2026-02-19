@@ -3,11 +3,11 @@
  * ==============================================================
  * Läuft als dauerhaft laufender Prozess (z.B. in einem Docker-Container).
  *
- * Loxone Miniserver: WebSocket-Streaming (event-push, < 1s Latenz)
+ * Loxone Miniserver: WebSocket-Streaming via lxcommunicator (offizielle Bibliothek)
  * Alle anderen Gateways: HTTP-REST-Polling (Intervall = POLL_INTERVAL_MS)
  *
  * Unterstützte Gateways:
- *   - Loxone Miniserver    → WebSocket ws://{ip}/ws/rfc6455 (JWT-Token Auth, RSA+AES256)
+ *   - Loxone Miniserver    → lxcommunicator BinarySocket (JWT-Token Auth, automatisch)
  *   - Shelly Cloud         → HTTP REST
  *   - ABB free@home        → HTTP REST
  *   - Siemens Building X   → HTTP REST + OAuth
@@ -33,7 +33,6 @@
  */
 
 import WebSocket from "ws";
-import * as crypto from "crypto";
 
 // ─── Configuration ──────────────────────────────────────────────────────────
 
@@ -158,14 +157,12 @@ async function fetchMeters(): Promise<MeterWithSensor[]> {
 // ─── Loxone DNS Cache ────────────────────────────────────────────────────────
 
 const loxoneBaseUrlCache = new Map<string, string>();
-// In-flight map prevents duplicate concurrent DNS lookups for the same serial
 const loxoneDnsInFlight = new Map<string, Promise<string | null>>();
 
 async function resolveLoxoneBaseUrl(serialNumber: string): Promise<string | null> {
   if (loxoneBaseUrlCache.has(serialNumber)) {
     return loxoneBaseUrlCache.get(serialNumber)!;
   }
-  // Deduplicate concurrent calls: if a lookup is already in progress, reuse it
   if (loxoneDnsInFlight.has(serialNumber)) {
     return loxoneDnsInFlight.get(serialNumber)!;
   }
@@ -191,569 +188,49 @@ async function resolveLoxoneBaseUrl(serialNumber: string): Promise<string | null
   return promise;
 }
 
-// ─── Loxone WebSocket Manager ─────────────────────────────────────────────────
+// ─── Loxone WebSocket Manager (via lxcommunicator) ────────────────────────────
 //
 // Pro Miniserver (Seriennummer) wird EINE persistente WebSocket-Verbindung
-// gehalten. Der Miniserver pusht alle Wertänderungen sofort (< 1s Latenz).
-// Der Worker pflegt einen In-Memory-State und flusht ihn sekündlich in die DB.
+// gehalten. lxcommunicator übernimmt Auth, Crypto, Keepalive und Token-Refresh.
 
 interface LoxoneWsState {
   serialNumber: string;
   username: string;
   password: string;
   baseUrl: string;
-  ws: WebSocket | null;
+  ws: any; // LxCommunicator.BinarySocket (kein Standard-WebSocket)
   // sensor_uuid → { meter_id, tenant_id, energy_type, latest_value }
   uuidMap: Map<string, { meter_id: string; tenant_id: string; energy_type: string; latest_value: number | null }>;
-  reconnectDelay: number; // Exponential backoff in ms
+  reconnectDelay: number;
   reconnecting: boolean;
   authenticated: boolean;
   statusUpdatesEnabled: boolean;
-  keepaliveTimer: ReturnType<typeof setInterval> | null;
 }
 
 // Global state map: serialNumber → state
 const loxoneConnections = new Map<string, LoxoneWsState>();
 
-// ─── Loxone JWT Token Store ──────────────────────────────────────────────────
-// Tokens haben ~4 Wochen Lebensdauer (Permission-Level 4 = App)
-// Pro Miniserver wird das Token persistent im Worker-Speicher gehalten.
-
-interface LoxoneToken {
-  token: string;
-  validUntil: number; // Unix-Timestamp (Sekunden)
-}
-
-const loxoneTokenStore = new Map<string, LoxoneToken>();
-
-// ─── AES-256-CBC Verschlüsselung (Loxone-Protokoll) ─────────────────────────
-// Zero-Byte-Padding auf 16-Byte-Blockgröße, Base64 ohne Zeilenumbrüche
-
-function loxoneAesEncrypt(plaintext: string, aesKey: Buffer, aesIv: Buffer): string {
-  // lxcommunicator (forge): Zero-Padding + PKCS7 (forge adds PKCS7 on top automatically)
-  // payload: "salt/{randomSalt}/{command}\0" + zero-pad to block boundary
-  const salt = crypto.randomBytes(2).toString("hex"); // 2 random bytes = 4 hex chars (matches lxcommunicator _generateSalt(2))
-  const cmdStr = `salt/${salt}/${plaintext}\0`; // Null-Terminator wie in lxcommunicator
-  const blockSize = 16;
-  const remainder = Buffer.byteLength(cmdStr, "utf8") % blockSize;
-  const zeroPadLen = remainder === 0 ? 0 : blockSize - remainder;
-  const padded = Buffer.concat([Buffer.from(cmdStr, "utf8"), Buffer.alloc(zeroPadLen, 0)]);
-
-  // PKCS7-Padding AKTIVIERT (Standard) — forge tut das ebenfalls implizit in cipher.finish()
-  // Bei block-aligned Input wird ein kompletter 16-Byte PKCS7-Block angehängt.
-  const cipher = crypto.createCipheriv("aes-256-cbc", aesKey, aesIv);
-  // setAutoPadding(true) ist der Default — PKCS7 wird hinzugefügt
-  const encrypted = Buffer.concat([cipher.update(padded), cipher.final()]);
-  return encrypted.toString("base64");
-}
-
-function loxoneAesDecrypt(ciphertext: string, aesKey: Buffer, aesIv: Buffer): string {
-  const buf = Buffer.from(ciphertext, "base64");
-  const decipher = crypto.createDecipheriv("aes-256-cbc", aesKey, aesIv);
-  // PKCS7-Padding-Entfernung AKTIVIERT (Standard) — forge tut das ebenfalls in decipher.finish()
-  let decrypted: Buffer;
-  try {
-    decrypted = Buffer.concat([decipher.update(buf), decipher.final()]);
-  } catch (_e) {
-    // Fallback: Falls kein gültiges PKCS7-Padding vorhanden (ältere Miniserver)
-    const decipher2 = crypto.createDecipheriv("aes-256-cbc", aesKey, aesIv);
-    decipher2.setAutoPadding(false);
-    decrypted = Buffer.concat([decipher2.update(buf), decipher2.final()]);
-  }
-  // Nullbytes am Ende entfernen
-  return decrypted.toString("utf8").replace(/\0+$/, "");
-}
-
-// ─── Loxone WebSocket Auth (JWT-Token-Protokoll, ab Config 9.3) ──────────────
-//
-// Protokoll (4 Schritte):
-//   1. RSA Key Exchange: Öffentlichen Key holen, AES-Session-Key einrichten
-//   2. getkey2: Salt + Challenge für Passwort-Hashing holen
-//   3. getjwt: JWT-Token (verschlüsselt) anfordern
-//   4. authwithtoken: Token verifizieren (verschlüsselt)
-
-async function loxoneWsAuth(
-  ws: WebSocket,
-  baseUrl: string,
-  username: string,
-  password: string,
-  serialNumber: string
-): Promise<boolean> {
-
-  // ── Schritt 1: RSA Public Key holen + AES-Session-Key aufbauen ──────────────
-  let publicKeyObj: crypto.KeyObject;
-  try {
-    const pkRes = await fetch(`${baseUrl}/jdev/sys/getPublicKey`, {
-      signal: AbortSignal.timeout(8000),
-    });
-    const pkData = await pkRes.json() as any;
-    const rawKey = (pkData?.LL?.value as string | undefined)?.trim() ?? "";
-    if (!rawKey) {
-      log("warn", `[Loxone] No public key received from ${baseUrl}`);
-      return false;
-    }
-
-    // Immer sichtbar (INFO), damit wir das Schlüsselformat diagnostizieren können
-    log("info", `[Loxone] rawKey prefix: "${rawKey.substring(0, 60)}"`);
-
-    if (rawKey.startsWith("-----BEGIN CERTIFICATE-----")) {
-      // Loxone schickt "BEGIN CERTIFICATE" als Header, aber der Inhalt ist ein SPKI-Public-Key!
-      // Base64-Inhalt extrahieren und mit korrektem Header neu verpacken.
-      const b64 = rawKey
-        .replace("-----BEGIN CERTIFICATE-----", "")
-        .replace("-----END CERTIFICATE-----", "")
-        .replace(/\s+/g, "");
-      const b64Lines = (b64.match(/.{1,64}/g) ?? [b64]).join("\n");
-
-      // Versuch 1: Als SPKI Public Key (der tatsächliche Inhalt laut ASN.1-Analyse)
-      let keyParsed = false;
-      try {
-        const pemSpki = `-----BEGIN PUBLIC KEY-----\n${b64Lines}\n-----END PUBLIC KEY-----`;
-        publicKeyObj = crypto.createPublicKey(pemSpki);
-        keyParsed = true;
-        log("info", `[Loxone] Key format: SPKI (mislabeled as CERTIFICATE)`);
-      } catch (_e) { /* weiter */ }
-
-      // Versuch 2: Echter X.509-Zertifikat-Inhalt
-      if (!keyParsed) {
-        try {
-          const pemCert = `-----BEGIN CERTIFICATE-----\n${b64Lines}\n-----END CERTIFICATE-----`;
-          const cert = new crypto.X509Certificate(pemCert);
-          publicKeyObj = cert.publicKey;
-          keyParsed = true;
-          log("info", `[Loxone] Key format: X.509 Certificate (reformatted)`);
-        } catch (_e) { /* weiter */ }
-      }
-
-      // Versuch 3: PKCS#1 RSA Public Key
-      if (!keyParsed) {
-        const pemPkcs1 = `-----BEGIN RSA PUBLIC KEY-----\n${b64Lines}\n-----END RSA PUBLIC KEY-----`;
-        publicKeyObj = crypto.createPublicKey({ key: pemPkcs1, format: "pem" });
-        log("info", `[Loxone] Key format: PKCS#1 (mislabeled as CERTIFICATE)`);
-      }
-
-      // (key format already logged above inside the if/else chain)
-    } else if (rawKey.startsWith("-----")) {
-      // Fertiges PEM (z.B. BEGIN PUBLIC KEY / BEGIN RSA PUBLIC KEY) → direkt laden
-      publicKeyObj = crypto.createPublicKey(rawKey);
-      log("info", `[Loxone] Key format: Full PEM`);
-    } else {
-      // Roher Base64-Block ohne Header → alle Formate ausprobieren
-      // Versuch 1: SPKI / PKCS#8 (BEGIN PUBLIC KEY)
-      let parsed = false;
-      try {
-        const pemSpki = `-----BEGIN PUBLIC KEY-----\n${rawKey}\n-----END PUBLIC KEY-----`;
-        publicKeyObj = crypto.createPublicKey(pemSpki);
-        parsed = true;
-        log("info", `[Loxone] Key format: raw Base64 → SPKI/PKCS#8 OK`);
-      } catch (_e1) { /* weiter */ }
-
-      // Versuch 2: PKCS#1 (BEGIN RSA PUBLIC KEY)
-      if (!parsed) {
-        try {
-          const pemPkcs1 = `-----BEGIN RSA PUBLIC KEY-----\n${rawKey}\n-----END RSA PUBLIC KEY-----`;
-          publicKeyObj = crypto.createPublicKey({ key: pemPkcs1, format: "pem" });
-          parsed = true;
-          log("info", `[Loxone] Key format: raw Base64 → PKCS#1 OK`);
-        } catch (_e2) { /* weiter */ }
-      }
-
-      // Versuch 3: rohe DER-Bytes (Base64 → Buffer, createPublicKey mit DER)
-      if (!parsed) {
-        try {
-          const derBuf = Buffer.from(rawKey, "base64");
-          publicKeyObj = crypto.createPublicKey({ key: derBuf, format: "der", type: "spki" });
-          parsed = true;
-          log("info", `[Loxone] Key format: raw Base64 → DER/SPKI OK`);
-        } catch (_e3) { /* weiter */ }
-      }
-
-      // Versuch 4: DER PKCS#1
-      if (!parsed) {
-        try {
-          const derBuf = Buffer.from(rawKey, "base64");
-          publicKeyObj = crypto.createPublicKey({ key: derBuf, format: "der", type: "pkcs1" });
-          parsed = true;
-          log("info", `[Loxone] Key format: raw Base64 → DER/PKCS#1 OK`);
-        } catch (_e4) { /* weiter */ }
-      }
-
-      if (!parsed) {
-        throw new Error(`All key formats failed for ${baseUrl}. rawKey prefix: "${rawKey.substring(0, 60)}"`);
-      }
-    }
-  } catch (err) {
-    log("warn", `[Loxone] getPublicKey failed for ${baseUrl}: ${err instanceof Error ? err.message : err}`);
-    return false;
-  }
-
-  // AES-256 Key + IV generieren (32 + 16 Byte)
-  const aesKey = crypto.randomBytes(32);
-  const aesIv  = crypto.randomBytes(16);
-
-  // Session-Key RSA-OAEP verschlüsseln
-  let encryptedSessionKey: string;
-  try {
-    const keyPayload = `${aesKey.toString("hex")}:${aesIv.toString("hex")}`;
-    const encBuf = crypto.publicEncrypt(
-      {
-        key: publicKeyObj,
-        padding: crypto.constants.RSA_PKCS1_OAEP_PADDING,
-      },
-      Buffer.from(keyPayload, "utf8")
-    );
-    encryptedSessionKey = encBuf.toString("base64");
-  } catch (err) {
-    log("warn", `[Loxone] RSA encrypt failed for ${baseUrl}: ${err instanceof Error ? err.message : err}`);
-    return false;
-  }
-
-  // Key Exchange über WebSocket senden + Antwort abwarten
-  const keyExchangeOk = await new Promise<boolean>((resolve) => {
-    const timeout = setTimeout(() => resolve(false), 8000);
-    const onMsg = (data: WebSocket.RawData) => {
-      const msg = data.toString();
-      let parsed: any;
-      try { parsed = JSON.parse(msg); } catch (_e) { return; }
-      const ll = parsed?.LL;
-      if (!ll) return;
-      if (typeof ll.control === "string" && ll.control.includes("keyexchange")) {
-        clearTimeout(timeout);
-        ws.removeListener("message", onMsg);
-        const code = ll.Code ?? ll.code;
-        resolve(code === "200" || code === 200);
-      }
-    };
-    ws.on("message", onMsg);
-    ws.send(`jdev/sys/keyexchange/${encryptedSessionKey}`);
-  });
-
-  if (!keyExchangeOk) {
-    log("warn", `[Loxone] Key exchange failed for ${serialNumber}`);
-    return false;
-  }
-  log("info", `[Loxone] Key exchange successful: ${serialNumber}`);
-
-  // ── Schritt 2: Gespeichertes Token prüfen (Token-Persistenz) ──────────────
-  const existing = loxoneTokenStore.get(serialNumber);
-  const nowSec = Math.floor(Date.now() / 1000);
-
-  if (existing && existing.validUntil > nowSec + 60) {
-    // Vorhandenes Token ist noch gültig — direkt authwithtoken aufrufen
-    log("debug", `[Loxone] Reusing cached token for ${serialNumber}`);
-    return await loxoneAuthWithToken(ws, baseUrl, username, existing.token, aesKey, aesIv, serialNumber);
-  }
-
-  // ── Schritt 3: Neues Token anfordern ──────────────────────────────────────
-  // getkey2: Salt + Challenge für Passwort-Hashing
-  // getkey2 wird im KLARTEXT gesendet, Antwort kommt als JSON.
-  // Nur getjwt wird über fenc verschlüsselt!
-  // Die Antwort kommt ebenfalls verschlüsselt zurück.
-  let key2Value: string;
-  let saltValue: string;
-  let hashAlgValue: string = "SHA1"; // Default für ältere Firmware
-
-  const key2Ok = await new Promise<boolean>((resolve) => {
-    const timeout = setTimeout(() => {
-      log("warn", `[Loxone] getkey2 timeout for ${serialNumber}`);
-      ws.removeListener("message", onMsg);
-      resolve(false);
-    }, 8000);
-    const onMsg = (data: WebSocket.RawData) => {
-      const msg = data.toString();
-      log("debug", `[Loxone] getkey2 raw frame (${Buffer.isBuffer(data) ? "bin" : "txt"}, ${msg.length}B): ${msg.substring(0, 120)}`);
-
-      // Versuch 1: Direkt als JSON parsen (falls Miniserver Klartext-JSON schickt)
-      // Versuch 2: AES-Entschlüsselung (verschlüsselte Antwort auf fenc-Befehl)
-      let decrypted = msg;
-      try {
-        if (!msg.startsWith("{") && !msg.startsWith("[")) {
-          decrypted = loxoneAesDecrypt(msg, aesKey, aesIv);
-          log("debug", `[Loxone] getkey2 decrypted: ${decrypted.substring(0, 120)}`);
-        }
-      } catch (_e) {
-        // Nicht entschlüsselbar — könnte ein binärer Header-Frame sein, überspringen
-        return;
-      }
-
-      let parsed: any;
-      try { parsed = JSON.parse(decrypted); } catch (_e) { return; }
-      const ll = parsed?.LL;
-      if (!ll) return;
-      if (typeof ll.control === "string" && ll.control.includes("getkey2")) {
-        clearTimeout(timeout);
-        ws.removeListener("message", onMsg);
-
-        let val = ll.value;
-
-        if (typeof val === "object" && val.key && val.salt) {
-          key2Value = val.key as string;
-          saltValue = val.salt as string;
-          if (val.hashAlg) {
-            hashAlgValue = val.hashAlg as string;
-          }
-          resolve(true);
-        } else {
-          log("warn", `[Loxone] getkey2 unexpected value: ${JSON.stringify(val)}`);
-          resolve(false);
-        }
-      }
-    };
-    ws.on("message", onMsg);
-    // getkey2 wird im KLARTEXT gesendet (nicht via fenc)!
-    // Nur getjwt und authwithtoken werden verschlüsselt.
-    log("info", `[Loxone] Sending getkey2 for ${serialNumber} (user: ${username})`);
-    ws.send(`jdev/sys/getkey2/${username}`);
-  });
-
-  if (!key2Ok) {
-    log("warn", `[Loxone] getkey2 failed for ${serialNumber}`);
-    return false;
-  }
-
-  // Da getkey2 jetzt VERSCHLÜSSELT gesendet wird, kommen salt und key als Klartext zurück
-  // (nach AES-Entschlüsselung). KEIN Hex-Decoding nötig!
-  // lxcommunicator verwendet die Werte direkt: this._key = result.key; this._salt = result.salt;
-  const actualSalt = saltValue!;
-  const actualKey  = key2Value!;
-  // CryptoJS.HmacSHA256(msg, keyString) interpretiert keyString als UTF8-Bytes
-  const hmacKeyBuf = Buffer.from(actualKey, "utf8");
-  log("info", `[Loxone] getkey2: salt="${actualSalt.substring(0, 20)}..." key="${actualKey.substring(0, 8)}..." (hmacKey=${hmacKeyBuf.length}B) hashAlg=${hashAlgValue}`);
-
-  // Hash gemäß hashAlg (lxcommunicator TokenHandler._otHash):
-  //   pwHash = HASH(password:salt) → uppercase hex
-  //   hash   = HMAC-HASH(user:pwHash, key) → hex
-  const useAlg = hashAlgValue.toUpperCase() === "SHA256" ? "sha256" : "sha1";
-  function buildHash(algorithm: "sha1" | "sha256"): string {
-    const pwHash = crypto.createHash(algorithm)
-      .update(`${password}:${actualSalt}`)
-      .digest("hex")
-      .toUpperCase();
-    return crypto.createHmac(algorithm, hmacKeyBuf)
-      .update(`${username}:${pwHash}`)
-      .digest("hex");
-  }
-  // Primär den vom Miniserver angeforderten Algorithmus verwenden
-  const hashPrimary = buildHash(useAlg);
-  // Fallback: den anderen Algorithmus
-  const hashFallback = buildHash(useAlg === "sha1" ? "sha256" : "sha1");
-  log("info", `[Loxone] hashPrimary(${useAlg})="${hashPrimary.substring(0, 8)}..." hashFallback="${hashFallback.substring(0, 8)}..."`);
-
-  // Hilfsfunktion: einen Hash-Versuch per getjwt abschicken und Antwort auswerten
-  async function tryGetJwt(hash: string, label: string): Promise<{ ok: boolean; token: string | null; validUntil: number }> {
-    const clientUuid = crypto.randomUUID();
-    // Permission 4 = App-Token (langlebig, 4 Wochen), passend für Gateway-Worker
-    // (Permission 2 = Web-Token, kurzlebig — NICHT für dauerhaften Gateway geeignet)
-    const jwtCmd = `jdev/sys/getjwt/${hash}/${username}/4/${clientUuid}/GatewayWorker`;
-    let tok: string | null = null;
-    let vu = 0;
-
-    const ok = await new Promise<boolean>((resolve) => {
-      let resolved = false;
-      const done = (val: boolean) => { if (!resolved) { resolved = true; resolve(val); } };
-
-      const timeout = setTimeout(() => {
-        log("warn", `[Loxone] getjwt timeout (${label}) for ${serialNumber}`);
-        ws.removeListener("message", onMsg);
-        ws.removeListener("close", onClose);
-        done(false);
-      }, 8000);
-
-      const onClose = (code: number) => {
-        clearTimeout(timeout);
-        ws.removeListener("message", onMsg);
-        log("warn", `[Loxone] getjwt ws closed (${label}) code=${code} for ${serialNumber}`);
-        done(false);
-      };
-
-      const onMsg = (data: WebSocket.RawData) => {
-        const msg = data.toString();
-        let decrypted = msg;
-        try {
-          if (!msg.startsWith("{") && !msg.startsWith("[")) {
-            decrypted = loxoneAesDecrypt(msg, aesKey, aesIv);
-          }
-        } catch (_e) { /* ignore */ }
-        let parsed: any;
-        try { parsed = JSON.parse(decrypted); } catch (_e) { return; }
-        const ll = parsed?.LL;
-        if (!ll) return;
-        if (typeof ll.control === "string" && ll.control.includes("getjwt")) {
-          clearTimeout(timeout);
-          ws.removeListener("message", onMsg);
-          ws.removeListener("close", onClose);
-          const code = String(ll.Code ?? ll.code ?? "?");
-          log("info", `[Loxone] getjwt response (${label}): code=${code}`);
-          if (code === "200") {
-            const val = ll.value as any;
-            if (val?.token) {
-              tok = val.token as string;
-              const loxEpoch = 1230768000;
-              vu = (val.validUntil as number) + loxEpoch;
-            }
-            done(true);
-          } else {
-            done(false);
-          }
-        }
-      };
-
-      ws.on("message", onMsg);
-      ws.on("close", onClose);
-      const encrypted = loxoneAesEncrypt(jwtCmd, aesKey, aesIv);
-      ws.send(`jdev/sys/fenc/${encrypted}`);
-    });
-
-    return { ok, token: tok, validUntil: vu };
-  }
-
-  // Primären Hash (vom Miniserver angefordert) zuerst versuchen; falls Fehler → Fallback
-  let jwtResult = await tryGetJwt(hashPrimary, `${useAlg}-primary`);
-  if (!jwtResult.ok && ws.readyState === WebSocket.OPEN) {
-    const fallbackAlg = useAlg === "sha1" ? "sha256" : "sha1";
-    log("info", `[Loxone] Retrying with ${fallbackAlg} fallback hash for ${serialNumber}`);
-    jwtResult = await tryGetJwt(hashFallback, `${fallbackAlg}-fallback`);
-  }
-
-  const receivedToken = jwtResult.token;
-  const validUntil    = jwtResult.validUntil;
-
-  if (!jwtResult.ok || !receivedToken) {
-    log("warn", `[Loxone] getjwt failed for ${serialNumber} (both hash variants exhausted)`);
-    return false;
-  }
-
-
-
-  loxoneTokenStore.set(serialNumber, { token: receivedToken, validUntil });
-  const validDate = new Date(validUntil * 1000).toISOString().slice(0, 10);
-  log("info", `[Loxone] Token acquired: ${serialNumber} (valid until: ${validDate})`);
-
-  // ── Schritt 4: Mit Token authentifizieren ────────────────────────────────
-  return await loxoneAuthWithToken(ws, baseUrl, username, receivedToken, aesKey, aesIv, serialNumber);
-}
-
 /**
- * authwithtoken — letzter Schritt der JWT-Auth.
- * Holt einen neuen key für den Token-Hash und sendet ihn verschlüsselt.
- */
-async function loxoneAuthWithToken(
-  ws: WebSocket,
-  baseUrl: string,
-  username: string,
-  token: string,
-  aesKey: Buffer,
-  aesIv: Buffer,
-  serialNumber: string
-): Promise<boolean> {
-
-  // Neuen Key für Token-Hash anfordern
-  let tokenKey: string | null = null;
-
-  const getKeyOk = await new Promise<boolean>((resolve) => {
-    const timeout = setTimeout(() => resolve(false), 8000);
-    const onMsg = (data: WebSocket.RawData) => {
-      const msg = data.toString();
-      let parsed: any;
-      try { parsed = JSON.parse(msg); } catch (_e) { return; }
-      const ll = parsed?.LL;
-      if (!ll) return;
-      if (typeof ll.control === "string" && ll.control.includes("getkey") && !ll.control.includes("getkey2")) {
-        clearTimeout(timeout);
-        ws.removeListener("message", onMsg);
-        if (ll.value && typeof ll.value === "string") {
-          tokenKey = ll.value as string;
-          resolve(true);
-        } else {
-          resolve(false);
-        }
-      }
-    };
-    ws.on("message", onMsg);
-    ws.send("jdev/sys/getkey");
-  });
-
-  if (!getKeyOk || !tokenKey) {
-    log("warn", `[Loxone] getkey (for token hash) failed for ${serialNumber}`);
-    return false;
-  }
-
-  // tokenHash = HMAC-SHA1(token, key)
-  const tokenHash = crypto.createHmac("sha1", tokenKey)
-    .update(token)
-    .digest("hex");
-
-  // authwithtoken verschlüsselt senden
-  const authCmd = `authwithtoken/${tokenHash}/${username}`;
-
-  const authOk = await new Promise<boolean>((resolve) => {
-    const timeout = setTimeout(() => resolve(false), 8000);
-    const onMsg = (data: WebSocket.RawData) => {
-      const msg = data.toString();
-      let decrypted = msg;
-      try {
-        if (!msg.startsWith("{") && !msg.startsWith("[")) {
-          decrypted = loxoneAesDecrypt(msg, aesKey, aesIv);
-        }
-      } catch (_e) { /* ignore */ }
-
-      let parsed: any;
-      try { parsed = JSON.parse(decrypted); } catch (_e) { return; }
-      const ll = parsed?.LL;
-      if (!ll) return;
-      if (typeof ll.control === "string" && ll.control.includes("authwithtoken")) {
-        clearTimeout(timeout);
-        ws.removeListener("message", onMsg);
-        const code = ll.Code ?? ll.code;
-        if (code === "200" || code === 200) {
-          resolve(true);
-        } else {
-          // Token ungültig → aus Cache löschen
-          loxoneTokenStore.delete(serialNumber);
-          log("warn", `[Loxone] authwithtoken failed (code ${code}), token removed: ${serialNumber}`);
-          resolve(false);
-        }
-      }
-    };
-    ws.on("message", onMsg);
-
-    const encrypted = loxoneAesEncrypt(authCmd, aesKey, aesIv);
-    ws.send(`jdev/sys/fenc/${encrypted}`);
-  });
-
-  if (authOk) {
-    log("info", `[Loxone] Authenticated: ${serialNumber}`);
-  }
-  return authOk;
-}
-
-/**
- * Loxone Binär-Frame-Parser (ValueEvent)
- * Der Miniserver sendet States initial und bei Änderungen als Binär-Frames.
- * Format: Header (8 Bytes) + Payload
- * Header-Byte 1: Identifier (0x03 = ValueEvent)
- * Payload: UUID (16 Bytes, little-endian) + double (8 Bytes, little-endian) — wiederholt
+ * Loxone Binär-Frame-Parser (ValueEvent) — Fallback
+ * Falls lxcommunicator Events nicht bereits geparst liefert,
+ * können wir Binär-Frames manuell auswerten.
  */
 function parseLoxoneValueEvent(buffer: Buffer): Array<{ uuid: string; value: number }> {
   const results: Array<{ uuid: string; value: number }> = [];
 
-  // Minimal-Header: 8 Bytes
   if (buffer.length < 8) return results;
 
   const msgType = buffer[1]; // 0x03 = ValueEvent
   if (msgType !== 0x03) return results;
 
-  // Payload ab Byte 8
   let offset = 8;
   while (offset + 24 <= buffer.length) {
-    // UUID: 16 Bytes in Loxone-spezifischem Format (4 Gruppen: uint32le + uint16le + uint16le + uint8[8])
     const p1 = buffer.readUInt32LE(offset).toString(16).padStart(8, "0");
     const p2 = buffer.readUInt16LE(offset + 4).toString(16).padStart(4, "0");
     const p3 = buffer.readUInt16LE(offset + 6).toString(16).padStart(4, "0");
     const p4 = buffer.slice(offset + 8, offset + 16).toString("hex");
     const uuid = `${p1}-${p2}-${p3}-${p4.slice(0, 4)}-${p4.slice(4)}`;
 
-    // double: 8 Bytes (IEEE 754, little-endian)
     const value = buffer.readDoubleLE(offset + 16);
     results.push({ uuid: uuid.toLowerCase(), value });
     offset += 24;
@@ -763,122 +240,93 @@ function parseLoxoneValueEvent(buffer: Buffer): Array<{ uuid: string; value: num
 }
 
 /**
- * Baut eine WebSocket-Verbindung zum Loxone Miniserver auf und startet Streaming.
+ * Baut eine WebSocket-Verbindung zum Loxone Miniserver auf via lxcommunicator.
+ * Die Bibliothek übernimmt: RSA Key Exchange, AES-256-CBC, JWT-Token, Keepalive.
  */
 function connectLoxoneWs(state: LoxoneWsState): void {
   if (state.ws) {
-    try { state.ws.terminate(); } catch (_e) {}
+    try { state.ws.close(); } catch (_e) {}
     state.ws = null;
-  }
-
-  // Keepalive-Timer stoppen falls vorhanden
-  if (state.keepaliveTimer) {
-    clearInterval(state.keepaliveTimer);
-    state.keepaliveTimer = null;
   }
 
   state.authenticated = false;
   state.statusUpdatesEnabled = false;
 
-  const wsUrl = state.baseUrl.replace(/^http/, "ws") + "/ws/rfc6455";
-  log("info", `[Loxone] WebSocket connecting: ${state.serialNumber} → ${wsUrl}`);
+  const LxCommunicator = require("lxcommunicator");
+  const WebSocketConfig = LxCommunicator.WebSocketConfig;
 
-  const ws = new WebSocket(wsUrl, {
-    handshakeTimeout: 10000,
-  });
-  state.ws = ws;
+  const deviceInfo = "GatewayWorker";
+  const config = new WebSocketConfig(
+    WebSocketConfig.protocol.WS,     // WS für lokale Verbindung
+    state.serialNumber,
+    deviceInfo,
+    WebSocketConfig.permission.APP,  // Permission 4 = langlebiges Token (4 Wochen)
+    false                            // kein TLS-Zertifikat
+  );
 
-  ws.on("open", async () => {
-    log("info", `[Loxone] WebSocket open: ${state.serialNumber}`);
-    state.reconnectDelay = 1000; // Reset backoff
-
-    // JWT-Token-basierte Authentifizierung (RSA Key Exchange + AES + Token)
-    const ok = await loxoneWsAuth(ws, state.baseUrl, state.username, state.password, state.serialNumber);
-    if (!ok) {
-      ws.terminate();
-      scheduleReconnect(state);
-      return;
-    }
-
-    state.authenticated = true;
-
-    // Status-Updates aktivieren: Miniserver sendet jetzt bei jeder Wertänderung
-    ws.send("jdev/sps/enablestatusupdate");
-    log("info", `[Loxone] Status updates requested: ${state.serialNumber} (${state.uuidMap.size} UUIDs registered)`);
-
-    // Keepalive: alle 4 Minuten "keepalive" senden (Miniserver schließt nach 5 min Inaktivität)
-    state.keepaliveTimer = setInterval(() => {
-      if (ws.readyState === WebSocket.OPEN) {
-        ws.send("keepalive");
-        log("debug", `[Loxone] Keepalive sent: ${state.serialNumber}`);
-      }
-    }, 4 * 60 * 1000);
-  });
-
-  ws.on("message", (data: WebSocket.RawData) => {
-    // Binäre Frames → ValueEvents
-    if (Buffer.isBuffer(data)) {
-      const events = parseLoxoneValueEvent(data);
-      for (const { uuid, value } of events) {
+  config.delegate = {
+    socketOnEventReceived: (socket: any, events: any[], type: number) => {
+      // type 1 = ValueEvent, type 2 = TextEvent
+      for (const event of events) {
+        const uuid = (event.uuid || "").toLowerCase();
         const entry = state.uuidMap.get(uuid);
-        if (entry) {
-          if (!isSpike(value, entry.energy_type)) {
-            entry.latest_value = value;
+        if (entry && typeof event.value === "number") {
+          if (!isSpike(event.value, entry.energy_type)) {
+            entry.latest_value = event.value;
           }
         }
       }
       if (events.length > 0) {
-        log("debug", `[Loxone] ${events.length} value events from ${state.serialNumber}`);
+        log("debug", `[Loxone] ${events.length} events (type=${type}) from ${state.serialNumber}`);
       }
-      return;
-    }
+    },
 
-    // Text-Frames → Status/Ack
-    const msg = data.toString();
-    let parsed: any;
-    try { parsed = JSON.parse(msg); } catch (_e) { return; }
+    socketOnConnectionClosed: (socket: any, code: number) => {
+      log("warn", `[Loxone] Connection closed: ${state.serialNumber} (code=${code})`);
+      state.authenticated = false;
+      state.statusUpdatesEnabled = false;
+      state.ws = null;
+      scheduleReconnect(state);
+    },
 
-    const ll = parsed?.LL;
-    if (!ll) return;
+    socketOnTokenConfirmed: (socket: any, response: any) => {
+      log("info", `[Loxone] Token confirmed: ${state.serialNumber}`);
+    },
 
-    // enablestatusupdate Bestätigung
-    if (typeof ll.control === "string" && ll.control.includes("enablestatusupdate")) {
+    socketOnTokenReceived: (socket: any, response: any) => {
+      log("info", `[Loxone] Token received: ${state.serialNumber}`);
+    },
+
+    socketOnTokenRefreshFailed: (socket: any, response: any) => {
+      log("warn", `[Loxone] Token refresh failed: ${state.serialNumber} — will reconnect`);
+    },
+  };
+
+  const socket = new LxCommunicator.BinarySocket(config);
+
+  // Host = DNS-aufgelöste URL ohne Protokoll-Prefix
+  const host = state.baseUrl.replace(/^https?:\/\//, "");
+
+  log("info", `[Loxone] Connecting via lxcommunicator: ${state.serialNumber} → ${host}`);
+
+  socket.open(host, state.username, state.password)
+    .then(() => {
+      state.authenticated = true;
+      state.reconnectDelay = 1000; // Reset backoff
+      log("info", `[Loxone] Authenticated via lxcommunicator: ${state.serialNumber} (${state.uuidMap.size} UUIDs)`);
+      return socket.send("jdev/sps/enablebinstatusupdate");
+    })
+    .then((response: any) => {
       state.statusUpdatesEnabled = true;
       log("info", `[Loxone] Status updates enabled: ${state.serialNumber}`);
-    }
+    })
+    .catch((err: any) => {
+      log("warn", `[Loxone] Connection failed: ${state.serialNumber}: ${err}`);
+      state.ws = null;
+      scheduleReconnect(state);
+    });
 
-    // Text-basierte Wert-Events (ältere Miniserver-Versionen)
-    if (ll.control && ll.value !== undefined) {
-      const uuidMatch = String(ll.control).match(/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i);
-      if (uuidMatch) {
-        const uuid = uuidMatch[1].toLowerCase();
-        const entry = state.uuidMap.get(uuid);
-        if (entry) {
-          const v = parseFloat(String(ll.value));
-          if (!isNaN(v) && !isSpike(v, entry.energy_type)) {
-            entry.latest_value = v;
-          }
-        }
-      }
-    }
-  });
-
-  ws.on("close", (code, reason) => {
-    log("warn", `[Loxone] WebSocket closed: ${state.serialNumber} (${code} ${reason?.toString() || ""})`);
-    if (state.keepaliveTimer) {
-      clearInterval(state.keepaliveTimer);
-      state.keepaliveTimer = null;
-    }
-    state.ws = null;
-    state.authenticated = false;
-    state.statusUpdatesEnabled = false;
-    scheduleReconnect(state);
-  });
-
-  ws.on("error", (err) => {
-    log("warn", `[Loxone] WebSocket error: ${state.serialNumber}: ${err.message}`);
-    // close event folgt automatisch
-  });
+  state.ws = socket;
 }
 
 function scheduleReconnect(state: LoxoneWsState): void {
@@ -943,7 +391,6 @@ async function initLoxoneConnections(meters: MeterWithSensor[]): Promise<MeterWi
     let state = loxoneConnections.get(serial);
 
     if (!state) {
-      // Neuer Miniserver: State anlegen
       state = {
         serialNumber: serial,
         username: config.username,
@@ -955,7 +402,6 @@ async function initLoxoneConnections(meters: MeterWithSensor[]): Promise<MeterWi
         reconnecting: false,
         authenticated: false,
         statusUpdatesEnabled: false,
-        keepaliveTimer: null,
       };
       loxoneConnections.set(serial, state);
     }
@@ -973,8 +419,8 @@ async function initLoxoneConnections(meters: MeterWithSensor[]): Promise<MeterWi
       }
     }
 
-    // Verbindung aufbauen (idempotent wenn schon verbunden)
-    if (!state.ws || state.ws.readyState === WebSocket.CLOSED || state.ws.readyState === WebSocket.CLOSING) {
+    // Verbindung aufbauen (nur wenn nicht bereits verbunden)
+    if (!state.ws) {
       connectLoxoneWs(state);
     }
   }
@@ -1021,7 +467,6 @@ async function flushLoxoneBuffer(): Promise<void> {
 // ─── HTTP Gateway Pollers ─────────────────────────────────────────────────────
 
 async function pollLoxoneHttp(meter: MeterWithSensor): Promise<number | null> {
-  // HTTP-Fallback für Loxone (wenn WebSocket nicht verfügbar)
   const config = meter.location_integration?.config as {
     serial_number: string;
     username: string;
@@ -1216,7 +661,6 @@ async function pollHomematic(meter: MeterWithSensor): Promise<number | null> {
 // ─── Gateway Dispatcher ──────────────────────────────────────────────────────
 
 const GATEWAY_POLLERS: Record<string, (meter: MeterWithSensor) => Promise<number | null>> = {
-  // Loxone: Nur als HTTP-Fallback (primär läuft WebSocket)
   loxone: pollLoxoneHttp,
   loxone_miniserver: pollLoxoneHttp,
   shelly_cloud: pollShelly,
@@ -1285,7 +729,7 @@ async function httpPollCycle(meters: MeterWithSensor[]): Promise<void> {
 // ─── Entry Point ─────────────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
-  log("info", `Gateway Worker starting (WebSocket mode)...`);
+  log("info", `Gateway Worker v3.0 starting (lxcommunicator mode)...`);
   log("info", `  Supabase URL:      ${SUPABASE_URL}`);
   log("info", `  HTTP Poll interval: ${POLL_INTERVAL_MS}ms`);
   log("info", `  WS Flush interval:  ${FLUSH_INTERVAL_MS}ms`);
@@ -1294,7 +738,6 @@ async function main(): Promise<void> {
   process.on("SIGTERM", () => { log("info", "SIGTERM – shutting down..."); process.exit(0); });
   process.on("SIGINT", () => { log("info", "SIGINT – shutting down..."); process.exit(0); });
 
-  // Meter laden und Loxone WebSocket-Verbindungen aufbauen
   let nonLoxoneMeters: MeterWithSensor[] = [];
 
   const initMeters = async () => {
@@ -1306,7 +749,7 @@ async function main(): Promise<void> {
 
   await initMeters();
 
-  // Meter-Liste alle 5 Minuten neu laden (um neue Meter zu erkennen)
+  // Meter-Liste alle 5 Minuten neu laden
   setInterval(initMeters, 5 * 60 * 1000);
 
   // ── Loxone Flush-Timer (sekündlich) ──────────────────────────────────────
@@ -1327,7 +770,6 @@ async function main(): Promise<void> {
     }
   };
 
-  // Initialer Poll sofort, dann im Intervall
   await httpPoll();
   setInterval(httpPoll, POLL_INTERVAL_MS);
 }
