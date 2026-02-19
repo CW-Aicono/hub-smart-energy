@@ -309,6 +309,9 @@ async function loxoneWsAuth(
       const msg = data.toString();
       let parsed: any;
       try { parsed = JSON.parse(msg); } catch (_e) { return; }
+      const ll = parsed?.LL;
+      if (!ll) return;
+      if (typeof ll.control === "string" && ll.control.includes("keyexchange")) {
         clearTimeout(timeout);
         ws.removeListener("message", onMsg);
         const code = ll.Code ?? ll.code;
@@ -346,6 +349,9 @@ async function loxoneWsAuth(
       const msg = data.toString();
       let parsed: any;
       try { parsed = JSON.parse(msg); } catch (_e) { return; }
+      const ll = parsed?.LL;
+      if (!ll) return;
+      if (typeof ll.control === "string" && ll.control.includes("getkey2")) {
         clearTimeout(timeout);
         ws.removeListener("message", onMsg);
         const val = ll.value as any;
