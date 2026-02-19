@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
@@ -595,28 +595,18 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
                   if (name && name.startsWith("__gap_")) return null;
                   return legendFormatter(value, entry);
                 }} />
-                {/* Strom: dashed = full line (gaps included), solid = real data only */}
-                {visibleEnergyKeys.includes("strom") && !hiddenKeys.has("strom") && <>
-                  <Line type="monotone" dataKey="strom" name="__gap_strom" stroke={ENERGY_CHART_COLORS.strom} strokeWidth={1.5} strokeDasharray="4 4" dot={false} connectNulls={false} legendType="none" tooltipType="none" />
-                  <Line type="monotone" dataKey="real_strom" name="Strom" stroke={ENERGY_CHART_COLORS.strom} strokeWidth={2.5} dot={false} connectNulls={false} legendType="line" />
-                </>}
-                {visibleEnergyKeys.includes("gas") && !hiddenKeys.has("gas") && <>
-                  <Line type="monotone" dataKey="gas" name="__gap_gas" stroke={ENERGY_CHART_COLORS.gas} strokeWidth={1.5} strokeDasharray="4 4" dot={false} connectNulls={false} legendType="none" tooltipType="none" />
-                  <Line type="monotone" dataKey="real_gas" name="Gas" stroke={ENERGY_CHART_COLORS.gas} strokeWidth={2.5} dot={false} connectNulls={false} legendType="line" />
-                </>}
-                {visibleEnergyKeys.includes("waerme") && !hiddenKeys.has("waerme") && <>
-                  <Line type="monotone" dataKey="waerme" name="__gap_waerme" stroke={ENERGY_CHART_COLORS.waerme} strokeWidth={1.5} strokeDasharray="4 4" dot={false} connectNulls={false} legendType="none" tooltipType="none" />
-                  <Line type="monotone" dataKey="real_waerme" name="Wärme" stroke={ENERGY_CHART_COLORS.waerme} strokeWidth={2.5} dot={false} connectNulls={false} legendType="line" />
-                </>}
-                {visibleEnergyKeys.includes("wasser") && !hiddenKeys.has("wasser") && <>
-                  <Line type="monotone" dataKey="wasser" name="__gap_wasser" stroke={ENERGY_CHART_COLORS.wasser} strokeWidth={1.5} strokeDasharray="4 4" dot={false} connectNulls={false} legendType="none" tooltipType="none" />
-                  <Line type="monotone" dataKey="real_wasser" name="Wasser" stroke={ENERGY_CHART_COLORS.wasser} strokeWidth={2.5} dot={false} connectNulls={false} legendType="line" />
-                </>}
-                {/* Invisible lines for hidden keys so legend stays interactive */}
-                {visibleEnergyKeys.includes("strom") && hiddenKeys.has("strom") && <Line type="monotone" dataKey="strom" name="Strom" stroke={ENERGY_CHART_COLORS.strom} strokeWidth={0} dot={false} legendType="line" />}
-                {visibleEnergyKeys.includes("gas") && hiddenKeys.has("gas") && <Line type="monotone" dataKey="gas" name="Gas" stroke={ENERGY_CHART_COLORS.gas} strokeWidth={0} dot={false} legendType="line" />}
-                {visibleEnergyKeys.includes("waerme") && hiddenKeys.has("waerme") && <Line type="monotone" dataKey="waerme" name="Wärme" stroke={ENERGY_CHART_COLORS.waerme} strokeWidth={0} dot={false} legendType="line" />}
-                {visibleEnergyKeys.includes("wasser") && hiddenKeys.has("wasser") && <Line type="monotone" dataKey="wasser" name="Wasser" stroke={ENERGY_CHART_COLORS.wasser} strokeWidth={0} dot={false} legendType="line" />}
+                {/* Always render all lines in fixed order to prevent legend reordering */}
+                {visibleEnergyKeys.map((key) => {
+                  const hidden = hiddenKeys.has(key);
+                  const nameMap: Record<string, string> = { strom: "Strom", gas: "Gas", waerme: "Wärme", wasser: "Wasser" };
+                  const displayName = nameMap[key] || key;
+                  return (
+                    <React.Fragment key={key}>
+                      <Line type="monotone" dataKey={key} name={`__gap_${key}`} stroke={ENERGY_CHART_COLORS[key]} strokeWidth={hidden ? 0 : 1.5} strokeDasharray="4 4" dot={false} connectNulls={false} legendType="none" tooltipType="none" />
+                      <Line type="monotone" dataKey={hidden ? key : `real_${key}`} name={displayName} stroke={ENERGY_CHART_COLORS[key]} strokeWidth={hidden ? 0 : 2.5} dot={false} connectNulls={false} legendType="line" />
+                    </React.Fragment>
+                  );
+                })}
               </LineChart>
             ) : (
               <BarChart data={chartData} barGap={2} margin={{ top: 5, right: 10, left: 5, bottom: 5 }}>
