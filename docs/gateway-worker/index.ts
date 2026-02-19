@@ -275,7 +275,7 @@ function connectLoxoneWs(state: LoxoneWsState): void {
 
   const deviceInfo = "GatewayWorker";
   const config = new WebSocketConfig(
-    WebSocketConfig.protocol.WS,     // WS für lokale Verbindung
+    WebSocketConfig.protocol.WSS,    // WSS für Remote-Verbindung über Cloud DNS
     state.serialNumber,
     deviceInfo,
     WebSocketConfig.permission.APP,  // Permission 4 = langlebiges Token (4 Wochen)
