@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "ws": "^8.18.0",
-    "lxcommunicator": "^1.2.0"
+    "lxcommunicator": "^1.1.1"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
