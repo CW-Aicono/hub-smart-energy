@@ -1,129 +1,105 @@
 
-# Entwickler-Dokumentation erstellen
+# Ehrliche Analyse & Empfehlung für industrietaugliche Echtzeit-Daten
 
-## Wo wird die Dokumentation gespeichert?
+## Das eigentliche Problem – klar benannt
 
-Die Dokumentation wird als `docs/DEVELOPER_DOCUMENTATION.md` im Projektrepository angelegt. Sie ist damit:
-- **Im Code-Editor** direkt einsehbar (Lovable Code View > docs/DEVELOPER_DOCUMENTATION.md)
-- **Im GitHub-Repository** unter `docs/DEVELOPER_DOCUMENTATION.md` gerendert als Markdown
-- **Dauerhaft im Projekt** versioniert und mit dem Code mitversioniert
+Der Kern des Problems liegt nicht in der Architektur dieser Anwendung, sondern in einer grundsätzlichen technischen Einschränkung: **Der Loxone Miniserver bietet keine API, die historische Leistungswerte mit hoher Zeitauflösung (< 5 Minuten) rückwirkend liefert.**
 
----
+Die aktuelle Loxone HTTP-API gibt bei einem Aufruf nur den **aktuellen Momentanwert** zurück. Es gibt keine Möglichkeit, nachträglich zu fragen: "Was hat der Zähler um 14:32 Uhr gemessen?" Daher sind Datenpunkte im Verlaufsdiagramm immer genau so dicht wie die Abfragefrequenz.
 
-## Umfang der Dokumentation
+## Was ist realistisch erreichbar – und was nicht?
 
-Die Dokumentation wird folgende Kapitel enthalten:
+### Option 1: Cron-Job auf 1 Minute reduzieren (innerhalb der bestehenden Architektur)
 
-### 1. Projektübersicht
-- Zweck: Multi-Tenant B2B Energie-Dashboard für Kommunen & KMU
-- Technologie-Stack (React 18, Vite, TypeScript, Tailwind CSS, Supabase/Lovable Cloud)
-- Deployment-URLs (Preview & Live)
-- PWA-Konfiguration
+Das ist die einzige Verbesserung, die **ohne externe Infrastruktur** funktioniert.
 
-### 2. Architektur
+- Ergebnis: 60 Datenpunkte pro Stunde statt 12
+- Datenqualität: Gut, aber nicht industrietauglich im Sinne von Sekunden-Präzision
+- Für alle Gateways gleichzeitig
+- Umsetzung: 2 Datenbankzeilen ändern
 
-#### Frontend-Architektur
-- Provider-Hierarchie in `App.tsx`: `QueryClientProvider > AuthProvider > TenantProvider > TranslationProvider > ThemeProvider`
-- Routing-Konzept mit React Router v6
-- `ModuleGuard` – Feature-Flag-basierter Routenschutz
+**Grenze:** pg_cron erlaubt maximal 1 Ausführung pro Minute. Feiner ist innerhalb der Serverless-Architektur nicht möglich.
 
-#### Backend-Architektur (Lovable Cloud / Supabase)
-- Datenbank-Schema: alle wichtigen Tabellen
-- Row-Level Security (RLS): Muster für Tenant-Isolation
-- Edge Functions: Übersicht aller 23 Funktionen mit Zweck
-- Cron-basiertes Synchronisierungs-System
+### Option 2: Dedizierter Hintergrund-Worker-Dienst (industrietauglich)
 
-### 3. Multi-Tenancy System
-- `useTenant` Hook: Tenant-Daten, Branding-Anwendung via CSS-Variablen
-- `get_user_tenant_id()` DB-Funktion: Basis aller RLS-Policies
-- `profiles`-Tabelle als Brücke zwischen `auth.users` und Tenants
-- Tenant-Module-System (`ALL_MODULES`-Konstante, `useTenantModules`)
+Für präzise, lückenlose Leistungsdaten in einer industriellen Anwendung ist ein **dauerhaft laufender Prozess** erforderlich. Das ist die technisch korrekte Lösung.
 
-### 4. Authentifizierung & Rollen
-- Drei App-Rollen: `user`, `admin`, `super_admin`
-- `useUserRole` Hook mit `ensure_at_least_one_admin()` RPC
-- `useModuleGuard` Hook: Routen- und Nav-Absicherung nach Modul-Codes
-- Super-Admin-Bereich (`/super-admin/*`) mit `SuperAdminWrapper`
-- Einladungs-Flow: Edge Functions `invite-tenant-admin`, `activate-invited-user`, `send-invitation-email`
+Dieser Worker würde:
+- Alle 10–30 Sekunden die Loxone HTTP-API (und andere Gateways) abfragen
+- Werte direkt in die bestehende `meter_power_readings`-Tabelle schreiben
+- Vollständig von der bestehenden App getrennt laufen
+- Die bestehenden Spike-Detection-Regeln anwenden
+- Bei Ausfall oder Neustart selbst weitermachen
 
-### 5. Gateway-Integrations-System
-- Plugin-Architektur via `gatewayRegistry.ts` (`GATEWAY_DEFINITIONS`)
-- Unterstützte Gateways: Loxone Miniserver, Shelly Cloud, ABB free@home, Siemens Building X, Tuya, Homematic IP, TP-Link Omada
-- Jede Gateway-Integration hat: `type`, `edgeFunctionName`, `configFields`
-- `gateway-periodic-sync` Edge Function: Polling alle 5 Min über pg_cron
-- `loxone-periodic-sync`: separates Handling wegen Batch-Optimierung (20 parallel)
+**Kein Umbau der App nötig** – die Datenbank bleibt dieselbe, das Dashboard zeigt automatisch die dichteren Daten an.
 
-### 6. OCPP / Ladeinfrastruktur-System
-- Architektur: `ocpp-ws-proxy` (WebSocket-Gateway) → `ocpp-central` (Business Logic)
-- OCPP 1.6 JSON Message Types: CALL(2), CALLRESULT(3), CALLERROR(4)
-- Nachrichtenverfolgung: `ocpp_message_log`-Tabelle
-- Remote-Befehle über `pending_ocpp_commands`-Tabelle (Poll-Intervall: 3s)
-- Charge-Point-Gruppen: `charge_point_groups` + `useChargePointGroups` Hook
-- RFID & App-Tag Autorisierung (`generate_app_tag()` DB-Trigger)
+```text
+Worker-Dienst (alle 30 Sek.)           App (bestehend, unverändert)
+      │                                        │
+      │  HTTP → Loxone API                     │  Zeigt Daten an
+      │  HTTP → Shelly API                     │  aus meter_power_readings
+      │  HTTP → ABB API ...                    │
+      ▼                                        ▼
+              ┌─────────────────────────┐
+              │    meter_power_readings  │
+              │    (Supabase Datenbank)  │
+              └─────────────────────────┘
+```
 
-### 7. Internationalisierung (i18n)
-- Sprachen: DE, EN, ES, NL
-- `translations.ts` (~3200 Zeilen): alle UI-Strings
-- `useTranslation` Hook: Zugriff via `t("key")`, Fallback zu Deutsch
-- `useSATranslation`: separater Hook für Super-Admin-Bereich
-- `getT()` Utility: Außerhalb von React-Komponenten (z.B. in Mutations)
+Dieser Worker kann auf jeder einfachen Infrastruktur betrieben werden:
 
-### 8. Datenfluss & State-Management
-- TanStack Query (React Query v5) als primärer Cache-Layer
-- Namenskonvention für Query-Keys
-- `useTenantQuery` Helper: Tenant-scoped Query Builder
-- Realtime-Subscriptions (Supabase Postgres Changes) z.B. bei `charge_points`
+| Plattform | Beschreibung | Kosten |
+|---|---|---|
+| **Railway** | Docker-Container, immer an, einfaches Deployment | ~5 USD/Monat |
+| **Fly.io** | Ähnlich wie Railway, globale Regionen | ~3–5 USD/Monat |
+| **VPS** (z.B. Hetzner CX11) | Root-Server, maximale Kontrolle | ~4 EUR/Monat |
+| **Bestehender Server** | Falls ein Server vor Ort oder in der Cloud vorhanden | Keine Zusatzkosten |
 
-### 9. Kernmodule
-- **Dashboard**: Widget-System (`dashboard_widgets`), anpassbar per Drag & Drop
-- **Energiedaten**: `useEnergyData`, manuelle Zählerlesungen + Live-Sensor-Werte aus Gateways
-- **Standorte**: Hierarchisch (parent_id), 3D-Grundriss-Viewer (Three.js), Raum-Editor
-- **Messstellen**: Zähler-Baum, virtuelle Zähler mit Formel-Builder
-- **Automation**: `location_automations` mit Conditions/Actions in JSONB
-- **Aufgaben (Tasks)**: `tasks`-Tabelle, Prioritäten (low/medium/high/critical), Kanban-artig
-- **Netzwerk-Infrastruktur**: TP-Link Omada Integration
-- **BrightHub API**: Externe Energieplattform-Anbindung (`brighthub-sync`)
+Der Worker wäre ein kleines Node.js- oder Deno-Skript (~200 Zeilen), das in einem Docker-Container läuft.
 
-### 10. Branding & Theming
-- `TenantProvider` konvertiert Hex-Farben zu HSL und setzt CSS-Variablen auf `<html>`
-- CSS-Variablen: `--primary`, `--accent`, `--sidebar-primary`
-- Dark/Light Mode via `next-themes`
+## Ehrliche Empfehlung
 
-### 11. PWA-Konfiguration
-- Workbox via `vite-plugin-pwa`
-- Service Worker mit Cache-First für Fonts
-- Manifests: `public/manifest.json` (Haupt-App) und `public/manifest-ev.json` (EV Charging App)
-- `UpdateBanner`-Komponente: manueller PWA-Update-Check
+Für eine **industrielle Anwendung mit Präzisionsanforderungen** ist Option 2 die richtige Antwort. Option 1 ist ein nützlicher Quick-Win, löst aber das grundsätzliche Problem nur teilweise.
 
-### 12. Secrets & Umgebungsvariablen
-- Vite-Env: `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, `VITE_SUPABASE_PROJECT_ID`
-- Edge-Function-Secrets: `RESEND_API_KEY`, `OPENCHARGEMAP_API_KEY`, `SUPABASE_SERVICE_ROLE_KEY`
-- Hinweis: `.env` wird automatisch generiert – nie manuell bearbeiten
+**Konkret empfehle ich eine Kombination:**
 
-### 13. Entwicklungsworkflow
-- Lokale Entwicklung: `npm run dev` auf Port 8080
-- Alias `@` zeigt auf `./src`
-- TypeScript-Pfade in `tsconfig.app.json`
-- Supabase-Typen in `src/integrations/supabase/types.ts` (auto-generiert – nicht bearbeiten)
-- Migrations-Konvention: `supabase/migrations/YYYYMMDDHHMMSS_<uuid>.sql`
+1. **Sofort:** Cron-Job auf 1 Minute reduzieren – verbessert die Datendichte sofort ohne Aufwand
+2. **Mittelfristig:** Einen dedizierten Worker-Dienst aufbauen und betreiben
 
-### 14. Wichtige Patterns & Konventionen
-- Alle datenbanknahen Hooks: `useQuery` + `useMutation` mit `queryClient.invalidateQueries`
-- Toast-Feedback bei jeder Mutation (Erfolg & Fehler)
-- Tenant-Isolation in allen Tabellen via `tenant_id = get_user_tenant_id()`
-- Keine direkte Manipulation von `auth.users`; stattdessen `profiles`-Tabelle
-- Edge Functions: immer `CORS headers` + `OPTIONS`-Handler
+## Was wird in diesem Plan umgesetzt?
 
-### 15. Bekannte Besonderheiten & Fallstricke
-- `src/integrations/supabase/types.ts` und `client.ts` nie manuell editieren
-- React Hook Rules bei dynamischen Gateway-Abfragen: `useQueries` statt bedingter `useQuery`
-- Loxone: Batch-Größe max. 20, separater Cron-Sync
-- BrightHub: `sync_readings` nutzt `meter_readings` (kWh), `sync_intraday` nutzt `meter_power_readings` (kW)
+Da der Worker-Dienst außerhalb dieser Anwendung läuft, kann ich hier nur **Teil 1** umsetzen (Cron-Intervall). Für **Teil 2** werde ich den vollständigen Worker-Code erstellen, den du dann in einem Docker-Container betreiben kannst.
 
----
+### Schritt 1: Cron-Jobs auf 1 Minute reduzieren (Datenbankänderung)
 
-## Technische Umsetzung
+Beide bestehenden Jobs werden aktualisiert:
+- `loxone-power-readings-sync`: `*/5 * * * *` → `* * * * *`
+- `gateway-power-readings-sync`: `*/5 * * * *` → `* * * * *`
 
-Die Dokumentation wird als **eine einzige Markdown-Datei** (`docs/DEVELOPER_DOCUMENTATION.md`) angelegt. Sie enthält Code-Beispiele, Tabellen und Diagramme in ASCII/Markdown-Format.
+### Schritt 2: Worker-Skript erstellen
 
-**Umfang:** ca. 600–800 Zeilen strukturiertes Markdown
+Eine neue Datei `docs/gateway-worker/index.ts` (Deno/Node.js) wird als Dokumentation und einsatzbereiter Code erstellt. Sie enthält:
+
+- Verbindungslogik für alle registrierten Gateways (Loxone, Shelly, ABB, Siemens, Tuya, Homematic, Omada)
+- Konfigurierbares Polling-Intervall (Standard: 30 Sekunden)
+- Direkte Schreibzugriffe in die Supabase-Datenbank über den Service-Role-Key
+- Dieselbe Spike-Detection wie die bestehende Edge Function
+- Fehlerbehandlung und automatischen Neustart bei Verbindungsfehlern
+- Ein `Dockerfile` für einfaches Deployment
+
+### Schritt 3: Dokumentation
+
+Die bestehende `docs/DEVELOPER_DOCUMENTATION.md` wird um einen Abschnitt "Gateway Worker Deployment" erweitert, der erklärt, wie der Worker auf Railway, Fly.io oder einem eigenen Server deployt wird.
+
+## Betroffene Dateien
+
+| Datei | Änderung |
+|---|---|
+| Datenbank (SQL) | Cron-Intervall von `*/5` auf `*` ändern |
+| `docs/gateway-worker/index.ts` | Neuer Worker-Dienst (einsatzbereit) |
+| `docs/gateway-worker/Dockerfile` | Docker-Konfiguration |
+| `docs/DEVELOPER_DOCUMENTATION.md` | Deployment-Anleitung ergänzen |
+
+## Was bleibt offen?
+
+Der Worker-Dienst benötigt den Supabase **Service-Role-Key** als Umgebungsvariable, um direkt in die Datenbank zu schreiben. Dieser Key muss beim Deployment des Workers als Secret gesetzt werden (nicht im Code gespeichert). Die App selbst muss nicht verändert werden.
