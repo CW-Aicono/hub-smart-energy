@@ -302,7 +302,7 @@ function connectLoxoneWs(state: LoxoneWsState): void {
     },
   };
 
-  const socket = new LxCommunicator.BinarySocket(config);
+  const socket = new LxCommunicator.WebSocket(config);
 
   // Host = DNS-aufgelöste URL ohne Protokoll-Prefix
   const host = state.baseUrl.replace(/^https?:\/\//, "");
