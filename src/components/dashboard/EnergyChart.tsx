@@ -137,20 +137,35 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
         return;
       }
 
-      const { data, error } = await supabase
-        .from("meter_power_readings")
-        .select("meter_id, power_value, recorded_at")
-        .in("meter_id", mainMeterIds)
-        .gte("recorded_at", rangeStart.toISOString())
-        .lte("recorded_at", rangeEnd.toISOString())
-        .order("recorded_at", { ascending: true });
+      // Fetch all pages (Supabase default limit is 1000 rows – a full day with many meters
+      // easily exceeds this, causing data to appear cut off at ~15:50 Uhr).
+      const PAGE_SIZE = 1000;
+      let allData: Array<{ meter_id: string; power_value: number; recorded_at: string }> = [];
+      let from = 0;
+      let hasMore = true;
 
-      if (error) {
-        console.error("Error fetching power readings:", error);
-        setPowerReadings([]);
-      } else {
-        setPowerReadings((data ?? []) as Array<{ meter_id: string; power_value: number; recorded_at: string }>);
+      while (hasMore) {
+        const { data, error } = await supabase
+          .from("meter_power_readings")
+          .select("meter_id, power_value, recorded_at")
+          .in("meter_id", mainMeterIds)
+          .gte("recorded_at", rangeStart.toISOString())
+          .lte("recorded_at", rangeEnd.toISOString())
+          .order("recorded_at", { ascending: true })
+          .range(from, from + PAGE_SIZE - 1);
+
+        if (error) {
+          console.error("Error fetching power readings:", error);
+          hasMore = false;
+          break;
+        }
+
+        allData = [...allData, ...(data ?? [])];
+        hasMore = (data?.length ?? 0) === PAGE_SIZE;
+        from += PAGE_SIZE;
       }
+
+      setPowerReadings(allData);
       setPowerLoading(false);
     };
     fetchPower();
