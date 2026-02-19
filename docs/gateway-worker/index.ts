@@ -182,6 +182,7 @@ async function pollLoxone(meter: MeterWithSensor): Promise<number | null> {
     }
 
     const data = await response.json() as any;
+    const ll = data?.LL;
     if (!ll) return null;
 
     // Try to get "actual" power (Pf output → mapped to "actual" in kW)
