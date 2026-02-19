@@ -477,27 +477,28 @@ async function loxoneWsAuth(
     return false;
   }
 
-  // Loxone encodes both key and salt as hex strings of the actual ASCII text.
-  // Must hex-decode them before use in password hashing.
-  const decodedSalt   = Buffer.from(saltValue!, "hex").toString("utf8");
-  const decodedKeyStr = Buffer.from(key2Value!, "hex").toString("utf8"); // 40-char hex string
-  const decodedKeyBuf = Buffer.from(decodedKeyStr, "hex");               // 20 binary bytes
-  log("info", `[Loxone] getkey2 decoded: salt="${decodedSalt}" key="${decodedKeyStr.substring(0, 8)}..."`);
+  // Loxone getkey2 response format:
+  //   salt  → plain-text UUID nonce, e.g. "2031943c-024e-7a28-ffff..."  (NOT hex-encoded!)
+  //   key   → hex-encoded 20-byte HMAC key, e.g. "D47997DF..."           (IS hex-encoded!)
+  // Decode ONLY the key from hex to binary; use the salt as-is.
+  const saltForHash = saltValue!;                         // plain text → use directly
+  const hmacKeyBuf  = Buffer.from(key2Value!, "hex");    // hex → 20 binary bytes for HMAC
+  log("info", `[Loxone] getkey2: salt="${saltForHash.substring(0, 16)}..." key="${key2Value!.substring(0, 8)}..." (keyBuf ${hmacKeyBuf.length}B)`);
 
   // Passwort-Hash: zwei Varianten probieren (ältere vs. neuere Loxone-Firmware)
-  // Variante A (SHA1-PW): SHA1(password:salt) → UPPER, HMAC-SHA1(user:hash, key-binary)
-  // Variante B (SHA256-PW): SHA1(SHA256(password):salt) → UPPER, HMAC-SHA1(user:hash, key-binary)
+  // Variante A (SHA1-PW):   SHA1(password:salt)         → UPPER, HMAC-SHA1(user:hash, hmacKeyBuf)
+  // Variante B (SHA256-PW): SHA1(SHA256hex(password):salt) → UPPER, HMAC-SHA1(user:hash, hmacKeyBuf)
   function buildHash(passwordInput: string): string {
     const pwHash = crypto.createHash("sha1")
-      .update(`${passwordInput}:${decodedSalt}`)
+      .update(`${passwordInput}:${saltForHash}`)
       .digest("hex")
       .toUpperCase();
-    return crypto.createHmac("sha1", decodedKeyBuf)
+    return crypto.createHmac("sha1", hmacKeyBuf)
       .update(`${username}:${pwHash}`)
       .digest("hex");
   }
   const hashA = buildHash(password);
-  const hashB = buildHash(crypto.createHash("sha256").update(password).digest("hex"));
+  const hashB = buildHash(crypto.createHash("sha256").update(password).digest("hex").toUpperCase());
   log("info", `[Loxone] hashA(SHA1-pw)="${hashA.substring(0, 8)}..." hashB(SHA256-pw)="${hashB.substring(0, 8)}..."`);
 
   // Hilfsfunktion: einen Hash-Versuch per getjwt abschicken und Antwort auswerten
