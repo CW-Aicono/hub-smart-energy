@@ -435,8 +435,10 @@ async function loxoneWsAuth(
 
   // ── Schritt 3: Neues Token anfordern ──────────────────────────────────────
   // getkey2: Salt + Challenge für Passwort-Hashing
+  // WICHTIG: getkey2 wird verschlüsselt gesendet (via fenc) und die Antwort kommt ebenfalls verschlüsselt zurück.
   let key2Value: string;
   let saltValue: string;
+  let hashAlgValue: string = "SHA1"; // Default für ältere Firmware
 
   const key2Ok = await new Promise<boolean>((resolve) => {
     const timeout = setTimeout(() => {
@@ -445,20 +447,40 @@ async function loxoneWsAuth(
     }, 8000);
     const onMsg = (data: WebSocket.RawData) => {
       // Loxone sends getkey2 response as a binary-flagged frame containing plain JSON text.
-      // Always convert to string and attempt to parse — never skip based on frame type.
+      // After fenc, the LL.value is AES-encrypted — try to decrypt it.
       const msg = data.toString();
       log("debug", `[Loxone] getkey2 frame: ${msg.substring(0, 120)}`);
       let parsed: any;
-      try { parsed = JSON.parse(msg); } catch (_e) { return; }
+      try { parsed = JSON.parse(msg); } catch (_e) {
+        // Not JSON — might be binary header, skip
+        return;
+      }
       const ll = parsed?.LL;
       if (!ll) return;
       if (typeof ll.control === "string" && ll.control.includes("getkey2")) {
         clearTimeout(timeout);
         ws.removeListener("message", onMsg);
-        const val = ll.value as any;
+
+        // When sent via fenc, the value might be an AES-encrypted string
+        let val = ll.value;
+        if (typeof val === "string") {
+          try {
+            const decrypted = loxoneAesDecrypt(val, aesKey, aesIv);
+            val = JSON.parse(decrypted);
+            log("debug", `[Loxone] getkey2 value decrypted OK`);
+          } catch (_e) {
+            // Maybe it's a plain JSON string? Try parsing directly
+            try { val = JSON.parse(val); } catch (_e2) { /* leave as-is */ }
+          }
+        }
+
         if (typeof val === "object" && val.key && val.salt) {
           key2Value = val.key as string;
           saltValue = val.salt as string;
+          // Loxone Config 10.3+: hashAlg field specifies the hashing algorithm
+          if (val.hashAlg) {
+            hashAlgValue = val.hashAlg as string;
+          }
           resolve(true);
         } else {
           log("warn", `[Loxone] getkey2 unexpected value: ${JSON.stringify(val)}`);
@@ -467,9 +489,11 @@ async function loxoneWsAuth(
       }
     };
     ws.on("message", onMsg);
-    // getkey2 PLAINTEXT senden (Loxone erwartet dies nach keyexchange unverschlüsselt)
+    // Sende getkey2 verschlüsselt via fenc (Request + Response verschlüsselt)
     log("info", `[Loxone] Sending getkey2 for ${serialNumber} (user: ${username})`);
-    ws.send(`jdev/sys/getkey2/${username}`);
+    const getkey2Cmd = `getkey2/${username}`;
+    const encGetkey2 = loxoneAesEncrypt(getkey2Cmd, aesKey, aesIv);
+    ws.send(`jdev/sys/fenc/${encodeURIComponent(encGetkey2)}`);
   });
 
   if (!key2Ok) {
@@ -483,30 +507,35 @@ async function loxoneWsAuth(
   const actualSalt   = Buffer.from(saltValue!, "hex").toString("utf8");   // z.B. "2031943c-024e-..."
   const actualKeyHex = Buffer.from(key2Value!, "hex").toString("utf8");   // z.B. "D47997DF..." (40 Hex-Chars)
   const hmacKeyBuf   = Buffer.from(actualKeyHex, "hex");                  // 20 Bytes für HMAC
-  log("info", `[Loxone] getkey2 decoded: salt="${actualSalt.substring(0, 20)}..." keyHex="${actualKeyHex.substring(0, 8)}..." (hmacKey=${hmacKeyBuf.length}B)`);
+  log("info", `[Loxone] getkey2 decoded: salt="${actualSalt.substring(0, 20)}..." keyHex="${actualKeyHex.substring(0, 8)}..." (hmacKey=${hmacKeyBuf.length}B) hashAlg=${hashAlgValue}`);
 
-  // Zwei Hash-Varianten (Loxone-Firmware-abhängig):
-  //   Variante A (SHA1):   pwHash = SHA1(password:salt).upper()   → HMAC-SHA1(user:pwHash, key)
-  //   Variante B (SHA256): pwHash = SHA256(password:salt).upper() → HMAC-SHA1(user:pwHash, key)
-  // WICHTIG: "SHA256" betrifft nur den pwHash-Schritt, HMAC bleibt immer SHA1!
+  // Hash gemäß hashAlg vom Miniserver:
+  //   pwHash = SHA1|SHA256(password:salt) → uppercase
+  //   hash   = HMAC-SHA1|HMAC-SHA256(user:pwHash, key) → je nach hashAlg
+  // Referenz: Loxone lxcommunicator TokenHandler._otHash + requestToken
+  const useAlg = hashAlgValue.toUpperCase() === "SHA256" ? "sha256" : "sha1";
   function buildHash(algorithm: "sha1" | "sha256"): string {
     const pwHash = crypto.createHash(algorithm)
       .update(`${password}:${actualSalt}`)
       .digest("hex")
       .toUpperCase();
-    return crypto.createHmac("sha1", hmacKeyBuf)
+    // HMAC verwendet denselben Algorithmus wie pwHash (laut lxcommunicator Referenz)
+    return crypto.createHmac(algorithm, hmacKeyBuf)
       .update(`${username}:${pwHash}`)
       .digest("hex");
   }
-  const hashA = buildHash("sha1");    // SHA1(pw:salt) → korrekt für ältere Firmware
-  const hashB = buildHash("sha256");  // SHA256(pw:salt) → korrekt für neuere Firmware
-  log("info", `[Loxone] hashA(SHA1)="${hashA.substring(0, 8)}..." hashB(SHA256)="${hashB.substring(0, 8)}..."`);
+  // Primär den vom Miniserver angeforderten Algorithmus verwenden
+  const hashPrimary = buildHash(useAlg);
+  // Fallback: den anderen Algorithmus
+  const hashFallback = buildHash(useAlg === "sha1" ? "sha256" : "sha1");
+  log("info", `[Loxone] hashPrimary(${useAlg})="${hashPrimary.substring(0, 8)}..." hashFallback="${hashFallback.substring(0, 8)}..."`);
 
   // Hilfsfunktion: einen Hash-Versuch per getjwt abschicken und Antwort auswerten
   async function tryGetJwt(hash: string, label: string): Promise<{ ok: boolean; token: string | null; validUntil: number }> {
     const clientUuid = crypto.randomUUID();
-    // Permission 2 = App-Token (langlebig), passend für Gateway-Worker
-    const jwtCmd = `jdev/sys/getjwt/${hash}/${username}/2/${clientUuid}/GatewayWorker`;
+    // Permission 4 = App-Token (langlebig, 4 Wochen), passend für Gateway-Worker
+    // (Permission 2 = Web-Token, kurzlebig — NICHT für dauerhaften Gateway geeignet)
+    const jwtCmd = `jdev/sys/getjwt/${hash}/${username}/4/${clientUuid}/GatewayWorker`;
     let tok: string | null = null;
     let vu = 0;
 
@@ -569,11 +598,12 @@ async function loxoneWsAuth(
     return { ok, token: tok, validUntil: vu };
   }
 
-  // Variante A zuerst versuchen; falls Fehler und WS noch offen → Variante B
-  let jwtResult = await tryGetJwt(hashA, "SHA1-pw");
+  // Primären Hash (vom Miniserver angefordert) zuerst versuchen; falls Fehler → Fallback
+  let jwtResult = await tryGetJwt(hashPrimary, `${useAlg}-primary`);
   if (!jwtResult.ok && ws.readyState === WebSocket.OPEN) {
-    log("info", `[Loxone] Retrying with SHA256-pw hash for ${serialNumber}`);
-    jwtResult = await tryGetJwt(hashB, "SHA256-pw");
+    const fallbackAlg = useAlg === "sha1" ? "sha256" : "sha1";
+    log("info", `[Loxone] Retrying with ${fallbackAlg} fallback hash for ${serialNumber}`);
+    jwtResult = await tryGetJwt(hashFallback, `${fallbackAlg}-fallback`);
   }
 
   const receivedToken = jwtResult.token;
