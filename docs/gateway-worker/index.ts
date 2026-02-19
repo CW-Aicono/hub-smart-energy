@@ -258,22 +258,33 @@ async function loxoneWsAuth(
 ): Promise<boolean> {
 
   // ── Schritt 1: RSA Public Key holen + AES-Session-Key aufbauen ──────────────
-  let publicKeyPem: string;
+  let publicKeyObj: crypto.KeyObject;
   try {
     const pkRes = await fetch(`${baseUrl}/jdev/sys/getPublicKey`, {
       signal: AbortSignal.timeout(8000),
     });
     const pkData = await pkRes.json() as any;
-    const rawKey = pkData?.LL?.value as string | undefined;
+    const rawKey = (pkData?.LL?.value as string | undefined)?.trim() ?? "";
     if (!rawKey) {
       log("warn", `[Loxone] No public key received from ${baseUrl}`);
       return false;
     }
-    // Loxone liefert den Key ohne PEM-Header — Header hinzufügen
-    if (rawKey.startsWith("-----")) {
-      publicKeyPem = rawKey;
+
+    // Loxone liefert einen RSA Public Key als Base64-kodiertes X.509-Zertifikat.
+    // Node 20 / OpenSSL 3.x kann ein "CERTIFICATE"-PEM nicht direkt als Key nutzen —
+    // deshalb parsen wir es als X509Certificate und extrahieren den Public Key daraus.
+    if (rawKey.startsWith("-----BEGIN CERTIFICATE-----")) {
+      // Bereits vollständiges PEM-Zertifikat
+      const cert = new crypto.X509Certificate(rawKey);
+      publicKeyObj = cert.publicKey;
+    } else if (rawKey.startsWith("-----")) {
+      // Anderes PEM-Format (z.B. PUBLIC KEY) — direkt laden
+      publicKeyObj = crypto.createPublicKey(rawKey);
     } else {
-      publicKeyPem = `-----BEGIN CERTIFICATE-----\n${rawKey}\n-----END CERTIFICATE-----`;
+      // Nur Base64 ohne Header → X.509-Zertifikat
+      const pemCert = `-----BEGIN CERTIFICATE-----\n${rawKey}\n-----END CERTIFICATE-----`;
+      const cert = new crypto.X509Certificate(pemCert);
+      publicKeyObj = cert.publicKey;
     }
   } catch (err) {
     log("warn", `[Loxone] getPublicKey failed for ${baseUrl}: ${err instanceof Error ? err.message : err}`);
@@ -290,7 +301,7 @@ async function loxoneWsAuth(
     const keyPayload = `${aesKey.toString("hex")}:${aesIv.toString("hex")}`;
     const encBuf = crypto.publicEncrypt(
       {
-        key: publicKeyPem,
+        key: publicKeyObj,
         padding: crypto.constants.RSA_PKCS1_OAEP_PADDING,
       },
       Buffer.from(keyPayload, "utf8")
