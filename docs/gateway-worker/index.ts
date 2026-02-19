@@ -461,18 +461,8 @@ async function loxoneWsAuth(
         clearTimeout(timeout);
         ws.removeListener("message", onMsg);
 
-        // When sent via fenc, the value might be an AES-encrypted string
+        // getkey2 response is plain JSON (not encrypted), value is an object directly
         let val = ll.value;
-        if (typeof val === "string") {
-          try {
-            const decrypted = loxoneAesDecrypt(val, aesKey, aesIv);
-            val = JSON.parse(decrypted);
-            log("debug", `[Loxone] getkey2 value decrypted OK`);
-          } catch (_e) {
-            // Maybe it's a plain JSON string? Try parsing directly
-            try { val = JSON.parse(val); } catch (_e2) { /* leave as-is */ }
-          }
-        }
 
         if (typeof val === "object" && val.key && val.salt) {
           key2Value = val.key as string;
@@ -489,11 +479,9 @@ async function loxoneWsAuth(
       }
     };
     ws.on("message", onMsg);
-    // Sende getkey2 verschlüsselt via fenc (Request + Response verschlüsselt)
+    // getkey2 wird UNVERSCHLÜSSELT gesendet (nur getjwt wird via fenc verschlüsselt)
     log("info", `[Loxone] Sending getkey2 for ${serialNumber} (user: ${username})`);
-    const getkey2Cmd = `getkey2/${username}`;
-    const encGetkey2 = loxoneAesEncrypt(getkey2Cmd, aesKey, aesIv);
-    ws.send(`jdev/sys/fenc/${encodeURIComponent(encGetkey2)}`);
+    ws.send(`jdev/sys/getkey2/${username}`);
   });
 
   if (!key2Ok) {
