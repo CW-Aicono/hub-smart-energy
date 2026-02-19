@@ -490,12 +490,13 @@ async function loxoneWsAuth(
   }
 
   // Da getkey2 UNVERSCHLÜSSELT gesendet wird, kommen salt und key HEX-KODIERT zurück.
-  // Doppeltes Hex-Decoding nötig:
-  //   salt: hex-decode → UTF8 → UUID-String (z.B. "2031943c-024e-...")
-  //   key:  hex-decode → UTF8 → 40-Char-Hex-String → hex-decode → 20 Bytes HMAC-Key
+  // Hex-Decode → UTF8 ergibt die eigentlichen Klartext-Strings.
   const actualSalt   = Buffer.from(saltValue!, "hex").toString("utf8");
   const actualKeyHex = Buffer.from(key2Value!, "hex").toString("utf8");
-  const hmacKeyBuf   = Buffer.from(actualKeyHex, "hex");
+  // WICHTIG: lxcommunicator verwendet den Key-String DIREKT als HMAC-Schlüssel (UTF8-Bytes),
+  // NICHT hex-dekodiert! CryptoJS.HmacSHA256(msg, keyString) interpretiert keyString als UTF8.
+  // D.h. der 40-Zeichen-Hex-String wird als 40 UTF8-Bytes verwendet.
+  const hmacKeyBuf   = Buffer.from(actualKeyHex, "utf8");
   log("info", `[Loxone] getkey2: salt="${actualSalt.substring(0, 20)}..." key="${actualKeyHex.substring(0, 8)}..." (hmacKey=${hmacKeyBuf.length}B) hashAlg=${hashAlgValue}`);
 
   // Hash gemäß hashAlg (lxcommunicator TokenHandler._otHash):
