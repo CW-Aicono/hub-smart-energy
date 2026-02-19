@@ -308,10 +308,7 @@ async function loxoneWsAuth(
     const onMsg = (data: WebSocket.RawData) => {
       const msg = data.toString();
       let parsed: any;
-      try { parsed = JSON.parse(msg); } catch { return; }
-      const ll = parsed?.LL;
-      if (!ll) return;
-      if (typeof ll.control === "string" && ll.control.includes("keyexchange")) {
+      try { parsed = JSON.parse(msg); } catch (_e) { return; }
         clearTimeout(timeout);
         ws.removeListener("message", onMsg);
         const code = ll.Code ?? ll.code;
@@ -348,10 +345,7 @@ async function loxoneWsAuth(
     const onMsg = (data: WebSocket.RawData) => {
       const msg = data.toString();
       let parsed: any;
-      try { parsed = JSON.parse(msg); } catch { return; }
-      const ll = parsed?.LL;
-      if (!ll) return;
-      if (typeof ll.control === "string" && ll.control.includes("getkey2")) {
+      try { parsed = JSON.parse(msg); } catch (_e) { return; }
         clearTimeout(timeout);
         ws.removeListener("message", onMsg);
         const val = ll.value as any;
@@ -402,10 +396,10 @@ async function loxoneWsAuth(
         if (!msg.startsWith("{") && !msg.startsWith("[")) {
           decrypted = loxoneAesDecrypt(msg, aesKey, aesIv);
         }
-      } catch { /* ignore, weiterversuchen mit rohem Text */ }
+      } catch (_e) { /* ignore, weiterversuchen mit rohem Text */ }
 
       let parsed: any;
-      try { parsed = JSON.parse(decrypted); } catch { return; }
+      try { parsed = JSON.parse(decrypted); } catch (_e) { return; }
 
       const ll = parsed?.LL;
       if (!ll) return;
@@ -471,7 +465,7 @@ async function loxoneAuthWithToken(
     const onMsg = (data: WebSocket.RawData) => {
       const msg = data.toString();
       let parsed: any;
-      try { parsed = JSON.parse(msg); } catch { return; }
+      try { parsed = JSON.parse(msg); } catch (_e) { return; }
       const ll = parsed?.LL;
       if (!ll) return;
       if (typeof ll.control === "string" && ll.control.includes("getkey") && !ll.control.includes("getkey2")) {
@@ -511,10 +505,10 @@ async function loxoneAuthWithToken(
         if (!msg.startsWith("{") && !msg.startsWith("[")) {
           decrypted = loxoneAesDecrypt(msg, aesKey, aesIv);
         }
-      } catch { /* ignore */ }
+      } catch (_e) { /* ignore */ }
 
       let parsed: any;
-      try { parsed = JSON.parse(decrypted); } catch { return; }
+      try { parsed = JSON.parse(decrypted); } catch (_e) { return; }
       const ll = parsed?.LL;
       if (!ll) return;
       if (typeof ll.control === "string" && ll.control.includes("authwithtoken")) {
@@ -583,7 +577,7 @@ function parseLoxoneValueEvent(buffer: Buffer): Array<{ uuid: string; value: num
  */
 function connectLoxoneWs(state: LoxoneWsState): void {
   if (state.ws) {
-    try { state.ws.terminate(); } catch {}
+    try { state.ws.terminate(); } catch (_e) {}
     state.ws = null;
   }
 
@@ -652,7 +646,7 @@ function connectLoxoneWs(state: LoxoneWsState): void {
     // Text-Frames → Status/Ack
     const msg = data.toString();
     let parsed: any;
-    try { parsed = JSON.parse(msg); } catch { return; }
+    try { parsed = JSON.parse(msg); } catch (_e) { return; }
 
     const ll = parsed?.LL;
     if (!ll) return;
