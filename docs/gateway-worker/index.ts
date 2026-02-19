@@ -270,42 +270,61 @@ async function loxoneWsAuth(
       return false;
     }
 
-    // Debug: ersten 40 Zeichen loggen — hilft zu sehen welches Format Loxone liefert
-    log("debug", `[Loxone] rawKey prefix (${baseUrl}): ${rawKey.substring(0, 40)}`);
+    // Immer sichtbar (INFO), damit wir das Schlüsselformat diagnostizieren können
+    log("info", `[Loxone] rawKey prefix: "${rawKey.substring(0, 60)}"`);
 
-    // Loxone liefert den RSA Public Key in verschiedenen Formaten je nach Firmware:
-    // - Voller PEM-Header vorhanden (BEGIN PUBLIC KEY, BEGIN RSA PUBLIC KEY, BEGIN CERTIFICATE)
-    // - Nur roher Base64 ohne Header → dann beide Formate probieren (SPKI und PKCS#1)
     if (rawKey.startsWith("-----BEGIN CERTIFICATE-----")) {
       // X.509-Zertifikat → Public Key extrahieren
       const cert = new crypto.X509Certificate(rawKey);
       publicKeyObj = cert.publicKey;
+      log("info", `[Loxone] Key format: X.509 Certificate`);
     } else if (rawKey.startsWith("-----")) {
-      // Bereits ein vollständiges PEM — direkt laden
+      // Fertiges PEM (z.B. BEGIN PUBLIC KEY / BEGIN RSA PUBLIC KEY) → direkt laden
       publicKeyObj = crypto.createPublicKey(rawKey);
+      log("info", `[Loxone] Key format: Full PEM`);
     } else {
-      // Roher Base64 ohne Header → SPKI probieren, dann PKCS#1 als Fallback
+      // Roher Base64-Block ohne Header → alle Formate ausprobieren
+      // Versuch 1: SPKI / PKCS#8 (BEGIN PUBLIC KEY)
       let parsed = false;
       try {
         const pemSpki = `-----BEGIN PUBLIC KEY-----\n${rawKey}\n-----END PUBLIC KEY-----`;
         publicKeyObj = crypto.createPublicKey(pemSpki);
         parsed = true;
-        log("debug", `[Loxone] Key parsed as SPKI/PKCS#8 for ${baseUrl}`);
-      } catch {
-        // ignore, try PKCS#1 next
-      }
+        log("info", `[Loxone] Key format: raw Base64 → SPKI/PKCS#8 OK`);
+      } catch (_e1) { /* weiter */ }
+
+      // Versuch 2: PKCS#1 (BEGIN RSA PUBLIC KEY)
       if (!parsed) {
         try {
           const pemPkcs1 = `-----BEGIN RSA PUBLIC KEY-----\n${rawKey}\n-----END RSA PUBLIC KEY-----`;
           publicKeyObj = crypto.createPublicKey({ key: pemPkcs1, format: "pem" });
           parsed = true;
-          log("debug", `[Loxone] Key parsed as PKCS#1 for ${baseUrl}`);
-        } catch {
-          // ignore, will throw below
-        }
+          log("info", `[Loxone] Key format: raw Base64 → PKCS#1 OK`);
+        } catch (_e2) { /* weiter */ }
       }
+
+      // Versuch 3: rohe DER-Bytes (Base64 → Buffer, createPublicKey mit DER)
       if (!parsed) {
-        throw new Error(`Could not parse RSA public key from ${baseUrl} — rawKey prefix: ${rawKey.substring(0, 40)}`);
+        try {
+          const derBuf = Buffer.from(rawKey, "base64");
+          publicKeyObj = crypto.createPublicKey({ key: derBuf, format: "der", type: "spki" });
+          parsed = true;
+          log("info", `[Loxone] Key format: raw Base64 → DER/SPKI OK`);
+        } catch (_e3) { /* weiter */ }
+      }
+
+      // Versuch 4: DER PKCS#1
+      if (!parsed) {
+        try {
+          const derBuf = Buffer.from(rawKey, "base64");
+          publicKeyObj = crypto.createPublicKey({ key: derBuf, format: "der", type: "pkcs1" });
+          parsed = true;
+          log("info", `[Loxone] Key format: raw Base64 → DER/PKCS#1 OK`);
+        } catch (_e4) { /* weiter */ }
+      }
+
+      if (!parsed) {
+        throw new Error(`All key formats failed for ${baseUrl}. rawKey prefix: "${rawKey.substring(0, 60)}"`);
       }
     }
   } catch (err) {
