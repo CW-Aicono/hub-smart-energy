@@ -28,17 +28,21 @@
  *     gateway-worker
  */
 
-import { createClient, SupabaseClient } from "@supabase/supabase-js";
+// Kein Supabase-Client mehr nötig – Kommunikation läuft über gateway-ingest HTTP API
 
 // ─── Configuration ──────────────────────────────────────────────────────────
 
 const SUPABASE_URL = process.env.SUPABASE_URL!;
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+const GATEWAY_API_KEY = process.env.GATEWAY_API_KEY!;
 const POLL_INTERVAL_MS = parseInt(process.env.POLL_INTERVAL_MS || "30000", 10);
 const LOG_LEVEL = (process.env.LOG_LEVEL || "info") as "debug" | "info" | "warn" | "error";
 
-if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-  console.error("[FATAL] SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set");
+// Ingest endpoint: POST readings via secure HTTP proxy
+const GATEWAY_INGEST_URL = process.env.GATEWAY_INGEST_URL ||
+  `${SUPABASE_URL}/functions/v1/gateway-ingest`;
+
+if (!SUPABASE_URL || !GATEWAY_API_KEY) {
+  console.error("[FATAL] SUPABASE_URL and GATEWAY_API_KEY must be set");
   process.exit(1);
 }
 
@@ -110,11 +114,33 @@ function isSpike(powerValue: number, energyType: string): boolean {
   return Math.abs(powerValue) > threshold;
 }
 
-// ─── Supabase Client ──────────────────────────────────────────────────────────
+// ─── HTTP Ingest Client ───────────────────────────────────────────────────────
+// Sendet Readings sicher an die gateway-ingest Edge Function statt direkt in die DB
 
-const supabase: SupabaseClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-  auth: { persistSession: false },
-});
+async function sendReadings(readings: PowerReading[]): Promise<void> {
+  if (readings.length === 0) return;
+
+  const response = await fetch(GATEWAY_INGEST_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${GATEWAY_API_KEY}`,
+    },
+    body: JSON.stringify({ readings }),
+    signal: AbortSignal.timeout(15000),
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`HTTP ${response.status}: ${text}`);
+  }
+
+  const result = await response.json();
+  log("info", `✓ Ingest: ${result.inserted} inserted, ${result.skipped ?? 0} skipped`);
+  if (result.skipped_details?.length) {
+    log("debug", "Skipped:", result.skipped_details.join("; "));
+  }
+}
 
 // ─── Gateway Pollers ─────────────────────────────────────────────────────────
 
@@ -444,44 +470,26 @@ const GATEWAY_POLLERS: Record<string, (meter: MeterWithSensor) => Promise<number
 // ─── Main Poll Loop ───────────────────────────────────────────────────────────
 
 async function fetchMeters(): Promise<MeterWithSensor[]> {
-  const { data, error } = await supabase
-    .from("meters")
-    .select(`
-      id,
-      name,
-      energy_type,
-      sensor_uuid,
-      location_integration_id,
-      tenant_id,
-      location_integration:location_integrations!meters_location_integration_id_fkey (
-        id,
-        config,
-        integration:integrations!location_integrations_integration_id_fkey (
-          type
-        )
-      )
-    `)
-    .eq("is_archived", false)
-    .not("sensor_uuid", "is", null)
-    .not("location_integration_id", "is", null);
+  // Meter-Liste über die gateway-ingest Funktion abrufen (kein direkter DB-Zugriff nötig)
+  const listUrl = GATEWAY_INGEST_URL + "?action=list-meters";
+  const response = await fetch(listUrl, {
+    headers: { "Authorization": `Bearer ${GATEWAY_API_KEY}` },
+    signal: AbortSignal.timeout(15000),
+  });
 
-  if (error) {
-    log("error", "Failed to fetch meters:", error.message);
+  if (!response.ok) {
+    const text = await response.text();
+    log("error", `Failed to fetch meters: HTTP ${response.status}: ${text}`);
     return [];
   }
 
-  return (data || []) as unknown as MeterWithSensor[];
-}
-
-async function writeReadings(readings: PowerReading[]): Promise<void> {
-  if (readings.length === 0) return;
-
-  const { error } = await supabase.from("meter_power_readings").insert(readings);
-  if (error) {
-    log("error", "Failed to write readings:", error.message);
-  } else {
-    log("info", `✓ Wrote ${readings.length} power readings`);
+  const data = await response.json();
+  if (!data.success) {
+    log("error", "Failed to fetch meters:", data.error);
+    return [];
   }
+
+  return (data.meters || []) as unknown as MeterWithSensor[];
 }
 
 async function pollCycle(): Promise<void> {
@@ -544,7 +552,7 @@ async function pollCycle(): Promise<void> {
     log("warn", `${errors.length} meters failed:`, errors.join("; "));
   }
 
-  await writeReadings(readings);
+  await sendReadings(readings);
 
   const duration = Date.now() - cycleStart;
   log("info", `── Poll cycle done in ${duration}ms (${readings.length}/${meters.length} readings) ──`);
