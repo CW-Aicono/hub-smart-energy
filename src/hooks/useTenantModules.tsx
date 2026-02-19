@@ -17,6 +17,7 @@ export const ALL_MODULES = [
   { code: "meter_scanning", label: "Zähler-Scanning (OCR)" },
   { code: "live_values", label: "Live-Sensorwerte" },
   { code: "network_infra", label: "Netzwerkinfrastruktur" },
+  { code: "task_management", label: "Aufgabenverwaltung" },
   { code: "brighthub_api", label: "BrightHub API" },
 ] as const;
 
