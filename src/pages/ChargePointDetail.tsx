@@ -897,10 +897,29 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
                           <p className="text-xs text-muted-foreground">PV-Überschussladen</p>
                           <p className="font-medium text-sm">{cpGroup.energy_settings.pv_surplus_charging ? "Aktiv" : "Inaktiv"}</p>
                         </div>
-                        <div className="border rounded-lg p-3 text-left">
-                          <p className="text-xs text-muted-foreground">Leistungsbegrenzung</p>
-                          <p className="font-medium text-sm">{cpGroup.energy_settings.power_limit_kw ? `${cpGroup.energy_settings.power_limit_kw} kW` : "Keine"}</p>
-                        </div>
+                        {(() => {
+                          const pls = (cpGroup.energy_settings as any).power_limit_schedule;
+                          const isActive = pls?.enabled;
+                          let label = "Keine";
+                          let detail: string | null = null;
+                          if (isActive) {
+                            const limitStr = pls.limit_type === "minimal"
+                              ? "Minimale Leistung"
+                              : pls.limit_kw ? `${pls.limit_kw} kW` : "—";
+                            const timeStr = pls.mode === "allday"
+                              ? "Ganztägig"
+                              : `${pls.time_from}–${pls.time_to} Uhr`;
+                            label = limitStr;
+                            detail = timeStr;
+                          }
+                          return (
+                            <div className={`border rounded-lg p-3 text-left col-span-2 ${isActive ? "border-primary/30 bg-primary/5" : ""}`}>
+                              <p className="text-xs text-muted-foreground">Leistungsbegrenzung (Gruppe)</p>
+                              <p className={`font-medium text-sm ${isActive ? "text-primary" : ""}`}>{label}</p>
+                              {detail && <p className="text-xs text-muted-foreground mt-0.5">{detail}</p>}
+                            </div>
+                          );
+                        })()}
                         <div className="border rounded-lg p-3 text-left">
                           <p className="text-xs text-muted-foreground">Günstig-Laden-Modus</p>
                           <p className="font-medium text-sm">{cpGroup.energy_settings.cheap_charging_mode ? "Aktiv" : "Inaktiv"}</p>
