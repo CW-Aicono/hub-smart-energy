@@ -527,6 +527,20 @@ async function pollCycle(): Promise<void> {
     return;
   }
 
+  // DNS-Warmup: alle Loxone-Seriennummern sequenziell auflösen BEVOR paralleles Polling startet.
+  // Verhindert Race-Condition im 1. Zyklus, bei der 41 Promises gleichzeitig den leeren Cache treffen.
+  const uniqueSerials = [...new Set(
+    meters
+      .map(m => (m.location_integration?.config as any)?.serial_number as string | undefined)
+      .filter(Boolean) as string[]
+  )];
+  if (uniqueSerials.length > 0) {
+    for (const serial of uniqueSerials) {
+      await resolveLoxoneBaseUrl(serial);
+    }
+    log("info", `DNS cache warmed for ${uniqueSerials.length} Miniserver(s)`);
+  }
+
   const now = new Date().toISOString();
   const readings: PowerReading[] = [];
   const errors: string[] = [];
