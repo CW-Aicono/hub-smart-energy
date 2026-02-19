@@ -477,42 +477,57 @@ async function loxoneWsAuth(
     return false;
   }
 
-  // Loxone getkey2 response format:
-  //   salt  → plain-text UUID nonce, e.g. "2031943c-024e-7a28-ffff..."  (NOT hex-encoded!)
-  //   key   → hex-encoded 20-byte HMAC key, e.g. "D47997DF..."           (IS hex-encoded!)
-  // Decode ONLY the key from hex to binary; use the salt as-is.
-  const saltForHash = saltValue!;                         // plain text → use directly
-  const hmacKeyBuf  = Buffer.from(key2Value!, "hex");    // hex → 20 binary bytes for HMAC
-  log("info", `[Loxone] getkey2: salt="${saltForHash.substring(0, 16)}..." key="${key2Value!.substring(0, 8)}..." (keyBuf ${hmacKeyBuf.length}B)`);
+  // Loxone Websocket-Protokoll: BEIDE Werte (salt + key) sind hex-kodiert.
+  //   salt raw → hex-decode → UTF8 → UUID-String, z.B. "2031943c-024e-7a28-..."
+  //   key  raw → hex-decode → UTF8 → 40-Zeichen-Hex-String → hex-decode → 20 Bytes HMAC-Key
+  const actualSalt   = Buffer.from(saltValue!, "hex").toString("utf8");   // z.B. "2031943c-024e-..."
+  const actualKeyHex = Buffer.from(key2Value!, "hex").toString("utf8");   // z.B. "D47997DF..." (40 Hex-Chars)
+  const hmacKeyBuf   = Buffer.from(actualKeyHex, "hex");                  // 20 Bytes für HMAC
+  log("info", `[Loxone] getkey2 decoded: salt="${actualSalt.substring(0, 20)}..." keyHex="${actualKeyHex.substring(0, 8)}..." (hmacKey=${hmacKeyBuf.length}B)`);
 
-  // Passwort-Hash: zwei Varianten probieren (ältere vs. neuere Loxone-Firmware)
-  // Variante A (SHA1-PW):   SHA1(password:salt)         → UPPER, HMAC-SHA1(user:hash, hmacKeyBuf)
-  // Variante B (SHA256-PW): SHA1(SHA256hex(password):salt) → UPPER, HMAC-SHA1(user:hash, hmacKeyBuf)
-  function buildHash(passwordInput: string): string {
-    const pwHash = crypto.createHash("sha1")
-      .update(`${passwordInput}:${saltForHash}`)
+  // Zwei Hash-Varianten (Loxone-Firmware-abhängig):
+  //   Variante A (SHA1):   pwHash = SHA1(password:salt).upper()   → HMAC-SHA1(user:pwHash, key)
+  //   Variante B (SHA256): pwHash = SHA256(password:salt).upper() → HMAC-SHA1(user:pwHash, key)
+  // WICHTIG: "SHA256" betrifft nur den pwHash-Schritt, HMAC bleibt immer SHA1!
+  function buildHash(algorithm: "sha1" | "sha256"): string {
+    const pwHash = crypto.createHash(algorithm)
+      .update(`${password}:${actualSalt}`)
       .digest("hex")
       .toUpperCase();
     return crypto.createHmac("sha1", hmacKeyBuf)
       .update(`${username}:${pwHash}`)
       .digest("hex");
   }
-  const hashA = buildHash(password);
-  const hashB = buildHash(crypto.createHash("sha256").update(password).digest("hex").toUpperCase());
-  log("info", `[Loxone] hashA(SHA1-pw)="${hashA.substring(0, 8)}..." hashB(SHA256-pw)="${hashB.substring(0, 8)}..."`);
+  const hashA = buildHash("sha1");    // SHA1(pw:salt) → korrekt für ältere Firmware
+  const hashB = buildHash("sha256");  // SHA256(pw:salt) → korrekt für neuere Firmware
+  log("info", `[Loxone] hashA(SHA1)="${hashA.substring(0, 8)}..." hashB(SHA256)="${hashB.substring(0, 8)}..."`);
 
   // Hilfsfunktion: einen Hash-Versuch per getjwt abschicken und Antwort auswerten
   async function tryGetJwt(hash: string, label: string): Promise<{ ok: boolean; token: string | null; validUntil: number }> {
     const clientUuid = crypto.randomUUID();
-    const jwtCmd = `jdev/sys/getjwt/${hash}/${username}/4/${clientUuid}/GatewayWorker`;
+    // Permission 2 = App-Token (langlebig), passend für Gateway-Worker
+    const jwtCmd = `jdev/sys/getjwt/${hash}/${username}/2/${clientUuid}/GatewayWorker`;
     let tok: string | null = null;
     let vu = 0;
 
     const ok = await new Promise<boolean>((resolve) => {
+      let resolved = false;
+      const done = (val: boolean) => { if (!resolved) { resolved = true; resolve(val); } };
+
       const timeout = setTimeout(() => {
         log("warn", `[Loxone] getjwt timeout (${label}) for ${serialNumber}`);
-        resolve(false);
+        ws.removeListener("message", onMsg);
+        ws.removeListener("close", onClose);
+        done(false);
       }, 8000);
+
+      const onClose = (code: number) => {
+        clearTimeout(timeout);
+        ws.removeListener("message", onMsg);
+        log("warn", `[Loxone] getjwt ws closed (${label}) code=${code} for ${serialNumber}`);
+        done(false);
+      };
+
       const onMsg = (data: WebSocket.RawData) => {
         const msg = data.toString();
         let decrypted = msg;
@@ -528,6 +543,7 @@ async function loxoneWsAuth(
         if (typeof ll.control === "string" && ll.control.includes("getjwt")) {
           clearTimeout(timeout);
           ws.removeListener("message", onMsg);
+          ws.removeListener("close", onClose);
           const code = String(ll.Code ?? ll.code ?? "?");
           log("info", `[Loxone] getjwt response (${label}): code=${code}`);
           if (code === "200") {
@@ -537,13 +553,15 @@ async function loxoneWsAuth(
               const loxEpoch = 1230768000;
               vu = (val.validUntil as number) + loxEpoch;
             }
-            resolve(true);
+            done(true);
           } else {
-            resolve(false);
+            done(false);
           }
         }
       };
+
       ws.on("message", onMsg);
+      ws.on("close", onClose);
       const encrypted = loxoneAesEncrypt(jwtCmd, aesKey, aesIv);
       ws.send(`jdev/sys/enc/${encodeURIComponent(encrypted)}`);
     });
