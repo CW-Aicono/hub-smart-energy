@@ -10,6 +10,44 @@ import { ENERGY_TYPE_LABELS, ENERGY_HEX_COLORS } from "@/lib/energyTypeColors";
 import { supabase } from "@/integrations/supabase/client";
 import { startOfDay, endOfDay } from "date-fns";
 
+interface EnergyValue {
+  meter_id: string;
+  recorded_at: string;
+  power_value: number;
+}
+
+interface MeterWithLocation extends Meter {
+  location_id: string | null;
+  location_integration_id: string | null;
+}
+
+interface Meter {
+  id: string;
+  name: string;
+  energy_type: string;
+  capture_type: string;
+  is_main_meter: boolean;
+  is_archived: boolean;
+  sensor_uuid: string | null;
+}
+
+interface LoxoneSensor {
+  uuid: string;
+  name: string;
+  room: string;
+  category: string;
+  details: any;
+  states: any;
+  last_updated: string;
+  device_uuid: string;
+  type: string;
+  sub_type: string;
+  unit: string;
+  rawValue: number;
+  textValue: string;
+  is_favorite: boolean;
+}
+
 interface EnergyGaugeWidgetProps {
   locationId: string | null;
 }
@@ -38,17 +76,16 @@ function autoScale(value: number, peak: number): number {
   return 10 * magnitude;
 }
 
-/** Single automotive-style analog gauge */
 function AnalogGauge({ data }: { data: GaugeData }) {
   const { currentValue, peakValue, maxScale, unit, label, color } = data;
 
   const startAngle = -225;
   const endAngle = 45;
-  const sweep = endAngle - startAngle; // 270
+  const sweep = endAngle - startAngle;
 
-  const cx = 120;
-  const cy = 120;
-  const r = 90;
+  const cx = 100;
+  const cy = 100;
+  const r = 78;
 
   const valueAngle = startAngle + (Math.min(currentValue, maxScale) / maxScale) * sweep;
   const peakAngle = startAngle + (Math.min(peakValue, maxScale) / maxScale) * sweep;
@@ -63,37 +100,31 @@ function AnalogGauge({ data }: { data: GaugeData }) {
   const arcEnd = arcPoint(endAngle, r);
   const valEnd = arcPoint(valueAngle, r);
 
-  // Tick marks
   const numTicks = 10;
   const ticks = Array.from({ length: numTicks + 1 }, (_, i) => {
     const frac = i / numTicks;
     const angle = startAngle + frac * sweep;
     const isMajor = i % 2 === 0;
-    const inner = arcPoint(angle, r - (isMajor ? 14 : 8));
+    const inner = arcPoint(angle, r - (isMajor ? 12 : 7));
     const outer = arcPoint(angle, r);
-    const labelPt = arcPoint(angle, r - 24);
+    const labelPt = arcPoint(angle, r - 21);
     const tickVal = Math.round((frac * maxScale) * 100) / 100;
-    return { inner, outer, labelPt, tickVal, isMajor, angle };
+    return { inner, outer, labelPt, tickVal, isMajor };
   });
 
-  // Needle
-  const needleLen = r - 20;
+  const needleLen = r - 18;
   const needleTip = arcPoint(valueAngle, needleLen);
-  const needleTail = arcPoint(valueAngle + 180, 16);
-  const needleBase1 = arcPoint(valueAngle + 90, 3.5);
-  const needleBase2 = arcPoint(valueAngle - 90, 3.5);
+  const needleTail = arcPoint(valueAngle + 180, 14);
+  const needleBase1 = arcPoint(valueAngle + 90, 3);
+  const needleBase2 = arcPoint(valueAngle - 90, 3);
 
-  // Peak marker
   const peakOuter = arcPoint(peakAngle, r + 2);
-  const peakInner = arcPoint(peakAngle, r - 6);
+  const peakInner = arcPoint(peakAngle, r - 5);
 
-  // Format display
   const displayValue = currentValue >= 1000
     ? (currentValue / 1000).toLocaleString("de-DE", { maximumFractionDigits: 1 })
     : currentValue.toLocaleString("de-DE", { maximumFractionDigits: 1 });
-  const displayUnit = currentValue >= 1000
-    ? (unit === "kW" ? "MW" : unit)
-    : unit;
+  const displayUnit = currentValue >= 1000 ? (unit === "kW" ? "MW" : unit) : unit;
 
   const fmtTick = (v: number) => {
     if (v >= 1000) return `${Math.round(v / 1000)}k`;
@@ -102,15 +133,11 @@ function AnalogGauge({ data }: { data: GaugeData }) {
   };
 
   return (
-    <div className="flex flex-col items-center">
-      <svg viewBox="-10 0 260 180" className="w-full max-w-[220px]" overflow="visible">
+    <div className="flex flex-col items-center flex-1 min-w-[140px] max-w-[200px]">
+      <svg viewBox="0 0 200 155" className="w-full">
         <defs>
-          <radialGradient id={`bg-${data.energyType}`} cx="50%" cy="45%" r="55%">
-            <stop offset="0%" stopColor="hsl(var(--card))" stopOpacity={1} />
-            <stop offset="100%" stopColor="hsl(var(--muted))" stopOpacity={0.3} />
-          </radialGradient>
           <filter id={`glow-${data.energyType}`}>
-            <feDropShadow dx="0" dy="0" stdDeviation="4" floodColor={color} floodOpacity="0.35" />
+            <feDropShadow dx="0" dy="0" stdDeviation="3" floodColor={color} floodOpacity="0.4" />
           </filter>
           <linearGradient id={`needle-${data.energyType}`} x1="0%" y1="0%" x2="100%" y2="100%">
             <stop offset="0%" stopColor="hsl(var(--foreground))" />
@@ -118,14 +145,14 @@ function AnalogGauge({ data }: { data: GaugeData }) {
           </linearGradient>
         </defs>
 
-        {/* Background arc track */}
+        {/* Background arc */}
         <path
           d={`M ${arcStart.x} ${arcStart.y} A ${r} ${r} 0 1 1 ${arcEnd.x} ${arcEnd.y}`}
           fill="none"
           stroke="hsl(var(--border))"
-          strokeWidth={7}
+          strokeWidth={6}
           strokeLinecap="round"
-          opacity={0.4}
+          opacity={0.35}
         />
         {/* Value arc */}
         {currentValue > 0 && (
@@ -133,32 +160,29 @@ function AnalogGauge({ data }: { data: GaugeData }) {
             d={`M ${arcStart.x} ${arcStart.y} A ${r} ${r} 0 ${valueAngle - startAngle > 180 ? 1 : 0} 1 ${valEnd.x} ${valEnd.y}`}
             fill="none"
             stroke={color}
-            strokeWidth={7}
+            strokeWidth={6}
             strokeLinecap="round"
             filter={`url(#glow-${data.energyType})`}
             style={{ transition: "all 1s cubic-bezier(0.4,0,0.2,1)" }}
           />
         )}
 
-        {/* Tick marks */}
+        {/* Ticks */}
         {ticks.map((t, i) => (
           <g key={i}>
             <line
               x1={t.inner.x} y1={t.inner.y}
               x2={t.outer.x} y2={t.outer.y}
               stroke="hsl(var(--foreground))"
-              strokeWidth={t.isMajor ? 1.5 : 0.7}
+              strokeWidth={t.isMajor ? 1.5 : 0.6}
               opacity={t.isMajor ? 0.5 : 0.2}
             />
             {t.isMajor && (
               <text
                 x={t.labelPt.x} y={t.labelPt.y}
-                textAnchor="middle"
-                dominantBaseline="middle"
+                textAnchor="middle" dominantBaseline="middle"
                 fill="hsl(var(--muted-foreground))"
-                fontSize={9}
-                fontFamily="system-ui, sans-serif"
-                fontWeight={500}
+                fontSize={8} fontWeight={500}
               >
                 {fmtTick(t.tickVal)}
               </text>
@@ -166,45 +190,39 @@ function AnalogGauge({ data }: { data: GaugeData }) {
           </g>
         ))}
 
-        {/* Peak marker (red notch) */}
+        {/* Peak */}
         {peakValue > 0 && (
           <line
             x1={peakInner.x} y1={peakInner.y}
             x2={peakOuter.x} y2={peakOuter.y}
-            stroke="#ef4444"
-            strokeWidth={2.5}
-            strokeLinecap="round"
-            opacity={0.85}
+            stroke="#ef4444" strokeWidth={2.5} strokeLinecap="round" opacity={0.85}
           >
-            <title>Tageshöchstwert: {peakValue.toLocaleString("de-DE", { maximumFractionDigits: 1 })} {unit}</title>
+            <title>Peak: {peakValue.toLocaleString("de-DE", { maximumFractionDigits: 1 })} {unit}</title>
           </line>
         )}
 
         {/* Needle */}
-        <g style={{ transition: "all 1s cubic-bezier(0.4,0,0.2,1)", transformOrigin: `${cx}px ${cy}px` }}>
-          <polygon
-            points={`${needleTip.x},${needleTip.y} ${needleBase1.x},${needleBase1.y} ${needleTail.x},${needleTail.y} ${needleBase2.x},${needleBase2.y}`}
-            fill={`url(#needle-${data.energyType})`}
-            opacity={0.9}
-            style={{ transition: "all 1s cubic-bezier(0.4,0,0.2,1)" }}
-          />
-        </g>
+        <polygon
+          points={`${needleTip.x},${needleTip.y} ${needleBase1.x},${needleBase1.y} ${needleTail.x},${needleTail.y} ${needleBase2.x},${needleBase2.y}`}
+          fill={`url(#needle-${data.energyType})`}
+          opacity={0.9}
+          style={{ transition: "all 1s cubic-bezier(0.4,0,0.2,1)" }}
+        />
 
-        {/* Center hub */}
-        <circle cx={cx} cy={cy} r={9} fill="hsl(var(--muted))" stroke="hsl(var(--border))" strokeWidth={1.5} />
-        <circle cx={cx} cy={cy} r={5} fill="hsl(var(--foreground))" opacity={0.6} />
-        <circle cx={cx} cy={cy} r={2.5} fill="hsl(var(--background))" />
+        {/* Hub */}
+        <circle cx={cx} cy={cy} r={8} fill="hsl(var(--muted))" stroke="hsl(var(--border))" strokeWidth={1} />
+        <circle cx={cx} cy={cy} r={4.5} fill="hsl(var(--foreground))" opacity={0.6} />
+        <circle cx={cx} cy={cy} r={2} fill="hsl(var(--background))" />
 
-        {/* Digital readout */}
-        <text x={cx} y={cy + 36} textAnchor="middle" fill="hsl(var(--foreground))" fontSize={24} fontWeight={700} fontFamily="'SF Mono', 'Cascadia Code', monospace">
+        {/* Readout */}
+        <text x={cx} y={cy + 30} textAnchor="middle" fill="hsl(var(--foreground))" fontSize={20} fontWeight={700} fontFamily="'SF Mono', 'Cascadia Code', monospace">
           {displayValue}
         </text>
-        <text x={cx} y={cy + 50} textAnchor="middle" fill="hsl(var(--muted-foreground))" fontSize={10} fontWeight={500}>
+        <text x={cx} y={cy + 43} textAnchor="middle" fill="hsl(var(--muted-foreground))" fontSize={9} fontWeight={500}>
           {displayUnit}
         </text>
       </svg>
-      {/* Label + peak below */}
-      <span className="text-sm font-semibold tracking-wide -mt-1" style={{ color }}>{label}</span>
+      <span className="text-sm font-semibold tracking-wide -mt-2" style={{ color }}>{label}</span>
       {peakValue > 0 && (
         <span className="text-[10px] text-muted-foreground flex items-center gap-1 mt-0.5">
           <span className="text-destructive">▲</span>
@@ -245,21 +263,15 @@ const EnergyGaugeWidget = ({ locationId }: EnergyGaugeWidgetProps) => {
   const fetchPeaks = useCallback(async () => {
     const meterIds = activeMeters.map((m) => m.id);
     if (meterIds.length === 0) return;
-
     const today = new Date();
-    const dayStart = startOfDay(today).toISOString();
-    const dayEnd = endOfDay(today).toISOString();
-
     const { data, error } = await supabase
       .from("meter_power_readings")
       .select("meter_id, power_value")
       .in("meter_id", meterIds)
-      .gte("recorded_at", dayStart)
-      .lte("recorded_at", dayEnd)
+      .gte("recorded_at", startOfDay(today).toISOString())
+      .lte("recorded_at", endOfDay(today).toISOString())
       .order("power_value", { ascending: false });
-
     if (error || !data) return;
-
     const peaks: Record<string, number> = {};
     for (const row of data) {
       const meter = activeMeters.find((m) => m.id === row.meter_id);
@@ -276,9 +288,7 @@ const EnergyGaugeWidget = ({ locationId }: EnergyGaugeWidgetProps) => {
     return () => clearInterval(interval);
   }, [fetchPeaks]);
 
-  const handleResetPeaks = useCallback(() => {
-    setDailyPeaks({});
-  }, []);
+  const handleResetPeaks = useCallback(() => setDailyPeaks({}), []);
 
   const gaugeData = useMemo((): GaugeData[] => {
     const sensorsByIntegration = new Map<string, any[]>();
@@ -286,7 +296,6 @@ const EnergyGaugeWidget = ({ locationId }: EnergyGaugeWidgetProps) => {
       const query = sensorQueries[idx];
       if (query?.data) sensorsByIntegration.set(id, query.data);
     });
-
     const currentByType: Record<string, number> = {};
     for (const meter of activeMeters) {
       const sensors = sensorsByIntegration.get(meter.location_integration_id!);
@@ -296,21 +305,18 @@ const EnergyGaugeWidget = ({ locationId }: EnergyGaugeWidgetProps) => {
       const et = meter.energy_type;
       currentByType[et] = (currentByType[et] ?? 0) + Math.abs(sensor.rawValue);
     }
-
     const energyTypes = ["strom", "gas", "waerme", "wasser"].filter(
       (et) => allowedTypes.has(et) && (currentByType[et] != null || dailyPeaks[et] != null)
     );
-
     return energyTypes.map((et) => {
       const current = currentByType[et] ?? 0;
       const peak = dailyPeaks[et] ?? 0;
-      const maxScale = autoScale(current, peak);
       return {
         energyType: et,
         label: ENERGY_TYPE_LABELS[et] || et,
         currentValue: Math.round(current * 10) / 10,
         peakValue: Math.round(peak * 10) / 10,
-        maxScale,
+        maxScale: autoScale(current, peak),
         unit: getPowerUnit(et),
         color: ENERGY_HEX_COLORS[et] || "#888",
       };
@@ -355,8 +361,7 @@ const EnergyGaugeWidget = ({ locationId }: EnergyGaugeWidgetProps) => {
           </div>
           {hasPeaks && (
             <Button
-              variant="ghost"
-              size="sm"
+              variant="ghost" size="sm"
               onClick={handleResetPeaks}
               className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground gap-1"
               title="Peak-Werte zurücksetzen"
@@ -367,12 +372,15 @@ const EnergyGaugeWidget = ({ locationId }: EnergyGaugeWidgetProps) => {
           )}
         </div>
       </CardHeader>
-      <CardContent className="pt-2 pb-4">
-        {/* Oval cockpit frame */}
-        <div className="mx-auto w-fit rounded-[60px] border border-border/60 bg-gradient-to-b from-muted/30 to-muted/10 px-8 py-4 shadow-[inset_0_2px_8px_rgba(0,0,0,0.06),0_1px_4px_rgba(0,0,0,0.05)]">
-          <div className={`flex items-start justify-center ${
-            gaugeData.length <= 2 ? "gap-10" : "gap-6"
-          }`}>
+      <CardContent className="pt-0 pb-3">
+        {/* Cockpit instrument panel */}
+        <div className="
+          rounded-[50px] border border-border/50
+          bg-gradient-to-b from-background via-muted/20 to-muted/40
+          shadow-[inset_0_1px_0_rgba(255,255,255,0.08),inset_0_-2px_6px_rgba(0,0,0,0.06),0_2px_8px_rgba(0,0,0,0.08)]
+          px-6 py-5
+        ">
+          <div className="flex items-start justify-around">
             {gaugeData.map((g) => (
               <AnalogGauge key={g.energyType} data={g} />
             ))}
