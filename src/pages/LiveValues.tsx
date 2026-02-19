@@ -104,7 +104,72 @@ const LiveValues = () => {
     fetchLatestReadings();
   }, [user]);
 
-  // Fetch live values for automatic meters
+  // Load initial power values from DB (last known value per meter)
+  const loadInitialPowerValues = useCallback(async () => {
+    const autoMeters = meters.filter(
+      (m) => !m.is_archived && m.capture_type === "automatic" && m.sensor_uuid && m.location_integration_id
+    );
+    if (autoMeters.length === 0) return;
+
+    setLoadingLive(true);
+
+    // Fetch latest power reading per meter from DB
+    const { data: powerRows } = await supabase
+      .from("meter_power_readings")
+      .select("meter_id, power_value, recorded_at")
+      .in("meter_id", autoMeters.map((m) => m.id))
+      .order("recorded_at", { ascending: false });
+
+    // Fetch period totals (day/month/year) from meter_period_totals
+    const today = new Date().toISOString().split("T")[0];
+    const firstOfMonth = today.substring(0, 7) + "-01";
+    const firstOfYear = today.substring(0, 4) + "-01-01";
+
+    const { data: periodRows } = await supabase
+      .from("meter_period_totals")
+      .select("meter_id, period_type, period_start, total_value, energy_type")
+      .in("meter_id", autoMeters.map((m) => m.id))
+      .in("period_type", ["day", "month", "year"]);
+
+    // Build period totals map
+    const periodMap = new Map<string, { totalDay: number | null; totalMonth: number | null; totalYear: number | null }>();
+    if (periodRows) {
+      for (const row of periodRows) {
+        const existing = periodMap.get(row.meter_id) ?? { totalDay: null, totalMonth: null, totalYear: null };
+        if (row.period_type === "day" && row.period_start === today) existing.totalDay = row.total_value;
+        if (row.period_type === "month" && row.period_start === firstOfMonth) existing.totalMonth = row.total_value;
+        if (row.period_type === "year" && row.period_start === firstOfYear) existing.totalYear = row.total_value;
+        periodMap.set(row.meter_id, existing);
+      }
+    }
+
+    // Build live values map — last value per meter
+    if (powerRows) {
+      setLiveValues((prev) => {
+        const next = new Map(prev);
+        const seen = new Set<string>();
+        for (const row of powerRows) {
+          if (seen.has(row.meter_id)) continue;
+          seen.add(row.meter_id);
+          const periods = periodMap.get(row.meter_id) ?? { totalDay: null, totalMonth: null, totalYear: null };
+          next.set(row.meter_id, {
+            value: row.power_value,
+            totalDay: periods.totalDay,
+            totalWeek: null,
+            totalMonth: periods.totalMonth,
+            totalYear: periods.totalYear,
+            meterReading: null,
+            meterReadingUnit: "kWh",
+          });
+        }
+        return next;
+      });
+      setLastRefresh(new Date());
+    }
+    setLoadingLive(false);
+  }, [meters]);
+
+  // Fetch period totals + meter readings from loxone-api once per session (for totalDay, meterReading etc.)
   const fetchLiveValues = useCallback(async () => {
     const autoMeters = meters.filter(
       (m) => !m.is_archived && m.capture_type === "automatic" && m.sensor_uuid && m.location_integration_id
@@ -112,7 +177,6 @@ const LiveValues = () => {
     if (autoMeters.length === 0) return;
 
     setLoadingLive(true);
-    const newValues = new Map<string, { value: number; totalDay: number | null; totalWeek: number | null; totalMonth: number | null; totalYear: number | null; meterReading: number | null; meterReadingUnit: string }>();
 
     // Group by integration
     const byIntegration = new Map<string, typeof autoMeters>();
@@ -133,7 +197,6 @@ const LiveValues = () => {
         for (const meter of intMeters) {
           const sensor = data.sensors?.find((s: any) => s.id === meter.sensor_uuid);
           if (sensor) {
-            // Use rawValue (numeric) instead of formatted value string
             const numVal = typeof sensor.rawValue === "number"
               ? sensor.rawValue
               : (sensor.rawValue != null ? parseFloat(String(sensor.rawValue)) : NaN);
@@ -143,7 +206,6 @@ const LiveValues = () => {
             const totalWeek = typeof sensor.totalWeek === "number" ? sensor.totalWeek : (sensor.totalWeek != null ? parseFloat(String(sensor.totalWeek)) : null);
             const totalMonth = typeof sensor.totalMonth === "number" ? sensor.totalMonth : (sensor.totalMonth != null ? parseFloat(String(sensor.totalMonth)) : null);
             const totalYear = typeof sensor.totalYear === "number" ? sensor.totalYear : (sensor.totalYear != null ? parseFloat(String(sensor.totalYear)) : null);
-            // Extract meter reading (Zählerstand / Mr / Mrc / Mrd) from secondaryValue
             const meterReadingRaw = sensor.secondaryValue != null && sensor.secondaryValue !== ""
               ? (typeof sensor.secondaryValue === "number" ? sensor.secondaryValue : parseFloat(String(sensor.secondaryValue).replace(/\./g, "").replace(",", ".")))
               : null;
@@ -151,14 +213,18 @@ const LiveValues = () => {
             const meterReadingUnit = sensor.secondaryUnit || "kWh";
 
             if (!isNaN(numVal)) {
-              newValues.set(meter.id, {
-                value: numVal,
-                totalDay: totalDay !== null && !isNaN(totalDay) ? totalDay : null,
-                totalWeek: totalWeek !== null && !isNaN(totalWeek as number) ? totalWeek : null,
-                totalMonth: totalMonth !== null && !isNaN(totalMonth as number) ? totalMonth : null,
-                totalYear: totalYear !== null && !isNaN(totalYear as number) ? totalYear : null,
-                meterReading,
-                meterReadingUnit,
+              setLiveValues((prev) => {
+                const next = new Map(prev);
+                next.set(meter.id, {
+                  value: numVal,
+                  totalDay: totalDay !== null && !isNaN(totalDay) ? totalDay : null,
+                  totalWeek: totalWeek !== null && !isNaN(totalWeek as number) ? totalWeek : null,
+                  totalMonth: totalMonth !== null && !isNaN(totalMonth as number) ? totalMonth : null,
+                  totalYear: totalYear !== null && !isNaN(totalYear as number) ? totalYear : null,
+                  meterReading,
+                  meterReadingUnit,
+                });
+                return next;
               });
             }
           }
@@ -168,18 +234,46 @@ const LiveValues = () => {
       }
     }
 
-    setLiveValues(newValues);
     setLastRefresh(new Date());
     setLoadingLive(false);
   }, [meters]);
 
+  // On mount: load initial DB values, then fetch full data from loxone-api once,
+  // then subscribe to Realtime for instant power_value updates
   useEffect(() => {
-    if (meters.length > 0) {
-      fetchLiveValues();
-      const interval = setInterval(fetchLiveValues, 30000);
-      return () => clearInterval(interval);
-    }
-  }, [fetchLiveValues, meters.length]);
+    if (meters.length === 0) return;
+
+    loadInitialPowerValues();
+    fetchLiveValues();
+
+    // Realtime subscription: update power_value instantly on every new INSERT
+    const channel = supabase
+      .channel("meter-power-readings-live")
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "meter_power_readings" },
+        (payload) => {
+          const r = payload.new as { meter_id: string; power_value: number; recorded_at: string };
+          setLiveValues((prev) => {
+            const existing = prev.get(r.meter_id);
+            if (!existing) return prev; // ignore meters not in our list
+            const next = new Map(prev);
+            next.set(r.meter_id, {
+              ...existing,
+              value: r.power_value,
+            });
+            return next;
+          });
+          setLastRefresh(new Date());
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [meters.length]);
 
   // Filter meters
   const filteredMeters = useMemo(() => {
