@@ -579,7 +579,7 @@ async function loxoneWsAuth(
       ws.on("message", onMsg);
       ws.on("close", onClose);
       const encrypted = loxoneAesEncrypt(jwtCmd, aesKey, aesIv);
-      ws.send(`jdev/sys/fenc/${encodeURIComponent(encrypted)}`);
+      ws.send(`jdev/sys/fenc/${encrypted}`);
     });
 
     return { ok, token: tok, validUntil: vu };
@@ -696,7 +696,7 @@ async function loxoneAuthWithToken(
     ws.on("message", onMsg);
 
     const encrypted = loxoneAesEncrypt(authCmd, aesKey, aesIv);
-    ws.send(`jdev/sys/enc/${encodeURIComponent(encrypted)}`);
+    ws.send(`jdev/sys/fenc/${encrypted}`);
   });
 
   if (authOk) {
