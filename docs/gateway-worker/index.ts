@@ -479,80 +479,94 @@ async function loxoneWsAuth(
 
   // Loxone encodes both key and salt as hex strings of the actual ASCII text.
   // Must hex-decode them before use in password hashing.
-  const decodedSalt = Buffer.from(saltValue!, "hex").toString("utf8");
-  const decodedKey  = Buffer.from(key2Value!, "hex").toString("utf8");
-  log("debug", `[Loxone] getkey2 decoded: salt="${decodedSalt}" keyLen=${decodedKey.length}`);
+  const decodedSalt   = Buffer.from(saltValue!, "hex").toString("utf8");
+  const decodedKeyStr = Buffer.from(key2Value!, "hex").toString("utf8"); // 40-char hex string
+  const decodedKeyBuf = Buffer.from(decodedKeyStr, "hex");               // 20 binary bytes
+  log("info", `[Loxone] getkey2 decoded: salt="${decodedSalt}" key="${decodedKeyStr.substring(0, 8)}..."`);
 
-  // Passwort-Hash berechnen (Loxone JWT-Protokoll):
-  // 1. SHA1(password + ":" + salt) → UPPER HEX
-  // 2. HMAC-SHA1(username + ":" + pwHash, key)
-  const pwHash = crypto.createHash("sha1")
-    .update(`${password}:${decodedSalt}`)
-    .digest("hex")
-    .toUpperCase();
+  // Passwort-Hash: zwei Varianten probieren (ältere vs. neuere Loxone-Firmware)
+  // Variante A (SHA1-PW): SHA1(password:salt) → UPPER, HMAC-SHA1(user:hash, key-binary)
+  // Variante B (SHA256-PW): SHA1(SHA256(password):salt) → UPPER, HMAC-SHA1(user:hash, key-binary)
+  function buildHash(passwordInput: string): string {
+    const pwHash = crypto.createHash("sha1")
+      .update(`${passwordInput}:${decodedSalt}`)
+      .digest("hex")
+      .toUpperCase();
+    return crypto.createHmac("sha1", decodedKeyBuf)
+      .update(`${username}:${pwHash}`)
+      .digest("hex");
+  }
+  const hashA = buildHash(password);
+  const hashB = buildHash(crypto.createHash("sha256").update(password).digest("hex"));
+  log("info", `[Loxone] hashA(SHA1-pw)="${hashA.substring(0, 8)}..." hashB(SHA256-pw)="${hashB.substring(0, 8)}..."`);
 
-  const hash = crypto.createHmac("sha1", decodedKey)
-    .update(`${username}:${pwHash}`)
-    .digest("hex");
+  // Hilfsfunktion: einen Hash-Versuch per getjwt abschicken und Antwort auswerten
+  async function tryGetJwt(hash: string, label: string): Promise<{ ok: boolean; token: string | null; validUntil: number }> {
+    const clientUuid = crypto.randomUUID();
+    const jwtCmd = `jdev/sys/getjwt/${hash}/${username}/4/${clientUuid}/GatewayWorker`;
+    let tok: string | null = null;
+    let vu = 0;
 
-  // getjwt — verschlüsselt senden
-  const clientUuid = crypto.randomUUID();
-  const jwtCmd = `jdev/sys/getjwt/${hash}/${username}/4/${clientUuid}/GatewayWorker`;
-
-  let receivedToken: string | null = null;
-  let validUntil = 0;
-
-  const jwtOk = await new Promise<boolean>((resolve) => {
-    const timeout = setTimeout(() => resolve(false), 10000);
-    const onMsg = (data: WebSocket.RawData) => {
-      // Antwort kommt als verschlüsselter Text-Frame
-      const msg = data.toString();
-      let decrypted = msg;
-
-      // Versuche Entschlüsselung wenn Base64-artig
-      try {
-        if (!msg.startsWith("{") && !msg.startsWith("[")) {
-          decrypted = loxoneAesDecrypt(msg, aesKey, aesIv);
-        }
-      } catch (_e) { /* ignore, weiterversuchen mit rohem Text */ }
-
-      let parsed: any;
-      try { parsed = JSON.parse(decrypted); } catch (_e) { return; }
-
-      const ll = parsed?.LL;
-      if (!ll) return;
-      if (typeof ll.control === "string" && ll.control.includes("getjwt")) {
-        clearTimeout(timeout);
-        ws.removeListener("message", onMsg);
-        const code = ll.Code ?? ll.code;
-        if (code === "200" || code === 200) {
-          const val = ll.value as any;
-          if (val?.token) {
-            receivedToken = val.token as string;
-            // validUntil: Loxone liefert Sekunden seit 2009-01-01
-            // Konvertierung: loxoneEpoch = 1230768000 (Unix-Timestamp 2009-01-01)
-            const loxEpoch = 1230768000;
-            validUntil = (val.validUntil as number) + loxEpoch;
+    const ok = await new Promise<boolean>((resolve) => {
+      const timeout = setTimeout(() => {
+        log("warn", `[Loxone] getjwt timeout (${label}) for ${serialNumber}`);
+        resolve(false);
+      }, 8000);
+      const onMsg = (data: WebSocket.RawData) => {
+        const msg = data.toString();
+        let decrypted = msg;
+        try {
+          if (!msg.startsWith("{") && !msg.startsWith("[")) {
+            decrypted = loxoneAesDecrypt(msg, aesKey, aesIv);
           }
-          resolve(true);
-        } else {
-          resolve(false);
+        } catch (_e) { /* ignore */ }
+        let parsed: any;
+        try { parsed = JSON.parse(decrypted); } catch (_e) { return; }
+        const ll = parsed?.LL;
+        if (!ll) return;
+        if (typeof ll.control === "string" && ll.control.includes("getjwt")) {
+          clearTimeout(timeout);
+          ws.removeListener("message", onMsg);
+          const code = String(ll.Code ?? ll.code ?? "?");
+          log("info", `[Loxone] getjwt response (${label}): code=${code}`);
+          if (code === "200") {
+            const val = ll.value as any;
+            if (val?.token) {
+              tok = val.token as string;
+              const loxEpoch = 1230768000;
+              vu = (val.validUntil as number) + loxEpoch;
+            }
+            resolve(true);
+          } else {
+            resolve(false);
+          }
         }
-      }
-    };
-    ws.on("message", onMsg);
+      };
+      ws.on("message", onMsg);
+      const encrypted = loxoneAesEncrypt(jwtCmd, aesKey, aesIv);
+      ws.send(`jdev/sys/enc/${encodeURIComponent(encrypted)}`);
+    });
 
-    // Verschlüsselt senden
-    const encrypted = loxoneAesEncrypt(jwtCmd, aesKey, aesIv);
-    ws.send(`jdev/sys/enc/${encodeURIComponent(encrypted)}`);
-  });
+    return { ok, token: tok, validUntil: vu };
+  }
 
-  if (!jwtOk || !receivedToken) {
-    log("warn", `[Loxone] getjwt failed for ${serialNumber}`);
+  // Variante A zuerst versuchen; falls Fehler und WS noch offen → Variante B
+  let jwtResult = await tryGetJwt(hashA, "SHA1-pw");
+  if (!jwtResult.ok && ws.readyState === WebSocket.OPEN) {
+    log("info", `[Loxone] Retrying with SHA256-pw hash for ${serialNumber}`);
+    jwtResult = await tryGetJwt(hashB, "SHA256-pw");
+  }
+
+  const receivedToken = jwtResult.token;
+  const validUntil    = jwtResult.validUntil;
+
+  if (!jwtResult.ok || !receivedToken) {
+    log("warn", `[Loxone] getjwt failed for ${serialNumber} (both hash variants exhausted)`);
     return false;
   }
 
-  // Token speichern
+
+
   loxoneTokenStore.set(serialNumber, { token: receivedToken, validUntil });
   const validDate = new Date(validUntil * 1000).toISOString().slice(0, 10);
   log("info", `[Loxone] Token acquired: ${serialNumber} (valid until: ${validDate})`);
