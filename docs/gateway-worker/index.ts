@@ -114,6 +114,31 @@ function isSpike(powerValue: number, energyType: string): boolean {
   return Math.abs(powerValue) > threshold;
 }
 
+// ─── Loxone DNS Cache ────────────────────────────────────────────────────────
+// Die IP des Miniservers ist fest (ändert sich nur bei Hardware-Austausch).
+// Daher permanenter In-Memory-Cache ohne TTL – DNS wird genau einmal aufgelöst.
+const loxoneBaseUrlCache = new Map<string, string>();
+
+async function resolveLoxoneBaseUrl(serialNumber: string): Promise<string | null> {
+  if (loxoneBaseUrlCache.has(serialNumber)) {
+    return loxoneBaseUrlCache.get(serialNumber)!;
+  }
+  try {
+    const dnsResponse = await fetch(
+      `http://dns.loxonecloud.com/${serialNumber}`,
+      { method: "HEAD", redirect: "follow", signal: AbortSignal.timeout(5000) }
+    );
+    const urlObj = new URL(dnsResponse.url);
+    const baseUrl = `${urlObj.protocol}//${urlObj.host}`;
+    loxoneBaseUrlCache.set(serialNumber, baseUrl);
+    log("info", `[Loxone] DNS resolved: ${serialNumber} → ${baseUrl}`);
+    return baseUrl;
+  } catch (err) {
+    log("warn", `[Loxone] DNS lookup failed for ${serialNumber}: ${err instanceof Error ? err.message : err}`);
+    return null;
+  }
+}
+
 // ─── HTTP Ingest Client ───────────────────────────────────────────────────────
 // Sendet Readings sicher an die gateway-ingest Edge Function statt direkt in die DB
 
@@ -161,11 +186,9 @@ async function pollLoxone(meter: MeterWithSensor): Promise<number | null> {
   }
 
   try {
-    // Resolve Cloud DNS
-    const dnsUrl = `http://dns.loxonecloud.com/${config.serial_number}`;
-    const dnsResponse = await fetch(dnsUrl, { method: "HEAD", redirect: "follow", signal: AbortSignal.timeout(5000) });
-    const urlObj = new URL(dnsResponse.url);
-    const baseUrl = `${urlObj.protocol}//${urlObj.host}`;
+    // Resolve Cloud DNS (gecacht – nur einmal pro Seriennummer)
+    const baseUrl = await resolveLoxoneBaseUrl(config.serial_number);
+    if (!baseUrl) return null;
 
     const authHeader = `Basic ${Buffer.from(`${config.username}:${config.password}`).toString("base64")}`;
 
