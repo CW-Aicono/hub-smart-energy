@@ -7,7 +7,7 @@
  * Alle anderen Gateways: HTTP-REST-Polling (Intervall = POLL_INTERVAL_MS)
  *
  * Unterstützte Gateways:
- *   - Loxone Miniserver    → WebSocket ws://{ip}/ws/rfc6455 (HMAC-SHA1 Auth)
+ *   - Loxone Miniserver    → WebSocket ws://{ip}/ws/rfc6455 (JWT-Token Auth, RSA+AES256)
  *   - Shelly Cloud         → HTTP REST
  *   - ABB free@home        → HTTP REST
  *   - Siemens Building X   → HTTP REST + OAuth
@@ -197,69 +197,350 @@ interface LoxoneWsState {
   reconnecting: boolean;
   authenticated: boolean;
   statusUpdatesEnabled: boolean;
+  keepaliveTimer: ReturnType<typeof setInterval> | null;
 }
 
 // Global state map: serialNumber → state
 const loxoneConnections = new Map<string, LoxoneWsState>();
 
 /**
- * Loxone WebSocket Authentifizierung (HMAC-SHA1, Token-basiert)
- * Protokoll: https://www.loxone.com/enen/wp-content/uploads/sites/2/2020/08/1100_WebSocket.pdf
- */
-async function loxoneWsAuth(ws: WebSocket, baseUrl: string, username: string, password: string): Promise<boolean> {
-  return new Promise((resolve) => {
-    // Timeout für Auth-Prozess
-    const timeout = setTimeout(() => {
-      log("warn", `[Loxone] Auth timeout for ${baseUrl}`);
-      resolve(false);
-    }, 10000);
+// ─── Loxone JWT Token Store ──────────────────────────────────────────────────
+// Tokens haben ~4 Wochen Lebensdauer (Permission-Level 4 = App)
+// Pro Miniserver wird das Token persistent im Worker-Speicher gehalten.
 
-    let step: "getkey" | "authenticate" | "done" = "getkey";
+interface LoxoneToken {
+  token: string;
+  validUntil: number; // Unix-Timestamp (Sekunden)
+}
 
-    const onMessage = (data: WebSocket.RawData) => {
+const loxoneTokenStore = new Map<string, LoxoneToken>();
+
+// ─── AES-256-CBC Verschlüsselung (Loxone-Protokoll) ─────────────────────────
+// Zero-Byte-Padding auf 16-Byte-Blockgröße, Base64 ohne Zeilenumbrüche
+
+function loxoneAesEncrypt(plaintext: string, aesKey: Buffer, aesIv: Buffer): string {
+  // payload: "salt/{randomSalt}/{command}"
+  const salt = crypto.randomBytes(8).toString("hex");
+  const cmd = `salt/${salt}/${plaintext}`;
+  // Zero-Byte-Padding auf 16-Byte-Blockgröße
+  const blockSize = 16;
+  const padLen = blockSize - (Buffer.byteLength(cmd, "utf8") % blockSize);
+  const padded = Buffer.concat([Buffer.from(cmd, "utf8"), Buffer.alloc(padLen, 0)]);
+
+  const cipher = crypto.createCipheriv("aes-256-cbc", aesKey, aesIv);
+  cipher.setAutoPadding(false);
+  const encrypted = Buffer.concat([cipher.update(padded), cipher.final()]);
+  return encrypted.toString("base64");
+}
+
+function loxoneAesDecrypt(ciphertext: string, aesKey: Buffer, aesIv: Buffer): string {
+  const buf = Buffer.from(ciphertext, "base64");
+  const decipher = crypto.createDecipheriv("aes-256-cbc", aesKey, aesIv);
+  decipher.setAutoPadding(false);
+  const decrypted = Buffer.concat([decipher.update(buf), decipher.final()]);
+  // Nullbytes am Ende entfernen
+  return decrypted.toString("utf8").replace(/\0+$/, "");
+}
+
+// ─── Loxone WebSocket Auth (JWT-Token-Protokoll, ab Config 9.3) ──────────────
+//
+// Protokoll (4 Schritte):
+//   1. RSA Key Exchange: Öffentlichen Key holen, AES-Session-Key einrichten
+//   2. getkey2: Salt + Challenge für Passwort-Hashing holen
+//   3. getjwt: JWT-Token (verschlüsselt) anfordern
+//   4. authwithtoken: Token verifizieren (verschlüsselt)
+
+async function loxoneWsAuth(
+  ws: WebSocket,
+  baseUrl: string,
+  username: string,
+  password: string,
+  serialNumber: string
+): Promise<boolean> {
+
+  // ── Schritt 1: RSA Public Key holen + AES-Session-Key aufbauen ──────────────
+  let publicKeyPem: string;
+  try {
+    const pkRes = await fetch(`${baseUrl}/jdev/sys/getPublicKey`, {
+      signal: AbortSignal.timeout(8000),
+    });
+    const pkData = await pkRes.json() as any;
+    const rawKey = pkData?.LL?.value as string | undefined;
+    if (!rawKey) {
+      log("warn", `[Loxone] No public key received from ${baseUrl}`);
+      return false;
+    }
+    // Loxone liefert den Key ohne PEM-Header — Header hinzufügen
+    if (rawKey.startsWith("-----")) {
+      publicKeyPem = rawKey;
+    } else {
+      publicKeyPem = `-----BEGIN CERTIFICATE-----\n${rawKey}\n-----END CERTIFICATE-----`;
+    }
+  } catch (err) {
+    log("warn", `[Loxone] getPublicKey failed for ${baseUrl}: ${err instanceof Error ? err.message : err}`);
+    return false;
+  }
+
+  // AES-256 Key + IV generieren (32 + 16 Byte)
+  const aesKey = crypto.randomBytes(32);
+  const aesIv  = crypto.randomBytes(16);
+
+  // Session-Key RSA-OAEP verschlüsseln
+  let encryptedSessionKey: string;
+  try {
+    const keyPayload = `${aesKey.toString("hex")}:${aesIv.toString("hex")}`;
+    const encBuf = crypto.publicEncrypt(
+      {
+        key: publicKeyPem,
+        padding: crypto.constants.RSA_PKCS1_OAEP_PADDING,
+      },
+      Buffer.from(keyPayload, "utf8")
+    );
+    encryptedSessionKey = encBuf.toString("base64");
+  } catch (err) {
+    log("warn", `[Loxone] RSA encrypt failed for ${baseUrl}: ${err instanceof Error ? err.message : err}`);
+    return false;
+  }
+
+  // Key Exchange über WebSocket senden + Antwort abwarten
+  const keyExchangeOk = await new Promise<boolean>((resolve) => {
+    const timeout = setTimeout(() => resolve(false), 8000);
+    const onMsg = (data: WebSocket.RawData) => {
       const msg = data.toString();
       let parsed: any;
       try { parsed = JSON.parse(msg); } catch { return; }
-
       const ll = parsed?.LL;
       if (!ll) return;
-
-      if (step === "getkey") {
-        // Step 1: Empfange Challenge (hex key)
-        const challenge = ll.value as string;
-        if (!challenge || typeof challenge !== "string") return;
-
-        // HMAC-SHA1: key=password, message=challenge
-        const hash = crypto.createHmac("sha1", password)
-          .update(challenge)
-          .digest("hex")
-          .toUpperCase();
-
-        log("debug", `[Loxone] Authenticating with hash for ${baseUrl}`);
-        step = "authenticate";
-        ws.send(`jdev/sys/authenticate/${username}/${hash}`);
-
-      } else if (step === "authenticate") {
+      if (typeof ll.control === "string" && ll.control.includes("keyexchange")) {
+        clearTimeout(timeout);
+        ws.removeListener("message", onMsg);
         const code = ll.Code ?? ll.code;
-        if (code === "200" || code === 200) {
-          clearTimeout(timeout);
-          ws.removeListener("message", onMessage);
-          log("info", `[Loxone] Authenticated: ${baseUrl}`);
+        resolve(code === "200" || code === 200);
+      }
+    };
+    ws.on("message", onMsg);
+    ws.send(`jdev/sys/keyexchange/${encryptedSessionKey}`);
+  });
+
+  if (!keyExchangeOk) {
+    log("warn", `[Loxone] Key exchange failed for ${serialNumber}`);
+    return false;
+  }
+  log("info", `[Loxone] Key exchange successful: ${serialNumber}`);
+
+  // ── Schritt 2: Gespeichertes Token prüfen (Token-Persistenz) ──────────────
+  const existing = loxoneTokenStore.get(serialNumber);
+  const nowSec = Math.floor(Date.now() / 1000);
+
+  if (existing && existing.validUntil > nowSec + 60) {
+    // Vorhandenes Token ist noch gültig — direkt authwithtoken aufrufen
+    log("debug", `[Loxone] Reusing cached token for ${serialNumber}`);
+    return await loxoneAuthWithToken(ws, baseUrl, username, existing.token, aesKey, aesIv, serialNumber);
+  }
+
+  // ── Schritt 3: Neues Token anfordern ──────────────────────────────────────
+  // getkey2: Salt + Challenge für Passwort-Hashing
+  let key2Value: string;
+  let saltValue: string;
+
+  const key2Ok = await new Promise<boolean>((resolve) => {
+    const timeout = setTimeout(() => resolve(false), 8000);
+    const onMsg = (data: WebSocket.RawData) => {
+      const msg = data.toString();
+      let parsed: any;
+      try { parsed = JSON.parse(msg); } catch { return; }
+      const ll = parsed?.LL;
+      if (!ll) return;
+      if (typeof ll.control === "string" && ll.control.includes("getkey2")) {
+        clearTimeout(timeout);
+        ws.removeListener("message", onMsg);
+        const val = ll.value as any;
+        if (typeof val === "object" && val.key && val.salt) {
+          key2Value = val.key as string;
+          saltValue = val.salt as string;
           resolve(true);
         } else {
-          clearTimeout(timeout);
-          ws.removeListener("message", onMessage);
-          log("warn", `[Loxone] Auth failed (code ${code}): ${baseUrl}`);
           resolve(false);
         }
       }
     };
+    ws.on("message", onMsg);
+    ws.send(`jdev/sys/getkey2/${username}`);
+  });
 
-    ws.on("message", onMessage);
+  if (!key2Ok) {
+    log("warn", `[Loxone] getkey2 failed for ${serialNumber}`);
+    return false;
+  }
 
-    // Step 0: Challenge anfordern
+  // Passwort-Hash berechnen
+  const pwHash = crypto.createHash("sha1")
+    .update(`${password}:${saltValue!}`)
+    .digest("hex")
+    .toUpperCase();
+
+  const hash = crypto.createHmac("sha1", key2Value!)
+    .update(`${username}:${pwHash}`)
+    .digest("hex");
+
+  // getjwt — verschlüsselt senden
+  const clientUuid = crypto.randomUUID();
+  const jwtCmd = `jdev/sys/getjwt/${hash}/${username}/4/${clientUuid}/GatewayWorker`;
+
+  let receivedToken: string | null = null;
+  let validUntil = 0;
+
+  const jwtOk = await new Promise<boolean>((resolve) => {
+    const timeout = setTimeout(() => resolve(false), 10000);
+    const onMsg = (data: WebSocket.RawData) => {
+      // Antwort kommt als verschlüsselter Text-Frame
+      const msg = data.toString();
+      let decrypted = msg;
+
+      // Versuche Entschlüsselung wenn Base64-artig
+      try {
+        if (!msg.startsWith("{") && !msg.startsWith("[")) {
+          decrypted = loxoneAesDecrypt(msg, aesKey, aesIv);
+        }
+      } catch { /* ignore, weiterversuchen mit rohem Text */ }
+
+      let parsed: any;
+      try { parsed = JSON.parse(decrypted); } catch { return; }
+
+      const ll = parsed?.LL;
+      if (!ll) return;
+      if (typeof ll.control === "string" && ll.control.includes("getjwt")) {
+        clearTimeout(timeout);
+        ws.removeListener("message", onMsg);
+        const code = ll.Code ?? ll.code;
+        if (code === "200" || code === 200) {
+          const val = ll.value as any;
+          if (val?.token) {
+            receivedToken = val.token as string;
+            // validUntil: Loxone liefert Sekunden seit 2009-01-01
+            // Konvertierung: loxoneEpoch = 1230768000 (Unix-Timestamp 2009-01-01)
+            const loxEpoch = 1230768000;
+            validUntil = (val.validUntil as number) + loxEpoch;
+          }
+          resolve(true);
+        } else {
+          resolve(false);
+        }
+      }
+    };
+    ws.on("message", onMsg);
+
+    // Verschlüsselt senden
+    const encrypted = loxoneAesEncrypt(jwtCmd, aesKey, aesIv);
+    ws.send(`jdev/sys/enc/${encodeURIComponent(encrypted)}`);
+  });
+
+  if (!jwtOk || !receivedToken) {
+    log("warn", `[Loxone] getjwt failed for ${serialNumber}`);
+    return false;
+  }
+
+  // Token speichern
+  loxoneTokenStore.set(serialNumber, { token: receivedToken, validUntil });
+  const validDate = new Date(validUntil * 1000).toISOString().slice(0, 10);
+  log("info", `[Loxone] Token acquired: ${serialNumber} (valid until: ${validDate})`);
+
+  // ── Schritt 4: Mit Token authentifizieren ────────────────────────────────
+  return await loxoneAuthWithToken(ws, baseUrl, username, receivedToken, aesKey, aesIv, serialNumber);
+}
+
+/**
+ * authwithtoken — letzter Schritt der JWT-Auth.
+ * Holt einen neuen key für den Token-Hash und sendet ihn verschlüsselt.
+ */
+async function loxoneAuthWithToken(
+  ws: WebSocket,
+  baseUrl: string,
+  username: string,
+  token: string,
+  aesKey: Buffer,
+  aesIv: Buffer,
+  serialNumber: string
+): Promise<boolean> {
+
+  // Neuen Key für Token-Hash anfordern
+  let tokenKey: string | null = null;
+
+  const getKeyOk = await new Promise<boolean>((resolve) => {
+    const timeout = setTimeout(() => resolve(false), 8000);
+    const onMsg = (data: WebSocket.RawData) => {
+      const msg = data.toString();
+      let parsed: any;
+      try { parsed = JSON.parse(msg); } catch { return; }
+      const ll = parsed?.LL;
+      if (!ll) return;
+      if (typeof ll.control === "string" && ll.control.includes("getkey") && !ll.control.includes("getkey2")) {
+        clearTimeout(timeout);
+        ws.removeListener("message", onMsg);
+        if (ll.value && typeof ll.value === "string") {
+          tokenKey = ll.value as string;
+          resolve(true);
+        } else {
+          resolve(false);
+        }
+      }
+    };
+    ws.on("message", onMsg);
     ws.send("jdev/sys/getkey");
   });
+
+  if (!getKeyOk || !tokenKey) {
+    log("warn", `[Loxone] getkey (for token hash) failed for ${serialNumber}`);
+    return false;
+  }
+
+  // tokenHash = HMAC-SHA1(token, key)
+  const tokenHash = crypto.createHmac("sha1", tokenKey)
+    .update(token)
+    .digest("hex");
+
+  // authwithtoken verschlüsselt senden
+  const authCmd = `authwithtoken/${tokenHash}/${username}`;
+
+  const authOk = await new Promise<boolean>((resolve) => {
+    const timeout = setTimeout(() => resolve(false), 8000);
+    const onMsg = (data: WebSocket.RawData) => {
+      const msg = data.toString();
+      let decrypted = msg;
+      try {
+        if (!msg.startsWith("{") && !msg.startsWith("[")) {
+          decrypted = loxoneAesDecrypt(msg, aesKey, aesIv);
+        }
+      } catch { /* ignore */ }
+
+      let parsed: any;
+      try { parsed = JSON.parse(decrypted); } catch { return; }
+      const ll = parsed?.LL;
+      if (!ll) return;
+      if (typeof ll.control === "string" && ll.control.includes("authwithtoken")) {
+        clearTimeout(timeout);
+        ws.removeListener("message", onMsg);
+        const code = ll.Code ?? ll.code;
+        if (code === "200" || code === 200) {
+          resolve(true);
+        } else {
+          // Token ungültig → aus Cache löschen
+          loxoneTokenStore.delete(serialNumber);
+          log("warn", `[Loxone] authwithtoken failed (code ${code}), token removed: ${serialNumber}`);
+          resolve(false);
+        }
+      }
+    };
+    ws.on("message", onMsg);
+
+    const encrypted = loxoneAesEncrypt(authCmd, aesKey, aesIv);
+    ws.send(`jdev/sys/enc/${encodeURIComponent(encrypted)}`);
+  });
+
+  if (authOk) {
+    log("info", `[Loxone] Authenticated: ${serialNumber}`);
+  }
+  return authOk;
 }
 
 /**
@@ -306,6 +587,12 @@ function connectLoxoneWs(state: LoxoneWsState): void {
     state.ws = null;
   }
 
+  // Keepalive-Timer stoppen falls vorhanden
+  if (state.keepaliveTimer) {
+    clearInterval(state.keepaliveTimer);
+    state.keepaliveTimer = null;
+  }
+
   state.authenticated = false;
   state.statusUpdatesEnabled = false;
 
@@ -314,7 +601,6 @@ function connectLoxoneWs(state: LoxoneWsState): void {
 
   const ws = new WebSocket(wsUrl, {
     handshakeTimeout: 10000,
-    // Loxone verwendet Basic Auth im HTTP-Upgrade (optional, Auth per WS möglich)
   });
   state.ws = ws;
 
@@ -322,8 +608,8 @@ function connectLoxoneWs(state: LoxoneWsState): void {
     log("info", `[Loxone] WebSocket open: ${state.serialNumber}`);
     state.reconnectDelay = 1000; // Reset backoff
 
-    // Authentifizierung via Challenge-Response
-    const ok = await loxoneWsAuth(ws, state.baseUrl, state.username, state.password);
+    // JWT-Token-basierte Authentifizierung (RSA Key Exchange + AES + Token)
+    const ok = await loxoneWsAuth(ws, state.baseUrl, state.username, state.password, state.serialNumber);
     if (!ok) {
       ws.terminate();
       scheduleReconnect(state);
@@ -335,6 +621,14 @@ function connectLoxoneWs(state: LoxoneWsState): void {
     // Status-Updates aktivieren: Miniserver sendet jetzt bei jeder Wertänderung
     ws.send("jdev/sps/enablestatusupdate");
     log("info", `[Loxone] Status updates requested: ${state.serialNumber} (${state.uuidMap.size} UUIDs registered)`);
+
+    // Keepalive: alle 4 Minuten "keepalive" senden (Miniserver schließt nach 5 min Inaktivität)
+    state.keepaliveTimer = setInterval(() => {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send("keepalive");
+        log("debug", `[Loxone] Keepalive sent: ${state.serialNumber}`);
+      }
+    }, 4 * 60 * 1000);
   });
 
   ws.on("message", (data: WebSocket.RawData) => {
@@ -371,7 +665,6 @@ function connectLoxoneWs(state: LoxoneWsState): void {
 
     // Text-basierte Wert-Events (ältere Miniserver-Versionen)
     if (ll.control && ll.value !== undefined) {
-      // Format: control = "dev/sps/io/{uuid}/state" or similar
       const uuidMatch = String(ll.control).match(/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i);
       if (uuidMatch) {
         const uuid = uuidMatch[1].toLowerCase();
@@ -388,6 +681,10 @@ function connectLoxoneWs(state: LoxoneWsState): void {
 
   ws.on("close", (code, reason) => {
     log("warn", `[Loxone] WebSocket closed: ${state.serialNumber} (${code} ${reason?.toString() || ""})`);
+    if (state.keepaliveTimer) {
+      clearInterval(state.keepaliveTimer);
+      state.keepaliveTimer = null;
+    }
     state.ws = null;
     state.authenticated = false;
     state.statusUpdatesEnabled = false;
@@ -474,6 +771,7 @@ async function initLoxoneConnections(meters: MeterWithSensor[]): Promise<MeterWi
         reconnecting: false,
         authenticated: false,
         statusUpdatesEnabled: false,
+        keepaliveTimer: null,
       };
       loxoneConnections.set(serial, state);
     }
