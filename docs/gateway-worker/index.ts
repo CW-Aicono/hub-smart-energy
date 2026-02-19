@@ -274,16 +274,40 @@ async function loxoneWsAuth(
     log("info", `[Loxone] rawKey prefix: "${rawKey.substring(0, 60)}"`);
 
     if (rawKey.startsWith("-----BEGIN CERTIFICATE-----")) {
-      // Loxone liefert das PEM ohne Zeilenumbrüche — OpenSSL braucht 64-Zeichen-Zeilen!
+      // Loxone schickt "BEGIN CERTIFICATE" als Header, aber der Inhalt ist ein SPKI-Public-Key!
+      // Base64-Inhalt extrahieren und mit korrektem Header neu verpacken.
       const b64 = rawKey
         .replace("-----BEGIN CERTIFICATE-----", "")
         .replace("-----END CERTIFICATE-----", "")
         .replace(/\s+/g, "");
       const b64Lines = (b64.match(/.{1,64}/g) ?? [b64]).join("\n");
-      const pemFormatted = `-----BEGIN CERTIFICATE-----\n${b64Lines}\n-----END CERTIFICATE-----`;
-      const cert = new crypto.X509Certificate(pemFormatted);
-      publicKeyObj = cert.publicKey;
-      log("info", `[Loxone] Key format: X.509 Certificate (reformatted PEM)`);
+
+      // Versuch 1: Als SPKI Public Key (der tatsächliche Inhalt laut ASN.1-Analyse)
+      let keyParsed = false;
+      try {
+        const pemSpki = `-----BEGIN PUBLIC KEY-----\n${b64Lines}\n-----END PUBLIC KEY-----`;
+        publicKeyObj = crypto.createPublicKey(pemSpki);
+        keyParsed = true;
+        log("info", `[Loxone] Key format: SPKI (mislabeled as CERTIFICATE)`);
+      } catch (_e) { /* weiter */ }
+
+      // Versuch 2: Echter X.509-Zertifikat-Inhalt
+      if (!keyParsed) {
+        try {
+          const pemCert = `-----BEGIN CERTIFICATE-----\n${b64Lines}\n-----END CERTIFICATE-----`;
+          const cert = new crypto.X509Certificate(pemCert);
+          publicKeyObj = cert.publicKey;
+          keyParsed = true;
+          log("info", `[Loxone] Key format: X.509 Certificate (reformatted)`);
+        } catch (_e) { /* weiter */ }
+      }
+
+      // Versuch 3: PKCS#1 RSA Public Key
+      if (!keyParsed) {
+        const pemPkcs1 = `-----BEGIN RSA PUBLIC KEY-----\n${b64Lines}\n-----END RSA PUBLIC KEY-----`;
+        publicKeyObj = crypto.createPublicKey({ key: pemPkcs1, format: "pem" });
+        log("info", `[Loxone] Key format: PKCS#1 (mislabeled as CERTIFICATE)`);
+      }
 
       log("info", `[Loxone] Key format: X.509 Certificate`);
     } else if (rawKey.startsWith("-----")) {
