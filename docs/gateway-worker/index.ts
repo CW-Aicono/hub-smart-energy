@@ -427,9 +427,16 @@ async function loxoneWsAuth(
   let saltValue: string;
 
   const key2Ok = await new Promise<boolean>((resolve) => {
-    const timeout = setTimeout(() => resolve(false), 8000);
+    const timeout = setTimeout(() => {
+      log("warn", `[Loxone] getkey2 timeout for ${serialNumber}`);
+      resolve(false);
+    }, 8000);
     const onMsg = (data: WebSocket.RawData) => {
+      const isBinary = Buffer.isBuffer(data);
       const msg = data.toString();
+      // Jede Nachricht nach keyexchange sichtbar loggen (max. 200 Zeichen)
+      log("info", `[Loxone] getkey2 msg [${isBinary ? "BIN" : "TXT"}]: ${msg.substring(0, 200)}`);
+      if (isBinary) return; // Binäre Frames überspringen (Loxone Header-Frames)
       let parsed: any;
       try { parsed = JSON.parse(msg); } catch (_e) { return; }
       const ll = parsed?.LL;
@@ -443,13 +450,15 @@ async function loxoneWsAuth(
           saltValue = val.salt as string;
           resolve(true);
         } else {
+          log("warn", `[Loxone] getkey2 unexpected value: ${JSON.stringify(val)}`);
           resolve(false);
         }
       }
     };
     ws.on("message", onMsg);
-    const getkey2Encrypted = loxoneAesEncrypt(`jdev/sys/getkey2/${username}`, aesKey, aesIv);
-    ws.send(`jdev/sys/enc/${encodeURIComponent(getkey2Encrypted)}`);
+    // getkey2 PLAINTEXT senden (Loxone erwartet dies nach keyexchange unverschlüsselt)
+    log("info", `[Loxone] Sending getkey2 for ${serialNumber} (user: ${username})`);
+    ws.send(`jdev/sys/getkey2/${username}`);
   });
 
   if (!key2Ok) {
