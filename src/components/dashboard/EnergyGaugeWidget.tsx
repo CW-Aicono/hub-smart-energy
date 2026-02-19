@@ -103,7 +103,7 @@ function AnalogGauge({ data }: { data: GaugeData }) {
 
   return (
     <div className="flex flex-col items-center">
-      <svg viewBox="0 0 240 175" className="w-full max-w-[200px]" overflow="visible">
+      <svg viewBox="-10 0 260 180" className="w-full max-w-[220px]" overflow="visible">
         <defs>
           <radialGradient id={`bg-${data.energyType}`} cx="50%" cy="45%" r="55%">
             <stop offset="0%" stopColor="hsl(var(--card))" stopOpacity={1} />
