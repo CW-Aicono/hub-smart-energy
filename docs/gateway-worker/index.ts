@@ -270,19 +270,43 @@ async function loxoneWsAuth(
       return false;
     }
 
-    // Loxone liefert den RSA Public Key als Base64-kodiertes SPKI (SubjectPublicKeyInfo),
-    // NICHT als X.509-Zertifikat. Korrekte PEM-Header: BEGIN PUBLIC KEY (PKCS#8/SPKI).
+    // Debug: ersten 40 Zeichen loggen — hilft zu sehen welches Format Loxone liefert
+    log("debug", `[Loxone] rawKey prefix (${baseUrl}): ${rawKey.substring(0, 40)}`);
+
+    // Loxone liefert den RSA Public Key in verschiedenen Formaten je nach Firmware:
+    // - Voller PEM-Header vorhanden (BEGIN PUBLIC KEY, BEGIN RSA PUBLIC KEY, BEGIN CERTIFICATE)
+    // - Nur roher Base64 ohne Header → dann beide Formate probieren (SPKI und PKCS#1)
     if (rawKey.startsWith("-----BEGIN CERTIFICATE-----")) {
-      // Seltener Fall: echter X.509-Zertifikat → Public Key extrahieren
+      // X.509-Zertifikat → Public Key extrahieren
       const cert = new crypto.X509Certificate(rawKey);
       publicKeyObj = cert.publicKey;
     } else if (rawKey.startsWith("-----")) {
-      // Bereits ein vollständiges PEM (z.B. BEGIN PUBLIC KEY) — direkt laden
+      // Bereits ein vollständiges PEM — direkt laden
       publicKeyObj = crypto.createPublicKey(rawKey);
     } else {
-      // Roher Base64 SPKI-Key ohne Header → BEGIN PUBLIC KEY wrapper
-      const pemKey = `-----BEGIN PUBLIC KEY-----\n${rawKey}\n-----END PUBLIC KEY-----`;
-      publicKeyObj = crypto.createPublicKey(pemKey);
+      // Roher Base64 ohne Header → SPKI probieren, dann PKCS#1 als Fallback
+      let parsed = false;
+      try {
+        const pemSpki = `-----BEGIN PUBLIC KEY-----\n${rawKey}\n-----END PUBLIC KEY-----`;
+        publicKeyObj = crypto.createPublicKey(pemSpki);
+        parsed = true;
+        log("debug", `[Loxone] Key parsed as SPKI/PKCS#8 for ${baseUrl}`);
+      } catch {
+        // ignore, try PKCS#1 next
+      }
+      if (!parsed) {
+        try {
+          const pemPkcs1 = `-----BEGIN RSA PUBLIC KEY-----\n${rawKey}\n-----END RSA PUBLIC KEY-----`;
+          publicKeyObj = crypto.createPublicKey({ key: pemPkcs1, format: "pem" });
+          parsed = true;
+          log("debug", `[Loxone] Key parsed as PKCS#1 for ${baseUrl}`);
+        } catch {
+          // ignore, will throw below
+        }
+      }
+      if (!parsed) {
+        throw new Error(`Could not parse RSA public key from ${baseUrl} — rawKey prefix: ${rawKey.substring(0, 40)}`);
+      }
     }
   } catch (err) {
     log("warn", `[Loxone] getPublicKey failed for ${baseUrl}: ${err instanceof Error ? err.message : err}`);
