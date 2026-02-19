@@ -92,6 +92,141 @@ Deno.serve(async (req) => {
     );
   }
 
+  // ── Route: compact-day (POST ?action=compact-day) ──────────────────────────
+  // Verdichtet Rohdaten des Vortages in 5-Minuten-Buckets und löscht danach
+  // die Roh-Readings. Wird täglich um 00:05 Uhr per pg_cron aufgerufen.
+  if (req.method === "POST" && action === "compact-day") {
+    // API-Key Validierung (gleicher Key wie für readings)
+    const gatewayApiKey = Deno.env.get("GATEWAY_API_KEY");
+    if (!gatewayApiKey) {
+      return new Response(JSON.stringify({ error: "Service misconfigured" }), {
+        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    const authHeader = req.headers.get("Authorization") || "";
+    const providedKey = authHeader.replace(/^Bearer\s+/i, "").trim();
+    if (!providedKey || providedKey !== gatewayApiKey) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const supabase = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+      { auth: { persistSession: false } }
+    );
+
+    // Zeitfenster: Vortag (von 00:00:00 bis 23:59:59 UTC)
+    const now = new Date();
+    const dayStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 1));
+    const dayEnd   = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+
+    // 1. Rohdaten des Vortages abrufen
+    const { data: rawData, error: fetchError } = await supabase
+      .from("meter_power_readings")
+      .select("meter_id, tenant_id, energy_type, power_value, recorded_at")
+      .gte("recorded_at", dayStart.toISOString())
+      .lt("recorded_at", dayEnd.toISOString());
+
+    if (fetchError) {
+      console.error("[compact-day] Fetch error:", fetchError.message);
+      return new Response(JSON.stringify({ error: fetchError.message }), {
+        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    if (!rawData || rawData.length === 0) {
+      console.log("[compact-day] No raw data to compact");
+      return new Response(JSON.stringify({ success: true, compacted: 0, deleted: 0 }), {
+        status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // 2. In 5-Minuten-Buckets aggregieren (in Memory)
+    type BucketKey = string; // `${meter_id}::${bucket_iso}`
+    const buckets = new Map<BucketKey, {
+      meter_id: string; tenant_id: string; energy_type: string;
+      bucket: string; sum: number; max: number; count: number;
+    }>();
+
+    for (const row of rawData) {
+      const d = new Date(row.recorded_at);
+      // Bucket-Beginn: auf 5-Minuten abrunden
+      const bucketMin = Math.floor(d.getUTCMinutes() / 5) * 5;
+      const bucketTs = new Date(Date.UTC(
+        d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(),
+        d.getUTCHours(), bucketMin, 0, 0
+      )).toISOString();
+
+      const key: BucketKey = `${row.meter_id}::${bucketTs}`;
+      const existing = buckets.get(key);
+      const v = Number(row.power_value);
+      if (existing) {
+        existing.sum += v;
+        existing.max = Math.max(existing.max, v);
+        existing.count += 1;
+      } else {
+        buckets.set(key, {
+          meter_id: row.meter_id,
+          tenant_id: row.tenant_id,
+          energy_type: row.energy_type,
+          bucket: bucketTs,
+          sum: v,
+          max: v,
+          count: 1,
+        });
+      }
+    }
+
+    // 3. Komprimierte Daten in meter_power_readings_5min schreiben (UPSERT)
+    const compactedRows = Array.from(buckets.values()).map((b) => ({
+      meter_id: b.meter_id,
+      tenant_id: b.tenant_id,
+      energy_type: b.energy_type,
+      bucket: b.bucket,
+      power_avg: b.sum / b.count,
+      power_max: b.max,
+      sample_count: b.count,
+    }));
+
+    const { error: upsertError } = await supabase
+      .from("meter_power_readings_5min")
+      .upsert(compactedRows, { onConflict: "meter_id,bucket" });
+
+    if (upsertError) {
+      console.error("[compact-day] Upsert error:", upsertError.message);
+      return new Response(JSON.stringify({ error: upsertError.message }), {
+        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // 4. Rohdaten des Vortages löschen
+    const { count: deletedCount, error: deleteError } = await supabase
+      .from("meter_power_readings")
+      .delete({ count: "exact" })
+      .gte("recorded_at", dayStart.toISOString())
+      .lt("recorded_at", dayEnd.toISOString());
+
+    if (deleteError) {
+      console.error("[compact-day] Delete error:", deleteError.message);
+      // Verdichtung war erfolgreich, nur Cleanup ist fehlgeschlagen – trotzdem 200
+    }
+
+    console.log(`[compact-day] ✓ Compacted ${compactedRows.length} buckets, deleted ${deletedCount ?? "?"} raw rows`);
+
+    return new Response(
+      JSON.stringify({
+        success: true,
+        compacted: compactedRows.length,
+        raw_rows_processed: rawData.length,
+        deleted: deletedCount ?? 0,
+        period: { from: dayStart.toISOString(), to: dayEnd.toISOString() },
+      }),
+      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
+
   // ── Route: POST readings ────────────────────────────────────────────────────
   // Only accept POST
   if (req.method !== "POST") {
