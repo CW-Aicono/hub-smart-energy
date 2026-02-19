@@ -448,7 +448,8 @@ async function loxoneWsAuth(
       }
     };
     ws.on("message", onMsg);
-    ws.send(`jdev/sys/getkey2/${username}`);
+    const getkey2Encrypted = loxoneAesEncrypt(`jdev/sys/getkey2/${username}`, aesKey, aesIv);
+    ws.send(`jdev/sys/enc/${encodeURIComponent(getkey2Encrypted)}`);
   });
 
   if (!key2Ok) {
