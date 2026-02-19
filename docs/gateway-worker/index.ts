@@ -446,8 +446,8 @@ async function loxoneWsAuth(
 
   // ── Schritt 3: Neues Token anfordern ──────────────────────────────────────
   // getkey2: Salt + Challenge für Passwort-Hashing
-  // WICHTIG: Nach dem Key-Exchange ist der Kanal verschlüsselt!
-  // lxcommunicator sendet getkey2 VERSCHLÜSSELT via fenc.
+  // getkey2 wird im KLARTEXT gesendet, Antwort kommt als JSON.
+  // Nur getjwt wird über fenc verschlüsselt!
   // Die Antwort kommt ebenfalls verschlüsselt zurück.
   let key2Value: string;
   let saltValue: string;
@@ -500,10 +500,10 @@ async function loxoneWsAuth(
       }
     };
     ws.on("message", onMsg);
-    // Nach Key-Exchange: ALLE Befehle verschlüsselt via fenc senden!
+    // getkey2 wird im KLARTEXT gesendet (nicht via fenc)!
+    // Nur getjwt und authwithtoken werden verschlüsselt.
     log("info", `[Loxone] Sending getkey2 for ${serialNumber} (user: ${username})`);
-    const encKey2 = loxoneAesEncrypt(`jdev/sys/getkey2/${username}`, aesKey, aesIv);
-    ws.send(`jdev/sys/fenc/${encKey2}`);
+    ws.send(`jdev/sys/getkey2/${username}`);
   });
 
   if (!key2Ok) {
