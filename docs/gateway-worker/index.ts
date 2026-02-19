@@ -489,25 +489,22 @@ async function loxoneWsAuth(
     return false;
   }
 
-  // Loxone Websocket-Protokoll: BEIDE Werte (salt + key) sind hex-kodiert.
-  //   salt raw → hex-decode → UTF8 → UUID-String, z.B. "2031943c-024e-7a28-..."
-  //   key  raw → hex-decode → UTF8 → 40-Zeichen-Hex-String → hex-decode → 20 Bytes HMAC-Key
-  const actualSalt   = Buffer.from(saltValue!, "hex").toString("utf8");   // z.B. "2031943c-024e-..."
-  const actualKeyHex = Buffer.from(key2Value!, "hex").toString("utf8");   // z.B. "D47997DF..." (40 Hex-Chars)
-  const hmacKeyBuf   = Buffer.from(actualKeyHex, "hex");                  // 20 Bytes für HMAC
-  log("info", `[Loxone] getkey2 decoded: salt="${actualSalt.substring(0, 20)}..." keyHex="${actualKeyHex.substring(0, 8)}..." (hmacKey=${hmacKeyBuf.length}B) hashAlg=${hashAlgValue}`);
+  // lxcommunicator Referenz: salt und key werden DIREKT aus der getkey2-Response verwendet.
+  //   salt → direkt als String in "password:salt"
+  //   key  → Buffer.from(key, "hex") → binärer HMAC-Key
+  // KEIN doppeltes Hex-Decoding!
+  const hmacKeyBuf = Buffer.from(key2Value!, "hex");
+  log("info", `[Loxone] getkey2: salt="${saltValue!.substring(0, 20)}..." key="${key2Value!.substring(0, 8)}..." (hmacKey=${hmacKeyBuf.length}B) hashAlg=${hashAlgValue}`);
 
-  // Hash gemäß hashAlg vom Miniserver:
-  //   pwHash = SHA1|SHA256(password:salt) → uppercase
-  //   hash   = HMAC-SHA1|HMAC-SHA256(user:pwHash, key) → je nach hashAlg
-  // Referenz: Loxone lxcommunicator TokenHandler._otHash + requestToken
+  // Hash gemäß hashAlg vom Miniserver (lxcommunicator TokenHandler._otHash):
+  //   pwHash = HASH(password:salt) → uppercase hex
+  //   hash   = HMAC-HASH(user:pwHash, key) → hex
   const useAlg = hashAlgValue.toUpperCase() === "SHA256" ? "sha256" : "sha1";
   function buildHash(algorithm: "sha1" | "sha256"): string {
     const pwHash = crypto.createHash(algorithm)
-      .update(`${password}:${actualSalt}`)
+      .update(`${password}:${saltValue!}`)
       .digest("hex")
       .toUpperCase();
-    // HMAC verwendet denselben Algorithmus wie pwHash (laut lxcommunicator Referenz)
     return crypto.createHmac(algorithm, hmacKeyBuf)
       .update(`${username}:${pwHash}`)
       .digest("hex");
