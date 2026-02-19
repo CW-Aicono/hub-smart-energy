@@ -1,0 +1,223 @@
+/**
+ * Gateway Ingest – Sicherer Proxy-Endpunkt für den Gateway Worker Docker Container
+ * ==================================================================================
+ * Nimmt Leistungswerte vom externen Gateway Worker entgegen und schreibt sie
+ * in meter_power_readings. Authentifizierung via GATEWAY_API_KEY (Bearer Token).
+ *
+ * POST /functions/v1/gateway-ingest
+ * Authorization: Bearer <GATEWAY_API_KEY>
+ * Content-Type: application/json
+ * Body: { readings: PowerReading[] }
+ */
+
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
+};
+
+interface PowerReading {
+  meter_id: string;
+  tenant_id: string;
+  power_value: number;
+  energy_type: string;
+  recorded_at: string;
+}
+
+const SPIKE_THRESHOLDS: Record<string, number> = {
+  strom: 10000,
+  gas: 5000,
+  wasser: 1000,
+  wärme: 5000,
+  kälte: 2000,
+  default: 50000,
+};
+
+function isSpike(powerValue: number, energyType: string): boolean {
+  if (!isFinite(powerValue) || isNaN(powerValue)) return true;
+  const threshold = SPIKE_THRESHOLDS[energyType] ?? SPIKE_THRESHOLDS.default;
+  return Math.abs(powerValue) > threshold;
+}
+
+Deno.serve(async (req) => {
+  // CORS preflight
+  if (req.method === "OPTIONS") {
+    return new Response(null, { headers: corsHeaders });
+  }
+
+  // ── Route: list-meters (GET ?action=list-meters) ───────────────────────────
+  const url = new URL(req.url);
+  const action = url.searchParams.get("action");
+
+  if (req.method === "GET" && action === "list-meters") {
+    const supabase = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+      { auth: { persistSession: false } }
+    );
+
+    const { data, error } = await supabase
+      .from("meters")
+      .select(`
+        id,
+        name,
+        energy_type,
+        sensor_uuid,
+        location_integration_id,
+        tenant_id,
+        location_integration:location_integrations!meters_location_integration_id_fkey (
+          id,
+          config,
+          integration:integrations!location_integrations_integration_id_fkey (
+            type
+          )
+        )
+      `)
+      .eq("is_archived", false)
+      .not("sensor_uuid", "is", null)
+      .not("location_integration_id", "is", null);
+
+    if (error) {
+      return new Response(
+        JSON.stringify({ success: false, error: error.message }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    return new Response(
+      JSON.stringify({ success: true, meters: data || [] }),
+      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
+
+  // ── Route: POST readings ────────────────────────────────────────────────────
+  // Only accept POST
+  if (req.method !== "POST") {
+    return new Response(JSON.stringify({ error: "Method not allowed" }), {
+      status: 405,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
+  // ── API Key Validation ──────────────────────────────────────────────────────
+  const gatewayApiKey = Deno.env.get("GATEWAY_API_KEY");
+  if (!gatewayApiKey) {
+    console.error("[gateway-ingest] GATEWAY_API_KEY secret not configured");
+    return new Response(JSON.stringify({ error: "Service misconfigured" }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
+  const authHeader = req.headers.get("Authorization") || "";
+  const providedKey = authHeader.replace(/^Bearer\s+/i, "").trim();
+
+  if (!providedKey || providedKey !== gatewayApiKey) {
+    console.warn("[gateway-ingest] Invalid or missing API key");
+    return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      status: 401,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
+  // ── Parse Body ──────────────────────────────────────────────────────────────
+  let body: { readings?: PowerReading[] };
+  try {
+    body = await req.json();
+  } catch {
+    return new Response(JSON.stringify({ error: "Invalid JSON body" }), {
+      status: 400,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
+  const readings = body?.readings;
+  if (!Array.isArray(readings) || readings.length === 0) {
+    return new Response(
+      JSON.stringify({ error: "readings array is required and must not be empty" }),
+      {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      }
+    );
+  }
+
+  // ── Validate & Filter Readings ──────────────────────────────────────────────
+  const validReadings: PowerReading[] = [];
+  const skipped: string[] = [];
+
+  for (const r of readings) {
+    if (!r.meter_id || !r.tenant_id || r.power_value === undefined || !r.energy_type) {
+      skipped.push(`${r.meter_id ?? "unknown"}: missing required fields`);
+      continue;
+    }
+
+    const powerValue = Number(r.power_value);
+    if (isSpike(powerValue, r.energy_type)) {
+      skipped.push(`${r.meter_id}: spike detected (${powerValue})`);
+      continue;
+    }
+
+    validReadings.push({
+      meter_id: r.meter_id,
+      tenant_id: r.tenant_id,
+      power_value: powerValue,
+      energy_type: r.energy_type,
+      recorded_at: r.recorded_at || new Date().toISOString(),
+    });
+  }
+
+  if (validReadings.length === 0) {
+    return new Response(
+      JSON.stringify({
+        success: true,
+        inserted: 0,
+        skipped: skipped.length,
+        skipped_details: skipped,
+      }),
+      {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      }
+    );
+  }
+
+  // ── Write to Database ───────────────────────────────────────────────────────
+  const supabase = createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+    { auth: { persistSession: false } }
+  );
+
+  const { error } = await supabase.from("meter_power_readings").insert(validReadings);
+
+  if (error) {
+    console.error("[gateway-ingest] DB insert error:", error.message);
+    return new Response(
+      JSON.stringify({ error: "Database error", details: error.message }),
+      {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      }
+    );
+  }
+
+  console.log(
+    `[gateway-ingest] ✓ Inserted ${validReadings.length} readings, skipped ${skipped.length}`
+  );
+
+  return new Response(
+    JSON.stringify({
+      success: true,
+      inserted: validReadings.length,
+      skipped: skipped.length,
+      skipped_details: skipped.length > 0 ? skipped : undefined,
+    }),
+    {
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    }
+  );
+});
