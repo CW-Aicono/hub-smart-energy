@@ -193,6 +193,10 @@ const FloorPlanWidget = ({ locationId }: FloorPlanWidgetProps) => {
                   {positions.map((pos) => {
                     const sensorValue = sensorValuesMap.get(pos.sensor_uuid);
                     const scale = (pos as any).label_scale ?? 1.0;
+                    // For water/gas meters the live value is a flow rate – override unit to m³/h
+                    const linkedMeter = meters.find((m) => m.sensor_uuid === pos.sensor_uuid);
+                    const isFlowType = linkedMeter?.energy_type === "wasser" || linkedMeter?.energy_type === "gas";
+                    const displayUnit = sensorValue ? (isFlowType ? "m³/h" : sensorValue.unit) : "";
                     return (
                       <div
                         key={pos.id}
@@ -210,7 +214,7 @@ const FloorPlanWidget = ({ locationId }: FloorPlanWidgetProps) => {
                             {pos.sensor_name}
                           </p>
                           <p className="text-sm font-mono font-bold text-primary">
-                            {sensorValue ? `${sensorValue.value} ${sensorValue.unit}` : "—"}
+                            {sensorValue ? `${sensorValue.value} ${displayUnit}` : "—"}
                           </p>
                         </div>
                       </div>
