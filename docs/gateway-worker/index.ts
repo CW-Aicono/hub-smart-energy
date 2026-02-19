@@ -274,9 +274,17 @@ async function loxoneWsAuth(
     log("info", `[Loxone] rawKey prefix: "${rawKey.substring(0, 60)}"`);
 
     if (rawKey.startsWith("-----BEGIN CERTIFICATE-----")) {
-      // X.509-Zertifikat → Public Key extrahieren
-      const cert = new crypto.X509Certificate(rawKey);
+      // Loxone liefert das PEM ohne Zeilenumbrüche — OpenSSL braucht 64-Zeichen-Zeilen!
+      const b64 = rawKey
+        .replace("-----BEGIN CERTIFICATE-----", "")
+        .replace("-----END CERTIFICATE-----", "")
+        .replace(/\s+/g, "");
+      const b64Lines = (b64.match(/.{1,64}/g) ?? [b64]).join("\n");
+      const pemFormatted = `-----BEGIN CERTIFICATE-----\n${b64Lines}\n-----END CERTIFICATE-----`;
+      const cert = new crypto.X509Certificate(pemFormatted);
       publicKeyObj = cert.publicKey;
+      log("info", `[Loxone] Key format: X.509 Certificate (reformatted PEM)`);
+
       log("info", `[Loxone] Key format: X.509 Certificate`);
     } else if (rawKey.startsWith("-----")) {
       // Fertiges PEM (z.B. BEGIN PUBLIC KEY / BEGIN RSA PUBLIC KEY) → direkt laden
