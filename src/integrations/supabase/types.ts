@@ -201,6 +201,7 @@ export type Database = {
           name: string
           ocpp_id: string
           photo_url: string | null
+          power_limit_schedule: Json | null
           status: string
           tenant_id: string
           updated_at: string
@@ -223,6 +224,7 @@ export type Database = {
           name: string
           ocpp_id: string
           photo_url?: string | null
+          power_limit_schedule?: Json | null
           status?: string
           tenant_id: string
           updated_at?: string
@@ -245,6 +247,7 @@ export type Database = {
           name?: string
           ocpp_id?: string
           photo_url?: string | null
+          power_limit_schedule?: Json | null
           status?: string
           tenant_id?: string
           updated_at?: string
