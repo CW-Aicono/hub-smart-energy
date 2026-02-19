@@ -13,6 +13,9 @@
 # ── Stage 1: Build TypeScript ────────────────────────────────────────────────
 FROM node:20-alpine AS builder
 
+# bufferutil (dependency of lxcommunicator) needs python3 + build tools
+RUN apk add --no-cache python3 make g++
+
 WORKDIR /app
 
 COPY package.json ./
