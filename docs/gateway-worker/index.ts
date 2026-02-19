@@ -203,7 +203,6 @@ interface LoxoneWsState {
 // Global state map: serialNumber → state
 const loxoneConnections = new Map<string, LoxoneWsState>();
 
-/**
 // ─── Loxone JWT Token Store ──────────────────────────────────────────────────
 // Tokens haben ~4 Wochen Lebensdauer (Permission-Level 4 = App)
 // Pro Miniserver wird das Token persistent im Worker-Speicher gehalten.
