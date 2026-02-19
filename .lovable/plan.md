@@ -1,202 +1,114 @@
 
-## Ziele
+## Problem: Auth Code 400 — Falsches Authentifizierungsprotokoll
 
-1. **1-Sekunden-Auflösung** über Loxone WebSocket (statt 30s HTTP-Polling)
-2. **Intelligente Datenhaltung:** Sekundengenaue Rohwerte werden täglich in eine 5-Minuten-Verlaufskurve verdichtet und danach gelöscht
-3. **Skalierbarkeit:** Klare Antwort wie viele Miniservers ein einziger Worker-Server abfragen kann
+Der Miniserver läuft auf Config 10.x und erwartet das **JWT-Token-basierte Auth-Protokoll** (eingeführt in Config 9.0, ab 9.3 Pflicht). Der aktuelle Code im Gateway Worker nutzt das alte, seit Config 9.3 entfernte `jdev/sys/getkey` + HMAC-SHA1-Passwort-Verfahren.
 
----
-
-## Teil 1: Loxone WebSocket-Streaming
-
-### Warum WebSocket statt weiterem HTTP-Polling
-
-Der Miniserver unterstützt nativ ein **Event-Push-Protokoll über WebSocket** (`ws://ip/ws/rfc6455`). Das bedeutet: Der Server schickt aktiv Wertänderungen, sobald sie auftreten — der Worker muss nichts mehr fragen.
-
-**Loxone WebSocket-Protokoll (aus der Dokumentation):**
+**Was die Miniserver-Dokumentation vorschreibt (ab Config 10.2):**
 
 ```text
-1. Verbindungsaufbau: ws://{ip}:{port}/ws/rfc6455
-2. Auth:
-   GET /jdev/sys/getkey → challenge (hex string)
-   HMAC-SHA1(password, challenge) → hash
-   GET /authenticate/{user}/{hash}
-3. Status-Updates aktivieren:
-   GET jdev/sps/enablestatusupdate
-4. Miniserver sendet:
-   - Beim Connect: alle aktuellen States (Header + ValueEvent-Binärframes)
-   - Bei jeder Änderung: nur geänderte Werte (< 1s Latenz)
+Schritt 1: AES-Session-Key einrichten (Verschlüsselung)
+  GET jdev/sys/getPublicKey → RSA Public Key (X.509)
+  Generate AES-256 Key + IV (random)
+  RSA-encrypt "{aesKey}:{iv}" → encrypted-session-key (Base64)
+  SEND jdev/sys/keyexchange/{encrypted-session-key}
+
+Schritt 2: Token anfordern (verschlüsselt)
+  GET jdev/sys/getkey2/{user} → { key, salt }
+  pwHash = SHA1("{password}:{salt}").toUpperCase()
+  hash = HMAC-SHA1("{user}:{pwHash}", key) (hex, unchanged case)
+  SEND (encrypted) jdev/sys/getjwt/{hash}/{user}/4/{clientUUID}/GatewayWorker
+  → Antwort enthält { token, validUntil }
+
+Schritt 3: Mit Token authentifizieren
+  tokenHash = HMAC-SHA1(token, key_from_new_getkey).hex
+  SEND (encrypted) authwithtoken/{tokenHash}/{user}
+  → Code 200 = erfolgreich authentifiziert
 ```
 
-### Architektur im Gateway Worker
+Das ist erheblich komplexer als das alte Verfahren, weil alle sensiblen Commands (getjwt, authwithtoken) per AES256 verschlüsselt über den WebSocket gesendet werden müssen.
 
-Statt 41 HTTP-Requests alle 30 Sekunden:
-- **1 WebSocket-Verbindung pro Miniserver** (3 persistente Verbindungen für 3 Miniservers)
-- Miniserver pusht Wertänderungen sofort bei Auftreten
-- Worker pflegt einen **In-Memory-State** (`Map<sensor_uuid, latest_value>`)
-- Ein **Flush-Timer** (konfigurierbar, z.B. `FLUSH_INTERVAL_MS=1000`) schreibt den aktuellen State einmal pro Sekunde als Batch in die DB
+## Was zu ändern ist
 
-```text
-Loxone MS #1 ──ws://──► Worker (UUID → value map)
-Loxone MS #2 ──ws://──►                │
-Loxone MS #3 ──ws://──►                │ (flush alle 1s)
-                                        ▼
-                              gateway-ingest (HTTP POST)
-                                        │
-                              meter_power_readings (DB)
-                                        │
-                              Supabase Realtime (WebSocket)
-                                        │
-                              Browser → UI aktualisiert < 1s nach Änderung
+**Einzige Datei:** `docs/gateway-worker/index.ts`
+
+Die `loxoneWsAuth`-Funktion (Zeilen 209–263) wird durch eine vollständige JWT-basierte Auth-Implementierung ersetzt:
+
+### 1. RSA Key Exchange (Verbindungsaufbau)
+
+```typescript
+// HTTP-Request: jdev/sys/getPublicKey
+// → X.509 RSA Public Key
+// AES-256 Key + IV (32 + 16 Byte) generieren
+// RSA-OAEP encrypt("{aesKey}:{iv}", publicKey) → session key
+// WebSocket: jdev/sys/keyexchange/{base64(sessionKey)}
 ```
 
-### Reconnect-Logik
+Node.js `crypto`-Modul unterstützt RSA-OAEP nativ — keine neue Abhängigkeit nötig.
 
-Bei Verbindungsabbruch: exponentielles Backoff (1s → 2s → 4s → max 60s) + automatischer Reconnect. Während der Reconnect-Phase fällt der Worker **automatisch auf HTTP REST-Polling zurück** (bisheriges Verhalten), sodass es keine Datenlücken gibt.
+### 2. Passwort-Hashing (getkey2)
 
-### Neue Abhängigkeit
-
-Das npm-Paket `ws` (WebSocket-Client für Node.js) wird in `docs/gateway-worker/package.json` hinzugefügt.
-
-### Neue Umgebungsvariable
-
-`FLUSH_INTERVAL_MS=1000` — wie oft der In-Memory-Buffer in die DB geschrieben wird.
-
----
-
-## Teil 2: Intelligente Datenhaltung (Verdichtung + Cleanup)
-
-### Das Problem
-
-Bei 41 Metern und 1-Sekunden-Flush entstehen:
-- **41 Rows/Sekunde → 3,5 Mio. Rows/Tag**
-- Nach einer Woche: **25 Mio. Rows** — Kosten und Query-Performance leiden
-
-### Die Lösung: Tagesverdichtung in 5-Minuten-Buckets
-
-Am Ende jedes Tages (um 00:05 Uhr per pg_cron) wird eine neue Datenbanktabelle `meter_power_readings_5min` befüllt — mit dem **Durchschnittswert pro 5-Minuten-Fenster**. Danach werden die Rohdaten des Vortages gelöscht.
-
-**Neue Tabelle: `meter_power_readings_5min`**
-
-```sql
-CREATE TABLE meter_power_readings_5min (
-  id          uuid DEFAULT gen_random_uuid() PRIMARY KEY,
-  meter_id    uuid NOT NULL,
-  tenant_id   uuid NOT NULL,
-  energy_type text NOT NULL,
-  power_avg   numeric NOT NULL,   -- Durchschnitt im 5-Min-Fenster
-  power_max   numeric NOT NULL,   -- Maximum im 5-Min-Fenster
-  bucket      timestamptz NOT NULL, -- Beginn des 5-Min-Fensters
-  sample_count integer NOT NULL   -- Anzahl Einzelwerte (Qualitätsindikator)
-);
+```typescript
+// jdev/sys/getkey2/{user} → { key, salt }
+// pwHash = crypto.createHash("sha1").update(`${password}:${salt}`).digest("hex").toUpperCase()
+// hash = crypto.createHmac("sha1", key).update(`${user}:${pwHash}`).digest("hex")
 ```
 
-**Verdichtungslogik (SQL, läuft täglich):**
+### 3. Token-Anforderung (verschlüsselt)
 
-```sql
-INSERT INTO meter_power_readings_5min (meter_id, tenant_id, energy_type, power_avg, power_max, bucket, sample_count)
-SELECT
-  meter_id,
-  tenant_id,
-  energy_type,
-  avg(power_value)  AS power_avg,
-  max(power_value)  AS power_max,
-  date_trunc('hour', recorded_at) + 
-    (floor(extract(minute FROM recorded_at) / 5) * interval '5 minutes') AS bucket,
-  count(*)          AS sample_count
-FROM meter_power_readings
-WHERE recorded_at >= date_trunc('day', now() - interval '1 day')
-  AND recorded_at <  date_trunc('day', now())
-GROUP BY meter_id, tenant_id, energy_type, bucket;
-
--- Dann Rohdaten des Vortages löschen
-DELETE FROM meter_power_readings
-WHERE recorded_at < date_trunc('day', now());
+```typescript
+// Command: jdev/sys/getjwt/{hash}/{user}/4/{uuid}/GatewayWorker
+// Vor dem Senden: AES-256-CBC-encrypt mit Session-Key
+// Senden als: jdev/sys/enc/{base64url(cipher)}
+// Antwort: { token, validUntil } — ebenfalls AES-verschlüsselt zurück
 ```
 
-**Ergebnis:** Statt 3,5 Mio. Roh-Rows/Tag entstehen nur noch **288 Rows/Meter/Tag** (12 × 24). Bei 41 Metern: **~11.800 Rows/Tag** in `meter_power_readings_5min`.
+### 4. Token-Authentifizierung (verschlüsselt)
 
-### Vorhandene Verlaufskurven im Frontend
-
-Die Verlaufsdiagramme in `EnergyChart.tsx` lesen aktuell aus `meter_power_readings`. Sie werden auf `meter_power_readings_5min` umgestellt — damit bleibt die Kurve mit voller Qualität erhalten, die DB-Last sinkt drastisch.
-
-### Datenfluss nach dem Umbau
-
-```text
-Heute (Rohdaten, 1s Auflösung):
-  meter_power_readings     → LiveValues-Seite (Realtime, < 1s)
-  
-Gestern und älter (verdichtet, 5-Min Auflösung):
-  meter_power_readings_5min → EnergyChart, Verlaufsdiagramme
-  
-Monatstotals / Jahrestotals (immer):
-  meter_period_totals       → Summenwerte
+```typescript
+// Neuen getkey holen für tokenHash
+// tokenHash = HMAC-SHA1(token, key)
+// Encrypted send: authwithtoken/{tokenHash}/{user}
+// Code 200 → authentifiziert
 ```
 
----
+### 5. Token-Persistenz (im Speicher)
 
-## Teil 3: Skalierbarkeit — Wie viele Miniservers pro Server?
+Tokens haben eine Lebensdauer von ~4 Wochen (App-Permission = 4). Der Worker speichert das Token pro Miniserver im State und verwendet es für folgende Verbindungen (nach Reconnects), ohne es jedes Mal neu anzufordern. Erst wenn `validUntil` abgelaufen ist, wird ein neues Token angefragt.
 
-### Ressourcenverbrauch pro Miniserver-Verbindung
+### 6. Keepalive-Mechanismus
 
-| Ressource | Pro Miniserver-WebSocket |
-|---|---|
-| RAM | ~2–5 MB (Verbindungs-Buffer + State-Map aller UUIDs) |
-| CPU | < 1% idle (nur Event-Parsing bei Änderungen) |
-| Netzwerk | ~5–20 kbit/s (bei aktiven Änderungen) |
-| DB-Schreiblast | Wird durch Flush-Timer kontrolliert, unabhängig von Miniserver-Anzahl |
-
-### Skalierungsrechnung
-
-**Auf einem modernen Server (z.B. 4 CPU-Kerne, 8 GB RAM):**
-- RAM-Limit bei 5 MB/Miniserver: **~1.000 Miniservers**
-- CPU-Limit: De-facto irrelevant (WebSocket-Events sind nicht CPU-intensiv)
-- Netzwerk-Limit bei 20 kbit/s: unkritisch bis weit über 1.000 Verbindungen
-- **Reales Limit:** Wahrscheinlich die **DB-Schreibrate** (gateway-ingest HTTP-Calls)
-
-**DB-Schreibrate bei 1-Sekunden-Flush:**
-- 1 HTTP-POST/Sekunde mit N Readings
-- Bei 500 Miniservers à 15 Metern = 7.500 Readings/POST → problemlos für Supabase
-- Bei 1.000 Miniservers: möglicherweise auf 2–5s Flush erhöhen oder direkt DB-Verbindung (Service-Role-Key im Worker) verwenden
-
-### Empfehlung für Produktions-Skalierung
-
-```text
-Stufe 1 (aktuell):    1 Worker-Instanz auf Raspberry Pi     → bis ~10 Miniservers
-Stufe 2 (klein):      1 Worker auf VPS (2 CPU, 4 GB)        → bis ~200 Miniservers
-Stufe 3 (mittel):     1 Worker auf Server (8 CPU, 16 GB)    → bis ~1.000 Miniservers
-Stufe 4 (enterprise): Worker als Kubernetes-Deployment       → horizontal skalierbar
-```
-
-**Für echte Hochskalierung:**
-Der Worker sollte mit einer `TENANT_FILTER`-Umgebungsvariable ausgestattet werden, die angibt welche Tenants dieser Instanz zugeordnet sind. Dann können mehrere Worker-Instanzen parallel betrieben werden — jede für eine Teilmenge der Kunden. Das ist mit minimalem Code-Aufwand umsetzbar.
-
----
+Die Dokumentation schreibt vor: Bei keinem Command für >5 Minuten schließt der Miniserver die Verbindung. Ein `setInterval` sendet alle 4 Minuten `keepalive` — der Miniserver antwortet mit Header-Byte 0x06.
 
 ## Geänderte Dateien
 
 | Datei | Änderung |
 |---|---|
-| `docs/gateway-worker/index.ts` | Loxone WebSocket-Streaming + Flush-Buffer + HTTP-Polling-Fallback |
-| `docs/gateway-worker/package.json` | `"ws": "^8.18.0"` + `"@types/ws": "^8.5.0"` hinzufügen |
-| Neue Migration | Tabelle `meter_power_readings_5min` erstellen + pg_cron Job für Verdichtung + RLS |
-| `supabase/functions/gateway-ingest/index.ts` | Tagesverdichtung als optionale Route (`?action=compact-day`) |
+| `docs/gateway-worker/index.ts` | `loxoneWsAuth()` komplett ersetzen durch JWT-Token-Flow (RSA Key Exchange + AES Encryption + Token Persistenz + Keepalive) |
 
-### Keine Änderungen nötig an:
-- `src/pages/LiveValues.tsx` — Realtime-Subscription läuft weiterhin
-- `supabase/functions/loxone-api/index.ts` — wird nicht mehr für Live-Werte benötigt
+Keine anderen Dateien werden berührt — Flush-Logik, Reconnect-Logik, HTTP-Polling-Fallback und alle anderen Gateway-Typen bleiben unverändert.
 
----
+## Technische Details zur AES-Verschlüsselung
 
-## Deployment nach Änderung
+Laut Dokumentation:
+- AES-256-CBC
+- Zero-Byte-Padding
+- Base64 (NoWrap) — d.h. ohne `\n`-Umbrüche
 
-**Raspberry Pi (identische Schritte wie bisher):**
+In Node.js:
+```typescript
+const cipher = crypto.createCipheriv("aes-256-cbc", aesKey, aesIv);
+cipher.setAutoPadding(false);
+// payload: "salt/{salt}/{cmd}" → padded to 16-byte block size mit Nullbytes
+```
+
+## Deployment nach der Änderung
+
+Identische Schritte wie bisher — nur `index.ts` aktualisieren:
 
 ```bash
 docker stop gateway-worker && docker rm gateway-worker
-rm ~/gateway-worker/index.ts ~/gateway-worker/package.json
-# Beide Dateien aus Lovable kopieren (nano)
-cd ~/gateway-worker && npm install && docker build -t gateway-worker .
+nano ~/gateway-worker/index.ts  # neuen Inhalt einfügen
+docker build -t gateway-worker .
 docker run -d --name gateway-worker --restart unless-stopped \
   -e SUPABASE_URL="https://xnveugycurplszevdxtw.supabase.co" \
   -e GATEWAY_API_KEY="sk_live_odclyxINkLa0XcHuIXbeeNw44lwzzDHp" \
@@ -204,12 +116,17 @@ docker run -d --name gateway-worker --restart unless-stopped \
   gateway-worker
 ```
 
-**Erwartete Logs:**
+**Erwartete Logs nach dem Fix:**
 ```
-[INFO] [Loxone] WebSocket connecting: 504F94D107EE → ws://195-201-222-243...
-[INFO] [Loxone] WebSocket connected: 504F94D107EE (41 UUIDs registriert)
+[INFO] [Loxone] Key exchange successful: 504F94D107EE
+[INFO] [Loxone] Token acquired: 504F94D107EE (valid until: 2026-03-19)
+[INFO] [Loxone] Authenticated: 504F94D107EE
 [INFO] [Loxone] Status updates enabled: 504F94D107EE
-[INFO] ✓ Flush: 41 readings inserted (1003ms cycle)
-[INFO] ✓ Flush: 41 readings inserted (1001ms cycle)
+[INFO] ✓ Flush: 41 inserted (1001ms)
 ```
 
+Statt der aktuellen Fehler:
+```
+[WARN] [Loxone] Auth failed (code 400): ...
+[INFO] [Loxone] Reconnecting ... in 1000ms...
+```
