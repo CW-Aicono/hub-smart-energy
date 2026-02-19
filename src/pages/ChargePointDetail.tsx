@@ -37,6 +37,7 @@ import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "@/hooks/use-toast";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, Cell } from "recharts";
+import { PowerLimitScheduler, PowerLimitSchedule, defaultPowerLimitSchedule } from "@/components/charging/PowerLimitScheduler";
 
 const statusConfig: Record<string, { label: string; color: string; variant: "default" | "secondary" | "destructive" | "outline"; icon: typeof Zap }> = {
   available: { label: "Verfügbar", color: "hsl(var(--primary))", variant: "default", icon: Zap },
@@ -81,6 +82,8 @@ const ChargePointDetail = () => {
   const [geocoding, setGeocoding] = useState(false);
   const [statsPeriod, setStatsPeriod] = useState("7");
   const [remoteLoading, setRemoteLoading] = useState<string | null>(null);
+  const [powerLimit, setPowerLimit] = useState<PowerLimitSchedule | null>(null);
+  const [savingPowerLimit, setSavingPowerLimit] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { window.scrollTo(0, 0); }, [id]);
@@ -88,6 +91,29 @@ const ChargePointDetail = () => {
   const cp = chargePoints.find((c) => c.id === id);
   const cpGroup = cp?.group_id ? groups.find((g) => g.id === cp.group_id) ?? null : null;
   const ocppMeter = useOcppMeterValue(cp?.ocpp_id);
+
+  // Sync powerLimit state from cp when cp loads or changes
+  const cpPowerLimit = (cp as any)?.power_limit_schedule as PowerLimitSchedule | null | undefined;
+  if (powerLimit === null && cpPowerLimit !== undefined) {
+    setPowerLimit(cpPowerLimit ?? defaultPowerLimitSchedule);
+  }
+
+  const handleSavePowerLimit = async () => {
+    if (!cp || !powerLimit) return;
+    setSavingPowerLimit(true);
+    try {
+      const { error } = await supabase
+        .from("charge_points")
+        .update({ power_limit_schedule: powerLimit as any })
+        .eq("id", cp.id);
+      if (error) throw error;
+      toast({ title: "Leistungsbegrenzung gespeichert" });
+    } catch (e: any) {
+      toast({ title: "Fehler", description: e.message, variant: "destructive" });
+    } finally {
+      setSavingPowerLimit(false);
+    }
+  };
 
   // Auto-create fault task when status changes to faulted/offline
   const prevStatusRef = useRef<string | undefined>(undefined);
@@ -892,37 +918,20 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
                     <CardHeader>
                       <CardTitle className="flex items-center gap-2">
                         <Gauge className="h-5 w-5" />
-                        Lastmanagement
+                        Leistungsbegrenzung
                       </CardTitle>
                     </CardHeader>
-                    <CardContent className="space-y-4">
-                      <div className="flex items-center justify-between p-4 border rounded-lg">
-                        <div>
-                          <p className="font-medium">Dynamisches Lastmanagement</p>
-                          <p className="text-sm text-muted-foreground">Leistung automatisch an verfügbare Kapazität anpassen</p>
-                        </div>
-                        <Switch disabled />
-                      </div>
-                      <div className="flex items-center justify-between p-4 border rounded-lg">
-                        <div>
-                          <p className="font-medium">Leistungsbegrenzung</p>
-                          <p className="text-sm text-muted-foreground">Maximale Ladeleistung auf einen festen Wert begrenzen</p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Input type="number" className="w-20" defaultValue={cp.max_power_kw} disabled />
-                          <span className="text-sm text-muted-foreground">kW</span>
-                        </div>
-                      </div>
-                      <div className="flex items-center justify-between p-4 border rounded-lg">
-                        <div>
-                          <p className="font-medium">PV-Überschussladen</p>
-                          <p className="text-sm text-muted-foreground">Laden priorisiert mit eigenem Solarstrom</p>
-                        </div>
-                        <Switch disabled />
-                      </div>
-                      <p className="text-xs text-muted-foreground flex items-center gap-1">
-                        <Info className="h-3 w-3" /> Diese Funktionen werden in einem zukünftigen Update verfügbar. Alternativ können Sie eine Gruppe erstellen und die Einstellungen dort verwalten.
-                      </p>
+                    <CardContent>
+                      {powerLimit && (
+                        <PowerLimitScheduler
+                          value={powerLimit}
+                          onChange={setPowerLimit}
+                          onSave={handleSavePowerLimit}
+                          isSaving={savingPowerLimit}
+                          disabled={!isAdmin}
+                          maxPowerKw={cp.max_power_kw}
+                        />
+                      )}
                     </CardContent>
                   </Card>
 
@@ -930,18 +939,25 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
                     <CardHeader>
                       <CardTitle className="flex items-center gap-2">
                         <Calendar className="h-5 w-5" />
-                        Ladezeitplan
+                        Weitere Energiefunktionen
                       </CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-4">
-                      <div className="flex items-center justify-between p-4 border rounded-lg">
+                      <div className="flex items-center justify-between p-4 border rounded-lg opacity-60">
                         <div>
-                          <p className="font-medium">Zeitgesteuerte Verfügbarkeit</p>
-                          <p className="text-sm text-muted-foreground">Ladepunkt nur zu bestimmten Zeiten freigeben</p>
+                          <p className="font-medium">Dynamisches Lastmanagement</p>
+                          <p className="text-sm text-muted-foreground">Leistung automatisch an verfügbare Kapazität anpassen</p>
                         </div>
                         <Switch disabled />
                       </div>
-                      <div className="flex items-center justify-between p-4 border rounded-lg">
+                      <div className="flex items-center justify-between p-4 border rounded-lg opacity-60">
+                        <div>
+                          <p className="font-medium">PV-Überschussladen</p>
+                          <p className="text-sm text-muted-foreground">Laden priorisiert mit eigenem Solarstrom</p>
+                        </div>
+                        <Switch disabled />
+                      </div>
+                      <div className="flex items-center justify-between p-4 border rounded-lg opacity-60">
                         <div>
                           <p className="font-medium">Günstig-Laden-Modus</p>
                           <p className="text-sm text-muted-foreground">Laden automatisch in Niedrigtarifzeiten verschieben</p>
@@ -949,7 +965,7 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
                         <Switch disabled />
                       </div>
                       <p className="text-xs text-muted-foreground flex items-center gap-1">
-                        <Info className="h-3 w-3" /> Diese Funktionen werden in einem zukünftigen Update verfügbar.
+                        <Info className="h-3 w-3" /> Diese Funktionen sind über Ladepunkt-Gruppen konfigurierbar oder werden in einem späteren Update als Einzelkonfiguration verfügbar.
                       </p>
                     </CardContent>
                   </Card>

@@ -14,6 +14,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
 import { Plus, Trash2, PlugZap, Users, Gauge, Shield, Info, Pencil, X, Check } from "lucide-react";
+import { PowerLimitScheduler, PowerLimitSchedule, defaultPowerLimitSchedule } from "@/components/charging/PowerLimitScheduler";
 
 export function ChargePointGroupsManager({ isAdmin }: { isAdmin: boolean }) {
   const { groups, isLoading, createGroup, updateGroup, deleteGroup, assignChargePointToGroup } = useChargePointGroups();
@@ -175,12 +176,15 @@ function ChargePointGroupDetail({ group, open, onOpenChange, chargePoints, isAdm
   const [access, setAccess] = useState<ChargePointGroupAccessSettings>({ ...group.access_settings });
   const [energySaved, setEnergySaved] = useState(false);
   const [accessSaved, setAccessSaved] = useState(false);
+  const [powerLimit, setPowerLimit] = useState<PowerLimitSchedule>(
+    (group.energy_settings as any).power_limit_schedule ?? defaultPowerLimitSchedule
+  );
 
   const members = chargePoints.filter((cp) => cp.group_id === group.id);
   const nonMembers = chargePoints.filter((cp) => !cp.group_id || cp.group_id === group.id);
 
   const handleSaveEnergy = () => {
-    onUpdate({ id: group.id, energy_settings: energy });
+    onUpdate({ id: group.id, energy_settings: { ...energy, power_limit_schedule: powerLimit } });
     setEnergySaved(true);
     setTimeout(() => setEnergySaved(false), 2000);
   };
@@ -278,22 +282,22 @@ function ChargePointGroupDetail({ group, open, onOpenChange, chargePoints, isAdm
 
           {/* Energy tab */}
           <TabsContent value="energy" className="mt-4 space-y-4">
+            {/* Power limit scheduler */}
+            <PowerLimitScheduler
+              value={powerLimit}
+              onChange={setPowerLimit}
+              onSave={handleSaveEnergy}
+              disabled={!isAdmin}
+            />
+
+            <Separator />
+
             <div className="flex items-center justify-between p-4 border rounded-lg">
               <div>
                 <p className="font-medium">Dynamisches Lastmanagement</p>
                 <p className="text-sm text-muted-foreground">Leistung automatisch an verfügbare Kapazität anpassen</p>
               </div>
               <Switch checked={energy.dynamic_load_management} onCheckedChange={(v) => setEnergy({ ...energy, dynamic_load_management: v })} disabled={!isAdmin} />
-            </div>
-            <div className="flex items-center justify-between p-4 border rounded-lg">
-              <div>
-                <p className="font-medium">Leistungsbegrenzung</p>
-                <p className="text-sm text-muted-foreground">Maximale Ladeleistung für alle Ladepunkte der Gruppe</p>
-              </div>
-              <div className="flex items-center gap-2">
-                <Input type="number" className="w-20" value={energy.power_limit_kw ?? ""} onChange={(e) => setEnergy({ ...energy, power_limit_kw: e.target.value ? parseFloat(e.target.value) : null })} disabled={!isAdmin} />
-                <span className="text-sm text-muted-foreground">kW</span>
-              </div>
             </div>
             <div className="flex items-center justify-between p-4 border rounded-lg">
               <div>
@@ -304,13 +308,6 @@ function ChargePointGroupDetail({ group, open, onOpenChange, chargePoints, isAdm
             </div>
             <div className="flex items-center justify-between p-4 border rounded-lg">
               <div>
-                <p className="font-medium">Zeitgesteuerte Verfügbarkeit</p>
-                <p className="text-sm text-muted-foreground">Ladepunkte nur zu bestimmten Zeiten freigeben</p>
-              </div>
-              <Switch checked={energy.scheduled_availability} onCheckedChange={(v) => setEnergy({ ...energy, scheduled_availability: v })} disabled={!isAdmin} />
-            </div>
-            <div className="flex items-center justify-between p-4 border rounded-lg">
-              <div>
                 <p className="font-medium">Günstig-Laden-Modus</p>
                 <p className="text-sm text-muted-foreground">Laden automatisch in Niedrigtarifzeiten verschieben</p>
               </div>
@@ -318,7 +315,7 @@ function ChargePointGroupDetail({ group, open, onOpenChange, chargePoints, isAdm
             </div>
             {isAdmin && (
               <Button onClick={handleSaveEnergy} variant={energySaved ? "outline" : "default"} className="gap-1.5">
-                {energySaved ? <><Check className="h-3.5 w-3.5" />Gespeichert</> : "Einstellungen speichern"}
+                {energySaved ? <><Check className="h-3.5 w-3.5" />Gespeichert</> : "Weitere Einstellungen speichern"}
               </Button>
             )}
             <p className="text-xs text-muted-foreground flex items-center gap-1">
