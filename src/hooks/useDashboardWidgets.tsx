@@ -24,16 +24,17 @@ export interface DashboardWidget {
 const DEFAULT_WIDGETS = [
   { widget_type: "location_map", position: 0, is_visible: true },
   { widget_type: "weather", position: 1, is_visible: true },
-  { widget_type: "cost_overview", position: 2, is_visible: true },
-  { widget_type: "energy_chart", position: 3, is_visible: true },
-  { widget_type: "sustainability_kpis", position: 4, is_visible: true },
-  { widget_type: "alerts_list", position: 5, is_visible: true },
-  { widget_type: "floor_plan_explorer", position: 6, is_visible: true },
-  { widget_type: "pie_chart", position: 7, is_visible: true },
-  { widget_type: "sankey", position: 8, is_visible: true },
-  { widget_type: "forecast", position: 9, is_visible: true },
-  { widget_type: "anomaly", position: 10, is_visible: true },
-  { widget_type: "weather_normalization", position: 11, is_visible: true },
+  { widget_type: "energy_gauge", position: 2, is_visible: true },
+  { widget_type: "cost_overview", position: 3, is_visible: true },
+  { widget_type: "energy_chart", position: 4, is_visible: true },
+  { widget_type: "sustainability_kpis", position: 5, is_visible: true },
+  { widget_type: "alerts_list", position: 6, is_visible: true },
+  { widget_type: "floor_plan_explorer", position: 7, is_visible: true },
+  { widget_type: "pie_chart", position: 8, is_visible: true },
+  { widget_type: "sankey", position: 9, is_visible: true },
+  { widget_type: "forecast", position: 10, is_visible: true },
+  { widget_type: "anomaly", position: 11, is_visible: true },
+  { widget_type: "weather_normalization", position: 12, is_visible: true },
 ];
 
 export function useDashboardWidgets() {
