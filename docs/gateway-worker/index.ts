@@ -230,16 +230,19 @@ const loxoneTokenStore = new Map<string, LoxoneToken>();
 // Zero-Byte-Padding auf 16-Byte-Blockgröße, Base64 ohne Zeilenumbrüche
 
 function loxoneAesEncrypt(plaintext: string, aesKey: Buffer, aesIv: Buffer): string {
-  // payload: "salt/{randomSalt}/{command}"
-  const salt = crypto.randomBytes(8).toString("hex");
-  const cmd = `salt/${salt}/${plaintext}`;
-  // Zero-Byte-Padding auf 16-Byte-Blockgröße
+  // lxcommunicator (forge): Zero-Padding + PKCS7 (forge adds PKCS7 on top automatically)
+  // payload: "salt/{randomSalt}/{command}\0" + zero-pad to block boundary
+  const salt = crypto.randomBytes(2).toString("hex"); // 2 random bytes = 4 hex chars (matches lxcommunicator _generateSalt(2))
+  const cmdStr = `salt/${salt}/${plaintext}\0`; // Null-Terminator wie in lxcommunicator
   const blockSize = 16;
-  const padLen = blockSize - (Buffer.byteLength(cmd, "utf8") % blockSize);
-  const padded = Buffer.concat([Buffer.from(cmd, "utf8"), Buffer.alloc(padLen, 0)]);
+  const remainder = Buffer.byteLength(cmdStr, "utf8") % blockSize;
+  const zeroPadLen = remainder === 0 ? 0 : blockSize - remainder;
+  const padded = Buffer.concat([Buffer.from(cmdStr, "utf8"), Buffer.alloc(zeroPadLen, 0)]);
 
+  // PKCS7-Padding AKTIVIERT (Standard) — forge tut das ebenfalls implizit in cipher.finish()
+  // Bei block-aligned Input wird ein kompletter 16-Byte PKCS7-Block angehängt.
   const cipher = crypto.createCipheriv("aes-256-cbc", aesKey, aesIv);
-  cipher.setAutoPadding(false);
+  // setAutoPadding(true) ist der Default — PKCS7 wird hinzugefügt
   const encrypted = Buffer.concat([cipher.update(padded), cipher.final()]);
   return encrypted.toString("base64");
 }
@@ -247,8 +250,16 @@ function loxoneAesEncrypt(plaintext: string, aesKey: Buffer, aesIv: Buffer): str
 function loxoneAesDecrypt(ciphertext: string, aesKey: Buffer, aesIv: Buffer): string {
   const buf = Buffer.from(ciphertext, "base64");
   const decipher = crypto.createDecipheriv("aes-256-cbc", aesKey, aesIv);
-  decipher.setAutoPadding(false);
-  const decrypted = Buffer.concat([decipher.update(buf), decipher.final()]);
+  // PKCS7-Padding-Entfernung AKTIVIERT (Standard) — forge tut das ebenfalls in decipher.finish()
+  let decrypted: Buffer;
+  try {
+    decrypted = Buffer.concat([decipher.update(buf), decipher.final()]);
+  } catch (_e) {
+    // Fallback: Falls kein gültiges PKCS7-Padding vorhanden (ältere Miniserver)
+    const decipher2 = crypto.createDecipheriv("aes-256-cbc", aesKey, aesIv);
+    decipher2.setAutoPadding(false);
+    decrypted = Buffer.concat([decipher2.update(buf), decipher2.final()]);
+  }
   // Nullbytes am Ende entfernen
   return decrypted.toString("utf8").replace(/\0+$/, "");
 }
