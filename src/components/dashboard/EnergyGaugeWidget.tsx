@@ -114,18 +114,31 @@ function AnalogGauge({ data }: { data: GaugeData }) {
             <stop offset="0%" stopColor="hsl(var(--foreground))" />
             <stop offset="100%" stopColor="hsl(var(--muted-foreground))" />
           </linearGradient>
+          {/* Eco arc gradient: red (0%) → yellow (50%) → green (100%), mapped to arc direction */}
+          {data.energyType === "eco" && (
+            <linearGradient id="eco-arc-gradient" x1="0%" y1="100%" x2="100%" y2="100%">
+              <stop offset="0%" stopColor="#ef4444" />
+              <stop offset="50%" stopColor="#eab308" />
+              <stop offset="100%" stopColor="#22c55e" />
+            </linearGradient>
+          )}
         </defs>
 
         {/* Background arc */}
         <path
           d={`M ${arcStart.x} ${arcStart.y} A ${r} ${r} 0 1 1 ${arcEnd.x} ${arcEnd.y}`}
-          fill="none" stroke="hsl(var(--border))" strokeWidth={6} strokeLinecap="round" opacity={0.35}
+          fill="none"
+          stroke={data.energyType === "eco" ? "url(#eco-arc-gradient)" : "hsl(var(--border))"}
+          strokeWidth={6} strokeLinecap="round"
+          opacity={data.energyType === "eco" ? 0.2 : 0.35}
         />
         {/* Value arc */}
         {currentValue > 0 && (
           <path
             d={`M ${arcStart.x} ${arcStart.y} A ${r} ${r} 0 ${valueAngle - startAngle > 180 ? 1 : 0} 1 ${valEnd.x} ${valEnd.y}`}
-            fill="none" stroke={color} strokeWidth={6} strokeLinecap="round"
+            fill="none"
+            stroke={data.energyType === "eco" ? "url(#eco-arc-gradient)" : color}
+            strokeWidth={6} strokeLinecap="round"
             filter={`url(#glow-${data.energyType})`}
             style={{ transition: "all 1s cubic-bezier(0.4,0,0.2,1)" }}
           />
