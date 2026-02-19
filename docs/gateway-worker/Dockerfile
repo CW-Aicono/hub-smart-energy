@@ -4,8 +4,8 @@
 #
 # Build:   docker build -t gateway-worker .
 # Run:     docker run -d --restart=always \
-#            -e SUPABASE_URL=https://xxxxx.supabase.co \
-#            -e SUPABASE_SERVICE_ROLE_KEY=eyJ... \
+#            -e SUPABASE_URL=https://xnveugycurplszevdxtw.supabase.co \
+#            -e GATEWAY_API_KEY=dein-api-key \
 #            -e POLL_INTERVAL_MS=30000 \
 #            gateway-worker
 
