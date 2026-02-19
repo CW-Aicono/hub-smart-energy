@@ -1064,4 +1064,196 @@ Destructive Migrations (Spalten löschen, Tabellen umbenennen) müssen zuerst in
 
 ---
 
+---
+
+## 20. Gateway Worker – Industrietaugliches Echtzeit-Polling
+
+### 20.1 Warum ein externer Worker?
+
+Die bestehende Serverless-Architektur (Lovable Cloud Edge Functions + pg_cron) ermöglicht Polling-Intervalle von **mindestens 1 Minute** (pg_cron-Limit). Für industrielle Anwendungen mit Präzisionsanforderungen (<1 Minute) ist ein **dauerhaft laufender Prozess** erforderlich – ein sogenannter Gateway Worker.
+
+> **Architekturprinzip:** Der Worker läuft vollständig unabhängig von der App. Die Datenbank (`meter_power_readings`) bleibt die einzige Schnittstelle. Die App zeigt die vom Worker geschriebenen Daten automatisch an – kein App-Umbau nötig.
+
+```text
+Gateway Worker (alle 30 Sek.)          App (unverändert)
+      │                                      │
+      │  HTTP → Loxone API                   │  Zeigt Daten
+      │  HTTP → Shelly API                   │  aus meter_power_readings
+      │  HTTP → ABB API ...                  │
+      ▼                                      ▼
+            ┌────────────────────────────┐
+            │    meter_power_readings    │
+            │    (Lovable Cloud DB)      │
+            └────────────────────────────┘
+```
+
+### 20.2 Worker-Code
+
+Der einsatzbereite Worker-Code liegt in `docs/gateway-worker/`:
+
+| Datei | Beschreibung |
+|---|---|
+| `index.ts` | Haupt-Worker mit Polling-Logik für alle Gateway-Typen |
+| `Dockerfile` | Multi-Stage Docker Build (Node.js 20 Alpine) |
+| `package.json` | Abhängigkeiten (`@supabase/supabase-js`) |
+| `tsconfig.json` | TypeScript-Konfiguration |
+
+**Unterstützte Gateway-Typen:**
+
+| Typ | Poller | Methode |
+|---|---|---|
+| `loxone` / `loxone_miniserver` | `pollLoxone()` | Cloud DNS → `/jdev/sps/io/{uuid}/all` |
+| `shelly_cloud` | `pollShelly()` | Shelly Cloud API `/device/all_status` |
+| `abb_free_at_home` | `pollABB()` | Local REST API |
+| `siemens_building_x` | `pollSiemens()` | OAuth2 + REST API |
+| `tuya_cloud` | Delegation | Edge Function (HMAC-Signing) |
+| `homematic_ip` | `pollHomematic()` | CCU REST API |
+
+### 20.3 Umgebungsvariablen
+
+| Variable | Beschreibung | Pflicht |
+|---|---|---|
+| `SUPABASE_URL` | URL der Lovable Cloud Datenbank | ✅ |
+| `SUPABASE_SERVICE_ROLE_KEY` | Service-Role-Key (NIEMALS Anon-Key!) | ✅ |
+| `POLL_INTERVAL_MS` | Polling-Intervall in ms (Standard: 30000) | ❌ |
+| `LOG_LEVEL` | `debug` / `info` / `warn` / `error` | ❌ |
+
+> ⚠️ **Sicherheit:** Der `SUPABASE_SERVICE_ROLE_KEY` darf **niemals** in den Code eingecheckt werden. Immer als Umgebungsvariable oder Docker Secret übergeben.
+
+### 20.4 Lokales Testen
+
+```bash
+cd docs/gateway-worker
+npm install
+npm run build
+
+# Mit echten Werten starten
+SUPABASE_URL=https://xxxxx.supabase.co \
+SUPABASE_SERVICE_ROLE_KEY=eyJ... \
+POLL_INTERVAL_MS=10000 \
+LOG_LEVEL=debug \
+npm start
+```
+
+### 20.5 Deployment auf Railway (empfohlen)
+
+Railway bietet das einfachste Deployment für dauerhafte Prozesse:
+
+1. **Konto erstellen:** [railway.app](https://railway.app) → Anmelden mit GitHub
+2. **Neues Projekt:** "Deploy from GitHub" → Repository auswählen
+3. **Service konfigurieren:**
+   - Root Directory: `docs/gateway-worker`
+   - Build Command: `npm run build`
+   - Start Command: `npm start`
+4. **Umgebungsvariablen setzen** (Railway → Service → Variables):
+   ```
+   SUPABASE_URL=https://xnveugycurplszevdxtw.supabase.co
+   SUPABASE_SERVICE_ROLE_KEY=<Service-Role-Key aus Lovable Cloud>
+   POLL_INTERVAL_MS=30000
+   LOG_LEVEL=info
+   ```
+5. **Deploy** → Railway erstellt automatisch einen Container mit Restart-Policy
+
+**Kosten:** ~5 USD/Monat für einen dauerhaft laufenden Service.
+
+### 20.6 Deployment auf Fly.io
+
+```bash
+# Fly.io CLI installieren
+curl -L https://fly.io/install.sh | sh
+
+cd docs/gateway-worker
+
+# App erstellen
+fly launch --name gateway-worker-smarthub --no-deploy
+
+# Secrets setzen
+fly secrets set SUPABASE_URL=https://xnveugycurplszevdxtw.supabase.co
+fly secrets set SUPABASE_SERVICE_ROLE_KEY=eyJ...
+fly secrets set POLL_INTERVAL_MS=30000
+
+# Deployen
+fly deploy
+```
+
+**Kosten:** ~3–5 USD/Monat (Shared CPU, 256 MB RAM).
+
+### 20.7 Deployment auf einem eigenen Server (VPS/On-Premise)
+
+Für maximale Kontrolle oder wenn ein Server bereits vorhanden ist:
+
+```bash
+# 1. Repository klonen oder Worker-Ordner kopieren
+scp -r docs/gateway-worker user@server:/opt/gateway-worker
+
+# 2. Auf dem Server: Build
+cd /opt/gateway-worker
+npm install && npm run build
+
+# 3. Als systemd-Service einrichten
+cat > /etc/systemd/system/gateway-worker.service << EOF
+[Unit]
+Description=SmartHub Gateway Worker
+After=network.target
+
+[Service]
+Type=simple
+User=nobody
+WorkingDirectory=/opt/gateway-worker
+ExecStart=/usr/bin/node dist/index.js
+Restart=always
+RestartSec=10
+Environment=SUPABASE_URL=https://xnveugycurplszevdxtw.supabase.co
+Environment=SUPABASE_SERVICE_ROLE_KEY=eyJ...
+Environment=POLL_INTERVAL_MS=30000
+Environment=LOG_LEVEL=info
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+systemctl enable gateway-worker
+systemctl start gateway-worker
+systemctl status gateway-worker
+```
+
+### 20.8 Monitoring & Logs
+
+```bash
+# Railway
+railway logs --tail
+
+# Fly.io
+fly logs --app gateway-worker-smarthub
+
+# Systemd
+journalctl -u gateway-worker -f
+
+# Docker
+docker logs -f gateway-worker
+```
+
+**Erwartete Log-Ausgabe bei Betrieb:**
+```
+[2026-02-19T14:32:00.000Z] [INFO] Gateway Worker starting...
+[2026-02-19T14:32:00.000Z] [INFO]   Supabase URL: https://...supabase.co
+[2026-02-19T14:32:00.000Z] [INFO]   Poll interval: 30000ms
+[2026-02-19T14:32:00.100Z] [INFO] ── Poll cycle started ──────────────────────
+[2026-02-19T14:32:00.110Z] [INFO] Found 12 active meters with gateway assignments
+[2026-02-19T14:32:02.500Z] [INFO] ✓ Wrote 10 power readings
+[2026-02-19T14:32:02.510Z] [INFO] ── Poll cycle done in 2410ms (10/12 readings) ──
+```
+
+### 20.9 Zusammenspiel mit Cron-Jobs
+
+| Mechanismus | Intervall | Zweck |
+|---|---|---|
+| pg_cron `loxone-power-readings-sync` | 1 Minute | Fallback wenn Worker nicht läuft |
+| pg_cron `gateway-power-readings-sync` | 1 Minute | Fallback für andere Gateways |
+| **Gateway Worker** | **30 Sekunden** | **Industrietaugliche Echtzeit-Daten** |
+
+Der Worker ergänzt die Cron-Jobs – er ersetzt sie nicht. Bei Ausfall des Workers übernehmen die Cron-Jobs automatisch (mit 1-Minuten-Auflösung als Fallback).
+
+---
+
 *Dokumentation erstellt: Februar 2026 | Für Änderungen: Pull Request gegen `main`-Branch*
