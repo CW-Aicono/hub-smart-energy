@@ -158,25 +158,37 @@ async function fetchMeters(): Promise<MeterWithSensor[]> {
 // ─── Loxone DNS Cache ────────────────────────────────────────────────────────
 
 const loxoneBaseUrlCache = new Map<string, string>();
+// In-flight map prevents duplicate concurrent DNS lookups for the same serial
+const loxoneDnsInFlight = new Map<string, Promise<string | null>>();
 
 async function resolveLoxoneBaseUrl(serialNumber: string): Promise<string | null> {
   if (loxoneBaseUrlCache.has(serialNumber)) {
     return loxoneBaseUrlCache.get(serialNumber)!;
   }
-  try {
-    const dnsResponse = await fetch(
-      `http://dns.loxonecloud.com/${serialNumber}`,
-      { method: "HEAD", redirect: "follow", signal: AbortSignal.timeout(5000) }
-    );
-    const urlObj = new URL(dnsResponse.url);
-    const baseUrl = `${urlObj.protocol}//${urlObj.host}`;
-    loxoneBaseUrlCache.set(serialNumber, baseUrl);
-    log("info", `[Loxone] DNS resolved: ${serialNumber} → ${baseUrl}`);
-    return baseUrl;
-  } catch (err) {
-    log("warn", `[Loxone] DNS lookup failed for ${serialNumber}: ${err instanceof Error ? err.message : err}`);
-    return null;
+  // Deduplicate concurrent calls: if a lookup is already in progress, reuse it
+  if (loxoneDnsInFlight.has(serialNumber)) {
+    return loxoneDnsInFlight.get(serialNumber)!;
   }
+  const promise = (async () => {
+    try {
+      const dnsResponse = await fetch(
+        `http://dns.loxonecloud.com/${serialNumber}`,
+        { method: "HEAD", redirect: "follow", signal: AbortSignal.timeout(5000) }
+      );
+      const urlObj = new URL(dnsResponse.url);
+      const baseUrl = `${urlObj.protocol}//${urlObj.host}`;
+      loxoneBaseUrlCache.set(serialNumber, baseUrl);
+      log("info", `[Loxone] DNS resolved: ${serialNumber} → ${baseUrl}`);
+      return baseUrl;
+    } catch (err) {
+      log("warn", `[Loxone] DNS lookup failed for ${serialNumber}: ${err instanceof Error ? err.message : err}`);
+      return null;
+    } finally {
+      loxoneDnsInFlight.delete(serialNumber);
+    }
+  })();
+  loxoneDnsInFlight.set(serialNumber, promise);
+  return promise;
 }
 
 // ─── Loxone WebSocket Manager ─────────────────────────────────────────────────
@@ -309,7 +321,7 @@ async function loxoneWsAuth(
         log("info", `[Loxone] Key format: PKCS#1 (mislabeled as CERTIFICATE)`);
       }
 
-      log("info", `[Loxone] Key format: X.509 Certificate`);
+      // (key format already logged above inside the if/else chain)
     } else if (rawKey.startsWith("-----")) {
       // Fertiges PEM (z.B. BEGIN PUBLIC KEY / BEGIN RSA PUBLIC KEY) → direkt laden
       publicKeyObj = crypto.createPublicKey(rawKey);
@@ -432,11 +444,10 @@ async function loxoneWsAuth(
       resolve(false);
     }, 8000);
     const onMsg = (data: WebSocket.RawData) => {
-      const isBinary = Buffer.isBuffer(data);
+      // Loxone sends getkey2 response as a binary-flagged frame containing plain JSON text.
+      // Always convert to string and attempt to parse — never skip based on frame type.
       const msg = data.toString();
-      // Jede Nachricht nach keyexchange sichtbar loggen (max. 200 Zeichen)
-      log("info", `[Loxone] getkey2 msg [${isBinary ? "BIN" : "TXT"}]: ${msg.substring(0, 200)}`);
-      if (isBinary) return; // Binäre Frames überspringen (Loxone Header-Frames)
+      log("debug", `[Loxone] getkey2 frame: ${msg.substring(0, 120)}`);
       let parsed: any;
       try { parsed = JSON.parse(msg); } catch (_e) { return; }
       const ll = parsed?.LL;
