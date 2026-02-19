@@ -168,15 +168,33 @@ async function resolveLoxoneBaseUrl(serialNumber: string): Promise<string | null
   }
   const promise = (async () => {
     try {
-      const dnsResponse = await fetch(
-        `http://dns.loxonecloud.com/${serialNumber}`,
-        { method: "HEAD", redirect: "follow", signal: AbortSignal.timeout(5000) }
-      );
-      const urlObj = new URL(dnsResponse.url);
-      const baseUrl = `${urlObj.protocol}//${urlObj.host}`;
-      loxoneBaseUrlCache.set(serialNumber, baseUrl);
-      log("info", `[Loxone] DNS resolved: ${serialNumber} → ${baseUrl}`);
-      return baseUrl;
+      // Versuche HTTPS zuerst, dann HTTP als Fallback
+      for (const proto of ["https", "http"]) {
+        try {
+          const dnsResponse = await fetch(
+            `${proto}://dns.loxonecloud.com/${serialNumber}`,
+            { method: "GET", redirect: "follow", signal: AbortSignal.timeout(8000) }
+          );
+          const finalUrl = dnsResponse.url;
+          if (finalUrl && finalUrl.includes(serialNumber.toLowerCase())) {
+            const urlObj = new URL(finalUrl);
+            const baseUrl = `${urlObj.protocol}//${urlObj.host}`;
+            loxoneBaseUrlCache.set(serialNumber, baseUrl);
+            log("info", `[Loxone] DNS resolved (${proto}): ${serialNumber} → ${baseUrl}`);
+            return baseUrl;
+          }
+          // Fallback: parse Location header from response body or direct URL construction
+          const text = await dnsResponse.text().catch(() => "");
+          log("debug", `[Loxone] DNS ${proto} response status=${dnsResponse.status} url=${finalUrl} body=${text.slice(0, 200)}`);
+        } catch (innerErr) {
+          log("debug", `[Loxone] DNS ${proto} failed for ${serialNumber}: ${innerErr instanceof Error ? innerErr.message : innerErr}`);
+        }
+      }
+      // Letzter Fallback: Standard Loxone Cloud DNS URL-Schema
+      const fallbackUrl = `https://${serialNumber.toLowerCase()}.dns.loxonecloud.com`;
+      log("warn", `[Loxone] DNS lookup failed for ${serialNumber}, trying fallback: ${fallbackUrl}`);
+      loxoneBaseUrlCache.set(serialNumber, fallbackUrl);
+      return fallbackUrl;
     } catch (err) {
       log("warn", `[Loxone] DNS lookup failed for ${serialNumber}: ${err instanceof Error ? err.message : err}`);
       return null;
