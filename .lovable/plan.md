@@ -1,121 +1,114 @@
 
-## Aktueller Stand
+## Ziel: Echtes Realtime statt 30-Sekunden-Polling
 
-Der Gateway Worker läuft stabil:
-- Zyklus 1: DNS wird 41× parallel aufgelöst (einmalig beim Start, da alle Promises gleichzeitig starten)
-- Zyklus 2+: 0 DNS-Requests, alle 41 Meter aus dem Cache → 41/41 in ~2 Sekunden
+Aktuell holt `LiveValues.tsx` alle 30 Sekunden aktiv neue Daten via HTTP-Aufruf zur `loxone-api` Edge Function. Das Ziel ist, dass das Frontend neue Werte **sofort** erhält — ohne selbst zu fragen — sobald der Gateway Worker sie in die Datenbank schreibt.
 
-Das ist technisch korrekt, aber der erste Zyklus könnte bei sehr aggressivem Rate-Limiting des Loxone Cloud-DNS trotzdem Probleme machen. Die saubere Lösung: **DNS-Warmup vor dem parallelen Polling**.
+## Architektur-Vergleich
 
-## Ursache des Verhaltens im 1. Zyklus
+```text
+JETZT (Polling):
+  Worker  ──30s──►  meter_power_readings
+  Browser ──30s──►  loxone-api  ──────►  Loxone Miniserver
+                    (2 parallele Polling-Schleifen, unabhängig)
 
+ZIEL (Realtime):
+  Worker  ──30s──►  meter_power_readings
+                         │
+                    Supabase Realtime (WebSocket, instant)
+                         │
+                    Browser (bekommt neuen Wert sofort)
 ```
-Promise.allSettled([poll(m1), poll(m2), ..., poll(m41)])
+
+## Warum das funktioniert
+
+Der Gateway Worker schreibt bereits jede 30 Sekunden in `meter_power_readings`. Diese Tabelle enthält `power_value` — den aktuellen Momentanwert (kW) pro Meter. Wenn Supabase Realtime auf diese Tabelle aktiviert wird, bekommt der Browser über eine WebSocket-Verbindung sofort ein Event bei jedem `INSERT`. Das Frontend muss dann nur noch auf diese Events hören und den angezeigten Wert aktualisieren — kein eigener Timer, kein eigener HTTP-Call mehr.
+
+## Was geändert wird
+
+### 1. Datenbank: Realtime für `meter_power_readings` aktivieren
+
+Eine Migration aktiviert Realtime auf der Tabelle:
+```sql
+ALTER PUBLICATION supabase_realtime ADD TABLE public.meter_power_readings;
 ```
 
-Alle 41 Promises starten gleichzeitig. Jedes prüft den Cache — der ist noch leer. Alle 41 starten einen DNS-Request. Der erste schreibt ins Cache. Aber die anderen 40 haben ihren Request schon abgesendet, bevor der Cache-Eintrag da ist.
+### 2. `src/pages/LiveValues.tsx` — Polling ersetzen durch Realtime-Subscription
 
-## Lösung: Pre-Warmup vor dem parallelen Polling
-
-In `pollCycle()` wird vor dem `Promise.allSettled(...)` ein einmaliger Warmup eingefügt:
+Die bisherige `fetchLiveValues`-Funktion mit `setInterval(..., 30000)` wird ersetzt durch:
 
 ```typescript
-// Einmalige DNS-Auflösung pro Seriennummer BEVOR paralleles Polling startet
-const uniqueSerialNumbers = new Set(
-  meters
-    .map(m => (m.location_integration?.config as any)?.serial_number as string | undefined)
-    .filter(Boolean)
-);
-for (const serial of uniqueSerialNumbers) {
-  await resolveLoxoneBaseUrl(serial!);
-}
+useEffect(() => {
+  // Einmaliger Initialload aus meter_power_readings (letzter Wert pro Meter)
+  loadInitialValues();
+
+  // WebSocket-Subscription: bei jedem neuen INSERT sofort UI updaten
+  const channel = supabase
+    .channel('meter-power-readings-live')
+    .on(
+      'postgres_changes',
+      { event: 'INSERT', schema: 'public', table: 'meter_power_readings' },
+      (payload) => {
+        const r = payload.new;
+        setLiveValues(prev => {
+          const next = new Map(prev);
+          next.set(r.meter_id, {
+            value: r.power_value,
+            totalDay: prev.get(r.meter_id)?.totalDay ?? null,
+            // ... weitere Felder
+          });
+          return next;
+        });
+        setLastRefresh(new Date());
+      }
+    )
+    .subscribe();
+
+  return () => { supabase.removeChannel(channel); };
+}, [meters]);
 ```
 
-Dieser sequentielle Warmup:
-1. Sammelt alle eindeutigen Seriennummern (hier: 3 Stück — `504F94D107EE`, `504F94A2BAA2`, `504F94A22D9C`)
-2. Löst sie **der Reihe nach** auf (nicht parallel) → genau 3 DNS-Requests
-3. Füllt den Cache
-4. Erst dann startet `Promise.allSettled(...)` → alle 41 treffen auf vollen Cache
+Der manuelle "Aktualisieren"-Button bleibt als Fallback erhalten.
+
+### 3. Initialer Datenladeweg (einmalig beim Start)
+
+Beim ersten Laden der Seite werden die **letzten bekannten Werte** aus `meter_power_readings` geladen (ein DB-Query, kein Loxone-API-Call):
+
+```sql
+SELECT DISTINCT ON (meter_id) meter_id, power_value, recorded_at
+FROM meter_power_readings
+ORDER BY meter_id, recorded_at DESC
+```
+
+Das ersetzt den bisherigen Aufruf der `loxone-api` beim Seitenaufruf komplett.
+
+### 4. Tageswerte / Zählerstände (totalDay, totalMonth etc.)
+
+Diese Werte kommen nicht aus `meter_power_readings` (dort steht nur der Momentanwert). Sie werden **weiterhin einmalig** beim Laden über die `loxone-api` Edge Function abgerufen und gecacht — aber nicht mehr im 30-Sekunden-Intervall. Der Loxone-API-Call wird damit auf einen einzigen Aufruf pro Sitzung reduziert.
+
+## Geänderte Dateien
+
+| Datei | Änderung |
+|---|---|
+| `supabase/migrations/...` | `ALTER PUBLICATION supabase_realtime ADD TABLE meter_power_readings` |
+| `src/pages/LiveValues.tsx` | `setInterval` → Supabase Realtime Channel Subscription |
+
+Keine Änderungen am Gateway Worker nötig — er schreibt weiterhin wie bisher in die DB.
 
 ## Ergebnis
 
-| | Aktuell | Nach Fix |
+| | Vorher | Nachher |
 |---|---|---|
-| DNS-Requests Zyklus 1 | 41 | **3** (eine pro Miniserver) |
-| DNS-Requests ab Zyklus 2 | 0 | 0 |
-| Rate-Limit-Risiko | gering (funktioniert) | **null** |
+| Latenz (Browser sieht neuen Wert) | bis zu 30 Sekunden | unter 1 Sekunde |
+| HTTP-Calls pro Minute (Browser) | 2× loxone-api | 0 (nur WebSocket) |
+| Loxone Miniserver-Last | jede 30s direkt abgefragt | keine direkten Abfragen mehr |
+| Netzwerk-Effizienz | HTTP-Polling | Event-Push via WebSocket |
 
-## Technische Änderung
+## Schritt-für-Schritt Deployment
 
-Einzige Datei: `docs/gateway-worker/index.ts`
+Nach der Implementierung durch Lovable:
 
-In der Funktion `pollCycle()`, direkt nach `log("info", `Found ${meters.length} active meters...`)` und **vor** dem `Promise.allSettled(...)`:
-
-```typescript
-// DNS-Warmup: alle Seriennummern sequenziell auflösen, bevor paralleles Polling startet
-const uniqueSerials = [...new Set(
-  meters
-    .map(m => (m.location_integration?.config as any)?.serial_number as string | undefined)
-    .filter(Boolean) as string[]
-)];
-for (const serial of uniqueSerials) {
-  await resolveLoxoneBaseUrl(serial);
-}
-log("info", `DNS cache warmed for ${uniqueSerials.length} Miniserver(s)`);
-```
-
-Keine anderen Änderungen nötig.
-
-## Schritt-für-Schritt auf dem Raspberry Pi
-
-**Schritt 1 — Alten Container stoppen:**
-```bash
-docker stop gateway-worker && docker rm gateway-worker
-```
-
-**Schritt 2 — Alte index.ts löschen:**
-```bash
-rm ~/gateway-worker/index.ts
-```
-
-**Schritt 3 — Neue index.ts aus Lovable kopieren:**
-1. In Lovable links auf `docs/gateway-worker/index.ts` klicken
-2. Alles markieren: **Strg+A** → Kopieren: **Strg+C**
-3. Im Terminal:
-```bash
-nano ~/gateway-worker/index.ts
-```
-Einfügen → **Strg+X → Y → Enter**
-
-**Schritt 4 — Docker-Image neu bauen:**
-```bash
-cd ~/gateway-worker && docker build -t gateway-worker .
-```
-
-**Schritt 5 — Container starten und Logs prüfen:**
-```bash
-docker run -d --name gateway-worker --restart unless-stopped \
-  -e SUPABASE_URL="https://xnveugycurplszevdxtw.supabase.co" \
-  -e GATEWAY_API_KEY="sk_live_odclyxINkLa0XcHuIXbeeNw44lwzzDHp" \
-  -e POLL_INTERVAL_MS=30000 \
-  gateway-worker
-
-docker logs gateway-worker
-```
-
-**Erwartetes Ergebnis** (ab sofort auch der 1. Zyklus nur noch 3 DNS-Requests):
-```
-[INFO] ── Poll cycle started ──
-[INFO] Found 41 active meters with gateway assignments
-[INFO] [Loxone] DNS resolved: 504F94D107EE → https://...
-[INFO] [Loxone] DNS resolved: 504F94A2BAA2 → https://...
-[INFO] [Loxone] DNS resolved: 504F94A22D9C → https://...
-[INFO] DNS cache warmed for 3 Miniserver(s)
-[INFO] ✓ Ingest: 41 inserted, 0 skipped
-[INFO] ── Poll cycle done in Xms (41/41 readings) ──
-[INFO] ── Poll cycle started ──
-[INFO] ✓ Ingest: 41 inserted, 0 skipped
-[INFO] ── Poll cycle done in Xms (41/41 readings) ──
-```
-
-Genau 3 DNS-Lookups im gesamten Leben des Prozesses — danach nie wieder.
+1. Die Migration läuft automatisch — keine manuelle Aktion nötig
+2. Die `LiveValues`-Seite im Browser öffnen
+3. Warten bis der Gateway Worker im nächsten 30-Sekunden-Zyklus Daten schreibt
+4. Die Werte sollten sich **sofort** aktualisieren — ohne sichtbares "Polling"
+5. Im Browser-DevTools → Network → WS-Tab: eine persistente WebSocket-Verbindung zu Supabase Realtime sollte sichtbar sein
