@@ -1,85 +1,72 @@
 
-## Problem
+## Aktueller Stand
 
-In `pollLoxone()` (Zeile 165–168) wird bei jedem der 41 Meter ein separater DNS-Request gemacht:
+Der Gateway Worker läuft stabil:
+- Zyklus 1: DNS wird 41× parallel aufgelöst (einmalig beim Start, da alle Promises gleichzeitig starten)
+- Zyklus 2+: 0 DNS-Requests, alle 41 Meter aus dem Cache → 41/41 in ~2 Sekunden
+
+Das ist technisch korrekt, aber der erste Zyklus könnte bei sehr aggressivem Rate-Limiting des Loxone Cloud-DNS trotzdem Probleme machen. Die saubere Lösung: **DNS-Warmup vor dem parallelen Polling**.
+
+## Ursache des Verhaltens im 1. Zyklus
 
 ```
-http://dns.loxonecloud.com/{serial_number}
+Promise.allSettled([poll(m1), poll(m2), ..., poll(m41)])
 ```
 
-Da alle 41 Meter am selben Miniserver hängen, passiert das **41 Mal gleichzeitig** (Promise.allSettled). Der Loxone Cloud-DNS blockt diese parallelen Anfragen → alle 41 schlagen fehl. 30 Sekunden später: Limit zurückgesetzt → alle 41 funktionieren. Daher das Wechselmuster ✓ ✗ ✓ ✗.
+Alle 41 Promises starten gleichzeitig. Jedes prüft den Cache — der ist noch leer. Alle 41 starten einen DNS-Request. Der erste schreibt ins Cache. Aber die anderen 40 haben ihren Request schon abgesendet, bevor der Cache-Eintrag da ist.
 
-Da die IP des Miniservers **fest** ist (ändert sich nur bei Hardware-Austausch), reicht ein **permanenter In-Memory-Cache** — kein TTL nötig. Die IP wird genau einmal beim ersten Start aufgelöst, danach nie wieder.
+## Lösung: Pre-Warmup vor dem parallelen Polling
 
----
-
-## Technische Änderung in `docs/gateway-worker/index.ts`
-
-### 1. Permanenter DNS-Cache (nach Zeile 115, nach `isSpike`)
+In `pollCycle()` wird vor dem `Promise.allSettled(...)` ein einmaliger Warmup eingefügt:
 
 ```typescript
-// Permanenter DNS-Cache: serial_number → baseUrl
-// IP ändert sich nur bei Hardware-Austausch → kein TTL nötig
-const loxoneBaseUrlCache = new Map<string, string>();
-```
-
-### 2. Hilfsfunktion `resolveLoxoneBaseUrl()` (vor `pollLoxone`)
-
-```typescript
-async function resolveLoxoneBaseUrl(serialNumber: string): Promise<string | null> {
-  // Cache-Hit: sofort zurückgeben (kein Netzwerk-Request)
-  if (loxoneBaseUrlCache.has(serialNumber)) {
-    return loxoneBaseUrlCache.get(serialNumber)!;
-  }
-  // Einmaliger DNS-Lookup
-  try {
-    const dnsResponse = await fetch(
-      `http://dns.loxonecloud.com/${serialNumber}`,
-      { method: "HEAD", redirect: "follow", signal: AbortSignal.timeout(5000) }
-    );
-    const urlObj = new URL(dnsResponse.url);
-    const baseUrl = `${urlObj.protocol}//${urlObj.host}`;
-    loxoneBaseUrlCache.set(serialNumber, baseUrl);
-    log("info", `[Loxone] DNS resolved: ${serialNumber} → ${baseUrl}`);
-    return baseUrl;
-  } catch (err) {
-    log("warn", `[Loxone] DNS lookup failed for ${serialNumber}: ${err instanceof Error ? err.message : err}`);
-    return null;
-  }
+// Einmalige DNS-Auflösung pro Seriennummer BEVOR paralleles Polling startet
+const uniqueSerialNumbers = new Set(
+  meters
+    .map(m => (m.location_integration?.config as any)?.serial_number as string | undefined)
+    .filter(Boolean)
+);
+for (const serial of uniqueSerialNumbers) {
+  await resolveLoxoneBaseUrl(serial!);
 }
 ```
 
-### 3. `pollLoxone()` vereinfachen (Zeilen 163–168 ersetzen)
-
-Die 4 DNS-Zeilen werden durch einen einzigen Aufruf ersetzt:
-
-```typescript
-// Vorher (4 Zeilen, DNS bei jedem Aufruf):
-const dnsUrl = `http://dns.loxonecloud.com/${config.serial_number}`;
-const dnsResponse = await fetch(dnsUrl, { method: "HEAD", redirect: "follow", signal: AbortSignal.timeout(5000) });
-const urlObj = new URL(dnsResponse.url);
-const baseUrl = `${urlObj.protocol}//${urlObj.host}`;
-
-// Nachher (1 Zeile, aus Cache):
-const baseUrl = await resolveLoxoneBaseUrl(config.serial_number);
-if (!baseUrl) return null;
-```
-
----
+Dieser sequentielle Warmup:
+1. Sammelt alle eindeutigen Seriennummern (hier: 3 Stück — `504F94D107EE`, `504F94A2BAA2`, `504F94A22D9C`)
+2. Löst sie **der Reihe nach** auf (nicht parallel) → genau 3 DNS-Requests
+3. Füllt den Cache
+4. Erst dann startet `Promise.allSettled(...)` → alle 41 treffen auf vollen Cache
 
 ## Ergebnis
 
-| | Vorher | Nachher |
+| | Aktuell | Nach Fix |
 |---|---|---|
-| DNS-Requests pro Zyklus | 41 | 0 (nach erstem Zyklus) |
-| DNS-Requests gesamt | unbegrenzt | 1 (einmalig beim Start) |
-| Rate-Limit-Problem | jeder 2. Zyklus schlägt fehl | komplett gelöst |
+| DNS-Requests Zyklus 1 | 41 | **3** (eine pro Miniserver) |
+| DNS-Requests ab Zyklus 2 | 0 | 0 |
+| Rate-Limit-Risiko | gering (funktioniert) | **null** |
 
----
+## Technische Änderung
+
+Einzige Datei: `docs/gateway-worker/index.ts`
+
+In der Funktion `pollCycle()`, direkt nach `log("info", `Found ${meters.length} active meters...`)` und **vor** dem `Promise.allSettled(...)`:
+
+```typescript
+// DNS-Warmup: alle Seriennummern sequenziell auflösen, bevor paralleles Polling startet
+const uniqueSerials = [...new Set(
+  meters
+    .map(m => (m.location_integration?.config as any)?.serial_number as string | undefined)
+    .filter(Boolean) as string[]
+)];
+for (const serial of uniqueSerials) {
+  await resolveLoxoneBaseUrl(serial);
+}
+log("info", `DNS cache warmed for ${uniqueSerials.length} Miniserver(s)`);
+```
+
+Keine anderen Änderungen nötig.
 
 ## Schritt-für-Schritt auf dem Raspberry Pi
-
-Sobald Lovable die Datei gespeichert hat — diese 5 Befehle der Reihe nach ausführen:
 
 **Schritt 1 — Alten Container stoppen:**
 ```bash
@@ -116,14 +103,19 @@ docker run -d --name gateway-worker --restart unless-stopped \
 docker logs gateway-worker
 ```
 
-**Erwartetes Ergebnis** (beim ersten Zyklus einmalige DNS-Meldung, danach alle Zyklen 41/41):
+**Erwartetes Ergebnis** (ab sofort auch der 1. Zyklus nur noch 3 DNS-Requests):
 ```
-[INFO] [Loxone] DNS resolved: AABBCCDD → http://192.168.x.x
+[INFO] ── Poll cycle started ──
+[INFO] Found 41 active meters with gateway assignments
+[INFO] [Loxone] DNS resolved: 504F94D107EE → https://...
+[INFO] [Loxone] DNS resolved: 504F94A2BAA2 → https://...
+[INFO] [Loxone] DNS resolved: 504F94A22D9C → https://...
+[INFO] DNS cache warmed for 3 Miniserver(s)
 [INFO] ✓ Ingest: 41 inserted, 0 skipped
-[INFO] ── Poll cycle done (41/41 readings) ──
+[INFO] ── Poll cycle done in Xms (41/41 readings) ──
 [INFO] ── Poll cycle started ──
 [INFO] ✓ Ingest: 41 inserted, 0 skipped
-[INFO] ── Poll cycle done (41/41 readings) ──
+[INFO] ── Poll cycle done in Xms (41/41 readings) ──
 ```
 
-Kein einziger `[WARN] fetch failed` mehr — da der DNS ab dem 2. Zyklus überhaupt nicht mehr angefragt wird.
+Genau 3 DNS-Lookups im gesamten Leben des Prozesses — danach nie wieder.
