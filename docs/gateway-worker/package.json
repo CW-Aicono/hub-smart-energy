@@ -1,16 +1,19 @@
 {
   "name": "gateway-worker",
-  "version": "1.0.0",
-  "description": "Industrietauglicher Echtzeit-Polling-Worker für alle Gateway-Integrationen",
+  "version": "2.0.0",
+  "description": "Industrietauglicher Echtzeit-Streaming-Worker (Loxone WebSocket + HTTP-Polling)",
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc",
     "start": "node dist/index.js",
     "dev": "ts-node index.ts"
   },
-  "dependencies": {},
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
   "devDependencies": {
     "@types/node": "^20.0.0",
+    "@types/ws": "^8.5.13",
     "ts-node": "^10.9.2",
     "typescript": "^5.4.5"
   }

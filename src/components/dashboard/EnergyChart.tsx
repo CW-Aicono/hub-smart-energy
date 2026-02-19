@@ -118,6 +118,9 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
   const canGoForward = offset < 0;
 
   // Fetch power readings from DB for day view
+  // Strategy:
+  //   - TODAY  → meter_power_readings (1s-Rohdaten, hohe Auflösung)
+  //   - PAST   → meter_power_readings_5min (verdichtete 5-Min-Buckets)
   useEffect(() => {
     if (period !== "day") {
       setPowerReadings([]);
@@ -125,7 +128,6 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
     }
     const fetchPower = async () => {
       setPowerLoading(true);
-      // Get main meter IDs for the location
       const mainMeterIds = meters
         .filter(m => !m.is_archived && m.is_main_meter && m.capture_type === "automatic")
         .filter(m => !locationId || m.location_id === locationId)
@@ -137,39 +139,65 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
         return;
       }
 
-      // Fetch all pages (Supabase default limit is 1000 rows – a full day with many meters
-      // easily exceeds this, causing data to appear cut off at ~15:50 Uhr).
-      const PAGE_SIZE = 1000;
-      let allData: Array<{ meter_id: string; power_value: number; recorded_at: string }> = [];
-      let from = 0;
-      let hasMore = true;
+      const isToday = offset === 0 && (() => {
+        const ref = getRefDate("day", offset);
+        return ref.toDateString() === new Date().toDateString();
+      })();
 
-      while (hasMore) {
+      let allData: Array<{ meter_id: string; power_value: number; recorded_at: string }> = [];
+
+      if (isToday) {
+        // Heute: Rohdaten (1s-Auflösung) mit Paginierung
+        const PAGE_SIZE = 1000;
+        let from = 0;
+        let hasMore = true;
+
+        while (hasMore) {
+          const { data, error } = await supabase
+            .from("meter_power_readings")
+            .select("meter_id, power_value, recorded_at")
+            .in("meter_id", mainMeterIds)
+            .gte("recorded_at", rangeStart.toISOString())
+            .lte("recorded_at", rangeEnd.toISOString())
+            .order("recorded_at", { ascending: true })
+            .range(from, from + PAGE_SIZE - 1);
+
+          if (error) {
+            console.error("Error fetching power readings:", error);
+            hasMore = false;
+            break;
+          }
+
+          allData = [...allData, ...(data ?? [])];
+          hasMore = (data?.length ?? 0) === PAGE_SIZE;
+          from += PAGE_SIZE;
+        }
+      } else {
+        // Vergangene Tage: 5-Minuten-Buckets (power_avg als power_value)
         const { data, error } = await supabase
-          .from("meter_power_readings")
-          .select("meter_id, power_value, recorded_at")
+          .from("meter_power_readings_5min")
+          .select("meter_id, power_avg, bucket")
           .in("meter_id", mainMeterIds)
-          .gte("recorded_at", rangeStart.toISOString())
-          .lte("recorded_at", rangeEnd.toISOString())
-          .order("recorded_at", { ascending: true })
-          .range(from, from + PAGE_SIZE - 1);
+          .gte("bucket", rangeStart.toISOString())
+          .lte("bucket", rangeEnd.toISOString())
+          .order("bucket", { ascending: true });
 
         if (error) {
-          console.error("Error fetching power readings:", error);
-          hasMore = false;
-          break;
+          console.error("Error fetching 5min power readings:", error);
+        } else {
+          allData = (data ?? []).map(r => ({
+            meter_id: r.meter_id,
+            power_value: r.power_avg,
+            recorded_at: r.bucket,
+          }));
         }
-
-        allData = [...allData, ...(data ?? [])];
-        hasMore = (data?.length ?? 0) === PAGE_SIZE;
-        from += PAGE_SIZE;
       }
 
       setPowerReadings(allData);
       setPowerLoading(false);
     };
     fetchPower();
-  }, [period, rangeStart.toISOString(), rangeEnd.toISOString(), meters, locationId]);
+  }, [period, rangeStart.toISOString(), rangeEnd.toISOString(), meters, locationId, offset]);
 
   const chartData = useMemo(() => {
     // For non-day periods at offset 0, inject Loxone period totals for automatic main meters

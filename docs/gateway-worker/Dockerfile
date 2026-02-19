@@ -7,6 +7,7 @@
 #            -e SUPABASE_URL=https://xnveugycurplszevdxtw.supabase.co \
 #            -e GATEWAY_API_KEY=dein-api-key \
 #            -e POLL_INTERVAL_MS=30000 \
+#            -e FLUSH_INTERVAL_MS=1000 \
 #            gateway-worker
 
 # ── Stage 1: Build TypeScript ────────────────────────────────────────────────
