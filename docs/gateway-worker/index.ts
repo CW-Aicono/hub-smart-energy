@@ -477,13 +477,21 @@ async function loxoneWsAuth(
     return false;
   }
 
-  // Passwort-Hash berechnen
+  // Loxone encodes both key and salt as hex strings of the actual ASCII text.
+  // Must hex-decode them before use in password hashing.
+  const decodedSalt = Buffer.from(saltValue!, "hex").toString("utf8");
+  const decodedKey  = Buffer.from(key2Value!, "hex").toString("utf8");
+  log("debug", `[Loxone] getkey2 decoded: salt="${decodedSalt}" keyLen=${decodedKey.length}`);
+
+  // Passwort-Hash berechnen (Loxone JWT-Protokoll):
+  // 1. SHA1(password + ":" + salt) → UPPER HEX
+  // 2. HMAC-SHA1(username + ":" + pwHash, key)
   const pwHash = crypto.createHash("sha1")
-    .update(`${password}:${saltValue!}`)
+    .update(`${password}:${decodedSalt}`)
     .digest("hex")
     .toUpperCase();
 
-  const hash = crypto.createHmac("sha1", key2Value!)
+  const hash = crypto.createHmac("sha1", decodedKey)
     .update(`${username}:${pwHash}`)
     .digest("hex");
 
