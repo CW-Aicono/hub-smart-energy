@@ -135,7 +135,7 @@ async function sendReadings(readings: PowerReading[]): Promise<void> {
     throw new Error(`HTTP ${response.status}: ${text}`);
   }
 
-  const result = await response.json();
+  const result = await response.json() as any;
   log("info", `✓ Ingest: ${result.inserted} inserted, ${result.skipped ?? 0} skipped`);
   if (result.skipped_details?.length) {
     log("debug", "Skipped:", result.skipped_details.join("; "));
@@ -181,8 +181,7 @@ async function pollLoxone(meter: MeterWithSensor): Promise<number | null> {
       return null;
     }
 
-    const data = await response.json();
-    const ll = data?.LL;
+    const data = await response.json() as any;
     if (!ll) return null;
 
     // Try to get "actual" power (Pf output → mapped to "actual" in kW)
@@ -240,7 +239,7 @@ async function pollShelly(meter: MeterWithSensor): Promise<number | null> {
       return null;
     }
 
-    const data = await response.json();
+    const data = await response.json() as any;
     const devices = data?.data?.devices_status || {};
 
     // sensor_uuid format: "{deviceId}_em0_power" or "{deviceId}_switch{ch}"
@@ -303,7 +302,7 @@ async function pollABB(meter: MeterWithSensor): Promise<number | null> {
       return null;
     }
 
-    const data = await response.json();
+    const data = await response.json() as any;
     const values = data?.values || {};
     const rawValue = Object.values(values)[0];
     if (rawValue === undefined) return null;
@@ -350,7 +349,7 @@ async function pollSiemens(meter: MeterWithSensor): Promise<number | null> {
       return null;
     }
 
-    const { access_token } = await tokenRes.json();
+    const { access_token } = await tokenRes.json() as any;
 
     // Fetch datapoint value
     const dataRes = await fetch(
@@ -366,7 +365,7 @@ async function pollSiemens(meter: MeterWithSensor): Promise<number | null> {
       return null;
     }
 
-    const data = await dataRes.json();
+    const data = await dataRes.json() as any;
     const value = data?.data?.[0]?.attributes?.presentValue ?? data?.data?.[0]?.attributes?.value;
     if (value === undefined) return null;
 
@@ -444,7 +443,7 @@ async function pollHomematic(meter: MeterWithSensor): Promise<number | null> {
       return null;
     }
 
-    const data = await response.json();
+    const data = await response.json() as any;
     const value = data?.result;
     if (value === null || value === undefined) return null;
 
@@ -483,7 +482,7 @@ async function fetchMeters(): Promise<MeterWithSensor[]> {
     return [];
   }
 
-  const data = await response.json();
+  const data = await response.json() as any;
   if (!data.success) {
     log("error", "Failed to fetch meters:", data.error);
     return [];
