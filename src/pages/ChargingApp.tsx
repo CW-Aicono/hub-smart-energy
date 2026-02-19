@@ -1530,7 +1530,15 @@ const ChargingApp = () => {
   }
 
   if (!user) {
-    return <ChargingAppAuth onAuth={() => {}} />;
+    return <ChargingAppAuth onAuth={() => {
+      // Force re-check session after successful login
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        if (session?.user) {
+          setUser({ id: session.user.id, email: session.user.email || "" });
+          ensureChargingUser(session.user.id, session.user.email || "", session.user.user_metadata?.display_name);
+        }
+      });
+    }} />;
   }
 
 
