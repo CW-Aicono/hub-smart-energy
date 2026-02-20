@@ -352,6 +352,15 @@ function InvoicesTab({ invoices }: { invoices: Invoice[] }) {
 const fmtDe = (v: number, decimals = 1) =>
   v.toLocaleString("de-DE", { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
 
+// Capitalize energy type and map display unit
+const fmtEnergyType = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
+const displayUnit = (_unit: string, energyType: string) => {
+  // Gas/Wasser volumes are stored in m³ but displayed as kWh in tenant app
+  if (energyType === "gas") return "kWh";
+  if (energyType === "strom") return "kWh";
+  return "kWh";
+};
+
 function MeterTab({ tenantRecord }: { tenantRecord: TenantRecord }) {
   const [meters, setMeters] = useState<any[]>([]);
   const [allTotals, setAllTotals] = useState<any[]>([]);
@@ -417,7 +426,7 @@ function MeterTab({ tenantRecord }: { tenantRecord: TenantRecord }) {
           meter: m,
           consumption: reading ? Number(reading.total_value) : null,
           meterStand: meterReading ? Number(meterReading.value) : null,
-          unit: m.unit || "kWh",
+          unit: displayUnit(m.unit, m.energy_type),
         };
       });
 
@@ -454,7 +463,7 @@ function MeterTab({ tenantRecord }: { tenantRecord: TenantRecord }) {
                   <p className="font-medium">{m.name}</p>
                   <p className="text-xs text-muted-foreground">
                     {m.meter_number && `Nr. ${m.meter_number} · `}
-                    {m.energy_type} · {m.unit}
+                    {fmtEnergyType(m.energy_type)} · {displayUnit(m.unit, m.energy_type)}
                   </p>
                 </div>
               </div>
@@ -482,7 +491,7 @@ function MeterTab({ tenantRecord }: { tenantRecord: TenantRecord }) {
                       <div className="flex items-center justify-between">
                         <div>
                           <p className="font-medium text-sm">{meter.name}</p>
-                          <p className="text-xs text-muted-foreground">{meter.energy_type}</p>
+                          <p className="text-xs text-muted-foreground">{fmtEnergyType(meter.energy_type)}</p>
                         </div>
                         <div className="text-right">
                           {consumption !== null ? (
