@@ -18,7 +18,10 @@ import { useArbitrageStrategies } from "@/hooks/useArbitrageStrategies";
 import { useArbitrageTrades } from "@/hooks/useArbitrageTrades";
 import { useLocations } from "@/hooks/useLocations";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
-import { format } from "date-fns";
+import { format, type Locale } from "date-fns";
+import { de, enUS, es, nl } from "date-fns/locale";
+
+const localeMap: Record<string, Locale> = { de, en: enUS, es, nl };
 
 const ArbitrageTrading = () => {
   const { t } = useTranslation();
@@ -53,20 +56,37 @@ const ArbitrageTrading = () => {
 
 // ── Dashboard Tab ──
 function ArbitrageDashboard() {
+  const { t, language } = useTranslation();
   const { prices, currentPrice } = useSpotPrices();
   const { storages } = useEnergyStorages();
   const { totalRevenue, totalEnergy } = useArbitrageTrades();
 
-  const chartData = prices.map((p, i) => {
+  const now = new Date();
+  const startCutoff = new Date(now.getTime() - 12 * 60 * 60 * 1000);
+  const locale = localeMap[language] || de;
+
+  const filteredPrices = prices.filter((p) => new Date(p.timestamp) >= startCutoff);
+
+  const chartData = filteredPrices.map((p, i) => {
     const d = new Date(p.timestamp);
     return {
       idx: i,
       time: format(d, "HH:mm"),
-      dateLabel: format(d, "EEE dd.MM."),
+      dateLabel: format(d, "EEEE dd.MM.", { locale }),
       price: Number(p.price_eur_mwh),
       _date: d.toDateString(),
+      isPast: d < now,
     };
   });
+
+  // Split into past / future segments for different styling
+  const pastData = chartData.map((d) => ({ ...d, price: d.isPast ? d.price : undefined }));
+  const futureData = chartData.map((d) => ({ ...d, price: !d.isPast ? d.price : undefined }));
+  // Find the transition point to connect the two lines
+  const transitionIdx = chartData.findIndex((d) => !d.isPast);
+  if (transitionIdx > 0) {
+    futureData[transitionIdx - 1] = { ...futureData[transitionIdx - 1], price: chartData[transitionIdx - 1].price };
+  }
 
   // Find indices where the day changes
   const dayChangeIndices: number[] = [];
@@ -168,7 +188,8 @@ function ArbitrageDashboard() {
                     strokeWidth={1}
                   />
                 ))}
-                <Line type="monotone" dataKey="price" stroke="hsl(var(--primary))" strokeWidth={2} dot={false} />
+                <Line data={pastData} type="monotone" dataKey="price" stroke="hsl(var(--muted-foreground))" strokeWidth={2} strokeDasharray="6 3" dot={false} name="Vergangen" connectNulls={false} />
+                <Line type="monotone" dataKey="price" stroke="hsl(var(--primary))" strokeWidth={2} dot={false} name="Preis" data={futureData} connectNulls={false} />
               </LineChart>
             </ResponsiveContainer>
           ) : (
