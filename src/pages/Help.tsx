@@ -272,7 +272,7 @@ const Help = () => {
               </CardDescription>
             </CardHeader>
             <CardContent className="px-6 pb-6">
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
                 <Button 
                   variant="outline" 
                   className="justify-start gap-3 h-auto py-4 px-5"
