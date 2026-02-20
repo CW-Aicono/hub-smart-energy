@@ -3,20 +3,22 @@ import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "./useTenant";
 import { toast } from "./use-toast";
 
-export function useTenantElectricityTariffs() {
+export function useTenantElectricityTariffs(locationId?: string) {
   const { tenant } = useTenant();
   const queryClient = useQueryClient();
   const tenantId = tenant?.id;
 
   const { data: tariffs = [], isLoading } = useQuery({
-    queryKey: ["te-tariffs", tenantId],
+    queryKey: ["te-tariffs", tenantId, locationId],
     enabled: !!tenantId,
     queryFn: async () => {
-      const { data, error } = await supabase
+      let q = supabase
         .from("tenant_electricity_tariffs")
-        .select("*")
+        .select("*, locations(name)")
         .eq("tenant_id", tenantId!)
         .order("valid_from", { ascending: false });
+      if (locationId) q = q.eq("location_id", locationId);
+      const { data, error } = await q;
       if (error) throw error;
       return data;
     },
@@ -25,7 +27,7 @@ export function useTenantElectricityTariffs() {
   const createTariff = useMutation({
     mutationFn: async (values: {
       name: string; price_per_kwh_local: number; price_per_kwh_grid: number;
-      base_fee_monthly: number; valid_from?: string; valid_until?: string;
+      base_fee_monthly: number; location_id: string; valid_from?: string; valid_until?: string;
     }) => {
       const { error } = await supabase.from("tenant_electricity_tariffs").insert({ ...values, tenant_id: tenantId! });
       if (error) throw error;
@@ -63,5 +65,12 @@ export function useTenantElectricityTariffs() {
 
   const activeTariff = tariffs.find((t) => !t.valid_until || new Date(t.valid_until) >= new Date());
 
-  return { tariffs, activeTariff, isLoading, createTariff, updateTariff, deleteTariff };
+  const getActiveTariffForLocation = (locId: string) => {
+    const now = new Date();
+    return tariffs.find(
+      (t) => (t as any).location_id === locId && (!t.valid_until || new Date(t.valid_until) >= now)
+    );
+  };
+
+  return { tariffs, activeTariff, isLoading, createTariff, updateTariff, deleteTariff, getActiveTariffForLocation };
 }

@@ -57,7 +57,7 @@ const TenantElectricity = () => {
 // ── Overview ──
 function OverviewTab() {
   const { activeTenants } = useTenantElectricityTenants();
-  const { activeTariff } = useTenantElectricityTariffs();
+  const { tariffs } = useTenantElectricityTariffs();
   const { totalRevenue, invoices } = useTenantElectricityInvoices();
 
   return (
@@ -67,9 +67,9 @@ function OverviewTab() {
         <CardContent><div className="text-2xl font-bold flex items-center gap-2"><Users className="h-5 w-5 text-primary" />{activeTenants.length}</div></CardContent>
       </Card>
       <Card>
-        <CardHeader className="pb-2"><CardDescription>Aktiver Tarif</CardDescription></CardHeader>
-        <CardContent><div className="text-lg font-semibold">{activeTariff?.name || "Kein Tarif"}</div>
-          {activeTariff && <p className="text-xs text-muted-foreground">Lokal: {activeTariff.price_per_kwh_local} ct | Netz: {activeTariff.price_per_kwh_grid} ct</p>}
+        <CardHeader className="pb-2"><CardDescription>Aktive Tarife</CardDescription></CardHeader>
+        <CardContent><div className="text-2xl font-bold">{tariffs.length}</div>
+          <p className="text-xs text-muted-foreground">{tariffs.length === 0 ? "Keine Tarife angelegt" : `${tariffs.length} Tarif(e) konfiguriert`}</p>
         </CardContent>
       </Card>
       <Card>
@@ -113,7 +113,7 @@ function TenantsTab() {
   const handleCreate = () => {
     createTenant.mutate({
       name: form.name, unit_label: form.unit_label || undefined, email: form.email || undefined,
-      location_id: form.location_id || undefined, meter_ids: form.meter_ids.length > 0 ? form.meter_ids : undefined,
+      location_id: form.location_id, meter_ids: form.meter_ids.length > 0 ? form.meter_ids : undefined,
       move_in_date: form.move_in_date || undefined,
     }, { onSuccess: () => { setOpen(false); setForm({ name: "", unit_label: "", email: "", location_id: "", meter_ids: [], move_in_date: "" }); } });
   };
@@ -205,7 +205,7 @@ function TenantsTab() {
               </div>
               <MeterSelector selectedIds={form.meter_ids} isEdit={false} locationId={form.location_id} />
               <div><Label>Einzugsdatum</Label><Input type="date" value={form.move_in_date} onChange={(e) => setForm({ ...form, move_in_date: e.target.value })} /></div>
-              <Button onClick={handleCreate} disabled={!form.name || createTenant.isPending} className="w-full">Speichern</Button>
+              <Button onClick={handleCreate} disabled={!form.name || !form.location_id || createTenant.isPending} className="w-full">Speichern</Button>
             </div>
           </DialogContent>
         </Dialog>
@@ -232,7 +232,7 @@ function TenantsTab() {
               <div><Label>Einzugsdatum</Label><Input type="date" value={editForm.move_in_date} onChange={(e) => setEditForm({ ...editForm, move_in_date: e.target.value })} /></div>
               <div><Label>Auszugsdatum</Label><Input type="date" value={editForm.move_out_date} onChange={(e) => setEditForm({ ...editForm, move_out_date: e.target.value })} /></div>
             </div>
-            <Button onClick={handleUpdate} disabled={!editForm.name || updateTenant.isPending} className="w-full">Änderungen speichern</Button>
+            <Button onClick={handleUpdate} disabled={!editForm.name || !editForm.location_id || updateTenant.isPending} className="w-full">Änderungen speichern</Button>
           </div>
         </DialogContent>
       </Dialog>
@@ -320,8 +320,9 @@ function TenantsTab() {
 // ── Tariffs Tab ──
 function TariffsTab() {
   const { tariffs, createTariff, deleteTariff } = useTenantElectricityTariffs();
+  const { locations } = useLocations();
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ name: "", price_per_kwh_local: 0.22, price_per_kwh_grid: 0.35, base_fee_monthly: 5.0, valid_from: new Date().toISOString().split("T")[0], valid_until: "" });
+  const [form, setForm] = useState({ name: "", price_per_kwh_local: 0.22, price_per_kwh_grid: 0.35, base_fee_monthly: 5.0, location_id: "", valid_from: new Date().toISOString().split("T")[0], valid_until: "" });
 
   const handleCreate = () => {
     createTariff.mutate({
@@ -329,9 +330,10 @@ function TariffsTab() {
       price_per_kwh_local: form.price_per_kwh_local,
       price_per_kwh_grid: form.price_per_kwh_grid,
       base_fee_monthly: form.base_fee_monthly,
+      location_id: form.location_id,
       valid_from: form.valid_from,
       valid_until: form.valid_until || undefined,
-    }, { onSuccess: () => setOpen(false) });
+    }, { onSuccess: () => { setOpen(false); setForm({ name: "", price_per_kwh_local: 0.22, price_per_kwh_grid: 0.35, base_fee_monthly: 5.0, location_id: "", valid_from: new Date().toISOString().split("T")[0], valid_until: "" }); } });
   };
 
   return (
@@ -344,6 +346,12 @@ function TariffsTab() {
             <DialogHeader><DialogTitle>Neuer Tarif</DialogTitle></DialogHeader>
             <div className="space-y-3">
               <div><Label>Tarifname</Label><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
+              <div><Label>Standort</Label>
+                <Select value={form.location_id} onValueChange={(v) => setForm({ ...form, location_id: v })}>
+                  <SelectTrigger><SelectValue placeholder="Standort wählen" /></SelectTrigger>
+                  <SelectContent>{locations.map((l) => <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
               <div className="grid grid-cols-3 gap-3">
                 <div><Label>Lokalstrom (€/kWh)</Label><Input type="number" step="0.01" value={form.price_per_kwh_local} onChange={(e) => setForm({ ...form, price_per_kwh_local: Number(e.target.value) })} /></div>
                 <div><Label>Netzstrom (€/kWh)</Label><Input type="number" step="0.01" value={form.price_per_kwh_grid} onChange={(e) => setForm({ ...form, price_per_kwh_grid: Number(e.target.value) })} /></div>
@@ -353,7 +361,7 @@ function TariffsTab() {
                 <div><Label>Gültig ab</Label><Input type="date" value={form.valid_from} onChange={(e) => setForm({ ...form, valid_from: e.target.value })} /></div>
                 <div><Label>Gültig bis (optional)</Label><Input type="date" value={form.valid_until} onChange={(e) => setForm({ ...form, valid_until: e.target.value })} /></div>
               </div>
-              <Button onClick={handleCreate} disabled={!form.name || createTariff.isPending} className="w-full">Speichern</Button>
+              <Button onClick={handleCreate} disabled={!form.name || !form.location_id || createTariff.isPending} className="w-full">Speichern</Button>
             </div>
           </DialogContent>
         </Dialog>
@@ -364,11 +372,12 @@ function TariffsTab() {
       </Card>
 
       <Table>
-        <TableHeader><TableRow><TableHead>Name</TableHead><TableHead>Lokal (€/kWh)</TableHead><TableHead>Netz (€/kWh)</TableHead><TableHead>Grundgebühr</TableHead><TableHead>Gültig ab</TableHead><TableHead>Gültig bis</TableHead><TableHead></TableHead></TableRow></TableHeader>
+        <TableHeader><TableRow><TableHead>Name</TableHead><TableHead>Standort</TableHead><TableHead>Lokal (€/kWh)</TableHead><TableHead>Netz (€/kWh)</TableHead><TableHead>Grundgebühr</TableHead><TableHead>Gültig ab</TableHead><TableHead>Gültig bis</TableHead><TableHead></TableHead></TableRow></TableHeader>
         <TableBody>
-          {tariffs.map((t) => (
+          {tariffs.map((t: any) => (
             <TableRow key={t.id}>
               <TableCell className="font-medium">{t.name}</TableCell>
+              <TableCell>{t.locations?.name || "–"}</TableCell>
               <TableCell>{Number(t.price_per_kwh_local).toFixed(2)}</TableCell>
               <TableCell>{Number(t.price_per_kwh_grid).toFixed(2)}</TableCell>
               <TableCell>{Number(t.base_fee_monthly).toFixed(2)} €</TableCell>
@@ -377,7 +386,7 @@ function TariffsTab() {
               <TableCell><Button variant="ghost" size="icon" onClick={() => deleteTariff.mutate(t.id)}><Trash2 className="h-4 w-4" /></Button></TableCell>
             </TableRow>
           ))}
-          {tariffs.length === 0 && <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">Noch keine Tarife angelegt</TableCell></TableRow>}
+          {tariffs.length === 0 && <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground py-8">Noch keine Tarife angelegt</TableCell></TableRow>}
         </TableBody>
       </Table>
     </div>
@@ -388,12 +397,18 @@ function TariffsTab() {
 function InvoicesTab() {
   const { invoices, createInvoice, updateInvoice } = useTenantElectricityInvoices();
   const { activeTenants } = useTenantElectricityTenants();
-  const { activeTariff } = useTenantElectricityTariffs();
+  const { tariffs, getActiveTariffForLocation } = useTenantElectricityTariffs();
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({
     tenant_electricity_tenant_id: "", period_start: "", period_end: "",
     local_kwh: 0, grid_kwh: 0,
   });
+
+  // Find tariff based on selected tenant's location
+  const selectedTenant = activeTenants.find((t) => t.id === form.tenant_electricity_tenant_id);
+  const activeTariff = selectedTenant?.location_id
+    ? getActiveTariffForLocation(selectedTenant.location_id)
+    : undefined;
 
   const totalKwh = form.local_kwh + form.grid_kwh;
   const localAmount = activeTariff ? form.local_kwh * Number(activeTariff.price_per_kwh_local) : 0;

@@ -2736,6 +2736,7 @@ export type Database = {
           base_fee_monthly: number
           created_at: string
           id: string
+          location_id: string
           name: string
           price_per_kwh_grid: number
           price_per_kwh_local: number
@@ -2747,6 +2748,7 @@ export type Database = {
           base_fee_monthly?: number
           created_at?: string
           id?: string
+          location_id: string
           name: string
           price_per_kwh_grid?: number
           price_per_kwh_local?: number
@@ -2758,6 +2760,7 @@ export type Database = {
           base_fee_monthly?: number
           created_at?: string
           id?: string
+          location_id?: string
           name?: string
           price_per_kwh_grid?: number
           price_per_kwh_local?: number
@@ -2766,6 +2769,13 @@ export type Database = {
           valid_until?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "tenant_electricity_tariffs_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "tenant_electricity_tariffs_tenant_id_fkey"
             columns: ["tenant_id"]
@@ -2817,7 +2827,7 @@ export type Database = {
           created_at: string
           email: string | null
           id: string
-          location_id: string | null
+          location_id: string
           meter_id: string | null
           move_in_date: string | null
           move_out_date: string | null
@@ -2832,7 +2842,7 @@ export type Database = {
           created_at?: string
           email?: string | null
           id?: string
-          location_id?: string | null
+          location_id: string
           meter_id?: string | null
           move_in_date?: string | null
           move_out_date?: string | null
@@ -2847,7 +2857,7 @@ export type Database = {
           created_at?: string
           email?: string | null
           id?: string
-          location_id?: string | null
+          location_id?: string
           meter_id?: string | null
           move_in_date?: string | null
           move_out_date?: string | null
