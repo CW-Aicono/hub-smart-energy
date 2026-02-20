@@ -25,6 +25,7 @@ import ForecastWidget from "@/components/dashboard/ForecastWidget";
 import AnomalyWidget from "@/components/dashboard/AnomalyWidget";
 import WeatherNormalizationWidget from "@/components/dashboard/WeatherNormalizationWidget";
 import EnergyGaugeWidget from "@/components/dashboard/EnergyGaugeWidget";
+import SpotPriceWidget from "@/components/dashboard/SpotPriceWidget";
 
 interface WidgetProps {
   locationId: string | null;
@@ -47,6 +48,7 @@ const WIDGET_COMPONENTS: Record<string, React.ComponentType<WidgetProps>> = {
   anomaly: AnomalyWidget,
   weather_normalization: WeatherNormalizationWidget,
   energy_gauge: EnergyGaugeWidget,
+  spot_price: SpotPriceWidget,
 };
 
 const SIZE_CLASS: Record<WidgetSize, string> = {
@@ -74,6 +76,7 @@ const WIDGET_MODULE_MAP: Record<string, string> = {
   sankey: "energy_monitoring",
   weather_normalization: "energy_monitoring",
   energy_gauge: "energy_monitoring",
+  spot_price: "arbitrage_trading",
 };
 
 const DashboardContent = () => {

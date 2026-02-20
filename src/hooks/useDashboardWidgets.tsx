@@ -35,6 +35,7 @@ const DEFAULT_WIDGETS = [
   { widget_type: "forecast", position: 10, is_visible: true },
   { widget_type: "anomaly", position: 11, is_visible: true },
   { widget_type: "weather_normalization", position: 12, is_visible: true },
+  { widget_type: "spot_price", position: 13, is_visible: true },
 ];
 
 export function useDashboardWidgets() {
