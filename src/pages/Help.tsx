@@ -8,16 +8,16 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { BookOpen, HelpCircle, Mail, Phone, History, ExternalLink, Gauge, Smartphone, ShieldCheck, RefreshCw, Download, Rocket, Cpu, Zap } from "lucide-react";
+import { BookOpen, HelpCircle, Mail, Phone, History, ExternalLink, Gauge, Smartphone, ShieldCheck, RefreshCw, Download, Rocket, Cpu, Zap, TrendingUp } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { useTenant } from "@/hooks/useTenant";
 import { useUpdateCheck } from "@/hooks/useUpdateCheck";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
-const APP_VERSION = "1.0.7";
+const APP_VERSION = "1.0.8";
 
-type ManualChapter = "gettingStarted" | "locationManagement" | "floorManagement" | "energyAnalysis" | "meterManagement" | "mobileApp" | "automation" | "evCharging" | "integrations";
+type ManualChapter = "gettingStarted" | "locationManagement" | "floorManagement" | "energyAnalysis" | "meterManagement" | "mobileApp" | "automation" | "evCharging" | "integrations" | "arbitrageTrading";
 
 const Help = () => {
   const { user, loading } = useAuth();
@@ -91,9 +91,22 @@ const Help = () => {
     { questionKey: "help.faq16Question", answerKey: "help.faq16Answer" },
     { questionKey: "help.faq17Question", answerKey: "help.faq17Answer" },
     { questionKey: "help.faq18Question", answerKey: "help.faq18Answer" },
+    { questionKey: "help.faq19Question", answerKey: "help.faq19Answer" },
+    { questionKey: "help.faq20Question", answerKey: "help.faq20Answer" },
   ];
 
   const changelog = [
+    {
+      version: "1.0.8",
+      date: "2026-02-20",
+      changes: [
+        { type: "feature", textKey: "help.changelog108Feature1" },
+        { type: "feature", textKey: "help.changelog108Feature2" },
+        { type: "feature", textKey: "help.changelog108Feature3" },
+        { type: "improvement", textKey: "help.changelog108Improvement1" },
+        { type: "improvement", textKey: "help.changelog108Improvement2" },
+      ],
+    },
     {
       version: "1.0.7",
       date: "2026-02-16",
@@ -357,6 +370,17 @@ const Help = () => {
                   <div className="text-left">
                     <p className="font-medium">Integrationen & Sync</p>
                     <p className="text-xs text-muted-foreground">BrightHub, Gateways und Datensynchronisation</p>
+                  </div>
+                </Button>
+                <Button 
+                  variant="outline" 
+                  className="justify-start gap-3 h-auto py-4 px-5"
+                  onClick={() => openManualChapter("arbitrageTrading")}
+                >
+                  <TrendingUp className="h-5 w-5 text-muted-foreground shrink-0" />
+                  <div className="text-left">
+                    <p className="font-medium">Arbitragehandel</p>
+                    <p className="text-xs text-muted-foreground">Spotpreise, Speicher und Handelsstrategien</p>
                   </div>
                 </Button>
               </div>
