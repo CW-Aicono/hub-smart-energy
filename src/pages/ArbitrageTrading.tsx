@@ -105,9 +105,9 @@ function ArbitrageDashboard() {
       tickIndices.push(i);
     }
   }
-  // Always include first & last
+  // Always include first
   if (tickIndices.length === 0 || tickIndices[0] !== 0) tickIndices.unshift(0);
-  if (tickIndices[tickIndices.length - 1] !== chartData.length - 1) tickIndices.push(chartData.length - 1);
+  // Do NOT add the last data point – it's rarely a full hour and gets clipped
 
   // Custom two-line tick: top = time, bottom = date (once per day)
   const renderCustomTick = (props: any) => {
