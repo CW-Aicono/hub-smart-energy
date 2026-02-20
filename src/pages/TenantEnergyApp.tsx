@@ -18,6 +18,11 @@ import {
 } from "recharts";
 
 // ── Types ──
+interface AssignedMeter {
+  meter_id: string;
+  meters: { id: string; name: string; energy_type: string; unit: string; meter_number: string | null } | null;
+}
+
 interface TenantRecord {
   id: string;
   name: string;
@@ -25,6 +30,7 @@ interface TenantRecord {
   meter_id: string | null;
   tenant_id: string;
   status: string;
+  assigned_meters: AssignedMeter[];
 }
 
 interface Invoice {
@@ -341,37 +347,53 @@ function InvoicesTab({ invoices }: { invoices: Invoice[] }) {
 
 // ── Meter Tab ──
 function MeterTab({ tenantRecord }: { tenantRecord: TenantRecord }) {
-  const [readings, setReadings] = useState<any[]>([]);
-  const [meterInfo, setMeterInfo] = useState<any>(null);
+  const [meterData, setMeterData] = useState<{ meter: any; readings: any[] }[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const meterIds = useMemo(() => {
+    // Use assigned_meters from junction table, fall back to legacy meter_id
+    const ids = (tenantRecord.assigned_meters || [])
+      .map((am) => am.meter_id)
+      .filter(Boolean);
+    if (ids.length === 0 && tenantRecord.meter_id) {
+      ids.push(tenantRecord.meter_id);
+    }
+    return ids;
+  }, [tenantRecord]);
+
   useEffect(() => {
-    if (!tenantRecord.meter_id) { setLoading(false); return; }
+    if (meterIds.length === 0) { setLoading(false); return; }
 
     const fetchData = async () => {
-      // Fetch meter info
-      const { data: meter } = await supabase
-        .from("meters")
-        .select("name, meter_number, energy_type, unit")
-        .eq("id", tenantRecord.meter_id!)
-        .single();
-      setMeterInfo(meter);
+      const results: { meter: any; readings: any[] }[] = [];
 
-      // Fetch monthly period totals
-      const { data: totals } = await supabase
+      // Fetch meter info for all meters
+      const { data: meters } = await supabase
+        .from("meters")
+        .select("id, name, meter_number, energy_type, unit")
+        .in("id", meterIds);
+
+      // Fetch readings for all meters
+      const { data: allTotals } = await supabase
         .from("meter_period_totals")
         .select("*")
-        .eq("meter_id", tenantRecord.meter_id!)
+        .in("meter_id", meterIds)
         .eq("period_type", "month")
         .order("period_start", { ascending: false })
-        .limit(12);
-      setReadings(totals || []);
+        .limit(60);
+
+      for (const m of meters || []) {
+        const readings = (allTotals || []).filter((t: any) => t.meter_id === m.id);
+        results.push({ meter: m, readings });
+      }
+
+      setMeterData(results);
       setLoading(false);
     };
     fetchData();
-  }, [tenantRecord.meter_id]);
+  }, [meterIds]);
 
-  if (!tenantRecord.meter_id) {
+  if (meterIds.length === 0) {
     return (
       <Card className="p-6 text-center text-muted-foreground">
         <Zap className="h-8 w-8 mx-auto mb-2 opacity-50" />
@@ -386,65 +408,66 @@ function MeterTab({ tenantRecord }: { tenantRecord: TenantRecord }) {
   }
 
   return (
-    <div className="space-y-4">
-      {meterInfo && (
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-lg bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
-                <Zap className="h-5 w-5 text-green-600" />
+    <div className="space-y-6">
+      {meterData.map(({ meter, readings }) => (
+        <div key={meter.id} className="space-y-3">
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-lg bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
+                  <Zap className="h-5 w-5 text-green-600" />
+                </div>
+                <div>
+                  <p className="font-medium">{meter.name}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {meter.meter_number && `Nr. ${meter.meter_number} · `}
+                    {meter.energy_type} · {meter.unit}
+                  </p>
+                </div>
               </div>
-              <div>
-                <p className="font-medium">{meterInfo.name}</p>
-                <p className="text-xs text-muted-foreground">
-                  {meterInfo.meter_number && `Nr. ${meterInfo.meter_number} · `}
-                  {meterInfo.energy_type} · {meterInfo.unit}
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+            </CardContent>
+          </Card>
 
-      <h2 className="text-lg font-semibold">Monatliche Verbräuche</h2>
+          <h3 className="text-sm font-semibold text-muted-foreground">Monatliche Verbräuche</h3>
 
-      {readings.length === 0 ? (
-        <Card className="p-6 text-center text-muted-foreground">
-          <BarChart3 className="h-8 w-8 mx-auto mb-2 opacity-50" />
-          <p>Noch keine Verbrauchsdaten verfügbar</p>
-        </Card>
-      ) : (
-        <div className="space-y-2">
-          {readings.map((r: any) => {
-            const prev = readings.find((pr: any) =>
-              new Date(pr.period_start).getTime() === subMonths(new Date(r.period_start), 1).getTime()
-            );
-            const diff = prev ? Number(r.total_value) - Number(prev.total_value) : null;
+          {readings.length === 0 ? (
+            <Card className="p-4 text-center text-muted-foreground text-sm">
+              <p>Noch keine Verbrauchsdaten</p>
+            </Card>
+          ) : (
+            <div className="space-y-2">
+              {readings.map((r: any) => {
+                const prev = readings.find((pr: any) =>
+                  new Date(pr.period_start).getTime() === subMonths(new Date(r.period_start), 1).getTime()
+                );
+                const diff = prev ? Number(r.total_value) - Number(prev.total_value) : null;
 
-            return (
-              <Card key={r.id}>
-                <CardContent className="p-3 flex items-center justify-between">
-                  <div>
-                    <p className="font-medium text-sm">
-                      {format(new Date(r.period_start), "MMMM yyyy", { locale: de })}
-                    </p>
-                    <p className="text-xs text-muted-foreground">{r.energy_type} · {r.source}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="font-bold">{Number(r.total_value).toFixed(1)} kWh</p>
-                    {diff !== null && (
-                      <div className={`text-xs flex items-center gap-0.5 justify-end ${diff > 0 ? "text-red-500" : "text-green-600"}`}>
-                        {diff > 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
-                        {diff > 0 ? "+" : ""}{diff.toFixed(1)} kWh
+                return (
+                  <Card key={r.id}>
+                    <CardContent className="p-3 flex items-center justify-between">
+                      <div>
+                        <p className="font-medium text-sm">
+                          {format(new Date(r.period_start), "MMMM yyyy", { locale: de })}
+                        </p>
+                        <p className="text-xs text-muted-foreground">{r.energy_type} · {r.source}</p>
                       </div>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })}
+                      <div className="text-right">
+                        <p className="font-bold">{Number(r.total_value).toFixed(1)} kWh</p>
+                        {diff !== null && (
+                          <div className={`text-xs flex items-center gap-0.5 justify-end ${diff > 0 ? "text-red-500" : "text-green-600"}`}>
+                            {diff > 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+                            {diff > 0 ? "+" : ""}{diff.toFixed(1)} kWh
+                          </div>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          )}
         </div>
-      )}
+      ))}
     </div>
   );
 }
@@ -517,7 +540,7 @@ const TenantEnergyApp = () => {
       // Try to find by auth_user_id first, then by email
       let { data: rec } = await supabase
         .from("tenant_electricity_tenants")
-        .select("id, name, unit_label, meter_id, tenant_id, status")
+        .select("id, name, unit_label, meter_id, tenant_id, status, tenant_electricity_tenant_meters(meter_id, meters(id, name, energy_type, unit, meter_number))")
         .eq("auth_user_id", user.id)
         .eq("status", "active")
         .maybeSingle();
@@ -526,7 +549,7 @@ const TenantEnergyApp = () => {
       if (!rec && user.email) {
         const { data: emailMatch } = await supabase
           .from("tenant_electricity_tenants")
-          .select("id, name, unit_label, meter_id, tenant_id, status")
+          .select("id, name, unit_label, meter_id, tenant_id, status, tenant_electricity_tenant_meters(meter_id, meters(id, name, energy_type, unit, meter_number))")
           .eq("email", user.email)
           .eq("status", "active")
           .is("auth_user_id", null)
@@ -543,7 +566,11 @@ const TenantEnergyApp = () => {
       }
 
       if (rec) {
-        setTenantRecord(rec as TenantRecord);
+        const mapped: TenantRecord = {
+          ...rec,
+          assigned_meters: (rec as any).tenant_electricity_tenant_meters || [],
+        };
+        setTenantRecord(mapped);
 
         // Load invoices
         const { data: invData } = await supabase
