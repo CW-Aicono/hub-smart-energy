@@ -62,6 +62,14 @@ const SIZE_CLASS: Record<WidgetSize, string> = {
   "1/3": "w-1/3",
 };
 
+/** On mobile: always full width. On md+: use configured size */
+const SIZE_FLEX_BASIS: Record<WidgetSize, string> = {
+  "full": "100%",
+  "2/3": "calc(66.666% - 8px)",
+  "1/2": "calc(50% - 8px)",
+  "1/3": "calc(33.333% - 11px)",
+};
+
 const getLocationWidget = (locationId: string | null): string => {
   return "location_map";
 };
@@ -122,20 +130,21 @@ const DashboardContent = () => {
               selectedLocationId={selectedLocationId}
               onLocationChange={setSelectedLocationId}
             />
-            <DashboardCustomizer
-              widgets={widgets}
-              onToggleVisibility={toggleWidgetVisibility}
-              onReorder={reorderWidgets}
-              onResizeWidget={updateWidgetSize}
-              onResetLayout={() => {
-                // Reset all to full width and keep current order
-                widgets.forEach(w => {
-                  if (w.widget_size !== "full") {
-                    updateWidgetSize(w.widget_type, "full");
-                  }
-                });
-              }}
-            />
+            <div className="hidden md:block">
+              <DashboardCustomizer
+                widgets={widgets}
+                onToggleVisibility={toggleWidgetVisibility}
+                onReorder={reorderWidgets}
+                onResizeWidget={updateWidgetSize}
+                onResetLayout={() => {
+                  widgets.forEach(w => {
+                    if (w.widget_size !== "full") {
+                      updateWidgetSize(w.widget_type, "full");
+                    }
+                  });
+                }}
+              />
+            </div>
           </div>
         </header>
         <div className="p-3 md:p-6">
@@ -150,8 +159,8 @@ const DashboardContent = () => {
                 return Component ? (
                   <div
                     key={widget.widget_type}
-                    className={`${sizeClass} min-w-0 relative group`}
-                    style={{ flexBasis: sizeClass === "w-full" ? "100%" : sizeClass === "w-2/3" ? "calc(66.666% - 8px)" : "calc(33.333% - 11px)" }}
+                    className="w-full min-w-0 relative group"
+                    data-widget-size={widget.widget_size}
                   >
                     {widget.widget_size !== "full" && widgetType !== "floor_plan_explorer" && (
                       <button
