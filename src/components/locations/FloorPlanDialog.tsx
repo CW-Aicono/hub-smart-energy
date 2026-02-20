@@ -487,6 +487,7 @@ export function FloorPlanDialog({ floor, locationId, open, onOpenChange }: Floor
                     centerOnInit
                     limitToBounds={false}
                     wheel={{ disabled: true }}
+                    pinch={{ disabled: true }}
                   >
                     {({ zoomIn, zoomOut, resetTransform }) => (
                       <>

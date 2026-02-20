@@ -174,12 +174,13 @@ const FloorPlanWidget = ({ locationId }: FloorPlanWidgetProps) => {
               centerOnInit
               limitToBounds={false}
               wheel={{ disabled: true }}
+              pinch={{ disabled: true }}
               panning={{ velocityDisabled: true }}
             >
               <ZoomControls />
               <TransformComponent
-                wrapperStyle={{ width: "100%", height: "100%" }}
-                contentStyle={{ width: "100%", height: "100%", display: "flex", justifyContent: "center", alignItems: "center" }}
+                wrapperStyle={{ width: "100%", height: "100%", touchAction: "pan-y" }}
+                contentStyle={{ width: "100%", height: "100%", display: "flex", justifyContent: "center", alignItems: "center", touchAction: "pan-y" }}
               >
                 <div className="relative inline-block">
                   <img
