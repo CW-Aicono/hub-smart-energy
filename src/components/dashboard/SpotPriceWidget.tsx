@@ -101,7 +101,7 @@ const SpotPriceWidget = ({ locationId }: SpotPriceWidgetProps) => {
           <div className="text-right">
             <div className="text-lg font-bold">{priceCtKwh} ct/kWh</div>
             {currentPrice && (
-              <div className="text-xs text-muted-foreground">{Number(currentPrice.price_eur_mwh).toFixed(1)} €/MWh</div>
+              <div className="text-xs text-muted-foreground">aktuell: {Number(currentPrice.price_eur_mwh).toFixed(1)} €/MWh</div>
             )}
           </div>
         </div>
