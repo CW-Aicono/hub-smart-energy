@@ -16,6 +16,7 @@ export function useSpotPrices(marketArea = "DE-LU", hours = 48) {
       return data;
     },
     staleTime: 5 * 60 * 1000,
+    refetchInterval: 5 * 60 * 1000,
   });
 
   const currentPrice = prices.length > 0 ? prices[prices.length - 1] : null;
