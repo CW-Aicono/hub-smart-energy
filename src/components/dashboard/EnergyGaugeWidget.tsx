@@ -39,6 +39,28 @@ function autoScale(value: number, peak: number): number {
   return 10 * magnitude;
 }
 
+/** Interpolate eco gradient color at a given fraction (0–1) along the arc */
+function ecoColorAtFraction(frac: number): string {
+  // Gradient stops: 0% = #ef4444 (red), 50% = #eab308 (yellow), 100% = #22c55e (green)
+  const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
+  const hexToRgb = (h: string) => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
+  const rgbToHex = (r: number, g: number, b: number) => `#${[r, g, b].map((v) => Math.round(v).toString(16).padStart(2, "0")).join("")}`;
+
+  const red = hexToRgb("#ef4444");
+  const yellow = hexToRgb("#eab308");
+  const green = hexToRgb("#22c55e");
+
+  let rgb: number[];
+  if (frac <= 0.5) {
+    const t = frac / 0.5;
+    rgb = [lerp(red[0], yellow[0], t), lerp(red[1], yellow[1], t), lerp(red[2], yellow[2], t)];
+  } else {
+    const t = (frac - 0.5) / 0.5;
+    rgb = [lerp(yellow[0], green[0], t), lerp(yellow[1], green[1], t), lerp(yellow[2], green[2], t)];
+  }
+  return rgbToHex(rgb[0], rgb[1], rgb[2]);
+}
+
 function AnalogGauge({ data }: { data: GaugeData }) {
   const { currentValue, peakValue, maxScale, unit, label, color, hidePeak } = data;
 
@@ -53,7 +75,8 @@ function AnalogGauge({ data }: { data: GaugeData }) {
   const cy = size / 2;
   const r = 72;
 
-  const valueAngle = startAngle + (Math.min(currentValue, maxScale) / maxScale) * sweep;
+  const valueFrac = Math.min(currentValue, maxScale) / maxScale;
+  const valueAngle = startAngle + valueFrac * sweep;
   const peakAngle = startAngle + (Math.min(peakValue, maxScale) / maxScale) * sweep;
 
   const toRad = (deg: number) => (deg * Math.PI) / 180;
@@ -116,11 +139,19 @@ function AnalogGauge({ data }: { data: GaugeData }) {
           </linearGradient>
           {/* Eco arc gradient: red (0%) → yellow (50%) → green (100%), mapped to arc direction */}
           {data.energyType === "eco" && (
-            <linearGradient id="eco-arc-gradient" x1="0%" y1="100%" x2="100%" y2="100%">
-              <stop offset="0%" stopColor="#ef4444" />
-              <stop offset="50%" stopColor="#eab308" />
-              <stop offset="100%" stopColor="#22c55e" />
-            </linearGradient>
+            <>
+              <linearGradient id="eco-arc-gradient" x1="0%" y1="100%" x2="100%" y2="100%">
+                <stop offset="0%" stopColor="#ef4444" />
+                <stop offset="50%" stopColor="#eab308" />
+                <stop offset="100%" stopColor="#22c55e" />
+              </linearGradient>
+              {/* Value gradient: same colors but end-stop = interpolated color at needle position */}
+              <linearGradient id="eco-value-gradient" x1="0%" y1="100%" x2="100%" y2="100%">
+                <stop offset="0%" stopColor="#ef4444" />
+                {valueFrac > 0.1 && <stop offset="50%" stopColor="#eab308" />}
+                <stop offset="100%" stopColor={ecoColorAtFraction(valueFrac)} />
+              </linearGradient>
+            </>
           )}
         </defs>
 
@@ -137,10 +168,9 @@ function AnalogGauge({ data }: { data: GaugeData }) {
           <path
             d={`M ${arcStart.x} ${arcStart.y} A ${r} ${r} 0 ${valueAngle - startAngle > 180 ? 1 : 0} 1 ${valEnd.x} ${valEnd.y}`}
             fill="none"
-            stroke={data.energyType === "eco" ? "url(#eco-arc-gradient)" : color}
+            stroke={data.energyType === "eco" ? "url(#eco-value-gradient)" : color}
             strokeWidth={6} strokeLinecap="round"
-            filter={data.energyType === "eco" ? undefined : `url(#glow-${data.energyType})`}
-            opacity={data.energyType === "eco" ? 1 : undefined}
+            filter={`url(#glow-${data.energyType})`}
             style={{ transition: "all 1s cubic-bezier(0.4,0,0.2,1)" }}
           />
         )}
