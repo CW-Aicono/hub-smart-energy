@@ -145,33 +145,37 @@ function TenantsTab() {
 
   const displayedTenants = showArchived ? archivedTenants : activeTenants;
 
-  const MeterSelector = ({ selectedIds, isEdit }: { selectedIds: string[]; isEdit: boolean }) => (
-    <div>
-      <Label>Zähler zuordnen</Label>
-      <div className="border rounded-md p-2 max-h-40 overflow-y-auto space-y-1 mt-1">
-        {meters.length === 0 && <p className="text-sm text-muted-foreground p-1">Keine Zähler verfügbar</p>}
-        {meters.map((m) => (
-          <label key={m.id} className="flex items-center gap-2 p-1.5 rounded hover:bg-muted/50 cursor-pointer text-sm">
-            <Checkbox checked={selectedIds.includes(m.id)} onCheckedChange={() => toggleMeter(m.id, isEdit)} />
-            <span className="font-medium">{m.name}</span>
-            <span className="text-xs text-muted-foreground ml-auto">{m.energy_type}</span>
-          </label>
-        ))}
-      </div>
-      {selectedIds.length > 0 && (
-        <div className="flex flex-wrap gap-1 mt-2">
-          {selectedIds.map((mid) => {
-            const m = meters.find((me) => me.id === mid);
-            return m ? (
-              <Badge key={mid} variant="secondary" className="gap-1">
-                {m.name} <X className="h-3 w-3 cursor-pointer" onClick={() => toggleMeter(mid, isEdit)} />
-              </Badge>
-            ) : null;
-          })}
+  const MeterSelector = ({ selectedIds, isEdit, locationId }: { selectedIds: string[]; isEdit: boolean; locationId: string }) => {
+    const filteredMeters = locationId ? meters.filter((m) => m.location_id === locationId) : [];
+    return (
+      <div>
+        <Label>Zähler zuordnen</Label>
+        <div className="border rounded-md p-2 max-h-40 overflow-y-auto space-y-1 mt-1">
+          {!locationId && <p className="text-sm text-muted-foreground p-1">Bitte zuerst einen Standort wählen</p>}
+          {locationId && filteredMeters.length === 0 && <p className="text-sm text-muted-foreground p-1">Keine Zähler an diesem Standort</p>}
+          {filteredMeters.map((m) => (
+            <label key={m.id} className="flex items-center gap-2 p-1.5 rounded hover:bg-muted/50 cursor-pointer text-sm">
+              <Checkbox checked={selectedIds.includes(m.id)} onCheckedChange={() => toggleMeter(m.id, isEdit)} />
+              <span className="font-medium">{m.name}</span>
+              <span className="text-xs text-muted-foreground ml-auto">{m.energy_type}</span>
+            </label>
+          ))}
         </div>
-      )}
-    </div>
-  );
+        {selectedIds.length > 0 && (
+          <div className="flex flex-wrap gap-1 mt-2">
+            {selectedIds.map((mid) => {
+              const m = meters.find((me) => me.id === mid);
+              return m ? (
+                <Badge key={mid} variant="secondary" className="gap-1">
+                  {m.name} <X className="h-3 w-3 cursor-pointer" onClick={() => toggleMeter(mid, isEdit)} />
+                </Badge>
+              ) : null;
+            })}
+          </div>
+        )}
+      </div>
+    );
+  };
 
   return (
     <div className="space-y-4">
@@ -194,12 +198,12 @@ function TenantsTab() {
               </div>
               <div><Label>E-Mail</Label><Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></div>
               <div><Label>Standort</Label>
-                <Select value={form.location_id} onValueChange={(v) => setForm({ ...form, location_id: v })}>
-                  <SelectTrigger><SelectValue placeholder="Optional" /></SelectTrigger>
+                <Select value={form.location_id} onValueChange={(v) => setForm({ ...form, location_id: v, meter_ids: [] })}>
+                  <SelectTrigger><SelectValue placeholder="Standort wählen" /></SelectTrigger>
                   <SelectContent>{locations.map((l) => <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
-              <MeterSelector selectedIds={form.meter_ids} isEdit={false} />
+              <MeterSelector selectedIds={form.meter_ids} isEdit={false} locationId={form.location_id} />
               <div><Label>Einzugsdatum</Label><Input type="date" value={form.move_in_date} onChange={(e) => setForm({ ...form, move_in_date: e.target.value })} /></div>
               <Button onClick={handleCreate} disabled={!form.name || createTenant.isPending} className="w-full">Speichern</Button>
             </div>
@@ -218,12 +222,12 @@ function TenantsTab() {
             </div>
             <div><Label>E-Mail</Label><Input type="email" value={editForm.email} onChange={(e) => setEditForm({ ...editForm, email: e.target.value })} /></div>
             <div><Label>Standort</Label>
-              <Select value={editForm.location_id} onValueChange={(v) => setEditForm({ ...editForm, location_id: v })}>
-                <SelectTrigger><SelectValue placeholder="Optional" /></SelectTrigger>
+              <Select value={editForm.location_id} onValueChange={(v) => setEditForm({ ...editForm, location_id: v, meter_ids: [] })}>
+                <SelectTrigger><SelectValue placeholder="Standort wählen" /></SelectTrigger>
                 <SelectContent>{locations.map((l) => <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>)}</SelectContent>
               </Select>
             </div>
-            <MeterSelector selectedIds={editForm.meter_ids} isEdit={true} />
+            <MeterSelector selectedIds={editForm.meter_ids} isEdit={true} locationId={editForm.location_id} />
             <div className="grid grid-cols-2 gap-3">
               <div><Label>Einzugsdatum</Label><Input type="date" value={editForm.move_in_date} onChange={(e) => setEditForm({ ...editForm, move_in_date: e.target.value })} /></div>
               <div><Label>Auszugsdatum</Label><Input type="date" value={editForm.move_out_date} onChange={(e) => setEditForm({ ...editForm, move_out_date: e.target.value })} /></div>
