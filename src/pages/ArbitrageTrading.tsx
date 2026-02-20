@@ -18,7 +18,7 @@ import { useSpotPrices } from "@/hooks/useSpotPrices";
 import { useArbitrageStrategies } from "@/hooks/useArbitrageStrategies";
 import { useArbitrageTrades } from "@/hooks/useArbitrageTrades";
 import { useLocations } from "@/hooks/useLocations";
-import { usePvForecast } from "@/hooks/usePvForecast";
+import { usePvForecast, usePvForecastSettings } from "@/hooks/usePvForecast";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, Area, ComposedChart } from "recharts";
 import { format, type Locale } from "date-fns";
 import { de, enUS, es, nl } from "date-fns/locale";
@@ -65,10 +65,13 @@ function ArbitrageDashboard() {
   const { storages } = useEnergyStorages();
   const { totalRevenue, totalEnergy } = useArbitrageTrades();
   const { locations } = useLocations();
+  const [selectedLocationId, setSelectedLocationId] = useState<string>("");
 
-  // Use first location with coordinates for PV forecast
-  const pvLocation = locations.find((l) => l.latitude && l.longitude);
-  const { forecast: pvForecast } = usePvForecast(pvLocation?.id ?? null);
+  // Auto-select first location
+  const effectiveLocationId = selectedLocationId || locations[0]?.id || null;
+  const { forecast: pvForecast } = usePvForecast(effectiveLocationId);
+  const { settings: pvSettings } = usePvForecastSettings(effectiveLocationId);
+  const hasPv = !!pvSettings?.peak_power_kwp;
   const now = new Date();
   const startCutoff = new Date(now.getTime() - 12 * 60 * 60 * 1000);
   const locale = localeMap[language] || de;
@@ -150,8 +153,23 @@ function ArbitrageDashboard() {
   };
   const priceCtKwh = currentPrice ? (Number(currentPrice.price_eur_mwh) / 10).toFixed(2) : "–";
 
+  const activePvForecast = hasPv ? pvForecast : null;
+
   return (
     <div className="space-y-6">
+      {/* Location Filter */}
+      <div className="flex items-center gap-3">
+        <Label className="whitespace-nowrap">Standort:</Label>
+        <Select value={effectiveLocationId || ""} onValueChange={setSelectedLocationId}>
+          <SelectTrigger className="w-64"><SelectValue placeholder="Standort wählen" /></SelectTrigger>
+          <SelectContent>
+            {locations.map((l) => (
+              <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card>
           <CardHeader className="pb-2"><CardDescription>Aktueller Spotpreis</CardDescription></CardHeader>
@@ -183,7 +201,7 @@ function ArbitrageDashboard() {
         <CardHeader>
           <div className="flex items-center justify-between">
             <CardTitle>Spotpreis-Verlauf (48h)</CardTitle>
-            {pvForecast && (
+            {activePvForecast && (
               <Badge variant="secondary" className="gap-1">
                 <Sun className="h-3 w-3" />
                 PV-Prognose aktiv
@@ -194,7 +212,7 @@ function ArbitrageDashboard() {
         <CardContent>
           {chartData.length > 0 ? (
             <ResponsiveContainer width="100%" height={320}>
-              <ComposedChart data={chartData} margin={{ left: 10, bottom: 20, right: pvForecast ? 50 : 10 }}>
+              <ComposedChart data={chartData} margin={{ left: 10, bottom: 20, right: activePvForecast ? 50 : 10 }}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis
                   dataKey="idx"
@@ -205,7 +223,7 @@ function ArbitrageDashboard() {
                   domain={["dataMin", "dataMax"]}
                 />
                 <YAxis yAxisId="price" tick={{ fontSize: 12 }} label={{ value: "€/MWh", angle: -90, position: "insideLeft" }} />
-                {pvForecast && (
+                {activePvForecast && (
                   <YAxis yAxisId="pv" orientation="right" tick={{ fontSize: 12 }} label={{ value: "kWh", angle: 90, position: "insideRight" }} />
                 )}
                 <Tooltip
@@ -234,7 +252,7 @@ function ArbitrageDashboard() {
                 ))}
                 <Line yAxisId="price" data={pastData} type="monotone" dataKey="price" stroke="hsl(var(--muted-foreground))" strokeWidth={2} dot={false} name="Vergangen" connectNulls={false} />
                 <Line yAxisId="price" type="monotone" dataKey="price" stroke="hsl(var(--primary))" strokeWidth={2} dot={false} name="Preis" data={futureData} connectNulls={false} />
-                {pvForecast && (
+                {activePvForecast && (
                   <Area yAxisId="pv" type="monotone" dataKey="pvKwh" stroke="hsl(45, 93%, 47%)" fill="hsl(45, 93%, 47%)" fillOpacity={0.15} strokeWidth={1.5} dot={false} name="PV" connectNulls={false} />
                 )}
               </ComposedChart>
@@ -246,7 +264,7 @@ function ArbitrageDashboard() {
       </Card>
 
       {/* PV Recommendation */}
-      {pvForecast && pvForecast.summary.ai_notes && (
+      {activePvForecast && activePvForecast.summary.ai_notes && (
         <Card className="border-amber-200 bg-amber-50/50 dark:bg-amber-950/20 dark:border-amber-800">
           <CardHeader className="pb-2">
             <CardTitle className="text-base flex items-center gap-2">
@@ -256,13 +274,13 @@ function ArbitrageDashboard() {
           </CardHeader>
           <CardContent>
             <p className="text-sm">
-              Heute: <strong>{pvForecast.summary.today_total_kwh.toFixed(0)} kWh</strong> prognostiziert
-              {pvForecast.summary.peak_hour && (
-                <> · Spitze um <strong>{pvForecast.summary.peak_hour.slice(11, 16)} Uhr</strong> ({pvForecast.summary.peak_kwh.toFixed(1)} kW)</>
+              Heute: <strong>{activePvForecast.summary.today_total_kwh.toFixed(0)} kWh</strong> prognostiziert
+              {activePvForecast.summary.peak_hour && (
+                <> · Spitze um <strong>{activePvForecast.summary.peak_hour.slice(11, 16)} Uhr</strong> ({activePvForecast.summary.peak_kwh.toFixed(1)} kW)</>
               )}
             </p>
-            {pvForecast.summary.ai_notes && (
-              <p className="text-sm text-muted-foreground mt-1">{pvForecast.summary.ai_notes}</p>
+            {activePvForecast.summary.ai_notes && (
+              <p className="text-sm text-muted-foreground mt-1">{activePvForecast.summary.ai_notes}</p>
             )}
           </CardContent>
         </Card>
