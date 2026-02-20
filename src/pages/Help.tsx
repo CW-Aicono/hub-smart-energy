@@ -275,7 +275,7 @@ const Help = () => {
               <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
                 <Button 
                   variant="outline" 
-                  className="justify-start gap-3 h-auto py-4 px-5"
+                  className="justify-start gap-3 h-auto py-4 px-5 whitespace-normal"
                   onClick={() => openManualChapter("gettingStarted")}
                 >
                   <BookOpen className="h-5 w-5 text-muted-foreground shrink-0" />
@@ -286,7 +286,7 @@ const Help = () => {
                 </Button>
                 <Button 
                   variant="outline" 
-                  className="justify-start gap-3 h-auto py-4 px-5"
+                  className="justify-start gap-3 h-auto py-4 px-5 whitespace-normal"
                   onClick={() => openManualChapter("locationManagement")}
                 >
                   <BookOpen className="h-5 w-5 text-muted-foreground shrink-0" />
@@ -297,7 +297,7 @@ const Help = () => {
                 </Button>
                 <Button 
                   variant="outline" 
-                  className="justify-start gap-3 h-auto py-4 px-5"
+                  className="justify-start gap-3 h-auto py-4 px-5 whitespace-normal"
                   onClick={() => openManualChapter("floorManagement")}
                 >
                   <BookOpen className="h-5 w-5 text-muted-foreground shrink-0" />
@@ -308,7 +308,7 @@ const Help = () => {
                 </Button>
                 <Button 
                   variant="outline" 
-                  className="justify-start gap-3 h-auto py-4 px-5"
+                  className="justify-start gap-3 h-auto py-4 px-5 whitespace-normal"
                   onClick={() => openManualChapter("energyAnalysis")}
                 >
                   <BookOpen className="h-5 w-5 text-muted-foreground shrink-0" />
@@ -319,7 +319,7 @@ const Help = () => {
                 </Button>
                 <Button 
                   variant="outline" 
-                  className="justify-start gap-3 h-auto py-4 px-5"
+                  className="justify-start gap-3 h-auto py-4 px-5 whitespace-normal"
                   onClick={() => openManualChapter("meterManagement")}
                 >
                   <Gauge className="h-5 w-5 text-muted-foreground shrink-0" />
@@ -330,7 +330,7 @@ const Help = () => {
                 </Button>
                 <Button 
                   variant="outline" 
-                  className="justify-start gap-3 h-auto py-4 px-5"
+                  className="justify-start gap-3 h-auto py-4 px-5 whitespace-normal"
                   onClick={() => openManualChapter("mobileApp")}
                 >
                   <Smartphone className="h-5 w-5 text-muted-foreground shrink-0" />
@@ -341,7 +341,7 @@ const Help = () => {
                 </Button>
                 <Button 
                   variant="outline" 
-                  className="justify-start gap-3 h-auto py-4 px-5"
+                  className="justify-start gap-3 h-auto py-4 px-5 whitespace-normal"
                   onClick={() => openManualChapter("automation")}
                 >
                   <Cpu className="h-5 w-5 text-muted-foreground shrink-0" />
@@ -352,7 +352,7 @@ const Help = () => {
                 </Button>
                 <Button 
                   variant="outline" 
-                  className="justify-start gap-3 h-auto py-4 px-5"
+                  className="justify-start gap-3 h-auto py-4 px-5 whitespace-normal"
                   onClick={() => openManualChapter("evCharging")}
                 >
                   <Zap className="h-5 w-5 text-muted-foreground shrink-0" />
@@ -363,7 +363,7 @@ const Help = () => {
                 </Button>
                 <Button 
                   variant="outline" 
-                  className="justify-start gap-3 h-auto py-4 px-5"
+                  className="justify-start gap-3 h-auto py-4 px-5 whitespace-normal"
                   onClick={() => openManualChapter("integrations")}
                 >
                   <ExternalLink className="h-5 w-5 text-muted-foreground shrink-0" />
@@ -374,7 +374,7 @@ const Help = () => {
                 </Button>
                 <Button 
                   variant="outline" 
-                  className="justify-start gap-3 h-auto py-4 px-5"
+                  className="justify-start gap-3 h-auto py-4 px-5 whitespace-normal"
                   onClick={() => openManualChapter("arbitrageTrading")}
                 >
                   <TrendingUp className="h-5 w-5 text-muted-foreground shrink-0" />
