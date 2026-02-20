@@ -200,12 +200,10 @@ function ArbitrageDashboard() {
         <CardHeader>
           <div className="flex items-center justify-between">
             <CardTitle>Spotpreis-Verlauf (48h)</CardTitle>
-            {activePvForecast && (
-              <Badge variant="secondary" className="gap-1">
-                <Sun className="h-3 w-3" />
-                PV-Prognose aktiv
-              </Badge>
-            )}
+            <Badge variant="secondary" className={`gap-1 ${hasPv ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' : ''}`}>
+              <Sun className="h-3 w-3" />
+              {hasPv ? "PV-Prognose aktiv" : "PV-Prognose inaktiv"}
+            </Badge>
           </div>
         </CardHeader>
         <CardContent>
