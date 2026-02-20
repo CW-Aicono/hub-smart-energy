@@ -10,7 +10,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Home, Users, Receipt, Settings, Plus, Trash2, FileText, Sun, Plug2 } from "lucide-react";
+import { Home, Users, Receipt, Settings, Plus, Trash2, FileText, Sun, Plug2, Pencil, Archive, ArchiveRestore } from "lucide-react";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { useTenantElectricityTenants } from "@/hooks/useTenantElectricityTenants";
 import { useTenantElectricityTariffs } from "@/hooks/useTenantElectricityTariffs";
 import { useTenantElectricityInvoices } from "@/hooks/useTenantElectricityInvoices";
@@ -84,11 +85,15 @@ function OverviewTab() {
 
 // ── Tenants Tab ──
 function TenantsTab() {
-  const { tenants, createTenant, deleteTenant } = useTenantElectricityTenants();
+  const { tenants, activeTenants, archivedTenants, createTenant, updateTenant, archiveTenant } = useTenantElectricityTenants();
   const { locations } = useLocations();
   const { meters } = useMeters();
   const [open, setOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [editTenant, setEditTenant] = useState<any>(null);
+  const [showArchived, setShowArchived] = useState(false);
   const [form, setForm] = useState({ name: "", unit_label: "", email: "", location_id: "", meter_id: "", move_in_date: "" });
+  const [editForm, setEditForm] = useState({ name: "", unit_label: "", email: "", location_id: "", meter_id: "", move_in_date: "", move_out_date: "" });
 
   const handleCreate = () => {
     createTenant.mutate({
@@ -98,10 +103,42 @@ function TenantsTab() {
     }, { onSuccess: () => { setOpen(false); setForm({ name: "", unit_label: "", email: "", location_id: "", meter_id: "", move_in_date: "" }); } });
   };
 
+  const openEdit = (te: any) => {
+    setEditTenant(te);
+    setEditForm({
+      name: te.name || "", unit_label: te.unit_label || "", email: te.email || "",
+      location_id: te.location_id || "", meter_id: te.meter_id || "",
+      move_in_date: te.move_in_date || "", move_out_date: te.move_out_date || "",
+    });
+    setEditOpen(true);
+  };
+
+  const handleUpdate = () => {
+    if (!editTenant) return;
+    updateTenant.mutate({
+      id: editTenant.id,
+      name: editForm.name, unit_label: editForm.unit_label || null, email: editForm.email || null,
+      location_id: editForm.location_id || null, meter_id: editForm.meter_id || null,
+      move_in_date: editForm.move_in_date || null, move_out_date: editForm.move_out_date || null,
+    }, { onSuccess: () => setEditOpen(false) });
+  };
+
+  const handleReactivate = (id: string) => {
+    updateTenant.mutate({ id, status: "active", move_out_date: null });
+  };
+
+  const displayedTenants = showArchived ? archivedTenants : activeTenants;
+
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
-        <h2 className="text-lg font-semibold">Mieterverwaltung</h2>
+        <div className="flex items-center gap-3">
+          <h2 className="text-lg font-semibold">Mieterverwaltung</h2>
+          <Button variant={showArchived ? "default" : "outline"} size="sm" onClick={() => setShowArchived(!showArchived)}>
+            <Archive className="h-4 w-4 mr-1" />
+            Archiv {archivedTenants.length > 0 && `(${archivedTenants.length})`}
+          </Button>
+        </div>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild><Button><Plus className="h-4 w-4 mr-2" />Mieter anlegen</Button></DialogTrigger>
           <DialogContent>
@@ -131,20 +168,101 @@ function TenantsTab() {
         </Dialog>
       </div>
 
+      {/* Edit Dialog */}
+      <Dialog open={editOpen} onOpenChange={setEditOpen}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Mieter bearbeiten</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label>Name</Label><Input value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} /></div>
+              <div><Label>Einheit</Label><Input value={editForm.unit_label} onChange={(e) => setEditForm({ ...editForm, unit_label: e.target.value })} /></div>
+            </div>
+            <div><Label>E-Mail</Label><Input type="email" value={editForm.email} onChange={(e) => setEditForm({ ...editForm, email: e.target.value })} /></div>
+            <div><Label>Standort</Label>
+              <Select value={editForm.location_id} onValueChange={(v) => setEditForm({ ...editForm, location_id: v })}>
+                <SelectTrigger><SelectValue placeholder="Optional" /></SelectTrigger>
+                <SelectContent>{locations.map((l) => <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+            <div><Label>Zähler</Label>
+              <Select value={editForm.meter_id} onValueChange={(v) => setEditForm({ ...editForm, meter_id: v })}>
+                <SelectTrigger><SelectValue placeholder="Zähler zuordnen" /></SelectTrigger>
+                <SelectContent>{meters.map((m) => <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label>Einzugsdatum</Label><Input type="date" value={editForm.move_in_date} onChange={(e) => setEditForm({ ...editForm, move_in_date: e.target.value })} /></div>
+              <div><Label>Auszugsdatum</Label><Input type="date" value={editForm.move_out_date} onChange={(e) => setEditForm({ ...editForm, move_out_date: e.target.value })} /></div>
+            </div>
+            <Button onClick={handleUpdate} disabled={!editForm.name || updateTenant.isPending} className="w-full">Änderungen speichern</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <Table>
-        <TableHeader><TableRow><TableHead>Name</TableHead><TableHead>Einheit</TableHead><TableHead>Zähler</TableHead><TableHead>Einzug</TableHead><TableHead>Status</TableHead><TableHead></TableHead></TableRow></TableHeader>
+        <TableHeader><TableRow><TableHead>Name</TableHead><TableHead>Einheit</TableHead><TableHead>E-Mail</TableHead><TableHead>Zähler</TableHead><TableHead>Einzug</TableHead>{showArchived && <TableHead>Auszug</TableHead>}<TableHead>Status</TableHead><TableHead></TableHead></TableRow></TableHeader>
         <TableBody>
-          {tenants.map((te) => (
-            <TableRow key={te.id}>
+          {displayedTenants.map((te) => (
+            <TableRow key={te.id} className={te.status === "archived" ? "opacity-60" : ""}>
               <TableCell className="font-medium">{te.name}</TableCell>
               <TableCell>{te.unit_label || "–"}</TableCell>
+              <TableCell className="text-sm text-muted-foreground">{te.email || "–"}</TableCell>
               <TableCell>{(te as any).meters?.name || "–"}</TableCell>
               <TableCell>{te.move_in_date ? format(new Date(te.move_in_date), "dd.MM.yyyy") : "–"}</TableCell>
-              <TableCell><Badge variant={te.status === "active" ? "default" : "secondary"}>{te.status}</Badge></TableCell>
-              <TableCell><Button variant="ghost" size="icon" onClick={() => deleteTenant.mutate(te.id)}><Trash2 className="h-4 w-4" /></Button></TableCell>
+              {showArchived && <TableCell>{te.move_out_date ? format(new Date(te.move_out_date), "dd.MM.yyyy") : "–"}</TableCell>}
+              <TableCell>
+                <Badge variant={te.status === "active" ? "default" : "secondary"}>
+                  {te.status === "active" ? "Aktiv" : "Archiviert"}
+                </Badge>
+              </TableCell>
+              <TableCell>
+                <div className="flex items-center gap-1">
+                  {te.status === "active" ? (
+                    <>
+                      <Button variant="ghost" size="icon" onClick={() => openEdit(te)} title="Bearbeiten">
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button variant="ghost" size="icon" title="Archivieren">
+                            <Archive className="h-4 w-4" />
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Mieter archivieren?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              <strong>{te.name}</strong> {te.unit_label ? `(${te.unit_label})` : ""} wird archiviert. Alle zugehörigen Daten (Rechnungen, Ablesungen) bleiben erhalten. Der Mieter kann später reaktiviert werden.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Abbrechen</AlertDialogCancel>
+                            <AlertDialogAction onClick={() => archiveTenant.mutate(te.id)}>Archivieren</AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </>
+                  ) : (
+                    <>
+                      <Button variant="ghost" size="icon" onClick={() => openEdit(te)} title="Bearbeiten">
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button variant="ghost" size="icon" onClick={() => handleReactivate(te.id)} title="Reaktivieren">
+                        <ArchiveRestore className="h-4 w-4" />
+                      </Button>
+                    </>
+                  )}
+                </div>
+              </TableCell>
             </TableRow>
           ))}
-          {tenants.length === 0 && <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-8">Noch keine Mieter angelegt</TableCell></TableRow>}
+          {displayedTenants.length === 0 && (
+            <TableRow>
+              <TableCell colSpan={showArchived ? 8 : 7} className="text-center text-muted-foreground py-8">
+                {showArchived ? "Keine archivierten Mieter" : "Noch keine Mieter angelegt"}
+              </TableCell>
+            </TableRow>
+          )}
         </TableBody>
       </Table>
     </div>
