@@ -2199,6 +2199,67 @@ export type Database = {
           },
         ]
       }
+      pv_forecast_settings: {
+        Row: {
+          azimuth_deg: number | null
+          created_at: string
+          id: string
+          is_active: boolean | null
+          location_id: string
+          peak_power_kwp: number
+          pv_meter_id: string | null
+          tenant_id: string
+          tilt_deg: number | null
+          updated_at: string
+        }
+        Insert: {
+          azimuth_deg?: number | null
+          created_at?: string
+          id?: string
+          is_active?: boolean | null
+          location_id: string
+          peak_power_kwp?: number
+          pv_meter_id?: string | null
+          tenant_id: string
+          tilt_deg?: number | null
+          updated_at?: string
+        }
+        Update: {
+          azimuth_deg?: number | null
+          created_at?: string
+          id?: string
+          is_active?: boolean | null
+          location_id?: string
+          peak_power_kwp?: number
+          pv_meter_id?: string | null
+          tenant_id?: string
+          tilt_deg?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pv_forecast_settings_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pv_forecast_settings_pv_meter_id_fkey"
+            columns: ["pv_meter_id"]
+            isOneToOne: false
+            referencedRelation: "meters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pv_forecast_settings_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       report_schedules: {
         Row: {
           created_at: string

@@ -62,3 +62,6 @@ verify_jwt = false
 
 [functions.fetch-spot-prices]
 verify_jwt = false
+
+[functions.pv-forecast]
+verify_jwt = false
