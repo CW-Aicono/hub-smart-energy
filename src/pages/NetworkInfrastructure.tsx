@@ -18,9 +18,9 @@ const NetworkInfrastructure = () => {
 
   if (authLoading) {
     return (
-      <div className="flex min-h-screen bg-background">
+      <div className="flex flex-col md:flex-row min-h-screen bg-background">
         <DashboardSidebar />
-        <main className="flex-1 p-6">
+        <main className="flex-1 p-3 md:p-6">
           <Skeleton className="h-8 w-64 mb-6" />
           <div className="grid gap-4 md:grid-cols-4">
             {[1, 2, 3, 4].map((i) => (
@@ -45,9 +45,9 @@ const NetworkInfrastructure = () => {
   };
 
   return (
-    <div className="flex min-h-screen bg-background">
+    <div className="flex flex-col md:flex-row min-h-screen bg-background">
       <DashboardSidebar />
-      <main className="flex-1 p-6 overflow-auto">
+      <main className="flex-1 p-3 md:p-6 overflow-auto">
         <div className="max-w-7xl mx-auto space-y-6">
           {/* Header */}
           <div>

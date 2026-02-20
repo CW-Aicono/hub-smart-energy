@@ -29,16 +29,16 @@ const Profile = () => {
   const dateLocale = language === "de" ? "de-DE" : language === "nl" ? "nl-NL" : language === "es" ? "es-ES" : "en-US";
 
   return (
-    <div className="flex min-h-screen bg-background">
+    <div className="flex flex-col md:flex-row min-h-screen bg-background">
       <DashboardSidebar />
       <main className="flex-1 overflow-auto">
-        <header className="border-b p-6">
-          <h1 className="text-2xl font-display font-bold">{t("profile.title")}</h1>
+        <header className="border-b p-4 md:p-6">
+          <h1 className="text-xl md:text-2xl font-display font-bold">{t("profile.title")}</h1>
           <p className="text-sm text-muted-foreground mt-1">
             {t("profile.subtitle")}
           </p>
         </header>
-        <div className="p-6 space-y-6">
+        <div className="p-3 md:p-6 space-y-6">
           {/* User Info Card */}
           <Card>
             <CardHeader>

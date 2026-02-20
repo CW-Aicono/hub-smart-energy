@@ -22,16 +22,16 @@ const EmailTemplates = () => {
   if (!isAdmin) return <Navigate to="/" replace />;
 
   return (
-    <div className="flex min-h-screen bg-background">
+    <div className="flex flex-col md:flex-row min-h-screen bg-background">
       <DashboardSidebar />
       <main className="flex-1 overflow-auto">
-        <header className="border-b p-6">
-          <h1 className="text-2xl font-display font-bold">Mailvorlagen</h1>
+        <header className="border-b p-4 md:p-6">
+          <h1 className="text-xl md:text-2xl font-display font-bold">Mailvorlagen</h1>
           <p className="text-sm text-muted-foreground mt-1">
             E-Mail-Vorlagen für automatische Benachrichtigungen verwalten
           </p>
         </header>
-        <div className="p-6 space-y-6">
+        <div className="p-3 md:p-6 space-y-6">
           <EmailTemplateSettings />
         </div>
       </main>

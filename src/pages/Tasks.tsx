@@ -53,9 +53,9 @@ const Tasks = () => {
 
   if (authLoading) {
     return (
-      <div className="flex min-h-screen bg-background">
+      <div className="flex flex-col md:flex-row min-h-screen bg-background">
         <DashboardSidebar />
-        <main className="flex-1 p-6"><Skeleton className="h-8 w-64" /></main>
+        <main className="flex-1 p-3 md:p-6"><Skeleton className="h-8 w-64" /></main>
       </div>
     );
   }
@@ -87,10 +87,10 @@ const Tasks = () => {
   const countExternal = tasks.filter((t) => t.external_contact_name && t.status !== "done" && t.status !== "cancelled").length;
 
   return (
-    <div className="flex min-h-screen bg-background">
+    <div className="flex flex-col md:flex-row min-h-screen bg-background">
       <DashboardSidebar />
       <main className="flex-1 overflow-auto">
-        <div className="p-6 space-y-6 max-w-5xl mx-auto">
+        <div className="p-3 md:p-6 space-y-6 max-w-5xl mx-auto">
           {/* Header */}
           <div className="flex items-center justify-between">
             <div>
