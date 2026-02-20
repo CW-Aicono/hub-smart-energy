@@ -537,13 +537,21 @@ function SettingsTab() {
           <div><Label><Sun className="inline h-3 w-3 mr-1" />PV-Erzeugungszähler</Label>
             <Select value={form.pv_meter_id} onValueChange={(v) => setForm({ ...form, pv_meter_id: v })}>
               <SelectTrigger><SelectValue placeholder="Zähler wählen" /></SelectTrigger>
-              <SelectContent>{meters.map((m) => <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>)}</SelectContent>
+              <SelectContent>
+                {meters
+                  .filter((m) => m.location_id === form.location_id && m.meter_function === "generation")
+                  .map((m) => <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>)}
+              </SelectContent>
             </Select>
           </div>
           <div><Label><Plug2 className="inline h-3 w-3 mr-1" />Netzbezugszähler</Label>
             <Select value={form.grid_meter_id} onValueChange={(v) => setForm({ ...form, grid_meter_id: v })}>
               <SelectTrigger><SelectValue placeholder="Zähler wählen" /></SelectTrigger>
-              <SelectContent>{meters.map((m) => <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>)}</SelectContent>
+              <SelectContent>
+                {meters
+                  .filter((m) => m.location_id === form.location_id && m.is_main_meter)
+                  .map((m) => <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>)}
+              </SelectContent>
             </Select>
           </div>
         </div>
