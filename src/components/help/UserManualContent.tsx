@@ -22,12 +22,14 @@ import {
   Cpu,
   RefreshCw,
   Link,
+  TrendingUp,
+  Battery,
 } from "lucide-react";
 
 interface UserManualContentProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  chapter: "gettingStarted" | "locationManagement" | "floorManagement" | "energyAnalysis" | "meterManagement" | "mobileApp" | "automation" | "evCharging" | "integrations";
+  chapter: "gettingStarted" | "locationManagement" | "floorManagement" | "energyAnalysis" | "meterManagement" | "mobileApp" | "automation" | "evCharging" | "integrations" | "arbitrageTrading";
 }
 
 const UserManualContent = ({ open, onOpenChange, chapter }: UserManualContentProps) => {
@@ -755,6 +757,90 @@ const UserManualContent = ({ open, onOpenChange, chapter }: UserManualContentPro
               In den BrightHub-Einstellungen sehen Sie den Zeitpunkt der letzten Zähler- 
               und Messwerte-Synchronisation. Über die manuellen Sync-Buttons können Sie 
               die Synchronisation jederzeit auslösen und den Status überprüfen.
+            </p>
+          </section>
+        </div>
+      ),
+    },
+    arbitrageTrading: {
+      title: "Arbitragehandel",
+      icon: <TrendingUp className="h-5 w-5" />,
+      content: (
+        <div className="space-y-6">
+          <section>
+            <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
+              <TrendingUp className="h-4 w-4 text-primary" />
+              Arbitragehandel mit Batteriespeichern
+            </h3>
+            <p className="text-muted-foreground mb-4">
+              Nutzen Sie Day-Ahead-Spotpreise (EPEX Spot), um Batteriespeicher wirtschaftlich zu optimieren. 
+              Laden Sie bei niedrigen Preisen und entladen Sie bei hohen Preisen.
+            </p>
+          </section>
+
+          <Separator />
+
+          <section>
+            <h4 className="font-semibold mb-2">Dashboard</h4>
+            <p className="text-sm text-muted-foreground mb-2">
+              Das Arbitrage-Dashboard zeigt auf einen Blick:
+            </p>
+            <ul className="list-disc list-inside text-sm text-muted-foreground space-y-1 ml-4">
+              <li><strong>Aktueller Spotpreis:</strong> In ct/kWh und €/MWh</li>
+              <li><strong>Registrierte Speicher:</strong> Anzahl der verwalteten Batteriespeicher</li>
+              <li><strong>Gesamterlös:</strong> Kumulierter Gewinn/Verlust aus allen Trades</li>
+              <li><strong>Gehandelte Energie:</strong> Gesamtmenge in kWh</li>
+            </ul>
+          </section>
+
+          <section>
+            <h4 className="font-semibold mb-2">Spotpreis-Verlauf</h4>
+            <p className="text-sm text-muted-foreground mb-2">
+              Der Chart zeigt die Spotpreise ab 12 Stunden vor der aktuellen Uhrzeit:
+            </p>
+            <ul className="list-disc list-inside text-sm text-muted-foreground space-y-1 ml-4">
+              <li><strong>Vergangene Stunden:</strong> Gestrichelte Linie in gedämpfter Farbe</li>
+              <li><strong>Zukünftige Stunden:</strong> Durchgezogene Linie in Primärfarbe</li>
+              <li><strong>X-Achse:</strong> Zweizeilig – Uhrzeit (oben) und lokalisierter Wochentag + Datum (unten)</li>
+              <li><strong>Tageswechsel:</strong> Vertikale Trennlinien markieren den Datumswechsel</li>
+              <li><strong>Aktualisierung:</strong> Stündlicher Datenabruf, alle 5 Minuten Refresh im Browser</li>
+            </ul>
+          </section>
+
+          <section>
+            <h4 className="font-semibold mb-2 flex items-center gap-2">
+              <Battery className="h-4 w-4" />
+              Batteriespeicher verwalten
+            </h4>
+            <ol className="list-decimal list-inside text-sm text-muted-foreground space-y-2 ml-4">
+              <li>Navigieren Sie zu <strong>Arbitragehandel → Speicher</strong></li>
+              <li>Klicken Sie auf <strong>„Speicher anlegen"</strong></li>
+              <li>Konfigurieren Sie Kapazität (kWh), maximale Lade-/Entladeleistung (kW) und Wirkungsgrad (%)</li>
+              <li>Optional: Weisen Sie den Speicher einem Standort zu</li>
+            </ol>
+          </section>
+
+          <section>
+            <h4 className="font-semibold mb-2">Handelsstrategien</h4>
+            <ol className="list-decimal list-inside text-sm text-muted-foreground space-y-2 ml-4">
+              <li>Navigieren Sie zu <strong>Arbitragehandel → Strategien</strong></li>
+              <li>Klicken Sie auf <strong>„Strategie anlegen"</strong></li>
+              <li>Wählen Sie einen Speicher und definieren Sie die Preisschwellen:
+                <ul className="list-disc list-inside ml-4 mt-1">
+                  <li><strong>Kaufen unter:</strong> Spotpreis-Schwelle für Laden (z.B. 30 €/MWh)</li>
+                  <li><strong>Verkaufen über:</strong> Spotpreis-Schwelle für Entladen (z.B. 80 €/MWh)</li>
+                </ul>
+              </li>
+              <li>Aktivieren/deaktivieren Sie Strategien jederzeit per Toggle</li>
+            </ol>
+          </section>
+
+          <section>
+            <h4 className="font-semibold mb-2">Handelshistorie</h4>
+            <p className="text-sm text-muted-foreground">
+              Unter <strong>Arbitragehandel → Trades</strong> sehen Sie alle ausgeführten Trades 
+              mit Zeitpunkt, Typ (Laden/Entladen), Energiemenge, Preis und Erlös. 
+              Der Gesamterlös wird als Badge oben rechts angezeigt.
             </p>
           </section>
         </div>

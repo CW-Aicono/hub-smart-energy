@@ -267,6 +267,7 @@ export const ALL_MODULES = [
   { code: "live_values",         label: "Live-Sensorwerte" },
   { code: "network_infra",       label: "Netzwerkinfrastruktur" },
   { code: "brighthub_api",       label: "BrightHub API" },
+  { code: "arbitrage_trading",  label: "Arbitragehandel" },
 ];
 ```
 
@@ -768,6 +769,8 @@ Alle Edge Functions liegen unter `supabase/functions/`. Alle verwenden Deno-Runt
 | `anomaly-detection` | pg_cron | Anomalie-Erkennung in Energiedaten |
 | `weather-degree-days` | HTTP POST | Heizgradtage für Wetternormalisierung berechnen |
 | `openchargemap` | HTTP POST | Öffentliche Ladepunkte von OpenChargeMap abrufen |
+| `fetch-spot-prices` | pg_cron (1h) | Day-Ahead-Spotpreise (EPEX Spot DE-LU) abrufen |
+| `gateway-ingest` | HTTP POST | Messwerte vom Gateway Worker entgegennehmen |
 
 **Authentifizierung:** Die meisten Functions haben `verify_jwt = false` (in `supabase/config.toml`), da sie entweder von pg_cron oder von der App ohne User-JWT aufgerufen werden. Sie verwenden intern den `SUPABASE_SERVICE_ROLE_KEY`.
 
@@ -806,6 +809,10 @@ tenants                      – Mandanten (Unternehmen)
   ├─ email_templates         – E-Mail-Vorlagen
   ├─ brighthub_settings      – BrightHub-Konfiguration
   └─ dashboard_widgets       – Widget-Konfiguration (per User)
+  ├─ energy_storages         – Batteriespeicher (Kapazität, Leistung, Wirkungsgrad)
+  ├─ arbitrage_strategies    – Handelsstrategien (Schwellenwerte)
+  ├─ arbitrage_trades        – Trade-Historie (Erlöse)
+  └─ spot_prices             – Stündliche Day-Ahead-Spotpreise
 ```
 
 ### 15.2 System-Tabellen (kein Tenant-Scope)
@@ -1064,9 +1071,86 @@ Destructive Migrations (Spalten löschen, Tabellen umbenennen) müssen zuerst in
 
 ---
 
+## 20. Arbitragehandel-Modul
+
+### 20.1 Überblick
+
+Das Arbitragehandel-Modul ermöglicht die wirtschaftliche Optimierung von Batteriespeichern durch Nutzung von Day-Ahead-Spotpreisen (EPEX Spot DE-LU).
+
+### 20.2 Datenbanktabellen
+
+| Tabelle | Zweck |
+|---|---|
+| `spot_prices` | Stündliche Day-Ahead-Spotpreise (€/MWh, Marktgebiet, Zeitstempel) |
+| `energy_storages` | Batteriespeicher (Kapazität, Lade-/Entladeleistung, Wirkungsgrad) |
+| `arbitrage_strategies` | Handelsstrategien (Kauf-/Verkaufsschwellen, aktiv/inaktiv) |
+| `arbitrage_trades` | Ausgeführte Trades (Typ, Energie, Preis, Erlös) |
+
+### 20.3 Edge Function: `fetch-spot-prices`
+
+- **Trigger:** pg_cron (stündlich, `0 * * * *`)
+- **Datenquelle:** `api.energy-charts.info/price?bzn=DE-LU` (Day-Ahead EPEX Spot)
+- **Logik:** Lädt Preise für heute und morgen (falls verfügbar), upsert in `spot_prices`
+- **Deduplication:** Upsert via `ON CONFLICT (market_area, timestamp)`
+
+### 20.4 Frontend-Hooks
+
+```ts
+// src/hooks/useSpotPrices.tsx
+const { prices, currentPrice, isLoading } = useSpotPrices(marketArea, hours);
+// refetchInterval: 5 Minuten – automatische Aktualisierung im Browser
+
+// src/hooks/useEnergyStorages.tsx
+const { storages, createStorage, deleteStorage } = useEnergyStorages();
+
+// src/hooks/useArbitrageStrategies.tsx
+const { strategies, createStrategy, updateStrategy, deleteStrategy } = useArbitrageStrategies();
+
+// src/hooks/useArbitrageTrades.tsx
+const { trades, totalRevenue, totalEnergy } = useArbitrageTrades();
+```
+
+### 20.5 Chart-Visualisierung
+
+Der Spotpreis-Chart (`ArbitrageDashboard`) zeigt Preise ab `now - 12h`:
+- **Vergangene Stunden:** Gestrichelte Linie (`strokeDasharray`), `muted-foreground`-Farbe
+- **Zukünftige Stunden:** Durchgezogene Linie, `primary`-Farbe
+- **X-Achse:** Zweizeilig (Uhrzeit + lokalisierter Wochentag/Datum), 3h-Intervalle auf vollen Stunden
+- **Tagestrennlinien:** Vertikale `ReferenceLine` bei Datumswechsel
+- **Lokalisierung:** `date-fns` Locales (`de`, `enUS`, `es`, `nl`) basierend auf User-Sprache
+
 ---
 
-## 20. Gateway Worker – Industrietaugliches Echtzeit-Polling
+## 21. Echtzeit-Datenerfassung & Verdichtung
+
+### 21.1 Live-Werte Pipeline
+
+```
+Gateway Worker (30s) → meter_power_readings (roh)
+                           │
+  pg_cron (00:05 UTC) ─────┘
+                           ▼
+               meter_power_readings_5min (aggregiert)
+                           │
+               Rohdaten > 24h alt → DELETE
+```
+
+### 21.2 Datenverdichtung (Cron: `compact-meter-power-readings-daily`)
+
+- **Zeitplan:** Täglich 00:05 UTC
+- **Logik:** Aggregiert Rohdaten älter als 24h in 5-Minuten-Buckets (`power_avg`, `power_max`, `sample_count`)
+- **Deduplication:** Upsert via `ON CONFLICT (meter_id, energy_type, tenant_id, bucket)`
+- **Cleanup:** Löscht Rohdaten nach erfolgreicher Verdichtung
+
+### 21.3 Supabase Realtime für Live-Anzeige
+
+Die Seite „Aktuelle Werte" (`/live-values`) nutzt Supabase Realtime Subscriptions auf `meter_power_readings` für Echtzeit-Updates mit < 1 Sekunde Latenz.
+
+---
+
+---
+
+## 22. Gateway Worker – Industrietaugliches Echtzeit-Polling
 
 ### 20.1 Warum ein externer Worker?
 

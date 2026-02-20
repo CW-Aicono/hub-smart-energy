@@ -1871,6 +1871,37 @@ export const translations = {
     es: "Constructor de reglas completo como diálogo para automatizaciones complejas",
     nl: "Volledige regelbouwer als sheet-dialoog voor complexe automatiseringen",
   },
+  // Version 1.0.8 changelog
+  "help.changelog108Feature1": {
+    de: "Arbitragehandel-Modul: Spotmarkt-Preise (EPEX Spot) visualisieren, Batteriespeicher verwalten und Handelsstrategien automatisieren",
+    en: "Arbitrage trading module: Visualize spot market prices (EPEX Spot), manage battery storages, and automate trading strategies",
+    es: "Módulo de arbitraje: Visualizar precios del mercado spot (EPEX Spot), gestionar almacenamiento de baterías y automatizar estrategias de trading",
+    nl: "Arbitragehandel-module: Spotmarktprijzen (EPEX Spot) visualiseren, batterijopslag beheren en handelsstrategieën automatiseren",
+  },
+  "help.changelog108Feature2": {
+    de: "Stündlicher Abruf der Day-Ahead-Spotpreise über Cron-Job mit automatischer 5-Minuten-Aktualisierung im Dashboard",
+    en: "Hourly retrieval of day-ahead spot prices via cron job with automatic 5-minute dashboard refresh",
+    es: "Recuperación horaria de precios spot day-ahead mediante cron job con actualización automática del dashboard cada 5 minutos",
+    nl: "Elk uur ophalen van day-ahead spotprijzen via cron job met automatische 5-minuten dashboard-verversing",
+  },
+  "help.changelog108Feature3": {
+    de: "Echtzeit-Seite (Aktuelle Werte): Live-Momentanleistung, Tagessummen und Zählerstand-Trends über Supabase Realtime",
+    en: "Real-time page (Live Values): Live instantaneous power, daily totals, and meter reading trends via Supabase Realtime",
+    es: "Página en tiempo real (Valores actuales): Potencia instantánea en vivo, totales diarios y tendencias de lecturas via Supabase Realtime",
+    nl: "Realtime-pagina (Actuele waarden): Live momentanvermogen, dagtotalen en meterstandtrends via Supabase Realtime",
+  },
+  "help.changelog108Improvement1": {
+    de: "Spotpreis-Chart: Zweizeilige X-Achse (Uhrzeit + lokalisierter Wochentag/Datum), 3h-Takte, Tagestrennlinien und visuelle Unterscheidung vergangener Stunden",
+    en: "Spot price chart: Two-line X-axis (time + localized weekday/date), 3h intervals, day separators, and visual distinction of past hours",
+    es: "Gráfico de precios spot: Eje X de dos líneas (hora + día/fecha localizado), intervalos de 3h, separadores de día y distinción visual de horas pasadas",
+    nl: "Spotprijsgrafiek: Tweelijnige X-as (tijd + gelokaliseerde weekdag/datum), 3u-intervallen, dagscheidingen en visueel onderscheid van afgelopen uren",
+  },
+  "help.changelog108Improvement2": {
+    de: "Automatische Datenverdichtung: Täglicher Cron-Job komprimiert Roh-Leistungsmesswerte in 5-Minuten-Aggregate",
+    en: "Automatic data compaction: Daily cron job compresses raw power readings into 5-minute aggregates",
+    es: "Compactación automática de datos: Cron job diario comprime lecturas de potencia brutas en agregados de 5 minutos",
+    nl: "Automatische dataverdichting: Dagelijkse cron job comprimeert ruwe vermogensmetingen naar 5-minuten aggregaten",
+  },
   // Version 1.0.7 changelog
   "help.changelog107Feature1": {
     de: "BrightHub-Integration: Automatische Zähler-Synchronisation (täglich) und Messwerte-Sync (alle 15 Min.)",
@@ -2132,6 +2163,32 @@ export const translations = {
     en: "Smart Energy Hub supports Loxone Miniserver, Shelly, Tuya, Siemens, ABB, HomeMatic, and TP-Link Omada. Additionally, data can be synced with external energy platforms via the BrightHub interface. More integrations can be configured under Integrations → Add.",
     es: "Smart Energy Hub es compatible con Loxone Miniserver, Shelly, Tuya, Siemens, ABB, HomeMatic y TP-Link Omada. Además, los datos se pueden sincronizar con plataformas externas a través de BrightHub.",
     nl: "Smart Energy Hub ondersteunt Loxone Miniserver, Shelly, Tuya, Siemens, ABB, HomeMatic en TP-Link Omada. Daarnaast kunnen gegevens worden gesynchroniseerd met externe energieplatformen via BrightHub.",
+  },
+  // FAQ 19 - Arbitragehandel
+  "help.faq19Question": {
+    de: "Was ist das Arbitragehandel-Modul und wie funktioniert es?",
+    en: "What is the arbitrage trading module and how does it work?",
+    es: "¿Qué es el módulo de arbitraje y cómo funciona?",
+    nl: "Wat is de arbitragehandel-module en hoe werkt het?",
+  },
+  "help.faq19Answer": {
+    de: "Das Arbitragehandel-Modul nutzt Day-Ahead-Spotpreise (EPEX Spot), um Batteriespeicher wirtschaftlich zu optimieren. Sie definieren Schwellenwerte (z.B. Laden unter 30 €/MWh, Entladen über 80 €/MWh), und das System handelt automatisch. Spotpreise werden stündlich abgerufen und im Dashboard als 36h-Chart mit vergangenen (gestrichelt) und zukünftigen Preisen angezeigt.",
+    en: "The arbitrage trading module uses day-ahead spot prices (EPEX Spot) to economically optimize battery storages. You define thresholds (e.g., charge below 30 €/MWh, discharge above 80 €/MWh), and the system trades automatically. Spot prices are fetched hourly and displayed in the dashboard as a 36h chart with past (dashed) and future prices.",
+    es: "El módulo de arbitraje utiliza precios spot day-ahead (EPEX Spot) para optimizar económicamente el almacenamiento de baterías. Define umbrales (p.ej., cargar por debajo de 30 €/MWh, descargar por encima de 80 €/MWh) y el sistema opera automáticamente.",
+    nl: "De arbitragehandel-module gebruikt day-ahead spotprijzen (EPEX Spot) om batterijopslag economisch te optimaliseren. U definieert drempels (bijv. laden onder 30 €/MWh, ontladen boven 80 €/MWh) en het systeem handelt automatisch.",
+  },
+  // FAQ 20 - Echtzeit-Daten
+  "help.faq20Question": {
+    de: "Wie oft werden die Echtzeit-Messwerte aktualisiert?",
+    en: "How often are real-time readings updated?",
+    es: "¿Con qué frecuencia se actualizan las lecturas en tiempo real?",
+    nl: "Hoe vaak worden de realtime meetwaarden bijgewerkt?",
+  },
+  "help.faq20Answer": {
+    de: "Messwerte werden über den Gateway Worker alle 30 Sekunden abgerufen und per Supabase Realtime (<1s Latenz) im Frontend angezeigt. Rohdaten werden täglich automatisch in 5-Minuten-Aggregate verdichtet, um Speicherplatz zu sparen. Die Spotpreise im Arbitrage-Modul werden stündlich abgerufen und alle 5 Minuten im Browser aktualisiert.",
+    en: "Readings are fetched via the Gateway Worker every 30 seconds and displayed in the frontend via Supabase Realtime (<1s latency). Raw data is automatically compacted daily into 5-minute aggregates to save storage. Spot prices in the arbitrage module are fetched hourly and refreshed in the browser every 5 minutes.",
+    es: "Las lecturas se obtienen cada 30 segundos a través del Gateway Worker y se muestran en el frontend vía Supabase Realtime (<1s latencia). Los datos brutos se compactan automáticamente en agregados de 5 minutos.",
+    nl: "Meetwaarden worden elke 30 seconden opgehaald via de Gateway Worker en weergegeven in het frontend via Supabase Realtime (<1s latentie). Ruwe data wordt dagelijks automatisch verdicht naar 5-minuten aggregaten.",
   },
   // User management - activate user
   "users.activateUser": {
