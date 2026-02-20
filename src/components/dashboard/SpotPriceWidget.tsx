@@ -20,7 +20,7 @@ const SpotPriceWidget = ({ locationId }: SpotPriceWidgetProps) => {
   const { language } = useTranslation();
 
   const now = new Date();
-  const startCutoff = new Date(now.getTime() - 12 * 60 * 60 * 1000);
+  const startCutoff = new Date(now.getTime() - 3 * 60 * 60 * 1000);
   const locale = localeMap[language] || de;
 
   const { chartData, pastData, futureData, dayChangeIndices, tickIndices } = useMemo(() => {

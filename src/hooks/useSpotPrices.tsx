@@ -5,12 +5,14 @@ export function useSpotPrices(marketArea = "DE-LU", hours = 48) {
   const { data: prices = [], isLoading } = useQuery({
     queryKey: ["spot-prices", marketArea, hours],
     queryFn: async () => {
-      const since = new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
+      const since = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString();
+      const until = new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString();
       const { data, error } = await supabase
         .from("spot_prices")
         .select("*")
         .eq("market_area", marketArea)
         .gte("timestamp", since)
+        .lte("timestamp", until)
         .order("timestamp", { ascending: true });
       if (error) throw error;
       return data;

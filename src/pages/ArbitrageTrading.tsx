@@ -72,7 +72,7 @@ function ArbitrageDashboard() {
   const { forecast: pvForecast } = usePvForecast(effectiveLocationId);
   const hasPv = !!pvForecast?.settings?.peak_power_kwp;
   const now = new Date();
-  const startCutoff = new Date(now.getTime() - 12 * 60 * 60 * 1000);
+  const startCutoff = new Date(now.getTime() - 3 * 60 * 60 * 1000);
   const locale = localeMap[language] || de;
 
   const filteredPrices = prices.filter((p) => new Date(p.timestamp) >= startCutoff);
