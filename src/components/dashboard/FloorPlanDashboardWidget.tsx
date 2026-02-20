@@ -240,9 +240,9 @@ const FloorPlanDashboardWidget = ({ locationId, onExpand, onCollapse }: FloorPla
       <CardContent className="flex-1 p-0 min-h-0 overflow-hidden" style={{ minHeight: 400, height: 400 }}>
         {selectedFloor && viewMode === "2d" && selectedFloor.floor_plan_url ? (
           <div className="relative w-full h-full">
-            <TransformWrapper ref={transformRef} initialScale={1} minScale={0.5} maxScale={4} centerOnInit wheel={{ disabled: true }}>
+            <TransformWrapper ref={transformRef} initialScale={1} minScale={0.5} maxScale={4} centerOnInit wheel={{ disabled: true }} pinch={{ disabled: true }}>
               <ZoomControls />
-              <TransformComponent wrapperStyle={{ width: "100%", height: "100%" }} contentStyle={{ width: "100%", height: "100%", display: "flex", justifyContent: "center", alignItems: "center" }}>
+              <TransformComponent wrapperStyle={{ width: "100%", height: "100%", touchAction: "pan-y" }} contentStyle={{ width: "100%", height: "100%", display: "flex", justifyContent: "center", alignItems: "center", touchAction: "pan-y" }}>
                 <div className="relative inline-block">
                   <img src={selectedFloor.floor_plan_url} alt={selectedFloor.name} className="max-w-full max-h-full object-contain" draggable={false} />
 
