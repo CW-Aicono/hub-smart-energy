@@ -87,6 +87,118 @@ export type Database = {
           },
         ]
       }
+      arbitrage_strategies: {
+        Row: {
+          buy_below_eur_mwh: number
+          created_at: string
+          id: string
+          is_active: boolean
+          name: string
+          sell_above_eur_mwh: number
+          storage_id: string
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          buy_below_eur_mwh?: number
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name: string
+          sell_above_eur_mwh?: number
+          storage_id: string
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          buy_below_eur_mwh?: number
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+          sell_above_eur_mwh?: number
+          storage_id?: string
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "arbitrage_strategies_storage_id_fkey"
+            columns: ["storage_id"]
+            isOneToOne: false
+            referencedRelation: "energy_storages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "arbitrage_strategies_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      arbitrage_trades: {
+        Row: {
+          created_at: string
+          energy_kwh: number
+          id: string
+          price_eur_mwh: number
+          revenue_eur: number
+          storage_id: string
+          strategy_id: string | null
+          tenant_id: string
+          timestamp: string
+          trade_type: string
+        }
+        Insert: {
+          created_at?: string
+          energy_kwh?: number
+          id?: string
+          price_eur_mwh?: number
+          revenue_eur?: number
+          storage_id: string
+          strategy_id?: string | null
+          tenant_id: string
+          timestamp?: string
+          trade_type?: string
+        }
+        Update: {
+          created_at?: string
+          energy_kwh?: number
+          id?: string
+          price_eur_mwh?: number
+          revenue_eur?: number
+          storage_id?: string
+          strategy_id?: string | null
+          tenant_id?: string
+          timestamp?: string
+          trade_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "arbitrage_trades_storage_id_fkey"
+            columns: ["storage_id"]
+            isOneToOne: false
+            referencedRelation: "energy_storages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "arbitrage_trades_strategy_id_fkey"
+            columns: ["strategy_id"]
+            isOneToOne: false
+            referencedRelation: "arbitrage_strategies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "arbitrage_trades_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       brighthub_settings: {
         Row: {
           api_key: string
@@ -923,6 +1035,63 @@ export type Database = {
             columns: ["location_id"]
             isOneToOne: false
             referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      energy_storages: {
+        Row: {
+          capacity_kwh: number
+          created_at: string
+          efficiency_pct: number
+          id: string
+          location_id: string | null
+          max_charge_kw: number
+          max_discharge_kw: number
+          name: string
+          status: string
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          capacity_kwh?: number
+          created_at?: string
+          efficiency_pct?: number
+          id?: string
+          location_id?: string | null
+          max_charge_kw?: number
+          max_discharge_kw?: number
+          name: string
+          status?: string
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          capacity_kwh?: number
+          created_at?: string
+          efficiency_pct?: number
+          id?: string
+          location_id?: string | null
+          max_charge_kw?: number
+          max_discharge_kw?: number
+          name?: string
+          status?: string
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "energy_storages_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "energy_storages_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
             referencedColumns: ["id"]
           },
         ]
@@ -2118,6 +2287,33 @@ export type Database = {
           },
         ]
       }
+      spot_prices: {
+        Row: {
+          created_at: string
+          id: string
+          market_area: string
+          price_eur_mwh: number
+          price_type: string
+          timestamp: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          market_area?: string
+          price_eur_mwh: number
+          price_type?: string
+          timestamp: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          market_area?: string
+          price_eur_mwh?: number
+          price_type?: string
+          timestamp?: string
+        }
+        Relationships: []
+      }
       support_sessions: {
         Row: {
           created_at: string
@@ -2271,6 +2467,319 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      tenant_electricity_invoices: {
+        Row: {
+          base_fee: number
+          created_at: string
+          grid_amount: number
+          grid_kwh: number
+          id: string
+          invoice_number: string | null
+          issued_at: string | null
+          local_amount: number
+          local_kwh: number
+          period_end: string
+          period_start: string
+          status: string
+          tariff_id: string | null
+          tenant_electricity_tenant_id: string
+          tenant_id: string
+          total_amount: number
+          total_kwh: number
+        }
+        Insert: {
+          base_fee?: number
+          created_at?: string
+          grid_amount?: number
+          grid_kwh?: number
+          id?: string
+          invoice_number?: string | null
+          issued_at?: string | null
+          local_amount?: number
+          local_kwh?: number
+          period_end: string
+          period_start: string
+          status?: string
+          tariff_id?: string | null
+          tenant_electricity_tenant_id: string
+          tenant_id: string
+          total_amount?: number
+          total_kwh?: number
+        }
+        Update: {
+          base_fee?: number
+          created_at?: string
+          grid_amount?: number
+          grid_kwh?: number
+          id?: string
+          invoice_number?: string | null
+          issued_at?: string | null
+          local_amount?: number
+          local_kwh?: number
+          period_end?: string
+          period_start?: string
+          status?: string
+          tariff_id?: string | null
+          tenant_electricity_tenant_id?: string
+          tenant_id?: string
+          total_amount?: number
+          total_kwh?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tenant_electricity_invoices_tariff_id_fkey"
+            columns: ["tariff_id"]
+            isOneToOne: false
+            referencedRelation: "tenant_electricity_tariffs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tenant_electricity_invoices_tenant_electricity_tenant_id_fkey"
+            columns: ["tenant_electricity_tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenant_electricity_tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tenant_electricity_invoices_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tenant_electricity_readings: {
+        Row: {
+          created_at: string
+          id: string
+          meter_id: string | null
+          reading_date: string
+          reading_type: string
+          reading_value: number
+          tenant_electricity_tenant_id: string
+          tenant_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          meter_id?: string | null
+          reading_date?: string
+          reading_type?: string
+          reading_value: number
+          tenant_electricity_tenant_id: string
+          tenant_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          meter_id?: string | null
+          reading_date?: string
+          reading_type?: string
+          reading_value?: number
+          tenant_electricity_tenant_id?: string
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tenant_electricity_readings_meter_id_fkey"
+            columns: ["meter_id"]
+            isOneToOne: false
+            referencedRelation: "meters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tenant_electricity_readings_tenant_electricity_tenant_id_fkey"
+            columns: ["tenant_electricity_tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenant_electricity_tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tenant_electricity_readings_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tenant_electricity_settings: {
+        Row: {
+          allocation_method: string
+          billing_period: string
+          created_at: string
+          grid_meter_id: string | null
+          id: string
+          location_id: string | null
+          pv_meter_id: string | null
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          allocation_method?: string
+          billing_period?: string
+          created_at?: string
+          grid_meter_id?: string | null
+          id?: string
+          location_id?: string | null
+          pv_meter_id?: string | null
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          allocation_method?: string
+          billing_period?: string
+          created_at?: string
+          grid_meter_id?: string | null
+          id?: string
+          location_id?: string | null
+          pv_meter_id?: string | null
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tenant_electricity_settings_grid_meter_id_fkey"
+            columns: ["grid_meter_id"]
+            isOneToOne: false
+            referencedRelation: "meters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tenant_electricity_settings_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tenant_electricity_settings_pv_meter_id_fkey"
+            columns: ["pv_meter_id"]
+            isOneToOne: false
+            referencedRelation: "meters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tenant_electricity_settings_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tenant_electricity_tariffs: {
+        Row: {
+          base_fee_monthly: number
+          created_at: string
+          id: string
+          name: string
+          price_per_kwh_grid: number
+          price_per_kwh_local: number
+          tenant_id: string
+          valid_from: string
+          valid_until: string | null
+        }
+        Insert: {
+          base_fee_monthly?: number
+          created_at?: string
+          id?: string
+          name: string
+          price_per_kwh_grid?: number
+          price_per_kwh_local?: number
+          tenant_id: string
+          valid_from?: string
+          valid_until?: string | null
+        }
+        Update: {
+          base_fee_monthly?: number
+          created_at?: string
+          id?: string
+          name?: string
+          price_per_kwh_grid?: number
+          price_per_kwh_local?: number
+          tenant_id?: string
+          valid_from?: string
+          valid_until?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tenant_electricity_tariffs_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tenant_electricity_tenants: {
+        Row: {
+          created_at: string
+          email: string | null
+          id: string
+          location_id: string | null
+          meter_id: string | null
+          move_in_date: string | null
+          move_out_date: string | null
+          name: string
+          status: string
+          tenant_id: string
+          unit_label: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          email?: string | null
+          id?: string
+          location_id?: string | null
+          meter_id?: string | null
+          move_in_date?: string | null
+          move_out_date?: string | null
+          name: string
+          status?: string
+          tenant_id: string
+          unit_label?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          email?: string | null
+          id?: string
+          location_id?: string | null
+          meter_id?: string | null
+          move_in_date?: string | null
+          move_out_date?: string | null
+          name?: string
+          status?: string
+          tenant_id?: string
+          unit_label?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tenant_electricity_tenants_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tenant_electricity_tenants_meter_id_fkey"
+            columns: ["meter_id"]
+            isOneToOne: false
+            referencedRelation: "meters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tenant_electricity_tenants_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       tenant_invoices: {
         Row: {

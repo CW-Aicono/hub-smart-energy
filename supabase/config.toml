@@ -59,3 +59,6 @@ verify_jwt = false
 
 [functions.gateway-periodic-sync]
 verify_jwt = false
+
+[functions.fetch-spot-prices]
+verify_jwt = false

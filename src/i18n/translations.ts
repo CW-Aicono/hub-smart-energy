@@ -3183,6 +3183,12 @@ export const translations = {
   "meterReadingDialog.notesPlaceholder": { de: "z.B. Zählerwechsel, Korrektur...", en: "e.g. meter replacement, correction...", es: "p.ej. cambio de contador, corrección...", nl: "bijv. meterwisseling, correctie..." },
   "meterReadingDialog.saving": { de: "Speichern...", en: "Saving...", es: "Guardando...", nl: "Opslaan..." },
   "meterReadingDialog.save": { de: "Zählerstand speichern", en: "Save reading", es: "Guardar lectura", nl: "Meterstand opslaan" },
+
+  // Arbitrage Trading
+  "nav.arbitrageTrading": { de: "Arbitragehandel", en: "Arbitrage Trading", es: "Comercio de arbitraje", nl: "Arbitragehandel" },
+
+  // Tenant Electricity (Mieterstrom)
+  "nav.tenantElectricity": { de: "Mieterstrom", en: "Tenant Electricity", es: "Electricidad inquilinos", nl: "Huurderstroom" },
 } as const;
 
 export type TranslationKey = keyof typeof translations;

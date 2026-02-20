@@ -17,6 +17,8 @@ const ROUTE_MODULE_MAP: Record<string, string> = {
   "/network": "network_infra",
   "/tasks": "task_management",
   "/settings/branding": "integrations",
+  "/arbitrage": "arbitrage_trading",
+  "/tenant-electricity": "tenant_electricity",
 };
 
 /**
@@ -32,6 +34,8 @@ const NAV_MODULE_MAP: Record<string, string> = {
   "/automation": "automation_multi",
   "/network": "network_infra",
   "/tasks": "task_management",
+  "/arbitrage": "arbitrage_trading",
+  "/tenant-electricity": "tenant_electricity",
 };
 
 export function useModuleGuard() {

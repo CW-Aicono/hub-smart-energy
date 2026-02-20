@@ -19,6 +19,8 @@ export const ALL_MODULES = [
   { code: "network_infra", label: "Netzwerkinfrastruktur" },
   { code: "task_management", label: "Aufgabenverwaltung" },
   { code: "brighthub_api", label: "BrightHub API" },
+  { code: "arbitrage_trading", label: "Arbitragehandel (Strom)" },
+  { code: "tenant_electricity", label: "Mieterstrom" },
 ] as const;
 
 export function useTenantModules(tenantId: string | null) {
