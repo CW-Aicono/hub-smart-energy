@@ -200,7 +200,7 @@ function ArbitrageDashboard() {
                     strokeWidth={1}
                   />
                 ))}
-                <Line data={pastData} type="monotone" dataKey="price" stroke="hsl(var(--muted-foreground))" strokeWidth={2} strokeDasharray="6 3" dot={false} name="Vergangen" connectNulls={false} />
+                <Line data={pastData} type="monotone" dataKey="price" stroke="hsl(var(--muted-foreground))" strokeWidth={2} dot={false} name="Vergangen" connectNulls={false} />
                 <Line type="monotone" dataKey="price" stroke="hsl(var(--primary))" strokeWidth={2} dot={false} name="Preis" data={futureData} connectNulls={false} />
               </LineChart>
             </ResponsiveContainer>
