@@ -49,19 +49,23 @@ export function useTenantElectricityTenants() {
     onError: (e: Error) => toast({ title: "Fehler", description: e.message, variant: "destructive" }),
   });
 
-  const deleteTenant = useMutation({
+  const archiveTenant = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("tenant_electricity_tenants").delete().eq("id", id);
+      const { error } = await supabase
+        .from("tenant_electricity_tenants")
+        .update({ status: "archived", move_out_date: new Date().toISOString().split("T")[0] })
+        .eq("id", id);
       if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["te-tenants", tenantId] });
-      toast({ title: "Mieter gelöscht" });
+      toast({ title: "Mieter archiviert" });
     },
     onError: (e: Error) => toast({ title: "Fehler", description: e.message, variant: "destructive" }),
   });
 
   const activeTenants = tenants.filter((t) => t.status === "active");
+  const archivedTenants = tenants.filter((t) => t.status === "archived");
 
-  return { tenants, activeTenants, isLoading, createTenant, updateTenant, deleteTenant };
+  return { tenants, activeTenants, archivedTenants, isLoading, createTenant, updateTenant, archiveTenant };
 }
