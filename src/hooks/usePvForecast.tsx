@@ -81,16 +81,23 @@ export function usePvForecastSettings(locationId: string | null) {
     }) => {
       if (!locationId || !tenantId) throw new Error("Missing context");
 
-      if (settings?.id) {
+      // Always read the latest settings from the query cache to avoid stale closures
+      const currentSettings = queryClient.getQueryData<PvForecastSettings | null>(["pv-forecast-settings", locationId]);
+
+      if (currentSettings?.id) {
         const { error } = await supabase
           .from("pv_forecast_settings")
           .update(values)
-          .eq("id", settings.id);
+          .eq("id", currentSettings.id);
         if (error) throw error;
       } else {
+        // Use upsert to prevent duplicate insert errors
         const { error } = await supabase
           .from("pv_forecast_settings")
-          .insert({ ...values, location_id: locationId, tenant_id: tenantId });
+          .upsert(
+            { ...values, location_id: locationId, tenant_id: tenantId },
+            { onConflict: "tenant_id,location_id" }
+          );
         if (error) throw error;
       }
     },
