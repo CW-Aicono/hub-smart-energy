@@ -57,10 +57,16 @@ function ArbitrageDashboard() {
   const { storages } = useEnergyStorages();
   const { totalRevenue, totalEnergy } = useArbitrageTrades();
 
-  const chartData = prices.map((p) => ({
-    time: format(new Date(p.timestamp), "HH:mm"),
-    price: Number(p.price_eur_mwh),
-  }));
+  const chartData = prices.map((p) => {
+    const d = new Date(p.timestamp);
+    return {
+      time: format(d, "HH:mm"),
+      label: format(d, "EEE dd.MM. HH:mm"),
+      dateLabel: format(d, "EEE dd.MM."),
+      price: Number(p.price_eur_mwh),
+      _ts: d.getTime(),
+    };
+  });
 
   const priceCtKwh = currentPrice ? (Number(currentPrice.price_eur_mwh) / 10).toFixed(2) : "–";
 
@@ -100,9 +106,21 @@ function ArbitrageDashboard() {
             <ResponsiveContainer width="100%" height={300}>
               <LineChart data={chartData}>
                 <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="time" tick={{ fontSize: 12 }} interval="preserveStartEnd" />
+                <XAxis
+                  dataKey="label"
+                  tick={{ fontSize: 11 }}
+                  interval="preserveStartEnd"
+                  tickFormatter={(val: string) => {
+                    // Show date+time for first tick of each day, otherwise just time
+                    const parts = val.split(" ");
+                    return parts.length >= 2 ? `${parts[0]} ${parts[1]}` : val;
+                  }}
+                />
                 <YAxis tick={{ fontSize: 12 }} label={{ value: "€/MWh", angle: -90, position: "insideLeft" }} />
-                <Tooltip formatter={(v: number) => [`${v.toFixed(1)} €/MWh`, "Preis"]} />
+                <Tooltip
+                  labelFormatter={(val: string) => val}
+                  formatter={(v: number) => [`${v.toFixed(1)} €/MWh`, "Preis"]}
+                />
                 <ReferenceLine y={0} stroke="hsl(var(--muted-foreground))" strokeDasharray="3 3" />
                 <Line type="monotone" dataKey="price" stroke="hsl(var(--primary))" strokeWidth={2} dot={false} />
               </LineChart>
