@@ -4,6 +4,12 @@ import { toast } from "@/hooks/use-toast";
 import { useEffect } from "react";
 import { getT } from "@/i18n/getT";
 
+export interface ChargePointAccessSettings {
+  free_charging: boolean;
+  user_group_restriction: boolean;
+  max_charging_duration_min: number;
+}
+
 export interface ChargePoint {
   id: string;
   tenant_id: string;
@@ -23,6 +29,7 @@ export interface ChargePoint {
   address: string | null;
   latitude: number | null;
   longitude: number | null;
+  access_settings: ChargePointAccessSettings;
   created_at: string;
   updated_at: string;
 }
@@ -38,7 +45,7 @@ export function useChargePoints() {
         .select("*")
         .order("name");
       if (error) throw error;
-      return data as ChargePoint[];
+      return (data ?? []) as unknown as ChargePoint[];
     },
   });
 
@@ -60,7 +67,7 @@ export function useChargePoints() {
 
   const addChargePoint = useMutation({
     mutationFn: async (cp: Partial<ChargePoint> & { tenant_id: string; ocpp_id: string; name: string }) => {
-      const { data, error } = await supabase.from("charge_points").insert(cp).select().single();
+      const { data, error } = await supabase.from("charge_points").insert(cp as any).select().single();
       if (error) throw error;
       return data;
     },
@@ -77,7 +84,7 @@ export function useChargePoints() {
 
   const updateChargePoint = useMutation({
     mutationFn: async ({ id, ...updates }: Partial<ChargePoint> & { id: string }) => {
-      const { error } = await supabase.from("charge_points").update(updates).eq("id", id);
+      const { error } = await supabase.from("charge_points").update(updates as any).eq("id", id);
       if (error) throw error;
     },
     onSuccess: () => {

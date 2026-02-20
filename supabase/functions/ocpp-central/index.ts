@@ -108,60 +108,159 @@ async function handleAuthorize(
   return { idTagInfo: { status } };
 }
 
+/**
+ * Resolves the effective access settings for a charge point,
+ * considering group membership (group settings override individual).
+ */
+async function getEffectiveAccessSettings(
+  supabase: ReturnType<typeof createSupabase>,
+  cpId: string,
+  groupId: string | null
+) {
+  const defaults = { free_charging: false, user_group_restriction: false, max_charging_duration_min: 480 };
+
+  if (groupId) {
+    const { data: group } = await supabase
+      .from("charge_point_groups")
+      .select("access_settings")
+      .eq("id", groupId)
+      .single();
+    if (group?.access_settings) {
+      const settings = group.access_settings as Record<string, unknown>;
+      return {
+        free_charging: settings.free_charging as boolean ?? defaults.free_charging,
+        user_group_restriction: settings.user_group_restriction as boolean ?? defaults.user_group_restriction,
+        max_charging_duration_min: settings.max_charging_duration_min as number ?? defaults.max_charging_duration_min,
+        source: "group" as const,
+        sourceId: groupId,
+      };
+    }
+  }
+
+  // Individual charge point settings
+  const { data: cp } = await supabase
+    .from("charge_points")
+    .select("access_settings")
+    .eq("id", cpId)
+    .single();
+
+  if (cp?.access_settings) {
+    const settings = cp.access_settings as Record<string, unknown>;
+    return {
+      free_charging: settings.free_charging as boolean ?? defaults.free_charging,
+      user_group_restriction: settings.user_group_restriction as boolean ?? defaults.user_group_restriction,
+      max_charging_duration_min: settings.max_charging_duration_min as number ?? defaults.max_charging_duration_min,
+      source: "chargepoint" as const,
+      sourceId: cpId,
+    };
+  }
+
+  return { ...defaults, source: "default" as const, sourceId: cpId };
+}
+
+/**
+ * Checks if a charging user (identified by idTag) is in one of the allowed user groups.
+ */
+async function isUserInAllowedGroups(
+  supabase: ReturnType<typeof createSupabase>,
+  tenantId: string,
+  idTag: string,
+  source: "group" | "chargepoint" | "default",
+  sourceId: string
+): Promise<boolean> {
+  // Get allowed user group IDs
+  const table = source === "group" ? "charge_point_group_allowed_user_groups" : "charge_point_allowed_user_groups";
+  const fkCol = source === "group" ? "group_id" : "charge_point_id";
+
+  const { data: allowedRows } = await supabase
+    .from(table)
+    .select("user_group_id")
+    .eq(fkCol, sourceId);
+
+  if (!allowedRows || allowedRows.length === 0) {
+    // No groups configured = no restriction (all allowed)
+    return true;
+  }
+
+  const allowedGroupIds = allowedRows.map((r: any) => r.user_group_id);
+
+  // Find the charging user by idTag
+  let userGroupId: string | null = null;
+
+  if (idTag.startsWith("APP")) {
+    const isLegacy = idTag.startsWith("APP:");
+    const query = isLegacy
+      ? supabase.from("charging_users").select("group_id").eq("tenant_id", tenantId).eq("auth_user_id", idTag.substring(4)).single()
+      : supabase.from("charging_users").select("group_id").eq("tenant_id", tenantId).eq("app_tag", idTag).single();
+    const { data } = await query;
+    userGroupId = data?.group_id ?? null;
+  } else {
+    const { data } = await supabase
+      .from("charging_users")
+      .select("group_id")
+      .eq("tenant_id", tenantId)
+      .eq("rfid_tag", idTag)
+      .single();
+    userGroupId = data?.group_id ?? null;
+  }
+
+  if (!userGroupId) return false;
+  return allowedGroupIds.includes(userGroupId);
+}
+
 async function validateIdTag(
   supabase: ReturnType<typeof createSupabase>,
   chargePointId: string,
   idTag: string | null | undefined
 ): Promise<string> {
-  if (!idTag) return "Accepted"; // No tag = free charging
-
-  // Find the charge point's tenant
+  // Find the charge point
   const { data: cp } = await supabase
     .from("charge_points")
-    .select("tenant_id")
+    .select("id, tenant_id, group_id")
     .eq("ocpp_id", chargePointId)
     .single();
 
   if (!cp) return "Invalid";
 
-  // App user: short app_tag format "APPxxxxxxxx" (OCPP-compliant, max 20 chars)
-  if (idTag.startsWith("APP")) {
-    // Support both new short format (APP12345678) and legacy long format (APP:uuid)
-    const isLegacy = idTag.startsWith("APP:");
-    let query;
-    if (isLegacy) {
-      const authUserId = idTag.substring(4);
-      query = supabase
-        .from("charging_users")
-        .select("id, status")
-        .eq("tenant_id", cp.tenant_id)
-        .eq("auth_user_id", authUserId)
-        .single();
-    } else {
-      query = supabase
-        .from("charging_users")
-        .select("id, status")
-        .eq("tenant_id", cp.tenant_id)
-        .eq("app_tag", idTag)
-        .single();
-    }
+  // Get effective access settings
+  const accessSettings = await getEffectiveAccessSettings(supabase, cp.id, cp.group_id);
 
+  // Free charging = accept anyone
+  if (accessSettings.free_charging) return "Accepted";
+
+  // No tag and not free charging = reject
+  if (!idTag) return "Invalid";
+
+  // Basic tag validation (user exists and is active)
+  let userId: string | null = null;
+  if (idTag.startsWith("APP")) {
+    const isLegacy = idTag.startsWith("APP:");
+    const query = isLegacy
+      ? supabase.from("charging_users").select("id, status, group_id").eq("tenant_id", cp.tenant_id).eq("auth_user_id", idTag.substring(4)).single()
+      : supabase.from("charging_users").select("id, status, group_id").eq("tenant_id", cp.tenant_id).eq("app_tag", idTag).single();
     const { data: appUser } = await query;
-    if (!appUser) return "Invalid"; // Not registered as charging user
+    if (!appUser) return "Invalid";
     if (appUser.status !== "active") return "Blocked";
-    return "Accepted";
+    userId = appUser.id;
+  } else {
+    const { data: user } = await supabase
+      .from("charging_users")
+      .select("id, status, group_id")
+      .eq("tenant_id", cp.tenant_id)
+      .eq("rfid_tag", idTag)
+      .single();
+    if (!user) return "Invalid";
+    if (user.status !== "active") return "Blocked";
+    userId = user.id;
   }
 
-  // RFID tag lookup
-  const { data: user } = await supabase
-    .from("charging_users")
-    .select("id, status")
-    .eq("tenant_id", cp.tenant_id)
-    .eq("rfid_tag", idTag)
-    .single();
-
-  if (!user) return "Invalid";
-  if (user.status !== "active") return "Blocked";
+  // User group restriction check
+  if (accessSettings.user_group_restriction) {
+    const allowed = await isUserInAllowedGroups(
+      supabase, cp.tenant_id, idTag, accessSettings.source, accessSettings.sourceId
+    );
+    if (!allowed) return "Blocked";
+  }
 
   return "Accepted";
 }
@@ -174,7 +273,7 @@ async function handleStartTransaction(
   // Get charge point
   const { data: cp } = await supabase
     .from("charge_points")
-    .select("id, tenant_id")
+    .select("id, tenant_id, group_id")
     .eq("ocpp_id", chargePointId)
     .single();
 
@@ -182,7 +281,7 @@ async function handleStartTransaction(
     return { idTagInfo: { status: "Invalid" } };
   }
 
-  // Validate RFID tag
+  // Validate RFID tag (includes access control checks)
   const idTag = payload.idTag as string | undefined;
   const authStatus = await validateIdTag(supabase, chargePointId, idTag);
   if (authStatus !== "Accepted") {
@@ -207,6 +306,19 @@ async function handleStartTransaction(
     .from("charge_points")
     .update({ status: "charging" })
     .eq("ocpp_id", chargePointId);
+
+  // Schedule auto-stop based on max charging duration
+  const accessSettings = await getEffectiveAccessSettings(supabase, cp.id, cp.group_id);
+  if (accessSettings.max_charging_duration_min > 0 && accessSettings.max_charging_duration_min < 1440) {
+    const stopAt = new Date(Date.now() + accessSettings.max_charging_duration_min * 60 * 1000).toISOString();
+    await supabase.from("pending_ocpp_commands").insert({
+      charge_point_ocpp_id: chargePointId,
+      command: "RemoteStopTransaction",
+      payload: { transactionId },
+      status: "scheduled",
+      scheduled_at: stopAt,
+    });
+  }
 
   return {
     transactionId,

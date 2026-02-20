@@ -15,6 +15,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
 import { Plus, Trash2, PlugZap, Users, Gauge, Shield, Info, Pencil, X, Check } from "lucide-react";
 import { PowerLimitScheduler, PowerLimitSchedule, defaultPowerLimitSchedule } from "@/components/charging/PowerLimitScheduler";
+import { AccessControlSettings, AccessSettings } from "@/components/charging/AccessControlSettings";
 
 export function ChargePointGroupsManager({ isAdmin }: { isAdmin: boolean }) {
   const { groups, isLoading, createGroup, updateGroup, deleteGroup, assignChargePointToGroup } = useChargePointGroups();
@@ -324,41 +325,18 @@ function ChargePointGroupDetail({ group, open, onOpenChange, chargePoints, isAdm
           </TabsContent>
 
           {/* Access tab */}
-          <TabsContent value="access" className="mt-4 space-y-4">
-            <div className="flex items-center justify-between p-4 border rounded-lg">
-              <div>
-                <p className="font-medium">Freies Laden erlauben</p>
-                <p className="text-sm text-muted-foreground">Laden ohne RFID-Karte oder App-Autorisierung</p>
-              </div>
-              <Switch checked={access.free_charging} onCheckedChange={(v) => setAccess({ ...access, free_charging: v })} disabled={!isAdmin} />
-            </div>
-            <div className="flex items-center justify-between p-4 border rounded-lg">
-              <div>
-                <p className="font-medium">Nutzergruppen-Beschränkung</p>
-                <p className="text-sm text-muted-foreground">Nur bestimmte Nutzergruppen für diese Gruppe zulassen</p>
-              </div>
-              <Switch checked={access.user_group_restriction} onCheckedChange={(v) => setAccess({ ...access, user_group_restriction: v })} disabled={!isAdmin} />
-            </div>
-            <div className="flex items-center justify-between p-4 border rounded-lg">
-              <div>
-                <p className="font-medium">Maximale Ladedauer</p>
-                <p className="text-sm text-muted-foreground">Ladevorgang nach Zeitlimit automatisch beenden</p>
-              </div>
-              <div className="flex items-center gap-2">
-                <Input type="number" className="w-20" value={access.max_charging_duration_min}
-                  onChange={(e) => setAccess({ ...access, max_charging_duration_min: parseInt(e.target.value) || 480 })}
-                  disabled={!isAdmin} />
-                <span className="text-sm text-muted-foreground">min</span>
-              </div>
-            </div>
-            {isAdmin && (
-              <Button onClick={handleSaveAccess} variant={accessSaved ? "outline" : "default"} className="gap-1.5">
-                {accessSaved ? <><Check className="h-3.5 w-3.5" />Gespeichert</> : "Einstellungen speichern"}
-              </Button>
-            )}
-            <p className="text-xs text-muted-foreground flex items-center gap-1">
-              <Info className="h-3 w-3" /> Diese Einstellungen gelten für alle Ladepunkte der Gruppe.
-            </p>
+          <TabsContent value="access" className="mt-4">
+            <AccessControlSettings
+              entityType="group"
+              entityId={group.id}
+              settings={access}
+              isAdmin={isAdmin}
+              onSave={(s) => {
+                onUpdate({ id: group.id, access_settings: s });
+                setAccessSaved(true);
+                setTimeout(() => setAccessSaved(false), 2000);
+              }}
+            />
           </TabsContent>
         </Tabs>
       </DialogContent>

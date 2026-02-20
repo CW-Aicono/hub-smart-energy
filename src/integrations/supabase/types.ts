@@ -150,6 +150,78 @@ export type Database = {
           },
         ]
       }
+      charge_point_allowed_user_groups: {
+        Row: {
+          charge_point_id: string
+          created_at: string
+          id: string
+          user_group_id: string
+        }
+        Insert: {
+          charge_point_id: string
+          created_at?: string
+          id?: string
+          user_group_id: string
+        }
+        Update: {
+          charge_point_id?: string
+          created_at?: string
+          id?: string
+          user_group_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "charge_point_allowed_user_groups_charge_point_id_fkey"
+            columns: ["charge_point_id"]
+            isOneToOne: false
+            referencedRelation: "charge_points"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "charge_point_allowed_user_groups_user_group_id_fkey"
+            columns: ["user_group_id"]
+            isOneToOne: false
+            referencedRelation: "charging_user_groups"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      charge_point_group_allowed_user_groups: {
+        Row: {
+          created_at: string
+          group_id: string
+          id: string
+          user_group_id: string
+        }
+        Insert: {
+          created_at?: string
+          group_id: string
+          id?: string
+          user_group_id: string
+        }
+        Update: {
+          created_at?: string
+          group_id?: string
+          id?: string
+          user_group_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "charge_point_group_allowed_user_groups_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "charge_point_groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "charge_point_group_allowed_user_groups_user_group_id_fkey"
+            columns: ["user_group_id"]
+            isOneToOne: false
+            referencedRelation: "charging_user_groups"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       charge_point_groups: {
         Row: {
           access_settings: Json
@@ -185,6 +257,7 @@ export type Database = {
       }
       charge_points: {
         Row: {
+          access_settings: Json
           address: string | null
           connector_count: number
           connector_type: string
@@ -208,6 +281,7 @@ export type Database = {
           vendor: string | null
         }
         Insert: {
+          access_settings?: Json
           address?: string | null
           connector_count?: number
           connector_type?: string
@@ -231,6 +305,7 @@ export type Database = {
           vendor?: string | null
         }
         Update: {
+          access_settings?: Json
           address?: string | null
           connector_count?: number
           connector_type?: string
@@ -1812,6 +1887,7 @@ export type Database = {
           payload: Json
           processed_at: string | null
           result: Json | null
+          scheduled_at: string | null
           status: string
         }
         Insert: {
@@ -1822,6 +1898,7 @@ export type Database = {
           payload?: Json
           processed_at?: string | null
           result?: Json | null
+          scheduled_at?: string | null
           status?: string
         }
         Update: {
@@ -1832,6 +1909,7 @@ export type Database = {
           payload?: Json
           processed_at?: string | null
           result?: Json | null
+          scheduled_at?: string | null
           status?: string
         }
         Relationships: []
