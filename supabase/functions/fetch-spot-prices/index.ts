@@ -19,7 +19,7 @@ Deno.serve(async (req) => {
     const startDate = new Date(now);
     startDate.setDate(startDate.getDate() - 1);
     const endDate = new Date(now);
-    endDate.setDate(endDate.getDate() + 1);
+    endDate.setDate(endDate.getDate() + 2);
 
     const start = startDate.toISOString().split("T")[0];
     const end = endDate.toISOString().split("T")[0];
