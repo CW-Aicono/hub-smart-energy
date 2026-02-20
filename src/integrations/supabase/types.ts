@@ -2716,6 +2716,7 @@ export type Database = {
       }
       tenant_electricity_tenants: {
         Row: {
+          auth_user_id: string | null
           created_at: string
           email: string | null
           id: string
@@ -2730,6 +2731,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          auth_user_id?: string | null
           created_at?: string
           email?: string | null
           id?: string
@@ -2744,6 +2746,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          auth_user_id?: string | null
           created_at?: string
           email?: string | null
           id?: string
