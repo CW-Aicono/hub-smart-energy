@@ -313,10 +313,13 @@ function TenantsTab() {
 
 // ── Tariffs Tab ──
 function TariffsTab() {
-  const { tariffs, createTariff, deleteTariff } = useTenantElectricityTariffs();
+  const { tariffs, createTariff, updateTariff, deleteTariff } = useTenantElectricityTariffs();
   const { locations } = useLocations();
   const [open, setOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [editTariff, setEditTariff] = useState<any>(null);
   const [form, setForm] = useState({ name: "", price_per_kwh_local: 0.22, price_per_kwh_grid: 0.35, base_fee_monthly: 5.0, location_id: "", valid_from: new Date().toISOString().split("T")[0], valid_until: "" });
+  const [editForm, setEditForm] = useState({ name: "", price_per_kwh_local: 0, price_per_kwh_grid: 0, base_fee_monthly: 0, location_id: "", valid_from: "", valid_until: "" });
 
   const handleCreate = () => {
     createTariff.mutate({
@@ -328,6 +331,34 @@ function TariffsTab() {
       valid_from: form.valid_from,
       valid_until: form.valid_until || undefined,
     }, { onSuccess: () => { setOpen(false); setForm({ name: "", price_per_kwh_local: 0.22, price_per_kwh_grid: 0.35, base_fee_monthly: 5.0, location_id: "", valid_from: new Date().toISOString().split("T")[0], valid_until: "" }); } });
+  };
+
+  const openEdit = (t: any) => {
+    setEditTariff(t);
+    setEditForm({
+      name: t.name || "",
+      price_per_kwh_local: Number(t.price_per_kwh_local),
+      price_per_kwh_grid: Number(t.price_per_kwh_grid),
+      base_fee_monthly: Number(t.base_fee_monthly),
+      location_id: t.location_id || "",
+      valid_from: t.valid_from || "",
+      valid_until: t.valid_until || "",
+    });
+    setEditOpen(true);
+  };
+
+  const handleUpdate = () => {
+    if (!editTariff) return;
+    updateTariff.mutate({
+      id: editTariff.id,
+      name: editForm.name,
+      price_per_kwh_local: editForm.price_per_kwh_local,
+      price_per_kwh_grid: editForm.price_per_kwh_grid,
+      base_fee_monthly: editForm.base_fee_monthly,
+      location_id: editForm.location_id,
+      valid_from: editForm.valid_from,
+      valid_until: editForm.valid_until || null,
+    }, { onSuccess: () => setEditOpen(false) });
   };
 
   return (
@@ -361,6 +392,32 @@ function TariffsTab() {
         </Dialog>
       </div>
 
+      {/* Edit Dialog */}
+      <Dialog open={editOpen} onOpenChange={setEditOpen}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Tarif bearbeiten</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div><Label>Tarifname</Label><Input value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} /></div>
+            <div><Label>Standort</Label>
+              <Select value={editForm.location_id} onValueChange={(v) => setEditForm({ ...editForm, location_id: v })}>
+                <SelectTrigger><SelectValue placeholder="Standort wählen" /></SelectTrigger>
+                <SelectContent>{locations.map((l) => <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <div><Label>Lokalstrom (€/kWh)</Label><Input type="number" step="0.01" value={editForm.price_per_kwh_local} onChange={(e) => setEditForm({ ...editForm, price_per_kwh_local: Number(e.target.value) })} /></div>
+              <div><Label>Netzstrom (€/kWh)</Label><Input type="number" step="0.01" value={editForm.price_per_kwh_grid} onChange={(e) => setEditForm({ ...editForm, price_per_kwh_grid: Number(e.target.value) })} /></div>
+              <div><Label>Grundgebühr (€/Monat)</Label><Input type="number" step="0.5" value={editForm.base_fee_monthly} onChange={(e) => setEditForm({ ...editForm, base_fee_monthly: Number(e.target.value) })} /></div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label>Gültig ab</Label><Input type="date" value={editForm.valid_from} onChange={(e) => setEditForm({ ...editForm, valid_from: e.target.value })} /></div>
+              <div><Label>Gültig bis (optional)</Label><Input type="date" value={editForm.valid_until} onChange={(e) => setEditForm({ ...editForm, valid_until: e.target.value })} /></div>
+            </div>
+            <Button onClick={handleUpdate} disabled={!editForm.name || !editForm.location_id || updateTariff.isPending} className="w-full">Änderungen speichern</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <Card className="p-4 bg-muted/50">
         <p className="text-sm text-muted-foreground"><Sun className="inline h-4 w-4 mr-1" />Hinweis: Der Mieterstromtarif muss gemäß § 42a EnWG mindestens 10 % unter dem örtlichen Grundversorgungstarif liegen.</p>
       </Card>
@@ -370,7 +427,7 @@ function TariffsTab() {
         <TableBody>
           {tariffs.map((t: any) => (
             <TableRow key={t.id}>
-              <TableCell className="font-medium">{t.name}</TableCell>
+              <TableCell className="font-medium"><button className="hover:underline text-left cursor-pointer text-primary" onClick={() => openEdit(t)}>{t.name}</button></TableCell>
               <TableCell>{t.locations?.name || "–"}</TableCell>
               <TableCell>{Number(t.price_per_kwh_local).toFixed(2)}</TableCell>
               <TableCell>{Number(t.price_per_kwh_grid).toFixed(2)}</TableCell>
