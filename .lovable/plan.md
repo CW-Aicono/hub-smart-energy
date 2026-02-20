@@ -1,162 +1,171 @@
 
+# Zwei neue Module: Arbitragehandel und Mieterstrom
 
-# Plan: lxcommunicator Integration im Gateway Worker
+## Hintergrund & Recherche
 
-## Zusammenfassung
+### Modul 1: Arbitragehandel (Strom)
+Arbitrage im Strommarkt bedeutet, Strom zu kaufen wenn er guenstig ist (z.B. nachts, bei viel Wind/Sonne) und ihn zu nutzen/einzuspeisen wenn er teuer ist. Fuer B2B-Kunden mit Batteriespeichern oder flexiblen Lasten ist das eine echte Erloesoption.
 
-Die gesamte eigene Crypto-Implementierung (RSA Key Exchange, AES-256-CBC, getkey2, getjwt, authwithtoken -- ca. 450 Zeilen fehleranfälliger Code) wird durch die offizielle Loxone-Bibliothek `lxcommunicator` ersetzt. Diese Bibliothek wird von Loxone selbst gepflegt und implementiert das Protokoll nachweislich korrekt.
+**Kernfunktionen:**
+- **Spotmarkt-Preisintegration**: Abruf aktueller Day-Ahead-Preise (EPEX Spot) ueber eine oeffentliche API (z.B. energy-charts.info oder ENTSO-E Transparency Platform)
+- **Speicher-Management**: Batteriespeicher registrieren mit Kapazitaet, Lade-/Entladeleistung, Wirkungsgrad
+- **Handelsstrategien**: Einfache Schwellwert-Strategien (kaufen unter X ct/kWh, verkaufen ueber Y ct/kWh)
+- **Erloes-Tracking**: Historische Aufzeichnung aller Lade-/Entladezyklen mit Gewinn/Verlust-Berechnung
+- **Dashboard-Widget**: Aktueller Spotpreis, Tagesverlauf, Speicherstatus, kumulierter Gewinn
 
-## Was sich ändert
+### Modul 2: Mieterstrom
+Vermieter erzeugen Strom (typisch PV-Anlage) und liefern ihn direkt an Mieter. Die Abrechnung erfordert: Erzeugungsmessung, individuelle Verbrauchsmessung je Mieter, Reststromberechnung aus dem Netz, und regelkonforme Rechnungserstellung.
 
-### Entfernt (ca. 450 Zeilen)
+**Kernfunktionen:**
+- **Mieterverwaltung**: Mieter mit Einheit/Wohnung, Zaehler-Zuordnung, Ein-/Auszugsdatum
+- **Tarif-Konfiguration**: Mieterstromtarif (muss unter Grundversorgung liegen, 90%-Regel), Reststromtarif
+- **Verbrauchs-Tracking**: Zuordnung PV-Erzeugung vs. Netzstrom je Mieter (proportional oder per Zaehler)
+- **Abrechnungslauf**: Periodische Abrechnung (monatlich/quartalsweise) mit Rechnungsgenerierung
+- **Mieter-Portal**: Einfache Verbrauchsuebersicht fuer Mieter (optional, spaetere Phase)
 
-- `loxoneAesEncrypt()` und `loxoneAesDecrypt()`
-- `loxoneWsAuth()` (RSA Key Exchange, getkey2, getjwt)
-- `loxoneAuthWithToken()` (getkey, authwithtoken)
-- `loxoneTokenStore` (Token-Verwaltung)
-- Alle manuellen WebSocket-Message-Handler fur Auth-Schritte
+---
 
-### Neu (ca. 80 Zeilen)
+## Technischer Plan
 
-Die Funktion `connectLoxoneWs()` wird umgeschrieben. Statt manueller Auth nutzt sie:
+### Phase 1: Datenbank-Schema
+
+**Arbitragehandel - Neue Tabellen:**
 
 ```text
-LxCommunicator.WebSocketConfig  -- Konfiguration (Protokoll, Permission APP)
-LxCommunicator.BinarySocket     -- WebSocket mit Auth + Crypto
-socket.open(host, user, pass)   -- Komplette Auth in einem Aufruf
-socket.send("jdev/sps/enablebinstatusupdate") -- Status-Updates
-delegate.socketOnEventReceived  -- Events empfangen
+energy_storages
+  id, tenant_id, location_id, name, capacity_kwh, max_charge_kw,
+  max_discharge_kw, efficiency_pct, status, created_at, updated_at
+
+spot_prices
+  id, market_area (z.B. "DE-LU"), price_eur_mwh, timestamp,
+  price_type ("day_ahead"/"intraday"), created_at
+
+arbitrage_strategies
+  id, tenant_id, storage_id, name, buy_below_eur_mwh,
+  sell_above_eur_mwh, is_active, created_at, updated_at
+
+arbitrage_trades
+  id, tenant_id, storage_id, strategy_id, trade_type ("charge"/"discharge"),
+  energy_kwh, price_eur_mwh, revenue_eur, timestamp, created_at
 ```
 
-### Unverandert bleibt
+**Mieterstrom - Neue Tabellen:**
 
-- Docker-Setup (Dockerfile, package.json-Struktur)
-- Supabase-Ingest (sendReadings, flushLoxoneBuffer)
-- Spike Detection
-- HTTP-Polling fur andere Gateways (Shelly, ABB, etc.)
-- Loxone DNS-Cache
-- UUID-Map und Meter-Zuordnung
-- Reconnect-Logik (wird vereinfacht)
-- Binar-Frame-Parser `parseLoxoneValueEvent()` (bleibt als Fallback)
+```text
+tenant_electricity_tenants (Mieter)
+  id, tenant_id, location_id, name, unit_label (z.B. "Whg 3"),
+  email, meter_id (FK meters), move_in_date, move_out_date,
+  status, created_at, updated_at
 
-## Technische Details
+tenant_electricity_tariffs
+  id, tenant_id, name, price_per_kwh_local (PV-Strom),
+  price_per_kwh_grid (Reststrom), base_fee_monthly,
+  valid_from, valid_until, created_at
 
-### 1. Neue Dependency
+tenant_electricity_readings
+  id, tenant_id, tenant_electricity_tenant_id, meter_id,
+  reading_value, reading_date, reading_type ("regular"/"move_in"/"move_out"),
+  created_at
 
-In `docs/gateway-worker/package.json`:
+tenant_electricity_invoices
+  id, tenant_id, tenant_electricity_tenant_id, tariff_id,
+  period_start, period_end, local_kwh, grid_kwh, total_kwh,
+  local_amount, grid_amount, base_fee, total_amount,
+  invoice_number, status, issued_at, created_at
 
-```json
-"dependencies": {
-  "ws": "^8.18.0",
-  "lxcommunicator": "^1.2.0"
-}
+tenant_electricity_settings
+  id, tenant_id, location_id, pv_meter_id (Erzeugungszaehler),
+  grid_meter_id (Netzbezugszaehler), allocation_method
+  ("proportional"/"metered"), billing_period ("monthly"/"quarterly"),
+  created_at, updated_at
 ```
 
-### 2. Neuer connectLoxoneWs() Aufbau
+Alle Tabellen erhalten RLS-Policies nach dem bestehenden Muster (`tenant_id = get_user_tenant_id()`).
 
-```typescript
-function connectLoxoneWs(state: LoxoneWsState): void {
-  const LxCommunicator = require("lxcommunicator");
-  const WebSocketConfig = LxCommunicator.WebSocketConfig;
+### Phase 2: Modul-Registrierung
 
-  const deviceInfo = "Gateway Worker";
-  const config = new WebSocketConfig(
-    WebSocketConfig.protocol.WS,   // oder WSS fur Gen2
-    state.serialNumber,
-    deviceInfo,
-    WebSocketConfig.permission.APP, // Permission 4 = langlebiges Token
-    false                           // kein TLS-Zertifikat
-  );
+Zwei neue Eintraege in `ALL_MODULES` (useTenantModules.tsx):
+- `{ code: "arbitrage_trading", label: "Arbitragehandel (Strom)" }`
+- `{ code: "tenant_electricity", label: "Mieterstrom" }`
 
-  config.delegate = {
-    socketOnEventReceived: (socket, events, type) => {
-      // type 1 = ValueEvent, type 2 = TextEvent
-      for (const event of events) {
-        const uuid = event.uuid?.toLowerCase();
-        const entry = state.uuidMap.get(uuid);
-        if (entry && typeof event.value === "number") {
-          if (!isSpike(event.value, entry.energy_type)) {
-            entry.latest_value = event.value;
-          }
-        }
-      }
-    },
-    socketOnConnectionClosed: (socket, code) => {
-      state.authenticated = false;
-      scheduleReconnect(state);
-    },
-    socketOnTokenConfirmed: (socket, response) => {
-      log("info", `[Loxone] Token confirmed: ${state.serialNumber}`);
-    },
-    socketOnTokenReceived: (socket, response) => {
-      log("info", `[Loxone] Token received: ${state.serialNumber}`);
-    },
-  };
+Entsprechende Eintraege in `ROUTE_MODULE_MAP` und `NAV_MODULE_MAP` im ModuleGuard.
 
-  const socket = new LxCommunicator.BinarySocket(config);
+### Phase 3: Frontend - Arbitragehandel
 
-  // host = DNS-aufgeloeste URL ohne Protokoll
-  const host = state.baseUrl.replace(/^https?:\/\//, "");
+**Neue Seiten:**
+- `/arbitrage` - Hauptseite mit Tabs:
+  - **Dashboard**: Aktueller Spotpreis-Chart (24h), Speicherstatus, Tagesgewinn
+  - **Speicher**: Batteriespeicher verwalten (CRUD)
+  - **Strategien**: Handelsstrategien konfigurieren (Schwellwerte)
+  - **Trades**: Historische Handels-Uebersicht mit Gewinn/Verlust
 
-  socket.open(host, state.username, state.password)
-    .then(() => {
-      state.authenticated = true;
-      log("info", `[Loxone] Authenticated via lxcommunicator: ${state.serialNumber}`);
-      return socket.send("jdev/sps/enablebinstatusupdate");
-    })
-    .then(() => {
-      state.statusUpdatesEnabled = true;
-      log("info", `[Loxone] Status updates enabled: ${state.serialNumber}`);
-    })
-    .catch((err) => {
-      log("warn", `[Loxone] Connection failed: ${state.serialNumber}: ${err}`);
-      scheduleReconnect(state);
-    });
+**Neue Hooks:**
+- `useEnergyStorages` - CRUD fuer Speicher
+- `useSpotPrices` - Abruf aktueller/historischer Spotpreise
+- `useArbitrageStrategies` - CRUD fuer Strategien
+- `useArbitrageTrades` - Trades-Historie
 
-  state.ws = socket; // Typ-Anpassung noetig
-}
-```
+**Dashboard-Widget:**
+- Kompakter Spotpreis-Ticker + Speicherstatus fuer das Haupt-Dashboard
 
-### 3. LoxoneWsState Interface anpassen
+**Edge Function:**
+- `fetch-spot-prices` - Holt stuendlich Day-Ahead-Preise von ENTSO-E/energy-charts API und schreibt sie in `spot_prices`
 
-Das `ws`-Feld wird auf `any` erweitert, da `BinarySocket` kein Standard-WebSocket ist:
+### Phase 4: Frontend - Mieterstrom
 
-```typescript
-interface LoxoneWsState {
-  // ...bestehende Felder...
-  ws: any;  // war: WebSocket | null
-  socket: any; // LxCommunicator.BinarySocket
-}
-```
+**Neue Seiten:**
+- `/tenant-electricity` - Hauptseite mit Tabs:
+  - **Uebersicht**: KPI-Karten (Gesamterzeugung, Eigenverbrauchsquote, Mieteranzahl, Umsatz)
+  - **Mieter**: Mieterverwaltung (Name, Einheit, Zaehler-Zuordnung, Status)
+  - **Tarife**: Mieterstromtarif und Reststromtarif konfigurieren
+  - **Ablesungen**: Zaehlerstaende erfassen (manuell oder automatisch aus bestehenden Metern)
+  - **Abrechnung**: Abrechnungslaeufe starten, Rechnungen generieren und versenden
+  - **Einstellungen**: PV-Zaehler, Netzzaehler, Verteilmethode konfigurieren
 
-### 4. Keepalive
+**Neue Hooks:**
+- `useTenantElectricityTenants` - CRUD Mieterverwaltung
+- `useTenantElectricityTariffs` - Tarifverwaltung
+- `useTenantElectricityReadings` - Zaehlerstaende
+- `useTenantElectricityInvoices` - Rechnungen
+- `useTenantElectricitySettings` - Konfiguration
 
-`lxcommunicator` verwaltet Keepalive intern -- unser manueller 4-Minuten-Timer entfallt.
+**Abrechnungslogik:**
+- Berechnung des Anteils PV-Strom vs. Netzstrom je Mieter (proportional nach Verbrauch oder direkt gemessen)
+- Automatische Rechnungserstellung mit Aufschluesselung (Lokal-kWh x Tarif + Netz-kWh x Tarif + Grundgebuehr)
+- Integration mit bestehendem E-Mail-Template-System fuer Rechnungsversand
 
-### 5. Reconnect
+### Phase 5: Super-Admin-Integration
 
-`scheduleReconnect()` bleibt, ruft aber `connectLoxoneWs()` auf, das nun `lxcommunicator` nutzt.
+- Beide Module erscheinen automatisch im TenantModulesDialog und auf der Module-Pricing-Seite
+- Keine zusaetzlichen Super-Admin-Seiten noetig - die Module werden per Tenant aktiviert/deaktiviert
 
-## Dateien die geandert werden
+### Phase 6: Sidebar-Navigation
 
-| Datei | Anderung |
-|---|---|
-| `docs/gateway-worker/index.ts` | Crypto-Code entfernen, lxcommunicator-Integration einbauen |
-| `docs/gateway-worker/package.json` | `lxcommunicator` als Dependency hinzufugen |
+**Mandanten-Sidebar** (DashboardSidebar.tsx):
+- Neuer Eintrag "Arbitragehandel" mit TrendingUp-Icon unter Energiedaten
+- Neuer Eintrag "Mieterstrom" mit Home-Icon als eigener Hauptpunkt
 
-## Risikobewertung
+---
 
-- **Gering**: `lxcommunicator` ist die offizielle Loxone-Bibliothek, wird auf npm gepflegt, und ist fur genau diesen Zweck gebaut
-- **Getestet**: Die Bibliothek wird von der Loxone-Community (node-red, openHAB, etc.) produktiv eingesetzt
-- **Fallback**: Falls etwas nicht funktioniert, liefern die Logs klare Fehlermeldungen der Bibliothek statt unserer eigenen kryptischen Timeout-Meldungen
+## Zusammenfassung der Dateien
 
-## Deployment
-
-Gleicher Ablauf wie bisher:
-
-1. `docker stop gateway-worker && docker rm gateway-worker && docker rmi gateway-worker`
-2. `index.ts` und `package.json` auf dem Pi aktualisieren
-3. `docker build --no-cache -t gateway-worker .`
-4. `docker run -d --name gateway-worker --restart unless-stopped -e SUPABASE_URL=... -e GATEWAY_API_KEY=... -e FLUSH_INTERVAL_MS=1000 gateway-worker`
-5. `sleep 15 && docker logs --tail 80 gateway-worker`
+| Aktion | Datei |
+|--------|-------|
+| Migration | Neue Tabellen + RLS fuer beide Module |
+| Bearbeiten | `useTenantModules.tsx` - 2 neue Module |
+| Bearbeiten | `useModuleGuard.tsx` - Route-Mappings |
+| Bearbeiten | `DashboardSidebar.tsx` - Nav-Eintraege |
+| Bearbeiten | `App.tsx` - Neue Routen |
+| Neu | `src/pages/ArbitrageTrading.tsx` |
+| Neu | `src/pages/TenantElectricity.tsx` |
+| Neu | `src/hooks/useEnergyStorages.tsx` |
+| Neu | `src/hooks/useSpotPrices.tsx` |
+| Neu | `src/hooks/useArbitrageStrategies.tsx` |
+| Neu | `src/hooks/useArbitrageTrades.tsx` |
+| Neu | `src/hooks/useTenantElectricityTenants.tsx` |
+| Neu | `src/hooks/useTenantElectricityTariffs.tsx` |
+| Neu | `src/hooks/useTenantElectricityInvoices.tsx` |
+| Neu | `src/hooks/useTenantElectricitySettings.tsx` |
+| Neu | `supabase/functions/fetch-spot-prices/index.ts` |
+| Bearbeiten | `src/i18n/translations.ts` - Neue Uebersetzungsschluessel |
 
