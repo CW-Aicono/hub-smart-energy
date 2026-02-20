@@ -1,149 +1,120 @@
 
-# Zwei neue Module: Arbitragehandel und Mieterstrom
 
-## Hintergrund & Recherche
+# PV-Produktionsprognose
 
-### Modul 1: Arbitragehandel (Strom)
-Arbitrage im Strommarkt bedeutet, Strom zu kaufen wenn er guenstig ist (z.B. nachts, bei viel Wind/Sonne) und ihn zu nutzen/einzuspeisen wenn er teuer ist. Fuer B2B-Kunden mit Batteriespeichern oder flexiblen Lasten ist das eine echte Erloesoption.
+## Ueberblick
 
-**Kernfunktionen:**
-- **Spotmarkt-Preisintegration**: Abruf aktueller Day-Ahead-Preise (EPEX Spot) ueber eine oeffentliche API (z.B. energy-charts.info oder ENTSO-E Transparency Platform)
-- **Speicher-Management**: Batteriespeicher registrieren mit Kapazitaet, Lade-/Entladeleistung, Wirkungsgrad
-- **Handelsstrategien**: Einfache Schwellwert-Strategien (kaufen unter X ct/kWh, verkaufen ueber Y ct/kWh)
-- **Erloes-Tracking**: Historische Aufzeichnung aller Lade-/Entladezyklen mit Gewinn/Verlust-Berechnung
-- **Dashboard-Widget**: Aktueller Spotpreis, Tagesverlauf, Speicherstatus, kumulierter Gewinn
+Eine KI-gestuetzte Solarprognose, die fuer jede Liegenschaft auf Basis von Standort-Koordinaten, Wetterdaten und historischen PV-Erzeugungswerten die erwartete Stromproduktion der naechsten 48 Stunden vorhersagt. Die Prognose wird als Dashboard-Widget, auf Liegenschaftsebene und im Arbitragehandel nutzbar gemacht.
 
-### Modul 2: Mieterstrom
-Vermieter erzeugen Strom (typisch PV-Anlage) und liefern ihn direkt an Mieter. Die Abrechnung erfordert: Erzeugungsmessung, individuelle Verbrauchsmessung je Mieter, Reststromberechnung aus dem Netz, und regelkonforme Rechnungserstellung.
+## Datenquellen
 
-**Kernfunktionen:**
-- **Mieterverwaltung**: Mieter mit Einheit/Wohnung, Zaehler-Zuordnung, Ein-/Auszugsdatum
-- **Tarif-Konfiguration**: Mieterstromtarif (muss unter Grundversorgung liegen, 90%-Regel), Reststromtarif
-- **Verbrauchs-Tracking**: Zuordnung PV-Erzeugung vs. Netzstrom je Mieter (proportional oder per Zaehler)
-- **Abrechnungslauf**: Periodische Abrechnung (monatlich/quartalsweise) mit Rechnungsgenerierung
-- **Mieter-Portal**: Einfache Verbrauchsuebersicht fuer Mieter (optional, spaetere Phase)
-
----
+- **Open-Meteo Solar Forecast API** (kostenlos, kein API-Key noetig): Liefert stuendliche Globalstrahlung (GHI), Direktstrahlung (DNI) und Diffusstrahlung (DHI) fuer beliebige Koordinaten. URL-Muster: `https://api.open-meteo.com/v1/forecast?latitude=...&longitude=...&hourly=shortwave_radiation,direct_radiation,diffuse_radiation,cloud_cover&timezone=Europe/Berlin&forecast_days=2`
+- **Standort-Koordinaten**: Bereits in der `locations`-Tabelle vorhanden (latitude, longitude)
+- **Historische PV-Erzeugung**: Aus `meter_period_totals` fuer Zaehler mit energy_type "solar" oder ueber `tenant_electricity_settings.pv_meter_id`
+- **KI-Veredelung**: Lovable AI (Gemini Flash) vergleicht die Strahlungsprognose mit historischen Erzeugungswerten und leitet daraus eine kalibrierte kWh-Prognose ab
 
 ## Technischer Plan
 
-### Phase 1: Datenbank-Schema
-
-**Arbitragehandel - Neue Tabellen:**
+### 1. Neue Datenbank-Tabelle
 
 ```text
-energy_storages
-  id, tenant_id, location_id, name, capacity_kwh, max_charge_kw,
-  max_discharge_kw, efficiency_pct, status, created_at, updated_at
+pv_forecast_settings (Mandanten-/Liegenschaftsebene)
+  id             uuid PK
+  tenant_id      uuid NOT NULL (FK tenants)
+  location_id    uuid NOT NULL (FK locations)
+  pv_meter_id    uuid (FK meters) -- zugeordneter PV-Zaehler
+  peak_power_kwp numeric NOT NULL DEFAULT 10  -- installierte Spitzenleistung
+  tilt_deg       numeric DEFAULT 30           -- Neigungswinkel der Module
+  azimuth_deg    numeric DEFAULT 180          -- Ausrichtung (180 = Sued)
+  is_active      boolean DEFAULT true
+  created_at     timestamptz
+  updated_at     timestamptz
 
-spot_prices
-  id, market_area (z.B. "DE-LU"), price_eur_mwh, timestamp,
-  price_type ("day_ahead"/"intraday"), created_at
-
-arbitrage_strategies
-  id, tenant_id, storage_id, name, buy_below_eur_mwh,
-  sell_above_eur_mwh, is_active, created_at, updated_at
-
-arbitrage_trades
-  id, tenant_id, storage_id, strategy_id, trade_type ("charge"/"discharge"),
-  energy_kwh, price_eur_mwh, revenue_eur, timestamp, created_at
+RLS: tenant_id = get_user_tenant_id()
 ```
 
-**Mieterstrom - Neue Tabellen:**
+Die Prognose-Ergebnisse werden NICHT persistent gespeichert, sondern on-demand aus der API abgerufen und optional per KI kalibriert. Das haelt die Architektur schlank.
+
+### 2. Edge Function: `pv-forecast`
+
+Eine neue Backend-Funktion mit zwei Schritten:
+
+**Schritt A - Strahlungsdaten holen:**
+- Empfaengt `location_id` (und optional `tenant_id`)
+- Liest Koordinaten und PV-Einstellungen (kWp, Neigung, Ausrichtung) aus der DB
+- Ruft Open-Meteo Solar API ab (48h stuendlich)
+- Berechnet eine Basis-Prognose: `estimated_kwh = GHI * peak_power_kwp * efficiency_factor`
+
+**Schritt B - KI-Kalibrierung (optional):**
+- Liest die letzten 30 Tage historische PV-Erzeugung aus `meter_period_totals`
+- Sendet Strahlungsprognose + historische Daten an Lovable AI (Gemini Flash)
+- KI liefert kalibrierten Korrekturfaktor und stuendliche kWh-Prognose zurueck
+- Fallback: Wenn keine historischen Daten vorhanden, wird die physikalische Basisprognose verwendet
+
+**Rueckgabe-Format:**
+```text
+{
+  location: { name, city },
+  settings: { peak_power_kwp, tilt_deg, azimuth_deg },
+  hourly: [
+    { timestamp, radiation_w_m2, cloud_cover_pct, estimated_kwh, ai_adjusted_kwh }
+  ],
+  summary: {
+    today_total_kwh, tomorrow_total_kwh,
+    peak_hour, peak_kwh,
+    ai_confidence, ai_notes
+  }
+}
+```
+
+### 3. Frontend-Hook: `usePvForecast`
 
 ```text
-tenant_electricity_tenants (Mieter)
-  id, tenant_id, location_id, name, unit_label (z.B. "Whg 3"),
-  email, meter_id (FK meters), move_in_date, move_out_date,
-  status, created_at, updated_at
+usePvForecast(locationId: string | null)
+  -> { forecast, isLoading, error, refetch }
 
-tenant_electricity_tariffs
-  id, tenant_id, name, price_per_kwh_local (PV-Strom),
-  price_per_kwh_grid (Reststrom), base_fee_monthly,
-  valid_from, valid_until, created_at
-
-tenant_electricity_readings
-  id, tenant_id, tenant_electricity_tenant_id, meter_id,
-  reading_value, reading_date, reading_type ("regular"/"move_in"/"move_out"),
-  created_at
-
-tenant_electricity_invoices
-  id, tenant_id, tenant_electricity_tenant_id, tariff_id,
-  period_start, period_end, local_kwh, grid_kwh, total_kwh,
-  local_amount, grid_amount, base_fee, total_amount,
-  invoice_number, status, issued_at, created_at
-
-tenant_electricity_settings
-  id, tenant_id, location_id, pv_meter_id (Erzeugungszaehler),
-  grid_meter_id (Netzbezugszaehler), allocation_method
-  ("proportional"/"metered"), billing_period ("monthly"/"quarterly"),
-  created_at, updated_at
+usePvForecastSettings(locationId: string)
+  -> { settings, isLoading, upsertSettings, deleteSettings }
 ```
 
-Alle Tabellen erhalten RLS-Policies nach dem bestehenden Muster (`tenant_id = get_user_tenant_id()`).
+- Ruft die Edge Function `pv-forecast` auf
+- Cached das Ergebnis fuer 30 Minuten (staleTime)
+- Refetch alle 30 Minuten
 
-### Phase 2: Modul-Registrierung
+### 4. Dashboard-Widget: `PvForecastWidget`
 
-Zwei neue Eintraege in `ALL_MODULES` (useTenantModules.tsx):
-- `{ code: "arbitrage_trading", label: "Arbitragehandel (Strom)" }`
-- `{ code: "tenant_electricity", label: "Mieterstrom" }`
+Neues Dashboard-Widget fuer die Hauptuebersicht:
 
-Entsprechende Eintraege in `ROUTE_MODULE_MAP` und `NAV_MODULE_MAP` im ModuleGuard.
+- **Kopfzeile**: "PV-Prognose" mit Sonnen-Icon, Liegenschaftsname
+- **Tageszusammenfassung**: Heute X kWh / Morgen Y kWh als grosse Zahlen
+- **Stuendlicher Verlauf**: Balkendiagramm (48h) mit farblicher Kodierung (gelb = Sonne, grau = bewoelkt)
+- **Aktueller Status**: Geschaetzte aktuelle Leistung in kW
+- **KI-Hinweis**: Kurzer Satz der KI zur Prognoseguete ("Gute Uebereinstimmung mit historischen Daten" o.ae.)
 
-### Phase 3: Frontend - Arbitragehandel
+Registrierung in `useDashboardWidgets` als neuer Widget-Typ `pv_forecast`.
 
-**Neue Seiten:**
-- `/arbitrage` - Hauptseite mit Tabs:
-  - **Dashboard**: Aktueller Spotpreis-Chart (24h), Speicherstatus, Tagesgewinn
-  - **Speicher**: Batteriespeicher verwalten (CRUD)
-  - **Strategien**: Handelsstrategien konfigurieren (Schwellwerte)
-  - **Trades**: Historische Handels-Uebersicht mit Gewinn/Verlust
+### 5. Integration in Liegenschafts-Detail
 
-**Neue Hooks:**
-- `useEnergyStorages` - CRUD fuer Speicher
-- `useSpotPrices` - Abruf aktueller/historischer Spotpreise
-- `useArbitrageStrategies` - CRUD fuer Strategien
-- `useArbitrageTrades` - Trades-Historie
+Auf der Seite `/locations/:id` wird ein neuer Abschnitt "PV-Prognose" eingefuegt (collapsible, wie die anderen Sektionen):
 
-**Dashboard-Widget:**
-- Kompakter Spotpreis-Ticker + Speicherstatus fuer das Haupt-Dashboard
+- **Einstellungen-Karte**: kWp, Neigung, Ausrichtung konfigurieren, PV-Zaehler zuordnen
+- **Prognose-Chart**: 48h-Verlauf mit Ist-Erzeugung (wenn Live-Daten vorhanden) vs. Prognose
+- **Tages-/Wochenuebersicht**: Zusammenfassung der prognostizierten Erzeugung
 
-**Edge Function:**
-- `fetch-spot-prices` - Holt stuendlich Day-Ahead-Preise von ENTSO-E/energy-charts API und schreibt sie in `spot_prices`
+### 6. Integration in Arbitragehandel
 
-### Phase 4: Frontend - Mieterstrom
+Auf der Arbitrage-Seite (`/arbitrage`) wird ein neuer Bereich ergaenzt:
 
-**Neue Seiten:**
-- `/tenant-electricity` - Hauptseite mit Tabs:
-  - **Uebersicht**: KPI-Karten (Gesamterzeugung, Eigenverbrauchsquote, Mieteranzahl, Umsatz)
-  - **Mieter**: Mieterverwaltung (Name, Einheit, Zaehler-Zuordnung, Status)
-  - **Tarife**: Mieterstromtarif und Reststromtarif konfigurieren
-  - **Ablesungen**: Zaehlerstaende erfassen (manuell oder automatisch aus bestehenden Metern)
-  - **Abrechnung**: Abrechnungslaeufe starten, Rechnungen generieren und versenden
-  - **Einstellungen**: PV-Zaehler, Netzzaehler, Verteilmethode konfigurieren
+- **PV-Prognose-Overlay im Spotpreis-Chart**: Die prognostizierte PV-Leistung wird als zweite Y-Achse im bestehenden Spotpreis-Verlauf angezeigt. So sieht man auf einen Blick: "Wann ist Strom teuer UND wann produziere ich viel?"
+- **Empfehlungs-Karte**: KI-generierter Hinweis wie "Heute 14-16 Uhr: Hohe PV-Erzeugung bei hohem Spotpreis - Batterie entladen empfohlen"
 
-**Neue Hooks:**
-- `useTenantElectricityTenants` - CRUD Mieterverwaltung
-- `useTenantElectricityTariffs` - Tarifverwaltung
-- `useTenantElectricityReadings` - Zaehlerstaende
-- `useTenantElectricityInvoices` - Rechnungen
-- `useTenantElectricitySettings` - Konfiguration
+### 7. Modul-Zuordnung
 
-**Abrechnungslogik:**
-- Berechnung des Anteils PV-Strom vs. Netzstrom je Mieter (proportional nach Verbrauch oder direkt gemessen)
-- Automatische Rechnungserstellung mit Aufschluesselung (Lokal-kWh x Tarif + Netz-kWh x Tarif + Grundgebuehr)
-- Integration mit bestehendem E-Mail-Template-System fuer Rechnungsversand
+Die PV-Prognose wird KEIN eigenes Modul, sondern als Feature innerhalb des bestehenden `energy_monitoring`-Moduls gefuehrt. Die Konfiguration erfolgt pro Liegenschaft - Mandanten ohne PV-Zaehler sehen das Feature nicht.
 
-### Phase 5: Super-Admin-Integration
+### 8. Sidebar / Navigation
 
-- Beide Module erscheinen automatisch im TenantModulesDialog und auf der Module-Pricing-Seite
-- Keine zusaetzlichen Super-Admin-Seiten noetig - die Module werden per Tenant aktiviert/deaktiviert
-
-### Phase 6: Sidebar-Navigation
-
-**Mandanten-Sidebar** (DashboardSidebar.tsx):
-- Neuer Eintrag "Arbitragehandel" mit TrendingUp-Icon unter Energiedaten
-- Neuer Eintrag "Mieterstrom" mit Home-Icon als eigener Hauptpunkt
+Kein neuer Navigationseintrag noetig - die Prognose ist ueber das Dashboard-Widget und die Liegenschafts-Detailseite erreichbar.
 
 ---
 
@@ -151,21 +122,15 @@ Entsprechende Eintraege in `ROUTE_MODULE_MAP` und `NAV_MODULE_MAP` im ModuleGuar
 
 | Aktion | Datei |
 |--------|-------|
-| Migration | Neue Tabellen + RLS fuer beide Module |
-| Bearbeiten | `useTenantModules.tsx` - 2 neue Module |
-| Bearbeiten | `useModuleGuard.tsx` - Route-Mappings |
-| Bearbeiten | `DashboardSidebar.tsx` - Nav-Eintraege |
-| Bearbeiten | `App.tsx` - Neue Routen |
-| Neu | `src/pages/ArbitrageTrading.tsx` |
-| Neu | `src/pages/TenantElectricity.tsx` |
-| Neu | `src/hooks/useEnergyStorages.tsx` |
-| Neu | `src/hooks/useSpotPrices.tsx` |
-| Neu | `src/hooks/useArbitrageStrategies.tsx` |
-| Neu | `src/hooks/useArbitrageTrades.tsx` |
-| Neu | `src/hooks/useTenantElectricityTenants.tsx` |
-| Neu | `src/hooks/useTenantElectricityTariffs.tsx` |
-| Neu | `src/hooks/useTenantElectricityInvoices.tsx` |
-| Neu | `src/hooks/useTenantElectricitySettings.tsx` |
-| Neu | `supabase/functions/fetch-spot-prices/index.ts` |
-| Bearbeiten | `src/i18n/translations.ts` - Neue Uebersetzungsschluessel |
+| Migration | `pv_forecast_settings`-Tabelle + RLS |
+| Neu | `supabase/functions/pv-forecast/index.ts` |
+| Neu | `src/hooks/usePvForecast.tsx` |
+| Neu | `src/components/dashboard/PvForecastWidget.tsx` |
+| Neu | `src/components/locations/PvForecastSection.tsx` |
+| Bearbeiten | `src/pages/LocationDetail.tsx` - PV-Prognose-Sektion einbinden |
+| Bearbeiten | `src/pages/ArbitrageTrading.tsx` - PV-Overlay im Spotpreis-Chart |
+| Bearbeiten | `src/hooks/useDashboardWidgets.tsx` - Widget-Typ registrieren |
+| Bearbeiten | `src/components/dashboard/DashboardCustomizer.tsx` - Widget hinzufuegen |
+| Bearbeiten | `supabase/config.toml` - `[functions.pv-forecast]` eintragen |
+| Bearbeiten | `src/i18n/translations.ts` - Uebersetzungsschluessel |
 
