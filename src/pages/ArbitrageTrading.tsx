@@ -18,7 +18,7 @@ import { useSpotPrices } from "@/hooks/useSpotPrices";
 import { useArbitrageStrategies } from "@/hooks/useArbitrageStrategies";
 import { useArbitrageTrades } from "@/hooks/useArbitrageTrades";
 import { useLocations } from "@/hooks/useLocations";
-import { usePvForecast, usePvForecastSettings } from "@/hooks/usePvForecast";
+import { usePvForecast } from "@/hooks/usePvForecast";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, Area, ComposedChart } from "recharts";
 import { format, type Locale } from "date-fns";
 import { de, enUS, es, nl } from "date-fns/locale";
@@ -70,8 +70,7 @@ function ArbitrageDashboard() {
   // Auto-select first location
   const effectiveLocationId = selectedLocationId || locations[0]?.id || null;
   const { forecast: pvForecast } = usePvForecast(effectiveLocationId);
-  const { settings: pvSettings } = usePvForecastSettings(effectiveLocationId);
-  const hasPv = !!pvSettings?.peak_power_kwp;
+  const hasPv = !!pvForecast?.settings?.peak_power_kwp;
   const now = new Date();
   const startCutoff = new Date(now.getTime() - 12 * 60 * 60 * 1000);
   const locale = localeMap[language] || de;
