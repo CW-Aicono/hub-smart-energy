@@ -54,15 +54,29 @@ export function PvForecastSection({ locationId }: PvForecastSectionProps) {
     });
   };
 
+  const dayNames = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
   const chartData = forecast?.hourly
-    .filter((_, i) => i % 1 === 0)
-    .map((h) => ({
-      time: h.timestamp.slice(11, 16),
-      date: h.timestamp.slice(0, 10),
-      kwh: h.ai_adjusted_kwh ?? h.estimated_kwh,
-      cloud: h.cloud_cover_pct,
-      radiation: h.radiation_w_m2,
-    })) ?? [];
+    .map((h) => {
+      const d = new Date(h.timestamp);
+      const dayLabel = `${dayNames[d.getDay()]} ${d.getDate()}.${d.getMonth() + 1}.`;
+      return {
+        time: h.timestamp.slice(11, 16),
+        dayLabel,
+        kwh: h.ai_adjusted_kwh ?? h.estimated_kwh,
+        cloud: h.cloud_cover_pct,
+        radiation: h.radiation_w_m2,
+      };
+    }) ?? [];
+
+  // Build tick labels: show day header at first hour of each day
+  const seenDays = new Set<string>();
+  const chartDataWithLabel = chartData.map((d) => {
+    if (!seenDays.has(d.dayLabel)) {
+      seenDays.add(d.dayLabel);
+      return { ...d, xLabel: `${d.dayLabel} ${d.time}` };
+    }
+    return { ...d, xLabel: d.time };
+  });
 
   return (
     <Collapsible open={isOpen} onOpenChange={setIsOpen}>
@@ -164,22 +178,25 @@ export function PvForecastSection({ locationId }: PvForecastSectionProps) {
                 <div>
                   <h4 className="text-sm font-medium mb-2">48-Stunden-Prognose</h4>
                   <ResponsiveContainer width="100%" height={240}>
-                    <BarChart data={chartData} margin={{ left: -10 }}>
+                    <BarChart data={chartDataWithLabel} margin={{ left: -10, bottom: 20 }}>
                       <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="time" tick={{ fontSize: 10 }} interval={3} />
+                      <XAxis
+                        dataKey="xLabel"
+                        tick={{ fontSize: 9 }}
+                        interval={3}
+                        angle={-30}
+                        textAnchor="end"
+                        height={50}
+                      />
                       <YAxis tick={{ fontSize: 10 }} width={35} label={{ value: "kWh", angle: -90, position: "insideLeft", style: { fontSize: 10 } }} />
                       <Tooltip
                         formatter={(v: number, name: string) => {
                           if (name === "kwh") return [`${v.toFixed(2)} kWh`, "Erzeugung"];
                           return [v, name];
                         }}
-                        labelFormatter={(l) => `${l} Uhr`}
+                        labelFormatter={(l) => `${l}`}
                       />
-                      <Bar dataKey="kwh" radius={[2, 2, 0, 0]}>
-                        {chartData.map((entry, idx) => (
-                          <Cell key={idx} fill={entry.cloud > 70 ? "hsl(var(--muted-foreground))" : "hsl(45, 93%, 47%)"} />
-                        ))}
-                      </Bar>
+                      <Bar dataKey="kwh" radius={[2, 2, 0, 0]} fill="hsl(45, 93%, 47%)" />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
