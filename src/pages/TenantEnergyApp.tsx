@@ -30,6 +30,8 @@ interface TenantRecord {
   meter_id: string | null;
   tenant_id: string;
   status: string;
+  move_in_date: string | null;
+  move_out_date: string | null;
   assigned_meters: AssignedMeter[];
 }
 
@@ -385,9 +387,17 @@ function MeterTab({ tenantRecord }: { tenantRecord: TenantRecord }) {
 
   // Group data by month across all meters
   const monthGroups = useMemo(() => {
-    // Collect all unique months from totals
+    // Collect all unique months from totals, filtered by tenancy period
+    const moveIn = tenantRecord.move_in_date ? new Date(tenantRecord.move_in_date) : null;
+    const moveOut = tenantRecord.move_out_date ? new Date(tenantRecord.move_out_date) : null;
     const monthSet = new Set<string>();
-    allTotals.forEach((t: any) => monthSet.add(t.period_start));
+    allTotals.forEach((t: any) => {
+      const monthDate = new Date(t.period_start);
+      // Only include months that fall within the tenancy period
+      if (moveIn && monthDate < startOfMonth(moveIn)) return;
+      if (moveOut && monthDate > startOfMonth(moveOut)) return;
+      monthSet.add(t.period_start);
+    });
 
     const sorted = Array.from(monthSet).sort((a, b) => b.localeCompare(a));
 
@@ -413,7 +423,7 @@ function MeterTab({ tenantRecord }: { tenantRecord: TenantRecord }) {
 
       return { periodStart, label, meterEntries };
     });
-  }, [meters, allTotals, allReadings]);
+  }, [meters, allTotals, allReadings, tenantRecord.move_in_date, tenantRecord.move_out_date]);
 
   if (meterIds.length === 0) {
     return (
@@ -567,7 +577,7 @@ const TenantEnergyApp = () => {
       // Try to find by auth_user_id first, then by email
       let { data: rec } = await supabase
         .from("tenant_electricity_tenants")
-        .select("id, name, unit_label, meter_id, tenant_id, status, tenant_electricity_tenant_meters(meter_id, meters(id, name, energy_type, unit, meter_number))")
+        .select("id, name, unit_label, meter_id, tenant_id, status, move_in_date, move_out_date, tenant_electricity_tenant_meters(meter_id, meters(id, name, energy_type, unit, meter_number))")
         .eq("auth_user_id", user.id)
         .eq("status", "active")
         .maybeSingle();
@@ -576,7 +586,7 @@ const TenantEnergyApp = () => {
       if (!rec && user.email) {
         const { data: emailMatch } = await supabase
           .from("tenant_electricity_tenants")
-          .select("id, name, unit_label, meter_id, tenant_id, status, tenant_electricity_tenant_meters(meter_id, meters(id, name, energy_type, unit, meter_number))")
+          .select("id, name, unit_label, meter_id, tenant_id, status, move_in_date, move_out_date, tenant_electricity_tenant_meters(meter_id, meters(id, name, energy_type, unit, meter_number))")
           .eq("email", user.email)
           .eq("status", "active")
           .is("auth_user_id", null)
