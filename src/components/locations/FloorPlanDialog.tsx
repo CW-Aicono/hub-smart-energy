@@ -486,7 +486,7 @@ export function FloorPlanDialog({ floor, locationId, open, onOpenChange }: Floor
                     maxScale={6}
                     centerOnInit
                     limitToBounds={false}
-                    wheel={{ step: 0.1 }}
+                    wheel={{ disabled: true }}
                   >
                     {({ zoomIn, zoomOut, resetTransform }) => (
                       <>

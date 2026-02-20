@@ -173,7 +173,7 @@ const FloorPlanWidget = ({ locationId }: FloorPlanWidgetProps) => {
               maxScale={4}
               centerOnInit
               limitToBounds={false}
-              wheel={{ step: 0.1 }}
+              wheel={{ disabled: true }}
               panning={{ velocityDisabled: true }}
             >
               <ZoomControls />
