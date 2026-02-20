@@ -58,9 +58,11 @@ export function PvForecastSection({ locationId }: PvForecastSectionProps) {
   const chartData = forecast?.hourly
     .map((h) => {
       const d = new Date(h.timestamp);
+      const hour = d.getHours();
       const dayLabel = `${dayNames[d.getDay()]} ${d.getDate()}.${d.getMonth() + 1}.`;
       return {
         time: h.timestamp.slice(11, 16),
+        hour,
         dayLabel,
         kwh: h.ai_adjusted_kwh ?? h.estimated_kwh,
         cloud: h.cloud_cover_pct,
@@ -68,15 +70,23 @@ export function PvForecastSection({ locationId }: PvForecastSectionProps) {
       };
     }) ?? [];
 
-  // Build tick labels: show day header at first hour of each day
-  const seenDays = new Set<string>();
-  const chartDataWithLabel = chartData.map((d) => {
-    if (!seenDays.has(d.dayLabel)) {
-      seenDays.add(d.dayLabel);
-      return { ...d, xLabel: `${d.dayLabel} ${d.time}` };
-    }
-    return { ...d, xLabel: d.time };
-  });
+  const CustomXTick = ({ x, y, payload }: any) => {
+    const entry = chartData[payload?.index];
+    if (!entry) return null;
+    const showDate = entry.hour === 12;
+    return (
+      <g transform={`translate(${x},${y})`}>
+        <text x={0} y={0} dy={12} textAnchor="middle" fontSize={9} fill="currentColor">
+          {entry.time}
+        </text>
+        {showDate && (
+          <text x={0} y={0} dy={24} textAnchor="middle" fontSize={9} fill="currentColor" fontWeight={600}>
+            {entry.dayLabel}
+          </text>
+        )}
+      </g>
+    );
+  };
 
   return (
     <Collapsible open={isOpen} onOpenChange={setIsOpen}>
@@ -178,15 +188,13 @@ export function PvForecastSection({ locationId }: PvForecastSectionProps) {
                 <div>
                   <h4 className="text-sm font-medium mb-2">48-Stunden-Prognose</h4>
                   <ResponsiveContainer width="100%" height={240}>
-                    <BarChart data={chartDataWithLabel} margin={{ left: -10, bottom: 20 }}>
+                    <BarChart data={chartData} margin={{ left: -10, bottom: 30 }}>
                       <CartesianGrid strokeDasharray="3 3" />
                       <XAxis
-                        dataKey="xLabel"
-                        tick={{ fontSize: 9 }}
-                        interval={3}
-                        angle={-30}
-                        textAnchor="end"
-                        height={50}
+                        dataKey="time"
+                        tick={<CustomXTick />}
+                        interval={2}
+                        height={55}
                       />
                       <YAxis tick={{ fontSize: 10 }} width={35} label={{ value: "kWh", angle: -90, position: "insideLeft", style: { fontSize: 10 } }} />
                       <Tooltip
@@ -194,7 +202,10 @@ export function PvForecastSection({ locationId }: PvForecastSectionProps) {
                           if (name === "kwh") return [`${v.toFixed(2)} kWh`, "Erzeugung"];
                           return [v, name];
                         }}
-                        labelFormatter={(l) => `${l}`}
+                        labelFormatter={(_l: string, payload: any[]) => {
+                          const entry = payload?.[0]?.payload;
+                          return entry ? `${entry.dayLabel} ${entry.time} Uhr` : _l;
+                        }}
                       />
                       <Bar dataKey="kwh" radius={[2, 2, 0, 0]} fill="hsl(45, 93%, 47%)" />
                     </BarChart>
