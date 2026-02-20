@@ -365,6 +365,7 @@ function MeterTab({ tenantRecord }: { tenantRecord: TenantRecord }) {
   const [meters, setMeters] = useState<any[]>([]);
   const [allTotals, setAllTotals] = useState<any[]>([]);
   const [allReadings, setAllReadings] = useState<any[]>([]);
+  const [meterStands, setMeterStands] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
 
   const meterIds = useMemo(() => {
@@ -382,7 +383,7 @@ function MeterTab({ tenantRecord }: { tenantRecord: TenantRecord }) {
 
     const fetchData = async () => {
       const [{ data: mData }, { data: tData }, { data: rData }] = await Promise.all([
-        supabase.from("meters").select("id, name, meter_number, energy_type, unit").in("id", meterIds),
+        supabase.from("meters").select("id, name, meter_number, energy_type, unit, sensor_uuid, location_integration_id").in("id", meterIds),
         supabase.from("meter_period_totals").select("*").in("meter_id", meterIds).eq("period_type", "month").order("period_start", { ascending: false }).limit(120),
         supabase.from("meter_readings").select("meter_id, value, reading_date").in("meter_id", meterIds).order("reading_date", { ascending: false }).limit(120),
       ]);
@@ -390,6 +391,40 @@ function MeterTab({ tenantRecord }: { tenantRecord: TenantRecord }) {
       setAllTotals(tData || []);
       setAllReadings(rData || []);
       setLoading(false);
+
+      // Fetch live Zählerstände from gateway for automatic meters
+      const autoMeters = (mData || []).filter((m: any) => m.sensor_uuid && m.location_integration_id);
+      if (autoMeters.length > 0) {
+        // Group by integration
+        const byIntegration = new Map<string, any[]>();
+        autoMeters.forEach((m: any) => {
+          const arr = byIntegration.get(m.location_integration_id) || [];
+          arr.push(m);
+          byIntegration.set(m.location_integration_id, arr);
+        });
+
+        const stands: Record<string, number> = {};
+        for (const [integrationId, intMeters] of byIntegration) {
+          try {
+            const { data } = await supabase.functions.invoke("loxone-api", {
+              body: { locationIntegrationId: integrationId, action: "getSensors" },
+            });
+            if (data?.sensors) {
+              for (const m of intMeters) {
+                const sensor = data.sensors.find((s: any) => s.id === m.sensor_uuid);
+                if (sensor?.meterReading !== undefined && sensor.meterReading !== null) {
+                  stands[m.id] = Number(sensor.meterReading);
+                } else if (sensor?.secondaryValue !== undefined && sensor.secondaryValue !== null) {
+                  stands[m.id] = Number(sensor.secondaryValue);
+                }
+              }
+            }
+          } catch (e) {
+            console.warn("Failed to fetch live meter stands:", e);
+          }
+        }
+        setMeterStands(stands);
+      }
     };
     fetchData();
   }, [meterIds]);
@@ -452,24 +487,35 @@ function MeterTab({ tenantRecord }: { tenantRecord: TenantRecord }) {
     <div className="space-y-4">
       {/* Meter overview cards */}
       <div className="space-y-2">
-        {meters.map((m) => (
-          <Card key={m.id}>
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-lg bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
-                  <Zap className="h-5 w-5 text-green-600" />
+        {meters.map((m) => {
+          const stand = meterStands[m.id];
+          return (
+            <Card key={m.id}>
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="h-10 w-10 rounded-lg bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
+                      <Zap className="h-5 w-5 text-green-600" />
+                    </div>
+                    <div>
+                      <p className="font-medium">{m.name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {m.meter_number && `Nr. ${m.meter_number} · `}
+                        {fmtEnergyType(m.energy_type)} · {displayUnit(m.unit, m.energy_type)}
+                      </p>
+                    </div>
+                  </div>
+                  {stand !== undefined && (
+                    <div className="text-right">
+                      <p className="text-xs text-muted-foreground">Zählerstand</p>
+                      <p className="font-bold text-sm">{fmtDe(stand, 1)} {displayUnit(m.unit, m.energy_type)}</p>
+                    </div>
+                  )}
                 </div>
-                <div>
-                  <p className="font-medium">{m.name}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {m.meter_number && `Nr. ${m.meter_number} · `}
-                    {fmtEnergyType(m.energy_type)} · {displayUnit(m.unit, m.energy_type)}
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+              </CardContent>
+            </Card>
+          );
+        })}
       </div>
 
       <h2 className="text-lg font-semibold">Monatliche Verbräuche</h2>
