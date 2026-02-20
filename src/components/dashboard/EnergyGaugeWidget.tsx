@@ -139,7 +139,8 @@ function AnalogGauge({ data }: { data: GaugeData }) {
             fill="none"
             stroke={data.energyType === "eco" ? "url(#eco-arc-gradient)" : color}
             strokeWidth={6} strokeLinecap="round"
-            filter={`url(#glow-${data.energyType})`}
+            filter={data.energyType === "eco" ? undefined : `url(#glow-${data.energyType})`}
+            opacity={data.energyType === "eco" ? 1 : undefined}
             style={{ transition: "all 1s cubic-bezier(0.4,0,0.2,1)" }}
           />
         )}
