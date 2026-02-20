@@ -25,7 +25,7 @@ export function PvForecastSection({ locationId }: PvForecastSectionProps) {
   const { forecast, isLoading: forecastLoading } = usePvForecast(isOpen ? locationId : null);
   const { meters } = useMeters(locationId);
 
-  const solarMeters = meters.filter((m) => m.energy_type === "solar" || m.energy_type === "pv");
+  const solarMeters = meters.filter((m) => m.meter_function === "generation" || m.energy_type === "solar" || m.energy_type === "pv");
 
   const [form, setForm] = useState({
     peak_power_kwp: 10,
