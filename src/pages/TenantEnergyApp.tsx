@@ -346,12 +346,17 @@ function InvoicesTab({ invoices }: { invoices: Invoice[] }) {
 }
 
 // ── Meter Tab ──
+// German number formatter
+const fmtDe = (v: number, decimals = 1) =>
+  v.toLocaleString("de-DE", { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+
 function MeterTab({ tenantRecord }: { tenantRecord: TenantRecord }) {
-  const [meterData, setMeterData] = useState<{ meter: any; readings: any[] }[]>([]);
+  const [meters, setMeters] = useState<any[]>([]);
+  const [allTotals, setAllTotals] = useState<any[]>([]);
+  const [allReadings, setAllReadings] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   const meterIds = useMemo(() => {
-    // Use assigned_meters from junction table, fall back to legacy meter_id
     const ids = (tenantRecord.assigned_meters || [])
       .map((am) => am.meter_id)
       .filter(Boolean);
@@ -365,33 +370,50 @@ function MeterTab({ tenantRecord }: { tenantRecord: TenantRecord }) {
     if (meterIds.length === 0) { setLoading(false); return; }
 
     const fetchData = async () => {
-      const results: { meter: any; readings: any[] }[] = [];
-
-      // Fetch meter info for all meters
-      const { data: meters } = await supabase
-        .from("meters")
-        .select("id, name, meter_number, energy_type, unit")
-        .in("id", meterIds);
-
-      // Fetch readings for all meters
-      const { data: allTotals } = await supabase
-        .from("meter_period_totals")
-        .select("*")
-        .in("meter_id", meterIds)
-        .eq("period_type", "month")
-        .order("period_start", { ascending: false })
-        .limit(60);
-
-      for (const m of meters || []) {
-        const readings = (allTotals || []).filter((t: any) => t.meter_id === m.id);
-        results.push({ meter: m, readings });
-      }
-
-      setMeterData(results);
+      const [{ data: mData }, { data: tData }, { data: rData }] = await Promise.all([
+        supabase.from("meters").select("id, name, meter_number, energy_type, unit").in("id", meterIds),
+        supabase.from("meter_period_totals").select("*").in("meter_id", meterIds).eq("period_type", "month").order("period_start", { ascending: false }).limit(120),
+        supabase.from("meter_readings").select("meter_id, value, reading_date").in("meter_id", meterIds).order("reading_date", { ascending: false }).limit(120),
+      ]);
+      setMeters(mData || []);
+      setAllTotals(tData || []);
+      setAllReadings(rData || []);
       setLoading(false);
     };
     fetchData();
   }, [meterIds]);
+
+  // Group data by month across all meters
+  const monthGroups = useMemo(() => {
+    // Collect all unique months from totals
+    const monthSet = new Set<string>();
+    allTotals.forEach((t: any) => monthSet.add(t.period_start));
+
+    const sorted = Array.from(monthSet).sort((a, b) => b.localeCompare(a));
+
+    return sorted.map((periodStart) => {
+      const monthDate = new Date(periodStart);
+      const label = format(monthDate, "MMMM yyyy", { locale: de });
+
+      const meterEntries = meters.map((m) => {
+        const reading = allTotals.find((t: any) => t.meter_id === m.id && t.period_start === periodStart);
+        // Find meter reading (Zählerstand) closest to end of this month
+        const monthEnd = endOfMonth(monthDate);
+        const meterReading = allReadings.find((r: any) =>
+          r.meter_id === m.id && new Date(r.reading_date) <= monthEnd && new Date(r.reading_date) >= monthDate
+        );
+
+        return {
+          meter: m,
+          consumption: reading ? Number(reading.total_value) : null,
+          meterStand: meterReading ? Number(meterReading.value) : null,
+          unit: m.unit || "kWh",
+        };
+      });
+
+      return { periodStart, label, meterEntries };
+    });
+  }, [meters, allTotals, allReadings]);
 
   if (meterIds.length === 0) {
     return (
@@ -408,66 +430,71 @@ function MeterTab({ tenantRecord }: { tenantRecord: TenantRecord }) {
   }
 
   return (
-    <div className="space-y-6">
-      {meterData.map(({ meter, readings }) => (
-        <div key={meter.id} className="space-y-3">
-          <Card>
+    <div className="space-y-4">
+      {/* Meter overview cards */}
+      <div className="space-y-2">
+        {meters.map((m) => (
+          <Card key={m.id}>
             <CardContent className="p-4">
               <div className="flex items-center gap-3">
                 <div className="h-10 w-10 rounded-lg bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
                   <Zap className="h-5 w-5 text-green-600" />
                 </div>
                 <div>
-                  <p className="font-medium">{meter.name}</p>
+                  <p className="font-medium">{m.name}</p>
                   <p className="text-xs text-muted-foreground">
-                    {meter.meter_number && `Nr. ${meter.meter_number} · `}
-                    {meter.energy_type} · {meter.unit}
+                    {m.meter_number && `Nr. ${m.meter_number} · `}
+                    {m.energy_type} · {m.unit}
                   </p>
                 </div>
               </div>
             </CardContent>
           </Card>
+        ))}
+      </div>
 
-          <h3 className="text-sm font-semibold text-muted-foreground">Monatliche Verbräuche</h3>
+      <h2 className="text-lg font-semibold">Monatliche Verbräuche</h2>
 
-          {readings.length === 0 ? (
-            <Card className="p-4 text-center text-muted-foreground text-sm">
-              <p>Noch keine Verbrauchsdaten</p>
-            </Card>
-          ) : (
-            <div className="space-y-2">
-              {readings.map((r: any) => {
-                const prev = readings.find((pr: any) =>
-                  new Date(pr.period_start).getTime() === subMonths(new Date(r.period_start), 1).getTime()
-                );
-                const diff = prev ? Number(r.total_value) - Number(prev.total_value) : null;
-
-                return (
-                  <Card key={r.id}>
-                    <CardContent className="p-3 flex items-center justify-between">
-                      <div>
-                        <p className="font-medium text-sm">
-                          {format(new Date(r.period_start), "MMMM yyyy", { locale: de })}
-                        </p>
-                        <p className="text-xs text-muted-foreground">{r.energy_type} · {r.source}</p>
-                      </div>
-                      <div className="text-right">
-                        <p className="font-bold">{Number(r.total_value).toFixed(1)} kWh</p>
-                        {diff !== null && (
-                          <div className={`text-xs flex items-center gap-0.5 justify-end ${diff > 0 ? "text-red-500" : "text-green-600"}`}>
-                            {diff > 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
-                            {diff > 0 ? "+" : ""}{diff.toFixed(1)} kWh
-                          </div>
-                        )}
+      {monthGroups.length === 0 ? (
+        <Card className="p-6 text-center text-muted-foreground">
+          <BarChart3 className="h-8 w-8 mx-auto mb-2 opacity-50" />
+          <p>Noch keine Verbrauchsdaten verfügbar</p>
+        </Card>
+      ) : (
+        <div className="space-y-4">
+          {monthGroups.map(({ periodStart, label, meterEntries }) => (
+            <div key={periodStart}>
+              <h3 className="text-sm font-semibold mb-2">{label}</h3>
+              <div className="space-y-2">
+                {meterEntries.map(({ meter, consumption, meterStand, unit }) => (
+                  <Card key={meter.id}>
+                    <CardContent className="p-3">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="font-medium text-sm">{meter.name}</p>
+                          <p className="text-xs text-muted-foreground">{meter.energy_type}</p>
+                        </div>
+                        <div className="text-right">
+                          {consumption !== null ? (
+                            <p className="font-bold">{fmtDe(consumption)} {unit}</p>
+                          ) : (
+                            <p className="text-sm text-muted-foreground">–</p>
+                          )}
+                          {meterStand !== null && (
+                            <p className="text-xs text-muted-foreground">
+                              Zählerstand: {fmtDe(meterStand, 0)} {unit}
+                            </p>
+                          )}
+                        </div>
                       </div>
                     </CardContent>
                   </Card>
-                );
-              })}
+                ))}
+              </div>
             </div>
-          )}
+          ))}
         </div>
-      ))}
+      )}
     </div>
   );
 }
