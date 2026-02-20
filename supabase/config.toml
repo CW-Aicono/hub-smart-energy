@@ -65,3 +65,6 @@ verify_jwt = false
 
 [functions.pv-forecast]
 verify_jwt = false
+
+[functions.arbitrage-ai-strategy]
+verify_jwt = false

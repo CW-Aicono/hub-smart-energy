@@ -11,8 +11,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { TrendingUp, TrendingDown, Battery, Zap, Plus, Trash2, Edit, BarChart3, Sun } from "lucide-react";
+import { TrendingUp, TrendingDown, Battery, Zap, Plus, Trash2, Edit, BarChart3, Sun, Brain } from "lucide-react";
 import { useEnergyStorages } from "@/hooks/useEnergyStorages";
+import ArbitrageAiSuggestions from "@/components/charging/ArbitrageAiSuggestions";
 import { useSpotPrices } from "@/hooks/useSpotPrices";
 import { useArbitrageStrategies } from "@/hooks/useArbitrageStrategies";
 import { useArbitrageTrades } from "@/hooks/useArbitrageTrades";
@@ -43,12 +44,14 @@ const ArbitrageTrading = () => {
             <TabsTrigger value="storages">Speicher</TabsTrigger>
             <TabsTrigger value="strategies">Strategien</TabsTrigger>
             <TabsTrigger value="trades">Trades</TabsTrigger>
+            <TabsTrigger value="ai-strategy" className="gap-1"><Brain className="h-3 w-3" />KI-Empfehlungen</TabsTrigger>
           </TabsList>
 
           <TabsContent value="dashboard"><ArbitrageDashboard /></TabsContent>
           <TabsContent value="storages"><StoragesTab /></TabsContent>
           <TabsContent value="strategies"><StrategiesTab /></TabsContent>
           <TabsContent value="trades"><TradesTab /></TabsContent>
+          <TabsContent value="ai-strategy"><ArbitrageAiSuggestions /></TabsContent>
         </Tabs>
       </main>
     </div>

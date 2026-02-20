@@ -33,6 +33,7 @@ const WIDGET_LABELS: Record<string, string> = {
   weather_normalization: "Witterungsbereinigung",
   spot_price: "Spotpreis-Verlauf",
   pv_forecast: "PV-Prognose",
+  arbitrage_ai: "KI-Handelsempfehlung",
 };
 
 const SIZE_LABELS: Record<WidgetSize, string> = {

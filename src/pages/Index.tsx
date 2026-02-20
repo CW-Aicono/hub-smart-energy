@@ -27,6 +27,7 @@ import WeatherNormalizationWidget from "@/components/dashboard/WeatherNormalizat
 import EnergyGaugeWidget from "@/components/dashboard/EnergyGaugeWidget";
 import SpotPriceWidget from "@/components/dashboard/SpotPriceWidget";
 import PvForecastWidget from "@/components/dashboard/PvForecastWidget";
+import ArbitrageAiWidget from "@/components/dashboard/ArbitrageAiWidget";
 
 interface WidgetProps {
   locationId: string | null;
@@ -51,6 +52,7 @@ const WIDGET_COMPONENTS: Record<string, React.ComponentType<WidgetProps>> = {
   energy_gauge: EnergyGaugeWidget,
   spot_price: SpotPriceWidget,
   pv_forecast: PvForecastWidget,
+  arbitrage_ai: ArbitrageAiWidget,
 };
 
 const SIZE_CLASS: Record<WidgetSize, string> = {

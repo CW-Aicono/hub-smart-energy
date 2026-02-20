@@ -37,6 +37,7 @@ const DEFAULT_WIDGETS = [
   { widget_type: "weather_normalization", position: 12, is_visible: true },
   { widget_type: "spot_price", position: 13, is_visible: true },
   { widget_type: "pv_forecast", position: 14, is_visible: true },
+  { widget_type: "arbitrage_ai", position: 15, is_visible: true },
 ];
 
 export function useDashboardWidgets() {
