@@ -57,17 +57,49 @@ function ArbitrageDashboard() {
   const { storages } = useEnergyStorages();
   const { totalRevenue, totalEnergy } = useArbitrageTrades();
 
-  const chartData = prices.map((p) => {
+  const chartData = prices.map((p, i) => {
     const d = new Date(p.timestamp);
     return {
+      idx: i,
       time: format(d, "HH:mm"),
-      label: format(d, "EEE dd.MM. HH:mm"),
       dateLabel: format(d, "EEE dd.MM."),
       price: Number(p.price_eur_mwh),
-      _ts: d.getTime(),
+      _date: d.toDateString(),
     };
   });
 
+  // Find indices where the day changes
+  const dayChangeIndices: number[] = [];
+  for (let i = 1; i < chartData.length; i++) {
+    if (chartData[i]._date !== chartData[i - 1]._date) {
+      dayChangeIndices.push(i);
+    }
+  }
+
+  // Custom two-line tick: top = time, bottom = date (once per day)
+  const renderCustomTick = (props: any) => {
+    const { x, y, payload } = props;
+    const dataIndex = payload?.value;
+    const entry = chartData[dataIndex];
+    if (!entry) return null;
+
+    const isFirstOfDay =
+      dataIndex === 0 ||
+      entry._date !== chartData[dataIndex - 1]?._date;
+
+    return (
+      <g transform={`translate(${x},${y})`}>
+        <text x={0} y={0} dy={12} textAnchor="middle" fontSize={11} fill="hsl(var(--foreground))">
+          {entry.time}
+        </text>
+        {isFirstOfDay && (
+          <text x={0} y={0} dy={26} textAnchor="middle" fontSize={10} fill="hsl(var(--muted-foreground))">
+            {entry.dateLabel}
+          </text>
+        )}
+      </g>
+    );
+  };
   const priceCtKwh = currentPrice ? (Number(currentPrice.price_eur_mwh) / 10).toFixed(2) : "–";
 
   return (
@@ -103,25 +135,39 @@ function ArbitrageDashboard() {
         <CardHeader><CardTitle>Spotpreis-Verlauf (48h)</CardTitle></CardHeader>
         <CardContent>
           {chartData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={300}>
-              <LineChart data={chartData}>
+            <ResponsiveContainer width="100%" height={320}>
+              <LineChart data={chartData} margin={{ bottom: 20 }}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis
-                  dataKey="label"
-                  tick={{ fontSize: 11 }}
+                  dataKey="idx"
+                  tick={renderCustomTick}
                   interval="preserveStartEnd"
-                  tickFormatter={(val: string) => {
-                    // Show date+time for first tick of each day, otherwise just time
-                    const parts = val.split(" ");
-                    return parts.length >= 2 ? `${parts[0]} ${parts[1]}` : val;
-                  }}
+                  height={45}
+                  type="number"
+                  domain={["dataMin", "dataMax"]}
+                  tickCount={12}
                 />
                 <YAxis tick={{ fontSize: 12 }} label={{ value: "€/MWh", angle: -90, position: "insideLeft" }} />
                 <Tooltip
-                  labelFormatter={(val: string) => val}
+                  labelFormatter={(_val: string, payload: any[]) => {
+                    if (payload?.[0]?.payload) {
+                      const p = payload[0].payload;
+                      return `${p.dateLabel} ${p.time}`;
+                    }
+                    return _val;
+                  }}
                   formatter={(v: number) => [`${v.toFixed(1)} €/MWh`, "Preis"]}
                 />
                 <ReferenceLine y={0} stroke="hsl(var(--muted-foreground))" strokeDasharray="3 3" />
+                {dayChangeIndices.map((idx) => (
+                  <ReferenceLine
+                    key={`day-${idx}`}
+                    x={idx}
+                    stroke="hsl(var(--muted-foreground))"
+                    strokeDasharray="4 4"
+                    strokeWidth={1}
+                  />
+                ))}
                 <Line type="monotone" dataKey="price" stroke="hsl(var(--primary))" strokeWidth={2} dot={false} />
               </LineChart>
             </ResponsiveContainer>
