@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { useTenantQuery } from "./useTenantQuery";
+import { useTenant } from "./useTenant";
 import { toast } from "sonner";
 
 export interface PvHourlyEntry {
@@ -55,20 +55,23 @@ export function usePvForecast(locationId: string | null) {
 }
 
 export function usePvForecastSettings(locationId: string | null) {
-  const { from, ready, tenantId } = useTenantQuery();
+  const { tenant } = useTenant();
+  const tenantId = tenant?.id ?? null;
   const queryClient = useQueryClient();
 
   const { data: settings, isLoading } = useQuery({
     queryKey: ["pv-forecast-settings", locationId],
     queryFn: async () => {
-      const { data, error } = await from("pv_forecast_settings")
+      const { data, error } = await supabase
+        .from("pv_forecast_settings")
         .select("*")
+        .eq("tenant_id", tenantId!)
         .eq("location_id", locationId!)
         .maybeSingle();
       if (error) throw error;
       return data as PvForecastSettings | null;
     },
-    enabled: ready && !!locationId,
+    enabled: !!tenantId && !!locationId,
   });
 
   const upsertSettings = useMutation({
