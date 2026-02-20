@@ -48,6 +48,8 @@ import SuperAdminOcppIntegrations from "./pages/SuperAdminOcppIntegrations";
 import SuperAdminOcppControl from "./pages/SuperAdminOcppControl";
 import ChargingApp from "./pages/ChargingApp";
 import ChargingAppAdmin from "./pages/ChargingAppAdmin";
+import ArbitrageTrading from "./pages/ArbitrageTrading";
+import TenantElectricity from "./pages/TenantElectricity";
 import UpdateBanner from "./components/UpdateBanner";
 import CookieConsent from "./components/CookieConsent";
 // Import Leaflet CSS globally
@@ -111,6 +113,8 @@ const App = () => (
                   <Route path="/automation" element={<M><Automation /></M>} />
                   <Route path="/tasks" element={<M><Tasks /></M>} />
                   <Route path="/network" element={<M><NetworkInfrastructure /></M>} />
+                  <Route path="/arbitrage" element={<M><ArbitrageTrading /></M>} />
+                  <Route path="/tenant-electricity" element={<M><TenantElectricity /></M>} />
                   <Route path="/ev" element={<ChargingApp />} />
                   <Route path="/m" element={<MobileApp />} />
                   <Route path="/getting-started" element={<GettingStarted />} />
