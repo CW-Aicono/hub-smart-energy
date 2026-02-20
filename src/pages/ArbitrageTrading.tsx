@@ -72,6 +72,8 @@ function ArbitrageDashboard() {
     return {
       idx: i,
       time: format(d, "HH:mm"),
+      hour: d.getHours(),
+      minute: d.getMinutes(),
       dateLabel: format(d, "EEEE dd.MM.", { locale }),
       price: Number(p.price_eur_mwh),
       _date: d.toDateString(),
@@ -82,7 +84,6 @@ function ArbitrageDashboard() {
   // Split into past / future segments for different styling
   const pastData = chartData.map((d) => ({ ...d, price: d.isPast ? d.price : undefined }));
   const futureData = chartData.map((d) => ({ ...d, price: !d.isPast ? d.price : undefined }));
-  // Find the transition point to connect the two lines
   const transitionIdx = chartData.findIndex((d) => !d.isPast);
   if (transitionIdx > 0) {
     futureData[transitionIdx - 1] = { ...futureData[transitionIdx - 1], price: chartData[transitionIdx - 1].price };
@@ -95,6 +96,18 @@ function ArbitrageDashboard() {
       dayChangeIndices.push(i);
     }
   }
+
+  // Build explicit tick indices: every 3h on full hours (00, 03, 06, …)
+  const tickIndices: number[] = [];
+  for (let i = 0; i < chartData.length; i++) {
+    const e = chartData[i];
+    if (e.minute === 0 && e.hour % 3 === 0) {
+      tickIndices.push(i);
+    }
+  }
+  // Always include first & last
+  if (tickIndices.length === 0 || tickIndices[0] !== 0) tickIndices.unshift(0);
+  if (tickIndices[tickIndices.length - 1] !== chartData.length - 1) tickIndices.push(chartData.length - 1);
 
   // Custom two-line tick: top = time, bottom = date (once per day)
   const renderCustomTick = (props: any) => {
@@ -156,16 +169,15 @@ function ArbitrageDashboard() {
         <CardContent>
           {chartData.length > 0 ? (
             <ResponsiveContainer width="100%" height={320}>
-              <LineChart data={chartData} margin={{ bottom: 20 }}>
+              <LineChart data={chartData} margin={{ left: 10, bottom: 20, right: 10 }}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis
                   dataKey="idx"
                   tick={renderCustomTick}
-                  interval="preserveStartEnd"
+                  ticks={tickIndices}
                   height={45}
                   type="number"
                   domain={["dataMin", "dataMax"]}
-                  tickCount={12}
                 />
                 <YAxis tick={{ fontSize: 12 }} label={{ value: "€/MWh", angle: -90, position: "insideLeft" }} />
                 <Tooltip
