@@ -199,15 +199,15 @@ const Help = () => {
     <div className="flex flex-col md:flex-row min-h-screen bg-background">
       <DashboardSidebar />
       <main className="flex-1 overflow-auto">
-        <header className="border-b p-6">
-          <div className="flex items-center justify-between">
+        <header className="border-b p-4 md:p-6">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div>
               <h1 className="text-2xl font-display font-bold">{t("help.title")}</h1>
               <p className="text-sm text-muted-foreground mt-1">
                 {t("help.subtitle")}
               </p>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-2">
               <Button
                 variant="outline"
                 size="sm"
@@ -242,7 +242,7 @@ const Help = () => {
           {/* Getting Started */}
           <Card className="border-primary/20 bg-primary/5">
             <CardContent className="p-6">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div className="flex items-center gap-4">
                   <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
                     <Rocket className="h-6 w-6 text-primary" />
@@ -252,7 +252,7 @@ const Help = () => {
                     <p className="text-sm text-muted-foreground">{t("onboarding.gettingStartedDesc")}</p>
                   </div>
                 </div>
-                <Button onClick={() => navigate("/getting-started")} className="gap-2">
+                <Button onClick={() => navigate("/getting-started")} className="gap-2 w-full sm:w-auto">
                   <Rocket className="h-4 w-4" />
                   {t("onboarding.gettingStarted")}
                 </Button>
