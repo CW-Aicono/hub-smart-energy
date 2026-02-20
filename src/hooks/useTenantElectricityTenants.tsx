@@ -3,6 +3,25 @@ import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "./useTenant";
 import { toast } from "./use-toast";
 
+export interface TenantWithMeters {
+  id: string;
+  tenant_id: string;
+  location_id: string | null;
+  name: string;
+  unit_label: string | null;
+  email: string | null;
+  meter_id: string | null;
+  move_in_date: string | null;
+  move_out_date: string | null;
+  status: string;
+  auth_user_id: string | null;
+  created_at: string;
+  updated_at: string;
+  locations: { name: string } | null;
+  meters: { name: string } | null;
+  assigned_meters: { meter_id: string; meters: { id: string; name: string; energy_type: string; unit: string } | null }[];
+}
+
 export function useTenantElectricityTenants() {
   const { tenant } = useTenant();
   const queryClient = useQueryClient();
@@ -14,21 +33,35 @@ export function useTenantElectricityTenants() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("tenant_electricity_tenants")
-        .select("*, locations(name), meters(name)")
+        .select("*, locations(name), meters(name), tenant_electricity_tenant_meters(meter_id, meters(id, name, energy_type, unit))")
         .eq("tenant_id", tenantId!)
         .order("name");
       if (error) throw error;
-      return data;
+      return (data || []).map((t: any) => ({
+        ...t,
+        assigned_meters: t.tenant_electricity_tenant_meters || [],
+      })) as TenantWithMeters[];
     },
   });
 
   const createTenant = useMutation({
     mutationFn: async (values: {
       name: string; unit_label?: string; email?: string;
-      location_id?: string; meter_id?: string; move_in_date?: string;
+      location_id?: string; meter_ids?: string[]; move_in_date?: string;
     }) => {
-      const { error } = await supabase.from("tenant_electricity_tenants").insert({ ...values, tenant_id: tenantId! });
+      const { meter_ids, ...rest } = values;
+      const { data, error } = await supabase
+        .from("tenant_electricity_tenants")
+        .insert({ ...rest, tenant_id: tenantId! })
+        .select("id")
+        .single();
       if (error) throw error;
+      if (meter_ids && meter_ids.length > 0) {
+        const { error: mErr } = await supabase
+          .from("tenant_electricity_tenant_meters")
+          .insert(meter_ids.map((mid) => ({ tenant_electricity_tenant_id: data.id, meter_id: mid })));
+        if (mErr) throw mErr;
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["te-tenants", tenantId] });
@@ -38,9 +71,19 @@ export function useTenantElectricityTenants() {
   });
 
   const updateTenant = useMutation({
-    mutationFn: async ({ id, ...values }: { id: string } & Record<string, any>) => {
+    mutationFn: async ({ id, meter_ids, ...values }: { id: string; meter_ids?: string[] } & Record<string, any>) => {
       const { error } = await supabase.from("tenant_electricity_tenants").update(values).eq("id", id);
       if (error) throw error;
+      if (meter_ids !== undefined) {
+        // Remove old assignments and insert new ones
+        await supabase.from("tenant_electricity_tenant_meters").delete().eq("tenant_electricity_tenant_id", id);
+        if (meter_ids.length > 0) {
+          const { error: mErr } = await supabase
+            .from("tenant_electricity_tenant_meters")
+            .insert(meter_ids.map((mid) => ({ tenant_electricity_tenant_id: id, meter_id: mid })));
+          if (mErr) throw mErr;
+        }
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["te-tenants", tenantId] });

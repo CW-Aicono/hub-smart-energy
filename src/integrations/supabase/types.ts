@@ -2714,6 +2714,42 @@ export type Database = {
           },
         ]
       }
+      tenant_electricity_tenant_meters: {
+        Row: {
+          created_at: string
+          id: string
+          meter_id: string
+          tenant_electricity_tenant_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          meter_id: string
+          tenant_electricity_tenant_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          meter_id?: string
+          tenant_electricity_tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tenant_electricity_tenant_met_tenant_electricity_tenant_id_fkey"
+            columns: ["tenant_electricity_tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenant_electricity_tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tenant_electricity_tenant_meters_meter_id_fkey"
+            columns: ["meter_id"]
+            isOneToOne: false
+            referencedRelation: "meters"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tenant_electricity_tenants: {
         Row: {
           auth_user_id: string | null
