@@ -84,11 +84,13 @@ Deno.serve((req) => {
     if (socket.readyState !== WebSocket.OPEN) return;
 
     try {
+      // Also pick up scheduled commands whose time has arrived
       const { data: commands } = await supabase
         .from("pending_ocpp_commands")
         .select("*")
         .eq("charge_point_ocpp_id", chargePointId)
-        .eq("status", "pending")
+        .in("status", ["pending", "scheduled"])
+        .or(`scheduled_at.is.null,scheduled_at.lte.${new Date().toISOString()}`)
         .order("created_at", { ascending: true })
         .limit(5);
 
