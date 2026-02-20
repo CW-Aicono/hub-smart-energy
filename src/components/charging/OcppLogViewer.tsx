@@ -30,8 +30,9 @@ const OcppLogViewer = ({ chargePointId, showCpColumn = false }: OcppLogViewerPro
   const timeoutIds = new Set<string>();
   for (let i = 0; i < logs.length; i++) {
     const log = logs[i];
-    // Look for StatusNotification → Available
-    if (log.message_type === "StatusNotification" && JSON.stringify(log.raw_message).includes('"Available"')) {
+    // Look for StatusNotification → Available (without vendorErrorCode)
+    const rawStr = JSON.stringify(log.raw_message);
+    if (log.message_type === "StatusNotification" && rawStr.includes('"Available"') && !rawStr.match(/"vendorErrorCode"\s*:\s*"(?!0x00000000")[^"]+"/)) {
       // Search forward (older entries) for the matching Preparing without a StartTransaction in between
       for (let j = i + 1; j < logs.length; j++) {
         const prev = logs[j];
@@ -59,6 +60,17 @@ const OcppLogViewer = ({ chargePointId, showCpColumn = false }: OcppLogViewerPro
     }
     return true;
   });
+
+  const extractVendorErrorCode = (log: OcppLogEntry): string | null => {
+    try {
+      const raw = JSON.stringify(log.raw_message);
+      const match = raw.match(/"vendorErrorCode"\s*:\s*"([^"]+)"/);
+      if (match && match[1] && match[1] !== "" && match[1] !== "0" && match[1] !== "0x00000000") {
+        return match[1];
+      }
+    } catch {}
+    return null;
+  };
 
   const directionBadge = (dir: string) => {
     if (dir === "incoming") return <Badge className="bg-blue-500/15 text-blue-700 dark:text-blue-400 border-blue-500/30 text-xs">↓ Eingehend</Badge>;
@@ -161,13 +173,22 @@ const OcppLogViewer = ({ chargePointId, showCpColumn = false }: OcppLogViewerPro
                       {showCpColumn && (
                         <TableCell className="font-mono text-xs">{log.charge_point_id}</TableCell>
                       )}
-                      <TableCell className="flex items-center gap-2">
+                      <TableCell className="flex items-center gap-2 flex-wrap">
                         {messageTypeBadge(log.message_type)}
-                        {timeoutIds.has(log.id) && (
-                          <Badge className="bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/30 text-xs whitespace-nowrap">
-                            ⏱ Timeout – kein Fahrzeug
-                          </Badge>
-                        )}
+                        {(() => {
+                          const vec = extractVendorErrorCode(log);
+                          if (vec) return (
+                            <Badge className="bg-destructive/15 text-destructive border-destructive/30 text-xs whitespace-nowrap font-mono">
+                              ⚠ vendorErrorCode: {vec}
+                            </Badge>
+                          );
+                          if (timeoutIds.has(log.id)) return (
+                            <Badge className="bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/30 text-xs whitespace-nowrap">
+                              ⏱ Timeout – kein Fahrzeug
+                            </Badge>
+                          );
+                          return null;
+                        })()}
                       </TableCell>
                     </TableRow>
                     {expandedId === log.id && (
