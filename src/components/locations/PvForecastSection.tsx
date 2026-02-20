@@ -105,10 +105,10 @@ export function PvForecastSection({ locationId }: PvForecastSectionProps) {
                   </div>
                   <div>
                     <Label>PV-Zähler</Label>
-                    <Select value={form.pv_meter_id} onValueChange={(v) => setForm({ ...form, pv_meter_id: v })}>
+                    <Select value={form.pv_meter_id || "__none__"} onValueChange={(v) => setForm({ ...form, pv_meter_id: v === "__none__" ? "" : v })}>
                       <SelectTrigger><SelectValue placeholder="Optional" /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">Keiner</SelectItem>
+                        <SelectItem value="__none__">Keiner</SelectItem>
                         {solarMeters.map((m) => (
                           <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
                         ))}
