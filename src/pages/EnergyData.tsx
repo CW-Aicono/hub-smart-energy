@@ -61,9 +61,9 @@ const EnergyData = () => {
 
   if (authLoading || locationsLoading) {
     return (
-      <div className="flex min-h-screen bg-background">
+      <div className="flex flex-col md:flex-row min-h-screen bg-background">
         <DashboardSidebar />
-        <main className="flex-1 overflow-auto p-6">
+        <main className="flex-1 overflow-auto p-3 md:p-6">
           <Skeleton className="h-8 w-64 mb-6" />
           <Skeleton className="h-96" />
         </main>
@@ -165,10 +165,10 @@ const EnergyData = () => {
   };
 
   return (
-    <div className="flex min-h-screen bg-background">
+    <div className="flex flex-col md:flex-row min-h-screen bg-background">
       <DashboardSidebar />
       <main className="flex-1 overflow-auto">
-        <header className="border-b p-6">
+        <header className="border-b p-4 md:p-6">
           <h1 className="text-2xl font-display font-bold flex items-center gap-2">
             <Database className="h-6 w-6 text-primary" />
             Energiedaten
@@ -178,7 +178,7 @@ const EnergyData = () => {
           </p>
         </header>
 
-        <div className="p-6 space-y-6">
+        <div className="p-3 md:p-6 space-y-6">
           <div className="grid gap-6 md:grid-cols-3">
             {/* Filter: Location */}
             <Card>

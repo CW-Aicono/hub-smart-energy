@@ -26,9 +26,9 @@ const TenantElectricity = () => {
   const [activeTab, setActiveTab] = useState("overview");
 
   return (
-    <div className="flex min-h-screen bg-background">
+    <div className="flex flex-col md:flex-row min-h-screen bg-background">
       <DashboardSidebar />
-      <main className="flex-1 p-6 overflow-auto">
+      <main className="flex-1 p-3 md:p-6 overflow-auto">
         <div className="mb-6">
           <h1 className="text-2xl font-bold text-foreground">{t("nav.tenantElectricity")}</h1>
           <p className="text-muted-foreground">PV-Mieterstrom verwalten, abrechnen und dokumentieren</p>

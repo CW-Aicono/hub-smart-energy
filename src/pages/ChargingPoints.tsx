@@ -217,7 +217,7 @@ const ChargingPoints = () => {
   );
 
   return (
-    <div className="flex min-h-screen bg-background">
+    <div className="flex flex-col md:flex-row min-h-screen bg-background">
       <DashboardSidebar />
       <main className="flex-1 overflow-auto">
         <div className="p-4 md:p-8 space-y-6">

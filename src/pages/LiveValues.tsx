@@ -376,9 +376,9 @@ const LiveValues = () => {
 
   if (authLoading || locationsLoading || metersLoading) {
     return (
-      <div className="flex min-h-screen bg-background">
+      <div className="flex flex-col md:flex-row min-h-screen bg-background">
         <DashboardSidebar />
-        <main className="flex-1 overflow-auto p-6">
+        <main className="flex-1 overflow-auto p-3 md:p-6">
           <Skeleton className="h-8 w-64 mb-6" />
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {[...Array(6)].map((_, i) => <Skeleton key={i} className="h-32" />)}
@@ -391,10 +391,10 @@ const LiveValues = () => {
   if (!user) return <Navigate to="/auth" replace />;
 
   return (
-    <div className="flex min-h-screen bg-background">
+    <div className="flex flex-col md:flex-row min-h-screen bg-background">
       <DashboardSidebar />
       <main className="flex-1 overflow-auto">
-        <header className="border-b p-6">
+        <header className="border-b p-4 md:p-6">
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-2xl font-display font-bold flex items-center gap-2">

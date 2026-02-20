@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, Fragment } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
@@ -6,6 +6,7 @@ import { useUserRole } from "@/hooks/useUserRole";
 import { useTranslation } from "@/hooks/useTranslation";
 import { useModuleGuard } from "@/hooks/useModuleGuard";
 import { Button } from "@/components/ui/button";
+import { MobileHeader } from "@/components/dashboard/MobileSidebar";
 import { LayoutDashboard, LogOut, Shield, Settings, Users, ChevronDown, ChevronRight, MapPin, PanelLeftClose, PanelLeft, UserCircle, Key, HelpCircle, Plug, Palette, Database, Gauge, Download, Car, PlugZap, Receipt, Cpu, Activity, Mail, Smartphone, Network, ListChecks, TrendingUp, Home } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TenantLogo } from "@/components/tenant/TenantLogo";
@@ -276,12 +277,14 @@ const DashboardSidebar = () => {
   };
 
   return (
-    <aside 
-      className={cn(
-        "hidden md:flex flex-col bg-sidebar text-sidebar-foreground border-r border-sidebar-border h-screen sticky top-0 z-30 transition-all duration-300",
-        collapsed ? "w-16" : "w-64"
-      )}
-    >
+    <Fragment>
+      <MobileHeader />
+      <aside 
+        className={cn(
+          "hidden md:flex flex-col bg-sidebar text-sidebar-foreground border-r border-sidebar-border h-screen sticky top-0 z-30 transition-all duration-300",
+          collapsed ? "w-16" : "w-64"
+        )}
+      >
       {/* Logo & Collapse Toggle */}
       <div className={cn(
         "border-b border-sidebar-border flex items-center",
@@ -368,6 +371,7 @@ const DashboardSidebar = () => {
         </DropdownMenu>
       </div>
     </aside>
+    </Fragment>
   );
 };
 

@@ -264,9 +264,9 @@ const Integrations = () => {
 
   if (authLoading || roleLoading) {
     return (
-      <div className="flex min-h-screen bg-background">
+      <div className="flex flex-col md:flex-row min-h-screen bg-background">
         <DashboardSidebar />
-        <main className="flex-1 overflow-auto p-6">
+        <main className="flex-1 overflow-auto p-3 md:p-6">
           <Skeleton className="h-8 w-48 mb-6" />
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             <Skeleton className="h-48" />
@@ -281,7 +281,7 @@ const Integrations = () => {
   if (!isAdmin) return <Navigate to="/" replace />;
 
   return (
-    <div className="flex min-h-screen bg-background">
+    <div className="flex flex-col md:flex-row min-h-screen bg-background">
       <DashboardSidebar />
       <main className="flex-1 overflow-auto">
         <header className="border-b p-6">

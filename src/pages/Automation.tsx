@@ -173,9 +173,9 @@ const Automation = () => {
 
   if (authLoading) {
     return (
-      <div className="flex min-h-screen bg-background">
+      <div className="flex flex-col md:flex-row min-h-screen bg-background">
         <DashboardSidebar />
-        <main className="flex-1 overflow-auto p-6">
+        <main className="flex-1 overflow-auto p-3 md:p-6">
           <Skeleton className="h-8 w-64 mb-6" />
           <Skeleton className="h-96" />
         </main>
@@ -186,10 +186,10 @@ const Automation = () => {
   if (!user) return <Navigate to="/auth" replace />;
 
   return (
-    <div className="flex min-h-screen bg-background">
+    <div className="flex flex-col md:flex-row min-h-screen bg-background">
       <DashboardSidebar />
       <main className="flex-1 overflow-auto">
-        <header className="border-b p-6">
+        <header className="border-b p-4 md:p-6">
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-2xl font-display font-bold flex items-center gap-2">
