@@ -19,7 +19,17 @@ export function useSpotPrices(marketArea = "DE-LU", hours = 48) {
     refetchInterval: 5 * 60 * 1000,
   });
 
-  const currentPrice = prices.length > 0 ? prices[prices.length - 1] : null;
+  const currentPrice = (() => {
+    if (prices.length === 0) return null;
+    const now = Date.now();
+    // Find the price entry whose hour contains "now" (timestamp <= now, next timestamp > now)
+    for (let i = prices.length - 1; i >= 0; i--) {
+      if (new Date(prices[i].timestamp).getTime() <= now) {
+        return prices[i];
+      }
+    }
+    return prices[0];
+  })();
 
   return { prices, isLoading, currentPrice };
 }
