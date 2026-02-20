@@ -50,6 +50,7 @@ import ChargingApp from "./pages/ChargingApp";
 import ChargingAppAdmin from "./pages/ChargingAppAdmin";
 import ArbitrageTrading from "./pages/ArbitrageTrading";
 import TenantElectricity from "./pages/TenantElectricity";
+import TenantEnergyApp from "./pages/TenantEnergyApp";
 import UpdateBanner from "./components/UpdateBanner";
 import CookieConsent from "./components/CookieConsent";
 // Import Leaflet CSS globally
@@ -116,6 +117,7 @@ const App = () => (
                   <Route path="/arbitrage" element={<M><ArbitrageTrading /></M>} />
                   <Route path="/tenant-electricity" element={<M><TenantElectricity /></M>} />
                   <Route path="/ev" element={<ChargingApp />} />
+                  <Route path="/te" element={<TenantEnergyApp />} />
                   <Route path="/m" element={<MobileApp />} />
                   <Route path="/getting-started" element={<GettingStarted />} />
                   <Route path="*" element={<NotFound />} />
