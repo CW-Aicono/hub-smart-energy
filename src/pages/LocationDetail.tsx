@@ -14,6 +14,7 @@ import { LocationAutomation } from "@/components/locations/LocationAutomation";
 import { MeterManagement } from "@/components/locations/MeterManagement";
 import { BrightHubSettings } from "@/components/settings/BrightHubSettings";
 import { EnergyPriceManagement } from "@/components/locations/EnergyPriceManagement";
+import { PvForecastSection } from "@/components/locations/PvForecastSection";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -223,6 +224,11 @@ const LocationDetail = () => {
 
           {/* Energy Prices */}
           <EnergyPriceManagement locationId={location.id} />
+
+          {/* PV Forecast */}
+          {location.latitude && location.longitude && (
+            <PvForecastSection locationId={location.id} />
+          )}
 
           {/* Automation - only if building automation module is enabled */}
           {isModuleEnabled("automation_building") && (

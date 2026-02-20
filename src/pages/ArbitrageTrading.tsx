@@ -11,13 +11,14 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { TrendingUp, TrendingDown, Battery, Zap, Plus, Trash2, Edit, BarChart3 } from "lucide-react";
+import { TrendingUp, TrendingDown, Battery, Zap, Plus, Trash2, Edit, BarChart3, Sun } from "lucide-react";
 import { useEnergyStorages } from "@/hooks/useEnergyStorages";
 import { useSpotPrices } from "@/hooks/useSpotPrices";
 import { useArbitrageStrategies } from "@/hooks/useArbitrageStrategies";
 import { useArbitrageTrades } from "@/hooks/useArbitrageTrades";
 import { useLocations } from "@/hooks/useLocations";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
+import { usePvForecast } from "@/hooks/usePvForecast";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, Area, ComposedChart } from "recharts";
 import { format, type Locale } from "date-fns";
 import { de, enUS, es, nl } from "date-fns/locale";
 
@@ -60,7 +61,11 @@ function ArbitrageDashboard() {
   const { prices, currentPrice } = useSpotPrices();
   const { storages } = useEnergyStorages();
   const { totalRevenue, totalEnergy } = useArbitrageTrades();
+  const { locations } = useLocations();
 
+  // Use first location with coordinates for PV forecast
+  const pvLocation = locations.find((l) => l.latitude && l.longitude);
+  const { forecast: pvForecast } = usePvForecast(pvLocation?.id ?? null);
   const now = new Date();
   const startCutoff = new Date(now.getTime() - 12 * 60 * 60 * 1000);
   const locale = localeMap[language] || de;
@@ -69,6 +74,12 @@ function ArbitrageDashboard() {
 
   const chartData = filteredPrices.map((p, i) => {
     const d = new Date(p.timestamp);
+    // Match PV forecast hourly entry by timestamp
+    const pvEntry = pvForecast?.hourly.find((h) => {
+      const ht = new Date(h.timestamp);
+      return ht.getHours() === d.getHours() && ht.toDateString() === d.toDateString();
+    });
+    const pvKwh = pvEntry ? (pvEntry.ai_adjusted_kwh ?? pvEntry.estimated_kwh) : undefined;
     return {
       idx: i,
       time: format(d, "HH:mm"),
@@ -76,6 +87,7 @@ function ArbitrageDashboard() {
       minute: d.getMinutes(),
       dateLabel: format(d, "EEEE dd.MM.", { locale }),
       price: Number(p.price_eur_mwh),
+      pvKwh,
       _date: d.toDateString(),
       isPast: d < now,
     };
@@ -165,11 +177,21 @@ function ArbitrageDashboard() {
       </div>
 
       <Card>
-        <CardHeader><CardTitle>Spotpreis-Verlauf (48h)</CardTitle></CardHeader>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle>Spotpreis-Verlauf (48h)</CardTitle>
+            {pvForecast && (
+              <Badge variant="secondary" className="gap-1">
+                <Sun className="h-3 w-3" />
+                PV-Prognose aktiv
+              </Badge>
+            )}
+          </div>
+        </CardHeader>
         <CardContent>
           {chartData.length > 0 ? (
             <ResponsiveContainer width="100%" height={320}>
-              <LineChart data={chartData} margin={{ left: 10, bottom: 20, right: 10 }}>
+              <ComposedChart data={chartData} margin={{ left: 10, bottom: 20, right: pvForecast ? 50 : 10 }}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis
                   dataKey="idx"
@@ -179,7 +201,10 @@ function ArbitrageDashboard() {
                   type="number"
                   domain={["dataMin", "dataMax"]}
                 />
-                <YAxis tick={{ fontSize: 12 }} label={{ value: "€/MWh", angle: -90, position: "insideLeft" }} />
+                <YAxis yAxisId="price" tick={{ fontSize: 12 }} label={{ value: "€/MWh", angle: -90, position: "insideLeft" }} />
+                {pvForecast && (
+                  <YAxis yAxisId="pv" orientation="right" tick={{ fontSize: 12 }} label={{ value: "kWh", angle: 90, position: "insideRight" }} />
+                )}
                 <Tooltip
                   labelFormatter={(_val: string, payload: any[]) => {
                     if (payload?.[0]?.payload) {
@@ -188,27 +213,57 @@ function ArbitrageDashboard() {
                     }
                     return _val;
                   }}
-                  formatter={(v: number) => [`${v.toFixed(1)} €/MWh`, "Preis"]}
+                  formatter={(v: number, name: string) => {
+                    if (name === "PV") return [`${v.toFixed(2)} kWh`, "PV-Erzeugung"];
+                    return [`${v.toFixed(1)} €/MWh`, "Preis"];
+                  }}
                 />
-                <ReferenceLine y={0} stroke="hsl(var(--muted-foreground))" strokeDasharray="3 3" />
+                <ReferenceLine yAxisId="price" y={0} stroke="hsl(var(--muted-foreground))" strokeDasharray="3 3" />
                 {dayChangeIndices.map((idx) => (
                   <ReferenceLine
                     key={`day-${idx}`}
                     x={idx}
+                    yAxisId="price"
                     stroke="hsl(var(--muted-foreground))"
                     strokeDasharray="4 4"
                     strokeWidth={1}
                   />
                 ))}
-                <Line data={pastData} type="monotone" dataKey="price" stroke="hsl(var(--muted-foreground))" strokeWidth={2} dot={false} name="Vergangen" connectNulls={false} />
-                <Line type="monotone" dataKey="price" stroke="hsl(var(--primary))" strokeWidth={2} dot={false} name="Preis" data={futureData} connectNulls={false} />
-              </LineChart>
+                <Line yAxisId="price" data={pastData} type="monotone" dataKey="price" stroke="hsl(var(--muted-foreground))" strokeWidth={2} dot={false} name="Vergangen" connectNulls={false} />
+                <Line yAxisId="price" type="monotone" dataKey="price" stroke="hsl(var(--primary))" strokeWidth={2} dot={false} name="Preis" data={futureData} connectNulls={false} />
+                {pvForecast && (
+                  <Area yAxisId="pv" type="monotone" dataKey="pvKwh" stroke="hsl(45, 93%, 47%)" fill="hsl(45, 93%, 47%)" fillOpacity={0.15} strokeWidth={1.5} dot={false} name="PV" connectNulls={false} />
+                )}
+              </ComposedChart>
             </ResponsiveContainer>
           ) : (
             <p className="text-muted-foreground text-center py-12">Noch keine Spotpreis-Daten vorhanden. Die Edge Function „fetch-spot-prices" lädt Daten automatisch.</p>
           )}
         </CardContent>
       </Card>
+
+      {/* PV Recommendation */}
+      {pvForecast && pvForecast.summary.ai_notes && (
+        <Card className="border-amber-200 bg-amber-50/50 dark:bg-amber-950/20 dark:border-amber-800">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Sun className="h-5 w-5 text-amber-500" />
+              PV-gestützte Empfehlung
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm">
+              Heute: <strong>{pvForecast.summary.today_total_kwh.toFixed(0)} kWh</strong> prognostiziert
+              {pvForecast.summary.peak_hour && (
+                <> · Spitze um <strong>{pvForecast.summary.peak_hour.slice(11, 16)} Uhr</strong> ({pvForecast.summary.peak_kwh.toFixed(1)} kW)</>
+              )}
+            </p>
+            {pvForecast.summary.ai_notes && (
+              <p className="text-sm text-muted-foreground mt-1">{pvForecast.summary.ai_notes}</p>
+            )}
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
