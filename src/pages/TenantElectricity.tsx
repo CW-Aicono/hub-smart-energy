@@ -10,8 +10,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Home, Users, Receipt, Settings, Plus, Trash2, FileText, Sun, Plug2, Pencil, Archive, ArchiveRestore } from "lucide-react";
+import { Home, Users, Receipt, Settings, Plus, Trash2, FileText, Sun, Plug2, Pencil, Archive, ArchiveRestore, X } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useTenantElectricityTenants } from "@/hooks/useTenantElectricityTenants";
 import { useTenantElectricityTariffs } from "@/hooks/useTenantElectricityTariffs";
 import { useTenantElectricityInvoices } from "@/hooks/useTenantElectricityInvoices";
@@ -92,22 +93,37 @@ function TenantsTab() {
   const [editOpen, setEditOpen] = useState(false);
   const [editTenant, setEditTenant] = useState<any>(null);
   const [showArchived, setShowArchived] = useState(false);
-  const [form, setForm] = useState({ name: "", unit_label: "", email: "", location_id: "", meter_id: "", move_in_date: "" });
-  const [editForm, setEditForm] = useState({ name: "", unit_label: "", email: "", location_id: "", meter_id: "", move_in_date: "", move_out_date: "" });
+  const [form, setForm] = useState({ name: "", unit_label: "", email: "", location_id: "", meter_ids: [] as string[], move_in_date: "" });
+  const [editForm, setEditForm] = useState({ name: "", unit_label: "", email: "", location_id: "", meter_ids: [] as string[], move_in_date: "", move_out_date: "" });
+
+  const toggleMeter = (meterId: string, isEdit: boolean) => {
+    if (isEdit) {
+      setEditForm((f) => ({
+        ...f,
+        meter_ids: f.meter_ids.includes(meterId) ? f.meter_ids.filter((id) => id !== meterId) : [...f.meter_ids, meterId],
+      }));
+    } else {
+      setForm((f) => ({
+        ...f,
+        meter_ids: f.meter_ids.includes(meterId) ? f.meter_ids.filter((id) => id !== meterId) : [...f.meter_ids, meterId],
+      }));
+    }
+  };
 
   const handleCreate = () => {
     createTenant.mutate({
       name: form.name, unit_label: form.unit_label || undefined, email: form.email || undefined,
-      location_id: form.location_id || undefined, meter_id: form.meter_id || undefined,
+      location_id: form.location_id || undefined, meter_ids: form.meter_ids.length > 0 ? form.meter_ids : undefined,
       move_in_date: form.move_in_date || undefined,
-    }, { onSuccess: () => { setOpen(false); setForm({ name: "", unit_label: "", email: "", location_id: "", meter_id: "", move_in_date: "" }); } });
+    }, { onSuccess: () => { setOpen(false); setForm({ name: "", unit_label: "", email: "", location_id: "", meter_ids: [], move_in_date: "" }); } });
   };
 
   const openEdit = (te: any) => {
     setEditTenant(te);
     setEditForm({
       name: te.name || "", unit_label: te.unit_label || "", email: te.email || "",
-      location_id: te.location_id || "", meter_id: te.meter_id || "",
+      location_id: te.location_id || "",
+      meter_ids: (te.assigned_meters || []).map((am: any) => am.meter_id),
       move_in_date: te.move_in_date || "", move_out_date: te.move_out_date || "",
     });
     setEditOpen(true);
@@ -118,7 +134,7 @@ function TenantsTab() {
     updateTenant.mutate({
       id: editTenant.id,
       name: editForm.name, unit_label: editForm.unit_label || null, email: editForm.email || null,
-      location_id: editForm.location_id || null, meter_id: editForm.meter_id || null,
+      location_id: editForm.location_id || null, meter_ids: editForm.meter_ids,
       move_in_date: editForm.move_in_date || null, move_out_date: editForm.move_out_date || null,
     }, { onSuccess: () => setEditOpen(false) });
   };
@@ -128,6 +144,34 @@ function TenantsTab() {
   };
 
   const displayedTenants = showArchived ? archivedTenants : activeTenants;
+
+  const MeterSelector = ({ selectedIds, isEdit }: { selectedIds: string[]; isEdit: boolean }) => (
+    <div>
+      <Label>Zähler zuordnen</Label>
+      <div className="border rounded-md p-2 max-h-40 overflow-y-auto space-y-1 mt-1">
+        {meters.length === 0 && <p className="text-sm text-muted-foreground p-1">Keine Zähler verfügbar</p>}
+        {meters.map((m) => (
+          <label key={m.id} className="flex items-center gap-2 p-1.5 rounded hover:bg-muted/50 cursor-pointer text-sm">
+            <Checkbox checked={selectedIds.includes(m.id)} onCheckedChange={() => toggleMeter(m.id, isEdit)} />
+            <span className="font-medium">{m.name}</span>
+            <span className="text-xs text-muted-foreground ml-auto">{m.energy_type}</span>
+          </label>
+        ))}
+      </div>
+      {selectedIds.length > 0 && (
+        <div className="flex flex-wrap gap-1 mt-2">
+          {selectedIds.map((mid) => {
+            const m = meters.find((me) => me.id === mid);
+            return m ? (
+              <Badge key={mid} variant="secondary" className="gap-1">
+                {m.name} <X className="h-3 w-3 cursor-pointer" onClick={() => toggleMeter(mid, isEdit)} />
+              </Badge>
+            ) : null;
+          })}
+        </div>
+      )}
+    </div>
+  );
 
   return (
     <div className="space-y-4">
@@ -155,12 +199,7 @@ function TenantsTab() {
                   <SelectContent>{locations.map((l) => <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
-              <div><Label>Zähler</Label>
-                <Select value={form.meter_id} onValueChange={(v) => setForm({ ...form, meter_id: v })}>
-                  <SelectTrigger><SelectValue placeholder="Zähler zuordnen" /></SelectTrigger>
-                  <SelectContent>{meters.map((m) => <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>)}</SelectContent>
-                </Select>
-              </div>
+              <MeterSelector selectedIds={form.meter_ids} isEdit={false} />
               <div><Label>Einzugsdatum</Label><Input type="date" value={form.move_in_date} onChange={(e) => setForm({ ...form, move_in_date: e.target.value })} /></div>
               <Button onClick={handleCreate} disabled={!form.name || createTenant.isPending} className="w-full">Speichern</Button>
             </div>
@@ -184,12 +223,7 @@ function TenantsTab() {
                 <SelectContent>{locations.map((l) => <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>)}</SelectContent>
               </Select>
             </div>
-            <div><Label>Zähler</Label>
-              <Select value={editForm.meter_id} onValueChange={(v) => setEditForm({ ...editForm, meter_id: v })}>
-                <SelectTrigger><SelectValue placeholder="Zähler zuordnen" /></SelectTrigger>
-                <SelectContent>{meters.map((m) => <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>)}</SelectContent>
-              </Select>
-            </div>
+            <MeterSelector selectedIds={editForm.meter_ids} isEdit={true} />
             <div className="grid grid-cols-2 gap-3">
               <div><Label>Einzugsdatum</Label><Input type="date" value={editForm.move_in_date} onChange={(e) => setEditForm({ ...editForm, move_in_date: e.target.value })} /></div>
               <div><Label>Auszugsdatum</Label><Input type="date" value={editForm.move_out_date} onChange={(e) => setEditForm({ ...editForm, move_out_date: e.target.value })} /></div>
@@ -207,7 +241,17 @@ function TenantsTab() {
               <TableCell className="font-medium">{te.name}</TableCell>
               <TableCell>{te.unit_label || "–"}</TableCell>
               <TableCell className="text-sm text-muted-foreground">{te.email || "–"}</TableCell>
-              <TableCell>{(te as any).meters?.name || "–"}</TableCell>
+              <TableCell>
+                {te.assigned_meters && te.assigned_meters.length > 0 ? (
+                  <div className="flex flex-wrap gap-1">
+                    {te.assigned_meters.map((am) => (
+                      <Badge key={am.meter_id} variant="outline" className="text-xs">
+                        {am.meters?.name || "–"} <span className="text-muted-foreground ml-1">{am.meters?.energy_type}</span>
+                      </Badge>
+                    ))}
+                  </div>
+                ) : "–"}
+              </TableCell>
               <TableCell>{te.move_in_date ? format(new Date(te.move_in_date), "dd.MM.yyyy") : "–"}</TableCell>
               {showArchived && <TableCell>{te.move_out_date ? format(new Date(te.move_out_date), "dd.MM.yyyy") : "–"}</TableCell>}
               <TableCell>
