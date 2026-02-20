@@ -215,39 +215,57 @@ function ArbitrageDashboard() {
 
 // ── Storages Tab ──
 function StoragesTab() {
-  const { storages, isLoading, createStorage, deleteStorage } = useEnergyStorages();
+  const { storages, isLoading, createStorage, updateStorage, deleteStorage } = useEnergyStorages();
   const { locations } = useLocations();
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ name: "", location_id: "", capacity_kwh: 100, max_charge_kw: 50, max_discharge_kw: 50, efficiency_pct: 90 });
+  const [editId, setEditId] = useState<string | null>(null);
+  const emptyForm = { name: "", location_id: "", capacity_kwh: 100, max_charge_kw: 50, max_discharge_kw: 50, efficiency_pct: 90 };
+  const [form, setForm] = useState(emptyForm);
 
-  const handleCreate = () => {
-    createStorage.mutate({ ...form, location_id: form.location_id || undefined }, { onSuccess: () => { setOpen(false); setForm({ name: "", location_id: "", capacity_kwh: 100, max_charge_kw: 50, max_discharge_kw: 50, efficiency_pct: 90 }); } });
+  const openEdit = (s: any) => {
+    setForm({ name: s.name, location_id: s.location_id || "", capacity_kwh: s.capacity_kwh, max_charge_kw: s.max_charge_kw, max_discharge_kw: s.max_discharge_kw, efficiency_pct: s.efficiency_pct });
+    setEditId(s.id);
+    setOpen(true);
   };
+
+  const handleSave = () => {
+    if (editId) {
+      updateStorage.mutate({ id: editId, ...form, location_id: form.location_id || undefined } as any, { onSuccess: () => { setOpen(false); setEditId(null); setForm(emptyForm); } });
+    } else {
+      createStorage.mutate({ ...form, location_id: form.location_id || undefined }, { onSuccess: () => { setOpen(false); setForm(emptyForm); } });
+    }
+  };
+
+  const handleOpenChange = (v: boolean) => { setOpen(v); if (!v) { setEditId(null); setForm(emptyForm); } };
+
+  const storageForm = (
+    <div className="space-y-3">
+      <div><Label>Name</Label><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
+      <div><Label>Standort</Label>
+        <Select value={form.location_id} onValueChange={(v) => setForm({ ...form, location_id: v })}>
+          <SelectTrigger><SelectValue placeholder="Optional" /></SelectTrigger>
+          <SelectContent>{locations.map((l) => <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>)}</SelectContent>
+        </Select>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div><Label>Kapazität (kWh)</Label><Input type="number" value={form.capacity_kwh} onChange={(e) => setForm({ ...form, capacity_kwh: Number(e.target.value) })} /></div>
+        <div><Label>Wirkungsgrad (%)</Label><Input type="number" value={form.efficiency_pct} onChange={(e) => setForm({ ...form, efficiency_pct: Number(e.target.value) })} /></div>
+        <div><Label>Max Laden (kW)</Label><Input type="number" value={form.max_charge_kw} onChange={(e) => setForm({ ...form, max_charge_kw: Number(e.target.value) })} /></div>
+        <div><Label>Max Entladen (kW)</Label><Input type="number" value={form.max_discharge_kw} onChange={(e) => setForm({ ...form, max_discharge_kw: Number(e.target.value) })} /></div>
+      </div>
+      <Button onClick={handleSave} disabled={!form.name || createStorage.isPending || updateStorage.isPending} className="w-full">{editId ? "Änderungen speichern" : "Speichern"}</Button>
+    </div>
+  );
 
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
         <h2 className="text-lg font-semibold">Batteriespeicher</h2>
-        <Dialog open={open} onOpenChange={setOpen}>
+        <Dialog open={open} onOpenChange={handleOpenChange}>
           <DialogTrigger asChild><Button><Plus className="h-4 w-4 mr-2" />Speicher anlegen</Button></DialogTrigger>
           <DialogContent>
-            <DialogHeader><DialogTitle>Neuer Speicher</DialogTitle></DialogHeader>
-            <div className="space-y-3">
-              <div><Label>Name</Label><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
-              <div><Label>Standort</Label>
-                <Select value={form.location_id} onValueChange={(v) => setForm({ ...form, location_id: v })}>
-                  <SelectTrigger><SelectValue placeholder="Optional" /></SelectTrigger>
-                  <SelectContent>{locations.map((l) => <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>)}</SelectContent>
-                </Select>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div><Label>Kapazität (kWh)</Label><Input type="number" value={form.capacity_kwh} onChange={(e) => setForm({ ...form, capacity_kwh: Number(e.target.value) })} /></div>
-                <div><Label>Wirkungsgrad (%)</Label><Input type="number" value={form.efficiency_pct} onChange={(e) => setForm({ ...form, efficiency_pct: Number(e.target.value) })} /></div>
-                <div><Label>Max Laden (kW)</Label><Input type="number" value={form.max_charge_kw} onChange={(e) => setForm({ ...form, max_charge_kw: Number(e.target.value) })} /></div>
-                <div><Label>Max Entladen (kW)</Label><Input type="number" value={form.max_discharge_kw} onChange={(e) => setForm({ ...form, max_discharge_kw: Number(e.target.value) })} /></div>
-              </div>
-              <Button onClick={handleCreate} disabled={!form.name || createStorage.isPending} className="w-full">Speichern</Button>
-            </div>
+            <DialogHeader><DialogTitle>{editId ? "Speicher bearbeiten" : "Neuer Speicher"}</DialogTitle></DialogHeader>
+            {storageForm}
           </DialogContent>
         </Dialog>
       </div>
@@ -263,7 +281,10 @@ function StoragesTab() {
               <TableCell>{s.max_charge_kw}/{s.max_discharge_kw} kW</TableCell>
               <TableCell>{s.efficiency_pct}%</TableCell>
               <TableCell><Badge variant={s.status === "active" ? "default" : "secondary"}>{s.status}</Badge></TableCell>
-              <TableCell><Button variant="ghost" size="icon" onClick={() => deleteStorage.mutate(s.id)}><Trash2 className="h-4 w-4" /></Button></TableCell>
+              <TableCell className="flex gap-1">
+                <Button variant="ghost" size="icon" onClick={() => openEdit(s)}><Edit className="h-4 w-4" /></Button>
+                <Button variant="ghost" size="icon" onClick={() => deleteStorage.mutate(s.id)}><Trash2 className="h-4 w-4" /></Button>
+              </TableCell>
             </TableRow>
           ))}
           {storages.length === 0 && <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">Noch keine Speicher angelegt</TableCell></TableRow>}
@@ -278,35 +299,53 @@ function StrategiesTab() {
   const { strategies, createStrategy, updateStrategy, deleteStrategy } = useArbitrageStrategies();
   const { storages } = useEnergyStorages();
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ name: "", storage_id: "", buy_below_eur_mwh: 30, sell_above_eur_mwh: 80 });
+  const [editId, setEditId] = useState<string | null>(null);
+  const emptyForm = { name: "", storage_id: "", buy_below_eur_mwh: 30, sell_above_eur_mwh: 80 };
+  const [form, setForm] = useState(emptyForm);
 
-  const handleCreate = () => {
-    if (!form.name || !form.storage_id) return;
-    createStrategy.mutate(form, { onSuccess: () => { setOpen(false); setForm({ name: "", storage_id: "", buy_below_eur_mwh: 30, sell_above_eur_mwh: 80 }); } });
+  const openEdit = (s: any) => {
+    setForm({ name: s.name, storage_id: s.storage_id, buy_below_eur_mwh: s.buy_below_eur_mwh, sell_above_eur_mwh: s.sell_above_eur_mwh });
+    setEditId(s.id);
+    setOpen(true);
   };
+
+  const handleSave = () => {
+    if (!form.name || !form.storage_id) return;
+    if (editId) {
+      updateStrategy.mutate({ id: editId, name: form.name, buy_below_eur_mwh: form.buy_below_eur_mwh, sell_above_eur_mwh: form.sell_above_eur_mwh }, { onSuccess: () => { setOpen(false); setEditId(null); setForm(emptyForm); } });
+    } else {
+      createStrategy.mutate(form, { onSuccess: () => { setOpen(false); setForm(emptyForm); } });
+    }
+  };
+
+  const handleOpenChange = (v: boolean) => { setOpen(v); if (!v) { setEditId(null); setForm(emptyForm); } };
+
+  const strategyForm = (
+    <div className="space-y-3">
+      <div><Label>Name</Label><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
+      <div><Label>Speicher</Label>
+        <Select value={form.storage_id} onValueChange={(v) => setForm({ ...form, storage_id: v })} disabled={!!editId}>
+          <SelectTrigger><SelectValue placeholder="Speicher wählen" /></SelectTrigger>
+          <SelectContent>{storages.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}</SelectContent>
+        </Select>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div><Label>Kaufen unter (€/MWh)</Label><Input type="number" value={form.buy_below_eur_mwh} onChange={(e) => setForm({ ...form, buy_below_eur_mwh: Number(e.target.value) })} /></div>
+        <div><Label>Verkaufen über (€/MWh)</Label><Input type="number" value={form.sell_above_eur_mwh} onChange={(e) => setForm({ ...form, sell_above_eur_mwh: Number(e.target.value) })} /></div>
+      </div>
+      <Button onClick={handleSave} disabled={createStrategy.isPending || updateStrategy.isPending} className="w-full">{editId ? "Änderungen speichern" : "Speichern"}</Button>
+    </div>
+  );
 
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
         <h2 className="text-lg font-semibold">Handelsstrategien</h2>
-        <Dialog open={open} onOpenChange={setOpen}>
+        <Dialog open={open} onOpenChange={handleOpenChange}>
           <DialogTrigger asChild><Button><Plus className="h-4 w-4 mr-2" />Strategie anlegen</Button></DialogTrigger>
           <DialogContent>
-            <DialogHeader><DialogTitle>Neue Strategie</DialogTitle></DialogHeader>
-            <div className="space-y-3">
-              <div><Label>Name</Label><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
-              <div><Label>Speicher</Label>
-                <Select value={form.storage_id} onValueChange={(v) => setForm({ ...form, storage_id: v })}>
-                  <SelectTrigger><SelectValue placeholder="Speicher wählen" /></SelectTrigger>
-                  <SelectContent>{storages.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}</SelectContent>
-                </Select>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div><Label>Kaufen unter (€/MWh)</Label><Input type="number" value={form.buy_below_eur_mwh} onChange={(e) => setForm({ ...form, buy_below_eur_mwh: Number(e.target.value) })} /></div>
-                <div><Label>Verkaufen über (€/MWh)</Label><Input type="number" value={form.sell_above_eur_mwh} onChange={(e) => setForm({ ...form, sell_above_eur_mwh: Number(e.target.value) })} /></div>
-              </div>
-              <Button onClick={handleCreate} disabled={createStrategy.isPending} className="w-full">Speichern</Button>
-            </div>
+            <DialogHeader><DialogTitle>{editId ? "Strategie bearbeiten" : "Neue Strategie"}</DialogTitle></DialogHeader>
+            {strategyForm}
           </DialogContent>
         </Dialog>
       </div>
@@ -323,7 +362,10 @@ function StrategiesTab() {
               <TableCell>
                 <Switch checked={s.is_active} onCheckedChange={(v) => updateStrategy.mutate({ id: s.id, is_active: v })} />
               </TableCell>
-              <TableCell><Button variant="ghost" size="icon" onClick={() => deleteStrategy.mutate(s.id)}><Trash2 className="h-4 w-4" /></Button></TableCell>
+              <TableCell className="flex gap-1">
+                <Button variant="ghost" size="icon" onClick={() => openEdit(s)}><Edit className="h-4 w-4" /></Button>
+                <Button variant="ghost" size="icon" onClick={() => deleteStrategy.mutate(s.id)}><Trash2 className="h-4 w-4" /></Button>
+              </TableCell>
             </TableRow>
           ))}
           {strategies.length === 0 && <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-8">Noch keine Strategien angelegt</TableCell></TableRow>}
