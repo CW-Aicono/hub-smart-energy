@@ -184,12 +184,31 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
 
         if (error) {
           console.error("Error fetching 5min power readings:", error);
-        } else {
-          allData = (data ?? []).map(r => ({
+        } else if (data && data.length > 0) {
+          allData = data.map(r => ({
             meter_id: r.meter_id,
             power_value: r.power_avg,
             recorded_at: r.bucket,
           }));
+        } else {
+          // Fallback: Rohdaten laden wenn keine 5-Min-Aggregate vorhanden
+          const PAGE_SIZE = 1000;
+          let from = 0;
+          let hasMore = true;
+          while (hasMore) {
+            const { data: rawData, error: rawError } = await supabase
+              .from("meter_power_readings")
+              .select("meter_id, power_value, recorded_at")
+              .in("meter_id", mainMeterIds)
+              .gte("recorded_at", rangeStart.toISOString())
+              .lte("recorded_at", rangeEnd.toISOString())
+              .order("recorded_at", { ascending: true })
+              .range(from, from + PAGE_SIZE - 1);
+            if (rawError) { console.error("Error fetching raw fallback:", rawError); hasMore = false; break; }
+            allData = [...allData, ...(rawData ?? [])];
+            hasMore = (rawData?.length ?? 0) === PAGE_SIZE;
+            from += PAGE_SIZE;
+          }
         }
       }
 
