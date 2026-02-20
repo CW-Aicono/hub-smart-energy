@@ -10,7 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Home, Users, Receipt, Settings, Plus, Trash2, FileText, Sun, Plug2, Pencil, Archive, ArchiveRestore, X } from "lucide-react";
+import { Home, Users, Receipt, Settings, Plus, Trash2, FileText, Sun, Plug2, Archive, ArchiveRestore, X } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useTenantElectricityTenants } from "@/hooks/useTenantElectricityTenants";
@@ -242,7 +242,7 @@ function TenantsTab() {
         <TableBody>
           {displayedTenants.map((te) => (
             <TableRow key={te.id} className={te.status === "archived" ? "opacity-60" : ""}>
-              <TableCell className="font-medium">{te.name}</TableCell>
+              <TableCell className="font-medium"><button className="hover:underline text-left cursor-pointer text-primary" onClick={() => openEdit(te)}>{te.name}</button></TableCell>
               <TableCell>{te.unit_label || "–"}</TableCell>
               <TableCell className="text-sm text-muted-foreground">{te.email || "–"}</TableCell>
               <TableCell>
@@ -267,9 +267,6 @@ function TenantsTab() {
                 <div className="flex items-center gap-1">
                   {te.status === "active" ? (
                     <>
-                      <Button variant="ghost" size="icon" onClick={() => openEdit(te)} title="Bearbeiten">
-                        <Pencil className="h-4 w-4" />
-                      </Button>
                       <AlertDialog>
                         <AlertDialogTrigger asChild>
                           <Button variant="ghost" size="icon" title="Archivieren">
@@ -292,9 +289,6 @@ function TenantsTab() {
                     </>
                   ) : (
                     <>
-                      <Button variant="ghost" size="icon" onClick={() => openEdit(te)} title="Bearbeiten">
-                        <Pencil className="h-4 w-4" />
-                      </Button>
                       <Button variant="ghost" size="icon" onClick={() => handleReactivate(te.id)} title="Reaktivieren">
                         <ArchiveRestore className="h-4 w-4" />
                       </Button>
