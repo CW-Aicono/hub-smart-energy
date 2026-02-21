@@ -10,7 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Home, Users, Receipt, Settings, Plus, Trash2, FileText, Sun, Plug2, Archive, ArchiveRestore, X } from "lucide-react";
+import { Home, Users, Receipt, Settings, Plus, Trash2, FileText, Sun, Plug2, Archive, ArchiveRestore, X, Smartphone, ExternalLink, Copy, Check, Link, QrCode } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useTenantElectricityTenants } from "@/hooks/useTenantElectricityTenants";
@@ -20,6 +20,8 @@ import { useTenantElectricitySettings } from "@/hooks/useTenantElectricitySettin
 import { useLocations } from "@/hooks/useLocations";
 import { useMeters } from "@/hooks/useMeters";
 import { format } from "date-fns";
+import { useEffect, useRef } from "react";
+import QRCode from "qrcode";
 
 const TenantElectricity = () => {
   const { t } = useTranslation();
@@ -41,6 +43,7 @@ const TenantElectricity = () => {
             <TabsTrigger value="tariffs">Tarife</TabsTrigger>
             <TabsTrigger value="invoices">Abrechnung</TabsTrigger>
             <TabsTrigger value="settings">Einstellungen</TabsTrigger>
+            <TabsTrigger value="app" className="gap-1.5"><Smartphone className="h-4 w-4" />Mein Strom App</TabsTrigger>
           </TabsList>
 
           <TabsContent value="overview"><OverviewTab /></TabsContent>
@@ -48,6 +51,7 @@ const TenantElectricity = () => {
           <TabsContent value="tariffs"><TariffsTab /></TabsContent>
           <TabsContent value="invoices"><InvoicesTab /></TabsContent>
           <TabsContent value="settings"><SettingsTab /></TabsContent>
+          <TabsContent value="app"><MeinStromAppTab /></TabsContent>
         </Tabs>
       </main>
     </div>
@@ -627,6 +631,79 @@ function SettingsTab() {
           </div>
         </div>
         <Button onClick={() => upsertSettings.mutate(form)} disabled={upsertSettings.isPending}>Einstellungen speichern</Button>
+      </div>
+    </div>
+  );
+}
+
+// ── Mein Strom App Tab ──
+const APP_URL_TE = `${window.location.origin}/te`;
+
+function MeinStromAppTab() {
+  const qrCanvasRef = useRef<HTMLCanvasElement>(null);
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    if (qrCanvasRef.current) {
+      QRCode.toCanvas(qrCanvasRef.current, APP_URL_TE, { width: 180, margin: 2 });
+    }
+  }, []);
+
+  return (
+    <div className="flex flex-col lg:flex-row gap-6">
+      {/* Left: Link & QR */}
+      <div className="space-y-4 lg:w-72 shrink-0">
+        <Card>
+          <CardContent className="p-4 space-y-3">
+            <h3 className="font-semibold text-sm flex items-center gap-1.5"><Link className="h-4 w-4" /> App-Link</h3>
+            <div className="flex items-center gap-2">
+              <Input value={APP_URL_TE} readOnly className="text-xs font-mono" />
+              <Button
+                variant="outline"
+                size="icon"
+                className="shrink-0"
+                onClick={() => {
+                  navigator.clipboard.writeText(APP_URL_TE);
+                  setCopied(true);
+                  setTimeout(() => setCopied(false), 2000);
+                }}
+              >
+                {copied ? <Check className="h-4 w-4 text-primary" /> : <Copy className="h-4 w-4" />}
+              </Button>
+            </div>
+            <Button variant="outline" size="sm" asChild className="w-full gap-1.5">
+              <a href="/te" target="_blank" rel="noopener noreferrer">
+                <ExternalLink className="h-4 w-4" />
+                App in neuem Tab öffnen
+              </a>
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="p-4 space-y-3">
+            <h3 className="font-semibold text-sm flex items-center gap-1.5"><QrCode className="h-4 w-4" /> QR-Code</h3>
+            <div className="flex justify-center">
+              <canvas ref={qrCanvasRef} />
+            </div>
+            <p className="text-xs text-muted-foreground text-center">Scannen zum Öffnen der Mein Strom App</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Right: Phone mockup */}
+      <div className="flex-1 flex justify-center">
+        <div className="relative" style={{ width: 375, height: 740 }}>
+          <div className="absolute inset-0 rounded-[2.5rem] border-[8px] border-foreground/80 bg-background shadow-2xl overflow-hidden">
+            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-32 h-6 bg-foreground/80 rounded-b-2xl z-10" />
+            <iframe
+              src="/te"
+              className="w-full h-full border-0"
+              title="Mein Strom App Vorschau"
+              style={{ borderRadius: "1.8rem" }}
+            />
+          </div>
+        </div>
       </div>
     </div>
   );
