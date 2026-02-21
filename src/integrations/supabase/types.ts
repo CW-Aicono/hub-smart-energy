@@ -3038,6 +3038,53 @@ export type Database = {
           },
         ]
       }
+      tenant_self_tariffs: {
+        Row: {
+          base_fee_monthly: number
+          created_at: string
+          energy_type: string
+          id: string
+          price_per_kwh: number
+          provider_name: string | null
+          tenant_electricity_tenant_id: string
+          updated_at: string
+          valid_from: string
+          valid_until: string | null
+        }
+        Insert: {
+          base_fee_monthly?: number
+          created_at?: string
+          energy_type?: string
+          id?: string
+          price_per_kwh?: number
+          provider_name?: string | null
+          tenant_electricity_tenant_id: string
+          updated_at?: string
+          valid_from?: string
+          valid_until?: string | null
+        }
+        Update: {
+          base_fee_monthly?: number
+          created_at?: string
+          energy_type?: string
+          id?: string
+          price_per_kwh?: number
+          provider_name?: string | null
+          tenant_electricity_tenant_id?: string
+          updated_at?: string
+          valid_from?: string
+          valid_until?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tenant_self_tariffs_tenant_electricity_tenant_id_fkey"
+            columns: ["tenant_electricity_tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenant_electricity_tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tenants: {
         Row: {
           address: string | null
