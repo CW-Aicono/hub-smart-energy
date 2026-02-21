@@ -9,6 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import {
   Zap, LogOut, Loader2, ArrowLeft, Mail, Lock, Eye, EyeOff,
   User, BarChart3, Receipt, Home, TrendingUp, TrendingDown,
+  Settings, Plus, Trash2, Pencil,
 } from "lucide-react";
 import { toast } from "sonner";
 import { format, subMonths, startOfMonth, endOfMonth } from "date-fns";
@@ -564,6 +565,269 @@ function MeterTab({ tenantRecord }: { tenantRecord: TenantRecord }) {
   );
 }
 
+// ── Tariffs Tab (Self-managed tariffs) ──
+interface SelfTariff {
+  id: string;
+  tenant_electricity_tenant_id: string;
+  energy_type: string;
+  price_per_kwh: number;
+  base_fee_monthly: number;
+  provider_name: string | null;
+  valid_from: string;
+  valid_until: string | null;
+}
+
+function TariffsTab({ tenantRecord }: { tenantRecord: TenantRecord }) {
+  const [tariffs, setTariffs] = useState<SelfTariff[]>([]);
+  const [landlordTariffExists, setLandlordTariffExists] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [editId, setEditId] = useState<string | null>(null);
+  const [form, setForm] = useState({
+    energy_type: "gas", price_per_kwh: "", base_fee_monthly: "0",
+    provider_name: "", valid_from: new Date().toISOString().split("T")[0], valid_until: "",
+  });
+
+  const energyTypes = useMemo(() => {
+    const types = new Set<string>();
+    (tenantRecord.assigned_meters || []).forEach((am) => {
+      if (am.meters?.energy_type) types.add(am.meters.energy_type);
+    });
+    return Array.from(types);
+  }, [tenantRecord]);
+
+  const fetchTariffs = async () => {
+    setLoading(true);
+    const { data } = await supabase
+      .from("tenant_self_tariffs")
+      .select("*")
+      .eq("tenant_electricity_tenant_id", tenantRecord.id)
+      .order("valid_from", { ascending: false });
+    setTariffs((data || []) as SelfTariff[]);
+
+    // Check if landlord has set a Mieterstrom tariff for this tenant's location
+    const { data: landlordTariff } = await supabase
+      .from("tenant_electricity_tariffs")
+      .select("id")
+      .eq("tenant_id", tenantRecord.tenant_id)
+      .limit(1);
+    setLandlordTariffExists((landlordTariff || []).length > 0);
+
+    setLoading(false);
+  };
+
+  useEffect(() => { fetchTariffs(); }, [tenantRecord.id]);
+
+  const resetForm = (energyType = "gas") => {
+    setForm({
+      energy_type: energyType, price_per_kwh: "", base_fee_monthly: "0",
+      provider_name: "", valid_from: new Date().toISOString().split("T")[0], valid_until: "",
+    });
+    setEditId(null);
+  };
+
+  const handleSave = async () => {
+    const payload = {
+      tenant_electricity_tenant_id: tenantRecord.id,
+      energy_type: form.energy_type,
+      price_per_kwh: parseFloat(form.price_per_kwh) || 0,
+      base_fee_monthly: parseFloat(form.base_fee_monthly) || 0,
+      provider_name: form.provider_name || null,
+      valid_from: form.valid_from,
+      valid_until: form.valid_until || null,
+    };
+
+    if (editId) {
+      const { error } = await supabase.from("tenant_self_tariffs").update(payload).eq("id", editId);
+      if (error) { toast.error("Fehler beim Speichern"); return; }
+      toast.success("Tarif aktualisiert");
+    } else {
+      const { error } = await supabase.from("tenant_self_tariffs").insert(payload);
+      if (error) { toast.error("Fehler beim Speichern"); return; }
+      toast.success("Tarif gespeichert");
+    }
+    setShowForm(false);
+    resetForm();
+    fetchTariffs();
+  };
+
+  const handleEdit = (t: SelfTariff) => {
+    setForm({
+      energy_type: t.energy_type,
+      price_per_kwh: String(t.price_per_kwh),
+      base_fee_monthly: String(t.base_fee_monthly),
+      provider_name: t.provider_name || "",
+      valid_from: t.valid_from,
+      valid_until: t.valid_until || "",
+    });
+    setEditId(t.id);
+    setShowForm(true);
+  };
+
+  const handleDelete = async (id: string) => {
+    const { error } = await supabase.from("tenant_self_tariffs").delete().eq("id", id);
+    if (error) { toast.error("Fehler beim Löschen"); return; }
+    toast.success("Tarif gelöscht");
+    fetchTariffs();
+  };
+
+  // Determine which energy types the tenant can self-manage
+  const selfManagedTypes = useMemo(() => {
+    const types: string[] = [];
+    energyTypes.forEach((et) => {
+      if (et === "gas" || et === "wasser" || et === "waerme") {
+        types.push(et);
+      } else if (et === "strom" && !landlordTariffExists) {
+        types.push(et);
+      }
+    });
+    return types;
+  }, [energyTypes, landlordTariffExists]);
+
+  if (loading) {
+    return <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>;
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-semibold">Meine Tarife</h2>
+        {!showForm && selfManagedTypes.length > 0 && (
+          <Button size="sm" onClick={() => { resetForm(selfManagedTypes[0]); setShowForm(true); }} className="gap-1">
+            <Plus className="h-4 w-4" /> Tarif anlegen
+          </Button>
+        )}
+      </div>
+
+      {landlordTariffExists && energyTypes.includes("strom") && (
+        <Card className="border-green-200 dark:border-green-800">
+          <CardContent className="p-3">
+            <div className="flex items-center gap-2">
+              <Zap className="h-4 w-4 text-green-600" />
+              <p className="text-sm">
+                <strong>Strom:</strong> Ihr Vermieter hat einen Mieterstrom-Tarif für Sie hinterlegt.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {selfManagedTypes.length === 0 && tariffs.length === 0 && (
+        <Card className="p-6 text-center text-muted-foreground">
+          <Settings className="h-8 w-8 mx-auto mb-2 opacity-50" />
+          <p>Keine selbstverwalteten Tarife nötig</p>
+          <p className="text-xs mt-1">Ihr Vermieter verwaltet alle Tarife für Sie.</p>
+        </Card>
+      )}
+
+      {/* Add/Edit form */}
+      {showForm && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">{editId ? "Tarif bearbeiten" : "Neuer Tarif"}</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div>
+              <Label className="text-sm">Energieart</Label>
+              <select
+                className="w-full border rounded-md px-3 py-2 text-sm bg-background mt-1"
+                value={form.energy_type}
+                onChange={(e) => setForm({ ...form, energy_type: e.target.value })}
+                disabled={!!editId}
+              >
+                {selfManagedTypes.map((et) => (
+                  <option key={et} value={et}>{fmtEnergyType(et)}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <Label className="text-sm">Anbieter (optional)</Label>
+              <Input
+                value={form.provider_name}
+                onChange={(e) => setForm({ ...form, provider_name: e.target.value })}
+                placeholder="z.B. Stadtwerke..."
+                className="mt-1"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-sm">Preis pro kWh (€)</Label>
+                <Input
+                  type="number" step="0.01" min="0"
+                  value={form.price_per_kwh}
+                  onChange={(e) => setForm({ ...form, price_per_kwh: e.target.value })}
+                  placeholder="0.35"
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <Label className="text-sm">Grundgebühr/Monat (€)</Label>
+                <Input
+                  type="number" step="0.01" min="0"
+                  value={form.base_fee_monthly}
+                  onChange={(e) => setForm({ ...form, base_fee_monthly: e.target.value })}
+                  placeholder="0.00"
+                  className="mt-1"
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-sm">Gültig ab</Label>
+                <Input type="date" value={form.valid_from} onChange={(e) => setForm({ ...form, valid_from: e.target.value })} className="mt-1" />
+              </div>
+              <div>
+                <Label className="text-sm">Gültig bis (optional)</Label>
+                <Input type="date" value={form.valid_until} onChange={(e) => setForm({ ...form, valid_until: e.target.value })} className="mt-1" />
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <Button onClick={handleSave} className="flex-1" disabled={!form.price_per_kwh}>
+                {editId ? "Speichern" : "Anlegen"}
+              </Button>
+              <Button variant="outline" onClick={() => { setShowForm(false); resetForm(); }}>Abbrechen</Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Existing tariffs */}
+      {tariffs.map((t) => (
+        <Card key={t.id}>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="flex items-center gap-2">
+                  <Badge variant="outline">{fmtEnergyType(t.energy_type)}</Badge>
+                  {t.provider_name && <span className="text-sm text-muted-foreground">{t.provider_name}</span>}
+                </div>
+                <div className="mt-1 text-sm">
+                  <span className="font-bold">{Number(t.price_per_kwh).toFixed(4)} €/kWh</span>
+                  {Number(t.base_fee_monthly) > 0 && (
+                    <span className="text-muted-foreground ml-2">+ {Number(t.base_fee_monthly).toFixed(2)} €/Monat</span>
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  ab {format(new Date(t.valid_from), "dd.MM.yyyy")}
+                  {t.valid_until && ` bis ${format(new Date(t.valid_until), "dd.MM.yyyy")}`}
+                </p>
+              </div>
+              <div className="flex gap-1">
+                <Button variant="ghost" size="icon" onClick={() => handleEdit(t)}>
+                  <Pencil className="h-4 w-4" />
+                </Button>
+                <Button variant="ghost" size="icon" onClick={() => handleDelete(t.id)}>
+                  <Trash2 className="h-4 w-4 text-destructive" />
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      ))}
+    </div>
+  );
+}
+
 // ── Not Linked Screen ──
 function NotLinkedScreen({ email, onLogout }: { email: string; onLogout: () => void }) {
   return (
@@ -586,7 +850,7 @@ function NotLinkedScreen({ email, onLogout }: { email: string; onLogout: () => v
 }
 
 // ── Main App ──
-type AppTab = "dashboard" | "meter" | "invoices";
+type AppTab = "dashboard" | "meter" | "invoices" | "tariffs";
 
 const TenantEnergyApp = () => {
   const [user, setUser] = useState<any>(null);
@@ -734,6 +998,7 @@ const TenantEnergyApp = () => {
         {activeTab === "dashboard" && <DashboardTab tenantRecord={tenantRecord} invoices={invoices} />}
         {activeTab === "meter" && <MeterTab tenantRecord={tenantRecord} />}
         {activeTab === "invoices" && <InvoicesTab invoices={invoices} />}
+        {activeTab === "tariffs" && <TariffsTab tenantRecord={tenantRecord} />}
       </div>
 
       {/* Bottom Navigation */}
@@ -741,6 +1006,7 @@ const TenantEnergyApp = () => {
         {([
           { id: "dashboard" as AppTab, icon: Home, label: "Übersicht" },
           { id: "meter" as AppTab, icon: BarChart3, label: "Zähler" },
+          { id: "tariffs" as AppTab, icon: Settings, label: "Tarife" },
           { id: "invoices" as AppTab, icon: Receipt, label: "Rechnungen" },
         ]).map((tab) => (
           <button
