@@ -48,6 +48,7 @@ export function useTenantElectricityTenants() {
     mutationFn: async (values: {
       name: string; unit_label?: string; email?: string;
       location_id: string; meter_ids?: string[]; move_in_date?: string;
+      is_mieterstrom?: boolean;
     }) => {
       const { meter_ids, ...rest } = values;
       const { data, error } = await supabase

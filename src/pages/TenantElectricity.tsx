@@ -97,8 +97,8 @@ function TenantsTab() {
   const [editOpen, setEditOpen] = useState(false);
   const [editTenant, setEditTenant] = useState<any>(null);
   const [showArchived, setShowArchived] = useState(false);
-  const [form, setForm] = useState({ name: "", unit_label: "", email: "", location_id: "", meter_ids: [] as string[], move_in_date: "" });
-  const [editForm, setEditForm] = useState({ name: "", unit_label: "", email: "", location_id: "", meter_ids: [] as string[], move_in_date: "", move_out_date: "" });
+  const [form, setForm] = useState({ name: "", unit_label: "", email: "", location_id: "", meter_ids: [] as string[], move_in_date: "", is_mieterstrom: false });
+  const [editForm, setEditForm] = useState({ name: "", unit_label: "", email: "", location_id: "", meter_ids: [] as string[], move_in_date: "", move_out_date: "", is_mieterstrom: false });
 
   const toggleMeter = (meterId: string, isEdit: boolean) => {
     if (isEdit) {
@@ -118,8 +118,8 @@ function TenantsTab() {
     createTenant.mutate({
       name: form.name, unit_label: form.unit_label || undefined, email: form.email || undefined,
       location_id: form.location_id, meter_ids: form.meter_ids.length > 0 ? form.meter_ids : undefined,
-      move_in_date: form.move_in_date || undefined,
-    }, { onSuccess: () => { setOpen(false); setForm({ name: "", unit_label: "", email: "", location_id: "", meter_ids: [], move_in_date: "" }); } });
+      move_in_date: form.move_in_date || undefined, is_mieterstrom: form.is_mieterstrom,
+    }, { onSuccess: () => { setOpen(false); setForm({ name: "", unit_label: "", email: "", location_id: "", meter_ids: [], move_in_date: "", is_mieterstrom: false }); } });
   };
 
   const openEdit = (te: any) => {
@@ -129,6 +129,7 @@ function TenantsTab() {
       location_id: te.location_id || "",
       meter_ids: (te.assigned_meters || []).map((am: any) => am.meter_id),
       move_in_date: te.move_in_date || "", move_out_date: te.move_out_date || "",
+      is_mieterstrom: !!(te as any).is_mieterstrom,
     });
     setEditOpen(true);
   };
@@ -140,6 +141,7 @@ function TenantsTab() {
       name: editForm.name, unit_label: editForm.unit_label || null, email: editForm.email || null,
       location_id: editForm.location_id || null, meter_ids: editForm.meter_ids,
       move_in_date: editForm.move_in_date || null, move_out_date: editForm.move_out_date || null,
+      is_mieterstrom: editForm.is_mieterstrom,
     }, { onSuccess: () => setEditOpen(false) });
   };
 
@@ -209,6 +211,11 @@ function TenantsTab() {
               </div>
               <MeterSelector selectedIds={form.meter_ids} isEdit={false} locationId={form.location_id} />
               <div><Label>Einzugsdatum</Label><Input type="date" value={form.move_in_date} onChange={(e) => setForm({ ...form, move_in_date: e.target.value })} /></div>
+              <label className="flex items-center gap-2 pt-1 cursor-pointer">
+                <Checkbox checked={form.is_mieterstrom} onCheckedChange={(v) => setForm({ ...form, is_mieterstrom: !!v })} />
+                <span className="text-sm font-medium">Mieterstrom</span>
+                <span className="text-xs text-muted-foreground">— Mieter nimmt am Mieterstrommodell teil</span>
+              </label>
               <Button onClick={handleCreate} disabled={!form.name || !form.location_id || createTenant.isPending} className="w-full">Speichern</Button>
             </div>
           </DialogContent>
@@ -236,6 +243,11 @@ function TenantsTab() {
               <div><Label>Einzugsdatum</Label><Input type="date" value={editForm.move_in_date} onChange={(e) => setEditForm({ ...editForm, move_in_date: e.target.value })} /></div>
               <div><Label>Auszugsdatum</Label><Input type="date" value={editForm.move_out_date} onChange={(e) => setEditForm({ ...editForm, move_out_date: e.target.value })} /></div>
             </div>
+            <label className="flex items-center gap-2 pt-1 cursor-pointer">
+              <Checkbox checked={editForm.is_mieterstrom} onCheckedChange={(v) => setEditForm({ ...editForm, is_mieterstrom: !!v })} />
+              <span className="text-sm font-medium">Mieterstrom</span>
+              <span className="text-xs text-muted-foreground">— Mieter nimmt am Mieterstrommodell teil</span>
+            </label>
             <Button onClick={handleUpdate} disabled={!editForm.name || !editForm.location_id || updateTenant.isPending} className="w-full">Änderungen speichern</Button>
           </div>
         </DialogContent>

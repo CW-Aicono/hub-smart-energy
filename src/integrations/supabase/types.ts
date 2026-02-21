@@ -2827,6 +2827,7 @@ export type Database = {
           created_at: string
           email: string | null
           id: string
+          is_mieterstrom: boolean
           location_id: string
           meter_id: string | null
           move_in_date: string | null
@@ -2842,6 +2843,7 @@ export type Database = {
           created_at?: string
           email?: string | null
           id?: string
+          is_mieterstrom?: boolean
           location_id: string
           meter_id?: string | null
           move_in_date?: string | null
@@ -2857,6 +2859,7 @@ export type Database = {
           created_at?: string
           email?: string | null
           id?: string
+          is_mieterstrom?: boolean
           location_id?: string
           meter_id?: string | null
           move_in_date?: string | null
