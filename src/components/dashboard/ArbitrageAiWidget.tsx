@@ -76,7 +76,7 @@ export default function ArbitrageAiWidget({ locationId }: ArbitrageAiWidgetProps
               variant="link"
               size="sm"
               className="w-full"
-              onClick={() => navigate("/arbitrage-trading")}
+              onClick={() => navigate("/arbitrage")}
             >
               Alle Details & Übernahme →
             </Button>
