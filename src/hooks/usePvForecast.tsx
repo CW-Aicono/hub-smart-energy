@@ -36,17 +36,97 @@ export interface PvForecastSettings {
   is_active: boolean;
 }
 
-export function usePvForecast(locationId: string | null) {
-  const { data: forecast, isLoading, error, refetch } = useQuery({
-    queryKey: ["pv-forecast", locationId],
-    queryFn: async () => {
-      const { data, error } = await supabase.functions.invoke("pv-forecast", {
-        body: { location_id: locationId },
-      });
-      if (error) throw error;
-      return data as PvForecast;
+function aggregateForecasts(forecasts: PvForecast[]): PvForecast {
+  if (forecasts.length === 1) return forecasts[0];
+
+  // Build a map of timestamp -> summed values
+  const hourlyMap = new Map<string, PvHourlyEntry>();
+  for (const fc of forecasts) {
+    for (const h of fc.hourly) {
+      const existing = hourlyMap.get(h.timestamp);
+      if (existing) {
+        existing.radiation_w_m2 = Math.max(existing.radiation_w_m2, h.radiation_w_m2);
+        existing.cloud_cover_pct = Math.round((existing.cloud_cover_pct + h.cloud_cover_pct) / 2);
+        existing.estimated_kwh = Math.round((existing.estimated_kwh + h.estimated_kwh) * 100) / 100;
+        existing.ai_adjusted_kwh =
+          existing.ai_adjusted_kwh != null || h.ai_adjusted_kwh != null
+            ? Math.round(((existing.ai_adjusted_kwh ?? existing.estimated_kwh) + (h.ai_adjusted_kwh ?? h.estimated_kwh)) * 100) / 100
+            : null;
+      } else {
+        hourlyMap.set(h.timestamp, { ...h });
+      }
+    }
+  }
+  const hourly = Array.from(hourlyMap.values()).sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+
+  const totalKwp = forecasts.reduce((s, f) => s + f.settings.peak_power_kwp, 0);
+  const getValue = (h: PvHourlyEntry) => h.ai_adjusted_kwh ?? h.estimated_kwh;
+
+  const now = new Date();
+  const todayStr = now.toISOString().slice(0, 10);
+  const tomorrowStr = new Date(now.getTime() + 86400000).toISOString().slice(0, 10);
+
+  const todayTotal = hourly.filter((h) => h.timestamp.startsWith(todayStr)).reduce((s, h) => s + getValue(h), 0);
+  const tomorrowTotal = hourly.filter((h) => h.timestamp.startsWith(tomorrowStr)).reduce((s, h) => s + getValue(h), 0);
+  const peakEntry = hourly.reduce((best, h) => (getValue(h) > getValue(best) ? h : best), hourly[0]);
+
+  return {
+    location: { name: `Alle Anlagen (${forecasts.length})`, city: null },
+    settings: { peak_power_kwp: totalKwp, tilt_deg: 0, azimuth_deg: 0 },
+    hourly,
+    summary: {
+      today_total_kwh: Math.round(todayTotal * 10) / 10,
+      tomorrow_total_kwh: Math.round(tomorrowTotal * 10) / 10,
+      peak_hour: peakEntry?.timestamp || null,
+      peak_kwh: peakEntry ? Math.round(getValue(peakEntry) * 100) / 100 : 0,
+      ai_confidence: "",
+      ai_notes: "",
     },
-    enabled: !!locationId,
+  };
+}
+
+export function usePvForecast(locationId: string | null) {
+  const { tenant } = useTenant();
+  const tenantId = tenant?.id ?? null;
+
+  const { data: forecast, isLoading, error, refetch } = useQuery({
+    queryKey: ["pv-forecast", locationId ?? "all", tenantId],
+    queryFn: async () => {
+      if (locationId) {
+        // Single location – existing behaviour
+        const { data, error } = await supabase.functions.invoke("pv-forecast", {
+          body: { location_id: locationId },
+        });
+        if (error) throw error;
+        return data as PvForecast;
+      }
+
+      // No location selected → fetch all active PV settings and aggregate
+      if (!tenantId) return null;
+      const { data: allSettings, error: sErr } = await supabase
+        .from("pv_forecast_settings")
+        .select("location_id")
+        .eq("tenant_id", tenantId)
+        .eq("is_active", true);
+      if (sErr) throw sErr;
+      if (!allSettings || allSettings.length === 0) return null;
+
+      const results = await Promise.allSettled(
+        allSettings.map((s) =>
+          supabase.functions.invoke("pv-forecast", { body: { location_id: s.location_id } }).then((r) => {
+            if (r.error) throw r.error;
+            return r.data as PvForecast;
+          })
+        )
+      );
+      const forecasts = results
+        .filter((r): r is PromiseFulfilledResult<PvForecast> => r.status === "fulfilled")
+        .map((r) => r.value);
+
+      if (forecasts.length === 0) return null;
+      return aggregateForecasts(forecasts);
+    },
+    enabled: !!locationId || !!tenantId,
     staleTime: 30 * 60 * 1000,
     refetchInterval: 30 * 60 * 1000,
   });

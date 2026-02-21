@@ -14,17 +14,6 @@ interface PvForecastWidgetProps {
 const PvForecastWidget = ({ locationId }: PvForecastWidgetProps) => {
   const { forecast, isLoading } = usePvForecast(locationId);
 
-  if (!locationId) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2"><Sun className="h-5 w-5 text-amber-500" />PV-Prognose</CardTitle>
-        </CardHeader>
-        <CardContent><p className="text-muted-foreground text-sm">Bitte wählen Sie einen Standort aus.</p></CardContent>
-      </Card>
-    );
-  }
-
   if (isLoading) {
     return (
       <Card>
