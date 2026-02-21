@@ -674,7 +674,10 @@ function TariffsTab({ tenantRecord }: { tenantRecord: TenantRecord }) {
   // Determine which energy types the tenant can self-manage
   const selfManagedTypes = useMemo(() => {
     const types: string[] = [];
-    energyTypes.forEach((et) => {
+    // Include wasser even if not from meters
+    const allTypes = new Set(energyTypes);
+    allTypes.add("wasser");
+    allTypes.forEach((et) => {
       if (et === "gas" || et === "wasser" || et === "waerme") {
         types.push(et);
       } else if (et === "strom" && !landlordTariffExists) {
@@ -684,6 +687,16 @@ function TariffsTab({ tenantRecord }: { tenantRecord: TenantRecord }) {
     return types;
   }, [energyTypes, landlordTariffExists]);
 
+  // Energy types that already have an active (no valid_until or future valid_until) tariff
+  const availableTypesForNew = useMemo(() => {
+    const usedTypes = new Set(
+      tariffs
+        .filter((t) => !t.valid_until || new Date(t.valid_until) >= new Date())
+        .map((t) => t.energy_type)
+    );
+    return selfManagedTypes.filter((et) => !usedTypes.has(et));
+  }, [selfManagedTypes, tariffs]);
+
   if (loading) {
     return <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>;
   }
@@ -692,8 +705,8 @@ function TariffsTab({ tenantRecord }: { tenantRecord: TenantRecord }) {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold">Meine Tarife</h2>
-        {!showForm && selfManagedTypes.length > 0 && (
-          <Button size="sm" onClick={() => { resetForm(selfManagedTypes[0]); setShowForm(true); }} className="gap-1">
+        {!showForm && availableTypesForNew.length > 0 && (
+          <Button size="sm" onClick={() => { resetForm(availableTypesForNew[0]); setShowForm(true); }} className="gap-1">
             <Plus className="h-4 w-4" /> Tarif anlegen
           </Button>
         )}
@@ -735,7 +748,7 @@ function TariffsTab({ tenantRecord }: { tenantRecord: TenantRecord }) {
                 onChange={(e) => setForm({ ...form, energy_type: e.target.value })}
                 disabled={!!editId}
               >
-                {selfManagedTypes.map((et) => (
+                {(editId ? selfManagedTypes : availableTypesForNew).map((et) => (
                   <option key={et} value={et}>{fmtEnergyType(et)}</option>
                 ))}
               </select>
