@@ -353,6 +353,7 @@ function DashboardTab({ tenantRecord, invoices }: { tenantRecord: TenantRecord; 
               const total = totalByType[et] || 0;
               const tariff = getTariffPrice(et);
               const cost = tariff ? total * tariff.pricePerKwh : null;
+              const unit = et === "wasser" ? "m³" : "kWh";
               return (
                 <div key={et} className="flex items-center justify-between py-1.5 border-b last:border-0">
                   <div className="flex items-center gap-2">
@@ -360,9 +361,11 @@ function DashboardTab({ tenantRecord, invoices }: { tenantRecord: TenantRecord; 
                     <span className="text-sm font-medium">{fmtEnergyType(et)}</span>
                   </div>
                   <div className="text-right">
-                    <span className="text-sm font-semibold">{total.toFixed(1)} kWh</span>
-                    {cost !== null && (
+                    <span className="text-sm font-semibold">{total.toFixed(1)} {unit}</span>
+                    {cost !== null ? (
                       <span className="text-xs text-muted-foreground ml-2">≈ {cost.toFixed(2)} €</span>
+                    ) : (
+                      <span className="text-xs text-muted-foreground ml-2">≈ 0,00 €</span>
                     )}
                   </div>
                 </div>
@@ -496,9 +499,7 @@ const fmtDe = (v: number, decimals = 1) =>
 // Capitalize energy type and map display unit
 const fmtEnergyType = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
 const displayUnit = (_unit: string, energyType: string) => {
-  // Gas/Wasser volumes are stored in m³ but displayed as kWh in tenant app
-  if (energyType === "gas") return "kWh";
-  if (energyType === "strom") return "kWh";
+  if (energyType === "wasser") return "m³";
   return "kWh";
 };
 
