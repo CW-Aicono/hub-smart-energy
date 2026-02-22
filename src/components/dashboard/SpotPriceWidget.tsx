@@ -87,7 +87,7 @@ const SpotPriceWidget = ({ locationId }: SpotPriceWidgetProps) => {
   if (isLoading) {
     return (
       <Card>
-        <CardHeader><CardTitle className="font-display text-lg">Spotpreis-Verlauf</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="font-display text-lg">Spotpreis-Verlauf (Day-Ahead, 15 min)</CardTitle></CardHeader>
         <CardContent><Skeleton className="h-[260px]" /></CardContent>
       </Card>
     );
@@ -97,7 +97,7 @@ const SpotPriceWidget = ({ locationId }: SpotPriceWidgetProps) => {
     <Card>
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between">
-          <CardTitle className="font-display text-lg">Spotpreis-Verlauf (48h)</CardTitle>
+          <CardTitle className="font-display text-lg">Spotpreis-Verlauf (Day-Ahead, 15 min)</CardTitle>
           <div className="text-right">
             <div className="text-lg font-bold">{priceCtKwh} ct/kWh</div>
             {currentPrice && (
