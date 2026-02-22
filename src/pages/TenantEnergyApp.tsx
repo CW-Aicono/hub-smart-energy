@@ -194,20 +194,117 @@ function TenantAppAuth({ onAuth }: { onAuth: () => void }) {
 // ── Dashboard Tab ──
 function DashboardTab({ tenantRecord, invoices }: { tenantRecord: TenantRecord; invoices: Invoice[] }) {
   const latestInvoice = invoices[0] || null;
+  const [meterTotals, setMeterTotals] = useState<any[]>([]);
+  const [selfTariffs, setSelfTariffs] = useState<any[]>([]);
+  const [landlordTariff, setLandlordTariff] = useState<any>(null);
+  const [loadingMeter, setLoadingMeter] = useState(true);
 
-  // Build monthly chart from invoices
+  const meterIds = useMemo(() => {
+    const ids = (tenantRecord.assigned_meters || []).map((am) => am.meter_id).filter(Boolean);
+    if (ids.length === 0 && tenantRecord.meter_id) ids.push(tenantRecord.meter_id);
+    return ids;
+  }, [tenantRecord]);
+
+  const meterMap = useMemo(() => {
+    const map: Record<string, { name: string; energy_type: string }> = {};
+    (tenantRecord.assigned_meters || []).forEach((am) => {
+      if (am.meters) map[am.meter_id] = { name: am.meters.name, energy_type: am.meters.energy_type };
+    });
+    return map;
+  }, [tenantRecord]);
+
+  useEffect(() => {
+    if (meterIds.length === 0) { setLoadingMeter(false); return; }
+    const fetch = async () => {
+      const [{ data: totals }, { data: st }, { data: lt }] = await Promise.all([
+        supabase.from("meter_period_totals").select("*").in("meter_id", meterIds).eq("period_type", "month").order("period_start", { ascending: false }).limit(120),
+        supabase.from("tenant_self_tariffs").select("*").eq("tenant_electricity_tenant_id", tenantRecord.id),
+        supabase.from("tenant_electricity_tariffs").select("*").eq("tenant_id", tenantRecord.tenant_id).limit(1),
+      ]);
+      setMeterTotals(totals || []);
+      setSelfTariffs(st || []);
+      setLandlordTariff((lt || [])[0] || null);
+      setLoadingMeter(false);
+    };
+    fetch();
+  }, [meterIds, tenantRecord.id, tenantRecord.tenant_id]);
+
+  // Group meter totals by month and energy type
+  const monthlyByType = useMemo(() => {
+    const map: Record<string, Record<string, number>> = {};
+    meterTotals.forEach((t: any) => {
+      const month = t.period_start.substring(0, 7); // YYYY-MM
+      const eType = meterMap[t.meter_id]?.energy_type || t.energy_type || "strom";
+      if (!map[month]) map[month] = {};
+      map[month][eType] = (map[month][eType] || 0) + Number(t.total_value);
+    });
+    return map;
+  }, [meterTotals, meterMap]);
+
+  // Get tariff price for an energy type
+  const getTariffPrice = (energyType: string): { pricePerKwh: number; baseFee: number } | null => {
+    if (energyType === "strom" && landlordTariff) {
+      return { pricePerKwh: Number(landlordTariff.price_per_kwh_grid), baseFee: Number(landlordTariff.base_fee_monthly) };
+    }
+    const st = (selfTariffs || []).find((t: any) => t.energy_type === energyType && (!t.valid_until || new Date(t.valid_until) >= new Date()));
+    if (st) return { pricePerKwh: Number(st.price_per_kwh), baseFee: Number(st.base_fee_monthly) };
+    return null;
+  };
+
+  // Aggregate all months
+  const months = Object.keys(monthlyByType).sort();
+  const allEnergyTypes = useMemo(() => {
+    const types = new Set<string>();
+    Object.values(monthlyByType).forEach((byType) => Object.keys(byType).forEach((et) => types.add(et)));
+    return Array.from(types);
+  }, [monthlyByType]);
+
+  // Chart data: last 6 months, grouped by energy type
   const chartData = useMemo(() => {
-    const last6 = invoices.slice(0, 6).reverse();
-    return last6.map((inv) => ({
-      month: format(new Date(inv.period_start), "MMM yy", { locale: de }),
-      lokalstrom: Number(inv.local_kwh),
-      netzstrom: Number(inv.grid_kwh),
-    }));
-  }, [invoices]);
+    const last6 = months.slice(-6);
+    return last6.map((m) => {
+      const entry: any = { month: format(new Date(m + "-01"), "MMM yy", { locale: de }) };
+      allEnergyTypes.forEach((et) => {
+        entry[et] = monthlyByType[m]?.[et] || 0;
+      });
+      return entry;
+    });
+  }, [months, monthlyByType, allEnergyTypes]);
 
-  const totalConsumption = invoices.reduce((s, i) => s + Number(i.total_kwh), 0);
-  const totalCost = invoices.reduce((s, i) => s + Number(i.total_amount), 0);
-  const avgMonthly = invoices.length > 0 ? totalConsumption / invoices.length : 0;
+  // Total consumption per energy type
+  const totalByType = useMemo(() => {
+    const totals: Record<string, number> = {};
+    Object.values(monthlyByType).forEach((byType) => {
+      Object.entries(byType).forEach(([et, val]) => {
+        totals[et] = (totals[et] || 0) + val;
+      });
+    });
+    return totals;
+  }, [monthlyByType]);
+
+  // Estimated total cost
+  const totalCostEstimate = useMemo(() => {
+    let cost = 0;
+    Object.entries(totalByType).forEach(([et, kwh]) => {
+      const tariff = getTariffPrice(et);
+      if (tariff) cost += kwh * tariff.pricePerKwh + tariff.baseFee * months.length;
+    });
+    return cost;
+  }, [totalByType, selfTariffs, landlordTariff, months.length]);
+
+  // Avg monthly consumption
+  const avgMonthly = months.length > 0
+    ? Object.values(totalByType).reduce((s, v) => s + v, 0) / months.length
+    : 0;
+
+  // Use invoice data if available, otherwise meter data
+  const hasInvoices = invoices.length > 0;
+  const displayAvg = hasInvoices ? (invoices.reduce((s, i) => s + Number(i.total_kwh), 0) / invoices.length) : avgMonthly;
+  const displayCost = hasInvoices ? invoices.reduce((s, i) => s + Number(i.total_amount), 0) : totalCostEstimate;
+
+  const energyColors: Record<string, string> = {
+    strom: "#3b82f6", gas: "#f59e0b", waerme: "#ef4444", wasser: "#06b6d4",
+  };
 
   return (
     <div className="space-y-4">
@@ -222,22 +319,52 @@ function DashboardTab({ tenantRecord, invoices }: { tenantRecord: TenantRecord; 
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center gap-2 mb-1">
-              <Zap className="h-4 w-4 text-green-600" />
+              <Zap className="h-4 w-4 text-primary" />
               <span className="text-xs text-muted-foreground">Ø Monat</span>
             </div>
-            <p className="text-lg font-bold">{avgMonthly.toFixed(0)} kWh</p>
+            <p className="text-lg font-bold">{displayAvg.toFixed(0)} kWh</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center gap-2 mb-1">
-              <Receipt className="h-4 w-4 text-green-600" />
-              <span className="text-xs text-muted-foreground">Gesamt</span>
+              <Receipt className="h-4 w-4 text-primary" />
+              <span className="text-xs text-muted-foreground">{hasInvoices ? "Gesamt" : "Geschätzt"}</span>
             </div>
-            <p className="text-lg font-bold">{totalCost.toFixed(2)} €</p>
+            <p className="text-lg font-bold">{displayCost.toFixed(2)} €</p>
           </CardContent>
         </Card>
       </div>
+
+      {/* Per-energy-type breakdown */}
+      {allEnergyTypes.length > 0 && !loadingMeter && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Verbrauch nach Energieträger</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {allEnergyTypes.map((et) => {
+              const total = totalByType[et] || 0;
+              const tariff = getTariffPrice(et);
+              const cost = tariff ? total * tariff.pricePerKwh : null;
+              return (
+                <div key={et} className="flex items-center justify-between py-1.5 border-b last:border-0">
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full" style={{ backgroundColor: energyColors[et] || "#94a3b8" }} />
+                    <span className="text-sm font-medium">{fmtEnergyType(et)}</span>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-sm font-semibold">{total.toFixed(1)} kWh</span>
+                    {cost !== null && (
+                      <span className="text-xs text-muted-foreground ml-2">≈ {cost.toFixed(2)} €</span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Latest invoice summary */}
       {latestInvoice && (
@@ -252,7 +379,7 @@ function DashboardTab({ tenantRecord, invoices }: { tenantRecord: TenantRecord; 
             <div className="grid grid-cols-3 gap-2 text-center text-sm">
               <div>
                 <p className="text-muted-foreground text-xs">Lokal (PV)</p>
-                <p className="font-semibold text-green-600">{Number(latestInvoice.local_kwh).toFixed(0)} kWh</p>
+                <p className="font-semibold text-primary">{Number(latestInvoice.local_kwh).toFixed(0)} kWh</p>
               </div>
               <div>
                 <p className="text-muted-foreground text-xs">Netz</p>
@@ -282,8 +409,9 @@ function DashboardTab({ tenantRecord, invoices }: { tenantRecord: TenantRecord; 
                   <YAxis tick={{ fontSize: 11 }} />
                   <Tooltip />
                   <Legend wrapperStyle={{ fontSize: 11 }} />
-                  <Bar dataKey="lokalstrom" name="Lokalstrom (PV)" fill="#22c55e" radius={[2, 2, 0, 0]} />
-                  <Bar dataKey="netzstrom" name="Netzstrom" fill="#64748b" radius={[2, 2, 0, 0]} />
+                  {allEnergyTypes.map((et) => (
+                    <Bar key={et} dataKey={et} name={fmtEnergyType(et)} fill={energyColors[et] || "#94a3b8"} radius={[2, 2, 0, 0]} />
+                  ))}
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -291,11 +419,17 @@ function DashboardTab({ tenantRecord, invoices }: { tenantRecord: TenantRecord; 
         </Card>
       )}
 
-      {chartData.length === 0 && (
+      {chartData.length === 0 && !loadingMeter && (
         <Card className="p-6 text-center text-muted-foreground">
           <BarChart3 className="h-8 w-8 mx-auto mb-2 opacity-50" />
           <p>Noch keine Verbrauchsdaten verfügbar</p>
         </Card>
+      )}
+
+      {loadingMeter && (
+        <div className="flex justify-center py-8">
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        </div>
       )}
     </div>
   );
