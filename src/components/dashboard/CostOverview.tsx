@@ -9,6 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { startOfDay, startOfWeek, startOfMonth, startOfQuarter, startOfYear, subDays, subWeeks, subMonths, subQuarters, subYears } from "date-fns";
 import { useWeekStartDay } from "@/hooks/useWeekStartDay";
 import { gasM3ToKWh } from "@/lib/formatEnergy";
+import { useSpotPrices } from "@/hooks/useSpotPrices";
 
 interface CostOverviewProps {
   locationId: string | null;
@@ -81,6 +82,7 @@ const CostOverview = ({ locationId }: CostOverviewProps) => {
   const { meters } = useMeters();
   const { selectedPeriod } = useDashboardFilter();
   const weekStartsOn = useWeekStartDay();
+  const { currentPrice: currentSpotPrice } = useSpotPrices();
 
   const meterMap = useMemo(() => {
     const map: Record<string, { energy_type: string; location_id: string; is_main_meter: boolean; unit: string; gas_type: string | null; brennwert: number | null; zustandszahl: number | null }> = {};
@@ -90,7 +92,7 @@ const CostOverview = ({ locationId }: CostOverviewProps) => {
     return map;
   }, [meters]);
 
-  // Build a price lookup: location_id + energy_type -> price_per_unit
+  // Build a price lookup: location_id + energy_type -> effective price per unit
   const priceLookup = useMemo(() => {
     const lookup = new Map<string, number>();
     const today = new Date().toISOString().split("T")[0];
@@ -99,12 +101,18 @@ const CostOverview = ({ locationId }: CostOverviewProps) => {
       if (p.valid_from <= today && (!p.valid_until || p.valid_until >= today)) {
         const key = `${p.location_id}:${p.energy_type}`;
         if (!lookup.has(key)) {
-          lookup.set(key, Number(p.price_per_unit));
+          if (p.is_dynamic && currentSpotPrice) {
+            // Spot price is EUR/MWh → convert to EUR/kWh + markup
+            const spotEurKwh = currentSpotPrice.price_eur_mwh / 1000;
+            lookup.set(key, spotEurKwh + Number(p.spot_markup_per_unit));
+          } else if (!p.is_dynamic) {
+            lookup.set(key, Number(p.price_per_unit));
+          }
         }
       }
     });
     return lookup;
-  }, [prices]);
+  }, [prices, currentSpotPrice]);
 
   const costData = useMemo(() => {
     const { start, prevStart, prevEnd } = getPeriodRange(selectedPeriod, weekStartsOn);

@@ -17,6 +17,8 @@ export interface EnergyPrice {
   tenant_id: string;
   created_at: string;
   updated_at: string;
+  is_dynamic: boolean;
+  spot_markup_per_unit: number;
 }
 
 export function useEnergyPrices(locationId?: string) {
@@ -45,7 +47,7 @@ export function useEnergyPrices(locationId?: string) {
     fetchPrices();
   }, [fetchPrices]);
 
-  const addPrice = async (price: { location_id: string; energy_type: string; price_per_unit: number; unit: string; valid_from: string; tenant_id?: string }) => {
+  const addPrice = async (price: { location_id: string; energy_type: string; price_per_unit: number; unit: string; valid_from: string; tenant_id?: string; is_dynamic?: boolean; spot_markup_per_unit?: number }) => {
     if (!ready) return false;
     const t = getT();
     // Strip manually passed tenant_id – tenantInsert injects it automatically
