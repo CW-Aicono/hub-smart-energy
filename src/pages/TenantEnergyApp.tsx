@@ -572,17 +572,27 @@ function MeterTab({ tenantRecord }: { tenantRecord: TenantRecord }) {
 
   // Group data by month across all meters
   const monthGroups = useMemo(() => {
-    // Collect all unique months from totals, filtered by tenancy period
     const moveIn = tenantRecord.move_in_date ? new Date(tenantRecord.move_in_date) : null;
     const moveOut = tenantRecord.move_out_date ? new Date(tenantRecord.move_out_date) : null;
     const monthSet = new Set<string>();
+
+    // Include months from actual consumption data
     allTotals.forEach((t: any) => {
       const monthDate = new Date(t.period_start);
-      // Only include months that fall within the tenancy period
       if (moveIn && monthDate < startOfMonth(moveIn)) return;
       if (moveOut && monthDate > startOfMonth(moveOut)) return;
       monthSet.add(t.period_start);
     });
+
+    // Always include current month if within tenancy period and meters exist
+    if (meters.length > 0) {
+      const now = new Date();
+      const currentMonthStart = format(startOfMonth(now), "yyyy-MM-dd");
+      const currentMonthDate = new Date(currentMonthStart);
+      const inRange = (!moveIn || currentMonthDate >= startOfMonth(moveIn)) &&
+                      (!moveOut || currentMonthDate <= startOfMonth(moveOut));
+      if (inRange) monthSet.add(currentMonthStart);
+    }
 
     const sorted = Array.from(monthSet).sort((a, b) => b.localeCompare(a));
 
@@ -592,7 +602,6 @@ function MeterTab({ tenantRecord }: { tenantRecord: TenantRecord }) {
 
       const meterEntries = meters.map((m) => {
         const reading = allTotals.find((t: any) => t.meter_id === m.id && t.period_start === periodStart);
-        // Find meter reading (Zählerstand) closest to end of this month
         const monthEnd = endOfMonth(monthDate);
         const meterReading = allReadings.find((r: any) =>
           r.meter_id === m.id && new Date(r.reading_date) <= monthEnd && new Date(r.reading_date) >= monthDate
@@ -600,7 +609,7 @@ function MeterTab({ tenantRecord }: { tenantRecord: TenantRecord }) {
 
         return {
           meter: m,
-          consumption: reading ? Number(reading.total_value) : null,
+          consumption: reading ? Number(reading.total_value) : 0,
           meterStand: meterReading ? Number(meterReading.value) : null,
           unit: displayUnit(m.unit, m.energy_type),
         };
