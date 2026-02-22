@@ -12,7 +12,11 @@ import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Sun, ChevronDown, ChevronRight, Sparkles, Save } from "lucide-react";
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, CartesianGrid } from "recharts";
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from "recharts";
+import { supabase } from "@/integrations/supabase/client";
+
+const PV_YELLOW = "hsl(45, 93%, 47%)";
+const ACTUAL_GREEN = "hsl(142, 71%, 45%)";
 
 interface PvForecastSectionProps {
   locationId: string;
@@ -24,6 +28,7 @@ export function PvForecastSection({ locationId }: PvForecastSectionProps) {
   const { settings, isLoading: settingsLoading, upsertSettings } = usePvForecastSettings(locationId);
   const { forecast, isLoading: forecastLoading } = usePvForecast(isOpen ? locationId : null);
   const { meters } = useMeters(locationId);
+  const [actualReadings, setActualReadings] = useState<Record<string, number>>({});
 
   const solarMeters = meters.filter((m) => m.meter_function === "generation" || m.energy_type === "solar" || m.energy_type === "pv");
 
@@ -47,6 +52,41 @@ export function PvForecastSection({ locationId }: PvForecastSectionProps) {
     }
   }, [settings]);
 
+  // Fetch actual PV meter readings for today
+  useEffect(() => {
+    if (!settings?.pv_meter_id || !isOpen) return;
+    const meterId = settings.pv_meter_id;
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+
+    (async () => {
+      const { data } = await supabase
+        .from("meter_power_readings")
+        .select("power_value, recorded_at")
+        .eq("meter_id", meterId)
+        .gte("recorded_at", todayStart.toISOString())
+        .order("recorded_at", { ascending: true });
+
+      if (!data || data.length === 0) {
+        setActualReadings({});
+        return;
+      }
+
+      const hourBuckets: Record<string, { sum: number; count: number }> = {};
+      for (const r of data) {
+        const hour = r.recorded_at.slice(0, 13);
+        if (!hourBuckets[hour]) hourBuckets[hour] = { sum: 0, count: 0 };
+        hourBuckets[hour].sum += r.power_value;
+        hourBuckets[hour].count += 1;
+      }
+      const result: Record<string, number> = {};
+      for (const [hour, b] of Object.entries(hourBuckets)) {
+        result[hour] = b.sum / b.count;
+      }
+      setActualReadings(result);
+    })();
+  }, [settings?.pv_meter_id, isOpen]);
+
   const handleSave = () => {
     upsertSettings.mutate({
       ...form,
@@ -60,15 +100,19 @@ export function PvForecastSection({ locationId }: PvForecastSectionProps) {
       const d = new Date(h.timestamp);
       const hour = d.getHours();
       const dayLabel = `${dayNames[d.getDay()]} ${d.getDate()}.${d.getMonth() + 1}.`;
+      const hourKey = h.timestamp.slice(0, 13);
       return {
         time: h.timestamp.slice(11, 16),
         hour,
         dayLabel,
-        kwh: h.ai_adjusted_kwh ?? h.estimated_kwh,
+        prognose: h.ai_adjusted_kwh ?? h.estimated_kwh,
+        ist: actualReadings[hourKey] ?? null,
         cloud: h.cloud_cover_pct,
         radiation: h.radiation_w_m2,
       };
     }) ?? [];
+
+  const hasActual = Object.keys(actualReadings).length > 0;
 
   const CustomXTick = ({ x, y, payload }: any) => {
     const entry = chartData[payload?.index];
@@ -186,7 +230,7 @@ export function PvForecastSection({ locationId }: PvForecastSectionProps) {
 
                 {/* 48h Chart */}
                 <div>
-                  <h4 className="text-sm font-medium mb-2">48-Stunden-Prognose</h4>
+                  <h4 className="text-sm font-medium mb-2">48-Stunden-Prognose{hasActual ? " vs. Ist-Erzeugung" : ""}</h4>
                   <ResponsiveContainer width="100%" height={240}>
                     <BarChart data={chartData} margin={{ left: -10, bottom: 30 }}>
                       <CartesianGrid strokeDasharray="3 3" />
@@ -199,7 +243,8 @@ export function PvForecastSection({ locationId }: PvForecastSectionProps) {
                       <YAxis tick={{ fontSize: 10 }} width={35} label={{ value: "kWh", angle: -90, position: "insideLeft", style: { fontSize: 10 } }} />
                       <Tooltip
                         formatter={(v: number, name: string) => {
-                          if (name === "kwh") return [`${v.toFixed(2)} kWh`, "Erzeugung"];
+                          if (name === "prognose") return [`${v.toFixed(2)} kWh`, "Prognose"];
+                          if (name === "ist") return [`${v.toFixed(2)} kWh`, "Ist-Erzeugung"];
                           return [v, name];
                         }}
                         labelFormatter={(_l: string, payload: any[]) => {
@@ -207,7 +252,9 @@ export function PvForecastSection({ locationId }: PvForecastSectionProps) {
                           return entry ? `${entry.dayLabel} ${entry.time} Uhr` : _l;
                         }}
                       />
-                      <Bar dataKey="kwh" radius={[2, 2, 0, 0]} fill="hsl(45, 93%, 47%)" />
+                      {hasActual && <Legend formatter={(v) => v === "prognose" ? "Prognose" : "Ist-Erzeugung"} />}
+                      <Bar dataKey="prognose" fill={PV_YELLOW} radius={[2, 2, 0, 0]} />
+                      {hasActual && <Bar dataKey="ist" fill={ACTUAL_GREEN} radius={[2, 2, 0, 0]} />}
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
