@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
-import { useDemoMode } from "@/contexts/DemoMode";
+import { useDemoMode, useDemoPath } from "@/contexts/DemoMode";
 import { useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useTranslation } from "@/hooks/useTranslation";
@@ -37,6 +37,7 @@ export function MobileHeader() {
   const location = useLocation();
   const { isNavItemVisible } = useModuleGuard();
   const isDemo = useDemoMode();
+  const demoPath = useDemoPath();
   const [openMenus, setOpenMenus] = useState<string[]>([]);
 
   const toggleMenu = (to: string) => {
@@ -103,7 +104,8 @@ export function MobileHeader() {
       .filter(Boolean) as NavItem[];
   }, [navItems, isNavItemVisible]);
 
-  const userInitials = user?.email?.substring(0, 2).toUpperCase() ?? "??";
+  const userInitials = isDemo ? "DB" : (user?.email?.substring(0, 2).toUpperCase() ?? "??");
+  const currentPath = isDemo ? location.pathname.replace(/^\/demo/, "") || "/" : location.pathname;
 
   return (
     <div className="md:hidden sticky top-0 z-30 flex items-center justify-between border-b bg-sidebar px-3 py-2">
@@ -120,10 +122,11 @@ export function MobileHeader() {
           </div>
           <nav className="flex-1 overflow-y-auto p-3 space-y-1" style={{ maxHeight: "calc(100vh - 140px)" }}>
             {filteredNavItems.map((item) => {
-              const isActive = location.pathname === item.to;
+              const isActive = currentPath === item.to;
               const hasChildren = item.children && item.children.length > 0;
               const isOpen = openMenus.includes(item.to);
-              const isChildActive = hasChildren && item.children?.some((child) => location.pathname === child.to);
+              const isChildActive = hasChildren && item.children?.some((child) => currentPath === child.to);
+              const linkTo = (path: string) => demoPath(path);
 
               if (hasChildren) {
                 return (
@@ -144,12 +147,12 @@ export function MobileHeader() {
                     </CollapsibleTrigger>
                     <CollapsibleContent className="pl-4 mt-1 space-y-1">
                       {item.children?.map((child) => {
-                        const isChildItemActive = location.pathname === child.to;
+                        const isChildItemActive = currentPath === child.to;
                         return (
                           <NavLink
                             key={child.to}
-                            to={child.to}
-                            onClick={(e) => { if (isDemo) e.preventDefault(); else setOpen(false); }}
+                            to={linkTo(child.to)}
+                            onClick={() => setOpen(false)}
                             className={cn(
                               "flex items-center rounded-lg text-sm font-medium transition-colors gap-3 px-3 py-2",
                               isChildItemActive
@@ -170,8 +173,8 @@ export function MobileHeader() {
               return (
                 <NavLink
                   key={item.to}
-                  to={item.to}
-                  onClick={(e) => { if (isDemo) e.preventDefault(); else setOpen(false); }}
+                  to={linkTo(item.to)}
+                  onClick={() => setOpen(false)}
                   className={cn(
                     "flex items-center rounded-lg text-sm font-medium transition-colors gap-3 px-3 py-2.5",
                     isActive

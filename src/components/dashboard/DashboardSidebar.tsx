@@ -5,7 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useTranslation } from "@/hooks/useTranslation";
 import { useModuleGuard } from "@/hooks/useModuleGuard";
-import { useDemoMode } from "@/contexts/DemoMode";
+import { useDemoMode, useDemoPath } from "@/contexts/DemoMode";
 import { Button } from "@/components/ui/button";
 import { MobileHeader } from "@/components/dashboard/MobileSidebar";
 import { LayoutDashboard, LogOut, Shield, Settings, Users, ChevronDown, ChevronRight, MapPin, PanelLeftClose, PanelLeft, UserCircle, Key, HelpCircle, Plug, Palette, Database, Gauge, Download, Car, PlugZap, Receipt, Cpu, Activity, Mail, Smartphone, Network, ListChecks, TrendingUp, Home } from "lucide-react";
@@ -46,6 +46,7 @@ const DashboardSidebar = () => {
   const location = useLocation();
   const { isNavItemVisible } = useModuleGuard();
   const isDemo = useDemoMode();
+  const demoPath = useDemoPath();
   const [displayName, setDisplayName] = useState<string | null>(isDemo ? "Demo Benutzer" : null);
   
   const [isTablet, setIsTablet] = useState(() => {
@@ -98,25 +99,26 @@ const DashboardSidebar = () => {
 
   // On tablet, collapse after navigating
   const handleTabletNavClick = useCallback((e?: React.MouseEvent) => {
-    if (isDemo) { e?.preventDefault(); return; }
     if (isTablet) setCollapsed(true);
+    if (isDemo && isTablet) setCollapsed(true);
   }, [isTablet, isDemo]);
 
   // Auto-open parent menu if child is active
+  const currentPath = isDemo ? location.pathname.replace(/^\/demo/, "") || "/" : location.pathname;
   useEffect(() => {
-    if (location.pathname === "/admin" || location.pathname === "/roles") {
+    if (currentPath === "/admin" || currentPath === "/roles") {
       setOpenMenus((prev) => prev.includes("/admin") ? prev : [...prev, "/admin"]);
     }
-    if (location.pathname === "/settings" || location.pathname === "/settings/branding" || location.pathname === "/settings/email-templates" || location.pathname === "/integrations") {
+    if (currentPath === "/settings" || currentPath === "/settings/branding" || currentPath === "/settings/email-templates" || currentPath === "/integrations") {
       setOpenMenus((prev) => prev.includes("/settings") ? prev : [...prev, "/settings"]);
     }
-   if (location.pathname === "/energy-data" || location.pathname === "/meters" || location.pathname === "/live-values") {
+   if (currentPath === "/energy-data" || currentPath === "/meters" || currentPath === "/live-values") {
       setOpenMenus((prev) => prev.includes("/energy-data") ? prev : [...prev, "/energy-data"]);
     }
-    if (location.pathname.startsWith("/charging")) {
+    if (currentPath.startsWith("/charging")) {
       setOpenMenus((prev) => prev.includes("/charging/points") ? prev : [...prev, "/charging/points"]);
     }
-  }, [location.pathname]);
+  }, [currentPath]);
 
   const toggleMenu = (to: string) => {
     setOpenMenus((prev) =>
@@ -199,10 +201,11 @@ const DashboardSidebar = () => {
     : "??");
 
   const renderNavItem = (item: NavItem) => {
-    const isActive = location.pathname === item.to;
+    const isActive = currentPath === item.to;
     const hasChildren = item.children && item.children.length > 0;
     const isOpen = openMenus.includes(item.to);
-    const isChildActive = hasChildren && item.children?.some((child) => location.pathname === child.to);
+    const isChildActive = hasChildren && item.children?.some((child) => currentPath === child.to);
+    const linkTo = (path: string) => demoPath(path);
 
     if (hasChildren && !collapsed) {
       return (
@@ -224,11 +227,11 @@ const DashboardSidebar = () => {
           <CollapsibleContent className="pl-4 mt-1 space-y-1">
             {/* Children */}
             {item.children?.map((child) => {
-              const isChildItemActive = location.pathname === child.to;
+              const isChildItemActive = currentPath === child.to;
               return (
                 <NavLink
                   key={child.to}
-                  to={child.to}
+                  to={linkTo(child.to)}
                   onClick={handleTabletNavClick}
                   className={cn(
                     "flex items-center rounded-lg text-sm font-medium transition-colors gap-3 px-3 py-2",
@@ -267,7 +270,7 @@ const DashboardSidebar = () => {
             <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">{t(item.labelKey)}</div>
             {item.children?.map((child) => (
               <DropdownMenuItem key={child.to} asChild>
-                <NavLink to={child.to} onClick={(e) => { if (isDemo) e.preventDefault(); }} className="flex items-center gap-2 cursor-pointer">
+                <NavLink to={linkTo(child.to)} onClick={() => { if (isTablet) setCollapsed(true); }} className="flex items-center gap-2 cursor-pointer">
                   <child.icon className="h-4 w-4" />
                   {t(child.labelKey)}
                 </NavLink>
@@ -281,7 +284,7 @@ const DashboardSidebar = () => {
     // Regular nav item
     const linkContent = (
       <NavLink
-        to={item.to}
+        to={linkTo(item.to)}
         onClick={handleTabletNavClick}
         className={cn(
           "flex items-center rounded-lg text-sm font-medium transition-colors",
@@ -404,10 +407,10 @@ const DashboardSidebar = () => {
             className="w-56 bg-popover"
           >
             <DropdownMenuItem asChild>
-              <a href="/profile" className="flex items-center cursor-pointer">
+              <NavLink to={demoPath("/profile")} className="flex items-center cursor-pointer">
                 <UserCircle className="h-4 w-4 mr-2" />
                 {t("nav.myProfile")}
-              </a>
+              </NavLink>
             </DropdownMenuItem>
             {!isDemo && (
               <DropdownMenuItem onClick={signOut} className="text-destructive focus:text-destructive">

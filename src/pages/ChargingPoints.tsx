@@ -1,5 +1,6 @@
 import { useState, lazy, Suspense } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
+import { useDemoPath } from "@/contexts/DemoMode";
 import { useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useTranslation } from "@/hooks/useTranslation";
@@ -42,6 +43,7 @@ const statusConfig: Record<string, { label: string; variant: "default" | "second
 
 const ChargingPoints = () => {
   const navigate = useNavigate();
+  const demoPath = useDemoPath();
   const { user, loading: authLoading } = useAuth();
   const { isAdmin } = useUserRole();
   const { t } = useTranslation();
@@ -320,7 +322,7 @@ const ChargingPoints = () => {
                           const activeSession = getActiveSession(cp.id);
                           return (
                             <TableRow key={cp.id}>
-                              <TableCell className="font-medium cursor-pointer hover:text-primary transition-colors" onClick={() => navigate(`/charging/points/${cp.id}`)}>{cp.name}</TableCell>
+                              <TableCell className="font-medium cursor-pointer hover:text-primary transition-colors" onClick={() => navigate(demoPath(`/charging/points/${cp.id}`))}>{cp.name}</TableCell>
                               <TableCell className="font-mono text-sm">{cp.ocpp_id}</TableCell>
                               <TableCell>
                                 <Badge variant={cfg.variant}>{cfg.label}</Badge>
@@ -381,7 +383,7 @@ const ChargingPoints = () => {
               <Suspense fallback={<div className="h-[400px] rounded-lg border bg-muted/50 flex items-center justify-center"><div className="animate-pulse text-muted-foreground">Karte wird geladen...</div></div>}>
                 <LazyChargePointsMap
                   chargePoints={filteredChargePoints}
-                  onChargePointClick={(cp) => navigate(`/charging/points/${cp.id}`)}
+                  onChargePointClick={(cp) => navigate(demoPath(`/charging/points/${cp.id}`))}
                   showEditPositionButton={true}
                   onPositionChange={(cpId, lat, lng) => {
                     updateChargePoint.mutate({ id: cpId, latitude: lat, longitude: lng });
