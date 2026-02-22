@@ -16,6 +16,18 @@ interface PvForecastWidgetProps {
 const PV_YELLOW = "hsl(45, 93%, 47%)";
 const ACTUAL_GREEN = "hsl(142, 71%, 45%)";
 
+/** Convert a UTC ISO timestamp to a local-hour key like "2026-02-22T16" */
+function toLocalHourKey(ts: string): string {
+  const d = new Date(ts);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}T${String(d.getHours()).padStart(2, "0")}`;
+}
+
+/** Convert a UTC ISO timestamp to "HH:MM" in local time */
+function toLocalTime(ts: string): string {
+  const d = new Date(ts);
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+
 const PvForecastWidget = ({ locationId }: PvForecastWidgetProps) => {
   const { forecast, isLoading } = usePvForecast(locationId);
   const { settings } = usePvForecastSettings(locationId);
@@ -61,7 +73,7 @@ const PvForecastWidget = ({ locationId }: PvForecastWidgetProps) => {
 
       const hourBuckets: Record<string, { sum: number; count: number }> = {};
       for (const r of data) {
-        const hour = r.recorded_at.slice(0, 13);
+        const hour = toLocalHourKey(r.recorded_at);
         if (!hourBuckets[hour]) hourBuckets[hour] = { sum: 0, count: 0 };
         hourBuckets[hour].sum += r.power_value;
         hourBuckets[hour].count += 1;
@@ -106,9 +118,9 @@ const PvForecastWidget = ({ locationId }: PvForecastWidgetProps) => {
   const hasActualTotal = Object.keys(actualReadings).length > 0;
 
   const chartData = hourly.map((h) => {
-    const hourKey = h.timestamp.slice(0, 13);
+    const hourKey = toLocalHourKey(h.timestamp);
     return {
-      time: h.timestamp.slice(11, 16),
+      time: toLocalTime(h.timestamp),
       prognose: h.ai_adjusted_kwh ?? h.estimated_kwh,
       ist: actualReadings[hourKey] ?? null,
     };

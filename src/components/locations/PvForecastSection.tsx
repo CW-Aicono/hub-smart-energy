@@ -18,6 +18,16 @@ import { supabase } from "@/integrations/supabase/client";
 const PV_YELLOW = "hsl(45, 93%, 47%)";
 const ACTUAL_GREEN = "hsl(142, 71%, 45%)";
 
+function toLocalHourKey(ts: string): string {
+  const d = new Date(ts);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}T${String(d.getHours()).padStart(2, "0")}`;
+}
+
+function toLocalTime(ts: string): string {
+  const d = new Date(ts);
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+
 interface PvForecastSectionProps {
   locationId: string;
 }
@@ -74,7 +84,7 @@ export function PvForecastSection({ locationId }: PvForecastSectionProps) {
 
       const hourBuckets: Record<string, { sum: number; count: number }> = {};
       for (const r of data) {
-        const hour = r.recorded_at.slice(0, 13);
+        const hour = toLocalHourKey(r.recorded_at);
         if (!hourBuckets[hour]) hourBuckets[hour] = { sum: 0, count: 0 };
         hourBuckets[hour].sum += r.power_value;
         hourBuckets[hour].count += 1;
@@ -100,9 +110,9 @@ export function PvForecastSection({ locationId }: PvForecastSectionProps) {
       const d = new Date(h.timestamp);
       const hour = d.getHours();
       const dayLabel = `${dayNames[d.getDay()]} ${d.getDate()}.${d.getMonth() + 1}.`;
-      const hourKey = h.timestamp.slice(0, 13);
+      const hourKey = toLocalHourKey(h.timestamp);
       return {
-        time: h.timestamp.slice(11, 16),
+        time: toLocalTime(h.timestamp),
         hour,
         dayLabel,
         prognose: h.ai_adjusted_kwh ?? h.estimated_kwh,
@@ -215,7 +225,7 @@ export function PvForecastSection({ locationId }: PvForecastSectionProps) {
                   <div className="border rounded-lg p-3 text-center">
                     <p className="text-xs text-muted-foreground">Spitze</p>
                     <p className="text-2xl font-bold">{forecast.summary.peak_kwh.toFixed(1)} kW</p>
-                    <p className="text-xs text-muted-foreground">{forecast.summary.peak_hour?.slice(11, 16)} Uhr</p>
+                    <p className="text-xs text-muted-foreground">{forecast.summary.peak_hour ? toLocalTime(forecast.summary.peak_hour) : "–"} Uhr</p>
                   </div>
                   {forecast.summary.ai_confidence && (
                     <div className="border rounded-lg p-3 text-center">
