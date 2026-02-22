@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 
 import { Navigate, useNavigate } from "react-router-dom";
+import { useDemoPath } from "@/contexts/DemoMode";
 import { useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useLocations, Location, LocationUsageType } from "@/hooks/useLocations";
@@ -58,10 +59,11 @@ const Locations = () => {
   const [searchQuery, setSearchQuery] = useState("");
 
   const navigate = useNavigate();
+  const demoPath = useDemoPath();
 
   // Handle clicking a location - navigate to detail page
   const handleLocationClick = (location: Location) => {
-    navigate(`/locations/${location.id}`);
+    navigate(demoPath(`/locations/${location.id}`));
   };
 
 

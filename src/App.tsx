@@ -82,8 +82,32 @@ const App = () => (
                   <UpdateBanner />
                   <CookieConsent />
                   <Routes>
+                    {/* Demo routes – same components, demo context auto-detected via /demo prefix */}
                     <Route path="/demo" element={<Demo />} />
-                    <Route path="/" element={<Index />} />
+                    <Route path="/demo/locations" element={<Locations />} />
+                    <Route path="/demo/energy-data" element={<EnergyData />} />
+                    <Route path="/demo/meters" element={<MetersOverview />} />
+                    <Route path="/demo/live-values" element={<LiveValues />} />
+                    <Route path="/demo/charging/points" element={<ChargingPoints />} />
+                    <Route path="/demo/charging/billing" element={<ChargingBilling />} />
+                    <Route path="/demo/charging/app" element={<ChargingAppAdmin />} />
+                    <Route path="/demo/automation" element={<Automation />} />
+                    <Route path="/demo/arbitrage" element={<ArbitrageTrading />} />
+                    <Route path="/demo/tenant-electricity" element={<TenantElectricity />} />
+                    <Route path="/demo/network" element={<NetworkInfrastructure />} />
+                    <Route path="/demo/tasks" element={<Tasks />} />
+                    <Route path="/demo/admin" element={<Admin />} />
+                    <Route path="/demo/roles" element={<Roles />} />
+                    <Route path="/demo/settings" element={<Settings />} />
+                    <Route path="/demo/settings/branding" element={<Branding />} />
+                    <Route path="/demo/settings/email-templates" element={<EmailTemplates />} />
+                    <Route path="/demo/integrations" element={<Integrations />} />
+                    <Route path="/demo/help" element={<Help />} />
+                    <Route path="/demo/profile" element={<Profile />} />
+                    <Route path="/demo/locations/:id" element={<LocationDetail />} />
+                    <Route path="/demo/charging/points/:id" element={<ChargePointDetail />} />
+
+                    {/* Regular routes */}
                     <Route path="/auth" element={<Auth />} />
                     <Route path="/admin" element={<Admin />} />
                     <Route path="/settings" element={<Settings />} />
