@@ -105,16 +105,14 @@ const PvForecastWidget = ({ locationId }: PvForecastWidgetProps) => {
   const actualTotalKwh = Object.values(actualReadings).reduce((sum, v) => sum + v, 0);
   const hasActualTotal = Object.keys(actualReadings).length > 0;
 
-  const chartData = hourly
-    .filter((_, i) => i % 2 === 0)
-    .map((h) => {
-      const hourKey = h.timestamp.slice(0, 13);
-      return {
-        time: h.timestamp.slice(11, 16),
-        prognose: h.ai_adjusted_kwh ?? h.estimated_kwh,
-        ist: actualReadings[hourKey] ?? null,
-      };
-    });
+  const chartData = hourly.map((h) => {
+    const hourKey = h.timestamp.slice(0, 13);
+    return {
+      time: h.timestamp.slice(11, 16),
+      prognose: h.ai_adjusted_kwh ?? h.estimated_kwh,
+      ist: actualReadings[hourKey] ?? null,
+    };
+  });
 
   const hasActual = Object.keys(actualReadings).length > 0;
 
