@@ -1,35 +1,31 @@
 
+# Spotpreis-Optimierung: 15-Minuten-Aufloesung korrekt darstellen
 
-# Fix: Mieter-Verknüpfung ermöglichen (RLS-Policy-Korrektur)
+## Ausgangslage
 
-## Problem
-Der Benutzer `christvs@t-online.de` kann sich nicht in die Mein-Strom-App einloggen, obwohl ein aktiver Mieterdatensatz mit dieser E-Mail existiert. Ursache: Die Datenbank-Sicherheitsrichtlinie (RLS) erlaubt keinen **Lese-Zugriff** auf den eigenen Datensatz, solange die Verknüpfung (`auth_user_id`) noch nicht gesetzt ist. Das Auto-Linking kann deshalb nie stattfinden -- ein "Henne-Ei-Problem".
+Die energy-charts.info API liefert seit der EPEX-Umstellung (01.10.2025) bereits **96 Viertelstunden-Werte pro Tag**. Euer System speichert diese korrekt in der Datenbank. Der Chart zeigt sie prinzipiell an, aber einige Details im Widget und der Edge Function koennten optimiert werden, um die hoehere Aufloesung besser zu nutzen und die Preise fuer morgen zuverlaessig darzustellen.
 
-## Loesung
-Eine zusaetzliche SELECT-Policy hinzufuegen, die es einem eingeloggten Benutzer erlaubt, den Mieterdatensatz per E-Mail-Abgleich zu **lesen**, damit das Auto-Linking greifen kann.
+## Aenderungen
 
-## Umsetzung
+### 1. Edge Function: Robustere Datenbeschaffung
+**Datei:** `supabase/functions/fetch-spot-prices/index.ts`
 
-### Schritt 1: Neue RLS-Policy (Datenbankmigration)
+- Aktuell wird `end` auf `+2 Tage` gesetzt -- das ist korrekt und liefert die Preise fuer morgen, sobald die Auktion gelaufen ist (ca. 13:00 MEZ)
+- Keine Aenderung noetig an der API-Logik -- die Daten kommen bereits in 15-Min-Aufloesung
 
-Neue SELECT-Policy auf `tenant_electricity_tenants`:
+### 2. SpotPriceWidget: Chart-Darstellung anpassen
+**Datei:** `src/components/dashboard/SpotPriceWidget.tsx`
 
-```text
-Name: "App tenants can find own record by email for linking"
-Bedingung: email = get_auth_user_email()
-           AND auth_user_id IS NULL
-           AND status = 'active'
-```
+- **Widget-Titel** von "Spotpreis-Verlauf (48h)" auf "Spotpreis-Verlauf (Day-Ahead, 15 min)" aendern, um die Aufloesung klar zu kommunizieren
+- **X-Achsen-Ticks**: Beibehalten der 3-Stunden-Ticks, da bei 96+ Datenpunkten pro Tag engere Ticks unleserlich waeren
+- **Tooltip**: Um Viertelstunden-Zeitstempel korrekt anzuzeigen (z.B. "14:15" statt nur volle Stunden) -- das funktioniert bereits, da `format(d, "HH:mm")` genutzt wird
 
-Das erlaubt einem authentifizierten Benutzer, genau den einen Datensatz zu lesen, dessen E-Mail mit der eigenen uebereinstimmt und der noch nicht verknuepft ist. Sobald das Auto-Linking den `auth_user_id` setzt, greift die bestehende Policy "App tenants can view own record".
+### 3. Hook: Zeitfenster pruefen
+**Datei:** `src/hooks/useSpotPrices.tsx`
 
-### Schritt 2: Keine Code-Aenderungen noetig
+- Der Hook filtert aktuell `-3h` bis `+48h`. Bei 15-Min-Aufloesung ergeben sich bis zu ~200 Datenpunkte statt ~50 -- das ist unproblematisch
+- `currentPrice`-Logik funktioniert korrekt: Sie findet den letzten Eintrag vor "jetzt", was bei 15-Min-Intervallen den aktuellen Viertelstunden-Preis liefert
 
-Die bestehende Logik in `TenantEnergyApp.tsx` (Zeilen 1051-1068) fuehrt bereits die Email-Suche und das Auto-Linking korrekt durch. Sobald die SELECT-Policy den Lesezugriff erlaubt, funktioniert der gesamte Flow automatisch.
+## Zusammenfassung
 
-## Technische Details
-
-- Nur **eine SQL-Migration** wird benoetigt
-- Die Policy ist eng begrenzt: Nur der eigene Datensatz (via `get_auth_user_email()`), nur wenn noch nicht verknuepft (`auth_user_id IS NULL`), nur wenn aktiv
-- Kein Sicherheitsrisiko: Ein Benutzer kann nur seinen eigenen Datensatz sehen, nicht die anderer Mieter
-
+Die gute Nachricht: Das System funktioniert bereits grundsaetzlich mit 15-Minuten-Daten. Die einzige sichtbare Aenderung ist die Anpassung des Widget-Titels, um die hoehere Aufloesung transparent zu machen. Die Preise fuer morgen sind ab ca. 13:00 Uhr verfuegbar und werden beim naechsten Cron-Lauf abgeholt und angezeigt.
