@@ -30,7 +30,7 @@ export function PvForecastSection({ locationId }: PvForecastSectionProps) {
   const { meters } = useMeters(locationId);
   const [actualReadings, setActualReadings] = useState<Record<string, number>>({});
 
-  const solarMeters = meters.filter((m) => m.meter_function === "generation" || m.energy_type === "solar" || m.energy_type === "pv");
+  const solarMeters = meters.filter((m) => m.meter_function === "generation" || m.energy_type === "solar" || m.energy_type === "pv" || m.energy_type === "strom" && m.meter_function === "generation");
 
   const [form, setForm] = useState({
     peak_power_kwp: 10,
