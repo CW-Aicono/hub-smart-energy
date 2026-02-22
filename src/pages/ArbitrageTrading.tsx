@@ -200,7 +200,7 @@ function ArbitrageDashboard() {
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
-            <CardTitle>Spotpreis-Verlauf (48h)</CardTitle>
+            <CardTitle>Spotpreis-Verlauf (Day-Ahead, 15 min)</CardTitle>
             <Badge variant="secondary" className={`gap-1 ${hasPv ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' : ''}`}>
               <Sun className="h-3 w-3" />
               {hasPv ? "PV-Prognose aktiv" : "PV-Prognose inaktiv"}
