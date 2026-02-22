@@ -46,9 +46,16 @@ const DashboardSidebar = () => {
   const { isNavItemVisible } = useModuleGuard();
   const [displayName, setDisplayName] = useState<string | null>(null);
   
+  const isTablet = () => {
+    const w = window.innerWidth;
+    return w >= 768 && w < 1280;
+  };
+
   const [collapsed, setCollapsed] = useState(() => {
     const stored = localStorage.getItem(SIDEBAR_COLLAPSED_KEY);
-    return stored === "true";
+    if (stored !== null) return stored === "true";
+    // Default collapsed on tablet
+    return isTablet();
   });
 
   useEffect(() => {
@@ -230,6 +237,7 @@ const DashboardSidebar = () => {
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent side="right" align="start" className="w-48 bg-popover">
+            <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">{t(item.labelKey)}</div>
             {item.children?.map((child) => (
               <DropdownMenuItem key={child.to} asChild>
                 <NavLink to={child.to} className="flex items-center gap-2 cursor-pointer">
