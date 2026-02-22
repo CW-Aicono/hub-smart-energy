@@ -62,12 +62,24 @@ const PvForecastWidget = ({ locationId }: PvForecastWidgetProps) => {
       if (meterIds.length === 0) return;
 
       // Fetch readings for all relevant meters
-      const { data } = await supabase
-        .from("meter_power_readings")
-        .select("power_value, recorded_at")
-        .in("meter_id", meterIds)
-        .gte("recorded_at", todayStart.toISOString())
-        .order("recorded_at", { ascending: true });
+      // Fetch all readings – default limit is 1000, but a single day can exceed that
+      const allData: { power_value: number; recorded_at: string }[] = [];
+      let from = 0;
+      const PAGE = 2000;
+      while (true) {
+        const { data: page } = await supabase
+          .from("meter_power_readings")
+          .select("power_value, recorded_at")
+          .in("meter_id", meterIds)
+          .gte("recorded_at", todayStart.toISOString())
+          .order("recorded_at", { ascending: true })
+          .range(from, from + PAGE - 1);
+        if (!page || page.length === 0) break;
+        allData.push(...page);
+        if (page.length < PAGE) break;
+        from += PAGE;
+      }
+      const data = allData;
 
       if (!data || data.length === 0) return;
 
