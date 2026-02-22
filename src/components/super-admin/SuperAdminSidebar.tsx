@@ -47,7 +47,11 @@ export default function SuperAdminSidebar() {
   const { t, language } = useSATranslation();
   const { colorPreset, themeMode, setColorPreset, setThemeMode, setLanguage } = useSAPreferences();
   const location = useLocation();
-  const [collapsed, setCollapsed] = useState(() => localStorage.getItem(SA_SIDEBAR_KEY) === "true");
+  const [collapsed, setCollapsed] = useState(() => {
+    const stored = localStorage.getItem(SA_SIDEBAR_KEY);
+    if (stored !== null) return stored === "true";
+    return window.innerWidth >= 768 && window.innerWidth < 1280;
+  });
   const [openMenus, setOpenMenus] = useState<string[]>([]);
 
   useEffect(() => { localStorage.setItem(SA_SIDEBAR_KEY, String(collapsed)); }, [collapsed]);
@@ -179,6 +183,7 @@ export default function SuperAdminSidebar() {
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent side="right" align="start" className="w-48 bg-popover">
+                  <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">{item.label}</div>
                   {item.children?.map((child) => (
                     <DropdownMenuItem key={child.to} asChild>
                       <NavLink to={child.to} className="flex items-center gap-2 cursor-pointer">
