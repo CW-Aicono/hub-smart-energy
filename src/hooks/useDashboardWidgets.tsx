@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
+import { useDemoMode } from "@/contexts/DemoMode";
 
 export type WidgetSize = "full" | "2/3" | "1/2" | "1/3";
 
@@ -42,10 +43,25 @@ const DEFAULT_WIDGETS = [
 
 export function useDashboardWidgets() {
   const { user } = useAuth();
+  const isDemo = useDemoMode();
   const [widgets, setWidgets] = useState<DashboardWidget[]>([]);
   const [loading, setLoading] = useState(true);
 
   const fetchWidgets = useCallback(async () => {
+    if (isDemo) {
+      const demoWidgets: DashboardWidget[] = DEFAULT_WIDGETS.map((w) => ({
+        id: `demo-${w.widget_type}`,
+        widget_type: w.widget_type,
+        position: w.position,
+        is_visible: w.is_visible,
+        widget_size: "full" as WidgetSize,
+        config: {},
+      }));
+      setWidgets(demoWidgets);
+      setLoading(false);
+      return;
+    }
+
     if (!user) return;
 
     setLoading(true);
@@ -91,7 +107,7 @@ export function useDashboardWidgets() {
       await initializeDefaultWidgets();
     }
     setLoading(false);
-  }, [user]);
+  }, [user, isDemo]);
 
   const initializeDefaultWidgets = async () => {
     if (!user) return;

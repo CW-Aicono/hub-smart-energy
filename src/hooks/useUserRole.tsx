@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
+import { useDemoMode } from "@/contexts/DemoMode";
 
 export type AppRole = "admin" | "user" | "super_admin";
 
@@ -12,10 +13,13 @@ interface UserRoleState {
 
 export function useUserRole(): UserRoleState {
   const { user } = useAuth();
-  const [role, setRole] = useState<AppRole | null>(null);
-  const [loading, setLoading] = useState(true);
+  const isDemo = useDemoMode();
+  const [role, setRole] = useState<AppRole | null>(isDemo ? "admin" : null);
+  const [loading, setLoading] = useState(!isDemo);
 
   useEffect(() => {
+    if (isDemo) return;
+
     let cancelled = false;
 
     if (!user) {
@@ -27,8 +31,6 @@ export function useUserRole(): UserRoleState {
     const resolveRole = async () => {
       setLoading(true);
 
-      // Ensures the first user becomes admin if no admin exists.
-      // Also inserts a default role row for users missing one.
       const { data, error } = await supabase.rpc("ensure_at_least_one_admin");
 
       if (cancelled) return;
@@ -48,7 +50,7 @@ export function useUserRole(): UserRoleState {
     return () => {
       cancelled = true;
     };
-  }, [user]);
+  }, [user, isDemo]);
 
   return {
     role,
@@ -56,4 +58,3 @@ export function useUserRole(): UserRoleState {
     loading,
   };
 }
-

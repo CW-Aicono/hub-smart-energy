@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { useTenantModules } from "./useTenantModules";
+import { useDemoMode } from "@/contexts/DemoMode";
 import { useTenant } from "./useTenant";
 
 /**
@@ -39,16 +40,19 @@ const NAV_MODULE_MAP: Record<string, string> = {
 };
 
 export function useModuleGuard() {
+  const isDemo = useDemoMode();
   const { tenant } = useTenant();
-  const { modules, isLoading, isModuleEnabled } = useTenantModules(tenant?.id ?? null);
+  const { modules, isLoading, isModuleEnabled } = useTenantModules(isDemo ? null : (tenant?.id ?? null));
 
   const checkModule = (code: string): boolean => {
+    if (isDemo) return true;
     if (isLoading || !tenant) return true;
     const mod = modules.find((m) => m.module_code === code);
     return mod ? mod.is_enabled : true;
   };
 
   const isRouteAllowed = (path: string): boolean => {
+    if (isDemo) return true;
     if (isLoading || !tenant) return true;
     
     const moduleCode = ROUTE_MODULE_MAP[path];
@@ -65,6 +69,7 @@ export function useModuleGuard() {
   };
 
   const isNavItemVisible = (path: string): boolean => {
+    if (isDemo) return true;
     if (isLoading || !tenant) return true;
     const moduleCode = NAV_MODULE_MAP[path];
     if (!moduleCode) return true;

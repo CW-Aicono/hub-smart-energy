@@ -5,6 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useTranslation } from "@/hooks/useTranslation";
 import { useModuleGuard } from "@/hooks/useModuleGuard";
+import { useDemoMode } from "@/contexts/DemoMode";
 import { Button } from "@/components/ui/button";
 import { MobileHeader } from "@/components/dashboard/MobileSidebar";
 import { LayoutDashboard, LogOut, Shield, Settings, Users, ChevronDown, ChevronRight, MapPin, PanelLeftClose, PanelLeft, UserCircle, Key, HelpCircle, Plug, Palette, Database, Gauge, Download, Car, PlugZap, Receipt, Cpu, Activity, Mail, Smartphone, Network, ListChecks, TrendingUp, Home } from "lucide-react";
@@ -44,7 +45,8 @@ const DashboardSidebar = () => {
   const { t } = useTranslation();
   const location = useLocation();
   const { isNavItemVisible } = useModuleGuard();
-  const [displayName, setDisplayName] = useState<string | null>(null);
+  const isDemo = useDemoMode();
+  const [displayName, setDisplayName] = useState<string | null>(isDemo ? "Demo Benutzer" : null);
   
   const [isTablet, setIsTablet] = useState(() => {
     const w = window.innerWidth;
@@ -75,7 +77,7 @@ const DashboardSidebar = () => {
   });
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || isDemo) return;
     supabase
       .from("profiles")
       .select("contact_person")
@@ -84,7 +86,7 @@ const DashboardSidebar = () => {
       .then(({ data }) => {
         setDisplayName(data?.contact_person || null);
       });
-  }, [user]);
+  }, [user, isDemo]);
 
   const [openMenus, setOpenMenus] = useState<string[]>([]);
 
@@ -95,9 +97,10 @@ const DashboardSidebar = () => {
   }, [collapsed, isTablet]);
 
   // On tablet, collapse after navigating
-  const handleTabletNavClick = useCallback(() => {
+  const handleTabletNavClick = useCallback((e?: React.MouseEvent) => {
+    if (isDemo) { e?.preventDefault(); return; }
     if (isTablet) setCollapsed(true);
-  }, [isTablet]);
+  }, [isTablet, isDemo]);
 
   // Auto-open parent menu if child is active
   useEffect(() => {
@@ -188,12 +191,12 @@ const DashboardSidebar = () => {
       .filter(Boolean) as NavItem[];
   }, [navItems, isNavItemVisible]);
 
-  const userDisplayName = displayName || user?.email || "";
-  const userInitials = displayName
+  const userDisplayName = isDemo ? "Demo Benutzer" : (displayName || user?.email || "");
+  const userInitials = isDemo ? "DB" : (displayName
     ? displayName.split(" ").map((n) => n[0]).join("").substring(0, 2).toUpperCase()
     : user?.email
     ? user.email.substring(0, 2).toUpperCase()
-    : "??";
+    : "??");
 
   const renderNavItem = (item: NavItem) => {
     const isActive = location.pathname === item.to;
@@ -264,7 +267,7 @@ const DashboardSidebar = () => {
             <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">{t(item.labelKey)}</div>
             {item.children?.map((child) => (
               <DropdownMenuItem key={child.to} asChild>
-                <NavLink to={child.to} className="flex items-center gap-2 cursor-pointer">
+                <NavLink to={child.to} onClick={(e) => { if (isDemo) e.preventDefault(); }} className="flex items-center gap-2 cursor-pointer">
                   <child.icon className="h-4 w-4" />
                   {t(child.labelKey)}
                 </NavLink>
@@ -406,10 +409,12 @@ const DashboardSidebar = () => {
                 {t("nav.myProfile")}
               </a>
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={signOut} className="text-destructive focus:text-destructive">
-              <LogOut className="h-4 w-4 mr-2" />
-              {t("nav.logout")}
-            </DropdownMenuItem>
+            {!isDemo && (
+              <DropdownMenuItem onClick={signOut} className="text-destructive focus:text-destructive">
+                <LogOut className="h-4 w-4 mr-2" />
+                {t("nav.logout")}
+              </DropdownMenuItem>
+            )}
           </DropdownMenuContent>
         </DropdownMenu>
       </div>

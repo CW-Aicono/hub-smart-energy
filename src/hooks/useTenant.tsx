@@ -1,6 +1,7 @@
 import { useState, useEffect, createContext, useContext, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
+import { useDemoMode } from "@/contexts/DemoMode";
 
 interface TenantBranding {
   primary_color: string;
@@ -98,11 +99,33 @@ function applyBrandingToCSS(branding: TenantBranding) {
 
 export function TenantProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
+  const isDemo = useDemoMode();
   const [tenant, setTenant] = useState<Tenant | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const fetchTenant = useCallback(async () => {
+    if (isDemo) {
+      const demoTenant: Tenant = {
+        id: "demo-tenant-id",
+        name: "Stadtwerke Musterstadt GmbH",
+        slug: "demo",
+        address: "Musterstraße 1, 80331 München",
+        contact_email: "info@stadtwerke-musterstadt.de",
+        contact_phone: "+49 89 12345678",
+        branding: DEFAULT_BRANDING,
+        logo_url: null,
+        report_settings: { footer_text: "Stadtwerke Musterstadt GmbH", show_logo: true },
+        week_start_day: 1,
+        created_at: "2025-01-01T00:00:00Z",
+        updated_at: "2025-01-01T00:00:00Z",
+      };
+      setTenant(demoTenant);
+      applyBrandingToCSS(demoTenant.branding);
+      setLoading(false);
+      return;
+    }
+
     if (!user) {
       setTenant(null);
       setLoading(false);
@@ -156,7 +179,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
     } finally {
       setLoading(false);
     }
-  }, [user]);
+  }, [user, isDemo]);
 
   useEffect(() => {
     fetchTenant();
