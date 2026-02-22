@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "./useTenant";
 import { useTenantQuery } from "./useTenantQuery";
+import { useDemoMode } from "@/contexts/DemoMode";
 
 export type LocationType = "einzelgebaeude" | "gebaeudekomplex" | "sonstiges";
 export type LocationUsageType = "verwaltungsgebaeude" | "universitaet" | "schule" | "kindertageseinrichtung" | "sportstaette" | "jugendzentrum" | "sonstiges";
@@ -68,14 +69,28 @@ function buildHierarchy(locations: Location[]): Location[] {
   return roots;
 }
 
+const DEMO_LOCATIONS: Location[] = [
+  { id: "demo-loc-1", tenant_id: "demo-tenant-id", parent_id: null, name: "Hauptverwaltung", type: "einzelgebaeude", usage_type: "verwaltungsgebaeude", address: "Musterstraße 1", city: "München", postal_code: "80331", country: "DE", latitude: 48.137, longitude: 11.576, description: "Hauptgebäude der Stadtverwaltung", contact_person: "Max Mustermann", contact_email: "verwaltung@musterstadt.de", contact_phone: "+49 89 11111", energy_sources: ["strom", "gas", "solar"], show_on_map: true, is_main_location: true, created_at: "2025-01-01T00:00:00Z", updated_at: "2025-01-01T00:00:00Z" },
+  { id: "demo-loc-2", tenant_id: "demo-tenant-id", parent_id: null, name: "Schulzentrum Nord", type: "gebaeudekomplex", usage_type: "schule", address: "Schulstraße 15", city: "München", postal_code: "80335", country: "DE", latitude: 48.152, longitude: 11.568, description: "Schulkomplex mit Turnhalle", contact_person: "Anna Schmidt", contact_email: "schule@musterstadt.de", contact_phone: "+49 89 22222", energy_sources: ["strom", "gas"], show_on_map: true, is_main_location: false, created_at: "2025-01-01T00:00:00Z", updated_at: "2025-01-01T00:00:00Z" },
+  { id: "demo-loc-3", tenant_id: "demo-tenant-id", parent_id: null, name: "Sportpark Süd", type: "einzelgebaeude", usage_type: "sportstaette", address: "Sportplatzweg 8", city: "München", postal_code: "80339", country: "DE", latitude: 48.125, longitude: 11.545, description: "Sportanlage mit Schwimmhalle", contact_person: "Peter Weber", contact_email: "sport@musterstadt.de", contact_phone: "+49 89 33333", energy_sources: ["strom", "gas", "fernwaerme"], show_on_map: true, is_main_location: false, created_at: "2025-01-01T00:00:00Z", updated_at: "2025-01-01T00:00:00Z" },
+  { id: "demo-loc-4", tenant_id: "demo-tenant-id", parent_id: null, name: "Rathaus", type: "einzelgebaeude", usage_type: "verwaltungsgebaeude", address: "Rathausplatz 1", city: "München", postal_code: "80331", country: "DE", latitude: 48.139, longitude: 11.577, description: "Historisches Rathaus", contact_person: "Lisa Müller", contact_email: "rathaus@musterstadt.de", contact_phone: "+49 89 44444", energy_sources: ["strom", "fernwaerme"], show_on_map: true, is_main_location: false, created_at: "2025-01-01T00:00:00Z", updated_at: "2025-01-01T00:00:00Z" },
+];
+
 export function useLocations(): UseLocationsReturn {
   const { tenant } = useTenant();
+  const isDemo = useDemoMode();
   const { ready, insert: tenantInsert } = useTenantQuery();
   const [locations, setLocations] = useState<Location[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const fetchLocations = useCallback(async () => {
+    if (isDemo) {
+      setLocations(DEMO_LOCATIONS);
+      setLoading(false);
+      return;
+    }
+
     if (!tenant) {
       setLocations([]);
       setLoading(false);
@@ -103,7 +118,7 @@ export function useLocations(): UseLocationsReturn {
     } finally {
       setLoading(false);
     }
-  }, [tenant]);
+  }, [tenant, isDemo]);
 
   useEffect(() => {
     if (tenant) {

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
+import { useDemoMode } from "@/contexts/DemoMode";
 import { useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useTranslation } from "@/hooks/useTranslation";
@@ -35,6 +36,7 @@ export function MobileHeader() {
   const { t } = useTranslation();
   const location = useLocation();
   const { isNavItemVisible } = useModuleGuard();
+  const isDemo = useDemoMode();
   const [openMenus, setOpenMenus] = useState<string[]>([]);
 
   const toggleMenu = (to: string) => {
@@ -147,7 +149,7 @@ export function MobileHeader() {
                           <NavLink
                             key={child.to}
                             to={child.to}
-                            onClick={() => setOpen(false)}
+                            onClick={(e) => { if (isDemo) e.preventDefault(); else setOpen(false); }}
                             className={cn(
                               "flex items-center rounded-lg text-sm font-medium transition-colors gap-3 px-3 py-2",
                               isChildItemActive
@@ -169,7 +171,7 @@ export function MobileHeader() {
                 <NavLink
                   key={item.to}
                   to={item.to}
-                  onClick={() => setOpen(false)}
+                  onClick={(e) => { if (isDemo) e.preventDefault(); else setOpen(false); }}
                   className={cn(
                     "flex items-center rounded-lg text-sm font-medium transition-colors gap-3 px-3 py-2.5",
                     isActive
@@ -185,25 +187,38 @@ export function MobileHeader() {
           </nav>
           {/* User footer */}
           <div className="border-t border-sidebar-border p-3 mt-auto">
-            <NavLink
-              to="/profile"
-              onClick={() => setOpen(false)}
-              className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-sidebar-foreground/70 hover:bg-sidebar-accent/50"
-            >
-              <Avatar className="h-7 w-7">
-                <AvatarFallback className="bg-sidebar-primary text-sidebar-primary-foreground text-xs">
-                  {userInitials}
-                </AvatarFallback>
-              </Avatar>
-              <span className="truncate">{user?.email}</span>
-            </NavLink>
-            <button
-              onClick={() => { setOpen(false); signOut(); }}
-              className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-destructive hover:bg-destructive/10 w-full"
-            >
-              <LogOut className="h-4 w-4" />
-              <span>{t("nav.logout")}</span>
-            </button>
+            {isDemo ? (
+              <div className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-sidebar-foreground/70">
+                <Avatar className="h-7 w-7">
+                  <AvatarFallback className="bg-sidebar-primary text-sidebar-primary-foreground text-xs">
+                    DB
+                  </AvatarFallback>
+                </Avatar>
+                <span className="truncate">Demo Benutzer</span>
+              </div>
+            ) : (
+              <>
+                <NavLink
+                  to="/profile"
+                  onClick={() => setOpen(false)}
+                  className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-sidebar-foreground/70 hover:bg-sidebar-accent/50"
+                >
+                  <Avatar className="h-7 w-7">
+                    <AvatarFallback className="bg-sidebar-primary text-sidebar-primary-foreground text-xs">
+                      {userInitials}
+                    </AvatarFallback>
+                  </Avatar>
+                  <span className="truncate">{user?.email}</span>
+                </NavLink>
+                <button
+                  onClick={() => { setOpen(false); signOut(); }}
+                  className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-destructive hover:bg-destructive/10 w-full"
+                >
+                  <LogOut className="h-4 w-4" />
+                  <span>{t("nav.logout")}</span>
+                </button>
+              </>
+            )}
           </div>
         </SheetContent>
       </Sheet>
