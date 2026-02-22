@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, Fragment } from "react";
+import { useState, useEffect, useMemo, Fragment, useCallback } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
@@ -46,16 +46,32 @@ const DashboardSidebar = () => {
   const { isNavItemVisible } = useModuleGuard();
   const [displayName, setDisplayName] = useState<string | null>(null);
   
-  const isTablet = () => {
+  const [isTablet, setIsTablet] = useState(() => {
     const w = window.innerWidth;
     return w >= 768 && w < 1280;
-  };
+  });
+
+  useEffect(() => {
+    const mql768 = window.matchMedia("(min-width: 768px)");
+    const mql1280 = window.matchMedia("(min-width: 1280px)");
+    const check = () => {
+      const tablet = mql768.matches && !mql1280.matches;
+      setIsTablet(tablet);
+      if (tablet) setCollapsed(true);
+    };
+    mql768.addEventListener("change", check);
+    mql1280.addEventListener("change", check);
+    return () => {
+      mql768.removeEventListener("change", check);
+      mql1280.removeEventListener("change", check);
+    };
+  }, []);
 
   const [collapsed, setCollapsed] = useState(() => {
+    if (isTablet) return true;
     const stored = localStorage.getItem(SIDEBAR_COLLAPSED_KEY);
     if (stored !== null) return stored === "true";
-    // Default collapsed on tablet
-    return isTablet();
+    return false;
   });
 
   useEffect(() => {
@@ -73,8 +89,15 @@ const DashboardSidebar = () => {
   const [openMenus, setOpenMenus] = useState<string[]>([]);
 
   useEffect(() => {
-    localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(collapsed));
-  }, [collapsed]);
+    if (!isTablet) {
+      localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(collapsed));
+    }
+  }, [collapsed, isTablet]);
+
+  // On tablet, collapse after navigating
+  const handleTabletNavClick = useCallback(() => {
+    if (isTablet) setCollapsed(true);
+  }, [isTablet]);
 
   // Auto-open parent menu if child is active
   useEffect(() => {
@@ -203,6 +226,7 @@ const DashboardSidebar = () => {
                 <NavLink
                   key={child.to}
                   to={child.to}
+                  onClick={handleTabletNavClick}
                   className={cn(
                     "flex items-center rounded-lg text-sm font-medium transition-colors gap-3 px-3 py-2",
                     isChildItemActive
@@ -255,6 +279,7 @@ const DashboardSidebar = () => {
     const linkContent = (
       <NavLink
         to={item.to}
+        onClick={handleTabletNavClick}
         className={cn(
           "flex items-center rounded-lg text-sm font-medium transition-colors",
           collapsed ? "justify-center p-2.5" : "gap-3 px-3 py-2.5",
@@ -287,10 +312,20 @@ const DashboardSidebar = () => {
   return (
     <Fragment>
       <MobileHeader />
+      {/* Backdrop overlay for tablet when sidebar is expanded */}
+      {isTablet && !collapsed && (
+        <div
+          className="fixed inset-0 bg-black/40 z-30 md:block hidden"
+          onClick={() => setCollapsed(true)}
+        />
+      )}
+      {/* Spacer div to reserve space in flow on tablet (sidebar is fixed) */}
+      {isTablet && <div className="hidden md:block w-16 shrink-0" />}
       <aside 
         className={cn(
-          "hidden md:flex flex-col bg-sidebar text-sidebar-foreground border-r border-sidebar-border h-screen sticky top-0 z-30 transition-all duration-300",
-          collapsed ? "w-16" : "w-64"
+          "hidden md:flex flex-col bg-sidebar text-sidebar-foreground border-r border-sidebar-border h-screen z-40 transition-all duration-300",
+          collapsed ? "w-16" : "w-64",
+          isTablet ? "fixed top-0 left-0" : "sticky top-0"
         )}
       >
       {/* Logo & Collapse Toggle */}
