@@ -65,7 +65,7 @@ const PvForecastWidget = ({ locationId }: PvForecastWidgetProps) => {
       // Fetch all readings – default limit is 1000, but a single day can exceed that
       const allData: { power_value: number; recorded_at: string }[] = [];
       let from = 0;
-      const PAGE = 2000;
+      const PAGE = 1000;
       while (true) {
         const { data: page } = await supabase
           .from("meter_power_readings")
