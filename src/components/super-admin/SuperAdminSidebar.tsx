@@ -20,7 +20,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import {
   Collapsible, CollapsibleContent, CollapsibleTrigger,
 } from "@/components/ui/collapsible";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, Fragment } from "react";
 
 const SA_SIDEBAR_KEY = "sa-sidebar-collapsed";
 
@@ -47,14 +47,42 @@ export default function SuperAdminSidebar() {
   const { t, language } = useSATranslation();
   const { colorPreset, themeMode, setColorPreset, setThemeMode, setLanguage } = useSAPreferences();
   const location = useLocation();
+  const [isTablet, setIsTablet] = useState(() => {
+    const w = window.innerWidth;
+    return w >= 768 && w < 1280;
+  });
+
   const [collapsed, setCollapsed] = useState(() => {
+    if (window.innerWidth >= 768 && window.innerWidth < 1280) return true;
     const stored = localStorage.getItem(SA_SIDEBAR_KEY);
     if (stored !== null) return stored === "true";
-    return window.innerWidth >= 768 && window.innerWidth < 1280;
+    return false;
   });
   const [openMenus, setOpenMenus] = useState<string[]>([]);
 
-  useEffect(() => { localStorage.setItem(SA_SIDEBAR_KEY, String(collapsed)); }, [collapsed]);
+  useEffect(() => {
+    const mql768 = window.matchMedia("(min-width: 768px)");
+    const mql1280 = window.matchMedia("(min-width: 1280px)");
+    const check = () => {
+      const tablet = mql768.matches && !mql1280.matches;
+      setIsTablet(tablet);
+      if (tablet) setCollapsed(true);
+    };
+    mql768.addEventListener("change", check);
+    mql1280.addEventListener("change", check);
+    return () => {
+      mql768.removeEventListener("change", check);
+      mql1280.removeEventListener("change", check);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isTablet) localStorage.setItem(SA_SIDEBAR_KEY, String(collapsed));
+  }, [collapsed, isTablet]);
+
+  const handleTabletNavClick = useCallback(() => {
+    if (isTablet) setCollapsed(true);
+  }, [isTablet]);
 
   const navItems = [
     { to: "/super-admin", icon: LayoutDashboard, label: t("nav.dashboard") },
@@ -103,14 +131,20 @@ export default function SuperAdminSidebar() {
   const ThemeModeIcon = themeModeIcon;
 
   return (
-    <aside className={cn(
-      "hidden md:flex flex-col border-r h-screen sticky top-0 z-30 transition-all duration-300",
-      collapsed ? "w-16" : "w-64"
-    )} style={{
-      backgroundColor: `hsl(var(--sa-sidebar-bg))`,
-      color: `hsl(var(--sa-sidebar-fg))`,
-      borderColor: `hsl(var(--sa-sidebar-border))`,
-    }}>
+    <Fragment>
+      {isTablet && !collapsed && (
+        <div className="fixed inset-0 bg-black/40 z-30 md:block hidden" onClick={() => setCollapsed(true)} />
+      )}
+      {isTablet && <div className="hidden md:block w-16 shrink-0" />}
+      <aside className={cn(
+        "hidden md:flex flex-col border-r h-screen z-40 transition-all duration-300",
+        collapsed ? "w-16" : "w-64",
+        isTablet ? "fixed top-0 left-0" : "sticky top-0"
+      )} style={{
+        backgroundColor: `hsl(var(--sa-sidebar-bg))`,
+        color: `hsl(var(--sa-sidebar-fg))`,
+        borderColor: `hsl(var(--sa-sidebar-border))`,
+      }}>
       {/* Header */}
       <div className={cn("border-b flex items-center", collapsed ? "p-3 justify-center" : "p-4 justify-between")} style={{ borderColor: `hsl(var(--sa-sidebar-border))` }}>
         {!collapsed && <span className="font-bold text-sm">{t("nav.super_admin")}</span>}
@@ -152,6 +186,7 @@ export default function SuperAdminSidebar() {
                       <NavLink
                         key={child.to}
                         to={child.to}
+                        onClick={handleTabletNavClick}
                         className={cn(
                           "flex items-center rounded-lg text-sm font-medium transition-colors gap-3 px-3 py-2",
                           isChildItemActive ? "text-white" : "opacity-70 hover:opacity-100"
@@ -201,6 +236,7 @@ export default function SuperAdminSidebar() {
             <NavLink
               key={item.to}
               to={item.to}
+              onClick={handleTabletNavClick}
               className={cn(
                 "flex items-center rounded-lg text-sm font-medium transition-colors",
                 collapsed ? "justify-center p-2.5" : "gap-3 px-3 py-2.5",
@@ -312,5 +348,6 @@ export default function SuperAdminSidebar() {
         </DropdownMenu>
       </div>
     </aside>
+    </Fragment>
   );
 }
