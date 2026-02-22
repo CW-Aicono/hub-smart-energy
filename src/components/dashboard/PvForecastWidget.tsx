@@ -101,6 +101,10 @@ const PvForecastWidget = ({ locationId }: PvForecastWidgetProps) => {
   });
   const currentKw = currentEntry ? (currentEntry.ai_adjusted_kwh ?? currentEntry.estimated_kwh) : 0;
 
+  // Compute actual daily total from readings
+  const actualTotalKwh = Object.values(actualReadings).reduce((sum, v) => sum + v, 0);
+  const hasActualTotal = Object.keys(actualReadings).length > 0;
+
   const chartData = hourly
     .filter((_, i) => i % 2 === 0)
     .map((h) => {
@@ -132,18 +136,22 @@ const PvForecastWidget = ({ locationId }: PvForecastWidgetProps) => {
         <CardDescription>{forecast.location.name}{forecast.location.city ? ` · ${forecast.location.city}` : ""}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="grid grid-cols-3 gap-3 text-center">
+        <div className="grid grid-cols-4 gap-3 text-center">
           <div>
             <p className="text-xs text-muted-foreground">Jetzt</p>
             <p className="text-xl font-bold text-amber-600">{currentKw.toFixed(1)} kW</p>
           </div>
           <div>
-            <p className="text-xs text-muted-foreground">Heute</p>
-            <p className="text-xl font-bold">{summary.today_total_kwh.toFixed(0)} kWh</p>
+            <p className="text-xs text-muted-foreground">Heute (Prognose)</p>
+            <p className="text-xl font-bold text-amber-600">{summary.today_total_kwh.toFixed(0)} kWh</p>
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground">Heute (Ist)</p>
+            <p className="text-xl font-bold text-emerald-600">{hasActualTotal ? `${actualTotalKwh.toFixed(1)} kWh` : "–"}</p>
           </div>
           <div>
             <p className="text-xs text-muted-foreground">Morgen</p>
-            <p className="text-xl font-bold">{summary.tomorrow_total_kwh.toFixed(0)} kWh</p>
+            <p className="text-xl font-bold text-amber-600">{summary.tomorrow_total_kwh.toFixed(0)} kWh</p>
           </div>
         </div>
 
