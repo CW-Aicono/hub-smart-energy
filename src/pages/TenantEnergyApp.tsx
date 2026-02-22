@@ -256,9 +256,14 @@ function DashboardTab({ tenantRecord, invoices }: { tenantRecord: TenantRecord; 
   const months = Object.keys(monthlyByType).sort();
   const allEnergyTypes = useMemo(() => {
     const types = new Set<string>();
+    // Include all energy types from assigned meters (even if no consumption data yet)
+    (tenantRecord.assigned_meters || []).forEach((am) => {
+      if (am.meters?.energy_type) types.add(am.meters.energy_type);
+    });
+    // Also include any types from actual consumption data
     Object.values(monthlyByType).forEach((byType) => Object.keys(byType).forEach((et) => types.add(et)));
     return Array.from(types);
-  }, [monthlyByType]);
+  }, [monthlyByType, tenantRecord.assigned_meters]);
 
   // Chart data: last 6 months, grouped by energy type
   const chartData = useMemo(() => {
