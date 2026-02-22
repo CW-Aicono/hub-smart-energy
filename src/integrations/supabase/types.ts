@@ -950,8 +950,10 @@ export type Database = {
           currency: string
           energy_type: string
           id: string
+          is_dynamic: boolean
           location_id: string
           price_per_unit: number
+          spot_markup_per_unit: number
           tenant_id: string
           unit: string
           updated_at: string
@@ -963,8 +965,10 @@ export type Database = {
           currency?: string
           energy_type?: string
           id?: string
+          is_dynamic?: boolean
           location_id: string
           price_per_unit?: number
+          spot_markup_per_unit?: number
           tenant_id: string
           unit?: string
           updated_at?: string
@@ -976,8 +980,10 @@ export type Database = {
           currency?: string
           energy_type?: string
           id?: string
+          is_dynamic?: boolean
           location_id?: string
           price_per_unit?: number
+          spot_markup_per_unit?: number
           tenant_id?: string
           unit?: string
           updated_at?: string

@@ -13,6 +13,7 @@ import { startOfDay, startOfWeek, startOfMonth, startOfQuarter, startOfYear } fr
 import { useDashboardFilter, TimePeriod } from "@/hooks/useDashboardFilter";
 import { useWeekStartDay } from "@/hooks/useWeekStartDay";
 import { useLocationEnergySources } from "@/hooks/useLocationEnergySources";
+import { useSpotPrices } from "@/hooks/useSpotPrices";
 
 type SankeyViewMode = "leistung" | "kosten";
 
@@ -73,6 +74,7 @@ const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
   const weekStartsOn = useWeekStartDay();
   const [viewMode, setViewMode] = useState<SankeyViewMode>("leistung");
   const allowedTypes = useLocationEnergySources(locationId);
+  const { currentPrice: currentSpotPrice } = useSpotPrices();
 
   // Build price lookup: location_id:energy_type -> price_per_unit
   const priceLookup = useMemo(() => {
@@ -81,11 +83,18 @@ const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
     prices.forEach((p) => {
       if (p.valid_from <= today && (!p.valid_until || p.valid_until >= today)) {
         const key = `${p.location_id}:${p.energy_type}`;
-        if (!lookup.has(key)) lookup.set(key, Number(p.price_per_unit));
+        if (!lookup.has(key)) {
+          if (p.is_dynamic && currentSpotPrice) {
+            const spotEurKwh = currentSpotPrice.price_eur_mwh / 1000;
+            lookup.set(key, spotEurKwh + Number(p.spot_markup_per_unit));
+          } else if (!p.is_dynamic) {
+            lookup.set(key, Number(p.price_per_unit));
+          }
+        }
       }
     });
     return lookup;
-  }, [prices]);
+  }, [prices, currentSpotPrice]);
 
   // Local UI state
   const [tooltip, setTooltip] = useState<{ x: number; y: number; source: string; target: string; value: number; sourceType: string } | null>(null);
