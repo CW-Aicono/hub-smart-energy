@@ -122,26 +122,41 @@ Deno.serve(async (req) => {
     const dayStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 1));
     const dayEnd   = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
 
-    // 1. Rohdaten des Vortages abrufen
-    const { data: rawData, error: fetchError } = await supabase
-      .from("meter_power_readings")
-      .select("meter_id, tenant_id, energy_type, power_value, recorded_at")
-      .gte("recorded_at", dayStart.toISOString())
-      .lt("recorded_at", dayEnd.toISOString());
+    // 1. Rohdaten des Vortages abrufen (mit Paginierung, da >1000 Zeilen)
+    const PAGE_SIZE = 1000;
+    let rawData: Array<{ meter_id: string; tenant_id: string; energy_type: string; power_value: number; recorded_at: string }> = [];
+    let from = 0;
+    let hasMore = true;
 
-    if (fetchError) {
-      console.error("[compact-day] Fetch error:", fetchError.message);
-      return new Response(JSON.stringify({ error: fetchError.message }), {
-        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+    while (hasMore) {
+      const { data, error: fetchError } = await supabase
+        .from("meter_power_readings")
+        .select("meter_id, tenant_id, energy_type, power_value, recorded_at")
+        .gte("recorded_at", dayStart.toISOString())
+        .lt("recorded_at", dayEnd.toISOString())
+        .order("recorded_at", { ascending: true })
+        .range(from, from + PAGE_SIZE - 1);
+
+      if (fetchError) {
+        console.error("[compact-day] Fetch error:", fetchError.message);
+        return new Response(JSON.stringify({ error: fetchError.message }), {
+          status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      rawData = rawData.concat(data ?? []);
+      hasMore = (data?.length ?? 0) === PAGE_SIZE;
+      from += PAGE_SIZE;
     }
 
-    if (!rawData || rawData.length === 0) {
+    if (rawData.length === 0) {
       console.log("[compact-day] No raw data to compact");
       return new Response(JSON.stringify({ success: true, compacted: 0, deleted: 0 }), {
         status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+
+    console.log(`[compact-day] Fetched ${rawData.length} raw rows to compact`);
 
     // 2. In 5-Minuten-Buckets aggregieren (in Memory)
     type BucketKey = string; // `${meter_id}::${bucket_iso}`
