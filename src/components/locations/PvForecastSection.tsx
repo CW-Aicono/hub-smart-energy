@@ -228,6 +228,11 @@ export function PvForecastSection({ locationId }: PvForecastSectionProps) {
                   <div className="border rounded-lg p-3 text-center">
                     <p className="text-xs text-muted-foreground">Heute gesamt</p>
                     <p className="text-2xl font-bold">{forecast.summary.today_total_kwh.toFixed(0)} kWh</p>
+                    {Object.keys(actualReadings).length > 0 && (
+                      <p className="text-sm font-semibold text-emerald-600">
+                        Ist: {Object.values(actualReadings).reduce((s, v) => s + v, 0).toFixed(1)} kWh
+                      </p>
+                    )}
                   </div>
                   <div className="border rounded-lg p-3 text-center">
                     <p className="text-xs text-muted-foreground">Morgen gesamt</p>
