@@ -32,7 +32,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } as User);
       setSession({ access_token: "demo-token" } as Session);
       setLoading(false);
-      return;
+      return () => {
+        // Reset fake state when leaving demo mode
+        setUser(null);
+        setSession(null);
+        setLoading(true);
+      };
     }
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
