@@ -85,13 +85,34 @@ function aggregateForecasts(forecasts: PvForecast[]): PvForecast {
   };
 }
 
+function buildDemoForecast(locationId: string | null): PvForecast {
+  const now = new Date();
+  const todayStr = now.toISOString().slice(0, 10);
+  const hourly: PvHourlyEntry[] = Array.from({ length: 24 }, (_, i) => {
+    const h = `${todayStr}T${String(i).padStart(2, "0")}:00`;
+    const sun = i >= 6 && i <= 20 ? Math.sin(((i - 6) / 14) * Math.PI) : 0;
+    const kwh = Math.round(sun * 8.5 * 100) / 100;
+    return { timestamp: h, radiation_w_m2: Math.round(sun * 850), cloud_cover_pct: Math.round(Math.random() * 30), estimated_kwh: kwh, ai_adjusted_kwh: Math.round(kwh * 0.95 * 100) / 100 };
+  });
+  const locName = locationId === "demo-loc-1" ? "Hauptverwaltung" : locationId === "demo-loc-2" ? "Wasserwerk Nord" : locationId === "demo-loc-3" ? "Kläranlage Süd" : locationId === "demo-loc-4" ? "Stadtbücherei" : "Alle Anlagen (4)";
+  return {
+    location: { name: locName, city: "Musterstadt" },
+    settings: { peak_power_kwp: 42, tilt_deg: 30, azimuth_deg: 180 },
+    hourly,
+    summary: { today_total_kwh: 48.3, tomorrow_total_kwh: 52.1, peak_hour: `${todayStr}T12:00`, peak_kwh: 8.1, ai_confidence: "hoch", ai_notes: "Klarer Himmel erwartet, leichte Bewölkung am Nachmittag." },
+  };
+}
+
 export function usePvForecast(locationId: string | null) {
   const { tenant } = useTenant();
   const tenantId = tenant?.id ?? null;
+  const isDemo = tenantId === "demo-tenant-id";
 
   const { data: forecast, isLoading, error, refetch } = useQuery({
     queryKey: ["pv-forecast", locationId ?? "all", tenantId],
     queryFn: async () => {
+      if (isDemo) return buildDemoForecast(locationId);
+
       if (locationId) {
         // Single location – existing behaviour
         const { data, error } = await supabase.functions.invoke("pv-forecast", {
