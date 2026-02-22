@@ -417,7 +417,7 @@ const EnergyGaugeWidget = ({ locationId }: EnergyGaugeWidgetProps) => {
           shadow-[inset_0_1px_0_rgba(255,255,255,0.08),inset_0_-2px_6px_rgba(0,0,0,0.06),0_2px_8px_rgba(0,0,0,0.08)]
           px-4 py-4
         ">
-          <div className="grid grid-cols-2 md:flex md:items-start md:justify-around gap-2 md:gap-0 place-items-center">
+          <div className="grid grid-cols-2 xl:flex xl:items-start xl:justify-around gap-2 xl:gap-0 place-items-center">
             {gaugeData.map((g) => (
               <AnalogGauge key={g.energyType} data={g} />
             ))}
