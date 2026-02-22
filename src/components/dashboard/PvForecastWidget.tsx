@@ -22,17 +22,38 @@ const PvForecastWidget = ({ locationId }: PvForecastWidgetProps) => {
   const [actualReadings, setActualReadings] = useState<Record<string, number>>({});
 
   // Fetch actual PV meter readings for today
+  // Supports both single-location (settings.pv_meter_id) and all-locations mode
   useEffect(() => {
-    if (!settings?.pv_meter_id || !forecast) return;
-    const meterId = settings.pv_meter_id;
+    if (!forecast) return;
+
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
 
     (async () => {
+      let meterIds: string[] = [];
+
+      if (locationId && settings?.pv_meter_id) {
+        // Single location
+        meterIds = [settings.pv_meter_id];
+      } else if (!locationId) {
+        // All locations – fetch all active PV settings with a pv_meter_id
+        const { data: allSettings } = await supabase
+          .from("pv_forecast_settings")
+          .select("pv_meter_id")
+          .eq("is_active", true)
+          .not("pv_meter_id", "is", null);
+        if (allSettings && allSettings.length > 0) {
+          meterIds = allSettings.map((s) => s.pv_meter_id!).filter(Boolean);
+        }
+      }
+
+      if (meterIds.length === 0) return;
+
+      // Fetch readings for all relevant meters
       const { data } = await supabase
         .from("meter_power_readings")
         .select("power_value, recorded_at")
-        .eq("meter_id", meterId)
+        .in("meter_id", meterIds)
         .gte("recorded_at", todayStart.toISOString())
         .order("recorded_at", { ascending: true });
 
@@ -51,7 +72,7 @@ const PvForecastWidget = ({ locationId }: PvForecastWidgetProps) => {
       }
       setActualReadings(result);
     })();
-  }, [settings?.pv_meter_id, forecast]);
+  }, [locationId, settings?.pv_meter_id, forecast]);
 
   if (isLoading) {
     return (
