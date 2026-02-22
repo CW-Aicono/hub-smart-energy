@@ -1,31 +1,78 @@
 
-# Spotpreis-Optimierung: 15-Minuten-Aufloesung korrekt darstellen
+# Dynamische Strompreise pro Liegenschaft
 
-## Ausgangslage
+## Konzept
 
-Die energy-charts.info API liefert seit der EPEX-Umstellung (01.10.2025) bereits **96 Viertelstunden-Werte pro Tag**. Euer System speichert diese korrekt in der Datenbank. Der Chart zeigt sie prinzipiell an, aber einige Details im Widget und der Edge Function koennten optimiert werden, um die hoehere Aufloesung besser zu nutzen und die Preise fuer morgen zuverlaessig darzustellen.
+Ein dynamischer Stromtarif bedeutet: Statt eines festen Preises pro kWh wird der aktuelle EPEX-Spotpreis (Day-Ahead) als Basis genommen, zzgl. eines festen Aufschlags (Netzentgelte, Umlagen, Marge des Lieferanten). Die Formel lautet:
+
+```text
+Effektiver Preis = Spotpreis (ct/kWh) + Aufschlag (ct/kWh)
+```
 
 ## Aenderungen
 
-### 1. Edge Function: Robustere Datenbeschaffung
-**Datei:** `supabase/functions/fetch-spot-prices/index.ts`
+### 1. Datenbank: Neue Spalten in `energy_prices`
 
-- Aktuell wird `end` auf `+2 Tage` gesetzt -- das ist korrekt und liefert die Preise fuer morgen, sobald die Auktion gelaufen ist (ca. 13:00 MEZ)
-- Keine Aenderung noetig an der API-Logik -- die Daten kommen bereits in 15-Min-Aufloesung
+Zwei neue Spalten auf der bestehenden Tabelle `energy_prices`:
 
-### 2. SpotPriceWidget: Chart-Darstellung anpassen
-**Datei:** `src/components/dashboard/SpotPriceWidget.tsx`
+- **`is_dynamic`** (boolean, default `false`) -- Markiert, ob dieser Eintrag ein dynamischer Spotpreis-Tarif ist
+- **`spot_markup_per_unit`** (numeric, default `0`) -- Fester Aufschlag auf den Spotpreis in EUR pro Einheit (z.B. 0.12 EUR/kWh fuer Netzentgelte, Umlagen, Marge)
 
-- **Widget-Titel** von "Spotpreis-Verlauf (48h)" auf "Spotpreis-Verlauf (Day-Ahead, 15 min)" aendern, um die Aufloesung klar zu kommunizieren
-- **X-Achsen-Ticks**: Beibehalten der 3-Stunden-Ticks, da bei 96+ Datenpunkten pro Tag engere Ticks unleserlich waeren
-- **Tooltip**: Um Viertelstunden-Zeitstempel korrekt anzuzeigen (z.B. "14:15" statt nur volle Stunden) -- das funktioniert bereits, da `format(d, "HH:mm")` genutzt wird
+Bei `is_dynamic = true` wird `price_per_unit` ignoriert und stattdessen der aktuelle Spotpreis + Aufschlag verwendet.
 
-### 3. Hook: Zeitfenster pruefen
-**Datei:** `src/hooks/useSpotPrices.tsx`
+### 2. UI: Dialog "Energiepreis hinzufuegen/bearbeiten"
 
-- Der Hook filtert aktuell `-3h` bis `+48h`. Bei 15-Min-Aufloesung ergeben sich bis zu ~200 Datenpunkte statt ~50 -- das ist unproblematisch
-- `currentPrice`-Logik funktioniert korrekt: Sie findet den letzten Eintrag vor "jetzt", was bei 15-Min-Intervallen den aktuellen Viertelstunden-Preis liefert
+**Datei:** `src/components/locations/EnergyPriceManagement.tsx`
 
-## Zusammenfassung
+- Nur bei Energietraeger "Strom" erscheint ein neuer Switch: **"Dynamischer Strompreis (Boerse)"**
+- Wenn aktiviert:
+  - Das Feld "Preis pro kWh" wird ausgeblendet
+  - Stattdessen erscheint ein Feld **"Aufschlag pro kWh (EUR)"** (Netzentgelte, Umlagen, Marge)
+  - Ein Hinweistext erklaert: "Der Strompreis wird automatisch anhand des aktuellen EPEX Day-Ahead Spotpreises berechnet."
+- In der Tabelle wird bei dynamischen Eintraegen statt des festen Preises angezeigt:
+  - "Spotpreis + 0,12 EUR/kWh" (mit dem konfigurierten Aufschlag)
+  - Optional: Der aktuelle effektive Preis in Klammern
 
-Die gute Nachricht: Das System funktioniert bereits grundsaetzlich mit 15-Minuten-Daten. Die einzige sichtbare Aenderung ist die Anpassung des Widget-Titels, um die hoehere Aufloesung transparent zu machen. Die Preise fuer morgen sind ab ca. 13:00 Uhr verfuegbar und werden beim naechsten Cron-Lauf abgeholt und angezeigt.
+### 3. Hook: `useEnergyPrices` erweitern
+
+**Datei:** `src/hooks/useEnergyPrices.tsx`
+
+- Interface `EnergyPrice` um `is_dynamic` und `spot_markup_per_unit` erweitern
+- `addPrice` und `updatePrice` um die neuen Felder erweitern
+- `getActivePrice` anpassen: Bei `is_dynamic = true` den aktuellen Spotpreis aus `useSpotPrices` holen und + Aufschlag zurueckgeben
+
+### 4. Kostenberechnung anpassen
+
+**Dateien:** `src/components/dashboard/CostOverview.tsx`, `src/components/dashboard/SankeyWidget.tsx`
+
+- Der `priceLookup` muss pruefen, ob ein dynamischer Preis vorliegt
+- Bei dynamischen Preisen: Aktuellen Spotpreis aus der `spot_prices`-Tabelle holen und den Aufschlag addieren
+- Fuer historische Berechnungen (Vorperiode): Den zum jeweiligen Zeitpunkt gueltigen Spotpreis nutzen
+
+### 5. Formdata und Validierung
+
+- Neues Formfeld `is_dynamic` (boolean, default false) und `spot_markup_per_unit` (string)
+- Bei `is_dynamic = true` wird `price_per_unit` auf 0 gesetzt (Platzhalter), da der echte Preis dynamisch ist
+- Validierung: Aufschlag muss >= 0 sein
+
+## Technische Details
+
+### Migration SQL
+
+```sql
+ALTER TABLE energy_prices
+  ADD COLUMN is_dynamic boolean NOT NULL DEFAULT false,
+  ADD COLUMN spot_markup_per_unit numeric NOT NULL DEFAULT 0;
+```
+
+### Effektive Preisberechnung
+
+Fuer die Kostenberechnung wird in `CostOverview` und `SankeyWidget` der `priceLookup` erweitert:
+- Fester Tarif: `price_per_unit` direkt verwenden (wie bisher)
+- Dynamischer Tarif: Aktueller Spotpreis (EUR/MWh / 1000 = EUR/kWh) + `spot_markup_per_unit`
+
+### Tabellenanzeige
+
+Dynamische Eintraege werden visuell gekennzeichnet:
+- Badge "Dynamisch" oder Blitz-Icon
+- Anzeige: "Spot + 0,12 EUR/kWh" statt eines festen Preises
