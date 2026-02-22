@@ -108,6 +108,7 @@ const App = () => (
                     <Route path="/demo/charging/points/:id" element={<ChargePointDetail />} />
 
                     {/* Regular routes */}
+                    <Route path="/" element={<Index />} />
                     <Route path="/auth" element={<Auth />} />
                     <Route path="/admin" element={<Admin />} />
                     <Route path="/settings" element={<Settings />} />
