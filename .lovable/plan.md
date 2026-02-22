@@ -1,52 +1,35 @@
 
 
-## Spotpreis-Anzeige: 3h Vergangenheit + 48h Zukunft
+# Fix: Mieter-Verknüpfung ermöglichen (RLS-Policy-Korrektur)
 
-### Problem
-Aktuell zeigt der Graph 12 Stunden in die Vergangenheit, wodurch der Fokus auf den zukuenftigen Preisverlauf verloren geht. Die verfuegbaren Day-Ahead-Preise (bis zu 48h voraus) werden nicht vollstaendig dargestellt.
+## Problem
+Der Benutzer `christvs@t-online.de` kann sich nicht in die Mein-Strom-App einloggen, obwohl ein aktiver Mieterdatensatz mit dieser E-Mail existiert. Ursache: Die Datenbank-Sicherheitsrichtlinie (RLS) erlaubt keinen **Lese-Zugriff** auf den eigenen Datensatz, solange die Verknüpfung (`auth_user_id`) noch nicht gesetzt ist. Das Auto-Linking kann deshalb nie stattfinden -- ein "Henne-Ei-Problem".
 
-### Loesung
+## Loesung
+Eine zusaetzliche SELECT-Policy hinzufuegen, die es einem eingeloggten Benutzer erlaubt, den Mieterdatensatz per E-Mail-Abgleich zu **lesen**, damit das Auto-Linking greifen kann.
 
-Drei Dateien muessen angepasst werden:
+## Umsetzung
 
----
+### Schritt 1: Neue RLS-Policy (Datenbankmigration)
 
-### 1. Edge Function anpassen (`supabase/functions/fetch-spot-prices/index.ts`)
+Neue SELECT-Policy auf `tenant_electricity_tenants`:
 
-Die API-Abfrage wird erweitert, um Daten von gestern bis uebermorgen abzudecken:
-- `startDate`: heute - 1 Tag (bleibt, um 3h Rueckblick abzudecken)
-- `endDate`: heute + **2 Tage** statt +1 Tag, damit volle 48h Zukunftsdaten verfuegbar sind
-
-### 2. Hook anpassen (`src/hooks/useSpotPrices.tsx`)
-
-- Der `since`-Parameter wird geaendert: statt `now - 48h` (reiner Rueckblick) wird `now - 3h` als Startpunkt gesetzt
-- Zusaetzlich wird eine obere Grenze eingefuegt: `now + 48h`
-- So werden genau die relevanten Daten geladen: 3h zurueck + 48h voraus
-
-### 3. Chart-Darstellung anpassen
-
-**SpotPriceWidget** (`src/components/dashboard/SpotPriceWidget.tsx`):
-- `startCutoff` von `now - 12h` auf `now - 3h` aendern
-- Titel von "48h" auf passendere Beschreibung anpassen
-
-**ArbitrageDashboard** (`src/pages/ArbitrageTrading.tsx`):
-- Gleiche Anpassung des `startCutoff` auf `now - 3h`
-
----
-
-### Technische Details
-
-```
-Zeitachse (neu):
-  |----3h----|--NOW--|------------------48h------------------>
-  Vergangenheit       Zukunft
-  (grau)              (Primaerfarbe)
+```text
+Name: "App tenants can find own record by email for linking"
+Bedingung: email = get_auth_user_email()
+           AND auth_user_id IS NULL
+           AND status = 'active'
 ```
 
-**useSpotPrices.tsx** - Query-Aenderung:
-- `since`: `new Date(Date.now() - 3 * 60 * 60 * 1000)` statt `hours * 60 * 60 * 1000`
-- Neuer Filter: `.lte("timestamp", new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString())`
+Das erlaubt einem authentifizierten Benutzer, genau den einen Datensatz zu lesen, dessen E-Mail mit der eigenen uebereinstimmt und der noch nicht verknuepft ist. Sobald das Auto-Linking den `auth_user_id` setzt, greift die bestehende Policy "App tenants can view own record".
 
-**fetch-spot-prices/index.ts** - API-Range:
-- `endDate.setDate(endDate.getDate() + 2)` statt `+ 1`
+### Schritt 2: Keine Code-Aenderungen noetig
+
+Die bestehende Logik in `TenantEnergyApp.tsx` (Zeilen 1051-1068) fuehrt bereits die Email-Suche und das Auto-Linking korrekt durch. Sobald die SELECT-Policy den Lesezugriff erlaubt, funktioniert der gesamte Flow automatisch.
+
+## Technische Details
+
+- Nur **eine SQL-Migration** wird benoetigt
+- Die Policy ist eng begrenzt: Nur der eigene Datensatz (via `get_auth_user_email()`), nur wenn noch nicht verknuepft (`auth_user_id IS NULL`), nur wenn aktiv
+- Kein Sicherheitsrisiko: Ein Benutzer kann nur seinen eigenen Datensatz sehen, nicht die anderer Mieter
 
