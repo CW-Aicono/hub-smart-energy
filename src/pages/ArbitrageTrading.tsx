@@ -248,10 +248,10 @@ function ArbitrageDashboard() {
                     strokeWidth={1}
                   />
                 ))}
-                <Line yAxisId="price" data={pastData} type="monotone" dataKey="price" stroke="hsl(var(--muted-foreground))" strokeWidth={2} dot={false} name="Vergangen" connectNulls={false} />
-                <Line yAxisId="price" type="monotone" dataKey="price" stroke="hsl(var(--primary))" strokeWidth={2} dot={false} name="Preis" data={futureData} connectNulls={false} />
+                <Line yAxisId="price" data={pastData} type="stepAfter" dataKey="price" stroke="hsl(var(--muted-foreground))" strokeWidth={2} dot={false} name="Vergangen" connectNulls={false} />
+                <Line yAxisId="price" type="stepAfter" dataKey="price" stroke="hsl(var(--primary))" strokeWidth={2} dot={false} name="Preis" data={futureData} connectNulls={false} />
                 {activePvForecast && (
-                  <Area yAxisId="pv" type="monotone" dataKey="pvKwh" stroke="hsl(45, 93%, 47%)" fill="hsl(45, 93%, 47%)" fillOpacity={0.15} strokeWidth={1.5} dot={false} name="PV" connectNulls={false} />
+                  <Area yAxisId="pv" type="stepAfter" dataKey="pvKwh" stroke="hsl(45, 93%, 47%)" fill="hsl(45, 93%, 47%)" fillOpacity={0.15} strokeWidth={1.5} dot={false} name="PV" connectNulls={false} />
                 )}
               </ComposedChart>
             </ResponsiveContainer>
