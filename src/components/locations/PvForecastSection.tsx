@@ -70,12 +70,23 @@ export function PvForecastSection({ locationId }: PvForecastSectionProps) {
     todayStart.setHours(0, 0, 0, 0);
 
     (async () => {
-      const { data } = await supabase
-        .from("meter_power_readings")
-        .select("power_value, recorded_at")
-        .eq("meter_id", meterId)
-        .gte("recorded_at", todayStart.toISOString())
-        .order("recorded_at", { ascending: true });
+      const allData: { power_value: number; recorded_at: string }[] = [];
+      let from = 0;
+      const PAGE = 2000;
+      while (true) {
+        const { data: page } = await supabase
+          .from("meter_power_readings")
+          .select("power_value, recorded_at")
+          .eq("meter_id", meterId)
+          .gte("recorded_at", todayStart.toISOString())
+          .order("recorded_at", { ascending: true })
+          .range(from, from + PAGE - 1);
+        if (!page || page.length === 0) break;
+        allData.push(...page);
+        if (page.length < PAGE) break;
+        from += PAGE;
+      }
+      const data = allData;
 
       if (!data || data.length === 0) {
         setActualReadings({});
