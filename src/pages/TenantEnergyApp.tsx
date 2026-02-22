@@ -33,6 +33,7 @@ interface TenantRecord {
   status: string;
   move_in_date: string | null;
   move_out_date: string | null;
+  is_mieterstrom: boolean;
   assigned_meters: AssignedMeter[];
 }
 
@@ -739,13 +740,8 @@ function TariffsTab({ tenantRecord }: { tenantRecord: TenantRecord }) {
       .order("valid_from", { ascending: false });
     setTariffs((data || []) as SelfTariff[]);
 
-    // Check if landlord has set a Mieterstrom tariff for this tenant's location
-    const { data: landlordTariff } = await supabase
-      .from("tenant_electricity_tariffs")
-      .select("id")
-      .eq("tenant_id", tenantRecord.tenant_id)
-      .limit(1);
-    setLandlordTariffExists((landlordTariff || []).length > 0);
+    // Check if this specific tenant is marked as Mieterstrom participant
+    setLandlordTariffExists(!!tenantRecord.is_mieterstrom);
 
     setLoading(false);
   };
@@ -1043,7 +1039,7 @@ const TenantEnergyApp = () => {
       // Try to find by auth_user_id first, then by email
       let { data: rec } = await supabase
         .from("tenant_electricity_tenants")
-        .select("id, name, unit_label, meter_id, tenant_id, status, move_in_date, move_out_date, tenant_electricity_tenant_meters(meter_id, meters(id, name, energy_type, unit, meter_number))")
+        .select("id, name, unit_label, meter_id, tenant_id, status, move_in_date, move_out_date, is_mieterstrom, tenant_electricity_tenant_meters(meter_id, meters(id, name, energy_type, unit, meter_number))")
         .eq("auth_user_id", user.id)
         .eq("status", "active")
         .maybeSingle();
@@ -1052,7 +1048,7 @@ const TenantEnergyApp = () => {
       if (!rec && user.email) {
         const { data: emailMatch } = await supabase
           .from("tenant_electricity_tenants")
-          .select("id, name, unit_label, meter_id, tenant_id, status, move_in_date, move_out_date, tenant_electricity_tenant_meters(meter_id, meters(id, name, energy_type, unit, meter_number))")
+          .select("id, name, unit_label, meter_id, tenant_id, status, move_in_date, move_out_date, is_mieterstrom, tenant_electricity_tenant_meters(meter_id, meters(id, name, energy_type, unit, meter_number))")
           .eq("email", user.email)
           .eq("status", "active")
           .is("auth_user_id", null)
