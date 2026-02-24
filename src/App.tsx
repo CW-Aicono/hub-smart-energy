@@ -54,6 +54,7 @@ import TenantElectricity from "./pages/TenantElectricity";
 import TenantEnergyApp from "./pages/TenantEnergyApp";
 import Demo from "./pages/Demo";
 import UpdateBanner from "./components/UpdateBanner";
+import SupportSessionBanner from "./components/SupportSessionBanner";
 import CookieConsent from "./components/CookieConsent";
 // Import Leaflet CSS globally
 import "leaflet/dist/leaflet.css";
@@ -80,6 +81,7 @@ const App = () => (
                   <Toaster />
                   <Sonner />
                   <UpdateBanner />
+                  <SupportSessionBanner />
                   <CookieConsent />
                   <Routes>
                     {/* Demo routes – same components, demo context auto-detected via /demo prefix */}

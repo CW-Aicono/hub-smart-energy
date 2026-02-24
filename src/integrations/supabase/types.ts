@@ -2385,6 +2385,7 @@ export type Database = {
         Row: {
           created_at: string
           ended_at: string | null
+          expires_at: string
           id: string
           reason: string | null
           started_at: string
@@ -2394,6 +2395,7 @@ export type Database = {
         Insert: {
           created_at?: string
           ended_at?: string | null
+          expires_at?: string
           id?: string
           reason?: string | null
           started_at?: string
@@ -2403,6 +2405,7 @@ export type Database = {
         Update: {
           created_at?: string
           ended_at?: string | null
+          expires_at?: string
           id?: string
           reason?: string | null
           started_at?: string
