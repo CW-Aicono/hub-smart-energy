@@ -104,6 +104,23 @@ export const saTranslations: SATranslations = {
   "module_pricing.monthly_defaults": { de: "Monatliche Standardpreise", en: "Monthly Default Prices", fr: "Tarifs mensuels par défaut", pl: "Domyślne ceny miesięczne" },
   "module_pricing.hint": { de: "Diese Preise gelten als Standard für alle Mandanten. Individuelle Preise können in der Mandantenansicht überschrieben werden.", en: "These prices are the default for all tenants. Individual prices can be overridden in the tenant view.", fr: "Ces tarifs s'appliquent par défaut à tous les locataires. Des tarifs individuels peuvent être définis dans la vue locataire.", pl: "Te ceny są domyślne dla wszystkich najemców. Indywidualne ceny można nadpisać w widoku najemcy." },
 
+  // Bundles & Module nav
+  "nav.bundles_modules": { de: "Bundles & Module", en: "Bundles & Modules", fr: "Bundles & Modules", pl: "Pakiety i moduły" },
+  "nav.bundles": { de: "Bundles", en: "Bundles", fr: "Bundles", pl: "Pakiety" },
+
+  // Bundles page
+  "bundles.title": { de: "Modul-Bundles", en: "Module Bundles", fr: "Bundles de modules", pl: "Pakiety modułów" },
+  "bundles.subtitle": { de: "Bundles aus mehreren Modulen zusammenstellen und bepreisen", en: "Create and price bundles from multiple modules", fr: "Créer et tarifer des bundles de modules", pl: "Twórz i wyceniaj pakiety z wielu modułów" },
+  "bundles.create": { de: "Neues Bundle", en: "New Bundle", fr: "Nouveau bundle", pl: "Nowy pakiet" },
+  "bundles.edit": { de: "Bundle bearbeiten", en: "Edit Bundle", fr: "Modifier le bundle", pl: "Edytuj pakiet" },
+  "bundles.empty": { de: "Noch keine Bundles erstellt", en: "No bundles created yet", fr: "Aucun bundle créé", pl: "Nie utworzono jeszcze pakietów" },
+  "bundles.description": { de: "Beschreibung", en: "Description", fr: "Description", pl: "Opis" },
+  "bundles.price_monthly": { de: "Monatspreis", en: "Monthly Price", fr: "Prix mensuel", pl: "Cena miesięczna" },
+  "bundles.select_modules": { de: "Module auswählen", en: "Select Modules", fr: "Sélectionner les modules", pl: "Wybierz moduły" },
+  "bundles.no_modules": { de: "Keine Module zugewiesen", en: "No modules assigned", fr: "Aucun module attribué", pl: "Brak przypisanych modułów" },
+  "bundles.delete_title": { de: "Bundle löschen", en: "Delete Bundle", fr: "Supprimer le bundle", pl: "Usuń pakiet" },
+  "bundles.delete_confirm": { de: "Möchten Sie dieses Bundle wirklich löschen?", en: "Do you really want to delete this bundle?", fr: "Voulez-vous vraiment supprimer ce bundle ?", pl: "Czy na pewno chcesz usunąć ten pakiet?" },
+
   // User management
   "users.title": { de: "Benutzerverwaltung", en: "User Management", fr: "Gestion des utilisateurs", pl: "Zarządzanie użytkownikami" },
   "users.subtitle": { de: "Alle Plattform-Benutzer verwalten", en: "Manage all platform users", fr: "Gérer tous les utilisateurs", pl: "Zarządzaj wszystkimi użytkownikami" },

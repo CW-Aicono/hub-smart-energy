@@ -2002,6 +2002,65 @@ export type Database = {
           },
         ]
       }
+      module_bundle_items: {
+        Row: {
+          bundle_id: string
+          created_at: string
+          id: string
+          module_code: string
+        }
+        Insert: {
+          bundle_id: string
+          created_at?: string
+          id?: string
+          module_code: string
+        }
+        Update: {
+          bundle_id?: string
+          created_at?: string
+          id?: string
+          module_code?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "module_bundle_items_bundle_id_fkey"
+            columns: ["bundle_id"]
+            isOneToOne: false
+            referencedRelation: "module_bundles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      module_bundles: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          is_active: boolean
+          name: string
+          price_monthly: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          name: string
+          price_monthly?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          price_monthly?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       module_prices: {
         Row: {
           created_at: string

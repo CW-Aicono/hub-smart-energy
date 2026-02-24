@@ -33,6 +33,7 @@ import SuperAdminStatistics from "./pages/SuperAdminStatistics";
 import SuperAdminBilling from "./pages/SuperAdminBilling";
 import SuperAdminSupport from "./pages/SuperAdminSupport";
 import SuperAdminModulePricing from "./pages/SuperAdminModulePricing";
+import SuperAdminBundles from "./pages/SuperAdminBundles";
 import SuperAdminUsers from "./pages/SuperAdminUsers";
 import SuperAdminRoles from "./pages/SuperAdminRoles";
 import MobileApp from "./pages/MobileApp";
@@ -135,6 +136,7 @@ const App = () => (
                     <Route path="/super-admin/roles" element={<SA><SuperAdminRoles /></SA>} />
                     <Route path="/super-admin/billing" element={<SA><SuperAdminBilling /></SA>} />
                     <Route path="/super-admin/module-pricing" element={<SA><SuperAdminModulePricing /></SA>} />
+                    <Route path="/super-admin/bundles" element={<SA><SuperAdminBundles /></SA>} />
                     <Route path="/super-admin/support" element={<SA><SuperAdminSupport /></SA>} />
                     <Route path="/super-admin/ocpp/integrations" element={<SA><SuperAdminOcppIntegrations /></SA>} />
                     <Route path="/super-admin/ocpp/control" element={<SA><SuperAdminOcppControl /></SA>} />
