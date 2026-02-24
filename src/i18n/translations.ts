@@ -3246,6 +3246,10 @@ export const translations = {
 
   // Tenant Electricity (Mieterstrom)
   "nav.tenantElectricity": { de: "Mieterstrom", en: "Tenant Electricity", es: "Electricidad inquilinos", nl: "Huurderstroom" },
+
+  // Support Session Banner
+  "support_banner.active": { de: "Supportsitzung aktiv!", en: "Support session active!", es: "¡Sesión de soporte activa!", nl: "Ondersteuningssessie actief!" },
+  "support_banner.extend": { de: "Verlängern", en: "Extend", es: "Extender", nl: "Verlengen" },
 } as const;
 
 export type TranslationKey = keyof typeof translations;
