@@ -4,10 +4,11 @@
  * Nimmt Leistungswerte vom externen Gateway Worker entgegen und schreibt sie
  * in meter_power_readings. Authentifizierung via GATEWAY_API_KEY (Bearer Token).
  *
- * POST /functions/v1/gateway-ingest
- * Authorization: Bearer <GATEWAY_API_KEY>
- * Content-Type: application/json
- * Body: { readings: PowerReading[] }
+ * Routes:
+ *   GET  ?action=list-locations               – Alle aktiven Liegenschaften
+ *   GET  ?action=list-meters[&location_id=…]  – Zähler (optional nach Standort)
+ *   POST ?action=compact-day                  – Rohdaten verdichten
+ *   POST (default)                            – Readings einfügen
  */
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -17,6 +18,38 @@ const corsHeaders = {
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type",
 };
+
+const json = (body: unknown, status = 200) =>
+  new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+
+/* ── Auth helper ─────────────────────────────────────────────────────────────── */
+
+function validateApiKey(req: Request): Response | null {
+  const gatewayApiKey = Deno.env.get("GATEWAY_API_KEY");
+  if (!gatewayApiKey) {
+    console.error("[gateway-ingest] GATEWAY_API_KEY secret not configured");
+    return json({ error: "Service misconfigured" }, 500);
+  }
+  const authHeader = req.headers.get("Authorization") || "";
+  const providedKey = authHeader.replace(/^Bearer\s+/i, "").trim();
+  if (!providedKey || providedKey !== gatewayApiKey) {
+    return json({ error: "Unauthorized" }, 401);
+  }
+  return null; // OK
+}
+
+function getSupabase() {
+  return createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+    { auth: { persistSession: false } },
+  );
+}
+
+/* ── Spike filter ────────────────────────────────────────────────────────────── */
 
 interface PowerReading {
   meter_id: string;
@@ -41,260 +74,170 @@ function isSpike(powerValue: number, energyType: string): boolean {
   return Math.abs(powerValue) > threshold;
 }
 
-Deno.serve(async (req) => {
-  // CORS preflight
-  if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
-  }
+/* ── Route handlers ──────────────────────────────────────────────────────────── */
 
-  // ── Route: list-meters (GET ?action=list-meters) ───────────────────────────
-  const url = new URL(req.url);
-  const action = url.searchParams.get("action");
+async function handleListLocations(): Promise<Response> {
+  const supabase = getSupabase();
+  const { data, error } = await supabase
+    .from("locations")
+    .select("id, tenant_id, name, address, city, postal_code, country, type, usage_type, energy_sources, latitude, longitude")
+    .eq("is_archived", false)
+    .order("name");
 
-  if (req.method === "GET" && action === "list-meters") {
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-      { auth: { persistSession: false } }
-    );
+  if (error) return json({ success: false, error: error.message }, 500);
+  return json({ success: true, locations: data || [] });
+}
 
-    const { data, error } = await supabase
-      .from("meters")
-      .select(`
+async function handleListMeters(url: URL): Promise<Response> {
+  const supabase = getSupabase();
+  const locationId = url.searchParams.get("location_id");
+
+  let query = supabase
+    .from("meters")
+    .select(`
+      id,
+      name,
+      energy_type,
+      sensor_uuid,
+      location_id,
+      location_integration_id,
+      tenant_id,
+      location_integration:location_integrations!meters_location_integration_id_fkey (
         id,
-        name,
-        energy_type,
-        sensor_uuid,
-        location_integration_id,
-        tenant_id,
-        location_integration:location_integrations!meters_location_integration_id_fkey (
-          id,
-          config,
-          integration:integrations!location_integrations_integration_id_fkey (
-            type
-          )
+        config,
+        integration:integrations!location_integrations_integration_id_fkey (
+          type
         )
-      `)
-      .eq("is_archived", false)
-      .not("sensor_uuid", "is", null)
-      .not("location_integration_id", "is", null);
+      )
+    `)
+    .eq("is_archived", false)
+    .not("sensor_uuid", "is", null)
+    .not("location_integration_id", "is", null);
 
-    if (error) {
-      return new Response(
-        JSON.stringify({ success: false, error: error.message }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    return new Response(
-      JSON.stringify({ success: true, meters: data || [] }),
-      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+  if (locationId) {
+    query = query.eq("location_id", locationId);
   }
 
-  // ── Route: compact-day (POST ?action=compact-day) ──────────────────────────
-  // Verdichtet Rohdaten des Vortages in 5-Minuten-Buckets und löscht danach
-  // die Roh-Readings. Wird täglich um 00:05 Uhr per pg_cron aufgerufen.
-  if (req.method === "POST" && action === "compact-day") {
-    // API-Key Validierung (gleicher Key wie für readings)
-    const gatewayApiKey = Deno.env.get("GATEWAY_API_KEY");
-    if (!gatewayApiKey) {
-      return new Response(JSON.stringify({ error: "Service misconfigured" }), {
-        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-    const authHeader = req.headers.get("Authorization") || "";
-    const providedKey = authHeader.replace(/^Bearer\s+/i, "").trim();
-    if (!providedKey || providedKey !== gatewayApiKey) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
+  const { data, error } = await query;
 
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-      { auth: { persistSession: false } }
-    );
+  if (error) return json({ success: false, error: error.message }, 500);
+  return json({ success: true, meters: data || [] });
+}
 
-    // Zeitfenster: Vortag (von 00:00:00 bis 23:59:59 UTC)
-    const now = new Date();
-    const dayStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 1));
-    const dayEnd   = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+async function handleCompactDay(req: Request): Promise<Response> {
+  const authErr = validateApiKey(req);
+  if (authErr) return authErr;
 
-    // 1. Rohdaten des Vortages abrufen (mit Paginierung, da >1000 Zeilen)
-    const PAGE_SIZE = 1000;
-    let rawData: Array<{ meter_id: string; tenant_id: string; energy_type: string; power_value: number; recorded_at: string }> = [];
-    let from = 0;
-    let hasMore = true;
+  const supabase = getSupabase();
 
-    while (hasMore) {
-      const { data, error: fetchError } = await supabase
-        .from("meter_power_readings")
-        .select("meter_id, tenant_id, energy_type, power_value, recorded_at")
-        .gte("recorded_at", dayStart.toISOString())
-        .lt("recorded_at", dayEnd.toISOString())
-        .order("recorded_at", { ascending: true })
-        .range(from, from + PAGE_SIZE - 1);
+  const now = new Date();
+  const dayStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 1));
+  const dayEnd = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
 
-      if (fetchError) {
-        console.error("[compact-day] Fetch error:", fetchError.message);
-        return new Response(JSON.stringify({ error: fetchError.message }), {
-          status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
+  // 1. Fetch raw data with pagination
+  const PAGE_SIZE = 1000;
+  let rawData: Array<{ meter_id: string; tenant_id: string; energy_type: string; power_value: number; recorded_at: string }> = [];
+  let from = 0;
+  let hasMore = true;
 
-      rawData = rawData.concat(data ?? []);
-      hasMore = (data?.length ?? 0) === PAGE_SIZE;
-      from += PAGE_SIZE;
-    }
-
-    if (rawData.length === 0) {
-      console.log("[compact-day] No raw data to compact");
-      return new Response(JSON.stringify({ success: true, compacted: 0, deleted: 0 }), {
-        status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    console.log(`[compact-day] Fetched ${rawData.length} raw rows to compact`);
-
-    // 2. In 5-Minuten-Buckets aggregieren (in Memory)
-    type BucketKey = string; // `${meter_id}::${bucket_iso}`
-    const buckets = new Map<BucketKey, {
-      meter_id: string; tenant_id: string; energy_type: string;
-      bucket: string; sum: number; max: number; count: number;
-    }>();
-
-    for (const row of rawData) {
-      const d = new Date(row.recorded_at);
-      // Bucket-Beginn: auf 5-Minuten abrunden
-      const bucketMin = Math.floor(d.getUTCMinutes() / 5) * 5;
-      const bucketTs = new Date(Date.UTC(
-        d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(),
-        d.getUTCHours(), bucketMin, 0, 0
-      )).toISOString();
-
-      const key: BucketKey = `${row.meter_id}::${bucketTs}`;
-      const existing = buckets.get(key);
-      const v = Number(row.power_value);
-      if (existing) {
-        existing.sum += v;
-        existing.max = Math.max(existing.max, v);
-        existing.count += 1;
-      } else {
-        buckets.set(key, {
-          meter_id: row.meter_id,
-          tenant_id: row.tenant_id,
-          energy_type: row.energy_type,
-          bucket: bucketTs,
-          sum: v,
-          max: v,
-          count: 1,
-        });
-      }
-    }
-
-    // 3. Komprimierte Daten in meter_power_readings_5min schreiben (UPSERT)
-    const compactedRows = Array.from(buckets.values()).map((b) => ({
-      meter_id: b.meter_id,
-      tenant_id: b.tenant_id,
-      energy_type: b.energy_type,
-      bucket: b.bucket,
-      power_avg: b.sum / b.count,
-      power_max: b.max,
-      sample_count: b.count,
-    }));
-
-    const { error: upsertError } = await supabase
-      .from("meter_power_readings_5min")
-      .upsert(compactedRows, { onConflict: "meter_id,bucket" });
-
-    if (upsertError) {
-      console.error("[compact-day] Upsert error:", upsertError.message);
-      return new Response(JSON.stringify({ error: upsertError.message }), {
-        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    // 4. Rohdaten des Vortages löschen
-    const { count: deletedCount, error: deleteError } = await supabase
+  while (hasMore) {
+    const { data, error: fetchError } = await supabase
       .from("meter_power_readings")
-      .delete({ count: "exact" })
+      .select("meter_id, tenant_id, energy_type, power_value, recorded_at")
       .gte("recorded_at", dayStart.toISOString())
-      .lt("recorded_at", dayEnd.toISOString());
+      .lt("recorded_at", dayEnd.toISOString())
+      .order("recorded_at", { ascending: true })
+      .range(from, from + PAGE_SIZE - 1);
 
-    if (deleteError) {
-      console.error("[compact-day] Delete error:", deleteError.message);
-      // Verdichtung war erfolgreich, nur Cleanup ist fehlgeschlagen – trotzdem 200
+    if (fetchError) return json({ error: fetchError.message }, 500);
+    rawData = rawData.concat(data ?? []);
+    hasMore = (data?.length ?? 0) === PAGE_SIZE;
+    from += PAGE_SIZE;
+  }
+
+  if (rawData.length === 0) {
+    return json({ success: true, compacted: 0, deleted: 0 });
+  }
+
+  console.log(`[compact-day] Fetched ${rawData.length} raw rows to compact`);
+
+  // 2. Aggregate into 5-min buckets
+  type BucketKey = string;
+  const buckets = new Map<BucketKey, {
+    meter_id: string; tenant_id: string; energy_type: string;
+    bucket: string; sum: number; max: number; count: number;
+  }>();
+
+  for (const row of rawData) {
+    const d = new Date(row.recorded_at);
+    const bucketMin = Math.floor(d.getUTCMinutes() / 5) * 5;
+    const bucketTs = new Date(Date.UTC(
+      d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(),
+      d.getUTCHours(), bucketMin, 0, 0,
+    )).toISOString();
+
+    const key: BucketKey = `${row.meter_id}::${bucketTs}`;
+    const existing = buckets.get(key);
+    const v = Number(row.power_value);
+    if (existing) {
+      existing.sum += v;
+      existing.max = Math.max(existing.max, v);
+      existing.count += 1;
+    } else {
+      buckets.set(key, {
+        meter_id: row.meter_id, tenant_id: row.tenant_id,
+        energy_type: row.energy_type, bucket: bucketTs,
+        sum: v, max: v, count: 1,
+      });
     }
-
-    console.log(`[compact-day] ✓ Compacted ${compactedRows.length} buckets, deleted ${deletedCount ?? "?"} raw rows`);
-
-    return new Response(
-      JSON.stringify({
-        success: true,
-        compacted: compactedRows.length,
-        raw_rows_processed: rawData.length,
-        deleted: deletedCount ?? 0,
-        period: { from: dayStart.toISOString(), to: dayEnd.toISOString() },
-      }),
-      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
   }
 
-  // ── Route: POST readings ────────────────────────────────────────────────────
-  // Only accept POST
-  if (req.method !== "POST") {
-    return new Response(JSON.stringify({ error: "Method not allowed" }), {
-      status: 405,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  }
+  // 3. Upsert compacted rows
+  const compactedRows = Array.from(buckets.values()).map((b) => ({
+    meter_id: b.meter_id, tenant_id: b.tenant_id, energy_type: b.energy_type,
+    bucket: b.bucket, power_avg: b.sum / b.count, power_max: b.max, sample_count: b.count,
+  }));
 
-  // ── API Key Validation ──────────────────────────────────────────────────────
-  const gatewayApiKey = Deno.env.get("GATEWAY_API_KEY");
-  if (!gatewayApiKey) {
-    console.error("[gateway-ingest] GATEWAY_API_KEY secret not configured");
-    return new Response(JSON.stringify({ error: "Service misconfigured" }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  }
+  const { error: upsertError } = await supabase
+    .from("meter_power_readings_5min")
+    .upsert(compactedRows, { onConflict: "meter_id,bucket" });
 
-  const authHeader = req.headers.get("Authorization") || "";
-  const providedKey = authHeader.replace(/^Bearer\s+/i, "").trim();
+  if (upsertError) return json({ error: upsertError.message }, 500);
 
-  if (!providedKey || providedKey !== gatewayApiKey) {
-    console.warn("[gateway-ingest] Invalid or missing API key");
-    return new Response(JSON.stringify({ error: "Unauthorized" }), {
-      status: 401,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  }
+  // 4. Delete raw data
+  const { count: deletedCount, error: deleteError } = await supabase
+    .from("meter_power_readings")
+    .delete({ count: "exact" })
+    .gte("recorded_at", dayStart.toISOString())
+    .lt("recorded_at", dayEnd.toISOString());
 
-  // ── Parse Body ──────────────────────────────────────────────────────────────
+  if (deleteError) console.error("[compact-day] Delete error:", deleteError.message);
+
+  console.log(`[compact-day] ✓ Compacted ${compactedRows.length} buckets, deleted ${deletedCount ?? "?"} raw rows`);
+
+  return json({
+    success: true, compacted: compactedRows.length,
+    raw_rows_processed: rawData.length, deleted: deletedCount ?? 0,
+    period: { from: dayStart.toISOString(), to: dayEnd.toISOString() },
+  });
+}
+
+async function handlePostReadings(req: Request): Promise<Response> {
+  const authErr = validateApiKey(req);
+  if (authErr) return authErr;
+
   let body: { readings?: PowerReading[] };
   try {
     body = await req.json();
   } catch {
-    return new Response(JSON.stringify({ error: "Invalid JSON body" }), {
-      status: 400,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return json({ error: "Invalid JSON body" }, 400);
   }
 
   const readings = body?.readings;
   if (!Array.isArray(readings) || readings.length === 0) {
-    return new Response(
-      JSON.stringify({ error: "readings array is required and must not be empty" }),
-      {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
-    );
+    return json({ error: "readings array is required and must not be empty" }, 400);
   }
 
-  // ── Validate & Filter Readings ──────────────────────────────────────────────
   const validReadings: PowerReading[] = [];
   const skipped: string[] = [];
 
@@ -303,71 +246,59 @@ Deno.serve(async (req) => {
       skipped.push(`${r.meter_id ?? "unknown"}: missing required fields`);
       continue;
     }
-
     const powerValue = Number(r.power_value);
     if (isSpike(powerValue, r.energy_type)) {
       skipped.push(`${r.meter_id}: spike detected (${powerValue})`);
       continue;
     }
-
     validReadings.push({
-      meter_id: r.meter_id,
-      tenant_id: r.tenant_id,
-      power_value: powerValue,
-      energy_type: r.energy_type,
-      recorded_at: r.recorded_at || new Date().toISOString(),
+      meter_id: r.meter_id, tenant_id: r.tenant_id, power_value: powerValue,
+      energy_type: r.energy_type, recorded_at: r.recorded_at || new Date().toISOString(),
     });
   }
 
   if (validReadings.length === 0) {
-    return new Response(
-      JSON.stringify({
-        success: true,
-        inserted: 0,
-        skipped: skipped.length,
-        skipped_details: skipped,
-      }),
-      {
-        status: 200,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
-    );
+    return json({ success: true, inserted: 0, skipped: skipped.length, skipped_details: skipped });
   }
 
-  // ── Write to Database ───────────────────────────────────────────────────────
-  const supabase = createClient(
-    Deno.env.get("SUPABASE_URL")!,
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-    { auth: { persistSession: false } }
-  );
-
+  const supabase = getSupabase();
   const { error } = await supabase.from("meter_power_readings").insert(validReadings);
 
   if (error) {
     console.error("[gateway-ingest] DB insert error:", error.message);
-    return new Response(
-      JSON.stringify({ error: "Database error", details: error.message }),
-      {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
-    );
+    return json({ error: "Database error", details: error.message }, 500);
   }
 
-  console.log(
-    `[gateway-ingest] ✓ Inserted ${validReadings.length} readings, skipped ${skipped.length}`
-  );
+  console.log(`[gateway-ingest] ✓ Inserted ${validReadings.length} readings, skipped ${skipped.length}`);
 
-  return new Response(
-    JSON.stringify({
-      success: true,
-      inserted: validReadings.length,
-      skipped: skipped.length,
-      skipped_details: skipped.length > 0 ? skipped : undefined,
-    }),
-    {
-      status: 200,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    }
-  );
+  return json({
+    success: true, inserted: validReadings.length,
+    skipped: skipped.length,
+    skipped_details: skipped.length > 0 ? skipped : undefined,
+  });
+}
+
+/* ── Main router ─────────────────────────────────────────────────────────────── */
+
+Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") {
+    return new Response(null, { headers: corsHeaders });
+  }
+
+  const url = new URL(req.url);
+  const action = url.searchParams.get("action");
+
+  // GET routes
+  if (req.method === "GET") {
+    if (action === "list-locations") return handleListLocations();
+    if (action === "list-meters") return handleListMeters(url);
+  }
+
+  // POST routes
+  if (req.method === "POST") {
+    if (action === "compact-day") return handleCompactDay(req);
+    return handlePostReadings(req);
+  }
+
+  return json({ error: "Method not allowed" }, 405);
 });
