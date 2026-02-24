@@ -1,11 +1,16 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { usePvForecast, usePvForecastSettings } from "@/hooks/usePvForecast";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
-import { Sun, CloudSun, Sparkles } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Sun, CloudSun, Sparkles, ChevronLeft, ChevronRight } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import { supabase } from "@/integrations/supabase/client";
+import { useDashboardFilter, type TimePeriod } from "@/hooks/useDashboardFilter";
+import { format, addDays, startOfDay } from "date-fns";
+import { de } from "date-fns/locale";
 
 interface PvForecastWidgetProps {
   locationId: string | null;
@@ -28,27 +33,48 @@ function toLocalTime(ts: string): string {
   return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 }
 
+/** Get local date string YYYY-MM-DD from a Date */
+function toLocalDateStr(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+const PERIOD_LABELS: Record<string, string> = {
+  day: "Tag",
+  week: "Woche",
+  month: "Monat",
+  quarter: "Quartal",
+  year: "Jahr",
+};
+
 const PvForecastWidget = ({ locationId }: PvForecastWidgetProps) => {
   const { forecast, isLoading } = usePvForecast(locationId);
   const { settings } = usePvForecastSettings(locationId);
+  const { selectedPeriod, setSelectedPeriod } = useDashboardFilter();
+  const [offset, setOffset] = useState(0);
   const [actualReadings, setActualReadings] = useState<Record<string, number>>({});
 
-  // Fetch actual PV meter readings for today
-  // Supports both single-location (settings.pv_meter_id) and all-locations mode
+  // Reset offset when period changes
+  useEffect(() => { setOffset(0); }, [selectedPeriod]);
+
+  const refDate = useMemo(() => addDays(new Date(), offset), [offset]);
+  const refDateStr = toLocalDateStr(refDate);
+  const periodLabel = format(refDate, "EEEE, d. MMM yyyy", { locale: de });
+  const canGoForward = offset < 0;
+
+  // Fetch actual PV meter readings for selected date
   useEffect(() => {
     if (!forecast) return;
 
-    const todayStart = new Date();
-    todayStart.setHours(0, 0, 0, 0);
+    const dayStart = startOfDay(refDate);
+    const dayEnd = new Date(dayStart);
+    dayEnd.setDate(dayEnd.getDate() + 1);
 
     (async () => {
       let meterIds: string[] = [];
 
       if (locationId && settings?.pv_meter_id) {
-        // Single location
         meterIds = [settings.pv_meter_id];
       } else if (!locationId) {
-        // All locations – fetch all active PV settings with a pv_meter_id
         const { data: allSettings } = await supabase
           .from("pv_forecast_settings")
           .select("pv_meter_id")
@@ -59,10 +85,8 @@ const PvForecastWidget = ({ locationId }: PvForecastWidgetProps) => {
         }
       }
 
-      if (meterIds.length === 0) return;
+      if (meterIds.length === 0) { setActualReadings({}); return; }
 
-      // Fetch readings for all relevant meters
-      // Fetch all readings – default limit is 1000, but a single day can exceed that
       const allData: { power_value: number; recorded_at: string }[] = [];
       let from = 0;
       const PAGE = 1000;
@@ -71,7 +95,8 @@ const PvForecastWidget = ({ locationId }: PvForecastWidgetProps) => {
           .from("meter_power_readings")
           .select("power_value, recorded_at")
           .in("meter_id", meterIds)
-          .gte("recorded_at", todayStart.toISOString())
+          .gte("recorded_at", dayStart.toISOString())
+          .lt("recorded_at", dayEnd.toISOString())
           .order("recorded_at", { ascending: true })
           .range(from, from + PAGE - 1);
         if (!page || page.length === 0) break;
@@ -79,12 +104,11 @@ const PvForecastWidget = ({ locationId }: PvForecastWidgetProps) => {
         if (page.length < PAGE) break;
         from += PAGE;
       }
-      const data = allData;
 
-      if (!data || data.length === 0) return;
+      if (allData.length === 0) { setActualReadings({}); return; }
 
       const hourBuckets: Record<string, { sum: number; count: number }> = {};
-      for (const r of data) {
+      for (const r of allData) {
         const hour = toLocalHourKey(r.recorded_at);
         if (!hourBuckets[hour]) hourBuckets[hour] = { sum: 0, count: 0 };
         hourBuckets[hour].sum += r.power_value;
@@ -96,7 +120,7 @@ const PvForecastWidget = ({ locationId }: PvForecastWidgetProps) => {
       }
       setActualReadings(result);
     })();
-  }, [locationId, settings?.pv_meter_id, forecast]);
+  }, [locationId, settings?.pv_meter_id, forecast, refDateStr]);
 
   if (isLoading) {
     return (
@@ -118,18 +142,28 @@ const PvForecastWidget = ({ locationId }: PvForecastWidgetProps) => {
 
   const { summary, hourly } = forecast;
 
+  // Filter hourly data to the selected date
+  const filteredHourly = hourly.filter((h) => {
+    const d = new Date(h.timestamp);
+    return toLocalDateStr(d) === refDateStr;
+  });
+
   const now = new Date();
-  const currentEntry = hourly.find((h) => {
+  const currentEntry = filteredHourly.find((h) => {
     const t = new Date(h.timestamp);
     return t.getTime() <= now.getTime() && now.getTime() < t.getTime() + 3600000;
   });
   const currentKw = currentEntry ? (currentEntry.ai_adjusted_kwh ?? currentEntry.estimated_kwh) : 0;
+  const isToday = offset === 0;
 
   // Compute actual daily total from readings
   const actualTotalKwh = Object.values(actualReadings).reduce((sum, v) => sum + v, 0);
   const hasActualTotal = Object.keys(actualReadings).length > 0;
 
-  const chartData = hourly.map((h) => {
+  // Compute forecast total for the selected day
+  const forecastDayTotal = filteredHourly.reduce((sum, h) => sum + (h.ai_adjusted_kwh ?? h.estimated_kwh), 0);
+
+  const chartData = filteredHourly.map((h) => {
     const hourKey = toLocalHourKey(h.timestamp);
     return {
       time: toLocalTime(h.timestamp),
@@ -148,53 +182,80 @@ const PvForecastWidget = ({ locationId }: PvForecastWidgetProps) => {
             <Sun className="h-5 w-5 text-amber-500" />
             PV-Prognose
           </CardTitle>
-          {summary.ai_confidence && (
-            <Badge variant="secondary" className="gap-1 text-xs">
-              <Sparkles className="h-3 w-3" />
-              KI: {summary.ai_confidence}
-            </Badge>
-          )}
+          <div className="flex items-center gap-2">
+            {summary.ai_confidence && isToday && (
+              <Badge variant="secondary" className="gap-1 text-xs">
+                <Sparkles className="h-3 w-3" />
+                KI: {summary.ai_confidence}
+              </Badge>
+            )}
+            <Select value={selectedPeriod} onValueChange={(v) => setSelectedPeriod(v as TimePeriod)}>
+              <SelectTrigger className="w-[120px] h-8 text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {(Object.keys(PERIOD_LABELS) as TimePeriod[]).map((key) => (
+                  <SelectItem key={key} value={key}>{PERIOD_LABELS[key]}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
-        <CardDescription>{forecast.location.name}{forecast.location.city ? ` · ${forecast.location.city}` : ""}</CardDescription>
+        <div className="flex items-center justify-between">
+          <CardDescription>{forecast.location.name}{forecast.location.city ? ` · ${forecast.location.city}` : ""}</CardDescription>
+          <div className="flex items-center gap-1">
+            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setOffset((o) => o - 1)}>
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <span className="text-xs text-muted-foreground min-w-[180px] text-center">{periodLabel}</span>
+            <Button variant="ghost" size="icon" className="h-7 w-7" disabled={!canGoForward} onClick={() => setOffset((o) => o + 1)}>
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="grid grid-cols-4 gap-3 text-center">
+        <div className="grid grid-cols-3 gap-3 text-center">
+          {isToday && (
+            <div>
+              <p className="text-xs text-muted-foreground">Jetzt</p>
+              <p className="text-xl font-bold text-amber-600">{currentKw.toFixed(1)} kW</p>
+            </div>
+          )}
           <div>
-            <p className="text-xs text-muted-foreground">Jetzt</p>
-            <p className="text-xl font-bold text-amber-600">{currentKw.toFixed(1)} kW</p>
+            <p className="text-xs text-muted-foreground">{isToday ? "Heute" : format(refDate, "d. MMM", { locale: de })} (Prognose)</p>
+            <p className="text-xl font-bold text-amber-600">{forecastDayTotal > 0 ? `${forecastDayTotal.toFixed(0)} kWh` : "–"}</p>
           </div>
           <div>
-            <p className="text-xs text-muted-foreground">Heute (Prognose)</p>
-            <p className="text-xl font-bold text-amber-600">{summary.today_total_kwh.toFixed(0)} kWh</p>
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground">Heute (Ist)</p>
+            <p className="text-xs text-muted-foreground">{isToday ? "Heute" : format(refDate, "d. MMM", { locale: de })} (Ist)</p>
             <p className="text-xl font-bold text-emerald-600">{hasActualTotal ? `${actualTotalKwh.toFixed(1)} kWh` : "–"}</p>
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground">Morgen</p>
-            <p className="text-xl font-bold text-amber-600">{summary.tomorrow_total_kwh.toFixed(0)} kWh</p>
           </div>
         </div>
 
-        <ResponsiveContainer width="100%" height={160}>
-          <BarChart data={chartData} margin={{ left: -10, right: 0 }}>
-            <XAxis dataKey="time" tick={{ fontSize: 10 }} interval="preserveStartEnd" />
-            <YAxis tick={{ fontSize: 10 }} width={35} />
-            <Tooltip
-              formatter={(v: number, name: string) => [
-                `${v.toFixed(2)} kWh`,
-                name === "prognose" ? "Prognose" : "Ist-Erzeugung",
-              ]}
-              labelFormatter={(l) => `${l} Uhr`}
-            />
-            {hasActual && <Legend formatter={(v) => v === "prognose" ? "Prognose" : "Ist-Erzeugung"} />}
-            <Bar dataKey="prognose" fill={PV_YELLOW} radius={[2, 2, 0, 0]} />
-            {hasActual && <Bar dataKey="ist" fill={ACTUAL_GREEN} radius={[2, 2, 0, 0]} />}
-          </BarChart>
-        </ResponsiveContainer>
+        {filteredHourly.length > 0 ? (
+          <ResponsiveContainer width="100%" height={160}>
+            <BarChart data={chartData} margin={{ left: -10, right: 0 }}>
+              <XAxis dataKey="time" tick={{ fontSize: 10 }} interval="preserveStartEnd" />
+              <YAxis tick={{ fontSize: 10 }} width={35} />
+              <Tooltip
+                formatter={(v: number, name: string) => [
+                  `${v.toFixed(2)} kWh`,
+                  name === "prognose" ? "Prognose" : "Ist-Erzeugung",
+                ]}
+                labelFormatter={(l) => `${l} Uhr`}
+              />
+              {hasActual && <Legend formatter={(v) => v === "prognose" ? "Prognose" : "Ist-Erzeugung"} />}
+              <Bar dataKey="prognose" fill={PV_YELLOW} radius={[2, 2, 0, 0]} />
+              {hasActual && <Bar dataKey="ist" fill={ACTUAL_GREEN} radius={[2, 2, 0, 0]} />}
+            </BarChart>
+          </ResponsiveContainer>
+        ) : (
+          <div className="h-[160px] flex items-center justify-center text-muted-foreground text-sm">
+            Keine Prognosedaten für diesen Tag
+          </div>
+        )}
 
-        {summary.ai_notes && (
+        {summary.ai_notes && isToday && (
           <p className="text-xs text-muted-foreground flex items-start gap-1">
             <CloudSun className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" />
             {summary.ai_notes}
