@@ -216,18 +216,56 @@ function DashboardTab({ tenantRecord, invoices }: { tenantRecord: TenantRecord; 
 
   useEffect(() => {
     if (meterIds.length === 0) { setLoadingMeter(false); return; }
-    const fetch = async () => {
+    const fetchData = async () => {
       const [{ data: totals }, { data: st }, { data: lt }] = await Promise.all([
         supabase.from("meter_period_totals").select("*").in("meter_id", meterIds).eq("period_type", "month").order("period_start", { ascending: false }).limit(120),
         supabase.from("tenant_self_tariffs").select("*").eq("tenant_electricity_tenant_id", tenantRecord.id),
         supabase.from("tenant_electricity_tariffs").select("*").eq("tenant_id", tenantRecord.tenant_id).limit(1),
       ]);
-      setMeterTotals(totals || []);
+
+      // Fallback: For meters without period totals, compute monthly totals from 5-min aggregates
+      const meterIdsWithTotals = new Set((totals || []).map((t: any) => t.meter_id));
+      const missingMeterIds = meterIds.filter((id) => !meterIdsWithTotals.has(id));
+      let fallbackTotals: any[] = [];
+
+      if (missingMeterIds.length > 0) {
+        // Query 5-min aggregates grouped by month for meters missing period totals
+        const { data: aggData } = await supabase
+          .from("meter_power_readings_5min")
+          .select("meter_id, bucket, power_avg")
+          .in("meter_id", missingMeterIds)
+          .order("bucket", { ascending: true });
+
+        if (aggData && aggData.length > 0) {
+          // Sum power_avg * (5/60) to get kWh per month per meter
+          const monthlyMap: Record<string, Record<string, number>> = {};
+          for (const row of aggData) {
+            const month = (row.bucket as string).substring(0, 7);
+            const key = `${row.meter_id}::${month}`;
+            if (!monthlyMap[key]) monthlyMap[key] = { total: 0 };
+            monthlyMap[key].total += Number(row.power_avg) * (5.0 / 60.0);
+          }
+          for (const [key, val] of Object.entries(monthlyMap)) {
+            const [meterId, month] = key.split("::");
+            const meter = (tenantRecord.assigned_meters || []).find((am) => am.meter_id === meterId);
+            fallbackTotals.push({
+              meter_id: meterId,
+              period_type: "month",
+              period_start: `${month}-01`,
+              total_value: val.total,
+              energy_type: meter?.meters?.energy_type || "strom",
+              source: "5min_aggregate",
+            });
+          }
+        }
+      }
+
+      setMeterTotals([...(totals || []), ...fallbackTotals]);
       setSelfTariffs(st || []);
       setLandlordTariff((lt || [])[0] || null);
       setLoadingMeter(false);
     };
-    fetch();
+    fetchData();
   }, [meterIds, tenantRecord.id, tenantRecord.tenant_id]);
 
   // Group meter totals by month and energy type
