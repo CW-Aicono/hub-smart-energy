@@ -229,7 +229,7 @@ function DashboardTab({ tenantRecord, invoices }: { tenantRecord: TenantRecord; 
     if (meterIds.length === 0) { setLoadingMeter(false); return; }
     const fetchData = async () => {
       const [{ data: totals }, { data: st }, { data: lt }] = await Promise.all([
-        supabase.from("meter_period_totals").select("*").in("meter_id", meterIds).eq("period_type", "month").order("period_start", { ascending: false }).limit(120),
+        supabase.from("meter_period_totals").select("*").in("meter_id", meterIds).eq("period_type", "month").order("period_start", { ascending: false }).limit(120).gte("period_start", tenantRecord.move_in_date || "1900-01-01"),
         supabase.from("tenant_self_tariffs").select("*").eq("tenant_electricity_tenant_id", tenantRecord.id),
         supabase.from("tenant_electricity_tariffs").select("*").eq("tenant_id", tenantRecord.tenant_id).limit(1),
       ]);
@@ -242,11 +242,16 @@ function DashboardTab({ tenantRecord, invoices }: { tenantRecord: TenantRecord; 
 
       // Always try to fill gaps from 5-min aggregates for ALL assigned meters
       let fallbackTotals: any[] = [];
-      const { data: aggData } = await supabase
+      let aggQuery = supabase
         .from("meter_power_readings_5min")
         .select("meter_id, bucket, power_avg")
         .in("meter_id", meterIds)
         .order("bucket", { ascending: true });
+      // Only fetch data from move-in date onwards
+      if (tenantRecord.move_in_date) {
+        aggQuery = aggQuery.gte("bucket", tenantRecord.move_in_date);
+      }
+      const { data: aggData } = await aggQuery;
 
       if (aggData && aggData.length > 0) {
         const monthlyMap: Record<string, number> = {};
@@ -279,17 +284,19 @@ function DashboardTab({ tenantRecord, invoices }: { tenantRecord: TenantRecord; 
     fetchData();
   }, [meterIds, tenantRecord.id, tenantRecord.tenant_id]);
 
-  // Group meter totals by month and energy type
+  // Group meter totals by month and energy type (only from move_in_date onwards)
   const monthlyByType = useMemo(() => {
+    const moveInMonth = tenantRecord.move_in_date ? tenantRecord.move_in_date.substring(0, 7) : null;
     const map: Record<string, Record<string, number>> = {};
     meterTotals.forEach((t: any) => {
       const month = t.period_start.substring(0, 7); // YYYY-MM
+      if (moveInMonth && month < moveInMonth) return; // skip data before move-in
       const eType = meterMap[t.meter_id]?.energy_type || t.energy_type || "strom";
       if (!map[month]) map[month] = {};
       map[month][eType] = (map[month][eType] || 0) + Number(t.total_value);
     });
     return map;
-  }, [meterTotals, meterMap]);
+  }, [meterTotals, meterMap, tenantRecord.move_in_date]);
 
   // Get tariff price for an energy type
   const getTariffPrice = (energyType: string): { pricePerKwh: number; baseFee: number } | null => {
@@ -1125,12 +1132,16 @@ const TenantEnergyApp = () => {
         };
         setTenantRecord(mapped);
 
-        // Load invoices
-        const { data: invData } = await supabase
+      // Load invoices (only from move-in date onwards)
+        let invQuery = supabase
           .from("tenant_electricity_invoices")
           .select("*")
           .eq("tenant_electricity_tenant_id", rec.id)
           .order("period_start", { ascending: false });
+        if (rec.move_in_date) {
+          invQuery = invQuery.gte("period_start", rec.move_in_date);
+        }
+        const { data: invData } = await invQuery;
         setInvoices((invData || []) as Invoice[]);
       } else {
         setTenantRecord(null);
