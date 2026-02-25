@@ -234,40 +234,40 @@ function DashboardTab({ tenantRecord, invoices }: { tenantRecord: TenantRecord; 
         supabase.from("tenant_electricity_tariffs").select("*").eq("tenant_id", tenantRecord.tenant_id).limit(1),
       ]);
 
-      // Fallback: For meters without period totals, compute monthly totals from 5-min aggregates
-      const meterIdsWithTotals = new Set((totals || []).map((t: any) => t.meter_id));
-      const missingMeterIds = meterIds.filter((id) => !meterIdsWithTotals.has(id));
+      // Fallback: For meter+month combos missing from period totals, compute from 5-min aggregates
+      // Build a set of "meterId::YYYY-MM" keys that already have period totals
+      const existingKeys = new Set(
+        (totals || []).map((t: any) => `${t.meter_id}::${(t.period_start as string).substring(0, 7)}`)
+      );
+
+      // Always try to fill gaps from 5-min aggregates for ALL assigned meters
       let fallbackTotals: any[] = [];
+      const { data: aggData } = await supabase
+        .from("meter_power_readings_5min")
+        .select("meter_id, bucket, power_avg")
+        .in("meter_id", meterIds)
+        .order("bucket", { ascending: true });
 
-      if (missingMeterIds.length > 0) {
-        // Query 5-min aggregates grouped by month for meters missing period totals
-        const { data: aggData } = await supabase
-          .from("meter_power_readings_5min")
-          .select("meter_id, bucket, power_avg")
-          .in("meter_id", missingMeterIds)
-          .order("bucket", { ascending: true });
-
-        if (aggData && aggData.length > 0) {
-          // Sum power_avg * (5/60) to get kWh per month per meter
-          const monthlyMap: Record<string, Record<string, number>> = {};
-          for (const row of aggData) {
-            const month = (row.bucket as string).substring(0, 7);
-            const key = `${row.meter_id}::${month}`;
-            if (!monthlyMap[key]) monthlyMap[key] = { total: 0 };
-            monthlyMap[key].total += Number(row.power_avg) * (5.0 / 60.0);
-          }
-          for (const [key, val] of Object.entries(monthlyMap)) {
-            const [meterId, month] = key.split("::");
-            const meter = (tenantRecord.assigned_meters || []).find((am) => am.meter_id === meterId);
-            fallbackTotals.push({
-              meter_id: meterId,
-              period_type: "month",
-              period_start: `${month}-01`,
-              total_value: val.total,
-              energy_type: meter?.meters?.energy_type || "strom",
-              source: "5min_aggregate",
-            });
-          }
+      if (aggData && aggData.length > 0) {
+        const monthlyMap: Record<string, number> = {};
+        for (const row of aggData) {
+          const month = (row.bucket as string).substring(0, 7);
+          const key = `${row.meter_id}::${month}`;
+          // Skip if we already have a period total for this meter+month
+          if (existingKeys.has(key)) continue;
+          monthlyMap[key] = (monthlyMap[key] || 0) + Number(row.power_avg) * (5.0 / 60.0);
+        }
+        for (const [key, total] of Object.entries(monthlyMap)) {
+          const [meterId, month] = key.split("::");
+          const meter = (tenantRecord.assigned_meters || []).find((am) => am.meter_id === meterId);
+          fallbackTotals.push({
+            meter_id: meterId,
+            period_type: "month",
+            period_start: `${month}-01`,
+            total_value: total,
+            energy_type: meter?.meters?.energy_type || "strom",
+            source: "5min_aggregate",
+          });
         }
       }
 
