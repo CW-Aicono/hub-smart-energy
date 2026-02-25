@@ -4,6 +4,10 @@ import { useAuth } from "./useAuth";
 import { useTenant } from "./useTenant";
 import { toast } from "sonner";
 import { getT } from "@/i18n/getT";
+import type { Database } from "@/integrations/supabase/types";
+
+type ReportInsertDB = Database["public"]["Tables"]["report_schedules"]["Insert"];
+type ReportUpdateDB = Database["public"]["Tables"]["report_schedules"]["Update"];
 
 export interface ReportSchedule {
   id: string;
@@ -55,11 +59,12 @@ export function useReportSchedules() {
   const createSchedule = async (input: ReportScheduleInsert) => {
     if (!tenant || !user) return false;
     const t = getT();
-    const { error } = await supabase.from("report_schedules").insert({
+    const dbInsert: ReportInsertDB = {
       ...input,
       tenant_id: tenant.id,
       created_by: user.id,
-    } as any);
+    };
+    const { error } = await supabase.from("report_schedules").insert(dbInsert);
     if (error) { toast.error(t("reportSchedule.errorCreate")); console.error(error); return false; }
     toast.success(t("reportSchedule.created"));
     fetchSchedules();
@@ -68,7 +73,7 @@ export function useReportSchedules() {
 
   const updateSchedule = async (id: string, updates: Partial<ReportScheduleInsert> & { is_active?: boolean }) => {
     const t = getT();
-    const { error } = await supabase.from("report_schedules").update(updates as any).eq("id", id);
+    const { error } = await supabase.from("report_schedules").update(updates as ReportUpdateDB).eq("id", id);
     if (error) { toast.error(t("common.errorUpdate")); console.error(error); return false; }
     toast.success(t("reportSchedule.updated"));
     fetchSchedules();

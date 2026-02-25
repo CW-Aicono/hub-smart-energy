@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
 import { useDemoMode } from "@/contexts/DemoMode";
+import type { Database, Json } from "@/integrations/supabase/types";
 
 export type WidgetSize = "full" | "2/3" | "1/2" | "1/3";
 
@@ -75,7 +76,6 @@ export function useDashboardWidgets() {
       console.error("Error fetching widgets:", error);
       setWidgets([]);
     } else if (data && data.length > 0) {
-      // Check for missing default widgets and add them for existing users
       const existingTypes = new Set(data.map(w => w.widget_type));
       const missingWidgets = DEFAULT_WIDGETS.filter(dw => !existingTypes.has(dw.widget_type));
       
@@ -86,7 +86,7 @@ export function useDashboardWidgets() {
           widget_type: w.widget_type,
           position: maxPosition + idx + 1,
           is_visible: w.is_visible,
-          config: {},
+          config: {} as Json,
         }));
         
         const { data: newWidgets } = await supabase
@@ -103,7 +103,6 @@ export function useDashboardWidgets() {
         setWidgets(data as DashboardWidget[]);
       }
     } else {
-      // Initialize default widgets for new users
       await initializeDefaultWidgets();
     }
     setLoading(false);
@@ -117,7 +116,7 @@ export function useDashboardWidgets() {
       widget_type: w.widget_type,
       position: w.position,
       is_visible: w.is_visible,
-      config: {},
+      config: {} as Json,
     }));
 
     const { data, error } = await supabase
@@ -156,7 +155,6 @@ export function useDashboardWidgets() {
       return widget ? { id: widget.id, position: index } : null;
     }).filter(Boolean);
 
-    // Update local state optimistically
     setWidgets((prev) => {
       const reordered = [...prev];
       newOrder.forEach((widgetType, index) => {
@@ -166,7 +164,6 @@ export function useDashboardWidgets() {
       return reordered.sort((a, b) => a.position - b.position);
     });
 
-    // Update in database
     for (const update of updates) {
       if (update) {
         await supabase
@@ -203,7 +200,7 @@ export function useDashboardWidgets() {
 
     const { error } = await supabase
       .from("dashboard_widgets")
-      .update({ config: newConfig as any })
+      .update({ config: newConfig as unknown as Json })
       .eq("id", widget.id);
 
     if (!error) {
@@ -222,7 +219,7 @@ export function useDashboardWidgets() {
       const newConfig = { ...(widget.config || {}), layout };
       await supabase
         .from("dashboard_widgets")
-        .update({ config: newConfig as any })
+        .update({ config: newConfig as unknown as Json })
         .eq("id", widget.id);
     });
     await Promise.all(updates);
@@ -246,7 +243,7 @@ export function useDashboardWidgets() {
       const newConfig = { ...(widget.config || {}), layout };
       await supabase
         .from("dashboard_widgets")
-        .update({ config: newConfig as any })
+        .update({ config: newConfig as unknown as Json })
         .eq("id", widget.id);
     });
     await Promise.all(updates);
@@ -267,10 +264,10 @@ export function useDashboardWidgets() {
     fetchWidgets();
   }, [fetchWidgets]);
 
-  // Parse layout from config
+  // Parse layout from config using typed access
   const widgetsWithLayout = widgets.map((w) => ({
     ...w,
-    layout: (w.config as any)?.layout as WidgetLayout | undefined,
+    layout: (w.config as Record<string, unknown>)?.layout as WidgetLayout | undefined,
   }));
 
   const visibleWidgets = widgetsWithLayout
