@@ -68,6 +68,26 @@ function addAutoMeterTotals(
   }
 }
 
+/**
+ * Aggregate filtered readings into energy-type totals and add live auto-meter data.
+ * This is the single source of truth for the repeated pattern across
+ * energyDistribution, energyTotals, costOverview, and monthlyData.
+ */
+function aggregateEnergyTotals(
+  filteredReadings: ReadingRow[],
+  meterMap: Record<string, { energy_type: string; location_id: string }>,
+  meters: { id: string; is_archived: boolean; capture_type: string; energy_type: string; location_id: string }[],
+  livePeriodTotals: Record<string, PeriodTotals>,
+  locationId?: string | null,
+): EnergyTypeTotals {
+  const totals: EnergyTypeTotals = { strom: 0, gas: 0, waerme: 0, wasser: 0 };
+  filteredReadings.forEach((r) => {
+    const energyType = meterMap[r.meter_id]?.energy_type || "strom";
+    addToTotals(totals, energyType, r.value);
+  });
+  addAutoMeterTotals(totals, meters, livePeriodTotals, meterMap, locationId);
+  return totals;
+}
 const MONTH_LABELS = ["Jan", "Feb", "Mär", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dez"];
 
 interface ReadingRow {
@@ -298,12 +318,8 @@ export function useEnergyData(locationId?: string | null) {
     });
 
     // Add auto meter totalMonth for current month
-    for (const m of meters) {
-      if (m.is_archived || m.capture_type !== "automatic") continue;
-      if (locationId && meterMap[m.id]?.location_id !== locationId) continue;
-      const pt = livePeriodTotals[m.id];
-      if (pt?.totalMonth != null) currentTotal += pt.totalMonth;
-    }
+    const autoTotals = aggregateEnergyTotals([], meterMap, meters, livePeriodTotals, locationId);
+    currentTotal += autoTotals.strom + autoTotals.gas + autoTotals.waerme + autoTotals.wasser;
 
     const savings = prevTotal - currentTotal;
     const savingsPercent = prevTotal > 0 ? Math.round((savings / prevTotal) * 1000) / 10 : 0;
@@ -313,14 +329,7 @@ export function useEnergyData(locationId?: string | null) {
 
   // Energy distribution for pie chart
   const energyDistribution = useMemo((): EnergyDistribution[] => {
-    const totals: EnergyTypeTotals = { strom: 0, gas: 0, waerme: 0, wasser: 0 };
-    filteredReadings.forEach((r) => {
-      const energyType = meterMap[r.meter_id]?.energy_type || "strom";
-      addToTotals(totals, energyType, r.value);
-    });
-
-    addAutoMeterTotals(totals, meters, livePeriodTotals, meterMap, locationId);
-
+    const totals = aggregateEnergyTotals(filteredReadings, meterMap, meters, livePeriodTotals, locationId);
     const total = Object.values(totals).reduce((s, v) => s + v, 0);
     if (total === 0) {
       return [
@@ -340,17 +349,10 @@ export function useEnergyData(locationId?: string | null) {
   }, [filteredReadings, meterMap, livePeriodTotals, meters, locationId]);
 
   // Total by energy type for Sankey
-  const energyTotals = useMemo((): EnergyTypeTotals => {
-    const totals: EnergyTypeTotals = { strom: 0, gas: 0, waerme: 0, wasser: 0 };
-    filteredReadings.forEach((r) => {
-      const energyType = meterMap[r.meter_id]?.energy_type || "strom";
-      addToTotals(totals, energyType, r.value);
-    });
-
-    addAutoMeterTotals(totals, meters, livePeriodTotals, meterMap, locationId);
-
-    return totals;
-  }, [filteredReadings, meterMap, livePeriodTotals, meters, locationId]);
+  const energyTotals = useMemo(
+    () => aggregateEnergyTotals(filteredReadings, meterMap, meters, livePeriodTotals, locationId),
+    [filteredReadings, meterMap, livePeriodTotals, meters, locationId],
+  );
 
   const hasData = filteredReadings.length > 0 || Object.keys(livePeriodTotals).length > 0;
   const isLoading = loading || liveLoading;
