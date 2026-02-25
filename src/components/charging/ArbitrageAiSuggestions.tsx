@@ -25,12 +25,20 @@ export default function ArbitrageAiSuggestions() {
       toast({ title: "Fehler", description: "Kein passender Speicher gefunden.", variant: "destructive" });
       return;
     }
+    // Determine valid_until from the latest discharge/charge window end time
+    const allWindows = [...suggestion.charge_windows, ...suggestion.discharge_windows];
+    const latestEnd = allWindows.length > 0
+      ? allWindows.reduce((max, w) => (w.end > max ? w.end : max), allWindows[0].end)
+      : undefined;
+
     createStrategy.mutate(
       {
         name: suggestion.name,
         storage_id: suggestion.storage_id,
         buy_below_eur_mwh: suggestion.buy_below_eur_mwh,
         sell_above_eur_mwh: suggestion.sell_above_eur_mwh,
+        source: "ai",
+        valid_until: latestEnd,
       },
       {
         onSuccess: () => {
