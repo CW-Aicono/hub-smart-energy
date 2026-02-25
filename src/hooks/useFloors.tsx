@@ -56,13 +56,16 @@ async function uploadWithProgress(
       });
     }
 
-    xhr.addEventListener("load", () => {
+    xhr.addEventListener("load", async () => {
       if (xhr.status >= 200 && xhr.status < 300) {
-        const { data: { publicUrl } } = supabase.storage
+        const { data: signedData, error: signError } = await supabase.storage
           .from(bucket)
-          .getPublicUrl(path);
-        const cacheBustedUrl = `${publicUrl}?t=${Date.now()}`;
-        resolve({ publicUrl: cacheBustedUrl, error: null });
+          .createSignedUrl(path, 3600);
+        if (signError || !signedData?.signedUrl) {
+          resolve({ publicUrl: null, error: signError ?? new Error("Failed to create signed URL") });
+        } else {
+          resolve({ publicUrl: signedData.signedUrl, error: null });
+        }
       } else {
         resolve({ publicUrl: null, error: new Error(`Upload failed: ${xhr.status} ${xhr.statusText}`) });
       }
