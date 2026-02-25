@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
 import { useMeters } from "./useMeters";
 import { useLoxoneSensorsMulti } from "./useLoxoneSensors";
+import type { GatewaySensor } from "./useLoxoneSensors";
 
 export interface MonthlyEnergyData {
   month: string;
@@ -27,12 +28,59 @@ export interface EnergyDistribution {
   color: string;
 }
 
+type EnergyTypeKey = "strom" | "gas" | "waerme" | "wasser";
+
+interface EnergyTypeTotals {
+  strom: number;
+  gas: number;
+  waerme: number;
+  wasser: number;
+}
+
+const ENERGY_TYPE_KEYS: EnergyTypeKey[] = ["strom", "gas", "waerme", "wasser"];
+
+function isEnergyTypeKey(key: string): key is EnergyTypeKey {
+  return ENERGY_TYPE_KEYS.includes(key as EnergyTypeKey);
+}
+
+/** Add a value to the correct energy type bucket */
+function addToTotals(totals: EnergyTypeTotals, energyType: string, value: number): void {
+  if (isEnergyTypeKey(energyType)) {
+    totals[energyType] += value;
+  }
+}
+
+/** Add live auto-meter period totals (totalMonth) into an EnergyTypeTotals bucket */
+function addAutoMeterTotals(
+  totals: EnergyTypeTotals,
+  meters: { id: string; is_archived: boolean; capture_type: string; energy_type: string; location_id: string }[],
+  livePeriodTotals: Record<string, PeriodTotals>,
+  meterMap: Record<string, { energy_type: string; location_id: string }>,
+  locationId?: string | null,
+): void {
+  for (const m of meters) {
+    if (m.is_archived || m.capture_type !== "automatic") continue;
+    if (locationId && meterMap[m.id]?.location_id !== locationId) continue;
+    const pt = livePeriodTotals[m.id];
+    if (pt?.totalMonth != null) {
+      addToTotals(totals, m.energy_type, pt.totalMonth);
+    }
+  }
+}
+
 const MONTH_LABELS = ["Jan", "Feb", "Mär", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dez"];
 
 interface ReadingRow {
   value: number;
   reading_date: string;
   meter_id: string;
+}
+
+interface PeriodTotals {
+  totalDay: number | null;
+  totalWeek: number | null;
+  totalMonth: number | null;
+  totalYear: number | null;
 }
 
 export function useEnergyData(locationId?: string | null) {
@@ -95,13 +143,13 @@ export function useEnergyData(locationId?: string | null) {
     const activeAutoMeters = meters.filter(
       (m) => !m.is_archived && m.capture_type === "automatic" && m.sensor_uuid && m.location_integration_id
     );
-    if (activeAutoMeters.length === 0) return { liveReadings: [] as ReadingRow[], livePeriodTotals: {} as Record<string, { totalDay: number | null; totalWeek: number | null; totalMonth: number | null; totalYear: number | null }> };
+    if (activeAutoMeters.length === 0) return { liveReadings: [] as ReadingRow[], livePeriodTotals: {} as Record<string, PeriodTotals> };
 
     const now = new Date().toISOString();
     const newLiveReadings: ReadingRow[] = [];
-    const periodTotals: Record<string, { totalDay: number | null; totalWeek: number | null; totalMonth: number | null; totalYear: number | null }> = {};
+    const periodTotals: Record<string, PeriodTotals> = {};
 
-    const sensorsByIntegration = new Map<string, any[]>();
+    const sensorsByIntegration = new Map<string, GatewaySensor[]>();
     integrationIds.forEach((id, idx) => {
       const query = sensorQueries[idx];
       if (query?.data) {
@@ -113,9 +161,8 @@ export function useEnergyData(locationId?: string | null) {
       const sensors = sensorsByIntegration.get(meter.location_integration_id!);
       if (!sensors) continue;
 
-      const sensor = sensors.find((s: any) => s.id === meter.sensor_uuid);
+      const sensor = sensors.find((s) => s.id === meter.sensor_uuid);
       if (sensor) {
-        // Extract period totals
         periodTotals[meter.id] = {
           totalDay: sensor.totalDay ?? null,
           totalWeek: sensor.totalWeek ?? null,
@@ -123,7 +170,6 @@ export function useEnergyData(locationId?: string | null) {
           totalYear: sensor.totalYear ?? null,
         };
 
-        // Create a live reading from instantaneous power for intraday charts
         const power = sensor.rawValue;
         if (power != null && !isNaN(power)) {
           newLiveReadings.push({
@@ -163,7 +209,6 @@ export function useEnergyData(locationId?: string | null) {
         .filter((s) => s.virtual_meter_id === vmId)
         .sort((a, b) => a.sort_order - b.sort_order);
 
-      // Use latest value from each source
       let total: number | null = null;
       let allResolved = true;
       for (const src of sources) {
@@ -209,7 +254,7 @@ export function useEnergyData(locationId?: string | null) {
 
   // Monthly energy data grouped by energy type
   const monthlyData = useMemo((): MonthlyEnergyData[] => {
-    const buckets: Record<string, { strom: number; gas: number; waerme: number; wasser: number }> = {};
+    const buckets: Record<string, EnergyTypeTotals> = {};
     MONTH_LABELS.forEach((m) => {
       buckets[m] = { strom: 0, gas: 0, waerme: 0, wasser: 0 };
     });
@@ -218,20 +263,16 @@ export function useEnergyData(locationId?: string | null) {
       const date = new Date(r.reading_date);
       const monthLabel = MONTH_LABELS[date.getMonth()];
       const energyType = meterMap[r.meter_id]?.energy_type || "strom";
-      if (buckets[monthLabel] && energyType in buckets[monthLabel]) {
-        (buckets[monthLabel] as any)[energyType] += r.value;
+      if (buckets[monthLabel]) {
+        addToTotals(buckets[monthLabel], energyType, r.value);
       }
     });
 
     // Add auto meter totalMonth for current month
     const currentMonthLabel = MONTH_LABELS[new Date().getMonth()];
-    meters.filter(m => !m.is_archived && m.capture_type === "automatic").forEach(m => {
-      if (locationId && meterMap[m.id]?.location_id !== locationId) return;
-      const pt = livePeriodTotals[m.id];
-      if (pt?.totalMonth != null && buckets[currentMonthLabel] && m.energy_type in buckets[currentMonthLabel]) {
-        (buckets[currentMonthLabel] as any)[m.energy_type] += pt.totalMonth;
-      }
-    });
+    if (buckets[currentMonthLabel]) {
+      addAutoMeterTotals(buckets[currentMonthLabel], meters, livePeriodTotals, meterMap, locationId);
+    }
 
     return MONTH_LABELS.map((m) => ({ month: m, ...buckets[m] }));
   }, [filteredReadings, meterMap, livePeriodTotals, meters, locationId]);
@@ -257,11 +298,12 @@ export function useEnergyData(locationId?: string | null) {
     });
 
     // Add auto meter totalMonth for current month
-    meters.filter(m => !m.is_archived && m.capture_type === "automatic").forEach(m => {
-      if (locationId && meterMap[m.id]?.location_id !== locationId) return;
+    for (const m of meters) {
+      if (m.is_archived || m.capture_type !== "automatic") continue;
+      if (locationId && meterMap[m.id]?.location_id !== locationId) continue;
       const pt = livePeriodTotals[m.id];
       if (pt?.totalMonth != null) currentTotal += pt.totalMonth;
-    });
+    }
 
     const savings = prevTotal - currentTotal;
     const savingsPercent = prevTotal > 0 ? Math.round((savings / prevTotal) * 1000) / 10 : 0;
@@ -271,22 +313,13 @@ export function useEnergyData(locationId?: string | null) {
 
   // Energy distribution for pie chart
   const energyDistribution = useMemo((): EnergyDistribution[] => {
-    const totals = { strom: 0, gas: 0, waerme: 0, wasser: 0 };
+    const totals: EnergyTypeTotals = { strom: 0, gas: 0, waerme: 0, wasser: 0 };
     filteredReadings.forEach((r) => {
       const energyType = meterMap[r.meter_id]?.energy_type || "strom";
-      if (energyType in totals) {
-        (totals as any)[energyType] += r.value;
-      }
+      addToTotals(totals, energyType, r.value);
     });
 
-    // Add auto meter totals from live period data (use totalMonth as default)
-    meters.filter(m => !m.is_archived && m.capture_type === "automatic").forEach(m => {
-      if (locationId && meterMap[m.id]?.location_id !== locationId) return;
-      const pt = livePeriodTotals[m.id];
-      if (pt?.totalMonth != null && m.energy_type in totals) {
-        (totals as any)[m.energy_type] += pt.totalMonth;
-      }
-    });
+    addAutoMeterTotals(totals, meters, livePeriodTotals, meterMap, locationId);
 
     const total = Object.values(totals).reduce((s, v) => s + v, 0);
     if (total === 0) {
@@ -307,23 +340,14 @@ export function useEnergyData(locationId?: string | null) {
   }, [filteredReadings, meterMap, livePeriodTotals, meters, locationId]);
 
   // Total by energy type for Sankey
-  const energyTotals = useMemo(() => {
-    const totals = { strom: 0, gas: 0, waerme: 0, wasser: 0 };
+  const energyTotals = useMemo((): EnergyTypeTotals => {
+    const totals: EnergyTypeTotals = { strom: 0, gas: 0, waerme: 0, wasser: 0 };
     filteredReadings.forEach((r) => {
       const energyType = meterMap[r.meter_id]?.energy_type || "strom";
-      if (energyType in totals) {
-        (totals as any)[energyType] += r.value;
-      }
+      addToTotals(totals, energyType, r.value);
     });
 
-    // Add auto meter totals from live period data
-    meters.filter(m => !m.is_archived && m.capture_type === "automatic").forEach(m => {
-      if (locationId && meterMap[m.id]?.location_id !== locationId) return;
-      const pt = livePeriodTotals[m.id];
-      if (pt?.totalMonth != null && m.energy_type in totals) {
-        (totals as any)[m.energy_type] += pt.totalMonth;
-      }
-    });
+    addAutoMeterTotals(totals, meters, livePeriodTotals, meterMap, locationId);
 
     return totals;
   }, [filteredReadings, meterMap, livePeriodTotals, meters, locationId]);
