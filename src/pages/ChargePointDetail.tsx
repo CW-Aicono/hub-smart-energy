@@ -302,7 +302,7 @@ const ChargePointDetail = () => {
     if (error) {
       toast({ title: "Upload fehlgeschlagen", description: error.message, variant: "destructive" });
     } else {
-      const { data: signedData } = await supabase.storage.from("meter-photos").createSignedUrl(path, 60 * 60 * 24 * 365);
+      const { data: signedData } = await supabase.storage.from("meter-photos").createSignedUrl(path, 3600);
       setPhotoUrl(signedData?.signedUrl || null);
     }
     setUploading(false);

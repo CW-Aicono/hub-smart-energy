@@ -86,6 +86,35 @@ interface EnergyChartProps {
 }
 
 const ENERGY_KEYS = ["strom", "gas", "waerme", "wasser"] as const;
+type EnergyKey = typeof ENERGY_KEYS[number];
+type EnergyBucket = Record<EnergyKey, number>;
+type EnergyBucketWithLabel = EnergyBucket & { label: string };
+type DayBucket = EnergyBucket & { label: string; real_strom: number | null; real_gas: number | null; real_waerme: number | null; real_wasser: number | null };
+
+/** Type-safe setter for energy bucket fields */
+function addToEnergyBucket(bucket: EnergyBucket, key: string, value: number) {
+  if (key in bucket && ENERGY_KEYS.includes(key as EnergyKey)) {
+    bucket[key as EnergyKey] += value;
+  }
+}
+
+function getEnergyValue(bucket: EnergyBucket, key: EnergyKey): number {
+  return bucket[key];
+}
+
+function setEnergyValue(bucket: EnergyBucket, key: EnergyKey, value: number) {
+  bucket[key] = value;
+}
+
+function setDayBucketReal(bucket: DayBucket, key: EnergyKey, value: number | null) {
+  const realKey = `real_${key}` as keyof DayBucket;
+  (bucket[realKey] as number | null) = value;
+}
+
+function getDayBucketReal(bucket: DayBucket, key: EnergyKey): number | null {
+  const realKey = `real_${key}` as keyof DayBucket;
+  return bucket[realKey] as number | null;
+}
 
 const EnergyChart = ({ locationId }: EnergyChartProps) => {
   const { locations } = useLocations();
@@ -239,7 +268,7 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
         const rawVal = pt[periodTotalKey as keyof typeof pt];
         if (rawVal != null && info.energy_type in totals) {
           const converted = info.energy_type === "gas" && info.unit === "m³" ? gasM3ToKWh(rawVal, info.gas_type, info.brennwert, info.zustandszahl) : rawVal;
-          (totals as any)[info.energy_type] += converted;
+          addToEnergyBucket(totals, info.energy_type, converted);
         }
       }
 
@@ -249,9 +278,9 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
         const info = meterMap[r.meter_id];
         if (!info || info.capture_type === "automatic" || !info.is_main_meter) return;
         const d = new Date(r.reading_date);
-        if (d >= rs && d <= re && info.energy_type in totals) {
+        if (d >= rs && d <= re) {
           const converted = info.energy_type === "gas" && info.unit === "m³" ? gasM3ToKWh(r.value, info.gas_type, info.brennwert, info.zustandszahl) : r.value;
-          (totals as any)[info.energy_type] += converted;
+          addToEnergyBucket(totals, info.energy_type, converted);
         }
       });
 
@@ -275,9 +304,9 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
         const info = meterMap[meterId];
         if (!info || !info.is_main_meter) continue;
         if (locationId && info.location_id !== locationId) continue;
-        if (pt.totalMonth != null && currentMonthIdx >= 0 && currentMonthIdx < 3 && info.energy_type in buckets[currentMonthIdx]) {
+        if (pt.totalMonth != null && currentMonthIdx >= 0 && currentMonthIdx < 3) {
           const converted = info.energy_type === "gas" && info.unit === "m³" ? gasM3ToKWh(pt.totalMonth, info.gas_type, info.brennwert, info.zustandszahl) : pt.totalMonth;
-          (buckets[currentMonthIdx] as any)[info.energy_type] += converted;
+          addToEnergyBucket(buckets[currentMonthIdx], info.energy_type, converted);
         }
       }
 
@@ -288,9 +317,9 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
         const d = new Date(r.reading_date);
         if (d >= rangeStart && d <= rangeEnd) {
           const mi = d.getMonth() - startMonth;
-          if (mi >= 0 && mi < 3 && info.energy_type in buckets[mi]) {
+          if (mi >= 0 && mi < 3) {
             const converted = info.energy_type === "gas" && info.unit === "m³" ? gasM3ToKWh(r.value, info.gas_type, info.brennwert, info.zustandszahl) : r.value;
-            (buckets[mi] as any)[info.energy_type] += converted;
+            addToEnergyBucket(buckets[mi], info.energy_type, converted);
           }
         }
       });
@@ -314,26 +343,25 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
       return value;
     };
 
-    const addToBucket = (bucket: any, r: { meter_id: string; value: number }) => {
+    const addToBucket = (bucket: EnergyBucket, r: { meter_id: string; value: number }) => {
       const info = meterMap[r.meter_id];
       const et = info?.energy_type || "strom";
-      if (et in bucket) bucket[et] += convertGas(r.meter_id, r.value);
+      addToEnergyBucket(bucket, et, convertGas(r.meter_id, r.value));
     };
 
     if (period === "day") {
       // Each bucket tracks value + whether the point is real or gap-interpolated
-      const buckets = Array.from({ length: 288 }, (_, i) => {
+      const buckets: DayBucket[] = Array.from({ length: 288 }, (_, i) => {
         const h = Math.floor(i / 12);
         const m = (i % 12) * 5;
         return {
           label: `${h}:${m.toString().padStart(2, "0")} Uhr`,
           ...emptyBucket(),
-          // real_* mirrors the energy value but is null for gap slots
-          real_strom: null as number | null,
-          real_gas: null as number | null,
-          real_waerme: null as number | null,
-          real_wasser: null as number | null,
-        };
+          real_strom: null,
+          real_gas: null,
+          real_waerme: null,
+          real_wasser: null,
+        } as DayBucket;
       });
 
       // Track which indices actually received a real reading
@@ -362,9 +390,9 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
       for (const [idxStr, meterMap2] of Object.entries(bucketAccum)) {
         const idx = Number(idxStr);
         for (const [, accum] of Object.entries(meterMap2)) {
-          const et = accum.et;
-          if (et in buckets[idx]) {
-            (buckets[idx] as any)[et] += accum.sum / accum.count;
+          const et = accum.et as EnergyKey;
+          if (ENERGY_KEYS.includes(et)) {
+            buckets[idx][et] += accum.sum / accum.count;
             realIndices[et]?.add(idx);
           }
         }
@@ -386,7 +414,7 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
       for (const key of ENERGY_KEYS) {
         const points: Array<{ idx: number; val: number }> = [];
         buckets.forEach((b, i) => {
-          const v = (b as any)[key] as number;
+          const v = getEnergyValue(b, key);
           if (v > 0) points.push({ idx: i, val: v });
         });
         for (let p = 0; p < points.length - 1; p++) {
@@ -396,7 +424,7 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
           if (gap > 1 && gap <= 12) {
             for (let g = 1; g < gap; g++) {
               const t = g / gap;
-              (buckets[start.idx + g] as any)[key] = start.val + (end.val - start.val) * t;
+              setEnergyValue(buckets[start.idx + g], key, start.val + (end.val - start.val) * t);
               // gap-interpolated: do NOT add to realIndices
             }
           }
@@ -406,11 +434,10 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
       // Populate real_* fields: only set where we have an actual data point
       buckets.forEach((b, i) => {
         for (const key of ENERGY_KEYS) {
-          const realKey = `real_${key}` as const;
           if (realIndices[key]?.has(i)) {
-            (b as any)[realKey] = (b as any)[key];
+            setDayBucketReal(b, key, getEnergyValue(b, key));
           } else {
-            (b as any)[realKey] = null;
+            setDayBucketReal(b, key, null);
           }
         }
       });
@@ -429,10 +456,9 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
         // The bucket index corresponding to the current time
         const currentIdx = nowForCutoff.getHours() * 12 + Math.floor(nowForCutoff.getMinutes() / 5);
         for (const key of ENERGY_KEYS) {
-          // Null out all buckets after current time (true future)
           for (let i = currentIdx + 1; i < buckets.length; i++) {
-            (buckets[i] as any)[key] = null;
-            (buckets[i] as any)[`real_${key}`] = null;
+            setEnergyValue(buckets[i], key, null as unknown as number);
+            setDayBucketReal(buckets[i], key, null);
           }
         }
       }
@@ -457,11 +483,11 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
             const info = meterMap[meterId];
             if (!info || !info.is_main_meter) continue;
             if (locationId && info.location_id !== locationId) continue;
-            if (pt.totalDay != null && info.energy_type in bucket) {
+            if (pt.totalDay != null) {
               const converted = info.energy_type === "gas" && info.unit === "m³"
                 ? gasM3ToKWh(pt.totalDay, info.gas_type, info.brennwert, info.zustandszahl)
                 : pt.totalDay;
-              (bucket as any)[info.energy_type] += converted;
+              addToEnergyBucket(bucket, info.energy_type, converted);
             }
           }
         }
@@ -525,7 +551,7 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
     // dataKey can be "strom", "real_strom", "__gap_strom" — normalise to base key
     const rawKey = (e.dataKey ?? e.value ?? "") as string;
     const key = rawKey.replace(/^real_/, "").replace(/^__gap_/, "");
-    if (!ENERGY_KEYS.includes(key as any)) return;
+    if (!(ENERGY_KEYS as readonly string[]).includes(key)) return;
     setHiddenKeys((prev) => {
       const next = new Set(prev);
       if (next.has(key)) next.delete(key); else next.add(key);
