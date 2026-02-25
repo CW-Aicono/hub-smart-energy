@@ -1,78 +1,59 @@
 
-# Dynamische Strompreise pro Liegenschaft
 
-## Konzept
+## Aktualisierte Projekt-Bewertung nach Code-Review
 
-Ein dynamischer Stromtarif bedeutet: Statt eines festen Preises pro kWh wird der aktuelle EPEX-Spotpreis (Day-Ahead) als Basis genommen, zzgl. eines festen Aufschlags (Netzentgelte, Umlagen, Marge des Lieferanten). Die Formel lautet:
+Basierend auf einer systematischen Analyse des aktuellen Codestands im Vergleich zur urspruenglichen Bewertung:
 
-```text
-Effektiver Preis = Spotpreis (ct/kWh) + Aufschlag (ct/kWh)
-```
+---
 
-## Aenderungen
+### Zusammenfassung
 
-### 1. Datenbank: Neue Spalten in `energy_prices`
+| Aspekt | Vorher | Nachher | Aenderung | Begruendung |
+|---|---|---|---|---|
+| **Architektur** | 7/10 | 8/10 | +1 | Code-Splitting mit `React.lazy()` fuer alle 46 Seiten, `WidgetErrorBoundary` fuer Dashboard-Isolation, `useTenantQuery` als zentrales Scoping-Pattern |
+| **Typsicherheit** | 5/10 | 6/10 | +1 | `as any` von ca. 600 auf ca. 520 reduziert (196 in 17 Hook-Dateien, 326 in 28 Komponenten). 8 Hook-Dateien mit DB-Typen refaktoriert. Kernhooks wie `useLocations`, `useFloors`, `useIntegrations` jetzt typsicher |
+| **Sicherheit** | 5/10 | 7/10 | +2 | 8 Edge Functions mit JWT + Tenant-Autorisierung abgesichert, 3 Storage-Buckets auf privat + RLS umgestellt, OCPP-Logs tenant-isoliert, Supabase-Linter meldet 0 Findings |
+| **Testbarkeit** | 2/10 | 3/10 | +1 | 4 Test-Dateien fuer kritische Hooks (`useAuth`, `useTenantQuery`, `useMeters`, `useEnergyData`), ca. 20 Tests. Testinfrastruktur mit `createTestWrapper` und Supabase-Mocking steht. Aber: weiterhin 0% Coverage auf Komponenten und Edge Functions |
+| **Performance** | 6/10 | 8/10 | +2 | Alle 46 Seiten-Routen mit `React.lazy()` + `Suspense` geladen. Initiale Bundle-Groesse deutlich reduziert |
+| **Wartbarkeit** | 6/10 | 7/10 | +1 | `useTenantQuery` eliminiert redundantes Tenant-Scoping, `WidgetErrorBoundary` verhindert Widget-Kaskadenausfaelle, Developer-Dokumentation vorhanden (`docs/DEVELOPER_DOCUMENTATION.md`) |
+| **Feature-Umfang** | 9/10 | 9/10 | 0 | Unveraendert breit: Multi-Tenant, OCPP, Arbitrage, 3D-Grundrisse, Automatisierung, Netzwerk-Infrastruktur |
+| **UX/UI Konsistenz** | 7/10 | 7/10 | 0 | Keine wesentlichen Aenderungen. shadcn/ui Baseline weiterhin konsistent |
 
-Zwei neue Spalten auf der bestehenden Tabelle `energy_prices`:
+---
 
-- **`is_dynamic`** (boolean, default `false`) -- Markiert, ob dieser Eintrag ein dynamischer Spotpreis-Tarif ist
-- **`spot_markup_per_unit`** (numeric, default `0`) -- Fester Aufschlag auf den Spotpreis in EUR pro Einheit (z.B. 0.12 EUR/kWh fuer Netzentgelte, Umlagen, Marge)
+### Gesamtbewertung: 6.9/10 (vorher: 5.9/10, Verbesserung +1.0)
 
-Bei `is_dynamic = true` wird `price_per_unit` ignoriert und stattdessen der aktuelle Spotpreis + Aufschlag verwendet.
+---
 
-### 2. UI: Dialog "Energiepreis hinzufuegen/bearbeiten"
+### Verbleibende Probleme
 
-**Datei:** `src/components/locations/EnergyPriceManagement.tsx`
+**Bugs / Risiken:**
+- `dangerouslySetInnerHTML` in `EmailTemplateSettings.tsx` ohne DOMPurify-Sanitisierung (XSS-Risiko, bereits als Security Finding erkannt)
+- `createSignedUrl` mit 1-Jahres-Expiry (365 Tage) in `ChargePointDetailDialog.tsx` und `ChargePointDetail.tsx` -- zu lang, sollte auf 1-24h reduziert werden
+- `meter-photos` Bucket nutzt noch `createSignedUrl` mit langen Laufzeiten, aber RLS-Status dieses Buckets ist unklar
 
-- Nur bei Energietraeger "Strom" erscheint ein neuer Switch: **"Dynamischer Strompreis (Boerse)"**
-- Wenn aktiviert:
-  - Das Feld "Preis pro kWh" wird ausgeblendet
-  - Stattdessen erscheint ein Feld **"Aufschlag pro kWh (EUR)"** (Netzentgelte, Umlagen, Marge)
-  - Ein Hinweistext erklaert: "Der Strompreis wird automatisch anhand des aktuellen EPEX Day-Ahead Spotpreises berechnet."
-- In der Tabelle wird bei dynamischen Eintraegen statt des festen Preises angezeigt:
-  - "Spotpreis + 0,12 EUR/kWh" (mit dem konfigurierten Aufschlag)
-  - Optional: Der aktuelle effektive Preis in Klammern
+**Typsicherheit:**
+- Noch ca. 520 `as any` Casts verteilt auf 17 Hook- und 28 Komponenten-Dateien
+- `EnergyChart.tsx` allein enthaelt ca. 15 `as any` Casts fuer dynamische Bucket-Zugriffe
+- `ocpp_message_log` wird ueberall als `as any` gecastet (Tabelle fehlt vermutlich in den generierten Typen)
 
-### 3. Hook: `useEnergyPrices` erweitern
+**Sicherheit:**
+- XSS via unsanitisiertem HTML in Email-Template-Preview (Schweregrad: mittel)
+- Gateway-Credentials in der Datenbank nicht verschluesselt (offen aus frueheren Audits)
+- `loxone-periodic-sync` nutzt Service-Role-Key fuer interne Aufrufe -- korrekt, aber kein User-Auth-Check am Eingang (akzeptabel da Cron-Job)
 
-**Datei:** `src/hooks/useEnergyPrices.tsx`
+**Testbarkeit:**
+- 0% Komponenten-Test-Coverage
+- 0% Edge-Function-Test-Coverage
+- Nur 4 Hook-Test-Dateien vorhanden
 
-- Interface `EnergyPrice` um `is_dynamic` und `spot_markup_per_unit` erweitern
-- `addPrice` und `updatePrice` um die neuen Felder erweitern
-- `getActivePrice` anpassen: Bei `is_dynamic = true` den aktuellen Spotpreis aus `useSpotPrices` holen und + Aufschlag zurueckgeben
+---
 
-### 4. Kostenberechnung anpassen
+### Top-5 Verbesserungsvorschlaege (priorisiert)
 
-**Dateien:** `src/components/dashboard/CostOverview.tsx`, `src/components/dashboard/SankeyWidget.tsx`
+1. **DOMPurify fuer Email-Template-Preview** -- Einfachster Fix mit hohem Sicherheitsgewinn. `npm install dompurify` und `DOMPurify.sanitize()` vor `dangerouslySetInnerHTML` einsetzen
+2. **`as any` in EnergyChart.tsx eliminieren** -- Typisierte Record-Zugriffe statt dynamischer Casts fuer die Bucket-Aggregation, da diese Datei die meisten Casts konzentriert
+3. **`ocpp_message_log` in Supabase-Typen aufnehmen** -- Tabelle in DB-Schema ergaenzen, damit die 3 OCPP-Hooks (`useOcppLogs`, `useOcppMeterValue`, Realtime) typsicher werden
+4. **Komponenten-Tests fuer kritische Flows** -- `Auth.tsx`, `LocationDetail.tsx`, `Index.tsx` (Dashboard) mit React Testing Library absichern
+5. **Signed-URL-Laufzeiten vereinheitlichen** -- Alle `createSignedUrl`-Aufrufe auf max. 3600s (1h) standardisieren, statt 1-Jahres-URLs
 
-- Der `priceLookup` muss pruefen, ob ein dynamischer Preis vorliegt
-- Bei dynamischen Preisen: Aktuellen Spotpreis aus der `spot_prices`-Tabelle holen und den Aufschlag addieren
-- Fuer historische Berechnungen (Vorperiode): Den zum jeweiligen Zeitpunkt gueltigen Spotpreis nutzen
-
-### 5. Formdata und Validierung
-
-- Neues Formfeld `is_dynamic` (boolean, default false) und `spot_markup_per_unit` (string)
-- Bei `is_dynamic = true` wird `price_per_unit` auf 0 gesetzt (Platzhalter), da der echte Preis dynamisch ist
-- Validierung: Aufschlag muss >= 0 sein
-
-## Technische Details
-
-### Migration SQL
-
-```sql
-ALTER TABLE energy_prices
-  ADD COLUMN is_dynamic boolean NOT NULL DEFAULT false,
-  ADD COLUMN spot_markup_per_unit numeric NOT NULL DEFAULT 0;
-```
-
-### Effektive Preisberechnung
-
-Fuer die Kostenberechnung wird in `CostOverview` und `SankeyWidget` der `priceLookup` erweitert:
-- Fester Tarif: `price_per_unit` direkt verwenden (wie bisher)
-- Dynamischer Tarif: Aktueller Spotpreis (EUR/MWh / 1000 = EUR/kWh) + `spot_markup_per_unit`
-
-### Tabellenanzeige
-
-Dynamische Eintraege werden visuell gekennzeichnet:
-- Badge "Dynamisch" oder Blitz-Icon
-- Anzeige: "Spot + 0,12 EUR/kWh" statt eines festen Preises
