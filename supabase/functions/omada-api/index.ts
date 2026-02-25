@@ -116,16 +116,33 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { locationIntegrationId, action } = await req.json();
-
+    // ── AUTH ──
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader?.startsWith("Bearer ")) {
+      return new Response(JSON.stringify({ success: false, error: "Nicht authentifiziert" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const authClient = createClient(supabaseUrl, supabaseAnonKey, { global: { headers: { Authorization: authHeader } } });
+    const token = authHeader.replace("Bearer ", "");
+    const { data: claimsData, error: claimsError } = await authClient.auth.getClaims(token);
+    if (claimsError || !claimsData?.claims) {
+      return new Response(JSON.stringify({ success: false, error: "Ungültiges Token" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+    const userId = claimsData.claims.sub;
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    const { data: profile } = await supabase.from("profiles").select("tenant_id").eq("user_id", userId).single();
+    if (!profile?.tenant_id) {
+      return new Response(JSON.stringify({ success: false, error: "Kein Mandant zugeordnet" }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    const { locationIntegrationId, action } = await req.json();
 
     // Load integration config
     const { data: li, error: liErr } = await supabase
       .from("location_integrations")
-      .select("*, integrations(*)")
+      .select("*, integrations(*), location:locations!inner(tenant_id)")
       .eq("id", locationIntegrationId)
       .single();
 
@@ -134,6 +151,11 @@ Deno.serve(async (req) => {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
         status: 404,
       });
+    }
+
+    // Verify tenant ownership
+    if ((li as any).location?.tenant_id !== profile.tenant_id) {
+      return new Response(JSON.stringify({ success: false, error: "Zugriff verweigert" }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
     const config = (li.config || {}) as Record<string, string>;

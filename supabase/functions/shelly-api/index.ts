@@ -19,12 +19,43 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
+    // ── AUTH: Validate JWT and tenant ownership ──
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader?.startsWith("Bearer ")) {
+      return new Response(JSON.stringify({ success: false, error: "Nicht authentifiziert" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+
+    const authClient = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } },
+    });
+    const token = authHeader.replace("Bearer ", "");
+    const { data: claimsData, error: claimsError } = await authClient.auth.getClaims(token);
+    if (claimsError || !claimsData?.claims) {
+      return new Response(JSON.stringify({ success: false, error: "Ungültiges Token" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+    const userId = claimsData.claims.sub;
+
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    const { data: profile } = await supabase.from("profiles").select("tenant_id").eq("user_id", userId).single();
+    if (!profile?.tenant_id) {
+      return new Response(JSON.stringify({ success: false, error: "Kein Mandant zugeordnet" }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
     const { locationIntegrationId, action } = await req.json();
     if (!locationIntegrationId) throw new Error("Location Integration ID ist erforderlich");
 
-    const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
-    const { data: li, error: liErr } = await supabase.from("location_integrations").select("*, integration:integrations(*)").eq("id", locationIntegrationId).maybeSingle();
+    const { data: li, error: liErr } = await supabase.from("location_integrations").select("*, integration:integrations(*), location:locations!inner(tenant_id)").eq("id", locationIntegrationId).maybeSingle();
     if (liErr || !li) throw new Error("Standort-Integration nicht gefunden");
+
+    // Verify tenant ownership
+    if ((li as any).location?.tenant_id !== profile.tenant_id) {
+      return new Response(JSON.stringify({ success: false, error: "Zugriff verweigert" }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
 
     const config = li.config as ShellyConfig;
     if (!config?.server_uri || !config?.auth_key) throw new Error("Server URI und Auth Key müssen konfiguriert sein");
@@ -43,7 +74,6 @@ serve(async (req) => {
 
     if (action === "getSensors") {
       await updateSyncStatus(supabase, locationIntegrationId, "syncing");
-      // Fetch all device statuses
       const res = await fetch(`${baseUrl}/device/all_status?auth_key=${config.auth_key}`);
       if (!res.ok) {
         await updateSyncStatus(supabase, locationIntegrationId, "error");
@@ -57,7 +87,6 @@ serve(async (req) => {
         const deviceName = deviceStatus?._dev_info?.name || deviceId;
         const model = deviceStatus?._dev_info?.model || "unknown";
 
-        // Extract EM data (Energy Meter channels)
         if (deviceStatus?.["em:0"]) {
           const em = deviceStatus["em:0"];
           sensors.push({
@@ -68,7 +97,6 @@ serve(async (req) => {
             stateName: "total_act_power", secondaryValue: "", secondaryStateName: "", secondaryUnit: "", totalDay: null,
           });
         }
-        // Extract emdata (cumulative)
         if (deviceStatus?.["emdata:0"]) {
           const emd = deviceStatus["emdata:0"];
           sensors.push({
@@ -79,7 +107,6 @@ serve(async (req) => {
             stateName: "total_act", secondaryValue: "", secondaryStateName: "", secondaryUnit: "", totalDay: null,
           });
         }
-        // Extract switch / relay channels
         for (let ch = 0; ch < 4; ch++) {
           const sw = deviceStatus?.[`switch:${ch}`];
           if (sw) {
@@ -92,7 +119,6 @@ serve(async (req) => {
             });
           }
         }
-        // Temperature
         if (deviceStatus?.["temperature:0"]) {
           const t = deviceStatus["temperature:0"];
           sensors.push({

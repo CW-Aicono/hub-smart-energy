@@ -256,6 +256,34 @@ serve(async (req) => {
   }
 
   try {
+    // ── AUTH: Validate JWT and tenant ownership ──
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader?.startsWith("Bearer ")) {
+      return new Response(JSON.stringify({ success: false, error: "Nicht authentifiziert" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+
+    const authClient = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } },
+    });
+    const token = authHeader.replace("Bearer ", "");
+    const { data: claimsData, error: claimsError } = await authClient.auth.getClaims(token);
+    if (claimsError || !claimsData?.claims) {
+      return new Response(JSON.stringify({ success: false, error: "Ungültiges Token" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+    const userId = claimsData.claims.sub;
+
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    // Get user's tenant_id
+    const { data: profile } = await supabase.from("profiles").select("tenant_id").eq("user_id", userId).single();
+    if (!profile?.tenant_id) {
+      return new Response(JSON.stringify({ success: false, error: "Kein Mandant zugeordnet" }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
     const requestBody = await req.json();
     const { locationIntegrationId, action, sensorName } = requestBody;
 
@@ -265,19 +293,20 @@ serve(async (req) => {
 
     console.log(`Loxone API request: action=${action}, locationIntegrationId=${locationIntegrationId}, sensorName=${sensorName || "N/A"}`);
 
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const supabase = createClient(supabaseUrl, supabaseKey);
-
     const { data: locationIntegration, error: liError } = await supabase
       .from("location_integrations")
-      .select("*, integration:integrations(*)")
+      .select("*, integration:integrations(*), location:locations!inner(tenant_id)")
       .eq("id", locationIntegrationId)
       .maybeSingle();
 
     if (liError || !locationIntegration) {
       console.error("Location integration not found:", liError);
       throw new Error("Standort-Integration nicht gefunden");
+    }
+
+    // Verify tenant ownership
+    if ((locationIntegration as any).location?.tenant_id !== profile.tenant_id) {
+      return new Response(JSON.stringify({ success: false, error: "Zugriff verweigert" }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
     const config = locationIntegration.config as LoxoneConfig;
