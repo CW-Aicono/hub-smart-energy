@@ -3492,11 +3492,26 @@ export type Database = {
         Args: never
         Returns: Database["public"]["Enums"]["app_role"]
       }
+      compact_power_readings_day: {
+        Args: { p_day?: string }
+        Returns: {
+          compacted_buckets: number
+          deleted_raw: number
+        }[]
+      }
       ensure_at_least_one_admin: {
         Args: never
         Returns: Database["public"]["Enums"]["app_role"]
       }
       get_auth_user_email: { Args: never; Returns: string }
+      get_power_readings_5min: {
+        Args: { p_end: string; p_meter_ids: string[]; p_start: string }
+        Returns: {
+          bucket: string
+          meter_id: string
+          power_avg: number
+        }[]
+      }
       get_user_tenant_id: { Args: never; Returns: string }
       has_location_access: {
         Args: { _location_id: string; _user_id: string }

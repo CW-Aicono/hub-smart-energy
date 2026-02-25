@@ -147,7 +147,8 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
   const canGoForward = offset < 0;
 
   // Fetch power readings from DB for day view
-  // Strategy: Always use meter_power_readings_5min first (max ~1700 rows vs ~50k raw).
+  // Strategy: Use server-side get_power_readings_5min function which automatically
+  // aggregates raw data into 5min buckets when pre-aggregated data isn't available.
   // For today, supplement with raw data for the last 10 minutes (not yet aggregated).
   useEffect(() => {
     if (period !== "day") {
@@ -171,23 +172,22 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
 
       let allData: Array<{ meter_id: string; power_value: number; recorded_at: string }> = [];
 
-      // 1) Always try 5-min aggregates first (fits in a single request for most days)
-      const { data: fiveMinData, error: fiveMinError } = await supabase
-        .from("meter_power_readings_5min")
-        .select("meter_id, power_avg, bucket")
-        .in("meter_id", mainMeterIds)
-        .gte("bucket", rangeStart.toISOString())
-        .lte("bucket", rangeEnd.toISOString())
-        .order("bucket", { ascending: true });
+      // Use server-side function that handles fallback aggregation automatically
+      const { data: aggData, error: aggError } = await supabase
+        .rpc("get_power_readings_5min", {
+          p_meter_ids: mainMeterIds,
+          p_start: rangeStart.toISOString(),
+          p_end: rangeEnd.toISOString(),
+        });
 
-      if (!fiveMinError && fiveMinData && fiveMinData.length > 0) {
-        allData = fiveMinData.map(r => ({
+      if (!aggError && aggData && aggData.length > 0) {
+        allData = aggData.map((r: any) => ({
           meter_id: r.meter_id,
           power_value: r.power_avg,
           recorded_at: r.bucket,
         }));
 
-        // 2) For today: fetch raw data for the last 10 minutes (not yet in 5min view)
+        // For today: fetch raw data for the last 10 minutes (not yet in any aggregate)
         if (isToday) {
           const recentCutoff = new Date(Date.now() - 10 * 60 * 1000).toISOString();
           const { data: recentRaw } = await supabase
@@ -199,31 +199,13 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
             .order("recorded_at", { ascending: true });
 
           if (recentRaw && recentRaw.length > 0) {
-            // Merge: remove 5min buckets that overlap with raw recent data, then append raw
             const cutoffDate = new Date(recentCutoff);
             allData = allData.filter(r => new Date(r.recorded_at) < cutoffDate);
             allData = [...allData, ...recentRaw];
           }
         }
       } else {
-        // Fallback: no 5min data available, load raw with pagination
-        const PAGE_SIZE = 1000;
-        let from = 0;
-        let hasMore = true;
-        while (hasMore) {
-          const { data: rawData, error: rawError } = await supabase
-            .from("meter_power_readings")
-            .select("meter_id, power_value, recorded_at")
-            .in("meter_id", mainMeterIds)
-            .gte("recorded_at", rangeStart.toISOString())
-            .lte("recorded_at", rangeEnd.toISOString())
-            .order("recorded_at", { ascending: true })
-            .range(from, from + PAGE_SIZE - 1);
-          if (rawError) { console.error("Error fetching raw fallback:", rawError); hasMore = false; break; }
-          allData = [...allData, ...(rawData ?? [])];
-          hasMore = (rawData?.length ?? 0) === PAGE_SIZE;
-          from += PAGE_SIZE;
-        }
+        console.warn("get_power_readings_5min returned no data or error:", aggError);
       }
 
       setPowerReadings(allData);
