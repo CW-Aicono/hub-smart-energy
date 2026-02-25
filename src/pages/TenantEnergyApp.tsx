@@ -1190,7 +1190,7 @@ const TenantEnergyApp = () => {
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-auto px-4 py-4">
+      <div className="flex-1 overflow-auto px-4 py-4 pb-20">
         {activeTab === "dashboard" && <DashboardTab tenantRecord={tenantRecord} invoices={invoices} />}
         {activeTab === "meter" && <MeterTab tenantRecord={tenantRecord} />}
         {activeTab === "invoices" && <InvoicesTab invoices={invoices} />}
@@ -1198,7 +1198,7 @@ const TenantEnergyApp = () => {
       </div>
 
       {/* Bottom Navigation */}
-      <div className="border-t bg-background/95 backdrop-blur-sm flex" style={{ paddingBottom: "env(safe-area-inset-bottom, 8px)" }}>
+      <div className="fixed bottom-0 left-0 right-0 z-50 border-t bg-background/95 backdrop-blur-sm flex" style={{ paddingBottom: "env(safe-area-inset-bottom, 8px)" }}>
         {([
           { id: "dashboard" as AppTab, icon: Home, label: "Übersicht" },
           { id: "meter" as AppTab, icon: BarChart3, label: "Zähler" },
