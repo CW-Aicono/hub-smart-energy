@@ -28,6 +28,7 @@ import EnergyGaugeWidget from "@/components/dashboard/EnergyGaugeWidget";
 import SpotPriceWidget from "@/components/dashboard/SpotPriceWidget";
 import PvForecastWidget from "@/components/dashboard/PvForecastWidget";
 import ArbitrageAiWidget from "@/components/dashboard/ArbitrageAiWidget";
+import WidgetErrorBoundary from "@/components/dashboard/WidgetErrorBoundary";
 
 interface WidgetProps {
   locationId: string | null;
@@ -171,7 +172,9 @@ const DashboardContent = () => {
                         <ZoomIn className="h-4 w-4 text-muted-foreground" />
                       </button>
                     )}
-                    <Component locationId={selectedLocationId} onExpand={widget.widget_size !== "full" ? () => setExpandedWidget(widgetType) : undefined} />
+                    <WidgetErrorBoundary widgetName={widgetType}>
+                      <Component locationId={selectedLocationId} onExpand={widget.widget_size !== "full" ? () => setExpandedWidget(widgetType) : undefined} />
+                    </WidgetErrorBoundary>
                   </div>
                 ) : null;
               })
@@ -188,7 +191,11 @@ const DashboardContent = () => {
         <DialogContent className="max-w-[90vw] w-full max-h-[90vh] overflow-auto p-6" hideCloseButton>
           {expandedWidget && WIDGET_COMPONENTS[expandedWidget] && (() => {
             const ExpandedComponent = WIDGET_COMPONENTS[expandedWidget];
-            return <ExpandedComponent locationId={selectedLocationId} onCollapse={() => setExpandedWidget(null)} />;
+            return (
+              <WidgetErrorBoundary widgetName={expandedWidget}>
+                <ExpandedComponent locationId={selectedLocationId} onCollapse={() => setExpandedWidget(null)} />
+              </WidgetErrorBoundary>
+            );
           })()}
         </DialogContent>
       </Dialog>
