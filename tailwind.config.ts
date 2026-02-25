@@ -89,10 +89,15 @@ export default {
           from: { height: "var(--radix-accordion-content-height)" },
           to: { height: "0" },
         },
+        "charging-pulse": {
+          "0%, 100%": { color: "hsl(var(--muted-foreground))" },
+          "50%": { color: "hsl(142, 71%, 45%)" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
+        "charging-pulse": "charging-pulse 1.5s ease-in-out infinite",
       },
     },
   },

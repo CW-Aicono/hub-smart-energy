@@ -1542,6 +1542,8 @@ const ChargingApp = () => {
   }
 
 
+  const hasActiveSession = sessions.some((s) => s.status === "charging" || (s.status === "active" && !s.stop_time));
+
   const tabs: { key: Tab; icon: typeof Map; label: string }[] = [
     { key: "map", icon: Map, label: "Karte" },
     { key: "history", icon: History, label: "Historie" },
@@ -1569,18 +1571,21 @@ const ChargingApp = () => {
 
       {/* Bottom navigation */}
       <nav className="border-t bg-background flex" style={{ paddingBottom: "env(safe-area-inset-bottom, 8px)" }}>
-        {tabs.map(({ key, icon: Icon, label }) => (
-          <button
-            key={key}
-            onClick={() => setTab(key)}
-            className={`flex-1 flex flex-col items-center gap-1 py-2 transition-colors ${
-              tab === key ? "text-primary" : "text-muted-foreground"
-            }`}
-          >
-            <Icon className="h-5 w-5" />
-            <span className="text-[10px] font-medium">{label}</span>
-          </button>
-        ))}
+        {tabs.map(({ key, icon: Icon, label }) => {
+          const isBlinking = key === "history" && hasActiveSession && tab !== "history";
+          return (
+            <button
+              key={key}
+              onClick={() => setTab(key)}
+              className={`flex-1 flex flex-col items-center gap-1 py-2 transition-colors ${
+                tab === key ? "text-primary" : "text-muted-foreground"
+              }`}
+            >
+              <Icon className={`h-5 w-5 ${isBlinking ? "animate-charging-pulse" : ""}`} />
+              <span className="text-[10px] font-medium">{label}</span>
+            </button>
+          );
+        })}
       </nav>
     </div>
   );
