@@ -1553,9 +1553,9 @@ const ChargingApp = () => {
   ];
 
   return (
-    <div className="min-h-screen bg-background flex flex-col" style={{ paddingTop: "env(safe-area-inset-top)" }}>
+    <div className="h-[100dvh] bg-background flex flex-col overflow-hidden" style={{ paddingTop: "env(safe-area-inset-top)" }}>
       {/* Content */}
-      <div className="flex-1 overflow-hidden flex flex-col">
+      <div className="flex-1 overflow-auto flex flex-col min-h-0">
         {loading ? (
           <div className="flex-1 flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
         ) : (
@@ -1570,7 +1570,7 @@ const ChargingApp = () => {
       </div>
 
       {/* Bottom navigation */}
-      <nav className="border-t bg-background flex" style={{ paddingBottom: "env(safe-area-inset-bottom, 8px)" }}>
+      <nav className="border-t bg-background flex shrink-0" style={{ paddingBottom: "env(safe-area-inset-bottom, 8px)" }}>
         {tabs.map(({ key, icon: Icon, label }) => {
           const isBlinking = key === "history" && hasActiveSession && tab !== "history";
           return (
