@@ -30,15 +30,15 @@ export interface MeterInsert {
 
 export function useMeters(locationId?: string) {
   const { user } = useAuth();
-  const { tenantId, ready, from, insert: tenantInsert } = useTenantQuery();
+  const { tenantId, insert: tenantInsert } = useTenantQuery();
   const [meters, setMeters] = useState<Meter[]>([]);
   const [loading, setLoading] = useState(true);
 
   const fetchMeters = useCallback(async () => {
-    if (!user || !ready) return;
+    if (!user || !tenantId) return;
     setLoading(true);
 
-    let query = from("meters").select("*").order("name");
+    let query = supabase.from("meters").select("*").eq("tenant_id", tenantId).order("name");
     if (locationId) query = query.eq("location_id", locationId);
 
     const { data, error } = await query;
@@ -49,7 +49,7 @@ export function useMeters(locationId?: string) {
       setMeters((data ?? []) as Meter[]);
     }
     setLoading(false);
-  }, [user, locationId, ready, from]);
+  }, [user, locationId, tenantId]);
 
   useEffect(() => {
     fetchMeters();

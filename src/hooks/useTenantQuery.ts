@@ -38,8 +38,10 @@ type TableName = keyof PublicTables;
  */
 function createTenantFrom(tenantId: string) {
   return function from<T extends TableName>(table: T) {
-    // We cast broadly so callers can chain any Supabase filter they need.
-    return (supabase.from(table) as any).eq("tenant_id", tenantId);
+    // Return a select query builder pre-filtered by tenant_id.
+    // We must call .select("*") first to get a PostgrestFilterBuilder
+    // before we can chain .eq().
+    return (supabase.from(table) as any).select("*").eq("tenant_id", tenantId);
   };
 }
 
