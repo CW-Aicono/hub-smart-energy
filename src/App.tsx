@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -10,55 +11,57 @@ import { ThemeProvider } from "@/hooks/useTheme";
 import { DemoModeDetector } from "@/contexts/DemoMode";
 import ModuleGuard from "@/components/ModuleGuard";
 import { SuperAdminWrapper } from "@/components/super-admin/SuperAdminWrapper";
-import Index from "./pages/Index";
-import Auth from "./pages/Auth";
-import Admin from "./pages/Admin";
-import Settings from "./pages/Settings";
-import Branding from "./pages/Branding";
-import Roles from "./pages/Roles";
-import Locations from "./pages/Locations";
-import LocationDetail from "./pages/LocationDetail";
-import EnergyData from "./pages/EnergyData";
-import MetersOverview from "./pages/MetersOverview";
-import Integrations from "./pages/Integrations";
-import Profile from "./pages/Profile";
-import SetPassword from "./pages/SetPassword";
-import AcceptInvite from "./pages/AcceptInvite";
-import Help from "./pages/Help";
-import NotFound from "./pages/NotFound";
-import SuperAdminDashboard from "./pages/SuperAdminDashboard";
-import SuperAdminTenants from "./pages/SuperAdminTenants";
-import SuperAdminTenantDetail from "./pages/SuperAdminTenantDetail";
-import SuperAdminStatistics from "./pages/SuperAdminStatistics";
-import SuperAdminBilling from "./pages/SuperAdminBilling";
-import SuperAdminSupport from "./pages/SuperAdminSupport";
-import SuperAdminModulePricing from "./pages/SuperAdminModulePricing";
-import SuperAdminBundles from "./pages/SuperAdminBundles";
-import SuperAdminUsers from "./pages/SuperAdminUsers";
-import SuperAdminRoles from "./pages/SuperAdminRoles";
-import MobileApp from "./pages/MobileApp";
-import GettingStarted from "./pages/GettingStarted";
-import ChargingPoints from "./pages/ChargingPoints";
-import ChargePointDetail from "./pages/ChargePointDetail";
-import ChargingBilling from "./pages/ChargingBilling";
-import Automation from "./pages/Automation";
-import EmailTemplates from "./pages/EmailTemplates";
-import LiveValues from "./pages/LiveValues";
-import Tasks from "./pages/Tasks";
-import NetworkInfrastructure from "./pages/NetworkInfrastructure";
-import SuperAdminOcppIntegrations from "./pages/SuperAdminOcppIntegrations";
-import SuperAdminOcppControl from "./pages/SuperAdminOcppControl";
-import ChargingApp from "./pages/ChargingApp";
-import ChargingAppAdmin from "./pages/ChargingAppAdmin";
-import ArbitrageTrading from "./pages/ArbitrageTrading";
-import TenantElectricity from "./pages/TenantElectricity";
-import TenantEnergyApp from "./pages/TenantEnergyApp";
-import Demo from "./pages/Demo";
 import UpdateBanner from "./components/UpdateBanner";
 import SupportSessionBanner from "./components/SupportSessionBanner";
 import CookieConsent from "./components/CookieConsent";
-// Import Leaflet CSS globally
 import "leaflet/dist/leaflet.css";
+
+// Lazy-loaded pages
+const Index = lazy(() => import("./pages/Index"));
+const Auth = lazy(() => import("./pages/Auth"));
+const Admin = lazy(() => import("./pages/Admin"));
+const Settings = lazy(() => import("./pages/Settings"));
+const Branding = lazy(() => import("./pages/Branding"));
+const Roles = lazy(() => import("./pages/Roles"));
+const Locations = lazy(() => import("./pages/Locations"));
+const LocationDetail = lazy(() => import("./pages/LocationDetail"));
+const EnergyData = lazy(() => import("./pages/EnergyData"));
+const MetersOverview = lazy(() => import("./pages/MetersOverview"));
+const Integrations = lazy(() => import("./pages/Integrations"));
+const Profile = lazy(() => import("./pages/Profile"));
+const SetPassword = lazy(() => import("./pages/SetPassword"));
+const AcceptInvite = lazy(() => import("./pages/AcceptInvite"));
+const Help = lazy(() => import("./pages/Help"));
+const NotFound = lazy(() => import("./pages/NotFound"));
+const SuperAdminDashboard = lazy(() => import("./pages/SuperAdminDashboard"));
+const SuperAdminTenants = lazy(() => import("./pages/SuperAdminTenants"));
+const SuperAdminTenantDetail = lazy(() => import("./pages/SuperAdminTenantDetail"));
+const SuperAdminStatistics = lazy(() => import("./pages/SuperAdminStatistics"));
+const SuperAdminBilling = lazy(() => import("./pages/SuperAdminBilling"));
+const SuperAdminSupport = lazy(() => import("./pages/SuperAdminSupport"));
+const SuperAdminModulePricing = lazy(() => import("./pages/SuperAdminModulePricing"));
+const SuperAdminBundles = lazy(() => import("./pages/SuperAdminBundles"));
+const SuperAdminUsers = lazy(() => import("./pages/SuperAdminUsers"));
+const SuperAdminRoles = lazy(() => import("./pages/SuperAdminRoles"));
+const MobileApp = lazy(() => import("./pages/MobileApp"));
+const GettingStarted = lazy(() => import("./pages/GettingStarted"));
+const ChargingPoints = lazy(() => import("./pages/ChargingPoints"));
+const ChargePointDetail = lazy(() => import("./pages/ChargePointDetail"));
+const ChargingBilling = lazy(() => import("./pages/ChargingBilling"));
+const Automation = lazy(() => import("./pages/Automation"));
+const EmailTemplates = lazy(() => import("./pages/EmailTemplates"));
+const LiveValues = lazy(() => import("./pages/LiveValues"));
+const Tasks = lazy(() => import("./pages/Tasks"));
+const NetworkInfrastructure = lazy(() => import("./pages/NetworkInfrastructure"));
+const SuperAdminOcppIntegrations = lazy(() => import("./pages/SuperAdminOcppIntegrations"));
+const SuperAdminOcppControl = lazy(() => import("./pages/SuperAdminOcppControl"));
+const ChargingApp = lazy(() => import("./pages/ChargingApp"));
+const ChargingAppAdmin = lazy(() => import("./pages/ChargingAppAdmin"));
+const ArbitrageTrading = lazy(() => import("./pages/ArbitrageTrading"));
+const TenantElectricity = lazy(() => import("./pages/TenantElectricity"));
+const TenantEnergyApp = lazy(() => import("./pages/TenantEnergyApp"));
+const Demo = lazy(() => import("./pages/Demo"));
+const SuperAdminMap = lazy(() => import("./pages/SuperAdminMap"));
 
 const queryClient = new QueryClient();
 
@@ -84,77 +87,80 @@ const App = () => (
                   <UpdateBanner />
                   <SupportSessionBanner />
                   <CookieConsent />
-                  <Routes>
-                    {/* Demo routes – same components, demo context auto-detected via /demo prefix */}
-                    <Route path="/demo" element={<Demo />} />
-                    <Route path="/demo/locations" element={<Locations />} />
-                    <Route path="/demo/energy-data" element={<EnergyData />} />
-                    <Route path="/demo/meters" element={<MetersOverview />} />
-                    <Route path="/demo/live-values" element={<LiveValues />} />
-                    <Route path="/demo/charging/points" element={<ChargingPoints />} />
-                    <Route path="/demo/charging/billing" element={<ChargingBilling />} />
-                    <Route path="/demo/charging/app" element={<ChargingAppAdmin />} />
-                    <Route path="/demo/automation" element={<Automation />} />
-                    <Route path="/demo/arbitrage" element={<ArbitrageTrading />} />
-                    <Route path="/demo/tenant-electricity" element={<TenantElectricity />} />
-                    <Route path="/demo/network" element={<NetworkInfrastructure />} />
-                    <Route path="/demo/tasks" element={<Tasks />} />
-                    <Route path="/demo/admin" element={<Admin />} />
-                    <Route path="/demo/roles" element={<Roles />} />
-                    <Route path="/demo/settings" element={<Settings />} />
-                    <Route path="/demo/settings/branding" element={<Branding />} />
-                    <Route path="/demo/settings/email-templates" element={<EmailTemplates />} />
-                    <Route path="/demo/integrations" element={<Integrations />} />
-                    <Route path="/demo/help" element={<Help />} />
-                    <Route path="/demo/profile" element={<Profile />} />
-                    <Route path="/demo/locations/:id" element={<LocationDetail />} />
-                    <Route path="/demo/charging/points/:id" element={<ChargePointDetail />} />
+                  <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div>}>
+                    <Routes>
+                      {/* Demo routes */}
+                      <Route path="/demo" element={<Demo />} />
+                      <Route path="/demo/locations" element={<Locations />} />
+                      <Route path="/demo/energy-data" element={<EnergyData />} />
+                      <Route path="/demo/meters" element={<MetersOverview />} />
+                      <Route path="/demo/live-values" element={<LiveValues />} />
+                      <Route path="/demo/charging/points" element={<ChargingPoints />} />
+                      <Route path="/demo/charging/billing" element={<ChargingBilling />} />
+                      <Route path="/demo/charging/app" element={<ChargingAppAdmin />} />
+                      <Route path="/demo/automation" element={<Automation />} />
+                      <Route path="/demo/arbitrage" element={<ArbitrageTrading />} />
+                      <Route path="/demo/tenant-electricity" element={<TenantElectricity />} />
+                      <Route path="/demo/network" element={<NetworkInfrastructure />} />
+                      <Route path="/demo/tasks" element={<Tasks />} />
+                      <Route path="/demo/admin" element={<Admin />} />
+                      <Route path="/demo/roles" element={<Roles />} />
+                      <Route path="/demo/settings" element={<Settings />} />
+                      <Route path="/demo/settings/branding" element={<Branding />} />
+                      <Route path="/demo/settings/email-templates" element={<EmailTemplates />} />
+                      <Route path="/demo/integrations" element={<Integrations />} />
+                      <Route path="/demo/help" element={<Help />} />
+                      <Route path="/demo/profile" element={<Profile />} />
+                      <Route path="/demo/locations/:id" element={<LocationDetail />} />
+                      <Route path="/demo/charging/points/:id" element={<ChargePointDetail />} />
 
-                    {/* Regular routes */}
-                    <Route path="/" element={<Index />} />
-                    <Route path="/auth" element={<Auth />} />
-                    <Route path="/admin" element={<Admin />} />
-                    <Route path="/settings" element={<Settings />} />
-                    <Route path="/settings/branding" element={<M><Branding /></M>} />
-                    <Route path="/settings/email-templates" element={<M><EmailTemplates /></M>} />
-                    <Route path="/roles" element={<Roles />} />
-                    <Route path="/locations" element={<M><Locations /></M>} />
-                    <Route path="/locations/:id" element={<M><LocationDetail /></M>} />
-                    <Route path="/energy-data" element={<M><EnergyData /></M>} />
-                    <Route path="/meters" element={<M><MetersOverview /></M>} />
-                    <Route path="/live-values" element={<M><LiveValues /></M>} />
-                    <Route path="/integrations" element={<M><Integrations /></M>} />
-                    <Route path="/profile" element={<Profile />} />
-                    <Route path="/set-password" element={<SetPassword />} />
-                    <Route path="/accept-invite" element={<AcceptInvite />} />
-                    <Route path="/help" element={<Help />} />
-                    <Route path="/super-admin" element={<SA><SuperAdminDashboard /></SA>} />
-                    <Route path="/super-admin/tenants" element={<SA><SuperAdminTenants /></SA>} />
-                    <Route path="/super-admin/tenants/:id" element={<SA><SuperAdminTenantDetail /></SA>} />
-                    <Route path="/super-admin/statistics" element={<SA><SuperAdminStatistics /></SA>} />
-                    <Route path="/super-admin/users" element={<SA><SuperAdminUsers /></SA>} />
-                    <Route path="/super-admin/roles" element={<SA><SuperAdminRoles /></SA>} />
-                    <Route path="/super-admin/billing" element={<SA><SuperAdminBilling /></SA>} />
-                    <Route path="/super-admin/module-pricing" element={<SA><SuperAdminModulePricing /></SA>} />
-                    <Route path="/super-admin/bundles" element={<SA><SuperAdminBundles /></SA>} />
-                    <Route path="/super-admin/support" element={<SA><SuperAdminSupport /></SA>} />
-                    <Route path="/super-admin/ocpp/integrations" element={<SA><SuperAdminOcppIntegrations /></SA>} />
-                    <Route path="/super-admin/ocpp/control" element={<SA><SuperAdminOcppControl /></SA>} />
-                    <Route path="/charging/points" element={<M><ChargingPoints /></M>} />
-                    <Route path="/charging/points/:id" element={<M><ChargePointDetail /></M>} />
-                    <Route path="/charging/billing" element={<M><ChargingBilling /></M>} />
-                    <Route path="/charging/app" element={<M><ChargingAppAdmin /></M>} />
-                    <Route path="/automation" element={<M><Automation /></M>} />
-                    <Route path="/tasks" element={<M><Tasks /></M>} />
-                    <Route path="/network" element={<M><NetworkInfrastructure /></M>} />
-                    <Route path="/arbitrage" element={<M><ArbitrageTrading /></M>} />
-                    <Route path="/tenant-electricity" element={<M><TenantElectricity /></M>} />
-                    <Route path="/ev" element={<ChargingApp />} />
-                    <Route path="/te" element={<TenantEnergyApp />} />
-                    <Route path="/m" element={<MobileApp />} />
-                    <Route path="/getting-started" element={<GettingStarted />} />
-                    <Route path="*" element={<NotFound />} />
-                  </Routes>
+                      {/* Regular routes */}
+                      <Route path="/" element={<Index />} />
+                      <Route path="/auth" element={<Auth />} />
+                      <Route path="/admin" element={<Admin />} />
+                      <Route path="/settings" element={<Settings />} />
+                      <Route path="/settings/branding" element={<M><Branding /></M>} />
+                      <Route path="/settings/email-templates" element={<M><EmailTemplates /></M>} />
+                      <Route path="/roles" element={<Roles />} />
+                      <Route path="/locations" element={<M><Locations /></M>} />
+                      <Route path="/locations/:id" element={<M><LocationDetail /></M>} />
+                      <Route path="/energy-data" element={<M><EnergyData /></M>} />
+                      <Route path="/meters" element={<M><MetersOverview /></M>} />
+                      <Route path="/live-values" element={<M><LiveValues /></M>} />
+                      <Route path="/integrations" element={<M><Integrations /></M>} />
+                      <Route path="/profile" element={<Profile />} />
+                      <Route path="/set-password" element={<SetPassword />} />
+                      <Route path="/accept-invite" element={<AcceptInvite />} />
+                      <Route path="/help" element={<Help />} />
+                      <Route path="/super-admin" element={<SA><SuperAdminDashboard /></SA>} />
+                      <Route path="/super-admin/tenants" element={<SA><SuperAdminTenants /></SA>} />
+                      <Route path="/super-admin/tenants/:id" element={<SA><SuperAdminTenantDetail /></SA>} />
+                      <Route path="/super-admin/statistics" element={<SA><SuperAdminStatistics /></SA>} />
+                      <Route path="/super-admin/users" element={<SA><SuperAdminUsers /></SA>} />
+                      <Route path="/super-admin/roles" element={<SA><SuperAdminRoles /></SA>} />
+                      <Route path="/super-admin/billing" element={<SA><SuperAdminBilling /></SA>} />
+                      <Route path="/super-admin/module-pricing" element={<SA><SuperAdminModulePricing /></SA>} />
+                      <Route path="/super-admin/bundles" element={<SA><SuperAdminBundles /></SA>} />
+                      <Route path="/super-admin/support" element={<SA><SuperAdminSupport /></SA>} />
+                      <Route path="/super-admin/ocpp/integrations" element={<SA><SuperAdminOcppIntegrations /></SA>} />
+                      <Route path="/super-admin/ocpp/control" element={<SA><SuperAdminOcppControl /></SA>} />
+                      <Route path="/super-admin/map" element={<SA><SuperAdminMap /></SA>} />
+                      <Route path="/charging/points" element={<M><ChargingPoints /></M>} />
+                      <Route path="/charging/points/:id" element={<M><ChargePointDetail /></M>} />
+                      <Route path="/charging/billing" element={<M><ChargingBilling /></M>} />
+                      <Route path="/charging/app" element={<M><ChargingAppAdmin /></M>} />
+                      <Route path="/automation" element={<M><Automation /></M>} />
+                      <Route path="/tasks" element={<M><Tasks /></M>} />
+                      <Route path="/network" element={<M><NetworkInfrastructure /></M>} />
+                      <Route path="/arbitrage" element={<M><ArbitrageTrading /></M>} />
+                      <Route path="/tenant-electricity" element={<M><TenantElectricity /></M>} />
+                      <Route path="/ev" element={<ChargingApp />} />
+                      <Route path="/te" element={<TenantEnergyApp />} />
+                      <Route path="/m" element={<MobileApp />} />
+                      <Route path="/getting-started" element={<GettingStarted />} />
+                      <Route path="*" element={<NotFound />} />
+                    </Routes>
+                  </Suspense>
                 </TooltipProvider>
               </ThemeProvider>
             </TranslationProvider>
