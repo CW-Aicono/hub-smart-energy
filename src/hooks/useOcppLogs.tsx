@@ -10,6 +10,10 @@ export interface OcppLogEntry {
   created_at: string;
 }
 
+// The ocpp_message_log table exists in the DB but is not yet in the generated types.
+// A single `as any` on the table name is the minimal workaround.
+const OCPP_TABLE = "ocpp_message_log";
+
 export function useOcppLogs(chargePointId?: string) {
   const [logs, setLogs] = useState<OcppLogEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -22,8 +26,8 @@ export function useOcppLogs(chargePointId?: string) {
   }, [paused]);
 
   const fetchLogs = useCallback(async () => {
-    let query = supabase
-      .from("ocpp_message_log" as any)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let query = (supabase.from as any)(OCPP_TABLE)
       .select("*")
       .order("created_at", { ascending: false })
       .limit(200);
@@ -45,16 +49,17 @@ export function useOcppLogs(chargePointId?: string) {
     const channel = supabase
       .channel(`ocpp-logs-${chargePointId || "all"}`)
       .on(
-        "postgres_changes" as any,
+        "postgres_changes" as const,
         {
           event: "INSERT",
           schema: "public",
           table: "ocpp_message_log",
           ...(chargePointId ? { filter: `charge_point_id=eq.${chargePointId}` } : {}),
-        },
-        (payload: any) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        } as any,
+        (payload: { new: Record<string, unknown> }) => {
           if (!pausedRef.current) {
-            setLogs((prev) => [payload.new as OcppLogEntry, ...prev].slice(0, 500));
+            setLogs((prev) => [payload.new as unknown as OcppLogEntry, ...prev].slice(0, 500));
           }
         }
       )

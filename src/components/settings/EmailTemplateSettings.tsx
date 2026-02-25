@@ -1,4 +1,5 @@
 import { useState } from "react";
+import DOMPurify from "dompurify";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -212,7 +213,7 @@ export function EmailTemplateSettings() {
           </DialogHeader>
           <div
             className="prose prose-sm max-w-none border rounded-md p-4 bg-white text-black"
-            dangerouslySetInnerHTML={{ __html: previewHtml || "" }}
+            dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(previewHtml || "") }}
           />
         </DialogContent>
       </Dialog>

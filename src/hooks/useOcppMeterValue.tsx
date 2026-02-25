@@ -8,6 +8,14 @@ export interface OcppMeterValueResult {
   loading: boolean;
 }
 
+// The ocpp_message_log table exists in the DB but is not yet in the generated types.
+const OCPP_TABLE = "ocpp_message_log";
+
+interface OcppRawRow {
+  raw_message: unknown;
+  created_at: string;
+}
+
 /**
  * Extracts the latest MeterValues reading from the OCPP message log
  * for a given charge point (by ocpp_id).
@@ -18,11 +26,11 @@ export function useOcppMeterValue(ocppId?: string): OcppMeterValueResult {
   const [timestamp, setTimestamp] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const fetch = useCallback(async () => {
+  const fetchValue = useCallback(async () => {
     if (!ocppId) { setLoading(false); return; }
 
-    const { data, error } = await supabase
-      .from("ocpp_message_log" as any)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data, error } = await (supabase.from as any)(OCPP_TABLE)
       .select("raw_message, created_at")
       .eq("charge_point_id", ocppId)
       .eq("message_type", "MeterValues")
@@ -31,10 +39,11 @@ export function useOcppMeterValue(ocppId?: string): OcppMeterValueResult {
 
     if (!error && data && data.length > 0) {
       try {
-        const raw = (data[0] as any).raw_message;
+        const row = data[0] as unknown as OcppRawRow;
+        const raw = row.raw_message;
         // OCPP 1.6 JSON: [2, messageId, "MeterValues", { meterValue: [...] }]
         const payload = Array.isArray(raw) ? raw[3] : raw;
-        const meterValues = payload?.meterValue || payload?.metervalue;
+        const meterValues = (payload as Record<string, unknown>)?.meterValue || (payload as Record<string, unknown>)?.metervalue;
         if (Array.isArray(meterValues) && meterValues.length > 0) {
           const sampledValues = meterValues[0]?.sampledValue;
           if (Array.isArray(sampledValues) && sampledValues.length > 0) {
@@ -45,7 +54,7 @@ export function useOcppMeterValue(ocppId?: string): OcppMeterValueResult {
             if (!isNaN(parsed)) {
               setValue(parsed);
               setUnit(sv.unit || "kWh");
-              setTimestamp((data[0] as any).created_at);
+              setTimestamp(row.created_at);
             }
           }
         }
@@ -57,27 +66,28 @@ export function useOcppMeterValue(ocppId?: string): OcppMeterValueResult {
   }, [ocppId]);
 
   useEffect(() => {
-    fetch();
+    fetchValue();
 
     // Also listen for new MeterValues in realtime
     if (!ocppId) return;
     const channel = supabase
       .channel(`meter-value-${ocppId}`)
       .on(
-        "postgres_changes" as any,
+        "postgres_changes" as const,
         {
           event: "INSERT",
           schema: "public",
           table: "ocpp_message_log",
           filter: `charge_point_id=eq.${ocppId}`,
-        },
-        (payload: any) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        } as any,
+        (payload: { new: Record<string, unknown> }) => {
           const row = payload.new;
           if (row?.message_type !== "MeterValues") return;
           try {
             const raw = row.raw_message;
             const p = Array.isArray(raw) ? raw[3] : raw;
-            const mv = p?.meterValue || p?.metervalue;
+            const mv = (p as Record<string, unknown>)?.meterValue || (p as Record<string, unknown>)?.metervalue;
             if (Array.isArray(mv) && mv.length > 0) {
               const sv = mv[0]?.sampledValue?.[0];
               if (sv) {
@@ -87,7 +97,7 @@ export function useOcppMeterValue(ocppId?: string): OcppMeterValueResult {
                 if (!isNaN(parsed)) {
                   setValue(parsed);
                   setUnit(sv.unit || "kWh");
-                  setTimestamp(row.created_at);
+                  setTimestamp(row.created_at as string);
                 }
               }
             }
@@ -97,7 +107,7 @@ export function useOcppMeterValue(ocppId?: string): OcppMeterValueResult {
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
-  }, [ocppId, fetch]);
+  }, [ocppId, fetchValue]);
 
   return { value, unit, timestamp, loading };
 }
