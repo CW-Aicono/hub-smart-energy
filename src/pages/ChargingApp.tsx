@@ -787,6 +787,58 @@ function QrScannerTab({ onScanned }: { onScanned: (data: string) => void }) {
   );
 }
 
+// ---- No Active Session Placeholder (with stop option for "charging" status sessions) ----
+function NoActiveSessionPlaceholder({ sessions, onStopCharge }: { sessions: AppSession[]; onStopCharge: (session: AppSession) => void }) {
+  const [confirmSession, setConfirmSession] = useState<AppSession | null>(null);
+  // Check if user has a "charging" session (charger reports active but HistoryTab shows no "active" status)
+  const chargingSession = sessions.find((s) => s.status === "charging" && !s.stop_time);
+
+  if (chargingSession) {
+    return (
+      <div className="flex flex-col items-center py-6 px-4 gap-3">
+        <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center">
+          <BatteryCharging className="h-8 w-8 text-primary animate-pulse" />
+        </div>
+        <p className="text-sm font-medium">Ladevorgang aktiv</p>
+        {!confirmSession ? (
+          <Button variant="destructive" size="sm" onClick={() => setConfirmSession(chargingSession)}>
+            <ZapOff className="h-4 w-4 mr-1.5" /> Ladevorgang beenden
+          </Button>
+        ) : (
+          <div className="flex flex-col items-center gap-2 bg-destructive/5 border border-destructive/20 rounded-lg p-4 w-full max-w-xs">
+            <p className="text-sm text-center font-medium">Ladevorgang wirklich beenden?</p>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={() => setConfirmSession(null)}>Abbrechen</Button>
+              <Button variant="destructive" size="sm" onClick={() => { onStopCharge(chargingSession); setConfirmSession(null); }}>
+                Ja, beenden
+              </Button>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col items-center py-6 px-4">
+      <div className="h-16 w-16 rounded-full bg-muted flex items-center justify-center mb-3">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" className="h-10 w-10 text-muted-foreground" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="4" y="28" width="32" height="14" rx="3" />
+          <path d="M8 28l4-10h16l4 10" />
+          <circle cx="12" cy="44" r="3" />
+          <circle cx="32" cy="44" r="3" />
+          <rect x="48" y="18" width="10" height="24" rx="2" />
+          <path d="M53 18v-6" />
+          <path d="M50 12h6" />
+          <path d="M48 32h-6c-2 0-3 1-3 3v4" strokeDasharray="3 2" />
+          <path d="M51 24l4-3h-3l4-3" />
+        </svg>
+      </div>
+      <p className="text-sm text-muted-foreground font-medium">Keine aktiven Ladevorgänge</p>
+    </div>
+  );
+}
+
 // ---- History Tab ----
 function HistoryTab({ sessions, chargePoints, tariff, onStopCharge }: { sessions: AppSession[]; chargePoints: AppChargePoint[]; tariff: AppTariff | null; onStopCharge: (session: AppSession) => void }) {
   const getCpName = (id: string | null) => chargePoints.find((cp) => cp.id === id)?.name || "Unbekannt";
@@ -891,26 +943,7 @@ function HistoryTab({ sessions, chargePoints, tariff, onStopCharge }: { sessions
           {activeSessions.map((s) => renderSessionRow(s, true))}
         </div>
       ) : (
-        <div className="flex flex-col items-center py-6 px-4">
-          <div className="h-16 w-16 rounded-full bg-muted flex items-center justify-center mb-3">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" className="h-10 w-10 text-muted-foreground" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              {/* Car body */}
-              <rect x="4" y="28" width="32" height="14" rx="3" />
-              <path d="M8 28l4-10h16l4 10" />
-              <circle cx="12" cy="44" r="3" />
-              <circle cx="32" cy="44" r="3" />
-              {/* Charger */}
-              <rect x="48" y="18" width="10" height="24" rx="2" />
-              <path d="M53 18v-6" />
-              <path d="M50 12h6" />
-              {/* Cable */}
-              <path d="M48 32h-6c-2 0-3 1-3 3v4" strokeDasharray="3 2" />
-              {/* Lightning bolt */}
-              <path d="M51 24l4-3h-3l4-3" />
-            </svg>
-          </div>
-          <p className="text-sm text-muted-foreground font-medium">Keine aktiven Ladevorgänge</p>
-        </div>
+        <NoActiveSessionPlaceholder sessions={sessions} onStopCharge={onStopCharge} />
       )}
 
       {completedSessions.length > 0 && (
