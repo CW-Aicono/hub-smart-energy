@@ -2,6 +2,10 @@ import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "./useTenant";
 import type { AutomationCondition, AutomationAction } from "@/components/locations/AutomationRuleBuilder";
+import type { Database, Json } from "@/integrations/supabase/types";
+
+type AutomationInsertDB = Database["public"]["Tables"]["location_automations"]["Insert"];
+type AutomationUpdateDB = Database["public"]["Tables"]["location_automations"]["Update"];
 
 export interface LocationAutomationRecord {
   id: string;
@@ -19,7 +23,6 @@ export interface LocationAutomationRecord {
   last_executed_at: string | null;
   created_at: string;
   updated_at: string;
-  // New complex fields
   conditions: AutomationCondition[];
   actions: AutomationAction[];
   logic_operator: "AND" | "OR";
@@ -57,11 +60,11 @@ export function useLocationAutomations(locationId: string | undefined) {
       .eq("location_id", locationId)
       .order("created_at", { ascending: true });
     if (!error && data) {
-      setAutomations(data.map((d: any) => ({
+      setAutomations(data.map((d) => ({
         ...d,
-        conditions: Array.isArray(d.conditions) ? d.conditions : [],
-        actions: Array.isArray(d.actions) ? d.actions : [],
-        logic_operator: d.logic_operator || "AND",
+        conditions: Array.isArray(d.conditions) ? d.conditions as unknown as AutomationCondition[] : [],
+        actions: Array.isArray(d.actions) ? d.actions as unknown as AutomationAction[] : [],
+        logic_operator: (d.logic_operator || "AND") as "AND" | "OR",
       })) as LocationAutomationRecord[]);
     }
     setLoading(false);
@@ -71,19 +74,31 @@ export function useLocationAutomations(locationId: string | undefined) {
 
   const createAutomation = async (input: CreateAutomationInput) => {
     if (!tenant?.id) return { error: new Error("Kein Mandant") };
+    const dbInsert: AutomationInsertDB = {
+      ...input,
+      tenant_id: tenant.id,
+      conditions: (input.conditions ?? []) as unknown as Json,
+      actions: (input.actions ?? []) as unknown as Json,
+    };
     const { data, error } = await supabase
       .from("location_automations")
-      .insert({ ...input, tenant_id: tenant.id } as any)
+      .insert(dbInsert)
       .select()
-      .single() as { data: any; error: any };
+      .single();
     if (!error) await fetchAutomations();
-    return { data: data as LocationAutomationRecord | null, error };
+    return { data: data as unknown as LocationAutomationRecord | null, error };
   };
 
   const updateAutomation = async (id: string, updates: Partial<CreateAutomationInput & { is_active: boolean }>) => {
+    const { conditions, actions, ...rest } = updates;
+    const dbUpdate: AutomationUpdateDB = {
+      ...rest,
+      ...(conditions !== undefined ? { conditions: conditions as unknown as Json } : {}),
+      ...(actions !== undefined ? { actions: actions as unknown as Json } : {}),
+    };
     const { error } = await supabase
       .from("location_automations")
-      .update(updates as any)
+      .update(dbUpdate)
       .eq("id", id);
     if (!error) await fetchAutomations();
     return { error };
@@ -101,7 +116,6 @@ export function useLocationAutomations(locationId: string | undefined) {
   const executeAutomation = async (automation: LocationAutomationRecord) => {
     setExecuting(automation.id);
     try {
-      // Execute all actions (multi-action support)
       const actionsToRun = automation.actions.length > 0
         ? automation.actions
         : [{ actuator_uuid: automation.actuator_uuid, action_type: automation.action_value || automation.action_type || "pulse", action_value: automation.action_value }];

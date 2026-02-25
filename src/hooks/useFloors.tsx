@@ -1,5 +1,9 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import type { Database } from "@/integrations/supabase/types";
+
+type FloorInsertDB = Database["public"]["Tables"]["floors"]["Insert"];
+type FloorUpdateDB = Database["public"]["Tables"]["floors"]["Update"];
 
 export interface Floor {
   id: string;
@@ -57,7 +61,6 @@ async function uploadWithProgress(
         const { data: { publicUrl } } = supabase.storage
           .from(bucket)
           .getPublicUrl(path);
-        // Cache-bust to ensure fresh file
         const cacheBustedUrl = `${publicUrl}?t=${Date.now()}`;
         resolve({ publicUrl: cacheBustedUrl, error: null });
       } else {
@@ -126,7 +129,7 @@ export function useFloors(locationId: string | undefined): UseFloorsReturn {
   const createFloor = async (floor: FloorInsert) => {
     const { data, error: insertError } = await supabase
       .from("floors")
-      .insert(floor as any)
+      .insert(floor as FloorInsertDB)
       .select()
       .single();
 
@@ -140,7 +143,7 @@ export function useFloors(locationId: string | undefined): UseFloorsReturn {
   const updateFloor = async (id: string, updates: Partial<Floor>) => {
     const { error: updateError } = await supabase
       .from("floors")
-      .update(updates as any)
+      .update(updates as FloorUpdateDB)
       .eq("id", id);
 
     if (!updateError) {
@@ -191,7 +194,6 @@ export function useFloors(locationId: string | undefined): UseFloorsReturn {
     const mainExt = files.main.name.split('.').pop()?.toLowerCase();
     const mainPath = `${locationId}/${floorId}.${mainExt}`;
 
-    // Calculate total size for combined progress
     const totalSize = files.main.size + (files.mtl?.size || 0);
     let mainLoaded = 0;
     let mtlLoaded = 0;
@@ -202,7 +204,6 @@ export function useFloors(locationId: string | undefined): UseFloorsReturn {
       }
     };
 
-    // Upload main file
     const { publicUrl: mainUrl, error: mainError } = await uploadWithProgress(
       'floor-3d-models',
       mainPath,
@@ -219,7 +220,6 @@ export function useFloors(locationId: string | undefined): UseFloorsReturn {
 
     let mtlUrl: string | null = null;
 
-    // Upload MTL file if provided
     if (files.mtl) {
       const mtlPath = `${locationId}/${floorId}.mtl`;
       const { publicUrl: mtlPublicUrl, error: mtlError } = await uploadWithProgress(
@@ -239,13 +239,13 @@ export function useFloors(locationId: string | undefined): UseFloorsReturn {
       mtlUrl = mtlPublicUrl;
     }
 
-    // Update floor record
+    // Update floor record with proper DB types
     const { error: updateError } = await supabase
       .from('floors')
       .update({
         model_3d_url: mainUrl,
         model_3d_mtl_url: mtlUrl,
-      } as any)
+      } satisfies FloorUpdateDB)
       .eq('id', floorId);
 
     if (updateError) {

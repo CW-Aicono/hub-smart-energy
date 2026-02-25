@@ -3,6 +3,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "./useTenant";
 import { useTenantQuery } from "./useTenantQuery";
 import { useDemoMode } from "@/contexts/DemoMode";
+import type { Database } from "@/integrations/supabase/types";
+
+type LocationRow = Database["public"]["Tables"]["locations"]["Row"];
+type LocationInsertDB = Database["public"]["Tables"]["locations"]["Insert"];
+type LocationUpdateDB = Database["public"]["Tables"]["locations"]["Update"];
 
 export type LocationType = "einzelgebaeude" | "gebaeudekomplex" | "sonstiges";
 export type LocationUsageType = "verwaltungsgebaeude" | "universitaet" | "schule" | "kindertageseinrichtung" | "sportstaette" | "jugendzentrum" | "sonstiges";
@@ -129,7 +134,7 @@ export function useLocations(): UseLocationsReturn {
   const createLocation = async (location: LocationInsert) => {
     if (!ready) return { error: new Error("No tenant") };
 
-    const { error: insertError } = await tenantInsert("locations", location as any);
+    const { error: insertError } = await tenantInsert("locations", location as Omit<LocationInsertDB, "tenant_id">);
 
     if (!insertError) {
       await fetchLocations();
@@ -139,9 +144,11 @@ export function useLocations(): UseLocationsReturn {
   };
 
   const updateLocation = async (id: string, updates: Partial<Location>) => {
+    // Strip non-DB fields before updating
+    const { children: _children, ...dbUpdates } = updates;
     const { error: updateError } = await supabase
       .from("locations")
-      .update(updates as any)
+      .update(dbUpdates as LocationUpdateDB)
       .eq("id", id);
 
     if (!updateError) {

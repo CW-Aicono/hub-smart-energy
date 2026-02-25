@@ -1,8 +1,12 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import type { Database } from "@/integrations/supabase/types";
+
+type SensorPosInsertDB = Database["public"]["Tables"]["floor_sensor_positions"]["Insert"];
+type SensorPosUpdateDB = Database["public"]["Tables"]["floor_sensor_positions"]["Update"];
 
 export type LabelSize = 'small' | 'medium' | 'large';
-export type LabelScale = number; // continuous scale factor, default 1.0
+export type LabelScale = number;
 
 export interface FloorSensorPosition {
   id: string;
@@ -71,7 +75,7 @@ export function useFloorSensorPositions(floorId: string | undefined): UseFloorSe
   const addPosition = async (position: FloorSensorPositionInsert) => {
     const { data, error: insertError } = await supabase
       .from("floor_sensor_positions")
-      .insert(position as any)
+      .insert(position as SensorPosInsertDB)
       .select()
       .single();
 
@@ -85,7 +89,7 @@ export function useFloorSensorPositions(floorId: string | undefined): UseFloorSe
   const updatePosition = async (id: string, updates: Partial<FloorSensorPosition>) => {
     const { error: updateError } = await supabase
       .from("floor_sensor_positions")
-      .update(updates as any)
+      .update(updates as SensorPosUpdateDB)
       .eq("id", id);
 
     if (!updateError) {
@@ -151,7 +155,6 @@ export function useLocationFloorSensorPositions(locationId: string | undefined) 
     setError(null);
 
     try {
-      // Get all floors for this location first, then get positions
       const { data: floors, error: floorsError } = await supabase
         .from("floors")
         .select("id")

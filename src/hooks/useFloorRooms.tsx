@@ -1,5 +1,9 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import type { Database, Json } from "@/integrations/supabase/types";
+
+type FloorRoomInsertDB = Database["public"]["Tables"]["floor_rooms"]["Insert"];
+type FloorRoomUpdateDB = Database["public"]["Tables"]["floor_rooms"]["Update"];
 
 export interface FloorRoom {
   id: string;
@@ -67,9 +71,13 @@ export function useFloorRooms(floorId: string | undefined): UseFloorRoomsReturn 
   }, [fetchRooms]);
 
   const addRoom = async (room: FloorRoomInsert) => {
+    const dbInsert: FloorRoomInsertDB = {
+      ...room,
+      polygon_points: room.polygon_points as Json ?? null,
+    };
     const { data, error: insertError } = await supabase
       .from("floor_rooms")
-      .insert(room as any)
+      .insert(dbInsert)
       .select()
       .single();
 
@@ -81,9 +89,14 @@ export function useFloorRooms(floorId: string | undefined): UseFloorRoomsReturn 
   };
 
   const updateRoom = async (id: string, updates: Partial<FloorRoom>) => {
+    const { polygon_points, ...rest } = updates;
+    const dbUpdate: FloorRoomUpdateDB = {
+      ...rest,
+      ...(polygon_points !== undefined ? { polygon_points: polygon_points as Json } : {}),
+    };
     const { error: updateError } = await supabase
       .from("floor_rooms")
-      .update(updates as any)
+      .update(dbUpdate)
       .eq("id", id);
 
     if (!updateError) {

@@ -4,6 +4,12 @@ import { useTenant } from "./useTenant";
 import { useTenantQuery } from "./useTenantQuery";
 import { getEdgeFunctionName } from "@/lib/gatewayRegistry";
 import { getT } from "@/i18n/getT";
+import type { Database, Json } from "@/integrations/supabase/types";
+
+type IntegrationInsertDB = Database["public"]["Tables"]["integrations"]["Insert"];
+type IntegrationUpdateDB = Database["public"]["Tables"]["integrations"]["Update"];
+type LocIntInsertDB = Database["public"]["Tables"]["location_integrations"]["Insert"];
+type LocIntUpdateDB = Database["public"]["Tables"]["location_integrations"]["Update"];
 
 export interface IntegrationCategory {
   id: string;
@@ -116,21 +122,40 @@ export function useIntegrations(): UseIntegrationsReturn {
   const createIntegration = async (integration: Omit<Integration, "id" | "tenant_id" | "created_at" | "updated_at">) => {
     if (!ready) return { data: null, error: new Error("No tenant") };
 
-    const { data, error: insertError } = await (tenantInsert("integrations", integration as any) as any)
+    const insertData: Omit<IntegrationInsertDB, "tenant_id"> = {
+      name: integration.name,
+      type: integration.type,
+      category: integration.category,
+      description: integration.description,
+      icon: integration.icon,
+      config: integration.config as Json,
+      is_active: integration.is_active,
+    };
+
+    const result = await tenantInsert("integrations", insertData);
+    const { data, error: insertError } = await supabase
+      .from("integrations")
       .select()
+      .order("created_at", { ascending: false })
+      .limit(1)
       .single();
 
     if (!insertError) {
       await fetchIntegrations();
     }
 
-    return { data: data as Integration | null, error: insertError as Error | null };
+    return { data: (result as { error?: unknown }).error ? null : data as Integration | null, error: insertError as Error | null };
   };
 
   const updateIntegration = async (id: string, updates: Partial<Integration>) => {
+    const { config, ...rest } = updates;
+    const dbUpdate: IntegrationUpdateDB = {
+      ...rest,
+      ...(config !== undefined ? { config: config as Json } : {}),
+    };
     const { error: updateError } = await supabase
       .from("integrations")
-      .update(updates as any)
+      .update(dbUpdate)
       .eq("id", id);
 
     if (!updateError) {
@@ -217,13 +242,14 @@ export function useLocationIntegrations(locationId: string | undefined): UseLoca
   }, [fetchLocationIntegrations]);
 
   const addIntegration = async (locationId: string, integrationId: string, config: LoxoneConfig | Record<string, unknown>) => {
+    const insertData: LocIntInsertDB = {
+      location_id: locationId,
+      integration_id: integrationId,
+      config: config as Json,
+    };
     const { data, error: insertError } = await supabase
       .from("location_integrations")
-      .insert({
-        location_id: locationId,
-        integration_id: integrationId,
-        config,
-      } as any)
+      .insert(insertData)
       .select(`
         *,
         integration:integrations(*)
@@ -238,9 +264,14 @@ export function useLocationIntegrations(locationId: string | undefined): UseLoca
   };
 
   const updateIntegration = async (id: string, updates: Partial<LocationIntegration>) => {
+    const { config, integration: _integration, ...rest } = updates;
+    const dbUpdate: LocIntUpdateDB = {
+      ...rest,
+      ...(config !== undefined ? { config: config as Json } : {}),
+    };
     const { error: updateError } = await supabase
       .from("location_integrations")
-      .update(updates as any)
+      .update(dbUpdate)
       .eq("id", id);
 
     if (!updateError) {
@@ -264,14 +295,12 @@ export function useLocationIntegrations(locationId: string | undefined): UseLoca
   };
 
   const testConnection = async (config: Record<string, unknown>): Promise<{ success: boolean; error: string | null }> => {
-    // Validate that at least one config value is provided
     const hasValues = Object.values(config).some(v => v && String(v).length > 0);
     if (!hasValues) {
       const t = getT();
       return { success: false, error: t("integration.configRequired") };
     }
     
-    // In a real implementation, this would make an API call to test the connection
     return { success: true, error: null };
   };
 
