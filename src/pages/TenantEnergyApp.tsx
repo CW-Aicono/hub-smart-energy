@@ -192,6 +192,17 @@ function TenantAppAuth({ onAuth }: { onAuth: () => void }) {
   );
 }
 
+// German number formatter (used across all tabs)
+const fmtDe = (v: number, decimals = 1) =>
+  v.toLocaleString("de-DE", { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+
+// Capitalize energy type
+const fmtEnergyType = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
+const displayUnit = (_unit: string, energyType: string) => {
+  if (energyType === "wasser") return "m³";
+  return "kWh";
+};
+
 // ── Dashboard Tab ──
 function DashboardTab({ tenantRecord, invoices }: { tenantRecord: TenantRecord; invoices: Invoice[] }) {
   const latestInvoice = invoices[0] || null;
@@ -366,7 +377,7 @@ function DashboardTab({ tenantRecord, invoices }: { tenantRecord: TenantRecord; 
               <Zap className="h-4 w-4 text-primary" />
               <span className="text-xs text-muted-foreground">Ø Monat</span>
             </div>
-            <p className="text-lg font-bold">{displayAvg.toFixed(0)} kWh</p>
+            <p className="text-lg font-bold">{fmtDe(displayAvg, 0)} kWh</p>
           </CardContent>
         </Card>
         <Card>
@@ -375,7 +386,7 @@ function DashboardTab({ tenantRecord, invoices }: { tenantRecord: TenantRecord; 
               <Receipt className="h-4 w-4 text-primary" />
               <span className="text-xs text-muted-foreground">{hasInvoices ? "Gesamt" : "Geschätzt"}</span>
             </div>
-            <p className="text-lg font-bold">{displayCost.toFixed(2)} €</p>
+            <p className="text-lg font-bold">{fmtDe(displayCost, 2)} €</p>
           </CardContent>
         </Card>
       </div>
@@ -399,9 +410,9 @@ function DashboardTab({ tenantRecord, invoices }: { tenantRecord: TenantRecord; 
                     <span className="text-sm font-medium">{fmtEnergyType(et)}</span>
                   </div>
                   <div className="text-right">
-                    <span className="text-sm font-semibold">{total.toFixed(1)} {unit}</span>
+                    <span className="text-sm font-semibold">{fmtDe(total, 1)} {unit}</span>
                     {cost !== null ? (
-                      <span className="text-xs text-muted-foreground ml-2">≈ {cost.toFixed(2)} €</span>
+                      <span className="text-xs text-muted-foreground ml-2">≈ {fmtDe(cost, 2)} €</span>
                     ) : (
                       <span className="text-xs text-muted-foreground ml-2">≈ 0,00 €</span>
                     )}
@@ -426,15 +437,15 @@ function DashboardTab({ tenantRecord, invoices }: { tenantRecord: TenantRecord; 
             <div className="grid grid-cols-3 gap-2 text-center text-sm">
               <div>
                 <p className="text-muted-foreground text-xs">Lokal (PV)</p>
-                <p className="font-semibold text-primary">{Number(latestInvoice.local_kwh).toFixed(0)} kWh</p>
+                <p className="font-semibold text-primary">{fmtDe(Number(latestInvoice.local_kwh), 0)} kWh</p>
               </div>
               <div>
                 <p className="text-muted-foreground text-xs">Netz</p>
-                <p className="font-semibold">{Number(latestInvoice.grid_kwh).toFixed(0)} kWh</p>
+                <p className="font-semibold">{fmtDe(Number(latestInvoice.grid_kwh), 0)} kWh</p>
               </div>
               <div>
                 <p className="text-muted-foreground text-xs">Betrag</p>
-                <p className="font-bold">{Number(latestInvoice.total_amount).toFixed(2)} €</p>
+                <p className="font-bold">{fmtDe(Number(latestInvoice.total_amount), 2)} €</p>
               </div>
             </div>
           </CardContent>
@@ -454,7 +465,7 @@ function DashboardTab({ tenantRecord, invoices }: { tenantRecord: TenantRecord; 
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="month" tick={{ fontSize: 11 }} />
                   <YAxis tick={{ fontSize: 11 }} />
-                  <Tooltip />
+                  <Tooltip formatter={(value: number) => fmtDe(value, 1)} />
                   <Legend wrapperStyle={{ fontSize: 11 }} />
                   {allEnergyTypes.map((et) => (
                     <Bar key={et} dataKey={et} name={fmtEnergyType(et)} fill={energyColors[et] || "#94a3b8"} radius={[2, 2, 0, 0]} />
@@ -510,16 +521,16 @@ function InvoicesTab({ invoices }: { invoices: Invoice[] }) {
               <div className="grid grid-cols-2 gap-2 text-xs">
                 <div className="flex items-center gap-1">
                   <div className="w-2 h-2 rounded-full bg-green-500" />
-                  <span>PV: {Number(inv.local_kwh).toFixed(1)} kWh = {Number(inv.local_amount).toFixed(2)} €</span>
+                  <span>PV: {fmtDe(Number(inv.local_kwh), 1)} kWh = {fmtDe(Number(inv.local_amount), 2)} €</span>
                 </div>
                 <div className="flex items-center gap-1">
                   <div className="w-2 h-2 rounded-full bg-slate-400" />
-                  <span>Netz: {Number(inv.grid_kwh).toFixed(1)} kWh = {Number(inv.grid_amount).toFixed(2)} €</span>
+                  <span>Netz: {fmtDe(Number(inv.grid_kwh), 1)} kWh = {fmtDe(Number(inv.grid_amount), 2)} €</span>
                 </div>
               </div>
               <div className="flex justify-between items-center mt-2 pt-2 border-t text-sm">
-                <span className="text-muted-foreground">Grundgebühr: {Number(inv.base_fee).toFixed(2)} €</span>
-                <span className="font-bold">{Number(inv.total_amount).toFixed(2)} €</span>
+                <span className="text-muted-foreground">Grundgebühr: {fmtDe(Number(inv.base_fee), 2)} €</span>
+                <span className="font-bold">{fmtDe(Number(inv.total_amount), 2)} €</span>
               </div>
             </CardContent>
           </Card>
@@ -530,16 +541,6 @@ function InvoicesTab({ invoices }: { invoices: Invoice[] }) {
 }
 
 // ── Meter Tab ──
-// German number formatter
-const fmtDe = (v: number, decimals = 1) =>
-  v.toLocaleString("de-DE", { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
-
-// Capitalize energy type and map display unit
-const fmtEnergyType = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
-const displayUnit = (_unit: string, energyType: string) => {
-  if (energyType === "wasser") return "m³";
-  return "kWh";
-};
 
 function MeterTab({ tenantRecord }: { tenantRecord: TenantRecord }) {
   const [meters, setMeters] = useState<any[]>([]);
@@ -998,9 +999,9 @@ function TariffsTab({ tenantRecord }: { tenantRecord: TenantRecord }) {
                   {t.provider_name && <span className="text-sm text-muted-foreground">{t.provider_name}</span>}
                 </div>
                 <div className="mt-1 text-sm">
-                  <span className="font-bold">{Number(t.price_per_kwh).toFixed(4)} €/{t.energy_type === "wasser" || t.energy_type === "gas" ? "m³" : "kWh"}</span>
+                  <span className="font-bold">{fmtDe(Number(t.price_per_kwh), 4)} €/{t.energy_type === "wasser" || t.energy_type === "gas" ? "m³" : "kWh"}</span>
                   {Number(t.base_fee_monthly) > 0 && (
-                    <span className="text-muted-foreground ml-2">+ {Number(t.base_fee_monthly).toFixed(2)} €/Monat</span>
+                    <span className="text-muted-foreground ml-2">+ {fmtDe(Number(t.base_fee_monthly), 2)} €/Monat</span>
                   )}
                 </div>
                 <p className="text-xs text-muted-foreground mt-0.5">
