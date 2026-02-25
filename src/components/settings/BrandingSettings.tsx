@@ -65,13 +65,16 @@ export function BrandingSettings() {
 
       if (uploadError) throw uploadError;
 
-      const { data: { publicUrl } } = supabase.storage
+      const { data: signedData, error: signError } = await supabase.storage
         .from('tenant-assets')
-        .getPublicUrl(fileName);
+        .createSignedUrl(fileName, 3600);
 
+      if (signError || !signedData?.signedUrl) throw signError ?? new Error("Signed URL failed");
+
+      // Store the path (not URL) so we can re-sign on each load
       const { error: updateError } = await supabase
         .from('tenants')
-        .update({ logo_url: publicUrl })
+        .update({ logo_url: fileName })
         .eq('id', tenant.id);
 
       if (updateError) throw updateError;

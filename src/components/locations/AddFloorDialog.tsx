@@ -97,19 +97,19 @@ export function AddFloorDialog({ locationId, onSuccess }: AddFloorDialogProps) {
           .upload(mainPath, model3dFile, { upsert: true });
 
         if (!modelUploadError) {
-          const { data: { publicUrl: mainUrl } } = supabase.storage
+          const { data: mainSigned } = await supabase.storage
             .from('floor-3d-models')
-            .getPublicUrl(mainPath);
+            .createSignedUrl(mainPath, 3600);
 
           let mtlUrl: string | null = null;
           if (mtlFile) {
             const mtlPath = `${locationId}/${floor.id}.mtl`;
             await supabase.storage.from('floor-3d-models').upload(mtlPath, mtlFile, { upsert: true });
-            const { data: { publicUrl } } = supabase.storage.from('floor-3d-models').getPublicUrl(mtlPath);
-            mtlUrl = publicUrl;
+            const { data: mtlSigned } = await supabase.storage.from('floor-3d-models').createSignedUrl(mtlPath, 3600);
+            mtlUrl = mtlSigned?.signedUrl ?? null;
           }
 
-          await supabase.from("floors").update({ model_3d_url: mainUrl, model_3d_mtl_url: mtlUrl } as any).eq("id", floor.id);
+          await supabase.from("floors").update({ model_3d_url: mainSigned?.signedUrl ?? null, model_3d_mtl_url: mtlUrl } as any).eq("id", floor.id);
         }
       }
 
