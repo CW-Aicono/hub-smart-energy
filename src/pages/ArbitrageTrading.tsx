@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
 import { useTranslation } from "@/hooks/useTranslation";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { TrendingUp, TrendingDown, Battery, Zap, Plus, Trash2, Edit, BarChart3, Sun, Brain } from "lucide-react";
+import { TrendingUp, TrendingDown, Battery, Zap, Plus, Trash2, Edit, BarChart3, Sun, Brain, Archive, Sparkles } from "lucide-react";
 import { useEnergyStorages } from "@/hooks/useEnergyStorages";
 import ArbitrageAiSuggestions from "@/components/charging/ArbitrageAiSuggestions";
 import { useSpotPrices } from "@/hooks/useSpotPrices";
@@ -370,12 +370,25 @@ function StoragesTab() {
 
 // ── Strategies Tab ──
 function StrategiesTab() {
-  const { strategies, createStrategy, updateStrategy, deleteStrategy } = useArbitrageStrategies();
+  const { activeStrategies, archivedStrategies, createStrategy, updateStrategy, deleteStrategy, archiveStrategy } = useArbitrageStrategies();
   const { storages } = useEnergyStorages();
   const [open, setOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
+  const [showArchive, setShowArchive] = useState(false);
   const emptyForm = { name: "", storage_id: "", buy_below_eur_mwh: 30, sell_above_eur_mwh: 80 };
   const [form, setForm] = useState(emptyForm);
+
+  // Auto-archive expired AI strategies
+  const archivedRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    const now = new Date();
+    activeStrategies.forEach((s: any) => {
+      if (s.source === "ai" && s.valid_until && new Date(s.valid_until) < now && !archivedRef.current.has(s.id)) {
+        archivedRef.current.add(s.id);
+        archiveStrategy.mutate(s.id);
+      }
+    });
+  }, [activeStrategies]);
 
   const openEdit = (s: any) => {
     setForm({ name: s.name, storage_id: s.storage_id, buy_below_eur_mwh: s.buy_below_eur_mwh, sell_above_eur_mwh: s.sell_above_eur_mwh });
@@ -411,40 +424,81 @@ function StrategiesTab() {
     </div>
   );
 
+  const renderStrategyRow = (s: any, isArchived = false) => (
+    <TableRow key={s.id} className={isArchived ? "opacity-60" : ""}>
+      <TableCell className="font-medium">
+        <div className="flex items-center gap-2">
+          {s.name}
+          {s.source === "ai" && (
+            <Badge variant="secondary" className="gap-1 bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300 text-xs">
+              <Sparkles className="h-3 w-3" />
+              KI
+            </Badge>
+          )}
+        </div>
+      </TableCell>
+      <TableCell>{s.energy_storages?.name || "–"}</TableCell>
+      <TableCell>{s.buy_below_eur_mwh} €/MWh ({(Number(s.buy_below_eur_mwh) / 10).toFixed(1)} ct/kWh)</TableCell>
+      <TableCell>{s.sell_above_eur_mwh} €/MWh ({(Number(s.sell_above_eur_mwh) / 10).toFixed(1)} ct/kWh)</TableCell>
+      <TableCell>
+        {isArchived ? (
+          <Badge variant="outline" className="text-muted-foreground"><Archive className="h-3 w-3 mr-1" />Archiviert</Badge>
+        ) : (
+          <Switch checked={s.is_active} onCheckedChange={(v) => updateStrategy.mutate({ id: s.id, is_active: v })} />
+        )}
+      </TableCell>
+      <TableCell className="flex gap-1">
+        {!isArchived && s.source !== "ai" && (
+          <Button variant="ghost" size="icon" onClick={() => openEdit(s)}><Edit className="h-4 w-4" /></Button>
+        )}
+        {!isArchived && s.source === "ai" && (
+          <Button variant="ghost" size="icon" title="Archivieren" onClick={() => archiveStrategy.mutate(s.id)}><Archive className="h-4 w-4" /></Button>
+        )}
+        <Button variant="ghost" size="icon" onClick={() => deleteStrategy.mutate(s.id)}><Trash2 className="h-4 w-4" /></Button>
+      </TableCell>
+    </TableRow>
+  );
+
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
         <h2 className="text-lg font-semibold">Handelsstrategien</h2>
-        <Dialog open={open} onOpenChange={handleOpenChange}>
-          <DialogTrigger asChild><Button><Plus className="h-4 w-4 mr-2" />Strategie anlegen</Button></DialogTrigger>
-          <DialogContent>
-            <DialogHeader><DialogTitle>{editId ? "Strategie bearbeiten" : "Neue Strategie"}</DialogTitle></DialogHeader>
-            {strategyForm}
-          </DialogContent>
-        </Dialog>
+        <div className="flex gap-2">
+          {archivedStrategies.length > 0 && (
+            <Button variant="outline" onClick={() => setShowArchive(!showArchive)}>
+              <Archive className="h-4 w-4 mr-2" />
+              Archiv ({archivedStrategies.length})
+            </Button>
+          )}
+          <Dialog open={open} onOpenChange={handleOpenChange}>
+            <DialogTrigger asChild><Button><Plus className="h-4 w-4 mr-2" />Strategie anlegen</Button></DialogTrigger>
+            <DialogContent>
+              <DialogHeader><DialogTitle>{editId ? "Strategie bearbeiten" : "Neue Strategie"}</DialogTitle></DialogHeader>
+              {strategyForm}
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
       <Table>
         <TableHeader><TableRow><TableHead>Name</TableHead><TableHead>Speicher</TableHead><TableHead>Kaufen unter</TableHead><TableHead>Verkaufen über</TableHead><TableHead>Aktiv</TableHead><TableHead></TableHead></TableRow></TableHeader>
         <TableBody>
-          {strategies.map((s) => (
-            <TableRow key={s.id}>
-              <TableCell className="font-medium">{s.name}</TableCell>
-              <TableCell>{(s as any).energy_storages?.name || "–"}</TableCell>
-              <TableCell>{s.buy_below_eur_mwh} €/MWh ({(Number(s.buy_below_eur_mwh) / 10).toFixed(1)} ct/kWh)</TableCell>
-              <TableCell>{s.sell_above_eur_mwh} €/MWh ({(Number(s.sell_above_eur_mwh) / 10).toFixed(1)} ct/kWh)</TableCell>
-              <TableCell>
-                <Switch checked={s.is_active} onCheckedChange={(v) => updateStrategy.mutate({ id: s.id, is_active: v })} />
-              </TableCell>
-              <TableCell className="flex gap-1">
-                <Button variant="ghost" size="icon" onClick={() => openEdit(s)}><Edit className="h-4 w-4" /></Button>
-                <Button variant="ghost" size="icon" onClick={() => deleteStrategy.mutate(s.id)}><Trash2 className="h-4 w-4" /></Button>
-              </TableCell>
-            </TableRow>
-          ))}
-          {strategies.length === 0 && <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-8">Noch keine Strategien angelegt</TableCell></TableRow>}
+          {activeStrategies.map((s) => renderStrategyRow(s))}
+          {activeStrategies.length === 0 && <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-8">Noch keine Strategien angelegt</TableCell></TableRow>}
         </TableBody>
       </Table>
+
+      {showArchive && archivedStrategies.length > 0 && (
+        <div className="space-y-2">
+          <h3 className="text-sm font-semibold text-muted-foreground flex items-center gap-1"><Archive className="h-4 w-4" /> Archivierte Strategien</h3>
+          <Table>
+            <TableHeader><TableRow><TableHead>Name</TableHead><TableHead>Speicher</TableHead><TableHead>Kaufen unter</TableHead><TableHead>Verkaufen über</TableHead><TableHead>Status</TableHead><TableHead></TableHead></TableRow></TableHeader>
+            <TableBody>
+              {archivedStrategies.map((s) => renderStrategyRow(s, true))}
+            </TableBody>
+          </Table>
+        </div>
+      )}
     </div>
   );
 }

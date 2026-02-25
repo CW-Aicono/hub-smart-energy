@@ -93,33 +93,42 @@ export type Database = {
           created_at: string
           id: string
           is_active: boolean
+          is_archived: boolean
           name: string
           sell_above_eur_mwh: number
+          source: string
           storage_id: string
           tenant_id: string
           updated_at: string
+          valid_until: string | null
         }
         Insert: {
           buy_below_eur_mwh?: number
           created_at?: string
           id?: string
           is_active?: boolean
+          is_archived?: boolean
           name: string
           sell_above_eur_mwh?: number
+          source?: string
           storage_id: string
           tenant_id: string
           updated_at?: string
+          valid_until?: string | null
         }
         Update: {
           buy_below_eur_mwh?: number
           created_at?: string
           id?: string
           is_active?: boolean
+          is_archived?: boolean
           name?: string
           sell_above_eur_mwh?: number
+          source?: string
           storage_id?: string
           tenant_id?: string
           updated_at?: string
+          valid_until?: string | null
         }
         Relationships: [
           {
