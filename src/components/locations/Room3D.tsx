@@ -178,9 +178,11 @@ function CeilingLight({ height, position }: { height: number; position: [number,
   );
 }
 
-// ─── Main Room3D ─────────────────────────────────────────────
+const DEFAULT_WALL_HEIGHT = 2.8;
+
 export function Room3D({ room, showCeiling = true }: Room3DProps) {
-  const { wall_height, color, id, polygon_points } = room;
+  const wall_height = DEFAULT_WALL_HEIGHT;
+  const { color, id, polygon_points } = room;
   const hash = useMemo(() => hashCode(id), [id]);
   const wallColor = color || "#f0f0f0";
   const floorColorBase = "#c8b99a";
