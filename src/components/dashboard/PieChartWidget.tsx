@@ -7,10 +7,12 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useMemo } from "react";
 import { useDashboardFilter, TimePeriod } from "@/hooks/useDashboardFilter";
-import { startOfDay, startOfWeek, startOfMonth, startOfQuarter, startOfYear } from "date-fns";
+import { startOfDay, startOfWeek, startOfMonth, startOfQuarter, startOfYear, endOfWeek, endOfMonth, endOfQuarter, endOfYear, format } from "date-fns";
 import { useWeekStartDay } from "@/hooks/useWeekStartDay";
 import { gasM3ToKWh } from "@/lib/formatEnergy";
 import { useLocationEnergySources } from "@/hooks/useLocationEnergySources";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 
 interface PieChartWidgetProps {
   locationId: string | null;
@@ -39,15 +41,6 @@ const PERIOD_LABELS: Record<TimePeriod, string> = {
   all: "Gesamt",
 };
 
-const PERIOD_TOTAL_KEY: Record<TimePeriod, "totalDay" | "totalWeek" | "totalMonth" | "totalYear" | null> = {
-  day: "totalDay",
-  week: "totalWeek",
-  month: "totalMonth",
-  quarter: null, // computed from archived months
-  year: "totalYear",
-  all: null,
-};
-
 function getPeriodStart(period: TimePeriod, weekStartsOn: 0|1|2|3|4|5|6 = 1): Date | null {
   const now = new Date();
   switch (period) {
@@ -70,14 +63,12 @@ const PieChartWidget = ({ locationId }: PieChartWidgetProps) => {
   const subtitle = selectedLocation ? `Daten für: ${selectedLocation.name}` : "Alle Liegenschaften";
   const allowedTypes = useLocationEnergySources(locationId);
 
-  // Determine which energy types have active meters configured
   const configuredTypes = useMemo(() => {
     const types = new Set<string>();
     meters.filter(m => !m.is_archived).forEach(m => types.add(m.energy_type));
     return types;
   }, [meters]);
 
-  // Build a meter_id -> energy_type map
   const meterMap = useMemo(() => {
     const map: Record<string, { energy_type: string; location_id: string; is_main_meter: boolean; capture_type: string; unit: string; gas_type: string | null; brennwert: number | null; zustandszahl: number | null }> = {};
     meters.forEach((m) => {
@@ -86,10 +77,41 @@ const PieChartWidget = ({ locationId }: PieChartWidgetProps) => {
     return map;
   }, [meters]);
 
-  // Compute distribution based on selected period
+  // DB-backed period sums
+  const { rangeStart, rangeEnd } = useMemo(() => {
+    const now = new Date();
+    switch (selectedPeriod) {
+      case "week": return { rangeStart: startOfWeek(now, { weekStartsOn }), rangeEnd: endOfWeek(now, { weekStartsOn }) };
+      case "month": return { rangeStart: startOfMonth(now), rangeEnd: endOfMonth(now) };
+      case "quarter": return { rangeStart: startOfQuarter(now), rangeEnd: endOfQuarter(now) };
+      case "year": return { rangeStart: startOfYear(now), rangeEnd: endOfYear(now) };
+      default: return { rangeStart: startOfDay(now), rangeEnd: now };
+    }
+  }, [selectedPeriod, weekStartsOn]);
+
+  const mainAutoMeterIds = useMemo(
+    () => meters.filter(m => !m.is_archived && m.capture_type === "automatic" && m.is_main_meter).map(m => m.id),
+    [meters]
+  );
+
+  const { data: dbPeriodSums } = useQuery({
+    queryKey: ["pie-period-sums", mainAutoMeterIds, format(rangeStart, "yyyy-MM-dd"), format(rangeEnd, "yyyy-MM-dd"), selectedPeriod],
+    enabled: selectedPeriod !== "day" && selectedPeriod !== "all" && mainAutoMeterIds.length > 0,
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("get_meter_period_sums", {
+        p_meter_ids: mainAutoMeterIds,
+        p_from_date: format(rangeStart, "yyyy-MM-dd"),
+        p_to_date: format(rangeEnd, "yyyy-MM-dd"),
+      });
+      if (error) { console.error("Pie period sums error:", error); return {}; }
+      const map: Record<string, number> = {};
+      (data ?? []).forEach((row: any) => { map[row.meter_id] = row.total_value; });
+      return map;
+    },
+  });
+
   const chartData = useMemo(() => {
     const totals: Record<string, number> = { strom: 0, gas: 0, waerme: 0, wasser: 0 };
-    const periodKey = PERIOD_TOTAL_KEY[selectedPeriod];
     const periodStart = getPeriodStart(selectedPeriod, weekStartsOn);
 
     // Manual readings filtered by period
@@ -117,18 +139,29 @@ const PieChartWidget = ({ locationId }: PieChartWidgetProps) => {
         }
       });
 
-    // Auto meters: use livePeriodTotals with the correct period key
+    // Auto meters: DB sums + live today for non-day periods
     meters.filter(m => !m.is_archived && m.capture_type === "automatic" && m.is_main_meter).forEach(m => {
       if (locationId && meterMap[m.id]?.location_id !== locationId) return;
-      const pt = livePeriodTotals[m.id];
-      if (!pt) return;
-      const rawVal = periodKey ? pt[periodKey] : pt.totalYear;
-      if (rawVal != null && m.energy_type in totals) {
+      const energyType = m.energy_type;
+      if (!(energyType in totals)) return;
+
+      let rawVal: number | null = null;
+      if (selectedPeriod === "day") {
+        rawVal = livePeriodTotals[m.id]?.totalDay ?? null;
+      } else if (selectedPeriod === "all") {
+        rawVal = livePeriodTotals[m.id]?.totalYear ?? null;
+      } else {
+        const dbVal = dbPeriodSums?.[m.id] ?? 0;
+        const todayVal = livePeriodTotals[m.id]?.totalDay ?? 0;
+        rawVal = dbVal + todayVal;
+      }
+
+      if (rawVal != null && rawVal > 0) {
         let val = rawVal;
-        if (m.energy_type === "gas" && m.unit === "m³") {
+        if (energyType === "gas" && m.unit === "m³") {
           val = gasM3ToKWh(val, m.gas_type ?? null, m.brennwert ?? null, m.zustandszahl ?? null);
         }
-        totals[m.energy_type] += val;
+        totals[energyType] += val;
       }
     });
 
@@ -146,13 +179,11 @@ const PieChartWidget = ({ locationId }: PieChartWidgetProps) => {
         color: `hsl(var(--energy-${key}))`,
       }));
 
-    // Only show types with configured meters or non-zero values
     return distribution.filter(d => d.totalValue > 0 || configuredTypes.has(
       Object.entries(ENERGY_LABELS).find(([, label]) => label === d.name)?.[0] || ""
     ));
-  }, [readings, livePeriodTotals, meters, meterMap, locationId, selectedPeriod, configuredTypes]);
+  }, [readings, livePeriodTotals, meters, meterMap, locationId, selectedPeriod, configuredTypes, dbPeriodSums]);
 
-  // For display: ensure at least a minimum visible slice for types with 0%
   const displayData = useMemo(() => {
     const hasNonZero = chartData.some(d => d.value > 0);
     if (!hasNonZero) return chartData;

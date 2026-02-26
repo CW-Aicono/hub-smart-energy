@@ -8,10 +8,12 @@ import { Leaf } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatEnergy } from "@/lib/formatEnergy";
 import { gasM3ToKWh } from "@/lib/formatEnergy";
-import { startOfDay, startOfWeek, startOfMonth, startOfQuarter, startOfYear } from "date-fns";
+import { startOfDay, startOfWeek, startOfMonth, startOfQuarter, startOfYear, endOfWeek, endOfMonth, endOfQuarter, endOfYear, format } from "date-fns";
 import { useWeekStartDay } from "@/hooks/useWeekStartDay";
 import { useDashboardFilter, TimePeriod } from "@/hooks/useDashboardFilter";
 import { useLocationEnergySources } from "@/hooks/useLocationEnergySources";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 
 const PERIOD_LABELS: Record<TimePeriod, string> = {
   day: "Tag",
@@ -33,15 +35,6 @@ function getPeriodStart(period: TimePeriod, weekStartsOn: 0|1|2|3|4|5|6 = 1): Da
     case "all": return null;
   }
 }
-
-const PERIOD_TOTAL_KEY: Record<TimePeriod, "totalDay" | "totalWeek" | "totalMonth" | "totalYear" | null> = {
-  day: "totalDay",
-  week: "totalWeek",
-  month: "totalMonth",
-  quarter: null,
-  year: "totalYear",
-  all: null,
-};
 
 interface SustainabilityKPIsProps {
   locationId: string | null;
@@ -74,43 +67,77 @@ const SustainabilityKPIs = ({ locationId }: SustainabilityKPIsProps) => {
   /** Convert a raw value to Wh (base unit for formatEnergy) */
   const toWh = (value: number, energyType: string, unit: string, gasType: string | null, brennwert: number | null, zustandszahl: number | null): number => {
     if (energyType === "gas" && unit === "m³") {
-      // m³ → kWh → Wh
       return gasM3ToKWh(value, gasType, brennwert, zustandszahl) * 1000;
     }
     if (energyType === "wasser") {
-      // Water stays in m³, don't scale
       return value;
     }
-    // Default: value is in kWh → ×1000 → Wh
     return value * 1000;
   };
 
+  // Compute date range for DB query
+  const { rangeStart, rangeEnd } = useMemo(() => {
+    const now = new Date();
+    switch (period) {
+      case "week": return { rangeStart: startOfWeek(now, { weekStartsOn }), rangeEnd: endOfWeek(now, { weekStartsOn }) };
+      case "month": return { rangeStart: startOfMonth(now), rangeEnd: endOfMonth(now) };
+      case "quarter": return { rangeStart: startOfQuarter(now), rangeEnd: endOfQuarter(now) };
+      case "year": return { rangeStart: startOfYear(now), rangeEnd: endOfYear(now) };
+      default: return { rangeStart: startOfDay(now), rangeEnd: now };
+    }
+  }, [period, weekStartsOn]);
+
+  const mainAutoMeterIds = useMemo(
+    () => meters.filter(m => !m.is_archived && m.capture_type === "automatic" && m.is_main_meter).map(m => m.id),
+    [meters]
+  );
+
+  const { data: dbPeriodSums } = useQuery({
+    queryKey: ["sustainability-period-sums", mainAutoMeterIds, format(rangeStart, "yyyy-MM-dd"), format(rangeEnd, "yyyy-MM-dd"), period],
+    enabled: period !== "day" && period !== "all" && mainAutoMeterIds.length > 0,
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("get_meter_period_sums", {
+        p_meter_ids: mainAutoMeterIds,
+        p_from_date: format(rangeStart, "yyyy-MM-dd"),
+        p_to_date: format(rangeEnd, "yyyy-MM-dd"),
+      });
+      if (error) { console.error("Sustainability period sums error:", error); return {}; }
+      const map: Record<string, number> = {};
+      (data ?? []).forEach((row: any) => { map[row.meter_id] = row.total_value; });
+      return map;
+    },
+  });
+
   const filteredTotals = useMemo(() => {
-    // Totals in Wh for strom/gas/waerme, m³ for wasser
     const totals = { strom: 0, gas: 0, waerme: 0, wasser: 0 };
     const periodStart = getPeriodStart(period, weekStartsOn);
-    const ptKey = PERIOD_TOTAL_KEY[period];
 
-    // Add automatic meter period totals (main meters only)
-    if (ptKey) {
-      meters.forEach(m => {
-        if (m.is_archived || m.capture_type !== "automatic" || !m.is_main_meter) return;
-        const pt = livePeriodTotals[m.id];
-        if (!pt) return;
-        const rawVal = pt[ptKey as keyof typeof pt];
-        if (rawVal == null) return;
-        const energyType = m.energy_type || "strom";
-        if (energyType in totals) {
-          if (energyType === "wasser") {
-            (totals as any)[energyType] += rawVal;
-          } else {
-            (totals as any)[energyType] += toWh(rawVal, energyType, m.unit, m.gas_type ?? null, m.brennwert ?? null, m.zustandszahl ?? null);
-          }
-        }
-      });
-    }
+    // Auto meters: DB sums + live today for non-day, or live totalDay for day
+    meters.forEach(m => {
+      if (m.is_archived || m.capture_type !== "automatic" || !m.is_main_meter) return;
+      const energyType = m.energy_type || "strom";
+      if (!(energyType in totals)) return;
 
-    // Add manual meter readings (main meters only)
+      let rawVal: number | null = null;
+      if (period === "day") {
+        rawVal = livePeriodTotals[m.id]?.totalDay ?? null;
+      } else if (period === "all") {
+        rawVal = livePeriodTotals[m.id]?.totalYear ?? null;
+      } else {
+        const dbVal = dbPeriodSums?.[m.id] ?? 0;
+        const todayVal = livePeriodTotals[m.id]?.totalDay ?? 0;
+        rawVal = dbVal + todayVal;
+      }
+
+      if (rawVal == null || rawVal <= 0) return;
+      if (energyType === "wasser") {
+        (totals as any)[energyType] += rawVal;
+      } else {
+        (totals as any)[energyType] += toWh(rawVal, energyType, m.unit, m.gas_type ?? null, m.brennwert ?? null, m.zustandszahl ?? null);
+      }
+    });
+
+    // Manual meter readings (main meters only)
     readings.forEach((r) => {
       if (periodStart && new Date(r.reading_date) < periodStart) return;
       const meta = meterMap[r.meter_id];
@@ -126,7 +153,7 @@ const SustainabilityKPIs = ({ locationId }: SustainabilityKPIsProps) => {
     });
 
     return totals;
-  }, [readings, meterMap, period, livePeriodTotals, meters, weekStartsOn]);
+  }, [readings, meterMap, period, livePeriodTotals, meters, weekStartsOn, dbPeriodSums]);
 
   if (loading) return <Card><CardContent className="p-6"><Skeleton className="h-[200px]" /></CardContent></Card>;
 
@@ -147,7 +174,6 @@ const SustainabilityKPIs = ({ locationId }: SustainabilityKPIsProps) => {
     </Select>
   );
 
-  // Format water separately (m³)
   const fmtWater = (val: number) =>
     val.toLocaleString("de-DE", { minimumFractionDigits: 0, maximumFractionDigits: 2 }) + " m³";
 

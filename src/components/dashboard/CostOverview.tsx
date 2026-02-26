@@ -6,10 +6,12 @@ import { useMeters } from "@/hooks/useMeters";
 import { useDashboardFilter, TimePeriod } from "@/hooks/useDashboardFilter";
 import { Euro, TrendingDown, TrendingUp, ArrowDownRight } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
-import { startOfDay, startOfWeek, startOfMonth, startOfQuarter, startOfYear, subDays, subWeeks, subMonths, subQuarters, subYears } from "date-fns";
+import { startOfDay, startOfWeek, startOfMonth, startOfQuarter, startOfYear, endOfWeek, endOfMonth, endOfQuarter, endOfYear, subDays, subWeeks, subMonths, subQuarters, subYears, format } from "date-fns";
 import { useWeekStartDay } from "@/hooks/useWeekStartDay";
 import { gasM3ToKWh } from "@/lib/formatEnergy";
 import { useSpotPrices } from "@/hooks/useSpotPrices";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 
 interface CostOverviewProps {
   locationId: string | null;
@@ -92,17 +94,14 @@ const CostOverview = ({ locationId }: CostOverviewProps) => {
     return map;
   }, [meters]);
 
-  // Build a price lookup: location_id + energy_type -> effective price per unit
   const priceLookup = useMemo(() => {
     const lookup = new Map<string, number>();
     const today = new Date().toISOString().split("T")[0];
-    // Group by location+energy, pick most recent valid
     prices.forEach((p) => {
       if (p.valid_from <= today && (!p.valid_until || p.valid_until >= today)) {
         const key = `${p.location_id}:${p.energy_type}`;
         if (!lookup.has(key)) {
           if (p.is_dynamic && currentSpotPrice) {
-            // Spot price is EUR/MWh → convert to EUR/kWh + markup
             const spotEurKwh = currentSpotPrice.price_eur_mwh / 1000;
             lookup.set(key, spotEurKwh + Number(p.spot_markup_per_unit));
           } else if (!p.is_dynamic) {
@@ -113,6 +112,71 @@ const CostOverview = ({ locationId }: CostOverviewProps) => {
     });
     return lookup;
   }, [prices, currentSpotPrice]);
+
+  // DB-backed period sums for current + previous period
+  const mainAutoMeterIds = useMemo(
+    () => meters.filter(m => !m.is_archived && m.capture_type === "automatic" && m.is_main_meter).map(m => m.id),
+    [meters]
+  );
+
+  const { currentRange, prevRange } = useMemo(() => {
+    const now = new Date();
+    const computeRange = (period: TimePeriod, offset: number = 0) => {
+      switch (period) {
+        case "week": {
+          const s = startOfWeek(offset === 0 ? now : subWeeks(now, 1), { weekStartsOn });
+          return { from: format(s, "yyyy-MM-dd"), to: format(endOfWeek(s, { weekStartsOn }), "yyyy-MM-dd") };
+        }
+        case "month": {
+          const s = offset === 0 ? startOfMonth(now) : startOfMonth(subMonths(now, 1));
+          return { from: format(s, "yyyy-MM-dd"), to: format(endOfMonth(s), "yyyy-MM-dd") };
+        }
+        case "quarter": {
+          const s = offset === 0 ? startOfQuarter(now) : startOfQuarter(subQuarters(now, 1));
+          return { from: format(s, "yyyy-MM-dd"), to: format(endOfQuarter(s), "yyyy-MM-dd") };
+        }
+        case "year": {
+          const s = offset === 0 ? startOfYear(now) : startOfYear(subYears(now, 1));
+          return { from: format(s, "yyyy-MM-dd"), to: format(endOfYear(s), "yyyy-MM-dd") };
+        }
+        default:
+          return { from: format(startOfDay(now), "yyyy-MM-dd"), to: format(now, "yyyy-MM-dd") };
+      }
+    };
+    return { currentRange: computeRange(selectedPeriod, 0), prevRange: computeRange(selectedPeriod, -1) };
+  }, [selectedPeriod, weekStartsOn]);
+
+  const { data: dbCurrentSums } = useQuery({
+    queryKey: ["cost-current-sums", mainAutoMeterIds, currentRange.from, currentRange.to, selectedPeriod],
+    enabled: selectedPeriod !== "day" && selectedPeriod !== "all" && mainAutoMeterIds.length > 0,
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("get_meter_period_sums", {
+        p_meter_ids: mainAutoMeterIds,
+        p_from_date: currentRange.from,
+        p_to_date: currentRange.to,
+      });
+      if (error) return {};
+      const map: Record<string, number> = {};
+      (data ?? []).forEach((row: any) => { map[row.meter_id] = row.total_value; });
+      return map;
+    },
+  });
+
+  const { data: dbPrevSums } = useQuery({
+    queryKey: ["cost-prev-sums", mainAutoMeterIds, prevRange.from, prevRange.to, selectedPeriod],
+    enabled: selectedPeriod !== "day" && selectedPeriod !== "all" && mainAutoMeterIds.length > 0,
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("get_meter_period_sums", {
+        p_meter_ids: mainAutoMeterIds,
+        p_from_date: prevRange.from,
+        p_to_date: prevRange.to,
+      });
+      if (error) return {};
+      const map: Record<string, number> = {};
+      (data ?? []).forEach((row: any) => { map[row.meter_id] = row.total_value; });
+      return map;
+    },
+  });
 
   const costData = useMemo(() => {
     const { start, prevStart, prevEnd } = getPeriodRange(selectedPeriod, weekStartsOn);
@@ -142,25 +206,46 @@ const CostOverview = ({ locationId }: CostOverviewProps) => {
       }
     });
 
-    // Add auto meter period totals for current period
-    const ptKey = selectedPeriod === "day" ? "totalDay" : selectedPeriod === "week" ? "totalWeek" : selectedPeriod === "month" ? "totalMonth" : selectedPeriod === "quarter" ? "totalMonth" : "totalYear";
+    // Auto meters
     meters.forEach(m => {
       if (m.is_archived || m.capture_type !== "automatic" || !m.is_main_meter) return;
       if (locationId && m.location_id !== locationId) return;
-      const pt = livePeriodTotals[m.id];
-      if (!pt) return;
-      const rawVal = pt[ptKey as keyof typeof pt];
-      if (rawVal == null) return;
       const meta = meterMap[m.id];
       if (!meta) return;
-      let consumptionVal = rawVal;
-      if (meta.energy_type === "gas" && meta.unit === "m³") {
-        consumptionVal = gasM3ToKWh(consumptionVal, meta.gas_type, meta.brennwert, meta.zustandszahl);
-      }
       const priceKey = `${meta.location_id}:${meta.energy_type}`;
       const price = priceLookup.get(priceKey) || 0;
-      currentCost += consumptionVal * price;
-      currentConsumption += consumptionVal;
+
+      const toConsumption = (rawVal: number) => {
+        if (meta.energy_type === "gas" && meta.unit === "m³") {
+          return gasM3ToKWh(rawVal, meta.gas_type, meta.brennwert, meta.zustandszahl);
+        }
+        return rawVal;
+      };
+
+      // Current period
+      let currentRaw: number | null = null;
+      if (selectedPeriod === "day") {
+        currentRaw = livePeriodTotals[m.id]?.totalDay ?? null;
+      } else if (selectedPeriod === "all") {
+        currentRaw = livePeriodTotals[m.id]?.totalYear ?? null;
+      } else {
+        const dbVal = dbCurrentSums?.[m.id] ?? 0;
+        const todayVal = livePeriodTotals[m.id]?.totalDay ?? 0;
+        currentRaw = dbVal + todayVal;
+      }
+      if (currentRaw != null && currentRaw > 0) {
+        const c = toConsumption(currentRaw);
+        currentCost += c * price;
+        currentConsumption += c;
+      }
+
+      // Previous period (from DB)
+      if (selectedPeriod !== "day" && selectedPeriod !== "all") {
+        const prevRaw = dbPrevSums?.[m.id] ?? 0;
+        if (prevRaw > 0) {
+          prevCost += toConsumption(prevRaw) * price;
+        }
+      }
     });
 
     const diff = prevCost - currentCost;
@@ -168,7 +253,7 @@ const CostOverview = ({ locationId }: CostOverviewProps) => {
     const hasPrices = priceLookup.size > 0;
 
     return { currentCost, prevCost, diff, diffPercent, hasPrices, currentConsumption };
-  }, [readings, meterMap, priceLookup, selectedPeriod, livePeriodTotals, meters, locationId]);
+  }, [readings, meterMap, priceLookup, selectedPeriod, livePeriodTotals, meters, locationId, dbCurrentSums, dbPrevSums]);
 
   const loading = dataLoading || pricesLoading;
 
