@@ -247,8 +247,10 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
     const periodTotalKey = period === "week" ? "totalWeek" : period === "month" ? "totalMonth" : period === "year" ? "totalYear" : null;
 
     // For current period with Loxone totals (month/week/year): show a single aggregated bar
+    // Only if we actually have meaningful total values for the requested period
     if (useLoxoneTotals && periodTotalKey && period !== "quarter") {
       const totals = { strom: 0, gas: 0, waerme: 0, wasser: 0 };
+      let hasAnyLoxoneValue = false;
 
       // Add Loxone period totals for automatic main meters only
       for (const [meterId, pt] of Object.entries(livePeriodTotals)) {
@@ -257,24 +259,28 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
         if (locationId && info.location_id !== locationId) continue;
         const rawVal = pt[periodTotalKey as keyof typeof pt];
         if (rawVal != null && info.energy_type in totals) {
+          hasAnyLoxoneValue = true;
           const converted = info.energy_type === "gas" && info.unit === "m³" ? gasM3ToKWh(rawVal, info.gas_type, info.brennwert, info.zustandszahl) : rawVal;
           addToEnergyBucket(totals, info.energy_type, converted);
         }
       }
 
-      // Add manual main meter readings for the period
-      const [rs, re] = [rangeStart, rangeEnd];
-      readings.forEach((r) => {
-        const info = meterMap[r.meter_id];
-        if (!info || info.capture_type === "automatic" || !info.is_main_meter) return;
-        const d = new Date(r.reading_date);
-        if (d >= rs && d <= re) {
-          const converted = info.energy_type === "gas" && info.unit === "m³" ? gasM3ToKWh(r.value, info.gas_type, info.brennwert, info.zustandszahl) : r.value;
-          addToEnergyBucket(totals, info.energy_type, converted);
-        }
-      });
+      // Only use the single-bar view if we actually got Loxone values for this period
+      if (hasAnyLoxoneValue) {
+        // Add manual main meter readings for the period
+        const [rs, re] = [rangeStart, rangeEnd];
+        readings.forEach((r) => {
+          const info = meterMap[r.meter_id];
+          if (!info || info.capture_type === "automatic" || !info.is_main_meter) return;
+          const d = new Date(r.reading_date);
+          if (d >= rs && d <= re) {
+            const converted = info.energy_type === "gas" && info.unit === "m³" ? gasM3ToKWh(r.value, info.gas_type, info.brennwert, info.zustandszahl) : r.value;
+            addToEnergyBucket(totals, info.energy_type, converted);
+          }
+        });
 
-      return [{ label: periodLabel, ...totals }];
+        return [{ label: periodLabel, ...totals }];
+      }
     }
 
     // Quarter with Loxone totals: use totalMonth for current period
