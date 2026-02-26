@@ -508,11 +508,12 @@ function Scene({
             return (
               <Html
                 key={`label-${room.id}`}
-                position={[center.cx, 0.1, center.cz]}
+                position={[center.cx, 1.2, center.cz]}
                 center
+                occlude="blending"
                 style={{ pointerEvents: 'none' }}
               >
-                <div className="text-xs font-medium text-muted-foreground whitespace-nowrap">{room.name}</div>
+                <div className="text-xs font-semibold text-muted-foreground whitespace-nowrap bg-background/60 px-1 rounded">{room.name}</div>
               </Html>
             );
           })}
