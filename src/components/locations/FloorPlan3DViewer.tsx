@@ -1,6 +1,6 @@
 import { Suspense, useState, useCallback, useMemo, useRef, useEffect } from "react";
 import { Canvas, useFrame, useLoader } from "@react-three/fiber";
-import { Environment, Grid, OrbitControls, Text, useGLTF } from "@react-three/drei";
+import { Grid, OrbitControls, Text, useGLTF } from "@react-three/drei";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { Play, Square, Edit, Loader2, RotateCw, Eye, EyeOff } from "lucide-react";
@@ -351,8 +351,8 @@ function Scene({
         shadow-mapSize={[2048, 2048]}
       />
       
-      {/* Environment for reflections */}
-      <Environment preset="apartment" />
+      {/* Additional fill light for reflections (replaces external HDR Environment) */}
+      <hemisphereLight args={["#b1e1ff", "#b97a20", 0.5]} />
       
       {/* Ground grid - placed well below floor polygons to prevent z-fighting */}
       <Grid 
