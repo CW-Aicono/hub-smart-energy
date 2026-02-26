@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, CloudUpload, Eye, EyeOff, Copy, Check, ChevronRight, RefreshCw, Zap } from "lucide-react";
+import { Loader2, CloudUpload, Eye, EyeOff, ChevronRight, RefreshCw, Zap } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { de } from "date-fns/locale";
@@ -29,27 +29,32 @@ export const BrightHubSettings = ({ locationId }: BrightHubSettingsProps) => {
   const [autoSync, setAutoSync] = useState(false);
   const [saving, setSaving] = useState(false);
   const [showApiKey, setShowApiKey] = useState(false);
-  const [copiedField, setCopiedField] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
   const [syncingMeters, setSyncingMeters] = useState(false);
   const [syncingReadings, setSyncingReadings] = useState(false);
   const [syncingIntraday, setSyncingIntraday] = useState(false);
+  // Track whether user has edited the masked fields
+  const [apiKeyDirty, setApiKeyDirty] = useState(false);
+  const [webhookSecretDirty, setWebhookSecretDirty] = useState(false);
 
   useEffect(() => {
     if (settings) {
-      setApiKey(settings.api_key);
-      setWebhookSecret(settings.webhook_secret);
-      setWebhookUrl(settings.webhook_url);
+      setApiKey(settings.api_key || "");
+      setWebhookSecret(settings.webhook_secret || "");
+      setWebhookUrl(settings.webhook_url || "");
       setIsEnabled(settings.is_enabled);
       setAutoSync(settings.auto_sync_readings);
+      setApiKeyDirty(false);
+      setWebhookSecretDirty(false);
     }
   }, [settings]);
 
   const handleSave = async () => {
     setSaving(true);
     await saveSettings({
-      api_key: apiKey.trim(),
-      webhook_secret: webhookSecret.trim(),
+      // Only send plaintext if user actually edited the field
+      api_key: apiKeyDirty ? apiKey.trim() : settings?.api_key || "",
+      webhook_secret: webhookSecretDirty ? webhookSecret.trim() : settings?.webhook_secret || "",
       webhook_url: webhookUrl.trim(),
       is_enabled: isEnabled,
       auto_sync_readings: autoSync,
@@ -163,7 +168,14 @@ export const BrightHubSettings = ({ locationId }: BrightHubSettingsProps) => {
                   type={showApiKey ? "text" : "password"}
                   placeholder="BrightHub API-Key eingeben"
                   value={apiKey}
-                  onChange={(e) => setApiKey(e.target.value)}
+                  onChange={(e) => { setApiKey(e.target.value); setApiKeyDirty(true); }}
+                  onFocus={() => {
+                    // Clear masked value on focus so user can type new key
+                    if (!apiKeyDirty && apiKey.startsWith("••••••")) {
+                      setApiKey("");
+                      setApiKeyDirty(true);
+                    }
+                  }}
                 />
                 <Button
                   type="button"
@@ -195,35 +207,20 @@ export const BrightHubSettings = ({ locationId }: BrightHubSettingsProps) => {
             </Button>
 
             {/* Manual sync section */}
-            {settings?.is_enabled && settings?.api_key && (
+            {settings?.is_enabled && settings?._has_api_key && (
               <div className="border-t pt-4 space-y-4">
                 <h4 className="text-sm font-medium">Manuelle Synchronisation</h4>
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <Button
-                    variant="outline"
-                    onClick={handleSyncMeters}
-                    disabled={syncingMeters}
-                    className="w-full"
-                  >
+                  <Button variant="outline" onClick={handleSyncMeters} disabled={syncingMeters} className="w-full">
                     {syncingMeters ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
                     Zähler synchronisieren
                   </Button>
-                  <Button
-                    variant="outline"
-                    onClick={handleSyncReadings}
-                    disabled={syncingReadings}
-                    className="w-full"
-                  >
+                  <Button variant="outline" onClick={handleSyncReadings} disabled={syncingReadings} className="w-full">
                     {syncingReadings ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Zap className="mr-2 h-4 w-4" />}
                     Messwerte synchronisieren
                   </Button>
-                  <Button
-                    variant="outline"
-                    onClick={handleSyncIntraday}
-                    disabled={syncingIntraday}
-                    className="w-full"
-                  >
+                  <Button variant="outline" onClick={handleSyncIntraday} disabled={syncingIntraday} className="w-full">
                     {syncingIntraday ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Zap className="mr-2 h-4 w-4" />}
                     Leistungsdaten (kW)
                   </Button>
@@ -233,15 +230,15 @@ export const BrightHubSettings = ({ locationId }: BrightHubSettingsProps) => {
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
                   <div className="rounded-md bg-muted/50 p-3">
                     <p className="text-muted-foreground text-xs">Letzter Zähler-Sync</p>
-                    <p className="font-medium">{formatDate((settings as any).last_meter_sync_at)}</p>
+                    <p className="font-medium">{formatDate(settings.last_meter_sync_at)}</p>
                   </div>
                   <div className="rounded-md bg-muted/50 p-3">
                     <p className="text-muted-foreground text-xs">Letzter Messwerte-Sync</p>
-                    <p className="font-medium">{formatDate((settings as any).last_reading_sync_at)}</p>
+                    <p className="font-medium">{formatDate(settings.last_reading_sync_at)}</p>
                   </div>
                   <div className="rounded-md bg-muted/50 p-3">
                     <p className="text-muted-foreground text-xs">Letzter Leistungsdaten-Sync</p>
-                    <p className="font-medium">{formatDate((settings as any).last_intraday_sync_at)}</p>
+                    <p className="font-medium">{formatDate(settings.last_intraday_sync_at)}</p>
                   </div>
                 </div>
               </div>

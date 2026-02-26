@@ -51,6 +51,9 @@ verify_jwt = false
 [functions.weather-degree-days]
 verify_jwt = false
 
+[functions.brighthub-crypto]
+verify_jwt = false
+
 [functions.brighthub-sync]
 verify_jwt = false
 
