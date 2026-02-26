@@ -34,6 +34,7 @@ interface StateValueResult {
   totalMonth?: number | null;
   totalYear?: number | null;
   totalMonthLast?: number | null;
+  totalDayLast?: number | null;
 }
 
 // ── Control-type-specific state mapping table ──
@@ -486,6 +487,12 @@ serve(async (req) => {
             : (mappedStates["totalMonthLastConsumption"] ?? mappedStates["totalMonthLast"] ?? null);
           const totalMonthLast = totalMonthLastRaw !== null ? (typeof totalMonthLastRaw === "number" ? totalMonthLastRaw : parseFloat(String(totalMonthLastRaw))) : null;
 
+          // totalDayLast (Rldc/Rldd/Rld) for archiving yesterday's daily total
+          const totalDayLastRaw = isGenerator
+            ? (mappedStates["totalDayLastDelivery"] ?? mappedStates["totalDayLast"] ?? mappedStates["totalDayLastConsumption"] ?? null)
+            : (mappedStates["totalDayLastConsumption"] ?? mappedStates["totalDayLast"] ?? mappedStates["totalDayLastDelivery"] ?? null);
+          const totalDayLast = totalDayLastRaw !== null ? (typeof totalDayLastRaw === "number" ? totalDayLastRaw : parseFloat(String(totalDayLastRaw))) : null;
+
           stateResults[controlUuid] = {
             value: primaryValue,
             stateName: primaryStateName,
@@ -497,6 +504,7 @@ serve(async (req) => {
             totalMonth: totalMonth !== null && !isNaN(totalMonth) ? totalMonth : null,
             totalYear: totalYear !== null && !isNaN(totalYear) ? totalYear : null,
             totalMonthLast: totalMonthLast !== null && !isNaN(totalMonthLast) ? totalMonthLast : null,
+            totalDayLast: totalDayLast !== null && !isNaN(totalDayLast) ? totalDayLast : null,
           };
         }
       }
@@ -673,6 +681,21 @@ serve(async (req) => {
                 period_type: "month",
                 period_start: periodStart,
                 total_value: stateData.totalMonthLast,
+                energy_type: meter.energy_type,
+                source: "loxone",
+              });
+            }
+
+            // Archive yesterday's daily total (Rldc/Rldd/Rld)
+            if (stateData?.totalDayLast != null && stateData.totalDayLast > 0) {
+              const yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+              const yesterdayStr = yesterday.toISOString().split("T")[0];
+              monthUpserts.push({
+                tenant_id: meter.tenant_id,
+                meter_id: meter.id,
+                period_type: "day",
+                period_start: yesterdayStr,
+                total_value: stateData.totalDayLast,
                 energy_type: meter.energy_type,
                 source: "loxone",
               });

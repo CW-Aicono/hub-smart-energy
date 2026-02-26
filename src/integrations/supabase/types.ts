@@ -3499,11 +3499,30 @@ export type Database = {
           deleted_raw: number
         }[]
       }
+      compute_daily_totals_from_5min: {
+        Args: { p_day?: string }
+        Returns: number
+      }
       ensure_at_least_one_admin: {
         Args: never
         Returns: Database["public"]["Enums"]["app_role"]
       }
       get_auth_user_email: { Args: never; Returns: string }
+      get_meter_daily_totals: {
+        Args: { p_from_date: string; p_meter_ids: string[]; p_to_date: string }
+        Returns: {
+          day: string
+          meter_id: string
+          total_value: number
+        }[]
+      }
+      get_meter_period_sums: {
+        Args: { p_from_date: string; p_meter_ids: string[]; p_to_date: string }
+        Returns: {
+          meter_id: string
+          total_value: number
+        }[]
+      }
       get_power_readings_5min: {
         Args: { p_end: string; p_meter_ids: string[]; p_start: string }
         Returns: {
