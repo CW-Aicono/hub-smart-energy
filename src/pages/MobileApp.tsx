@@ -425,8 +425,8 @@ const MobileApp = () => {
           .from("meter-photos")
           .upload(fileName, byteArray, { contentType: "image/jpeg" });
         if (!uploadError && uploadData) {
-          const { data: urlData } = supabase.storage.from("meter-photos").getPublicUrl(uploadData.path);
-          photoUrl = urlData.publicUrl;
+          const { data: urlData } = await supabase.storage.from("meter-photos").createSignedUrl(uploadData.path, 3600);
+          if (urlData) photoUrl = urlData.signedUrl;
         }
       }
 
