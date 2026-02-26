@@ -129,6 +129,10 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
   const allowedTypes = useLocationEnergySources(locationId);
   const visibleEnergyKeys = useMemo(() => ENERGY_KEYS.filter(k => allowedTypes.has(k)), [allowedTypes]);
 
+  // DB-based daily totals for non-day periods
+  const [dailyTotals, setDailyTotals] = useState<Array<{ meter_id: string; day: string; total_value: number }>>([]);
+  const [dailyTotalsLoading, setDailyTotalsLoading] = useState(false);
+
   // Map "all" to "year" for this chart
   const period: ChartPeriod = selectedPeriod === "all" ? "year" : selectedPeriod;
 
@@ -238,97 +242,45 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
     fetchPower();
   }, [period, rangeStart.toISOString(), rangeEnd.toISOString(), meters, locationId, offset]);
 
+  // Fetch daily totals from DB for non-day periods (week, month, quarter, year)
+  useEffect(() => {
+    if (period === "day") {
+      setDailyTotals([]);
+      return;
+    }
+    const fetchDailyTotals = async () => {
+      const mainMeterIds = meters
+        .filter(m => !m.is_archived && m.is_main_meter && m.capture_type === "automatic")
+        .filter(m => !locationId || m.location_id === locationId)
+        .map(m => m.id);
+
+      if (mainMeterIds.length === 0) {
+        setDailyTotals([]);
+        return;
+      }
+
+      setDailyTotalsLoading(true);
+      const fromDate = format(rangeStart, "yyyy-MM-dd");
+      const toDate = format(rangeEnd, "yyyy-MM-dd");
+
+      const { data, error } = await supabase.rpc("get_meter_daily_totals", {
+        p_meter_ids: mainMeterIds,
+        p_from_date: fromDate,
+        p_to_date: toDate,
+      });
+
+      if (error) {
+        console.error("Error fetching daily totals:", error);
+        setDailyTotals([]);
+      } else {
+        setDailyTotals((data ?? []) as Array<{ meter_id: string; day: string; total_value: number }>);
+      }
+      setDailyTotalsLoading(false);
+    };
+    fetchDailyTotals();
+  }, [period, rangeStart.toISOString(), rangeEnd.toISOString(), meters, locationId]);
+
   const chartData = useMemo(() => {
-    // For non-day periods at offset 0, inject Loxone period totals for automatic main meters
-    const isCurrentPeriod = offset === 0;
-    const useLoxoneTotals = isCurrentPeriod && period !== "day" && Object.keys(livePeriodTotals).length > 0;
-
-    // Determine which period total field to use
-    const periodTotalKey = period === "week" ? "totalWeek" : period === "month" ? "totalMonth" : period === "year" ? "totalYear" : null;
-
-    // For current period with Loxone totals (month/week/year): show a single aggregated bar
-    // Only if we actually have meaningful total values for the requested period
-    if (useLoxoneTotals && periodTotalKey && period !== "quarter") {
-      const totals = { strom: 0, gas: 0, waerme: 0, wasser: 0 };
-      let hasAnyLoxoneValue = false;
-
-      // Add Loxone period totals for automatic main meters only
-      for (const [meterId, pt] of Object.entries(livePeriodTotals)) {
-        const info = meterMap[meterId];
-        if (!info || !info.is_main_meter) continue;
-        if (locationId && info.location_id !== locationId) continue;
-        const rawVal = pt[periodTotalKey as keyof typeof pt];
-        if (rawVal != null && info.energy_type in totals) {
-          hasAnyLoxoneValue = true;
-          const converted = info.energy_type === "gas" && info.unit === "m³" ? gasM3ToKWh(rawVal, info.gas_type, info.brennwert, info.zustandszahl) : rawVal;
-          addToEnergyBucket(totals, info.energy_type, converted);
-        }
-      }
-
-      // Only use the single-bar view if we actually got Loxone values for this period
-      if (hasAnyLoxoneValue) {
-        // Add manual main meter readings for the period
-        const [rs, re] = [rangeStart, rangeEnd];
-        readings.forEach((r) => {
-          const info = meterMap[r.meter_id];
-          if (!info || info.capture_type === "automatic" || !info.is_main_meter) return;
-          const d = new Date(r.reading_date);
-          if (d >= rs && d <= re) {
-            const converted = info.energy_type === "gas" && info.unit === "m³" ? gasM3ToKWh(r.value, info.gas_type, info.brennwert, info.zustandszahl) : r.value;
-            addToEnergyBucket(totals, info.energy_type, converted);
-          }
-        });
-
-        return [{ label: periodLabel, ...totals }];
-      }
-    }
-
-    // Quarter with Loxone totals: use totalMonth for current period
-    if (useLoxoneTotals && period === "quarter") {
-      const monthLabels = ["Jan", "Feb", "Mär", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dez"];
-      const startMonth = rangeStart.getMonth();
-      const buckets = [0, 1, 2].map((i) => {
-        const monthIdx = startMonth + i;
-        return { label: monthLabels[monthIdx] || `M${monthIdx + 1}`, strom: 0, gas: 0, waerme: 0, wasser: 0 };
-      });
-
-      // For the current month, use live totalMonth; for past months, use totalMonth proportionally
-      // Since we only have current period totals, show totalMonth as the current month bucket
-      const currentMonthIdx = new Date().getMonth() - startMonth;
-
-      for (const [meterId, pt] of Object.entries(livePeriodTotals)) {
-        const info = meterMap[meterId];
-        if (!info || !info.is_main_meter) continue;
-        if (locationId && info.location_id !== locationId) continue;
-        if (pt.totalMonth != null && currentMonthIdx >= 0 && currentMonthIdx < 3) {
-          const converted = info.energy_type === "gas" && info.unit === "m³" ? gasM3ToKWh(pt.totalMonth, info.gas_type, info.brennwert, info.zustandszahl) : pt.totalMonth;
-          addToEnergyBucket(buckets[currentMonthIdx], info.energy_type, converted);
-        }
-      }
-
-      // Add manual readings distributed by month
-      readings.forEach((r) => {
-        const info = meterMap[r.meter_id];
-        if (!info || info.capture_type === "automatic") return;
-        const d = new Date(r.reading_date);
-        if (d >= rangeStart && d <= rangeEnd) {
-          const mi = d.getMonth() - startMonth;
-          if (mi >= 0 && mi < 3) {
-            const converted = info.energy_type === "gas" && info.unit === "m³" ? gasM3ToKWh(r.value, info.gas_type, info.brennwert, info.zustandszahl) : r.value;
-            addToEnergyBucket(buckets[mi], info.energy_type, converted);
-          }
-        }
-      });
-
-      return buckets;
-    }
-
-    // Default: existing logic using individual readings
-    const filtered = readings.filter((r) => {
-      const d = new Date(r.reading_date);
-      return d >= rangeStart && d <= rangeEnd;
-    });
-
     const emptyBucket = () => ({ strom: 0, gas: 0, waerme: 0, wasser: 0 });
 
     const convertGas = (meterId: string, value: number): number => {
@@ -344,6 +296,43 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
       const et = info?.energy_type || "strom";
       addToEnergyBucket(bucket, et, convertGas(r.meter_id, r.value));
     };
+
+    // Helper: build a map of date -> energy bucket from DB daily totals
+    const buildDailyBucketsFromDB = (): Map<string, EnergyBucket> => {
+      const map = new Map<string, EnergyBucket>();
+      for (const row of dailyTotals) {
+        const info = meterMap[row.meter_id];
+        if (!info) continue;
+        const dayStr = typeof row.day === "string" ? row.day.split("T")[0] : format(new Date(row.day), "yyyy-MM-dd");
+        if (!map.has(dayStr)) map.set(dayStr, emptyBucket());
+        const bucket = map.get(dayStr)!;
+        addToEnergyBucket(bucket, info.energy_type, convertGas(row.meter_id, row.total_value));
+      }
+      return map;
+    };
+
+    // Helper: add today's live totalDay from Loxone for a specific bucket
+    const addLiveTodayToBucket = (bucket: EnergyBucket) => {
+      const todayStr = format(new Date(), "yyyy-MM-dd");
+      for (const [meterId, pt] of Object.entries(livePeriodTotals)) {
+        const info = meterMap[meterId];
+        if (!info || !info.is_main_meter) continue;
+        if (locationId && info.location_id !== locationId) continue;
+        if (pt.totalDay != null) {
+          const converted = info.energy_type === "gas" && info.unit === "m³"
+            ? gasM3ToKWh(pt.totalDay, info.gas_type, info.brennwert, info.zustandszahl)
+            : pt.totalDay;
+          addToEnergyBucket(bucket, info.energy_type, converted);
+        }
+      }
+      return todayStr;
+    };
+
+    // Filter readings to current range
+    const filtered = readings.filter((r) => {
+      const d = new Date(r.reading_date);
+      return d >= rangeStart && d <= rangeEnd;
+    });
 
     if (period === "day") {
       // Each bucket tracks value + whether the point is real or gap-interpolated
@@ -466,26 +455,22 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
       const dayNames = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
       const days = eachDayOfInterval({ start: rangeStart, end: rangeEnd });
       const todayStr = format(new Date(), "yyyy-MM-dd");
+      const dbDailyMap = buildDailyBucketsFromDB();
       return days.map((d, i) => {
         const dateStr = format(d, "yyyy-MM-dd");
         const bucket = { label: dayNames[i] || format(d, "EEE", { locale: de }), ...emptyBucket() };
+        // Add DB daily totals for this day (automatic meters)
+        const dbBucket = dbDailyMap.get(dateStr);
+        if (dbBucket) {
+          for (const key of ENERGY_KEYS) addToEnergyBucket(bucket, key, dbBucket[key]);
+        }
         // Add manual readings for this day
         filtered.forEach((r) => {
           if (format(new Date(r.reading_date), "yyyy-MM-dd") === dateStr) addToBucket(bucket, r);
         });
-        // For today: inject live totalDay from automatic main meters
-        if (dateStr === todayStr) {
-          for (const [meterId, pt] of Object.entries(livePeriodTotals)) {
-            const info = meterMap[meterId];
-            if (!info || !info.is_main_meter) continue;
-            if (locationId && info.location_id !== locationId) continue;
-            if (pt.totalDay != null) {
-              const converted = info.energy_type === "gas" && info.unit === "m³"
-                ? gasM3ToKWh(pt.totalDay, info.gas_type, info.brennwert, info.zustandszahl)
-                : pt.totalDay;
-              addToEnergyBucket(bucket, info.energy_type, converted);
-            }
-          }
+        // For today: inject live totalDay (replaces any DB value for today since it's more current)
+        if (dateStr === todayStr && !dbBucket) {
+          addLiveTodayToBucket(bucket);
         }
         return bucket;
       });
@@ -493,23 +478,49 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
 
     if (period === "month") {
       const days = eachDayOfInterval({ start: rangeStart, end: rangeEnd });
+      const todayStr = format(new Date(), "yyyy-MM-dd");
+      const dbDailyMap = buildDailyBucketsFromDB();
       return days.map((d) => {
         const dateStr = format(d, "yyyy-MM-dd");
         const bucket = { label: format(d, "d."), ...emptyBucket() };
+        // Add DB daily totals
+        const dbBucket = dbDailyMap.get(dateStr);
+        if (dbBucket) {
+          for (const key of ENERGY_KEYS) addToEnergyBucket(bucket, key, dbBucket[key]);
+        }
+        // Add manual readings
         filtered.forEach((r) => {
           if (format(new Date(r.reading_date), "yyyy-MM-dd") === dateStr) addToBucket(bucket, r);
         });
+        // For today: inject live totalDay
+        if (dateStr === todayStr && !dbBucket) {
+          addLiveTodayToBucket(bucket);
+        }
         return bucket;
       });
     }
 
     if (period === "quarter") {
-      const weekMap = new Map<number, { label: string; strom: number; gas: number; waerme: number; wasser: number }>();
+      const weekMap = new Map<number, EnergyBucketWithLabel>();
       const days = eachDayOfInterval({ start: rangeStart, end: rangeEnd });
+      const todayStr = format(new Date(), "yyyy-MM-dd");
+      const dbDailyMap = buildDailyBucketsFromDB();
       days.forEach((d) => {
         const wk = getISOWeek(d);
         if (!weekMap.has(wk)) weekMap.set(wk, { label: `KW${wk}`, ...emptyBucket() });
+        const dateStr = format(d, "yyyy-MM-dd");
+        const bucket = weekMap.get(wk)!;
+        // Add DB daily totals
+        const dbBucket = dbDailyMap.get(dateStr);
+        if (dbBucket) {
+          for (const key of ENERGY_KEYS) addToEnergyBucket(bucket, key, dbBucket[key]);
+        }
+        // For today: inject live totalDay
+        if (dateStr === todayStr && !dbBucket) {
+          addLiveTodayToBucket(bucket);
+        }
       });
+      // Add manual readings
       filtered.forEach((r) => {
         const wk = getISOWeek(new Date(r.reading_date));
         const bucket = weekMap.get(wk);
@@ -521,12 +532,27 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
     // year
     const monthLabels = ["Jan", "Feb", "Mär", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dez"];
     const buckets = monthLabels.map((m) => ({ label: m, ...emptyBucket() }));
+    const todayStr = format(new Date(), "yyyy-MM-dd");
+    const dbDailyMap = buildDailyBucketsFromDB();
+    // Distribute DB daily totals into month buckets
+    for (const [dateStr, dbBucket] of dbDailyMap.entries()) {
+      const monthIdx = new Date(dateStr).getMonth();
+      for (const key of ENERGY_KEYS) addToEnergyBucket(buckets[monthIdx], key, dbBucket[key]);
+    }
+    // Add today's live value if no DB record yet
+    if (!dbDailyMap.has(todayStr)) {
+      const todayBucket = emptyBucket();
+      addLiveTodayToBucket(todayBucket);
+      const monthIdx = new Date().getMonth();
+      for (const key of ENERGY_KEYS) addToEnergyBucket(buckets[monthIdx], key, todayBucket[key]);
+    }
+    // Add manual readings
     filtered.forEach((r) => {
       const month = new Date(r.reading_date).getMonth();
       addToBucket(buckets[month], r);
     });
     return buckets;
-  }, [readings, meterMap, period, rangeStart.toISOString(), rangeEnd.toISOString(), livePeriodTotals, offset, periodLabel, locationId, powerReadings]);
+  }, [readings, meterMap, period, rangeStart.toISOString(), rangeEnd.toISOString(), livePeriodTotals, offset, periodLabel, locationId, powerReadings, dailyTotals]);
 
   // Reset offset when period changes
   const handlePeriodChange = (v: string) => {
@@ -536,7 +562,7 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
     }
   };
 
-  if (loading || powerLoading) return <Card><CardContent className="p-6"><Skeleton className="h-[300px]" /></CardContent></Card>;
+  if (loading || powerLoading || dailyTotalsLoading) return <Card><CardContent className="p-6"><Skeleton className="h-[300px]" /></CardContent></Card>;
 
   const unitLabel = getChartUnitLabel(period);
   const isLineChart = period === "day";
