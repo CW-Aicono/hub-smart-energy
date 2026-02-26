@@ -9,11 +9,16 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import {
   Zap, LogOut, Loader2, ArrowLeft, Mail, Lock, Eye, EyeOff,
   User, BarChart3, Receipt, Home, TrendingUp, TrendingDown,
-  Settings, Plus, Trash2, Pencil,
+  Settings, Plus, Trash2, Pencil, Sun, Moon, Monitor, Globe, ChevronRight,
 } from "lucide-react";
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem,
+  DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuSub,
+  DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import { format, subMonths, startOfMonth, endOfMonth } from "date-fns";
-import { de } from "date-fns/locale";
+import { de, enUS, pl, fr } from "date-fns/locale";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from "recharts";
@@ -1064,6 +1069,45 @@ const TenantEnergyApp = () => {
   const [dataLoading, setDataLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<AppTab>("dashboard");
 
+  // Tenant app user preferences (persisted in localStorage)
+  type TenantLang = "de" | "en" | "pl" | "fr";
+  type TenantThemeMode = "light" | "dark" | "system";
+  const [tenantLang, setTenantLangState] = useState<TenantLang>(() => {
+    try { return (localStorage.getItem("te-lang") as TenantLang) || "de"; } catch { return "de"; }
+  });
+  const [tenantTheme, setTenantThemeState] = useState<TenantThemeMode>(() => {
+    try { return (localStorage.getItem("te-theme") as TenantThemeMode) || "system"; } catch { return "system"; }
+  });
+
+  const setTenantLang = (lang: TenantLang) => {
+    setTenantLangState(lang);
+    try { localStorage.setItem("te-lang", lang); } catch {}
+  };
+  const setTenantTheme = (mode: TenantThemeMode) => {
+    setTenantThemeState(mode);
+    try { localStorage.setItem("te-theme", mode); } catch {}
+  };
+
+  // Apply theme
+  useEffect(() => {
+    const root = document.documentElement;
+    if (tenantTheme === "system") {
+      const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+      root.classList.toggle("dark", prefersDark);
+    } else {
+      root.classList.toggle("dark", tenantTheme === "dark");
+    }
+  }, [tenantTheme]);
+
+  // Listen for system theme changes
+  useEffect(() => {
+    if (tenantTheme !== "system") return;
+    const mq = window.matchMedia("(prefers-color-scheme: dark)");
+    const handler = (e: MediaQueryListEvent) => document.documentElement.classList.toggle("dark", e.matches);
+    mq.addEventListener("change", handler);
+    return () => mq.removeEventListener("change", handler);
+  }, [tenantTheme]);
+
   // Set PWA manifest
   useEffect(() => {
     let link = document.querySelector("link[rel='manifest']") as HTMLLinkElement | null;
@@ -1196,9 +1240,49 @@ const TenantEnergyApp = () => {
           </div>
           <span className="font-bold">Mein Strom</span>
         </div>
-        <Button variant="ghost" size="icon" onClick={handleLogout}>
-          <LogOut className="h-4 w-4" />
-        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon">
+              <User className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-48">
+            <DropdownMenuLabel className="text-xs text-muted-foreground truncate">{user?.email}</DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            {/* Language */}
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger className="gap-2">
+                <Globe className="h-4 w-4" />
+                {tenantLang === "de" ? "Deutsch" : tenantLang === "en" ? "English" : tenantLang === "pl" ? "Polski" : "Français"}
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent>
+                {([["de","Deutsch"],["en","English"],["pl","Polski"],["fr","Français"]] as const).map(([code, label]) => (
+                  <DropdownMenuItem key={code} onClick={() => setTenantLang(code)} className={tenantLang === code ? "font-semibold" : ""}>
+                    {label}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
+            {/* Theme */}
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger className="gap-2">
+                {tenantTheme === "dark" ? <Moon className="h-4 w-4" /> : tenantTheme === "light" ? <Sun className="h-4 w-4" /> : <Monitor className="h-4 w-4" />}
+                {tenantTheme === "dark" ? "Dark" : tenantTheme === "light" ? "Light" : "System"}
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent>
+                {([["light","Light",Sun],["dark","Dark",Moon],["system","System",Monitor]] as const).map(([val, label, Icon]) => (
+                  <DropdownMenuItem key={val} onClick={() => setTenantTheme(val as any)} className={`gap-2 ${tenantTheme === val ? "font-semibold" : ""}`}>
+                    <Icon className="h-4 w-4" /> {label}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={handleLogout} className="gap-2 text-destructive focus:text-destructive">
+              <LogOut className="h-4 w-4" /> Abmelden
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       {/* Content */}
