@@ -26,7 +26,10 @@ export function useMeterReadings(meterId?: string) {
   const [loading, setLoading] = useState(true);
 
   const fetchReadings = useCallback(async () => {
-    if (!user) return;
+    if (!user) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
 
     let query = supabase

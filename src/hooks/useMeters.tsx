@@ -35,7 +35,10 @@ export function useMeters(locationId?: string) {
   const [loading, setLoading] = useState(true);
 
   const fetchMeters = useCallback(async () => {
-    if (!user || !tenantId) return;
+    if (!user || !tenantId) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
 
     let query = supabase.from("meters").select("*").eq("tenant_id", tenantId).order("name");
