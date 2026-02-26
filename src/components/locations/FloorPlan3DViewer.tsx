@@ -1,6 +1,6 @@
 import { Suspense, useState, useCallback, useMemo, useRef, useEffect } from "react";
-import { Canvas, useFrame, useLoader } from "@react-three/fiber";
-import { Grid, OrbitControls, Text, useGLTF } from "@react-three/drei";
+import { Canvas, useFrame } from "@react-three/fiber";
+import { Grid, OrbitControls, Text } from "@react-three/drei";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { Play, Square, Edit, Loader2, RotateCw, Eye, EyeOff } from "lucide-react";
@@ -15,6 +15,7 @@ import { Sensor3DLabel } from "./Sensor3DLabel";
 import { DraggableMeter3D } from "./DraggableMeter3D";
 import { RoomEditor } from "./RoomEditor";
 import { Minimap3D } from "./Minimap3D";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { OBJLoader } from "three/examples/jsm/loaders/OBJLoader.js";
 import { MTLLoader } from "three/examples/jsm/loaders/MTLLoader.js";
 import { TDSLoader } from "three/examples/jsm/loaders/TDSLoader.js";
@@ -81,24 +82,78 @@ function centerAndGroundObject(obj: THREE.Object3D) {
   obj.updateMatrixWorld(true);
 }
 
+function normalizeModelStorageUrl(url?: string | null): string | null {
+  if (!url) return null;
+  const withoutQuery = url.split("?")[0];
+  return withoutQuery.replace(
+    "/storage/v1/object/sign/floor-3d-models/",
+    "/storage/v1/object/public/floor-3d-models/",
+  );
+}
+
 // Renders a GLB model
 function GLBModel({ url }: { url: string }) {
-  const { scene } = useGLTF(url);
-  const cloned = useMemo(() => {
-    const clone = scene.clone(true);
-    // Remove any cameras embedded in the model
-    const toRemove: THREE.Object3D[] = [];
-    clone.traverse((child) => {
-      if (child instanceof THREE.Camera) {
-        toRemove.push(child);
+  const [object, setObject] = useState<THREE.Object3D | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadModel = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const loader = new GLTFLoader();
+        const gltf = await loader.loadAsync(url);
+        const clone = gltf.scene.clone(true);
+
+        // Remove any cameras embedded in the model
+        const toRemove: THREE.Object3D[] = [];
+        clone.traverse((child) => {
+          if (child instanceof THREE.Camera) {
+            toRemove.push(child);
+          }
+        });
+        toRemove.forEach((obj) => obj.removeFromParent());
+
+        centerAndGroundObject(clone);
+
+        if (!cancelled) {
+          setObject(clone);
+          setLoading(false);
+        }
+      } catch (err) {
+        console.error("Error loading GLB model:", err);
+        if (!cancelled) {
+          setError(String(err));
+          setLoading(false);
+        }
       }
-    });
-    toRemove.forEach((obj) => obj.removeFromParent());
-    // Center and ground the model
-    centerAndGroundObject(clone);
-    return clone;
-  }, [scene]);
-  return <primitive object={cloned} />;
+    };
+
+    loadModel();
+    return () => {
+      cancelled = true;
+    };
+  }, [url]);
+
+  if (error) {
+    return (
+      <Text position={[0, 1, 0]} fontSize={0.3} color="#ef4444" anchorX="center" anchorY="middle">
+        Fehler beim Laden des 3D-Modells
+      </Text>
+    );
+  }
+
+  if (loading || !object) {
+    return (
+      <Text position={[0, 1, 0]} fontSize={0.3} color="#6b7280" anchorX="center" anchorY="middle">
+        3D-Modell wird geladen...
+      </Text>
+    );
+  }
+
+  return <primitive object={object} />;
 }
 
 // Renders an OBJ model with optional MTL
@@ -175,39 +230,91 @@ function OBJModel({ objUrl, mtlUrl }: { objUrl: string; mtlUrl?: string | null }
 // Renders a 3DS model
 function TDSModel({ url }: { url: string }) {
   const [object, setObject] = useState<THREE.Group | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const loader = new TDSLoader();
-    loader.loadAsync(url).then((obj) => {
-      centerAndGroundObject(obj);
-      setObject(obj);
-    });
+    let cancelled = false;
+    const loadModel = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const loader = new TDSLoader();
+        const obj = await loader.loadAsync(url);
+        centerAndGroundObject(obj);
+        if (!cancelled) {
+          setObject(obj);
+          setLoading(false);
+        }
+      } catch (err) {
+        console.error("Error loading 3DS model:", err);
+        if (!cancelled) {
+          setError(String(err));
+          setLoading(false);
+        }
+      }
+    };
+
+    loadModel();
+    return () => {
+      cancelled = true;
+    };
   }, [url]);
 
-  if (!object) return null;
+  if (error) {
+    return (
+      <Text position={[0, 1, 0]} fontSize={0.3} color="#ef4444" anchorX="center" anchorY="middle">
+        Fehler beim Laden des 3D-Modells
+      </Text>
+    );
+  }
+
+  if (loading || !object) {
+    return (
+      <Text position={[0, 1, 0]} fontSize={0.3} color="#6b7280" anchorX="center" anchorY="middle">
+        3D-Modell wird geladen...
+      </Text>
+    );
+  }
+
   return <primitive object={object} />;
 }
 
-// Wraps a model, applies X-axis rotation, then re-grounds so bottom sits at Y=0
-function RotatedModelGroup({ rotationDeg, children }: { rotationDeg: number; children: React.ReactNode }) {
+// Wraps a model, applies X-axis rotation, then re-grounds once after load/rotation changes
+function RotatedModelGroup({ rotationDeg, modelKey, children }: { rotationDeg: number; modelKey: string; children: React.ReactNode }) {
   const groupRef = useRef<THREE.Group>(null);
   const rotationX = (rotationDeg * Math.PI) / 180;
+  const needsGroundingRef = useRef(true);
+  const groundingFramesRef = useRef(0);
 
-  // Idempotent: reset position, measure, correct every frame
+  useEffect(() => {
+    needsGroundingRef.current = true;
+    groundingFramesRef.current = 0;
+  }, [rotationX, modelKey]);
+
   useFrame(() => {
-    if (!groupRef.current) return;
-    groupRef.current.rotation.set(rotationX, 0, 0);
-    groupRef.current.position.y = 0;
-    groupRef.current.updateMatrixWorld(true);
+    const group = groupRef.current;
+    if (!group || !needsGroundingRef.current) return;
 
-    const box = new THREE.Box3().setFromObject(groupRef.current);
-    if (box.isEmpty()) return;
+    group.position.y = 0;
+    group.updateMatrixWorld(true);
 
-    groupRef.current.position.y = -box.min.y;
+    const box = new THREE.Box3().setFromObject(group);
+    groundingFramesRef.current += 1;
+
+    if (!box.isEmpty()) {
+      group.position.y = -box.min.y;
+      needsGroundingRef.current = false;
+      return;
+    }
+
+    if (groundingFramesRef.current > 120) {
+      needsGroundingRef.current = false;
+    }
   });
 
   return (
-    <group ref={groupRef}>
+    <group ref={groupRef} rotation={[rotationX, 0, 0]}>
       {children}
     </group>
   );
@@ -215,23 +322,24 @@ function RotatedModelGroup({ rotationDeg, children }: { rotationDeg: number; chi
 
 // Renders uploaded 3D model (GLB, OBJ+MTL, or 3DS) with optional manual rotation
 function ModelViewer({ floor, rotationDeg }: { floor: Floor; rotationDeg: number }) {
-  if (!floor.model_3d_url) return null;
+  const modelUrl = normalizeModelStorageUrl(floor.model_3d_url);
+  if (!modelUrl) return null;
 
-  const url = floor.model_3d_url;
-  const pathOnly = url.split("?")[0].toLowerCase();
+  const mtlUrl = normalizeModelStorageUrl(floor.model_3d_mtl_url);
+  const pathOnly = modelUrl.toLowerCase();
 
   let modelElement: JSX.Element;
 
   if (pathOnly.endsWith(".glb")) {
-    modelElement = <GLBModel url={url} />;
+    modelElement = <GLBModel url={modelUrl} />;
   } else if (pathOnly.endsWith(".3ds")) {
-    modelElement = <TDSModel url={url} />;
+    modelElement = <TDSModel url={modelUrl} />;
   } else {
-    modelElement = <OBJModel objUrl={url} mtlUrl={floor.model_3d_mtl_url} />;
+    modelElement = <OBJModel objUrl={modelUrl} mtlUrl={mtlUrl} />;
   }
 
   return (
-    <RotatedModelGroup rotationDeg={rotationDeg}>
+    <RotatedModelGroup rotationDeg={rotationDeg} modelKey={pathOnly}>
       {modelElement}
     </RotatedModelGroup>
   );
@@ -720,7 +828,13 @@ export function FloorPlan3DViewer({ floor, locationId, sensors = [], isAdmin = f
               }}
               style={{ cursor: isWalking && isLocked ? "none" : "grab" }}
             >
-              <Suspense fallback={null}>
+              <Suspense
+                fallback={
+                  <Text position={[0, 1, 0]} fontSize={0.3} color="#6b7280" anchorX="center" anchorY="middle">
+                    3D-Modell wird geladen...
+                  </Text>
+                }
+              >
                 <Scene 
                   floor={floor}
                   rooms={rooms}

@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { useFloors } from "@/hooks/useFloors";
-import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,7 +14,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Plus, Upload } from "lucide-react";
+import { Plus } from "lucide-react";
 
 interface AddFloorDialogProps {
   locationId: string;
@@ -25,7 +24,7 @@ interface AddFloorDialogProps {
 export function AddFloorDialog({ locationId, onSuccess }: AddFloorDialogProps) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
-  const { createFloor, uploadFloorPlan } = useFloors(locationId);
+  const { createFloor, updateFloor, uploadFloorPlan, upload3DModel } = useFloors(locationId);
   
   const [name, setName] = useState("");
   const [floorNumber, setFloorNumber] = useState("0");
@@ -83,33 +82,20 @@ export function AddFloorDialog({ locationId, onSuccess }: AddFloorDialogProps) {
         if (uploadError) {
           toast.error("Etage erstellt, aber Grundriss konnte nicht hochgeladen werden");
         } else if (url) {
-          await supabase.from("floors").update({ floor_plan_url: url } as any).eq("id", floor.id);
+          await updateFloor(floor.id, { floor_plan_url: url });
         }
       }
 
       // Upload 3D model if provided
       if (model3dFile && floor) {
-        const mainExt = model3dFile.name.split('.').pop()?.toLowerCase();
-        const mainPath = `${locationId}/${floor.id}.${mainExt}`;
+        const { error: modelError } = await upload3DModel(
+          { main: model3dFile, mtl: mtlFile || undefined },
+          locationId,
+          floor.id,
+        );
 
-        const { error: modelUploadError } = await supabase.storage
-          .from('floor-3d-models')
-          .upload(mainPath, model3dFile, { upsert: true });
-
-        if (!modelUploadError) {
-          const { data: mainSigned } = await supabase.storage
-            .from('floor-3d-models')
-            .createSignedUrl(mainPath, 3600);
-
-          let mtlUrl: string | null = null;
-          if (mtlFile) {
-            const mtlPath = `${locationId}/${floor.id}.mtl`;
-            await supabase.storage.from('floor-3d-models').upload(mtlPath, mtlFile, { upsert: true });
-            const { data: mtlSigned } = await supabase.storage.from('floor-3d-models').createSignedUrl(mtlPath, 3600);
-            mtlUrl = mtlSigned?.signedUrl ?? null;
-          }
-
-          await supabase.from("floors").update({ model_3d_url: mainSigned?.signedUrl ?? null, model_3d_mtl_url: mtlUrl } as any).eq("id", floor.id);
+        if (modelError) {
+          toast.error("Etage erstellt, aber 3D-Modell konnte nicht hochgeladen werden");
         }
       }
 
