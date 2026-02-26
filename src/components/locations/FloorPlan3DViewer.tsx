@@ -1,6 +1,6 @@
-import { Suspense, useState, useCallback, useMemo, useRef, useEffect, Component, type ReactNode, type ErrorInfo } from "react";
+import { useState, useCallback, useMemo, useRef, useEffect, Component, type ReactNode, type ErrorInfo } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
-import { Grid, OrbitControls, Text } from "@react-three/drei";
+import { Grid, OrbitControls, Html } from "@react-three/drei";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { Play, Square, Edit, Loader2, RotateCw, Eye, EyeOff } from "lucide-react";
@@ -174,19 +174,13 @@ function GLBModel({ url }: { url: string }) {
 
   if (error) {
     return (
-      <Text position={[0, 1, 0]} fontSize={0.3} color="#ef4444" anchorX="center" anchorY="middle">
-        Fehler beim Laden des 3D-Modells
-      </Text>
+      <Html center>
+        <div className="text-destructive text-sm font-medium whitespace-nowrap">Fehler beim Laden des 3D-Modells</div>
+      </Html>
     );
   }
 
-  if (loading || !object) {
-    return (
-      <Text position={[0, 1, 0]} fontSize={0.3} color="#6b7280" anchorX="center" anchorY="middle">
-        3D-Modell wird geladen...
-      </Text>
-    );
-  }
+  if (loading || !object) return null;
 
   return <primitive object={object} />;
 }
@@ -245,19 +239,13 @@ function OBJModel({ objUrl, mtlUrl }: { objUrl: string; mtlUrl?: string | null }
 
   if (error) {
     return (
-      <Text position={[0, 1, 0]} fontSize={0.3} color="#ef4444" anchorX="center" anchorY="middle">
-        Fehler beim Laden des 3D-Modells
-      </Text>
+      <Html center>
+        <div className="text-destructive text-sm font-medium whitespace-nowrap">Fehler beim Laden des 3D-Modells</div>
+      </Html>
     );
   }
 
-  if (loading || !object) {
-    return (
-      <Text position={[0, 1, 0]} fontSize={0.3} color="#6b7280" anchorX="center" anchorY="middle">
-        3D-Modell wird geladen...
-      </Text>
-    );
-  }
+  if (loading || !object) return null;
 
   return <primitive object={object} />;
 }
@@ -298,19 +286,13 @@ function TDSModel({ url }: { url: string }) {
 
   if (error) {
     return (
-      <Text position={[0, 1, 0]} fontSize={0.3} color="#ef4444" anchorX="center" anchorY="middle">
-        Fehler beim Laden des 3D-Modells
-      </Text>
+      <Html center>
+        <div className="text-destructive text-sm font-medium whitespace-nowrap">Fehler beim Laden des 3D-Modells</div>
+      </Html>
     );
   }
 
-  if (loading || !object) {
-    return (
-      <Text position={[0, 1, 0]} fontSize={0.3} color="#6b7280" anchorX="center" anchorY="middle">
-        3D-Modell wird geladen...
-      </Text>
-    );
-  }
+  if (loading || !object) return null;
 
   return <primitive object={object} />;
 }
@@ -525,17 +507,14 @@ function Scene({
           {rooms.map((room, index) => {
             const center = deriveRoomCenter(room, index, rooms.length);
             return (
-              <Text
+              <Html
                 key={`label-${room.id}`}
                 position={[center.cx, 0.1, center.cz]}
-                rotation={[-Math.PI / 2, 0, 0]}
-                fontSize={0.5}
-                color="#374151"
-                anchorX="center"
-                anchorY="middle"
+                center
+                style={{ pointerEvents: 'none' }}
               >
-                {room.name}
-              </Text>
+                <div className="text-xs font-medium text-muted-foreground whitespace-nowrap">{room.name}</div>
+              </Html>
             );
           })}
           
@@ -558,15 +537,9 @@ function Scene({
 
           {/* Empty state hint */}
           {rooms.length === 0 && floorMeters.length === 0 && (
-            <Text
-              position={[0, 1, 0]}
-              fontSize={0.3}
-              color="#6b7280"
-              anchorX="center"
-              anchorY="middle"
-            >
-              Keine Räume definiert
-            </Text>
+            <Html center position={[0, 1, 0]}>
+              <div className="text-sm text-muted-foreground whitespace-nowrap">Keine Räume definiert</div>
+            </Html>
           )}
         </>
       )}
@@ -727,7 +700,7 @@ export function FloorPlan3DViewer({ floor, locationId, sensors = [], isAdmin = f
     }, 800);
   }, [updateMeter]);
 
-  const loading = roomsLoading || positionsLoading || metersLoading;
+  const loading = roomsLoading || positionsLoading;
 
   if (showRoomEditor) {
     return (
@@ -869,13 +842,6 @@ export function FloorPlan3DViewer({ floor, locationId, sensors = [], isAdmin = f
                 });
               }}
             >
-              <Suspense
-                fallback={
-                  <Text position={[0, 1, 0]} fontSize={0.3} color="#6b7280" anchorX="center" anchorY="middle">
-                    3D-Modell wird geladen...
-                  </Text>
-                }
-              >
                 <Scene 
                   floor={floor}
                   rooms={rooms}
@@ -893,7 +859,6 @@ export function FloorPlan3DViewer({ floor, locationId, sensors = [], isAdmin = f
                   onMovingChange={setIsMoving}
                   onCameraUpdate={handleCameraUpdate}
                 />
-              </Suspense>
             </Canvas>
           </Canvas3DErrorBoundary>
 

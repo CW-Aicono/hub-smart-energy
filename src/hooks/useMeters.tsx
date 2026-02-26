@@ -41,17 +41,23 @@ export function useMeters(locationId?: string) {
     }
     setLoading(true);
 
-    let query = supabase.from("meters").select("*").eq("tenant_id", tenantId).order("name");
-    if (locationId) query = query.eq("location_id", locationId);
+    try {
+      let query = supabase.from("meters").select("*").eq("tenant_id", tenantId).order("name");
+      if (locationId) query = query.eq("location_id", locationId);
 
-    const { data, error } = await query;
-    if (error) {
-      console.error("Error fetching meters:", error);
+      const { data, error } = await query;
+      if (error) {
+        console.error("Error fetching meters:", error);
+        setMeters([]);
+      } else {
+        setMeters((data ?? []) as Meter[]);
+      }
+    } catch (err) {
+      console.error("Error fetching meters:", err);
       setMeters([]);
-    } else {
-      setMeters((data ?? []) as Meter[]);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, [user, locationId, tenantId]);
 
   useEffect(() => {

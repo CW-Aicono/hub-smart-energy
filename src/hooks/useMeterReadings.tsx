@@ -32,21 +32,27 @@ export function useMeterReadings(meterId?: string) {
     }
     setLoading(true);
 
-    let query = supabase
-      .from("meter_readings")
-      .select("*")
-      .order("reading_date", { ascending: false });
+    try {
+      let query = supabase
+        .from("meter_readings")
+        .select("*")
+        .order("reading_date", { ascending: false });
 
-    if (meterId) query = query.eq("meter_id", meterId);
+      if (meterId) query = query.eq("meter_id", meterId);
 
-    const { data, error } = await query;
-    if (error) {
-      console.error("Error fetching meter readings:", error);
+      const { data, error } = await query;
+      if (error) {
+        console.error("Error fetching meter readings:", error);
+        setReadings([]);
+      } else {
+        setReadings((data ?? []) as MeterReading[]);
+      }
+    } catch (err) {
+      console.error("Error fetching meter readings:", err);
       setReadings([]);
-    } else {
-      setReadings((data ?? []) as MeterReading[]);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, [user, meterId]);
 
   useEffect(() => {
