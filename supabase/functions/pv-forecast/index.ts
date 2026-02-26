@@ -17,7 +17,7 @@ serve(async (req) => {
     // 1. Load location coordinates
     const { data: location, error: locErr } = await supabase
       .from("locations")
-      .select("id, name, city, latitude, longitude")
+      .select("id, name, city, latitude, longitude, tenant_id")
       .eq("id", location_id)
       .single();
     if (locErr || !location) throw new Error("Location not found");
@@ -152,7 +152,28 @@ serve(async (req) => {
       }
     }
 
-    // 6. Build summary
+    // 6. Persist forecast hourly data (upsert, fire-and-forget)
+    try {
+      const rows = hourly.map((h: any) => ({
+        tenant_id: location.tenant_id,
+        location_id: location_id,
+        forecast_date: h.timestamp.slice(0, 10),
+        hour_timestamp: h.timestamp,
+        radiation_w_m2: h.radiation_w_m2,
+        cloud_cover_pct: h.cloud_cover_pct,
+        estimated_kwh: h.estimated_kwh,
+        ai_adjusted_kwh: h.ai_adjusted_kwh,
+        peak_power_kwp: peakKwp,
+      }));
+      const { error: upsertErr } = await supabase
+        .from("pv_forecast_hourly")
+        .upsert(rows, { onConflict: "location_id,hour_timestamp" });
+      if (upsertErr) console.error("Failed to persist forecast:", upsertErr.message);
+    } catch (persistErr) {
+      console.error("Persist forecast error:", persistErr);
+    }
+
+    // 7. Build summary
     const now = new Date();
     const todayStr = now.toISOString().slice(0, 10);
     const tomorrowStr = new Date(now.getTime() + 86400000).toISOString().slice(0, 10);

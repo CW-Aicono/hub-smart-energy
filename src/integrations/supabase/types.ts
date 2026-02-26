@@ -2273,6 +2273,63 @@ export type Database = {
           },
         ]
       }
+      pv_forecast_hourly: {
+        Row: {
+          ai_adjusted_kwh: number | null
+          cloud_cover_pct: number
+          created_at: string
+          estimated_kwh: number
+          forecast_date: string
+          hour_timestamp: string
+          id: string
+          location_id: string
+          peak_power_kwp: number
+          radiation_w_m2: number
+          tenant_id: string
+        }
+        Insert: {
+          ai_adjusted_kwh?: number | null
+          cloud_cover_pct?: number
+          created_at?: string
+          estimated_kwh?: number
+          forecast_date: string
+          hour_timestamp: string
+          id?: string
+          location_id: string
+          peak_power_kwp?: number
+          radiation_w_m2?: number
+          tenant_id: string
+        }
+        Update: {
+          ai_adjusted_kwh?: number | null
+          cloud_cover_pct?: number
+          created_at?: string
+          estimated_kwh?: number
+          forecast_date?: string
+          hour_timestamp?: string
+          id?: string
+          location_id?: string
+          peak_power_kwp?: number
+          radiation_w_m2?: number
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pv_forecast_hourly_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pv_forecast_hourly_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pv_forecast_settings: {
         Row: {
           azimuth_deg: number | null
@@ -3529,6 +3586,14 @@ export type Database = {
           bucket: string
           meter_id: string
           power_avg: number
+        }[]
+      }
+      get_pv_forecast_daily_sums: {
+        Args: { p_from_date: string; p_location_id: string; p_to_date: string }
+        Returns: {
+          ai_adjusted_kwh: number
+          day: string
+          estimated_kwh: number
         }[]
       }
       get_user_tenant_id: { Args: never; Returns: string }
