@@ -22,6 +22,7 @@ import { de, enUS, pl, fr } from "date-fns/locale";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from "recharts";
+import { createTenantT, fmtEnergyTypeLocalized, type TenantLang } from "@/i18n/tenantAppTranslations";
 
 // ── Types ──
 interface AssignedMeter {
@@ -63,10 +64,32 @@ interface MonthlyReading {
   value: number;
 }
 
+// Date-fns locale helper
+const getDateFnsLocale = (lang: TenantLang) => {
+  switch (lang) {
+    case "en": return enUS;
+    case "pl": return pl;
+    case "fr": return fr;
+    default: return de;
+  }
+};
+
+// Number formatter based on language
+const fmtNum = (v: number, decimals = 1, lang: TenantLang = "de") => {
+  const loc = lang === "de" ? "de-DE" : lang === "fr" ? "fr-FR" : lang === "pl" ? "pl-PL" : "en-US";
+  return v.toLocaleString(loc, { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+};
+
+const displayUnit = (_unit: string, energyType: string) => {
+  if (energyType === "wasser") return "m³";
+  return "kWh";
+};
+
 // ── Auth Screen ──
 type AuthView = "login" | "register" | "forgotPassword";
 
-function TenantAppAuth({ onAuth }: { onAuth: () => void }) {
+function TenantAppAuth({ onAuth, lang }: { onAuth: () => void; lang: TenantLang }) {
+  const t = createTenantT(lang);
   const [view, setView] = useState<AuthView>("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -80,7 +103,7 @@ function TenantAppAuth({ onAuth }: { onAuth: () => void }) {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     setLoading(false);
     if (error) {
-      toast.error(error.message.includes("Invalid login") ? "Ungültige Zugangsdaten" : error.message);
+      toast.error(error.message.includes("Invalid login") ? t("auth.invalid_credentials") : error.message);
     } else {
       onAuth();
     }
@@ -88,7 +111,7 @@ function TenantAppAuth({ onAuth }: { onAuth: () => void }) {
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (password.length < 6) { toast.error("Passwort muss mindestens 6 Zeichen haben"); return; }
+    if (password.length < 6) { toast.error(t("auth.password_min")); return; }
     setLoading(true);
     const { error } = await supabase.auth.signUp({
       email, password,
@@ -96,23 +119,23 @@ function TenantAppAuth({ onAuth }: { onAuth: () => void }) {
     });
     setLoading(false);
     if (error) {
-      toast.error(error.message.includes("already registered") ? "E-Mail bereits registriert" : error.message);
+      toast.error(error.message.includes("already registered") ? t("auth.email_exists") : error.message);
     } else {
-      toast.success("Registrierung erfolgreich! Bitte E-Mail bestätigen.");
+      toast.success(t("auth.register_success"));
       setView("login");
     }
   };
 
   const handleForgot = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email) { toast.error("Bitte E-Mail eingeben"); return; }
+    if (!email) { toast.error(t("auth.enter_email")); return; }
     setLoading(true);
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: window.location.origin + "/te",
     });
     setLoading(false);
-    if (error) { toast.error("Fehler beim Senden"); } else {
-      toast.success("Rücksetz-Link gesendet!");
+    if (error) { toast.error(t("auth.send_error")); } else {
+      toast.success(t("auth.reset_sent"));
       setView("login");
     }
   };
@@ -124,41 +147,41 @@ function TenantAppAuth({ onAuth }: { onAuth: () => void }) {
           <div className="h-16 w-16 rounded-2xl bg-green-600 flex items-center justify-center mx-auto mb-4">
             <Zap className="h-9 w-9 text-white" />
           </div>
-          <h1 className="text-2xl font-bold">Mein Strom</h1>
+          <h1 className="text-2xl font-bold">{t("app_name")}</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            {view === "login" ? "Anmelden" : view === "register" ? "Konto erstellen" : "Passwort zurücksetzen"}
+            {view === "login" ? t("auth.login") : view === "register" ? t("auth.create_account") : t("auth.reset_password")}
           </p>
         </div>
 
         {view === "forgotPassword" ? (
           <form onSubmit={handleForgot} className="space-y-4">
             <div className="space-y-2">
-              <Label>E-Mail</Label>
+              <Label>{t("auth.email")}</Label>
               <div className="relative">
                 <Mail className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground" />
                 <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="h-12 pl-10 text-base" required />
               </div>
             </div>
             <Button type="submit" className="w-full h-12" disabled={loading}>
-              {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : "Link senden"}
+              {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : t("auth.send_link")}
             </Button>
             <button type="button" onClick={() => setView("login")} className="w-full text-sm text-muted-foreground flex items-center justify-center gap-1">
-              <ArrowLeft className="h-3 w-3" /> Zurück zum Login
+              <ArrowLeft className="h-3 w-3" /> {t("auth.back_to_login")}
             </button>
           </form>
         ) : (
           <form onSubmit={view === "login" ? handleLogin : handleRegister} className="space-y-4">
             {view === "register" && (
               <div className="space-y-2">
-                <Label>Name</Label>
+                <Label>{t("auth.name")}</Label>
                 <div className="relative">
                   <User className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground" />
-                  <Input value={name} onChange={(e) => setName(e.target.value)} className="h-12 pl-10 text-base" placeholder="Max Mustermann" required />
+                  <Input value={name} onChange={(e) => setName(e.target.value)} className="h-12 pl-10 text-base" placeholder={t("auth.name_placeholder")} required />
                 </div>
               </div>
             )}
             <div className="space-y-2">
-              <Label>E-Mail</Label>
+              <Label>{t("auth.email")}</Label>
               <div className="relative">
                 <Mail className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground" />
                 <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="h-12 pl-10 text-base" required />
@@ -166,10 +189,10 @@ function TenantAppAuth({ onAuth }: { onAuth: () => void }) {
             </div>
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <Label>Passwort</Label>
+                <Label>{t("auth.password")}</Label>
                 {view === "login" && (
                   <button type="button" onClick={() => setView("forgotPassword")} className="text-xs text-green-600 hover:underline">
-                    Passwort vergessen?
+                    {t("auth.forgot_password")}
                   </button>
                 )}
               </div>
@@ -182,12 +205,12 @@ function TenantAppAuth({ onAuth }: { onAuth: () => void }) {
               </div>
             </div>
             <Button type="submit" className="w-full h-12 text-base bg-green-600 hover:bg-green-700" disabled={loading}>
-              {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : view === "login" ? "Anmelden" : "Registrieren"}
+              {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : view === "login" ? t("auth.login") : t("auth.register")}
             </Button>
             <div className="text-center text-sm text-muted-foreground">
-              {view === "login" ? "Noch kein Konto?" : "Bereits registriert?"}{" "}
+              {view === "login" ? t("auth.no_account") : t("auth.already_registered")}{" "}
               <button type="button" onClick={() => setView(view === "login" ? "register" : "login")} className="text-green-600 hover:underline font-medium">
-                {view === "login" ? "Registrieren" : "Anmelden"}
+                {view === "login" ? t("auth.register") : t("auth.login")}
               </button>
             </div>
           </form>
@@ -197,19 +220,10 @@ function TenantAppAuth({ onAuth }: { onAuth: () => void }) {
   );
 }
 
-// German number formatter (used across all tabs)
-const fmtDe = (v: number, decimals = 1) =>
-  v.toLocaleString("de-DE", { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
-
-// Capitalize energy type
-const fmtEnergyType = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
-const displayUnit = (_unit: string, energyType: string) => {
-  if (energyType === "wasser") return "m³";
-  return "kWh";
-};
-
 // ── Dashboard Tab ──
-function DashboardTab({ tenantRecord, invoices }: { tenantRecord: TenantRecord; invoices: Invoice[] }) {
+function DashboardTab({ tenantRecord, invoices, lang }: { tenantRecord: TenantRecord; invoices: Invoice[]; lang: TenantLang }) {
+  const t = createTenantT(lang);
+  const dateLoc = getDateFnsLocale(lang);
   const latestInvoice = invoices[0] || null;
   const [meterTotals, setMeterTotals] = useState<any[]>([]);
   const [selfTariffs, setSelfTariffs] = useState<any[]>([]);
@@ -239,20 +253,16 @@ function DashboardTab({ tenantRecord, invoices }: { tenantRecord: TenantRecord; 
         supabase.from("tenant_electricity_tariffs").select("*").eq("tenant_id", tenantRecord.tenant_id).limit(1),
       ]);
 
-      // Fallback: For meter+month combos missing from period totals, compute from 5-min aggregates
-      // Build a set of "meterId::YYYY-MM" keys that already have period totals
       const existingKeys = new Set(
         (totals || []).map((t: any) => `${t.meter_id}::${(t.period_start as string).substring(0, 7)}`)
       );
 
-      // Always try to fill gaps from 5-min aggregates for ALL assigned meters
       let fallbackTotals: any[] = [];
       let aggQuery = supabase
         .from("meter_power_readings_5min")
         .select("meter_id, bucket, power_avg")
         .in("meter_id", meterIds)
         .order("bucket", { ascending: true });
-      // Only fetch data from move-in date onwards
       if (tenantRecord.move_in_date) {
         aggQuery = aggQuery.gte("bucket", tenantRecord.move_in_date);
       }
@@ -263,7 +273,6 @@ function DashboardTab({ tenantRecord, invoices }: { tenantRecord: TenantRecord; 
         for (const row of aggData) {
           const month = (row.bucket as string).substring(0, 7);
           const key = `${row.meter_id}::${month}`;
-          // Skip if we already have a period total for this meter+month
           if (existingKeys.has(key)) continue;
           monthlyMap[key] = (monthlyMap[key] || 0) + Number(row.power_avg) * (5.0 / 60.0);
         }
@@ -289,13 +298,12 @@ function DashboardTab({ tenantRecord, invoices }: { tenantRecord: TenantRecord; 
     fetchData();
   }, [meterIds, tenantRecord.id, tenantRecord.tenant_id]);
 
-  // Group meter totals by month and energy type (only from move_in_date onwards)
   const monthlyByType = useMemo(() => {
     const moveInMonth = tenantRecord.move_in_date ? tenantRecord.move_in_date.substring(0, 7) : null;
     const map: Record<string, Record<string, number>> = {};
     meterTotals.forEach((t: any) => {
-      const month = t.period_start.substring(0, 7); // YYYY-MM
-      if (moveInMonth && month < moveInMonth) return; // skip data before move-in
+      const month = t.period_start.substring(0, 7);
+      if (moveInMonth && month < moveInMonth) return;
       const eType = meterMap[t.meter_id]?.energy_type || t.energy_type || "strom";
       if (!map[month]) map[month] = {};
       map[month][eType] = (map[month][eType] || 0) + Number(t.total_value);
@@ -303,7 +311,6 @@ function DashboardTab({ tenantRecord, invoices }: { tenantRecord: TenantRecord; 
     return map;
   }, [meterTotals, meterMap, tenantRecord.move_in_date]);
 
-  // Get tariff price for an energy type
   const getTariffPrice = (energyType: string): { pricePerKwh: number; baseFee: number } | null => {
     if (energyType === "strom" && landlordTariff) {
       return { pricePerKwh: Number(landlordTariff.price_per_kwh_grid), baseFee: Number(landlordTariff.base_fee_monthly) };
@@ -313,32 +320,27 @@ function DashboardTab({ tenantRecord, invoices }: { tenantRecord: TenantRecord; 
     return null;
   };
 
-  // Aggregate all months
   const months = Object.keys(monthlyByType).sort();
   const allEnergyTypes = useMemo(() => {
     const types = new Set<string>();
-    // Include all energy types from assigned meters (even if no consumption data yet)
     (tenantRecord.assigned_meters || []).forEach((am) => {
       if (am.meters?.energy_type) types.add(am.meters.energy_type);
     });
-    // Also include any types from actual consumption data
     Object.values(monthlyByType).forEach((byType) => Object.keys(byType).forEach((et) => types.add(et)));
     return Array.from(types);
   }, [monthlyByType, tenantRecord.assigned_meters]);
 
-  // Chart data: last 6 months, grouped by energy type
   const chartData = useMemo(() => {
     const last6 = months.slice(-6);
     return last6.map((m) => {
-      const entry: any = { month: format(new Date(m + "-01"), "MMM yy", { locale: de }) };
+      const entry: any = { month: format(new Date(m + "-01"), "MMM yy", { locale: dateLoc }) };
       allEnergyTypes.forEach((et) => {
-        entry[et] = monthlyByType[m]?.[et] || 0;
+        entry[fmtEnergyTypeLocalized(et, lang)] = monthlyByType[m]?.[et] || 0;
       });
       return entry;
     });
-  }, [months, monthlyByType, allEnergyTypes]);
+  }, [months, monthlyByType, allEnergyTypes, lang]);
 
-  // Total consumption per energy type
   const totalByType = useMemo(() => {
     const totals: Record<string, number> = {};
     Object.values(monthlyByType).forEach((byType) => {
@@ -349,7 +351,6 @@ function DashboardTab({ tenantRecord, invoices }: { tenantRecord: TenantRecord; 
     return totals;
   }, [monthlyByType]);
 
-  // Estimated total cost
   const totalCostEstimate = useMemo(() => {
     let cost = 0;
     Object.entries(totalByType).forEach(([et, kwh]) => {
@@ -359,12 +360,10 @@ function DashboardTab({ tenantRecord, invoices }: { tenantRecord: TenantRecord; 
     return cost;
   }, [totalByType, selfTariffs, landlordTariff, months.length]);
 
-  // Avg monthly consumption
   const avgMonthly = months.length > 0
     ? Object.values(totalByType).reduce((s, v) => s + v, 0) / months.length
     : 0;
 
-  // Use invoice data if available, otherwise meter data
   const hasInvoices = invoices.length > 0;
   const displayAvg = hasInvoices ? (invoices.reduce((s, i) => s + Number(i.total_kwh), 0) / invoices.length) : avgMonthly;
   const displayCost = hasInvoices ? invoices.reduce((s, i) => s + Number(i.total_amount), 0) : totalCostEstimate;
@@ -376,38 +375,36 @@ function DashboardTab({ tenantRecord, invoices }: { tenantRecord: TenantRecord; 
   return (
     <div className="space-y-4">
       <div className="text-center pb-2">
-        <p className="text-sm text-muted-foreground">Willkommen,</p>
+        <p className="text-sm text-muted-foreground">{t("dash.welcome")}</p>
         <h2 className="text-xl font-bold">{tenantRecord.name}</h2>
         {tenantRecord.unit_label && <p className="text-sm text-muted-foreground">{tenantRecord.unit_label}</p>}
       </div>
 
-      {/* KPI Cards */}
       <div className="grid grid-cols-2 gap-3">
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center gap-2 mb-1">
               <Zap className="h-4 w-4 text-primary" />
-              <span className="text-xs text-muted-foreground">Ø Monat</span>
+              <span className="text-xs text-muted-foreground">{t("dash.avg_month")}</span>
             </div>
-            <p className="text-lg font-bold">{fmtDe(displayAvg, 0)} kWh</p>
+            <p className="text-lg font-bold">{fmtNum(displayAvg, 0, lang)} kWh</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center gap-2 mb-1">
               <Receipt className="h-4 w-4 text-primary" />
-              <span className="text-xs text-muted-foreground">{hasInvoices ? "Gesamt" : "Geschätzt"}</span>
+              <span className="text-xs text-muted-foreground">{hasInvoices ? t("dash.total") : t("dash.estimated")}</span>
             </div>
-            <p className="text-lg font-bold">{fmtDe(displayCost, 2)} €</p>
+            <p className="text-lg font-bold">{fmtNum(displayCost, 2, lang)} €</p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Per-energy-type breakdown */}
       {allEnergyTypes.length > 0 && !loadingMeter && (
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-base">Verbrauch nach Energieträger</CardTitle>
+            <CardTitle className="text-base">{t("dash.by_energy_type")}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
             {allEnergyTypes.map((et) => {
@@ -419,12 +416,12 @@ function DashboardTab({ tenantRecord, invoices }: { tenantRecord: TenantRecord; 
                 <div key={et} className="flex items-center justify-between py-1.5 border-b last:border-0">
                   <div className="flex items-center gap-2">
                     <div className="w-3 h-3 rounded-full" style={{ backgroundColor: energyColors[et] || "#94a3b8" }} />
-                    <span className="text-sm font-medium">{fmtEnergyType(et)}</span>
+                    <span className="text-sm font-medium">{fmtEnergyTypeLocalized(et, lang)}</span>
                   </div>
                   <div className="text-right">
-                    <span className="text-sm font-semibold">{fmtDe(total, 1)} {unit}</span>
+                    <span className="text-sm font-semibold">{fmtNum(total, 1, lang)} {unit}</span>
                     {cost !== null ? (
-                      <span className="text-xs text-muted-foreground ml-2">≈ {fmtDe(cost, 2)} €</span>
+                      <span className="text-xs text-muted-foreground ml-2">≈ {fmtNum(cost, 2, lang)} €</span>
                     ) : (
                       <span className="text-xs text-muted-foreground ml-2">≈ 0,00 €</span>
                     )}
@@ -436,11 +433,10 @@ function DashboardTab({ tenantRecord, invoices }: { tenantRecord: TenantRecord; 
         </Card>
       )}
 
-      {/* Latest invoice summary */}
       {latestInvoice && (
         <Card>
           <CardHeader className="pb-2">
-            <CardDescription>Letzte Abrechnung</CardDescription>
+            <CardDescription>{t("dash.latest_invoice")}</CardDescription>
             <CardTitle className="text-base">
               {format(new Date(latestInvoice.period_start), "dd.MM.")} – {format(new Date(latestInvoice.period_end), "dd.MM.yyyy")}
             </CardTitle>
@@ -448,27 +444,26 @@ function DashboardTab({ tenantRecord, invoices }: { tenantRecord: TenantRecord; 
           <CardContent>
             <div className="grid grid-cols-3 gap-2 text-center text-sm">
               <div>
-                <p className="text-muted-foreground text-xs">Lokal (PV)</p>
-                <p className="font-semibold text-primary">{fmtDe(Number(latestInvoice.local_kwh), 0)} kWh</p>
+                <p className="text-muted-foreground text-xs">{t("dash.local_pv")}</p>
+                <p className="font-semibold text-primary">{fmtNum(Number(latestInvoice.local_kwh), 0, lang)} kWh</p>
               </div>
               <div>
-                <p className="text-muted-foreground text-xs">Netz</p>
-                <p className="font-semibold">{fmtDe(Number(latestInvoice.grid_kwh), 0)} kWh</p>
+                <p className="text-muted-foreground text-xs">{t("dash.grid")}</p>
+                <p className="font-semibold">{fmtNum(Number(latestInvoice.grid_kwh), 0, lang)} kWh</p>
               </div>
               <div>
-                <p className="text-muted-foreground text-xs">Betrag</p>
-                <p className="font-bold">{fmtDe(Number(latestInvoice.total_amount), 2)} €</p>
+                <p className="text-muted-foreground text-xs">{t("dash.amount")}</p>
+                <p className="font-bold">{fmtNum(Number(latestInvoice.total_amount), 2, lang)} €</p>
               </div>
             </div>
           </CardContent>
         </Card>
       )}
 
-      {/* Consumption chart */}
       {chartData.length > 0 && (
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-base">Verbrauchsverlauf</CardTitle>
+            <CardTitle className="text-base">{t("dash.consumption_chart")}</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="h-48">
@@ -477,10 +472,10 @@ function DashboardTab({ tenantRecord, invoices }: { tenantRecord: TenantRecord; 
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="month" tick={{ fontSize: 11 }} />
                   <YAxis tick={{ fontSize: 11 }} />
-                  <Tooltip formatter={(value: number) => fmtDe(value, 1)} />
+                  <Tooltip formatter={(value: number) => fmtNum(value, 1, lang)} />
                   <Legend wrapperStyle={{ fontSize: 11 }} />
                   {allEnergyTypes.map((et) => (
-                    <Bar key={et} dataKey={et} name={fmtEnergyType(et)} fill={energyColors[et] || "#94a3b8"} radius={[2, 2, 0, 0]} />
+                    <Bar key={et} dataKey={fmtEnergyTypeLocalized(et, lang)} name={fmtEnergyTypeLocalized(et, lang)} fill={energyColors[et] || "#94a3b8"} radius={[2, 2, 0, 0]} />
                   ))}
                 </BarChart>
               </ResponsiveContainer>
@@ -492,7 +487,7 @@ function DashboardTab({ tenantRecord, invoices }: { tenantRecord: TenantRecord; 
       {chartData.length === 0 && !loadingMeter && (
         <Card className="p-6 text-center text-muted-foreground">
           <BarChart3 className="h-8 w-8 mx-auto mb-2 opacity-50" />
-          <p>Noch keine Verbrauchsdaten verfügbar</p>
+          <p>{t("dash.no_data")}</p>
         </Card>
       )}
 
@@ -506,14 +501,15 @@ function DashboardTab({ tenantRecord, invoices }: { tenantRecord: TenantRecord; 
 }
 
 // ── Invoices Tab ──
-function InvoicesTab({ invoices }: { invoices: Invoice[] }) {
+function InvoicesTab({ invoices, lang }: { invoices: Invoice[]; lang: TenantLang }) {
+  const t = createTenantT(lang);
   return (
     <div className="space-y-3">
-      <h2 className="text-lg font-semibold">Abrechnungen</h2>
+      <h2 className="text-lg font-semibold">{t("inv.title")}</h2>
       {invoices.length === 0 ? (
         <Card className="p-6 text-center text-muted-foreground">
           <Receipt className="h-8 w-8 mx-auto mb-2 opacity-50" />
-          <p>Noch keine Abrechnungen vorhanden</p>
+          <p>{t("inv.none")}</p>
         </Card>
       ) : (
         invoices.map((inv) => (
@@ -527,22 +523,22 @@ function InvoicesTab({ invoices }: { invoices: Invoice[] }) {
                   {inv.invoice_number && <p className="text-xs text-muted-foreground">Nr. {inv.invoice_number}</p>}
                 </div>
                 <Badge variant={inv.status === "paid" ? "default" : inv.status === "issued" ? "secondary" : "outline"}>
-                  {inv.status === "paid" ? "Bezahlt" : inv.status === "issued" ? "Offen" : "Entwurf"}
+                  {inv.status === "paid" ? t("inv.paid") : inv.status === "issued" ? t("inv.open") : t("inv.draft")}
                 </Badge>
               </div>
               <div className="grid grid-cols-2 gap-2 text-xs">
                 <div className="flex items-center gap-1">
                   <div className="w-2 h-2 rounded-full bg-green-500" />
-                  <span>PV: {fmtDe(Number(inv.local_kwh), 1)} kWh = {fmtDe(Number(inv.local_amount), 2)} €</span>
+                  <span>PV: {fmtNum(Number(inv.local_kwh), 1, lang)} kWh = {fmtNum(Number(inv.local_amount), 2, lang)} €</span>
                 </div>
                 <div className="flex items-center gap-1">
                   <div className="w-2 h-2 rounded-full bg-slate-400" />
-                  <span>Netz: {fmtDe(Number(inv.grid_kwh), 1)} kWh = {fmtDe(Number(inv.grid_amount), 2)} €</span>
+                  <span>{t("dash.grid")}: {fmtNum(Number(inv.grid_kwh), 1, lang)} kWh = {fmtNum(Number(inv.grid_amount), 2, lang)} €</span>
                 </div>
               </div>
               <div className="flex justify-between items-center mt-2 pt-2 border-t text-sm">
-                <span className="text-muted-foreground">Grundgebühr: {fmtDe(Number(inv.base_fee), 2)} €</span>
-                <span className="font-bold">{fmtDe(Number(inv.total_amount), 2)} €</span>
+                <span className="text-muted-foreground">{t("inv.base_fee")} {fmtNum(Number(inv.base_fee), 2, lang)} €</span>
+                <span className="font-bold">{fmtNum(Number(inv.total_amount), 2, lang)} €</span>
               </div>
             </CardContent>
           </Card>
@@ -553,8 +549,9 @@ function InvoicesTab({ invoices }: { invoices: Invoice[] }) {
 }
 
 // ── Meter Tab ──
-
-function MeterTab({ tenantRecord }: { tenantRecord: TenantRecord }) {
+function MeterTab({ tenantRecord, lang }: { tenantRecord: TenantRecord; lang: TenantLang }) {
+  const t = createTenantT(lang);
+  const dateLoc = getDateFnsLocale(lang);
   const [meters, setMeters] = useState<any[]>([]);
   const [allTotals, setAllTotals] = useState<any[]>([]);
   const [allReadings, setAllReadings] = useState<any[]>([]);
@@ -588,7 +585,6 @@ function MeterTab({ tenantRecord }: { tenantRecord: TenantRecord }) {
       // Fetch live Zählerstände from gateway for automatic meters
       const autoMeters = (mData || []).filter((m: any) => m.sensor_uuid && m.location_integration_id);
       if (autoMeters.length > 0) {
-        // Group by integration
         const byIntegration = new Map<string, any[]>();
         autoMeters.forEach((m: any) => {
           const arr = byIntegration.get(m.location_integration_id) || [];
@@ -622,13 +618,11 @@ function MeterTab({ tenantRecord }: { tenantRecord: TenantRecord }) {
     fetchData();
   }, [meterIds]);
 
-  // Group data by month across all meters
   const monthGroups = useMemo(() => {
     const moveIn = tenantRecord.move_in_date ? new Date(tenantRecord.move_in_date) : null;
     const moveOut = tenantRecord.move_out_date ? new Date(tenantRecord.move_out_date) : null;
     const monthSet = new Set<string>();
 
-    // Include months from actual consumption data
     allTotals.forEach((t: any) => {
       const monthDate = new Date(t.period_start);
       if (moveIn && monthDate < startOfMonth(moveIn)) return;
@@ -636,7 +630,6 @@ function MeterTab({ tenantRecord }: { tenantRecord: TenantRecord }) {
       monthSet.add(t.period_start);
     });
 
-    // Always include current month if within tenancy period and meters exist
     if (meters.length > 0) {
       const now = new Date();
       const currentMonthStart = format(startOfMonth(now), "yyyy-MM-dd");
@@ -650,7 +643,7 @@ function MeterTab({ tenantRecord }: { tenantRecord: TenantRecord }) {
 
     return sorted.map((periodStart) => {
       const monthDate = new Date(periodStart);
-      const label = format(monthDate, "MMMM yyyy", { locale: de });
+      const label = format(monthDate, "MMMM yyyy", { locale: dateLoc });
 
       const meterEntries = meters.map((m) => {
         const reading = allTotals.find((t: any) => t.meter_id === m.id && t.period_start === periodStart);
@@ -669,14 +662,14 @@ function MeterTab({ tenantRecord }: { tenantRecord: TenantRecord }) {
 
       return { periodStart, label, meterEntries };
     });
-  }, [meters, allTotals, allReadings, tenantRecord.move_in_date, tenantRecord.move_out_date]);
+  }, [meters, allTotals, allReadings, tenantRecord.move_in_date, tenantRecord.move_out_date, dateLoc]);
 
   if (meterIds.length === 0) {
     return (
       <Card className="p-6 text-center text-muted-foreground">
         <Zap className="h-8 w-8 mx-auto mb-2 opacity-50" />
-        <p>Kein Zähler zugeordnet</p>
-        <p className="text-xs mt-1">Bitte wenden Sie sich an Ihren Vermieter.</p>
+        <p>{t("meter.no_meter")}</p>
+        <p className="text-xs mt-1">{t("meter.contact_landlord")}</p>
       </Card>
     );
   }
@@ -687,7 +680,6 @@ function MeterTab({ tenantRecord }: { tenantRecord: TenantRecord }) {
 
   return (
     <div className="space-y-4">
-      {/* Meter overview cards */}
       <div className="space-y-2">
         {meters.map((m) => {
           const stand = meterStands[m.id];
@@ -703,14 +695,14 @@ function MeterTab({ tenantRecord }: { tenantRecord: TenantRecord }) {
                       <p className="font-medium">{m.name}</p>
                       <p className="text-xs text-muted-foreground">
                         {m.meter_number && `Nr. ${m.meter_number} · `}
-                        {fmtEnergyType(m.energy_type)} · {displayUnit(m.unit, m.energy_type)}
+                        {fmtEnergyTypeLocalized(m.energy_type, lang)} · {displayUnit(m.unit, m.energy_type)}
                       </p>
                     </div>
                   </div>
                   {stand !== undefined && (
                     <div className="text-right">
-                      <p className="text-xs text-muted-foreground">Zählerstand</p>
-                      <p className="font-bold text-sm">{fmtDe(stand, 1)} {displayUnit(m.unit, m.energy_type)}</p>
+                      <p className="text-xs text-muted-foreground">{t("meter.reading")}</p>
+                      <p className="font-bold text-sm">{fmtNum(stand, 1, lang)} {displayUnit(m.unit, m.energy_type)}</p>
                     </div>
                   )}
                 </div>
@@ -720,12 +712,12 @@ function MeterTab({ tenantRecord }: { tenantRecord: TenantRecord }) {
         })}
       </div>
 
-      <h2 className="text-lg font-semibold">Monatliche Verbräuche</h2>
+      <h2 className="text-lg font-semibold">{t("meter.monthly")}</h2>
 
       {monthGroups.length === 0 ? (
         <Card className="p-6 text-center text-muted-foreground">
           <BarChart3 className="h-8 w-8 mx-auto mb-2 opacity-50" />
-          <p>Noch keine Verbrauchsdaten verfügbar</p>
+          <p>{t("meter.no_data")}</p>
         </Card>
       ) : (
         <div className="space-y-4">
@@ -739,17 +731,17 @@ function MeterTab({ tenantRecord }: { tenantRecord: TenantRecord }) {
                       <div className="flex items-center justify-between">
                         <div>
                           <p className="font-medium text-sm">{meter.name}</p>
-                          <p className="text-xs text-muted-foreground">{fmtEnergyType(meter.energy_type)}</p>
+                          <p className="text-xs text-muted-foreground">{fmtEnergyTypeLocalized(meter.energy_type, lang)}</p>
                         </div>
                         <div className="text-right">
                           {consumption !== null ? (
-                            <p className="font-bold">{fmtDe(consumption)} {unit}</p>
+                            <p className="font-bold">{fmtNum(consumption, 1, lang)} {unit}</p>
                           ) : (
                             <p className="text-sm text-muted-foreground">–</p>
                           )}
                           {meterStand !== null && (
                             <p className="text-xs text-muted-foreground">
-                              Zählerstand: {fmtDe(meterStand, 0)} {unit}
+                              {t("meter.reading_label")} {fmtNum(meterStand, 0, lang)} {unit}
                             </p>
                           )}
                         </div>
@@ -766,7 +758,7 @@ function MeterTab({ tenantRecord }: { tenantRecord: TenantRecord }) {
   );
 }
 
-// ── Tariffs Tab (Self-managed tariffs) ──
+// ── Tariffs Tab ──
 interface SelfTariff {
   id: string;
   tenant_electricity_tenant_id: string;
@@ -778,7 +770,8 @@ interface SelfTariff {
   valid_until: string | null;
 }
 
-function TariffsTab({ tenantRecord }: { tenantRecord: TenantRecord }) {
+function TariffsTab({ tenantRecord, lang }: { tenantRecord: TenantRecord; lang: TenantLang }) {
+  const t = createTenantT(lang);
   const [tariffs, setTariffs] = useState<SelfTariff[]>([]);
   const [landlordTariffExists, setLandlordTariffExists] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -805,10 +798,7 @@ function TariffsTab({ tenantRecord }: { tenantRecord: TenantRecord }) {
       .eq("tenant_electricity_tenant_id", tenantRecord.id)
       .order("valid_from", { ascending: false });
     setTariffs((data || []) as SelfTariff[]);
-
-    // Check if this specific tenant is marked as Mieterstrom participant
     setLandlordTariffExists(!!tenantRecord.is_mieterstrom);
-
     setLoading(false);
   };
 
@@ -835,42 +825,40 @@ function TariffsTab({ tenantRecord }: { tenantRecord: TenantRecord }) {
 
     if (editId) {
       const { error } = await supabase.from("tenant_self_tariffs").update(payload).eq("id", editId);
-      if (error) { toast.error("Fehler beim Speichern"); return; }
-      toast.success("Tarif aktualisiert");
+      if (error) { toast.error(t("tariff.save_error")); return; }
+      toast.success(t("tariff.updated"));
     } else {
       const { error } = await supabase.from("tenant_self_tariffs").insert(payload);
-      if (error) { toast.error("Fehler beim Speichern"); return; }
-      toast.success("Tarif gespeichert");
+      if (error) { toast.error(t("tariff.save_error")); return; }
+      toast.success(t("tariff.saved"));
     }
     setShowForm(false);
     resetForm();
     fetchTariffs();
   };
 
-  const handleEdit = (t: SelfTariff) => {
+  const handleEdit = (tr: SelfTariff) => {
     setForm({
-      energy_type: t.energy_type,
-      price_per_kwh: String(t.price_per_kwh),
-      base_fee_monthly: String(t.base_fee_monthly),
-      provider_name: t.provider_name || "",
-      valid_from: t.valid_from,
-      valid_until: t.valid_until || "",
+      energy_type: tr.energy_type,
+      price_per_kwh: String(tr.price_per_kwh),
+      base_fee_monthly: String(tr.base_fee_monthly),
+      provider_name: tr.provider_name || "",
+      valid_from: tr.valid_from,
+      valid_until: tr.valid_until || "",
     });
-    setEditId(t.id);
+    setEditId(tr.id);
     setShowForm(true);
   };
 
   const handleDelete = async (id: string) => {
     const { error } = await supabase.from("tenant_self_tariffs").delete().eq("id", id);
-    if (error) { toast.error("Fehler beim Löschen"); return; }
-    toast.success("Tarif gelöscht");
+    if (error) { toast.error(t("tariff.delete_error")); return; }
+    toast.success(t("tariff.deleted"));
     fetchTariffs();
   };
 
-  // Determine which energy types the tenant can self-manage
   const selfManagedTypes = useMemo(() => {
     const types: string[] = [];
-    // Include wasser even if not from meters
     const allTypes = new Set(energyTypes);
     allTypes.add("wasser");
     allTypes.forEach((et) => {
@@ -883,12 +871,11 @@ function TariffsTab({ tenantRecord }: { tenantRecord: TenantRecord }) {
     return types;
   }, [energyTypes, landlordTariffExists]);
 
-  // Energy types that already have an active (no valid_until or future valid_until) tariff
   const availableTypesForNew = useMemo(() => {
     const usedTypes = new Set(
       tariffs
-        .filter((t) => !t.valid_until || new Date(t.valid_until) >= new Date())
-        .map((t) => t.energy_type)
+        .filter((tr) => !tr.valid_until || new Date(tr.valid_until) >= new Date())
+        .map((tr) => tr.energy_type)
     );
     return selfManagedTypes.filter((et) => !usedTypes.has(et));
   }, [selfManagedTypes, tariffs]);
@@ -900,10 +887,10 @@ function TariffsTab({ tenantRecord }: { tenantRecord: TenantRecord }) {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold">Meine Tarife</h2>
+        <h2 className="text-lg font-semibold">{t("tariff.title")}</h2>
         {!showForm && availableTypesForNew.length > 0 && (
           <Button size="sm" onClick={() => { resetForm(availableTypesForNew[0]); setShowForm(true); }} className="gap-1">
-            <Plus className="h-4 w-4" /> Tarif anlegen
+            <Plus className="h-4 w-4" /> {t("tariff.add")}
           </Button>
         )}
       </div>
@@ -914,7 +901,7 @@ function TariffsTab({ tenantRecord }: { tenantRecord: TenantRecord }) {
             <div className="flex items-center gap-2">
               <Zap className="h-4 w-4 text-green-600" />
               <p className="text-sm">
-                <strong>Strom:</strong> Ihr Vermieter hat einen Mieterstrom-Tarif für Sie hinterlegt.
+                <strong>{fmtEnergyTypeLocalized("strom", lang)}:</strong> {t("tariff.mieterstrom_info")}
               </p>
             </div>
           </CardContent>
@@ -924,20 +911,19 @@ function TariffsTab({ tenantRecord }: { tenantRecord: TenantRecord }) {
       {selfManagedTypes.length === 0 && tariffs.length === 0 && (
         <Card className="p-6 text-center text-muted-foreground">
           <Settings className="h-8 w-8 mx-auto mb-2 opacity-50" />
-          <p>Keine selbstverwalteten Tarife nötig</p>
-          <p className="text-xs mt-1">Ihr Vermieter verwaltet alle Tarife für Sie.</p>
+          <p>{t("tariff.none_needed")}</p>
+          <p className="text-xs mt-1">{t("tariff.landlord_manages")}</p>
         </Card>
       )}
 
-      {/* Add/Edit form */}
       {showForm && (
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-base">{editId ? "Tarif bearbeiten" : "Neuer Tarif"}</CardTitle>
+            <CardTitle className="text-base">{editId ? t("tariff.edit") : t("tariff.new")}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             <div>
-              <Label className="text-sm">Energieart</Label>
+              <Label className="text-sm">{t("tariff.energy_type")}</Label>
               <select
                 className="w-full border rounded-md px-3 py-2 text-sm bg-background mt-1"
                 value={form.energy_type}
@@ -945,22 +931,22 @@ function TariffsTab({ tenantRecord }: { tenantRecord: TenantRecord }) {
                 disabled={!!editId}
               >
                 {(editId ? selfManagedTypes : availableTypesForNew).map((et) => (
-                  <option key={et} value={et}>{fmtEnergyType(et)}</option>
+                  <option key={et} value={et}>{fmtEnergyTypeLocalized(et, lang)}</option>
                 ))}
               </select>
             </div>
             <div>
-              <Label className="text-sm">Anbieter (optional)</Label>
+              <Label className="text-sm">{t("tariff.provider")}</Label>
               <Input
                 value={form.provider_name}
                 onChange={(e) => setForm({ ...form, provider_name: e.target.value })}
-                placeholder="z.B. Stadtwerke..."
+                placeholder={t("tariff.provider_placeholder")}
                 className="mt-1"
               />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label className="text-sm">Preis pro {form.energy_type === "wasser" || form.energy_type === "gas" ? "m³" : "kWh"} (€)</Label>
+                <Label className="text-sm">{t("tariff.price_per")} {form.energy_type === "wasser" || form.energy_type === "gas" ? "m³" : "kWh"} (€)</Label>
                 <Input
                   type="number" step="0.01" min="0"
                   value={form.price_per_kwh}
@@ -970,7 +956,7 @@ function TariffsTab({ tenantRecord }: { tenantRecord: TenantRecord }) {
                 />
               </div>
               <div>
-                <Label className="text-sm">Grundgebühr/Monat (€)</Label>
+                <Label className="text-sm">{t("tariff.base_fee_monthly")}</Label>
                 <Input
                   type="number" step="0.01" min="0"
                   value={form.base_fee_monthly}
@@ -982,50 +968,49 @@ function TariffsTab({ tenantRecord }: { tenantRecord: TenantRecord }) {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label className="text-sm">Gültig ab</Label>
+                <Label className="text-sm">{t("tariff.valid_from")}</Label>
                 <Input type="date" value={form.valid_from} onChange={(e) => setForm({ ...form, valid_from: e.target.value })} className="mt-1" />
               </div>
               <div>
-                <Label className="text-sm">Gültig bis (optional)</Label>
+                <Label className="text-sm">{t("tariff.valid_until")}</Label>
                 <Input type="date" value={form.valid_until} onChange={(e) => setForm({ ...form, valid_until: e.target.value })} className="mt-1" />
               </div>
             </div>
             <div className="flex gap-2">
               <Button onClick={handleSave} className="flex-1" disabled={!form.price_per_kwh}>
-                {editId ? "Speichern" : "Anlegen"}
+                {editId ? t("tariff.save") : t("tariff.create")}
               </Button>
-              <Button variant="outline" onClick={() => { setShowForm(false); resetForm(); }}>Abbrechen</Button>
+              <Button variant="outline" onClick={() => { setShowForm(false); resetForm(); }}>{t("tariff.cancel")}</Button>
             </div>
           </CardContent>
         </Card>
       )}
 
-      {/* Existing tariffs */}
-      {tariffs.map((t) => (
-        <Card key={t.id}>
+      {tariffs.map((tr) => (
+        <Card key={tr.id}>
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
                 <div className="flex items-center gap-2">
-                  <Badge variant="outline">{fmtEnergyType(t.energy_type)}</Badge>
-                  {t.provider_name && <span className="text-sm text-muted-foreground">{t.provider_name}</span>}
+                  <Badge variant="outline">{fmtEnergyTypeLocalized(tr.energy_type, lang)}</Badge>
+                  {tr.provider_name && <span className="text-sm text-muted-foreground">{tr.provider_name}</span>}
                 </div>
                 <div className="mt-1 text-sm">
-                  <span className="font-bold">{fmtDe(Number(t.price_per_kwh), 4)} €/{t.energy_type === "wasser" || t.energy_type === "gas" ? "m³" : "kWh"}</span>
-                  {Number(t.base_fee_monthly) > 0 && (
-                    <span className="text-muted-foreground ml-2">+ {fmtDe(Number(t.base_fee_monthly), 2)} €/Monat</span>
+                  <span className="font-bold">{fmtNum(Number(tr.price_per_kwh), 4, lang)} €/{tr.energy_type === "wasser" || tr.energy_type === "gas" ? "m³" : "kWh"}</span>
+                  {Number(tr.base_fee_monthly) > 0 && (
+                    <span className="text-muted-foreground ml-2">+ {fmtNum(Number(tr.base_fee_monthly), 2, lang)} €/{lang === "de" ? "Monat" : lang === "en" ? "month" : lang === "pl" ? "mies." : "mois"}</span>
                   )}
                 </div>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  ab {format(new Date(t.valid_from), "dd.MM.yyyy")}
-                  {t.valid_until && ` bis ${format(new Date(t.valid_until), "dd.MM.yyyy")}`}
+                  {t("tariff.from")} {format(new Date(tr.valid_from), "dd.MM.yyyy")}
+                  {tr.valid_until && ` ${t("tariff.until")} ${format(new Date(tr.valid_until), "dd.MM.yyyy")}`}
                 </p>
               </div>
               <div className="flex gap-1">
-                <Button variant="ghost" size="icon" onClick={() => handleEdit(t)}>
+                <Button variant="ghost" size="icon" onClick={() => handleEdit(tr)}>
                   <Pencil className="h-4 w-4" />
                 </Button>
-                <Button variant="ghost" size="icon" onClick={() => handleDelete(t.id)}>
+                <Button variant="ghost" size="icon" onClick={() => handleDelete(tr.id)}>
                   <Trash2 className="h-4 w-4 text-destructive" />
                 </Button>
               </div>
@@ -1038,20 +1023,20 @@ function TariffsTab({ tenantRecord }: { tenantRecord: TenantRecord }) {
 }
 
 // ── Not Linked Screen ──
-function NotLinkedScreen({ email, onLogout }: { email: string; onLogout: () => void }) {
+function NotLinkedScreen({ email, onLogout, lang }: { email: string; onLogout: () => void; lang: TenantLang }) {
+  const t = createTenantT(lang);
   return (
     <div className="min-h-screen bg-background flex flex-col items-center justify-center px-6">
       <div className="w-full max-w-sm text-center space-y-4">
         <div className="h-16 w-16 rounded-2xl bg-muted flex items-center justify-center mx-auto">
           <Home className="h-9 w-9 text-muted-foreground" />
         </div>
-        <h1 className="text-xl font-bold">Kein Mietverhältnis gefunden</h1>
+        <h1 className="text-xl font-bold">{t("notlinked.title")}</h1>
         <p className="text-sm text-muted-foreground">
-          Für <strong>{email}</strong> wurde kein aktives Mietverhältnis gefunden. 
-          Bitte wenden Sie sich an Ihren Vermieter, damit Ihr Konto verknüpft wird.
+          {lang === "de" ? `Für ` : ""}<strong>{email}</strong> {t("notlinked.message")}
         </p>
         <Button variant="outline" onClick={onLogout} className="gap-2">
-          <LogOut className="h-4 w-4" /> Abmelden
+          <LogOut className="h-4 w-4" /> {t("auth.logout")}
         </Button>
       </div>
     </div>
@@ -1070,7 +1055,6 @@ const TenantEnergyApp = () => {
   const [activeTab, setActiveTab] = useState<AppTab>("dashboard");
 
   // Tenant app user preferences (persisted in localStorage)
-  type TenantLang = "de" | "en" | "pl" | "fr";
   type TenantThemeMode = "light" | "dark" | "system";
   const [tenantLang, setTenantLangState] = useState<TenantLang>(() => {
     try { return (localStorage.getItem("te-lang") as TenantLang) || "de"; } catch { return "de"; }
@@ -1087,6 +1071,8 @@ const TenantEnergyApp = () => {
     setTenantThemeState(mode);
     try { localStorage.setItem("te-theme", mode); } catch {}
   };
+
+  const t = createTenantT(tenantLang);
 
   // Apply theme
   useEffect(() => {
@@ -1118,8 +1104,8 @@ const TenantEnergyApp = () => {
     }
     link.href = "/manifest-te.json";
     const meta = document.querySelector('meta[name="apple-mobile-web-app-title"]');
-    if (meta) meta.setAttribute("content", "Mein Strom");
-  }, []);
+    if (meta) meta.setAttribute("content", t("app_name"));
+  }, [tenantLang]);
 
   // Auth state
   useEffect(() => {
@@ -1141,7 +1127,6 @@ const TenantEnergyApp = () => {
     const loadData = async () => {
       setDataLoading(true);
 
-      // Try to find by auth_user_id first, then by email
       let { data: rec } = await supabase
         .from("tenant_electricity_tenants")
         .select("id, name, unit_label, meter_id, tenant_id, status, move_in_date, move_out_date, is_mieterstrom, tenant_electricity_tenant_meters(meter_id, meters(id, name, energy_type, unit, meter_number))")
@@ -1149,7 +1134,6 @@ const TenantEnergyApp = () => {
         .eq("status", "active")
         .maybeSingle();
 
-      // If not found by auth_user_id, try email match and link
       if (!rec && user.email) {
         const { data: emailMatch } = await supabase
           .from("tenant_electricity_tenants")
@@ -1160,7 +1144,6 @@ const TenantEnergyApp = () => {
           .maybeSingle();
 
         if (emailMatch) {
-          // Auto-link user
           await supabase
             .from("tenant_electricity_tenants")
             .update({ auth_user_id: user.id })
@@ -1176,7 +1159,6 @@ const TenantEnergyApp = () => {
         };
         setTenantRecord(mapped);
 
-      // Load invoices (only from move-in date onwards)
         let invQuery = supabase
           .from("tenant_electricity_invoices")
           .select("*")
@@ -1212,7 +1194,7 @@ const TenantEnergyApp = () => {
   }
 
   if (!user) {
-    return <TenantAppAuth onAuth={() => {}} />;
+    return <TenantAppAuth onAuth={() => {}} lang={tenantLang} />;
   }
 
   if (dataLoading) {
@@ -1220,15 +1202,17 @@ const TenantEnergyApp = () => {
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center space-y-2">
           <Loader2 className="h-8 w-8 animate-spin text-green-600 mx-auto" />
-          <p className="text-sm text-muted-foreground">Daten werden geladen…</p>
+          <p className="text-sm text-muted-foreground">{t("loading.data")}</p>
         </div>
       </div>
     );
   }
 
   if (!tenantRecord) {
-    return <NotLinkedScreen email={user.email || ""} onLogout={handleLogout} />;
+    return <NotLinkedScreen email={user.email || ""} onLogout={handleLogout} lang={tenantLang} />;
   }
+
+  const langLabels: Record<TenantLang, string> = { de: "Deutsch", en: "English", pl: "Polski", fr: "Français" };
 
   return (
     <div className="min-h-screen bg-background flex flex-col" style={{ paddingTop: "env(safe-area-inset-top, 0px)", paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
@@ -1238,7 +1222,7 @@ const TenantEnergyApp = () => {
           <div className="h-8 w-8 rounded-lg bg-green-600 flex items-center justify-center">
             <Zap className="h-4 w-4 text-white" />
           </div>
-          <span className="font-bold">Mein Strom</span>
+          <span className="font-bold">{t("app_name")}</span>
         </div>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -1253,10 +1237,10 @@ const TenantEnergyApp = () => {
             <DropdownMenuSub>
               <DropdownMenuSubTrigger className="gap-2">
                 <Globe className="h-4 w-4" />
-                {tenantLang === "de" ? "Deutsch" : tenantLang === "en" ? "English" : tenantLang === "pl" ? "Polski" : "Français"}
+                {langLabels[tenantLang]}
               </DropdownMenuSubTrigger>
               <DropdownMenuSubContent>
-                {([["de","Deutsch"],["en","English"],["pl","Polski"],["fr","Français"]] as const).map(([code, label]) => (
+                {(Object.entries(langLabels) as [TenantLang, string][]).map(([code, label]) => (
                   <DropdownMenuItem key={code} onClick={() => setTenantLang(code)} className={tenantLang === code ? "font-semibold" : ""}>
                     {label}
                   </DropdownMenuItem>
@@ -1267,10 +1251,10 @@ const TenantEnergyApp = () => {
             <DropdownMenuSub>
               <DropdownMenuSubTrigger className="gap-2">
                 {tenantTheme === "dark" ? <Moon className="h-4 w-4" /> : tenantTheme === "light" ? <Sun className="h-4 w-4" /> : <Monitor className="h-4 w-4" />}
-                {tenantTheme === "dark" ? "Dark" : tenantTheme === "light" ? "Light" : "System"}
+                {tenantTheme === "dark" ? t("menu.dark") : tenantTheme === "light" ? t("menu.light") : t("menu.system")}
               </DropdownMenuSubTrigger>
               <DropdownMenuSubContent>
-                {([["light","Light",Sun],["dark","Dark",Moon],["system","System",Monitor]] as const).map(([val, label, Icon]) => (
+                {([["light", t("menu.light"), Sun], ["dark", t("menu.dark"), Moon], ["system", t("menu.system"), Monitor]] as const).map(([val, label, Icon]) => (
                   <DropdownMenuItem key={val} onClick={() => setTenantTheme(val as any)} className={`gap-2 ${tenantTheme === val ? "font-semibold" : ""}`}>
                     <Icon className="h-4 w-4" /> {label}
                   </DropdownMenuItem>
@@ -1279,7 +1263,7 @@ const TenantEnergyApp = () => {
             </DropdownMenuSub>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={handleLogout} className="gap-2 text-destructive focus:text-destructive">
-              <LogOut className="h-4 w-4" /> Abmelden
+              <LogOut className="h-4 w-4" /> {t("auth.logout")}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -1287,19 +1271,19 @@ const TenantEnergyApp = () => {
 
       {/* Content */}
       <div className="flex-1 overflow-auto px-4 py-4 pb-20">
-        {activeTab === "dashboard" && <DashboardTab tenantRecord={tenantRecord} invoices={invoices} />}
-        {activeTab === "meter" && <MeterTab tenantRecord={tenantRecord} />}
-        {activeTab === "invoices" && <InvoicesTab invoices={invoices} />}
-        {activeTab === "tariffs" && <TariffsTab tenantRecord={tenantRecord} />}
+        {activeTab === "dashboard" && <DashboardTab tenantRecord={tenantRecord} invoices={invoices} lang={tenantLang} />}
+        {activeTab === "meter" && <MeterTab tenantRecord={tenantRecord} lang={tenantLang} />}
+        {activeTab === "invoices" && <InvoicesTab invoices={invoices} lang={tenantLang} />}
+        {activeTab === "tariffs" && <TariffsTab tenantRecord={tenantRecord} lang={tenantLang} />}
       </div>
 
       {/* Bottom Navigation */}
       <div className="fixed bottom-0 left-0 right-0 z-50 border-t bg-background/95 backdrop-blur-sm flex" style={{ paddingBottom: "env(safe-area-inset-bottom, 8px)" }}>
         {([
-          { id: "dashboard" as AppTab, icon: Home, label: "Übersicht" },
-          { id: "meter" as AppTab, icon: BarChart3, label: "Zähler" },
-          { id: "tariffs" as AppTab, icon: Settings, label: "Tarife" },
-          { id: "invoices" as AppTab, icon: Receipt, label: "Rechnungen" },
+          { id: "dashboard" as AppTab, icon: Home, label: t("nav.overview") },
+          { id: "meter" as AppTab, icon: BarChart3, label: t("nav.meters") },
+          { id: "tariffs" as AppTab, icon: Settings, label: t("nav.tariffs") },
+          { id: "invoices" as AppTab, icon: Receipt, label: t("nav.invoices") },
         ]).map((tab) => (
           <button
             key={tab.id}
