@@ -1,4 +1,4 @@
-import { Suspense, useState, useCallback, useMemo, useRef, useEffect } from "react";
+import { Suspense, useState, useCallback, useMemo, useRef, useEffect, Component, type ReactNode, type ErrorInfo } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
 import { Grid, OrbitControls, Text } from "@react-three/drei";
 import { Button } from "@/components/ui/button";
@@ -37,7 +37,42 @@ interface FloorPlan3DViewerProps {
   readOnly?: boolean;
 }
 
-// Tracks camera position for minimap
+// ErrorBoundary for catching Three.js / R3F render errors
+class Canvas3DErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean; error: string | null }> {
+  constructor(props: { children: ReactNode }) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error: error.message || "Unknown 3D error" };
+  }
+
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    console.error("3D Viewer error:", error, info);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="flex items-center justify-center h-full text-destructive">
+          <div className="text-center p-4">
+            <p className="text-sm font-medium mb-1">3D-Darstellung fehlgeschlagen</p>
+            <p className="text-xs text-muted-foreground max-w-[300px]">{this.state.error}</p>
+            <button
+              className="mt-2 text-xs underline text-primary"
+              onClick={() => this.setState({ hasError: false, error: null })}
+            >
+              Erneut versuchen
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 function CameraTracker({ onUpdate }: { onUpdate: (pos: { x: number; z: number }, rotY: number) => void }) {
   useFrame(({ camera }) => {
     onUpdate({ x: camera.position.x, z: camera.position.z }, camera.rotation.y);
@@ -818,6 +853,7 @@ export function FloorPlan3DViewer({ floor, locationId, sensors = [], isAdmin = f
           </div>
         ) : (
           <>
+          <Canvas3DErrorBoundary>
             <Canvas
               shadows
               camera={{ 
@@ -827,6 +863,11 @@ export function FloorPlan3DViewer({ floor, locationId, sensors = [], isAdmin = f
                 far: 1000,
               }}
               style={{ cursor: isWalking && isLocked ? "none" : "grab" }}
+              onCreated={({ gl }) => {
+                gl.getContext().canvas.addEventListener("webglcontextlost", (e) => {
+                  console.error("WebGL context lost", e);
+                });
+              }}
             >
               <Suspense
                 fallback={
@@ -854,6 +895,7 @@ export function FloorPlan3DViewer({ floor, locationId, sensors = [], isAdmin = f
                 />
               </Suspense>
             </Canvas>
+          </Canvas3DErrorBoundary>
 
             {/* Floating buttons for compact/readOnly mode */}
             {compact && !isWalking && (
@@ -903,8 +945,9 @@ export function FloorPlan3DViewer({ floor, locationId, sensors = [], isAdmin = f
               </div>
             )}
 
-            {/* Minimap removed – not needed in location detail view */}
           </>
+          </>
+
         )}
       </div>
     </div>

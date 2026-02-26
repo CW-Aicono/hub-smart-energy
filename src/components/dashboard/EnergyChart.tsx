@@ -246,9 +246,8 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
     // Determine which period total field to use
     const periodTotalKey = period === "week" ? "totalWeek" : period === "month" ? "totalMonth" : period === "year" ? "totalYear" : null;
 
-    // For current period with Loxone totals (month/year only): show a single aggregated bar
-    // Week is excluded here – it falls through to the 7-day breakdown below
-    if (useLoxoneTotals && periodTotalKey && period !== "quarter" && period !== "week") {
+    // For current period with Loxone totals (month/week/year): show a single aggregated bar
+    if (useLoxoneTotals && periodTotalKey && period !== "quarter") {
       const totals = { strom: 0, gas: 0, waerme: 0, wasser: 0 };
 
       // Add Loxone period totals for automatic main meters only
