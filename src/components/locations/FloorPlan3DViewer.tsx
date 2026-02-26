@@ -946,8 +946,6 @@ export function FloorPlan3DViewer({ floor, locationId, sensors = [], isAdmin = f
             )}
 
           </>
-          </>
-
         )}
       </div>
     </div>
