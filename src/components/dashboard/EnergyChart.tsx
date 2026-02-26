@@ -1,7 +1,7 @@
 import React, { useMemo, useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
-  BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
+  BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
@@ -11,7 +11,8 @@ import { useMeters } from "@/hooks/useMeters";
 import { useLocations } from "@/hooks/useLocations";
 import { supabase } from "@/integrations/supabase/client";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ENERGY_CHART_COLORS } from "@/lib/energyTypeColors";
+import { ENERGY_CHART_COLORS, ENERGY_TYPE_LABELS } from "@/lib/energyTypeColors";
+import { cn } from "@/lib/utils";
 import { gasM3ToKWh } from "@/lib/formatEnergy";
 import {
   format, startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth,
@@ -564,10 +565,6 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
 
   const tickStyle = { fill: 'hsl(var(--muted-foreground))', fontSize: 11 };
 
-  const legendFormatter = (value: string, entry: any) => {
-    const hidden = hiddenKeys.has(entry.dataKey);
-    return <span style={{ color: hidden ? 'hsl(var(--muted-foreground))' : undefined, opacity: hidden ? 0.4 : 1, cursor: 'pointer' }}>{value}</span>;
-  };
 
   return (
     <Card>
@@ -606,57 +603,70 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
             Noch keine Verbrauchsdaten vorhanden
           </div>
         ) : (
-          <ResponsiveContainer width="100%" height={300}>
-            {isLineChart ? (
-              <LineChart data={chartData} margin={{ top: 5, right: 10, left: 5, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" className="stroke-border" vertical={false} />
-                <XAxis dataKey="label" tick={tickStyle} tickLine={false} axisLine={false} interval={11} tickFormatter={(v: string) => v.endsWith(":00 Uhr") ? v.replace(" Uhr", "") : ""} />
-                <YAxis width={50} tick={tickStyle} tickLine={false} axisLine={false} domain={visibleKeys.length === 0 ? [0, 1] : ['auto', 'auto']} />
-                <Tooltip
-                  contentStyle={tooltipStyle}
-                  formatter={(value, name, item) => {
-                    const nameStr = typeof name === "string" ? name : "";
-                    // Completely suppress gap (dashed interpolated) lines from tooltip
-                    if (nameStr.startsWith("__gap_")) return null;
-                    // real_* lines carry the display name (e.g. "Strom") — show them
-                    return tooltipFormatter(value as number, nameStr);
-                  }}
-                  itemSorter={(item) => ((item as any)?.dataKey as string ?? "").startsWith("real_") ? -1 : 1}
-                />
-                <Legend wrapperStyle={{ fontSize: 12, cursor: 'pointer' }} onClick={handleLegendClick} formatter={(value, entry) => {
-                  // Only show legend entries for the named real_* lines (they carry the display name like "Strom")
-                  // The gap lines (dataKey starts with "strom", "gas", etc. but name starts with "__gap_") must be hidden
-                  const name = (entry as any).name as string | undefined;
-                  if (name && name.startsWith("__gap_")) return null;
-                  return legendFormatter(value, entry);
-                }} />
-                {/* Always render all lines in fixed order to prevent legend reordering */}
-                {visibleEnergyKeys.map((key) => {
-                  const hidden = hiddenKeys.has(key);
-                  const nameMap: Record<string, string> = { strom: "Strom", gas: "Gas", waerme: "Wärme", wasser: "Wasser" };
-                  const displayName = nameMap[key] || key;
-                  return (
-                    <React.Fragment key={key}>
-                      <Line type="monotone" dataKey={key} name={`__gap_${key}`} stroke={ENERGY_CHART_COLORS[key]} strokeWidth={hidden ? 0 : 1.5} strokeDasharray="4 4" dot={false} connectNulls={false} legendType="none" tooltipType="none" />
-                      <Line type="monotone" dataKey={hidden ? key : `real_${key}`} name={displayName} stroke={ENERGY_CHART_COLORS[key]} strokeWidth={hidden ? 0 : 2.5} dot={false} connectNulls={false} legendType="line" />
-                    </React.Fragment>
-                  );
-                })}
-              </LineChart>
-            ) : (
-              <BarChart data={chartData} barGap={2} margin={{ top: 5, right: 10, left: 5, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" className="stroke-border" vertical={false} />
-                <XAxis dataKey="label" tick={tickStyle} tickLine={false} axisLine={false} />
-                <YAxis width={50} tick={tickStyle} tickLine={false} axisLine={false} domain={visibleKeys.length === 0 ? [0, 1] : ['auto', 'auto']} />
-                <Tooltip contentStyle={tooltipStyle} formatter={tooltipFormatter} />
-                <Legend wrapperStyle={{ fontSize: 12, cursor: 'pointer' }} onClick={handleLegendClick} formatter={legendFormatter} />
-                {visibleEnergyKeys.includes("strom") && <Bar dataKey="strom" name="Strom" fill={ENERGY_CHART_COLORS.strom} radius={[3, 3, 0, 0]} hide={hiddenKeys.has("strom")} />}
-                {visibleEnergyKeys.includes("gas") && <Bar dataKey="gas" name="Gas" fill={ENERGY_CHART_COLORS.gas} radius={[3, 3, 0, 0]} hide={hiddenKeys.has("gas")} />}
-                {visibleEnergyKeys.includes("waerme") && <Bar dataKey="waerme" name="Wärme" fill={ENERGY_CHART_COLORS.waerme} radius={[3, 3, 0, 0]} hide={hiddenKeys.has("waerme")} />}
-                {visibleEnergyKeys.includes("wasser") && <Bar dataKey="wasser" name="Wasser" fill={ENERGY_CHART_COLORS.wasser} radius={[3, 3, 0, 0]} hide={hiddenKeys.has("wasser")} />}
-              </BarChart>
-            )}
-          </ResponsiveContainer>
+          <>
+            <ResponsiveContainer width="100%" height={300}>
+              {isLineChart ? (
+                <LineChart data={chartData} margin={{ top: 5, right: 10, left: 5, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" className="stroke-border" vertical={false} />
+                  <XAxis dataKey="label" tick={tickStyle} tickLine={false} axisLine={false} interval={11} tickFormatter={(v: string) => v.endsWith(":00 Uhr") ? v.replace(" Uhr", "") : ""} />
+                  <YAxis width={50} tick={tickStyle} tickLine={false} axisLine={false} domain={visibleKeys.length === 0 ? [0, 1] : ['auto', 'auto']} />
+                  <Tooltip
+                    contentStyle={tooltipStyle}
+                    formatter={(value, name, item) => {
+                      const nameStr = typeof name === "string" ? name : "";
+                      if (nameStr.startsWith("__gap_")) return null;
+                      return tooltipFormatter(value as number, nameStr);
+                    }}
+                    itemSorter={(item) => ((item as any)?.dataKey as string ?? "").startsWith("real_") ? -1 : 1}
+                  />
+                  {visibleEnergyKeys.map((key) => {
+                    const hidden = hiddenKeys.has(key);
+                    const displayName = ENERGY_TYPE_LABELS[key] || key;
+                    return (
+                      <React.Fragment key={key}>
+                        <Line type="monotone" dataKey={key} name={`__gap_${key}`} stroke={ENERGY_CHART_COLORS[key]} strokeWidth={hidden ? 0 : 1.5} strokeDasharray="4 4" dot={false} connectNulls={false} legendType="none" tooltipType="none" />
+                        <Line type="monotone" dataKey={hidden ? key : `real_${key}`} name={displayName} stroke={ENERGY_CHART_COLORS[key]} strokeWidth={hidden ? 0 : 2.5} dot={false} connectNulls={false} legendType="line" />
+                      </React.Fragment>
+                    );
+                  })}
+                </LineChart>
+              ) : (
+                <BarChart data={chartData} barGap={2} margin={{ top: 5, right: 10, left: 5, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" className="stroke-border" vertical={false} />
+                  <XAxis dataKey="label" tick={tickStyle} tickLine={false} axisLine={false} />
+                  <YAxis width={50} tick={tickStyle} tickLine={false} axisLine={false} domain={visibleKeys.length === 0 ? [0, 1] : ['auto', 'auto']} />
+                  <Tooltip contentStyle={tooltipStyle} formatter={tooltipFormatter} />
+                  {visibleEnergyKeys.includes("strom") && <Bar dataKey="strom" name="Strom" fill={ENERGY_CHART_COLORS.strom} radius={[3, 3, 0, 0]} hide={hiddenKeys.has("strom")} />}
+                  {visibleEnergyKeys.includes("gas") && <Bar dataKey="gas" name="Gas" fill={ENERGY_CHART_COLORS.gas} radius={[3, 3, 0, 0]} hide={hiddenKeys.has("gas")} />}
+                  {visibleEnergyKeys.includes("waerme") && <Bar dataKey="waerme" name="Wärme" fill={ENERGY_CHART_COLORS.waerme} radius={[3, 3, 0, 0]} hide={hiddenKeys.has("waerme")} />}
+                  {visibleEnergyKeys.includes("wasser") && <Bar dataKey="wasser" name="Wasser" fill={ENERGY_CHART_COLORS.wasser} radius={[3, 3, 0, 0]} hide={hiddenKeys.has("wasser")} />}
+                </BarChart>
+              )}
+            </ResponsiveContainer>
+            <div className="flex items-center justify-center gap-2 mt-3 flex-wrap">
+              {visibleEnergyKeys.map((key) => {
+                const hidden = hiddenKeys.has(key);
+                return (
+                  <button
+                    key={key}
+                    onClick={() => handleLegendClick({ dataKey: key })}
+                    className={cn(
+                      "inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium transition-colors",
+                      hidden
+                        ? "border-muted text-muted-foreground opacity-50"
+                        : "border-input hover:bg-accent"
+                    )}
+                  >
+                    <span
+                      className="inline-block h-2.5 w-2.5 rounded-full shrink-0"
+                      style={{ backgroundColor: hidden ? "hsl(var(--muted-foreground))" : ENERGY_CHART_COLORS[key] }}
+                    />
+                    {ENERGY_TYPE_LABELS[key] || key}
+                  </button>
+                );
+              })}
+            </div>
+          </>
         )}
       </CardContent>
     </Card>
