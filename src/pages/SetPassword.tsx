@@ -177,6 +177,7 @@ const SetPassword = () => {
                       onChange={(e) => setPassword(e.target.value)}
                       required
                       minLength={8}
+                      autoComplete="new-password"
                     />
                     <button
                       type="button"
@@ -197,6 +198,7 @@ const SetPassword = () => {
                     value={passwordConfirm}
                     onChange={(e) => setPasswordConfirm(e.target.value)}
                     required
+                    autoComplete="new-password"
                   />
                   {passwordConfirm && password !== passwordConfirm && (
                     <p className="text-xs text-destructive">Passwörter stimmen nicht überein.</p>
