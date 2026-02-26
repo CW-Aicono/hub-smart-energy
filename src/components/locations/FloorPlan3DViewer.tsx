@@ -510,7 +510,7 @@ function Scene({
                 key={`label-${room.id}`}
                 position={[center.cx, 1.2, center.cz]}
                 center
-                occlude="blending"
+                occlude="raycast"
                 style={{ pointerEvents: 'none' }}
               >
                 <div className="text-xs font-semibold text-muted-foreground whitespace-nowrap bg-background/60 px-1 rounded">{room.name}</div>
