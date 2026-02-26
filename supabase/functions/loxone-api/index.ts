@@ -257,6 +257,7 @@ serve(async (req) => {
 
   try {
     // ── AUTH: Validate JWT and tenant ownership ──
+    // Support both user JWT and service-role key (for server-to-server calls like periodic-sync)
     const authHeader = req.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) {
       return new Response(JSON.stringify({ success: false, error: "Nicht authentifiziert" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -266,22 +267,33 @@ serve(async (req) => {
     const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-    const authClient = createClient(supabaseUrl, supabaseAnonKey, {
-      global: { headers: { Authorization: authHeader } },
-    });
     const token = authHeader.replace("Bearer ", "");
-    const { data: claimsData, error: claimsError } = await authClient.auth.getClaims(token);
-    if (claimsError || !claimsData?.claims) {
-      return new Response(JSON.stringify({ success: false, error: "Ungültiges Token" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-    }
-    const userId = claimsData.claims.sub;
+    const isServiceRole = token === supabaseServiceKey;
 
+    let userTenantId: string | null = null;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Get user's tenant_id
-    const { data: profile } = await supabase.from("profiles").select("tenant_id").eq("user_id", userId).single();
-    if (!profile?.tenant_id) {
-      return new Response(JSON.stringify({ success: false, error: "Kein Mandant zugeordnet" }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    if (isServiceRole) {
+      // Server-to-server call (e.g. from loxone-periodic-sync) – skip user auth,
+      // tenant will be resolved from the location_integration below
+      console.log("Service-role call detected – skipping user JWT validation");
+    } else {
+      // Normal user call – validate JWT
+      const authClient = createClient(supabaseUrl, supabaseAnonKey, {
+        global: { headers: { Authorization: authHeader } },
+      });
+      const { data: claimsData, error: claimsError } = await authClient.auth.getClaims(token);
+      if (claimsError || !claimsData?.claims) {
+        return new Response(JSON.stringify({ success: false, error: "Ungültiges Token" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+      const userId = claimsData.claims.sub;
+
+      // Get user's tenant_id
+      const { data: profile } = await supabase.from("profiles").select("tenant_id").eq("user_id", userId).single();
+      if (!profile?.tenant_id) {
+        return new Response(JSON.stringify({ success: false, error: "Kein Mandant zugeordnet" }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+      userTenantId = profile.tenant_id;
     }
 
     const requestBody = await req.json();
@@ -304,8 +316,8 @@ serve(async (req) => {
       throw new Error("Standort-Integration nicht gefunden");
     }
 
-    // Verify tenant ownership
-    if ((locationIntegration as any).location?.tenant_id !== profile.tenant_id) {
+    // Verify tenant ownership (skip for service-role calls)
+    if (!isServiceRole && (locationIntegration as any).location?.tenant_id !== userTenantId) {
       return new Response(JSON.stringify({ success: false, error: "Zugriff verweigert" }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
