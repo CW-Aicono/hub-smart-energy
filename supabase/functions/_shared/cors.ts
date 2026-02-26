@@ -6,12 +6,13 @@
 const ALLOWED_ORIGINS = [
   "https://hub-smart-energy.lovable.app",
   "https://id-preview--1e1d0ab0-a25d-49ac-9d3a-662f96a9ba12.lovable.app",
+  "https://ems-pro.aicono.org",
 ];
 
 export function getCorsHeaders(req?: Request): Record<string, string> {
   const origin = req?.headers?.get("Origin") || "";
   const isAllowed = ALLOWED_ORIGINS.some(
-    (o) => origin === o || origin.endsWith(".lovable.app"),
+    (o) => origin === o || origin.endsWith(".lovable.app") || origin.endsWith(".lovableproject.com"),
   );
   return {
     "Access-Control-Allow-Origin": isAllowed ? origin : ALLOWED_ORIGINS[0],

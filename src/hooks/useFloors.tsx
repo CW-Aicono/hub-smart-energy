@@ -58,14 +58,11 @@ async function uploadWithProgress(
 
     xhr.addEventListener("load", async () => {
       if (xhr.status >= 200 && xhr.status < 300) {
-        const { data: signedData, error: signError } = await supabase.storage
+        // Use public URL (bucket is public) instead of signed URL that expires
+        const { data: publicData } = supabase.storage
           .from(bucket)
-          .createSignedUrl(path, 3600);
-        if (signError || !signedData?.signedUrl) {
-          resolve({ publicUrl: null, error: signError ?? new Error("Failed to create signed URL") });
-        } else {
-          resolve({ publicUrl: signedData.signedUrl, error: null });
-        }
+          .getPublicUrl(path);
+        resolve({ publicUrl: publicData?.publicUrl ?? null, error: null });
       } else {
         resolve({ publicUrl: null, error: new Error(`Upload failed: ${xhr.status} ${xhr.statusText}`) });
       }
