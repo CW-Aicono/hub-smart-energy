@@ -9,11 +9,12 @@ import { useMemo, useState, useRef, useEffect } from "react";
 import { formatEnergy, formatEnergyByType, gasM3ToKWh } from "@/lib/formatEnergy";
 import { supabase } from "@/integrations/supabase/client";
 import { ENERGY_CHART_COLORS, ENERGY_TYPE_LABELS } from "@/lib/energyTypeColors";
-import { startOfDay, startOfWeek, startOfMonth, startOfQuarter, startOfYear } from "date-fns";
+import { startOfDay, startOfWeek, startOfMonth, startOfQuarter, startOfYear, endOfWeek, endOfMonth, endOfQuarter, endOfYear, format } from "date-fns";
 import { useDashboardFilter, TimePeriod } from "@/hooks/useDashboardFilter";
 import { useWeekStartDay } from "@/hooks/useWeekStartDay";
 import { useLocationEnergySources } from "@/hooks/useLocationEnergySources";
 import { useSpotPrices } from "@/hooks/useSpotPrices";
+import { useQuery } from "@tanstack/react-query";
 
 type SankeyViewMode = "leistung" | "kosten";
 
@@ -75,6 +76,57 @@ const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
   const [viewMode, setViewMode] = useState<SankeyViewMode>("leistung");
   const allowedTypes = useLocationEnergySources(locationId);
   const { currentPrice: currentSpotPrice } = useSpotPrices();
+
+  // Compute date range for DB query (always current period, no offset)
+  const { rangeStart, rangeEnd } = useMemo(() => {
+    const now = new Date();
+    let start: Date;
+    let end: Date;
+    switch (period) {
+      case "week":
+        start = startOfWeek(now, { weekStartsOn });
+        end = endOfWeek(now, { weekStartsOn });
+        break;
+      case "month":
+        start = startOfMonth(now);
+        end = endOfMonth(now);
+        break;
+      case "quarter":
+        start = startOfQuarter(now);
+        end = endOfQuarter(now);
+        break;
+      case "year":
+        start = startOfYear(now);
+        end = endOfYear(now);
+        break;
+      default:
+        start = startOfDay(now);
+        end = now;
+    }
+    return { rangeStart: start, rangeEnd: end };
+  }, [period, weekStartsOn]);
+
+  // Fetch DB-backed period sums for non-day periods
+  const mainAutoMeterIds = useMemo(
+    () => meters.filter(m => !m.is_archived && m.capture_type === "automatic" && m.is_main_meter).map(m => m.id),
+    [meters]
+  );
+
+  const { data: dbPeriodSums } = useQuery({
+    queryKey: ["sankey-period-sums", mainAutoMeterIds, format(rangeStart, "yyyy-MM-dd"), format(rangeEnd, "yyyy-MM-dd"), period],
+    enabled: period !== "day" && mainAutoMeterIds.length > 0,
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("get_meter_period_sums", {
+        p_meter_ids: mainAutoMeterIds,
+        p_from_date: format(rangeStart, "yyyy-MM-dd"),
+        p_to_date: format(rangeEnd, "yyyy-MM-dd"),
+      });
+      if (error) { console.error("Sankey period sums error:", error); return {}; }
+      const map: Record<string, number> = {};
+      (data ?? []).forEach((row: any) => { map[row.meter_id] = row.total_value; });
+      return map;
+    },
+  });
 
   // Build price lookup: location_id:energy_type -> price_per_unit
   const priceLookup = useMemo(() => {
@@ -222,17 +274,30 @@ const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
       addFlow(meter.energy_type || "strom", meter.location_id, meter.floor_id, meter.room_id, value);
     });
 
-    // Auto main meter period totals (totalDay for day view, etc.)
-    const ptKey = period === "day" ? "totalDay" : period === "week" ? "totalWeek" : period === "month" ? "totalMonth" : period === "quarter" ? "totalMonth" : period === "year" ? "totalYear" : "totalYear";
+    // Auto main meter period totals
+    // For "day": use live totalDay from Loxone
+    // For week/month/quarter/year: use DB-backed daily sums, plus live totalDay for today
     meters.filter(m => !m.is_archived && m.capture_type === "automatic" && m.is_main_meter).forEach(m => {
       if (locationId && m.location_id !== locationId) return;
       if (!allowedTypes.has(m.energy_type || "strom")) return;
-      const pt = livePeriodTotals[m.id];
-      if (!pt) return;
-      const val = pt[ptKey as keyof typeof pt];
-      if (val == null || val <= 0) return;
-      const converted = toBaseUnit(m.id, val);
-      addFlow(m.energy_type || "strom", m.location_id, m.floor_id || null, m.room_id || null, converted);
+
+      if (period === "day") {
+        const pt = livePeriodTotals[m.id];
+        if (!pt) return;
+        const val = pt.totalDay;
+        if (val == null || val <= 0) return;
+        const converted = toBaseUnit(m.id, val);
+        addFlow(m.energy_type || "strom", m.location_id, m.floor_id || null, m.room_id || null, converted);
+      } else {
+        // DB sum for past days
+        const dbVal = dbPeriodSums?.[m.id] ?? 0;
+        // Add live totalDay for today (which is within the current period)
+        const todayVal = livePeriodTotals[m.id]?.totalDay ?? 0;
+        const total = dbVal + todayVal;
+        if (total <= 0) return;
+        const converted = toBaseUnit(m.id, total);
+        addFlow(m.energy_type || "strom", m.location_id, m.floor_id || null, m.room_id || null, converted);
+      }
     });
 
     return Object.entries(flowMap)
@@ -241,7 +306,7 @@ const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
         return { sourceName, targetName, sourceColor, sourceType, value };
       })
       .filter((f) => f.value > 0);
-  }, [filteredReadings, meterMap, locationId, locations, floors, rooms, viewMode, priceLookup, livePeriodTotals, meters, period, allowedTypes]);
+  }, [filteredReadings, meterMap, locationId, locations, floors, rooms, viewMode, priceLookup, livePeriodTotals, meters, period, allowedTypes, dbPeriodSums]);
 
   // Format helper based on view mode
   const formatValue = (value: number, sourceType?: string) => {
