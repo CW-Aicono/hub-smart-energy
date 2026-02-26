@@ -46,12 +46,62 @@ serve(async (req) => {
     const dhi: number[] = meteo.hourly.diffuse_radiation;
     const clouds: number[] = meteo.hourly.cloud_cover;
 
-    // 4. Simple physical model: estimated kWh per hour
-    // Performance ratio ~0.80, GHI in W/m² → kWh = GHI * kWp * PR / 1000
+    // 4. Physical model with tilt & azimuth correction
+    // Uses a simplified transposition model: POA = DNI * cos(AOI) + DHI * (1+cos(tilt))/2
+    // where DNI ≈ GHI - DHI, and AOI depends on solar position + panel orientation.
     const PR = 0.80;
+    const deg2rad = (d: number) => (d * Math.PI) / 180;
+    const tiltRad = deg2rad(tiltDeg);
+    const latRad = deg2rad(location.latitude);
+
+    // Day of year helper
+    const dayOfYear = (dateStr: string) => {
+      const d = new Date(dateStr);
+      const start = new Date(d.getFullYear(), 0, 0);
+      return Math.floor((d.getTime() - start.getTime()) / 86400000);
+    };
+
     const hourly = times.map((ts: string, i: number) => {
       const radiationWm2 = ghi[i] ?? 0;
-      const estimatedKwh = (radiationWm2 * peakKwp * PR) / 1000;
+      const diffuseWm2 = dhi[i] ?? 0;
+      const directWm2 = Math.max(0, radiationWm2 - diffuseWm2);
+
+      // Solar declination (Cooper's equation)
+      const doy = dayOfYear(ts);
+      const declination = deg2rad(23.45 * Math.sin(deg2rad(360 * (284 + doy) / 365)));
+
+      // Hour angle (solar noon = 0)
+      const hour = new Date(ts).getHours() + new Date(ts).getMinutes() / 60;
+      const hourAngle = deg2rad((hour - 12) * 15);
+
+      // Solar altitude angle
+      const sinAlt = Math.sin(latRad) * Math.sin(declination)
+                    + Math.cos(latRad) * Math.cos(declination) * Math.cos(hourAngle);
+      const solarAlt = Math.asin(Math.max(-1, Math.min(1, sinAlt)));
+
+      // Solar azimuth angle (measured from south, positive west)
+      let solarAz = 0;
+      if (solarAlt > 0.01) {
+        const cosAz = (Math.sin(declination) - Math.sin(solarAlt) * Math.sin(latRad))
+                      / (Math.cos(solarAlt) * Math.cos(latRad));
+        solarAz = Math.acos(Math.max(-1, Math.min(1, cosAz)));
+        if (hourAngle > 0) solarAz = -solarAz; // afternoon = west
+      }
+
+      // Panel azimuth: user input is compass bearing (180=South), convert to math convention (0=South)
+      const panelAzRad = deg2rad(azimuthDeg - 180);
+
+      // Angle of incidence on tilted surface
+      const cosAOI = Math.sin(solarAlt) * Math.cos(tiltRad)
+                    + Math.cos(solarAlt) * Math.sin(tiltRad) * Math.cos(solarAz - panelAzRad);
+
+      // Plane-of-array irradiance
+      const beam = directWm2 * Math.max(0, cosAOI);
+      const diffuse = diffuseWm2 * (1 + Math.cos(tiltRad)) / 2;
+      const poaWm2 = beam + diffuse;
+
+      const estimatedKwh = (poaWm2 * peakKwp * PR) / 1000;
+
       return {
         timestamp: ts,
         radiation_w_m2: radiationWm2,
