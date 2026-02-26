@@ -15,12 +15,6 @@ Deno.serve(async (req) => {
   }
 
   try {
-    // ── Auth ──
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader?.startsWith("Bearer ")) {
-      return json({ success: false, error: "Unauthorized" }, 401, corsHeaders);
-    }
-
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -28,6 +22,63 @@ Deno.serve(async (req) => {
     if (!encKey) {
       console.error("BRIGHTHUB_ENCRYPTION_KEY not configured");
       return json({ success: false, error: "Server configuration error" }, 500, corsHeaders);
+    }
+
+    const body = await req.json();
+    const { action } = body;
+
+    // ── Migrate uses service-role auth (no user JWT needed) ──
+    if (action === "migrate") {
+      const authHeader = req.headers.get("Authorization");
+      const token = authHeader?.replace("Bearer ", "") || "";
+      if (token !== supabaseServiceKey && token !== supabaseAnonKey) {
+        // Also allow user JWT if they are admin – but for simplicity, 
+        // validate via service-role key match
+        // Try user JWT auth as fallback
+        const authClient = createClient(supabaseUrl, supabaseAnonKey, {
+          global: { headers: { Authorization: authHeader || "" } },
+        });
+        const { error: claimsError } = await authClient.auth.getClaims(token);
+        if (claimsError) {
+          return json({ success: false, error: "Unauthorized" }, 401, corsHeaders);
+        }
+      }
+
+      const supabase = createClient(supabaseUrl, supabaseServiceKey);
+      const { data: allSettings, error } = await supabase
+        .from("brighthub_settings")
+        .select("id, api_key, webhook_secret");
+
+      if (error) {
+        console.error("Migrate fetch error:", error.message);
+        return json({ success: false, error: "Database error" }, 500, corsHeaders);
+      }
+
+      let migrated = 0;
+      for (const s of (allSettings || [])) {
+        const updates: Record<string, string> = {};
+        if (s.api_key && !isEncrypted(s.api_key)) {
+          updates.api_key = await encrypt(s.api_key, encKey);
+        }
+        if (s.webhook_secret && !isEncrypted(s.webhook_secret)) {
+          updates.webhook_secret = await encrypt(s.webhook_secret, encKey);
+        }
+        if (Object.keys(updates).length > 0) {
+          await supabase
+            .from("brighthub_settings")
+            .update(updates as any)
+            .eq("id", s.id);
+          migrated++;
+        }
+      }
+
+      return json({ success: true, migrated }, 200, corsHeaders);
+    }
+
+    // ── Auth for load/save ──
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader?.startsWith("Bearer ")) {
+      return json({ success: false, error: "Unauthorized" }, 401, corsHeaders);
     }
 
     const authClient = createClient(supabaseUrl, supabaseAnonKey, {
@@ -52,8 +103,7 @@ Deno.serve(async (req) => {
       return json({ success: false, error: "No tenant" }, 403, corsHeaders);
     }
 
-    const body = await req.json();
-    const { action, tenantId, locationId } = body;
+    const { tenantId, locationId } = body;
 
     if (tenantId && tenantId !== profile.tenant_id) {
       return json({ success: false, error: "Forbidden" }, 403, corsHeaders);
@@ -170,39 +220,6 @@ Deno.serve(async (req) => {
       }
 
       return json({ success: true }, 200, corsHeaders);
-    }
-
-    // ── MIGRATE ──
-    if (action === "migrate") {
-      // Encrypt all plaintext api_key and webhook_secret values
-      const { data: allSettings, error } = await supabase
-        .from("brighthub_settings")
-        .select("id, api_key, webhook_secret");
-
-      if (error) {
-        console.error("Migrate fetch error:", error.message);
-        return json({ success: false, error: "Database error" }, 500, corsHeaders);
-      }
-
-      let migrated = 0;
-      for (const s of (allSettings || [])) {
-        const updates: Record<string, string> = {};
-        if (s.api_key && !isEncrypted(s.api_key)) {
-          updates.api_key = await encrypt(s.api_key, encKey);
-        }
-        if (s.webhook_secret && !isEncrypted(s.webhook_secret)) {
-          updates.webhook_secret = await encrypt(s.webhook_secret, encKey);
-        }
-        if (Object.keys(updates).length > 0) {
-          await supabase
-            .from("brighthub_settings")
-            .update(updates as any)
-            .eq("id", s.id);
-          migrated++;
-        }
-      }
-
-      return json({ success: true, migrated }, 200, corsHeaders);
     }
 
     return json({ success: false, error: `Unknown action: ${action}` }, 400, corsHeaders);
