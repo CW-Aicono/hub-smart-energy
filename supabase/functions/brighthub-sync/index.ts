@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders } from "../_shared/cors.ts";
+import { decrypt } from "../_shared/crypto.ts";
 
 const BRIGHTHUB_API_URL =
   "https://jcewrsouppdsvaipdpsy.supabase.co/functions/v1/energy-api";
@@ -141,6 +142,10 @@ Deno.serve(async (req) => {
       );
     }
 
+    // Decrypt api_key (backwards-compatible: plaintext values pass through)
+    const encKey = Deno.env.get("BRIGHTHUB_ENCRYPTION_KEY");
+    const apiKey = encKey ? await decrypt(settings.api_key, encKey) : settings.api_key;
+
     // Pre-fetch current energy prices for the location
     const priceMap = await fetchEnergyPriceMap(supabase, locationId, tenantId);
 
@@ -176,7 +181,7 @@ Deno.serve(async (req) => {
         return entry;
       });
 
-      const apiResult = await callBrightHub("sync_meters", { meters: metersPayload }, settings.api_key);
+      const apiResult = await callBrightHub("sync_meters", { meters: metersPayload }, apiKey);
 
       // Update last_meter_sync_at
       await supabase
@@ -238,7 +243,7 @@ Deno.serve(async (req) => {
         // Chunk into max 1,000 per call as per API spec
         for (let i = 0; i < readings.length; i += 1000) {
           const chunk = readings.slice(i, i + 1000);
-          const apiResult = await callBrightHub("bulk_readings", { readings: chunk }, settings.api_key);
+          const apiResult = await callBrightHub("bulk_readings", { readings: chunk }, apiKey);
           totalCount += apiResult.count ?? chunk.length;
         }
         result = { sent: readings.length, count: totalCount };
@@ -303,7 +308,7 @@ Deno.serve(async (req) => {
         // Chunk into max 5,000 per call as per API spec
         for (let i = 0; i < intradayReadings.length; i += 5000) {
           const chunk = intradayReadings.slice(i, i + 5000);
-          const apiResult = await callBrightHub("bulk_intraday", { readings: chunk }, settings.api_key);
+          const apiResult = await callBrightHub("bulk_intraday", { readings: chunk }, apiKey);
           totalCount += apiResult.count ?? chunk.length;
         }
         result = { sent: intradayReadings.length, count: totalCount };

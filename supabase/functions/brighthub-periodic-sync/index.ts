@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders } from "../_shared/cors.ts";
+import { decrypt } from "../_shared/crypto.ts";
 
 const BRIGHTHUB_API_URL =
   "https://jcewrsouppdsvaipdpsy.supabase.co/functions/v1/energy-api";
@@ -137,8 +138,13 @@ Deno.serve(async (req) => {
 
     const results: unknown[] = [];
 
+    const encKey = Deno.env.get("BRIGHTHUB_ENCRYPTION_KEY");
+
     for (const settings of allSettings) {
       if (!settings.api_key || !settings.location_id) continue;
+
+      // Decrypt api_key (backwards-compatible)
+      const apiKey = encKey ? await decrypt(settings.api_key, encKey) : settings.api_key;
 
       const locationResult: Record<string, unknown> = {
         location_id: settings.location_id,
@@ -175,7 +181,7 @@ Deno.serve(async (req) => {
             const meterResult = await callBrightHub(
               "sync_meters",
               { meters: metersPayload },
-              settings.api_key
+              apiKey
             );
 
             locationResult.meters = {
@@ -261,7 +267,7 @@ Deno.serve(async (req) => {
               // Chunk into max 1,000 per call as per API spec
               for (let i = 0; i < readings.length; i += 1000) {
                 const chunk = readings.slice(i, i + 1000);
-                const apiResult = await callBrightHub("bulk_readings", { readings: chunk }, settings.api_key);
+                const apiResult = await callBrightHub("bulk_readings", { readings: chunk }, apiKey);
                 totalCount += apiResult.count ?? chunk.length;
               }
               locationResult.readings = { sent: readings.length, count: totalCount };
@@ -321,7 +327,7 @@ Deno.serve(async (req) => {
               // Chunk into max 5,000 per call as per API spec
               for (let i = 0; i < intradayReadings.length; i += 5000) {
                 const chunk = intradayReadings.slice(i, i + 5000);
-                const apiResult = await callBrightHub("bulk_intraday", { readings: chunk }, settings.api_key);
+                const apiResult = await callBrightHub("bulk_intraday", { readings: chunk }, apiKey);
                 totalCount += apiResult.count ?? chunk.length;
               }
               locationResult.intraday = { sent: intradayReadings.length, count: totalCount };
