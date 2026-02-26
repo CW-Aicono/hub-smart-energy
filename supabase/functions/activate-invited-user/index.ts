@@ -1,13 +1,9 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
-};
+import { getCorsHeaders } from "../_shared/cors.ts";
 
 const handler = async (req: Request): Promise<Response> => {
+  const corsHeaders = getCorsHeaders(req);
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
@@ -112,9 +108,12 @@ const handler = async (req: Request): Promise<Response> => {
       if (createError) {
         if (createError.message?.toLowerCase().includes("already") || createError.message?.toLowerCase().includes("exists")) {
           // User already exists – find them and reuse
-          const { data: listData, error: listError } = await supabase.auth.admin.listUsers();
-          if (listError) throw new Error(`Benutzer konnte nicht gefunden werden: ${listError.message}`);
-          const existingUser = listData.users.find((u: { email: string }) => u.email?.toLowerCase() === email.toLowerCase());
+          const { data: listData, error: listError } = await supabase.auth.admin.listUsers({
+            filter: `email.eq.${email}`,
+            perPage: 1,
+          });
+          if (listError) throw new Error("Benutzer konnte nicht gefunden werden");
+          const existingUser = listData?.users?.[0];
           if (!existingUser) throw new Error("Benutzer mit dieser E-Mail konnte nicht gefunden werden.");
           newUserId = existingUser.id;
         } else {

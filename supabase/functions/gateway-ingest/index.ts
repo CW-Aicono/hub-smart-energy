@@ -12,12 +12,10 @@
  */
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { getCorsHeaders } from "../_shared/cors.ts";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
-};
+// Module-level default for helpers called outside handler context
+let corsHeaders: Record<string, string> = getCorsHeaders();
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), {
@@ -84,7 +82,10 @@ async function handleListLocations(): Promise<Response> {
     .eq("is_archived", false)
     .order("name");
 
-  if (error) return json({ success: false, error: error.message }, 500);
+  if (error) {
+    console.error("[gateway-ingest] list-locations error:", error.message);
+    return json({ success: false, error: "Internal error" }, 500);
+  }
   return json({ success: true, locations: data || [] });
 }
 
@@ -120,7 +121,10 @@ async function handleListMeters(url: URL): Promise<Response> {
 
   const { data, error } = await query;
 
-  if (error) return json({ success: false, error: error.message }, 500);
+  if (error) {
+    console.error("[gateway-ingest] list-meters error:", error.message);
+    return json({ success: false, error: "Internal error" }, 500);
+  }
   return json({ success: true, meters: data || [] });
 }
 
@@ -149,7 +153,10 @@ async function handleCompactDay(req: Request): Promise<Response> {
       .order("recorded_at", { ascending: true })
       .range(from, from + PAGE_SIZE - 1);
 
-    if (fetchError) return json({ error: fetchError.message }, 500);
+    if (fetchError) {
+      console.error("[compact-day] fetch error:", fetchError.message);
+      return json({ error: "Internal error" }, 500);
+    }
     rawData = rawData.concat(data ?? []);
     hasMore = (data?.length ?? 0) === PAGE_SIZE;
     from += PAGE_SIZE;
@@ -202,7 +209,10 @@ async function handleCompactDay(req: Request): Promise<Response> {
     .from("meter_power_readings_5min")
     .upsert(compactedRows, { onConflict: "meter_id,bucket" });
 
-  if (upsertError) return json({ error: upsertError.message }, 500);
+  if (upsertError) {
+    console.error("[compact-day] upsert error:", upsertError.message);
+    return json({ error: "Internal error" }, 500);
+  }
 
   // 4. Delete raw data
   const { count: deletedCount, error: deleteError } = await supabase
@@ -266,7 +276,7 @@ async function handlePostReadings(req: Request): Promise<Response> {
 
   if (error) {
     console.error("[gateway-ingest] DB insert error:", error.message);
-    return json({ error: "Database error", details: error.message }, 500);
+    return json({ error: "Database error" }, 500);
   }
 
   console.log(`[gateway-ingest] ✓ Inserted ${validReadings.length} readings, skipped ${skipped.length}`);
@@ -281,6 +291,7 @@ async function handlePostReadings(req: Request): Promise<Response> {
 /* ── Main router ─────────────────────────────────────────────────────────────── */
 
 Deno.serve(async (req) => {
+  corsHeaders = getCorsHeaders(req);
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
@@ -290,6 +301,8 @@ Deno.serve(async (req) => {
 
   // GET routes
   if (req.method === "GET") {
+    const authErr = validateApiKey(req);
+    if (authErr) return authErr;
     if (action === "list-locations") return handleListLocations();
     if (action === "list-meters") return handleListMeters(url);
   }

@@ -1,14 +1,10 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { Resend } from "npm:resend@2.0.0";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
-};
+import { getCorsHeaders } from "../_shared/cors.ts";
 
 const handler = async (req: Request): Promise<Response> => {
+  const corsHeaders = getCorsHeaders(req);
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
@@ -37,7 +33,13 @@ const handler = async (req: Request): Promise<Response> => {
     }
 
     const { tenantId, adminEmail, adminName, role, redirectTo } = await req.json();
-    if (!tenantId || !adminEmail) throw new Error("Missing tenantId or adminEmail");
+
+    // Input validation (BSI CON.8 H1)
+    if (!tenantId || typeof tenantId !== "string") throw new Error("Invalid tenantId");
+    if (!adminEmail || typeof adminEmail !== "string" || !adminEmail.includes("@"))
+      throw new Error("Invalid email");
+    if (adminName && typeof adminName !== "string") throw new Error("Invalid adminName");
+    if (role && !["admin", "user"].includes(role)) throw new Error("Invalid role");
     const assignedRole = role === "user" ? "user" : "admin";
 
     // Get tenant info for branding
@@ -67,9 +69,12 @@ const handler = async (req: Request): Promise<Response> => {
     if (createError) {
       if (createError.message?.includes("already")) {
         // User already exists in auth – find them and reassign to new tenant
-        const { data: listData, error: listError } = await supabase.auth.admin.listUsers();
-        if (listError) throw new Error(`Benutzer konnte nicht gefunden werden: ${listError.message}`);
-        const existingUser = listData.users.find((u) => u.email === adminEmail);
+        const { data: listData, error: listError } = await supabase.auth.admin.listUsers({
+          filter: `email.eq.${adminEmail}`,
+          perPage: 1,
+        });
+        if (listError) throw new Error("Benutzer konnte nicht gefunden werden");
+        const existingUser = listData?.users?.[0];
         if (!existingUser) throw new Error("Benutzer mit dieser E-Mail konnte nicht gefunden werden.");
         newUserId = existingUser.id;
       } else {
