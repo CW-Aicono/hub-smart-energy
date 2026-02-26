@@ -89,7 +89,7 @@ serve(async (req) => {
       }
 
       // Panel azimuth: user input is compass bearing (180=South), convert to math convention (0=South)
-      const panelAzRad = deg2rad(azimuthDeg - 180);
+      const panelAzRad = deg2rad(azimuthDeg);
 
       // Angle of incidence on tilted surface
       const cosAOI = Math.sin(solarAlt) * Math.cos(tiltRad)

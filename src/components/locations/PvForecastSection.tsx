@@ -112,6 +112,9 @@ export function PvForecastSection({ locationId }: PvForecastSectionProps) {
     if (form.tilt_deg < 0 || form.tilt_deg > 90) {
       return;
     }
+    if (form.azimuth_deg < 0 || form.azimuth_deg > 360) {
+      return;
+    }
     upsertSettings.mutate({
       ...form,
       pv_meter_id: form.pv_meter_id || null,
@@ -199,7 +202,13 @@ export function PvForecastSection({ locationId }: PvForecastSectionProps) {
                   </div>
                   <div>
                     <Label>Ausrichtung (°)</Label>
-                    <Input type="number" min={0} max={360} value={form.azimuth_deg} onChange={(e) => setForm({ ...form, azimuth_deg: Number(e.target.value) })} />
+                    <Input type="number" min={0} max={360} value={form.azimuth_deg} onChange={(e) => {
+                      const v = Number(e.target.value);
+                      setForm({ ...form, azimuth_deg: Math.min(360, Math.max(0, v)) });
+                    }} />
+                    {(form.azimuth_deg < 0 || form.azimuth_deg > 360) && (
+                      <p className="text-xs text-destructive mt-1">Wert muss zwischen 0° und 360° liegen</p>
+                    )}
                   </div>
                   <div>
                     <Label>PV-Zähler</Label>
