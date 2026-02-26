@@ -6,12 +6,12 @@
 
 const ENC_PREFIX = "enc:";
 
-/** Import a 32-byte hex key as a CryptoKey */
-async function importKey(hexKey: string): Promise<CryptoKey> {
-  const keyBytes = new Uint8Array(
-    hexKey.match(/.{1,2}/g)!.map((b) => parseInt(b, 16))
-  );
-  return crypto.subtle.importKey("raw", keyBytes, "AES-GCM", false, [
+/** Derive a 256-bit CryptoKey from any passphrase/key string via SHA-256 */
+async function importKey(secret: string): Promise<CryptoKey> {
+  // Hash the secret to always get exactly 32 bytes, regardless of input format
+  const encoded = new TextEncoder().encode(secret);
+  const hash = await crypto.subtle.digest("SHA-256", encoded);
+  return crypto.subtle.importKey("raw", hash, "AES-GCM", false, [
     "encrypt",
     "decrypt",
   ]);
