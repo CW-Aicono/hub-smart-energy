@@ -209,8 +209,9 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
       const fileName = `${meter.id}-${Date.now()}.${file.name.split(".").pop()}`;
       const { data, error } = await supabase.storage.from("meter-photos").upload(fileName, file, { upsert: true });
       if (error) throw error;
-      const { data: urlData } = supabase.storage.from("meter-photos").getPublicUrl(data.path);
-      setPhotoUrl(`${urlData.publicUrl}?t=${Date.now()}`);
+      const { data: urlData, error: urlError } = await supabase.storage.from("meter-photos").createSignedUrl(data.path, 3600);
+      if (urlError) throw urlError;
+      setPhotoUrl(`${urlData.signedUrl}`);
       toast.success("Foto hochgeladen");
     } catch {
       toast.error("Foto-Upload fehlgeschlagen");
