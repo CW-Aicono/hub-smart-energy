@@ -317,17 +317,16 @@ function RotatedModelGroup({ rotationDeg, modelKey, children }: { rotationDeg: n
     group.updateMatrixWorld(true);
 
     const box = new THREE.Box3().setFromObject(group);
-    groundingFramesRef.current += 1;
 
     if (!box.isEmpty()) {
       group.position.y = -box.min.y;
       needsGroundingRef.current = false;
+      groundingFramesRef.current = 0;
       return;
     }
 
-    if (groundingFramesRef.current > 120) {
-      needsGroundingRef.current = false;
-    }
+    // Keep trying indefinitely for empty boxes (model still loading / returns null)
+    // No timeout - grounding will succeed once the model renders
   });
 
   return (
