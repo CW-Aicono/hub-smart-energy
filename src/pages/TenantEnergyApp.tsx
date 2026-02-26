@@ -774,6 +774,7 @@ function TariffsTab({ tenantRecord, lang }: { tenantRecord: TenantRecord; lang: 
   const t = createTenantT(lang);
   const [tariffs, setTariffs] = useState<SelfTariff[]>([]);
   const [landlordTariffExists, setLandlordTariffExists] = useState(false);
+  const [landlordTariff, setLandlordTariff] = useState<{ price_per_kwh_local: number; price_per_kwh_grid: number; base_fee_monthly: number; valid_from: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
@@ -792,13 +793,26 @@ function TariffsTab({ tenantRecord, lang }: { tenantRecord: TenantRecord; lang: 
 
   const fetchTariffs = async () => {
     setLoading(true);
-    const { data } = await supabase
-      .from("tenant_self_tariffs")
-      .select("*")
-      .eq("tenant_electricity_tenant_id", tenantRecord.id)
-      .order("valid_from", { ascending: false });
+    const [{ data }, { data: ltData }] = await Promise.all([
+      supabase
+        .from("tenant_self_tariffs")
+        .select("*")
+        .eq("tenant_electricity_tenant_id", tenantRecord.id)
+        .order("valid_from", { ascending: false }),
+      tenantRecord.is_mieterstrom
+        ? supabase
+            .from("tenant_electricity_tariffs")
+            .select("*")
+            .eq("tenant_id", tenantRecord.tenant_id)
+            .order("valid_from", { ascending: false })
+            .limit(1)
+        : Promise.resolve({ data: null }),
+    ]);
     setTariffs((data || []) as SelfTariff[]);
     setLandlordTariffExists(!!tenantRecord.is_mieterstrom);
+    if (ltData && ltData.length > 0) {
+      setLandlordTariff(ltData[0] as any);
+    }
     setLoading(false);
   };
 
@@ -897,13 +911,23 @@ function TariffsTab({ tenantRecord, lang }: { tenantRecord: TenantRecord; lang: 
 
       {landlordTariffExists && energyTypes.includes("strom") && (
         <Card className="border-green-200 dark:border-green-800">
-          <CardContent className="p-3">
+          <CardContent className="p-3 space-y-2">
             <div className="flex items-center gap-2">
               <Zap className="h-4 w-4 text-green-600" />
               <p className="text-sm">
                 <strong>{fmtEnergyTypeLocalized("strom", lang)}:</strong> {t("tariff.mieterstrom_info")}
               </p>
             </div>
+            {landlordTariff && (
+              <div className="pl-6 text-sm space-y-0.5 text-muted-foreground">
+                <p>{t("dash.local_pv")}: <span className="font-semibold text-foreground">{fmtNum(landlordTariff.price_per_kwh_local, 4, lang)} €/kWh</span></p>
+                <p>{t("dash.grid")}: <span className="font-semibold text-foreground">{fmtNum(landlordTariff.price_per_kwh_grid, 4, lang)} €/kWh</span></p>
+                {landlordTariff.base_fee_monthly > 0 && (
+                  <p>{t("inv.base_fee")} <span className="font-semibold text-foreground">{fmtNum(landlordTariff.base_fee_monthly, 2, lang)} €/{lang === "de" ? "Monat" : lang === "fr" ? "mois" : lang === "pl" ? "mies." : "month"}</span></p>
+                )}
+                <p className="text-xs">{t("tariff.from")} {landlordTariff.valid_from}</p>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
