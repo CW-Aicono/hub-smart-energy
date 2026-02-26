@@ -698,6 +698,7 @@ export function FloorPlanDialog({ floor, locationId, open, onOpenChange }: Floor
                   </div>
                 }>
                   <FloorPlan3DViewer 
+                    key={floor.id}
                     floor={floor} 
                     locationId={locationId}
                     sensors={availableSensors.map(s => ({
@@ -758,7 +759,7 @@ export function FloorPlanDialog({ floor, locationId, open, onOpenChange }: Floor
 
               <TabsContent value="3d" className="flex-1 m-0 overflow-hidden">
                 <Suspense fallback={<div className="flex items-center justify-center h-full"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}>
-                  <FloorPlan3DViewer floor={floor} locationId={locationId} sensors={[]} isAdmin={false} />
+                  <FloorPlan3DViewer key={floor.id} floor={floor} locationId={locationId} sensors={[]} isAdmin={false} />
                 </Suspense>
               </TabsContent>
             </Tabs>
