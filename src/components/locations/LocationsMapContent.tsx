@@ -4,6 +4,7 @@ import { Icon, LatLngBounds, Map as LeafletMap } from "leaflet";
 import { Location } from "@/hooks/useLocations";
 import { Building2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { useTranslation } from "@/hooks/useTranslation";
 import { cn } from "@/lib/utils";
 // CSS is imported globally in App.tsx
 
@@ -59,13 +60,8 @@ function MapController({ locations, isTouchDevice }: { locations: Location[]; is
   return null;
 }
 
-const typeLabels: Record<string, string> = {
-  einzelgebaeude: "Einzelgebäude",
-  gebaeudekomplex: "Gebäudekomplex",
-  sonstiges: "Sonstiges",
-};
-
 function LocationsMapContent({ locations, onLocationClick, className }: LocationsMapContentProps) {
+  const { t } = useTranslation();
   const [mapReady, setMapReady] = useState(false);
   const isTouchDevice = "ontouchstart" in window || navigator.maxTouchPoints > 0;
 
@@ -118,7 +114,7 @@ function LocationsMapContent({ locations, onLocationClick, className }: Location
                   <span className="font-semibold">{location.name}</span>
                 </div>
                 <Badge variant="secondary" className="mb-2">
-                  {typeLabels[location.type] || location.type}
+                  {t(`locations.types.${location.type}` as any)}
                 </Badge>
                 {location.address && (
                   <p className="text-sm text-muted-foreground">

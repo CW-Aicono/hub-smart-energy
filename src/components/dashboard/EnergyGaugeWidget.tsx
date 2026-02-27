@@ -374,7 +374,7 @@ const EnergyGaugeWidget = ({ locationId }: EnergyGaugeWidgetProps) => {
   if (isLoading) {
     return (
       <Card>
-        <CardHeader><CardTitle className="font-display text-lg flex items-center gap-2">Live-Leistung <HelpTooltip text={t("tooltip.liveGauge" as any)} /></CardTitle></CardHeader>
+        <CardHeader><CardTitle className="font-display text-lg flex items-center gap-2">{t("dashboard.livePower" as any)} <HelpTooltip text={t("tooltip.liveGauge" as any)} /></CardTitle></CardHeader>
         <CardContent><Skeleton className="h-[200px]" /></CardContent>
       </Card>
     );
@@ -383,10 +383,10 @@ const EnergyGaugeWidget = ({ locationId }: EnergyGaugeWidgetProps) => {
   if (gaugeData.length === 0) {
     return (
       <Card>
-        <CardHeader><CardTitle className="font-display text-lg flex items-center gap-2">Live-Leistung <HelpTooltip text={t("tooltip.liveGauge" as any)} /></CardTitle></CardHeader>
+        <CardHeader><CardTitle className="font-display text-lg flex items-center gap-2">{t("dashboard.livePower" as any)} <HelpTooltip text={t("tooltip.liveGauge" as any)} /></CardTitle></CardHeader>
         <CardContent>
           <div className="h-[200px] flex items-center justify-center text-muted-foreground text-sm">
-            Keine aktiven automatischen Hauptzähler vorhanden
+            {t("dashboard.noActiveMeters" as any)}
           </div>
         </CardContent>
       </Card>
@@ -400,9 +400,9 @@ const EnergyGaugeWidget = ({ locationId }: EnergyGaugeWidgetProps) => {
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between">
            <div>
-            <CardTitle className="font-display text-lg flex items-center gap-2">Live-Leistung <HelpTooltip text={t("tooltip.liveGauge" as any)} /></CardTitle>
+            <CardTitle className="font-display text-lg flex items-center gap-2">{t("dashboard.livePower" as any)} <HelpTooltip text={t("tooltip.liveGauge" as any)} /></CardTitle>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Aktuelle Momentanwerte · <span className="text-destructive">▲</span> Tageshöchstwert
+              {t("dashboard.currentValues" as any)} · <span className="text-destructive">▲</span> {t("dashboard.dailyPeak" as any)}
             </p>
           </div>
           {hasPeaks && (

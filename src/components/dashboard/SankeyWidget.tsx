@@ -353,7 +353,7 @@ const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
         <CardHeader className="pb-2">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <CardTitle className="font-display text-lg flex items-center gap-2">Energiefluss <HelpTooltip text={t("tooltip.sankeyFlow" as any)} /></CardTitle>
+              <CardTitle className="font-display text-lg flex items-center gap-2">{t("dashboard.energyFlow" as any)} <HelpTooltip text={t("tooltip.sankeyFlow" as any)} /></CardTitle>
               <Select value={viewMode} onValueChange={(v) => setViewMode(v as SankeyViewMode)}>
                 <SelectTrigger className="w-[100px] h-7 text-xs">
                   <SelectValue />
@@ -519,7 +519,7 @@ const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <CardTitle className="font-display text-lg flex items-center gap-2">Energiefluss <HelpTooltip text={t("tooltip.sankeyFlow" as any)} /></CardTitle>
+            <CardTitle className="font-display text-lg flex items-center gap-2">{t("dashboard.energyFlow" as any)} <HelpTooltip text={t("tooltip.sankeyFlow" as any)} /></CardTitle>
             <Select value={viewMode} onValueChange={(v) => setViewMode(v as SankeyViewMode)}>
               <SelectTrigger className="w-[100px] h-7 text-xs">
                 <SelectValue />

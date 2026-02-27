@@ -348,7 +348,7 @@ const PvForecastWidget = ({ locationId }: PvForecastWidgetProps) => {
         <div className="flex items-center justify-between">
           <CardTitle className="flex items-center gap-2 text-lg">
             <Sun className="h-5 w-5 text-amber-500" />
-            PV-Prognose
+            {t("dashboard.pvForecast" as any)}
             <HelpTooltip text={t("tooltip.pvForecastWidget" as any)} />
           </CardTitle>
           <div className="flex items-center gap-2">

@@ -126,7 +126,7 @@ const WeatherNormalizationWidget = ({ locationId, onExpand, onCollapse }: Weathe
         <div className="flex items-center justify-between flex-wrap gap-2">
           <CardTitle className="font-display text-lg flex items-center gap-2">
             <Thermometer className="h-5 w-5 text-primary" />
-            Witterungsbereinigte Verbrauchsanalyse
+            {t("dashboard.weatherNorm" as any)}
             <HelpTooltip text={t("tooltip.weatherNorm" as any)} />
           </CardTitle>
           <div className="flex items-center gap-2 flex-wrap">
