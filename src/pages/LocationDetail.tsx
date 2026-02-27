@@ -21,32 +21,9 @@ import { Badge } from "@/components/ui/badge";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EditLocationDialog } from "@/components/locations/EditLocationDialog";
-import { 
-  ArrowLeft, 
-  Building2, 
-  MapPin, 
-  Mail, 
-  Phone, 
-  User, 
-  Star,
-  Layers,
-  ChevronDown,
-  ChevronRight,
-  Cpu,
-  Pencil
-} from "lucide-react";
+import { ArrowLeft, Building2, MapPin, Mail, Phone, User, Star, Layers, ChevronDown, ChevronRight, Cpu, Pencil } from "lucide-react";
 
-const usageTypeLabels: Record<LocationUsageType, string> = {
-  verwaltungsgebaeude: "Verwaltungsgebäude",
-  universitaet: "Universität",
-  schule: "Schule",
-  kindertageseinrichtung: "Kindertageseinrichtung",
-  sportstaette: "Sportstätte",
-  jugendzentrum: "Jugendzentrum",
-  sonstiges: "Sonstiges",
-};
-
-const FloorsCollapsible = ({ locationId, isAdmin, floors, floorsLoading, refetchFloors }: { locationId: string; isAdmin: boolean; floors: any[]; floorsLoading: boolean; refetchFloors: () => void }) => {
+const FloorsCollapsible = ({ locationId, isAdmin, floors, floorsLoading, refetchFloors, t }: { locationId: string; isAdmin: boolean; floors: any[]; floorsLoading: boolean; refetchFloors: () => void; t: (key: any) => string }) => {
   const [isOpen, setIsOpen] = useState(false);
   return (
     <Collapsible open={isOpen} onOpenChange={setIsOpen}>
@@ -56,23 +33,14 @@ const FloorsCollapsible = ({ locationId, isAdmin, floors, floorsLoading, refetch
             <button className="flex items-center gap-2 text-left group">
               {isOpen ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
               <div>
-                <CardTitle className="flex items-center gap-2">
-                  <Layers className="h-5 w-5" />
-                  Etagen & Grundrisse
-                </CardTitle>
-                <CardDescription>
-                  Verwalten Sie die Etagen und deren Grundrisspläne für diesen Standort
-                </CardDescription>
+                <CardTitle className="flex items-center gap-2"><Layers className="h-5 w-5" />{t("locationDetail.floorsTitle")}</CardTitle>
+                <CardDescription>{t("locationDetail.floorsDesc")}</CardDescription>
               </div>
             </button>
           </CollapsibleTrigger>
           {isAdmin && <AddFloorDialog locationId={locationId} onSuccess={refetchFloors} />}
         </CardHeader>
-        <CollapsibleContent>
-          <CardContent>
-            <FloorList floors={floors} loading={floorsLoading} locationId={locationId} onRefresh={refetchFloors} />
-          </CardContent>
-        </CollapsibleContent>
+        <CollapsibleContent><CardContent><FloorList floors={floors} loading={floorsLoading} locationId={locationId} onRefresh={refetchFloors} /></CardContent></CollapsibleContent>
       </Card>
     </Collapsible>
   );
@@ -89,16 +57,23 @@ const LocationDetail = () => {
 
   const location = locations.find((loc) => loc.id === id);
 
+  const usageTypeKeys: Record<LocationUsageType, string> = {
+    verwaltungsgebaeude: "locations.usage.verwaltungsgebaeude",
+    universitaet: "locations.usage.universitaet",
+    schule: "locations.usage.schule",
+    kindertageseinrichtung: "locations.usage.kindertageseinrichtung",
+    sportstaette: "locations.usage.sportstaette",
+    jugendzentrum: "locations.usage.jugendzentrum",
+    sonstiges: "locations.usage.sonstiges",
+  };
+
   if (authLoading || locationsLoading) {
     return (
       <div className="flex flex-col md:flex-row min-h-screen bg-background">
         <DashboardSidebar />
         <main className="flex-1 overflow-auto p-3 md:p-6">
           <Skeleton className="h-8 w-48 mb-6" />
-          <div className="grid gap-6 md:grid-cols-2">
-            <Skeleton className="h-64" />
-            <Skeleton className="h-64" />
-          </div>
+          <div className="grid gap-6 md:grid-cols-2"><Skeleton className="h-64" /><Skeleton className="h-64" /></div>
         </main>
       </div>
     );
@@ -114,10 +89,7 @@ const LocationDetail = () => {
         <header className="border-b p-4 md:p-6">
           <div className="flex items-center gap-4 mb-4">
             <Button variant="ghost" size="sm" asChild>
-              <Link to="/locations">
-                <ArrowLeft className="h-4 w-4 mr-2" />
-                Zurück
-              </Link>
+              <Link to="/locations"><ArrowLeft className="h-4 w-4 mr-2" />{t("common.back" as any)}</Link>
             </Button>
           </div>
           <div className="flex items-center justify-between">
@@ -129,12 +101,12 @@ const LocationDetail = () => {
                   {location.is_main_location && (
                     <Badge variant="secondary" className="gap-1 bg-amber-100 text-amber-700 border-amber-200">
                       <Star className="h-3 w-3 fill-amber-500 text-amber-500" />
-                      Hauptstandort
+                      {t("locationDetail.mainLocation" as any)}
                     </Badge>
                   )}
                 </div>
                 <p className="text-sm text-muted-foreground mt-1">
-                  {location.usage_type && usageTypeLabels[location.usage_type]}
+                  {location.usage_type && t(usageTypeKeys[location.usage_type] as any)}
                 </p>
               </div>
             </div>
@@ -143,120 +115,62 @@ const LocationDetail = () => {
 
         <div className="p-6 space-y-6">
           <div className="grid gap-6 md:grid-cols-2">
-            {/* Location Info Card */}
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0">
-                <CardTitle className="flex items-center gap-2">
-                  <MapPin className="h-5 w-5" />
-                  Standortinformationen
-                </CardTitle>
+                <CardTitle className="flex items-center gap-2"><MapPin className="h-5 w-5" />{t("locationDetail.locationInfo" as any)}</CardTitle>
                 {isAdmin && (
-                  <EditLocationDialog
-                    location={location}
-                    onSuccess={refetchLocations}
-                    trigger={
-                      <Button variant="ghost" size="icon" className="h-8 w-8">
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                    }
-                  />
+                  <EditLocationDialog location={location} onSuccess={refetchLocations} trigger={<Button variant="ghost" size="icon" className="h-8 w-8"><Pencil className="h-4 w-4" /></Button>} />
                 )}
               </CardHeader>
               <CardContent className="space-y-4">
                 {location.address && (
                   <div>
-                    <p className="text-sm font-medium text-muted-foreground">Adresse</p>
+                    <p className="text-sm font-medium text-muted-foreground">{t("common.address" as any)}</p>
                     <p>{location.address}</p>
-                    {location.city && (
-                      <p>{location.postal_code} {location.city}</p>
-                    )}
+                    {location.city && <p>{location.postal_code} {location.city}</p>}
                     {location.country && <p>{location.country}</p>}
                   </div>
                 )}
                 {location.description && (
                   <div>
-                    <p className="text-sm font-medium text-muted-foreground">Beschreibung</p>
+                    <p className="text-sm font-medium text-muted-foreground">{t("common.description" as any)}</p>
                     <p>{location.description}</p>
                   </div>
                 )}
                 {location.latitude && location.longitude && (
                   <div>
-                    <p className="text-sm font-medium text-muted-foreground">Koordinaten</p>
+                    <p className="text-sm font-medium text-muted-foreground">{t("common.coordinates" as any)}</p>
                     <p>{location.latitude}, {location.longitude}</p>
                   </div>
                 )}
               </CardContent>
             </Card>
 
-            {/* Contact Card */}
             <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <User className="h-5 w-5" />
-                  Kontakt
-                </CardTitle>
-              </CardHeader>
+              <CardHeader><CardTitle className="flex items-center gap-2"><User className="h-5 w-5" />{t("common.contact" as any)}</CardTitle></CardHeader>
               <CardContent className="space-y-4">
                 {location.contact_person ? (
                   <>
-                    <div className="flex items-center gap-2">
-                      <User className="h-4 w-4 text-muted-foreground" />
-                      <span>{location.contact_person}</span>
-                    </div>
-                    {location.contact_email && (
-                      <div className="flex items-center gap-2">
-                        <Mail className="h-4 w-4 text-muted-foreground" />
-                        <a href={`mailto:${location.contact_email}`} className="text-primary hover:underline">
-                          {location.contact_email}
-                        </a>
-                      </div>
-                    )}
-                    {location.contact_phone && (
-                      <div className="flex items-center gap-2">
-                        <Phone className="h-4 w-4 text-muted-foreground" />
-                        <a href={`tel:${location.contact_phone}`} className="text-primary hover:underline">
-                          {location.contact_phone}
-                        </a>
-                      </div>
-                    )}
+                    <div className="flex items-center gap-2"><User className="h-4 w-4 text-muted-foreground" /><span>{location.contact_person}</span></div>
+                    {location.contact_email && (<div className="flex items-center gap-2"><Mail className="h-4 w-4 text-muted-foreground" /><a href={`mailto:${location.contact_email}`} className="text-primary hover:underline">{location.contact_email}</a></div>)}
+                    {location.contact_phone && (<div className="flex items-center gap-2"><Phone className="h-4 w-4 text-muted-foreground" /><a href={`tel:${location.contact_phone}`} className="text-primary hover:underline">{location.contact_phone}</a></div>)}
                   </>
                 ) : (
-                  <p className="text-muted-foreground">Keine Kontaktdaten hinterlegt</p>
+                  <p className="text-muted-foreground">{t("common.noContactData" as any)}</p>
                 )}
               </CardContent>
             </Card>
           </div>
 
-          {/* Floors Card - only if floor_plans module is enabled */}
           {isModuleEnabled("floor_plans") && (
-            <FloorsCollapsible locationId={location.id} isAdmin={isAdmin} floors={floors} floorsLoading={floorsLoading} refetchFloors={refetchFloors} />
+            <FloorsCollapsible locationId={location.id} isAdmin={isAdmin} floors={floors} floorsLoading={floorsLoading} refetchFloors={refetchFloors} t={t} />
           )}
-
-          {/* Meters & Alerts */}
           <MeterManagement locationId={location.id} />
-
-          {/* Energy Prices */}
           <EnergyPriceManagement locationId={location.id} />
-
-          {/* PV Forecast */}
-          {location.latitude && location.longitude && (
-            <PvForecastSection locationId={location.id} />
-          )}
-
-          {/* Automation - only if building automation module is enabled */}
-          {isModuleEnabled("automation_building") && (
-            <LocationAutomation locationId={location.id} />
-          )}
-
-          {/* Integrations Card - only if integrations module is enabled */}
-          {isModuleEnabled("integrations") && (
-            <LocationIntegrationsList locationId={location.id} />
-          )}
-
-          {/* BrightHub API - only if brighthub_api module is enabled */}
-          {isModuleEnabled("brighthub_api") && (
-            <BrightHubSettings locationId={location.id} />
-          )}
+          {location.latitude && location.longitude && <PvForecastSection locationId={location.id} />}
+          {isModuleEnabled("automation_building") && <LocationAutomation locationId={location.id} />}
+          {isModuleEnabled("integrations") && <LocationIntegrationsList locationId={location.id} />}
+          {isModuleEnabled("brighthub_api") && <BrightHubSettings locationId={location.id} />}
         </div>
       </main>
     </div>
