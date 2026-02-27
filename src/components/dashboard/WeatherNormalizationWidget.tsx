@@ -6,6 +6,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip,
 import { Tooltip as ShadTooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Skeleton } from "@/components/ui/skeleton";
 import { HelpTooltip } from "@/components/ui/help-tooltip";
+import { useTranslation } from "@/hooks/useTranslation";
 import { Thermometer, TrendingDown, TrendingUp } from "lucide-react";
 import { useWeatherNormalization } from "@/hooks/useWeatherNormalization";
 import { formatEnergy } from "@/lib/formatEnergy";
@@ -40,6 +41,7 @@ const QUARTERS = ["Q1 (Jan–Mär)", "Q2 (Apr–Jun)", "Q3 (Jul–Sep)", "Q4 (Ok
 
 const WeatherNormalizationWidget = ({ locationId, onExpand, onCollapse }: WeatherNormalizationWidgetProps) => {
   const [energyType, setEnergyType] = useState("gas");
+  const { t } = useTranslation();
   const [period, setPeriod] = useState<"month" | "quarter" | "year">("year");
   const [year, setYear] = useState(currentYear);
   const [selectedMonth, setSelectedMonth] = useState(currentMonth);
@@ -125,7 +127,7 @@ const WeatherNormalizationWidget = ({ locationId, onExpand, onCollapse }: Weathe
           <CardTitle className="font-display text-lg flex items-center gap-2">
             <Thermometer className="h-5 w-5 text-primary" />
             Witterungsbereinigte Verbrauchsanalyse
-            <HelpTooltip text="Vergleicht Energieverbräuche über Zeiträume hinweg, indem Wetterbedingungen (Heizgradtage) herausgerechnet werden. So werden kalte und warme Winter vergleichbar." />
+            <HelpTooltip text={t("tooltip.weatherNorm" as any)} />
           </CardTitle>
           <div className="flex items-center gap-2 flex-wrap">
             <Select value={energyType} onValueChange={setEnergyType}>
@@ -210,7 +212,7 @@ const WeatherNormalizationWidget = ({ locationId, onExpand, onCollapse }: Weathe
                 </div>
               </TooltipTrigger>
               <TooltipContent side="bottom" className="max-w-[260px] text-xs">
-                Referenztemperatur für die Heizgradtag-Berechnung (HGT). Bestimmt, ab welcher Außentemperatur geheizt wird – üblich sind 15 °C.
+                {t("tooltip.refTemp" as any)}
               </TooltipContent>
             </ShadTooltip>
           </div>

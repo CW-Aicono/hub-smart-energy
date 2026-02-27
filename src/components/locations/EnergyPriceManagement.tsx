@@ -9,6 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { ChevronDown, ChevronRight, Euro, Plus, Pencil, Trash2, Zap } from "lucide-react";
 import { HelpTooltip } from "@/components/ui/help-tooltip";
+import { useTranslation } from "@/hooks/useTranslation";
 import { useEnergyPrices, EnergyPrice } from "@/hooks/useEnergyPrices";
 import { useTenant } from "@/hooks/useTenant";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -36,6 +37,7 @@ interface EnergyPriceManagementProps {
 
 export function EnergyPriceManagement({ locationId }: EnergyPriceManagementProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const { t } = useTranslation();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingPrice, setEditingPrice] = useState<EnergyPrice | null>(null);
   const { prices, loading, addPrice, updatePrice, deletePrice } = useEnergyPrices(locationId);
@@ -123,7 +125,7 @@ export function EnergyPriceManagement({ locationId }: EnergyPriceManagementProps
                   <CardTitle className="flex items-center gap-2">
                     <Euro className="h-5 w-5" />
                     Energiepreise
-                    <HelpTooltip text="Hinterlegen Sie hier die Preise pro Energieträger (Strom, Gas, Wärme, Wasser). Diese fließen in die Kostenberechnung auf dem Dashboard ein." />
+                    <HelpTooltip text={t("tooltip.energyPrices" as any)} />
                   </CardTitle>
                   <CardDescription>
                     Preise pro Energieträger für die Kostenberechnung

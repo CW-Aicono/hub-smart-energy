@@ -5,6 +5,7 @@ import { useMeters } from "@/hooks/useMeters";
 import { useEnergyPrices } from "@/hooks/useEnergyPrices";
 import { Skeleton } from "@/components/ui/skeleton";
 import { HelpTooltip } from "@/components/ui/help-tooltip";
+import { useTranslation } from "@/hooks/useTranslation";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useMemo, useState, useRef, useEffect } from "react";
 import { formatEnergy, formatEnergyByType, gasM3ToKWh } from "@/lib/formatEnergy";
@@ -68,6 +69,7 @@ const TARGET_COLORS = [
 
 const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
   const { locations } = useLocations();
+  const { t } = useTranslation();
   const { readings, livePeriodTotals, loading: energyLoading, hasData } = useEnergyData(locationId);
   const { meters } = useMeters();
   const { prices, loading: pricesLoading } = useEnergyPrices();
@@ -351,7 +353,7 @@ const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
         <CardHeader className="pb-2">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <CardTitle className="font-display text-lg flex items-center gap-2">Energiefluss <HelpTooltip text="Visualisiert den Energiefluss von Quellen (Bezug, PV) zu Verbrauchern. Umschaltbar zwischen Leistung (kW) und Kosten (€)." /></CardTitle>
+              <CardTitle className="font-display text-lg flex items-center gap-2">Energiefluss <HelpTooltip text={t("tooltip.sankeyFlow" as any)} /></CardTitle>
               <Select value={viewMode} onValueChange={(v) => setViewMode(v as SankeyViewMode)}>
                 <SelectTrigger className="w-[100px] h-7 text-xs">
                   <SelectValue />
@@ -517,7 +519,7 @@ const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <CardTitle className="font-display text-lg flex items-center gap-2">Energiefluss <HelpTooltip text="Visualisiert den Energiefluss von Quellen (Bezug, PV) zu Verbrauchern. Umschaltbar zwischen Leistung (kW) und Kosten (€)." /></CardTitle>
+            <CardTitle className="font-display text-lg flex items-center gap-2">Energiefluss <HelpTooltip text={t("tooltip.sankeyFlow" as any)} /></CardTitle>
             <Select value={viewMode} onValueChange={(v) => setViewMode(v as SankeyViewMode)}>
               <SelectTrigger className="w-[100px] h-7 text-xs">
                 <SelectValue />

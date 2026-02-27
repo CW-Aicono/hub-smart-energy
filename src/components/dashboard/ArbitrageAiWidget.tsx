@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Brain, TrendingUp, Loader2 } from "lucide-react";
 import { HelpTooltip } from "@/components/ui/help-tooltip";
 import { useArbitrageAiStrategy } from "@/hooks/useArbitrageAiStrategy";
+import { useTranslation } from "@/hooks/useTranslation";
 import { useNavigate } from "react-router-dom";
 
 interface ArbitrageAiWidgetProps {
@@ -20,6 +21,7 @@ const confidenceColor: Record<string, string> = {
 
 export default function ArbitrageAiWidget({ locationId }: ArbitrageAiWidgetProps) {
   const { result, isGenerating, generate } = useArbitrageAiStrategy();
+  const { t } = useTranslation();
   const navigate = useNavigate();
 
   return (
@@ -29,7 +31,7 @@ export default function ArbitrageAiWidget({ locationId }: ArbitrageAiWidgetProps
           <CardTitle className="text-base flex items-center gap-2">
             <Brain className="h-5 w-5 text-primary" />
             KI-Handelsempfehlung
-            <HelpTooltip text="Analysiert Spotpreise und PV-Prognosen, um optimale Kauf-/Verkaufszeitpunkte für Energiespeicher zu empfehlen." />
+            <HelpTooltip text={t("tooltip.arbitrageAi" as any)} />
           </CardTitle>
           <Button size="sm" variant="outline" onClick={generate} disabled={isGenerating}>
             {isGenerating ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}

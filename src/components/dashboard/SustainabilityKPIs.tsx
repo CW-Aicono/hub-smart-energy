@@ -6,6 +6,7 @@ import { useEnergyData } from "@/hooks/useEnergyData";
 import { useMeters } from "@/hooks/useMeters";
 import { Leaf } from "lucide-react";
 import { HelpTooltip } from "@/components/ui/help-tooltip";
+import { useTranslation } from "@/hooks/useTranslation";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatEnergy } from "@/lib/formatEnergy";
 import { gasM3ToKWh } from "@/lib/formatEnergy";
@@ -43,6 +44,7 @@ interface SustainabilityKPIsProps {
 
 const SustainabilityKPIs = ({ locationId }: SustainabilityKPIsProps) => {
   const { readings, livePeriodTotals, loading } = useEnergyData(locationId);
+  const { t } = useTranslation();
   const { meters } = useMeters(locationId || undefined);
   const { selectedPeriod: period, setSelectedPeriod: setPeriod } = useDashboardFilter();
   const weekStartsOn = useWeekStartDay();
@@ -185,7 +187,7 @@ const SustainabilityKPIs = ({ locationId }: SustainabilityKPIsProps) => {
           <CardTitle className="font-display text-lg flex items-center gap-2">
             <Leaf className="h-5 w-5 text-accent" />
             Verbrauchsübersicht
-            <HelpTooltip text="Zeigt den Gesamtverbrauch pro Energieträger mit prozentualer Aufschlüsselung für den gewählten Zeitraum." />
+            <HelpTooltip text={t("tooltip.sustainability" as any)} />
           </CardTitle>
           {periodSelect}
         </div>

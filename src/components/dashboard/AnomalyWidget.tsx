@@ -6,6 +6,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { HelpTooltip } from "@/components/ui/help-tooltip";
 import { useLocations } from "@/hooks/useLocations";
 import { useEnergyData } from "@/hooks/useEnergyData";
+import { useTranslation } from "@/hooks/useTranslation";
 import { supabase } from "@/integrations/supabase/client";
 import { BrainCircuit, AlertTriangle, ShieldAlert, Info, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
@@ -43,6 +44,7 @@ const RISK_LABELS: Record<string, { label: string; color: string }> = {
 
 const AnomalyWidget = ({ locationId }: AnomalyWidgetProps) => {
   const { locations } = useLocations();
+  const { t } = useTranslation();
   const { monthlyData, hasData } = useEnergyData(locationId);
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [loading, setLoading] = useState(false);
@@ -85,7 +87,7 @@ const AnomalyWidget = ({ locationId }: AnomalyWidgetProps) => {
           <CardTitle className="font-display text-lg flex items-center gap-2">
             <BrainCircuit className="h-5 w-5 text-primary" />
             KI-Anomalie-Erkennung
-            <HelpTooltip text="Analysiert Verbrauchsdaten mittels KI auf ungewöhnliche Muster, saisonale Abweichungen und Lastspitzen. Ergebnisse werden nach Risikostufe priorisiert." />
+            <HelpTooltip text={t("tooltip.anomaly" as any)} />
           </CardTitle>
           <Button size="sm" variant="outline" onClick={runAnalysis} disabled={loading || !hasData}>
             <RefreshCw className={`h-4 w-4 mr-1 ${loading ? "animate-spin" : ""}`} />

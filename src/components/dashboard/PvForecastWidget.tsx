@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Sun, CloudSun, Sparkles, ChevronLeft, ChevronRight } from "lucide-react";
 import { HelpTooltip } from "@/components/ui/help-tooltip";
+import { useTranslation } from "@/hooks/useTranslation";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import { supabase } from "@/integrations/supabase/client";
 import { useDashboardFilter, type TimePeriod } from "@/hooks/useDashboardFilter";
@@ -93,6 +94,7 @@ function getPeriodRange(period: TimePeriod, offset: number): { start: Date; end:
 
 const PvForecastWidget = ({ locationId }: PvForecastWidgetProps) => {
   const { tenant } = useTenant();
+  const { t } = useTranslation();
   const tenantId = tenant?.id ?? null;
   const { forecast, isLoading } = usePvForecast(locationId);
   const { settings } = usePvForecastSettings(locationId);
@@ -347,7 +349,7 @@ const PvForecastWidget = ({ locationId }: PvForecastWidgetProps) => {
           <CardTitle className="flex items-center gap-2 text-lg">
             <Sun className="h-5 w-5 text-amber-500" />
             PV-Prognose
-            <HelpTooltip text="Erwartete Solarstromerzeugung basierend auf Wetter und Anlagenparametern. Bei hinterlegtem PV-Zähler wird der Ist-Ertrag als Vergleich angezeigt." />
+            <HelpTooltip text={t("tooltip.pvForecastWidget" as any)} />
           </CardTitle>
           <div className="flex items-center gap-2">
             {summary.ai_confidence && isToday && (
