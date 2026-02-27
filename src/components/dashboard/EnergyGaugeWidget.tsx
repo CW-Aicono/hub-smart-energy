@@ -124,7 +124,7 @@ function AnalogGauge({ data }: { data: GaugeData }) {
   const vbX = -pad;
   const vbY = -pad;
   const vbW = size + pad * 2;
-  const vbH = size * 0.78 + pad * 2;
+  const vbH = size * 0.72 + pad * 2;
 
   return (
     <div className="flex flex-col items-center flex-1 min-w-[140px] max-w-[240px]">
@@ -262,6 +262,7 @@ const EnergyGaugeWidget = ({ locationId }: EnergyGaugeWidgetProps) => {
   const { meters } = useMeters();
   const allowedTypes = useLocationEnergySources(locationId);
   const [dailyPeaks, setDailyPeaks] = useState<Record<string, number>>({});
+  const [peakResetAt, setPeakResetAt] = useState<string | null>(null);
 
   const activeMeters = useMemo(() => {
     return meters.filter(
@@ -289,11 +290,12 @@ const EnergyGaugeWidget = ({ locationId }: EnergyGaugeWidgetProps) => {
     const meterIds = activeMeters.map((m) => m.id);
     if (meterIds.length === 0) return;
     const today = new Date();
+    const fromTime = peakResetAt || startOfDay(today).toISOString();
     const { data, error } = await supabase
       .from("meter_power_readings")
       .select("meter_id, power_value")
       .in("meter_id", meterIds)
-      .gte("recorded_at", startOfDay(today).toISOString())
+      .gte("recorded_at", fromTime)
       .lte("recorded_at", endOfDay(today).toISOString())
       .order("power_value", { ascending: false });
     if (error || !data) return;
@@ -305,7 +307,7 @@ const EnergyGaugeWidget = ({ locationId }: EnergyGaugeWidgetProps) => {
       if ((peaks[et] ?? 0) < row.power_value) peaks[et] = row.power_value;
     }
     setDailyPeaks(peaks);
-  }, [activeMeters]);
+  }, [activeMeters, peakResetAt]);
 
   useEffect(() => {
     fetchPeaks();
@@ -313,7 +315,10 @@ const EnergyGaugeWidget = ({ locationId }: EnergyGaugeWidgetProps) => {
     return () => clearInterval(interval);
   }, [fetchPeaks]);
 
-  const handleResetPeaks = useCallback(() => setDailyPeaks({}), []);
+  const handleResetPeaks = useCallback(() => {
+    setDailyPeaks({});
+    setPeakResetAt(new Date().toISOString());
+  }, []);
 
   const gaugeData = useMemo((): GaugeData[] => {
     const sensorsByIntegration = new Map<string, any[]>();
