@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
+import { gasM3ToKWh } from "@/lib/formatEnergy";
 import { useTenant } from "./useTenant";
 
 export interface DegreeDayData {
@@ -89,19 +90,35 @@ export function useWeatherNormalization({
       const locationIds = locations.map((l) => l.id);
       const { data: meters } = await supabase
         .from("meters")
-        .select("id, location_id")
+        .select("id, location_id, unit, gas_type, brennwert, zustandszahl")
         .in("location_id", locationIds)
         .eq("energy_type", energyType)
         .eq("is_main_meter", true)
         .eq("is_archived", false);
 
-      const meterIds = new Set((meters || []).map((m) => m.id));
+      const meterMap: Record<string, { unit: string; gas_type: string | null; brennwert: number | null; zustandszahl: number | null }> = {};
+      for (const m of meters || []) {
+        meterMap[m.id] = { unit: m.unit, gas_type: (m as any).gas_type ?? null, brennwert: (m as any).brennwert ?? null, zustandszahl: (m as any).zustandszahl ?? null };
+      }
+      const meterIds = new Set(Object.keys(meterMap));
 
       if (meterIds.size === 0) {
         setData([]);
         setLoading(false);
         return;
       }
+
+      // Convert raw total_value to Wh (base unit for formatEnergy)
+      const toWh = (rawValue: number, meterId: string): number => {
+        const m = meterMap[meterId];
+        if (!m) return rawValue * 1000; // assume kWh
+        if (energyType === "gas" && m.unit === "m³") {
+          const kWh = gasM3ToKWh(rawValue, m.gas_type, m.brennwert, m.zustandszahl);
+          return kWh * 1000; // kWh → Wh
+        }
+        // Default: value is in kWh → convert to Wh
+        return rawValue * 1000;
+      };
 
       // Get monthly consumption from meter_period_totals
       const { data: monthlyConsumptionRows } = await supabase
@@ -118,7 +135,7 @@ export function useWeatherNormalization({
       for (const row of monthlyConsumptionRows || []) {
         if (!meterIds.has(row.meter_id)) continue;
         const monthKey = row.period_start.substring(0, 7) + "-01";
-        monthlyConsumption[monthKey] = (monthlyConsumption[monthKey] || 0) + row.total_value;
+        monthlyConsumption[monthKey] = (monthlyConsumption[monthKey] || 0) + toWh(row.total_value, row.meter_id);
       }
 
       // For the current month (and any month without monthly total), sum daily values
@@ -167,7 +184,7 @@ export function useWeatherNormalization({
                   monthlyConsumption[`_daily_${mk}`] = 1 as any; // marker
                 }
               }
-              monthlyConsumption[mk] = (monthlyConsumption[mk] || 0) + row.total_value;
+              monthlyConsumption[mk] = (monthlyConsumption[mk] || 0) + toWh(row.total_value, row.meter_id);
             }
           }
         }
