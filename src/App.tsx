@@ -106,7 +106,7 @@ const App = () => (
                       <Route path="/demo/admin" element={<Admin />} />
                       <Route path="/demo/roles" element={<Roles />} />
                       <Route path="/demo/settings" element={<Settings />} />
-                      <Route path="/demo/settings/branding" element={<Branding />} />
+                      <Route path="/demo/settings/branding" element={<Settings />} />
                       <Route path="/demo/settings/email-templates" element={<EmailTemplates />} />
                       <Route path="/demo/integrations" element={<Integrations />} />
                       <Route path="/demo/help" element={<Help />} />
@@ -119,7 +119,7 @@ const App = () => (
                       <Route path="/auth" element={<Auth />} />
                       <Route path="/admin" element={<Admin />} />
                       <Route path="/settings" element={<Settings />} />
-                      <Route path="/settings/branding" element={<M><Branding /></M>} />
+                      <Route path="/settings/branding" element={<M><Settings /></M>} />
                       <Route path="/settings/email-templates" element={<M><EmailTemplates /></M>} />
                       <Route path="/roles" element={<Roles />} />
                       <Route path="/locations" element={<M><Locations /></M>} />
