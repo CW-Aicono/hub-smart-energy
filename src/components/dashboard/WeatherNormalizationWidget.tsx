@@ -56,6 +56,12 @@ const WeatherNormalizationWidget = ({ locationId, onExpand, onCollapse }: Weathe
     year,
   });
 
+  // Full month names for tooltip
+  const FULL_MONTHS = [
+    "Januar", "Februar", "März", "April", "Mai", "Juni",
+    "Juli", "August", "September", "Oktober", "November", "Dezember",
+  ];
+
   // Filter data based on selected period
   const filteredData = useMemo(() => {
     if (period === "year") return data;
@@ -69,6 +75,30 @@ const WeatherNormalizationWidget = ({ locationId, onExpand, onCollapse }: Weathe
       return m >= startMonth && m < startMonth + 3;
     });
   }, [data, period, selectedMonth, selectedQuarter]);
+
+  // Determine unit scaling: values are in Wh
+  const maxValue = useMemo(() => {
+    let max = 0;
+    for (const d of filteredData) {
+      if (d.actualConsumption > max) max = d.actualConsumption;
+      if (d.normalizedConsumption > max) max = d.normalizedConsumption;
+    }
+    return max;
+  }, [filteredData]);
+
+  // >= 1,000,000 Wh (1000 kWh) → show MWh, else kWh
+  const useMWh = maxValue >= 1_000_000;
+  const yAxisUnit = useMWh ? "MWh" : "kWh";
+  const yAxisDivisor = useMWh ? 1_000_000 : 1_000; // Wh → MWh or kWh
+
+  const chartData = useMemo(() => {
+    return filteredData.map((d) => ({
+      ...d,
+      actualScaled: d.actualConsumption / yAxisDivisor,
+      normalizedScaled: d.normalizedConsumption / yAxisDivisor,
+      fullMonthLabel: FULL_MONTHS[new Date(d.month).getMonth()] || d.monthLabel,
+    }));
+  }, [filteredData, yAxisDivisor]);
 
   const filteredTotalActual = filteredData.reduce((s, d) => s + d.actualConsumption, 0);
   const filteredTotalNormalized = filteredData.reduce((s, d) => s + d.normalizedConsumption, 0);
@@ -210,10 +240,14 @@ const WeatherNormalizationWidget = ({ locationId, onExpand, onCollapse }: Weathe
 
               <TabsContent value="chart">
                 <ResponsiveContainer width="100%" height={300}>
-                  <BarChart data={filteredData} barGap={2}>
+                  <BarChart data={chartData} barGap={2}>
                     <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
                     <XAxis dataKey="monthLabel" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }} />
-                    <YAxis tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }} />
+                    <YAxis
+                      tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }}
+                      label={{ value: yAxisUnit, angle: -90, position: "insideLeft", style: { fill: "hsl(var(--muted-foreground))", fontSize: 12 } }}
+                      tickFormatter={(v: number) => v.toLocaleString("de-DE", { maximumFractionDigits: 1 })}
+                    />
                     <Tooltip
                       contentStyle={{
                         backgroundColor: "hsl(var(--card))",
@@ -221,14 +255,18 @@ const WeatherNormalizationWidget = ({ locationId, onExpand, onCollapse }: Weathe
                         borderRadius: "var(--radius)",
                         color: "hsl(var(--card-foreground))",
                       }}
+                      labelFormatter={(label: string, payload: any[]) => {
+                        if (payload?.[0]?.payload?.fullMonthLabel) return payload[0].payload.fullMonthLabel;
+                        return label;
+                      }}
                       formatter={(value: number, name: string) => [
-                        formatEnergy(value),
-                        name === "actualConsumption" ? "Ist-Verbrauch" : "Bereinigt",
+                        value.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " " + yAxisUnit,
+                        name === "actualScaled" ? "Ist-Verbrauch" : "Bereinigt",
                       ]}
                     />
-                    <Legend formatter={(v) => (v === "actualConsumption" ? "Ist-Verbrauch" : "Bereinigt")} />
-                    <Bar dataKey="actualConsumption" fill="hsl(var(--chart-1))" radius={[2, 2, 0, 0]} />
-                    <Bar dataKey="normalizedConsumption" fill="hsl(var(--chart-3))" radius={[2, 2, 0, 0]} />
+                    <Legend formatter={(v) => (v === "actualScaled" ? "Ist-Verbrauch" : "Bereinigt")} />
+                    <Bar dataKey="actualScaled" fill="hsl(var(--chart-1))" radius={[2, 2, 0, 0]} />
+                    <Bar dataKey="normalizedScaled" fill="hsl(var(--chart-3))" radius={[2, 2, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </TabsContent>
