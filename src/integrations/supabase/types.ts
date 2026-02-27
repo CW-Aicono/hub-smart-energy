@@ -3665,6 +3665,14 @@ export type Database = {
           estimated_kwh: number
         }[]
       }
+      get_pv_forecast_daily_sums_all: {
+        Args: { p_from_date: string; p_tenant_id: string; p_to_date: string }
+        Returns: {
+          ai_adjusted_kwh: number
+          day: string
+          estimated_kwh: number
+        }[]
+      }
       get_user_tenant_id: { Args: never; Returns: string }
       has_location_access: {
         Args: { _location_id: string; _user_id: string }

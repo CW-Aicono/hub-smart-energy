@@ -9,6 +9,7 @@ import { Sun, CloudSun, Sparkles, ChevronLeft, ChevronRight } from "lucide-react
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import { supabase } from "@/integrations/supabase/client";
 import { useDashboardFilter, type TimePeriod } from "@/hooks/useDashboardFilter";
+import { useTenant } from "@/hooks/useTenant";
 import { useQuery } from "@tanstack/react-query";
 import { format, addDays, startOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfQuarter, endOfQuarter, startOfYear, endOfYear, addWeeks, addMonths, addQuarters, addYears } from "date-fns";
 import { de } from "date-fns/locale";
@@ -90,6 +91,8 @@ function getPeriodRange(period: TimePeriod, offset: number): { start: Date; end:
 }
 
 const PvForecastWidget = ({ locationId }: PvForecastWidgetProps) => {
+  const { tenant } = useTenant();
+  const tenantId = tenant?.id ?? null;
   const { forecast, isLoading } = usePvForecast(locationId);
   const { settings } = usePvForecastSettings(locationId);
   const { selectedPeriod, setSelectedPeriod } = useDashboardFilter();
@@ -116,36 +119,72 @@ const PvForecastWidget = ({ locationId }: PvForecastWidgetProps) => {
   const needsDbForecast = !isDay || offset < 0;
 
   const { data: dbForecastDays } = useQuery({
-    queryKey: ["pv-forecast-daily-sums", locationId, fromDateStr, toDateStr],
+    queryKey: ["pv-forecast-daily-sums", locationId ?? "all", tenantId, fromDateStr, toDateStr],
     queryFn: async () => {
-      if (!locationId) return null;
-      const { data, error } = await supabase.rpc("get_pv_forecast_daily_sums", {
-        p_location_id: locationId,
+      if (locationId) {
+        const { data, error } = await supabase.rpc("get_pv_forecast_daily_sums", {
+          p_location_id: locationId,
+          p_from_date: fromDateStr,
+          p_to_date: toDateStr,
+        });
+        if (error) { console.error("get_pv_forecast_daily_sums error:", error); return null; }
+        return data as { day: string; estimated_kwh: number; ai_adjusted_kwh: number | null }[];
+      }
+      // All locations
+      const { data, error } = await supabase.rpc("get_pv_forecast_daily_sums_all", {
+        p_tenant_id: tenantId!,
         p_from_date: fromDateStr,
         p_to_date: toDateStr,
       });
-      if (error) { console.error("get_pv_forecast_daily_sums error:", error); return null; }
+      if (error) { console.error("get_pv_forecast_daily_sums_all error:", error); return null; }
       return data as { day: string; estimated_kwh: number; ai_adjusted_kwh: number | null }[];
     },
-    enabled: needsDbForecast && !!locationId,
+    enabled: needsDbForecast && (!!locationId || !!tenantId),
     staleTime: 5 * 60 * 1000,
   });
 
   // For past days, load hourly archived forecast data from DB
   const { data: dbHourlyData } = useQuery({
-    queryKey: ["pv-forecast-hourly-archived", locationId, refDateStr],
+    queryKey: ["pv-forecast-hourly-archived", locationId ?? "all", tenantId, refDateStr],
     queryFn: async () => {
-      if (!locationId) return null;
-      const { data, error } = await supabase
+      let query = supabase
         .from("pv_forecast_hourly")
         .select("hour_timestamp, estimated_kwh, ai_adjusted_kwh, radiation_w_m2, cloud_cover_pct")
-        .eq("location_id", locationId)
         .eq("forecast_date", refDateStr)
         .order("hour_timestamp", { ascending: true });
+
+      if (locationId) {
+        query = query.eq("location_id", locationId);
+      } else {
+        query = query.eq("tenant_id", tenantId!);
+      }
+
+      const { data, error } = await query;
       if (error) { console.error("pv_forecast_hourly fetch error:", error); return null; }
+
+      if (!locationId && data && data.length > 0) {
+        // Aggregate across locations by hour
+        const hourMap = new Map<string, { estimated_kwh: number; ai_adjusted_kwh: number | null; radiation_w_m2: number; cloud_cover_pct: number; count: number }>();
+        for (const r of data) {
+          const existing = hourMap.get(r.hour_timestamp);
+          if (existing) {
+            existing.estimated_kwh += r.estimated_kwh;
+            existing.ai_adjusted_kwh = (existing.ai_adjusted_kwh ?? 0) + (r.ai_adjusted_kwh ?? r.estimated_kwh);
+            existing.radiation_w_m2 = Math.max(existing.radiation_w_m2, r.radiation_w_m2);
+            existing.cloud_cover_pct = Math.round((existing.cloud_cover_pct * existing.count + r.cloud_cover_pct) / (existing.count + 1));
+            existing.count += 1;
+          } else {
+            hourMap.set(r.hour_timestamp, { estimated_kwh: r.estimated_kwh, ai_adjusted_kwh: r.ai_adjusted_kwh, radiation_w_m2: r.radiation_w_m2, cloud_cover_pct: r.cloud_cover_pct, count: 1 });
+          }
+        }
+        return Array.from(hourMap.entries())
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([ts, v]) => ({ hour_timestamp: ts, estimated_kwh: v.estimated_kwh, ai_adjusted_kwh: v.ai_adjusted_kwh, radiation_w_m2: v.radiation_w_m2, cloud_cover_pct: v.cloud_cover_pct }));
+      }
+
       return data;
     },
-    enabled: isDay && offset < 0 && !!locationId,
+    enabled: isDay && offset < 0 && (!!locationId || !!tenantId),
     staleTime: 10 * 60 * 1000,
   });
 
@@ -219,7 +258,7 @@ const PvForecastWidget = ({ locationId }: PvForecastWidgetProps) => {
     );
   }
 
-  if (!forecast && !needsDbForecast) {
+  if (!forecast && !needsDbForecast && !isLoading) {
     return (
       <Card>
         <CardHeader><CardTitle className="flex items-center gap-2"><Sun className="h-5 w-5 text-amber-500" />PV-Prognose</CardTitle></CardHeader>
