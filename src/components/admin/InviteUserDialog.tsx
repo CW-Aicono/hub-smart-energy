@@ -2,6 +2,7 @@ import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useTenant } from "@/hooks/useTenant";
+import { useTranslation } from "@/hooks/useTranslation";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -14,6 +15,8 @@ const InviteUserDialog = () => {
   const { user } = useAuth();
   const { tenant } = useTenant();
   const { toast } = useToast();
+  const { t } = useTranslation();
+  const T = (key: string) => t(key as any);
   const [open, setOpen] = useState(false);
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
@@ -26,10 +29,8 @@ const InviteUserDialog = () => {
     setLoading(true);
 
     try {
-      // Create auth user directly and send password-set email via edge function
       const { data, error } = await supabase.functions.invoke("activate-invited-user", {
         body: {
-          // We reuse activate-invited-user but pass email directly for new invites
           directInvite: true,
           email,
           name: name || undefined,
@@ -41,17 +42,17 @@ const InviteUserDialog = () => {
 
       if (error) throw error;
       const result = typeof data === "string" ? JSON.parse(data) : data;
-      if (!result?.success) throw new Error(result?.error || "Einladung fehlgeschlagen");
+      if (!result?.success) throw new Error(result?.error || T("invite.error"));
 
       setDone(true);
       toast({
-        title: "Einladung gesendet",
-        description: `Eine Einladungsmail mit Passwort-Link wurde an ${email} gesendet.`,
+        title: T("invite.sent"),
+        description: T("invite.sentDesc").replace("{email}", email),
       });
     } catch (err: unknown) {
       toast({
-        title: "Fehler",
-        description: err instanceof Error ? err.message : "Einladung konnte nicht erstellt werden.",
+        title: T("common.error"),
+        description: err instanceof Error ? err.message : T("invite.error"),
         variant: "destructive",
       });
     } finally {
@@ -74,33 +75,29 @@ const InviteUserDialog = () => {
       <DialogTrigger asChild>
         <Button>
           <UserPlus className="h-4 w-4 mr-2" />
-          Nutzer einladen
+          {T("invite.button")}
         </Button>
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Neuen Nutzer einladen</DialogTitle>
-          <DialogDescription>
-            Der eingeladene Nutzer erhält eine E-Mail und vergibt sich selbst ein Passwort.
-          </DialogDescription>
+          <DialogTitle>{T("invite.title")}</DialogTitle>
+          <DialogDescription>{T("invite.description")}</DialogDescription>
         </DialogHeader>
 
         {!done ? (
           <div className="space-y-4 py-4">
             <div className="flex items-start gap-2 p-3 bg-accent/10 rounded-lg border border-accent/20">
               <AlertCircle className="h-4 w-4 text-accent mt-0.5 shrink-0" />
-              <p className="text-xs text-muted-foreground">
-                Nach dem Senden erhält der Nutzer eine E-Mail mit einem Link zum Passwort setzen. Der Link ist 7 Tage gültig.
-              </p>
+              <p className="text-xs text-muted-foreground">{T("invite.info")}</p>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="email">E-Mail-Adresse *</Label>
+              <Label htmlFor="email">{T("invite.emailLabel")}</Label>
               <div className="relative">
                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
                   id="email"
                   type="email"
-                  placeholder="nutzer@firma.de"
+                  placeholder={T("invite.emailPlaceholder")}
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="pl-10"
@@ -108,16 +105,16 @@ const InviteUserDialog = () => {
               </div>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="name">Name (optional)</Label>
+              <Label htmlFor="name">{T("invite.nameLabel")}</Label>
               <Input
                 id="name"
-                placeholder="Max Mustermann"
+                placeholder={T("invite.namePlaceholder")}
                 value={name}
                 onChange={(e) => setName(e.target.value)}
               />
             </div>
             <div className="space-y-2">
-              <Label>Rolle</Label>
+              <Label>{T("invite.roleLabel")}</Label>
               <Select value={role} onValueChange={(v: "admin" | "user") => setRole(v)}>
                 <SelectTrigger>
                   <SelectValue />
@@ -126,13 +123,13 @@ const InviteUserDialog = () => {
                   <SelectItem value="user">
                     <div className="flex items-center gap-2">
                       <User className="h-4 w-4" />
-                      Benutzer
+                      {T("invite.roleUser")}
                     </div>
                   </SelectItem>
                   <SelectItem value="admin">
                     <div className="flex items-center gap-2">
                       <Shield className="h-4 w-4" />
-                      Administrator
+                      {T("invite.roleAdmin")}
                     </div>
                   </SelectItem>
                 </SelectContent>
@@ -144,9 +141,9 @@ const InviteUserDialog = () => {
             <div className="h-12 w-12 rounded-full bg-accent/20 flex items-center justify-center mx-auto">
               <Mail className="h-6 w-6 text-accent" />
             </div>
-            <p className="font-medium">Einladung gesendet!</p>
+            <p className="font-medium">{T("invite.sentTitle")}</p>
             <p className="text-sm text-muted-foreground">
-              Eine E-Mail mit dem Link zum Passwort setzen wurde an <strong>{email}</strong> versendet.
+              {T("invite.sentConfirm")} <strong>{email}</strong>.
             </p>
           </div>
         )}
@@ -154,11 +151,11 @@ const InviteUserDialog = () => {
         <DialogFooter>
           {!done ? (
             <Button onClick={handleInvite} disabled={!email || loading}>
-              {loading ? "Wird gesendet..." : "Einladung senden"}
+              {loading ? T("invite.sending") : T("invite.sendButton")}
             </Button>
           ) : (
             <Button variant="outline" onClick={() => setOpen(false)}>
-              Schließen
+              {T("invite.close")}
             </Button>
           )}
         </DialogFooter>

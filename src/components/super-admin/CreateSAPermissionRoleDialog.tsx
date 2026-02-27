@@ -1,13 +1,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -17,6 +11,7 @@ import { Plus } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useSATranslation } from "@/hooks/useSATranslation";
 
 interface Permission {
   id: string;
@@ -26,6 +21,12 @@ interface Permission {
 }
 
 export default function CreateSAPermissionRoleDialog() {
+  const { t } = useSATranslation();
+  const T = (key: string) => {
+    // Try SA translations first, fall back to key
+    const result = t(key as any);
+    return result !== key ? result : key;
+  };
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -55,13 +56,12 @@ export default function CreateSAPermissionRoleDialog() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) {
-      toast.error("Bitte geben Sie einen Rollennamen ein");
+      toast.error(T("saRole.nameRequired"));
       return;
     }
 
     setLoading(true);
     try {
-      // Get tenant_id (use a placeholder for super-admin scope)
       const { data: tenantData } = await supabase.rpc("get_user_tenant_id");
       const tenantId = tenantData as string;
 
@@ -73,24 +73,19 @@ export default function CreateSAPermissionRoleDialog() {
       if (roleErr) throw roleErr;
 
       if (selectedPermissions.length > 0) {
-        const rows = selectedPermissions.map((pid) => ({
-          custom_role_id: role.id,
-          permission_id: pid,
-        }));
-        const { error: permErr } = await supabase
-          .from("custom_role_permissions")
-          .insert(rows);
+        const rows = selectedPermissions.map((pid) => ({ custom_role_id: role.id, permission_id: pid }));
+        const { error: permErr } = await supabase.from("custom_role_permissions").insert(rows);
         if (permErr) throw permErr;
       }
 
-      toast.success("Rolle erfolgreich erstellt");
+      toast.success(T("saRole.created"));
       queryClient.invalidateQueries({ queryKey: ["sa-custom-roles"] });
       setName("");
       setDescription("");
       setSelectedPermissions([]);
       setOpen(false);
     } catch (err: any) {
-      toast.error("Fehler: " + err.message);
+      toast.error(err.message);
     } finally {
       setLoading(false);
     }
@@ -101,46 +96,30 @@ export default function CreateSAPermissionRoleDialog() {
       <DialogTrigger asChild>
         <Button>
           <Plus className="h-4 w-4 mr-2" />
-          Neue Rolle
+          {T("saRole.newButton")}
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-[520px] max-h-[80vh] overflow-y-auto">
         <form onSubmit={handleSubmit}>
           <DialogHeader>
-            <DialogTitle>Neue Super-Admin Rolle erstellen</DialogTitle>
-            <DialogDescription>
-              Erstellen Sie eine Rolle und weisen Sie Super-Admin-Berechtigungen zu.
-            </DialogDescription>
+            <DialogTitle>{T("saRole.createTitle")}</DialogTitle>
+            <DialogDescription>{T("saRole.createDesc")}</DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
-              <Label htmlFor="sa-role-name">Name *</Label>
-              <Input
-                id="sa-role-name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="z.B. Support-Manager"
-              />
+              <Label htmlFor="sa-role-name">{T("saRole.nameLabel")}</Label>
+              <Input id="sa-role-name" value={name} onChange={(e) => setName(e.target.value)} placeholder={T("saRole.namePlaceholder")} />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="sa-role-desc">Beschreibung</Label>
-              <Textarea
-                id="sa-role-desc"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="Kurze Beschreibung der Rolle..."
-              />
+              <Label htmlFor="sa-role-desc">{T("saRole.descLabel")}</Label>
+              <Textarea id="sa-role-desc" value={description} onChange={(e) => setDescription(e.target.value)} placeholder={T("saRole.descPlaceholder")} />
             </div>
             <div className="grid gap-2">
-              <Label>Berechtigungen</Label>
+              <Label>{T("saRole.permissions")}</Label>
               <div className="grid gap-2 max-h-48 overflow-y-auto border rounded-md p-3">
                 {permissions.map((p) => (
                   <label key={p.id} className="flex items-start gap-2 cursor-pointer">
-                    <Checkbox
-                      checked={selectedPermissions.includes(p.id)}
-                      onCheckedChange={() => togglePerm(p.id)}
-                      className="mt-0.5"
-                    />
+                    <Checkbox checked={selectedPermissions.includes(p.id)} onCheckedChange={() => togglePerm(p.id)} className="mt-0.5" />
                     <div>
                       <p className="text-sm font-medium">{p.name}</p>
                       {p.description && <p className="text-xs text-muted-foreground">{p.description}</p>}
@@ -151,12 +130,8 @@ export default function CreateSAPermissionRoleDialog() {
             </div>
           </div>
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setOpen(false)}>
-              Abbrechen
-            </Button>
-            <Button type="submit" disabled={loading}>
-              {loading ? "Wird erstellt..." : "Erstellen"}
-            </Button>
+            <Button type="button" variant="outline" onClick={() => setOpen(false)}>{T("common.cancel")}</Button>
+            <Button type="submit" disabled={loading}>{loading ? T("createRole.creating") : T("createRole.create")}</Button>
           </DialogFooter>
         </form>
       </DialogContent>

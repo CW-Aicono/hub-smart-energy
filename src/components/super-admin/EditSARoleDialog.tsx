@@ -1,13 +1,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -17,6 +11,7 @@ import { Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useSATranslation } from "@/hooks/useSATranslation";
 
 interface Permission {
   id: string;
@@ -35,6 +30,11 @@ interface EditSARoleDialogProps {
 }
 
 export default function EditSARoleDialog({ role }: EditSARoleDialogProps) {
+  const { t } = useSATranslation();
+  const T = (key: string) => {
+    const result = t(key as any);
+    return result !== key ? result : key;
+  };
   const [open, setOpen] = useState(false);
   const [name, setName] = useState(role.name);
   const [description, setDescription] = useState(role.description ?? "");
@@ -75,7 +75,7 @@ export default function EditSARoleDialog({ role }: EditSARoleDialogProps) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) {
-      toast.error("Bitte geben Sie einen Rollennamen ein");
+      toast.error(T("saRole.nameRequired"));
       return;
     }
 
@@ -87,29 +87,20 @@ export default function EditSARoleDialog({ role }: EditSARoleDialogProps) {
         .eq("id", role.id);
       if (roleErr) throw roleErr;
 
-      // Delete existing permissions and re-insert
-      const { error: delErr } = await supabase
-        .from("custom_role_permissions")
-        .delete()
-        .eq("custom_role_id", role.id);
+      const { error: delErr } = await supabase.from("custom_role_permissions").delete().eq("custom_role_id", role.id);
       if (delErr) throw delErr;
 
       if (selectedPermissions.length > 0) {
-        const rows = selectedPermissions.map((pid) => ({
-          custom_role_id: role.id,
-          permission_id: pid,
-        }));
-        const { error: permErr } = await supabase
-          .from("custom_role_permissions")
-          .insert(rows);
+        const rows = selectedPermissions.map((pid) => ({ custom_role_id: role.id, permission_id: pid }));
+        const { error: permErr } = await supabase.from("custom_role_permissions").insert(rows);
         if (permErr) throw permErr;
       }
 
-      toast.success("Rolle aktualisiert");
+      toast.success(T("saRole.updated"));
       queryClient.invalidateQueries({ queryKey: ["sa-custom-roles"] });
       setOpen(false);
     } catch (err: any) {
-      toast.error("Fehler: " + err.message);
+      toast.error(err.message);
     } finally {
       setLoading(false);
     }
@@ -118,45 +109,31 @@ export default function EditSARoleDialog({ role }: EditSARoleDialogProps) {
   return (
     <Dialog open={open} onOpenChange={handleOpen}>
       <DialogTrigger asChild>
-        <Button variant="ghost" size="icon" title="Rolle bearbeiten">
+        <Button variant="ghost" size="icon" title={T("saRole.editButton")}>
           <Pencil className="h-4 w-4" />
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-[520px] max-h-[85vh] overflow-y-auto">
         <form onSubmit={handleSubmit}>
           <DialogHeader>
-            <DialogTitle>Rolle bearbeiten</DialogTitle>
-            <DialogDescription>
-              Bearbeiten Sie den Namen, die Beschreibung und die Berechtigungen dieser Rolle.
-            </DialogDescription>
+            <DialogTitle>{T("saRole.editTitle")}</DialogTitle>
+            <DialogDescription>{T("saRole.editDesc")}</DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
-              <Label htmlFor="edit-sa-role-name">Name *</Label>
-              <Input
-                id="edit-sa-role-name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-              />
+              <Label htmlFor="edit-sa-role-name">{T("saRole.nameLabel")}</Label>
+              <Input id="edit-sa-role-name" value={name} onChange={(e) => setName(e.target.value)} />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="edit-sa-role-desc">Beschreibung</Label>
-              <Textarea
-                id="edit-sa-role-desc"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-              />
+              <Label htmlFor="edit-sa-role-desc">{T("saRole.descLabel")}</Label>
+              <Textarea id="edit-sa-role-desc" value={description} onChange={(e) => setDescription(e.target.value)} />
             </div>
             <div className="grid gap-2">
-              <Label>Berechtigungen</Label>
+              <Label>{T("saRole.permissions")}</Label>
               <div className="grid gap-2 max-h-48 overflow-y-auto border rounded-md p-3">
                 {permissions.map((p) => (
                   <label key={p.id} className="flex items-start gap-2 cursor-pointer">
-                    <Checkbox
-                      checked={selectedPermissions.includes(p.id)}
-                      onCheckedChange={() => togglePerm(p.id)}
-                      className="mt-0.5"
-                    />
+                    <Checkbox checked={selectedPermissions.includes(p.id)} onCheckedChange={() => togglePerm(p.id)} className="mt-0.5" />
                     <div>
                       <p className="text-sm font-medium">{p.name}</p>
                       {p.description && <p className="text-xs text-muted-foreground">{p.description}</p>}
@@ -167,12 +144,8 @@ export default function EditSARoleDialog({ role }: EditSARoleDialogProps) {
             </div>
           </div>
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setOpen(false)}>
-              Abbrechen
-            </Button>
-            <Button type="submit" disabled={loading}>
-              {loading ? "Speichere..." : "Speichern"}
-            </Button>
+            <Button type="button" variant="outline" onClick={() => setOpen(false)}>{T("common.cancel")}</Button>
+            <Button type="submit" disabled={loading}>{loading ? T("common.saving") : T("common.save")}</Button>
           </DialogFooter>
         </form>
       </DialogContent>
