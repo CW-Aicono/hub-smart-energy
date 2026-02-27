@@ -35,151 +35,122 @@ interface UserManualContentProps {
 const UserManualContent = ({ open, onOpenChange, chapter }: UserManualContentProps) => {
   const { t } = useTranslation();
 
+  const T = (key: string) => t(key as any);
+
   const chapters = {
     gettingStarted: {
-      title: t("help.gettingStarted"),
+      title: T("help.gettingStarted"),
       icon: <LayoutDashboard className="h-5 w-5" />,
       content: (
         <div className="space-y-6">
           <section>
             <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
               <LayoutDashboard className="h-4 w-4 text-primary" />
-              Willkommen bei Smart Energy Hub
+              {T("manual.gs.welcome")}
             </h3>
-            <p className="text-muted-foreground mb-4">
-              Smart Energy Hub ist Ihre zentrale Plattform für das Energiemanagement Ihrer Gebäude und Standorte. 
-              Diese Anleitung hilft Ihnen beim Einstieg.
-            </p>
+            <p className="text-muted-foreground mb-4">{T("manual.gs.welcomeText")}</p>
           </section>
 
           <Separator />
 
           <section>
-            <h4 className="font-semibold mb-2">Erste Schritte (Einrichtungsassistent)</h4>
-            <p className="text-sm text-muted-foreground mb-2">
-              Beim ersten Login werden Sie durch einen interaktiven Einrichtungsassistenten geführt:
-            </p>
+            <h4 className="font-semibold mb-2">{T("manual.gs.wizardTitle")}</h4>
+            <p className="text-sm text-muted-foreground mb-2">{T("manual.gs.wizardText")}</p>
             <ol className="list-decimal list-inside text-sm text-muted-foreground space-y-1 ml-4">
-              <li>Firmenprofil einrichten (Name, Kontaktdaten)</li>
-              <li>Erste Liegenschaft anlegen</li>
-              <li>Ersten Zähler hinzufügen</li>
+              <li>{T("manual.gs.wizardStep1")}</li>
+              <li>{T("manual.gs.wizardStep2")}</li>
+              <li>{T("manual.gs.wizardStep3")}</li>
             </ol>
-            <p className="text-sm text-muted-foreground mt-2">
-              Jeden Schritt können Sie überspringen und den Assistenten jederzeit über 
-              <strong> Hilfe & Support → Erste Schritte</strong> erneut aufrufen.
-            </p>
+            <p className="text-sm text-muted-foreground mt-2">{T("manual.gs.wizardHint")}</p>
           </section>
 
           <Separator />
 
           <section>
-            <h4 className="font-semibold mb-2">1. Dashboard verstehen</h4>
-            <p className="text-sm text-muted-foreground mb-2">
-              Nach dem Login landen Sie auf dem Dashboard. Hier sehen Sie:
-            </p>
+            <h4 className="font-semibold mb-2">{T("manual.gs.dashboardTitle")}</h4>
+            <p className="text-sm text-muted-foreground mb-2">{T("manual.gs.dashboardText")}</p>
             <ul className="list-disc list-inside text-sm text-muted-foreground space-y-1 ml-4">
-              <li>Energieverbrauchsdiagramme mit Tages- und Wochenübersicht</li>
-              <li>Kostenübersicht für Strom, Gas, Wärme und Wasser</li>
-              <li>Wetterdaten für Ihre Standorte</li>
-              <li>Grundrisspläne mit Echtzeit-Sensordaten</li>
-              <li>Aktuelle Alerts und Benachrichtigungen</li>
-              <li>Jahresverbrauchsprognose und CO₂-Bilanzierung</li>
-              <li>Sankey- und Pie-Chart-Widgets für Energieflüsse</li>
+              <li>{T("manual.gs.dashboardItem1")}</li>
+              <li>{T("manual.gs.dashboardItem2")}</li>
+              <li>{T("manual.gs.dashboardItem3")}</li>
+              <li>{T("manual.gs.dashboardItem4")}</li>
+              <li>{T("manual.gs.dashboardItem5")}</li>
+              <li>{T("manual.gs.dashboardItem6")}</li>
+              <li>{T("manual.gs.dashboardItem7")}</li>
             </ul>
           </section>
 
           <section>
-            <h4 className="font-semibold mb-2">2. Navigation</h4>
-            <p className="text-sm text-muted-foreground mb-2">
-              Die Seitenleiste links enthält alle wichtigen Bereiche:
-            </p>
+            <h4 className="font-semibold mb-2">{T("manual.gs.navTitle")}</h4>
+            <p className="text-sm text-muted-foreground mb-2">{T("manual.gs.navText")}</p>
             <ul className="list-disc list-inside text-sm text-muted-foreground space-y-1 ml-4">
-              <li><strong>Dashboard:</strong> Übersicht und anpassbare Widgets</li>
-              <li><strong>Standorte:</strong> Gebäude und Bereiche verwalten</li>
-              <li><strong>Messstellen:</strong> Zähler und Zählerstände verwalten</li>
-              <li><strong>Integrationen:</strong> Externe Systeme und Gateways verbinden</li>
-              <li><strong>Benutzerverwaltung:</strong> Benutzer und Rollen verwalten</li>
-              <li><strong>Einstellungen:</strong> Profil, Branding und System konfigurieren</li>
+              <li><strong>Dashboard:</strong> {T("manual.gs.navDashboard").replace("Dashboard: ", "")}</li>
+              <li><strong>{T("nav.locations")}:</strong> {T("manual.gs.navLocations").split(": ")[1]}</li>
+              <li><strong>{T("nav.meters")}:</strong> {T("manual.gs.navMeters").split(": ")[1]}</li>
+              <li><strong>{T("nav.integrations")}:</strong> {T("manual.gs.navIntegrations").split(": ")[1]}</li>
+              <li><strong>{T("nav.admin")}:</strong> {T("manual.gs.navUsers").split(": ")[1]}</li>
+              <li><strong>{T("nav.settings")}:</strong> {T("manual.gs.navSettings").split(": ")[1]}</li>
             </ul>
           </section>
 
           <section>
-            <h4 className="font-semibold mb-2">3. Dashboard anpassen</h4>
-            <p className="text-sm text-muted-foreground">
-              Klicken Sie auf "Dashboard anpassen" oben rechts, um Widgets ein- oder auszublenden 
-              und die Anordnung nach Ihren Wünschen zu ändern. Widgets können in drei Größen 
-              dargestellt werden (1/3, 2/3, volle Breite).
-            </p>
+            <h4 className="font-semibold mb-2">{T("manual.gs.customizeTitle")}</h4>
+            <p className="text-sm text-muted-foreground">{T("manual.gs.customizeText")}</p>
           </section>
 
           <section>
-            <h4 className="font-semibold mb-2">4. Sprache und Theme wechseln</h4>
-            <p className="text-sm text-muted-foreground">
-              Unter "Mein Profil" können Sie die Sprache (Deutsch, Englisch, Spanisch, Niederländisch) 
-              und das Farbschema (Hell, Dunkel, System) ändern.
-            </p>
+            <h4 className="font-semibold mb-2">{T("manual.gs.langTitle")}</h4>
+            <p className="text-sm text-muted-foreground">{T("manual.gs.langText")}</p>
           </section>
 
           <section>
-            <h4 className="font-semibold mb-2">5. Mandantenfähigkeit</h4>
-            <p className="text-sm text-muted-foreground">
-              Smart Energy Hub ist mandantenfähig. Jeder Mandant hat seine eigenen Standorte, 
-              Benutzer, Rollen und Branding-Einstellungen. Super-Admins können alle Mandanten 
-              zentral verwalten.
-            </p>
+            <h4 className="font-semibold mb-2">{T("manual.gs.tenantTitle")}</h4>
+            <p className="text-sm text-muted-foreground">{T("manual.gs.tenantText")}</p>
           </section>
         </div>
       ),
     },
     locationManagement: {
-      title: t("help.locationManagement"),
+      title: T("help.locationManagement"),
       icon: <MapPin className="h-5 w-5" />,
       content: (
         <div className="space-y-6">
           <section>
             <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
               <MapPin className="h-4 w-4 text-primary" />
-              Standortverwaltung
+              {T("manual.loc.title")}
             </h3>
-            <p className="text-muted-foreground mb-4">
-              Verwalten Sie alle Ihre Gebäude und Standorte in einer hierarchischen Struktur.
-            </p>
+            <p className="text-muted-foreground mb-4">{T("manual.loc.intro")}</p>
           </section>
 
           <Separator />
 
           <section>
-            <h4 className="font-semibold mb-2">Standort anlegen</h4>
+            <h4 className="font-semibold mb-2">{T("manual.loc.createTitle")}</h4>
             <ol className="list-decimal list-inside text-sm text-muted-foreground space-y-2 ml-4">
-              <li>Navigieren Sie zu <strong>Standorte</strong> in der Seitenleiste</li>
-              <li>Klicken Sie auf <strong>"Standort anlegen"</strong> oben rechts</li>
-              <li>Wählen Sie den Standorttyp:
+              <li>{T("manual.loc.createStep1")}</li>
+              <li>{T("manual.loc.createStep2")}</li>
+              <li>{T("manual.loc.createStep3")}
                 <ul className="list-disc list-inside ml-4 mt-1">
-                  <li><strong>Einzelgebäude:</strong> Ein einzelnes Gebäude</li>
-                  <li><strong>Gebäudekomplex:</strong> Mehrere zusammengehörige Gebäude</li>
-                  <li><strong>Sonstiges:</strong> Andere Arten von Standorten</li>
+                  <li><strong>{T("manual.loc.typeSingle").split(": ")[0]}:</strong> {T("manual.loc.typeSingle").split(": ")[1]}</li>
+                  <li><strong>{T("manual.loc.typeComplex").split(": ")[0]}:</strong> {T("manual.loc.typeComplex").split(": ")[1]}</li>
+                  <li><strong>{T("manual.loc.typeOther").split(": ")[0]}:</strong> {T("manual.loc.typeOther").split(": ")[1]}</li>
                 </ul>
               </li>
-              <li>Füllen Sie die Grunddaten aus (Name, Adresse, Kontakt)</li>
-              <li>Optional: Fügen Sie einen übergeordneten Standort hinzu für Hierarchien</li>
-              <li>Klicken Sie auf <strong>"Speichern"</strong></li>
+              <li>{T("manual.loc.createStep4")}</li>
+              <li>{T("manual.loc.createStep5")}</li>
+              <li>{T("manual.loc.createStep6")}</li>
             </ol>
           </section>
 
           <section>
-            <h4 className="font-semibold mb-2">Standort bearbeiten</h4>
-            <p className="text-sm text-muted-foreground">
-              Klicken Sie auf einen Standort in der Übersicht, um zur Detailseite zu gelangen. 
-              Dort können Sie alle Informationen bearbeiten, Kontaktdaten anpassen und 
-              die zugehörigen Etagen verwalten.
-            </p>
+            <h4 className="font-semibold mb-2">{T("manual.loc.editTitle")}</h4>
+            <p className="text-sm text-muted-foreground">{T("manual.loc.editText")}</p>
           </section>
 
           <section>
-            <h4 className="font-semibold mb-2">Hierarchien nutzen</h4>
-            <p className="text-sm text-muted-foreground mb-2">
-              Standorte können hierarchisch organisiert werden:
-            </p>
+            <h4 className="font-semibold mb-2">{T("manual.loc.hierarchyTitle")}</h4>
+            <p className="text-sm text-muted-foreground mb-2">{T("manual.loc.hierarchyText")}</p>
             <div className="bg-muted/50 p-3 rounded-lg text-sm">
               <div className="flex items-center gap-2">
                 <Building2 className="h-4 w-4" />
@@ -197,651 +168,521 @@ const UserManualContent = ({ open, onOpenChange, chapter }: UserManualContentPro
           </section>
 
           <section>
-            <h4 className="font-semibold mb-2">Kartenansicht</h4>
-            <p className="text-sm text-muted-foreground">
-              Aktivieren Sie "Auf Karte anzeigen" bei einem Standort, um ihn auf der 
-              interaktiven Übersichtskarte darzustellen. Die Koordinaten werden 
-              automatisch aus der Adresse ermittelt.
-            </p>
+            <h4 className="font-semibold mb-2">{T("manual.loc.mapTitle")}</h4>
+            <p className="text-sm text-muted-foreground">{T("manual.loc.mapText")}</p>
           </section>
         </div>
       ),
     },
     floorManagement: {
-      title: t("help.floorManagement" as any),
+      title: T("help.floorManagement"),
       icon: <Building2 className="h-5 w-5" />,
       content: (
         <div className="space-y-6">
           <section>
             <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
               <Building2 className="h-4 w-4 text-primary" />
-              Etagenverwaltung
+              {T("manual.floor.title")}
             </h3>
-            <p className="text-muted-foreground mb-4">
-              Verwalten Sie Etagen innerhalb Ihrer Gebäude und laden Sie Grundrisspläne hoch, 
-              um Sensoren visuell zu positionieren.
-            </p>
+            <p className="text-muted-foreground mb-4">{T("manual.floor.intro")}</p>
           </section>
 
           <Separator />
 
           <section>
-            <h4 className="font-semibold mb-2">Etage anlegen</h4>
+            <h4 className="font-semibold mb-2">{T("manual.floor.createTitle")}</h4>
             <ol className="list-decimal list-inside text-sm text-muted-foreground space-y-2 ml-4">
-              <li>Öffnen Sie die Detailseite eines Standorts</li>
-              <li>Scrollen Sie zum Bereich <strong>"Etagen"</strong></li>
-              <li>Klicken Sie auf <strong>"Etage hinzufügen"</strong></li>
-              <li>Geben Sie Name, Etagennummer und optional die Fläche ein</li>
-              <li>Speichern Sie die Etage</li>
+              <li>{T("manual.floor.createStep1")}</li>
+              <li>{T("manual.floor.createStep2")}</li>
+              <li>{T("manual.floor.createStep3")}</li>
+              <li>{T("manual.floor.createStep4")}</li>
+              <li>{T("manual.floor.createStep5")}</li>
             </ol>
           </section>
 
           <section>
-            <h4 className="font-semibold mb-2">Grundrissplan hochladen</h4>
+            <h4 className="font-semibold mb-2">{T("manual.floor.uploadTitle")}</h4>
             <ol className="list-decimal list-inside text-sm text-muted-foreground space-y-2 ml-4">
-              <li>Klicken Sie bei einer Etage auf das <strong>Bild-Symbol</strong></li>
-              <li>Wählen Sie eine Bilddatei (PNG, JPG) aus</li>
-              <li>Der Grundriss wird automatisch hochgeladen und angezeigt</li>
+              <li>{T("manual.floor.uploadStep1")}</li>
+              <li>{T("manual.floor.uploadStep2")}</li>
+              <li>{T("manual.floor.uploadStep3")}</li>
             </ol>
           </section>
 
           <section>
-            <h4 className="font-semibold mb-2">Sensoren auf dem Grundriss platzieren</h4>
+            <h4 className="font-semibold mb-2">{T("manual.floor.sensorTitle")}</h4>
             <ol className="list-decimal list-inside text-sm text-muted-foreground space-y-2 ml-4">
-              <li>Öffnen Sie den Grundriss über das <strong>Grundriss-Symbol</strong></li>
-              <li>Wechseln Sie zum Tab <strong>"Messgeräte bearbeiten"</strong></li>
-              <li>Wählen Sie einen Sensor aus der Liste rechts</li>
-              <li>Ziehen Sie ihn per Drag & Drop auf die gewünschte Position</li>
-              <li>Bereits platzierte Sensoren können verschoben werden</li>
-              <li>Zum Löschen: Fahren Sie über einen Sensor und klicken Sie auf das X</li>
+              <li>{T("manual.floor.sensorStep1")}</li>
+              <li>{T("manual.floor.sensorStep2")}</li>
+              <li>{T("manual.floor.sensorStep3")}</li>
+              <li>{T("manual.floor.sensorStep4")}</li>
+              <li>{T("manual.floor.sensorStep5")}</li>
+              <li>{T("manual.floor.sensorStep6")}</li>
             </ol>
           </section>
 
           <section>
-            <h4 className="font-semibold mb-2">Grundriss im Dashboard</h4>
-            <p className="text-sm text-muted-foreground">
-              Im Dashboard wird der Grundriss mit den aktuellen Messwerten angezeigt. 
-              Sie können zoomen und schwenken, um Details zu sehen. Die Sensordaten 
-              werden alle 5 Minuten automatisch aktualisiert.
-            </p>
+            <h4 className="font-semibold mb-2">{T("manual.floor.dashboardTitle")}</h4>
+            <p className="text-sm text-muted-foreground">{T("manual.floor.dashboardText")}</p>
           </section>
         </div>
       ),
     },
     energyAnalysis: {
-      title: t("help.energyAnalysis"),
+      title: T("help.energyAnalysis"),
       icon: <Zap className="h-5 w-5" />,
       content: (
         <div className="space-y-6">
           <section>
             <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
               <Zap className="h-4 w-4 text-primary" />
-              Energieanalyse
+              {T("manual.energy.title")}
             </h3>
-            <p className="text-muted-foreground mb-4">
-              Analysieren Sie Ihren Energieverbrauch und identifizieren Sie Einsparpotenziale.
-            </p>
+            <p className="text-muted-foreground mb-4">{T("manual.energy.intro")}</p>
           </section>
 
           <Separator />
 
           <section>
-            <h4 className="font-semibold mb-2">Energietypen</h4>
-            <p className="text-sm text-muted-foreground mb-2">
-              Das System unterscheidet vier Energiearten:
-            </p>
+            <h4 className="font-semibold mb-2">{T("manual.energy.typesTitle")}</h4>
+            <p className="text-sm text-muted-foreground mb-2">{T("manual.energy.typesText")}</p>
             <ul className="list-disc list-inside text-sm text-muted-foreground space-y-1 ml-4">
-              <li><strong>Strom:</strong> Elektrische Energie in kWh</li>
-              <li><strong>Gas:</strong> Gasverbrauch in m³</li>
-              <li><strong>Wärme:</strong> Fernwärme in kWh</li>
-              <li><strong>Wasser:</strong> Wasserverbrauch in m³</li>
+              <li>{T("manual.energy.typeStrom")}</li>
+              <li>{T("manual.energy.typeGas")}</li>
+              <li>{T("manual.energy.typeWaerme")}</li>
+              <li>{T("manual.energy.typeWasser")}</li>
             </ul>
           </section>
 
           <section>
-            <h4 className="font-semibold mb-2">Verbrauchsdiagramme</h4>
-            <p className="text-sm text-muted-foreground mb-2">
-              Das Energiediagramm im Dashboard zeigt:
-            </p>
+            <h4 className="font-semibold mb-2">{T("manual.energy.chartsTitle")}</h4>
+            <p className="text-sm text-muted-foreground mb-2">{T("manual.energy.chartsText")}</p>
             <ul className="list-disc list-inside text-sm text-muted-foreground space-y-1 ml-4">
-              <li>Tägliche und wöchentliche Verbräuche</li>
-              <li>Farbcodierte Balken für jeden Energietyp</li>
-              <li>Vergleich mit Vorperioden</li>
+              <li>{T("manual.energy.chartsItem1")}</li>
+              <li>{T("manual.energy.chartsItem2")}</li>
+              <li>{T("manual.energy.chartsItem3")}</li>
             </ul>
           </section>
 
           <section>
-            <h4 className="font-semibold mb-2">Kostenübersicht</h4>
-            <p className="text-sm text-muted-foreground">
-              Die Kostenkachel zeigt die geschätzten Kosten basierend auf aktuellen 
-              Tarifen. Positive/negative Trends werden farblich hervorgehoben.
-            </p>
+            <h4 className="font-semibold mb-2">{T("manual.energy.costTitle")}</h4>
+            <p className="text-sm text-muted-foreground">{T("manual.energy.costText")}</p>
           </section>
 
           <section>
-            <h4 className="font-semibold mb-2">Standortfilter</h4>
-            <p className="text-sm text-muted-foreground">
-              Wählen Sie im Dashboard einen spezifischen Standort aus, um nur dessen 
-              Daten anzuzeigen. Alternativ können Sie "Alle Standorte" wählen für 
-              eine aggregierte Ansicht.
-            </p>
+            <h4 className="font-semibold mb-2">{T("manual.energy.filterTitle")}</h4>
+            <p className="text-sm text-muted-foreground">{T("manual.energy.filterText")}</p>
           </section>
 
-           <section>
-            <h4 className="font-semibold mb-2">Datenexport</h4>
-            <p className="text-sm text-muted-foreground">
-              Exportieren Sie Energiedaten über die Export-Funktion unter "Energiedaten". 
-              Verfügbare Formate: CSV für Tabellenkalkulationen und PDF für druckfertige Berichte.
-              Filtern Sie nach Standort, Energieart und Zeitraum.
-            </p>
+          <section>
+            <h4 className="font-semibold mb-2">{T("manual.energy.exportTitle")}</h4>
+            <p className="text-sm text-muted-foreground">{T("manual.energy.exportText")}</p>
           </section>
         </div>
       ),
     },
     meterManagement: {
-      title: "Messstellen",
+      title: T("help.meterManagement"),
       icon: <Gauge className="h-5 w-5" />,
       content: (
         <div className="space-y-6">
           <section>
             <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
               <Gauge className="h-4 w-4 text-primary" />
-              Messstellenverwaltung
+              {T("manual.meter.title")}
             </h3>
-            <p className="text-muted-foreground mb-4">
-              Verwalten Sie alle Zähler zentral – unabhängig vom Hersteller. Zähler können 
-              manuell oder automatisch über Gateways erfasst werden.
-            </p>
+            <p className="text-muted-foreground mb-4">{T("manual.meter.intro")}</p>
           </section>
 
           <Separator />
 
           <section>
-            <h4 className="font-semibold mb-2">Zähler anlegen</h4>
+            <h4 className="font-semibold mb-2">{T("manual.meter.createTitle")}</h4>
             <ol className="list-decimal list-inside text-sm text-muted-foreground space-y-2 ml-4">
-              <li>Navigieren Sie zu <strong>Standorte → Standort-Detail</strong> oder zur <strong>Messstellen-Übersicht</strong></li>
-              <li>Klicken Sie auf <strong>"Zähler anlegen"</strong></li>
-              <li>Wählen Sie die Erfassungsart:
+              <li>{T("manual.meter.createStep1")}</li>
+              <li>{T("manual.meter.createStep2")}</li>
+              <li>{T("manual.meter.createStep3")}
                 <ul className="list-disc list-inside ml-4 mt-1">
-                  <li><strong>Manuell:</strong> Zählerstand wird von Hand eingegeben</li>
-                  <li><strong>Automatisch:</strong> Zählerstand wird über ein Gateway/Sensor ausgelesen</li>
+                  <li>{T("manual.meter.typeManual")}</li>
+                  <li>{T("manual.meter.typeAuto")}</li>
                 </ul>
               </li>
-              <li>Füllen Sie Name, Zählernummer, Energieart und Einheit aus</li>
-              <li>Speichern Sie den Zähler</li>
+              <li>{T("manual.meter.createStep4")}</li>
+              <li>{T("manual.meter.createStep5")}</li>
             </ol>
           </section>
 
           <section>
-            <h4 className="font-semibold mb-2">Zähler bearbeiten</h4>
-            <p className="text-sm text-muted-foreground">
-              Über das Stift-Symbol in der Zähler-Tabelle können Sie Name, Zählernummer, 
-              Energieart, Einheit und Erfassungsart ändern. Bei automatischer Erfassung 
-              wählen Sie das Gateway und den Sensor aus.
-            </p>
+            <h4 className="font-semibold mb-2">{T("manual.meter.editTitle")}</h4>
+            <p className="text-sm text-muted-foreground">{T("manual.meter.editText")}</p>
           </section>
 
           <section>
-            <h4 className="font-semibold mb-2">Zähler archivieren</h4>
-            <p className="text-sm text-muted-foreground mb-2">
-              Statt einen Zähler zu löschen, können Sie ihn archivieren:
-            </p>
+            <h4 className="font-semibold mb-2">{T("manual.meter.archiveTitle")}</h4>
+            <p className="text-sm text-muted-foreground mb-2">{T("manual.meter.archiveText")}</p>
             <ul className="list-disc list-inside text-sm text-muted-foreground space-y-1 ml-4">
-              <li>Klicken Sie auf das <strong>Archiv-Symbol</strong> neben dem Zähler</li>
-              <li>Archivierte Zähler sind über den Toggle <strong>"Archiv anzeigen"</strong> sichtbar</li>
-              <li>Archivierte Zähler können wiederhergestellt oder endgültig gelöscht werden</li>
-              <li>Bestehende Messwerte bleiben bei der Archivierung erhalten</li>
+              <li>{T("manual.meter.archiveItem1")}</li>
+              <li>{T("manual.meter.archiveItem2")}</li>
+              <li>{T("manual.meter.archiveItem3")}</li>
+              <li>{T("manual.meter.archiveItem4")}</li>
             </ul>
           </section>
 
           <section>
-            <h4 className="font-semibold mb-2">QR-Codes für Zähler</h4>
-            <p className="text-sm text-muted-foreground">
-              Für jeden Zähler kann ein QR-Code generiert werden. Nutzen Sie die Funktionen 
-              "Herunterladen" oder "Drucken", um den QR-Code auszudrucken und an den 
-              physischen Zähler zu kleben. Die mobile App erkennt den Zähler dann 
-              automatisch per Kamerascan.
-            </p>
+            <h4 className="font-semibold mb-2">{T("manual.meter.qrTitle")}</h4>
+            <p className="text-sm text-muted-foreground">{T("manual.meter.qrText")}</p>
           </section>
 
           <section>
-            <h4 className="font-semibold mb-2">Alarmregeln</h4>
-            <p className="text-sm text-muted-foreground">
-              Definieren Sie Schwellenwerte pro Standort und Energieart. Das System benachrichtigt 
-              Sie, wenn ein Verbrauchswert den definierten Grenzwert über- oder unterschreitet.
-            </p>
+            <h4 className="font-semibold mb-2">{T("manual.meter.alertTitle")}</h4>
+            <p className="text-sm text-muted-foreground">{T("manual.meter.alertText")}</p>
           </section>
 
           <section>
-            <h4 className="font-semibold mb-2">Filter in der Übersicht</h4>
-            <p className="text-sm text-muted-foreground">
-              Die Messstellen-Übersicht bietet drei Filter: Liegenschaft, Energieart 
-              und Erfassungsart. Kombinieren Sie diese, um schnell den gewünschten 
-              Zähler zu finden.
-            </p>
+            <h4 className="font-semibold mb-2">{T("manual.meter.filterTitle")}</h4>
+            <p className="text-sm text-muted-foreground">{T("manual.meter.filterText")}</p>
           </section>
         </div>
       ),
     },
     mobileApp: {
-      title: "Mobile App (Meter Mate)",
+      title: T("help.mobileApp"),
       icon: <Smartphone className="h-5 w-5" />,
       content: (
         <div className="space-y-6">
           <section>
             <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
               <Smartphone className="h-4 w-4 text-primary" />
-              Mobile Zählerablesung
+              {T("manual.mobile.title")}
             </h3>
-            <p className="text-muted-foreground mb-4">
-              Die mobile App ermöglicht die Zählerablesung direkt vor Ort – per manuelle Eingabe, 
-              QR-Code-Scan oder KI-Bilderkennung.
-            </p>
+            <p className="text-muted-foreground mb-4">{T("manual.mobile.intro")}</p>
           </section>
 
           <Separator />
 
           <section>
-            <h4 className="font-semibold mb-2">Zugang zur App</h4>
-            <p className="text-sm text-muted-foreground mb-2">
-              Die App ist unter <strong>/m</strong> erreichbar und für Smartphones optimiert. 
-              Sie können sie als PWA auf Ihrem Homescreen installieren:
-            </p>
+            <h4 className="font-semibold mb-2">{T("manual.mobile.accessTitle")}</h4>
+            <p className="text-sm text-muted-foreground mb-2">{T("manual.mobile.accessText")}</p>
             <ol className="list-decimal list-inside text-sm text-muted-foreground space-y-1 ml-4">
-              <li>Öffnen Sie die App-URL im Browser</li>
-              <li>Tippen Sie auf "Zum Startbildschirm hinzufügen"</li>
-              <li>Die App läuft dann wie eine native App</li>
+              <li>{T("manual.mobile.accessStep1")}</li>
+              <li>{T("manual.mobile.accessStep2")}</li>
+              <li>{T("manual.mobile.accessStep3")}</li>
             </ol>
           </section>
 
           <section>
             <h4 className="font-semibold mb-2 flex items-center gap-2">
               <Camera className="h-4 w-4" />
-              KI-Bilderkennung
+              {T("manual.mobile.aiTitle")}
             </h4>
-            <p className="text-sm text-muted-foreground">
-              Fotografieren Sie den Zählerstand mit der Kamera. Die KI erkennt automatisch 
-              die Zählernummer und den aktuellen Stand. Sie können das Ergebnis vor dem 
-              Speichern überprüfen und korrigieren. Ein Konfidenzwert zeigt an, wie 
-              sicher die Erkennung ist.
-            </p>
+            <p className="text-sm text-muted-foreground">{T("manual.mobile.aiText")}</p>
           </section>
 
           <section>
             <h4 className="font-semibold mb-2 flex items-center gap-2">
               <QrCode className="h-4 w-4" />
-              QR-Code-Scan
+              {T("manual.mobile.qrTitle")}
             </h4>
-            <p className="text-sm text-muted-foreground">
-              Scannen Sie den QR-Code-Sticker am Zähler. Der Zähler wird automatisch 
-              erkannt und Sie können direkt den Stand eingeben. Nutzen Sie die 
-              QR-Code-Funktion in der Messstellen-Übersicht, um die Sticker zu drucken.
-            </p>
+            <p className="text-sm text-muted-foreground">{T("manual.mobile.qrText")}</p>
           </section>
 
           <section>
-            <h4 className="font-semibold mb-2">Unbekannte Zähler</h4>
-            <p className="text-sm text-muted-foreground">
-              Erkennt die KI eine Zählernummer, die nicht im System hinterlegt ist, können 
-              Sie den Zähler direkt in der App anlegen – inklusive Standortzuordnung, 
-              Energieart (Strom, Gas, Wasser, Wärme), Foto und erstem Zählerstand.
-            </p>
+            <h4 className="font-semibold mb-2">{T("manual.mobile.unknownTitle")}</h4>
+            <p className="text-sm text-muted-foreground">{T("manual.mobile.unknownText")}</p>
           </section>
 
           <section>
             <h4 className="font-semibold mb-2 flex items-center gap-2">
               <WifiOff className="h-4 w-4" />
-              Offline-Funktion
+              {T("manual.mobile.offlineTitle")}
             </h4>
-            <p className="text-sm text-muted-foreground">
-              Die App funktioniert auch ohne Internetverbindung. Erfasste Zählerstände 
-              werden lokal gespeichert und automatisch übermittelt, sobald die Verbindung 
-              wiederhergestellt ist. Ein Banner zeigt die Anzahl ausstehender Ablesungen.
-            </p>
+            <p className="text-sm text-muted-foreground">{T("manual.mobile.offlineText")}</p>
           </section>
 
           <section>
-            <h4 className="font-semibold mb-2">Plausibilitätsprüfung</h4>
-            <p className="text-sm text-muted-foreground">
-              Bei jeder Erfassung wird geprüft, ob der neue Zählerstand plausibel ist. 
-              Ist der Wert niedriger als der letzte gespeicherte Stand, wird eine 
-              Warnung angezeigt. Sie können den Wert dennoch speichern.
-            </p>
+            <h4 className="font-semibold mb-2">{T("manual.mobile.plausiTitle")}</h4>
+            <p className="text-sm text-muted-foreground">{T("manual.mobile.plausiText")}</p>
           </section>
         </div>
       ),
     },
     automation: {
-      title: "Gebäudeautomation",
+      title: T("help.automationTitle"),
       icon: <Cpu className="h-5 w-5" />,
       content: (
         <div className="space-y-6">
           <section>
             <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
               <Cpu className="h-4 w-4 text-primary" />
-              Gebäudeautomation
+              {T("manual.auto.title")}
             </h3>
-            <p className="text-muted-foreground mb-4">
-              Steuern Sie Aktoren des Loxone Miniservers direkt aus Smart Energy Hub heraus. 
-              Erstellen Sie komplexe Automationsregeln mit Bedingungen und mehreren Aktionen.
-            </p>
+            <p className="text-muted-foreground mb-4">{T("manual.auto.intro")}</p>
           </section>
 
           <Separator />
 
           <section>
-            <h4 className="font-semibold mb-2">Übersicht</h4>
-            <p className="text-sm text-muted-foreground">
-              Die Automationsverwaltung finden Sie in der Detailansicht eines Standorts unter 
-              dem Abschnitt <strong>„Automation"</strong>. Dort sehen Sie alle gespeicherten 
-              Automationen, deren Status und die letzte Ausführung.
-            </p>
+            <h4 className="font-semibold mb-2">{T("manual.auto.overviewTitle")}</h4>
+            <p className="text-sm text-muted-foreground">{T("manual.auto.overviewText")}</p>
           </section>
 
           <section>
-            <h4 className="font-semibold mb-2">Verfügbare Aktoren</h4>
-            <p className="text-sm text-muted-foreground">
-              Über den Button <strong>„Verfügbare Aktoren"</strong> sehen Sie alle steuerbaren 
-              Aktoren (Schalter, Dimmer, Jalousien etc.) des verbundenen Loxone Miniservers, 
-              gruppiert nach Räumen mit aktuellem Status.
-            </p>
+            <h4 className="font-semibold mb-2">{T("manual.auto.actorsTitle")}</h4>
+            <p className="text-sm text-muted-foreground">{T("manual.auto.actorsText")}</p>
           </section>
 
           <section>
-            <h4 className="font-semibold mb-2">Automation erstellen</h4>
+            <h4 className="font-semibold mb-2">{T("manual.auto.createTitle")}</h4>
             <ol className="list-decimal list-inside text-sm text-muted-foreground space-y-2 ml-4">
-              <li>Klicken Sie auf <strong>„Automation hinzufügen"</strong></li>
-              <li>Vergeben Sie einen Namen und eine optionale Beschreibung</li>
-              <li>Fügen Sie <strong>Bedingungen</strong> hinzu (optional):
+              <li>{T("manual.auto.createStep1")}</li>
+              <li>{T("manual.auto.createStep2")}</li>
+              <li>{T("manual.auto.createStep3")}
                 <ul className="list-disc list-inside ml-4 mt-1">
-                  <li><strong>Sensorwert:</strong> z.B. Temperatur &gt; 25°C</li>
-                  <li><strong>Uhrzeit:</strong> Zeitfenster (Von–Bis)</li>
-                  <li><strong>Wochentage:</strong> z.B. nur Mo–Fr</li>
-                  <li><strong>Aktor-Status:</strong> z.B. wenn Schalter X eingeschaltet ist</li>
+                  <li>{T("manual.auto.condSensor")}</li>
+                  <li>{T("manual.auto.condTime")}</li>
+                  <li>{T("manual.auto.condDays")}</li>
+                  <li>{T("manual.auto.condActor")}</li>
                 </ul>
               </li>
-              <li>Wählen Sie die <strong>Verknüpfung</strong> zwischen Bedingungen (UND/ODER) – individuell pro Bedingung einstellbar</li>
-              <li>Fügen Sie eine oder mehrere <strong>Aktionen</strong> hinzu (Aktor + Befehl)</li>
-              <li>Klicken Sie auf <strong>„Erstellen"</strong></li>
+              <li>{T("manual.auto.createStep4")}</li>
+              <li>{T("manual.auto.createStep5")}</li>
+              <li>{T("manual.auto.createStep6")}</li>
             </ol>
           </section>
 
           <section>
-            <h4 className="font-semibold mb-2">Aktionstypen</h4>
+            <h4 className="font-semibold mb-2">{T("manual.auto.actionTypesTitle")}</h4>
             <ul className="list-disc list-inside text-sm text-muted-foreground space-y-1 ml-4">
-              <li><strong>Pulse (Taster):</strong> Sendet einen kurzen Impuls</li>
-              <li><strong>Einschalten:</strong> Schaltet den Aktor dauerhaft ein</li>
-              <li><strong>Ausschalten:</strong> Schaltet den Aktor dauerhaft aus</li>
-              <li><strong>Umschalten (Toggle):</strong> Wechselt den aktuellen Zustand</li>
+              <li>{T("manual.auto.actionPulse")}</li>
+              <li>{T("manual.auto.actionOn")}</li>
+              <li>{T("manual.auto.actionOff")}</li>
+              <li>{T("manual.auto.actionToggle")}</li>
             </ul>
           </section>
 
           <section>
-            <h4 className="font-semibold mb-2">Automation ausführen</h4>
-            <p className="text-sm text-muted-foreground">
-              Gespeicherte Automationen können jederzeit manuell über den <strong>▶-Button</strong> ausgeführt werden. 
-              Mehrere Aktionen innerhalb einer Automation werden nacheinander abgearbeitet. 
-              Die letzte Ausführungszeit wird automatisch protokolliert.
-            </p>
+            <h4 className="font-semibold mb-2">{T("manual.auto.executeTitle")}</h4>
+            <p className="text-sm text-muted-foreground">{T("manual.auto.executeText")}</p>
           </section>
 
           <section>
-            <h4 className="font-semibold mb-2">Berechtigungen</h4>
-            <p className="text-sm text-muted-foreground">
-              Unter <strong>Benutzerverwaltung → Rollen</strong> können folgende Automationsrechte 
-              vergeben werden: Anzeigen, Erstellen, Bearbeiten, Löschen und Ausführen.
-            </p>
+            <h4 className="font-semibold mb-2">{T("manual.auto.permTitle")}</h4>
+            <p className="text-sm text-muted-foreground">{T("manual.auto.permText")}</p>
           </section>
         </div>
       ),
     },
     evCharging: {
-      title: "Ladeinfrastruktur (E-Mobilität)",
+      title: T("help.evCharging"),
       icon: <Zap className="h-5 w-5" />,
       content: (
         <div className="space-y-6">
           <section>
             <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
               <Zap className="h-4 w-4 text-primary" />
-              Ladeinfrastruktur verwalten
+              {T("manual.ev.title")}
             </h3>
-            <p className="text-muted-foreground mb-4">
-              Verwalten Sie Ihre Ladepunkte, Tarife und Abrechnungen zentral. Nutzer können 
-              über die mobile Lade-App (SmartCharge) Ladevorgänge starten und ihre Historie einsehen.
-            </p>
+            <p className="text-muted-foreground mb-4">{T("manual.ev.intro")}</p>
           </section>
 
           <Separator />
 
           <section>
-            <h4 className="font-semibold mb-2">Ladepunkte anlegen</h4>
+            <h4 className="font-semibold mb-2">{T("manual.ev.createTitle")}</h4>
             <ol className="list-decimal list-inside text-sm text-muted-foreground space-y-2 ml-4">
-              <li>Navigieren Sie zu <strong>Ladeinfrastruktur → Ladepunkte</strong></li>
-              <li>Klicken Sie auf <strong>„Ladepunkt anlegen"</strong></li>
-              <li>Geben Sie Name, OCPP-ID, Standort, Leistung und Steckertyp ein</li>
-              <li>Der Ladepunkt verbindet sich automatisch per OCPP 1.6J</li>
+              <li>{T("manual.ev.createStep1")}</li>
+              <li>{T("manual.ev.createStep2")}</li>
+              <li>{T("manual.ev.createStep3")}</li>
+              <li>{T("manual.ev.createStep4")}</li>
             </ol>
           </section>
 
           <section>
-            <h4 className="font-semibold mb-2">Ladepunkt-Details</h4>
-            <p className="text-sm text-muted-foreground mb-2">
-              Auf der Detailseite eines Ladepunkts finden Sie:
-            </p>
+            <h4 className="font-semibold mb-2">{T("manual.ev.detailTitle")}</h4>
+            <p className="text-sm text-muted-foreground mb-2">{T("manual.ev.detailText")}</p>
             <ul className="list-disc list-inside text-sm text-muted-foreground space-y-1 ml-4">
-              <li><strong>Performance-Statistiken:</strong> Verfügbarkeit, Auslastung, Sessions und Energie</li>
-              <li><strong>Remote-Steuerung:</strong> Ladevorgang per Klick starten</li>
-              <li><strong>Ladehistorie:</strong> Alle vergangenen Ladevorgänge mit Dauer und Energie</li>
-              <li><strong>OCPP-Protokoll:</strong> Live-Nachrichtenlog mit Pause-Funktion und Timeout-Erkennung</li>
-              <li><strong>Foto-Management:</strong> Bild des Ladepunkts hochladen</li>
+              <li>{T("manual.ev.detailItem1")}</li>
+              <li>{T("manual.ev.detailItem2")}</li>
+              <li>{T("manual.ev.detailItem3")}</li>
+              <li>{T("manual.ev.detailItem4")}</li>
+              <li>{T("manual.ev.detailItem5")}</li>
             </ul>
           </section>
 
           <section>
-            <h4 className="font-semibold mb-2">Tarife und Abrechnung</h4>
-            <p className="text-sm text-muted-foreground mb-2">
-              Unter <strong>Ladeinfrastruktur → Abrechnung</strong> verwalten Sie:
-            </p>
+            <h4 className="font-semibold mb-2">{T("manual.ev.billingTitle")}</h4>
+            <p className="text-sm text-muted-foreground mb-2">{T("manual.ev.billingText")}</p>
             <ul className="list-disc list-inside text-sm text-muted-foreground space-y-1 ml-4">
-              <li><strong>Tarife:</strong> Grundgebühr, Preis/kWh und Blockiergebühr (Idle Fee nach Freizeitraum)</li>
-              <li><strong>Rechnungen:</strong> Automatischer monatlicher Versand gebrandeter Rechnungen</li>
-              <li><strong>Ladenutzer:</strong> Nutzergruppen, RFID-Tags und App-Zugänge</li>
+              <li>{T("manual.ev.billingItem1")}</li>
+              <li>{T("manual.ev.billingItem2")}</li>
+              <li>{T("manual.ev.billingItem3")}</li>
             </ul>
           </section>
 
           <section>
-            <h4 className="font-semibold mb-2">Mobile Lade-App (SmartCharge)</h4>
-            <p className="text-sm text-muted-foreground mb-2">
-              Die App ist unter <strong>/ev</strong> erreichbar und als PWA installierbar:
-            </p>
+            <h4 className="font-semibold mb-2">{T("manual.ev.appTitle")}</h4>
+            <p className="text-sm text-muted-foreground mb-2">{T("manual.ev.appText")}</p>
             <ul className="list-disc list-inside text-sm text-muted-foreground space-y-1 ml-4">
-              <li><strong>Karte:</strong> Fullscreen-Karte mit allen verfügbaren Ladepunkten und Statusfiltern</li>
-              <li><strong>QR-Scan:</strong> Ladepunkt per QR-Code identifizieren und Ladevorgang starten</li>
-              <li><strong>Historie:</strong> Übersicht aller Ladevorgänge mit aktiven Sessions oben</li>
-              <li><strong>Rechnungen:</strong> Einsicht in alle Abrechnungen</li>
-              <li><strong>Navigation:</strong> Direkte Routenführung zum Ladepunkt (Apple Maps / Google Maps)</li>
+              <li>{T("manual.ev.appItem1")}</li>
+              <li>{T("manual.ev.appItem2")}</li>
+              <li>{T("manual.ev.appItem3")}</li>
+              <li>{T("manual.ev.appItem4")}</li>
+              <li>{T("manual.ev.appItem5")}</li>
             </ul>
           </section>
 
           <section>
-            <h4 className="font-semibold mb-2">Status-Farbschema</h4>
+            <h4 className="font-semibold mb-2">{T("manual.ev.statusTitle")}</h4>
             <ul className="list-disc list-inside text-sm text-muted-foreground space-y-1 ml-4">
-              <li><span className="text-green-600 font-medium">Grün:</span> Verfügbar</li>
-              <li><span className="text-blue-600 font-medium">Blau:</span> Lädt</li>
-              <li><span className="text-red-600 font-medium">Rot:</span> Fehler</li>
-              <li><span className="text-yellow-600 font-medium">Gelb:</span> Nicht verfügbar</li>
-              <li><span className="text-orange-600 font-medium">Orange:</span> Offline</li>
+              <li><span className="text-green-600 font-medium">{T("manual.ev.statusAvailable")}</span></li>
+              <li><span className="text-blue-600 font-medium">{T("manual.ev.statusCharging")}</span></li>
+              <li><span className="text-red-600 font-medium">{T("manual.ev.statusError")}</span></li>
+              <li><span className="text-yellow-600 font-medium">{T("manual.ev.statusUnavailable")}</span></li>
+              <li><span className="text-orange-600 font-medium">{T("manual.ev.statusOffline")}</span></li>
             </ul>
           </section>
         </div>
       ),
     },
     integrations: {
-      title: "Integrationen & Datensynchronisation",
+      title: T("help.integrationsTitle"),
       icon: <Link className="h-5 w-5" />,
       content: (
         <div className="space-y-6">
           <section>
             <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
               <Link className="h-4 w-4 text-primary" />
-              Integrationen & Datensynchronisation
+              {T("manual.int.title")}
             </h3>
-            <p className="text-muted-foreground mb-4">
-              Verbinden Sie externe Systeme und synchronisieren Sie Zähler- und Verbrauchsdaten 
-              automatisch mit Drittplattformen wie BrightHub.
-            </p>
+            <p className="text-muted-foreground mb-4">{T("manual.int.intro")}</p>
           </section>
 
           <Separator />
 
           <section>
-            <h4 className="font-semibold mb-2">Gateway-Integrationen</h4>
-            <p className="text-sm text-muted-foreground mb-2">
-              Unter <strong>Integrationen</strong> verwalten Sie Ihre Gateways und externen Systeme:
-            </p>
+            <h4 className="font-semibold mb-2">{T("manual.int.gatewayTitle")}</h4>
+            <p className="text-sm text-muted-foreground mb-2">{T("manual.int.gatewayText")}</p>
             <ul className="list-disc list-inside text-sm text-muted-foreground space-y-1 ml-4">
-              <li><strong>Loxone Miniserver:</strong> Sensoren, Aktoren und Gebäudeautomation</li>
-              <li><strong>Shelly:</strong> Smart-Home-Schalter und Energiemessung</li>
-              <li><strong>Tuya:</strong> IoT-Geräte und Smart Plugs</li>
-              <li><strong>Siemens / ABB:</strong> Industrielle Energiezähler</li>
-              <li><strong>HomeMatic:</strong> Heizungs- und Raumsensoren</li>
-              <li><strong>TP-Link Omada:</strong> Netzwerkinfrastruktur</li>
+              <li>{T("manual.int.gatewayLoxone")}</li>
+              <li>{T("manual.int.gatewayShelly")}</li>
+              <li>{T("manual.int.gatewayTuya")}</li>
+              <li>{T("manual.int.gatewaySiemens")}</li>
+              <li>{T("manual.int.gatewayHomematic")}</li>
+              <li>{T("manual.int.gatewayOmada")}</li>
             </ul>
           </section>
 
           <section>
-            <h4 className="font-semibold mb-2">BrightHub-Synchronisation</h4>
-            <p className="text-sm text-muted-foreground mb-2">
-              BrightHub ist eine externe Energieplattform, mit der Zähler und Messwerte 
-              automatisch synchronisiert werden können.
-            </p>
+            <h4 className="font-semibold mb-2">{T("manual.int.brighthubTitle")}</h4>
+            <p className="text-sm text-muted-foreground mb-2">{T("manual.int.brighthubText")}</p>
             <ol className="list-decimal list-inside text-sm text-muted-foreground space-y-2 ml-4">
-              <li>Navigieren Sie zu <strong>Einstellungen → BrightHub</strong></li>
-              <li>Aktivieren Sie die Integration und hinterlegen Sie den API-Key</li>
-              <li>Konfigurieren Sie die Synchronisation</li>
+              <li>{T("manual.int.brighthubStep1")}</li>
+              <li>{T("manual.int.brighthubStep2")}</li>
+              <li>{T("manual.int.brighthubStep3")}</li>
             </ol>
           </section>
 
           <section>
-            <h4 className="font-semibold mb-2">Zähler-Sync (täglich)</h4>
-            <p className="text-sm text-muted-foreground mb-2">
-              Einmal täglich (02:00 UTC) werden alle Zähler automatisch synchronisiert:
-            </p>
+            <h4 className="font-semibold mb-2">{T("manual.int.meterSyncTitle")}</h4>
+            <p className="text-sm text-muted-foreground mb-2">{T("manual.int.meterSyncText")}</p>
             <ul className="list-disc list-inside text-sm text-muted-foreground space-y-1 ml-4">
-              <li>Neue Zähler werden in BrightHub angelegt</li>
-              <li>Umbenennungen werden übernommen (Matching über UUID)</li>
-              <li>Nicht mehr vorhandene Zähler werden archiviert</li>
-              <li>Manuelle Synchronisation per Button jederzeit möglich</li>
+              <li>{T("manual.int.meterSyncItem1")}</li>
+              <li>{T("manual.int.meterSyncItem2")}</li>
+              <li>{T("manual.int.meterSyncItem3")}</li>
+              <li>{T("manual.int.meterSyncItem4")}</li>
             </ul>
           </section>
 
           <section>
-            <h4 className="font-semibold mb-2">Messwerte-Sync (alle 15 Min.)</h4>
-            <p className="text-sm text-muted-foreground mb-2">
-              Neue Messwerte werden alle 15 Minuten automatisch übertragen:
-            </p>
+            <h4 className="font-semibold mb-2">{T("manual.int.readingSyncTitle")}</h4>
+            <p className="text-sm text-muted-foreground mb-2">{T("manual.int.readingSyncText")}</p>
             <ul className="list-disc list-inside text-sm text-muted-foreground space-y-1 ml-4">
-              <li>Nur seit dem letzten Sync erfasste Werte werden gesendet</li>
-              <li>Sowohl automatische (Sensor) als auch manuelle Ablesungen</li>
-              <li>Maximal 1000 Werte pro Übertragung (Batching bei mehr Daten)</li>
-              <li>Kosten- und CO₂-Daten werden mitgesendet (falls vorhanden)</li>
+              <li>{T("manual.int.readingSyncItem1")}</li>
+              <li>{T("manual.int.readingSyncItem2")}</li>
+              <li>{T("manual.int.readingSyncItem3")}</li>
+              <li>{T("manual.int.readingSyncItem4")}</li>
             </ul>
           </section>
 
           <section>
             <h4 className="font-semibold mb-2 flex items-center gap-2">
               <RefreshCw className="h-4 w-4" />
-              Sync-Status prüfen
+              {T("manual.int.syncStatusTitle")}
             </h4>
-            <p className="text-sm text-muted-foreground">
-              In den BrightHub-Einstellungen sehen Sie den Zeitpunkt der letzten Zähler- 
-              und Messwerte-Synchronisation. Über die manuellen Sync-Buttons können Sie 
-              die Synchronisation jederzeit auslösen und den Status überprüfen.
-            </p>
+            <p className="text-sm text-muted-foreground">{T("manual.int.syncStatusText")}</p>
           </section>
         </div>
       ),
     },
     arbitrageTrading: {
-      title: "Arbitragehandel",
+      title: T("help.arbitrageTitle"),
       icon: <TrendingUp className="h-5 w-5" />,
       content: (
         <div className="space-y-6">
           <section>
             <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
               <TrendingUp className="h-4 w-4 text-primary" />
-              Arbitragehandel mit Batteriespeichern
+              {T("manual.arb.title")}
             </h3>
-            <p className="text-muted-foreground mb-4">
-              Nutzen Sie Day-Ahead-Spotpreise (EPEX Spot), um Batteriespeicher wirtschaftlich zu optimieren. 
-              Laden Sie bei niedrigen Preisen und entladen Sie bei hohen Preisen.
-            </p>
+            <p className="text-muted-foreground mb-4">{T("manual.arb.intro")}</p>
           </section>
 
           <Separator />
 
           <section>
-            <h4 className="font-semibold mb-2">Dashboard</h4>
-            <p className="text-sm text-muted-foreground mb-2">
-              Das Arbitrage-Dashboard zeigt auf einen Blick:
-            </p>
+            <h4 className="font-semibold mb-2">{T("manual.arb.dashboardTitle")}</h4>
+            <p className="text-sm text-muted-foreground mb-2">{T("manual.arb.dashboardText")}</p>
             <ul className="list-disc list-inside text-sm text-muted-foreground space-y-1 ml-4">
-              <li><strong>Aktueller Spotpreis:</strong> In ct/kWh und €/MWh</li>
-              <li><strong>Registrierte Speicher:</strong> Anzahl der verwalteten Batteriespeicher</li>
-              <li><strong>Gesamterlös:</strong> Kumulierter Gewinn/Verlust aus allen Trades</li>
-              <li><strong>Gehandelte Energie:</strong> Gesamtmenge in kWh</li>
+              <li>{T("manual.arb.dashItem1")}</li>
+              <li>{T("manual.arb.dashItem2")}</li>
+              <li>{T("manual.arb.dashItem3")}</li>
+              <li>{T("manual.arb.dashItem4")}</li>
             </ul>
           </section>
 
           <section>
-            <h4 className="font-semibold mb-2">Spotpreis-Verlauf</h4>
-            <p className="text-sm text-muted-foreground mb-2">
-              Der Chart zeigt die Spotpreise ab 12 Stunden vor der aktuellen Uhrzeit:
-            </p>
+            <h4 className="font-semibold mb-2">{T("manual.arb.chartTitle")}</h4>
+            <p className="text-sm text-muted-foreground mb-2">{T("manual.arb.chartText")}</p>
             <ul className="list-disc list-inside text-sm text-muted-foreground space-y-1 ml-4">
-              <li><strong>Vergangene Stunden:</strong> Gestrichelte Linie in gedämpfter Farbe</li>
-              <li><strong>Zukünftige Stunden:</strong> Durchgezogene Linie in Primärfarbe</li>
-              <li><strong>X-Achse:</strong> Zweizeilig – Uhrzeit (oben) und lokalisierter Wochentag + Datum (unten)</li>
-              <li><strong>Tageswechsel:</strong> Vertikale Trennlinien markieren den Datumswechsel</li>
-              <li><strong>Aktualisierung:</strong> Stündlicher Datenabruf, alle 5 Minuten Refresh im Browser</li>
+              <li>{T("manual.arb.chartItem1")}</li>
+              <li>{T("manual.arb.chartItem2")}</li>
+              <li>{T("manual.arb.chartItem3")}</li>
+              <li>{T("manual.arb.chartItem4")}</li>
+              <li>{T("manual.arb.chartItem5")}</li>
             </ul>
           </section>
 
           <section>
             <h4 className="font-semibold mb-2 flex items-center gap-2">
               <Battery className="h-4 w-4" />
-              Batteriespeicher verwalten
+              {T("manual.arb.storageTitle")}
             </h4>
             <ol className="list-decimal list-inside text-sm text-muted-foreground space-y-2 ml-4">
-              <li>Navigieren Sie zu <strong>Arbitragehandel → Speicher</strong></li>
-              <li>Klicken Sie auf <strong>„Speicher anlegen"</strong></li>
-              <li>Konfigurieren Sie Kapazität (kWh), maximale Lade-/Entladeleistung (kW) und Wirkungsgrad (%)</li>
-              <li>Optional: Weisen Sie den Speicher einem Standort zu</li>
+              <li>{T("manual.arb.storageStep1")}</li>
+              <li>{T("manual.arb.storageStep2")}</li>
+              <li>{T("manual.arb.storageStep3")}</li>
+              <li>{T("manual.arb.storageStep4")}</li>
             </ol>
           </section>
 
           <section>
-            <h4 className="font-semibold mb-2">Handelsstrategien</h4>
+            <h4 className="font-semibold mb-2">{T("manual.arb.strategyTitle")}</h4>
             <ol className="list-decimal list-inside text-sm text-muted-foreground space-y-2 ml-4">
-              <li>Navigieren Sie zu <strong>Arbitragehandel → Strategien</strong></li>
-              <li>Klicken Sie auf <strong>„Strategie anlegen"</strong></li>
-              <li>Wählen Sie einen Speicher und definieren Sie die Preisschwellen:
+              <li>{T("manual.arb.strategyStep1")}</li>
+              <li>{T("manual.arb.strategyStep2")}</li>
+              <li>{T("manual.arb.strategyStep3")}
                 <ul className="list-disc list-inside ml-4 mt-1">
-                  <li><strong>Kaufen unter:</strong> Spotpreis-Schwelle für Laden (z.B. 30 €/MWh)</li>
-                  <li><strong>Verkaufen über:</strong> Spotpreis-Schwelle für Entladen (z.B. 80 €/MWh)</li>
+                  <li>{T("manual.arb.buyBelow")}</li>
+                  <li>{T("manual.arb.sellAbove")}</li>
                 </ul>
               </li>
-              <li>Aktivieren/deaktivieren Sie Strategien jederzeit per Toggle</li>
+              <li>{T("manual.arb.strategyStep4")}</li>
             </ol>
           </section>
 
           <section>
-            <h4 className="font-semibold mb-2">Handelshistorie</h4>
-            <p className="text-sm text-muted-foreground">
-              Unter <strong>Arbitragehandel → Trades</strong> sehen Sie alle ausgeführten Trades 
-              mit Zeitpunkt, Typ (Laden/Entladen), Energiemenge, Preis und Erlös. 
-              Der Gesamterlös wird als Badge oben rechts angezeigt.
-            </p>
+            <h4 className="font-semibold mb-2">{T("manual.arb.historyTitle")}</h4>
+            <p className="text-sm text-muted-foreground">{T("manual.arb.historyText")}</p>
           </section>
         </div>
       ),
@@ -859,7 +700,7 @@ const UserManualContent = ({ open, onOpenChange, chapter }: UserManualContentPro
             {currentChapter.title}
           </DialogTitle>
           <DialogDescription>
-            {t("help.userManualDescription")}
+            {T("help.userManualDescription")}
           </DialogDescription>
         </DialogHeader>
         <ScrollArea className="h-[60vh] pr-4">
