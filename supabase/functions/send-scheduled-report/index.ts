@@ -13,7 +13,7 @@ const ENERGY_ICONS: Record<string, string> = {
   strom: "⚡", gas: "🔥", waerme: "🌡️", wasser: "💧",
 };
 const FREQ_LABELS: Record<string, string> = {
-  weekly: "Wöchentlich", monthly: "Monatlich", quarterly: "Quartalsweise", yearly: "Jährlich",
+  daily: "Täglich", weekly: "Wöchentlich", monthly: "Monatlich", quarterly: "Quartalsweise", yearly: "Jährlich",
 };
 
 function getDateRange(frequency: string): { from: string; to: string } {
@@ -21,6 +21,7 @@ function getDateRange(frequency: string): { from: string; to: string } {
   const to = now.toISOString().split("T")[0];
   let from: Date;
   switch (frequency) {
+    case "daily": from = new Date(now); from.setDate(now.getDate() - 1); break;
     case "weekly": from = new Date(now); from.setDate(now.getDate() - 7); break;
     case "quarterly": from = new Date(now); from.setMonth(now.getMonth() - 3); break;
     case "yearly": from = new Date(now); from.setFullYear(now.getFullYear() - 1); break;
