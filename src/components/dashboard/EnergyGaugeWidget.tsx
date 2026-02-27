@@ -127,7 +127,7 @@ function AnalogGauge({ data }: { data: GaugeData }) {
   const vbH = size * 0.78 + pad * 2;
 
   return (
-    <div className="flex flex-col items-center flex-1 min-w-[120px] max-w-[210px]">
+    <div className="flex flex-col items-center flex-1 min-w-[140px] max-w-[240px]">
       <svg viewBox={`${vbX} ${vbY} ${vbW} ${vbH}`} className="w-full">
         <defs>
           <filter id={`glow-${data.energyType}`} x="-30%" y="-30%" width="160%" height="160%">
@@ -411,19 +411,11 @@ const EnergyGaugeWidget = ({ locationId }: EnergyGaugeWidgetProps) => {
         </div>
       </CardHeader>
       <CardContent className="pt-0 pb-3">
-        <div className="
-          rounded-[50px] border border-border/50
-          bg-gradient-to-b from-background via-muted/20 to-muted/40
-          shadow-[inset_0_1px_0_rgba(255,255,255,0.08),inset_0_-2px_6px_rgba(0,0,0,0.06),0_2px_8px_rgba(0,0,0,0.08)]
-          px-4 py-4
-        ">
-          <div className="grid grid-cols-2 xl:flex xl:items-start xl:justify-around gap-2 xl:gap-0 place-items-center">
-            {gaugeData.map((g) => (
-              <AnalogGauge key={g.energyType} data={g} />
-            ))}
-            {/* Eco gauge always last */}
-            <AnalogGauge data={ecoGauge} />
-          </div>
+        <div className="grid grid-cols-2 xl:flex xl:items-start xl:justify-around gap-4 xl:gap-0 place-items-center">
+          {gaugeData.map((g) => (
+            <AnalogGauge key={g.energyType} data={g} />
+          ))}
+          <AnalogGauge data={ecoGauge} />
         </div>
       </CardContent>
     </Card>
