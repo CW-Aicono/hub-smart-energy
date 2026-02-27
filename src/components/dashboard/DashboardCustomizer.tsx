@@ -106,14 +106,14 @@ const DashboardCustomizer = ({ widgets, onToggleVisibility, onReorder, onResizeW
             </Button>
           </PopoverTrigger>
         </TooltipTrigger>
-        <TooltipContent>Dashboard anpassen</TooltipContent>
+        <TooltipContent>{t("dashboard.customize" as any)}</TooltipContent>
       </Tooltip>
       <PopoverContent align="end" className="w-96 bg-popover border shadow-lg z-50">
         <div className="space-y-4">
           <div>
-            <h4 className="font-medium text-sm mb-1">Widgets anzeigen</h4>
+            <h4 className="font-medium text-sm mb-1">{t("dashboard.showWidgets" as any)}</h4>
             <p className="text-xs text-muted-foreground">
-              Ziehen Sie die Widgets, um die Reihenfolge zu ändern.
+              {t("dashboard.dragWidgets" as any)}
             </p>
           </div>
           <div className="space-y-2">
@@ -169,7 +169,7 @@ const DashboardCustomizer = ({ widgets, onToggleVisibility, onReorder, onResizeW
           {onResetLayout && (
             <Button variant="outline" size="sm" className="w-full" onClick={onResetLayout}>
               <RotateCcw className="h-4 w-4 mr-2" />
-              Layout zurücksetzen
+              {t("dashboard.resetLayout" as any)}
             </Button>
           )}
         </div>

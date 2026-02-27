@@ -167,7 +167,7 @@ const DashboardContent = () => {
                       <button
                         onClick={() => setExpandedWidget(widgetType)}
                         className="absolute top-3 right-3 z-10 p-1.5 rounded-md bg-background/80 border border-border shadow-sm opacity-0 group-hover:opacity-100 transition-opacity hover:bg-muted"
-                        title="Vergrößern"
+                        title={t("dashboard.enlarge" as any)}
                       >
                         <ZoomIn className="h-4 w-4 text-muted-foreground" />
                       </button>
