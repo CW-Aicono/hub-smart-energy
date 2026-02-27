@@ -239,7 +239,7 @@ export function PvForecastSection({ locationId }: PvForecastSectionProps) {
             {/* Forecast Chart */}
             {forecastLoading ? (
               <Skeleton className="h-64 w-full" />
-            ) : forecast ? (
+            ) : forecast && forecast.summary && forecast.hourly ? (
               <div className="space-y-4">
                 {/* Summary */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
