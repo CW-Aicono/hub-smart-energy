@@ -11,6 +11,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
+import { useTranslation } from "@/hooks/useTranslation";
 import { Loader2, Settings } from "lucide-react";
 import { LocationIntegration } from "@/hooks/useIntegrations";
 import { getGatewayDefinition } from "@/lib/gatewayRegistry";
@@ -30,18 +31,18 @@ export function EditIntegrationDialog({
 }: EditIntegrationDialogProps) {
   const [isSaving, setIsSaving] = useState(false);
   const { toast } = useToast();
+  const { t } = useTranslation();
 
   const integrationType = locationIntegration?.integration?.type;
   const gatewayDef = integrationType ? getGatewayDefinition(integrationType) : undefined;
   const config = locationIntegration?.config as Record<string, string> | undefined;
 
-  // Build dynamic zod schema from gateway definition
   const formSchema = useMemo(() => {
     const shape: Record<string, z.ZodTypeAny> = {};
     if (gatewayDef) {
       for (const field of gatewayDef.configFields) {
         shape[field.name] = field.required
-          ? z.string().min(1, `${field.label} ist erforderlich`)
+          ? z.string().min(1, `${field.label}`)
           : z.string().optional();
       }
     }
@@ -79,14 +80,14 @@ export function EditIntegrationDialog({
 
     if (error) {
       toast({
-        title: "Fehler",
-        description: "Die Integration konnte nicht aktualisiert werden.",
+        title: t("common.error" as any),
+        description: t("editIntegration.updatedDesc" as any),
         variant: "destructive",
       });
     } else {
       toast({
-        title: "Integration aktualisiert",
-        description: "Die Änderungen wurden erfolgreich gespeichert.",
+        title: t("editIntegration.updated" as any),
+        description: t("editIntegration.updatedDesc" as any),
       });
       onOpenChange(false);
     }
@@ -98,10 +99,10 @@ export function EditIntegrationDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Settings className="h-5 w-5" />
-            Integration bearbeiten
+            {t("editIntegration.title" as any)}
           </DialogTitle>
           <DialogDescription>
-            Ändern Sie die Zugangsdaten für {locationIntegration?.integration?.name || "diese Integration"}
+            {t("editIntegration.changeCredentials" as any)} {locationIntegration?.integration?.name || ""}
           </DialogDescription>
         </DialogHeader>
 
@@ -134,16 +135,16 @@ export function EditIntegrationDialog({
 
             <div className="flex gap-2 justify-end pt-4">
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-                Abbrechen
+                {t("common.cancel" as any)}
               </Button>
               <Button type="submit" disabled={isSaving}>
                 {isSaving ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Speichern...
+                    {t("common.saving" as any)}
                   </>
                 ) : (
-                  "Speichern"
+                  t("common.save" as any)
                 )}
               </Button>
             </div>
