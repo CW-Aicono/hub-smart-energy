@@ -23,14 +23,12 @@ export interface NormalizedConsumption {
 
 interface UseWeatherNormalizationOptions {
   locationId: string | null;
-  energyType?: string; // "gas" | "waerme" | "strom"
+  energyType?: string;
   referenceTemperature?: number;
   year?: number;
 }
 
-// DWD long-term average HDD for Germany (base 15°C), roughly 3200 HDD/year
 const DEFAULT_REFERENCE_HDD_YEAR = 3200;
-
 const MONTH_LABELS = ["Jan", "Feb", "Mär", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dez"];
 
 export function useWeatherNormalization({
@@ -48,32 +46,67 @@ export function useWeatherNormalization({
   const selectedYear = year || new Date().getFullYear();
 
   const fetchData = useCallback(async () => {
-    if (!locationId || !user || !tenant) return;
+    if (!user || !tenant) return;
 
     setLoading(true);
     setError(null);
 
     try {
-      // 1. Get location coordinates
-      const { data: location } = await supabase
-        .from("locations")
-        .select("latitude, longitude")
-        .eq("id", locationId)
-        .single();
+      const startDate = `${selectedYear}-01-01`;
+      const endDate = `${selectedYear}-12-31`;
 
-      if (!location?.latitude || !location?.longitude) {
-        setError("Standort hat keine Koordinaten hinterlegt");
+      // Determine which locations to use
+      let locations: { id: string; latitude: number; longitude: number }[] = [];
+
+      if (locationId) {
+        const { data: loc } = await supabase
+          .from("locations")
+          .select("id, latitude, longitude")
+          .eq("id", locationId)
+          .single();
+        if (loc?.latitude && loc?.longitude) {
+          locations = [{ id: loc.id, latitude: loc.latitude, longitude: loc.longitude }];
+        }
+      } else {
+        // All locations for this tenant with coordinates
+        const { data: locs } = await supabase
+          .from("locations")
+          .select("id, latitude, longitude")
+          .eq("tenant_id", tenant.id)
+          .eq("is_archived", false)
+          .not("latitude", "is", null)
+          .not("longitude", "is", null);
+        locations = (locs || []).filter((l) => l.latitude && l.longitude) as any[];
+      }
+
+      if (locations.length === 0) {
+        setError("Keine Standorte mit Koordinaten vorhanden");
         setLoading(false);
         return;
       }
 
-      // 2. Get consumption data from meter_period_totals
-      const startDate = `${selectedYear}-01-01`;
-      const endDate = `${selectedYear}-12-31`;
+      // Get all main meters for these locations & energy type
+      const locationIds = locations.map((l) => l.id);
+      const { data: meters } = await supabase
+        .from("meters")
+        .select("id, location_id")
+        .in("location_id", locationIds)
+        .eq("energy_type", energyType)
+        .eq("is_main_meter", true)
+        .eq("is_archived", false);
 
-      const { data: consumption } = await supabase
+      const meterIds = new Set((meters || []).map((m) => m.id));
+
+      if (meterIds.size === 0) {
+        setData([]);
+        setLoading(false);
+        return;
+      }
+
+      // Get monthly consumption from meter_period_totals
+      const { data: monthlyConsumptionRows } = await supabase
         .from("meter_period_totals")
-        .select("period_start, total_value, meter_id, energy_type")
+        .select("period_start, total_value, meter_id")
         .eq("tenant_id", tenant.id)
         .eq("period_type", "month")
         .eq("energy_type", energyType)
@@ -81,32 +114,78 @@ export function useWeatherNormalization({
         .lte("period_start", endDate)
         .order("period_start", { ascending: true });
 
-      // Filter to meters belonging to this location
-      const { data: meters } = await supabase
-        .from("meters")
-        .select("id")
-        .eq("location_id", locationId)
-        .eq("energy_type", energyType)
-        .eq("is_main_meter", true);
-
-      const meterIds = new Set((meters || []).map((m) => m.id));
-
-      // Aggregate consumption by month (sum across all main meters of this type)
       const monthlyConsumption: Record<string, number> = {};
-      for (const row of consumption || []) {
+      for (const row of monthlyConsumptionRows || []) {
         if (!meterIds.has(row.meter_id)) continue;
         const monthKey = row.period_start.substring(0, 7) + "-01";
         monthlyConsumption[monthKey] = (monthlyConsumption[monthKey] || 0) + row.total_value;
       }
 
-      // 3. Fetch degree days via edge function
+      // For the current month (and any month without monthly total), sum daily values
+      const now = new Date();
+      const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+      
+      // Find months in the selected year that have no monthly total yet
+      const monthsToFillFromDaily: string[] = [];
+      for (let m = 0; m < 12; m++) {
+        const mk = `${selectedYear}-${String(m + 1).padStart(2, "0")}-01`;
+        const monthDate = new Date(selectedYear, m, 1);
+        if (monthDate > now) break; // future month
+        if (!monthlyConsumption[mk] || mk === currentMonthKey) {
+          monthsToFillFromDaily.push(mk);
+        }
+      }
+
+      if (monthsToFillFromDaily.length > 0) {
+        const dailyStart = monthsToFillFromDaily[0];
+        const lastMonth = monthsToFillFromDaily[monthsToFillFromDaily.length - 1];
+        const lastMonthDate = new Date(lastMonth);
+        lastMonthDate.setMonth(lastMonthDate.getMonth() + 1);
+        lastMonthDate.setDate(lastMonthDate.getDate() - 1);
+        const dailyEnd = lastMonthDate.toISOString().substring(0, 10);
+
+        const { data: dailyRows } = await supabase
+          .from("meter_period_totals")
+          .select("period_start, total_value, meter_id")
+          .eq("tenant_id", tenant.id)
+          .eq("period_type", "day")
+          .eq("energy_type", energyType)
+          .gte("period_start", dailyStart)
+          .lte("period_start", dailyEnd)
+          .order("period_start", { ascending: true });
+
+        for (const row of dailyRows || []) {
+          if (!meterIds.has(row.meter_id)) continue;
+          const mk = row.period_start.substring(0, 7) + "-01";
+          if (monthsToFillFromDaily.includes(mk)) {
+            // Only use daily sum if we don't already have a monthly total (except current month)
+            if (!monthlyConsumption[mk] || mk === currentMonthKey) {
+              if (mk === currentMonthKey) {
+                // For current month, always rebuild from daily
+                if (!monthlyConsumption[`_daily_${mk}`]) {
+                  monthlyConsumption[mk] = 0;
+                  monthlyConsumption[`_daily_${mk}`] = 1 as any; // marker
+                }
+              }
+              monthlyConsumption[mk] = (monthlyConsumption[mk] || 0) + row.total_value;
+            }
+          }
+        }
+        // Clean up markers
+        for (const key of Object.keys(monthlyConsumption)) {
+          if (key.startsWith("_daily_")) delete monthlyConsumption[key];
+        }
+      }
+
+      // Fetch degree days using the first location with coordinates as reference
+      const refLocation = locations[0];
       const functionsUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/weather-degree-days`;
       const params = new URLSearchParams({
-        latitude: String(location.latitude),
-        longitude: String(location.longitude),
+        latitude: String(refLocation.latitude),
+        longitude: String(refLocation.longitude),
         start_date: startDate,
         end_date: endDate,
-        location_id: locationId,
+        location_id: refLocation.id,
         tenant_id: tenant.id,
         reference_temperature: String(referenceTemperature),
       });
@@ -127,25 +206,20 @@ export function useWeatherNormalization({
 
       const degreeDays: DegreeDayData[] = await res.json();
 
-      // 4. Calculate reference HDD (average per month from available data, or DWD default)
-      const totalHDD = degreeDays.reduce((s, d) => s + d.heating_degree_days, 0);
-      const monthsWithHDD = degreeDays.filter((d) => d.heating_degree_days > 0).length;
-      const referenceHDDPerMonth = monthsWithHDD > 0
-        ? DEFAULT_REFERENCE_HDD_YEAR / 12
-        : 0;
+      // Calculate reference HDD
+      const referenceHDDPerMonth = DEFAULT_REFERENCE_HDD_YEAR / 12;
 
-      // 5. Build normalized data
+      // Build normalized data
       const result: NormalizedConsumption[] = degreeDays.map((dd) => {
         const actual = monthlyConsumption[dd.month] || 0;
         const hdd = dd.heating_degree_days;
         const monthIndex = new Date(dd.month).getMonth();
 
-        // Normalized = (actual / actual_HDD) * reference_HDD
         let normalized = 0;
         if (hdd > 0) {
           normalized = Math.round(((actual / hdd) * referenceHDDPerMonth) * 100) / 100;
         } else {
-          normalized = actual; // Summer months with no HDD: no normalization needed
+          normalized = actual;
         }
 
         const deviation = actual > 0
