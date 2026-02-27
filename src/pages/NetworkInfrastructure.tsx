@@ -23,9 +23,7 @@ const NetworkInfrastructure = () => {
         <main className="flex-1 p-3 md:p-6">
           <Skeleton className="h-8 w-64 mb-6" />
           <div className="grid gap-4 md:grid-cols-4">
-            {[1, 2, 3, 4].map((i) => (
-              <Skeleton key={i} className="h-24" />
-            ))}
+            {[1, 2, 3, 4].map((i) => (<Skeleton key={i} className="h-24" />))}
           </div>
         </main>
       </div>
@@ -49,39 +47,28 @@ const NetworkInfrastructure = () => {
       <DashboardSidebar />
       <main className="flex-1 p-3 md:p-6 overflow-auto">
         <div className="max-w-7xl mx-auto space-y-6">
-          {/* Header */}
           <div>
             <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
               <Network className="h-6 w-6" />
-              {t("nav.networkInfrastructure" as any)}
+              {t("network.title" as any)}
             </h1>
-            <p className="text-muted-foreground mt-1">
-              Überwachung und Verwaltung der Netzwerkinfrastruktur Ihrer Gebäude
-            </p>
+            <p className="text-muted-foreground mt-1">{t("network.subtitle" as any)}</p>
           </div>
 
-          {/* Stats Overview */}
           <div className="grid gap-4 md:grid-cols-4">
-            <StatCard icon={<Router className="h-5 w-5 text-primary" />} label="Gateways" value={String(gwCount)} />
-            <StatCard icon={<Wifi className="h-5 w-5 text-primary" />} label="Access Points" value={String(apCount)} />
-            <StatCard icon={<Cable className="h-5 w-5 text-primary" />} label="Switches" value={String(swCount)} />
-            <StatCard icon={<Activity className="h-5 w-5 text-primary" />} label="PoE-Verbrauch" value={`${totalPoe.toFixed(1)} W`} sub={`${totalClients} Clients`} />
+            <StatCard icon={<Router className="h-5 w-5 text-primary" />} label={t("network.gateways" as any)} value={String(gwCount)} />
+            <StatCard icon={<Wifi className="h-5 w-5 text-primary" />} label={t("network.accessPoints" as any)} value={String(apCount)} />
+            <StatCard icon={<Cable className="h-5 w-5 text-primary" />} label={t("network.switches" as any)} value={String(swCount)} />
+            <StatCard icon={<Activity className="h-5 w-5 text-primary" />} label={t("network.poeConsumption" as any)} value={`${totalPoe.toFixed(1)} W`} sub={`${totalClients} ${t("network.clients" as any)}`} />
           </div>
 
-          {/* Tabs */}
           <Tabs defaultValue="overview">
             <TabsList>
-              <TabsTrigger value="overview">Übersicht</TabsTrigger>
-              <TabsTrigger value="devices">Geräte</TabsTrigger>
+              <TabsTrigger value="overview">{t("network.tabOverview" as any)}</TabsTrigger>
+              <TabsTrigger value="devices">{t("network.tabDevices" as any)}</TabsTrigger>
             </TabsList>
-
-            <TabsContent value="overview" className="mt-4">
-              <NetworkOverview devices={devices} />
-            </TabsContent>
-
-            <TabsContent value="devices" className="mt-4">
-              <NetworkDevicesTable devices={devices} onUpdateDevice={handleUpdateDevice} />
-            </TabsContent>
+            <TabsContent value="overview" className="mt-4"><NetworkOverview devices={devices} /></TabsContent>
+            <TabsContent value="devices" className="mt-4"><NetworkDevicesTable devices={devices} onUpdateDevice={handleUpdateDevice} /></TabsContent>
           </Tabs>
         </div>
       </main>
