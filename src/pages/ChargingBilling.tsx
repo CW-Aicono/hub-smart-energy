@@ -100,20 +100,28 @@ const ChargingBilling = () => {
     setEditTariff(t);
   };
 
+  const periodKeys = [
+    { key: "day" as const, labelKey: "charging.periodDay" },
+    { key: "week" as const, labelKey: "charging.periodWeek" },
+    { key: "month" as const, labelKey: "charging.periodMonth" },
+    { key: "quarter" as const, labelKey: "charging.periodQuarter" },
+    { key: "year" as const, labelKey: "charging.periodYear" },
+  ];
+
   const tariffFormFields = (
     <div className="space-y-4">
-      <div><Label>Name</Label><Input value={tariffForm.name} onChange={(e) => setTariffForm({ ...tariffForm, name: e.target.value })} /></div>
+      <div><Label>{t("charging.name" as any)}</Label><Input value={tariffForm.name} onChange={(e) => setTariffForm({ ...tariffForm, name: e.target.value })} /></div>
       <div className="grid grid-cols-2 gap-4">
-        <div><Label>Preis pro kWh (€)</Label><Input type="number" step="0.01" value={tariffForm.price_per_kwh} onChange={(e) => setTariffForm({ ...tariffForm, price_per_kwh: e.target.value })} /></div>
-        <div><Label>Grundgebühr (€)</Label><Input type="number" step="0.01" value={tariffForm.base_fee} onChange={(e) => setTariffForm({ ...tariffForm, base_fee: e.target.value })} /></div>
+        <div><Label>{t("charging.pricePerKwh" as any)}</Label><Input type="number" step="0.01" value={tariffForm.price_per_kwh} onChange={(e) => setTariffForm({ ...tariffForm, price_per_kwh: e.target.value })} /></div>
+        <div><Label>{t("charging.baseFee" as any)}</Label><Input type="number" step="0.01" value={tariffForm.base_fee} onChange={(e) => setTariffForm({ ...tariffForm, base_fee: e.target.value })} /></div>
       </div>
       <div className="border-t pt-4">
-        <Label className="text-sm font-medium flex items-center gap-2 mb-3"><Clock className="h-4 w-4" />Blockiergebühr</Label>
+        <Label className="text-sm font-medium flex items-center gap-2 mb-3"><Clock className="h-4 w-4" />{t("charging.idleFee" as any)}</Label>
         <div className="grid grid-cols-2 gap-4">
-          <div><Label>Gebühr pro Minute (€)</Label><Input type="number" step="0.01" min="0" value={tariffForm.idle_fee_per_minute} onChange={(e) => setTariffForm({ ...tariffForm, idle_fee_per_minute: e.target.value })} /></div>
-          <div><Label>Freibetrag (Min.)</Label><Input type="number" step="1" min="0" value={tariffForm.idle_fee_grace_minutes} onChange={(e) => setTariffForm({ ...tariffForm, idle_fee_grace_minutes: e.target.value })} /></div>
+          <div><Label>{t("charging.idleFeePerMin" as any)}</Label><Input type="number" step="0.01" min="0" value={tariffForm.idle_fee_per_minute} onChange={(e) => setTariffForm({ ...tariffForm, idle_fee_per_minute: e.target.value })} /></div>
+          <div><Label>{t("charging.idleFeeGrace" as any)}</Label><Input type="number" step="1" min="0" value={tariffForm.idle_fee_grace_minutes} onChange={(e) => setTariffForm({ ...tariffForm, idle_fee_grace_minutes: e.target.value })} /></div>
         </div>
-        <p className="text-xs text-muted-foreground mt-2">Nach Ablauf der Freibetragszeit wird pro Minute die Blockiergebühr berechnet.</p>
+        <p className="text-xs text-muted-foreground mt-2">{t("charging.idleFeeDesc" as any)}</p>
       </div>
     </div>
   );
@@ -133,13 +141,7 @@ const ChargingBilling = () => {
             <div className="flex items-center gap-2">
               <Calendar className="h-4 w-4 text-muted-foreground" />
               <div className="flex gap-1 bg-muted rounded-lg p-1">
-                {([
-                  { key: "day", label: "Tag" },
-                  { key: "week", label: "Woche" },
-                  { key: "month", label: "Monat" },
-                  { key: "quarter", label: "Quartal" },
-                  { key: "year", label: "Jahr" },
-                ] as const).map(({ key, label }) => (
+                {periodKeys.map(({ key, labelKey }) => (
                   <Button
                     key={key}
                     variant={period === key ? "default" : "ghost"}
@@ -147,43 +149,43 @@ const ChargingBilling = () => {
                     className="h-7 text-xs px-3"
                     onClick={() => setPeriod(key)}
                   >
-                    {label}
+                    {t(labelKey as any)}
                   </Button>
                 ))}
               </div>
             </div>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <Card><CardContent className="p-4 flex items-center gap-3"><Zap className="h-5 w-5 text-muted-foreground" /><div><p className="text-2xl font-bold">{fmtKwh(totalEnergy, 1)}</p><p className="text-sm text-muted-foreground">gesamt</p></div></CardContent></Card>
-              <Card><CardContent className="p-4 flex items-center gap-3"><Receipt className="h-5 w-5 text-muted-foreground" /><div><p className="text-2xl font-bold">{fmtNum(completedSessions.length, 0)}</p><p className="text-sm text-muted-foreground">Ladevorgänge</p></div></CardContent></Card>
-              <Card><CardContent className="p-4 flex items-center gap-3"><TrendingUp className="h-5 w-5 text-muted-foreground" /><div><p className="text-2xl font-bold">{activeTariff ? fmtCurrency(totalEnergy * activeTariff.price_per_kwh + (completedSessions.length > 0 ? activeTariff.base_fee : 0)) : "—"}</p><p className="text-sm text-muted-foreground">Gesamtumsatz</p></div></CardContent></Card>
-              <Card><CardContent className="p-4 flex items-center gap-3"><Percent className="h-5 w-5 text-muted-foreground" /><div><p className="text-2xl font-bold">{chargePoints.length > 0 ? fmtNum((filteredSessions.filter(s => s.status === "active").length / chargePoints.length) * 100, 1) + " %" : "— %"}</p><p className="text-sm text-muted-foreground">Durchsch. Auslastung</p></div></CardContent></Card>
+              <Card><CardContent className="p-4 flex items-center gap-3"><Zap className="h-5 w-5 text-muted-foreground" /><div><p className="text-2xl font-bold">{fmtKwh(totalEnergy, 1)}</p><p className="text-sm text-muted-foreground">{t("charging.total" as any)}</p></div></CardContent></Card>
+              <Card><CardContent className="p-4 flex items-center gap-3"><Receipt className="h-5 w-5 text-muted-foreground" /><div><p className="text-2xl font-bold">{fmtNum(completedSessions.length, 0)}</p><p className="text-sm text-muted-foreground">{t("charging.sessions" as any)}</p></div></CardContent></Card>
+              <Card><CardContent className="p-4 flex items-center gap-3"><TrendingUp className="h-5 w-5 text-muted-foreground" /><div><p className="text-2xl font-bold">{activeTariff ? fmtCurrency(totalEnergy * activeTariff.price_per_kwh + (completedSessions.length > 0 ? activeTariff.base_fee : 0)) : "—"}</p><p className="text-sm text-muted-foreground">{t("charging.totalRevenue" as any)}</p></div></CardContent></Card>
+              <Card><CardContent className="p-4 flex items-center gap-3"><Percent className="h-5 w-5 text-muted-foreground" /><div><p className="text-2xl font-bold">{chargePoints.length > 0 ? fmtNum((filteredSessions.filter(s => s.status === "active").length / chargePoints.length) * 100, 1) + " %" : "— %"}</p><p className="text-sm text-muted-foreground">{t("charging.avgUtilization" as any)}</p></div></CardContent></Card>
             </div>
           </div>
 
           <Tabs defaultValue="sessions">
             <TabsList>
-              <TabsTrigger value="sessions">Ladevorgänge</TabsTrigger>
-              <TabsTrigger value="tariffs">Tarife</TabsTrigger>
-              <TabsTrigger value="invoices">Rechnungen</TabsTrigger>
-              <TabsTrigger value="users">Nutzer</TabsTrigger>
-              <TabsTrigger value="roaming">Roaming</TabsTrigger>
+              <TabsTrigger value="sessions">{t("charging.tabSessions" as any)}</TabsTrigger>
+              <TabsTrigger value="tariffs">{t("charging.tabTariffs" as any)}</TabsTrigger>
+              <TabsTrigger value="invoices">{t("charging.tabInvoices" as any)}</TabsTrigger>
+              <TabsTrigger value="users">{t("charging.tabUsers" as any)}</TabsTrigger>
+              <TabsTrigger value="roaming">{t("charging.tabRoaming" as any)}</TabsTrigger>
             </TabsList>
 
             {/* Sessions Tab */}
             <TabsContent value="sessions">
               <Card>
-                <CardHeader><CardTitle>Ladevorgänge</CardTitle></CardHeader>
+                <CardHeader><CardTitle>{t("charging.sessions" as any)}</CardTitle></CardHeader>
                 <CardContent>
-                  {sessionsLoading ? <p className="text-muted-foreground">Laden...</p> : sessions.length === 0 ? <p className="text-muted-foreground">Keine Ladevorgänge vorhanden.</p> : (
+                  {sessionsLoading ? <p className="text-muted-foreground">{t("charging.loading" as any)}</p> : sessions.length === 0 ? <p className="text-muted-foreground">{t("charging.noSessions" as any)}</p> : (
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          <TableHead>Ladepunkt</TableHead>
-                          <TableHead>Start</TableHead>
-                          <TableHead>Ende</TableHead>
-                          <TableHead>Energie</TableHead>
-                          <TableHead>Status</TableHead>
-                          <TableHead>ID-Tag</TableHead>
+                          <TableHead>{t("charging.chargePoint" as any)}</TableHead>
+                          <TableHead>{t("charging.start" as any)}</TableHead>
+                          <TableHead>{t("charging.end" as any)}</TableHead>
+                          <TableHead>{t("charging.energy" as any)}</TableHead>
+                          <TableHead>{t("common.status" as any)}</TableHead>
+                          <TableHead>{t("charging.idTag" as any)}</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -193,7 +195,7 @@ const ChargingBilling = () => {
                             <TableCell>{format(new Date(s.start_time), "dd.MM.yyyy HH:mm")}</TableCell>
                             <TableCell>{s.stop_time ? format(new Date(s.stop_time), "dd.MM.yyyy HH:mm") : "—"}</TableCell>
                             <TableCell>{fmtKwh(s.energy_kwh)}</TableCell>
-                            <TableCell><Badge variant={s.status === "active" ? "default" : s.status === "completed" ? "secondary" : "destructive"}>{s.status === "active" ? "Aktiv" : s.status === "completed" ? "Abgeschlossen" : "Fehler"}</Badge></TableCell>
+                            <TableCell><Badge variant={s.status === "active" ? "default" : s.status === "completed" ? "secondary" : "destructive"}>{s.status === "active" ? t("charging.statusActive" as any) : s.status === "completed" ? t("charging.statusCompleted" as any) : t("charging.statusError" as any)}</Badge></TableCell>
                             <TableCell className="font-mono text-sm">{s.id_tag || "—"}</TableCell>
                           </TableRow>
                         ))}
@@ -208,29 +210,29 @@ const ChargingBilling = () => {
             <TabsContent value="tariffs">
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between">
-                  <CardTitle>Tarife</CardTitle>
+                  <CardTitle>{t("charging.tariffs" as any)}</CardTitle>
                   {isAdmin && (
                     <Dialog open={tariffOpen} onOpenChange={setTariffOpen}>
-                      <DialogTrigger asChild><Button size="sm" onClick={resetTariffForm}><Plus className="h-4 w-4 mr-2" />Tarif hinzufügen</Button></DialogTrigger>
+                      <DialogTrigger asChild><Button size="sm" onClick={resetTariffForm}><Plus className="h-4 w-4 mr-2" />{t("charging.addTariff" as any)}</Button></DialogTrigger>
                       <DialogContent>
-                        <DialogHeader><DialogTitle>Neuer Tarif</DialogTitle></DialogHeader>
+                        <DialogHeader><DialogTitle>{t("charging.newTariff" as any)}</DialogTitle></DialogHeader>
                         {tariffFormFields}
-                        <Button onClick={handleAddTariff} disabled={!tariffForm.name}>Erstellen</Button>
+                        <Button onClick={handleAddTariff} disabled={!tariffForm.name}>{t("common.create" as any)}</Button>
                       </DialogContent>
                     </Dialog>
                   )}
                 </CardHeader>
                 <CardContent>
-                  {tariffsLoading ? <p className="text-muted-foreground">Laden...</p> : tariffs.length === 0 ? <p className="text-muted-foreground">Keine Tarife vorhanden.</p> : (
+                  {tariffsLoading ? <p className="text-muted-foreground">{t("charging.loading" as any)}</p> : tariffs.length === 0 ? <p className="text-muted-foreground">{t("charging.noTariffs" as any)}</p> : (
                     <Table>
                       <TableHeader>
                         <TableRow>
-                           <TableHead>Name</TableHead>
-                          <TableHead>Preis/kWh</TableHead>
-                          <TableHead>Grundgebühr</TableHead>
-                          <TableHead>Blockiergebühr</TableHead>
-                          <TableHead>Aktiv</TableHead>
-                          {isAdmin && <TableHead className="w-24">Aktionen</TableHead>}
+                           <TableHead>{t("charging.name" as any)}</TableHead>
+                          <TableHead>{t("charging.priceKwh" as any)}</TableHead>
+                          <TableHead>{t("charging.baseFee" as any)}</TableHead>
+                          <TableHead>{t("charging.idleFee" as any)}</TableHead>
+                          <TableHead>{t("charging.active" as any)}</TableHead>
+                          {isAdmin && <TableHead className="w-24">{t("charging.actions" as any)}</TableHead>}
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -265,9 +267,9 @@ const ChargingBilling = () => {
 
               <Dialog open={!!editTariff} onOpenChange={(open) => { if (!open) setEditTariff(null); }}>
                 <DialogContent>
-                  <DialogHeader><DialogTitle>Tarif bearbeiten</DialogTitle></DialogHeader>
+                  <DialogHeader><DialogTitle>{t("charging.editTariff" as any)}</DialogTitle></DialogHeader>
                   {tariffFormFields}
-                  <Button onClick={handleEditTariff} disabled={!tariffForm.name}>Speichern</Button>
+                  <Button onClick={handleEditTariff} disabled={!tariffForm.name}>{t("common.save" as any)}</Button>
                 </DialogContent>
               </Dialog>
             </TabsContent>
@@ -275,19 +277,19 @@ const ChargingBilling = () => {
             {/* Invoices Tab */}
             <TabsContent value="invoices">
               <Card>
-                <CardHeader><CardTitle>Rechnungen</CardTitle></CardHeader>
+                <CardHeader><CardTitle>{t("charging.invoices" as any)}</CardTitle></CardHeader>
                 <CardContent>
-                  {invoices.length === 0 ? <p className="text-muted-foreground">Keine Rechnungen vorhanden.</p> : (
+                  {invoices.length === 0 ? <p className="text-muted-foreground">{t("charging.noInvoices" as any)}</p> : (
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          <TableHead>Rechnungsnr.</TableHead>
-                          <TableHead>Energie</TableHead>
-                          <TableHead>Ladekosten</TableHead>
-                          <TableHead>Blockiergebühr</TableHead>
-                          <TableHead>Gesamt</TableHead>
-                          <TableHead>Status</TableHead>
-                          <TableHead>Erstellt</TableHead>
+                          <TableHead>{t("charging.invoiceNo" as any)}</TableHead>
+                          <TableHead>{t("charging.energyCol" as any)}</TableHead>
+                          <TableHead>{t("charging.chargingCosts" as any)}</TableHead>
+                          <TableHead>{t("charging.idleFee" as any)}</TableHead>
+                          <TableHead>{t("charging.totalAmount" as any)}</TableHead>
+                          <TableHead>{t("common.status" as any)}</TableHead>
+                          <TableHead>{t("charging.created" as any)}</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -298,7 +300,7 @@ const ChargingBilling = () => {
                             <TableCell>{fmtCurrency(inv.total_amount - (inv.idle_fee_amount || 0))}</TableCell>
                             <TableCell>{inv.idle_fee_amount > 0 ? fmtCurrency(inv.idle_fee_amount) : <span className="text-muted-foreground">—</span>}</TableCell>
                             <TableCell className="font-medium">{fmtCurrency(inv.total_amount)}</TableCell>
-                            <TableCell><Badge variant={inv.status === "paid" ? "default" : inv.status === "issued" ? "secondary" : "outline"}>{inv.status === "paid" ? "Bezahlt" : inv.status === "issued" ? "Ausgestellt" : "Entwurf"}</Badge></TableCell>
+                            <TableCell><Badge variant={inv.status === "paid" ? "default" : inv.status === "issued" ? "secondary" : "outline"}>{inv.status === "paid" ? t("charging.statusPaid" as any) : inv.status === "issued" ? t("charging.statusIssued" as any) : t("charging.statusDraft" as any)}</Badge></TableCell>
                             <TableCell>{format(new Date(inv.created_at), "dd.MM.yyyy")}</TableCell>
                           </TableRow>
                         ))}
@@ -317,9 +319,9 @@ const ChargingBilling = () => {
             {/* Roaming Tab */}
             <TabsContent value="roaming">
               <Card>
-                <CardHeader><CardTitle className="flex items-center gap-2"><Globe className="h-5 w-5" />Roaming</CardTitle></CardHeader>
+                <CardHeader><CardTitle className="flex items-center gap-2"><Globe className="h-5 w-5" />{t("charging.roaming" as any)}</CardTitle></CardHeader>
                 <CardContent>
-                  <p className="text-muted-foreground">Roaming-Verbindungen zu externen Netzwerken (z.&nbsp;B. Hubject, OCPI) werden in einem zukünftigen Update verfügbar sein.</p>
+                  <p className="text-muted-foreground">{t("charging.roamingDesc" as any)}</p>
                 </CardContent>
               </Card>
             </TabsContent>

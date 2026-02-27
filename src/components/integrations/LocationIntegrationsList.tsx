@@ -1,5 +1,6 @@
 import { useLocationIntegrations } from "@/hooks/useIntegrations";
 import { useUserRole } from "@/hooks/useUserRole";
+import { useTranslation } from "@/hooks/useTranslation";
 import { IntegrationCard } from "./IntegrationCard";
 import { AddIntegrationDialog } from "./AddIntegrationDialog";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,6 +14,7 @@ interface LocationIntegrationsListProps {
 export function LocationIntegrationsList({ locationId }: LocationIntegrationsListProps) {
   const { locationIntegrations, loading, refetch, updateIntegration, removeIntegration } = useLocationIntegrations(locationId);
   const { isAdmin } = useUserRole();
+  const { t } = useTranslation();
 
   if (loading) {
     return (
@@ -34,10 +36,10 @@ export function LocationIntegrationsList({ locationId }: LocationIntegrationsLis
         <div>
           <CardTitle className="flex items-center gap-2">
             <Plug className="h-5 w-5" />
-            Integrationen
+            {t("locationIntegrations.title" as any)}
           </CardTitle>
           <CardDescription>
-            Verbinden Sie diesen Standort mit Gebäudeautomationssystemen
+            {t("locationIntegrations.subtitle" as any)}
           </CardDescription>
         </div>
         {isAdmin && <AddIntegrationDialog locationId={locationId} onSuccess={refetch} />}
@@ -48,9 +50,9 @@ export function LocationIntegrationsList({ locationId }: LocationIntegrationsLis
             <div className="rounded-full bg-muted p-3 mb-4">
               <Plug className="h-6 w-6 text-muted-foreground" />
             </div>
-            <p className="text-muted-foreground font-medium">Keine Integrationen vorhanden</p>
+            <p className="text-muted-foreground font-medium">{t("locationIntegrations.none" as any)}</p>
             <p className="text-sm text-muted-foreground mt-1">
-              Fügen Sie Integrationen hinzu, um Daten aus Gebäudeautomationssystemen zu empfangen
+              {t("locationIntegrations.addHint" as any)}
             </p>
           </div>
         ) : (
