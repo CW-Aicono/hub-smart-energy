@@ -3250,6 +3250,30 @@ export const translations = {
   // Support Session Banner
   "support_banner.active": { de: "Supportsitzung aktiv!", en: "Support session active!", es: "¡Sesión de soporte activa!", nl: "Ondersteuningssessie actief!" },
   "support_banner.extend": { de: "Verlängern", en: "Extend", es: "Extender", nl: "Verlengen" },
+
+  // Backup
+  "backup.title": { de: "Datensicherung", en: "Data Backup", es: "Copia de seguridad", nl: "Back-up" },
+  "backup.subtitle": { de: "Mandantendaten sichern und wiederherstellen", en: "Back up and restore tenant data", es: "Realizar copias de seguridad y restaurar datos", nl: "Back-up en herstel van gegevens" },
+  "backup.manualBackup": { de: "Manuelle Sicherung", en: "Manual Backup", es: "Copia manual", nl: "Handmatige back-up" },
+  "backup.manualDescription": { de: "Erstellen Sie eine Sicherung aller Mandantendaten als Snapshot oder laden Sie sie als JSON-Datei herunter.", en: "Create a backup of all tenant data as a snapshot or download as JSON file.", es: "Cree una copia de seguridad de todos los datos como snapshot o descárguelos como archivo JSON.", nl: "Maak een back-up van alle gegevens als snapshot of download als JSON-bestand." },
+  "backup.createSnapshot": { de: "Snapshot erstellen", en: "Create Snapshot", es: "Crear snapshot", nl: "Snapshot maken" },
+  "backup.downloadJson": { de: "Als JSON herunterladen", en: "Download as JSON", es: "Descargar como JSON", nl: "Downloaden als JSON" },
+  "backup.retentionTitle": { de: "Aufbewahrung", en: "Retention", es: "Retención", nl: "Bewaring" },
+  "backup.retentionDescription": { de: "Snapshots werden automatisch nach 30 Tagen gelöscht. Hochfrequente Messdaten (Sekunden-Auflösung) sind nicht im Backup enthalten.", en: "Snapshots are automatically deleted after 30 days. High-frequency measurement data (second resolution) is not included.", es: "Los snapshots se eliminan automáticamente después de 30 días. Los datos de alta frecuencia no están incluidos.", nl: "Snapshots worden automatisch na 30 dagen verwijderd. Hoogfrequente meetgegevens zijn niet inbegrepen." },
+  "backup.existingSnapshots": { de: "Vorhandene Sicherungen", en: "Existing Backups", es: "Copias existentes", nl: "Bestaande back-ups" },
+  "backup.existingDescription": { de: "Alle gespeicherten Snapshots Ihres Mandanten.", en: "All stored snapshots of your tenant.", es: "Todos los snapshots almacenados de su inquilino.", nl: "Alle opgeslagen snapshots van uw organisatie." },
+  "backup.noSnapshots": { de: "Noch keine Sicherungen vorhanden.", en: "No backups yet.", es: "Aún no hay copias de seguridad.", nl: "Nog geen back-ups." },
+  "backup.tables": { de: "Tabellen", en: "tables", es: "tablas", nl: "tabellen" },
+  "backup.rows": { de: "Zeilen", en: "rows", es: "filas", nl: "rijen" },
+  "backup.manual": { de: "Manuell", en: "Manual", es: "Manual", nl: "Handmatig" },
+  "backup.scheduled": { de: "Automatisch", en: "Scheduled", es: "Programada", nl: "Gepland" },
+  "backup.snapshotCreated": { de: "Snapshot erstellt", en: "Snapshot created", es: "Snapshot creado", nl: "Snapshot gemaakt" },
+  "backup.exportSuccess": { de: "Backup heruntergeladen", en: "Backup downloaded", es: "Copia descargada", nl: "Back-up gedownload" },
+  "backup.deleted": { de: "Sicherung gelöscht", en: "Backup deleted", es: "Copia eliminada", nl: "Back-up verwijderd" },
+  "backup.errorLoading": { de: "Fehler beim Laden der Sicherungen", en: "Error loading backups", es: "Error al cargar copias", nl: "Fout bij laden back-ups" },
+  "backup.errorCreating": { de: "Fehler beim Erstellen", en: "Error creating backup", es: "Error al crear copia", nl: "Fout bij maken back-up" },
+  "backup.errorExporting": { de: "Fehler beim Export", en: "Error exporting", es: "Error al exportar", nl: "Fout bij exporteren" },
+  "backup.errorDeleting": { de: "Fehler beim Löschen", en: "Error deleting", es: "Error al eliminar", nl: "Fout bij verwijderen" },
 } as const;
 
 export type TranslationKey = keyof typeof translations;

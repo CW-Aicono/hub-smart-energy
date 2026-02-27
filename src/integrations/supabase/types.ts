@@ -208,6 +208,59 @@ export type Database = {
           },
         ]
       }
+      backup_snapshots: {
+        Row: {
+          backup_type: string
+          created_at: string
+          created_by: string | null
+          data: Json | null
+          error_message: string | null
+          expires_at: string
+          id: string
+          rows_count: number
+          size_bytes: number
+          status: string
+          tables_count: number
+          tenant_id: string
+        }
+        Insert: {
+          backup_type?: string
+          created_at?: string
+          created_by?: string | null
+          data?: Json | null
+          error_message?: string | null
+          expires_at?: string
+          id?: string
+          rows_count?: number
+          size_bytes?: number
+          status?: string
+          tables_count?: number
+          tenant_id: string
+        }
+        Update: {
+          backup_type?: string
+          created_at?: string
+          created_by?: string | null
+          data?: Json | null
+          error_message?: string | null
+          expires_at?: string
+          id?: string
+          rows_count?: number
+          size_bytes?: number
+          status?: string
+          tables_count?: number
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "backup_snapshots_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       brighthub_settings: {
         Row: {
           api_key: string
@@ -3549,6 +3602,7 @@ export type Database = {
         Args: never
         Returns: Database["public"]["Enums"]["app_role"]
       }
+      cleanup_expired_backups: { Args: never; Returns: number }
       compact_power_readings_day: {
         Args: { p_day?: string }
         Returns: {
