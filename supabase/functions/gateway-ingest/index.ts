@@ -121,6 +121,7 @@ async function handleListMeters(url: URL): Promise<Response> {
   const supabase = getSupabase();
   const locationId = url.searchParams.get("location_id");
 
+  // Include ALL meters (manual, automatic, virtual) – no sensor_uuid/integration filter
   let query = supabase
     .from("meters")
     .select(`
@@ -131,6 +132,10 @@ async function handleListMeters(url: URL): Promise<Response> {
       location_id,
       location_integration_id,
       tenant_id,
+      capture_type,
+      meter_function,
+      is_main_meter,
+      parent_meter_id,
       location_integration:location_integrations!meters_location_integration_id_fkey (
         id,
         config,
@@ -139,9 +144,7 @@ async function handleListMeters(url: URL): Promise<Response> {
         )
       )
     `)
-    .eq("is_archived", false)
-    .not("sensor_uuid", "is", null)
-    .not("location_integration_id", "is", null);
+    .eq("is_archived", false);
 
   if (locationId) {
     query = query.eq("location_id", locationId);
@@ -190,7 +193,8 @@ async function handleGetDailyTotals(url: URL): Promise<Response> {
   const fromDate = range.from.split("T")[0];
   const toDate = range.to.split("T")[0];
 
-  const { data, error } = await supabase.rpc("get_meter_daily_totals", {
+  // 1) Get totals from meter_period_totals (automatic meters)
+  const { data: periodData, error } = await supabase.rpc("get_meter_daily_totals", {
     p_meter_ids: resolvedMeterIds,
     p_from_date: fromDate,
     p_to_date: toDate,
@@ -201,7 +205,48 @@ async function handleGetDailyTotals(url: URL): Promise<Response> {
     return json({ error: "Internal error" }, 500);
   }
 
-  return json({ success: true, daily_totals: data || [] });
+  const results = [...(periodData || [])];
+  const coveredMeterIds = new Set((periodData || []).map((r: { meter_id: string }) => r.meter_id));
+
+  // 2) For meters NOT in period_totals, compute daily deltas from meter_readings
+  const uncoveredIds = resolvedMeterIds.filter((id: string) => !coveredMeterIds.has(id));
+
+  if (uncoveredIds.length > 0) {
+    const { data: readings } = await supabase
+      .from("meter_readings")
+      .select("meter_id, value, reading_date")
+      .in("meter_id", uncoveredIds)
+      .gte("reading_date", fromDate)
+      .lte("reading_date", toDate)
+      .order("reading_date", { ascending: true });
+
+    if (readings && readings.length > 0) {
+      // Group by meter_id and compute daily deltas from counter readings
+      const byMeter = new Map<string, Array<{ value: number; reading_date: string }>>();
+      for (const r of readings) {
+        const arr = byMeter.get(r.meter_id) || [];
+        arr.push({ value: Number(r.value), reading_date: r.reading_date });
+        byMeter.set(r.meter_id, arr);
+      }
+
+      for (const [meterId, meterReadings] of byMeter) {
+        // Sort by date and compute deltas between consecutive readings
+        meterReadings.sort((a, b) => a.reading_date.localeCompare(b.reading_date));
+        for (let i = 1; i < meterReadings.length; i++) {
+          const delta = meterReadings[i].value - meterReadings[i - 1].value;
+          if (delta >= 0) {
+            results.push({
+              meter_id: meterId,
+              day: meterReadings[i].reading_date,
+              total_value: delta,
+            });
+          }
+        }
+      }
+    }
+  }
+
+  return json({ success: true, daily_totals: results });
 }
 
 async function handleGetReadings(url: URL): Promise<Response> {
