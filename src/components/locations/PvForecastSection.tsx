@@ -12,6 +12,7 @@ import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Sun, ChevronDown, ChevronRight, Sparkles, Save } from "lucide-react";
+import { HelpTooltip } from "@/components/ui/help-tooltip";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from "recharts";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -170,6 +171,7 @@ export function PvForecastSection({ locationId }: PvForecastSectionProps) {
                 <CardTitle className="flex items-center gap-2">
                   <Sun className="h-5 w-5 text-amber-500" />
                   PV-Prognose
+                  <HelpTooltip text="Berechnet die erwartete Solarstromerzeugung auf Basis von Standortkoordinaten, Anlagenparametern und aktuellen Wetterdaten." />
                 </CardTitle>
                 <CardDescription>
                   KI-gestützte Solarprognose basierend auf Standortdaten und Wetter
@@ -187,11 +189,11 @@ export function PvForecastSection({ locationId }: PvForecastSectionProps) {
                 <h4 className="font-medium text-sm">Anlagen-Einstellungen</h4>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   <div>
-                    <Label>Spitzenleistung (kWp)</Label>
+                    <Label className="flex items-center gap-1">Spitzenleistung (kWp) <HelpTooltip text="Die maximale Leistung der PV-Anlage unter optimalen Bedingungen (Kilowatt-Peak)." iconSize={12} /></Label>
                     <Input type="number" value={form.peak_power_kwp} onChange={(e) => setForm({ ...form, peak_power_kwp: Number(e.target.value) })} />
                   </div>
                   <div>
-                    <Label>Neigung (°)</Label>
+                    <Label className="flex items-center gap-1">Neigung (°) <HelpTooltip text="Neigungswinkel der Solarmodule: 0° = flach liegend, 90° = senkrecht. Optimal für Mitteleuropa: 30–35°." iconSize={12} /></Label>
                     <Input type="number" min={0} max={90} value={form.tilt_deg} onChange={(e) => {
                       const v = Number(e.target.value);
                       setForm({ ...form, tilt_deg: Math.min(90, Math.max(0, v)) });
@@ -201,7 +203,7 @@ export function PvForecastSection({ locationId }: PvForecastSectionProps) {
                     )}
                   </div>
                   <div>
-                    <Label>Ausrichtung (°)</Label>
+                    <Label className="flex items-center gap-1">Ausrichtung (°) <HelpTooltip text="Himmelsrichtung der Module: 0° = Nord, 90° = Ost, 180° = Süd (optimal), 270° = West." iconSize={12} /></Label>
                     <Input type="number" min={0} max={360} value={form.azimuth_deg} onChange={(e) => {
                       const v = Number(e.target.value);
                       setForm({ ...form, azimuth_deg: Math.min(360, Math.max(0, v)) });
@@ -211,7 +213,7 @@ export function PvForecastSection({ locationId }: PvForecastSectionProps) {
                     )}
                   </div>
                   <div>
-                    <Label>PV-Zähler</Label>
+                    <Label className="flex items-center gap-1">PV-Zähler <HelpTooltip text="Optionaler Zähler für den Ist-Ertrag. Ermöglicht den Vergleich zwischen Prognose und tatsächlicher Erzeugung im Diagramm." iconSize={12} /></Label>
                     <Select value={form.pv_meter_id || "__none__"} onValueChange={(v) => setForm({ ...form, pv_meter_id: v === "__none__" ? "" : v })}>
                       <SelectTrigger><SelectValue placeholder="Optional" /></SelectTrigger>
                       <SelectContent>

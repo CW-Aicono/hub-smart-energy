@@ -5,6 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { Plus, Minus, Trash2, Calculator } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { HelpTooltip } from "@/components/ui/help-tooltip";
 
 export interface VirtualMeterSource {
   source_meter_id: string;
@@ -63,6 +64,7 @@ export const VirtualMeterFormulaBuilder = ({
       <div className="flex items-center gap-2">
         <Calculator className="h-4 w-4 text-muted-foreground" />
         <Label className="font-medium">Berechnungsformel</Label>
+        <HelpTooltip text="Definieren Sie, wie der virtuelle Zähler berechnet wird: Addieren (+) oder subtrahieren (−) Sie die Werte anderer Zähler." iconSize={12} />
       </div>
 
       {/* Current sources */}

@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useSpotPrices } from "@/hooks/useSpotPrices";
 import { useTranslation } from "@/hooks/useTranslation";
+import { HelpTooltip } from "@/components/ui/help-tooltip";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
 import { format, type Locale } from "date-fns";
 import { de, enUS, es, nl } from "date-fns/locale";
@@ -87,7 +88,7 @@ const SpotPriceWidget = ({ locationId }: SpotPriceWidgetProps) => {
   if (isLoading) {
     return (
       <Card>
-        <CardHeader><CardTitle className="font-display text-lg">Spotpreis-Verlauf (Day-Ahead, 15 min)</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="font-display text-lg flex items-center gap-2">Spotpreis-Verlauf (Day-Ahead, 15 min) <HelpTooltip text="Zeigt den aktuellen Börsenstrompreis (Day-Ahead) in 15-Minuten-Intervallen. Vergangene Preise sind fest, zukünftige basieren auf der Auktion." /></CardTitle></CardHeader>
         <CardContent><Skeleton className="h-[260px]" /></CardContent>
       </Card>
     );
@@ -97,7 +98,7 @@ const SpotPriceWidget = ({ locationId }: SpotPriceWidgetProps) => {
     <Card>
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between">
-          <CardTitle className="font-display text-lg">Spotpreis-Verlauf (Day-Ahead, 15 min)</CardTitle>
+          <CardTitle className="font-display text-lg flex items-center gap-2">Spotpreis-Verlauf (Day-Ahead, 15 min) <HelpTooltip text="Zeigt den aktuellen Börsenstrompreis (Day-Ahead) in 15-Minuten-Intervallen. Vergangene Preise sind fest, zukünftige basieren auf der Auktion." /></CardTitle>
           <div className="text-right">
             <div className="text-lg font-bold">{priceCtKwh} ct/kWh</div>
             {currentPrice && (
