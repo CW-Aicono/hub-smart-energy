@@ -147,40 +147,55 @@ const PvForecastWidget = ({ locationId }: PvForecastWidgetProps) => {
   const { data: dbHourlyData } = useQuery({
     queryKey: ["pv-forecast-hourly-archived", locationId ?? "all", tenantId, refDateStr],
     queryFn: async () => {
+      if (!locationId) {
+        // Only include locations with active PV settings
+        const { data: activeSettings } = await supabase
+          .from("pv_forecast_settings")
+          .select("location_id")
+          .eq("tenant_id", tenantId!)
+          .eq("is_active", true);
+        if (!activeSettings || activeSettings.length === 0) return null;
+        const activeLocationIds = activeSettings.map((s) => s.location_id);
+
+        const { data, error } = await supabase
+          .from("pv_forecast_hourly")
+          .select("hour_timestamp, estimated_kwh, ai_adjusted_kwh, radiation_w_m2, cloud_cover_pct, location_id")
+          .eq("forecast_date", refDateStr)
+          .eq("tenant_id", tenantId!)
+          .in("location_id", activeLocationIds)
+          .order("hour_timestamp", { ascending: true });
+        if (error) { console.error("pv_forecast_hourly fetch error:", error); return null; }
+
+        if (data && data.length > 0) {
+          const hourMap = new Map<string, { estimated_kwh: number; ai_adjusted_kwh: number | null; radiation_w_m2: number; cloud_cover_pct: number; count: number }>();
+          for (const r of data) {
+            const existing = hourMap.get(r.hour_timestamp);
+            if (existing) {
+              existing.estimated_kwh += r.estimated_kwh;
+              existing.ai_adjusted_kwh = (existing.ai_adjusted_kwh ?? 0) + (r.ai_adjusted_kwh ?? r.estimated_kwh);
+              existing.radiation_w_m2 = Math.max(existing.radiation_w_m2, r.radiation_w_m2);
+              existing.cloud_cover_pct = Math.round((existing.cloud_cover_pct * existing.count + r.cloud_cover_pct) / (existing.count + 1));
+              existing.count += 1;
+            } else {
+              hourMap.set(r.hour_timestamp, { estimated_kwh: r.estimated_kwh, ai_adjusted_kwh: r.ai_adjusted_kwh, radiation_w_m2: r.radiation_w_m2, cloud_cover_pct: r.cloud_cover_pct, count: 1 });
+            }
+          }
+          return Array.from(hourMap.entries())
+            .sort(([a], [b]) => a.localeCompare(b))
+            .map(([ts, v]) => ({ hour_timestamp: ts, estimated_kwh: v.estimated_kwh, ai_adjusted_kwh: v.ai_adjusted_kwh, radiation_w_m2: v.radiation_w_m2, cloud_cover_pct: v.cloud_cover_pct }));
+        }
+        return data;
+      }
+
       let query = supabase
         .from("pv_forecast_hourly")
         .select("hour_timestamp, estimated_kwh, ai_adjusted_kwh, radiation_w_m2, cloud_cover_pct")
         .eq("forecast_date", refDateStr)
+        .eq("location_id", locationId)
         .order("hour_timestamp", { ascending: true });
-
-      if (locationId) {
-        query = query.eq("location_id", locationId);
-      } else {
-        query = query.eq("tenant_id", tenantId!);
-      }
 
       const { data, error } = await query;
       if (error) { console.error("pv_forecast_hourly fetch error:", error); return null; }
-
-      if (!locationId && data && data.length > 0) {
-        // Aggregate across locations by hour
-        const hourMap = new Map<string, { estimated_kwh: number; ai_adjusted_kwh: number | null; radiation_w_m2: number; cloud_cover_pct: number; count: number }>();
-        for (const r of data) {
-          const existing = hourMap.get(r.hour_timestamp);
-          if (existing) {
-            existing.estimated_kwh += r.estimated_kwh;
-            existing.ai_adjusted_kwh = (existing.ai_adjusted_kwh ?? 0) + (r.ai_adjusted_kwh ?? r.estimated_kwh);
-            existing.radiation_w_m2 = Math.max(existing.radiation_w_m2, r.radiation_w_m2);
-            existing.cloud_cover_pct = Math.round((existing.cloud_cover_pct * existing.count + r.cloud_cover_pct) / (existing.count + 1));
-            existing.count += 1;
-          } else {
-            hourMap.set(r.hour_timestamp, { estimated_kwh: r.estimated_kwh, ai_adjusted_kwh: r.ai_adjusted_kwh, radiation_w_m2: r.radiation_w_m2, cloud_cover_pct: r.cloud_cover_pct, count: 1 });
-          }
-        }
-        return Array.from(hourMap.entries())
-          .sort(([a], [b]) => a.localeCompare(b))
-          .map(([ts, v]) => ({ hour_timestamp: ts, estimated_kwh: v.estimated_kwh, ai_adjusted_kwh: v.ai_adjusted_kwh, radiation_w_m2: v.radiation_w_m2, cloud_cover_pct: v.cloud_cover_pct }));
-      }
 
       return data;
     },

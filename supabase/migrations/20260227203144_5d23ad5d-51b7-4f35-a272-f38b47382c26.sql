@@ -1,0 +1,1 @@
+ALTER FUNCTION public.get_pv_forecast_daily_sums_all(UUID, DATE, DATE) SET search_path = public;
