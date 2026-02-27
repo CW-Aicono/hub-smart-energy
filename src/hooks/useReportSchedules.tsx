@@ -15,7 +15,7 @@ export interface ReportSchedule {
   created_by: string;
   name: string;
   recipients: string[];
-  frequency: "weekly" | "monthly" | "quarterly" | "yearly";
+  frequency: "daily" | "weekly" | "monthly" | "quarterly" | "yearly";
   format: "pdf" | "csv" | "both";
   energy_types: string[];
   location_ids: string[];

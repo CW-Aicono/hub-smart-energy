@@ -14,7 +14,7 @@ const ENERGY_LABELS: Record<string, string> = {
   strom: "Strom", gas: "Gas", waerme: "Wärme", wasser: "Wasser",
 };
 const FREQ_LABELS: Record<string, string> = {
-  weekly: "Wöchentlich", monthly: "Monatlich", quarterly: "Quartalsweise", yearly: "Jährlich",
+  daily: "Täglich", weekly: "Wöchentlich", monthly: "Monatlich", quarterly: "Quartalsweise", yearly: "Jährlich",
 };
 const FORMAT_LABELS: Record<string, string> = {
   pdf: "PDF", csv: "CSV", both: "PDF & CSV",
