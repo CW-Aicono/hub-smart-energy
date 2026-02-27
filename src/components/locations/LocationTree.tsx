@@ -297,25 +297,32 @@ function LocationNode({ location, level, selectedId, onSelect, onRefresh, isAdmi
   const status = locationStatuses?.get(location.id);
   const getOnlineStatusBadge = () => {
     if (!status || status.totalIntegrations === 0) return null;
+    
+    const badges: React.ReactNode[] = [];
+
+    if (status.isOnline) {
+      badges.push(
+        <Badge key="online" variant="outline" className="text-xs gap-1 bg-primary/10 text-primary border-primary/20">
+          <Wifi className="h-3 w-3" />
+        </Badge>
+      );
+    } else if (status.onlineIntegrations === 0 && !status.hasUnconfigured) {
+      badges.push(
+        <Badge key="offline" variant="outline" className="text-xs gap-1 bg-destructive/10 text-destructive border-destructive/20">
+          <WifiOff className="h-3 w-3" />
+        </Badge>
+      );
+    }
+
     if (status.hasUnconfigured) {
-      return (
-        <Badge variant="outline" className="text-xs gap-1 bg-secondary/50 text-secondary-foreground border-border">
+      badges.push(
+        <Badge key="unconf" variant="outline" className="text-xs gap-1 bg-secondary/50 text-secondary-foreground border-border">
           <AlertCircle className="h-3 w-3" />
         </Badge>
       );
     }
-    if (status.isOnline) {
-      return (
-        <Badge variant="outline" className="text-xs gap-1 bg-primary/10 text-primary border-primary/20">
-          <Wifi className="h-3 w-3" />
-        </Badge>
-      );
-    }
-    return (
-      <Badge variant="outline" className="text-xs gap-1 bg-destructive/10 text-destructive border-destructive/20">
-        <WifiOff className="h-3 w-3" />
-      </Badge>
-    );
+
+    return badges.length > 0 ? <>{badges}</> : null;
   };
 
   const indent = level * 20 + 12;

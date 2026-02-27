@@ -75,30 +75,38 @@ const Locations = () => {
       return null; // No integrations, don't show badge
     }
 
-    if (status.hasUnconfigured) {
-      return (
-        <Badge variant="outline" className="gap-1 text-xs bg-secondary/50 text-secondary-foreground border-border">
-          <AlertCircle className="h-3 w-3" />
-          Konfig. fehlt
-        </Badge>
-      );
-    }
+    const badges: React.ReactNode[] = [];
 
+    // Show Online badge if at least one integration is connected
     if (status.isOnline) {
-      return (
-        <Badge variant="outline" className="gap-1 text-xs bg-primary/10 text-primary border-primary/20">
+      badges.push(
+        <Badge key="online" variant="outline" className="gap-1 text-xs bg-primary/10 text-primary border-primary/20">
           <Wifi className="h-3 w-3" />
           Online
         </Badge>
       );
+    } else if (status.onlineIntegrations === 0 && !status.hasUnconfigured) {
+      badges.push(
+        <Badge key="offline" variant="outline" className="gap-1 text-xs bg-destructive/10 text-destructive border-destructive/20">
+          <WifiOff className="h-3 w-3" />
+          Offline
+        </Badge>
+      );
     }
 
-    return (
-      <Badge variant="outline" className="gap-1 text-xs bg-destructive/10 text-destructive border-destructive/20">
-        <WifiOff className="h-3 w-3" />
-        Offline
-      </Badge>
-    );
+    // Show warning badges for unconfigured integrations with their short name
+    if (status.hasUnconfigured) {
+      status.unconfiguredNames.forEach((name, i) => {
+        badges.push(
+          <Badge key={`unconf-${i}`} variant="outline" className="gap-1 text-xs bg-secondary/50 text-secondary-foreground border-border">
+            <AlertCircle className="h-3 w-3" />
+            {name}
+          </Badge>
+        );
+      });
+    }
+
+    return badges.length > 0 ? <>{badges}</> : null;
   };
 
   // Filter and sort locations, grouping children under parents
