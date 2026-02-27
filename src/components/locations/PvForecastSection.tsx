@@ -245,7 +245,7 @@ export function PvForecastSection({ locationId }: PvForecastSectionProps) {
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   <div className="border rounded-lg p-3 text-center">
                     <p className="text-xs text-muted-foreground">Heute gesamt</p>
-                    <p className="text-2xl font-bold">{forecast.summary.today_total_kwh.toFixed(0)} kWh</p>
+                    <p className="text-2xl font-bold">{(forecast.summary.today_total_kwh ?? 0).toFixed(0)} kWh</p>
                     {Object.keys(actualReadings).length > 0 && (
                       <p className="text-sm font-semibold text-emerald-600">
                         Ist: {Object.values(actualReadings).reduce((s, v) => s + v, 0).toFixed(1)} kWh
@@ -254,11 +254,11 @@ export function PvForecastSection({ locationId }: PvForecastSectionProps) {
                   </div>
                   <div className="border rounded-lg p-3 text-center">
                     <p className="text-xs text-muted-foreground">Morgen gesamt</p>
-                    <p className="text-2xl font-bold">{forecast.summary.tomorrow_total_kwh.toFixed(0)} kWh</p>
+                    <p className="text-2xl font-bold">{(forecast.summary.tomorrow_total_kwh ?? 0).toFixed(0)} kWh</p>
                   </div>
                   <div className="border rounded-lg p-3 text-center">
                     <p className="text-xs text-muted-foreground">Spitze</p>
-                    <p className="text-2xl font-bold">{forecast.summary.peak_kwh.toFixed(1)} kW</p>
+                    <p className="text-2xl font-bold">{(forecast.summary.peak_kwh ?? 0).toFixed(1)} kW</p>
                     <p className="text-xs text-muted-foreground">{forecast.summary.peak_hour ? toLocalTime(forecast.summary.peak_hour) : "–"} Uhr</p>
                   </div>
                   {forecast.summary.ai_confidence && (
