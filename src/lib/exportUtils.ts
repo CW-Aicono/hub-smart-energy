@@ -203,7 +203,7 @@ export function downloadPDF(
   <div style="background:linear-gradient(135deg,#1e293b 0%,#334155 100%);border-radius:12px;padding:24px 28px;margin-bottom:24px;color:white;display:flex;align-items:center;justify-content:space-between">
     <div>
       <div style="font-size:22px;font-weight:700;margin-bottom:4px">${title || "Energiedaten Export"}</div>
-      <div style="font-size:13px;opacity:0.8">Erstellt am ${new Date().toLocaleDateString("de-DE", { day: "2-digit", month: "long", year: "numeric" })}</div>
+      <div style="font-size:13px;opacity:0.8">Erstellt am ${new Date().toLocaleDateString("de-DE", { day: "2-digit", month: "long", year: "numeric" })}${options?.tenantName ? ` · ${options.tenantName}` : ""}</div>
     </div>
     ${options?.logoUrl ? `<img src="${options.logoUrl}" alt="Logo" style="max-height:52px;max-width:160px;object-fit:contain;border-radius:6px" />` : ""}
   </div>

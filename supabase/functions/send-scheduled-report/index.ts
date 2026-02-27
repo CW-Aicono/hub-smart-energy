@@ -214,7 +214,7 @@ function buildReportHTML(
     <tr>
       <td style="padding:24px 28px;vertical-align:middle">
         <div style="font-size:22px;font-weight:700;color:white;margin-bottom:4px">${reportTitle}</div>
-        <div style="font-size:13px;color:rgba(255,255,255,0.7)">Erstellt am ${new Date().toLocaleDateString("de-DE", { day: "2-digit", month: "long", year: "numeric" })} · Zeitraum: ${formatDateDE(dateRange.from)} – ${formatDateDE(dateRange.to)}</div>
+        <div style="font-size:13px;color:rgba(255,255,255,0.7)">${tenantName ? tenantName + " · " : ""}Erstellt am ${new Date().toLocaleDateString("de-DE", { day: "2-digit", month: "long", year: "numeric" })} · Zeitraum: ${formatDateDE(dateRange.from)} – ${formatDateDE(dateRange.to)}</div>
       </td>
       ${logoImgTag ? `<td style="padding:24px 28px;vertical-align:middle;text-align:right">${logoImgTag}</td>` : ""}
     </tr>
