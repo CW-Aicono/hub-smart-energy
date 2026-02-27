@@ -7,6 +7,9 @@
  * Routes:
  *   GET  ?action=list-locations               – Alle aktiven Liegenschaften
  *   GET  ?action=list-meters[&location_id=…]  – Zähler (optional nach Standort)
+ *   GET  ?action=get-daily-totals             – Tagessummen pro Zähler
+ *   GET  ?action=get-readings                 – 5-Min-Leistungswerte
+ *   GET  ?action=get-locations-summary        – Standorte mit Verbrauchsdaten
  *   POST ?action=compact-day                  – Rohdaten verdichten
  *   POST (default)                            – Readings einfügen
  */
@@ -72,7 +75,32 @@ function isSpike(powerValue: number, energyType: string): boolean {
   return Math.abs(powerValue) > threshold;
 }
 
-/* ── Route handlers ──────────────────────────────────────────────────────────── */
+/* ── Helpers ─────────────────────────────────────────────────────────────────── */
+
+function parseDateRange(url: URL): { from: string; to: string } | null {
+  const from = url.searchParams.get("from");
+  const to = url.searchParams.get("to");
+  if (!from || !to) return null;
+
+  // Validate ISO date format
+  const fromDate = new Date(from);
+  const toDate = new Date(to);
+  if (isNaN(fromDate.getTime()) || isNaN(toDate.getTime())) return null;
+
+  // Max 90 days
+  const diffDays = (toDate.getTime() - fromDate.getTime()) / (1000 * 60 * 60 * 24);
+  if (diffDays > 90 || diffDays < 0) return null;
+
+  return { from: fromDate.toISOString(), to: toDate.toISOString() };
+}
+
+function parseMeterIds(url: URL): string[] {
+  const raw = url.searchParams.get("meter_ids");
+  if (!raw) return [];
+  return raw.split(",").map((s) => s.trim()).filter(Boolean);
+}
+
+/* ── GET Route handlers ──────────────────────────────────────────────────────── */
 
 async function handleListLocations(): Promise<Response> {
   const supabase = getSupabase();
@@ -128,6 +156,158 @@ async function handleListMeters(url: URL): Promise<Response> {
   return json({ success: true, meters: data || [] });
 }
 
+async function handleGetDailyTotals(url: URL): Promise<Response> {
+  const range = parseDateRange(url);
+  if (!range) {
+    return json({ error: "Parameters 'from' and 'to' required (ISO date, max 90 days)" }, 400);
+  }
+
+  const meterIds = parseMeterIds(url);
+  const locationId = url.searchParams.get("location_id");
+
+  if (meterIds.length === 0 && !locationId) {
+    return json({ error: "Either 'meter_ids' or 'location_id' parameter required" }, 400);
+  }
+
+  const supabase = getSupabase();
+
+  // If location_id provided but no meter_ids, resolve meters first
+  let resolvedMeterIds = meterIds;
+  if (resolvedMeterIds.length === 0 && locationId) {
+    const { data: meters, error: mErr } = await supabase
+      .from("meters")
+      .select("id")
+      .eq("location_id", locationId)
+      .eq("is_archived", false);
+    if (mErr) return json({ error: "Internal error" }, 500);
+    resolvedMeterIds = (meters || []).map((m: { id: string }) => m.id);
+  }
+
+  if (resolvedMeterIds.length === 0) {
+    return json({ success: true, daily_totals: [] });
+  }
+
+  const fromDate = range.from.split("T")[0];
+  const toDate = range.to.split("T")[0];
+
+  const { data, error } = await supabase.rpc("get_meter_daily_totals", {
+    p_meter_ids: resolvedMeterIds,
+    p_from_date: fromDate,
+    p_to_date: toDate,
+  });
+
+  if (error) {
+    console.error("[gateway-ingest] get-daily-totals error:", error.message);
+    return json({ error: "Internal error" }, 500);
+  }
+
+  return json({ success: true, daily_totals: data || [] });
+}
+
+async function handleGetReadings(url: URL): Promise<Response> {
+  const range = parseDateRange(url);
+  if (!range) {
+    return json({ error: "Parameters 'from' and 'to' required (ISO date, max 90 days)" }, 400);
+  }
+
+  const meterIds = parseMeterIds(url);
+  const locationId = url.searchParams.get("location_id");
+
+  if (meterIds.length === 0 && !locationId) {
+    return json({ error: "Either 'meter_ids' or 'location_id' parameter required" }, 400);
+  }
+
+  const supabase = getSupabase();
+
+  let resolvedMeterIds = meterIds;
+  if (resolvedMeterIds.length === 0 && locationId) {
+    const { data: meters, error: mErr } = await supabase
+      .from("meters")
+      .select("id")
+      .eq("location_id", locationId)
+      .eq("is_archived", false);
+    if (mErr) return json({ error: "Internal error" }, 500);
+    resolvedMeterIds = (meters || []).map((m: { id: string }) => m.id);
+  }
+
+  if (resolvedMeterIds.length === 0) {
+    return json({ success: true, readings: [] });
+  }
+
+  // Limit to max 1000 rows
+  const { data, error } = await supabase.rpc("get_power_readings_5min", {
+    p_meter_ids: resolvedMeterIds,
+    p_start: range.from,
+    p_end: range.to,
+  });
+
+  if (error) {
+    console.error("[gateway-ingest] get-readings error:", error.message);
+    return json({ error: "Internal error" }, 500);
+  }
+
+  // Limit output
+  const limited = (data || []).slice(0, 1000);
+
+  return json({
+    success: true,
+    readings: limited,
+    truncated: (data || []).length > 1000,
+    total_available: (data || []).length,
+  });
+}
+
+async function handleGetLocationsSummary(url: URL): Promise<Response> {
+  const supabase = getSupabase();
+  const tenantId = url.searchParams.get("tenant_id");
+
+  let locQuery = supabase
+    .from("locations")
+    .select("id, tenant_id, name, address, city, type, usage_type, energy_sources, latitude, longitude")
+    .eq("is_archived", false)
+    .order("name");
+
+  if (tenantId) {
+    locQuery = locQuery.eq("tenant_id", tenantId);
+  }
+
+  const { data: locations, error: locErr } = await locQuery;
+  if (locErr) {
+    console.error("[gateway-ingest] get-locations-summary error:", locErr.message);
+    return json({ error: "Internal error" }, 500);
+  }
+
+  // Get meter counts per location
+  const locationIds = (locations || []).map((l: { id: string }) => l.id);
+  if (locationIds.length === 0) {
+    return json({ success: true, locations: [] });
+  }
+
+  const { data: meters } = await supabase
+    .from("meters")
+    .select("id, location_id, energy_type")
+    .in("location_id", locationIds)
+    .eq("is_archived", false);
+
+  const metersByLocation = new Map<string, { count: number; types: Set<string> }>();
+  for (const m of meters || []) {
+    const entry = metersByLocation.get(m.location_id) || { count: 0, types: new Set() };
+    entry.count++;
+    entry.types.add(m.energy_type);
+    metersByLocation.set(m.location_id, entry);
+  }
+
+  const result = (locations || []).map((loc: Record<string, unknown>) => ({
+    ...loc,
+    meter_count: metersByLocation.get(loc.id as string)?.count || 0,
+    energy_types: Array.from(metersByLocation.get(loc.id as string)?.types || []),
+  }));
+
+  return json({ success: true, locations: result });
+}
+
+/* ── POST Route handlers ─────────────────────────────────────────────────────── */
+
 async function handleCompactDay(req: Request): Promise<Response> {
   const authErr = validateApiKey(req);
   if (authErr) return authErr;
@@ -165,8 +345,6 @@ async function handleCompactDay(req: Request): Promise<Response> {
   if (rawData.length === 0) {
     return json({ success: true, compacted: 0, deleted: 0 });
   }
-
-  console.log(`[compact-day] Fetched ${rawData.length} raw rows to compact`);
 
   // 2. Aggregate into 5-min buckets
   type BucketKey = string;
@@ -223,8 +401,6 @@ async function handleCompactDay(req: Request): Promise<Response> {
 
   if (deleteError) console.error("[compact-day] Delete error:", deleteError.message);
 
-  console.log(`[compact-day] ✓ Compacted ${compactedRows.length} buckets, deleted ${deletedCount ?? "?"} raw rows`);
-
   return json({
     success: true, compacted: compactedRows.length,
     raw_rows_processed: rawData.length, deleted: deletedCount ?? 0,
@@ -279,8 +455,6 @@ async function handlePostReadings(req: Request): Promise<Response> {
     return json({ error: "Database error" }, 500);
   }
 
-  console.log(`[gateway-ingest] ✓ Inserted ${validReadings.length} readings, skipped ${skipped.length}`);
-
   return json({
     success: true, inserted: validReadings.length,
     skipped: skipped.length,
@@ -305,6 +479,9 @@ Deno.serve(async (req) => {
     if (authErr) return authErr;
     if (action === "list-locations") return handleListLocations();
     if (action === "list-meters") return handleListMeters(url);
+    if (action === "get-daily-totals") return handleGetDailyTotals(url);
+    if (action === "get-readings") return handleGetReadings(url);
+    if (action === "get-locations-summary") return handleGetLocationsSummary(url);
   }
 
   // POST routes
