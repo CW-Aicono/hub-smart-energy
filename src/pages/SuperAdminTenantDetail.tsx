@@ -17,7 +17,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { HeadsetIcon, RotateCcw, UserPlus, Mail, Shield, User, Copy, Check } from "lucide-react";
+import { HeadsetIcon, RotateCcw, UserPlus, Mail, Shield, User, Copy, Check, Building2, MapPin, UserCircle } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import {
@@ -211,12 +211,64 @@ const SuperAdminTenantDetail = () => {
           </Button>
         </header>
         <div className="p-6">
-          <Tabs defaultValue="modules">
+          <Tabs defaultValue="info">
             <TabsList>
+              <TabsTrigger value="info"><Building2 className="h-4 w-4 mr-1" />Info</TabsTrigger>
               <TabsTrigger value="modules">{t("tenant_detail.modules")}</TabsTrigger>
               <TabsTrigger value="license">{t("tenant_detail.license")}</TabsTrigger>
               <TabsTrigger value="users">{t("nav.users")}</TabsTrigger>
             </TabsList>
+
+            <TabsContent value="info" className="mt-6">
+              <Card>
+                <CardHeader><CardTitle>Mandanten-Informationen</CardTitle></CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-3">
+                      <div className="flex items-start gap-2">
+                        <Building2 className="h-4 w-4 mt-0.5 text-muted-foreground shrink-0" />
+                        <div>
+                          <p className="text-sm font-medium text-muted-foreground">Name</p>
+                          <p>{tenant?.name ?? "–"}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-start gap-2">
+                        <MapPin className="h-4 w-4 mt-0.5 text-muted-foreground shrink-0" />
+                        <div>
+                          <p className="text-sm font-medium text-muted-foreground">Anschrift</p>
+                          <p>
+                            {(tenant as any)?.street || (tenant as any)?.house_number
+                              ? `${(tenant as any)?.street ?? ""} ${(tenant as any)?.house_number ?? ""}`.trim()
+                              : "–"}
+                          </p>
+                          <p>
+                            {(tenant as any)?.postal_code || (tenant as any)?.city
+                              ? `${(tenant as any)?.postal_code ?? ""} ${(tenant as any)?.city ?? ""}`.trim()
+                              : ""}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="space-y-3">
+                      <div className="flex items-start gap-2">
+                        <UserCircle className="h-4 w-4 mt-0.5 text-muted-foreground shrink-0" />
+                        <div>
+                          <p className="text-sm font-medium text-muted-foreground">Hauptansprechpartner</p>
+                          <p>{(tenant as any)?.contact_person ?? "–"}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-start gap-2">
+                        <Mail className="h-4 w-4 mt-0.5 text-muted-foreground shrink-0" />
+                        <div>
+                          <p className="text-sm font-medium text-muted-foreground">Kontakt-E-Mail</p>
+                          <p>{tenant?.contact_email ?? "–"}</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
 
             <TabsContent value="modules" className="mt-6 space-y-6">
               <Card>

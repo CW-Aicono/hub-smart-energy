@@ -20,6 +20,11 @@ export interface Tenant {
   name: string;
   slug: string;
   address: string | null;
+  street: string | null;
+  house_number: string | null;
+  postal_code: string | null;
+  city: string | null;
+  contact_person: string | null;
   contact_email: string | null;
   contact_phone: string | null;
   branding: TenantBranding;
@@ -111,6 +116,11 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
         name: "Stadtwerke Musterstadt GmbH",
         slug: "demo",
         address: "Musterstraße 1, 80331 München",
+        street: "Musterstraße",
+        house_number: "1",
+        postal_code: "80331",
+        city: "München",
+        contact_person: "Max Mustermann",
         contact_email: "info@stadtwerke-musterstadt.de",
         contact_phone: "+49 89 12345678",
         branding: DEFAULT_BRANDING,

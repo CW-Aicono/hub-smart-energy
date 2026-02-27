@@ -3279,48 +3279,63 @@ export type Database = {
         Row: {
           address: string | null
           branding: Json
+          city: string | null
           contact_email: string | null
+          contact_person: string | null
           contact_phone: string | null
           created_at: string
+          house_number: string | null
           id: string
           logo_url: string | null
           name: string
+          postal_code: string | null
           remote_support_enabled: boolean
           remote_support_enabled_at: string | null
           report_settings: Json | null
           slug: string
+          street: string | null
           updated_at: string
           week_start_day: number
         }
         Insert: {
           address?: string | null
           branding?: Json
+          city?: string | null
           contact_email?: string | null
+          contact_person?: string | null
           contact_phone?: string | null
           created_at?: string
+          house_number?: string | null
           id?: string
           logo_url?: string | null
           name: string
+          postal_code?: string | null
           remote_support_enabled?: boolean
           remote_support_enabled_at?: string | null
           report_settings?: Json | null
           slug: string
+          street?: string | null
           updated_at?: string
           week_start_day?: number
         }
         Update: {
           address?: string | null
           branding?: Json
+          city?: string | null
           contact_email?: string | null
+          contact_person?: string | null
           contact_phone?: string | null
           created_at?: string
+          house_number?: string | null
           id?: string
           logo_url?: string | null
           name?: string
+          postal_code?: string | null
           remote_support_enabled?: boolean
           remote_support_enabled_at?: string | null
           report_settings?: Json | null
           slug?: string
+          street?: string | null
           updated_at?: string
           week_start_day?: number
         }
