@@ -114,13 +114,15 @@ const FloorPlanDashboardWidget = ({ locationId, onExpand, onCollapse }: FloorPla
           };
         });
         setAllFloors(options);
-        if (options.length > 0 && !selectedFloorId) {
-          // Prefer floor 0 of the main location, then any floor 0, then first floor
+        // Always auto-select when floors change (selectedFloorId was reset to null on location switch)
+        setSelectedFloorId(prev => {
+          if (prev && options.some(o => o.id === prev)) return prev;
+          if (options.length === 0) return null;
           const mainLoc = locations.find(l => l.is_main_location);
           const mainFloor0 = mainLoc ? options.find(f => f.location_id === mainLoc.id && f.floor_number === 0) : null;
           const anyFloor0 = options.find(f => f.floor_number === 0);
-          setSelectedFloorId((mainFloor0 || anyFloor0 || options[0]).id);
-        }
+          return (mainFloor0 || anyFloor0 || options[0]).id;
+        });
       }
     } finally {
       setLoading(false);
