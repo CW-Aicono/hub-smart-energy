@@ -3,6 +3,7 @@ import { Navigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useLocations } from "@/hooks/useLocations";
 import { useMeters } from "@/hooks/useMeters";
+import { useTranslation } from "@/hooks/useTranslation";
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -14,13 +15,6 @@ import { Activity, RefreshCw, Search, Gauge, Zap, Flame, Droplets, Thermometer }
 import { supabase } from "@/integrations/supabase/client";
 import { formatEnergy, formatGasDual } from "@/lib/formatEnergy";
 import { cn } from "@/lib/utils";
-
-const ENERGY_TYPE_CONFIG: Record<string, { label: string; icon: typeof Zap; colorClass: string }> = {
-  strom: { label: "Strom", icon: Zap, colorClass: "text-[hsl(var(--energy-strom))]" },
-  gas: { label: "Gas", icon: Flame, colorClass: "text-[hsl(var(--energy-gas))]" },
-  waerme: { label: "Wärme", icon: Thermometer, colorClass: "text-[hsl(var(--energy-waerme))]" },
-  wasser: { label: "Wasser", icon: Droplets, colorClass: "text-[hsl(var(--energy-wasser))]" },
-};
 
 interface MeterLiveValue {
   meterId: string;
@@ -36,6 +30,14 @@ const LiveValues = () => {
   const { user, loading: authLoading } = useAuth();
   const { locations, loading: locationsLoading } = useLocations();
   const { meters, loading: metersLoading } = useMeters();
+  const { t, language } = useTranslation();
+
+  const ENERGY_TYPE_CONFIG: Record<string, { label: string; icon: typeof Zap; colorClass: string }> = {
+    strom: { label: t("liveValues.strom" as any), icon: Zap, colorClass: "text-[hsl(var(--energy-strom))]" },
+    gas: { label: t("liveValues.gas" as any), icon: Flame, colorClass: "text-[hsl(var(--energy-gas))]" },
+    waerme: { label: t("liveValues.waerme" as any), icon: Thermometer, colorClass: "text-[hsl(var(--energy-waerme))]" },
+    wasser: { label: t("liveValues.wasser" as any), icon: Droplets, colorClass: "text-[hsl(var(--energy-wasser))]" },
+  };
 
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedLocationId, setSelectedLocationId] = useState<string>("all");
@@ -374,6 +376,8 @@ const LiveValues = () => {
     return { value: null, totalDay: null, totalMonth: null, totalYear: null, meterReading: null, meterReadingUnit: "", source: "none" };
   };
 
+  const dateLocale = language === "de" ? "de-DE" : language === "nl" ? "nl-NL" : language === "es" ? "es-ES" : "en-US";
+
   if (authLoading || locationsLoading || metersLoading) {
     return (
       <div className="flex flex-col md:flex-row min-h-screen bg-background">
@@ -399,21 +403,21 @@ const LiveValues = () => {
             <div>
               <h1 className="text-2xl font-display font-bold flex items-center gap-2">
                 <Activity className="h-6 w-6 text-primary" />
-                Aktuelle Werte
+                {t("liveValues.title" as any)}
               </h1>
               <p className="text-sm text-muted-foreground mt-1">
-                Live-Übersicht aller Messstellen und deren aktuelle Werte
+                {t("liveValues.subtitle" as any)}
               </p>
             </div>
             <div className="flex items-center gap-3">
               {lastRefresh && (
                 <span className="text-xs text-muted-foreground">
-                  Aktualisiert: {lastRefresh.toLocaleTimeString("de-DE")}
+                  {t("common.refreshed" as any)}: {lastRefresh.toLocaleTimeString(dateLocale)}
                 </span>
               )}
               <Button variant="outline" size="sm" onClick={fetchLiveValues} disabled={loadingLive}>
                 <RefreshCw className={cn("h-4 w-4 mr-2", loadingLive && "animate-spin")} />
-                Aktualisieren
+                {t("common.refresh" as any)}
               </Button>
             </div>
           </div>
@@ -425,7 +429,7 @@ const LiveValues = () => {
             <div className="relative flex-1 min-w-[200px] max-w-sm">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Zähler suchen..."
+                placeholder={t("liveValues.searchMeters" as any)}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-9"
@@ -433,10 +437,10 @@ const LiveValues = () => {
             </div>
             <Select value={selectedLocationId} onValueChange={setSelectedLocationId}>
               <SelectTrigger className="w-[200px]">
-                <SelectValue placeholder="Standort" />
+                <SelectValue placeholder={t("liveValues.allLocations" as any)} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Alle Standorte</SelectItem>
+                <SelectItem value="all">{t("liveValues.allLocations" as any)}</SelectItem>
                 {locations.map((loc) => (
                   <SelectItem key={loc.id} value={loc.id}>{loc.name}</SelectItem>
                 ))}
@@ -444,10 +448,10 @@ const LiveValues = () => {
             </Select>
             <Select value={selectedEnergyType} onValueChange={setSelectedEnergyType}>
               <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Energieart" />
+                <SelectValue placeholder={t("liveValues.allEnergyTypes" as any)} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Alle Energiearten</SelectItem>
+                <SelectItem value="all">{t("liveValues.allEnergyTypes" as any)}</SelectItem>
                 {Object.entries(ENERGY_TYPE_CONFIG).map(([key, cfg]) => (
                   <SelectItem key={key} value={key}>{cfg.label}</SelectItem>
                 ))}
@@ -455,13 +459,13 @@ const LiveValues = () => {
             </Select>
             <Select value={selectedCaptureType} onValueChange={setSelectedCaptureType}>
               <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Erfassung" />
+                <SelectValue placeholder={t("liveValues.allTypes" as any)} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Alle Typen</SelectItem>
-                <SelectItem value="automatic">Automatisch</SelectItem>
-                <SelectItem value="manual">Manuell</SelectItem>
-                <SelectItem value="virtual">Virtuell</SelectItem>
+                <SelectItem value="all">{t("liveValues.allTypes" as any)}</SelectItem>
+                <SelectItem value="automatic">{t("common.automatic" as any)}</SelectItem>
+                <SelectItem value="manual">{t("common.manual" as any)}</SelectItem>
+                <SelectItem value="virtual">{t("common.virtual" as any)}</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -469,14 +473,14 @@ const LiveValues = () => {
           {/* Summary */}
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Gauge className="h-4 w-4" />
-            <span>{filteredMeters.length} Messstelle{filteredMeters.length !== 1 ? "n" : ""}</span>
+            <span>{filteredMeters.length} {t("liveValues.meters" as any)}</span>
           </div>
 
           {/* Meter Cards */}
           {filteredMeters.length === 0 ? (
             <Card>
               <CardContent className="py-12 text-center text-muted-foreground">
-                Keine Messstellen gefunden.
+                {t("liveValues.noMeters" as any)}
               </CardContent>
             </Card>
           ) : (
@@ -497,7 +501,7 @@ const LiveValues = () => {
                           <CardTitle className="text-sm font-medium truncate">{meter.name}</CardTitle>
                         </div>
                         <Badge variant={source === "live" ? "default" : source === "virtual" ? "outline" : "secondary"} className="shrink-0 text-[10px] px-1.5 py-0">
-                          {source === "live" ? "Live" : source === "virtual" ? "Virtuell" : source === "manual" ? "Manuell" : "–"}
+                          {source === "live" ? "Live" : source === "virtual" ? t("common.virtual" as any) : source === "manual" ? t("common.manual" as any) : "–"}
                         </Badge>
                       </div>
                     </CardHeader>
@@ -508,37 +512,33 @@ const LiveValues = () => {
                             <>
                               {meter.energy_type === "gas" ? (
                                 <>
-                                  {value.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} m³
+                                  {value.toLocaleString(dateLocale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} m³
                                   {isFlowType && (
-                                    <span className="text-sm font-normal text-muted-foreground ml-1">Durchfluss</span>
+                                    <span className="text-sm font-normal text-muted-foreground ml-1">{t("liveValues.flow" as any)}</span>
                                   )}
                                 </>
                               ) : (
                                 <>
                               {(() => {
-                                    // For automatic meters, scale power value based on source_unit_power
                                     if (source === "live") {
                                       const srcPower = (meter as any).source_unit_power || "kW";
-                                      const displayUnit = meter.unit || "kWh";
-                                      // Convert to kW for display if source is W
                                       if (srcPower === "W") {
-                                        return `${(value / 1000).toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kW`;
+                                        return `${(value / 1000).toLocaleString(dateLocale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kW`;
                                       }
-                                      return `${value.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kW`;
+                                      return `${value.toLocaleString(dateLocale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kW`;
                                     }
-                                    return `${value.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${meter.unit}`;
+                                    return `${value.toLocaleString(dateLocale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${meter.unit}`;
                                   })()}
                                   {isFlowType && (
-                                    <span className="text-sm font-normal text-muted-foreground ml-1">Durchfluss</span>
+                                    <span className="text-sm font-normal text-muted-foreground ml-1">{t("liveValues.flow" as any)}</span>
                                   )}
                                 </>
                               )}
                             </>
                           ) : (
-                            <span className="text-muted-foreground text-lg">Kein Wert</span>
+                            <span className="text-muted-foreground text-lg">{t("common.noValue" as any)}</span>
                           )}
                         </div>
-                        {/* Gas: show kWh equivalent */}
                         {meter.energy_type === "gas" && value !== null && (
                           <div className="text-sm text-muted-foreground font-medium">
                             ≈ {formatGasDual(value, (meter as any).gas_type, (meter as any).brennwert, (meter as any).zustandszahl).kwhStr}
@@ -548,16 +548,16 @@ const LiveValues = () => {
                           <div className="text-sm text-muted-foreground font-medium">
                             {meter.energy_type === "gas" ? (
                               <>
-                                {Number(totalDay).toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} m³
-                                <span className="ml-1 font-normal">{source === "manual" ? "Verbrauch" : "Gesamt heute"}</span>
+                                {Number(totalDay).toLocaleString(dateLocale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} m³
+                                <span className="ml-1 font-normal">{source === "manual" ? t("liveValues.consumption" as any) : t("liveValues.totalToday" as any)}</span>
                                 <span className="ml-2 text-xs">
                                   (≈ {formatGasDual(Number(totalDay), (meter as any).gas_type, (meter as any).brennwert, (meter as any).zustandszahl).kwhStr})
                                 </span>
                               </>
                             ) : meter.energy_type === "wasser" ? (
                               <>
-                                {Number(totalDay).toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} m³
-                                <span className="ml-1 font-normal">{source === "manual" ? "Verbrauch" : "Gesamt heute"}</span>
+                                {Number(totalDay).toLocaleString(dateLocale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} m³
+                                <span className="ml-1 font-normal">{source === "manual" ? t("liveValues.consumption" as any) : t("liveValues.totalToday" as any)}</span>
                               </>
                             ) : (
                               <>
@@ -565,37 +565,34 @@ const LiveValues = () => {
                                   if (source === "manual") {
                                     return formatEnergy(Number(totalDay) * (meter.unit === "kWh" ? 1000 : 1));
                                   }
-                                  // Automatic: scale based on source_unit_energy setting
                                   const srcEnergy = (meter as any).source_unit_energy || "kWh";
-                                  const factor = srcEnergy === "Wh" ? 1 : 1000; // Wh is already base, kWh needs *1000
+                                  const factor = srcEnergy === "Wh" ? 1 : 1000;
                                   return formatEnergy(Number(totalDay) * factor);
                                 })()}
-                                <span className="ml-1 font-normal">{source === "manual" ? "Verbrauch" : "Gesamt heute"}</span>
+                                <span className="ml-1 font-normal">{source === "manual" ? t("liveValues.consumption" as any) : t("liveValues.totalToday" as any)}</span>
                               </>
                             )}
                           </div>
                         )}
-                        {/* Meter reading (Zählerstand) for automatic meters */}
                         {source === "live" && meterReading != null && (
                           <div className="text-sm text-muted-foreground">
                             <span className="font-medium">
-                              {Number(meterReading).toLocaleString("de-DE", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}{" "}
+                              {Number(meterReading).toLocaleString(dateLocale, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}{" "}
                               {meter.energy_type === "wasser" || meter.energy_type === "gas" ? "m³" : meterReadingUnit}
                             </span>
-                            <span className="ml-1 font-normal">Zählerstand</span>
+                            <span className="ml-1 font-normal">{t("liveValues.meterReading" as any)}</span>
                           </div>
                         )}
-                        {/* Period totals for automatic meters */}
                         {source === "live" && (totalMonth != null || totalYear != null) && (
                           <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
                             {totalMonth != null && (
-                              <span>Monat: {meter.energy_type === "wasser" || meter.energy_type === "gas"
-                                ? `${Number(totalMonth).toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} m³`
+                              <span>{t("liveValues.month" as any)}: {meter.energy_type === "wasser" || meter.energy_type === "gas"
+                                ? `${Number(totalMonth).toLocaleString(dateLocale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} m³`
                                 : formatEnergy(Number(totalMonth) * (((meter as any).source_unit_energy || "kWh") === "Wh" ? 1 : 1000))}</span>
                             )}
                             {totalYear != null && (
-                              <span>Jahr: {meter.energy_type === "wasser" || meter.energy_type === "gas"
-                                ? `${Number(totalYear).toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} m³`
+                              <span>{t("liveValues.year" as any)}: {meter.energy_type === "wasser" || meter.energy_type === "gas"
+                                ? `${Number(totalYear).toLocaleString(dateLocale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} m³`
                                 : formatEnergy(Number(totalYear) * (((meter as any).source_unit_energy || "kWh") === "Wh" ? 1 : 1000))}</span>
                             )}
                           </div>
@@ -611,7 +608,7 @@ const LiveValues = () => {
                           )}
                           {source === "manual" && date && (
                             <p className="text-xs text-muted-foreground">
-                              Stand: {new Date(date).toLocaleDateString("de-DE")}
+                              {t("liveValues.reading" as any)}: {new Date(date).toLocaleDateString(dateLocale)}
                             </p>
                           )}
                         </div>
