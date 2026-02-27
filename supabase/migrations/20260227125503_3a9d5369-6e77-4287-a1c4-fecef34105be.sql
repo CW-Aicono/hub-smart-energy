@@ -1,0 +1,2 @@
+ALTER TABLE public.report_schedules DROP CONSTRAINT report_schedules_frequency_check;
+ALTER TABLE public.report_schedules ADD CONSTRAINT report_schedules_frequency_check CHECK (frequency = ANY (ARRAY['daily'::text, 'weekly'::text, 'monthly'::text, 'quarterly'::text, 'yearly'::text]));
