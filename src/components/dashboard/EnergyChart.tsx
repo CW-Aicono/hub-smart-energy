@@ -177,8 +177,11 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
 
       let allData: Array<{ meter_id: string; power_value: number; recorded_at: string }> = [];
 
-      // Use server-side function with explicit pagination to avoid PostgREST's default 1000-row cap
-      const pageSize = 1000;
+      // Fetch all 5-min aggregated data. Use a large page size to minimise
+      // the number of sequential RPC calls (each re-executes the full on-the-fly
+      // aggregation of raw readings). With ~41 meters × 288 buckets ≈ 12k rows max,
+      // a page size of 15 000 usually fetches everything in one round-trip.
+      const pageSize = 15000;
       let from = 0;
       let hasMore = true;
       let aggError: unknown = null;
