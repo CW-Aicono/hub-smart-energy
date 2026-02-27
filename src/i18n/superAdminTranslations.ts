@@ -218,6 +218,25 @@ export const saTranslations: SATranslations = {
   "error.generic": { de: "Fehler", en: "Error", fr: "Erreur", pl: "Błąd" },
   "error.status_change": { de: "Status konnte nicht geändert werden.", en: "Status could not be changed.", fr: "Le statut n'a pas pu être modifié.", pl: "Nie udało się zmienić statusu." },
   "error.role_change": { de: "Rolle konnte nicht geändert werden.", en: "Role could not be changed.", fr: "Le rôle n'a pas pu être modifié.", pl: "Nie udało się zmienić roli." },
+
+  // SA Role Dialogs
+  "saRole.newButton": { de: "Neue Rolle", en: "New role", fr: "Nouveau rôle", pl: "Nowa rola" },
+  "saRole.createTitle": { de: "Neue Super-Admin Rolle erstellen", en: "Create new super admin role", fr: "Créer un nouveau rôle super admin", pl: "Utwórz nową rolę superadmina" },
+  "saRole.createDesc": { de: "Erstellen Sie eine Rolle und weisen Sie Super-Admin-Berechtigungen zu.", en: "Create a role and assign super admin permissions.", fr: "Créez un rôle et attribuez des permissions super admin.", pl: "Utwórz rolę i przypisz uprawnienia superadmina." },
+  "saRole.editTitle": { de: "Rolle bearbeiten", en: "Edit role", fr: "Modifier le rôle", pl: "Edytuj rolę" },
+  "saRole.editDesc": { de: "Bearbeiten Sie den Namen, die Beschreibung und die Berechtigungen dieser Rolle.", en: "Edit the name, description, and permissions of this role.", fr: "Modifiez le nom, la description et les permissions de ce rôle.", pl: "Edytuj nazwę, opis i uprawnienia tej roli." },
+  "saRole.nameLabel": { de: "Name *", en: "Name *", fr: "Nom *", pl: "Nazwa *" },
+  "saRole.namePlaceholder": { de: "z.B. Support-Manager", en: "e.g. Support Manager", fr: "p. ex. Responsable support", pl: "np. Menedżer wsparcia" },
+  "saRole.descLabel": { de: "Beschreibung", en: "Description", fr: "Description", pl: "Opis" },
+  "saRole.descPlaceholder": { de: "Kurze Beschreibung der Rolle...", en: "Short description of the role...", fr: "Brève description du rôle...", pl: "Krótki opis roli..." },
+  "saRole.permissions": { de: "Berechtigungen", en: "Permissions", fr: "Permissions", pl: "Uprawnienia" },
+  "saRole.nameRequired": { de: "Bitte geben Sie einen Rollennamen ein", en: "Please enter a role name", fr: "Veuillez saisir un nom de rôle", pl: "Proszę wprowadzić nazwę roli" },
+  "saRole.created": { de: "Rolle erfolgreich erstellt", en: "Role created successfully", fr: "Rôle créé avec succès", pl: "Rola utworzona pomyślnie" },
+  "saRole.updated": { de: "Rolle aktualisiert", en: "Role updated", fr: "Rôle mis à jour", pl: "Rola zaktualizowana" },
+  "saRole.editButton": { de: "Rolle bearbeiten", en: "Edit role", fr: "Modifier le rôle", pl: "Edytuj rolę" },
+  "common.saving": { de: "Speichere...", en: "Saving...", fr: "Enregistrement...", pl: "Zapisywanie..." },
+  "createRole.creating": { de: "Wird erstellt...", en: "Creating...", fr: "Création...", pl: "Tworzenie..." },
+  "createRole.create": { de: "Erstellen", en: "Create", fr: "Créer", pl: "Utwórz" },
 };
 
 // Color preset names
