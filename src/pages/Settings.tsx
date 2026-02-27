@@ -5,6 +5,7 @@ import { useTranslation } from "@/hooks/useTranslation";
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
 import { BrandingSettings } from "@/components/settings/BrandingSettings";
 import { BackupSettings } from "@/components/settings/BackupSettings";
+import { WeekStartSetting } from "@/components/settings/WeekStartSetting";
 import { TenantInfoSettings } from "@/components/settings/TenantInfoSettings";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Palette, HardDrive, Building2 } from "lucide-react";
@@ -54,7 +55,8 @@ const Settings = () => {
             <TabsContent value="tenant-info">
               <TenantInfoSettings />
             </TabsContent>
-            <TabsContent value="branding">
+            <TabsContent value="branding" className="space-y-6">
+              <WeekStartSetting />
               <BrandingSettings />
             </TabsContent>
             <TabsContent value="backup">
