@@ -16,18 +16,70 @@ const FREQ_LABELS: Record<string, string> = {
   daily: "Täglich", weekly: "Wöchentlich", monthly: "Monatlich", quarterly: "Quartalsweise", yearly: "Jährlich",
 };
 
-function getDateRange(frequency: string): { from: string; to: string } {
+function toDateStr(d: Date): string {
+  return d.toISOString().split("T")[0];
+}
+
+function getDateRange(frequency: string, weekStartDay = 1): { from: string; to: string } {
+  // All reports cover the PREVIOUS complete period.
+  // "now" in MEZ: the cron runs at 05:00 UTC = 06:00 MEZ, so "today" in MEZ is correct.
   const now = new Date();
-  const to = now.toISOString().split("T")[0];
-  let from: Date;
+
   switch (frequency) {
-    case "daily": from = new Date(now); from.setDate(now.getDate() - 1); break;
-    case "weekly": from = new Date(now); from.setDate(now.getDate() - 7); break;
-    case "quarterly": from = new Date(now); from.setMonth(now.getMonth() - 3); break;
-    case "yearly": from = new Date(now); from.setFullYear(now.getFullYear() - 1); break;
-    default: from = new Date(now); from.setMonth(now.getMonth() - 1); break;
+    case "daily": {
+      // Yesterday
+      const yesterday = new Date(now);
+      yesterday.setDate(now.getDate() - 1);
+      return { from: toDateStr(yesterday), to: toDateStr(yesterday) };
+    }
+    case "weekly": {
+      // Last full week based on weekStartDay (0=Sun, 1=Mon, ..., 6=Sat)
+      const today = new Date(now);
+      today.setHours(0, 0, 0, 0);
+      const currentDay = today.getDay(); // 0=Sun
+      // Days since the most recent weekStartDay
+      const daysSinceStart = (currentDay - weekStartDay + 7) % 7;
+      // Start of THIS week
+      const thisWeekStart = new Date(today);
+      thisWeekStart.setDate(today.getDate() - daysSinceStart);
+      // Last week = 7 days before this week start
+      const lastWeekStart = new Date(thisWeekStart);
+      lastWeekStart.setDate(thisWeekStart.getDate() - 7);
+      const lastWeekEnd = new Date(thisWeekStart);
+      lastWeekEnd.setDate(thisWeekStart.getDate() - 1);
+      return { from: toDateStr(lastWeekStart), to: toDateStr(lastWeekEnd) };
+    }
+    case "monthly": {
+      // Previous full month
+      const firstOfThisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      const lastOfPrevMonth = new Date(firstOfThisMonth);
+      lastOfPrevMonth.setDate(0); // last day of previous month
+      const firstOfPrevMonth = new Date(lastOfPrevMonth.getFullYear(), lastOfPrevMonth.getMonth(), 1);
+      return { from: toDateStr(firstOfPrevMonth), to: toDateStr(lastOfPrevMonth) };
+    }
+    case "quarterly": {
+      // Previous full quarter
+      const currentQuarter = Math.floor(now.getMonth() / 3);
+      const prevQuarterStart = currentQuarter === 0
+        ? new Date(now.getFullYear() - 1, 9, 1)  // Q4 of previous year
+        : new Date(now.getFullYear(), (currentQuarter - 1) * 3, 1);
+      const prevQuarterEnd = new Date(prevQuarterStart.getFullYear(), prevQuarterStart.getMonth() + 3, 0);
+      return { from: toDateStr(prevQuarterStart), to: toDateStr(prevQuarterEnd) };
+    }
+    case "yearly": {
+      // Previous full year
+      const prevYear = now.getFullYear() - 1;
+      return { from: `${prevYear}-01-01`, to: `${prevYear}-12-31` };
+    }
+    default: {
+      // Fallback: previous month
+      const firstOfThisMonth2 = new Date(now.getFullYear(), now.getMonth(), 1);
+      const lastOfPrevMonth2 = new Date(firstOfThisMonth2);
+      lastOfPrevMonth2.setDate(0);
+      const firstOfPrevMonth2 = new Date(lastOfPrevMonth2.getFullYear(), lastOfPrevMonth2.getMonth(), 1);
+      return { from: toDateStr(firstOfPrevMonth2), to: toDateStr(lastOfPrevMonth2) };
+    }
   }
-  return { from: from.toISOString().split("T")[0], to };
 }
 
 function buildCSV(rows: Record<string, unknown>[]): string {
@@ -315,15 +367,18 @@ serve(async (req) => {
 
     for (const schedule of schedules) {
       try {
-        const { from, to } = getDateRange(schedule.frequency);
+        // (tenant fetched first so weekStartDay is available for getDateRange)
 
         // Get tenant info (logo, name, branding)
-        const { data: tenantData } = await supabase.from("tenants").select("name, logo_url, branding").eq("id", schedule.tenant_id).single();
+        const { data: tenantData } = await supabase.from("tenants").select("name, logo_url, branding, week_start_day").eq("id", schedule.tenant_id).single();
         const tenantName = tenantData?.name || "";
         const logoUrl = tenantData?.logo_url || null;
         const tenantBranding = (tenantData?.branding as Record<string, string>) || {};
         const primaryColor = tenantBranding.primaryColor || "#1e293b";
         const accentColor = tenantBranding.accentColor || "#334155";
+        const weekStartDay: number = tenantData?.week_start_day ?? 1;
+
+        const { from, to } = getDateRange(schedule.frequency, weekStartDay);
 
         // Get meters matching filters
         let meterQuery = supabase.from("meters").select("*").eq("tenant_id", schedule.tenant_id);
@@ -420,13 +475,42 @@ serve(async (req) => {
           });
         }
 
-        // Update timestamps
-        const nextRun = new Date();
+        // Calculate next_run_at based on frequency
+        // Reports run at 05:00 UTC (06:00 MEZ) daily; next_run_at determines WHEN a schedule is due
+        const now = new Date();
+        const nextRun = new Date(now);
+        nextRun.setUTCHours(5, 0, 0, 0); // 05:00 UTC = 06:00 MEZ
+
         switch (schedule.frequency) {
-          case "weekly": nextRun.setDate(nextRun.getDate() + 7); break;
-          case "quarterly": nextRun.setMonth(nextRun.getMonth() + 3); break;
-          case "yearly": nextRun.setFullYear(nextRun.getFullYear() + 1); break;
-          default: nextRun.setMonth(nextRun.getMonth() + 1); break;
+          case "daily":
+            // Tomorrow at 05:00 UTC
+            nextRun.setUTCDate(nextRun.getUTCDate() + 1);
+            break;
+          case "weekly": {
+            // Next weekStartDay at 05:00 UTC
+            const currentDay = nextRun.getDay();
+            let daysUntilNext = (weekStartDay - currentDay + 7) % 7;
+            if (daysUntilNext === 0) daysUntilNext = 7; // always next week
+            nextRun.setUTCDate(nextRun.getUTCDate() + daysUntilNext);
+            break;
+          }
+          case "monthly":
+            // 1st of next month at 05:00 UTC
+            nextRun.setUTCMonth(nextRun.getUTCMonth() + 1, 1);
+            break;
+          case "quarterly": {
+            // 1st of next quarter at 05:00 UTC
+            const currentQuarter = Math.floor(nextRun.getUTCMonth() / 3);
+            nextRun.setUTCMonth((currentQuarter + 1) * 3, 1);
+            break;
+          }
+          case "yearly":
+            // Jan 1st of next year at 05:00 UTC
+            nextRun.setUTCFullYear(nextRun.getUTCFullYear() + 1, 0, 1);
+            break;
+          default:
+            nextRun.setUTCMonth(nextRun.getUTCMonth() + 1, 1);
+            break;
         }
 
         await supabase.from("report_schedules").update({
