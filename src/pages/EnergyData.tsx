@@ -4,6 +4,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useLocations } from "@/hooks/useLocations";
 import { useMeters } from "@/hooks/useMeters";
 import { useTenant } from "@/hooks/useTenant";
+import { useTranslation } from "@/hooks/useTranslation";
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -18,13 +19,6 @@ import { downloadCSV, downloadPDF } from "@/lib/exportUtils";
 import ReportSchedulesList from "@/components/energy-data/ReportSchedulesList";
 import { supabase } from "@/integrations/supabase/client";
 
-const ENERGY_TYPE_LABELS: Record<string, string> = {
-  strom: "Strom",
-  gas: "Gas",
-  waerme: "Wärme",
-  wasser: "Wasser",
-};
-
 interface ReadingExportRow {
   meter_id: string;
   value: number;
@@ -37,6 +31,7 @@ const EnergyData = () => {
   const { locations, loading: locationsLoading } = useLocations();
   const { meters, loading: metersLoading } = useMeters();
   const { tenant } = useTenant();
+  const { t } = useTranslation();
 
   const [selectedLocationId, setSelectedLocationId] = useState<string>("all");
   const [selectedEnergyTypes, setSelectedEnergyTypes] = useState<string[]>(["strom", "gas", "waerme", "wasser"]);
@@ -46,6 +41,13 @@ const EnergyData = () => {
   const [includeMeters, setIncludeMeters] = useState(true);
   const [readingsCount, setReadingsCount] = useState(0);
   const [loadingReadings, setLoadingReadings] = useState(false);
+
+  const ENERGY_TYPE_KEYS: Record<string, string> = {
+    strom: "energyData.strom",
+    gas: "energyData.gas",
+    waerme: "energyData.waerme",
+    wasser: "energyData.wasser",
+  };
 
   // Fetch reading count for badge
   useEffect(() => {
@@ -75,7 +77,7 @@ const EnergyData = () => {
 
   const toggleEnergyType = (type: string) => {
     setSelectedEnergyTypes((prev) =>
-      prev.includes(type) ? prev.filter((t) => t !== type) : [...prev, type]
+      prev.includes(type) ? prev.filter((t2) => t2 !== type) : [...prev, type]
     );
   };
 
@@ -90,7 +92,6 @@ const EnergyData = () => {
 
     if (includeReadings) {
       setLoadingReadings(true);
-      // Get meter IDs matching filters
       const meterIds = filteredMeters.map((m) => m.id);
       if (meterIds.length > 0) {
         let query = supabase
@@ -109,15 +110,15 @@ const EnergyData = () => {
           const meter = meters.find((m) => m.id === r.meter_id);
           const loc = locations.find((l) => l.id === meter?.location_id);
           rows.push({
-            Quelle: "Zählerablesung",
+            Quelle: t("energyData.meterReadings" as any),
             Standort: loc?.name || "",
             Zähler: meter?.name || "",
             Zählernummer: meter?.meter_number || "",
-            Energieart: ENERGY_TYPE_LABELS[meter?.energy_type || ""] || meter?.energy_type || "",
+            Energieart: t((ENERGY_TYPE_KEYS[meter?.energy_type || ""] || meter?.energy_type || "") as any),
             Datum: r.reading_date,
             Wert: r.value,
             Einheit: meter?.unit || "kWh",
-            Erfassung: r.capture_method === "manual" ? "Manuell" : r.capture_method === "ai" ? "KI-OCR" : r.capture_method,
+            Erfassung: r.capture_method === "manual" ? "Manual" : r.capture_method === "ai" ? "AI-OCR" : r.capture_method,
           });
         });
       }
@@ -128,13 +129,13 @@ const EnergyData = () => {
       filteredMeters.forEach((m) => {
         const loc = locations.find((l) => l.id === m.location_id);
         rows.push({
-          Quelle: "Messstellen",
+          Quelle: t("energyData.meters" as any),
           Standort: loc?.name || "",
           Name: m.name,
           Zählernummer: m.meter_number || "",
-          Energieart: ENERGY_TYPE_LABELS[m.energy_type] || m.energy_type,
+          Energieart: t((ENERGY_TYPE_KEYS[m.energy_type] || m.energy_type) as any),
           Einheit: m.unit,
-          Erfassung: m.capture_type === "automatic" ? "Automatisch" : "Manuell",
+          Erfassung: m.capture_type === "automatic" ? "Automatic" : "Manual",
         });
       });
     }
@@ -158,7 +159,7 @@ const EnergyData = () => {
   const handlePdfExport = async () => {
     const rows = await buildExportRows();
     if (rows.length === 0) return;
-    downloadPDF(rows, "energiedaten-export", getHeaders(rows), "Energiedaten Export", {
+    downloadPDF(rows, "energiedaten-export", getHeaders(rows), t("energyData.title" as any), {
       logoUrl: tenant?.logo_url,
       tenantName: tenant?.name,
     });
@@ -171,10 +172,10 @@ const EnergyData = () => {
         <header className="border-b p-4 md:p-6">
           <h1 className="text-2xl font-display font-bold flex items-center gap-2">
             <Database className="h-6 w-6 text-primary" />
-            Energiedaten
+            {t("energyData.title" as any)}
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Stellen Sie einen individuellen Datenexport aus allen verfügbaren Quellen zusammen
+            {t("energyData.subtitle" as any)}
           </p>
         </header>
 
@@ -185,16 +186,16 @@ const EnergyData = () => {
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm flex items-center gap-2">
                   <Filter className="h-4 w-4" />
-                  Standort
+                  {t("energyData.location" as any)}
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <Select value={selectedLocationId} onValueChange={setSelectedLocationId}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Standort wählen" />
+                    <SelectValue placeholder={t("energyData.selectLocation" as any)} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">Alle Standorte</SelectItem>
+                    <SelectItem value="all">{t("energyData.allLocations" as any)}</SelectItem>
                     {locations.map((loc) => (
                       <SelectItem key={loc.id} value={loc.id}>{loc.name}</SelectItem>
                     ))}
@@ -206,17 +207,17 @@ const EnergyData = () => {
             {/* Filter: Energy Types */}
             <Card>
               <CardHeader className="pb-3">
-                <CardTitle className="text-sm">Energiearten</CardTitle>
+                <CardTitle className="text-sm">{t("energyData.energyTypes" as any)}</CardTitle>
               </CardHeader>
               <CardContent className="space-y-2">
-                {Object.entries(ENERGY_TYPE_LABELS).map(([key, label]) => (
+                {Object.entries(ENERGY_TYPE_KEYS).map(([key, tKey]) => (
                   <div key={key} className="flex items-center gap-2">
                     <Checkbox
                       id={`energy-${key}`}
                       checked={selectedEnergyTypes.includes(key)}
                       onCheckedChange={() => toggleEnergyType(key)}
                     />
-                    <Label htmlFor={`energy-${key}`} className="text-sm cursor-pointer">{label}</Label>
+                    <Label htmlFor={`energy-${key}`} className="text-sm cursor-pointer">{t(tKey as any)}</Label>
                   </div>
                 ))}
               </CardContent>
@@ -227,16 +228,16 @@ const EnergyData = () => {
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm flex items-center gap-2">
                   <Calendar className="h-4 w-4" />
-                  Zeitraum
+                  {t("energyData.dateRange" as any)}
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
                 <div>
-                  <Label className="text-xs">Von</Label>
+                  <Label className="text-xs">{t("energyData.from" as any)}</Label>
                   <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
                 </div>
                 <div>
-                  <Label className="text-xs">Bis</Label>
+                  <Label className="text-xs">{t("energyData.to" as any)}</Label>
                   <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
                 </div>
               </CardContent>
@@ -246,8 +247,8 @@ const EnergyData = () => {
           {/* Data Sources */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Datenquellen</CardTitle>
-              <CardDescription>Wählen Sie die Datenquellen, die im Export enthalten sein sollen</CardDescription>
+              <CardTitle className="text-base">{t("energyData.dataSources" as any)}</CardTitle>
+              <CardDescription>{t("energyData.dataSourcesDesc" as any)}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex items-center justify-between p-3 rounded-md border">
@@ -259,12 +260,12 @@ const EnergyData = () => {
                       onCheckedChange={(c) => setIncludeReadings(!!c)}
                     />
                     <Label htmlFor="source-readings" className="cursor-pointer font-medium">
-                      Zählerablesungen
+                      {t("energyData.meterReadings" as any)}
                     </Label>
                   </div>
-                  <p className="text-xs text-muted-foreground ml-6">Erfasste Zählerstände (manuell & automatisch)</p>
+                  <p className="text-xs text-muted-foreground ml-6">{t("energyData.meterReadingsDesc" as any)}</p>
                 </div>
-                <Badge variant="secondary">{readingsCount} Ablesungen</Badge>
+                <Badge variant="secondary">{readingsCount} {t("energyData.readings" as any)}</Badge>
               </div>
 
               <div className="flex items-center justify-between p-3 rounded-md border">
@@ -276,12 +277,12 @@ const EnergyData = () => {
                       onCheckedChange={(c) => setIncludeMeters(!!c)}
                     />
                     <Label htmlFor="source-meters" className="cursor-pointer font-medium">
-                      Messstellen
+                      {t("energyData.meters" as any)}
                     </Label>
                   </div>
-                  <p className="text-xs text-muted-foreground ml-6">Konfigurierte Zähler und deren Metadaten</p>
+                  <p className="text-xs text-muted-foreground ml-6">{t("energyData.metersDesc" as any)}</p>
                 </div>
-                <Badge variant="secondary">{filteredMeters.length} Zähler</Badge>
+                <Badge variant="secondary">{filteredMeters.length} {t("energyData.metersCount" as any)}</Badge>
               </div>
             </CardContent>
           </Card>
@@ -295,7 +296,7 @@ const EnergyData = () => {
               disabled={(!includeReadings && !includeMeters) || loadingReadings}
             >
               <FileText className="h-4 w-4 mr-2" />
-              PDF exportieren
+              {t("energyData.exportPdf" as any)}
             </Button>
             <Button
               size="lg"
@@ -303,7 +304,7 @@ const EnergyData = () => {
               disabled={(!includeReadings && !includeMeters) || loadingReadings}
             >
               <Download className="h-4 w-4 mr-2" />
-              CSV exportieren
+              {t("energyData.exportCsv" as any)}
             </Button>
           </div>
 
