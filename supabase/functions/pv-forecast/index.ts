@@ -31,9 +31,18 @@ serve(async (req) => {
       .eq("is_active", true)
       .maybeSingle();
 
-    const peakKwp = settings?.peak_power_kwp ?? 10;
-    const tiltDeg = settings?.tilt_deg ?? 30;
-    const azimuthDeg = settings?.azimuth_deg ?? 180;
+    // If no active PV settings exist for this location, return empty forecast
+    if (!settings) {
+      return new Response(JSON.stringify({
+        location: { name: location.name, city: location.city ?? "" },
+        hourly: [],
+        summary: { total_kwh: 0, ai_confidence: "", ai_notes: "" },
+      }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    const peakKwp = settings.peak_power_kwp;
+    const tiltDeg = settings.tilt_deg;
+    const azimuthDeg = settings.azimuth_deg;
 
     // 3. Fetch Open-Meteo solar radiation forecast (48h)
     const meteoUrl = `https://api.open-meteo.com/v1/forecast?latitude=${location.latitude}&longitude=${location.longitude}&hourly=shortwave_radiation,direct_radiation,diffuse_radiation,cloud_cover&timezone=Europe/Berlin&forecast_days=2`;
