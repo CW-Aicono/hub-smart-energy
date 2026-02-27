@@ -3274,6 +3274,30 @@ export const translations = {
   "backup.errorCreating": { de: "Fehler beim Erstellen", en: "Error creating backup", es: "Error al crear copia", nl: "Fout bij maken back-up" },
   "backup.errorExporting": { de: "Fehler beim Export", en: "Error exporting", es: "Error al exportar", nl: "Fout bij exporteren" },
   "backup.errorDeleting": { de: "Fehler beim Löschen", en: "Error deleting", es: "Error al eliminar", nl: "Fout bij verwijderen" },
+
+  // API Settings
+  "api.title": { de: "API", en: "API", es: "API", nl: "API" },
+  "api.subtitle": { de: "API-Zugang für externe Systeme verwalten", en: "Manage API access for external systems", es: "Gestionar acceso API para sistemas externos", nl: "API-toegang voor externe systemen beheren" },
+  "api.credentials": { de: "API-Zugangsdaten", en: "API Credentials", es: "Credenciales API", nl: "API-inloggegevens" },
+  "api.credentialsDesc": { de: "Endpoint und API-Key für externe Systeme zum Kopieren", en: "Endpoint and API key for external systems to copy", es: "Endpoint y clave API para copiar en sistemas externos", nl: "Endpoint en API-sleutel om te kopiëren voor externe systemen" },
+  "api.endpoint": { de: "API-Endpoint", en: "API Endpoint", es: "Endpoint API", nl: "API-endpoint" },
+  "api.apiKey": { de: "API-Key", en: "API Key", es: "Clave API", nl: "API-sleutel" },
+  "api.apiKeyHint": { de: "Diesen Key im externen System als Bearer Token hinterlegen", en: "Use this key as Bearer token in the external system", es: "Usar esta clave como token Bearer en el sistema externo", nl: "Gebruik deze sleutel als Bearer-token in het externe systeem" },
+  "api.copied": { de: "In Zwischenablage kopiert", en: "Copied to clipboard", es: "Copiado al portapapeles", nl: "Gekopieerd naar klembord" },
+  "api.fetchError": { de: "API-Informationen konnten nicht geladen werden", en: "Could not load API information", es: "No se pudo cargar la información de la API", nl: "API-informatie kon niet worden geladen" },
+  "api.revealFirst": { de: "Bitte zuerst den Key anzeigen lassen", en: "Please reveal the key first", es: "Por favor, revele la clave primero", nl: "Toon eerst de sleutel" },
+  "api.availableRoutes": { de: "Verfügbare Routen", en: "Available Routes", es: "Rutas disponibles", nl: "Beschikbare routes" },
+  "api.availableRoutesDesc": { de: "Alle API-Endpunkte mit Authentifizierung via Bearer Token", en: "All API endpoints with Bearer token authentication", es: "Todos los endpoints API con autenticación Bearer", nl: "Alle API-endpoints met Bearer-token authenticatie" },
+  "api.method": { de: "Methode", en: "Method", es: "Método", nl: "Methode" },
+  "api.description": { de: "Beschreibung", en: "Description", es: "Descripción", nl: "Beschrijving" },
+  "api.route.listLocations": { de: "Alle aktiven Standorte abrufen", en: "List all active locations", es: "Listar todas las ubicaciones activas", nl: "Alle actieve locaties ophalen" },
+  "api.route.listMeters": { de: "Zähler abrufen (optional nach Standort)", en: "List meters (optionally by location)", es: "Listar contadores (opcionalmente por ubicación)", nl: "Meters ophalen (optioneel per locatie)" },
+  "api.route.getDailyTotals": { de: "Tagessummen pro Zähler abrufen", en: "Get daily totals per meter", es: "Obtener totales diarios por contador", nl: "Dagelijkse totalen per meter ophalen" },
+  "api.route.getReadings": { de: "5-Minuten-Leistungswerte abrufen", en: "Get 5-minute power readings", es: "Obtener lecturas de potencia de 5 minutos", nl: "5-minuten vermogenswaarden ophalen" },
+  "api.route.getLocationsSummary": { de: "Standortübersicht mit Zählerinfo", en: "Location summary with meter info", es: "Resumen de ubicaciones con info de contadores", nl: "Locatieoverzicht met meterinfo" },
+  "api.route.pushReadings": { de: "Messwerte einspeisen (Push)", en: "Push meter readings", es: "Enviar lecturas de contadores", nl: "Meterwaarden pushen" },
+  "api.route.compactDay": { de: "Rohdaten zu 5-Min-Aggregaten verdichten", en: "Compact raw data into 5-min aggregates", es: "Compactar datos brutos en agregados de 5 min", nl: "Ruwe data comprimeren naar 5-min aggregaten" },
+  "api.usageTitle": { de: "Verwendungsbeispiele", en: "Usage Examples", es: "Ejemplos de uso", nl: "Gebruiksvoorbeelden" },
 } as const;
 
 export type TranslationKey = keyof typeof translations;
