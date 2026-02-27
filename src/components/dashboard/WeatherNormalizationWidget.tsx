@@ -2,7 +2,8 @@ import { useState, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Legend } from "recharts";
+import { Tooltip as ShadTooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Thermometer, TrendingDown, TrendingUp } from "lucide-react";
 import { useWeatherNormalization } from "@/hooks/useWeatherNormalization";
@@ -189,18 +190,27 @@ const WeatherNormalizationWidget = ({ locationId, onExpand, onCollapse }: Weathe
                 </SelectContent>
               </Select>
             )}
-            <Select value={String(refTemp)} onValueChange={(v) => setRefTemp(Number(v))}>
-              <SelectTrigger className="h-8 w-[80px] text-xs">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {[12, 13, 14, 15, 16, 17, 18].map((t) => (
-                  <SelectItem key={t} value={String(t)} className="text-xs">
-                    {t}°C
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <ShadTooltip>
+              <TooltipTrigger asChild>
+                <div>
+                  <Select value={String(refTemp)} onValueChange={(v) => setRefTemp(Number(v))}>
+                    <SelectTrigger className="h-8 w-[80px] text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {[12, 13, 14, 15, 16, 17, 18].map((t) => (
+                        <SelectItem key={t} value={String(t)} className="text-xs">
+                          {t}°C
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="max-w-[260px] text-xs">
+                Referenztemperatur für die Heizgradtag-Berechnung (HGT). Bestimmt, ab welcher Außentemperatur geheizt wird – üblich sind 15 °C.
+              </TooltipContent>
+            </ShadTooltip>
           </div>
         </div>
       </CardHeader>
@@ -248,7 +258,7 @@ const WeatherNormalizationWidget = ({ locationId, onExpand, onCollapse }: Weathe
                       label={{ value: yAxisUnit, angle: -90, position: "insideLeft", style: { fill: "hsl(var(--muted-foreground))", fontSize: 12 } }}
                       tickFormatter={(v: number) => v.toLocaleString("de-DE", { maximumFractionDigits: 1 })}
                     />
-                    <Tooltip
+                    <RechartsTooltip
                       contentStyle={{
                         backgroundColor: "hsl(var(--card))",
                         border: "1px solid hsl(var(--border))",
