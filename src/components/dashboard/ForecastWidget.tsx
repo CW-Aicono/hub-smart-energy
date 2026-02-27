@@ -29,12 +29,12 @@ const ForecastWidget = ({ locationId }: ForecastWidgetProps) => {
         <CardHeader>
           <CardTitle className="font-display text-lg flex items-center gap-2">
             <TrendingUp className="h-5 w-5 text-primary" />
-            Jahresverbrauchsprognose
+            {t("dashboard.annualForecast" as any)}
           </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="h-[300px] flex items-center justify-center text-muted-foreground text-sm">
-            Noch keine Verbrauchsdaten für eine Prognose vorhanden
+            {t("dashboard.noDataForForecast" as any)}
           </div>
         </CardContent>
       </Card>
@@ -64,11 +64,11 @@ const ForecastWidget = ({ locationId }: ForecastWidgetProps) => {
       <CardHeader>
         <CardTitle className="font-display text-lg flex items-center gap-2">
           <TrendingUp className="h-5 w-5 text-primary" />
-          Jahresverbrauchsprognose
+          {t("dashboard.annualForecast" as any)}
           <HelpTooltip text={t("tooltip.forecast" as any)} />
         </CardTitle>
         <p className="text-sm text-muted-foreground">
-          Hochrechnung: ~{formatEnergy(totalForecast)} Gesamtjahr
+          {t("dashboard.forecastTotal" as any).replace("{value}", formatEnergy(totalForecast))}
         </p>
       </CardHeader>
       <CardContent>

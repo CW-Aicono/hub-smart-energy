@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Settings2, GripVertical, RotateCcw } from "lucide-react";
 import { DashboardWidget, WidgetSize } from "@/hooks/useDashboardWidgets";
+import { useTranslation } from "@/hooks/useTranslation";
 import { cn } from "@/lib/utils";
 
 interface DashboardCustomizerProps {
@@ -17,33 +18,34 @@ interface DashboardCustomizerProps {
   onResetLayout?: () => void;
 }
 
-const WIDGET_LABELS: Record<string, string> = {
-  location_map: "Standortkarte",
-  weather: "Lokales Wetter",
-  energy_gauge: "Live-Leistung (Tacho)",
-  cost_overview: "Kostenübersicht",
-  energy_chart: "Energieverbrauch",
-  sustainability_kpis: "Nachhaltigkeits-KPIs",
-  alerts_list: "Alerts & Benachrichtigungen",
-  floor_plan_explorer: "Grundriss-Explorer",
-  pie_chart: "Kreisdiagramm",
-  sankey: "Sankey-Diagramm",
-  forecast: "Jahresprognose",
-  anomaly: "KI-Anomalie-Erkennung",
-  weather_normalization: "Witterungsbereinigung",
-  spot_price: "Spotpreis-Verlauf",
-  pv_forecast: "PV-Prognose",
-  arbitrage_ai: "KI-Handelsempfehlung",
+const WIDGET_LABEL_KEYS: Record<string, string> = {
+  location_map: "widget.locationMap",
+  weather: "widget.weather",
+  energy_gauge: "widget.energyGauge",
+  cost_overview: "widget.costOverview",
+  energy_chart: "widget.energyChart",
+  sustainability_kpis: "widget.sustainabilityKpis",
+  alerts_list: "widget.alertsList",
+  floor_plan_explorer: "widget.floorPlanExplorer",
+  pie_chart: "widget.pieChart",
+  sankey: "widget.sankey",
+  forecast: "widget.forecast",
+  anomaly: "widget.anomaly",
+  weather_normalization: "widget.weatherNorm",
+  spot_price: "widget.spotPrice",
+  pv_forecast: "widget.pvForecast",
+  arbitrage_ai: "widget.arbitrageAi",
 };
 
-const SIZE_LABELS: Record<WidgetSize, string> = {
-  "full": "Volle Breite",
-  "2/3": "2/3 Breite",
-  "1/2": "1/2 Breite",
-  "1/3": "1/3 Breite",
+const SIZE_LABEL_KEYS: Record<WidgetSize, string> = {
+  "full": "widget.sizeFull",
+  "2/3": "widget.sizeTwoThirds",
+  "1/2": "widget.sizeHalf",
+  "1/3": "widget.sizeOneThird",
 };
 
 const DashboardCustomizer = ({ widgets, onToggleVisibility, onReorder, onResizeWidget, onResetLayout }: DashboardCustomizerProps) => {
+  const { t } = useTranslation();
   const [draggedItem, setDraggedItem] = useState<string | null>(null);
   const [dragOverItem, setDragOverItem] = useState<string | null>(null);
 
@@ -136,7 +138,7 @@ const DashboardCustomizer = ({ widgets, onToggleVisibility, onReorder, onResizeW
                     htmlFor={widget.widget_type}
                     className="text-sm cursor-grab truncate"
                   >
-                    {WIDGET_LABELS[widget.widget_type] || widget.widget_type}
+                    {t((WIDGET_LABEL_KEYS[widget.widget_type] || widget.widget_type) as any)}
                   </Label>
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
@@ -148,9 +150,9 @@ const DashboardCustomizer = ({ widgets, onToggleVisibility, onReorder, onResizeW
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {(Object.entries(SIZE_LABELS) as [WidgetSize, string][]).map(([value, label]) => (
+                      {(Object.entries(SIZE_LABEL_KEYS) as [WidgetSize, string][]).map(([value, key]) => (
                         <SelectItem key={value} value={value} className="text-xs">
-                          {label}
+                          {t(key as any)}
                         </SelectItem>
                       ))}
                     </SelectContent>

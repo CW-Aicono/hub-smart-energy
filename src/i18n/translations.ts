@@ -3420,6 +3420,80 @@ export const translations = {
     es: "Use el endpoint y la clave API para consultar datos programáticamente o importar desde sistemas externos.",
     nl: "Gebruik het endpoint en de API-key om gegevens programmatisch op te vragen of vanuit externe systemen te importeren.",
   },
+
+  // Locations page
+  "locations.searchPlaceholder": {
+    de: "Standort suchen...",
+    en: "Search location...",
+    es: "Buscar ubicación...",
+    nl: "Locatie zoeken...",
+  },
+  "locations.filterUsageType": {
+    de: "Nutzungsart filtern",
+    en: "Filter by usage type",
+    es: "Filtrar por tipo de uso",
+    nl: "Filteren op gebruikstype",
+  },
+  "locations.allUsageTypes": {
+    de: "Alle Nutzungsarten",
+    en: "All usage types",
+    es: "Todos los tipos de uso",
+    nl: "Alle gebruikstypes",
+  },
+  "locations.backToList": {
+    de: "Zurück zur Liste",
+    en: "Back to list",
+    es: "Volver a la lista",
+    nl: "Terug naar lijst",
+  },
+
+  // Dashboard widget titles
+  "widget.locationMap": { de: "Standortkarte", en: "Location Map", es: "Mapa de ubicaciones", nl: "Locatiekaart" },
+  "widget.weather": { de: "Lokales Wetter", en: "Local Weather", es: "Clima local", nl: "Lokaal weer" },
+  "widget.energyGauge": { de: "Live-Leistung (Tacho)", en: "Live Power (Gauge)", es: "Potencia en vivo (indicador)", nl: "Live vermogen (meter)" },
+  "widget.costOverview": { de: "Kostenübersicht", en: "Cost Overview", es: "Resumen de costes", nl: "Kostenoverzicht" },
+  "widget.energyChart": { de: "Energieverbrauch", en: "Energy Consumption", es: "Consumo de energía", nl: "Energieverbruik" },
+  "widget.sustainabilityKpis": { de: "Nachhaltigkeits-KPIs", en: "Sustainability KPIs", es: "KPIs de sostenibilidad", nl: "Duurzaamheids-KPI's" },
+  "widget.alertsList": { de: "Alerts & Benachrichtigungen", en: "Alerts & Notifications", es: "Alertas y notificaciones", nl: "Meldingen en notificaties" },
+  "widget.floorPlanExplorer": { de: "Grundriss-Explorer", en: "Floor Plan Explorer", es: "Explorador de planos", nl: "Plattegrond-verkenner" },
+  "widget.pieChart": { de: "Kreisdiagramm", en: "Pie Chart", es: "Gráfico circular", nl: "Cirkeldiagram" },
+  "widget.sankey": { de: "Sankey-Diagramm", en: "Sankey Diagram", es: "Diagrama Sankey", nl: "Sankey-diagram" },
+  "widget.forecast": { de: "Jahresprognose", en: "Annual Forecast", es: "Pronóstico anual", nl: "Jaarprognose" },
+  "widget.anomaly": { de: "KI-Anomalie-Erkennung", en: "AI Anomaly Detection", es: "Detección de anomalías con IA", nl: "AI-anomaliedetectie" },
+  "widget.weatherNorm": { de: "Witterungsbereinigung", en: "Weather Normalization", es: "Normalización climática", nl: "Weerscorrectie" },
+  "widget.spotPrice": { de: "Spotpreis-Verlauf", en: "Spot Price Trend", es: "Tendencia de precios spot", nl: "Spotprijsverloop" },
+  "widget.pvForecast": { de: "PV-Prognose", en: "PV Forecast", es: "Pronóstico FV", nl: "PV-prognose" },
+  "widget.arbitrageAi": { de: "KI-Handelsempfehlung", en: "AI Trading Recommendation", es: "Recomendación de trading con IA", nl: "AI-handelsaanbeveling" },
+
+  // Widget size labels
+  "widget.sizeFull": { de: "Volle Breite", en: "Full Width", es: "Ancho completo", nl: "Volledige breedte" },
+  "widget.sizeTwoThirds": { de: "2/3 Breite", en: "2/3 Width", es: "2/3 del ancho", nl: "2/3 breedte" },
+  "widget.sizeHalf": { de: "1/2 Breite", en: "1/2 Width", es: "1/2 del ancho", nl: "1/2 breedte" },
+  "widget.sizeOneThird": { de: "1/3 Breite", en: "1/3 Width", es: "1/3 del ancho", nl: "1/3 breedte" },
+
+  // Dashboard widget titles (used in cards)
+  "dashboard.livePower": { de: "Live-Leistung", en: "Live Power", es: "Potencia en vivo", nl: "Live vermogen" },
+  "dashboard.energyFlow": { de: "Energiefluss", en: "Energy Flow", es: "Flujo de energía", nl: "Energiestroom" },
+  "dashboard.annualForecast": { de: "Jahresverbrauchsprognose", en: "Annual Consumption Forecast", es: "Pronóstico de consumo anual", nl: "Jaarverbruiksprognose" },
+  "dashboard.aiAnomaly": { de: "KI-Anomalie-Erkennung", en: "AI Anomaly Detection", es: "Detección de anomalías con IA", nl: "AI-anomaliedetectie" },
+  "dashboard.aiTrading": { de: "KI-Handelsempfehlung", en: "AI Trading Recommendation", es: "Recomendación de trading con IA", nl: "AI-handelsaanbeveling" },
+  "dashboard.weatherNorm": { de: "Witterungsbereinigte Verbrauchsanalyse", en: "Weather-Normalized Consumption Analysis", es: "Análisis de consumo normalizado por clima", nl: "Weersgecorrigeerde verbruiksanalyse" },
+  "dashboard.consumptionOverview": { de: "Verbrauchsübersicht", en: "Consumption Overview", es: "Resumen de consumo", nl: "Verbruiksoverzicht" },
+  "dashboard.spotPriceTitle": { de: "Spotpreis-Verlauf (Day-Ahead, 15 min)", en: "Spot Price Trend (Day-Ahead, 15 min)", es: "Tendencia de precios spot (Day-Ahead, 15 min)", nl: "Spotprijsverloop (Day-Ahead, 15 min)" },
+  "dashboard.pvForecast": { de: "PV-Prognose", en: "PV Forecast", es: "Pronóstico FV", nl: "PV-prognose" },
+
+  // Dashboard widget misc strings
+  "dashboard.analyzeAgain": { de: "Erneut analysieren", en: "Analyze again", es: "Analizar de nuevo", nl: "Opnieuw analyseren" },
+  "dashboard.startAnalysis": { de: "Analyse starten", en: "Start analysis", es: "Iniciar análisis", nl: "Analyse starten" },
+  "dashboard.analyzing": { de: "Analysiert…", en: "Analyzing…", es: "Analizando…", nl: "Analyseert…" },
+  "dashboard.noDataForAnalysis": { de: "Noch keine Verbrauchsdaten für eine Analyse vorhanden.", en: "No consumption data available for analysis yet.", es: "Aún no hay datos de consumo disponibles para el análisis.", nl: "Nog geen verbruiksgegevens beschikbaar voor analyse." },
+  "dashboard.clickToAnalyze": { de: "Klicken Sie auf \"Analyse starten\", um die Verbrauchsdaten mit KI auszuwerten.", en: "Click \"Start analysis\" to evaluate consumption data with AI.", es: "Haga clic en \"Iniciar análisis\" para evaluar los datos de consumo con IA.", nl: "Klik op \"Analyse starten\" om verbruiksgegevens met AI te evalueren." },
+  "dashboard.noDataForForecast": { de: "Noch keine Verbrauchsdaten für eine Prognose vorhanden", en: "No consumption data available for a forecast yet", es: "Aún no hay datos de consumo para un pronóstico", nl: "Nog geen verbruiksgegevens beschikbaar voor een prognose" },
+  "dashboard.forecastTotal": { de: "Hochrechnung: ~{value} Gesamtjahr", en: "Forecast: ~{value} full year", es: "Proyección: ~{value} año completo", nl: "Prognose: ~{value} volledig jaar" },
+  "dashboard.currentValues": { de: "Aktuelle Momentanwerte", en: "Current instantaneous values", es: "Valores instantáneos actuales", nl: "Huidige momentane waarden" },
+  "dashboard.dailyPeak": { de: "Tageshöchstwert", en: "Daily peak", es: "Pico diario", nl: "Dagpiek" },
+  "dashboard.noActiveMeters": { de: "Keine aktiven automatischen Hauptzähler vorhanden", en: "No active automatic main meters available", es: "No hay contadores principales automáticos activos", nl: "Geen actieve automatische hoofdmeters beschikbaar" },
+  "dashboard.clickAnalyzeAi": { de: 'Klicken Sie auf \u201EAnalyse starten\u201C, um KI-basierte Strategievorschl\u00E4ge zu erhalten.', en: "Click \"Start analysis\" to receive AI-based strategy suggestions.", es: "Haga clic en \"Iniciar an\u00E1lisis\" para recibir sugerencias de estrategia basadas en IA.", nl: "Klik op \"Analyse starten\" om AI-gebaseerde strategievoorstellen te ontvangen." },
 } as const;
 
 export type TranslationKey = keyof typeof translations;

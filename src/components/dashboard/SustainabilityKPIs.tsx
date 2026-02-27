@@ -186,7 +186,7 @@ const SustainabilityKPIs = ({ locationId }: SustainabilityKPIsProps) => {
         <div className="flex items-center justify-between">
           <CardTitle className="font-display text-lg flex items-center gap-2">
             <Leaf className="h-5 w-5 text-accent" />
-            Verbrauchsübersicht
+            {t("dashboard.consumptionOverview" as any)}
             <HelpTooltip text={t("tooltip.sustainability" as any)} />
           </CardTitle>
           {periodSelect}

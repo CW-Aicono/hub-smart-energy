@@ -98,7 +98,7 @@ const SpotPriceWidget = ({ locationId }: SpotPriceWidgetProps) => {
     <Card>
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between">
-          <CardTitle className="font-display text-lg flex items-center gap-2">Spotpreis-Verlauf (Day-Ahead, 15 min) <HelpTooltip text={t("tooltip.spotPrice" as any)} /></CardTitle>
+          <CardTitle className="font-display text-lg flex items-center gap-2">{t("dashboard.spotPriceTitle" as any)} <HelpTooltip text={t("tooltip.spotPrice" as any)} /></CardTitle>
           <div className="text-right">
             <div className="text-lg font-bold">{priceCtKwh} ct/kWh</div>
             {currentPrice && (

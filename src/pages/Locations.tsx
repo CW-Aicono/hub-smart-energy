@@ -21,14 +21,14 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 
-const usageTypeLabels: Record<LocationUsageType, string> = {
-  verwaltungsgebaeude: "Verwaltungsgebäude",
-  universitaet: "Universität",
-  schule: "Schule",
-  kindertageseinrichtung: "Kindertageseinrichtung",
-  sportstaette: "Sportstätte",
-  jugendzentrum: "Jugendzentrum",
-  sonstiges: "Sonstiges",
+const usageTypeKeys: Record<LocationUsageType, string> = {
+  verwaltungsgebaeude: "locations.usage.verwaltungsgebaeude",
+  universitaet: "locations.usage.universitaet",
+  schule: "locations.usage.schule",
+  kindertageseinrichtung: "locations.usage.kindertageseinrichtung",
+  sportstaette: "locations.usage.sportstaette",
+  jugendzentrum: "locations.usage.jugendzentrum",
+  sonstiges: "locations.usage.sonstiges",
 };
 
 const Locations = () => {
@@ -274,7 +274,7 @@ const Locations = () => {
                 <div className="relative flex-1 min-w-[200px] max-w-sm">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
-                    placeholder="Standort suchen..."
+                    placeholder={t("locations.searchPlaceholder" as any)}
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     className="pl-9"
@@ -284,13 +284,13 @@ const Locations = () => {
                   <Filter className="h-4 w-4 text-muted-foreground" />
                   <Select value={usageFilter} onValueChange={setUsageFilter}>
                     <SelectTrigger className="w-[200px]">
-                      <SelectValue placeholder="Nutzungsart filtern" />
+                      <SelectValue placeholder={t("locations.filterUsageType" as any)} />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="all">Alle Nutzungsarten</SelectItem>
-                      {Object.entries(usageTypeLabels).map(([value, label]) => (
+                      <SelectItem value="all">{t("locations.allUsageTypes" as any)}</SelectItem>
+                      {Object.entries(usageTypeKeys).map(([value, key]) => (
                         <SelectItem key={value} value={value}>
-                          {label}
+                          {t(key as any)}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -342,7 +342,7 @@ const Locations = () => {
                     className="gap-2"
                   >
                     <ArrowLeft className="h-4 w-4" />
-                    Zurück zur Liste
+                    {t("locations.backToList" as any)}
                   </Button>
                 </div>
               )}
@@ -390,7 +390,7 @@ const Locations = () => {
                           <div className="flex items-center gap-2 text-sm text-muted-foreground">
                             {location.city && <span>{location.city}</span>}
                             {location.city && (location.usage_type || location.type) && <span>·</span>}
-                            {location.usage_type && <span>{usageTypeLabels[location.usage_type]}</span>}
+                            {location.usage_type && <span>{t(`locations.usage.${location.usage_type}` as any)}</span>}
                             {location.usage_type && location.type && <span>·</span>}
                             {location.type && (
                               <span>{t(`locations.types.${location.type}` as any)}</span>
@@ -413,7 +413,7 @@ const Locations = () => {
                                   {getOnlineStatusBadge(child.id)}
                                 </div>
                                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                                  {child.usage_type && <span>{usageTypeLabels[child.usage_type]}</span>}
+                                  {child.usage_type && <span>{t(`locations.usage.${child.usage_type}` as any)}</span>}
                                   {child.usage_type && child.type && <span>·</span>}
                                   {child.type && (
                                     <span>{t(`locations.types.${child.type}` as any)}</span>

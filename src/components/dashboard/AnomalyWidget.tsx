@@ -86,12 +86,12 @@ const AnomalyWidget = ({ locationId }: AnomalyWidgetProps) => {
         <div className="flex items-center justify-between">
           <CardTitle className="font-display text-lg flex items-center gap-2">
             <BrainCircuit className="h-5 w-5 text-primary" />
-            KI-Anomalie-Erkennung
+            {t("dashboard.aiAnomaly" as any)}
             <HelpTooltip text={t("tooltip.anomaly" as any)} />
           </CardTitle>
           <Button size="sm" variant="outline" onClick={runAnalysis} disabled={loading || !hasData}>
             <RefreshCw className={`h-4 w-4 mr-1 ${loading ? "animate-spin" : ""}`} />
-            {result ? "Erneut analysieren" : "Analyse starten"}
+            {result ? t("dashboard.analyzeAgain" as any) : t("dashboard.startAnalysis" as any)}
           </Button>
         </div>
         <p className="text-sm text-muted-foreground">
@@ -112,8 +112,8 @@ const AnomalyWidget = ({ locationId }: AnomalyWidgetProps) => {
             <BrainCircuit className="h-10 w-10 mx-auto mb-3 opacity-30" />
             <p className="text-sm">
               {hasData
-                ? 'Klicken Sie auf "Analyse starten", um die Verbrauchsdaten mit KI auszuwerten.'
-                : "Noch keine Verbrauchsdaten für eine Analyse vorhanden."}
+                ? t("dashboard.clickToAnalyze" as any)
+                : t("dashboard.noDataForAnalysis" as any)}
             </p>
           </div>
         ) : (

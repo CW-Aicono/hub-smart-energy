@@ -30,12 +30,12 @@ export default function ArbitrageAiWidget({ locationId }: ArbitrageAiWidgetProps
         <div className="flex items-center justify-between">
           <CardTitle className="text-base flex items-center gap-2">
             <Brain className="h-5 w-5 text-primary" />
-            KI-Handelsempfehlung
+            {t("dashboard.aiTrading" as any)}
             <HelpTooltip text={t("tooltip.arbitrageAi" as any)} />
           </CardTitle>
           <Button size="sm" variant="outline" onClick={generate} disabled={isGenerating}>
             {isGenerating ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}
-            {isGenerating ? "Analysiert…" : "Analyse starten"}
+            {isGenerating ? t("dashboard.analyzing" as any) : t("dashboard.startAnalysis" as any)}
           </Button>
         </div>
         {result?.market_summary && (
@@ -45,7 +45,7 @@ export default function ArbitrageAiWidget({ locationId }: ArbitrageAiWidgetProps
       <CardContent>
         {!result && !isGenerating && (
           <p className="text-sm text-muted-foreground text-center py-4">
-            Klicken Sie auf „Analyse starten", um KI-basierte Strategievorschläge zu erhalten.
+            {t("dashboard.clickAnalyzeAi" as any)}
           </p>
         )}
         {isGenerating && (
