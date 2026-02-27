@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { HelpTooltip } from "@/components/ui/help-tooltip";
 import { useLocations } from "@/hooks/useLocations";
 import { useEnergyData } from "@/hooks/useEnergyData";
 import { supabase } from "@/integrations/supabase/client";
@@ -84,6 +85,7 @@ const AnomalyWidget = ({ locationId }: AnomalyWidgetProps) => {
           <CardTitle className="font-display text-lg flex items-center gap-2">
             <BrainCircuit className="h-5 w-5 text-primary" />
             KI-Anomalie-Erkennung
+            <HelpTooltip text="Analysiert Verbrauchsdaten mittels KI auf ungewöhnliche Muster, saisonale Abweichungen und Lastspitzen. Ergebnisse werden nach Risikostufe priorisiert." />
           </CardTitle>
           <Button size="sm" variant="outline" onClick={runAnalysis} disabled={loading || !hasData}>
             <RefreshCw className={`h-4 w-4 mr-1 ${loading ? "animate-spin" : ""}`} />

@@ -11,6 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Gauge, Plus, Pencil, Trash2, Archive, ArchiveRestore, Eye, EyeOff, Network, ChevronDown, ChevronRight } from "lucide-react";
+import { HelpTooltip } from "@/components/ui/help-tooltip";
 import { AddMeterDialog } from "./AddMeterDialog";
 import { EditMeterDialog } from "./EditMeterDialog";
 import { AddAlertRuleDialog } from "./AddAlertRuleDialog";
@@ -56,6 +57,7 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
             <CardTitle className="flex items-center gap-2">
               <Gauge className="h-5 w-5" />
               Messstellen und Sensoren
+              <HelpTooltip text="Verwalten Sie hier Ihre Zähler (Strom, Gas, Wärme, Wasser) und Alarmregeln. Automatische Zähler werden über Integrationen befüllt, manuelle per Ablesung." />
             </CardTitle>
           </button>
         </CollapsibleTrigger>

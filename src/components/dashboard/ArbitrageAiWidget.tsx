@@ -2,6 +2,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Brain, TrendingUp, Loader2 } from "lucide-react";
+import { HelpTooltip } from "@/components/ui/help-tooltip";
 import { useArbitrageAiStrategy } from "@/hooks/useArbitrageAiStrategy";
 import { useNavigate } from "react-router-dom";
 
@@ -28,6 +29,7 @@ export default function ArbitrageAiWidget({ locationId }: ArbitrageAiWidgetProps
           <CardTitle className="text-base flex items-center gap-2">
             <Brain className="h-5 w-5 text-primary" />
             KI-Handelsempfehlung
+            <HelpTooltip text="Analysiert Spotpreise und PV-Prognosen, um optimale Kauf-/Verkaufszeitpunkte für Energiespeicher zu empfehlen." />
           </CardTitle>
           <Button size="sm" variant="outline" onClick={generate} disabled={isGenerating}>
             {isGenerating ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}

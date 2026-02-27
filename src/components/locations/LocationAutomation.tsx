@@ -45,6 +45,7 @@ import {
   CalendarDays,
   GitBranch,
 } from "lucide-react";
+import { HelpTooltip } from "@/components/ui/help-tooltip";
 import { useLocationIntegrations } from "@/hooks/useIntegrations";
 import { useLoxoneSensors, LoxoneSensor } from "@/hooks/useLoxoneSensors";
 import { useLocationAutomations, LocationAutomationRecord } from "@/hooks/useLocationAutomations";
@@ -249,6 +250,7 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
                     <CardTitle className="flex items-center gap-2">
                       <Cpu className="h-5 w-5" />
                       Automation
+                      <HelpTooltip text="Erstellen Sie Regeln, die Aktoren (z. B. Licht, Heizung) automatisch steuern – basierend auf Sensorwerten, Uhrzeiten oder Wochentagen." />
                       {automations.length > 0 && (
                         <Badge variant="secondary" className="ml-1 text-xs">
                           {automations.filter((a) => a.is_active).length} aktiv

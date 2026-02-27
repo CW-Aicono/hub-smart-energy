@@ -5,6 +5,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Legend } from "recharts";
 import { Tooltip as ShadTooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Skeleton } from "@/components/ui/skeleton";
+import { HelpTooltip } from "@/components/ui/help-tooltip";
 import { Thermometer, TrendingDown, TrendingUp } from "lucide-react";
 import { useWeatherNormalization } from "@/hooks/useWeatherNormalization";
 import { formatEnergy } from "@/lib/formatEnergy";
@@ -124,6 +125,7 @@ const WeatherNormalizationWidget = ({ locationId, onExpand, onCollapse }: Weathe
           <CardTitle className="font-display text-lg flex items-center gap-2">
             <Thermometer className="h-5 w-5 text-primary" />
             Witterungsbereinigte Verbrauchsanalyse
+            <HelpTooltip text="Vergleicht Energieverbräuche über Zeiträume hinweg, indem Wetterbedingungen (Heizgradtage) herausgerechnet werden. So werden kalte und warme Winter vergleichbar." />
           </CardTitle>
           <div className="flex items-center gap-2 flex-wrap">
             <Select value={energyType} onValueChange={setEnergyType}>

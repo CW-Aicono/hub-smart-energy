@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Sun, CloudSun, Sparkles, ChevronLeft, ChevronRight } from "lucide-react";
+import { HelpTooltip } from "@/components/ui/help-tooltip";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import { supabase } from "@/integrations/supabase/client";
 import { useDashboardFilter, type TimePeriod } from "@/hooks/useDashboardFilter";
@@ -346,6 +347,7 @@ const PvForecastWidget = ({ locationId }: PvForecastWidgetProps) => {
           <CardTitle className="flex items-center gap-2 text-lg">
             <Sun className="h-5 w-5 text-amber-500" />
             PV-Prognose
+            <HelpTooltip text="Erwartete Solarstromerzeugung basierend auf Wetter und Anlagenparametern. Bei hinterlegtem PV-Zähler wird der Ist-Ertrag als Vergleich angezeigt." />
           </CardTitle>
           <div className="flex items-center gap-2">
             {summary.ai_confidence && isToday && (

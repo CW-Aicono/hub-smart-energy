@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Copy, Eye, EyeOff, Check, ExternalLink } from "lucide-react";
+import { HelpTooltip } from "@/components/ui/help-tooltip";
 import { toast } from "sonner";
 
 export function ApiSettings() {
@@ -97,7 +98,7 @@ export function ApiSettings() {
       {/* Endpoint & Key */}
       <Card>
         <CardHeader>
-          <CardTitle>{t("api.credentials")}</CardTitle>
+          <CardTitle className="flex items-center gap-2">{t("api.credentials")} <HelpTooltip text="Verwenden Sie Endpoint und API-Key, um Daten programmatisch abzufragen oder von externen Systemen zu importieren." /></CardTitle>
           <CardDescription>{t("api.credentialsDesc")}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
