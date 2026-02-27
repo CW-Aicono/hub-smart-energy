@@ -49,7 +49,7 @@ const Roles = () => {
     id: "admin-system",
     tenant_id: "",
     name: "Administrator",
-    description: "Voller Zugriff auf alle Funktionen des Systems. Diese Rolle kann nicht geändert werden.",
+    description: t("roles.adminFullAccess" as any),
     is_system_role: true,
     created_at: "",
     updated_at: "",
@@ -98,10 +98,10 @@ const Roles = () => {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Shield className="h-5 w-5" />
-                  Keine benutzerdefinierten Rollen
+                  {t("roles.noCustomRoles" as any)}
                 </CardTitle>
                 <CardDescription>
-                  Erstellen Sie Ihre erste benutzerdefinierte Rolle, um Berechtigungen feingranular zu verwalten.
+                  {t("roles.noCustomRolesDesc" as any)}
                 </CardDescription>
               </CardHeader>
             </Card>
@@ -112,14 +112,12 @@ const Roles = () => {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Lock className="h-5 w-5" />
-                Hinweis zur Rechteverwaltung
+                {t("roles.noteTitle")}
               </CardTitle>
             </CardHeader>
             <CardContent className="text-sm text-muted-foreground">
               <p>
-                Die Admin-Rolle hat immer alle Berechtigungen und kann nicht bearbeitet werden. 
-                Erstellen Sie benutzerdefinierte Rollen für spezifische Anwendungsfälle wie "Energiemanager" 
-                oder "Berichterstatter" und weisen Sie nur die benötigten Berechtigungen zu.
+                {t("roles.noteTextFull" as any)}
               </p>
             </CardContent>
           </Card>

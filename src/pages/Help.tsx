@@ -49,11 +49,11 @@ const Help = () => {
       .eq("id", tenant.id);
     setRemoteSupportLoading(false);
     if (error) {
-      toast.error("Fehler beim Ändern des Remote-Zugriffs");
+      toast.error(t("help.remoteSupportError" as any));
     } else {
       setRemoteSupportEnabled(enabled);
       refetchTenant();
-      toast.success(enabled ? "Remote-Zugriff aktiviert" : "Remote-Zugriff deaktiviert");
+      toast.success(enabled ? t("help.remoteSupportEnabled" as any) : t("help.remoteSupportDisabled" as any));
     }
   };
 
@@ -216,7 +216,7 @@ const Help = () => {
                   if (!checking) {
                     setTimeout(() => {
                       if (!updateAvailable) {
-                        toast.success("Sie verwenden bereits die neueste Version.");
+                        toast.success(t("help.latestVersion" as any));
                       }
                     }, 2500);
                   }
@@ -224,12 +224,12 @@ const Help = () => {
                 disabled={checking}
               >
                 <RefreshCw className={`h-4 w-4 mr-2 ${checking ? "animate-spin" : ""}`} />
-                {checking ? "Prüfe..." : "Auf Update prüfen"}
+                {checking ? t("help.checkingUpdate" as any) : t("help.checkForUpdate" as any)}
               </Button>
               {updateAvailable && (
                 <Button size="sm" onClick={applyUpdate}>
                   <Download className="h-4 w-4 mr-2" />
-                  Update installieren
+                  {t("help.installUpdate" as any)}
                 </Button>
               )}
               <Badge variant="outline" className="text-xs">
@@ -324,8 +324,8 @@ const Help = () => {
                 >
                   <Gauge className="h-5 w-5 text-muted-foreground shrink-0" />
                   <div className="text-left">
-                    <p className="font-medium">Messstellen</p>
-                    <p className="text-xs text-muted-foreground">Zähler anlegen, bearbeiten und archivieren</p>
+                    <p className="font-medium">{t("help.meterManagement" as any)}</p>
+                    <p className="text-xs text-muted-foreground">{t("help.meterManagementDesc" as any)}</p>
                   </div>
                 </Button>
                 <Button 
@@ -335,8 +335,8 @@ const Help = () => {
                 >
                   <Smartphone className="h-5 w-5 text-muted-foreground shrink-0" />
                   <div className="text-left">
-                    <p className="font-medium">Mobile App</p>
-                    <p className="text-xs text-muted-foreground">Zählerablesung per App, QR-Code und KI</p>
+                    <p className="font-medium">{t("help.mobileApp" as any)}</p>
+                    <p className="text-xs text-muted-foreground">{t("help.mobileAppDesc" as any)}</p>
                   </div>
                 </Button>
                 <Button 
@@ -346,8 +346,8 @@ const Help = () => {
                 >
                   <Cpu className="h-5 w-5 text-muted-foreground shrink-0" />
                   <div className="text-left">
-                    <p className="font-medium">Gebäudeautomation</p>
-                    <p className="text-xs text-muted-foreground">Automationsregeln, Bedingungen und Aktoren</p>
+                    <p className="font-medium">{t("help.automationTitle" as any)}</p>
+                    <p className="text-xs text-muted-foreground">{t("help.automationDesc" as any)}</p>
                   </div>
                 </Button>
                 <Button 
@@ -357,8 +357,8 @@ const Help = () => {
                 >
                   <Zap className="h-5 w-5 text-muted-foreground shrink-0" />
                   <div className="text-left">
-                    <p className="font-medium">Ladeinfrastruktur</p>
-                    <p className="text-xs text-muted-foreground">Ladepunkte, Tarife, Abrechnung und Lade-App</p>
+                    <p className="font-medium">{t("help.evCharging" as any)}</p>
+                    <p className="text-xs text-muted-foreground">{t("help.evChargingDesc" as any)}</p>
                   </div>
                 </Button>
                 <Button 
@@ -368,8 +368,8 @@ const Help = () => {
                 >
                   <ExternalLink className="h-5 w-5 text-muted-foreground shrink-0" />
                   <div className="text-left">
-                    <p className="font-medium">Integrationen & Sync</p>
-                    <p className="text-xs text-muted-foreground">BrightHub, Gateways und Datensynchronisation</p>
+                    <p className="font-medium">{t("help.integrationsTitle" as any)}</p>
+                    <p className="text-xs text-muted-foreground">{t("help.integrationsDesc" as any)}</p>
                   </div>
                 </Button>
                 <Button 
@@ -379,8 +379,8 @@ const Help = () => {
                 >
                   <TrendingUp className="h-5 w-5 text-muted-foreground shrink-0" />
                   <div className="text-left">
-                    <p className="font-medium">Arbitragehandel</p>
-                    <p className="text-xs text-muted-foreground">Spotpreise, Speicher und Handelsstrategien</p>
+                    <p className="font-medium">{t("help.arbitrageTitle" as any)}</p>
+                    <p className="text-xs text-muted-foreground">{t("help.arbitrageDesc" as any)}</p>
                   </div>
                 </Button>
               </div>
@@ -425,20 +425,20 @@ const Help = () => {
             <CardHeader className="px-6">
               <CardTitle className="flex items-center gap-2">
                 <ShieldCheck className="h-5 w-5" />
-                Remote-Support
+                {t("help.remoteSupport" as any)}
               </CardTitle>
               <CardDescription>
-                Aktivieren Sie den Remote-Zugriff, damit unser Support-Team Ihnen direkt helfen kann.
+                {t("help.remoteSupportDesc" as any)}
               </CardDescription>
             </CardHeader>
             <CardContent className="px-6 pb-6">
               <div className="flex items-center justify-between p-4 rounded-lg border bg-muted/30">
                 <div className="space-y-1">
-                  <p className="font-medium">Remote-Zugriff erlauben</p>
+                  <p className="font-medium">{t("help.remoteSupportAllow" as any)}</p>
                   <p className="text-sm text-muted-foreground">
                     {remoteSupportEnabled
-                      ? "Ein Support-Mitarbeiter kann aktuell auf Ihr System zugreifen."
-                      : "Derzeit hat kein Support-Mitarbeiter Zugriff auf Ihr System."}
+                      ? t("help.remoteSupportActive" as any)
+                      : t("help.remoteSupportInactive" as any)}
                   </p>
                 </div>
                 <Switch
@@ -522,7 +522,7 @@ const Help = () => {
                         <span className="text-sm text-muted-foreground">{release.date}</span>
                         {idx === 0 && (
                           <Badge variant="outline" className="text-xs bg-primary/10 text-primary border-primary/20">
-                            Aktuell
+                            {t("help.current" as any)}
                           </Badge>
                         )}
                       </div>
