@@ -9,6 +9,7 @@ import { useMeterReadings } from "@/hooks/useMeterReadings";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useLoxoneSensorsMulti } from "@/hooks/useLoxoneSensors";
 import { useIntegrations } from "@/hooks/useIntegrations";
+import { useTranslation } from "@/hooks/useTranslation";
 import { formatEnergy } from "@/lib/formatEnergy";
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
 import { AddMeterReadingDialog } from "@/components/meters/AddMeterReadingDialog";
@@ -20,7 +21,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 import { Gauge, ClipboardEdit, Filter, QrCode, Pencil, Archive, ArchiveRestore, Trash2, Eye, EyeOff } from "lucide-react";
 import { format } from "date-fns";
-import { de } from "date-fns/locale";
+import { de, enUS, es, nl } from "date-fns/locale";
 import { ENERGY_TYPE_LABELS, ENERGY_BADGE_CLASSES } from "@/lib/energyTypeColors";
 
 const MetersOverview = () => {
@@ -29,6 +30,8 @@ const MetersOverview = () => {
   const { meters, loading: metersLoading, updateMeter, archiveMeter, deleteMeter } = useMeters();
   const { readings, loading: readingsLoading, addReading } = useMeterReadings();
   const { isAdmin } = useUserRole();
+  const { t, language } = useTranslation();
+  const dateLocale = language === "en" ? enUS : language === "es" ? es : language === "nl" ? nl : de;
 
   // Collect unique integration IDs from automatic meters for live sensor queries
   const autoIntegrationIds = useMemo(() => {
@@ -105,30 +108,29 @@ const MetersOverview = () => {
         <header className="border-b p-4 md:p-6">
           <h1 className="text-2xl font-display font-bold flex items-center gap-2">
             <Gauge className="h-6 w-6 text-primary" />
-            Messstellen
+            {t("meters.title" as any)}
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Übersicht aller Zähler und manuelle Zählerstanderfassung
+            {t("meters.subtitle" as any)}
           </p>
         </header>
 
         <div className="p-6 space-y-6">
-          {/* Filter */}
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-sm flex items-center gap-2">
                 <Filter className="h-4 w-4" />
-                Liegenschaft filtern
+                {t("meters.filterLocation" as any)}
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="flex flex-wrap gap-4">
                 <Select value={selectedLocationId} onValueChange={setSelectedLocationId}>
                   <SelectTrigger className="w-[220px]">
-                    <SelectValue placeholder="Standort wählen" />
+                    <SelectValue placeholder={t("meters.selectLocation" as any)} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">Alle Liegenschaften</SelectItem>
+                    <SelectItem value="all">{t("meters.allProperties" as any)}</SelectItem>
                     {locations.map((loc) => (
                       <SelectItem key={loc.id} value={loc.id}>
                         {loc.name}
@@ -139,25 +141,25 @@ const MetersOverview = () => {
 
                 <Select value={selectedEnergyType} onValueChange={setSelectedEnergyType}>
                   <SelectTrigger className="w-[180px]">
-                    <SelectValue placeholder="Energieart" />
+                    <SelectValue placeholder={t("meters.energyType" as any)} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">Alle Energiearten</SelectItem>
-                    <SelectItem value="strom">Strom</SelectItem>
-                    <SelectItem value="gas">Gas</SelectItem>
-                    <SelectItem value="waerme">Wärme</SelectItem>
-                    <SelectItem value="wasser">Wasser</SelectItem>
+                    <SelectItem value="all">{t("meters.allEnergyTypes" as any)}</SelectItem>
+                    <SelectItem value="strom">{t("liveValues.strom" as any)}</SelectItem>
+                    <SelectItem value="gas">{t("liveValues.gas" as any)}</SelectItem>
+                    <SelectItem value="waerme">{t("liveValues.waerme" as any)}</SelectItem>
+                    <SelectItem value="wasser">{t("liveValues.wasser" as any)}</SelectItem>
                   </SelectContent>
                 </Select>
 
                 <Select value={selectedCaptureType} onValueChange={setSelectedCaptureType}>
                   <SelectTrigger className="w-[180px]">
-                    <SelectValue placeholder="Erfassung" />
+                    <SelectValue placeholder={t("meters.capture" as any)} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">Alle Erfassungen</SelectItem>
-                    <SelectItem value="manual">Manuell</SelectItem>
-                    <SelectItem value="automatic">Automatisch</SelectItem>
+                    <SelectItem value="all">{t("meters.allCaptures" as any)}</SelectItem>
+                    <SelectItem value="manual">{t("common.manual" as any)}</SelectItem>
+                    <SelectItem value="automatic">{t("common.automatic" as any)}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -169,12 +171,12 @@ const MetersOverview = () => {
             <CardHeader>
               <div className="flex items-center justify-between">
                 <CardTitle className="text-base">
-                  {showArchived ? "Archivierte Zähler" : "Zähler"} ({filteredMeters.length})
+                  {showArchived ? t("meters.archivedMeters" as any) : t("meters.metersLabel" as any)} ({filteredMeters.length})
                 </CardTitle>
                 {(archivedMeters.length > 0 || showArchived) && (
                   <Button variant="ghost" size="sm" className="gap-1.5 text-xs" onClick={() => setShowArchived(!showArchived)}>
                     {showArchived ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
-                    {showArchived ? `Aktive anzeigen (${activeMeters.length})` : `Archiv (${archivedMeters.length})`}
+                    {showArchived ? `${t("meters.showActive" as any)} (${activeMeters.length})` : `${t("meters.archive" as any)} (${archivedMeters.length})`}
                   </Button>
                 )}
               </div>
@@ -184,18 +186,18 @@ const MetersOverview = () => {
                 <Skeleton className="h-32" />
               ) : filteredMeters.length === 0 ? (
                 <p className="text-sm text-muted-foreground py-4">
-                  {showArchived ? "Keine archivierten Messstellen." : "Keine Messstellen gefunden."}
+                  {showArchived ? t("meters.noArchived" as any) : t("meters.noMeters" as any)}
                 </p>
               ) : (
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Name</TableHead>
-                      <TableHead>Liegenschaft</TableHead>
-                      <TableHead>Zählernummer</TableHead>
-                      <TableHead>Energieart</TableHead>
-                      <TableHead>Erfassung</TableHead>
-                      <TableHead>Letzter Stand</TableHead>
+                      <TableHead>{t("common.name" as any)}</TableHead>
+                      <TableHead>{t("meters.property" as any)}</TableHead>
+                      <TableHead>{t("meters.meterNumber" as any)}</TableHead>
+                      <TableHead>{t("meters.energyType" as any)}</TableHead>
+                      <TableHead>{t("meters.capture" as any)}</TableHead>
+                      <TableHead>{t("meters.lastReading" as any)}</TableHead>
                       <TableHead className="w-56" />
                     </TableRow>
                   </TableHeader>
@@ -215,7 +217,7 @@ const MetersOverview = () => {
                           </TableCell>
                           <TableCell>
                             <Badge variant={isManual ? "secondary" : "default"}>
-                              {isManual ? "Manuell" : "Automatisch"}
+                              {isManual ? t("common.manual" as any) : t("common.automatic" as any)}
                             </Badge>
                           </TableCell>
                           <TableCell>
@@ -233,7 +235,7 @@ const MetersOverview = () => {
                                     return (
                                       <span className="text-sm">
                                         {rawVal.toLocaleString("de-DE", { maximumFractionDigits: 2 })} {unit}
-                                        <span className="text-muted-foreground ml-1 text-xs">(live)</span>
+                                        <span className="text-muted-foreground ml-1 text-xs">({t("meters.live" as any)})</span>
                                       </span>
                                     );
                                   }
@@ -243,8 +245,8 @@ const MetersOverview = () => {
                               return lastReading ? (
                                 <span className="text-sm">
                                   {lastReading.value.toLocaleString("de-DE")} {m.unit}
-                                  <span className="text-muted-foreground ml-1 text-xs">
-                                    ({format(new Date(lastReading.reading_date), "dd.MM.yy", { locale: de })})
+                                    <span className="text-muted-foreground ml-1 text-xs">
+                                      ({format(new Date(lastReading.reading_date), "dd.MM.yy", { locale: dateLocale })})
                                   </span>
                                 </span>
                               ) : (
@@ -257,7 +259,7 @@ const MetersOverview = () => {
                               {!m.is_archived && isManual && (
                                 <Button size="sm" variant="outline" onClick={() => setReadingDialogMeter(m)}>
                                   <ClipboardEdit className="h-4 w-4 mr-1" />
-                                  Ablesen
+                                  {t("meters.read" as any)}
                                 </Button>
                               )}
                               {!m.is_archived && (
