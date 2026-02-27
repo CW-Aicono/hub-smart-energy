@@ -119,6 +119,7 @@ export function usePvForecast(locationId: string | null) {
           body: { location_id: locationId },
         });
         if (error) throw error;
+        if (!data || !data.hourly || !data.summary) return null;
         return data as PvForecast;
       }
 
