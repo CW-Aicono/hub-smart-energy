@@ -2,6 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import { HelpTooltip } from "@/components/ui/help-tooltip";
 import { useEnergyData } from "@/hooks/useEnergyData";
+import { useTranslation } from "@/hooks/useTranslation";
 import { TrendingUp } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatEnergy } from "@/lib/formatEnergy";
@@ -12,6 +13,7 @@ interface ForecastWidgetProps {
 
 const ForecastWidget = ({ locationId }: ForecastWidgetProps) => {
   const { monthlyData, loading, hasData } = useEnergyData(locationId);
+  const { t } = useTranslation();
 
   if (loading) return <Card><CardContent className="p-6"><Skeleton className="h-[300px]" /></CardContent></Card>;
 
@@ -63,7 +65,7 @@ const ForecastWidget = ({ locationId }: ForecastWidgetProps) => {
         <CardTitle className="font-display text-lg flex items-center gap-2">
           <TrendingUp className="h-5 w-5 text-primary" />
           Jahresverbrauchsprognose
-          <HelpTooltip text="Hochrechnung des Gesamtjahresverbrauchs auf Basis der bisherigen Monatswerte. Die gestrichelte Linie zeigt die Prognose für die verbleibenden Monate." />
+          <HelpTooltip text={t("tooltip.forecast" as any)} />
         </CardTitle>
         <p className="text-sm text-muted-foreground">
           Hochrechnung: ~{formatEnergy(totalForecast)} Gesamtjahr

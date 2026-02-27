@@ -46,6 +46,7 @@ import {
   GitBranch,
 } from "lucide-react";
 import { HelpTooltip } from "@/components/ui/help-tooltip";
+import { useTranslation } from "@/hooks/useTranslation";
 import { useLocationIntegrations } from "@/hooks/useIntegrations";
 import { useLoxoneSensors, LoxoneSensor } from "@/hooks/useLoxoneSensors";
 import { useLocationAutomations, LocationAutomationRecord } from "@/hooks/useLocationAutomations";
@@ -123,6 +124,7 @@ function ConditionSummary({ auto }: { auto: LocationAutomationRecord }) {
 
 export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
   const [isOpen, setIsOpen] = useState(false);
+  const { t } = useTranslation();
   const [configOpen, setConfigOpen] = useState(false);
   const [ruleBuilderOpen, setRuleBuilderOpen] = useState(false);
   const [editAutomation, setEditAutomation] = useState<LocationAutomationRecord | null>(null);
@@ -250,7 +252,7 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
                     <CardTitle className="flex items-center gap-2">
                       <Cpu className="h-5 w-5" />
                       Automation
-                      <HelpTooltip text="Erstellen Sie Regeln, die Aktoren (z. B. Licht, Heizung) automatisch steuern – basierend auf Sensorwerten, Uhrzeiten oder Wochentagen." />
+                      <HelpTooltip text={t("tooltip.automation" as any)} />
                       {automations.length > 0 && (
                         <Badge variant="secondary" className="ml-1 text-xs">
                           {automations.filter((a) => a.is_active).length} aktiv

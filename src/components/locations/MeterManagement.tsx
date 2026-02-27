@@ -12,6 +12,7 @@ import { Switch } from "@/components/ui/switch";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Gauge, Plus, Pencil, Trash2, Archive, ArchiveRestore, Eye, EyeOff, Network, ChevronDown, ChevronRight } from "lucide-react";
 import { HelpTooltip } from "@/components/ui/help-tooltip";
+import { useTranslation } from "@/hooks/useTranslation";
 import { AddMeterDialog } from "./AddMeterDialog";
 import { EditMeterDialog } from "./EditMeterDialog";
 import { AddAlertRuleDialog } from "./AddAlertRuleDialog";
@@ -33,6 +34,7 @@ const TIME_UNIT_LABELS: Record<string, string> = {
 
 export const MeterManagement = ({ locationId }: MeterManagementProps) => {
   const { meters, loading: metersLoading, deleteMeter, updateMeter, archiveMeter, updateMeterParent } = useMeters(locationId);
+  const { t } = useTranslation();
   const { alertRules, loading: rulesLoading, deleteAlertRule, toggleAlertRule, updateAlertRule } = useAlertRules(locationId);
   const { readings } = useMeterReadings();
   const { isAdmin } = useUserRole();
@@ -57,7 +59,7 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
             <CardTitle className="flex items-center gap-2">
               <Gauge className="h-5 w-5" />
               Messstellen und Sensoren
-              <HelpTooltip text="Verwalten Sie hier Ihre Zähler (Strom, Gas, Wärme, Wasser) und Alarmregeln. Automatische Zähler werden über Integrationen befüllt, manuelle per Ablesung." />
+              <HelpTooltip text={t("tooltip.meterManagement" as any)} />
             </CardTitle>
           </button>
         </CollapsibleTrigger>

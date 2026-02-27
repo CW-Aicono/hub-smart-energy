@@ -98,7 +98,7 @@ export function ApiSettings() {
       {/* Endpoint & Key */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">{t("api.credentials")} <HelpTooltip text="Verwenden Sie Endpoint und API-Key, um Daten programmatisch abzufragen oder von externen Systemen zu importieren." /></CardTitle>
+          <CardTitle className="flex items-center gap-2">{t("api.credentials")} <HelpTooltip text={t("tooltip.apiCredentials" as any)} /></CardTitle>
           <CardDescription>{t("api.credentialsDesc")}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">

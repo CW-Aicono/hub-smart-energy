@@ -18,7 +18,7 @@ interface SpotPriceWidgetProps {
 
 const SpotPriceWidget = ({ locationId }: SpotPriceWidgetProps) => {
   const { prices, isLoading, currentPrice } = useSpotPrices();
-  const { language } = useTranslation();
+  const { language, t } = useTranslation();
 
   const now = new Date();
   const startCutoff = new Date(now.getTime() - 3 * 60 * 60 * 1000);
@@ -98,7 +98,7 @@ const SpotPriceWidget = ({ locationId }: SpotPriceWidgetProps) => {
     <Card>
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between">
-          <CardTitle className="font-display text-lg flex items-center gap-2">Spotpreis-Verlauf (Day-Ahead, 15 min) <HelpTooltip text="Zeigt den aktuellen Börsenstrompreis (Day-Ahead) in 15-Minuten-Intervallen. Vergangene Preise sind fest, zukünftige basieren auf der Auktion." /></CardTitle>
+          <CardTitle className="font-display text-lg flex items-center gap-2">Spotpreis-Verlauf (Day-Ahead, 15 min) <HelpTooltip text={t("tooltip.spotPrice" as any)} /></CardTitle>
           <div className="text-right">
             <div className="text-lg font-bold">{priceCtKwh} ct/kWh</div>
             {currentPrice && (

@@ -4,6 +4,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { RotateCcw } from "lucide-react";
 import { HelpTooltip } from "@/components/ui/help-tooltip";
+import { useTranslation } from "@/hooks/useTranslation";
 import { useMeters } from "@/hooks/useMeters";
 import { useLoxoneSensorsMulti } from "@/hooks/useLoxoneSensors";
 import { useLocationEnergySources } from "@/hooks/useLocationEnergySources";
@@ -261,6 +262,7 @@ function computeEcoScore(
 
 const EnergyGaugeWidget = ({ locationId }: EnergyGaugeWidgetProps) => {
   const { meters } = useMeters();
+  const { t } = useTranslation();
   const allowedTypes = useLocationEnergySources(locationId);
   const [dailyPeaks, setDailyPeaks] = useState<Record<string, number>>({});
   const [peakResetAt, setPeakResetAt] = useState<string | null>(null);
@@ -372,7 +374,7 @@ const EnergyGaugeWidget = ({ locationId }: EnergyGaugeWidgetProps) => {
   if (isLoading) {
     return (
       <Card>
-        <CardHeader><CardTitle className="font-display text-lg flex items-center gap-2">Live-Leistung <HelpTooltip text="Zeigt die aktuelle Momentanleistung aller Hauptzähler in Echtzeit. Der rote Pfeil markiert den bisherigen Tageshöchstwert." /></CardTitle></CardHeader>
+        <CardHeader><CardTitle className="font-display text-lg flex items-center gap-2">Live-Leistung <HelpTooltip text={t("tooltip.liveGauge" as any)} /></CardTitle></CardHeader>
         <CardContent><Skeleton className="h-[200px]" /></CardContent>
       </Card>
     );
@@ -381,7 +383,7 @@ const EnergyGaugeWidget = ({ locationId }: EnergyGaugeWidgetProps) => {
   if (gaugeData.length === 0) {
     return (
       <Card>
-        <CardHeader><CardTitle className="font-display text-lg flex items-center gap-2">Live-Leistung <HelpTooltip text="Zeigt die aktuelle Momentanleistung aller Hauptzähler in Echtzeit. Der rote Pfeil markiert den bisherigen Tageshöchstwert." /></CardTitle></CardHeader>
+        <CardHeader><CardTitle className="font-display text-lg flex items-center gap-2">Live-Leistung <HelpTooltip text={t("tooltip.liveGauge" as any)} /></CardTitle></CardHeader>
         <CardContent>
           <div className="h-[200px] flex items-center justify-center text-muted-foreground text-sm">
             Keine aktiven automatischen Hauptzähler vorhanden
@@ -398,7 +400,7 @@ const EnergyGaugeWidget = ({ locationId }: EnergyGaugeWidgetProps) => {
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between">
            <div>
-            <CardTitle className="font-display text-lg flex items-center gap-2">Live-Leistung <HelpTooltip text="Zeigt die aktuelle Momentanleistung aller Hauptzähler in Echtzeit. Der rote Pfeil markiert den bisherigen Tageshöchstwert." /></CardTitle>
+            <CardTitle className="font-display text-lg flex items-center gap-2">Live-Leistung <HelpTooltip text={t("tooltip.liveGauge" as any)} /></CardTitle>
             <p className="text-xs text-muted-foreground mt-0.5">
               Aktuelle Momentanwerte · <span className="text-destructive">▲</span> Tageshöchstwert
             </p>

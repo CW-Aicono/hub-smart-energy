@@ -3298,6 +3298,128 @@ export const translations = {
   "api.route.pushReadings": { de: "Messwerte einspeisen (Push)", en: "Push meter readings", es: "Enviar lecturas de contadores", nl: "Meterwaarden pushen" },
   "api.route.compactDay": { de: "Rohdaten zu 5-Min-Aggregaten verdichten", en: "Compact raw data into 5-min aggregates", es: "Compactar datos brutos en agregados de 5 min", nl: "Ruwe data comprimeren naar 5-min aggregaten" },
   "api.usageTitle": { de: "Verwendungsbeispiele", en: "Usage Examples", es: "Ejemplos de uso", nl: "Gebruiksvoorbeelden" },
+
+  // Help Tooltips
+  "tooltip.anomaly": {
+    de: "Analysiert Verbrauchsdaten mittels KI auf ungewöhnliche Muster, saisonale Abweichungen und Lastspitzen. Ergebnisse werden nach Risikostufe priorisiert.",
+    en: "Analyzes consumption data using AI for unusual patterns, seasonal deviations, and load peaks. Results are prioritized by risk level.",
+    es: "Analiza datos de consumo mediante IA en busca de patrones inusuales, desviaciones estacionales y picos de carga. Los resultados se priorizan por nivel de riesgo.",
+    nl: "Analyseert verbruiksgegevens met AI op ongewone patronen, seizoensafwijkingen en piekbelastingen. Resultaten worden geprioriteerd op risiconiveau.",
+  },
+  "tooltip.forecast": {
+    de: "Prognostiziert den voraussichtlichen Jahresverbrauch basierend auf den bisherigen Monatswerten aller Energieträger.",
+    en: "Forecasts the expected annual consumption based on previous monthly values across all energy types.",
+    es: "Pronostica el consumo anual esperado basado en los valores mensuales anteriores de todos los tipos de energía.",
+    nl: "Voorspelt het verwachte jaarverbruik op basis van eerdere maandelijkse waarden van alle energietypen.",
+  },
+  "tooltip.spotPrice": {
+    de: "Zeigt den aktuellen Börsenstrompreis (Day-Ahead) in 15-Minuten-Intervallen. Vergangene Preise sind fest, zukünftige basieren auf der Auktion.",
+    en: "Shows the current electricity spot price (day-ahead) in 15-minute intervals. Past prices are fixed, future prices are based on the auction.",
+    es: "Muestra el precio spot actual de la electricidad (day-ahead) en intervalos de 15 minutos. Los precios pasados son fijos, los futuros se basan en la subasta.",
+    nl: "Toont de huidige spotprijs voor elektriciteit (day-ahead) in intervallen van 15 minuten. Historische prijzen staan vast, toekomstige zijn op basis van de veiling.",
+  },
+  "tooltip.arbitrageAi": {
+    de: "Analysiert Spotpreise und PV-Prognosen, um optimale Kauf-/Verkaufszeitpunkte für Energiespeicher zu empfehlen.",
+    en: "Analyzes spot prices and PV forecasts to recommend optimal buy/sell timings for energy storage.",
+    es: "Analiza precios spot y pronósticos fotovoltaicos para recomendar momentos óptimos de compra/venta para almacenamiento de energía.",
+    nl: "Analyseert spotprijzen en PV-prognoses om optimale koop-/verkooptijden voor energieopslag aan te bevelen.",
+  },
+  "tooltip.liveGauge": {
+    de: "Zeigt die aktuelle Momentanleistung aller Hauptzähler in Echtzeit. Der rote Pfeil markiert den bisherigen Tageshöchstwert.",
+    en: "Shows the current instantaneous power of all main meters in real time. The red arrow marks the daily peak so far.",
+    es: "Muestra la potencia instantánea actual de todos los contadores principales en tiempo real. La flecha roja marca el pico diario hasta el momento.",
+    nl: "Toont het actuele momentane vermogen van alle hoofdmeters in realtime. De rode pijl markeert de dagpiek tot nu toe.",
+  },
+  "tooltip.sankeyFlow": {
+    de: "Visualisiert den Energiefluss von Quellen (Bezug, PV) zu Verbrauchern. Umschaltbar zwischen Leistung (kW) und Kosten (€).",
+    en: "Visualizes energy flow from sources (grid, PV) to consumers. Switchable between power (kW) and cost (€).",
+    es: "Visualiza el flujo de energía desde fuentes (red, FV) hasta consumidores. Conmutable entre potencia (kW) y coste (€).",
+    nl: "Visualiseert de energiestroom van bronnen (net, PV) naar verbruikers. Schakelbaar tussen vermogen (kW) en kosten (€).",
+  },
+  "tooltip.weatherNorm": {
+    de: "Vergleicht Energieverbräuche über Zeiträume hinweg, indem Wetterbedingungen (Heizgradtage) herausgerechnet werden. So werden kalte und warme Winter vergleichbar.",
+    en: "Compares energy consumption across periods by factoring out weather conditions (heating degree days). This makes cold and warm winters comparable.",
+    es: "Compara el consumo de energía entre períodos eliminando las condiciones climáticas (grados-día de calefacción). Así los inviernos fríos y cálidos son comparables.",
+    nl: "Vergelijkt energieverbruik over perioden door weersomstandigheden (graaddagen) eruit te rekenen. Hierdoor worden koude en warme winters vergelijkbaar.",
+  },
+  "tooltip.refTemp": {
+    de: "Referenztemperatur für die Heizgradtag-Berechnung (HGT). Bestimmt, ab welcher Außentemperatur geheizt wird – üblich sind 15 °C.",
+    en: "Reference temperature for heating degree day (HDD) calculation. Determines from which outdoor temperature heating starts – typically 15 °C.",
+    es: "Temperatura de referencia para el cálculo de grados-día de calefacción (GDC). Determina a partir de qué temperatura exterior se inicia la calefacción – normalmente 15 °C.",
+    nl: "Referentietemperatuur voor de graaddagberekening (GDD). Bepaalt vanaf welke buitentemperatuur er verwarmd wordt – gebruikelijk is 15 °C.",
+  },
+  "tooltip.sustainability": {
+    de: "Zeigt den Gesamtverbrauch pro Energieträger mit prozentualer Aufschlüsselung für den gewählten Zeitraum.",
+    en: "Shows total consumption per energy type with percentage breakdown for the selected period.",
+    es: "Muestra el consumo total por tipo de energía con desglose porcentual para el período seleccionado.",
+    nl: "Toont het totale verbruik per energietype met procentuele verdeling voor de geselecteerde periode.",
+  },
+  "tooltip.pvForecast": {
+    de: "Berechnet die erwartete Solarstromerzeugung auf Basis von Standortkoordinaten, Anlagenparametern und aktuellen Wetterdaten.",
+    en: "Calculates expected solar power generation based on location coordinates, system parameters, and current weather data.",
+    es: "Calcula la generación de energía solar esperada basada en coordenadas de ubicación, parámetros del sistema y datos meteorológicos actuales.",
+    nl: "Berekent de verwachte zonne-energieopwekking op basis van locatiecoördinaten, systeemparameters en actuele weergegevens.",
+  },
+  "tooltip.pvForecastWidget": {
+    de: "Erwartete Solarstromerzeugung basierend auf Wetter und Anlagenparametern. Bei hinterlegtem PV-Zähler wird der Ist-Ertrag als Vergleich angezeigt.",
+    en: "Expected solar power generation based on weather and system parameters. If a PV meter is configured, actual yield is shown for comparison.",
+    es: "Generación solar esperada basada en el clima y parámetros del sistema. Si se configura un contador FV, se muestra el rendimiento real para comparación.",
+    nl: "Verwachte zonne-energieopwekking op basis van weer en systeemparameters. Bij een gekoppelde PV-meter wordt het werkelijke rendement ter vergelijking getoond.",
+  },
+  "tooltip.pvPeakPower": {
+    de: "Die maximale Leistung der PV-Anlage unter optimalen Bedingungen (Kilowatt-Peak).",
+    en: "Maximum power output of the PV system under optimal conditions (kilowatt-peak).",
+    es: "Potencia máxima del sistema FV en condiciones óptimas (kilovatio-pico).",
+    nl: "Maximaal vermogen van het PV-systeem onder optimale omstandigheden (kilowatt-piek).",
+  },
+  "tooltip.pvTilt": {
+    de: "Neigungswinkel der Solarmodule: 0° = flach liegend, 90° = senkrecht. Optimal für Mitteleuropa: 30–35°.",
+    en: "Tilt angle of the solar panels: 0° = flat, 90° = vertical. Optimal for Central Europe: 30–35°.",
+    es: "Ángulo de inclinación de los paneles solares: 0° = plano, 90° = vertical. Óptimo para Europa Central: 30–35°.",
+    nl: "Hellingshoek van de zonnepanelen: 0° = plat, 90° = verticaal. Optimaal voor Centraal-Europa: 30–35°.",
+  },
+  "tooltip.pvAzimuth": {
+    de: "Himmelsrichtung der Module: 0° = Nord, 90° = Ost, 180° = Süd (optimal), 270° = West.",
+    en: "Compass direction of the panels: 0° = North, 90° = East, 180° = South (optimal), 270° = West.",
+    es: "Orientación de los paneles: 0° = Norte, 90° = Este, 180° = Sur (óptimo), 270° = Oeste.",
+    nl: "Kompasrichting van de panelen: 0° = Noord, 90° = Oost, 180° = Zuid (optimaal), 270° = West.",
+  },
+  "tooltip.pvMeter": {
+    de: "Optionaler Zähler für den Ist-Ertrag. Ermöglicht den Vergleich zwischen Prognose und tatsächlicher Erzeugung im Diagramm.",
+    en: "Optional meter for actual yield. Enables comparison between forecast and actual generation in the chart.",
+    es: "Contador opcional para el rendimiento real. Permite comparar pronóstico y generación real en el gráfico.",
+    nl: "Optionele meter voor het werkelijke rendement. Maakt vergelijking tussen prognose en werkelijke opwekking in de grafiek mogelijk.",
+  },
+  "tooltip.energyPrices": {
+    de: "Hinterlegen Sie hier die Preise pro Energieträger (Strom, Gas, Wärme, Wasser). Diese fließen in die Kostenberechnung auf dem Dashboard ein.",
+    en: "Enter the prices per energy type (electricity, gas, heat, water) here. These are used for cost calculations on the dashboard.",
+    es: "Ingrese aquí los precios por tipo de energía (electricidad, gas, calor, agua). Se utilizan para los cálculos de costes en el panel.",
+    nl: "Voer hier de prijzen per energietype in (elektriciteit, gas, warmte, water). Deze worden gebruikt voor kostenberekeningen op het dashboard.",
+  },
+  "tooltip.meterManagement": {
+    de: "Verwalten Sie hier Ihre Zähler (Strom, Gas, Wärme, Wasser) und Alarmregeln. Automatische Zähler werden über Integrationen befüllt, manuelle per Ablesung.",
+    en: "Manage your meters (electricity, gas, heat, water) and alert rules here. Automatic meters are populated via integrations, manual ones by readings.",
+    es: "Gestione aquí sus contadores (electricidad, gas, calor, agua) y reglas de alarma. Los contadores automáticos se llenan mediante integraciones, los manuales por lecturas.",
+    nl: "Beheer hier uw meters (elektriciteit, gas, warmte, water) en alarmregels. Automatische meters worden gevuld via integraties, handmatige via aflezingen.",
+  },
+  "tooltip.automation": {
+    de: "Erstellen Sie Regeln, die Aktoren (z. B. Licht, Heizung) automatisch steuern – basierend auf Sensorwerten, Uhrzeiten oder Wochentagen.",
+    en: "Create rules that automatically control actuators (e.g. lights, heating) – based on sensor values, times, or days of the week.",
+    es: "Cree reglas que controlen automáticamente actuadores (p. ej. luces, calefacción) – basadas en valores de sensores, horarios o días de la semana.",
+    nl: "Maak regels die actuatoren (bijv. verlichting, verwarming) automatisch aansturen – op basis van sensorwaarden, tijden of weekdagen.",
+  },
+  "tooltip.virtualMeterFormula": {
+    de: "Definieren Sie, wie der virtuelle Zähler berechnet wird: Addieren (+) oder subtrahieren (−) Sie die Werte anderer Zähler.",
+    en: "Define how the virtual meter is calculated: add (+) or subtract (−) the values of other meters.",
+    es: "Defina cómo se calcula el contador virtual: sume (+) o reste (−) los valores de otros contadores.",
+    nl: "Definieer hoe de virtuele meter wordt berekend: tel de waarden van andere meters op (+) of trek ze af (−).",
+  },
+  "tooltip.apiCredentials": {
+    de: "Verwenden Sie Endpoint und API-Key, um Daten programmatisch abzufragen oder von externen Systemen zu importieren.",
+    en: "Use the endpoint and API key to query data programmatically or import from external systems.",
+    es: "Use el endpoint y la clave API para consultar datos programáticamente o importar desde sistemas externos.",
+    nl: "Gebruik het endpoint en de API-key om gegevens programmatisch op te vragen of vanuit externe systemen te importeren.",
+  },
 } as const;
 
 export type TranslationKey = keyof typeof translations;
