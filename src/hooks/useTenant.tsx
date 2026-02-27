@@ -165,11 +165,21 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
           setError(fetchError.message);
         }
       } else if (data) {
+        // Resolve signed URL for logo if stored as a path
+        let resolvedLogoUrl = data.logo_url;
+        if (resolvedLogoUrl && !resolvedLogoUrl.startsWith('http')) {
+          const { data: signedData } = await supabase.storage
+            .from('tenant-assets')
+            .createSignedUrl(resolvedLogoUrl, 3600);
+          resolvedLogoUrl = signedData?.signedUrl ?? null;
+        }
+
         const tenantData: Tenant = {
           ...data,
           branding: (data.branding as unknown as TenantBranding) || DEFAULT_BRANDING,
           report_settings: (data.report_settings as unknown as TenantReportSettings) || { footer_text: "", show_logo: true },
           week_start_day: (data.week_start_day as 0 | 1 | 2 | 3 | 4 | 5 | 6) ?? 1,
+          logo_url: resolvedLogoUrl,
         };
         setTenant(tenantData);
         applyBrandingToCSS(tenantData.branding);
