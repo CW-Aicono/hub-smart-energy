@@ -123,6 +123,11 @@ const CostOverview = ({ locationId }: CostOverviewProps) => {
     const now = new Date();
     const computeRange = (period: TimePeriod, offset: number = 0) => {
       switch (period) {
+        case "day": {
+          const s = offset === 0 ? startOfDay(now) : startOfDay(subDays(now, 1));
+          const e = offset === 0 ? now : new Date(startOfDay(now).getTime() - 1);
+          return { from: format(s, "yyyy-MM-dd"), to: format(e, "yyyy-MM-dd") };
+        }
         case "week": {
           const s = startOfWeek(offset === 0 ? now : subWeeks(now, 1), { weekStartsOn });
           return { from: format(s, "yyyy-MM-dd"), to: format(endOfWeek(s, { weekStartsOn }), "yyyy-MM-dd") };
@@ -164,7 +169,7 @@ const CostOverview = ({ locationId }: CostOverviewProps) => {
 
   const { data: dbPrevSums } = useQuery({
     queryKey: ["cost-prev-sums", mainAutoMeterIds, prevRange.from, prevRange.to, selectedPeriod],
-    enabled: selectedPeriod !== "day" && selectedPeriod !== "all" && mainAutoMeterIds.length > 0,
+    enabled: selectedPeriod !== "all" && mainAutoMeterIds.length > 0,
     queryFn: async () => {
       const { data, error } = await supabase.rpc("get_meter_period_sums", {
         p_meter_ids: mainAutoMeterIds,
@@ -240,7 +245,7 @@ const CostOverview = ({ locationId }: CostOverviewProps) => {
       }
 
       // Previous period (from DB)
-      if (selectedPeriod !== "day" && selectedPeriod !== "all") {
+      if (selectedPeriod !== "all") {
         const prevRaw = dbPrevSums?.[m.id] ?? 0;
         if (prevRaw > 0) {
           prevCost += toConsumption(prevRaw) * price;
