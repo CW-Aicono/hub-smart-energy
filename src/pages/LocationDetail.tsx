@@ -20,6 +20,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Skeleton } from "@/components/ui/skeleton";
+import { EditLocationDialog } from "@/components/locations/EditLocationDialog";
 import { 
   ArrowLeft, 
   Building2, 
@@ -31,7 +32,8 @@ import {
   Layers,
   ChevronDown,
   ChevronRight,
-  Cpu
+  Cpu,
+  Pencil
 } from "lucide-react";
 
 const usageTypeLabels: Record<LocationUsageType, string> = {
@@ -80,7 +82,7 @@ const LocationDetail = () => {
   const { id } = useParams<{ id: string }>();
   const { user, loading: authLoading } = useAuth();
   const { isAdmin } = useUserRole();
-  const { locations, loading: locationsLoading } = useLocations();
+  const { locations, loading: locationsLoading, refetch: refetchLocations } = useLocations();
   const { floors, loading: floorsLoading, refetch: refetchFloors } = useFloors(id);
   const { t } = useTranslation();
   const { isModuleEnabled } = useModuleGuard();
@@ -143,11 +145,22 @@ const LocationDetail = () => {
           <div className="grid gap-6 md:grid-cols-2">
             {/* Location Info Card */}
             <Card>
-              <CardHeader>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0">
                 <CardTitle className="flex items-center gap-2">
                   <MapPin className="h-5 w-5" />
                   Standortinformationen
                 </CardTitle>
+                {isAdmin && (
+                  <EditLocationDialog
+                    location={location}
+                    onSuccess={refetchLocations}
+                    trigger={
+                      <Button variant="ghost" size="icon" className="h-8 w-8">
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                    }
+                  />
+                )}
               </CardHeader>
               <CardContent className="space-y-4">
                 {location.address && (
