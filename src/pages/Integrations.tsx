@@ -6,6 +6,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useIntegrations, Integration } from "@/hooks/useIntegrations";
 import { useTenant } from "@/hooks/useTenant";
+import { useTranslation } from "@/hooks/useTranslation";
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -33,19 +34,11 @@ import {
 } from "@/components/ui/alert-dialog";
 import { getGatewayTypes, getGatewayDefinition, type GatewayDefinition } from "@/lib/gatewayRegistry";
 
-const integrationSchema = z.object({
-  name: z.string().min(1, "Name ist erforderlich"),
-  type: z.string().min(1, "Gateway-Typ ist erforderlich"),
-  category: z.string().min(1, "Kategorie ist erforderlich"),
-  description: z.string().optional(),
-});
-
-type IntegrationFormData = z.infer<typeof integrationSchema>;
-
 const Integrations = () => {
   const { user, loading: authLoading } = useAuth();
   const { isAdmin, loading: roleLoading } = useUserRole();
   const { tenant } = useTenant();
+  const { t } = useTranslation();
   const { integrations, categories, loading, createIntegration, updateIntegration, deleteIntegration, refetch } = useIntegrations();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingIntegration, setEditingIntegration] = useState<Integration | null>(null);
@@ -53,106 +46,69 @@ const Integrations = () => {
   const [testingId, setTestingId] = useState<string | null>(null);
   const { toast } = useToast();
 
-  const form = useForm<IntegrationFormData>({
-    resolver: zodResolver(integrationSchema),
-    defaultValues: {
-      name: "",
-      type: "",
-      category: "",
-      description: "",
-    },
+  const integrationSchema = z.object({
+    name: z.string().min(1, t("integrations.nameRequired" as any)),
+    type: z.string().min(1, t("integrations.gatewayTypeRequired" as any)),
+    category: z.string().min(1, t("integrations.categoryRequired" as any)),
+    description: z.string().optional(),
   });
 
-  // Reset form when editing integration changes
+  type IntegrationFormData = z.infer<typeof integrationSchema>;
+
+  const form = useForm<IntegrationFormData>({
+    resolver: zodResolver(integrationSchema),
+    defaultValues: { name: "", type: "", category: "", description: "" },
+  });
+
   useEffect(() => {
     if (editingIntegration) {
-      form.reset({
-        name: editingIntegration.name,
-        type: editingIntegration.type,
-        category: editingIntegration.category,
-        description: editingIntegration.description || "",
-      });
+      form.reset({ name: editingIntegration.name, type: editingIntegration.type, category: editingIntegration.category, description: editingIntegration.description || "" });
     } else {
-      form.reset({
-        name: "",
-        type: "",
-        category: categories[0]?.slug || "",
-        description: "",
-      });
+      form.reset({ name: "", type: "", category: categories[0]?.slug || "", description: "" });
     }
   }, [editingIntegration, categories, form]);
 
   const onSubmit = async (data: IntegrationFormData) => {
     const gatewayDef = getGatewayDefinition(data.type);
-    const configData = {
-      connection_status: "disconnected",
-    };
+    const configData = { connection_status: "disconnected" };
 
     if (editingIntegration) {
       const { error } = await updateIntegration(editingIntegration.id, {
-        name: data.name,
-        type: data.type,
-        category: data.category,
-        description: data.description || null,
-        config: configData,
+        name: data.name, type: data.type, category: data.category, description: data.description || null, config: configData,
       });
-
       if (error) {
-        toast({ title: "Fehler", description: "Die Integration konnte nicht aktualisiert werden.", variant: "destructive" });
+        toast({ title: t("common.error" as any), description: t("integrations.updatedDesc" as any), variant: "destructive" });
       } else {
-        toast({ title: "Integration aktualisiert", description: "Die Integration wurde erfolgreich aktualisiert." });
+        toast({ title: t("integrations.updated" as any), description: t("integrations.updatedDesc" as any) });
         setEditingIntegration(null);
         setDialogOpen(false);
       }
     } else {
       const { error } = await createIntegration({
-        name: data.name,
-        type: data.type,
-        category: data.category,
-        description: data.description || null,
-        icon: gatewayDef?.icon || "server",
-        config: configData,
-        is_active: true,
+        name: data.name, type: data.type, category: data.category, description: data.description || null,
+        icon: gatewayDef?.icon || "server", config: configData, is_active: true,
       });
-
       if (error) {
-        toast({ title: "Fehler", description: "Die Integration konnte nicht erstellt werden.", variant: "destructive" });
+        toast({ title: t("common.error" as any), description: t("integrations.createdDesc" as any), variant: "destructive" });
       } else {
-        toast({ title: "Integration erstellt", description: "Die Integration wurde erfolgreich erstellt." });
+        toast({ title: t("integrations.created" as any), description: t("integrations.createdDesc" as any) });
         form.reset();
         setDialogOpen(false);
       }
     }
   };
 
-  const handleEdit = (integration: Integration) => {
-    setEditingIntegration(integration);
-    setDialogOpen(true);
-  };
-
-  const handleDialogClose = (open: boolean) => {
-    if (!open) {
-      setEditingIntegration(null);
-    }
-    setDialogOpen(open);
-  };
+  const handleEdit = (integration: Integration) => { setEditingIntegration(integration); setDialogOpen(true); };
+  const handleDialogClose = (open: boolean) => { if (!open) setEditingIntegration(null); setDialogOpen(open); };
 
   const handleDelete = async (id: string) => {
     setDeletingId(id);
     const { error } = await deleteIntegration(id);
     setDeletingId(null);
-
     if (error) {
-      toast({
-        title: "Fehler",
-        description: "Die Integration konnte nicht gelöscht werden.",
-        variant: "destructive",
-      });
+      toast({ title: t("common.error" as any), description: t("integrations.deleteError" as any), variant: "destructive" });
     } else {
-      toast({
-        title: "Integration gelöscht",
-        description: "Die Integration wurde erfolgreich gelöscht.",
-      });
+      toast({ title: t("integrations.deleted" as any), description: t("integrations.deletedDesc" as any) });
     }
   };
 
@@ -162,7 +118,6 @@ const Integrations = () => {
     const gatewayDef = getGatewayDefinition(integration.type);
     const gatewayLabel = gatewayDef?.label || integration.type;
 
-    // Credentials live in location_integrations, not in integrations table
     const { data: locIntegrations } = await supabase
       .from("location_integrations")
       .select("id, config")
@@ -172,8 +127,8 @@ const Integrations = () => {
     if (!locIntegrations?.length) {
       setTestingId(null);
       toast({
-        title: "Kein Standort verknüpft",
-        description: `Die Integration "${integration.name}" ist noch keinem Standort zugewiesen. Bitte weisen Sie sie zuerst einem Standort zu und konfigurieren Sie die Zugangsdaten.`,
+        title: t("integrations.noLocationLinked" as any),
+        description: `${t("integrations.noLocationLinkedDesc" as any)}`,
         variant: "destructive",
       });
       return;
@@ -190,37 +145,29 @@ const Integrations = () => {
       });
       refetch();
       toast({
-        title: "Verbindungstest fehlgeschlagen",
-        description: `Fehlende Konfiguration für ${gatewayLabel}: ${missingFields.map(f => f.label).join(", ")}`,
+        title: t("integrations.testFailed" as any),
+        description: `${t("integrations.missingConfig" as any)} ${gatewayLabel}: ${missingFields.map(f => f.label).join(", ")}`,
         variant: "destructive",
       });
       return;
     }
 
-    // Call edge function to truly test the connection
     try {
       const edgeFunction = gatewayDef?.edgeFunctionName || "loxone-api";
       const { data, error: fnError } = await supabase.functions.invoke(edgeFunction, {
         body: { locationIntegrationId: locIntegrations[0].id, action: "getSensors" },
       });
-
       const success = !fnError && data?.success;
       const newStatus = success ? "connected" : "disconnected";
-
       await updateIntegration(integration.id, {
         config: { ...config, connection_status: newStatus, last_tested_at: new Date().toISOString() },
       });
       setTestingId(null);
       refetch();
-
       if (success) {
-        toast({ title: "Verbindung erfolgreich", description: `Die Verbindung zum ${gatewayLabel} wurde hergestellt.` });
+        toast({ title: t("integrations.testSuccess" as any), description: t("integrations.connectionEstablished" as any) });
       } else {
-        toast({
-          title: "Verbindungstest fehlgeschlagen",
-          description: data?.error || `Keine Verbindung zum ${gatewayLabel} möglich.`,
-          variant: "destructive",
-        });
+        toast({ title: t("integrations.testFailed" as any), description: data?.error || `${gatewayLabel}`, variant: "destructive" });
       }
     } catch {
       await updateIntegration(integration.id, {
@@ -228,11 +175,7 @@ const Integrations = () => {
       });
       setTestingId(null);
       refetch();
-      toast({
-        title: "Verbindungstest fehlgeschlagen",
-        description: `Die Verbindung zum ${gatewayLabel} konnte nicht getestet werden.`,
-        variant: "destructive",
-      });
+      toast({ title: t("integrations.testFailed" as any), variant: "destructive" });
     }
   };
 
@@ -241,23 +184,15 @@ const Integrations = () => {
     return config?.connection_status === "connected" ? "connected" : "disconnected";
   };
 
-  const getCategoryName = (slug: string) => {
-    return categories.find(c => c.slug === slug)?.name || slug;
-  };
-
-  // Group integrations by category
   const integrationsByCategory = categories.map(category => ({
     category,
     integrations: integrations.filter(i => i.category === category.slug),
   })).filter(group => group.integrations.length > 0);
 
-  // Add uncategorized integrations
-  const uncategorizedIntegrations = integrations.filter(
-    i => !categories.some(c => c.slug === i.category)
-  );
+  const uncategorizedIntegrations = integrations.filter(i => !categories.some(c => c.slug === i.category));
   if (uncategorizedIntegrations.length > 0) {
     integrationsByCategory.push({
-      category: { id: "uncategorized", tenant_id: "", name: "Sonstige", slug: "sonstige", description: null, sort_order: 999, created_at: "" },
+      category: { id: "uncategorized", tenant_id: "", name: t("integrations.uncategorized" as any), slug: "sonstige", description: null, sort_order: 999, created_at: "" },
       integrations: uncategorizedIntegrations,
     });
   }
@@ -268,10 +203,7 @@ const Integrations = () => {
         <DashboardSidebar />
         <main className="flex-1 overflow-auto p-3 md:p-6">
           <Skeleton className="h-8 w-48 mb-6" />
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            <Skeleton className="h-48" />
-            <Skeleton className="h-48" />
-          </div>
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3"><Skeleton className="h-48" /><Skeleton className="h-48" /></div>
         </main>
       </div>
     );
@@ -289,129 +221,69 @@ const Integrations = () => {
             <div>
               <h1 className="text-2xl font-display font-bold flex items-center gap-2">
                 <Plug className="h-6 w-6" />
-                Integrationen
+                {t("integrations.title" as any)}
               </h1>
-              <p className="text-muted-foreground mt-1">
-                Verwalten Sie die verfügbaren Integrationen für Ihre Standorte
-              </p>
+              <p className="text-muted-foreground mt-1">{t("integrations.subtitle" as any)}</p>
             </div>
             <Dialog open={dialogOpen} onOpenChange={handleDialogClose}>
               <DialogTrigger asChild>
-                <Button className="gap-2">
-                  <Plus className="h-4 w-4" />
-                  Integration erstellen
-                </Button>
+                <Button className="gap-2"><Plus className="h-4 w-4" />{t("integrations.create" as any)}</Button>
               </DialogTrigger>
               <DialogContent>
                 <DialogHeader>
-                  <DialogTitle>
-                    {editingIntegration ? "Integration bearbeiten" : "Neue Integration"}
-                  </DialogTitle>
-                  <DialogDescription>
-                    {editingIntegration 
-                      ? "Bearbeiten Sie die Einstellungen der Integration"
-                      : "Erstellen Sie eine neue Integration, die an Standorten verwendet werden kann"
-                    }
-                  </DialogDescription>
+                  <DialogTitle>{editingIntegration ? t("integrations.editTitle" as any) : t("integrations.newTitle" as any)}</DialogTitle>
+                  <DialogDescription>{editingIntegration ? t("integrations.editDesc" as any) : t("integrations.newDesc" as any)}</DialogDescription>
                 </DialogHeader>
                 <Form {...form}>
                   <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                    <FormField
-                      control={form.control}
-                      name="name"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Name</FormLabel>
-                          <FormControl>
-                            <Input placeholder="z.B. Büro Miniserver" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="type"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Gateway-Typ</FormLabel>
-                          <Select onValueChange={field.onChange} value={field.value}>
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue placeholder="Gateway-Typ auswählen" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              {getGatewayTypes().map((gw) => (
-                                <SelectItem key={gw.type} value={gw.type}>
-                                  {gw.label}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          {field.value && getGatewayDefinition(field.value) && (
-                            <FormDescription>{getGatewayDefinition(field.value)!.description}</FormDescription>
-                          )}
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="category"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Kategorie</FormLabel>
-                          <Select onValueChange={field.onChange} value={field.value}>
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue placeholder="Kategorie auswählen" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              {categories.map((category) => (
-                                <SelectItem key={category.id} value={category.slug}>
-                                  {category.name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="description"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Beschreibung (optional)</FormLabel>
-                          <FormControl>
-                            <Textarea
-                              placeholder="Beschreiben Sie die Integration..."
-                              {...field}
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+                    <FormField control={form.control} name="name" render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t("integrations.name" as any)}</FormLabel>
+                        <FormControl><Input placeholder={t("integrations.namePlaceholder" as any)} {...field} /></FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )} />
+                    <FormField control={form.control} name="type" render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t("integrations.gatewayType" as any)}</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value}>
+                          <FormControl><SelectTrigger><SelectValue placeholder={t("integrations.gatewayTypePlaceholder" as any)} /></SelectTrigger></FormControl>
+                          <SelectContent>
+                            {getGatewayTypes().map((gw) => (<SelectItem key={gw.type} value={gw.type}>{gw.label}</SelectItem>))}
+                          </SelectContent>
+                        </Select>
+                        {field.value && getGatewayDefinition(field.value) && (
+                          <FormDescription>{getGatewayDefinition(field.value)!.description}</FormDescription>
+                        )}
+                        <FormMessage />
+                      </FormItem>
+                    )} />
+                    <FormField control={form.control} name="category" render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t("integrations.category" as any)}</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value}>
+                          <FormControl><SelectTrigger><SelectValue placeholder={t("integrations.categoryPlaceholder" as any)} /></SelectTrigger></FormControl>
+                          <SelectContent>
+                            {categories.map((category) => (<SelectItem key={category.id} value={category.slug}>{category.name}</SelectItem>))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )} />
+                    <FormField control={form.control} name="description" render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t("integrations.descriptionOptional" as any)}</FormLabel>
+                        <FormControl><Textarea placeholder={t("integrations.descriptionPlaceholder" as any)} {...field} /></FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )} />
                     <div className="flex justify-end gap-2 pt-4">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() => handleDialogClose(false)}
-                      >
-                        Abbrechen
-                      </Button>
+                      <Button type="button" variant="outline" onClick={() => handleDialogClose(false)}>{t("common.cancel" as any)}</Button>
                       <Button type="submit" disabled={form.formState.isSubmitting}>
                         {form.formState.isSubmitting ? (
-                          <>
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            {editingIntegration ? "Speichern..." : "Erstellen..."}
-                          </>
+                          <><Loader2 className="mr-2 h-4 w-4 animate-spin" />{editingIntegration ? t("integrations.saving" as any) : t("integrations.creating" as any)}</>
                         ) : (
-                          editingIntegration ? "Speichern" : "Erstellen"
+                          editingIntegration ? t("common.save" as any) : t("common.create" as any)
                         )}
                       </Button>
                     </div>
@@ -424,20 +296,13 @@ const Integrations = () => {
 
         <div className="p-6">
           {loading ? (
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              <Skeleton className="h-48" />
-              <Skeleton className="h-48" />
-            </div>
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3"><Skeleton className="h-48" /><Skeleton className="h-48" /></div>
           ) : integrations.length === 0 ? (
             <Card>
               <CardContent className="flex flex-col items-center justify-center py-12">
-                <div className="rounded-full bg-muted p-4 mb-4">
-                  <Server className="h-8 w-8 text-muted-foreground" />
-                </div>
-                <p className="text-lg font-medium">Keine Integrationen vorhanden</p>
-                <p className="text-muted-foreground text-center mt-1">
-                  Erstellen Sie eine Integration, um sie an Standorten zu verwenden
-                </p>
+                <div className="rounded-full bg-muted p-4 mb-4"><Server className="h-8 w-8 text-muted-foreground" /></div>
+                <p className="text-lg font-medium">{t("integrations.noIntegrations" as any)}</p>
+                <p className="text-muted-foreground text-center mt-1">{t("integrations.noIntegrationsDesc" as any)}</p>
               </CardContent>
             </Card>
           ) : (
@@ -451,67 +316,41 @@ const Integrations = () => {
                         <CardHeader className="pb-3">
                           <div className="flex items-start justify-between">
                             <div className="flex items-center gap-3">
-                              <div className="p-2 rounded-lg bg-primary/10">
-                                <Server className="h-5 w-5 text-primary" />
-                              </div>
+                              <div className="p-2 rounded-lg bg-primary/10"><Server className="h-5 w-5 text-primary" /></div>
                               <div>
                                 <CardTitle className="text-lg">{integration.name}</CardTitle>
                                 <div className="flex items-center gap-2 mt-1">
                                   {getConnectionStatus(integration) === "connected" ? (
-                                    <Badge variant="success">
-                                      <Wifi className="h-3 w-3 mr-1" />
-                                      Verbunden
-                                    </Badge>
+                                    <Badge variant="success"><Wifi className="h-3 w-3 mr-1" />{t("integrations.connected" as any)}</Badge>
                                   ) : (
-                                    <Badge variant="secondary" className="text-muted-foreground">
-                                      <WifiOff className="h-3 w-3 mr-1" />
-                                      Nicht verbunden
-                                    </Badge>
+                                    <Badge variant="secondary" className="text-muted-foreground"><WifiOff className="h-3 w-3 mr-1" />{t("integrations.notConnected" as any)}</Badge>
                                   )}
                                 </div>
                               </div>
                             </div>
                             <div className="flex gap-1">
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => handleEdit(integration)}
-                              >
-                                <Pencil className="h-4 w-4" />
-                              </Button>
+                              <Button variant="ghost" size="icon" onClick={() => handleEdit(integration)}><Pencil className="h-4 w-4" /></Button>
                               <AlertDialog>
                                 <AlertDialogTrigger asChild>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="text-destructive hover:text-destructive"
-                                  >
-                                    <Trash2 className="h-4 w-4" />
-                                  </Button>
+                                  <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive"><Trash2 className="h-4 w-4" /></Button>
                                 </AlertDialogTrigger>
                                 <AlertDialogContent>
                                   <AlertDialogHeader>
-                                    <AlertDialogTitle>Integration löschen?</AlertDialogTitle>
+                                    <AlertDialogTitle>{t("integrations.deleteTitle" as any)}</AlertDialogTitle>
                                     <AlertDialogDescription>
-                                      Möchten Sie die Integration "{integration.name}" wirklich löschen?
-                                      Alle Standort-Verknüpfungen werden ebenfalls entfernt.
+                                      {t("integrations.deleteDesc" as any)}
                                     </AlertDialogDescription>
                                   </AlertDialogHeader>
                                   <AlertDialogFooter>
-                                    <AlertDialogCancel>Abbrechen</AlertDialogCancel>
+                                    <AlertDialogCancel>{t("common.cancel" as any)}</AlertDialogCancel>
                                     <AlertDialogAction
                                       onClick={() => handleDelete(integration.id)}
                                       disabled={deletingId === integration.id}
                                       className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                                     >
                                       {deletingId === integration.id ? (
-                                        <>
-                                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                          Löschen...
-                                        </>
-                                      ) : (
-                                        "Löschen"
-                                      )}
+                                        <><Loader2 className="mr-2 h-4 w-4 animate-spin" />{t("integrations.deleting" as any)}</>
+                                      ) : t("common.delete" as any)}
                                     </AlertDialogAction>
                                   </AlertDialogFooter>
                                 </AlertDialogContent>
@@ -520,32 +359,16 @@ const Integrations = () => {
                           </div>
                         </CardHeader>
                         <CardContent className="pt-0">
-                          {integration.description && (
-                            <p className="text-sm text-muted-foreground mb-3">{integration.description}</p>
-                          )}
+                          {integration.description && <p className="text-sm text-muted-foreground mb-3">{integration.description}</p>}
                           <div className="flex items-center gap-2 text-xs text-muted-foreground mb-3">
-                            <span>Typ:</span>
-                            <code className="bg-muted px-1.5 py-0.5 rounded">
-                              {getGatewayDefinition(integration.type)?.label || integration.type}
-                            </code>
+                            <span>{t("integrations.type" as any)}</span>
+                            <code className="bg-muted px-1.5 py-0.5 rounded">{getGatewayDefinition(integration.type)?.label || integration.type}</code>
                           </div>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="w-full"
-                            onClick={() => handleTestConnection(integration)}
-                            disabled={testingId === integration.id}
-                          >
+                          <Button variant="outline" size="sm" className="w-full" onClick={() => handleTestConnection(integration)} disabled={testingId === integration.id}>
                             {testingId === integration.id ? (
-                              <>
-                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                Teste Verbindung...
-                              </>
+                              <><Loader2 className="mr-2 h-4 w-4 animate-spin" />{t("integrations.testingConnection" as any)}</>
                             ) : (
-                              <>
-                                <Wifi className="mr-2 h-4 w-4" />
-                                Verbindung testen
-                              </>
+                              <><Wifi className="mr-2 h-4 w-4" />{t("integrations.testConnection" as any)}</>
                             )}
                           </Button>
                         </CardContent>
@@ -557,7 +380,6 @@ const Integrations = () => {
             </div>
           )}
 
-          {/* Scanner Management Section */}
           <div className="border-t pt-8 mt-8">
             <ScannerManagement />
           </div>
