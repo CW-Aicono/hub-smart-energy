@@ -12,6 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Smartphone, Users, ExternalLink, Check, Ban, Archive, Loader2, Copy, Link, QrCode } from "lucide-react";
 import { format } from "date-fns";
 import QRCode from "qrcode";
+import { useTranslation } from "@/hooks/useTranslation";
 
 const APP_URL = `${window.location.origin}/ev`;
 
@@ -22,6 +23,8 @@ const ChargingAppAdmin = () => {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const qrCanvasRef = useRef<HTMLCanvasElement>(null);
   const [copied, setCopied] = useState(false);
+  const { t } = useTranslation();
+  const T = (key: string) => t(key as any);
 
   useEffect(() => {
     if (qrCanvasRef.current) {
@@ -37,9 +40,9 @@ const ChargingAppAdmin = () => {
 
   const statusBadge = (status: string) => {
     switch (status) {
-      case "active": return <Badge variant="default"><Check className="h-3 w-3 mr-1" />Aktiv</Badge>;
-      case "blocked": return <Badge variant="destructive"><Ban className="h-3 w-3 mr-1" />Gesperrt</Badge>;
-      case "archived": return <Badge variant="secondary"><Archive className="h-3 w-3 mr-1" />Archiviert</Badge>;
+      case "active": return <Badge variant="default"><Check className="h-3 w-3 mr-1" />{T("common.active")}</Badge>;
+      case "blocked": return <Badge variant="destructive"><Ban className="h-3 w-3 mr-1" />{T("common.blocked")}</Badge>;
+      case "archived": return <Badge variant="secondary"><Archive className="h-3 w-3 mr-1" />{T("task.statusCancelled")}</Badge>;
       default: return <Badge variant="outline">{status}</Badge>;
     }
   };
@@ -50,19 +53,19 @@ const ChargingAppAdmin = () => {
       <main className="flex-1 overflow-auto">
         <div className="p-4 md:p-6 space-y-6">
           <div>
-            <h1 className="text-2xl font-bold">Lade-App</h1>
-            <p className="text-sm text-muted-foreground">Vorschau und Benutzerverwaltung der mobilen Lade-App</p>
+            <h1 className="text-2xl font-bold">{T("chargingApp.title")}</h1>
+            <p className="text-sm text-muted-foreground">{T("chargingApp.subtitle")}</p>
           </div>
 
           <Tabs defaultValue="preview" className="space-y-4">
             <TabsList>
               <TabsTrigger value="preview" className="gap-1.5">
                 <Smartphone className="h-4 w-4" />
-                App-Vorschau
+                {T("chargingApp.preview")}
               </TabsTrigger>
               <TabsTrigger value="users" className="gap-1.5">
                 <Users className="h-4 w-4" />
-                App-Nutzer
+                {T("chargingApp.appUsers")}
                 {appUsers.length > 0 && (
                   <Badge variant="secondary" className="ml-1 h-5 min-w-5 px-1 text-xs">{appUsers.length}</Badge>
                 )}
@@ -75,7 +78,7 @@ const ChargingAppAdmin = () => {
                 <div className="space-y-4 lg:w-72 shrink-0">
                   <Card>
                     <CardContent className="p-4 space-y-3">
-                      <h3 className="font-semibold text-sm flex items-center gap-1.5"><Link className="h-4 w-4" /> App-Link</h3>
+                      <h3 className="font-semibold text-sm flex items-center gap-1.5"><Link className="h-4 w-4" /> {T("chargingApp.appLink")}</h3>
                       <div className="flex items-center gap-2">
                         <Input value={APP_URL} readOnly className="text-xs font-mono" />
                         <Button
@@ -94,7 +97,7 @@ const ChargingAppAdmin = () => {
                       <Button variant="outline" size="sm" asChild className="w-full gap-1.5">
                         <a href="/ev" target="_blank" rel="noopener noreferrer">
                           <ExternalLink className="h-4 w-4" />
-                          App in neuem Tab öffnen
+                          {T("chargingApp.openInTab")}
                         </a>
                       </Button>
                     </CardContent>
@@ -102,11 +105,11 @@ const ChargingAppAdmin = () => {
 
                   <Card>
                     <CardContent className="p-4 space-y-3">
-                      <h3 className="font-semibold text-sm flex items-center gap-1.5"><QrCode className="h-4 w-4" /> QR-Code</h3>
+                      <h3 className="font-semibold text-sm flex items-center gap-1.5"><QrCode className="h-4 w-4" /> {T("chargingApp.qrCode")}</h3>
                       <div className="flex justify-center">
                         <canvas ref={qrCanvasRef} />
                       </div>
-                      <p className="text-xs text-muted-foreground text-center">Scannen zum Öffnen der Lade-App</p>
+                      <p className="text-xs text-muted-foreground text-center">{T("chargingApp.scanToOpen")}</p>
                     </CardContent>
                   </Card>
                 </div>
@@ -119,7 +122,7 @@ const ChargingAppAdmin = () => {
                       <iframe
                         src="/ev"
                         className="w-full h-full border-0"
-                        title="Lade-App Vorschau"
+                        title={T("chargingApp.preview")}
                         style={{ borderRadius: "1.8rem" }}
                       />
                     </div>
@@ -135,16 +138,16 @@ const ChargingAppAdmin = () => {
                     <div className="flex items-center gap-3">
                       <Select value={statusFilter} onValueChange={setStatusFilter}>
                         <SelectTrigger className="w-[160px]">
-                          <SelectValue placeholder="Status" />
+                          <SelectValue placeholder={T("common.status")} />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="all">Alle Status</SelectItem>
-                          <SelectItem value="active">Aktiv</SelectItem>
-                          <SelectItem value="blocked">Gesperrt</SelectItem>
-                          <SelectItem value="archived">Archiviert</SelectItem>
+                          <SelectItem value="all">{T("chargingApp.allStatus")}</SelectItem>
+                          <SelectItem value="active">{T("common.active")}</SelectItem>
+                          <SelectItem value="blocked">{T("common.blocked")}</SelectItem>
+                          <SelectItem value="archived">{T("task.statusCancelled")}</SelectItem>
                         </SelectContent>
                       </Select>
-                      <Badge variant="outline">{filtered.length} Nutzer</Badge>
+                      <Badge variant="outline">{filtered.length} {T("chargingApp.users")}</Badge>
                     </div>
                   </div>
 
@@ -155,18 +158,18 @@ const ChargingAppAdmin = () => {
                   ) : filtered.length === 0 ? (
                     <div className="text-center py-12 text-muted-foreground">
                       <Users className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                      <p>Keine App-Nutzer gefunden</p>
+                      <p>{T("chargingApp.noAppUsers")}</p>
                     </div>
                   ) : (
                     <div className="overflow-auto">
                       <Table>
                         <TableHeader>
                           <TableRow>
-                            <TableHead>Name</TableHead>
-                            <TableHead>E-Mail</TableHead>
-                            <TableHead>Gruppe</TableHead>
-                            <TableHead>Status</TableHead>
-                            <TableHead>Registriert</TableHead>
+                            <TableHead>{T("common.name")}</TableHead>
+                            <TableHead>{T("common.email")}</TableHead>
+                            <TableHead>{T("chargingApp.group")}</TableHead>
+                            <TableHead>{T("common.status")}</TableHead>
+                            <TableHead>{T("chargingApp.registered")}</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
