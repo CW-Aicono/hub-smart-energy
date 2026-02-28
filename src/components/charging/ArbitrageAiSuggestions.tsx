@@ -10,9 +10,9 @@ import { format } from "date-fns";
 import { toast } from "@/hooks/use-toast";
 
 const confidenceColor: Record<string, string> = {
-  hoch: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
-  mittel: "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200",
-  niedrig: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
+  high: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
+  medium: "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200",
+  low: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
 };
 
 export default function ArbitrageAiSuggestions() {
@@ -123,7 +123,7 @@ export default function ArbitrageAiSuggestions() {
                     <div className="flex items-center gap-2">
                       <span className="font-semibold">{s.name}</span>
                       <Badge className={confidenceColor[s.confidence] || ""} variant="secondary">
-                        {T("aiArb.confidence")}: {s.confidence}
+                        {T("aiArb.confidence")}: {T(`aiArb.confidence_${s.confidence}`)}
                       </Badge>
                     </div>
                     <div className="flex items-center gap-2">
@@ -210,7 +210,7 @@ export default function ArbitrageAiSuggestions() {
 
             {result.generated_at && (
               <p className="text-xs text-muted-foreground text-right">
-                {T("aiArb.generated")}: {format(new Date(result.generated_at), "dd.MM.yyyy HH:mm")} Uhr
+                {T("aiArb.generated")}: {format(new Date(result.generated_at), "dd.MM.yyyy HH:mm")}
               </p>
             )}
           </div>

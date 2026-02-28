@@ -7,7 +7,7 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { tenant_id } = await req.json();
+    const { tenant_id, language = "de" } = await req.json();
     if (!tenant_id) throw new Error("tenant_id is required");
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
@@ -17,6 +17,14 @@ serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, serviceKey);
 
+    const langMap: Record<string, string> = {
+      de: "German",
+      en: "English",
+      es: "Spanish",
+      nl: "Dutch",
+    };
+    const outputLang = langMap[language] || "English";
+
     // 1. Load storages for this tenant
     const { data: storages } = await supabase
       .from("energy_storages")
@@ -25,7 +33,7 @@ serve(async (req) => {
       .eq("status", "active");
 
     if (!storages || storages.length === 0) {
-      return new Response(JSON.stringify({ suggestions: [], message: "Keine aktiven Speicher vorhanden." }), {
+      return new Response(JSON.stringify({ suggestions: [], message: "No active storages found." }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -45,7 +53,6 @@ serve(async (req) => {
 
     for (const locId of locationIds) {
       try {
-        // Check if PV settings exist for this location
         const { data: pvSettings } = await supabase
           .from("pv_forecast_settings")
           .select("peak_power_kwp, tilt_deg, azimuth_deg")
@@ -86,25 +93,25 @@ serve(async (req) => {
       .select("name, storage_id, buy_below_eur_mwh, sell_above_eur_mwh, is_active")
       .eq("tenant_id", tenant_id);
 
-    // 5. Build AI prompt
+    // 5. Build AI prompt data
     const pricesSummary = (prices || [])
       .map((p: any) => `${p.timestamp}: ${p.price_eur_mwh} €/MWh`)
       .join("\n");
 
     const storagesSummary = storages
-      .map((s) => `${s.name}: ${s.capacity_kwh} kWh, Laden max ${s.max_charge_kw} kW, Entladen max ${s.max_discharge_kw} kW, Wirkungsgrad ${s.efficiency_pct}%`)
+      .map((s) => `${s.name}: ${s.capacity_kwh} kWh, charge max ${s.max_charge_kw} kW, discharge max ${s.max_discharge_kw} kW, efficiency ${s.efficiency_pct}%`)
       .join("\n");
 
     const pvSummary = Object.entries(pvForecasts)
       .map(([locId, entries]: [string, any]) => {
         const storage = storages.find((s) => s.location_id === locId);
         const relevantEntries = entries.filter((e: any) => e.estimated_kwh > 0).slice(0, 24);
-        return `Speicher "${storage?.name}" – PV-Prognose:\n${relevantEntries.map((e: any) => `  ${e.timestamp}: ${e.estimated_kwh} kWh`).join("\n")}`;
+        return `Storage "${storage?.name}" – PV forecast:\n${relevantEntries.map((e: any) => `  ${e.timestamp}: ${e.estimated_kwh} kWh`).join("\n")}`;
       })
       .join("\n\n");
 
     const existingStr = (existingStrategies || [])
-      .map((s: any) => `"${s.name}" (Speicher: ${s.storage_id}, Kauf <${s.buy_below_eur_mwh} €/MWh, Verkauf >${s.sell_above_eur_mwh} €/MWh, aktiv: ${s.is_active})`)
+      .map((s: any) => `"${s.name}" (storage: ${s.storage_id}, buy <${s.buy_below_eur_mwh} €/MWh, sell >${s.sell_above_eur_mwh} €/MWh, active: ${s.is_active})`)
       .join("\n");
 
     // 6. Call AI
@@ -119,18 +126,21 @@ serve(async (req) => {
         messages: [
           {
             role: "system",
-            content: `Du bist ein Experte für Energiespeicher-Arbitrage am Spotmarkt (EPEX Spot DE-LU).
-Deine Aufgabe: Analysiere Spotpreise und PV-Prognosen, um optimale Lade-/Entladezeiten und Handelsstrategien vorzuschlagen.
-Berücksichtige:
-- Speicherkapazität und Wirkungsgrad (Verluste beim Laden/Entladen)
-- PV-Überschuss sollte zum Laden genutzt werden statt teuer aus dem Netz
-- Niedrige Spotpreise = laden, hohe Spotpreise = entladen/verkaufen
-- Preisspreads müssen groß genug sein, um Wirkungsgradverluste zu kompensieren
-- Gib konkrete Zeitfenster und geschätzte Erlöse in Euro an`,
+            content: `You are an expert in energy storage arbitrage on the spot market (EPEX Spot DE-LU).
+Your task: Analyze spot prices and PV forecasts to suggest optimal charge/discharge times and trading strategies.
+Consider:
+- Storage capacity and efficiency (round-trip losses)
+- PV surplus should be used for charging instead of expensive grid power
+- Low spot prices = charge, high spot prices = discharge/sell
+- Price spreads must be large enough to compensate for efficiency losses
+- Provide concrete time windows and estimated revenues in Euro
+
+IMPORTANT: All text output (strategy names, reasoning, market_summary, window reasons) MUST be written in ${outputLang}.
+The confidence field must use the English values: "high", "medium", or "low".`,
           },
           {
             role: "user",
-            content: `Aktuelle Spotpreise (DE-LU):\n${pricesSummary}\n\nSpeicher:\n${storagesSummary}\n\nPV-Prognosen:\n${pvSummary || "Keine PV-Daten verfügbar"}\n\nBestehende Strategien:\n${existingStr || "Keine"}\n\nBitte schlage 2-4 optimale Strategien vor.`,
+            content: `Current spot prices (DE-LU):\n${pricesSummary}\n\nStorages:\n${storagesSummary}\n\nPV forecasts:\n${pvSummary || "No PV data available"}\n\nExisting strategies:\n${existingStr || "None"}\n\nPlease suggest 2-4 optimal strategies.`,
           },
         ],
         tools: [
@@ -138,7 +148,7 @@ Berücksichtige:
             type: "function",
             function: {
               name: "suggest_strategies",
-              description: "Liefere Arbitrage-Strategievorschläge basierend auf Spotpreisen und PV-Prognose",
+              description: "Return arbitrage strategy suggestions based on spot prices and PV forecast",
               parameters: {
                 type: "object",
                 properties: {
@@ -147,18 +157,18 @@ Berücksichtige:
                     items: {
                       type: "object",
                       properties: {
-                        name: { type: "string", description: "Kurzname der Strategie" },
-                        storage_name: { type: "string", description: "Name des Speichers" },
-                        buy_below_eur_mwh: { type: "number", description: "Kaufschwelle in €/MWh" },
-                        sell_above_eur_mwh: { type: "number", description: "Verkaufsschwelle in €/MWh" },
+                        name: { type: "string", description: "Short strategy name" },
+                        storage_name: { type: "string", description: "Name of the storage" },
+                        buy_below_eur_mwh: { type: "number", description: "Buy threshold in €/MWh" },
+                        sell_above_eur_mwh: { type: "number", description: "Sell threshold in €/MWh" },
                         charge_windows: {
                           type: "array",
                           items: {
                             type: "object",
                             properties: {
-                              start: { type: "string", description: "Startzeit ISO" },
-                              end: { type: "string", description: "Endzeit ISO" },
-                              reason: { type: "string", description: "Grund (z.B. Niedrigpreis, PV-Überschuss)" },
+                              start: { type: "string", description: "Start time ISO" },
+                              end: { type: "string", description: "End time ISO" },
+                              reason: { type: "string", description: "Reason (e.g. low price, PV surplus)" },
                             },
                             required: ["start", "end", "reason"],
                           },
@@ -168,21 +178,21 @@ Berücksichtige:
                           items: {
                             type: "object",
                             properties: {
-                              start: { type: "string", description: "Startzeit ISO" },
-                              end: { type: "string", description: "Endzeit ISO" },
+                              start: { type: "string", description: "Start time ISO" },
+                              end: { type: "string", description: "End time ISO" },
                               reason: { type: "string" },
                             },
                             required: ["start", "end", "reason"],
                           },
                         },
-                        estimated_revenue_eur: { type: "number", description: "Geschätzter Erlös in Euro für 48h" },
-                        confidence: { type: "string", enum: ["hoch", "mittel", "niedrig"] },
-                        reasoning: { type: "string", description: "Kurze Begründung der Strategie" },
+                        estimated_revenue_eur: { type: "number", description: "Estimated revenue in Euro for 48h" },
+                        confidence: { type: "string", enum: ["high", "medium", "low"] },
+                        reasoning: { type: "string", description: "Brief reasoning for the strategy" },
                       },
                       required: ["name", "storage_name", "buy_below_eur_mwh", "sell_above_eur_mwh", "charge_windows", "discharge_windows", "estimated_revenue_eur", "confidence", "reasoning"],
                     },
                   },
-                  market_summary: { type: "string", description: "Kurze Zusammenfassung der aktuellen Marktsituation" },
+                  market_summary: { type: "string", description: "Brief summary of the current market situation" },
                 },
                 required: ["suggestions", "market_summary"],
                 additionalProperties: false,
@@ -198,13 +208,13 @@ Berücksichtige:
       const errText = await aiRes.text();
       console.error("AI error:", aiRes.status, errText);
       if (aiRes.status === 429) {
-        return new Response(JSON.stringify({ error: "Rate Limit erreicht. Bitte versuchen Sie es später erneut." }), {
+        return new Response(JSON.stringify({ error: "Rate limit exceeded. Please try again later." }), {
           status: 429,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
       if (aiRes.status === 402) {
-        return new Response(JSON.stringify({ error: "Guthaben erschöpft. Bitte laden Sie Ihr Guthaben auf." }), {
+        return new Response(JSON.stringify({ error: "Credits exhausted. Please top up." }), {
           status: 402,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
