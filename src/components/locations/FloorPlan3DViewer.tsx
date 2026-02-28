@@ -573,6 +573,7 @@ function Scene({
           }
         }
         
+        console.debug(`[FloorPlan3D] Meter "${meter.name}" pos=[${meterPos.map(v=>v.toFixed(2)).join(',')}] xPos=${xPos} zPos=${zPos}`);
         return (
           <DraggableMeter3D
             key={`meter-${meter.id}`}
