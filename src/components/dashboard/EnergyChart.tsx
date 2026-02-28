@@ -244,6 +244,7 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
   }, [period, rangeStart.toISOString(), rangeEnd.toISOString(), meters, locationId, offset]);
 
   // Fetch daily totals from DB for non-day periods (week, month, quarter, year)
+  // Also compute today's running total from power readings as fallback
   useEffect(() => {
     if (period === "day") {
       setDailyTotals([]);
@@ -270,12 +271,55 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
         p_to_date: toDate,
       });
 
+      let results = (data ?? []) as Array<{ meter_id: string; day: string; total_value: number }>;
+
       if (error) {
         console.error("Error fetching daily totals:", error);
-        setDailyTotals([]);
-      } else {
-        setDailyTotals((data ?? []) as Array<{ meter_id: string; day: string; total_value: number }>);
+        results = [];
       }
+
+      // Check if today falls within the range and has no archived daily total yet.
+      // Compute today's running total from DB power readings (written by periodic sync).
+      const todayStr = format(new Date(), "yyyy-MM-dd");
+      const todayDate = new Date();
+      if (todayDate >= rangeStart && todayDate <= rangeEnd) {
+        const hasTodayInResults = results.some(r => {
+          const dayStr = typeof r.day === "string" ? r.day.split("T")[0] : format(new Date(r.day), "yyyy-MM-dd");
+          return dayStr === todayStr;
+        });
+
+        if (!hasTodayInResults) {
+          try {
+            const todayStart = startOfDay(todayDate).toISOString();
+            const todayEnd = endOfDay(todayDate).toISOString();
+
+            // Fetch 5min aggregates + raw data for today via RPC
+            const { data: powerData } = await supabase.rpc("get_power_readings_5min", {
+              p_meter_ids: mainMeterIds,
+              p_start: todayStart,
+              p_end: todayEnd,
+            });
+
+            if (powerData && powerData.length > 0) {
+              // Sum power_avg * 5/60 per meter to get kWh
+              const meterTotals = new Map<string, number>();
+              for (const row of powerData as Array<{ meter_id: string; power_avg: number }>) {
+                const prev = meterTotals.get(row.meter_id) ?? 0;
+                meterTotals.set(row.meter_id, prev + (row.power_avg * 5.0 / 60.0));
+              }
+              for (const [meterId, totalValue] of meterTotals) {
+                if (totalValue > 0) {
+                  results.push({ meter_id: meterId, day: todayStr, total_value: totalValue });
+                }
+              }
+            }
+          } catch (e) {
+            console.warn("Error computing today's total from power readings:", e);
+          }
+        }
+      }
+
+      setDailyTotals(results);
       setDailyTotalsLoading(false);
     };
     fetchDailyTotals();
