@@ -12,8 +12,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/hooks/use-toast";
 
-const OCPP_WS_URL = import.meta.env.VITE_OCPP_WS_URL
-  || `${import.meta.env.VITE_SUPABASE_URL?.replace("https://", "wss://")}/functions/v1/ocpp-ws-proxy`;
+const OCPP_WS_URL_SHORT = import.meta.env.VITE_OCPP_WS_URL || null;
+const OCPP_WS_URL_LONG = `${import.meta.env.VITE_SUPABASE_URL?.replace("https://", "wss://")}/functions/v1/ocpp-ws-proxy`;
+const OCPP_WS_URL = OCPP_WS_URL_SHORT || OCPP_WS_URL_LONG;
 
 const DIFFICULTY_COLORS: Record<string, string> = {
   easy: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400",
@@ -93,8 +94,8 @@ const OcppIntegration = () => {
 
   const isLoading = guidesLoading || modelsLoading;
 
-  const copyUrl = () => {
-    navigator.clipboard.writeText(OCPP_WS_URL + "/{OCPP_ID}");
+  const copyUrl = (url: string) => {
+    navigator.clipboard.writeText(url + "/{OCPP_ID}");
     toast({ title: t("common.copied" as any) || "Kopiert!" });
   };
 
@@ -111,17 +112,40 @@ const OcppIntegration = () => {
           <CardContent className="pt-6">
             <div className="flex items-start gap-3">
               <Server className="h-5 w-5 text-primary mt-0.5 shrink-0" />
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium mb-1">{t("ocppIntegration.backendUrl" as any)}</p>
-                <div className="flex items-center gap-2">
-                  <code className="text-xs bg-background border rounded px-3 py-2 break-all select-all flex-1">
-                    {OCPP_WS_URL}/{"<OCPP_ID>"}
-                  </code>
-                  <Button variant="outline" size="icon" className="shrink-0" onClick={copyUrl}>
-                    <Copy className="h-4 w-4" />
-                  </Button>
+              <div className="flex-1 min-w-0 space-y-3">
+                <p className="text-sm font-medium">{t("ocppIntegration.backendUrl" as any)}</p>
+
+                {/* Short URL (if configured) */}
+                {OCPP_WS_URL_SHORT && (
+                  <div>
+                    <p className="text-xs font-medium text-primary mb-1">Kurze URL (empfohlen)</p>
+                    <div className="flex items-center gap-2">
+                      <code className="text-sm bg-background border rounded px-3 py-2 break-all select-all flex-1 font-semibold">
+                        {OCPP_WS_URL_SHORT}/{"<OCPP_ID>"}
+                      </code>
+                      <Button variant="outline" size="icon" className="shrink-0" onClick={() => copyUrl(OCPP_WS_URL_SHORT)}>
+                        <Copy className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Long URL */}
+                <div>
+                  {OCPP_WS_URL_SHORT && (
+                    <p className="text-xs text-muted-foreground mb-1">Vollständige URL</p>
+                  )}
+                  <div className="flex items-center gap-2">
+                    <code className="text-xs bg-background border rounded px-3 py-2 break-all select-all flex-1 text-muted-foreground">
+                      {OCPP_WS_URL_LONG}/{"<OCPP_ID>"}
+                    </code>
+                    <Button variant="outline" size="icon" className="shrink-0" onClick={() => copyUrl(OCPP_WS_URL_LONG)}>
+                      <Copy className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
-                <p className="text-xs text-muted-foreground mt-2">
+
+                <p className="text-xs text-muted-foreground">
                   {t("ocppIntegration.backendUrlHint" as any)}
                 </p>
               </div>
