@@ -310,7 +310,7 @@ const FloorPlanDashboardWidget = ({ locationId, onExpand, onCollapse }: FloorPla
             </TransformWrapper>
           </div>
         ) : selectedFloor && viewMode === "3d" ? (
-          <div className="w-full h-full">
+          <div style={{ width: "100%", height: 400 }}>
             <Suspense fallback={<div className="flex items-center justify-center h-full"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>}>
               <FloorPlan3DViewer
                 key={selectedFloor.id}
