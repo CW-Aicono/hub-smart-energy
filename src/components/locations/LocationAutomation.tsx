@@ -136,7 +136,11 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
   const loxoneIntegration = locationIntegrations.find(
     (li) => li.integration?.type?.startsWith("loxone") && li.is_enabled
   );
-  const { data: sensors, isLoading: sensorsLoading } = useLoxoneSensors(loxoneIntegration?.id);
+  const haIntegration = locationIntegrations.find(
+    (li) => li.integration?.type === "home_assistant" && li.is_enabled
+  );
+  const activeIntegration = loxoneIntegration || haIntegration;
+  const { data: sensors, isLoading: sensorsLoading } = useLoxoneSensors(activeIntegration?.id);
   const {
     automations, loading: autoLoading, executing,
     createAutomation, updateAutomation, deleteAutomation, executeAutomation,
@@ -174,7 +178,7 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
   };
 
   const handleSaveRule = async (data: AutomationRuleData) => {
-    if (!loxoneIntegration) throw new Error(T("auto.noIntegration"));
+    if (!activeIntegration) throw new Error(T("auto.noIntegration"));
 
     // Use first action as primary actuator for backward compatibility
     const primary = data.actions[0];
@@ -198,7 +202,7 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
     } else {
       const { error } = await createAutomation({
         location_id: locationId,
-        location_integration_id: loxoneIntegration.id,
+        location_integration_id: activeIntegration.id,
         name: data.name,
         description: data.description || undefined,
         actuator_uuid: primary.actuator_uuid,
@@ -393,7 +397,7 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
                 >
                   <Settings2 className="h-4 w-4" />
                   {T("auto.availableActuators")}
-                  {!intLoading && loxoneIntegration && (
+                  {!intLoading && activeIntegration && (
                     <Badge variant="secondary" className="ml-1 text-[10px]">
                       {actuators.length} {T("auto.actuators")}
                     </Badge>
@@ -404,7 +408,7 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
                   size="sm"
                   className="flex-1 gap-2"
                   onClick={openAddRule}
-                  disabled={!loxoneIntegration}
+                  disabled={!activeIntegration}
                 >
                   <Plus className="h-4 w-4" />
                   {T("auto.addAutomation")}
@@ -428,7 +432,7 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
             </DialogDescription>
           </DialogHeader>
 
-          {!loxoneIntegration ? (
+          {!activeIntegration ? (
             <div className="flex flex-col items-center gap-3 py-8 text-center">
               <AlertTriangle className="h-10 w-10 text-muted-foreground" />
               <p className="text-sm text-muted-foreground">

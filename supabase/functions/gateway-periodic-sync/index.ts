@@ -11,6 +11,7 @@ const GATEWAY_EDGE_FUNCTIONS: Record<string, string> = {
   tuya_cloud: "tuya-api",
   homematic_ip: "homematic-api",
   omada_cloud: "omada-api",
+  home_assistant: "home-assistant-api",
 };
 
 serve(async (req) => {
