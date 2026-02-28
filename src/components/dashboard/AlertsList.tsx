@@ -2,7 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAlertRules } from "@/hooks/useAlertRules";
 import { AlertTriangle, Info, CheckCircle, Bell } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ENERGY_TYPE_LABELS } from "@/lib/energyTypeColors";
+import { useTranslation } from "@/hooks/useTranslation";
 
 interface AlertsListProps {
   locationId: string | null;
@@ -10,6 +10,8 @@ interface AlertsListProps {
 
 const AlertsList = ({ locationId }: AlertsListProps) => {
   const { alertRules, loading } = useAlertRules();
+  const { t } = useTranslation();
+  const T = (key: string) => t(key as any);
 
   const filtered = locationId
     ? alertRules.filter((r) => r.location_id === locationId || !r.location_id)
@@ -30,13 +32,13 @@ const AlertsList = ({ locationId }: AlertsListProps) => {
       <CardHeader>
         <CardTitle className="font-display text-lg flex items-center gap-2">
           <Bell className="h-5 w-5" />
-          Alarmregeln
+          {T("alerts.title")}
         </CardTitle>
       </CardHeader>
       <CardContent>
         {filtered.length === 0 ? (
           <div className="text-center py-8 text-muted-foreground text-sm">
-            Keine Alarmregeln konfiguriert
+            {T("alerts.none")}
           </div>
         ) : (
           <div className="space-y-4">
@@ -50,10 +52,10 @@ const AlertsList = ({ locationId }: AlertsListProps) => {
                 <div className="min-w-0">
                   <p className="text-sm font-medium">{rule.name}</p>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    {ENERGY_TYPE_LABELS[rule.energy_type] || rule.energy_type} – Schwellwert: {rule.threshold_value} ({rule.threshold_type === "above" ? "Über" : "Unter"})
+                    {T(`energy.${rule.energy_type}`)} – {T("alerts.threshold")}: {rule.threshold_value} ({rule.threshold_type === "above" ? T("alerts.above") : T("alerts.below")})
                   </p>
                   <p className="text-xs text-muted-foreground mt-1">
-                    {rule.is_active ? "Aktiv" : "Inaktiv"}
+                    {rule.is_active ? T("alerts.active") : T("alerts.inactive")}
                   </p>
                 </div>
               </div>

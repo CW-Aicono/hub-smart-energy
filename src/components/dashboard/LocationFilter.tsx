@@ -9,6 +9,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { useLocations, Location } from "@/hooks/useLocations";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useTranslation } from "@/hooks/useTranslation";
 
 interface LocationFilterProps {
   selectedLocationId: string | null;
@@ -17,13 +18,13 @@ interface LocationFilterProps {
 
 export function LocationFilter({ selectedLocationId, onLocationChange }: LocationFilterProps) {
   const { locations, loading } = useLocations();
+  const { t } = useTranslation();
+  const T = (key: string) => t(key as any);
 
-  // Find the selected location name
   const selectedLocation = selectedLocationId
     ? locations.find((loc) => loc.id === selectedLocationId)
     : null;
 
-  // Sort locations: main location first, then alphabetically
   const sortedLocations = [...locations].sort((a, b) => {
     if (a.is_main_location && !b.is_main_location) return -1;
     if (!a.is_main_location && b.is_main_location) return 1;
@@ -47,7 +48,7 @@ export function LocationFilter({ selectedLocationId, onLocationChange }: Locatio
             ) : (
               <>
                 <MapPin className="h-4 w-4 shrink-0" />
-                <span>Alle Liegenschaften</span>
+                <span>{T("loc.allLocations")}</span>
               </>
             )}
           </span>
@@ -60,7 +61,7 @@ export function LocationFilter({ selectedLocationId, onLocationChange }: Locatio
           className={!selectedLocationId ? "bg-accent" : ""}
         >
           <MapPin className="h-4 w-4 mr-2" />
-          Alle Liegenschaften
+          {T("loc.allLocations")}
         </DropdownMenuItem>
         
         {locations.length > 0 && <DropdownMenuSeparator />}
@@ -74,14 +75,14 @@ export function LocationFilter({ selectedLocationId, onLocationChange }: Locatio
             <Building2 className="h-4 w-4 mr-2 shrink-0" />
             <span className="truncate flex-1">{location.name}</span>
             {location.is_main_location && (
-              <span className="text-xs text-muted-foreground ml-2">Haupt</span>
+              <span className="text-xs text-muted-foreground ml-2">{T("loc.mainBadge")}</span>
             )}
           </DropdownMenuItem>
         ))}
         
         {locations.length === 0 && (
           <DropdownMenuItem disabled>
-            <span className="text-muted-foreground">Keine Liegenschaften vorhanden</span>
+            <span className="text-muted-foreground">{T("loc.noLocations")}</span>
           </DropdownMenuItem>
         )}
       </DropdownMenuContent>
