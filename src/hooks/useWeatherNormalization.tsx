@@ -196,7 +196,19 @@ export function useWeatherNormalization({
 
       // Fetch degree days using the first location with coordinates as reference
       const refLocation = locations[0];
-      const functionsUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/weather-degree-days`;
+
+      // Refresh the session to ensure a valid token
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+      if (!token) {
+        // Try refreshing the session
+        const { data: refreshed } = await supabase.auth.refreshSession();
+        if (!refreshed.session?.access_token) {
+          throw new Error("Nicht authentifiziert – bitte neu anmelden");
+        }
+      }
+      const validToken = token || (await supabase.auth.getSession()).data.session?.access_token;
+
       const params = new URLSearchParams({
         latitude: String(refLocation.latitude),
         longitude: String(refLocation.longitude),
@@ -207,12 +219,9 @@ export function useWeatherNormalization({
         reference_temperature: String(referenceTemperature),
       });
 
-      const session = await supabase.auth.getSession();
-      const token = session.data.session?.access_token;
-
-      const res = await fetch(`${functionsUrl}?${params}`, {
+      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/weather-degree-days?${params}`, {
         headers: {
-          Authorization: `Bearer ${token}`,
+          Authorization: `Bearer ${validToken}`,
           apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
         },
       });
