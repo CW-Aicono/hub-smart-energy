@@ -729,7 +729,7 @@ export function FloorPlan3DViewer({ floor, locationId, sensors = [], isAdmin = f
   }
 
   return (
-    <div className={compact ? "relative h-full w-full" : "flex flex-col h-full"}>
+    <div className="flex flex-col h-full w-full" style={compact ? { minHeight: 0 } : undefined}>
       {/* Controls Bar - hidden in compact mode */}
       {!compact && (
         <div className="flex items-center justify-between p-3 border-b bg-muted/30 flex-shrink-0">
@@ -833,7 +833,7 @@ export function FloorPlan3DViewer({ floor, locationId, sensors = [], isAdmin = f
       )}
 
       {/* 3D Canvas */}
-      <div className={`${compact ? "absolute inset-0" : "flex-1 relative min-h-0"} bg-gradient-to-b from-muted/30 to-muted/60`}>
+      <div className="flex-1 relative bg-gradient-to-b from-muted/30 to-muted/60" style={{ minHeight: 0 }}>
         {loading ? (
           <div className="absolute inset-0 flex items-center justify-center">
             <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
