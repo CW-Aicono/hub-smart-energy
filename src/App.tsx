@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
 import { TenantProvider } from "@/hooks/useTenant";
+import { UserPreferencesProvider } from "@/hooks/useUserPreferences";
 import { TranslationProvider } from "@/hooks/useTranslation";
 import { ThemeProvider } from "@/hooks/useTheme";
 import { DemoModeDetector } from "@/contexts/DemoMode";
@@ -79,8 +80,9 @@ const App = () => (
       <DemoModeDetector>
         <AuthProvider>
           <TenantProvider>
-            <TranslationProvider>
-              <ThemeProvider>
+            <UserPreferencesProvider>
+              <TranslationProvider>
+                <ThemeProvider>
                 <TooltipProvider>
                   <Toaster />
                   <Sonner />
@@ -164,6 +166,7 @@ const App = () => (
                 </TooltipProvider>
               </ThemeProvider>
             </TranslationProvider>
+            </UserPreferencesProvider>
           </TenantProvider>
         </AuthProvider>
       </DemoModeDetector>

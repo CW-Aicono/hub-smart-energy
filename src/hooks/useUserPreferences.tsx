@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, createContext, useContext, ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
 
@@ -29,7 +29,9 @@ const defaultPreferences: Omit<UserPreferences, "id" | "user_id" | "created_at" 
   theme_mode: "system",
 };
 
-export function useUserPreferences(): UseUserPreferencesReturn {
+const UserPreferencesContext = createContext<UseUserPreferencesReturn | null>(null);
+
+export function UserPreferencesProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const [preferences, setPreferences] = useState<UserPreferences | null>(null);
   const [loading, setLoading] = useState(true);
@@ -90,7 +92,6 @@ export function useUserPreferences(): UseUserPreferencesReturn {
 
     const root = document.documentElement;
     
-    // Handle theme mode
     if (preferences.theme_mode === "system") {
       const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
       root.classList.toggle("dark", prefersDark);
@@ -98,7 +99,6 @@ export function useUserPreferences(): UseUserPreferencesReturn {
       root.classList.toggle("dark", preferences.theme_mode === "dark");
     }
 
-    // Handle color scheme
     root.setAttribute("data-color-scheme", preferences.color_scheme);
   }, [preferences]);
 
@@ -115,7 +115,7 @@ export function useUserPreferences(): UseUserPreferencesReturn {
     return () => mediaQuery.removeEventListener("change", handleChange);
   }, [preferences?.theme_mode]);
 
-  const updatePreferences = async (
+  const updatePreferences = useCallback(async (
     updates: Partial<Pick<UserPreferences, "language" | "color_scheme" | "theme_mode">>
   ) => {
     if (!user || !preferences) {
@@ -132,12 +132,25 @@ export function useUserPreferences(): UseUserPreferencesReturn {
     }
 
     return { error: updateError as Error | null };
-  };
+  }, [user, preferences]);
 
-  return {
-    preferences,
-    loading,
-    error,
-    updatePreferences,
-  };
+  return (
+    <UserPreferencesContext.Provider value={{ preferences, loading, error, updatePreferences }}>
+      {children}
+    </UserPreferencesContext.Provider>
+  );
+}
+
+export function useUserPreferences(): UseUserPreferencesReturn {
+  const context = useContext(UserPreferencesContext);
+  if (!context) {
+    // Fallback for components outside provider (shouldn't happen in practice)
+    return {
+      preferences: null,
+      loading: true,
+      error: null,
+      updatePreferences: async () => ({ error: new Error("No provider") }),
+    };
+  }
+  return context;
 }
