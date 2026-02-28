@@ -5,24 +5,28 @@ interface Sensor3DLabelProps {
   position: FloorSensorPosition;
   value?: string;
   unit?: string;
+  /** @deprecated use ROOM_SCALE/ROOM_OFFSET instead */
   scaleX?: number;
+  /** @deprecated use ROOM_SCALE/ROOM_OFFSET instead */
   scaleZ?: number;
+  /** @deprecated use ROOM_SCALE/ROOM_OFFSET instead */
   offsetX?: number;
+  /** @deprecated use ROOM_SCALE/ROOM_OFFSET instead */
   offsetZ?: number;
 }
+
+// Must match the room polygon transform in FloorPlan3DViewer (deriveRoomBounds)
+const ROOM_SCALE = 0.3;
+const ROOM_OFFSET = 15;
 
 export function Sensor3DLabel({ 
   position, 
   value = "—", 
   unit = "",
-  scaleX = 0.2,
-  scaleZ = 0.2,
-  offsetX = 0,
-  offsetZ = 0,
 }: Sensor3DLabelProps) {
-  const x = (position.position_x - 50) * scaleX + offsetX;
+  const x = position.position_x * ROOM_SCALE - ROOM_OFFSET;
   const y = (position as any).position_z ?? 1.5;
-  const z = (position.position_y - 50) * scaleZ + offsetZ;
+  const z = position.position_y * ROOM_SCALE - ROOM_OFFSET;
 
   return (
     <group position={[x, y, z]}>

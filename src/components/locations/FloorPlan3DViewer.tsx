@@ -529,10 +529,6 @@ function Scene({
                   position={pos}
                   value={sensor?.value}
                   unit={sensor?.unit}
-                  scaleX={0.2}
-                  scaleZ={0.2}
-                  offsetX={sceneBounds.centerX}
-                  offsetZ={sceneBounds.centerZ}
                 />
               );
             })}
@@ -558,13 +554,15 @@ function Scene({
           // Explicit 3D position saved by user drag
           meterPos = [xPos, yPos, zPos];
         } else {
-          // Derive initial 3D position from 2D floor_sensor_positions (same transform as Sensor3DLabel)
+          // Derive initial 3D position from 2D floor_sensor_positions (same transform as room polygons)
           const sensorPos = meter.sensor_uuid
             ? sensorPositions.find(sp => sp.sensor_uuid === meter.sensor_uuid)
             : null;
           if (sensorPos) {
-            const sx = (sensorPos.position_x - 50) * 0.2 + sceneBounds.centerX;
-            const sz = (sensorPos.position_y - 50) * 0.2 + sceneBounds.centerZ;
+            const ROOM_SCALE = 0.3;
+            const ROOM_OFFSET = 15;
+            const sx = sensorPos.position_x * ROOM_SCALE - ROOM_OFFSET;
+            const sz = sensorPos.position_y * ROOM_SCALE - ROOM_OFFSET;
             meterPos = [sx, yPos, sz];
           } else if (room) {
             meterPos = [room.position_x + 1, yPos, room.position_y];
@@ -573,7 +571,6 @@ function Scene({
           }
         }
         
-        console.debug(`[FloorPlan3D] Meter "${meter.name}" pos=[${meterPos.map(v=>v.toFixed(2)).join(',')}] xPos=${xPos} zPos=${zPos}`);
         return (
           <DraggableMeter3D
             key={`meter-${meter.id}`}
@@ -618,14 +615,9 @@ export function FloorPlan3DViewer({ floor, locationId, sensors = [], isAdmin = f
   const { readings, loading: readingsLoading } = useMeterReadings();
   const { updateFloor } = useFloors(locationId);
   
-  // Filter meters: only show meters that have been explicitly placed as sensor positions on this floor
   const floorMeters = useMemo(() => {
     const placedSensorUuids = new Set(sensorPositions.map(p => p.sensor_uuid));
-    const result = meters.filter(m => !m.is_archived && m.sensor_uuid && placedSensorUuids.has(m.sensor_uuid));
-    if (result.length !== meters.filter(m => !m.is_archived && m.sensor_uuid).length) {
-      console.debug("[FloorPlan3D] floorMeters:", result.length, "of", meters.length, "total meters. Placed UUIDs:", placedSensorUuids.size);
-    }
-    return result;
+    return meters.filter(m => !m.is_archived && m.sensor_uuid && placedSensorUuids.has(m.sensor_uuid));
   }, [meters, sensorPositions]);
 
   // Get meter values: prefer live sensor data from integrations, fall back to meter_readings
