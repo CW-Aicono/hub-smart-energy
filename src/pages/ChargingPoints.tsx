@@ -31,8 +31,7 @@ import ChargingOverviewStats from "@/components/charging/ChargingOverviewStats";
 const LazyChargePointsMap = lazy(() => import("@/components/charging/ChargePointsMap"));
 
 const OCPP_ENDPOINT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ocpp-central`;
-const OCPP_WS_ENDPOINT_URL = import.meta.env.VITE_OCPP_WS_URL
-  || `${import.meta.env.VITE_SUPABASE_URL?.replace("https://", "wss://")}/functions/v1/ocpp-ws-proxy`;
+const OCPP_WS_ENDPOINT_URL = "wss://ocpp.aicono.org";
 
 const ChargingPoints = () => {
   const navigate = useNavigate();
