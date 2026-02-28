@@ -575,10 +575,67 @@ Deno.serve(async (req) => {
     const url = new URL(req.url);
     const pathParts = url.pathname.split("/").filter(Boolean);
 
-    // REST commands: POST /ocpp-central/command/{action}
+// REST commands: POST /ocpp-central/command/{action}
+    // These require JWT authentication + tenant ownership
     if (pathParts.length >= 2 && pathParts[pathParts.length - 2] === "command") {
+      // Validate JWT
+      const authHeader = req.headers.get("Authorization");
+      if (!authHeader?.startsWith("Bearer ")) {
+        return new Response(
+          JSON.stringify({ error: "Unauthorized" }),
+          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      const token = authHeader.replace("Bearer ", "");
+      const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+      const authClient = createClient(supabaseUrl, anonKey, {
+        global: { headers: { Authorization: `Bearer ${token}` } },
+      });
+      const { data: claimsData, error: claimsError } = await authClient.auth.getClaims(token);
+      if (claimsError || !claimsData?.claims) {
+        return new Response(
+          JSON.stringify({ error: "Unauthorized" }),
+          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      const userId = claimsData.claims.sub as string;
+
+      // Verify user's tenant
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("tenant_id")
+        .eq("user_id", userId)
+        .single();
+
+      if (!profile?.tenant_id) {
+        return new Response(
+          JSON.stringify({ error: "Unauthorized - no tenant" }),
+          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
       const command = pathParts[pathParts.length - 1];
       const body = await req.json();
+
+      // Verify charge point belongs to user's tenant
+      const cpId = body.chargePointId as string;
+      if (cpId) {
+        const { data: cpCheck } = await supabase
+          .from("charge_points")
+          .select("tenant_id")
+          .eq("ocpp_id", cpId)
+          .single();
+
+        if (cpCheck && cpCheck.tenant_id !== profile.tenant_id) {
+          return new Response(
+            JSON.stringify({ error: "Forbidden - charge point not in your tenant" }),
+            { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+      }
+
       const result = await handleRemoteCommand(supabase, command, body);
       return new Response(JSON.stringify(result), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
