@@ -833,7 +833,18 @@ export function FloorPlan3DViewer({ floor, locationId, sensors = [], isAdmin = f
       )}
 
       {/* 3D Canvas */}
-      <div className={`${compact ? "relative w-full h-full" : "flex-1 relative min-h-0"} bg-gradient-to-b from-muted/30 to-muted/60`}>
+      <div 
+        ref={(el) => {
+          if (el && compact) {
+            const rect = el.getBoundingClientRect();
+            const parentRect = el.parentElement?.getBoundingClientRect();
+            console.log("[3D-Debug] Canvas container:", { width: rect.width, height: rect.height, top: rect.top, left: rect.left });
+            console.log("[3D-Debug] Parent:", { width: parentRect?.width, height: parentRect?.height, parentClass: el.parentElement?.className });
+            console.log("[3D-Debug] Grandparent:", { width: el.parentElement?.parentElement?.getBoundingClientRect()?.width, height: el.parentElement?.parentElement?.getBoundingClientRect()?.height, gpClass: el.parentElement?.parentElement?.className });
+          }
+        }}
+        className={`${compact ? "relative w-full h-full" : "flex-1 relative min-h-0"} bg-gradient-to-b from-muted/30 to-muted/60`}
+      >
         {loading ? (
           <div className="absolute inset-0 flex items-center justify-center">
             <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -851,6 +862,9 @@ export function FloorPlan3DViewer({ floor, locationId, sensors = [], isAdmin = f
               }}
               style={{ position: "absolute", inset: 0, cursor: isWalking && isLocked ? "none" : "grab" }}
               onCreated={({ gl }) => {
+                const canvas = gl.domElement;
+                console.log("[3D-Debug] Canvas element size:", { width: canvas.width, height: canvas.height, clientW: canvas.clientWidth, clientH: canvas.clientHeight });
+                console.log("[3D-Debug] Canvas parent size:", { width: canvas.parentElement?.clientWidth, height: canvas.parentElement?.clientHeight });
                 gl.getContext().canvas.addEventListener("webglcontextlost", (e) => {
                   console.error("WebGL context lost", e);
                 });
