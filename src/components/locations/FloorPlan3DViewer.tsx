@@ -588,7 +588,7 @@ function Scene({
       
       {/* OrbitControls for readOnly/dashboard mode when not walking */}
       {readOnly && !isWalking && (
-        <OrbitControls enablePan enableZoom enableRotate target={[0, 2, 0]} />
+        <OrbitControls enablePan enableZoom enableRotate target={[0, 2, 0]} maxPolarAngle={Math.PI / 2} />
       )}
 
       {/* No OrbitControls for admin editing mode - allows meter dragging */}
