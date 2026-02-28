@@ -19,7 +19,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Plus, PlugZap, Trash2, Zap, ZapOff, AlertTriangle, WifiOff, Info, Search, MapPin, ChevronDown, QrCode } from "lucide-react";
+import { Plus, PlugZap, Trash2, Zap, ZapOff, AlertTriangle, WifiOff, Info, Search, MapPin, ChevronDown, QrCode, Settings } from "lucide-react";
 import { ChargePointGroupsManager } from "@/components/charging/ChargePointGroupsManager";
 import { Checkbox } from "@/components/ui/checkbox";
 import ChargePointQrCode from "@/components/charging/ChargePointQrCode";
@@ -51,6 +51,7 @@ const ChargingPoints = () => {
     faulted: { labelKey: "charging.statusFaulted", variant: "destructive", icon: AlertTriangle, color: "text-red-500" },
     unavailable: { labelKey: "charging.statusUnavailable", variant: "outline", icon: ZapOff, color: "text-yellow-500" },
     offline: { labelKey: "charging.statusOffline", variant: "outline", icon: WifiOff, color: "text-orange-500" },
+    unconfigured: { labelKey: "charging.statusUnconfigured", variant: "outline", icon: Settings, color: "text-purple-500" },
   };
 
   const [addOpen, setAddOpen] = useState(false);

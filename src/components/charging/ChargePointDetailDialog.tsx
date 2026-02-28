@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Zap, PlugZap, AlertTriangle, ZapOff, WifiOff, Camera, Trash2, Edit, Save, X, Clock, MapPin, Search, Shield, Info as InfoIcon } from "lucide-react";
+import { Zap, PlugZap, AlertTriangle, ZapOff, WifiOff, Camera, Trash2, Edit, Save, X, Clock, MapPin, Search, Shield, Info as InfoIcon, Settings } from "lucide-react";
 import { format } from "date-fns";
 import { fmtKwh, fmtKw } from "@/lib/formatCharging";
 import { supabase } from "@/integrations/supabase/client";
@@ -24,6 +24,7 @@ const statusConfig: Record<string, { label: string; variant: "default" | "second
   faulted: { label: "Gestört", variant: "destructive", icon: AlertTriangle },
   unavailable: { label: "Nicht verfügbar", variant: "outline", icon: ZapOff },
   offline: { label: "Offline", variant: "outline", icon: WifiOff },
+  unconfigured: { label: "Nicht konfiguriert", variant: "outline", icon: Settings },
 };
 
 interface Props {

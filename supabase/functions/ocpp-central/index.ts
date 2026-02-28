@@ -36,21 +36,60 @@ async function handleBootNotification(
   chargePointId: string,
   payload: Record<string, unknown>
 ) {
-  await supabase
+  // Check if charge point already exists
+  const { data: existing } = await supabase
     .from("charge_points")
-    .update({
-      status: "available",
-      vendor: payload.chargePointVendor as string,
-      model: payload.chargePointModel as string,
-      firmware_version: payload.firmwareVersion as string || null,
-      last_heartbeat: new Date().toISOString(),
-    })
-    .eq("ocpp_id", chargePointId);
+    .select("id")
+    .eq("ocpp_id", chargePointId)
+    .maybeSingle();
+
+  if (existing) {
+    // Known charge point – update as before
+    await supabase
+      .from("charge_points")
+      .update({
+        status: "available",
+        vendor: payload.chargePointVendor as string,
+        model: payload.chargePointModel as string,
+        firmware_version: payload.firmwareVersion as string || null,
+        last_heartbeat: new Date().toISOString(),
+      })
+      .eq("ocpp_id", chargePointId);
+  } else {
+    // Auto-registration: unknown OCPP-ID → create new charge point
+    // Find the first tenant (single-tenant or pick the first available)
+    const { data: tenants } = await supabase
+      .from("tenants")
+      .select("id")
+      .limit(1);
+
+    const tenantId = tenants?.[0]?.id;
+    if (tenantId) {
+      const vendor = (payload.chargePointVendor as string) || "Unknown";
+      const model = (payload.chargePointModel as string) || "Unknown";
+      await supabase.from("charge_points").insert({
+        ocpp_id: chargePointId,
+        tenant_id: tenantId,
+        name: `${vendor} ${model} (${chargePointId})`,
+        status: "unconfigured",
+        vendor,
+        model,
+        firmware_version: (payload.firmwareVersion as string) || null,
+        last_heartbeat: new Date().toISOString(),
+        connector_count: 1,
+        connector_type: "Type2",
+        max_power_kw: 0,
+      });
+      console.log(`[ocpp-central] Auto-registered new charge point: ${chargePointId} for tenant ${tenantId}`);
+    } else {
+      console.error(`[ocpp-central] Cannot auto-register ${chargePointId}: no tenant found`);
+    }
+  }
 
   return {
     status: "Accepted",
     currentTime: new Date().toISOString(),
-    interval: 30, // heartbeat every 30s to keep WebSocket alive
+    interval: 30,
   };
 }
 
