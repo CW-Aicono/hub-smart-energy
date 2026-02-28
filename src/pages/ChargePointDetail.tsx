@@ -1,5 +1,6 @@
 import { useState, useMemo, useRef, useEffect } from "react";
 import { useParams, useNavigate, Navigate } from "react-router-dom";
+import { useTranslation } from "@/hooks/useTranslation";
 import { useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useChargePoints, ChargePoint } from "@/hooks/useChargePoints";
@@ -39,15 +40,16 @@ import { toast } from "@/hooks/use-toast";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, Cell } from "recharts";
 import { PowerLimitScheduler, PowerLimitSchedule, defaultPowerLimitSchedule } from "@/components/charging/PowerLimitScheduler";
 
-const statusConfig: Record<string, { label: string; color: string; variant: "default" | "secondary" | "destructive" | "outline"; icon: typeof Zap }> = {
-  available: { label: "Verfügbar", color: "hsl(var(--primary))", variant: "default", icon: Zap },
-  charging: { label: "Lädt", color: "hsl(var(--secondary))", variant: "secondary", icon: PlugZap },
-  faulted: { label: "Gestört", color: "hsl(var(--destructive))", variant: "destructive", icon: AlertTriangle },
-  unavailable: { label: "Nicht verfügbar", color: "hsl(var(--muted-foreground))", variant: "outline", icon: ZapOff },
-  offline: { label: "Offline", color: "hsl(var(--muted-foreground))", variant: "outline", icon: WifiOff },
+const STATUS_KEYS: Record<string, { labelKey: string; color: string; variant: "default" | "secondary" | "destructive" | "outline"; icon: typeof Zap }> = {
+  available: { labelKey: "cpd.available", color: "hsl(var(--primary))", variant: "default", icon: Zap },
+  charging: { labelKey: "cpd.charging", color: "hsl(var(--secondary))", variant: "secondary", icon: PlugZap },
+  faulted: { labelKey: "cpd.faulted", color: "hsl(var(--destructive))", variant: "destructive", icon: AlertTriangle },
+  unavailable: { labelKey: "cpd.unavailable", color: "hsl(var(--muted-foreground))", variant: "outline", icon: ZapOff },
+  offline: { labelKey: "cpd.offline", color: "hsl(var(--muted-foreground))", variant: "outline", icon: WifiOff },
 };
 
 const ChargePointDetail = () => {
+  const { t } = useTranslation();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { user, loading: authLoading } = useAuth();
@@ -221,7 +223,7 @@ const ChargePointDetail = () => {
   if (!cp && chargePoints.length > 0) return <Navigate to="/charging/points" replace />;
   if (!cp) return null;
 
-  const cfg = statusConfig[cp.status] || statusConfig.offline;
+  const cfg = STATUS_KEYS[cp.status] || STATUS_KEYS.offline;
   const StatusIcon = cfg.icon;
 
   // Warnings
@@ -438,7 +440,7 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
                 <h1 className="text-2xl font-bold text-foreground">{cp.name}</h1>
                 <Badge variant={cfg.variant} className="gap-1">
                   <StatusIcon className="h-3 w-3" />
-                  {cfg.label}
+                  {t(cfg.labelKey as any)}
                 </Badge>
                 {cpGroup && (
                   <Badge variant="outline" className="gap-1 text-xs cursor-pointer hover:bg-muted/50"
@@ -455,12 +457,12 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
           {/* Tabs */}
           <Tabs defaultValue="overview">
             <TabsList>
-             <TabsTrigger value="overview">Übersicht</TabsTrigger>
-              <TabsTrigger value="sessions">Ladevorgänge</TabsTrigger>
-              <TabsTrigger value="ocpp-log">OCPP-Log</TabsTrigger>
-              <TabsTrigger value="details">Details</TabsTrigger>
-              <TabsTrigger value="energy">Energiemanagement</TabsTrigger>
-              <TabsTrigger value="access">Zugangssteuerung</TabsTrigger>
+             <TabsTrigger value="overview">{t("cpd.tabOverview" as any)}</TabsTrigger>
+              <TabsTrigger value="sessions">{t("cpd.tabSessions" as any)}</TabsTrigger>
+              <TabsTrigger value="ocpp-log">{t("cpd.tabOcppLog" as any)}</TabsTrigger>
+              <TabsTrigger value="details">{t("cpd.tabDetails" as any)}</TabsTrigger>
+              <TabsTrigger value="energy">{t("cpd.tabEnergy" as any)}</TabsTrigger>
+              <TabsTrigger value="access">{t("cpd.tabAccess" as any)}</TabsTrigger>
             </TabsList>
 
             <TabsContent value="overview" className="space-y-6 mt-6">
@@ -474,7 +476,7 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
                         <CheckCircle className="h-5 w-5" />
                       </div>
                       <div>
-                        <p className="text-sm text-muted-foreground">Stabilitätsbewertung der Ladestation</p>
+                        <p className="text-sm text-muted-foreground">{t("cpd.stabilityScore" as any)}</p>
                         <p className="text-2xl font-bold">{fmtNum(uptimePercent, 2)} %</p>
                       </div>
                     </CardContent>
@@ -485,16 +487,16 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
                     <CardHeader className="flex flex-row items-center justify-between pb-2">
                       <CardTitle className="flex items-center gap-2">
                         <BarChart3 className="h-4 w-4" />
-                        Statistiken
+                        {t("cpd.statistics" as any)}
                       </CardTitle>
                       <Select value={statsPeriod} onValueChange={setStatsPeriod}>
                         <SelectTrigger className="w-40">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="7">Letzte Woche</SelectItem>
-                          <SelectItem value="30">Letzter Monat</SelectItem>
-                          <SelectItem value="90">Letztes Quartal</SelectItem>
+                          <SelectItem value="7">{t("cpd.lastWeek" as any)}</SelectItem>
+                          <SelectItem value="30">{t("cpd.lastMonth" as any)}</SelectItem>
+                          <SelectItem value="90">{t("cpd.lastQuarter" as any)}</SelectItem>
                         </SelectContent>
                       </Select>
                     </CardHeader>
@@ -502,7 +504,7 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
                       {/* KPI row */}
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                         <div className="border rounded-lg p-3">
-                          <p className="text-xs text-muted-foreground">kWh gesamt (Zähler)</p>
+                          <p className="text-xs text-muted-foreground">{t("cpd.totalKwhMeter" as any)}</p>
                           <p className="text-xl font-bold">
                             {ocppMeter.value != null ? fmtNum(ocppMeter.value) : fmtNum(totalKwh)}
                           </p>
@@ -513,15 +515,15 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
                           )}
                         </div>
                         <div className="border rounded-lg p-3">
-                          <p className="text-xs text-muted-foreground">Ladevorgänge</p>
+                          <p className="text-xs text-muted-foreground">{t("cpd.sessions" as any)}</p>
                           <p className="text-xl font-bold">{sessionCount}</p>
                         </div>
                         <div className="border rounded-lg p-3">
-                          <p className="text-xs text-muted-foreground">Erfolgreiche Ladevorgänge</p>
+                          <p className="text-xs text-muted-foreground">{t("cpd.successfulSessions" as any)}</p>
                           <p className="text-xl font-bold">{fmtNum(successRate, 0)} %</p>
                         </div>
                         <div className="border rounded-lg p-3">
-                          <p className="text-xs text-muted-foreground">Betriebszeit</p>
+                          <p className="text-xs text-muted-foreground">{t("cpd.uptime" as any)}</p>
                           <p className="text-xl font-bold">{fmtNum(uptimePercent, 2)} %</p>
                         </div>
                       </div>
@@ -535,12 +537,12 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
                             <Tooltip
                               formatter={(value: number, name: string) => [
                                 `${value.toFixed(1)} h`,
-                                name === "available" ? "Verfügbar" : name === "charging" ? "Belegt" : "Fehler",
+                                name === "available" ? t("cpd.available" as any) : name === "charging" ? t("cpd.occupied" as any) : t("cpd.error" as any),
                               ]}
                             />
                             <Legend
                               formatter={(value: string) =>
-                                value === "available" ? "Verfügbar" : value === "charging" ? "Belegt" : "Fehler"
+                                value === "available" ? t("cpd.available" as any) : value === "charging" ? t("cpd.occupied" as any) : t("cpd.error" as any)
                               }
                             />
                             <Bar dataKey="available" stackId="a" fill="hsl(var(--primary))" radius={[0, 0, 0, 0]} />
@@ -556,7 +558,7 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
                   {warnings.length > 0 && (
                     <Card>
                       <CardHeader className="pb-2">
-                        <CardTitle className="text-base">{warnings.length} Warnung{warnings.length > 1 ? "en" : ""}</CardTitle>
+                        <CardTitle className="text-base">{warnings.length} {warnings.length > 1 ? t("cpd.warningsPlural" as any) : t("cpd.warnings" as any)}</CardTitle>
                       </CardHeader>
                       <CardContent className="space-y-3">
                         {warnings.map((w, i) => (
@@ -583,7 +585,7 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
                         <div className="flex items-center justify-between">
                           <CardTitle className="text-base flex items-center gap-2">
                             <Settings className="h-4 w-4" />
-                            Fernfunktionen
+                            {t("cpd.remoteFunctions" as any)}
                           </CardTitle>
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
@@ -591,7 +593,7 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
                               <DropdownMenuItem onClick={() => remoteAction("Wartung einstellen")}>
-                                <Wrench className="h-4 w-4 mr-2" /> Wartung einstellen
+                                <Wrench className="h-4 w-4 mr-2" /> {t("cpd.maintenance" as any)}
                               </DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>
@@ -599,19 +601,19 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
                       </CardHeader>
                       <CardContent className="space-y-1">
                         <Button variant="ghost" className="w-full justify-start gap-2 text-sm" onClick={() => remoteAction("Ladestation neu starten")}>
-                          <RefreshCw className="h-4 w-4" /> Ladestation neu starten
+                          <RefreshCw className="h-4 w-4" /> {t("cpd.restart" as any)}
                         </Button>
                         <Button variant="ghost" className="w-full justify-start gap-2 text-sm" onClick={() => remoteAction("Ladevorgang starten")}>
-                          <Play className="h-4 w-4" /> Ladevorgang starten
+                          <Play className="h-4 w-4" /> {t("cpd.startCharging" as any)}
                         </Button>
                         <Button variant="ghost" className="w-full justify-start gap-2 text-sm" onClick={() => remoteAction("Ladevorgang stoppen")}>
-                          <Square className="h-4 w-4" /> Ladevorgang stoppen
+                          <Square className="h-4 w-4" /> {t("cpd.stopCharging" as any)}
                         </Button>
                         <Button variant="ghost" className="w-full justify-start gap-2 text-sm" onClick={() => remoteAction("Kabel entriegeln")}>
-                          <Unlock className="h-4 w-4" /> Kabel entriegeln
+                          <Unlock className="h-4 w-4" /> {t("cpd.unlockCable" as any)}
                         </Button>
                         <Button variant="ghost" className="w-full justify-start gap-2 text-sm" onClick={() => remoteAction("Auf inaktiv setzen")}>
-                          <Power className="h-4 w-4" /> Auf inaktiv setzen
+                          <Power className="h-4 w-4" /> {t("cpd.setInactive" as any)}
                         </Button>
                       </CardContent>
                     </Card>

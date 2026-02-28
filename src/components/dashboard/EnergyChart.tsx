@@ -1,5 +1,6 @@
 import React, { useMemo, useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useTranslation } from "@/hooks/useTranslation";
 import {
   BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
@@ -27,12 +28,12 @@ import { useLocationEnergySources } from "@/hooks/useLocationEnergySources";
 
 type ChartPeriod = "day" | "week" | "month" | "quarter" | "year";
 
-const PERIOD_LABELS: Record<ChartPeriod, string> = {
-  day: "Tag",
-  week: "Woche",
-  month: "Monat",
-  quarter: "Quartal",
-  year: "Jahr",
+const PERIOD_LABEL_KEYS: Record<ChartPeriod, string> = {
+  day: "chart.periodDay",
+  week: "chart.periodWeek",
+  month: "chart.periodMonth",
+  quarter: "chart.periodQuarter",
+  year: "chart.periodYear",
 };
 
 function getRefDate(period: ChartPeriod, offset: number): Date {
@@ -122,6 +123,7 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
   const { readings, livePeriodTotals, loading, hasData } = useEnergyData(locationId);
   const { meters } = useMeters();
   const { selectedPeriod, setSelectedPeriod } = useDashboardFilter();
+  const { t } = useTranslation();
   const [offset, setOffset] = useState(0);
   const [hiddenKeys, setHiddenKeys] = useState<Set<string>>(new Set());
   const [powerReadings, setPowerReadings] = useState<Array<{ meter_id: string; power_value: number; recorded_at: string }>>([]);
@@ -137,7 +139,7 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
   const period: ChartPeriod = selectedPeriod === "all" ? "year" : selectedPeriod;
 
   const selectedLocation = locationId ? locations.find((l) => l.id === locationId) : null;
-  const subtitle = selectedLocation ? `Daten für: ${selectedLocation.name}` : "Alle Liegenschaften";
+  const subtitle = selectedLocation ? t("chart.dataFor" as any).replace("{name}", selectedLocation.name) : t("chart.allLocations" as any);
 
   const meterMap = useMemo(() => {
     const map: Record<string, { energy_type: string; capture_type: string; location_id: string; is_main_meter: boolean; unit: string; gas_type: string | null; brennwert: number | null; zustandszahl: number | null }> = {};
@@ -654,15 +656,15 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
       <CardHeader>
         <div className="flex items-center justify-between">
           <CardTitle className="font-display text-lg">
-            Energieverbrauch ({unitLabel})
+            {t("chart.title" as any)} ({unitLabel})
           </CardTitle>
           <Select value={period} onValueChange={handlePeriodChange}>
             <SelectTrigger className="w-[120px] h-8 text-xs">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {(Object.keys(PERIOD_LABELS) as ChartPeriod[]).map((key) => (
-                <SelectItem key={key} value={key}>{PERIOD_LABELS[key]}</SelectItem>
+              {(Object.keys(PERIOD_LABEL_KEYS) as ChartPeriod[]).map((key) => (
+                <SelectItem key={key} value={key}>{t(PERIOD_LABEL_KEYS[key] as any)}</SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -683,7 +685,7 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
       <CardContent>
         {!hasData ? (
           <div className="h-[300px] flex items-center justify-center text-muted-foreground text-sm">
-            Noch keine Verbrauchsdaten vorhanden
+            {t("chart.noData" as any)}
           </div>
         ) : (
           <>
