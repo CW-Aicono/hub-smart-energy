@@ -482,7 +482,9 @@ const PvForecastWidget = ({ locationId }: PvForecastWidgetProps) => {
                   ]}
                   labelFormatter={(l) => {
                     const suffix = T("pv.clock");
-                    return suffix ? `${l} ${suffix}` : l;
+                    const h = parseInt(l.split(":")[0], 10);
+                    const nextH = `${String((h + 1) % 24).padStart(2, "0")}:00`;
+                    return suffix ? `${l} – ${nextH} ${suffix}` : `${l} – ${nextH}`;
                   }}
                 />
                 {hasActual && <Legend formatter={(v) => v === "prognose" ? T("pv.forecast") : T("pv.actualGeneration")} />}
