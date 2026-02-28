@@ -1,3 +1,4 @@
+import "leaflet/dist/leaflet.css";
 import { useMemo, useState, useCallback } from "react";
 import { MapContainer, TileLayer, Marker, Popup, useMap, useMapEvents, Circle } from "react-leaflet";
 import { Icon, LatLngBounds } from "leaflet";
