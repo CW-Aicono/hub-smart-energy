@@ -240,21 +240,29 @@ export default function AnalogGauge({ data }: { data: GaugeData }) {
         <circle cx={cx} cy={cy} r={2} fill="hsl(var(--background))" />
 
         {/* Digital readout */}
-        <text x={cx} y={cy + 28} textAnchor="middle" fill="hsl(var(--foreground))" fontSize={18} fontWeight={700}
+        <text x={cx} y={cy + 26} textAnchor="middle" fill="hsl(var(--foreground))" fontSize={18} fontWeight={700}
           fontFamily="'SF Mono', 'Cascadia Code', monospace">
           {displayValue}
         </text>
-        <text x={cx} y={cy + 40} textAnchor="middle" fill="hsl(var(--muted-foreground))" fontSize={9} fontWeight={500}>
+        <text x={cx} y={cy + 38} textAnchor="middle" fill="hsl(var(--muted-foreground))" fontSize={9} fontWeight={500}>
           {displayUnit}
         </text>
+
+        {/* Label inside circle */}
+        <text x={cx} y={cy + 54} textAnchor="middle" fill={color} fontSize={11} fontWeight={600}>
+          {label}
+        </text>
+
+        {/* Peak inside circle */}
+        {!hidePeak && peakValue > 0 && (
+          <g>
+            <text x={cx} y={cy + 67} textAnchor="middle" fill="hsl(var(--muted-foreground))" fontSize={8.5} fontWeight={500}>
+              <tspan fill="#ef4444">▲</tspan>
+              {" "}{peakValue.toLocaleString("de-DE", { maximumFractionDigits: 1 })} {unit}
+            </text>
+          </g>
+        )}
       </svg>
-      <span className="text-sm font-semibold tracking-wide -mt-3" style={{ color }}>{label}</span>
-      {!hidePeak && peakValue > 0 && (
-        <span className="text-[10px] text-muted-foreground flex items-center gap-1 mt-0.5">
-          <span className="text-destructive">▲</span>
-          {peakValue.toLocaleString("de-DE", { maximumFractionDigits: 1 })} {unit}
-        </span>
-      )}
     </div>
   );
 }
