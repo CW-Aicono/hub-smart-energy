@@ -15,7 +15,7 @@ import { SuperAdminWrapper } from "@/components/super-admin/SuperAdminWrapper";
 import UpdateBanner from "./components/UpdateBanner";
 import SupportSessionBanner from "./components/SupportSessionBanner";
 import CookieConsent from "./components/CookieConsent";
-import "leaflet/dist/leaflet.css";
+// leaflet CSS is loaded lazily in map components
 
 // Lazy-loaded pages
 const Index = lazy(() => import("./pages/Index"));

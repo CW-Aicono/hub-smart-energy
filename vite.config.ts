@@ -63,6 +63,19 @@ export default defineConfig(({ mode }) => ({
     force: true,
   },
 
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          translations: ["./src/i18n/translations.ts"],
+          leaflet: ["leaflet", "react-leaflet", "@react-leaflet/core"],
+          recharts: ["recharts"],
+          three: ["three", "@react-three/fiber", "@react-three/drei"],
+        },
+      },
+    },
+  },
+
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
