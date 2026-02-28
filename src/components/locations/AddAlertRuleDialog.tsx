@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useAlertRules } from "@/hooks/useAlertRules";
+import { useTranslation } from "@/hooks/useTranslation";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -28,6 +29,8 @@ const TIME_UNITS = [
 
 export const AddAlertRuleDialog = ({ locationId, open, onOpenChange }: AddAlertRuleDialogProps) => {
   const { addAlertRule } = useAlertRules(locationId);
+  const { t } = useTranslation();
+  const T = (key: string) => t(key as any);
   const [name, setName] = useState("");
   const [energyType, setEnergyType] = useState("strom");
   const [thresholdValue, setThresholdValue] = useState("");
@@ -89,10 +92,10 @@ export const AddAlertRuleDialog = ({ locationId, open, onOpenChange }: AddAlertR
               <Select value={energyType} onValueChange={handleEnergyTypeChange}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="strom">Strom</SelectItem>
-                  <SelectItem value="gas">Gas</SelectItem>
-                  <SelectItem value="waerme">Wärme</SelectItem>
-                  <SelectItem value="wasser">Wasser</SelectItem>
+                  <SelectItem value="strom">{T("energy.strom")}</SelectItem>
+                  <SelectItem value="gas">{T("energy.gas")}</SelectItem>
+                  <SelectItem value="waerme">{T("energy.waerme")}</SelectItem>
+                  <SelectItem value="wasser">{T("energy.wasser")}</SelectItem>
                 </SelectContent>
               </Select>
             </div>

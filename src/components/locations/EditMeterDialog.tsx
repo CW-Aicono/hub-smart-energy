@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { useTranslation } from "@/hooks/useTranslation";
 import { Meter, MeterInsert } from "@/hooks/useMeters";
 import { useMeters } from "@/hooks/useMeters";
 import { useLocationIntegrations } from "@/hooks/useIntegrations";
@@ -41,6 +42,8 @@ interface SensorOption {
 
 export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeterDialogProps) => {
   const { locationIntegrations, loading: integrationsLoading } = useLocationIntegrations(meter.location_id);
+  const { t } = useTranslation();
+  const T = (key: string) => t(key as any);
   const { meters: allMeters } = useMeters(meter.location_id);
   const [name, setName] = useState(meter.name);
   const [meterNumber, setMeterNumber] = useState(meter.meter_number || "");
@@ -383,10 +386,10 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
               <Select value={energyType} onValueChange={setEnergyType}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="strom">Strom</SelectItem>
-                  <SelectItem value="gas">Gas</SelectItem>
-                  <SelectItem value="waerme">Wärme</SelectItem>
-                  <SelectItem value="wasser">Wasser</SelectItem>
+                  <SelectItem value="strom">{T("energy.strom")}</SelectItem>
+                  <SelectItem value="gas">{T("energy.gas")}</SelectItem>
+                  <SelectItem value="waerme">{T("energy.waerme")}</SelectItem>
+                  <SelectItem value="wasser">{T("energy.wasser")}</SelectItem>
                 </SelectContent>
               </Select>
             </div>

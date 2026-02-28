@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { useTranslation } from "@/hooks/useTranslation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useEnergyData } from "@/hooks/useEnergyData";
 import { useEnergyPrices } from "@/hooks/useEnergyPrices";
@@ -60,25 +61,27 @@ function getPeriodRange(period: TimePeriod, weekStartsOn: 0|1|2|3|4|5|6 = 1): { 
   return { start, prevStart, prevEnd };
 }
 
-const PERIOD_LABELS: Record<TimePeriod, string> = {
-  day: "Heute",
-  week: "Diese Woche",
-  month: "Laufender Monat",
-  quarter: "Laufendes Quartal",
-  year: "Laufendes Jahr",
-  all: "Gesamt",
+const PERIOD_LABEL_KEYS: Record<TimePeriod, string> = {
+  day: "cost.periodDay",
+  week: "cost.periodWeek",
+  month: "cost.periodMonth",
+  quarter: "cost.periodQuarter",
+  year: "cost.periodYear",
+  all: "cost.periodAll",
 };
 
-const PREV_PERIOD_LABELS: Record<TimePeriod, string> = {
-  day: "Gestern",
-  week: "Letzte Woche",
-  month: "Letzter Monat",
-  quarter: "Letztes Quartal",
-  year: "Letztes Jahr",
-  all: "–",
+const PREV_PERIOD_LABEL_KEYS: Record<TimePeriod, string> = {
+  day: "cost.prevDay",
+  week: "cost.prevWeek",
+  month: "cost.prevMonth",
+  quarter: "cost.prevQuarter",
+  year: "cost.prevYear",
+  all: "cost.prevAll",
 };
 
 const CostOverview = ({ locationId }: CostOverviewProps) => {
+  const { t } = useTranslation();
+  const T = (key: string) => t(key as any);
   const { readings, livePeriodTotals, loading: dataLoading } = useEnergyData(locationId);
   const { prices, loading: pricesLoading } = useEnergyPrices();
   const { meters } = useMeters();
@@ -277,24 +280,24 @@ const CostOverview = ({ locationId }: CostOverviewProps) => {
 
   const kpis = [
     {
-      label: "Kosten",
+      label: T("cost.costs"),
       value: costData.hasPrices && costData.currentCost > 0 ? formatCurrency(costData.currentCost) : "–",
       icon: Euro,
-      subtitle: PERIOD_LABELS[selectedPeriod],
+      subtitle: T(PERIOD_LABEL_KEYS[selectedPeriod]),
     },
     {
-      label: "Vorperiode",
+      label: T("cost.prevPeriod"),
       value: costData.hasPrices && costData.prevCost > 0 ? formatCurrency(costData.prevCost) : "–",
       icon: TrendingUp,
-      subtitle: PREV_PERIOD_LABELS[selectedPeriod],
+      subtitle: T(PREV_PERIOD_LABEL_KEYS[selectedPeriod]),
     },
     {
-      label: "Differenz",
+      label: T("cost.difference"),
       value: costData.hasPrices && costData.diff !== 0 ? formatCurrency(Math.abs(costData.diff)) : "–",
       icon: TrendingDown,
       subtitle: costData.diffPercent !== 0
-        ? `${costData.diffPercent > 0 ? costData.diffPercent : Math.abs(costData.diffPercent)}% ${costData.diff > 0 ? "weniger" : "mehr"}`
-        : costData.hasPrices ? "Keine Veränderung" : "Keine Preise hinterlegt",
+        ? `${costData.diffPercent > 0 ? costData.diffPercent : Math.abs(costData.diffPercent)}% ${costData.diff > 0 ? T("cost.less") : T("cost.more")}`
+        : costData.hasPrices ? T("cost.noChange") : T("cost.noPrices"),
       positive: costData.diff > 0,
     },
   ];

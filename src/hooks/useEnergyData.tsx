@@ -333,18 +333,18 @@ export function useEnergyData(locationId?: string | null) {
     const total = Object.values(totals).reduce((s, v) => s + v, 0);
     if (total === 0) {
       return [
-        { name: "Strom", value: 0, totalValue: 0, unit: "kWh", color: "hsl(var(--energy-strom))" },
-        { name: "Gas", value: 0, totalValue: 0, unit: "m³", color: "hsl(var(--energy-gas))" },
-        { name: "Wärme", value: 0, totalValue: 0, unit: "kWh", color: "hsl(var(--energy-waerme))" },
-        { name: "Wasser", value: 0, totalValue: 0, unit: "m³", color: "hsl(var(--energy-wasser))" },
+        { name: "strom", value: 0, totalValue: 0, unit: "kWh", color: "hsl(var(--energy-strom))" },
+        { name: "gas", value: 0, totalValue: 0, unit: "m³", color: "hsl(var(--energy-gas))" },
+        { name: "waerme", value: 0, totalValue: 0, unit: "kWh", color: "hsl(var(--energy-waerme))" },
+        { name: "wasser", value: 0, totalValue: 0, unit: "m³", color: "hsl(var(--energy-wasser))" },
       ];
     }
 
     return [
-      { name: "Strom", value: Math.round((totals.strom / total) * 100), totalValue: Math.round(totals.strom * 100) / 100, unit: "kWh", color: "hsl(var(--energy-strom))" },
-      { name: "Gas", value: Math.round((totals.gas / total) * 100), totalValue: Math.round(totals.gas * 100) / 100, unit: "m³", color: "hsl(var(--energy-gas))" },
-      { name: "Wärme", value: Math.round((totals.waerme / total) * 100), totalValue: Math.round(totals.waerme * 100) / 100, unit: "kWh", color: "hsl(var(--energy-waerme))" },
-      { name: "Wasser", value: Math.round((totals.wasser / total) * 100), totalValue: Math.round(totals.wasser * 100) / 100, unit: "m³", color: "hsl(var(--energy-wasser))" },
+      { name: "strom", value: Math.round((totals.strom / total) * 100), totalValue: Math.round(totals.strom * 100) / 100, unit: "kWh", color: "hsl(var(--energy-strom))" },
+      { name: "gas", value: Math.round((totals.gas / total) * 100), totalValue: Math.round(totals.gas * 100) / 100, unit: "m³", color: "hsl(var(--energy-gas))" },
+      { name: "waerme", value: Math.round((totals.waerme / total) * 100), totalValue: Math.round(totals.waerme * 100) / 100, unit: "kWh", color: "hsl(var(--energy-waerme))" },
+      { name: "wasser", value: Math.round((totals.wasser / total) * 100), totalValue: Math.round(totals.wasser * 100) / 100, unit: "m³", color: "hsl(var(--energy-wasser))" },
     ];
   }, [filteredReadings, meterMap, livePeriodTotals, meters, locationId]);
 
