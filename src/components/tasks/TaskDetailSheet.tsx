@@ -17,49 +17,59 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
-import { de } from "date-fns/locale";
+import { de, enUS, es, nl } from "date-fns/locale";
+import { useTranslation } from "@/hooks/useTranslation";
+import type { Locale } from "date-fns";
 
-const PRIORITY_CONFIG = {
-  low: { label: "Niedrig", dot: "🟢", color: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20" },
-  medium: { label: "Mittel", dot: "🔵", color: "bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/20" },
-  high: { label: "Hoch", dot: "🟠", color: "bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-500/20" },
-  critical: { label: "Kritisch", dot: "🔴", color: "bg-destructive/15 text-destructive border-destructive/20" },
+const dfLocaleMap: Record<string, Locale> = { de, en: enUS, es, nl };
+
+const PRIORITY_KEYS: Record<string, string> = {
+  low: "task.priorityLow",
+  medium: "task.priorityMedium",
+  high: "task.priorityHigh",
+  critical: "task.priorityCritical",
 };
 
-const STATUS_CONFIG: Record<TaskStatus, { label: string; icon: React.ElementType; color: string }> = {
-  open: { label: "Offen", icon: Circle, color: "text-muted-foreground" },
-  in_progress: { label: "In Bearbeitung", icon: ArrowRight, color: "text-primary" },
-  done: { label: "Erledigt", icon: CheckCircle2, color: "text-emerald-600 dark:text-emerald-400" },
-  cancelled: { label: "Abgebrochen", icon: XCircle, color: "text-muted-foreground" },
+const PRIORITY_DOTS: Record<string, string> = {
+  low: "🟢", medium: "🔵", high: "🟠", critical: "🔴",
+};
+
+const PRIORITY_COLORS: Record<string, string> = {
+  low: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20",
+  medium: "bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/20",
+  high: "bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-500/20",
+  critical: "bg-destructive/15 text-destructive border-destructive/20",
+};
+
+const STATUS_KEYS: Record<TaskStatus, string> = {
+  open: "task.statusOpen",
+  in_progress: "task.statusInProgress",
+  done: "task.statusDone",
+  cancelled: "task.statusCancelled",
+};
+
+const STATUS_ICONS: Record<TaskStatus, React.ElementType> = {
+  open: Circle, in_progress: ArrowRight, done: CheckCircle2, cancelled: XCircle,
+};
+
+const STATUS_COLORS: Record<TaskStatus, string> = {
+  open: "text-muted-foreground",
+  in_progress: "text-primary",
+  done: "text-emerald-600 dark:text-emerald-400",
+  cancelled: "text-muted-foreground",
 };
 
 const SOURCE_ICONS: Record<string, React.ElementType> = {
-  manual: User,
-  alert: AlertTriangle,
-  charging: PlugZap,
-  automation: Zap,
+  manual: User, alert: AlertTriangle, charging: PlugZap, automation: Zap,
 };
 
-const SOURCE_LABELS: Record<string, string> = {
-  manual: "Manuell",
-  alert: "Alarm",
-  charging: "Ladesäule",
-  automation: "Automatisierung",
+const SOURCE_KEYS: Record<string, string> = {
+  manual: "task.sourceManual", alert: "task.sourceAlert", charging: "task.sourceCharging", automation: "task.sourceAutomation",
 };
 
-const ACTION_LABELS: Record<string, string> = {
-  created: "Aufgabe erstellt",
-  status_changed: "Status geändert",
-  assigned: "Zugewiesen",
-  transferred: "Übergeben an",
-  comment: "Kommentar",
-};
-
-const STATUS_LABELS: Record<string, string> = {
-  open: "Offen",
-  in_progress: "In Bearbeitung",
-  done: "Erledigt",
-  cancelled: "Abgebrochen",
+const ACTION_KEYS: Record<string, string> = {
+  created: "task.actionCreated", status_changed: "task.actionStatusChanged",
+  assigned: "task.actionAssigned", transferred: "task.actionTransferred", comment: "task.actionComment",
 };
 
 interface TaskDetailSheetProps {
@@ -71,6 +81,9 @@ interface TaskDetailSheetProps {
 export const TaskDetailSheet = ({ task, open, onOpenChange }: TaskDetailSheetProps) => {
   const { updateTask, addComment, tenantUsers } = useTasks();
   const { data: history = [], isLoading: historyLoading } = useTaskHistory(task.id);
+  const { t, language } = useTranslation();
+  const T = (key: string) => t(key as any);
+  const dateLocale = dfLocaleMap[language] || de;
 
   // Comment
   const [comment, setComment] = useState("");
@@ -91,9 +104,9 @@ export const TaskDetailSheet = ({ task, open, onOpenChange }: TaskDetailSheetPro
   const [transferSaved, setTransferSaved] = useState(false);
 
   const SourceIcon = SOURCE_ICONS[task.source_type] ?? User;
-  const priorityCfg = PRIORITY_CONFIG[task.priority];
-  const statusCfg = STATUS_CONFIG[task.status];
-  const StatusIcon = statusCfg.icon;
+  const priorityColor = PRIORITY_COLORS[task.priority];
+  const StatusIcon = STATUS_ICONS[task.status];
+  const statusColor = STATUS_COLORS[task.status];
 
   const isOverdue = task.due_date && task.status !== "done" && task.status !== "cancelled"
     && new Date(task.due_date) < new Date();
@@ -178,8 +191,8 @@ export const TaskDetailSheet = ({ task, open, onOpenChange }: TaskDetailSheetPro
                 };
                 handleStatusChange(next[task.status] as TaskStatus);
               }}
-              className={cn("mt-1 shrink-0 transition-colors hover:scale-110", statusCfg.color)}
-              title={`Status: ${statusCfg.label}`}
+              className={cn("mt-1 shrink-0 transition-colors hover:scale-110", statusColor)}
+              title={`Status: ${T(STATUS_KEYS[task.status])}`}
             >
               <StatusIcon className="h-5 w-5" />
             </button>
@@ -211,23 +224,23 @@ export const TaskDetailSheet = ({ task, open, onOpenChange }: TaskDetailSheetPro
               )}
 
               <div className="flex flex-wrap items-center gap-2 mt-2">
-                <Badge variant="outline" className={cn("text-xs py-0", priorityCfg.color)}>
-                  {priorityCfg.label}
+                <Badge variant="outline" className={cn("text-xs py-0", priorityColor)}>
+                  {T(PRIORITY_KEYS[task.priority])}
                 </Badge>
                 <span className="flex items-center gap-1 text-xs text-muted-foreground">
                   <SourceIcon className="h-3.5 w-3.5" />
-                  {task.source_label ?? SOURCE_LABELS[task.source_type]}
+                  {task.source_label ?? T(SOURCE_KEYS[task.source_type])}
                 </span>
                 {task.due_date && (
                   <span className={cn("flex items-center gap-1 text-xs", isOverdue ? "text-destructive font-medium" : "text-muted-foreground")}>
                     <CalendarDays className="h-3.5 w-3.5" />
-                    {format(new Date(task.due_date), "dd.MM.yyyy", { locale: de })}
-                    {isOverdue && " (überfällig)"}
+                    {format(new Date(task.due_date), "dd.MM.yyyy", { locale: dateLocale })}
+                    {isOverdue && ` (${T("task.overdue")})`}
                   </span>
                 )}
                 <span className="flex items-center gap-1 text-xs text-muted-foreground">
                   <Clock className="h-3.5 w-3.5" />
-                  {format(new Date(task.created_at), "dd.MM.yy", { locale: de })}
+                  {format(new Date(task.created_at), "dd.MM.yy", { locale: dateLocale })}
                 </span>
               </div>
             </div>
@@ -240,7 +253,7 @@ export const TaskDetailSheet = ({ task, open, onOpenChange }: TaskDetailSheetPro
 
             {/* Description */}
             <div className="space-y-1.5">
-              <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Beschreibung</Label>
+              <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{T("task.description")}</Label>
               {editingDesc ? (
                 <div className="space-y-1.5">
                   <Textarea
@@ -251,8 +264,8 @@ export const TaskDetailSheet = ({ task, open, onOpenChange }: TaskDetailSheetPro
                     className="text-sm"
                   />
                   <div className="flex gap-1.5">
-                    <Button size="sm" onClick={handleSaveDesc}><Check className="h-3.5 w-3.5 mr-1" /> Speichern</Button>
-                    <Button size="sm" variant="outline" onClick={() => setEditingDesc(false)}>Abbrechen</Button>
+                    <Button size="sm" onClick={handleSaveDesc}><Check className="h-3.5 w-3.5 mr-1" /> {T("common.save")}</Button>
+                    <Button size="sm" variant="outline" onClick={() => setEditingDesc(false)}>{T("common.cancel")}</Button>
                   </div>
                 </div>
               ) : (
@@ -263,7 +276,7 @@ export const TaskDetailSheet = ({ task, open, onOpenChange }: TaskDetailSheetPro
                   )}
                   onClick={() => { setDescDraft(task.description ?? ""); setEditingDesc(true); }}
                 >
-                  {task.description ?? "Beschreibung hinzufügen..."}
+                  {task.description ?? T("task.addDescription")}
                   <Pencil className="h-3 w-3 inline ml-1.5 opacity-0 group-hover:opacity-40 transition-opacity" />
                 </div>
               )}
@@ -272,22 +285,22 @@ export const TaskDetailSheet = ({ task, open, onOpenChange }: TaskDetailSheetPro
             {/* Status + Priority row */}
             <div className="flex gap-4 flex-wrap">
               <div className="space-y-1.5">
-                <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Status</Label>
+                <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{T("task.status")}</Label>
                 <Select value={task.status} onValueChange={(v) => handleStatusChange(v as TaskStatus)}>
                   <SelectTrigger className="w-44">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="open">⬜ Offen</SelectItem>
-                    <SelectItem value="in_progress">🔵 In Bearbeitung</SelectItem>
-                    <SelectItem value="done">✅ Erledigt</SelectItem>
-                    <SelectItem value="cancelled">❌ Abgebrochen</SelectItem>
+                    <SelectItem value="open">⬜ {T("task.statusOpen")}</SelectItem>
+                    <SelectItem value="in_progress">🔵 {T("task.statusInProgress")}</SelectItem>
+                    <SelectItem value="done">✅ {T("task.statusDone")}</SelectItem>
+                    <SelectItem value="cancelled">❌ {T("task.statusCancelled")}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
               <div className="space-y-1.5">
-                <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Priorität</Label>
+                <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{T("task.priority")}</Label>
                 <Select
                   value={task.priority}
                   onValueChange={(v) => updateTask.mutate({ id: task.id, priority: v as Task["priority"] })}
@@ -296,10 +309,10 @@ export const TaskDetailSheet = ({ task, open, onOpenChange }: TaskDetailSheetPro
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="low">🟢 Niedrig</SelectItem>
-                    <SelectItem value="medium">🔵 Mittel</SelectItem>
-                    <SelectItem value="high">🟠 Hoch</SelectItem>
-                    <SelectItem value="critical">🔴 Kritisch</SelectItem>
+                    <SelectItem value="low">🟢 {T("task.priorityLow")}</SelectItem>
+                    <SelectItem value="medium">🔵 {T("task.priorityMedium")}</SelectItem>
+                    <SelectItem value="high">🟠 {T("task.priorityHigh")}</SelectItem>
+                    <SelectItem value="critical">🔴 {T("task.priorityCritical")}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -308,7 +321,7 @@ export const TaskDetailSheet = ({ task, open, onOpenChange }: TaskDetailSheetPro
             {/* Due date */}
             <div className="space-y-1.5">
               <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
-                <CalendarDays className="h-3.5 w-3.5" /> Fälligkeitsdatum
+                <CalendarDays className="h-3.5 w-3.5" /> {T("task.dueDate")}
               </Label>
               <div className="flex items-center gap-2">
                 <input
@@ -329,13 +342,13 @@ export const TaskDetailSheet = ({ task, open, onOpenChange }: TaskDetailSheetPro
                     className="text-xs text-muted-foreground h-7 px-2"
                     onClick={() => updateTask.mutate({ id: task.id, due_date: null })}
                   >
-                    <X className="h-3.5 w-3.5 mr-1" /> Entfernen
+                    <X className="h-3.5 w-3.5 mr-1" /> {T("common.remove")}
                   </Button>
                 )}
               </div>
               {isOverdue && (
                 <p className="text-xs text-destructive flex items-center gap-1">
-                  <AlertTriangle className="h-3 w-3" /> Fälligkeit überschritten
+                  <AlertTriangle className="h-3 w-3" /> {T("task.overdueWarning")}
                 </p>
               )}
             </div>
@@ -345,7 +358,7 @@ export const TaskDetailSheet = ({ task, open, onOpenChange }: TaskDetailSheetPro
             {/* Transfer / Assignment */}
             <div className="space-y-3">
               <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
-                <ArrowLeftRight className="h-3.5 w-3.5" /> Zuweisung &amp; Übergabe
+                <ArrowLeftRight className="h-3.5 w-3.5" /> {T("task.assignmentTransfer")}
               </Label>
 
               {/* Current assignee info */}
@@ -355,7 +368,7 @@ export const TaskDetailSheet = ({ task, open, onOpenChange }: TaskDetailSheetPro
                     <>
                       <User className="h-4 w-4 text-muted-foreground shrink-0" />
                       <span className="font-medium">{task.assigned_to_name}</span>
-                      <Badge variant="outline" className="text-xs py-0">Intern</Badge>
+                      <Badge variant="outline" className="text-xs py-0">{T("task.internal")}</Badge>
                     </>
                   ) : (
                     <>
@@ -369,7 +382,7 @@ export const TaskDetailSheet = ({ task, open, onOpenChange }: TaskDetailSheetPro
                           <span className="text-xs text-muted-foreground">{task.external_contact_phone}</span>
                         )}
                       </div>
-                      <Badge variant="outline" className="text-xs py-0 ml-auto">Extern</Badge>
+                      <Badge variant="outline" className="text-xs py-0 ml-auto">{T("task.external")}</Badge>
                     </>
                   )}
                 </div>
@@ -378,16 +391,16 @@ export const TaskDetailSheet = ({ task, open, onOpenChange }: TaskDetailSheetPro
               <Tabs value={transferTab} onValueChange={(v) => setTransferTab(v as "team" | "external")}>
                 <TabsList className="w-full">
                   <TabsTrigger value="team" className="flex-1 gap-1.5 text-xs">
-                    <User className="h-3.5 w-3.5" /> Intern zuweisen
+                    <User className="h-3.5 w-3.5" /> {T("task.assignInternal")}
                   </TabsTrigger>
                   <TabsTrigger value="external" className="flex-1 gap-1.5 text-xs">
-                    <ExternalLink className="h-3.5 w-3.5" /> Extern übergeben
+                    <ExternalLink className="h-3.5 w-3.5" /> {T("task.transferExternal")}
                   </TabsTrigger>
                 </TabsList>
                 <TabsContent value="team" className="mt-3 space-y-2">
                   <Select value={selectedUserId} onValueChange={setSelectedUserId}>
                     <SelectTrigger>
-                      <SelectValue placeholder="Benutzer wählen..." />
+                      <SelectValue placeholder={T("task.selectUser")} />
                     </SelectTrigger>
                     <SelectContent>
                       {tenantUsers.map((u) => (
@@ -402,18 +415,18 @@ export const TaskDetailSheet = ({ task, open, onOpenChange }: TaskDetailSheetPro
                   <Input
                     value={externalName}
                     onChange={(e) => setExternalName(e.target.value)}
-                    placeholder="Name des Dienstleisters..."
+                    placeholder={T("task.serviceProvider")}
                   />
                   <Input
                     value={externalEmail}
                     onChange={(e) => setExternalEmail(e.target.value)}
-                    placeholder="E-Mail..."
+                    placeholder={T("common.email") + "..."}
                     type="email"
                   />
                   <Input
                     value={externalPhone}
                     onChange={(e) => setExternalPhone(e.target.value)}
-                    placeholder="Telefon..."
+                    placeholder={T("common.phone") + "..."}
                     type="tel"
                   />
                 </TabsContent>
@@ -422,7 +435,7 @@ export const TaskDetailSheet = ({ task, open, onOpenChange }: TaskDetailSheetPro
               <Textarea
                 value={transferNote}
                 onChange={(e) => setTransferNote(e.target.value)}
-                placeholder="Übergabenotiz (optional)..."
+                placeholder={T("task.transferNote")}
                 rows={2}
                 className="text-sm"
               />
@@ -435,9 +448,9 @@ export const TaskDetailSheet = ({ task, open, onOpenChange }: TaskDetailSheetPro
                 variant={transferSaved ? "outline" : "default"}
               >
                 {transferSaved ? (
-                  <><Check className="h-3.5 w-3.5" /> Gespeichert</>
+                  <><Check className="h-3.5 w-3.5" /> {T("task.saved")}</>
                 ) : (
-                  <><ArrowLeftRight className="h-3.5 w-3.5" /> Übergeben</>
+                  <><ArrowLeftRight className="h-3.5 w-3.5" /> {T("task.transfer")}</>
                 )}
               </Button>
             </div>
@@ -447,13 +460,13 @@ export const TaskDetailSheet = ({ task, open, onOpenChange }: TaskDetailSheetPro
             {/* History / Comments */}
             <div className="space-y-3">
               <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
-                <History className="h-3.5 w-3.5" /> Protokoll
+                <History className="h-3.5 w-3.5" /> {T("task.log")}
               </Label>
 
               {historyLoading ? (
-                <p className="text-xs text-muted-foreground text-center py-4">Lädt...</p>
+                <p className="text-xs text-muted-foreground text-center py-4">{T("task.logLoading")}</p>
               ) : history.length === 0 ? (
-                <p className="text-xs text-muted-foreground text-center py-4">Noch keine Einträge.</p>
+                <p className="text-xs text-muted-foreground text-center py-4">{T("task.logEmpty")}</p>
               ) : (
                 <div className="space-y-0">
                   {history.map((entry, idx) => (
@@ -475,17 +488,17 @@ export const TaskDetailSheet = ({ task, open, onOpenChange }: TaskDetailSheetPro
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="text-xs font-medium">{entry.actor_name ?? "System"}</span>
                           <span className="text-xs text-muted-foreground">
-                            {format(new Date(entry.created_at), "dd.MM.yy, HH:mm", { locale: de })}
+                            {format(new Date(entry.created_at), "dd.MM.yy, HH:mm", { locale: dateLocale })}
                           </span>
                         </div>
                         <p className="text-xs text-muted-foreground mt-0.5">
-                          {ACTION_LABELS[entry.action] ?? entry.action}
+                          {T(ACTION_KEYS[entry.action] ?? entry.action)}
                           {entry.action === "status_changed" && entry.old_value && entry.new_value && (
                             <>
                               {": "}
-                              <span className="line-through">{STATUS_LABELS[entry.old_value] ?? entry.old_value}</span>
+                              <span className="line-through">{T(STATUS_KEYS[entry.old_value as TaskStatus] ?? entry.old_value)}</span>
                               {" → "}
-                              <span className="font-medium text-foreground">{STATUS_LABELS[entry.new_value] ?? entry.new_value}</span>
+                              <span className="font-medium text-foreground">{T(STATUS_KEYS[entry.new_value as TaskStatus] ?? entry.new_value)}</span>
                             </>
                           )}
                           {entry.action === "transferred" && entry.new_value && (
@@ -509,7 +522,7 @@ export const TaskDetailSheet = ({ task, open, onOpenChange }: TaskDetailSheetPro
                 <Textarea
                   value={comment}
                   onChange={(e) => setComment(e.target.value)}
-                  placeholder="Kommentar hinzufügen... (Strg+Enter)"
+                  placeholder={T("task.addComment")}
                   rows={2}
                   className="flex-1 text-sm"
                   onKeyDown={(e) => { if (e.key === "Enter" && e.ctrlKey) handleAddComment(); }}
