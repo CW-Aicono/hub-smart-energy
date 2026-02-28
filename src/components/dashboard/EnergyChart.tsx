@@ -622,6 +622,20 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
     }
   };
 
+  // Compute filtered chart data that zeros out hidden energy types so Y-axis rescales
+  const filteredChartData = useMemo(() => {
+    if (hiddenKeys.size === 0) return chartData;
+    return chartData.map((bucket: any) => {
+      const clone = { ...bucket };
+      for (const key of hiddenKeys) {
+        clone[key] = 0;
+        if (`real_${key}` in clone) clone[`real_${key}`] = null;
+        if (`__gap_${key}` in clone) clone[`__gap_${key}`] = null;
+      }
+      return clone;
+    });
+  }, [chartData, hiddenKeys]);
+
   if (loading || powerLoading || dailyTotalsLoading) return <Card><CardContent className="p-6"><Skeleton className="h-[300px]" /></CardContent></Card>;
 
   const unitLabel = getChartUnitLabel(period);
@@ -698,7 +712,7 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
           <>
             <ResponsiveContainer width="100%" height={300}>
               {isLineChart ? (
-                <LineChart data={chartData} margin={{ top: 5, right: 10, left: 5, bottom: 5 }}>
+                <LineChart data={filteredChartData} margin={{ top: 5, right: 10, left: 5, bottom: 5 }}>
                   <CartesianGrid strokeDasharray="3 3" className="stroke-border" vertical={false} />
                   <XAxis dataKey="label" tick={tickStyle} tickLine={false} axisLine={false} interval={11} tickFormatter={(v: string) => v.includes(":00") ? v.split(" ")[0] : ""} />
                   <YAxis width={50} tick={tickStyle} tickLine={false} axisLine={false} domain={visibleKeys.length === 0 ? [0, 1] : ['auto', 'auto']} />
@@ -723,7 +737,7 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
                   })}
                 </LineChart>
               ) : (
-                <BarChart data={chartData} barGap={2} margin={{ top: 5, right: 10, left: 5, bottom: 5 }}>
+                <BarChart data={filteredChartData} barGap={2} margin={{ top: 5, right: 10, left: 5, bottom: 5 }}>
                   <CartesianGrid strokeDasharray="3 3" className="stroke-border" vertical={false} />
                   <XAxis dataKey="label" tick={tickStyle} tickLine={false} axisLine={false} />
                   <YAxis width={50} tick={tickStyle} tickLine={false} axisLine={false} domain={visibleKeys.length === 0 ? [0, 1] : ['auto', 'auto']} />
