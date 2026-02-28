@@ -17,11 +17,11 @@ import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { useSpotPrices } from "@/hooks/useSpotPrices";
 
-const ENERGY_TYPE_LABELS: Record<string, string> = {
-  strom: "Strom",
-  gas: "Gas",
-  waerme: "Wärme",
-  wasser: "Wasser",
+const ENERGY_TYPE_KEYS: Record<string, string> = {
+  strom: "ep.strom",
+  gas: "ep.gas",
+  waerme: "ep.waerme",
+  wasser: "ep.wasser",
 };
 
 const ENERGY_TYPE_UNITS: Record<string, string> = {
@@ -38,6 +38,7 @@ interface EnergyPriceManagementProps {
 export function EnergyPriceManagement({ locationId }: EnergyPriceManagementProps) {
   const [isOpen, setIsOpen] = useState(false);
   const { t } = useTranslation();
+  const T = (key: string) => t(key as any);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingPrice, setEditingPrice] = useState<EnergyPrice | null>(null);
   const { prices, loading, addPrice, updatePrice, deletePrice } = useEnergyPrices(locationId);
@@ -124,18 +125,18 @@ export function EnergyPriceManagement({ locationId }: EnergyPriceManagementProps
                 <div>
                   <CardTitle className="flex items-center gap-2">
                     <Euro className="h-5 w-5" />
-                    Energiepreise
-                    <HelpTooltip text={t("tooltip.energyPrices" as any)} />
+                    {T("ep.sectionTitle")}
+                    <HelpTooltip text={T("tooltip.energyPrices")} />
                   </CardTitle>
                   <CardDescription>
-                    Preise pro Energieträger für die Kostenberechnung
+                    {T("ep.sectionDesc")}
                   </CardDescription>
                 </div>
               </button>
             </CollapsibleTrigger>
             <Button size="sm" onClick={openAddDialog}>
               <Plus className="h-4 w-4 mr-1" />
-              Preis hinzufügen
+              {T("ep.addPrice")}
             </Button>
           </CardHeader>
           <CollapsibleContent>
@@ -144,15 +145,15 @@ export function EnergyPriceManagement({ locationId }: EnergyPriceManagementProps
                 <Skeleton className="h-24" />
               ) : prices.length === 0 ? (
                 <p className="text-sm text-muted-foreground text-center py-4">
-                  Noch keine Energiepreise hinterlegt
+                  {T("ep.noprices")}
                 </p>
               ) : (
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Energieträger</TableHead>
-                      <TableHead>Preis</TableHead>
-                      <TableHead>Gültig ab</TableHead>
+                      <TableHead>{T("ep.carrier")}</TableHead>
+                      <TableHead>{T("ep.price")}</TableHead>
+                      <TableHead>{T("ep.validFrom")}</TableHead>
                       <TableHead className="w-[80px]"></TableHead>
                     </TableRow>
                   </TableHeader>
@@ -161,8 +162,8 @@ export function EnergyPriceManagement({ locationId }: EnergyPriceManagementProps
                       <TableRow key={p.id}>
                         <TableCell>
                           <div className="flex items-center gap-1.5">
-                            {ENERGY_TYPE_LABELS[p.energy_type] || p.energy_type}
-                            {p.is_dynamic && <Badge variant="secondary" className="text-[10px] px-1.5 py-0 gap-0.5"><Zap className="h-2.5 w-2.5" />Dynamisch</Badge>}
+                            {T(ENERGY_TYPE_KEYS[p.energy_type] || `ep.${p.energy_type}`)}
+                            {p.is_dynamic && <Badge variant="secondary" className="text-[10px] px-1.5 py-0 gap-0.5"><Zap className="h-2.5 w-2.5" />{T("ep.dynamic")}</Badge>}
                           </div>
                         </TableCell>
                         <TableCell>
@@ -171,7 +172,7 @@ export function EnergyPriceManagement({ locationId }: EnergyPriceManagementProps
                               Spot + {Number(p.spot_markup_per_unit).toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 4 })} €/{p.unit}
                               {currentSpotPrice && (
                                 <span className="text-muted-foreground ml-1">
-                                  (aktuell {((currentSpotPrice.price_eur_mwh / 1000) + Number(p.spot_markup_per_unit)).toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 4 })} €/{p.unit})
+                                  ({T("ep.currently")} {((currentSpotPrice.price_eur_mwh / 1000) + Number(p.spot_markup_per_unit)).toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 4 })} €/{p.unit})
                                 </span>
                               )}
                             </span>
@@ -203,18 +204,18 @@ export function EnergyPriceManagement({ locationId }: EnergyPriceManagementProps
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{editingPrice ? "Energiepreis bearbeiten" : "Energiepreis hinzufügen"}</DialogTitle>
+            <DialogTitle>{editingPrice ? T("ep.editTitle") : T("ep.addTitle")}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <Label>Energieträger</Label>
+              <Label>{T("ep.carrier")}</Label>
               <Select value={formData.energy_type} onValueChange={(v) => setFormData({ ...formData, energy_type: v, is_dynamic: v !== "strom" ? false : formData.is_dynamic })}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {Object.entries(ENERGY_TYPE_LABELS).map(([key, label]) => (
-                    <SelectItem key={key} value={key}>{label}</SelectItem>
+                  {Object.entries(ENERGY_TYPE_KEYS).map(([key, tKey]) => (
+                    <SelectItem key={key} value={key}>{T(tKey)}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -222,15 +223,15 @@ export function EnergyPriceManagement({ locationId }: EnergyPriceManagementProps
             {formData.energy_type === "strom" && (
               <div className="flex items-center justify-between rounded-lg border p-3">
                 <div className="space-y-0.5">
-                  <Label className="flex items-center gap-1.5"><Zap className="h-4 w-4" />Dynamischer Strompreis (Börse)</Label>
-                  <p className="text-xs text-muted-foreground">Preis basiert auf dem EPEX Day-Ahead Spotpreis</p>
+                  <Label className="flex items-center gap-1.5"><Zap className="h-4 w-4" />{T("ep.dynamicLabel")}</Label>
+                  <p className="text-xs text-muted-foreground">{T("ep.dynamicDesc")}</p>
                 </div>
                 <Switch checked={formData.is_dynamic} onCheckedChange={(checked) => setFormData({ ...formData, is_dynamic: checked })} />
               </div>
             )}
             {formData.is_dynamic && formData.energy_type === "strom" ? (
               <div>
-                <Label>Aufschlag pro kWh (€) – Netzentgelte, Umlagen, Marge</Label>
+                <Label>{T("ep.markupLabel")}</Label>
                 <Input
                   type="text"
                   placeholder="0,12"
@@ -238,12 +239,12 @@ export function EnergyPriceManagement({ locationId }: EnergyPriceManagementProps
                   onChange={(e) => setFormData({ ...formData, spot_markup_per_unit: e.target.value })}
                 />
                 <p className="text-xs text-muted-foreground mt-1">
-                  Der Strompreis wird automatisch anhand des aktuellen EPEX Day-Ahead Spotpreises berechnet. Der Aufschlag deckt Netzentgelte, Umlagen und die Marge des Lieferanten ab.
+                  {T("ep.markupDesc")}
                 </p>
               </div>
             ) : (
               <div>
-                <Label>Preis pro {ENERGY_TYPE_UNITS[formData.energy_type]} (€)</Label>
+                <Label>{T("ep.pricePerUnit").replace("{unit}", ENERGY_TYPE_UNITS[formData.energy_type])}</Label>
                 <Input
                   type="text"
                   placeholder="0,30"
@@ -253,7 +254,7 @@ export function EnergyPriceManagement({ locationId }: EnergyPriceManagementProps
               </div>
             )}
             <div>
-              <Label>Gültig ab</Label>
+              <Label>{T("ep.validFrom")}</Label>
               <Input
                 type="date"
                 value={formData.valid_from}
@@ -262,8 +263,8 @@ export function EnergyPriceManagement({ locationId }: EnergyPriceManagementProps
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>Abbrechen</Button>
-            <Button onClick={handleSave}>Speichern</Button>
+            <Button variant="outline" onClick={() => setDialogOpen(false)}>{T("common.cancel")}</Button>
+            <Button onClick={handleSave}>{T("common.save")}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

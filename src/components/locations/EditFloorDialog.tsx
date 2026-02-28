@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Progress } from "@/components/ui/progress";
 import { Floor, useFloors } from "@/hooks/useFloors";
+import { useTranslation } from "@/hooks/useTranslation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -29,6 +30,8 @@ export function EditFloorDialog({ floor, locationId, onSuccess }: EditFloorDialo
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadLabel, setUploadLabel] = useState("");
   const { updateFloor, uploadFloorPlan, upload3DModel } = useFloors(locationId);
+  const { t } = useTranslation();
+  const T = (key: string) => t(key as any);
   
   const [name, setName] = useState(floor.name);
   const [floorNumber, setFloorNumber] = useState(floor.floor_number.toString());
@@ -44,7 +47,7 @@ export function EditFloorDialog({ floor, locationId, onSuccess }: EditFloorDialo
     e.preventDefault();
     
     if (!name.trim()) {
-      toast.error("Bitte geben Sie einen Namen ein");
+      toast.error(T("fl.nameRequired"));
       return;
     }
 
@@ -54,9 +57,8 @@ export function EditFloorDialog({ floor, locationId, onSuccess }: EditFloorDialo
     try {
       let floorPlanUrl = floor.floor_plan_url;
 
-      // Upload new floor plan if provided
       if (floorPlanFile) {
-        setUploadLabel("Grundriss wird hochgeladen…");
+        setUploadLabel(T("fl.uploadingFloorPlan"));
         const { url, error: uploadError } = await uploadFloorPlan(
           floorPlanFile,
           locationId,
@@ -65,7 +67,7 @@ export function EditFloorDialog({ floor, locationId, onSuccess }: EditFloorDialo
         );
 
         if (uploadError) {
-          toast.error("Grundriss konnte nicht hochgeladen werden");
+          toast.error(T("fl.floorPlanUploadFailed"));
           setLoading(false);
           setUploadProgress(0);
           setUploadLabel("");
@@ -74,7 +76,7 @@ export function EditFloorDialog({ floor, locationId, onSuccess }: EditFloorDialo
         floorPlanUrl = url;
       }
 
-      setUploadLabel("Etagendaten werden gespeichert…");
+      setUploadLabel(T("fl.savingData"));
       setUploadProgress(model3dFile ? 0 : 100);
 
       const { error } = await updateFloor(floor.id, {
@@ -86,13 +88,12 @@ export function EditFloorDialog({ floor, locationId, onSuccess }: EditFloorDialo
       });
 
       if (error) {
-        toast.error("Fehler beim Aktualisieren der Etage");
+        toast.error(T("fl.updateError"));
         return;
       }
 
-      // Upload 3D model if provided
       if (model3dFile) {
-        setUploadLabel("3D-Modell wird hochgeladen…");
+        setUploadLabel(T("fl.uploading3d"));
         setUploadProgress(0);
         const { error: modelError } = await upload3DModel(
           { main: model3dFile, mtl: mtlFile || undefined },
@@ -101,16 +102,16 @@ export function EditFloorDialog({ floor, locationId, onSuccess }: EditFloorDialo
           (p) => setUploadProgress(p),
         );
         if (modelError) {
-          toast.error("Etage aktualisiert, aber 3D-Modell konnte nicht hochgeladen werden");
+          toast.error(T("fl.3dUploadFailed"));
           return;
         }
       }
 
-      toast.success("Etage erfolgreich aktualisiert");
+      toast.success(T("floor.updated"));
       setOpen(false);
       onSuccess?.();
     } catch (err) {
-      toast.error("Unerwarteter Fehler beim Speichern");
+      toast.error(T("common.error"));
     } finally {
       setLoading(false);
       setUploadProgress(0);
@@ -127,62 +128,58 @@ export function EditFloorDialog({ floor, locationId, onSuccess }: EditFloorDialo
       </DialogTrigger>
       <DialogContent className="max-h-[85vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Etage bearbeiten</DialogTitle>
+          <DialogTitle>{T("fl.editFloor")}</DialogTitle>
           <DialogDescription>
-            Bearbeiten Sie die Etagendetails und den Grundrissplan
+            {T("fl.editFloorDesc")}
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="edit-name">Name *</Label>
+              <Label htmlFor="edit-name">{T("fl.name")} *</Label>
               <Input
                 id="edit-name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="z.B. Erdgeschoss"
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="edit-floorNumber">Etage (Nummer)</Label>
+              <Label htmlFor="edit-floorNumber">{T("fl.floorNumber")}</Label>
               <Input
                 id="edit-floorNumber"
                 type="number"
                 value={floorNumber}
                 onChange={(e) => setFloorNumber(e.target.value)}
-                placeholder="0"
               />
             </div>
           </div>
           
           <div className="space-y-2">
-            <Label htmlFor="edit-description">Beschreibung</Label>
+            <Label htmlFor="edit-description">{T("common.description")}</Label>
             <Textarea
               id="edit-description"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="Optionale Beschreibung"
               rows={2}
             />
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="edit-areaSqm">Fläche (m²)</Label>
+            <Label htmlFor="edit-areaSqm">{T("fl.area")}</Label>
             <Input
               id="edit-areaSqm"
               type="number"
               step="0.01"
               value={areaSqm}
               onChange={(e) => setAreaSqm(e.target.value)}
-              placeholder="z.B. 150.5"
             />
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="edit-floorPlan">Grundrissplan ändern</Label>
+            <Label htmlFor="edit-floorPlan">{T("fl.floorPlanChange")}</Label>
             {floor.floor_plan_url && (
               <p className="text-sm text-muted-foreground">
-                Aktueller Grundriss vorhanden. Laden Sie eine neue Datei hoch, um ihn zu ersetzen.
+                {T("fl.floorPlanExists")}
               </p>
             )}
             <Input
@@ -194,10 +191,10 @@ export function EditFloorDialog({ floor, locationId, onSuccess }: EditFloorDialo
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="edit-model3d">3D-Modell (.glb, .obj oder .3ds)</Label>
+            <Label htmlFor="edit-model3d">{T("fl.model3dEdit")}</Label>
             {floor.model_3d_url && (
               <p className="text-sm text-muted-foreground">
-                Aktuelles 3D-Modell vorhanden. Laden Sie eine neue Datei hoch, um es zu ersetzen.
+                {T("fl.model3dExists")}
               </p>
             )}
             <Input
@@ -216,7 +213,7 @@ export function EditFloorDialog({ floor, locationId, onSuccess }: EditFloorDialo
 
           {isObjSelected && (
             <div className="space-y-2">
-              <Label htmlFor="edit-mtlFile">Material-Datei (.mtl)</Label>
+              <Label htmlFor="edit-mtlFile">{T("fl.materialFile")}</Label>
               <Input
                 id="edit-mtlFile"
                 type="file"
@@ -225,7 +222,6 @@ export function EditFloorDialog({ floor, locationId, onSuccess }: EditFloorDialo
               />
             </div>
           )}
-
 
           {loading && (
             <div className="space-y-1">
@@ -239,10 +235,10 @@ export function EditFloorDialog({ floor, locationId, onSuccess }: EditFloorDialo
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={loading}>
-              Abbrechen
+              {T("common.cancel")}
             </Button>
             <Button type="submit" disabled={loading}>
-              {loading ? "Speichere..." : "Speichern"}
+              {loading ? T("common.loading") : T("common.save")}
             </Button>
           </DialogFooter>
         </form>

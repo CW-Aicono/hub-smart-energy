@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useFloors } from "@/hooks/useFloors";
+import { useTranslation } from "@/hooks/useTranslation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -25,6 +26,8 @@ export function AddFloorDialog({ locationId, onSuccess }: AddFloorDialogProps) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const { createFloor, updateFloor, uploadFloorPlan, upload3DModel } = useFloors(locationId);
+  const { t } = useTranslation();
+  const T = (key: string) => t(key as any);
   
   const [name, setName] = useState("");
   const [floorNumber, setFloorNumber] = useState("0");
@@ -50,7 +53,7 @@ export function AddFloorDialog({ locationId, onSuccess }: AddFloorDialogProps) {
     e.preventDefault();
     
     if (!name.trim()) {
-      toast.error("Bitte geben Sie einen Namen ein");
+      toast.error(T("fl.nameRequired"));
       return;
     }
 
@@ -67,11 +70,10 @@ export function AddFloorDialog({ locationId, onSuccess }: AddFloorDialogProps) {
       });
 
       if (error) {
-        toast.error("Fehler beim Erstellen der Etage");
+        toast.error(T("fl.createError"));
         return;
       }
 
-      // Upload floor plan if provided
       if (floorPlanFile && floor) {
         const { url, error: uploadError } = await uploadFloorPlan(
           floorPlanFile,
@@ -80,13 +82,12 @@ export function AddFloorDialog({ locationId, onSuccess }: AddFloorDialogProps) {
         );
 
         if (uploadError) {
-          toast.error("Etage erstellt, aber Grundriss konnte nicht hochgeladen werden");
+          toast.error(T("fl.floorPlanUploadError"));
         } else if (url) {
           await updateFloor(floor.id, { floor_plan_url: url });
         }
       }
 
-      // Upload 3D model if provided
       if (model3dFile && floor) {
         const { error: modelError } = await upload3DModel(
           { main: model3dFile, mtl: mtlFile || undefined },
@@ -95,16 +96,16 @@ export function AddFloorDialog({ locationId, onSuccess }: AddFloorDialogProps) {
         );
 
         if (modelError) {
-          toast.error("Etage erstellt, aber 3D-Modell konnte nicht hochgeladen werden");
+          toast.error(T("fl.model3dUploadError"));
         }
       }
 
-      toast.success("Etage erfolgreich erstellt");
+      toast.success(T("floor.created"));
       resetForm();
       setOpen(false);
       onSuccess?.();
     } catch (err) {
-      toast.error("Unerwarteter Fehler");
+      toast.error(T("common.error"));
     } finally {
       setLoading(false);
     }
@@ -115,20 +116,20 @@ export function AddFloorDialog({ locationId, onSuccess }: AddFloorDialogProps) {
       <DialogTrigger asChild>
         <Button size="sm" className="gap-2">
           <Plus className="h-4 w-4" />
-          Etage hinzufügen
+          {T("fl.addFloor")}
         </Button>
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Neue Etage hinzufügen</DialogTitle>
+          <DialogTitle>{T("fl.addFloorTitle")}</DialogTitle>
           <DialogDescription>
-            Fügen Sie eine neue Etage mit optionalem Grundrissplan hinzu
+            {T("fl.addFloorDesc")}
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="name">Name *</Label>
+              <Label htmlFor="name">{T("fl.name")} *</Label>
               <Input
                 id="name"
                 value={name}
@@ -137,7 +138,7 @@ export function AddFloorDialog({ locationId, onSuccess }: AddFloorDialogProps) {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="floorNumber">Etage (Nummer)</Label>
+              <Label htmlFor="floorNumber">{T("fl.floorNumber")}</Label>
               <Input
                 id="floorNumber"
                 type="number"
@@ -146,24 +147,23 @@ export function AddFloorDialog({ locationId, onSuccess }: AddFloorDialogProps) {
                 placeholder="0"
               />
               <p className="text-xs text-muted-foreground">
-                Negative Zahlen für Untergeschosse
+                {T("fl.negativeHint")}
               </p>
             </div>
           </div>
           
           <div className="space-y-2">
-            <Label htmlFor="description">Beschreibung</Label>
+            <Label htmlFor="description">{T("common.description")}</Label>
             <Textarea
               id="description"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="Optionale Beschreibung"
               rows={2}
             />
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="areaSqm">Fläche (m²)</Label>
+            <Label htmlFor="areaSqm">{T("fl.area")}</Label>
             <Input
               id="areaSqm"
               type="number"
@@ -175,7 +175,7 @@ export function AddFloorDialog({ locationId, onSuccess }: AddFloorDialogProps) {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="floorPlan">Grundrissplan</Label>
+            <Label htmlFor="floorPlan">{T("fl.floorPlanUpload")}</Label>
             <div className="flex items-center gap-2">
               <Input
                 id="floorPlan"
@@ -186,12 +186,12 @@ export function AddFloorDialog({ locationId, onSuccess }: AddFloorDialogProps) {
               />
             </div>
             <p className="text-xs text-muted-foreground">
-              Unterstützte Formate: JPG, PNG, PDF
+              {T("fl.supportedFormats")}
             </p>
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="model3d">3D-Modell (optional)</Label>
+            <Label htmlFor="model3d">{T("fl.model3d")}</Label>
             <Input
               id="model3d"
               type="file"
@@ -205,13 +205,13 @@ export function AddFloorDialog({ locationId, onSuccess }: AddFloorDialogProps) {
               }}
             />
             <p className="text-xs text-muted-foreground">
-              Unterstützte Formate: GLB (empfohlen), OBJ, 3DS
+              {T("fl.model3dFormats")}
             </p>
           </div>
 
           {isObjSelected && (
             <div className="space-y-2">
-              <Label htmlFor="mtlFile">Material-Datei (.mtl)</Label>
+              <Label htmlFor="mtlFile">{T("fl.materialFile")}</Label>
               <Input
                 id="mtlFile"
                 type="file"
@@ -223,10 +223,10 @@ export function AddFloorDialog({ locationId, onSuccess }: AddFloorDialogProps) {
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setOpen(false)}>
-              Abbrechen
+              {T("common.cancel")}
             </Button>
             <Button type="submit" disabled={loading}>
-              {loading ? "Erstelle..." : "Erstellen"}
+              {loading ? T("common.loading") : T("common.create")}
             </Button>
           </DialogFooter>
         </form>
