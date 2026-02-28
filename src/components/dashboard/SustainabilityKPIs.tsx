@@ -17,13 +17,13 @@ import { useLocationEnergySources } from "@/hooks/useLocationEnergySources";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
-const PERIOD_LABELS: Record<TimePeriod, string> = {
-  day: "Tag",
-  week: "Woche",
-  month: "Monat",
-  quarter: "Quartal",
-  year: "Jahr",
-  all: "Gesamt",
+const PERIOD_LABEL_KEYS: Record<TimePeriod, string> = {
+  day: "chart.periodDay",
+  week: "chart.periodWeek",
+  month: "chart.periodMonth",
+  quarter: "chart.periodQuarter",
+  year: "chart.periodYear",
+  all: "chart.periodAll",
 };
 
 function getPeriodStart(period: TimePeriod, weekStartsOn: 0|1|2|3|4|5|6 = 1): Date | null {
@@ -45,6 +45,7 @@ interface SustainabilityKPIsProps {
 const SustainabilityKPIs = ({ locationId }: SustainabilityKPIsProps) => {
   const { readings, livePeriodTotals, loading } = useEnergyData(locationId);
   const { t } = useTranslation();
+  const T = (key: string) => t(key as any);
   const { meters } = useMeters(locationId || undefined);
   const { selectedPeriod: period, setSelectedPeriod: setPeriod } = useDashboardFilter();
   const weekStartsOn = useWeekStartDay();
@@ -170,8 +171,8 @@ const SustainabilityKPIs = ({ locationId }: SustainabilityKPIsProps) => {
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
-        {(Object.keys(PERIOD_LABELS) as TimePeriod[]).map((key) => (
-          <SelectItem key={key} value={key}>{PERIOD_LABELS[key]}</SelectItem>
+        {(Object.keys(PERIOD_LABEL_KEYS) as TimePeriod[]).map((key) => (
+          <SelectItem key={key} value={key}>{T(PERIOD_LABEL_KEYS[key])}</SelectItem>
         ))}
       </SelectContent>
     </Select>
@@ -195,13 +196,13 @@ const SustainabilityKPIs = ({ locationId }: SustainabilityKPIsProps) => {
       <CardContent className="space-y-6">
         {!hasFilteredData ? (
           <div className="text-center py-8 text-muted-foreground text-sm">
-            Noch keine Verbrauchsdaten vorhanden
+            {T("dashboard.noConsumptionData")}
           </div>
         ) : (
           <>
             <div>
               <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-medium">Gesamtverbrauch</span>
+                <span className="text-sm font-medium">{T("dashboard.totalConsumption")}</span>
                 <span className="text-sm font-display font-bold">{formatEnergy(totalWhBased)}</span>
               </div>
             </div>
@@ -209,7 +210,7 @@ const SustainabilityKPIs = ({ locationId }: SustainabilityKPIsProps) => {
             {allowedTypes.has("strom") && (
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm font-medium">Strom</span>
+                  <span className="text-sm font-medium">{T("energy.strom")}</span>
                   <span className="text-sm text-muted-foreground">{formatEnergy(filteredTotals.strom)}</span>
                 </div>
                 <Progress value={totalWhBased > 0 ? (filteredTotals.strom / totalWhBased) * 100 : 0} className="h-2" />
@@ -219,7 +220,7 @@ const SustainabilityKPIs = ({ locationId }: SustainabilityKPIsProps) => {
             {allowedTypes.has("gas") && (
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm font-medium">Gas</span>
+                  <span className="text-sm font-medium">{T("energy.gas")}</span>
                   <span className="text-sm text-muted-foreground">{formatEnergy(filteredTotals.gas)}</span>
                 </div>
                 <Progress value={totalWhBased > 0 ? (filteredTotals.gas / totalWhBased) * 100 : 0} className="h-2" />
@@ -229,7 +230,7 @@ const SustainabilityKPIs = ({ locationId }: SustainabilityKPIsProps) => {
             {allowedTypes.has("waerme") && (
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm font-medium">Wärme</span>
+                  <span className="text-sm font-medium">{T("energy.waerme")}</span>
                   <span className="text-sm text-muted-foreground">{formatEnergy(filteredTotals.waerme)}</span>
                 </div>
                 <Progress value={totalWhBased > 0 ? (filteredTotals.waerme / totalWhBased) * 100 : 0} className="h-2" />
@@ -239,7 +240,7 @@ const SustainabilityKPIs = ({ locationId }: SustainabilityKPIsProps) => {
             {allowedTypes.has("wasser") && (
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm font-medium">Wasser</span>
+                  <span className="text-sm font-medium">{T("energy.wasser")}</span>
                   <span className="text-sm text-muted-foreground">{fmtWater(filteredTotals.wasser)}</span>
                 </div>
                 <Progress value={0} className="h-2" />

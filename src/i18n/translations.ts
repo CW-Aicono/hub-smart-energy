@@ -4650,6 +4650,32 @@ export const translations = {
   "chart.periodYear": { de: "Jahr", en: "Year", es: "Año", nl: "Jaar" },
   "chart.periodAll": { de: "Gesamt", en: "Total", es: "Total", nl: "Totaal" },
 
+  // ── Cost Overview ─────────────────────────────────────────────────────────
+  "cost.costs": { de: "Kosten", en: "Costs", es: "Costes", nl: "Kosten" },
+  "cost.prevPeriod": { de: "Vorperiode", en: "Previous Period", es: "Periodo anterior", nl: "Vorige periode" },
+  "cost.difference": { de: "Differenz", en: "Difference", es: "Diferencia", nl: "Verschil" },
+  "cost.less": { de: "weniger", en: "less", es: "menos", nl: "minder" },
+  "cost.more": { de: "mehr", en: "more", es: "más", nl: "meer" },
+  "cost.noChange": { de: "Keine Veränderung", en: "No change", es: "Sin cambios", nl: "Geen verandering" },
+  "cost.noPrices": { de: "Keine Preise hinterlegt", en: "No prices configured", es: "Sin precios configurados", nl: "Geen prijzen geconfigureerd" },
+  "cost.periodDay": { de: "Heute", en: "Today", es: "Hoy", nl: "Vandaag" },
+  "cost.periodWeek": { de: "Diese Woche", en: "This Week", es: "Esta semana", nl: "Deze week" },
+  "cost.periodMonth": { de: "Laufender Monat", en: "Current Month", es: "Mes actual", nl: "Lopende maand" },
+  "cost.periodQuarter": { de: "Laufendes Quartal", en: "Current Quarter", es: "Trimestre actual", nl: "Lopend kwartaal" },
+  "cost.periodYear": { de: "Laufendes Jahr", en: "Current Year", es: "Año actual", nl: "Lopend jaar" },
+  "cost.periodAll": { de: "Gesamt", en: "Total", es: "Total", nl: "Totaal" },
+  "cost.prevDay": { de: "Gestern", en: "Yesterday", es: "Ayer", nl: "Gisteren" },
+  "cost.prevWeek": { de: "Letzte Woche", en: "Last Week", es: "Semana pasada", nl: "Vorige week" },
+  "cost.prevMonth": { de: "Letzter Monat", en: "Last Month", es: "Mes pasado", nl: "Vorige maand" },
+  "cost.prevQuarter": { de: "Letztes Quartal", en: "Last Quarter", es: "Trimestre pasado", nl: "Vorig kwartaal" },
+  "cost.prevYear": { de: "Letztes Jahr", en: "Last Year", es: "Año pasado", nl: "Vorig jaar" },
+  "cost.prevAll": { de: "–", en: "–", es: "–", nl: "–" },
+
+  // ── Sustainability / Consumption Overview ─────────────────────────────────
+  "dashboard.totalConsumption": { de: "Gesamtverbrauch", en: "Total Consumption", es: "Consumo total", nl: "Totaalverbruik" },
+  "dashboard.noConsumptionData": { de: "Noch keine Verbrauchsdaten vorhanden", en: "No consumption data available yet", es: "Aún no hay datos de consumo", nl: "Nog geen verbruiksgegevens beschikbaar" },
+  "dashboard.ecoScore": { de: "Öko-Score", en: "Eco Score", es: "Eco-Score", nl: "Eco-Score" },
+
 
   // ── Sankey Widget ─────────────────────────────────────────────────────────
   "sankey.power": { de: "Leistung", en: "Power", es: "Potencia", nl: "Vermogen" },

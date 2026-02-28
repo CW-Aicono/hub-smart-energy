@@ -91,10 +91,10 @@ interface UnknownMeterPromptProps {
 }
 
 const ENERGY_TYPE_OPTIONS = [
-  { value: "strom", label: "Strom", unit: "kWh" },
-  { value: "gas", label: "Gas", unit: "m³" },
-  { value: "wasser", label: "Wasser", unit: "m³" },
-  { value: "waerme", label: "Wärme", unit: "kWh" },
+  { value: "strom", label: "Strom", tKey: "energy.strom", unit: "kWh" },
+  { value: "gas", label: "Gas", tKey: "energy.gas", unit: "m³" },
+  { value: "wasser", label: "Wasser", tKey: "energy.wasser", unit: "m³" },
+  { value: "waerme", label: "Wärme", tKey: "energy.waerme", unit: "kWh" },
 ];
 
 function UnknownMeterPrompt({ meterNumber, reading, onReadingChange, capturedImage, locations, onCreateMeter, onDismiss, creating }: UnknownMeterPromptProps) {

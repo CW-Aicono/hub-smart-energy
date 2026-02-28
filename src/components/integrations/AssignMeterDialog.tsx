@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useTranslation } from "@/hooks/useTranslation";
 import {
   Dialog,
   DialogContent,
@@ -63,6 +64,8 @@ export function AssignMeterDialog({
   const sensorList = sensorsProp || (sensor ? [sensor] : []);
 
   const { locations } = useLocations();
+  const { t } = useTranslation();
+  const T = (key: string) => t(key as any);
   const { addMeter } = useMeters();
 
   const [energyType, setEnergyType] = useState("strom");
@@ -219,10 +222,10 @@ export function AssignMeterDialog({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="strom">Strom</SelectItem>
-                <SelectItem value="gas">Gas</SelectItem>
-                <SelectItem value="waerme">Wärme</SelectItem>
-                <SelectItem value="wasser">Wasser</SelectItem>
+                <SelectItem value="strom">{T("energy.strom")}</SelectItem>
+                <SelectItem value="gas">{T("energy.gas")}</SelectItem>
+                <SelectItem value="waerme">{T("energy.waerme")}</SelectItem>
+                <SelectItem value="wasser">{T("energy.wasser")}</SelectItem>
               </SelectContent>
             </Select>
           </div>

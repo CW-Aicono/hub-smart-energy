@@ -1,5 +1,6 @@
 import { useState, useCallback, useMemo } from "react";
 import { Meter } from "@/hooks/useMeters";
+import { useTranslation } from "@/hooks/useTranslation";
 import { useUserRole } from "@/hooks/useUserRole";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -284,6 +285,8 @@ function MeterTreeNode({
 
 export const MeterTreeView = ({ meters, onUpdateParent, onSelectMeter }: MeterTreeViewProps) => {
   const { isAdmin } = useUserRole();
+  const { t } = useTranslation();
+  const T = (key: string) => t(key as any);
   const activeMeters = meters.filter((m) => !m.is_archived);
   const tree = buildTree(activeMeters);
   const allMetersMap = new Map(activeMeters.map((m) => [m.id, m]));
@@ -477,11 +480,11 @@ export const MeterTreeView = ({ meters, onUpdateParent, onSelectMeter }: MeterTr
             <SelectValue placeholder="Alle Typen" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">Alle Energiearten</SelectItem>
-            <SelectItem value="strom">Strom</SelectItem>
-            <SelectItem value="gas">Gas</SelectItem>
-            <SelectItem value="waerme">Wärme</SelectItem>
-            <SelectItem value="wasser">Wasser</SelectItem>
+            <SelectItem value="all">{T("meters.allEnergyTypes")}</SelectItem>
+            <SelectItem value="strom">{T("energy.strom")}</SelectItem>
+            <SelectItem value="gas">{T("energy.gas")}</SelectItem>
+            <SelectItem value="waerme">{T("energy.waerme")}</SelectItem>
+            <SelectItem value="wasser">{T("energy.wasser")}</SelectItem>
           </SelectContent>
         </Select>
         <span className="text-xs text-muted-foreground">

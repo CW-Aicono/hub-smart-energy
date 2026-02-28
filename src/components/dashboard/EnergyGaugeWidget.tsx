@@ -346,7 +346,7 @@ const EnergyGaugeWidget = ({ locationId }: EnergyGaugeWidgetProps) => {
       const peak = dailyPeaks[et] ?? 0;
       return {
         energyType: et,
-        label: ENERGY_TYPE_LABELS[et] || et,
+        label: t(`energy.${et}` as any) || ENERGY_TYPE_LABELS[et] || et,
         currentValue: Math.round(current * 10) / 10,
         peakValue: Math.round(peak * 10) / 10,
         maxScale: autoScale(current, peak),
@@ -360,7 +360,7 @@ const EnergyGaugeWidget = ({ locationId }: EnergyGaugeWidgetProps) => {
 
   const ecoGauge: GaugeData = {
     energyType: "eco",
-    label: "Öko-Score",
+    label: t("dashboard.ecoScore" as any) || "Öko-Score",
     currentValue: ecoScore,
     peakValue: 0,
     maxScale: 100,

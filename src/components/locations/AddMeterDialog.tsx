@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useTranslation } from "@/hooks/useTranslation";
 import { useMeters } from "@/hooks/useMeters";
 import { useLocationIntegrations, LocationIntegration } from "@/hooks/useIntegrations";
 import { supabase } from "@/integrations/supabase/client";
@@ -29,6 +30,8 @@ interface SensorOption {
 
 export const AddMeterDialog = ({ locationId, open, onOpenChange }: AddMeterDialogProps) => {
   const { addMeter, meters } = useMeters(locationId);
+  const { t } = useTranslation();
+  const T = (key: string) => t(key as any);
   const { locationIntegrations, loading: integrationsLoading } = useLocationIntegrations(locationId);
   const [name, setName] = useState("");
   const [meterNumber, setMeterNumber] = useState("");
@@ -288,10 +291,10 @@ export const AddMeterDialog = ({ locationId, open, onOpenChange }: AddMeterDialo
               <Select value={energyType} onValueChange={setEnergyType}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="strom">Strom</SelectItem>
-                  <SelectItem value="gas">Gas</SelectItem>
-                  <SelectItem value="waerme">Wärme</SelectItem>
-                  <SelectItem value="wasser">Wasser</SelectItem>
+                  <SelectItem value="strom">{T("energy.strom")}</SelectItem>
+                  <SelectItem value="gas">{T("energy.gas")}</SelectItem>
+                  <SelectItem value="waerme">{T("energy.waerme")}</SelectItem>
+                  <SelectItem value="wasser">{T("energy.wasser")}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
