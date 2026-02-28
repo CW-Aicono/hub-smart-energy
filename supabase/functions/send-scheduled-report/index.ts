@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { Resend } from "npm:resend@2.0.0";
+import { jsPDF } from "npm:jspdf@2.5.2";
 import { getCorsHeaders } from "../_shared/cors.ts";
 
 const ENERGY_LABELS: Record<string, string> = {
@@ -88,6 +89,129 @@ function buildCSV(rows: Record<string, unknown>[]): string {
   const header = keys.join(";");
   const body = rows.map((r) => keys.map((k) => String(r[k] ?? "")).join(";")).join("\n");
   return "\uFEFF" + header + "\n" + body;
+}
+
+/** Build a PDF document from report data and return base64 string */
+function buildPDF(
+  rows: Record<string, unknown>[],
+  reportTitle: string,
+  dateRange: { from: string; to: string },
+  tenantName: string,
+  energySummary: { label: string; value: number; color: string; icon: string }[],
+): string {
+  const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
+  const pageW = doc.internal.pageSize.getWidth();
+  const pageH = doc.internal.pageSize.getHeight();
+  const margin = 14;
+  let y = margin;
+
+  // --- Header bar ---
+  doc.setFillColor(30, 41, 59);
+  doc.rect(0, 0, pageW, 22, "F");
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(14);
+  doc.setFont("helvetica", "bold");
+  doc.text(reportTitle, margin, 10);
+  doc.setFontSize(9);
+  doc.setFont("helvetica", "normal");
+  doc.text(
+    `${tenantName ? tenantName + " \u00B7 " : ""}Zeitraum: ${formatDateDE(dateRange.from)} \u2013 ${formatDateDE(dateRange.to)} \u00B7 Erstellt: ${new Date().toLocaleDateString("de-DE")}`,
+    margin, 17
+  );
+  y = 28;
+
+  // --- KPI summary ---
+  const totalReadings = rows.length;
+  const totalLocations = new Set(rows.map((r) => r["Standort"])).size;
+  const totalMeters = new Set(rows.map((r) => r["Z\u00E4hler"])).size;
+  const totalEnergy = rows.reduce((s, r) => s + (Number(r["Wert"]) || 0), 0);
+
+  doc.setTextColor(30, 41, 59);
+  doc.setFontSize(9);
+  doc.setFont("helvetica", "bold");
+  const kpis = [
+    `Datensaetze: ${totalReadings}`,
+    `Standorte: ${totalLocations}`,
+    `Zaehler: ${totalMeters}`,
+    `Gesamt: ${formatDE(totalEnergy)} kWh`,
+  ];
+  energySummary.forEach((e) => {
+    kpis.push(`${e.label}: ${formatDE(e.value)} kWh`);
+  });
+  doc.text(kpis.join("   |   "), margin, y);
+  y += 7;
+
+  // --- Data table ---
+  if (rows.length === 0) {
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    doc.text("Keine Daten im gewaehlten Zeitraum.", margin, y);
+  } else {
+    const cols = Object.keys(rows[0]);
+    const availW = pageW - margin * 2;
+    const colW = availW / cols.length;
+
+    const drawTableHeader = () => {
+      doc.setFillColor(241, 245, 249);
+      doc.rect(margin, y, availW, 7, "F");
+      doc.setFontSize(7);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(100, 116, 139);
+      cols.forEach((col, i) => {
+        doc.text(col, margin + i * colW + 2, y + 5);
+      });
+      y += 8;
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(51, 65, 85);
+      doc.setFontSize(7);
+    };
+
+    drawTableHeader();
+
+    rows.forEach((row, rowIdx) => {
+      if (y > pageH - 15) {
+        doc.addPage();
+        y = margin;
+        drawTableHeader();
+      }
+
+      if (rowIdx % 2 === 0) {
+        doc.setFillColor(248, 250, 252);
+        doc.rect(margin, y - 1, availW, 6, "F");
+      }
+
+      cols.forEach((col, i) => {
+        let val: unknown = row[col] ?? "";
+        if (col === "Datum" && typeof val === "string") val = formatDateDE(val as string);
+        if (col === "Wert" && typeof val === "number") val = formatDE(val as number);
+        const text = String(val).substring(0, 30);
+        doc.text(text, margin + i * colW + 2, y + 3.5);
+      });
+      y += 6;
+    });
+  }
+
+  // --- Footer on every page ---
+  const totalPages = doc.getNumberOfPages();
+  for (let p = 1; p <= totalPages; p++) {
+    doc.setPage(p);
+    doc.setFontSize(7);
+    doc.setTextColor(148, 163, 184);
+    doc.text(
+      `${tenantName} | Energiebericht | Seite ${p}/${totalPages}`,
+      pageW / 2, pageH - 6,
+      { align: "center" }
+    );
+  }
+
+  // Return as base64
+  const pdfOutput = doc.output("arraybuffer");
+  const uint8 = new Uint8Array(pdfOutput as ArrayBuffer);
+  let binary = "";
+  for (let i = 0; i < uint8.length; i++) {
+    binary += String.fromCharCode(uint8[i]);
+  }
+  return btoa(binary);
 }
 
 function formatDE(n: number): string {
@@ -483,13 +607,24 @@ serve(async (req) => {
         // Build HTML report
         const htmlContent = buildReportHTML(rows, reportTitle, dateRange, tenantName, logoUrl, energySummary, locationSummary, primaryColor, accentColor);
 
-        // Build CSV attachment
+        // Build attachments (CSV and/or PDF)
         const attachments: { filename: string; content: string }[] = [];
         if (schedule.format === "csv" || schedule.format === "both") {
           attachments.push({
             filename: `report-${from}-${to}.csv`,
             content: btoa(unescape(encodeURIComponent(buildCSV(rows)))),
           });
+        }
+        if (schedule.format === "pdf" || schedule.format === "both") {
+          try {
+            const pdfBase64 = buildPDF(rows, reportTitle, dateRange, tenantName, energySummary);
+            attachments.push({
+              filename: `report-${from}-${to}.pdf`,
+              content: pdfBase64,
+            });
+          } catch (pdfErr: any) {
+            console.error("PDF generation failed:", pdfErr);
+          }
         }
 
         if (resend && schedule.recipients.length > 0) {
