@@ -550,11 +550,26 @@ function Scene({
         const yPos = Math.max(0.5, (meter as any).position_3d_y ?? 2.5);
         const xPos = (meter as any).position_3d_x;
         const zPos = (meter as any).position_3d_z;
-        const meterPos: [number, number, number] = (xPos != null && zPos != null)
-          ? [xPos, yPos, zPos]
-          : room
-            ? [room.position_x + 1, yPos, room.position_y]
-            : [(index - floorMeters.length / 2) * 3, yPos, -2];
+
+        let meterPos: [number, number, number];
+        if (xPos != null && zPos != null) {
+          // Explicit 3D position saved by user drag
+          meterPos = [xPos, yPos, zPos];
+        } else {
+          // Derive initial 3D position from 2D floor_sensor_positions (same transform as Sensor3DLabel)
+          const sensorPos = meter.sensor_uuid
+            ? sensorPositions.find(sp => sp.sensor_uuid === meter.sensor_uuid)
+            : null;
+          if (sensorPos) {
+            const sx = (sensorPos.position_x - 50) * 0.2 + sceneBounds.centerX;
+            const sz = (sensorPos.position_y - 50) * 0.2 + sceneBounds.centerZ;
+            meterPos = [sx, yPos, sz];
+          } else if (room) {
+            meterPos = [room.position_x + 1, yPos, room.position_y];
+          } else {
+            meterPos = [(index - floorMeters.length / 2) * 3, yPos, -2];
+          }
+        }
         
         return (
           <DraggableMeter3D
