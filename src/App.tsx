@@ -47,6 +47,7 @@ const SuperAdminRoles = lazy(() => import("./pages/SuperAdminRoles"));
 const MobileApp = lazy(() => import("./pages/MobileApp"));
 const GettingStarted = lazy(() => import("./pages/GettingStarted"));
 const ChargingPoints = lazy(() => import("./pages/ChargingPoints"));
+const OcppIntegration = lazy(() => import("./pages/OcppIntegration"));
 const ChargePointDetail = lazy(() => import("./pages/ChargePointDetail"));
 const ChargingBilling = lazy(() => import("./pages/ChargingBilling"));
 const Automation = lazy(() => import("./pages/Automation"));
@@ -100,6 +101,7 @@ const App = () => (
                       <Route path="/demo/charging/points" element={<ChargingPoints />} />
                       <Route path="/demo/charging/billing" element={<ChargingBilling />} />
                       <Route path="/demo/charging/app" element={<ChargingAppAdmin />} />
+                      <Route path="/demo/charging/ocpp-integration" element={<OcppIntegration />} />
                       <Route path="/demo/automation" element={<Automation />} />
                       <Route path="/demo/arbitrage" element={<ArbitrageTrading />} />
                       <Route path="/demo/tenant-electricity" element={<TenantElectricity />} />
@@ -151,6 +153,7 @@ const App = () => (
                       <Route path="/charging/points/:id" element={<M><ChargePointDetail /></M>} />
                       <Route path="/charging/billing" element={<M><ChargingBilling /></M>} />
                       <Route path="/charging/app" element={<M><ChargingAppAdmin /></M>} />
+                      <Route path="/charging/ocpp-integration" element={<M><OcppIntegration /></M>} />
                       <Route path="/automation" element={<M><Automation /></M>} />
                       <Route path="/tasks" element={<M><Tasks /></M>} />
                       <Route path="/network" element={<M><NetworkInfrastructure /></M>} />

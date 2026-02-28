@@ -2147,6 +2147,50 @@ export type Database = {
         }
         Relationships: []
       }
+      ocpp_integration_guides: {
+        Row: {
+          charger_model_id: string | null
+          content_md: string
+          created_at: string
+          difficulty: string
+          id: string
+          model: string
+          ocpp_version: string
+          updated_at: string
+          vendor: string
+        }
+        Insert: {
+          charger_model_id?: string | null
+          content_md?: string
+          created_at?: string
+          difficulty?: string
+          id?: string
+          model: string
+          ocpp_version?: string
+          updated_at?: string
+          vendor: string
+        }
+        Update: {
+          charger_model_id?: string | null
+          content_md?: string
+          created_at?: string
+          difficulty?: string
+          id?: string
+          model?: string
+          ocpp_version?: string
+          updated_at?: string
+          vendor?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ocpp_integration_guides_charger_model_id_fkey"
+            columns: ["charger_model_id"]
+            isOneToOne: false
+            referencedRelation: "charger_models"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ocpp_message_log: {
         Row: {
           charge_point_id: string
