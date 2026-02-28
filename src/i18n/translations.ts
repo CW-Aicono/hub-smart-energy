@@ -2633,6 +2633,18 @@ export const translations = {
     es: "Reemplace <OCPP_ID> con el ID OCPP individual de su punto de carga.",
     nl: "Vervang <OCPP_ID> door het individuele OCPP-ID van uw laadpunt.",
   },
+  "ocppIntegration.shortUrl": {
+    de: "Kurze URL (empfohlen)",
+    en: "Short URL (recommended)",
+    es: "URL corta (recomendada)",
+    nl: "Korte URL (aanbevolen)",
+  },
+  "ocppIntegration.fullUrl": {
+    de: "Vollständige URL",
+    en: "Full URL",
+    es: "URL completa",
+    nl: "Volledige URL",
+  },
   "ocppIntegration.allVendors": {
     de: "Alle Hersteller",
     en: "All Vendors",
