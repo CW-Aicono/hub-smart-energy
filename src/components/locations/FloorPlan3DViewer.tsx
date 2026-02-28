@@ -833,7 +833,7 @@ export function FloorPlan3DViewer({ floor, locationId, sensors = [], isAdmin = f
       )}
 
       {/* 3D Canvas */}
-      <div className={`${compact ? "h-full w-full" : "flex-1 relative min-h-0"} bg-gradient-to-b from-muted/30 to-muted/60`}>
+      <div className={`${compact ? "relative w-full h-full" : "flex-1 relative min-h-0"} bg-gradient-to-b from-muted/30 to-muted/60`}>
         {loading ? (
           <div className="absolute inset-0 flex items-center justify-center">
             <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -849,7 +849,7 @@ export function FloorPlan3DViewer({ floor, locationId, sensors = [], isAdmin = f
                 near: 0.1,
                 far: 1000,
               }}
-              style={{ width: "100%", height: "100%", cursor: isWalking && isLocked ? "none" : "grab" }}
+              style={{ position: "absolute", inset: 0, cursor: isWalking && isLocked ? "none" : "grab" }}
               onCreated={({ gl }) => {
                 gl.getContext().canvas.addEventListener("webglcontextlost", (e) => {
                   console.error("WebGL context lost", e);
