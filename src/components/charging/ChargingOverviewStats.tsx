@@ -6,6 +6,7 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer } fro
 import { subDays, isAfter, format } from "date-fns";
 import { de } from "date-fns/locale";
 import { fmtNum } from "@/lib/formatCharging";
+import { useTranslation } from "@/hooks/useTranslation";
 import type { ChargePoint } from "@/hooks/useChargePoints";
 import type { ChargingSession } from "@/hooks/useChargingSessions";
 
@@ -16,6 +17,7 @@ interface Props {
 
 export default function ChargingOverviewStats({ chargePoints, sessions }: Props) {
   const [period, setPeriod] = useState("7");
+  const { t } = useTranslation();
 
   const periodDays = parseInt(period);
   const cutoff = subDays(new Date(), periodDays);
@@ -30,7 +32,6 @@ export default function ChargingOverviewStats({ chargePoints, sessions }: Props)
     ? (periodSessions.filter((s) => s.status === "completed" || s.energy_kwh > 0).length / sessionCount * 100)
     : 0;
 
-  // Uptime: fraction of charge points that are NOT faulted/offline
   const uptimePercent = chargePoints.length > 0
     ? (chargePoints.filter((cp) => cp.status === "available" || cp.status === "charging").length / chargePoints.length * 100)
     : 0;
@@ -50,10 +51,7 @@ export default function ChargingOverviewStats({ chargePoints, sessions }: Props)
       );
 
       const cpCount = chargePoints.length;
-      if (cpCount === 0) {
-        days.push({ day: dayLabel, available: 0, charging: 0, error: 0 });
-        continue;
-      }
+      if (cpCount === 0) { days.push({ day: dayLabel, available: 0, charging: 0, error: 0 }); continue; }
 
       const hoursInDay = isToday ? new Date().getHours() + (new Date().getMinutes() / 60) : 24;
       const totalHours = cpCount * hoursInDay;
@@ -61,7 +59,6 @@ export default function ChargingOverviewStats({ chargePoints, sessions }: Props)
       const chargingHours = Math.min(totalHours, daySessions.reduce((sum, s) => {
         const start = new Date(s.start_time);
         const end = s.stop_time ? new Date(s.stop_time) : new Date();
-        // Clamp session duration to this day only
         const dayStart = new Date(dateStr + "T00:00:00");
         const dayEnd = isToday ? new Date() : new Date(dateStr + "T23:59:59.999");
         const effectiveStart = start < dayStart ? dayStart : start;
@@ -70,8 +67,6 @@ export default function ChargingOverviewStats({ chargePoints, sessions }: Props)
         return sum + (effectiveEnd.getTime() - effectiveStart.getTime()) / 3600000;
       }, 0));
 
-      // Only count error hours for currently faulted charge points (live status as best available proxy)
-      // Past days without sessions are still counted as "available", not empty.
       const errorHours = isToday
         ? chargePoints.filter((cp) => cp.status === "faulted").length * hoursInDay
         : 0;
@@ -91,41 +86,37 @@ export default function ChargingOverviewStats({ chargePoints, sessions }: Props)
       <CardHeader className="flex flex-row items-center justify-between pb-2">
         <CardTitle className="flex items-center gap-2">
           <BarChart3 className="h-4 w-4" />
-          Statistiken
+          {t("cos.title" as any)}
         </CardTitle>
         <Select value={period} onValueChange={setPeriod}>
-          <SelectTrigger className="w-40">
-            <SelectValue />
-          </SelectTrigger>
+          <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="7">Letzte Woche</SelectItem>
-            <SelectItem value="30">Letzter Monat</SelectItem>
-            <SelectItem value="90">Letztes Quartal</SelectItem>
+            <SelectItem value="7">{t("cos.lastWeek" as any)}</SelectItem>
+            <SelectItem value="30">{t("cos.lastMonth" as any)}</SelectItem>
+            <SelectItem value="90">{t("cos.lastQuarter" as any)}</SelectItem>
           </SelectContent>
         </Select>
       </CardHeader>
       <CardContent className="space-y-6">
-        {/* KPI row */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div className="border rounded-lg p-3">
-            <p className="text-xs text-muted-foreground">kWh gesamt</p>
+            <p className="text-xs text-muted-foreground">{t("cos.totalKwh" as any)}</p>
             <p className="text-xl font-bold">{fmtNum(totalKwh)}</p>
           </div>
           <div className="border rounded-lg p-3">
-            <p className="text-xs text-muted-foreground">Ladevorgänge</p>
+            <p className="text-xs text-muted-foreground">{t("cos.sessions" as any)}</p>
             <p className="text-xl font-bold">{sessionCount}</p>
           </div>
           <div className="border rounded-lg p-3">
-            <p className="text-xs text-muted-foreground">Erfolgreiche Ladevorgänge</p>
+            <p className="text-xs text-muted-foreground">{t("cos.successRate" as any)}</p>
             <p className="text-xl font-bold">{fmtNum(successRate, 0)} %</p>
           </div>
           <div className="border rounded-lg p-3">
-            <p className="text-xs text-muted-foreground">Betriebszeit</p>
+            <p className="text-xs text-muted-foreground">{t("cos.uptime" as any)}</p>
             <p className="text-xl font-bold">{fmtNum(uptimePercent, 2)} %</p>
           </div>
         </div>
 
-        {/* Stacked bar chart */}
         <div className="h-64">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={chartData} barCategoryGap="20%">
@@ -134,12 +125,12 @@ export default function ChargingOverviewStats({ chargePoints, sessions }: Props)
               <Tooltip
                 formatter={(value: number, name: string) => [
                   `${value.toFixed(1)} h`,
-                  name === "available" ? "Verfügbar" : name === "charging" ? "Belegt" : "Fehler",
+                  name === "available" ? t("cos.available" as any) : name === "charging" ? t("cos.charging" as any) : t("cos.error" as any),
                 ]}
               />
               <Legend
                 formatter={(value: string) =>
-                  value === "available" ? "Verfügbar" : value === "charging" ? "Belegt" : "Fehler"
+                  value === "available" ? t("cos.available" as any) : value === "charging" ? t("cos.charging" as any) : t("cos.error" as any)
                 }
               />
               <Bar dataKey="available" stackId="a" fill="hsl(var(--primary))" />

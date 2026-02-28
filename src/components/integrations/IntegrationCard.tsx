@@ -4,17 +4,11 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
+import { useTranslation } from "@/hooks/useTranslation";
 import { Server, Trash2, Pencil, CheckCircle2, XCircle, Clock, Loader2, Gauge } from "lucide-react";
 import { LocationIntegration } from "@/hooks/useIntegrations";
 import { SensorsDialog } from "./SensorsDialog";
@@ -33,6 +27,7 @@ export function IntegrationCard({ locationIntegration, onUpdate, onDelete }: Int
   const [sensorsOpen, setSensorsOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const { toast } = useToast();
+  const { t } = useTranslation();
 
   const integration = locationIntegration.integration;
   const config = locationIntegration.config as Record<string, unknown>;
@@ -42,17 +37,12 @@ export function IntegrationCard({ locationIntegration, onUpdate, onDelete }: Int
     setIsToggling(true);
     const { error } = await onUpdate(locationIntegration.id, { is_enabled: enabled });
     setIsToggling(false);
-
     if (error) {
-      toast({
-        title: "Fehler",
-        description: "Status konnte nicht geändert werden.",
-        variant: "destructive",
-      });
+      toast({ title: t("intCard.error" as any), description: t("intCard.statusChangeError" as any), variant: "destructive" });
     } else {
       toast({
-        title: enabled ? "Aktiviert" : "Deaktiviert",
-        description: `Die Integration wurde ${enabled ? "aktiviert" : "deaktiviert"}.`,
+        title: enabled ? t("intCard.activated" as any) : t("intCard.deactivated" as any),
+        description: t("intCard.toggleDesc" as any).replace("{state}", enabled ? t("intCard.activated" as any).toLowerCase() : t("intCard.deactivated" as any).toLowerCase()),
       });
     }
   };
@@ -61,79 +51,34 @@ export function IntegrationCard({ locationIntegration, onUpdate, onDelete }: Int
     setIsDeleting(true);
     const { error } = await onDelete(locationIntegration.id);
     setIsDeleting(false);
-
     if (error) {
-      toast({
-        title: "Fehler",
-        description: "Die Integration konnte nicht entfernt werden.",
-        variant: "destructive",
-      });
+      toast({ title: t("intCard.error" as any), description: t("intCard.deleteError" as any), variant: "destructive" });
     } else {
-      toast({
-        title: "Integration entfernt",
-        description: "Die Integration wurde erfolgreich entfernt.",
-      });
+      toast({ title: t("intCard.deleted" as any), description: t("intCard.deletedDesc" as any) });
     }
   };
 
-  // Check if all required config fields have values
   const isConfigured = (() => {
     if (!gatewayDef || !config) return false;
-    return gatewayDef.configFields
-      .filter((f) => f.required)
-      .every((f) => {
-        const val = config[f.name];
-        return val && String(val).length > 0;
-      });
+    return gatewayDef.configFields.filter((f) => f.required).every((f) => { const val = config[f.name]; return val && String(val).length > 0; });
   })();
 
-  // Build a subtitle from the first non-password config field
   const configSubtitle = (() => {
-    if (!gatewayDef || !config) return "Nicht konfiguriert";
+    if (!gatewayDef || !config) return t("intCard.notConfigured" as any);
     const firstField = gatewayDef.configFields.find((f) => f.type !== "password" && config[f.name]);
-    if (!firstField) return "Nicht konfiguriert";
+    if (!firstField) return t("intCard.notConfigured" as any);
     return `${firstField.label}: ${config[firstField.name]}`;
   })();
 
   const getSyncStatusBadge = () => {
     if (!isConfigured) {
-      return (
-        <Badge variant="outline" className="gap-1 bg-muted text-muted-foreground border-border">
-          <Clock className="h-3 w-3" />
-          Nicht konfiguriert
-        </Badge>
-      );
+      return <Badge variant="outline" className="gap-1 bg-muted text-muted-foreground border-border"><Clock className="h-3 w-3" />{t("intCard.notConfigured" as any)}</Badge>;
     }
-
     switch (locationIntegration.sync_status) {
-      case "success":
-        return (
-          <Badge variant="outline" className="gap-1 bg-primary/10 text-primary border-primary/20">
-            <CheckCircle2 className="h-3 w-3" />
-            Verbunden
-          </Badge>
-        );
-      case "error":
-        return (
-          <Badge variant="outline" className="gap-1 bg-destructive/10 text-destructive border-destructive/20">
-            <XCircle className="h-3 w-3" />
-            Fehler
-          </Badge>
-        );
-      case "syncing":
-        return (
-          <Badge variant="outline" className="gap-1 bg-secondary text-secondary-foreground border-border">
-            <Loader2 className="h-3 w-3 animate-spin" />
-            Synchronisiere...
-          </Badge>
-        );
-      default:
-        return (
-          <Badge variant="outline" className="gap-1 bg-muted text-muted-foreground border-border">
-            <Clock className="h-3 w-3" />
-            Ausstehend
-          </Badge>
-        );
+      case "success": return <Badge variant="outline" className="gap-1 bg-primary/10 text-primary border-primary/20"><CheckCircle2 className="h-3 w-3" />{t("intCard.connected" as any)}</Badge>;
+      case "error": return <Badge variant="outline" className="gap-1 bg-destructive/10 text-destructive border-destructive/20"><XCircle className="h-3 w-3" />{t("intCard.error" as any)}</Badge>;
+      case "syncing": return <Badge variant="outline" className="gap-1 bg-secondary text-secondary-foreground border-border"><Loader2 className="h-3 w-3 animate-spin" />{t("intCard.syncing" as any)}</Badge>;
+      default: return <Badge variant="outline" className="gap-1 bg-muted text-muted-foreground border-border"><Clock className="h-3 w-3" />{t("intCard.pending" as any)}</Badge>;
     }
   };
 
@@ -143,77 +88,33 @@ export function IntegrationCard({ locationIntegration, onUpdate, onDelete }: Int
         <CardContent className="p-4">
           <div className="flex items-start justify-between gap-4">
             <div className="flex items-start gap-3">
-              <div className="p-2 rounded-lg bg-primary/10">
-                <Server className="h-5 w-5 text-primary" />
-              </div>
+              <div className="p-2 rounded-lg bg-primary/10"><Server className="h-5 w-5 text-primary" /></div>
               <div className="space-y-1">
                 <div className="flex items-center gap-2">
                   <h4 className="font-medium">{integration?.name || "Integration"}</h4>
                   {getSyncStatusBadge()}
                 </div>
-                <p className="text-sm text-muted-foreground">
-                  {configSubtitle}
-                </p>
-                {integration?.description && (
-                  <p className="text-xs text-muted-foreground">{integration.description}</p>
-                )}
+                <p className="text-sm text-muted-foreground">{configSubtitle}</p>
+                {integration?.description && <p className="text-xs text-muted-foreground">{integration.description}</p>}
               </div>
             </div>
-
             <div className="flex items-center gap-2">
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setSensorsOpen(true)}
-                title="Sensoren anzeigen"
-              >
-                <Gauge className="h-4 w-4" />
-              </Button>
-
-              <Switch
-                checked={locationIntegration.is_enabled}
-                onCheckedChange={handleToggleEnabled}
-                disabled={isToggling}
-              />
-              
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setEditOpen(true)}
-                title="Bearbeiten"
-              >
-                <Pencil className="h-4 w-4" />
-              </Button>
-
+              <Button variant="ghost" size="icon" onClick={() => setSensorsOpen(true)} title={t("intCard.showSensors" as any)}><Gauge className="h-4 w-4" /></Button>
+              <Switch checked={locationIntegration.is_enabled} onCheckedChange={handleToggleEnabled} disabled={isToggling} />
+              <Button variant="ghost" size="icon" onClick={() => setEditOpen(true)} title={t("common.edit")}><Pencil className="h-4 w-4" /></Button>
               <AlertDialog>
                 <AlertDialogTrigger asChild>
-                  <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive">
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+                  <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive"><Trash2 className="h-4 w-4" /></Button>
                 </AlertDialogTrigger>
                 <AlertDialogContent>
                   <AlertDialogHeader>
-                    <AlertDialogTitle>Integration entfernen?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      Möchten Sie die Integration "{integration?.name}" wirklich entfernen? 
-                      Diese Aktion kann nicht rückgängig gemacht werden.
-                    </AlertDialogDescription>
+                    <AlertDialogTitle>{t("intCard.removeTitle" as any)}</AlertDialogTitle>
+                    <AlertDialogDescription>{t("intCard.removeDesc" as any).replace("{name}", integration?.name || "")}</AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>
-                    <AlertDialogCancel>Abbrechen</AlertDialogCancel>
-                    <AlertDialogAction
-                      onClick={handleDelete}
-                      disabled={isDeleting}
-                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                    >
-                      {isDeleting ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Entfernen...
-                        </>
-                      ) : (
-                        "Entfernen"
-                      )}
+                    <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleDelete} disabled={isDeleting} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                      {isDeleting ? (<><Loader2 className="mr-2 h-4 w-4 animate-spin" />{t("intCard.removing" as any)}</>) : t("intCard.remove" as any)}
                     </AlertDialogAction>
                   </AlertDialogFooter>
                 </AlertDialogContent>
@@ -222,20 +123,8 @@ export function IntegrationCard({ locationIntegration, onUpdate, onDelete }: Int
           </div>
         </CardContent>
       </Card>
-
-      <SensorsDialog
-        locationIntegration={locationIntegration}
-        open={sensorsOpen}
-        onOpenChange={setSensorsOpen}
-        locationId={locationIntegration.location_id}
-      />
-
-      <EditIntegrationDialog
-        locationIntegration={locationIntegration}
-        open={editOpen}
-        onOpenChange={setEditOpen}
-        onUpdate={onUpdate}
-      />
+      <SensorsDialog locationIntegration={locationIntegration} open={sensorsOpen} onOpenChange={setSensorsOpen} locationId={locationIntegration.location_id} />
+      <EditIntegrationDialog locationIntegration={locationIntegration} open={editOpen} onOpenChange={setEditOpen} onUpdate={onUpdate} />
     </>
   );
 }
