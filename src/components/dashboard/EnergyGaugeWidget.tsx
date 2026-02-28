@@ -6,8 +6,8 @@ import { RotateCcw } from "lucide-react";
 import { HelpTooltip } from "@/components/ui/help-tooltip";
 import { useTranslation } from "@/hooks/useTranslation";
 import { useMeters } from "@/hooks/useMeters";
-import { useLoxoneSensorsMulti } from "@/hooks/useLoxoneSensors";
 import { useLocationEnergySources } from "@/hooks/useLocationEnergySources";
+import { useRealtimePower } from "@/hooks/useRealtimePower";
 import { ENERGY_TYPE_LABELS, ENERGY_HEX_COLORS } from "@/lib/energyTypeColors";
 import { supabase } from "@/integrations/supabase/client";
 import { startOfDay, endOfDay } from "date-fns";
@@ -50,86 +50,115 @@ const EnergyGaugeWidget = ({ locationId }: EnergyGaugeWidgetProps) => {
   const { meters } = useMeters();
   const { t } = useTranslation();
   const allowedTypes = useLocationEnergySources(locationId);
-  const [dailyPeaks, setDailyPeaks] = useState<Record<string, number>>({});
-  const [peakResetAt, setPeakResetAt] = useState<string | null>(null);
+  const [initialPeaksLoaded, setInitialPeaksLoaded] = useState(false);
+  const [initialCurrentLoaded, setInitialCurrentLoaded] = useState(false);
 
+  // Filter to main meters with automatic capture
   const activeMeters = useMemo(() => {
     return meters.filter(
       (m) =>
         !m.is_archived &&
         m.capture_type === "automatic" &&
         m.is_main_meter &&
-        m.sensor_uuid &&
-        m.location_integration_id &&
         (!locationId || m.location_id === locationId)
     );
   }, [meters, locationId]);
 
-  const integrationIds = useMemo(() => {
-    const ids = new Set<string>();
-    activeMeters.forEach((m) => {
-      if (m.location_integration_id) ids.add(m.location_integration_id);
-    });
-    return Array.from(ids);
-  }, [activeMeters]);
+  const meterIds = useMemo(() => activeMeters.map((m) => m.id), [activeMeters]);
 
-  const sensorQueries = useLoxoneSensorsMulti(integrationIds);
+  // Subscribe to Realtime for instant updates
+  const { latestByMeter, peakByMeter, resetPeaks } = useRealtimePower(meterIds);
 
-  const fetchPeaks = useCallback(async () => {
-    const meterIds = activeMeters.map((m) => m.id);
-    if (meterIds.length === 0) return;
-    const today = new Date();
-    const fromTime = peakResetAt || startOfDay(today).toISOString();
-    const { data, error } = await supabase
-      .from("meter_power_readings")
-      .select("meter_id, power_value")
-      .in("meter_id", meterIds)
-      .gte("recorded_at", fromTime)
-      .lte("recorded_at", endOfDay(today).toISOString())
-      .order("power_value", { ascending: false });
-    if (error || !data) return;
-    const peaks: Record<string, number> = {};
-    for (const row of data) {
-      const meter = activeMeters.find((m) => m.id === row.meter_id);
-      if (!meter) continue;
-      const et = meter.energy_type;
-      if ((peaks[et] ?? 0) < row.power_value) peaks[et] = row.power_value;
-    }
-    setDailyPeaks(peaks);
-  }, [activeMeters, peakResetAt]);
+  // Load initial current values from the latest power readings
+  const [initialCurrent, setInitialCurrent] = useState<Record<string, number>>({});
 
   useEffect(() => {
+    if (meterIds.length === 0) return;
+    // Fetch the latest reading per meter to seed gauges before first Realtime event
+    const fetchLatest = async () => {
+      const promises = meterIds.map((id) =>
+        supabase
+          .from("meter_power_readings")
+          .select("meter_id, power_value")
+          .eq("meter_id", id)
+          .order("recorded_at", { ascending: false })
+          .limit(1)
+      );
+      const results = await Promise.all(promises);
+      const current: Record<string, number> = {};
+      for (const { data } of results) {
+        if (data && data.length > 0) {
+          current[data[0].meter_id] = Math.abs(data[0].power_value);
+        }
+      }
+      setInitialCurrent(current);
+      setInitialCurrentLoaded(true);
+    };
+    fetchLatest();
+  }, [meterIds.join(",")]);
+
+  // Load initial daily peaks
+  const [initialPeaks, setInitialPeaks] = useState<Record<string, number>>({});
+
+  useEffect(() => {
+    if (meterIds.length === 0) return;
+    const fetchPeaks = async () => {
+      const today = new Date();
+      const { data } = await supabase
+        .from("meter_power_readings")
+        .select("meter_id, power_value")
+        .in("meter_id", meterIds)
+        .gte("recorded_at", startOfDay(today).toISOString())
+        .lte("recorded_at", endOfDay(today).toISOString())
+        .order("power_value", { ascending: false });
+      if (!data) return;
+      const peaks: Record<string, number> = {};
+      for (const row of data) {
+        if ((peaks[row.meter_id] ?? 0) < row.power_value) {
+          peaks[row.meter_id] = row.power_value;
+        }
+      }
+      setInitialPeaks(peaks);
+      setInitialPeaksLoaded(true);
+    };
     fetchPeaks();
-    const interval = setInterval(fetchPeaks, 60_000);
-    return () => clearInterval(interval);
-  }, [fetchPeaks]);
+  }, [meterIds.join(",")]);
 
   const handleResetPeaks = useCallback(() => {
-    setDailyPeaks({});
-    setPeakResetAt(new Date().toISOString());
-  }, []);
+    resetPeaks();
+    setInitialPeaks({});
+  }, [resetPeaks]);
 
+  // Build gauge data from Realtime values (with initial seed as fallback)
   const gaugeData = useMemo((): GaugeData[] => {
-    const sensorsByIntegration = new Map<string, any[]>();
-    integrationIds.forEach((id, idx) => {
-      const query = sensorQueries[idx];
-      if (query?.data) sensorsByIntegration.set(id, query.data);
-    });
     const currentByType: Record<string, number> = {};
+    const peaksByType: Record<string, number> = {};
+
     for (const meter of activeMeters) {
-      const sensors = sensorsByIntegration.get(meter.location_integration_id!);
-      if (!sensors) continue;
-      const sensor = sensors.find((s: any) => s.id === meter.sensor_uuid);
-      if (!sensor || sensor.rawValue == null) continue;
       const et = meter.energy_type;
-      currentByType[et] = (currentByType[et] ?? 0) + Math.abs(sensor.rawValue);
+      // Realtime value takes priority, then initial seed
+      const current = latestByMeter[meter.id] ?? initialCurrent[meter.id];
+      if (current != null) {
+        currentByType[et] = (currentByType[et] ?? 0) + current;
+      }
+      // Peak: max of Realtime peak and initial peak
+      const rtPeak = peakByMeter[meter.id] ?? 0;
+      const initPeak = initialPeaks[meter.id] ?? 0;
+      const peak = Math.max(rtPeak, initPeak);
+      if (peak > 0) {
+        peaksByType[et] = Math.max(peaksByType[et] ?? 0, (peaksByType[et] ?? 0) > 0 ? peaksByType[et] : 0);
+        // Accumulate peaks per type properly
+        peaksByType[et] = Math.max(peaksByType[et] ?? 0, peak);
+      }
     }
+
     const energyTypes = ["strom", "gas", "waerme", "wasser"].filter(
-      (et) => allowedTypes.has(et) && (currentByType[et] != null || dailyPeaks[et] != null)
+      (et) => allowedTypes.has(et) && (currentByType[et] != null || peaksByType[et] != null)
     );
+
     return energyTypes.map((et) => {
       const current = currentByType[et] ?? 0;
-      const peak = dailyPeaks[et] ?? 0;
+      const peak = peaksByType[et] ?? 0;
       return {
         energyType: et,
         label: t(`energy.${et}` as any) || ENERGY_TYPE_LABELS[et] || et,
@@ -140,7 +169,7 @@ const EnergyGaugeWidget = ({ locationId }: EnergyGaugeWidgetProps) => {
         color: ENERGY_HEX_COLORS[et] || "#888",
       };
     });
-  }, [activeMeters, integrationIds, sensorQueries, allowedTypes, dailyPeaks]);
+  }, [activeMeters, latestByMeter, initialCurrent, peakByMeter, initialPeaks, allowedTypes, t]);
 
   const ecoScore = useMemo(() => computeEcoScore(gaugeData), [gaugeData]);
 
@@ -155,7 +184,7 @@ const EnergyGaugeWidget = ({ locationId }: EnergyGaugeWidgetProps) => {
     hidePeak: true,
   };
 
-  const isLoading = sensorQueries.some((q) => q.isLoading);
+  const isLoading = !initialCurrentLoaded && meterIds.length > 0;
 
   if (isLoading) {
     return (
@@ -179,7 +208,7 @@ const EnergyGaugeWidget = ({ locationId }: EnergyGaugeWidgetProps) => {
     );
   }
 
-  const hasPeaks = Object.values(dailyPeaks).some((v) => v > 0);
+  const hasPeaks = gaugeData.some((g) => g.peakValue > 0);
 
   return (
     <Card>
