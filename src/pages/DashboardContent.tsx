@@ -26,6 +26,7 @@ import SpotPriceWidget from "@/components/dashboard/SpotPriceWidget";
 import PvForecastWidget from "@/components/dashboard/PvForecastWidget";
 import ArbitrageAiWidget from "@/components/dashboard/ArbitrageAiWidget";
 import WidgetErrorBoundary from "@/components/dashboard/WidgetErrorBoundary";
+import LazyWidget from "@/components/dashboard/LazyWidget";
 
 interface WidgetProps {
   locationId: string | null;
@@ -161,9 +162,11 @@ const DashboardContent = () => {
                         <ZoomIn className="h-4 w-4 text-muted-foreground" />
                       </button>
                     )}
-                    <WidgetErrorBoundary widgetName={widgetType}>
-                      <Component locationId={selectedLocationId} onExpand={widget.widget_size !== "full" ? () => setExpandedWidget(widgetType) : undefined} />
-                    </WidgetErrorBoundary>
+                    <LazyWidget>
+                      <WidgetErrorBoundary widgetName={widgetType}>
+                        <Component locationId={selectedLocationId} onExpand={widget.widget_size !== "full" ? () => setExpandedWidget(widgetType) : undefined} />
+                      </WidgetErrorBoundary>
+                    </LazyWidget>
                   </div>
                 ) : null;
               })
