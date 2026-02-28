@@ -42,7 +42,7 @@ function generateUniqueId(): string {
   return crypto.randomUUID().substring(0, 36);
 }
 
-Deno.serve((req) => {
+Deno.serve(async (req) => {
   const url = new URL(req.url);
   const pathParts = url.pathname.split("/").filter(Boolean);
   const chargePointId = pathParts[pathParts.length - 1];
@@ -64,6 +64,34 @@ Deno.serve((req) => {
       }),
       { status: 200, headers: { "Content-Type": "application/json" } }
     );
+  }
+
+  // Optional Basic Auth: validate charge point password if configured
+  const supabaseForAuth = createSupabase();
+  const { data: cpRecord } = await supabaseForAuth
+    .from("charge_points")
+    .select("ocpp_password")
+    .eq("ocpp_id", chargePointId)
+    .maybeSingle();
+
+  if (cpRecord?.ocpp_password) {
+    const authHeader = req.headers.get("Authorization") || "";
+    let providedPassword = "";
+
+    if (authHeader.startsWith("Basic ")) {
+      try {
+        const decoded = atob(authHeader.substring(6));
+        // Format: chargePointId:password
+        const colonIdx = decoded.indexOf(":");
+        providedPassword = colonIdx >= 0 ? decoded.substring(colonIdx + 1) : "";
+      } catch { /* invalid base64 */ }
+    }
+
+    if (providedPassword !== cpRecord.ocpp_password) {
+      console.warn(`[ocpp-ws-proxy] Auth failed for ${chargePointId}: invalid password`);
+      return new Response("Unauthorized", { status: 401, headers: { "WWW-Authenticate": "Basic realm=\"OCPP\"" } });
+    }
+    console.log(`[ocpp-ws-proxy] Auth OK for ${chargePointId}`);
   }
 
   const { socket, response } = Deno.upgradeWebSocket(req, {

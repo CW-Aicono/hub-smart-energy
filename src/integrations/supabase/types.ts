@@ -447,6 +447,7 @@ export type Database = {
           model: string | null
           name: string
           ocpp_id: string
+          ocpp_password: string | null
           photo_url: string | null
           power_limit_schedule: Json | null
           status: string
@@ -471,6 +472,7 @@ export type Database = {
           model?: string | null
           name: string
           ocpp_id: string
+          ocpp_password?: string | null
           photo_url?: string | null
           power_limit_schedule?: Json | null
           status?: string
@@ -495,6 +497,7 @@ export type Database = {
           model?: string | null
           name?: string
           ocpp_id?: string
+          ocpp_password?: string | null
           photo_url?: string | null
           power_limit_schedule?: Json | null
           status?: string
