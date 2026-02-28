@@ -42,7 +42,7 @@ export default function LazyWidget({ children, minHeight = 200 }: LazyWidgetProp
           observer.disconnect();
         }
       },
-      { root, rootMargin: "400px" }, // start loading 400px before visible
+      { root, rootMargin: "800px" }, // start rendering 800px before visible
     );
 
     observer.observe(el);
