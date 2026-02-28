@@ -21,7 +21,10 @@ import {
   addDays, addWeeks, addMonths, addQuarters, addYears,
   eachDayOfInterval, getISOWeek,
 } from "date-fns";
-import { de } from "date-fns/locale";
+import { de, enUS, es, nl } from "date-fns/locale";
+import type { Locale } from "date-fns";
+
+const localeMap: Record<string, Locale> = { de, en: enUS, es, nl };
 import { useDashboardFilter, TimePeriod } from "@/hooks/useDashboardFilter";
 import { useWeekStartDay } from "@/hooks/useWeekStartDay";
 import { useLocationEnergySources } from "@/hooks/useLocationEnergySources";
@@ -57,11 +60,11 @@ function getPeriodRange(period: ChartPeriod, ref: Date, weekStartsOn: 0|1|2|3|4|
   }
 }
 
-function getPeriodLabel(period: ChartPeriod, ref: Date): string {
+function getPeriodLabel(period: ChartPeriod, ref: Date, locale: Locale, cwPrefix: string): string {
   switch (period) {
-    case "day": return format(ref, "EEEE, d. MMM yyyy", { locale: de });
-    case "week": return `KW ${getISOWeek(ref)}, ${format(ref, "yyyy")}`;
-    case "month": return format(ref, "MMMM yyyy", { locale: de });
+    case "day": return format(ref, "EEEE, d. MMM yyyy", { locale });
+    case "week": return `${cwPrefix} ${getISOWeek(ref)}, ${format(ref, "yyyy")}`;
+    case "month": return format(ref, "MMMM yyyy", { locale });
     case "quarter": {
       const q = Math.floor(ref.getMonth() / 3) + 1;
       return `Q${q} ${format(ref, "yyyy")}`;
@@ -123,7 +126,10 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
   const { readings, livePeriodTotals, loading, hasData } = useEnergyData(locationId);
   const { meters } = useMeters();
   const { selectedPeriod, setSelectedPeriod } = useDashboardFilter();
-  const { t } = useTranslation();
+  const { t, language } = useTranslation();
+  const T = (key: string) => t(key as any);
+  const dateLocale = localeMap[language] || de;
+  const cwPrefix = T("chart.cwPrefix");
   const [offset, setOffset] = useState(0);
   const [hiddenKeys, setHiddenKeys] = useState<Set<string>>(new Set());
   const [powerReadings, setPowerReadings] = useState<Array<{ meter_id: string; power_value: number; recorded_at: string }>>([]);
@@ -139,7 +145,7 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
   const period: ChartPeriod = selectedPeriod === "all" ? "year" : selectedPeriod;
 
   const selectedLocation = locationId ? locations.find((l) => l.id === locationId) : null;
-  const subtitle = selectedLocation ? t("chart.dataFor" as any).replace("{name}", selectedLocation.name) : t("chart.allLocations" as any);
+  const subtitle = selectedLocation ? T("chart.dataFor").replace("{name}", selectedLocation.name) : T("chart.allLocations");
 
   const meterMap = useMemo(() => {
     const map: Record<string, { energy_type: string; capture_type: string; location_id: string; is_main_meter: boolean; unit: string; gas_type: string | null; brennwert: number | null; zustandszahl: number | null }> = {};
@@ -150,7 +156,7 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
   const refDate = getRefDate(period, offset);
   const weekStartsOn = useWeekStartDay();
   const [rangeStart, rangeEnd] = getPeriodRange(period, refDate, weekStartsOn);
-  const periodLabel = getPeriodLabel(period, refDate);
+  const periodLabel = getPeriodLabel(period, refDate, dateLocale, cwPrefix);
   const canGoForward = offset < 0;
 
   // Fetch power readings from DB for day view
@@ -386,8 +392,9 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
       const buckets: DayBucket[] = Array.from({ length: 288 }, (_, i) => {
         const h = Math.floor(i / 12);
         const m = (i % 12) * 5;
+        const timeSuffix = T("chart.timeLabel");
         return {
-          label: `${h}:${m.toString().padStart(2, "0")} Uhr`,
+          label: `${h}:${m.toString().padStart(2, "0")}${timeSuffix ? ` ${timeSuffix}` : ""}`,
           ...emptyBucket(),
           real_strom: null,
           real_gas: null,
@@ -506,13 +513,12 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
     const manualFiltered = filtered.filter(r => !autoMeterIds.has(r.meter_id));
 
     if (period === "week") {
-      const dayNames = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
       const days = eachDayOfInterval({ start: rangeStart, end: rangeEnd });
       const todayStr = format(new Date(), "yyyy-MM-dd");
       const dbDailyMap = buildDailyBucketsFromDB();
       return days.map((d, i) => {
         const dateStr = format(d, "yyyy-MM-dd");
-        const bucket = { label: dayNames[i] || format(d, "EEE", { locale: de }), ...emptyBucket() };
+        const bucket = { label: format(d, "EEEEEE", { locale: dateLocale }), ...emptyBucket() };
         // Add DB daily totals for this day (automatic meters)
         const dbBucket = dbDailyMap.get(dateStr);
         if (dbBucket) {
@@ -561,7 +567,7 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
       const dbDailyMap = buildDailyBucketsFromDB();
       days.forEach((d) => {
         const wk = getISOWeek(d);
-        if (!weekMap.has(wk)) weekMap.set(wk, { label: `KW${wk}`, ...emptyBucket() });
+        if (!weekMap.has(wk)) weekMap.set(wk, { label: `${cwPrefix}${wk}`, ...emptyBucket() });
         const dateStr = format(d, "yyyy-MM-dd");
         const bucket = weekMap.get(wk)!;
         // Add DB daily totals
@@ -584,7 +590,7 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
     }
 
     // year
-    const monthLabels = ["Jan", "Feb", "Mär", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dez"];
+    const monthLabels = Array.from({ length: 12 }, (_, i) => T(`month.short.${i}`));
     const buckets = monthLabels.map((m) => ({ label: m, ...emptyBucket() }));
     const todayStr = format(new Date(), "yyyy-MM-dd");
     const dbDailyMap = buildDailyBucketsFromDB();
@@ -636,8 +642,9 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
   };
 
   const tooltipFormatter = (value: number, name: string) => {
-    const typeKey = name === "Strom" ? "strom" : name === "Gas" ? "gas" : name === "Wärme" ? "waerme" : "wasser";
-    const u = getUnitForPeriod(period, typeKey);
+    const typeKey = name.toLowerCase();
+    const energyKey = ENERGY_KEYS.find(k => T(`energy.${k}`) === name) || typeKey;
+    const u = getUnitForPeriod(period, energyKey);
     return [`${value.toLocaleString("de-DE", { maximumFractionDigits: 2 })} ${u}`, name];
   };
 
@@ -693,7 +700,7 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
               {isLineChart ? (
                 <LineChart data={chartData} margin={{ top: 5, right: 10, left: 5, bottom: 5 }}>
                   <CartesianGrid strokeDasharray="3 3" className="stroke-border" vertical={false} />
-                  <XAxis dataKey="label" tick={tickStyle} tickLine={false} axisLine={false} interval={11} tickFormatter={(v: string) => v.endsWith(":00 Uhr") ? v.replace(" Uhr", "") : ""} />
+                  <XAxis dataKey="label" tick={tickStyle} tickLine={false} axisLine={false} interval={11} tickFormatter={(v: string) => v.includes(":00") ? v.split(" ")[0] : ""} />
                   <YAxis width={50} tick={tickStyle} tickLine={false} axisLine={false} domain={visibleKeys.length === 0 ? [0, 1] : ['auto', 'auto']} />
                   <Tooltip
                     contentStyle={tooltipStyle}
@@ -706,7 +713,7 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
                   />
                   {visibleEnergyKeys.map((key) => {
                     const hidden = hiddenKeys.has(key);
-                    const displayName = ENERGY_TYPE_LABELS[key] || key;
+                    const displayName = T(`energy.${key}`);
                     return (
                       <React.Fragment key={key}>
                         <Line type="monotone" dataKey={key} name={`__gap_${key}`} stroke={ENERGY_CHART_COLORS[key]} strokeWidth={hidden ? 0 : 1.5} strokeDasharray="4 4" dot={false} connectNulls={false} legendType="none" tooltipType="none" />
@@ -721,10 +728,10 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
                   <XAxis dataKey="label" tick={tickStyle} tickLine={false} axisLine={false} />
                   <YAxis width={50} tick={tickStyle} tickLine={false} axisLine={false} domain={visibleKeys.length === 0 ? [0, 1] : ['auto', 'auto']} />
                   <Tooltip contentStyle={tooltipStyle} formatter={tooltipFormatter} />
-                  {visibleEnergyKeys.includes("strom") && <Bar dataKey="strom" name="Strom" fill={ENERGY_CHART_COLORS.strom} radius={[3, 3, 0, 0]} hide={hiddenKeys.has("strom")} />}
-                  {visibleEnergyKeys.includes("gas") && <Bar dataKey="gas" name="Gas" fill={ENERGY_CHART_COLORS.gas} radius={[3, 3, 0, 0]} hide={hiddenKeys.has("gas")} />}
-                  {visibleEnergyKeys.includes("waerme") && <Bar dataKey="waerme" name="Wärme" fill={ENERGY_CHART_COLORS.waerme} radius={[3, 3, 0, 0]} hide={hiddenKeys.has("waerme")} />}
-                  {visibleEnergyKeys.includes("wasser") && <Bar dataKey="wasser" name="Wasser" fill={ENERGY_CHART_COLORS.wasser} radius={[3, 3, 0, 0]} hide={hiddenKeys.has("wasser")} />}
+                  {visibleEnergyKeys.includes("strom") && <Bar dataKey="strom" name={T("energy.strom")} fill={ENERGY_CHART_COLORS.strom} radius={[3, 3, 0, 0]} hide={hiddenKeys.has("strom")} />}
+                  {visibleEnergyKeys.includes("gas") && <Bar dataKey="gas" name={T("energy.gas")} fill={ENERGY_CHART_COLORS.gas} radius={[3, 3, 0, 0]} hide={hiddenKeys.has("gas")} />}
+                  {visibleEnergyKeys.includes("waerme") && <Bar dataKey="waerme" name={T("energy.waerme")} fill={ENERGY_CHART_COLORS.waerme} radius={[3, 3, 0, 0]} hide={hiddenKeys.has("waerme")} />}
+                  {visibleEnergyKeys.includes("wasser") && <Bar dataKey="wasser" name={T("energy.wasser")} fill={ENERGY_CHART_COLORS.wasser} radius={[3, 3, 0, 0]} hide={hiddenKeys.has("wasser")} />}
                 </BarChart>
               )}
             </ResponsiveContainer>
@@ -746,7 +753,7 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
                       className="inline-block h-2.5 w-2.5 rounded-full shrink-0"
                       style={{ backgroundColor: hidden ? "hsl(var(--muted-foreground))" : ENERGY_CHART_COLORS[key] }}
                     />
-                    {ENERGY_TYPE_LABELS[key] || key}
+                    {T(`energy.${key}`)}
                   </button>
                 );
               })}

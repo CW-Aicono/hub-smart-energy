@@ -14,7 +14,10 @@ import { useDashboardFilter, type TimePeriod } from "@/hooks/useDashboardFilter"
 import { useTenant } from "@/hooks/useTenant";
 import { useQuery } from "@tanstack/react-query";
 import { format, addDays, startOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfQuarter, endOfQuarter, startOfYear, endOfYear, addWeeks, addMonths, addQuarters, addYears } from "date-fns";
-import { de } from "date-fns/locale";
+import { de, enUS, es, nl } from "date-fns/locale";
+import type { Locale } from "date-fns";
+
+const dfLocaleMap: Record<string, Locale> = { de, en: enUS, es, nl };
 
 interface PvForecastWidgetProps {
   locationId: string | null;
@@ -42,15 +45,15 @@ function toLocalDateStr(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-const PERIOD_LABELS: Record<string, string> = {
-  day: "Tag",
-  week: "Woche",
-  month: "Monat",
-  quarter: "Quartal",
-  year: "Jahr",
+const PERIOD_LABEL_KEYS: Record<string, string> = {
+  day: "chart.periodDay",
+  week: "chart.periodWeek",
+  month: "chart.periodMonth",
+  quarter: "chart.periodQuarter",
+  year: "chart.periodYear",
 };
 
-function getPeriodRange(period: TimePeriod, offset: number): { start: Date; end: Date; label: string } {
+function getPeriodRange(period: TimePeriod, offset: number, locale: Locale, cwPrefix: string): { start: Date; end: Date; label: string } {
   const now = new Date();
   let base: Date;
   let start: Date, end: Date;
@@ -60,14 +63,14 @@ function getPeriodRange(period: TimePeriod, offset: number): { start: Date; end:
       base = addWeeks(now, offset);
       start = startOfWeek(base, { weekStartsOn: 1 });
       end = endOfWeek(base, { weekStartsOn: 1 });
-      const label = `KW ${format(start, "w", { locale: de })}, ${format(start, "yyyy")}`;
+      const label = `${cwPrefix} ${format(start, "w", { locale })}, ${format(start, "yyyy")}`;
       return { start, end, label };
     }
     case "month": {
       base = addMonths(now, offset);
       start = startOfMonth(base);
       end = endOfMonth(base);
-      return { start, end, label: format(start, "MMMM yyyy", { locale: de }) };
+      return { start, end, label: format(start, "MMMM yyyy", { locale }) };
     }
     case "quarter": {
       base = addQuarters(now, offset);
@@ -87,14 +90,17 @@ function getPeriodRange(period: TimePeriod, offset: number): { start: Date; end:
       start = startOfDay(base);
       end = new Date(start);
       end.setDate(end.getDate() + 1);
-      return { start, end, label: format(base, "EEEE, d. MMM yyyy", { locale: de }) };
+      return { start, end, label: format(base, "EEEE, d. MMM yyyy", { locale }) };
     }
   }
 }
 
 const PvForecastWidget = ({ locationId }: PvForecastWidgetProps) => {
   const { tenant } = useTenant();
-  const { t } = useTranslation();
+  const { t, language } = useTranslation();
+  const T = (key: string) => t(key as any);
+  const dateLocale = dfLocaleMap[language] || de;
+  const cwPrefix = T("chart.cwPrefix");
   const tenantId = tenant?.id ?? null;
   const { forecast, isLoading } = usePvForecast(locationId);
   const { settings } = usePvForecastSettings(locationId);
@@ -106,8 +112,8 @@ const PvForecastWidget = ({ locationId }: PvForecastWidgetProps) => {
   useEffect(() => { setOffset(0); }, [selectedPeriod]);
 
   const { start: rangeStart, end: rangeEnd, label: periodLabel } = useMemo(
-    () => getPeriodRange(selectedPeriod, offset),
-    [selectedPeriod, offset]
+    () => getPeriodRange(selectedPeriod, offset, dateLocale, cwPrefix),
+    [selectedPeriod, offset, dateLocale, cwPrefix]
   );
 
   const refDate = useMemo(() => addDays(new Date(), offset), [offset]);
@@ -270,7 +276,7 @@ const PvForecastWidget = ({ locationId }: PvForecastWidgetProps) => {
   if (isLoading) {
     return (
       <Card>
-        <CardHeader><CardTitle className="flex items-center gap-2"><Sun className="h-5 w-5 text-amber-500" />PV-Prognose</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="flex items-center gap-2"><Sun className="h-5 w-5 text-amber-500" />{T("dashboard.pvForecast")}</CardTitle></CardHeader>
         <CardContent><Skeleton className="h-48 w-full" /></CardContent>
       </Card>
     );
@@ -279,8 +285,8 @@ const PvForecastWidget = ({ locationId }: PvForecastWidgetProps) => {
   if (!forecast && !needsDbForecast && !isLoading) {
     return (
       <Card>
-        <CardHeader><CardTitle className="flex items-center gap-2"><Sun className="h-5 w-5 text-amber-500" />PV-Prognose</CardTitle></CardHeader>
-        <CardContent><p className="text-muted-foreground text-sm">Keine Prognosedaten verfügbar. Konfigurieren Sie PV-Einstellungen in der Liegenschaft.</p></CardContent>
+        <CardHeader><CardTitle className="flex items-center gap-2"><Sun className="h-5 w-5 text-amber-500" />{T("dashboard.pvForecast")}</CardTitle></CardHeader>
+        <CardContent><p className="text-muted-foreground text-sm">{T("pv.noDataAvailable")}</p></CardContent>
       </Card>
     );
   }
@@ -307,7 +313,7 @@ const PvForecastWidget = ({ locationId }: PvForecastWidgetProps) => {
   // For multi-day periods, build bar chart from dbForecastDays
   const multiDayChart = !isDay && dbForecastDays
     ? dbForecastDays.map((d) => ({
-        label: format(new Date(d.day + "T00:00"), "d. MMM", { locale: de }),
+        label: format(new Date(d.day + "T00:00"), "d. MMM", { locale: dateLocale }),
         prognose: Math.round((d.ai_adjusted_kwh ?? d.estimated_kwh) * 10) / 10,
       }))
     : [];
@@ -355,7 +361,7 @@ const PvForecastWidget = ({ locationId }: PvForecastWidgetProps) => {
             {summary.ai_confidence && isToday && (
               <Badge variant="secondary" className="gap-1 text-xs">
                 <Sparkles className="h-3 w-3" />
-                KI: {summary.ai_confidence}
+                {T("pv.ai")}: {summary.ai_confidence}
               </Badge>
             )}
             <Select value={selectedPeriod} onValueChange={(v) => setSelectedPeriod(v as TimePeriod)}>
@@ -363,8 +369,8 @@ const PvForecastWidget = ({ locationId }: PvForecastWidgetProps) => {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {(Object.keys(PERIOD_LABELS) as TimePeriod[]).map((key) => (
-                  <SelectItem key={key} value={key}>{PERIOD_LABELS[key]}</SelectItem>
+                {(Object.keys(PERIOD_LABEL_KEYS) as TimePeriod[]).map((key) => (
+                  <SelectItem key={key} value={key}>{T(PERIOD_LABEL_KEYS[key])}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -387,17 +393,17 @@ const PvForecastWidget = ({ locationId }: PvForecastWidgetProps) => {
         <div className="grid grid-cols-3 gap-3 text-center">
           {isToday && (
             <div>
-              <p className="text-xs text-muted-foreground">Jetzt</p>
+              <p className="text-xs text-muted-foreground">{T("pv.now")}</p>
               <p className="text-xl font-bold text-amber-600">{currentKw.toFixed(1)} kW</p>
             </div>
           )}
           <div>
-            <p className="text-xs text-muted-foreground">{isDay ? (isToday ? "Heute" : format(refDate, "d. MMM", { locale: de })) : PERIOD_LABELS[selectedPeriod]} (Prognose)</p>
+            <p className="text-xs text-muted-foreground">{isDay ? (isToday ? T("pv.todayForecast") : T("pv.dateForecast").replace("{date}", format(refDate, "d. MMM", { locale: dateLocale }))) : T("pv.periodForecast").replace("{period}", T(PERIOD_LABEL_KEYS[selectedPeriod]))}</p>
             <p className="text-xl font-bold text-amber-600">{forecastDayTotal > 0 ? `${forecastDayTotal.toFixed(0)} kWh` : "–"}</p>
           </div>
           {isDay && (
             <div>
-              <p className="text-xs text-muted-foreground">{isToday ? "Heute" : format(refDate, "d. MMM", { locale: de })} (Ist)</p>
+              <p className="text-xs text-muted-foreground">{isToday ? T("pv.todayActual") : T("pv.dateActual").replace("{date}", format(refDate, "d. MMM", { locale: dateLocale }))}</p>
               <p className="text-xl font-bold text-emerald-600">{hasActualTotal ? `${actualTotalKwh.toFixed(1)} kWh` : "–"}</p>
             </div>
           )}
@@ -412,11 +418,14 @@ const PvForecastWidget = ({ locationId }: PvForecastWidgetProps) => {
                 <Tooltip
                   formatter={(v: number, name: string) => [
                     `${v.toFixed(2)} kWh`,
-                    name === "prognose" ? "Prognose" : "Ist-Erzeugung",
+                    name === "prognose" ? T("pv.forecast") : T("pv.actualGeneration"),
                   ]}
-                  labelFormatter={(l) => `${l} Uhr`}
+                  labelFormatter={(l) => {
+                    const suffix = T("pv.clock");
+                    return suffix ? `${l} ${suffix}` : l;
+                  }}
                 />
-                {hasActual && <Legend formatter={(v) => v === "prognose" ? "Prognose" : "Ist-Erzeugung"} />}
+                {hasActual && <Legend formatter={(v) => v === "prognose" ? T("pv.forecast") : T("pv.actualGeneration")} />}
                 <Bar dataKey="prognose" fill={PV_YELLOW} radius={[2, 2, 0, 0]} />
                 {hasActual && <Bar dataKey="ist" fill={ACTUAL_GREEN} radius={[2, 2, 0, 0]} />}
               </BarChart>
@@ -426,14 +435,14 @@ const PvForecastWidget = ({ locationId }: PvForecastWidgetProps) => {
               <BarChart data={multiDayChart} margin={{ left: -10, right: 0 }}>
                 <XAxis dataKey="label" tick={{ fontSize: 10 }} interval="preserveStartEnd" />
                 <YAxis tick={{ fontSize: 10 }} width={35} />
-                <Tooltip formatter={(v: number) => [`${v.toFixed(1)} kWh`, "Prognose"]} />
+                <Tooltip formatter={(v: number) => [`${v.toFixed(1)} kWh`, T("pv.forecast")]} />
                 <Bar dataKey="prognose" fill={PV_YELLOW} radius={[2, 2, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           )
         ) : (
           <div className="h-[160px] flex items-center justify-center text-muted-foreground text-sm">
-            Keine Prognosedaten für {isDay ? "diesen Tag" : "diesen Zeitraum"}
+            {isDay ? T("pv.noForecastDay") : T("pv.noForecastPeriod")}
           </div>
         )}
 
