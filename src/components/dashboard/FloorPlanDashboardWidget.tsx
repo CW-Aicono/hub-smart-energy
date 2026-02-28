@@ -310,17 +310,19 @@ const FloorPlanDashboardWidget = ({ locationId, onExpand, onCollapse }: FloorPla
             </TransformWrapper>
           </div>
         ) : selectedFloor && viewMode === "3d" ? (
-          <Suspense fallback={<div className="flex items-center justify-center h-full"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>}>
-            <FloorPlan3DViewer
-              key={selectedFloor.id}
-              floor={{ id: selectedFloor.id, location_id: selectedFloor.location_id, name: selectedFloor.name, floor_number: selectedFloor.floor_number, floor_plan_url: selectedFloor.floor_plan_url, description: null, area_sqm: null, model_3d_url: selectedFloor.model_3d_url, model_3d_mtl_url: selectedFloor.model_3d_mtl_url, model_3d_rotation: selectedFloor.model_3d_rotation, created_at: "", updated_at: "" }}
-              locationId={selectedFloor.location_id}
-              sensors={sensorValues}
-              isAdmin={false}
-              compact
-              readOnly
-            />
-          </Suspense>
+          <div className="w-full h-full">
+            <Suspense fallback={<div className="flex items-center justify-center h-full"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>}>
+              <FloorPlan3DViewer
+                key={selectedFloor.id}
+                floor={{ id: selectedFloor.id, location_id: selectedFloor.location_id, name: selectedFloor.name, floor_number: selectedFloor.floor_number, floor_plan_url: selectedFloor.floor_plan_url, description: null, area_sqm: null, model_3d_url: selectedFloor.model_3d_url, model_3d_mtl_url: selectedFloor.model_3d_mtl_url, model_3d_rotation: selectedFloor.model_3d_rotation, created_at: "", updated_at: "" }}
+                locationId={selectedFloor.location_id}
+                sensors={sensorValues}
+                isAdmin={false}
+                compact
+                readOnly
+              />
+            </Suspense>
+          </div>
         ) : (
           <div className="flex items-center justify-center h-full text-muted-foreground">
             <div className="text-center">
