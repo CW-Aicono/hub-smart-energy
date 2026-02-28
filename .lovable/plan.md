@@ -1,149 +1,125 @@
 
+# Home Assistant Integration (aktualisiert)
 
-# Plan: Redundante Datensicherung und Backup-Funktion
+## Zusammenfassung
+Neue Gateway-Integration fuer Home Assistant mit zwei Kommunikationswegen:
+1. **REST API** (Edge Function) -- Sensor-Polling alle 1 Minute + sofortige Aktor-Steuerung
+2. **WebSocket API** (Edge Function) -- Persistenter Proxy fuer Echtzeit-Events und schnelle Steuerung
 
-## Ausgangslage
+## Architektur-Entscheidung: WebSocket
 
-Das Projekt hat aktuell **keine Backup-Funktionalitaet**. Es gibt 70+ Datenbanktabellen, 4 Storage-Buckets und keine Moeglichkeit fuer Admins, Daten zu sichern oder wiederherzustellen. Die einzige existierende Export-Funktion ist ein CSV/PDF-Export fuer Energiedaten.
+Home Assistant bietet eine WebSocket API (`ws://<ha>:8123/api/websocket`), die sowohl Events als auch `call_service`-Befehle unterstuetzt. Da Edge Functions kurzlebig sind, wird das gleiche Muster wie beim bestehenden OCPP-WebSocket-Proxy verwendet:
 
----
-
-## Strategie: Drei Sicherungsebenen
-
-```text
-Ebene 1: Automatische DB-Snapshots (Infrastruktur)
-  -- Taegliche automatische Sicherung der gesamten Datenbank
-  -- Durch Lovable Cloud / Hosting-Provider bereitgestellt
-  -- Keine Code-Aenderung noetig, nur Konfiguration
-
-Ebene 2: Tenant-Datenexport (In-App Backup)
-  -- Admin kann alle Mandantendaten als JSON exportieren
-  -- Edge Function sammelt alle tenant-relevanten Tabellen
-  -- Download als strukturierte JSON-Datei
-
-Ebene 3: Automatische Backup-Snapshots (Scheduled)
-  -- pg_cron Job erstellt periodisch Mandanten-Snapshots
-  -- Speicherung in einer backup_snapshots Tabelle
-  -- Aufbewahrungspolitik: 30 Tage
-```
-
----
-
-## Umsetzung
-
-### 1. Neue Datenbanktabelle: `backup_snapshots`
-
-Speichert Metadaten und Inhalt der automatischen Mandanten-Backups.
+- Eine neue Edge Function `ha-ws-proxy` haelt die WebSocket-Verbindung offen, solange ein Browser-Client verbunden ist
+- Der Browser baut eine WebSocket-Verbindung zur Edge Function auf, die als Proxy zur HA-Instanz fungiert
+- Steuerungsbefehle (`call_service`) werden in Echtzeit durchgeleitet
+- Sensor-Events koennen optional live gestreamt werden
 
 ```text
-backup_snapshots
-  id            UUID (PK)
-  tenant_id     UUID (FK tenants)
-  created_at    timestamptz
-  created_by    UUID (nullable, auth user)
-  backup_type   text ('manual' | 'scheduled')
-  status        text ('completed' | 'failed')
-  tables_count  integer
-  rows_count    integer
-  size_bytes    bigint
-  data          jsonb       -- die eigentlichen Backup-Daten
-  expires_at    timestamptz -- Aufbewahrungsfrist
+Browser (UI)  <--WS-->  ha-ws-proxy (Edge Fn)  <--WS-->  Home Assistant
+                                                          (Nabu Casa / Reverse Proxy)
 ```
 
-RLS: Nur Admins des eigenen Tenants koennen lesen/erstellen. Alte Eintraege werden per Trigger/Cron bereinigt.
+Fuer das **minutliche Sensor-Polling** bleibt die REST-basierte Edge Function bestehen (wie bei allen anderen Gateways).
 
-### 2. Neue Edge Function: `tenant-backup`
+## Aenderungen
 
-Sammelt alle mandantenrelevanten Daten und gibt sie als JSON zurueck oder speichert sie in `backup_snapshots`.
+### 1. Gateway Registry erweitern
+**Datei:** `src/lib/gatewayRegistry.ts`
 
-**Gesicherte Tabellen (pro Tenant):**
+Neuer Eintrag `home_assistant`:
+- **Label:** Home Assistant
+- **Icon:** `house` (lucide)
+- **Edge Function:** `home-assistant-api`
+- **Konfigurationsfelder:**
+  - `api_url` (URL, erforderlich) -- z.B. `https://mein-ha.duckdns.org` oder Nabu Casa URL
+  - `access_token` (Passwort, erforderlich) -- Long-Lived Access Token
+  - `entity_filter` (Text, optional) -- Kommagetrennte Praefixe, z.B. `sensor.energy,switch.`
 
+### 2. REST Edge Function (Sensor-Polling + Steuerung)
+**Datei:** `supabase/functions/home-assistant-api/index.ts`
+
+Aktionen:
+- **`test`**: `GET /api/` mit Bearer Token -- Verbindungstest
+- **`getSensors`**: `GET /api/states` -- alle Entities abrufen, nach `entity_filter` filtern, in Standard-Sensor-Format mappen:
+
+| HA device_class | Sensor-Typ | Einheit |
+|-----------------|------------|---------|
+| power | power | W |
+| energy | energy | kWh |
+| temperature | temperature | C |
+| voltage | voltage | V |
+| current | current | A |
+| humidity | humidity | % |
+| switch.* / light.* | switch | on/off |
+
+- **`executeCommand`**: `POST /api/services/<domain>/<service>` -- Aktor steuern (z.B. `switch/turn_on`, `light/toggle`). Wird fuer einfache Befehle ohne WebSocket verwendet.
+
+### 3. WebSocket Proxy Edge Function (Echtzeit-Steuerung)
+**Datei:** `supabase/functions/ha-ws-proxy/index.ts`
+
+Architektur analog zu `ocpp-ws-proxy`:
+1. Browser oeffnet WebSocket zu `wss://.../ha-ws-proxy/<locationIntegrationId>`
+2. Edge Function liest HA-Credentials aus `location_integrations.config`
+3. Edge Function oeffnet WebSocket zu HA (`wss://<ha-url>/api/websocket`)
+4. Authentifizierung via `auth_required` -> `auth` Message mit Access Token
+5. Bidirektionales Proxying:
+   - **Browser -> HA**: `call_service`-Befehle (Licht an/aus, Heizung setzen, etc.)
+   - **HA -> Browser**: `state_changed`-Events fuer Echtzeit-Updates
+
+Nachrichten-Format (HA WebSocket API):
 ```text
-Konfiguration:     tenants, locations, floors, floor_rooms, meters,
-                   virtual_meter_sources, integrations, location_integrations,
-                   alert_rules, location_automations, energy_prices,
-                   dashboard_widgets, email_templates, pv_forecast_settings
+-- Auth
+{"type": "auth", "access_token": "..."}
 
-Benutzerdaten:     profiles, user_roles, user_location_access, user_preferences
+-- Service aufrufen (Steuerung)
+{"id": 1, "type": "call_service", "domain": "switch", "service": "turn_on",
+ "target": {"entity_id": "switch.wohnzimmer"}}
 
-Messdaten:         meter_period_totals, meter_readings, energy_readings
-                   (meter_power_readings und _5min werden NICHT gesichert
-                    -- zu gross, werden ohnehin taeglich komprimiert)
-
-Ladeinfrastruktur: charge_points, charging_sessions, charging_users,
-                   charging_tariffs, charging_invoices, charge_point_groups
-
-Aufgaben:          tasks, task_history
-
-Sonstiges:         report_schedules, brighthub_settings, tenant_modules
+-- Events abonnieren
+{"id": 2, "type": "subscribe_events", "event_type": "state_changed"}
 ```
 
-**Aktionen:**
+### 4. config.toml erweitern
+**Datei:** `supabase/config.toml`
 
-| Aktion | Beschreibung |
-|---|---|
-| `export` | Gibt JSON direkt als Download zurueck |
-| `snapshot` | Speichert in backup_snapshots Tabelle |
-| `list` | Listet vorhandene Snapshots |
-| `restore-preview` | Zeigt Diff zwischen Snapshot und aktuellem Stand |
+```toml
+[functions.home-assistant-api]
+verify_jwt = false
 
-### 3. Frontend: Backup-Bereich in den Einstellungen
-
-Neuer Tab oder Abschnitt auf der Settings-Seite (nur fuer Admins):
-
-```text
-Einstellungen > Datensicherung
-  +------------------------------------------+
-  | Manuelle Sicherung                       |
-  | [Backup erstellen]  [Als JSON laden]     |
-  +------------------------------------------+
-  | Automatische Sicherungen                 |
-  | Intervall: [Taeglich v]                  |
-  | Aufbewahrung: 30 Tage                    |
-  +------------------------------------------+
-  | Vorhandene Sicherungen                   |
-  | 27.02.2026 03:00  auto   42 Tabellen     |
-  | 26.02.2026 03:00  auto   42 Tabellen     |
-  | 25.02.2026 14:22  manuell 42 Tabellen    |
-  |                          [Laden] [Loeschen]|
-  +------------------------------------------+
+[functions.ha-ws-proxy]
+verify_jwt = false
 ```
 
-### 4. Automatischer Backup-Cronjob
+### 5. Periodische Synchronisierung
+**Datei:** `supabase/functions/gateway-periodic-sync/index.ts`
 
-Ein `pg_cron` Job ruft taeglich die Edge Function auf, um einen Snapshot zu erstellen. Ein zweiter Job bereinigt abgelaufene Snapshots (aelter als 30 Tage).
+Mapping erweitern:
+```
+home_assistant: "home-assistant-api"
+```
 
-### 5. Storage-Backup (Dateien)
+### 6. UI: Live-Steuerung in Automation
+**Datei:** `src/components/locations/LocationAutomation.tsx`
 
-Fuer die Storage-Buckets (`meter-photos`, `tenant-assets`, `floor-plans`, `floor-3d-models`) wird eine Liste aller Dateipfade ins Backup-JSON aufgenommen. Die Dateien selbst werden nicht in die DB kopiert, da sie ueber signierte URLs zugaenglich bleiben. Ein vollstaendiges Datei-Backup erfordert externe Infrastruktur (z.B. S3-Sync) und wird als Empfehlung dokumentiert.
+Der bestehende "Verfuegbare Aktoren"-Dialog zeigt aktuell nur Loxone-Aktoren. Erweiterung:
+- HA-Entities vom Typ `switch`, `light`, `climate`, `cover` als steuerbare Aktoren anzeigen
+- Bei Klick auf Steuerbefehl (On/Off/Toggle): REST-Call via `home-assistant-api` `executeCommand`
+- Optional: WebSocket-Verbindung fuer sofortiges Feedback bei Statusaenderungen
 
----
-
-## Dateien und Aenderungen
+## Dateien-Uebersicht
 
 | Datei | Aenderung |
-|---|---|
-| `supabase/functions/tenant-backup/index.ts` | Neue Edge Function |
-| `supabase/config.toml` | JWT-Config fuer tenant-backup |
-| Migration SQL | Tabelle `backup_snapshots` + RLS + Cleanup-Trigger |
-| `src/components/settings/BackupSettings.tsx` | Neue UI-Komponente |
-| `src/pages/Settings.tsx` | BackupSettings einbinden |
-| `src/hooks/useBackups.tsx` | Hook fuer Backup-Operationen |
-| `src/i18n/translations.ts` | Uebersetzungen fuer Backup-UI |
+|-------|-----------|
+| `src/lib/gatewayRegistry.ts` | Neuer `home_assistant`-Eintrag |
+| `supabase/functions/home-assistant-api/index.ts` | Neue Edge Function (REST) |
+| `supabase/functions/ha-ws-proxy/index.ts` | Neue Edge Function (WebSocket Proxy) |
+| `supabase/functions/gateway-periodic-sync/index.ts` | Mapping erweitern |
+| `supabase/config.toml` | Zwei neue Funktionen registrieren |
+| `src/components/locations/LocationAutomation.tsx` | HA-Aktoren in UI integrieren |
 
----
-
-## Sicherheitsaspekte
-
-- Backup-Daten enthalten **keine Passwoerter** (auth.users wird nicht gesichert)
-- Verschluesselte API-Keys (AES-256-GCM) bleiben verschluesselt im Backup
-- RLS stellt sicher, dass nur der eigene Mandant seine Backups sieht
-- Die Edge Function nutzt den Service-Role-Key fuer den Zugriff
-- JSONB-Spalte begrenzt auf ca. 500 MB pro Eintrag (PostgreSQL-Limit)
-
-## Einschraenkungen
-
-- **Kein Point-in-Time-Recovery** -- das erfordert Infrastruktur-Level-Backups
-- **Keine automatische Wiederherstellung** -- nur Export/Download; Restore muesste manuell oder ueber eine separate Funktion erfolgen
-- **Hochfrequente Messdaten** (meter_power_readings) werden nicht gesichert -- diese sind ohnehin transient und werden taeglich in 5-Min-Aggregate komprimiert
-
+## Hinweise
+- **Keine neuen Secrets noetig** -- Access Token wird in `location_integrations.config` (JSONB) gespeichert, wie bei allen anderen Gateways
+- **Keine DB-Migration noetig** -- nutzt bestehende Tabellen (`integrations`, `location_integrations`, `loxone_sensors`)
+- **Nabu Casa empfohlen** -- einfachster Weg fuer externen Zugriff, HTTPS/WSS automatisch inklusive
+- **Reverse Proxy** -- Alternative mit eigenem SSL-Zertifikat und Portweiterleitung
