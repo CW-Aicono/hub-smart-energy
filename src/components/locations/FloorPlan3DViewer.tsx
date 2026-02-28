@@ -620,8 +620,12 @@ export function FloorPlan3DViewer({ floor, locationId, sensors = [], isAdmin = f
   // Filter meters: only show meters that have been explicitly placed as sensor positions on this floor
   const floorMeters = useMemo(() => {
     const placedSensorUuids = new Set(sensorPositions.map(p => p.sensor_uuid));
-    return meters.filter(m => !m.is_archived && m.sensor_uuid && placedSensorUuids.has(m.sensor_uuid));
-  }, [meters, floor.id, sensorPositions]);
+    const result = meters.filter(m => !m.is_archived && m.sensor_uuid && placedSensorUuids.has(m.sensor_uuid));
+    if (result.length !== meters.filter(m => !m.is_archived && m.sensor_uuid).length) {
+      console.debug("[FloorPlan3D] floorMeters:", result.length, "of", meters.length, "total meters. Placed UUIDs:", placedSensorUuids.size);
+    }
+    return result;
+  }, [meters, sensorPositions]);
 
   // Get meter values: prefer live sensor data from integrations, fall back to meter_readings
   const meterLatestValues = useMemo(() => {
