@@ -892,44 +892,70 @@ function HistoryTab({ sessions, chargePoints, tariff, onStopCharge }: { sessions
 
   const renderSessionRow = (s: AppSession, isActive: boolean) => {
     const cost = calcCost(s);
+
+    if (isActive) {
+      return (
+        <div key={s.id} className="bg-blue-500/5 border border-blue-500/20 rounded-lg mx-3 mb-2 p-4 space-y-3">
+          {/* Top: Name + Status */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-full flex items-center justify-center shrink-0 bg-blue-500/10 text-blue-500 animate-pulse">
+                <BatteryCharging className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="font-medium text-sm">{getCpName(s.charge_point_id)}</p>
+                <p className="text-xs text-muted-foreground">{format(new Date(s.start_time), "dd.MM.yyyy HH:mm")}</p>
+              </div>
+            </div>
+            <Badge className="text-[10px] bg-blue-500 border-0 shrink-0">Lädt…</Badge>
+          </div>
+
+          {/* Stats row */}
+          <div className="grid grid-cols-3 gap-2 text-center">
+            <div className="rounded-md bg-background p-2">
+              <p className="text-lg font-bold">{fmtKwh(s.energy_kwh)}</p>
+              <p className="text-[10px] text-muted-foreground">Energie</p>
+            </div>
+            <div className="rounded-md bg-background p-2">
+              <p className="text-lg font-bold">{renderDuration(s)}</p>
+              <p className="text-[10px] text-muted-foreground">Dauer</p>
+            </div>
+            <div className="rounded-md bg-background p-2">
+              <p className="text-lg font-bold text-blue-600">{cost !== null ? `~${fmtCurrency(cost)}` : "—"}</p>
+              <p className="text-[10px] text-muted-foreground">Kosten</p>
+            </div>
+          </div>
+
+          {/* Stop button */}
+          <Button
+            variant="destructive"
+            size="sm"
+            className="w-full text-sm h-9"
+            onClick={(e) => { e.stopPropagation(); onStopCharge(s); }}
+          >
+            <ZapOff className="h-4 w-4 mr-1.5" />
+            Ladevorgang beenden
+          </Button>
+        </div>
+      );
+    }
+
     return (
-      <div key={s.id} className={`flex items-center gap-3 p-4 ${isActive ? "bg-blue-500/5 border border-blue-500/20 rounded-lg mx-3 mb-2" : "border-b"}`}>
+      <div key={s.id} className="flex items-center gap-3 p-4 border-b">
         <div className={`h-10 w-10 rounded-full flex items-center justify-center shrink-0 ${
-          isActive ? "bg-blue-500/10 text-blue-500 animate-pulse" :
-          s.status === "completed" ? "bg-primary/10 text-primary" :
-          "bg-muted text-muted-foreground"
+          s.status === "completed" ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"
         }`}>
-          {isActive ? <BatteryCharging className="h-5 w-5" /> : <PlugZap className="h-5 w-5" />}
+          <PlugZap className="h-5 w-5" />
         </div>
         <div className="flex-1 min-w-0">
           <p className="font-medium text-sm">{getCpName(s.charge_point_id)}</p>
           <p className="text-xs text-muted-foreground">{format(new Date(s.start_time), "dd.MM.yyyy HH:mm")}</p>
-          {isActive && (
-            <div className="flex items-center gap-2 mt-1">
-              <Badge variant="secondary" className="text-[10px] px-1.5 py-0 bg-blue-500/10 text-blue-600 border-0">
-                <Clock className="h-3 w-3 mr-0.5" /> {renderDuration(s)}
-              </Badge>
-            </div>
-          )}
         </div>
         <div className="text-right shrink-0">
           <p className="text-sm font-bold">{fmtKwh(s.energy_kwh)}</p>
-          {!isActive && s.stop_time && <p className="text-xs text-muted-foreground">{renderDuration(s)}</p>}
-          {cost !== null && !isActive && <p className="text-xs font-semibold text-primary">{fmtCurrency(cost)}</p>}
-          {isActive && cost !== null && <p className="text-xs font-semibold text-blue-600">~{fmtCurrency(cost)}</p>}
-          {isActive && <Badge className="text-[10px] bg-blue-500 border-0 mt-0.5">Lädt…</Badge>}
+          {s.stop_time && <p className="text-xs text-muted-foreground">{renderDuration(s)}</p>}
+          {cost !== null && <p className="text-xs font-semibold text-primary">{fmtCurrency(cost)}</p>}
         </div>
-        {isActive && (
-          <Button
-            variant="destructive"
-            size="sm"
-            className="shrink-0 ml-1 text-xs h-8 px-3"
-            onClick={(e) => { e.stopPropagation(); onStopCharge(s); }}
-          >
-            <ZapOff className="h-3.5 w-3.5 mr-1" />
-            Ladevorgang beenden
-          </Button>
-        )}
       </div>
     );
   };
