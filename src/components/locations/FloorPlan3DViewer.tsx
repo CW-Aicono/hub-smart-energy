@@ -844,8 +844,8 @@ export function FloorPlan3DViewer({ floor, locationId, sensors = [], isAdmin = f
             <Canvas
               shadows
               camera={{ 
-                position: readOnly ? [15, 20, 15] : [0, 1.7, 10], 
-                fov: readOnly ? 50 : 75,
+                position: readOnly ? [10, 12, 10] : [0, 1.7, 10], 
+                fov: readOnly ? 55 : 75,
                 near: 0.1,
                 far: 1000,
               }}
