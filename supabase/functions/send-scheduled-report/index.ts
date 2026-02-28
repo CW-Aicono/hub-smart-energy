@@ -318,12 +318,6 @@ function buildReportHTML(
     </div>
   </div>
 
-  <!-- Print Button (hidden in print) -->
-  <div class="no-print" style="text-align:center;margin-top:20px">
-    <button onclick="window.print()" style="background:#1e293b;color:white;border:none;padding:10px 24px;border-radius:8px;font-size:14px;cursor:pointer;font-weight:600">
-      Als PDF drucken
-    </button>
-  </div>
 
 </div>
 </body>
@@ -395,10 +389,38 @@ serve(async (req) => {
         const { data: locations } = await supabase.from("locations").select("id, name").eq("tenant_id", schedule.tenant_id);
         const locMap = new Map((locations ?? []).map((l: any) => [l.id, l.name]));
 
-        // Get readings
+        // Get data from meter_period_totals (primary: automated daily aggregates)
+        // AND meter_readings (secondary: manual/QR/AI readings)
         let rows: Record<string, unknown>[] = [];
         if (meterIds.length > 0) {
-          const { data: readings } = await supabase
+          // 1) meter_period_totals – daily aggregates from Loxone/computed
+          const { data: periodTotals } = await supabase
+            .from("meter_period_totals")
+            .select("meter_id, total_value, period_start, source, energy_type")
+            .in("meter_id", meterIds)
+            .eq("period_type", "day")
+            .gte("period_start", from)
+            .lte("period_start", to)
+            .order("period_start", { ascending: true });
+
+          const periodRows = (periodTotals ?? []).map((r: any) => {
+            const meter = (meters ?? []).find((m: any) => m.id === r.meter_id);
+            return {
+              Quelle: "Messstellen",
+              Standort: locMap.get(meter?.location_id) || "",
+              Zähler: meter?.name || "",
+              Zählernummer: meter?.meter_number || "",
+              Energieart: ENERGY_LABELS[r.energy_type] || ENERGY_LABELS[meter?.energy_type] || meter?.energy_type || "",
+              Datum: r.period_start,
+              Wert: Number(r.total_value) || 0,
+              Einheit: meter?.unit || "kWh",
+              Erfassung: r.source === "loxone" ? "Automatic" : r.source || "Automatic",
+              Name: meter?.name || "",
+            };
+          });
+
+          // 2) meter_readings – manual/QR/AI readings
+          const { data: manualReadings } = await supabase
             .from("meter_readings")
             .select("meter_id, value, reading_date, capture_method")
             .in("meter_id", meterIds)
@@ -406,9 +428,11 @@ serve(async (req) => {
             .lte("reading_date", to)
             .order("reading_date", { ascending: true });
 
-          rows = (readings ?? []).map((r: any) => {
+          const manualRows = (manualReadings ?? []).map((r: any) => {
             const meter = (meters ?? []).find((m: any) => m.id === r.meter_id);
+            const captureLabels: Record<string, string> = { manual: "Manual", qr: "AI-OCR", ai: "AI-OCR", ocr: "AI-OCR" };
             return {
+              Quelle: "Zählerablesungen",
               Standort: locMap.get(meter?.location_id) || "",
               Zähler: meter?.name || "",
               Zählernummer: meter?.meter_number || "",
@@ -416,8 +440,14 @@ serve(async (req) => {
               Datum: r.reading_date,
               Wert: r.value,
               Einheit: meter?.unit || "kWh",
+              Erfassung: captureLabels[r.capture_method] || r.capture_method || "Manual",
+              Name: meter?.name || "",
             };
           });
+
+          rows = [...manualRows, ...periodRows];
+          // Sort by date
+          rows.sort((a, b) => String(a.Datum).localeCompare(String(b.Datum)));
         }
 
         const dateRange = { from, to };
