@@ -5220,6 +5220,22 @@ export const translations = {
   "pv.sectionTitle": { de: "PV-Prognose", en: "PV Forecast", es: "Pronóstico FV", nl: "PV-prognose" },
   "pv.sectionDesc": { de: "KI-gestützte Solarprognose basierend auf Standortdaten und Wetter", en: "AI-powered solar forecast based on location data and weather", es: "Pronóstico solar con IA basado en datos de ubicación y clima", nl: "AI-ondersteunde zonneprognose op basis van locatiegegevens en weer" },
   "pv.clock": { de: "Uhr", en: "", es: "", nl: "" },
+  "pv.now": { de: "Jetzt", en: "Now", es: "Ahora", nl: "Nu" },
+  "pv.todayForecast": { de: "Heute (Prognose)", en: "Today (Forecast)", es: "Hoy (Pronóstico)", nl: "Vandaag (Prognose)" },
+  "pv.todayActual": { de: "Heute (Ist)", en: "Today (Actual)", es: "Hoy (Real)", nl: "Vandaag (Werkelijk)" },
+  "pv.dateForecast": { de: "{date} (Prognose)", en: "{date} (Forecast)", es: "{date} (Pronóstico)", nl: "{date} (Prognose)" },
+  "pv.dateActual": { de: "{date} (Ist)", en: "{date} (Actual)", es: "{date} (Real)", nl: "{date} (Werkelijk)" },
+  "pv.periodForecast": { de: "{period} (Prognose)", en: "{period} (Forecast)", es: "{period} (Pronóstico)", nl: "{period} (Prognose)" },
+  "pv.noForecastDay": { de: "Keine Prognosedaten für diesen Tag", en: "No forecast data for this day", es: "Sin datos de pronóstico para este día", nl: "Geen prognosegegevens voor deze dag" },
+  "pv.noForecastPeriod": { de: "Keine Prognosedaten für diesen Zeitraum", en: "No forecast data for this period", es: "Sin datos de pronóstico para este período", nl: "Geen prognosegegevens voor deze periode" },
+  "pv.noDataAvailable": { de: "Keine Prognosedaten verfügbar. Konfigurieren Sie PV-Einstellungen in der Liegenschaft.", en: "No forecast data available. Configure PV settings in the property.", es: "Sin datos de pronóstico. Configure los ajustes FV en la propiedad.", nl: "Geen prognosegegevens beschikbaar. Configureer PV-instellingen in het pand." },
+  "pv.ai": { de: "KI", en: "AI", es: "IA", nl: "AI" },
+
+  // ── EnergyChart day-view label ────────────────────────────────────────────
+  "chart.timeLabel": { de: "Uhr", en: "", es: "", nl: "" },
+
+  // ── Calendar week abbreviation ────────────────────────────────────────────
+  "chart.cwPrefix": { de: "KW", en: "CW", es: "S", nl: "KW" },
 
 } as const;
 
