@@ -1,125 +1,77 @@
 
-# Home Assistant Integration (aktualisiert)
 
-## Zusammenfassung
-Neue Gateway-Integration fuer Home Assistant mit zwei Kommunikationswegen:
-1. **REST API** (Edge Function) -- Sensor-Polling alle 1 Minute + sofortige Aktor-Steuerung
-2. **WebSocket API** (Edge Function) -- Persistenter Proxy fuer Echtzeit-Events und schnelle Steuerung
+## Kurze OCPP-URL: `ocpp.aicono.org/{OCPP_ID}`
 
-## Architektur-Entscheidung: WebSocket
+### Problem
+Die aktuelle URL `wss://xnveugycurplszevdxtw.supabase.co/functions/v1/ocpp-ws-proxy/{OCPP_ID}` ist viel zu lang fuer die manuelle Eingabe auf einem Handy oder in einer Wallbox-App.
 
-Home Assistant bietet eine WebSocket API (`ws://<ha>:8123/api/websocket`), die sowohl Events als auch `call_service`-Befehle unterstuetzt. Da Edge Functions kurzlebig sind, wird das gleiche Muster wie beim bestehenden OCPP-WebSocket-Proxy verwendet:
+### Loesung: Zwei Massnahmen
 
-- Eine neue Edge Function `ha-ws-proxy` haelt die WebSocket-Verbindung offen, solange ein Browser-Client verbunden ist
-- Der Browser baut eine WebSocket-Verbindung zur Edge Function auf, die als Proxy zur HA-Instanz fungiert
-- Steuerungsbefehle (`call_service`) werden in Echtzeit durchgeleitet
-- Sensor-Events koennen optional live gestreamt werden
+#### 1. Infrastruktur: Reverse-Proxy-Subdomain (ausserhalb Lovable)
+
+Da die Produktivumgebung auf eigenem Hetzner-Server laeuft, wird ein Nginx-Eintrag fuer `ocpp.aicono.org` benoetigt, der WebSocket-Verbindungen an die Supabase Edge Function weiterleitet.
 
 ```text
-Browser (UI)  <--WS-->  ha-ws-proxy (Edge Fn)  <--WS-->  Home Assistant
-                                                          (Nabu Casa / Reverse Proxy)
+DNS:  ocpp.aicono.org  -->  A-Record auf Hetzner-Server IP
+
+Nginx-Config (Beispiel):
+
+server {
+    listen 443 ssl;
+    server_name ocpp.aicono.org;
+
+    # SSL-Zertifikat (Let's Encrypt)
+    ssl_certificate     /etc/letsencrypt/live/ocpp.aicono.org/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/ocpp.aicono.org/privkey.pem;
+
+    location / {
+        proxy_pass https://xnveugycurplszevdxtw.supabase.co/functions/v1/ocpp-ws-proxy/;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host xnveugycurplszevdxtw.supabase.co;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_read_timeout 86400;
+    }
+}
 ```
 
-Fuer das **minutliche Sensor-Polling** bleibt die REST-basierte Edge Function bestehen (wie bei allen anderen Gateways).
+Ergebnis: `wss://ocpp.aicono.org/{OCPP_ID}` -- kurz, merkbar, professionell.
 
-## Aenderungen
+#### 2. Code: OCPP-URL konfigurierbar machen
 
-### 1. Gateway Registry erweitern
-**Datei:** `src/lib/gatewayRegistry.ts`
+Damit die angezeigte URL in der App automatisch die kurze Domain nutzt:
 
-Neuer Eintrag `home_assistant`:
-- **Label:** Home Assistant
-- **Icon:** `house` (lucide)
-- **Edge Function:** `home-assistant-api`
-- **Konfigurationsfelder:**
-  - `api_url` (URL, erforderlich) -- z.B. `https://mein-ha.duckdns.org` oder Nabu Casa URL
-  - `access_token` (Passwort, erforderlich) -- Long-Lived Access Token
-  - `entity_filter` (Text, optional) -- Kommagetrennte Praefixe, z.B. `sensor.energy,switch.`
+- **Neue Umgebungsvariable** `VITE_OCPP_WS_URL` (optional). Wenn gesetzt, wird diese anstelle der automatisch generierten Supabase-URL verwendet.
+- **Fallback**: Ist die Variable nicht gesetzt, wird weiterhin die bisherige Supabase-URL generiert.
+- **Betroffene Dateien**:
+  - `src/pages/OcppIntegration.tsx` -- URL-Anzeige und Copy-Funktion
+  - `src/pages/ChargingPoints.tsx` -- URL-Anzeige beim Hinzufuegen eines Ladepunkts
 
-### 2. REST Edge Function (Sensor-Polling + Steuerung)
-**Datei:** `supabase/functions/home-assistant-api/index.ts`
+### Technische Details
 
-Aktionen:
-- **`test`**: `GET /api/` mit Bearer Token -- Verbindungstest
-- **`getSensors`**: `GET /api/states` -- alle Entities abrufen, nach `entity_filter` filtern, in Standard-Sensor-Format mappen:
+Aenderung in beiden Dateien:
 
-| HA device_class | Sensor-Typ | Einheit |
-|-----------------|------------|---------|
-| power | power | W |
-| energy | energy | kWh |
-| temperature | temperature | C |
-| voltage | voltage | V |
-| current | current | A |
-| humidity | humidity | % |
-| switch.* / light.* | switch | on/off |
+```typescript
+// Vorher:
+const OCPP_WS_URL = `${import.meta.env.VITE_SUPABASE_URL?.replace("https://", "wss://")}/functions/v1/ocpp-ws-proxy`;
 
-- **`executeCommand`**: `POST /api/services/<domain>/<service>` -- Aktor steuern (z.B. `switch/turn_on`, `light/toggle`). Wird fuer einfache Befehle ohne WebSocket verwendet.
-
-### 3. WebSocket Proxy Edge Function (Echtzeit-Steuerung)
-**Datei:** `supabase/functions/ha-ws-proxy/index.ts`
-
-Architektur analog zu `ocpp-ws-proxy`:
-1. Browser oeffnet WebSocket zu `wss://.../ha-ws-proxy/<locationIntegrationId>`
-2. Edge Function liest HA-Credentials aus `location_integrations.config`
-3. Edge Function oeffnet WebSocket zu HA (`wss://<ha-url>/api/websocket`)
-4. Authentifizierung via `auth_required` -> `auth` Message mit Access Token
-5. Bidirektionales Proxying:
-   - **Browser -> HA**: `call_service`-Befehle (Licht an/aus, Heizung setzen, etc.)
-   - **HA -> Browser**: `state_changed`-Events fuer Echtzeit-Updates
-
-Nachrichten-Format (HA WebSocket API):
-```text
--- Auth
-{"type": "auth", "access_token": "..."}
-
--- Service aufrufen (Steuerung)
-{"id": 1, "type": "call_service", "domain": "switch", "service": "turn_on",
- "target": {"entity_id": "switch.wohnzimmer"}}
-
--- Events abonnieren
-{"id": 2, "type": "subscribe_events", "event_type": "state_changed"}
+// Nachher:
+const OCPP_WS_URL = import.meta.env.VITE_OCPP_WS_URL
+  || `${import.meta.env.VITE_SUPABASE_URL?.replace("https://", "wss://")}/functions/v1/ocpp-ws-proxy`;
 ```
 
-### 4. config.toml erweitern
-**Datei:** `supabase/config.toml`
-
-```toml
-[functions.home-assistant-api]
-verify_jwt = false
-
-[functions.ha-ws-proxy]
-verify_jwt = false
+Fuer die Produktivumgebung unter `ems-pro.aicono.org` setzt ihr dann in der `.env`:
+```
+VITE_OCPP_WS_URL=wss://ocpp.aicono.org
 ```
 
-### 5. Periodische Synchronisierung
-**Datei:** `supabase/functions/gateway-periodic-sync/index.ts`
+### Zusammenfassung
 
-Mapping erweitern:
-```
-home_assistant: "home-assistant-api"
-```
+| Schritt | Wo | Was |
+|---|---|---|
+| DNS-Eintrag | Domain-Registrar | `ocpp.aicono.org` A-Record |
+| Nginx-Config | Hetzner-Server | WebSocket-Reverse-Proxy |
+| Code-Aenderung | Lovable | `VITE_OCPP_WS_URL` Fallback in 2 Dateien |
+| Env-Variable | Produktiv-Deployment | `VITE_OCPP_WS_URL=wss://ocpp.aicono.org` |
 
-### 6. UI: Live-Steuerung in Automation
-**Datei:** `src/components/locations/LocationAutomation.tsx`
-
-Der bestehende "Verfuegbare Aktoren"-Dialog zeigt aktuell nur Loxone-Aktoren. Erweiterung:
-- HA-Entities vom Typ `switch`, `light`, `climate`, `cover` als steuerbare Aktoren anzeigen
-- Bei Klick auf Steuerbefehl (On/Off/Toggle): REST-Call via `home-assistant-api` `executeCommand`
-- Optional: WebSocket-Verbindung fuer sofortiges Feedback bei Statusaenderungen
-
-## Dateien-Uebersicht
-
-| Datei | Aenderung |
-|-------|-----------|
-| `src/lib/gatewayRegistry.ts` | Neuer `home_assistant`-Eintrag |
-| `supabase/functions/home-assistant-api/index.ts` | Neue Edge Function (REST) |
-| `supabase/functions/ha-ws-proxy/index.ts` | Neue Edge Function (WebSocket Proxy) |
-| `supabase/functions/gateway-periodic-sync/index.ts` | Mapping erweitern |
-| `supabase/config.toml` | Zwei neue Funktionen registrieren |
-| `src/components/locations/LocationAutomation.tsx` | HA-Aktoren in UI integrieren |
-
-## Hinweise
-- **Keine neuen Secrets noetig** -- Access Token wird in `location_integrations.config` (JSONB) gespeichert, wie bei allen anderen Gateways
-- **Keine DB-Migration noetig** -- nutzt bestehende Tabellen (`integrations`, `location_integrations`, `loxone_sensors`)
-- **Nabu Casa empfohlen** -- einfachster Weg fuer externen Zugriff, HTTPS/WSS automatisch inklusive
-- **Reverse Proxy** -- Alternative mit eigenem SSL-Zertifikat und Portweiterleitung
