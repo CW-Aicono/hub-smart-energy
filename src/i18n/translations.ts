@@ -688,6 +688,25 @@ export const translations = {
     es: "Pellets",
     nl: "Pellets",
   },
+  // DB-key aliases used in alert_rules.energy_type
+  "energy.strom": {
+    de: "Strom",
+    en: "Electricity",
+    es: "Electricidad",
+    nl: "Elektriciteit",
+  },
+  "energy.waerme": {
+    de: "Wärme",
+    en: "Heat",
+    es: "Calor",
+    nl: "Warmte",
+  },
+  "energy.wasser": {
+    de: "Wasser",
+    en: "Water",
+    es: "Agua",
+    nl: "Water",
+  },
 
   // User Management
   "users.title": {
