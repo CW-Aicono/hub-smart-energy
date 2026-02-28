@@ -3838,6 +3838,7 @@ export const translations = {
   "common.coordinates": { de: "Koordinaten", en: "Coordinates", es: "Coordenadas", nl: "Coördinaten" },
   "common.contact": { de: "Kontakt", en: "Contact", es: "Contacto", nl: "Contact" },
   "common.noContactData": { de: "Keine Kontaktdaten hinterlegt", en: "No contact information available", es: "No hay datos de contacto", nl: "Geen contactgegevens beschikbaar" },
+  "common.automation": { de: "Automation", en: "Automation", es: "Automatización", nl: "Automatisering" },
   "common.manual": { de: "Manuell", en: "Manual", es: "Manual", nl: "Handmatig" },
   "common.automatic": { de: "Automatisch", en: "Automatic", es: "Automático", nl: "Automatisch" },
   "common.virtual": { de: "Virtuell", en: "Virtual", es: "Virtual", nl: "Virtueel" },
