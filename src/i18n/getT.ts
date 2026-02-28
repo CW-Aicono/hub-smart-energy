@@ -17,9 +17,9 @@ export function getT() {
     // ignore – fall back to "de"
   }
 
-  return (key: TranslationKey): string => {
-    const entry = translations[key];
-    if (!entry) return key;
-    return entry[language] || entry.de || key;
+  return (key: TranslationKey | (string & {})): string => {
+    const entry = translations[key as TranslationKey];
+    if (!entry) return key as string;
+    return entry[language] || entry.de || (key as string);
   };
 }

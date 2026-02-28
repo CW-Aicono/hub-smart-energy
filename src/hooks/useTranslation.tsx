@@ -4,8 +4,11 @@ import { useUserPreferences } from "./useUserPreferences";
 
 type TranslationMap = Record<string, Record<string, string>>;
 
+/** Accept both typed keys and arbitrary strings (for dynamically built keys). */
+type TranslateFn = (key: TranslationKey | (string & {})) => string;
+
 interface TranslationContextType {
-  t: (key: TranslationKey) => string;
+  t: TranslateFn;
   language: Language;
 }
 
@@ -37,8 +40,8 @@ export function TranslationProvider({ children }: { children: ReactNode }) {
     }
   }, [translations]);
 
-  const t = useCallback(
-    (key: TranslationKey): string => {
+  const t: TranslateFn = useCallback(
+    (key): string => {
       if (!translations) return key as string;
       const entry = translations[key as string];
       if (!entry) return key as string;
@@ -58,11 +61,11 @@ export function useTranslation() {
   const context = useContext(TranslationContext);
   if (!context) {
     return {
-      t: (key: TranslationKey): string => {
+      t: ((key: TranslationKey | (string & {})): string => {
         if (!cachedTranslations) return key as string;
         const entry = cachedTranslations[key as string];
         return entry?.de || (key as string);
-      },
+      }) as TranslateFn,
       language: "de" as Language,
     };
   }
