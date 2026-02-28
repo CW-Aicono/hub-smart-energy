@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Brain, TrendingUp, Loader2, Clock, Zap, CheckCircle2, ChevronDown, ChevronUp } from "lucide-react";
 import { useArbitrageAiStrategy, AiStrategySuggestion } from "@/hooks/useArbitrageAiStrategy";
 import { useArbitrageStrategies } from "@/hooks/useArbitrageStrategies";
+import { useTranslation } from "@/hooks/useTranslation";
 import { format } from "date-fns";
 import { toast } from "@/hooks/use-toast";
 
@@ -17,15 +18,16 @@ const confidenceColor: Record<string, string> = {
 export default function ArbitrageAiSuggestions() {
   const { result, isGenerating, generate } = useArbitrageAiStrategy();
   const { createStrategy } = useArbitrageStrategies();
+  const { t } = useTranslation();
+  const T = (key: string) => t(key as any);
   const [adopted, setAdopted] = useState<Set<number>>(new Set());
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
 
   const adoptStrategy = (suggestion: AiStrategySuggestion, index: number) => {
     if (!suggestion.storage_id) {
-      toast({ title: "Fehler", description: "Kein passender Speicher gefunden.", variant: "destructive" });
+      toast({ title: T("common.error"), description: T("aiArb.errorNoStorage"), variant: "destructive" });
       return;
     }
-    // Determine valid_until from the latest discharge/charge window end time
     const allWindows = [...suggestion.charge_windows, ...suggestion.discharge_windows];
     const latestEnd = allWindows.length > 0
       ? allWindows.reduce((max, w) => (w.end > max ? w.end : max), allWindows[0].end)
@@ -43,7 +45,7 @@ export default function ArbitrageAiSuggestions() {
       {
         onSuccess: () => {
           setAdopted((prev) => new Set(prev).add(index));
-          toast({ title: "Strategie übernommen", description: `"${suggestion.name}" wurde als aktive Strategie angelegt.` });
+          toast({ title: T("aiArb.adoptedMsg"), description: T("aiArb.adoptedDesc").replace("{name}", suggestion.name) });
         },
       }
     );
@@ -72,30 +74,30 @@ export default function ArbitrageAiSuggestions() {
         <div className="flex items-center justify-between">
           <CardTitle className="flex items-center gap-2">
             <Brain className="h-5 w-5 text-primary" />
-            KI-Strategievorschläge
+            {T("aiArb.title")}
           </CardTitle>
           <Button onClick={generate} disabled={isGenerating}>
             {isGenerating ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Brain className="h-4 w-4 mr-2" />}
-            {isGenerating ? "Analysiert Spotpreise & PV…" : "KI-Analyse starten"}
+            {isGenerating ? T("aiArb.analyzing") : T("aiArb.analyze")}
           </Button>
         </div>
         <CardDescription>
-          Basierend auf aktuellen Spotpreisen, PV-Prognosen und Ihren Speicherparametern
+          {T("aiArb.subtitle")}
         </CardDescription>
       </CardHeader>
       <CardContent>
         {!result && !isGenerating && (
           <div className="text-center py-8 text-muted-foreground space-y-2">
             <Brain className="h-10 w-10 mx-auto opacity-30" />
-            <p>Starten Sie die KI-Analyse, um optimale Handelsstrategien für die nächsten 48 Stunden zu erhalten.</p>
-            <p className="text-xs">Die KI berücksichtigt Spotpreise, PV-Erzeugung, Speicherkapazitäten und Wirkungsgrade.</p>
+            <p>{T("aiArb.empty")}</p>
+            <p className="text-xs">{T("aiArb.emptyHint")}</p>
           </div>
         )}
 
         {isGenerating && (
           <div className="flex flex-col items-center justify-center py-10 gap-3">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            <p className="text-sm text-muted-foreground">Spotpreise, PV-Prognosen und Speicherdaten werden analysiert…</p>
+            <p className="text-sm text-muted-foreground">{T("aiArb.loadingMsg")}</p>
           </div>
         )}
 
@@ -103,14 +105,14 @@ export default function ArbitrageAiSuggestions() {
           <div className="space-y-4">
             {result.market_summary && (
               <div className="bg-muted/50 rounded-lg p-3">
-                <p className="text-sm font-medium">Markteinschätzung</p>
+                <p className="text-sm font-medium">{T("aiArb.marketSummary")}</p>
                 <p className="text-sm text-muted-foreground">{result.market_summary}</p>
               </div>
             )}
 
             {result.suggestions.length === 0 && (
               <p className="text-center py-6 text-muted-foreground">
-                Aktuell keine profitablen Strategien identifiziert. Versuchen Sie es später erneut.
+                {T("aiArb.noProfitable")}
               </p>
             )}
 
@@ -121,7 +123,7 @@ export default function ArbitrageAiSuggestions() {
                     <div className="flex items-center gap-2">
                       <span className="font-semibold">{s.name}</span>
                       <Badge className={confidenceColor[s.confidence] || ""} variant="secondary">
-                        Konfidenz: {s.confidence}
+                        {T("aiArb.confidence")}: {s.confidence}
                       </Badge>
                     </div>
                     <div className="flex items-center gap-2">
@@ -132,7 +134,7 @@ export default function ArbitrageAiSuggestions() {
                       {adopted.has(i) ? (
                         <Badge variant="default" className="gap-1">
                           <CheckCircle2 className="h-3 w-3" />
-                          Übernommen
+                          {T("aiArb.adopted")}
                         </Badge>
                       ) : (
                         <Button
@@ -141,7 +143,7 @@ export default function ArbitrageAiSuggestions() {
                           disabled={!s.storage_id || createStrategy.isPending}
                         >
                           <Zap className="h-3 w-3 mr-1" />
-                          Übernehmen
+                          {T("aiArb.adopt")}
                         </Button>
                       )}
                     </div>
@@ -150,14 +152,14 @@ export default function ArbitrageAiSuggestions() {
                   <p className="text-sm text-muted-foreground">{s.reasoning}</p>
 
                   <div className="flex items-center gap-4 text-sm">
-                    <span>Speicher: <strong>{s.storage_name}</strong></span>
-                    <span>Kauf &lt; <strong>{s.buy_below_eur_mwh} €/MWh</strong></span>
-                    <span>Verkauf &gt; <strong>{s.sell_above_eur_mwh} €/MWh</strong></span>
+                    <span>{T("aiArb.storage")}: <strong>{s.storage_name}</strong></span>
+                    <span>{T("aiArb.buyBelow")} <strong>{s.buy_below_eur_mwh} €/MWh</strong></span>
+                    <span>{T("aiArb.sellAbove")} <strong>{s.sell_above_eur_mwh} €/MWh</strong></span>
                   </div>
 
                   <Button variant="ghost" size="sm" onClick={() => toggleExpand(i)} className="w-full mt-1">
                     {expanded.has(i) ? <ChevronUp className="h-4 w-4 mr-1" /> : <ChevronDown className="h-4 w-4 mr-1" />}
-                    Zeitfenster {expanded.has(i) ? "ausblenden" : "anzeigen"}
+                    {expanded.has(i) ? T("aiArb.hideWindows") : T("aiArb.showWindows")}
                   </Button>
                 </div>
 
@@ -166,10 +168,10 @@ export default function ArbitrageAiSuggestions() {
                     <div>
                       <p className="text-sm font-medium mb-2 flex items-center gap-1">
                         <Zap className="h-3 w-3 text-green-600" />
-                        Laden (Kaufen)
+                        {T("aiArb.charge")}
                       </p>
                       {s.charge_windows.length === 0 ? (
-                        <p className="text-xs text-muted-foreground">Kein Ladefenster empfohlen</p>
+                        <p className="text-xs text-muted-foreground">{T("aiArb.noCharge")}</p>
                       ) : (
                         <div className="space-y-1">
                           {s.charge_windows.map((w, j) => (
@@ -185,10 +187,10 @@ export default function ArbitrageAiSuggestions() {
                     <div>
                       <p className="text-sm font-medium mb-2 flex items-center gap-1">
                         <TrendingUp className="h-3 w-3 text-amber-600" />
-                        Entladen (Verkaufen)
+                        {T("aiArb.discharge")}
                       </p>
                       {s.discharge_windows.length === 0 ? (
-                        <p className="text-xs text-muted-foreground">Kein Entladefenster empfohlen</p>
+                        <p className="text-xs text-muted-foreground">{T("aiArb.noDischarge")}</p>
                       ) : (
                         <div className="space-y-1">
                           {s.discharge_windows.map((w, j) => (
@@ -208,7 +210,7 @@ export default function ArbitrageAiSuggestions() {
 
             {result.generated_at && (
               <p className="text-xs text-muted-foreground text-right">
-                Generiert: {format(new Date(result.generated_at), "dd.MM.yyyy HH:mm")} Uhr
+                {T("aiArb.generated")}: {format(new Date(result.generated_at), "dd.MM.yyyy HH:mm")} Uhr
               </p>
             )}
           </div>

@@ -7,6 +7,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Plus, Trash2, Pencil, Clock, Mail, CalendarClock } from "lucide-react";
 import { useReportSchedules, type ReportScheduleInsert } from "@/hooks/useReportSchedules";
 import { useLocations, type Location } from "@/hooks/useLocations";
+import { useTranslation } from "@/hooks/useTranslation";
 import ReportScheduleDialog from "./ReportScheduleDialog";
 import {
   AlertDialog,
@@ -19,22 +20,24 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
-const FREQ_LABELS: Record<string, string> = {
-  daily: "Täglich", weekly: "Wöchentlich", monthly: "Monatlich", quarterly: "Quartalsweise", yearly: "Jährlich",
-};
-const FORMAT_LABELS: Record<string, string> = {
-  pdf: "PDF", csv: "CSV", both: "PDF & CSV",
-};
-const ENERGY_LABELS: Record<string, string> = {
-  strom: "Strom", gas: "Gas", waerme: "Wärme", wasser: "Wasser",
-};
-
 export default function ReportSchedulesList() {
   const { schedules, loading, createSchedule, updateSchedule, deleteSchedule } = useReportSchedules();
   const { locations } = useLocations();
+  const { t } = useTranslation();
+  const T = (key: string) => t(key as any);
   const [createOpen, setCreateOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+
+  const FREQ_LABELS: Record<string, string> = {
+    daily: T("report.freqDaily"), weekly: T("report.freqWeekly"), monthly: T("report.freqMonthly"), quarterly: T("report.freqQuarterly"), yearly: T("report.freqYearly"),
+  };
+  const FORMAT_LABELS: Record<string, string> = {
+    pdf: "PDF", csv: "CSV", both: "PDF & CSV",
+  };
+  const ENERGY_LABELS: Record<string, string> = {
+    strom: T("report.energyStrom"), gas: T("report.energyGas"), waerme: T("report.energyWaerme"), wasser: T("report.energyWasser"),
+  };
 
   const editSchedule = schedules.find((s) => s.id === editId);
 
@@ -48,21 +51,21 @@ export default function ReportSchedulesList() {
             <div>
               <CardTitle className="text-base flex items-center gap-2">
                 <CalendarClock className="h-5 w-5 text-primary" />
-                Automatische Reports
+                {T("report.title")}
               </CardTitle>
               <CardDescription>
-                Erstellen Sie Report-Templates, die automatisch versendet werden
+                {T("report.subtitle")}
               </CardDescription>
             </div>
             <Button onClick={() => setCreateOpen(true)} size="sm">
-              <Plus className="h-4 w-4 mr-1" /> Neues Template
+              <Plus className="h-4 w-4 mr-1" /> {T("report.new")}
             </Button>
           </div>
         </CardHeader>
         <CardContent>
           {schedules.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-6">
-              Noch keine Report-Templates angelegt. Erstellen Sie ein Template, um automatisch Reports zu versenden.
+              {T("report.empty")}
             </p>
           ) : (
             <div className="space-y-3">
@@ -72,7 +75,7 @@ export default function ReportSchedulesList() {
                     <div className="flex items-center gap-2">
                       <span className="font-medium truncate">{s.name}</span>
                       <Badge variant={s.is_active ? "default" : "secondary"}>
-                        {s.is_active ? "Aktiv" : "Pausiert"}
+                        {s.is_active ? T("report.active") : T("report.paused")}
                       </Badge>
                     </div>
                     <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
@@ -80,20 +83,20 @@ export default function ReportSchedulesList() {
                       <span>{FORMAT_LABELS[s.format]}</span>
                       <span className="flex items-center gap-1">
                         <Mail className="h-3 w-3" />
-                        {s.recipients.length} Empfänger
+                        {s.recipients.length} {T("report.recipients")}
                       </span>
                       <span>
-                        {s.energy_types.map((t) => ENERGY_LABELS[t] || t).join(", ")}
+                        {s.energy_types.map((et) => ENERGY_LABELS[et] || et).join(", ")}
                       </span>
                       {s.location_ids.length > 0 ? (
-                        <span>{s.location_ids.length} Standort(e)</span>
+                        <span>{s.location_ids.length} {T("report.locations")}</span>
                       ) : (
-                        <span>Alle Standorte</span>
+                        <span>{T("report.allLocations")}</span>
                       )}
                     </div>
                     {s.last_sent_at && (
                       <p className="text-xs text-muted-foreground">
-                        Zuletzt: {new Date(s.last_sent_at).toLocaleDateString("de-DE")}
+                        {T("report.lastSent")}: {new Date(s.last_sent_at).toLocaleDateString("de-DE")}
                       </p>
                     )}
                   </div>
@@ -139,7 +142,7 @@ export default function ReportSchedulesList() {
             energy_types: editSchedule.energy_types,
             location_ids: editSchedule.location_ids,
           }}
-          title="Report-Template bearbeiten"
+          title={T("report.editTitle")}
         />
       )}
 
@@ -147,15 +150,15 @@ export default function ReportSchedulesList() {
       <AlertDialog open={!!deleteId} onOpenChange={(o) => !o && setDeleteId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Template löschen?</AlertDialogTitle>
+            <AlertDialogTitle>{T("report.deleteTitle")}</AlertDialogTitle>
             <AlertDialogDescription>
-              Dieses Report-Template wird unwiderruflich gelöscht. Es werden keine weiteren Reports mehr versendet.
+              {T("report.deleteDesc")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Abbrechen</AlertDialogCancel>
+            <AlertDialogCancel>{T("common.cancel")}</AlertDialogCancel>
             <AlertDialogAction onClick={() => { if (deleteId) { deleteSchedule(deleteId); setDeleteId(null); } }}>
-              Löschen
+              {T("common.delete")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

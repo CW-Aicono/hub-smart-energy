@@ -5,6 +5,7 @@ import { z } from "zod";
 import { useLocations, LocationType } from "@/hooks/useLocations";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useGeocode } from "@/hooks/useGeocode";
+import { useTranslation } from "@/hooks/useTranslation";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -38,33 +39,23 @@ import { useToast } from "@/hooks/use-toast";
 import { Plus, MapPin, LocateFixed, Loader2, AlertTriangle } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
-const ENERGY_SOURCES = [
-  { id: "strom", label: "Strom" },
-  { id: "gas", label: "Gas" },
-  { id: "waerme", label: "Fernwärme" },
-  { id: "solar", label: "Solar/Photovoltaik" },
-  { id: "wasser", label: "Wasser" },
-  { id: "oel", label: "Heizöl" },
-  { id: "pellets", label: "Pellets" },
-] as const;
-
 const locationSchema = z.object({
-  name: z.string().trim().min(1, "Name ist erforderlich").max(100, "Name darf maximal 100 Zeichen haben"),
+  name: z.string().trim().min(1, "Name ist erforderlich").max(100),
   type: z.enum(["einzelgebaeude", "gebaeudekomplex", "sonstiges"] as const),
   parent_id: z.string().nullable().optional(),
   usage_type: z.enum(["verwaltungsgebaeude", "universitaet", "schule", "kindertageseinrichtung", "sportstaette", "jugendzentrum", "sonstiges"] as const),
-  address: z.string().trim().max(200, "Adresse darf maximal 200 Zeichen haben").optional(),
-  postal_code: z.string().trim().max(10, "PLZ darf maximal 10 Zeichen haben").optional(),
-  city: z.string().trim().max(100, "Stadt darf maximal 100 Zeichen haben").optional(),
-  contact_person: z.string().trim().max(100, "Ansprechpartner darf maximal 100 Zeichen haben").optional(),
-  contact_email: z.string().trim().email("Ungültige E-Mail-Adresse").max(255).optional().or(z.literal("")),
-  contact_phone: z.string().trim().max(30, "Telefonnummer darf maximal 30 Zeichen haben").optional(),
+  address: z.string().trim().max(200).optional(),
+  postal_code: z.string().trim().max(10).optional(),
+  city: z.string().trim().max(100).optional(),
+  contact_person: z.string().trim().max(100).optional(),
+  contact_email: z.string().trim().email().max(255).optional().or(z.literal("")),
+  contact_phone: z.string().trim().max(30).optional(),
   energy_sources: z.array(z.string()).default([]),
   show_on_map: z.boolean().default(true),
   is_main_location: z.boolean().default(false),
   latitude: z.coerce.number().min(-90).max(90).optional().or(z.literal("")),
   longitude: z.coerce.number().min(-180).max(180).optional().or(z.literal("")),
-  description: z.string().trim().max(500, "Beschreibung darf maximal 500 Zeichen haben").optional(),
+  description: z.string().trim().max(500).optional(),
 });
 
 type LocationFormData = z.infer<typeof locationSchema>;
@@ -76,12 +67,22 @@ interface AddLocationDialogProps {
 export function AddLocationDialog({ parentId }: AddLocationDialogProps) {
   const [open, setOpen] = useState(false);
   const { locations, createLocation } = useLocations();
-  
-  // Get available Gebäudekomplexe for parent selection
   const availableComplexes = locations.filter(loc => loc.type === "gebaeudekomplex");
   const { isAdmin } = useUserRole();
   const { geocodeAddress, isLoading: isGeocoding } = useGeocode();
   const { toast } = useToast();
+  const { t } = useTranslation();
+  const T = (key: string) => t(key as any);
+
+  const ENERGY_SOURCES = [
+    { id: "strom", label: T("addLoc.energyStrom") },
+    { id: "gas", label: T("addLoc.energyGas") },
+    { id: "waerme", label: T("addLoc.energyWaerme") },
+    { id: "solar", label: T("addLoc.energySolar") },
+    { id: "wasser", label: T("addLoc.energyWasser") },
+    { id: "oel", label: T("addLoc.energyOel") },
+    { id: "pellets", label: T("addLoc.energyPellets") },
+  ];
 
   const form = useForm<LocationFormData>({
     resolver: zodResolver(locationSchema),
@@ -132,14 +133,14 @@ export function AddLocationDialog({ parentId }: AddLocationDialogProps) {
 
     if (error) {
       toast({
-        title: "Fehler",
-        description: "Standort konnte nicht angelegt werden.",
+        title: T("common.error"),
+        description: T("addLoc.errorCreate"),
         variant: "destructive",
       });
     } else {
       toast({
-        title: "Erfolgreich",
-        description: "Standort wurde angelegt.",
+        title: T("common.success"),
+        description: T("addLoc.success"),
       });
       form.reset();
       setOpen(false);
@@ -153,17 +154,17 @@ export function AddLocationDialog({ parentId }: AddLocationDialogProps) {
       <DialogTrigger asChild>
         <Button>
           <Plus className="h-4 w-4 mr-2" />
-          Standort anlegen
+          {T("addLoc.button")}
         </Button>
       </DialogTrigger>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <MapPin className="h-5 w-5" />
-            Neuen Standort anlegen
+            {T("addLoc.title")}
           </DialogTitle>
           <DialogDescription>
-            Erfassen Sie die Daten für den neuen Standort.
+            {T("addLoc.description")}
           </DialogDescription>
         </DialogHeader>
 
@@ -176,9 +177,9 @@ export function AddLocationDialog({ parentId }: AddLocationDialogProps) {
                 name="name"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Name *</FormLabel>
+                    <FormLabel>{T("addLoc.nameLabel")}</FormLabel>
                     <FormControl>
-                      <Input placeholder="z.B. Hauptstandort Berlin" {...field} />
+                      <Input placeholder={T("addLoc.namePlaceholder")} {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -190,17 +191,17 @@ export function AddLocationDialog({ parentId }: AddLocationDialogProps) {
                 name="type"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Typ</FormLabel>
+                    <FormLabel>{T("addLoc.typeLabel")}</FormLabel>
                     <Select onValueChange={field.onChange} defaultValue={field.value}>
                       <FormControl>
                         <SelectTrigger>
-                          <SelectValue placeholder="Typ wählen" />
+                          <SelectValue />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value="einzelgebaeude">Einzelgebäude</SelectItem>
-                        <SelectItem value="gebaeudekomplex">Gebäudekomplex</SelectItem>
-                        <SelectItem value="sonstiges">Sonstiges</SelectItem>
+                        <SelectItem value="einzelgebaeude">{T("addLoc.typeSingle")}</SelectItem>
+                        <SelectItem value="gebaeudekomplex">{T("addLoc.typeComplex")}</SelectItem>
+                        <SelectItem value="sonstiges">{T("addLoc.typeOther")}</SelectItem>
                       </SelectContent>
                     </Select>
                     <FormMessage />
@@ -209,7 +210,7 @@ export function AddLocationDialog({ parentId }: AddLocationDialogProps) {
               />
             </div>
 
-            {/* Parent Complex Selection - only for Einzelgebäude */}
+            {/* Parent Complex Selection */}
             {watchedType === "einzelgebaeude" && availableComplexes.length > 0 && !parentId && (
               <FormField
                 control={form.control}
@@ -230,18 +231,18 @@ export function AddLocationDialog({ parentId }: AddLocationDialogProps) {
                   
                   return (
                     <FormItem>
-                      <FormLabel>Zugehöriger Gebäudekomplex (optional)</FormLabel>
+                      <FormLabel>{T("addLoc.parentComplex")}</FormLabel>
                       <Select 
                         onValueChange={field.onChange} 
                         value={field.value || "none"}
                       >
                         <FormControl>
                           <SelectTrigger>
-                            <SelectValue placeholder="Kein Gebäudekomplex" />
+                            <SelectValue />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          <SelectItem value="none">Kein Gebäudekomplex (eigenständig)</SelectItem>
+                          <SelectItem value="none">{T("addLoc.noComplex")}</SelectItem>
                           {availableComplexes.map((complex) => (
                             <SelectItem key={complex.id} value={complex.id}>
                               {complex.name}
@@ -250,7 +251,7 @@ export function AddLocationDialog({ parentId }: AddLocationDialogProps) {
                         </SelectContent>
                       </Select>
                       <FormDescription>
-                        Ordnen Sie dieses Gebäude einem bestehenden Gebäudekomplex zu.
+                        {T("addLoc.parentDesc")}
                       </FormDescription>
                       {hasComplexAddress && (
                         <Button
@@ -261,7 +262,7 @@ export function AddLocationDialog({ parentId }: AddLocationDialogProps) {
                           onClick={copyAddressFromComplex}
                         >
                           <MapPin className="h-4 w-4 mr-2" />
-                          Adresse vom Komplex übernehmen
+                          {T("addLoc.copyAddress")}
                         </Button>
                       )}
                       <FormMessage />
@@ -277,21 +278,21 @@ export function AddLocationDialog({ parentId }: AddLocationDialogProps) {
               name="usage_type"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Nutzungsart</FormLabel>
+                  <FormLabel>{T("addLoc.usageType")}</FormLabel>
                   <Select onValueChange={field.onChange} defaultValue={field.value}>
                     <FormControl>
                       <SelectTrigger>
-                        <SelectValue placeholder="Nutzungsart wählen" />
+                        <SelectValue />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      <SelectItem value="verwaltungsgebaeude">Verwaltungsgebäude</SelectItem>
-                      <SelectItem value="universitaet">Universität</SelectItem>
-                      <SelectItem value="schule">Schule</SelectItem>
-                      <SelectItem value="kindertageseinrichtung">Kindertageseinrichtung</SelectItem>
-                      <SelectItem value="sportstaette">Sportstätte</SelectItem>
-                      <SelectItem value="jugendzentrum">Jugendzentrum</SelectItem>
-                      <SelectItem value="sonstiges">Sonstiges</SelectItem>
+                      <SelectItem value="verwaltungsgebaeude">{T("locations.usage.verwaltungsgebaeude")}</SelectItem>
+                      <SelectItem value="universitaet">{T("locations.usage.universitaet")}</SelectItem>
+                      <SelectItem value="schule">{T("locations.usage.schule")}</SelectItem>
+                      <SelectItem value="kindertageseinrichtung">{T("locations.usage.kindertageseinrichtung")}</SelectItem>
+                      <SelectItem value="sportstaette">{T("locations.usage.sportstaette")}</SelectItem>
+                      <SelectItem value="jugendzentrum">{T("locations.usage.jugendzentrum")}</SelectItem>
+                      <SelectItem value="sonstiges">{T("locations.usage.sonstiges")}</SelectItem>
                     </SelectContent>
                   </Select>
                   <FormMessage />
@@ -301,15 +302,15 @@ export function AddLocationDialog({ parentId }: AddLocationDialogProps) {
 
             {/* Address */}
             <div className="space-y-4">
-              <h4 className="text-sm font-medium">Adresse</h4>
+              <h4 className="text-sm font-medium">{T("addLoc.addressSection")}</h4>
               <FormField
                 control={form.control}
                 name="address"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Straße & Hausnummer</FormLabel>
+                    <FormLabel>{T("addLoc.street")}</FormLabel>
                     <FormControl>
-                      <Input placeholder="z.B. Musterstraße 123" {...field} />
+                      <Input placeholder={T("addLoc.streetPlaceholder")} {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -321,7 +322,7 @@ export function AddLocationDialog({ parentId }: AddLocationDialogProps) {
                   name="postal_code"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>PLZ</FormLabel>
+                      <FormLabel>{T("addLoc.postalCode")}</FormLabel>
                       <FormControl>
                         <Input placeholder="z.B. 10115" {...field} />
                       </FormControl>
@@ -334,7 +335,7 @@ export function AddLocationDialog({ parentId }: AddLocationDialogProps) {
                   name="city"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Stadt</FormLabel>
+                      <FormLabel>{T("addLoc.city")}</FormLabel>
                       <FormControl>
                         <Input placeholder="z.B. Berlin" {...field} />
                       </FormControl>
@@ -347,14 +348,14 @@ export function AddLocationDialog({ parentId }: AddLocationDialogProps) {
 
             {/* Contact */}
             <div className="space-y-4">
-              <h4 className="text-sm font-medium">Ansprechpartner</h4>
+              <h4 className="text-sm font-medium">{T("addLoc.contactSection")}</h4>
               <div className="grid gap-4 sm:grid-cols-3">
                 <FormField
                   control={form.control}
                   name="contact_person"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Name</FormLabel>
+                      <FormLabel>{T("addLoc.contactName")}</FormLabel>
                       <FormControl>
                         <Input placeholder="Max Mustermann" {...field} />
                       </FormControl>
@@ -367,7 +368,7 @@ export function AddLocationDialog({ parentId }: AddLocationDialogProps) {
                   name="contact_email"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>E-Mail</FormLabel>
+                      <FormLabel>{T("addLoc.email")}</FormLabel>
                       <FormControl>
                         <Input type="email" placeholder="email@beispiel.de" {...field} />
                       </FormControl>
@@ -380,7 +381,7 @@ export function AddLocationDialog({ parentId }: AddLocationDialogProps) {
                   name="contact_phone"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Telefon</FormLabel>
+                      <FormLabel>{T("addLoc.phone")}</FormLabel>
                       <FormControl>
                         <Input placeholder="+49 30 123456" {...field} />
                       </FormControl>
@@ -397,9 +398,9 @@ export function AddLocationDialog({ parentId }: AddLocationDialogProps) {
               name="energy_sources"
               render={() => (
                 <FormItem>
-                  <FormLabel>Energiequellen</FormLabel>
+                  <FormLabel>{T("addLoc.energySources")}</FormLabel>
                   <FormDescription>
-                    Wählen Sie die verfügbaren Energiequellen für diesen Standort.
+                    {T("addLoc.energySourcesDesc")}
                   </FormDescription>
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-2">
                     {ENERGY_SOURCES.map((source) => (
@@ -438,7 +439,7 @@ export function AddLocationDialog({ parentId }: AddLocationDialogProps) {
             {/* Coordinates */}
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <h4 className="text-sm font-medium">Koordinaten (optional)</h4>
+                <h4 className="text-sm font-medium">{T("addLoc.coordinates")}</h4>
                 <Button
                   type="button"
                   variant="outline"
@@ -460,7 +461,7 @@ export function AddLocationDialog({ parentId }: AddLocationDialogProps) {
                   ) : (
                     <LocateFixed className="h-4 w-4 mr-2" />
                   )}
-                  Aus Adresse ermitteln
+                  {T("addLoc.geocode")}
                 </Button>
               </div>
               <div className="grid gap-4 sm:grid-cols-2">
@@ -469,7 +470,7 @@ export function AddLocationDialog({ parentId }: AddLocationDialogProps) {
                   name="latitude"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Breitengrad</FormLabel>
+                      <FormLabel>{T("addLoc.latitude")}</FormLabel>
                       <FormControl>
                         <Input 
                           type="number" 
@@ -488,7 +489,7 @@ export function AddLocationDialog({ parentId }: AddLocationDialogProps) {
                   name="longitude"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Längengrad</FormLabel>
+                      <FormLabel>{T("addLoc.longitude")}</FormLabel>
                       <FormControl>
                         <Input 
                           type="number" 
@@ -512,9 +513,9 @@ export function AddLocationDialog({ parentId }: AddLocationDialogProps) {
               render={({ field }) => (
                 <FormItem className="flex items-center justify-between rounded-lg border p-4">
                   <div className="space-y-0.5">
-                    <FormLabel className="text-base">Auf Karte anzeigen</FormLabel>
+                    <FormLabel className="text-base">{T("addLoc.showOnMap")}</FormLabel>
                     <FormDescription>
-                      Standort wird auf der interaktiven Karte dargestellt.
+                      {T("addLoc.showOnMapDesc")}
                     </FormDescription>
                   </div>
                   <FormControl>
@@ -535,9 +536,9 @@ export function AddLocationDialog({ parentId }: AddLocationDialogProps) {
                 <FormItem className="flex flex-col rounded-lg border p-4 border-primary/20 bg-primary/5">
                   <div className="flex items-center justify-between">
                     <div className="space-y-0.5">
-                      <FormLabel className="text-base">Hauptstandort</FormLabel>
+                      <FormLabel className="text-base">{T("addLoc.mainLocation")}</FormLabel>
                       <FormDescription>
-                        Als Hauptstandort für Wetter-Widget und Berichte verwenden.
+                        {T("addLoc.mainLocationDesc")}
                       </FormDescription>
                     </div>
                     <FormControl>
@@ -551,7 +552,7 @@ export function AddLocationDialog({ parentId }: AddLocationDialogProps) {
                     <Alert variant="default" className="mt-3 border-amber-500/30 bg-amber-500/10">
                       <AlertTriangle className="h-4 w-4 text-amber-600" />
                       <AlertDescription className="text-sm text-amber-800 dark:text-amber-300">
-                        Der aktuelle Hauptstandort <span className="font-semibold">„{currentMainLocation.name}"</span> wird dadurch ersetzt.
+                        {T("addLoc.mainLocationWarn").replace("{name}", currentMainLocation.name)}
                       </AlertDescription>
                     </Alert>
                   )}
@@ -565,10 +566,10 @@ export function AddLocationDialog({ parentId }: AddLocationDialogProps) {
               name="description"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Beschreibung</FormLabel>
+                  <FormLabel>{T("addLoc.descriptionLabel")}</FormLabel>
                   <FormControl>
                     <Textarea
-                      placeholder="Zusätzliche Informationen zum Standort..."
+                      placeholder={T("addLoc.descPlaceholder")}
                       className="resize-none"
                       rows={3}
                       {...field}
@@ -581,10 +582,10 @@ export function AddLocationDialog({ parentId }: AddLocationDialogProps) {
 
             <div className="flex justify-end gap-3">
               <Button type="button" variant="outline" onClick={() => setOpen(false)}>
-                Abbrechen
+                {T("common.cancel")}
               </Button>
               <Button type="submit" disabled={form.formState.isSubmitting}>
-                {form.formState.isSubmitting ? "Wird gespeichert..." : "Standort anlegen"}
+                {form.formState.isSubmitting ? T("addLoc.submitting") : T("addLoc.button")}
               </Button>
             </div>
           </form>

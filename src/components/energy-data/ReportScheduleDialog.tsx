@@ -7,18 +7,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { X, Plus } from "lucide-react";
+import { useTranslation } from "@/hooks/useTranslation";
 import type { ReportScheduleInsert } from "@/hooks/useReportSchedules";
 import type { Location } from "@/hooks/useLocations";
-
-const ENERGY_LABELS: Record<string, string> = {
-  strom: "Strom", gas: "Gas", waerme: "Wärme", wasser: "Wasser",
-};
-const FREQ_LABELS: Record<string, string> = {
-  daily: "Täglich", weekly: "Wöchentlich", monthly: "Monatlich", quarterly: "Quartalsweise", yearly: "Jährlich",
-};
-const FORMAT_LABELS: Record<string, string> = {
-  pdf: "PDF", csv: "CSV", both: "PDF & CSV",
-};
 
 interface Props {
   open: boolean;
@@ -30,6 +21,19 @@ interface Props {
 }
 
 export default function ReportScheduleDialog({ open, onOpenChange, onSubmit, locations, initial, title }: Props) {
+  const { t } = useTranslation();
+  const T = (key: string) => t(key as any);
+
+  const ENERGY_LABELS: Record<string, string> = {
+    strom: T("report.energyStrom"), gas: T("report.energyGas"), waerme: T("report.energyWaerme"), wasser: T("report.energyWasser"),
+  };
+  const FREQ_LABELS: Record<string, string> = {
+    daily: T("report.freqDaily"), weekly: T("report.freqWeekly"), monthly: T("report.freqMonthly"), quarterly: T("report.freqQuarterly"), yearly: T("report.freqYearly"),
+  };
+  const FORMAT_LABELS: Record<string, string> = {
+    pdf: "PDF", csv: "CSV", both: "PDF & CSV",
+  };
+
   const [name, setName] = useState(initial?.name ?? "");
   const [recipients, setRecipients] = useState<string[]>(initial?.recipients ?? []);
   const [newEmail, setNewEmail] = useState("");
@@ -67,24 +71,24 @@ export default function ReportScheduleDialog({ open, onOpenChange, onSubmit, loc
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{title ?? "Neues Report-Template"}</DialogTitle>
+          <DialogTitle>{title ?? T("report.newTitle")}</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4 py-2">
           {/* Name */}
           <div>
-            <Label>Name *</Label>
-            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="z.B. Monatlicher Energiebericht" />
+            <Label>{T("report.nameLabel")}</Label>
+            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder={T("report.namePlaceholder")} />
           </div>
 
           {/* Recipients */}
           <div>
-            <Label>Empfänger *</Label>
+            <Label>{T("report.recipientsLabel")}</Label>
             <div className="flex gap-2 mt-1">
               <Input
                 value={newEmail}
                 onChange={(e) => setNewEmail(e.target.value)}
-                placeholder="E-Mail-Adresse"
+                placeholder={T("report.emailPlaceholder")}
                 onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addRecipient())}
               />
               <Button type="button" size="icon" variant="outline" onClick={addRecipient}><Plus className="h-4 w-4" /></Button>
@@ -103,7 +107,7 @@ export default function ReportScheduleDialog({ open, onOpenChange, onSubmit, loc
 
           {/* Frequency */}
           <div>
-            <Label>Frequenz</Label>
+            <Label>{T("report.frequency")}</Label>
             <Select value={frequency} onValueChange={setFrequency}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
@@ -114,7 +118,7 @@ export default function ReportScheduleDialog({ open, onOpenChange, onSubmit, loc
 
           {/* Format */}
           <div>
-            <Label>Format</Label>
+            <Label>{T("report.format")}</Label>
             <Select value={format} onValueChange={setFormat}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
@@ -125,7 +129,7 @@ export default function ReportScheduleDialog({ open, onOpenChange, onSubmit, loc
 
           {/* Energy Types */}
           <div>
-            <Label>Energiearten</Label>
+            <Label>{T("report.energyTypes")}</Label>
             <div className="space-y-2 mt-1">
               {Object.entries(ENERGY_LABELS).map(([k, v]) => (
                 <div key={k} className="flex items-center gap-2">
@@ -138,7 +142,7 @@ export default function ReportScheduleDialog({ open, onOpenChange, onSubmit, loc
 
           {/* Locations */}
           <div>
-            <Label>Standorte <span className="text-muted-foreground font-normal">(leer = alle)</span></Label>
+            <Label>{T("report.locationsLabel")} <span className="text-muted-foreground font-normal">{T("report.locationsHint")}</span></Label>
             <div className="space-y-2 mt-1 max-h-40 overflow-y-auto">
               {locations.map((loc) => (
                 <div key={loc.id} className="flex items-center gap-2">
@@ -146,15 +150,15 @@ export default function ReportScheduleDialog({ open, onOpenChange, onSubmit, loc
                   <Label htmlFor={`rs-l-${loc.id}`} className="text-sm cursor-pointer">{loc.name}</Label>
                 </div>
               ))}
-              {locations.length === 0 && <p className="text-sm text-muted-foreground">Keine Standorte vorhanden</p>}
+              {locations.length === 0 && <p className="text-sm text-muted-foreground">{T("report.noLocations")}</p>}
             </div>
           </div>
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Abbrechen</Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>{T("common.cancel")}</Button>
           <Button onClick={handleSubmit} disabled={saving || !name.trim() || recipients.length === 0 || energyTypes.length === 0}>
-            {saving ? "Speichern…" : "Speichern"}
+            {saving ? T("common.saving") : T("common.save")}
           </Button>
         </DialogFooter>
       </DialogContent>
