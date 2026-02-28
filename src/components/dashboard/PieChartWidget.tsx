@@ -7,6 +7,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useMemo } from "react";
 import { useDashboardFilter, TimePeriod } from "@/hooks/useDashboardFilter";
+import { useTranslation } from "@/hooks/useTranslation";
 import { startOfDay, startOfWeek, startOfMonth, startOfQuarter, startOfYear, endOfWeek, endOfMonth, endOfQuarter, endOfYear, format } from "date-fns";
 import { useWeekStartDay } from "@/hooks/useWeekStartDay";
 import { gasM3ToKWh } from "@/lib/formatEnergy";
@@ -18,28 +19,7 @@ interface PieChartWidgetProps {
   locationId: string | null;
 }
 
-const ENERGY_LABELS: Record<string, string> = {
-  strom: "Strom",
-  gas: "Gas",
-  waerme: "Wärme",
-  wasser: "Wasser",
-};
-
-const ENERGY_UNITS: Record<string, string> = {
-  strom: "kWh",
-  gas: "kWh",
-  waerme: "kWh",
-  wasser: "m³",
-};
-
-const PERIOD_LABELS: Record<TimePeriod, string> = {
-  day: "Tag",
-  week: "Woche",
-  month: "Monat",
-  quarter: "Quartal",
-  year: "Jahr",
-  all: "Gesamt",
-};
+// Energy labels/units are now dynamic via t() below
 
 function getPeriodStart(period: TimePeriod, weekStartsOn: 0|1|2|3|4|5|6 = 1): Date | null {
   const now = new Date();
@@ -60,7 +40,12 @@ const PieChartWidget = ({ locationId }: PieChartWidgetProps) => {
   const { selectedPeriod, setSelectedPeriod } = useDashboardFilter();
   const weekStartsOn = useWeekStartDay();
   const selectedLocation = locationId ? locations.find((l) => l.id === locationId) : null;
-  const subtitle = selectedLocation ? `Daten für: ${selectedLocation.name}` : "Alle Liegenschaften";
+  const { t } = useTranslation();
+  const T = (key: string) => t(key as any);
+  const ENERGY_LABELS: Record<string, string> = { strom: T("energy.strom"), gas: T("energy.gas"), waerme: T("energy.waerme"), wasser: T("energy.wasser") };
+  const ENERGY_UNITS: Record<string, string> = { strom: "kWh", gas: "kWh", waerme: "kWh", wasser: "m³" };
+  const PERIOD_LABELS: Record<TimePeriod, string> = { day: T("chart.periodDay"), week: T("chart.periodWeek"), month: T("chart.periodMonth"), quarter: T("chart.periodQuarter"), year: T("chart.periodYear"), all: T("chart.periodAll") };
+  const subtitle = selectedLocation ? T("chart.dataFor").replace("{name}", selectedLocation.name) : T("chart.allLocations");
   const allowedTypes = useLocationEnergySources(locationId);
 
   const configuredTypes = useMemo(() => {
@@ -200,7 +185,7 @@ const PieChartWidget = ({ locationId }: PieChartWidgetProps) => {
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between gap-2">
           <div>
-            <CardTitle className="font-display text-lg">Energieverteilung</CardTitle>
+            <CardTitle className="font-display text-lg">{T("pie.title")}</CardTitle>
             <p className="text-sm text-muted-foreground">{subtitle}</p>
           </div>
           <Select value={selectedPeriod} onValueChange={(v) => setSelectedPeriod(v as TimePeriod)}>
@@ -219,7 +204,7 @@ const PieChartWidget = ({ locationId }: PieChartWidgetProps) => {
         <div className="h-[280px] relative" style={{ zIndex: 0 }}>
           {displayData.length === 0 ? (
             <div className="h-full flex items-center justify-center text-muted-foreground text-sm">
-              Noch keine Verbrauchsdaten vorhanden
+              {T("chart.noData")}
             </div>
           ) : (
             <ResponsiveContainer width="100%" height="100%">

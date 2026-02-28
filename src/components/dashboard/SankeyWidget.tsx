@@ -20,14 +20,7 @@ import { useQuery } from "@tanstack/react-query";
 
 type SankeyViewMode = "leistung" | "kosten";
 
-const PERIOD_LABELS: Record<TimePeriod, string> = {
-  day: "Tag",
-  week: "Woche",
-  month: "Monat",
-  quarter: "Quartal",
-  year: "Jahr",
-  all: "Gesamt",
-};
+// Period labels are now dynamic via t() below
 
 function getPeriodStart(period: TimePeriod, weekStartsOn: 0|1|2|3|4|5|6 = 1): Date | null {
   const now = new Date();
@@ -70,6 +63,8 @@ const TARGET_COLORS = [
 const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
   const { locations } = useLocations();
   const { t } = useTranslation();
+  const T = (key: string) => t(key as any);
+  const PERIOD_LABELS: Record<TimePeriod, string> = { day: T("chart.periodDay"), week: T("chart.periodWeek"), month: T("chart.periodMonth"), quarter: T("chart.periodQuarter"), year: T("chart.periodYear"), all: T("chart.periodAll") };
   const { readings, livePeriodTotals, loading: energyLoading, hasData } = useEnergyData(locationId);
   const { meters } = useMeters();
   const { prices, loading: pricesLoading } = useEnergyPrices();
@@ -188,7 +183,7 @@ const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
   }, [locationId]);
 
   const selectedLocation = locationId ? locations.find((l) => l.id === locationId) : null;
-  const subtitle = selectedLocation ? `Daten für: ${selectedLocation.name}` : "Alle Liegenschaften";
+  const subtitle = selectedLocation ? T("chart.dataFor").replace("{name}", selectedLocation.name) : T("chart.allLocations");
 
   // Build meter lookup
   const meterMap = useMemo(() => {
@@ -248,16 +243,16 @@ const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
       let targetName: string;
       if (!locationId) {
         const loc = locations.find((l) => l.id === locId);
-        targetName = loc?.name || "Unbekannt";
+        targetName = loc?.name || T("sankey.unknown");
       } else {
         if (roomId) {
           const room = rooms.find((rm) => rm.id === roomId);
-          targetName = room?.name || "Raum";
+          targetName = room?.name || T("sankey.room");
         } else if (floorId) {
           const floor = floors.find((f) => f.id === floorId);
-          targetName = floor?.name || "Etage";
+          targetName = floor?.name || T("sankey.floor");
         } else {
-          targetName = "Sonstige";
+          targetName = T("sankey.other");
         }
       }
 
@@ -359,8 +354,8 @@ const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="leistung">Leistung</SelectItem>
-                  <SelectItem value="kosten">Kosten</SelectItem>
+                  <SelectItem value="leistung">{T("sankey.power")}</SelectItem>
+                  <SelectItem value="kosten">{T("sankey.cost")}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -379,7 +374,7 @@ const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
         </CardHeader>
         <CardContent>
           <div className="h-[200px] flex items-center justify-center text-muted-foreground text-sm">
-            Noch keine Verbrauchsdaten vorhanden
+            {T("chart.noData")}
           </div>
         </CardContent>
       </Card>
@@ -525,8 +520,8 @@ const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="leistung">Leistung</SelectItem>
-                <SelectItem value="kosten">Kosten</SelectItem>
+                <SelectItem value="leistung">{T("sankey.power")}</SelectItem>
+                <SelectItem value="kosten">{T("sankey.cost")}</SelectItem>
               </SelectContent>
             </Select>
           </div>

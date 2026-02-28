@@ -21,31 +21,32 @@ interface MainLocation {
   longitude: number;
 }
 
-const WEATHER_CODES: Record<number, { icon: React.ComponentType<{ className?: string }>; description: string }> = {
-  0: { icon: Sun, description: "Klar" },
-  1: { icon: Sun, description: "Überwiegend klar" },
-  2: { icon: Cloud, description: "Teilweise bewölkt" },
-  3: { icon: Cloud, description: "Bewölkt" },
-  45: { icon: Cloud, description: "Nebelig" },
-  48: { icon: Cloud, description: "Reifnebel" },
-  51: { icon: CloudRain, description: "Leichter Nieselregen" },
-  53: { icon: CloudRain, description: "Nieselregen" },
-  55: { icon: CloudRain, description: "Starker Nieselregen" },
-  61: { icon: CloudRain, description: "Leichter Regen" },
-  63: { icon: CloudRain, description: "Regen" },
-  65: { icon: CloudRain, description: "Starker Regen" },
-  71: { icon: CloudSnow, description: "Leichter Schneefall" },
-  73: { icon: CloudSnow, description: "Schneefall" },
-  75: { icon: CloudSnow, description: "Starker Schneefall" },
-  77: { icon: CloudSnow, description: "Schneegriesel" },
-  80: { icon: CloudRain, description: "Leichte Regenschauer" },
-  81: { icon: CloudRain, description: "Regenschauer" },
-  82: { icon: CloudRain, description: "Heftige Regenschauer" },
-  85: { icon: CloudSnow, description: "Leichte Schneeschauer" },
-  86: { icon: CloudSnow, description: "Schneeschauer" },
-  95: { icon: CloudLightning, description: "Gewitter" },
-  96: { icon: CloudLightning, description: "Gewitter mit Hagel" },
-  99: { icon: CloudLightning, description: "Gewitter mit starkem Hagel" },
+// Weather code descriptions are now resolved via t() at render time
+const WEATHER_CODE_KEYS: Record<number, { icon: React.ComponentType<{ className?: string }>; key: string }> = {
+  0: { icon: Sun, key: "wx.clear" },
+  1: { icon: Sun, key: "wx.mostlyClear" },
+  2: { icon: Cloud, key: "wx.partlyCloudy" },
+  3: { icon: Cloud, key: "wx.cloudy" },
+  45: { icon: Cloud, key: "wx.foggy" },
+  48: { icon: Cloud, key: "wx.rimeFog" },
+  51: { icon: CloudRain, key: "wx.lightDrizzle" },
+  53: { icon: CloudRain, key: "wx.drizzle" },
+  55: { icon: CloudRain, key: "wx.heavyDrizzle" },
+  61: { icon: CloudRain, key: "wx.lightRain" },
+  63: { icon: CloudRain, key: "wx.rain" },
+  65: { icon: CloudRain, key: "wx.heavyRain" },
+  71: { icon: CloudSnow, key: "wx.lightSnow" },
+  73: { icon: CloudSnow, key: "wx.snow" },
+  75: { icon: CloudSnow, key: "wx.heavySnow" },
+  77: { icon: CloudSnow, key: "wx.snowGrains" },
+  80: { icon: CloudRain, key: "wx.lightShowers" },
+  81: { icon: CloudRain, key: "wx.showers" },
+  82: { icon: CloudRain, key: "wx.heavyShowers" },
+  85: { icon: CloudSnow, key: "wx.lightSnowShowers" },
+  86: { icon: CloudSnow, key: "wx.snowShowers" },
+  95: { icon: CloudLightning, key: "wx.thunderstorm" },
+  96: { icon: CloudLightning, key: "wx.thunderHail" },
+  99: { icon: CloudLightning, key: "wx.thunderHeavyHail" },
 };
 
 async function geocodePostalCode(postalCode: string): Promise<{ lat: number; lon: number } | null> {
@@ -76,13 +77,14 @@ async function fetchWeather(lat: number, lon: number): Promise<WeatherData | nul
     const data = await response.json();
     
     if (data.current) {
-      const weatherInfo = WEATHER_CODES[data.current.weather_code] || { description: "Unbekannt" };
+      const weatherKey = WEATHER_CODE_KEYS[data.current.weather_code]?.key || "wx.unknown";
+      // description will be resolved at render time via t()
       return {
         temperature: Math.round(data.current.temperature_2m),
         weatherCode: data.current.weather_code,
         humidity: data.current.relative_humidity_2m,
         windSpeed: Math.round(data.current.wind_speed_10m),
-        description: weatherInfo.description,
+        description: weatherKey,
       };
     }
     return null;
@@ -97,6 +99,7 @@ interface WeatherWidgetProps {
 
 const WeatherWidget = ({ locationId }: WeatherWidgetProps) => {
   const { t } = useTranslation();
+  const T = (key: string) => t(key as any);
   const [weather, setWeather] = useState<WeatherData | null>(null);
   const [mainLocation, setMainLocation] = useState<MainLocation | null>(null);
   const [loading, setLoading] = useState(true);
@@ -204,7 +207,7 @@ const WeatherWidget = ({ locationId }: WeatherWidgetProps) => {
 
   if (!weather || !mainLocation) return null;
 
-  const WeatherIcon = WEATHER_CODES[weather.weatherCode]?.icon || Cloud;
+  const WeatherIcon = WEATHER_CODE_KEYS[weather.weatherCode]?.icon || Cloud;
 
   return (
     <Card>
@@ -226,7 +229,7 @@ const WeatherWidget = ({ locationId }: WeatherWidgetProps) => {
               <WeatherIcon className="h-12 w-12 text-primary" />
               <div>
                 <div className="text-4xl font-bold">{weather.temperature}°C</div>
-                <div className="text-sm text-muted-foreground">{weather.description}</div>
+                <div className="text-sm text-muted-foreground">{T(weather.description)}</div>
               </div>
             </div>
           </div>

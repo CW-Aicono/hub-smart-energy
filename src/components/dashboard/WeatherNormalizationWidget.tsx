@@ -18,35 +18,39 @@ interface WeatherNormalizationWidgetProps {
   onCollapse?: () => void;
 }
 
-const ENERGY_TYPES = [
-  { value: "gas", label: "Gas" },
-  { value: "waerme", label: "Wärme" },
-  { value: "strom", label: "Strom" },
-];
-
-const PERIOD_OPTIONS = [
-  { value: "month", label: "Monat" },
-  { value: "quarter", label: "Quartal" },
-  { value: "year", label: "Jahr" },
-];
-
 const currentYear = new Date().getFullYear();
 const currentMonth = new Date().getMonth();
 const YEARS = Array.from({ length: 5 }, (_, i) => currentYear - i);
-const MONTHS = [
-  "Januar", "Februar", "März", "April", "Mai", "Juni",
-  "Juli", "August", "September", "Oktober", "November", "Dezember",
-];
-const QUARTERS = ["Q1 (Jan–Mär)", "Q2 (Apr–Jun)", "Q3 (Jul–Sep)", "Q4 (Okt–Dez)"];
+const QUARTERS_DE = ["Q1 (Jan–Mär)", "Q2 (Apr–Jun)", "Q3 (Jul–Sep)", "Q4 (Okt–Dez)"];
+const QUARTERS_EN = ["Q1 (Jan–Mar)", "Q2 (Apr–Jun)", "Q3 (Jul–Sep)", "Q4 (Oct–Dec)"];
+const QUARTERS_ES = ["Q1 (Ene–Mar)", "Q2 (Abr–Jun)", "Q3 (Jul–Sep)", "Q4 (Oct–Dic)"];
+const QUARTERS_NL = ["Q1 (Jan–Mrt)", "Q2 (Apr–Jun)", "Q3 (Jul–Sep)", "Q4 (Okt–Dec)"];
+const QUARTERS_MAP: Record<string, string[]> = { de: QUARTERS_DE, en: QUARTERS_EN, es: QUARTERS_ES, nl: QUARTERS_NL };
 
 const WeatherNormalizationWidget = ({ locationId, onExpand, onCollapse }: WeatherNormalizationWidgetProps) => {
   const [energyType, setEnergyType] = useState("gas");
-  const { t } = useTranslation();
+  const { t, language } = useTranslation();
+  const T = (key: string) => t(key as any);
   const [period, setPeriod] = useState<"month" | "quarter" | "year">("year");
   const [year, setYear] = useState(currentYear);
   const [selectedMonth, setSelectedMonth] = useState(currentMonth);
   const [selectedQuarter, setSelectedQuarter] = useState(Math.floor(currentMonth / 3));
   const [refTemp, setRefTemp] = useState(15);
+
+  const ENERGY_TYPES = [
+    { value: "gas", label: T("energy.gas") },
+    { value: "waerme", label: T("energy.waerme") },
+    { value: "strom", label: T("energy.strom") },
+  ];
+
+  const PERIOD_OPTIONS = [
+    { value: "month", label: T("chart.periodMonth") },
+    { value: "quarter", label: T("chart.periodQuarter") },
+    { value: "year", label: T("chart.periodYear") },
+  ];
+
+  const MONTHS = Array.from({ length: 12 }, (_, i) => T(`month.${i}`));
+  const QUARTERS = QUARTERS_MAP[language] || QUARTERS_DE;
 
   const {
     data,
@@ -60,11 +64,7 @@ const WeatherNormalizationWidget = ({ locationId, onExpand, onCollapse }: Weathe
     year,
   });
 
-  // Full month names for tooltip
-  const FULL_MONTHS = [
-    "Januar", "Februar", "März", "April", "Mai", "Juni",
-    "Juli", "August", "September", "Oktober", "November", "Dezember",
-  ];
+  const FULL_MONTHS = Array.from({ length: 12 }, (_, i) => T(`month.${i}`));
 
   // Filter data based on selected period
   const filteredData = useMemo(() => {
@@ -72,7 +72,6 @@ const WeatherNormalizationWidget = ({ locationId, onExpand, onCollapse }: Weathe
     if (period === "month") {
       return data.filter((d) => new Date(d.month).getMonth() === selectedMonth);
     }
-    // quarter
     const startMonth = selectedQuarter * 3;
     return data.filter((d) => {
       const m = new Date(d.month).getMonth();
@@ -80,7 +79,6 @@ const WeatherNormalizationWidget = ({ locationId, onExpand, onCollapse }: Weathe
     });
   }, [data, period, selectedMonth, selectedQuarter]);
 
-  // Determine unit scaling: values are in Wh
   const maxValue = useMemo(() => {
     let max = 0;
     for (const d of filteredData) {
@@ -90,10 +88,9 @@ const WeatherNormalizationWidget = ({ locationId, onExpand, onCollapse }: Weathe
     return max;
   }, [filteredData]);
 
-  // >= 1,000,000 Wh (1000 kWh) → show MWh, else kWh
   const useMWh = maxValue >= 1_000_000;
   const yAxisUnit = useMWh ? "MWh" : "kWh";
-  const yAxisDivisor = useMWh ? 1_000_000 : 1_000; // Wh → MWh or kWh
+  const yAxisDivisor = useMWh ? 1_000_000 : 1_000;
 
   const chartData = useMemo(() => {
     return filteredData.map((d) => ({
@@ -102,7 +99,7 @@ const WeatherNormalizationWidget = ({ locationId, onExpand, onCollapse }: Weathe
       normalizedScaled: d.normalizedConsumption / yAxisDivisor,
       fullMonthLabel: FULL_MONTHS[new Date(d.month).getMonth()] || d.monthLabel,
     }));
-  }, [filteredData, yAxisDivisor]);
+  }, [filteredData, yAxisDivisor, FULL_MONTHS]);
 
   const filteredTotalActual = filteredData.reduce((s, d) => s + d.actualConsumption, 0);
   const filteredTotalNormalized = filteredData.reduce((s, d) => s + d.normalizedConsumption, 0);
@@ -126,8 +123,8 @@ const WeatherNormalizationWidget = ({ locationId, onExpand, onCollapse }: Weathe
         <div className="flex items-center justify-between flex-wrap gap-2">
           <CardTitle className="font-display text-lg flex items-center gap-2">
             <Thermometer className="h-5 w-5 text-primary" />
-            {t("dashboard.weatherNorm" as any)}
-            <HelpTooltip text={t("tooltip.weatherNorm" as any)} />
+            {T("dashboard.weatherNorm")}
+            <HelpTooltip text={T("tooltip.weatherNorm")} />
           </CardTitle>
           <div className="flex items-center gap-2 flex-wrap">
             <Select value={energyType} onValueChange={setEnergyType}>
@@ -212,7 +209,7 @@ const WeatherNormalizationWidget = ({ locationId, onExpand, onCollapse }: Weathe
                 </div>
               </TooltipTrigger>
               <TooltipContent side="bottom" className="max-w-[260px] text-xs">
-                {t("tooltip.refTemp" as any)}
+                {T("tooltip.refTemp")}
               </TooltipContent>
             </ShadTooltip>
           </div>
@@ -223,22 +220,22 @@ const WeatherNormalizationWidget = ({ locationId, onExpand, onCollapse }: Weathe
           <div className="h-[300px] flex items-center justify-center text-destructive text-sm">{error}</div>
         ) : !hasData && !loading ? (
           <div className="h-[300px] flex items-center justify-center text-muted-foreground text-sm">
-            Keine Verbrauchsdaten für diesen Standort/Zeitraum vorhanden
+            {T("wn.noData")}
           </div>
         ) : (
           <>
             {/* KPI Cards */}
             <div className="grid grid-cols-3 gap-3 mb-4">
               <div className="rounded-lg bg-muted/50 p-3 text-center">
-                <p className="text-xs text-muted-foreground">Ist-Verbrauch</p>
+                <p className="text-xs text-muted-foreground">{T("wn.actual")}</p>
                 <p className="text-lg font-semibold">{formatEnergy(filteredTotalActual)}</p>
               </div>
               <div className="rounded-lg bg-muted/50 p-3 text-center">
-                <p className="text-xs text-muted-foreground">Bereinigt</p>
+                <p className="text-xs text-muted-foreground">{T("wn.normalized")}</p>
                 <p className="text-lg font-semibold">{formatEnergy(filteredTotalNormalized)}</p>
               </div>
               <div className="rounded-lg bg-muted/50 p-3 text-center">
-                <p className="text-xs text-muted-foreground">Abweichung</p>
+                <p className="text-xs text-muted-foreground">{T("wn.deviation")}</p>
                 <p className={`text-lg font-semibold flex items-center justify-center gap-1 ${filteredTotalDeviation > 0 ? "text-destructive" : "text-emerald-600"}`}>
                   {filteredTotalDeviation > 0 ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
                   {filteredTotalDeviation > 0 ? "+" : ""}{filteredTotalDeviation}%
@@ -248,8 +245,8 @@ const WeatherNormalizationWidget = ({ locationId, onExpand, onCollapse }: Weathe
 
             <Tabs defaultValue="chart">
               <TabsList className="mb-3">
-                <TabsTrigger value="chart">Diagramm</TabsTrigger>
-                <TabsTrigger value="table">Tabelle</TabsTrigger>
+                <TabsTrigger value="chart">{T("wn.chart")}</TabsTrigger>
+                <TabsTrigger value="table">{T("wn.table")}</TabsTrigger>
               </TabsList>
 
               <TabsContent value="chart">
@@ -275,10 +272,10 @@ const WeatherNormalizationWidget = ({ locationId, onExpand, onCollapse }: Weathe
                       }}
                       formatter={(value: number, name: string) => [
                         value.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " " + yAxisUnit,
-                        name === "actualScaled" ? "Ist-Verbrauch" : "Bereinigt",
+                        name === "actualScaled" ? T("wn.actual") : T("wn.normalized"),
                       ]}
                     />
-                    <Legend formatter={(v) => (v === "actualScaled" ? "Ist-Verbrauch" : "Bereinigt")} />
+                    <Legend formatter={(v) => (v === "actualScaled" ? T("wn.actual") : T("wn.normalized"))} />
                     <Bar dataKey="actualScaled" fill="hsl(var(--chart-1))" radius={[2, 2, 0, 0]} />
                     <Bar dataKey="normalizedScaled" fill="hsl(var(--chart-3))" radius={[2, 2, 0, 0]} />
                   </BarChart>
@@ -290,12 +287,12 @@ const WeatherNormalizationWidget = ({ locationId, onExpand, onCollapse }: Weathe
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Monat</TableHead>
-                        <TableHead className="text-right">Gradtage</TableHead>
-                        <TableHead className="text-right">Ø Temp.</TableHead>
-                        <TableHead className="text-right">Ist</TableHead>
-                        <TableHead className="text-right">Bereinigt</TableHead>
-                        <TableHead className="text-right">Abw.</TableHead>
+                        <TableHead>{T("wn.monthCol")}</TableHead>
+                        <TableHead className="text-right">{T("wn.degreeDays")}</TableHead>
+                        <TableHead className="text-right">{T("wn.avgTemp")}</TableHead>
+                        <TableHead className="text-right">{T("wn.actualShort")}</TableHead>
+                        <TableHead className="text-right">{T("wn.normalized")}</TableHead>
+                        <TableHead className="text-right">{T("wn.devShort")}</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>

@@ -19,6 +19,7 @@ interface SpotPriceWidgetProps {
 const SpotPriceWidget = ({ locationId }: SpotPriceWidgetProps) => {
   const { prices, isLoading, currentPrice } = useSpotPrices();
   const { language, t } = useTranslation();
+  const T = (key: string) => t(key as any);
 
   const now = new Date();
   const startCutoff = new Date(now.getTime() - 3 * 60 * 60 * 1000);
@@ -88,7 +89,7 @@ const SpotPriceWidget = ({ locationId }: SpotPriceWidgetProps) => {
   if (isLoading) {
     return (
       <Card>
-        <CardHeader><CardTitle className="font-display text-lg flex items-center gap-2">Spotpreis-Verlauf (Day-Ahead, 15 min) <HelpTooltip text="Zeigt den aktuellen Börsenstrompreis (Day-Ahead) in 15-Minuten-Intervallen. Vergangene Preise sind fest, zukünftige basieren auf der Auktion." /></CardTitle></CardHeader>
+        <CardHeader><CardTitle className="font-display text-lg flex items-center gap-2">{T("dashboard.spotPriceTitle")} <HelpTooltip text={T("tooltip.spotPrice")} /></CardTitle></CardHeader>
         <CardContent><Skeleton className="h-[260px]" /></CardContent>
       </Card>
     );
@@ -98,11 +99,11 @@ const SpotPriceWidget = ({ locationId }: SpotPriceWidgetProps) => {
     <Card>
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between">
-          <CardTitle className="font-display text-lg flex items-center gap-2">{t("dashboard.spotPriceTitle" as any)} <HelpTooltip text={t("tooltip.spotPrice" as any)} /></CardTitle>
+          <CardTitle className="font-display text-lg flex items-center gap-2">{T("dashboard.spotPriceTitle")} <HelpTooltip text={T("tooltip.spotPrice")} /></CardTitle>
           <div className="text-right">
             <div className="text-lg font-bold">{priceCtKwh} ct/kWh</div>
             {currentPrice && (
-              <div className="text-xs text-muted-foreground">aktuell: {Number(currentPrice.price_eur_mwh).toFixed(1)} €/MWh</div>
+              <div className="text-xs text-muted-foreground">{T("spot.current")}: {Number(currentPrice.price_eur_mwh).toFixed(1)} €/MWh</div>
             )}
           </div>
         </div>
@@ -129,7 +130,7 @@ const SpotPriceWidget = ({ locationId }: SpotPriceWidgetProps) => {
                   }
                   return _val;
                 }}
-                formatter={(v: number) => [`${v.toFixed(1)} €/MWh`, "Preis"]}
+                formatter={(v: number) => [`${v.toFixed(1)} €/MWh`, T("spot.price")]}
               />
               <ReferenceLine y={0} stroke="hsl(var(--muted-foreground))" strokeDasharray="3 3" />
               {dayChangeIndices.map((idx) => (
@@ -141,12 +142,12 @@ const SpotPriceWidget = ({ locationId }: SpotPriceWidgetProps) => {
                   strokeWidth={1}
                 />
               ))}
-              <Line data={pastData} type="stepAfter" dataKey="price" stroke="hsl(var(--muted-foreground))" strokeWidth={2} dot={false} name="Vergangen" connectNulls={false} />
-              <Line type="stepAfter" dataKey="price" stroke="hsl(var(--primary))" strokeWidth={2} dot={false} name="Preis" data={futureData} connectNulls={false} />
+              <Line data={pastData} type="stepAfter" dataKey="price" stroke="hsl(var(--muted-foreground))" strokeWidth={2} dot={false} name={T("spot.past")} connectNulls={false} />
+              <Line type="stepAfter" dataKey="price" stroke="hsl(var(--primary))" strokeWidth={2} dot={false} name={T("spot.price")} data={futureData} connectNulls={false} />
             </LineChart>
           </ResponsiveContainer>
         ) : (
-          <p className="text-muted-foreground text-center py-12">Keine Spotpreis-Daten vorhanden</p>
+          <p className="text-muted-foreground text-center py-12">{T("spot.noData")}</p>
         )}
       </CardContent>
     </Card>
