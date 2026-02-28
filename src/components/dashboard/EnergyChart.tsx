@@ -496,6 +496,13 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
       return buckets;
     }
 
+    // For non-day periods, only use manual-meter readings from `filtered` to avoid
+    // double-counting automatic meters whose data comes from dailyTotals / livePeriodTotals.
+    const autoMeterIds = new Set(
+      meters.filter(m => m.capture_type === "automatic" && !m.is_archived).map(m => m.id)
+    );
+    const manualFiltered = filtered.filter(r => !autoMeterIds.has(r.meter_id));
+
     if (period === "week") {
       const dayNames = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
       const days = eachDayOfInterval({ start: rangeStart, end: rangeEnd });
@@ -509,11 +516,11 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
         if (dbBucket) {
           for (const key of ENERGY_KEYS) addToEnergyBucket(bucket, key, dbBucket[key]);
         }
-        // Add manual readings for this day
-        filtered.forEach((r) => {
+        // Add manual readings for this day (skip automatic meters – handled above)
+        manualFiltered.forEach((r) => {
           if (format(new Date(r.reading_date), "yyyy-MM-dd") === dateStr) addToBucket(bucket, r);
         });
-        // For today: inject live totalDay (replaces any DB value for today since it's more current)
+        // For today: inject live totalDay if no DB value exists yet
         if (dateStr === todayStr && !dbBucket) {
           addLiveTodayToBucket(bucket);
         }
@@ -533,8 +540,8 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
         if (dbBucket) {
           for (const key of ENERGY_KEYS) addToEnergyBucket(bucket, key, dbBucket[key]);
         }
-        // Add manual readings
-        filtered.forEach((r) => {
+        // Add manual readings (skip automatic meters – handled via DB daily totals)
+        manualFiltered.forEach((r) => {
           if (format(new Date(r.reading_date), "yyyy-MM-dd") === dateStr) addToBucket(bucket, r);
         });
         // For today: inject live totalDay
@@ -565,8 +572,8 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
           addLiveTodayToBucket(bucket);
         }
       });
-      // Add manual readings
-      filtered.forEach((r) => {
+      // Add manual readings (skip automatic meters)
+      manualFiltered.forEach((r) => {
         const wk = getISOWeek(new Date(r.reading_date));
         const bucket = weekMap.get(wk);
         if (bucket) addToBucket(bucket, r);
@@ -591,8 +598,8 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
       const monthIdx = new Date().getMonth();
       for (const key of ENERGY_KEYS) addToEnergyBucket(buckets[monthIdx], key, todayBucket[key]);
     }
-    // Add manual readings
-    filtered.forEach((r) => {
+    // Add manual readings (skip automatic meters)
+    manualFiltered.forEach((r) => {
       const month = new Date(r.reading_date).getMonth();
       addToBucket(buckets[month], r);
     });
