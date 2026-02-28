@@ -26,7 +26,8 @@ import SpotPriceWidget from "@/components/dashboard/SpotPriceWidget";
 import PvForecastWidget from "@/components/dashboard/PvForecastWidget";
 import ArbitrageAiWidget from "@/components/dashboard/ArbitrageAiWidget";
 import WidgetErrorBoundary from "@/components/dashboard/WidgetErrorBoundary";
-
+import LazyWidget from "@/components/dashboard/LazyWidget";
+import { useDashboardPrefetch } from "@/hooks/useDashboardPrefetch";
 
 interface WidgetProps {
   locationId: string | null;
@@ -89,6 +90,10 @@ const DashboardContent = () => {
   const { t } = useTranslation();
   const { selectedLocationId, setSelectedLocationId } = useDashboardFilter();
   const { isModuleEnabled } = useModuleGuard();
+
+  // Prefetch shared data at dashboard level – fills React Query cache
+  // BEFORE LazyWidget mounts individual widgets on scroll
+  useDashboardPrefetch(selectedLocationId);
 
   // Filter visible widgets by active modules
   const filteredVisibleWidgets = useMemo(() => {
@@ -162,9 +167,11 @@ const DashboardContent = () => {
                         <ZoomIn className="h-4 w-4 text-muted-foreground" />
                       </button>
                     )}
-                    <WidgetErrorBoundary widgetName={widgetType}>
-                      <Component locationId={selectedLocationId} onExpand={widget.widget_size !== "full" ? () => setExpandedWidget(widgetType) : undefined} />
-                    </WidgetErrorBoundary>
+                    <LazyWidget>
+                      <WidgetErrorBoundary widgetName={widgetType}>
+                        <Component locationId={selectedLocationId} onExpand={widget.widget_size !== "full" ? () => setExpandedWidget(widgetType) : undefined} />
+                      </WidgetErrorBoundary>
+                    </LazyWidget>
                   </div>
                 ) : null;
               })
