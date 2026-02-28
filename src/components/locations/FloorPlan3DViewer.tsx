@@ -518,22 +518,24 @@ function Scene({
             );
           })}
           
-          {/* Sensor Labels */}
-          {sensorPositions.map((pos) => {
-            const sensor = sensors.find(s => s.id === pos.sensor_uuid);
-            return (
-              <Sensor3DLabel
-                key={pos.id}
-                position={pos}
-                value={sensor?.value}
-                unit={sensor?.unit}
-                scaleX={0.2}
-                scaleZ={0.2}
-                offsetX={sceneBounds.centerX}
-                offsetZ={sceneBounds.centerZ}
-              />
-            );
-          })}
+          {/* Sensor Labels – skip sensors that already have a meter (rendered as DraggableMeter3D) */}
+          {sensorPositions
+            .filter((pos) => !floorMeters.some(m => m.sensor_uuid === pos.sensor_uuid))
+            .map((pos) => {
+              const sensor = sensors.find(s => s.id === pos.sensor_uuid);
+              return (
+                <Sensor3DLabel
+                  key={pos.id}
+                  position={pos}
+                  value={sensor?.value}
+                  unit={sensor?.unit}
+                  scaleX={0.2}
+                  scaleZ={0.2}
+                  offsetX={sceneBounds.centerX}
+                  offsetZ={sceneBounds.centerZ}
+                />
+              );
+            })}
 
           {/* Empty state hint */}
           {rooms.length === 0 && floorMeters.length === 0 && (
