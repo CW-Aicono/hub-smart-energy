@@ -109,6 +109,18 @@ export const GATEWAY_DEFINITIONS: Record<string, GatewayDefinition> = {
       { name: "client_secret", label: "Client Secret", placeholder: "••••••••", type: "password", description: "OAuth2 Client Secret", required: true },
     ],
   },
+  home_assistant: {
+    type: "home_assistant",
+    label: "Home Assistant",
+    icon: "house",
+    description: "Home Assistant über Nabu Casa oder Reverse Proxy",
+    edgeFunctionName: "home-assistant-api",
+    configFields: [
+      { name: "api_url", label: "API URL", placeholder: "https://mein-ha.duckdns.org", type: "url", description: "Externe URL der Home Assistant Instanz (Nabu Casa oder Reverse Proxy)", required: true },
+      { name: "access_token", label: "Long-Lived Access Token", placeholder: "••••••••", type: "password", description: "Unter Profil → Sicherheit → Langlebige Zugriffstoken erstellen", required: true },
+      { name: "entity_filter", label: "Entity-Filter (optional)", placeholder: "sensor.energy,switch.", type: "text", description: "Kommagetrennte Entity-ID-Präfixe zum Filtern, z.B. sensor.energy,switch.", required: false },
+    ],
+  },
 };
 
 /** Get ordered list of gateway types for dropdowns */
