@@ -5226,6 +5226,7 @@ export const translations = {
   "pv.dateForecast": { de: "{date} (Prognose)", en: "{date} (Forecast)", es: "{date} (Pronóstico)", nl: "{date} (Prognose)" },
   "pv.dateActual": { de: "{date} (Ist)", en: "{date} (Actual)", es: "{date} (Real)", nl: "{date} (Werkelijk)" },
   "pv.periodForecast": { de: "{period} (Prognose)", en: "{period} (Forecast)", es: "{period} (Pronóstico)", nl: "{period} (Prognose)" },
+  "pv.periodActual": { de: "{period} (Ist)", en: "{period} (Actual)", es: "{period} (Real)", nl: "{period} (Werkelijk)" },
   "pv.noForecastDay": { de: "Keine Prognosedaten für diesen Tag", en: "No forecast data for this day", es: "Sin datos de pronóstico para este día", nl: "Geen prognosegegevens voor deze dag" },
   "pv.noForecastPeriod": { de: "Keine Prognosedaten für diesen Zeitraum", en: "No forecast data for this period", es: "Sin datos de pronóstico para este período", nl: "Geen prognosegegevens voor deze periode" },
   "pv.noDataAvailable": { de: "Keine Prognosedaten verfügbar. Konfigurieren Sie PV-Einstellungen in der Liegenschaft.", en: "No forecast data available. Configure PV settings in the property.", es: "Sin datos de pronóstico. Configure los ajustes FV en la propiedad.", nl: "Geen prognosegegevens beschikbaar. Configureer PV-instellingen in het pand." },
