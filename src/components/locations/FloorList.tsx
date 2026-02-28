@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Floor } from "@/hooks/useFloors";
 import { useUserRole } from "@/hooks/useUserRole";
+import { useTranslation } from "@/hooks/useTranslation";
 import { EditFloorDialog } from "./EditFloorDialog";
 import { DeleteFloorDialog } from "./DeleteFloorDialog";
 import { FloorPlanDialog } from "./FloorPlanDialog";
@@ -18,6 +19,8 @@ interface FloorListProps {
 
 export function FloorList({ floors, loading, locationId, onRefresh }: FloorListProps) {
   const { isAdmin } = useUserRole();
+  const { t } = useTranslation();
+  const T = (key: string) => t(key as any);
   const [openFloor, setOpenFloor] = useState<Floor | null>(null);
   const [expandedFloors, setExpandedFloors] = useState<Set<string>>(new Set());
 
@@ -44,8 +47,8 @@ export function FloorList({ floors, loading, locationId, onRefresh }: FloorListP
     return (
       <div className="text-center py-12 text-muted-foreground">
         <SquareStack className="h-12 w-12 mx-auto mb-3 opacity-50" />
-        <p className="font-medium">Keine Etagen vorhanden</p>
-        <p className="text-sm">Fügen Sie Etagen hinzu, um Grundrisspläne zu verwalten</p>
+        <p className="font-medium">{T("fl.noFloors")}</p>
+        <p className="text-sm">{T("fl.addHint")}</p>
       </div>
     );
   }
@@ -87,10 +90,10 @@ export function FloorList({ floors, loading, locationId, onRefresh }: FloorListP
                     onClick={() => setOpenFloor(floor)}
                   >
                     <Image className="h-4 w-4" />
-                    Grundriss
+                    {T("fl.floorPlan")}
                   </Button>
                 ) : (
-                  <span className="text-sm text-muted-foreground">Kein Grundriss</span>
+                  <span className="text-sm text-muted-foreground">{T("fl.noFloorPlan")}</span>
                 )}
 
                 {floor.model_3d_url && (
@@ -115,7 +118,6 @@ export function FloorList({ floors, loading, locationId, onRefresh }: FloorListP
         );
       })}
       
-      {/* Floor Plan Dialog */}
       {openFloor && (
         <FloorPlanDialog
           floor={openFloor}

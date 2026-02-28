@@ -26,17 +26,18 @@ export function DeleteFloorDialog({ floor, onSuccess }: DeleteFloorDialogProps) 
   const [loading, setLoading] = useState(false);
   const { deleteFloor } = useFloors(floor.location_id);
   const { t } = useTranslation();
+  const T = (key: string) => t(key as any);
 
   const handleDelete = async () => {
     setLoading(true);
     try {
       const { error } = await deleteFloor(floor.id);
-      if (error) { toast.error(t("common.errorDelete")); return; }
-      toast.success(t("floor.deleted"));
+      if (error) { toast.error(T("common.errorDelete")); return; }
+      toast.success(T("floor.deleted"));
       setOpen(false);
       onSuccess?.();
     } catch {
-      toast.error(t("common.error"));
+      toast.error(T("common.error"));
     } finally {
       setLoading(false);
     }
@@ -51,25 +52,24 @@ export function DeleteFloorDialog({ floor, onSuccess }: DeleteFloorDialogProps) 
       </AlertDialogTrigger>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Etage löschen?</AlertDialogTitle>
+          <AlertDialogTitle>{T("fl.deleteTitle")}</AlertDialogTitle>
           <AlertDialogDescription>
-            Möchten Sie die Etage "{floor.name}" wirklich löschen? 
-            Diese Aktion kann nicht rückgängig gemacht werden.
+            {T("fl.deleteDesc").replace("{name}", floor.name)}
             {floor.floor_plan_url && (
               <span className="block mt-2 text-amber-600">
-                Der zugehörige Grundrissplan wird ebenfalls gelöscht.
+                {T("fl.deleteFloorPlanWarning")}
               </span>
             )}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel>Abbrechen</AlertDialogCancel>
+          <AlertDialogCancel>{T("common.cancel")}</AlertDialogCancel>
           <AlertDialogAction
             onClick={handleDelete}
             disabled={loading}
             className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
           >
-            {loading ? "Lösche..." : "Löschen"}
+            {loading ? T("common.loading") : T("common.delete")}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

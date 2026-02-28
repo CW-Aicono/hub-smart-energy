@@ -37,6 +37,7 @@ interface PvForecastSectionProps {
 export function PvForecastSection({ locationId }: PvForecastSectionProps) {
   const [isOpen, setIsOpen] = useState(false);
   const { t } = useTranslation();
+  const T = (key: string) => t(key as any);
   const { isAdmin } = useUserRole();
   const { settings, isLoading: settingsLoading, upsertSettings } = usePvForecastSettings(locationId);
   const { forecast, isLoading: forecastLoading } = usePvForecast(isOpen ? locationId : null);
@@ -65,7 +66,6 @@ export function PvForecastSection({ locationId }: PvForecastSectionProps) {
     }
   }, [settings]);
 
-  // Fetch actual PV meter readings for today
   useEffect(() => {
     if (!settings?.pv_meter_id || !isOpen) return;
     const meterId = settings.pv_meter_id;
@@ -112,12 +112,8 @@ export function PvForecastSection({ locationId }: PvForecastSectionProps) {
   }, [settings?.pv_meter_id, isOpen]);
 
   const handleSave = () => {
-    if (form.tilt_deg < 0 || form.tilt_deg > 90) {
-      return;
-    }
-    if (form.azimuth_deg < 0 || form.azimuth_deg > 360) {
-      return;
-    }
+    if (form.tilt_deg < 0 || form.tilt_deg > 90) return;
+    if (form.azimuth_deg < 0 || form.azimuth_deg > 360) return;
     upsertSettings.mutate({
       ...form,
       pv_meter_id: form.pv_meter_id || null,
@@ -172,11 +168,11 @@ export function PvForecastSection({ locationId }: PvForecastSectionProps) {
               <div>
                 <CardTitle className="flex items-center gap-2">
                   <Sun className="h-5 w-5 text-amber-500" />
-                  PV-Prognose
-                  <HelpTooltip text={t("tooltip.pvForecast" as any)} />
+                  {T("pv.sectionTitle")}
+                  <HelpTooltip text={T("tooltip.pvForecast")} />
                 </CardTitle>
                 <CardDescription>
-                  KI-gestützte Solarprognose basierend auf Standortdaten und Wetter
+                  {T("pv.sectionDesc")}
                 </CardDescription>
               </div>
             </button>
@@ -185,41 +181,40 @@ export function PvForecastSection({ locationId }: PvForecastSectionProps) {
 
         <CollapsibleContent>
           <CardContent className="space-y-6">
-            {/* Settings */}
             {isAdmin && (
               <div className="border rounded-lg p-4 space-y-4">
-                <h4 className="font-medium text-sm">Anlagen-Einstellungen</h4>
+                <h4 className="font-medium text-sm">{T("pv.settings")}</h4>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   <div>
-                    <Label className="flex items-center gap-1">Spitzenleistung (kWp) <HelpTooltip text={t("tooltip.pvPeakPower" as any)} iconSize={12} /></Label>
+                    <Label className="flex items-center gap-1">{T("pv.peakPower")} <HelpTooltip text={T("tooltip.pvPeakPower")} iconSize={12} /></Label>
                     <Input type="number" value={form.peak_power_kwp} onChange={(e) => setForm({ ...form, peak_power_kwp: Number(e.target.value) })} />
                   </div>
                   <div>
-                    <Label className="flex items-center gap-1">Neigung (°) <HelpTooltip text={t("tooltip.pvTilt" as any)} iconSize={12} /></Label>
+                    <Label className="flex items-center gap-1">{T("pv.tilt")} <HelpTooltip text={T("tooltip.pvTilt")} iconSize={12} /></Label>
                     <Input type="number" min={0} max={90} value={form.tilt_deg} onChange={(e) => {
                       const v = Number(e.target.value);
                       setForm({ ...form, tilt_deg: Math.min(90, Math.max(0, v)) });
                     }} />
                     {(form.tilt_deg < 0 || form.tilt_deg > 90) && (
-                      <p className="text-xs text-destructive mt-1">Wert muss zwischen 0° und 90° liegen</p>
+                      <p className="text-xs text-destructive mt-1">{T("pv.tiltRange")}</p>
                     )}
                   </div>
                   <div>
-                    <Label className="flex items-center gap-1">Ausrichtung (°) <HelpTooltip text={t("tooltip.pvAzimuth" as any)} iconSize={12} /></Label>
+                    <Label className="flex items-center gap-1">{T("pv.azimuth")} <HelpTooltip text={T("tooltip.pvAzimuth")} iconSize={12} /></Label>
                     <Input type="number" min={0} max={360} value={form.azimuth_deg} onChange={(e) => {
                       const v = Number(e.target.value);
                       setForm({ ...form, azimuth_deg: Math.min(360, Math.max(0, v)) });
                     }} />
                     {(form.azimuth_deg < 0 || form.azimuth_deg > 360) && (
-                      <p className="text-xs text-destructive mt-1">Wert muss zwischen 0° und 360° liegen</p>
+                      <p className="text-xs text-destructive mt-1">{T("pv.azimuthRange")}</p>
                     )}
                   </div>
                   <div>
-                    <Label className="flex items-center gap-1">PV-Zähler <HelpTooltip text={t("tooltip.pvMeter" as any)} iconSize={12} /></Label>
+                    <Label className="flex items-center gap-1">{T("pv.meter")} <HelpTooltip text={T("tooltip.pvMeter")} iconSize={12} /></Label>
                     <Select value={form.pv_meter_id || "__none__"} onValueChange={(v) => setForm({ ...form, pv_meter_id: v === "__none__" ? "" : v })}>
                       <SelectTrigger><SelectValue placeholder="Optional" /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="__none__">Keiner</SelectItem>
+                        <SelectItem value="__none__">{T("pv.none")}</SelectItem>
                         {solarMeters.map((m) => (
                           <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
                         ))}
@@ -230,44 +225,42 @@ export function PvForecastSection({ locationId }: PvForecastSectionProps) {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <Switch checked={form.is_active} onCheckedChange={(v) => setForm({ ...form, is_active: v })} />
-                    <Label>Prognose aktiv</Label>
+                    <Label>{T("pv.forecastActive")}</Label>
                   </div>
                   <Button onClick={handleSave} disabled={upsertSettings.isPending} size="sm">
                     <Save className="h-4 w-4 mr-1" />
-                    Speichern
+                    {T("common.save")}
                   </Button>
                 </div>
               </div>
             )}
 
-            {/* Forecast Chart */}
             {forecastLoading ? (
               <Skeleton className="h-64 w-full" />
             ) : forecast && forecast.summary && forecast.hourly ? (
               <div className="space-y-4">
-                {/* Summary */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   <div className="border rounded-lg p-3 text-center">
-                    <p className="text-xs text-muted-foreground">Heute gesamt</p>
+                    <p className="text-xs text-muted-foreground">{T("pv.todayTotal")}</p>
                     <p className="text-2xl font-bold">{(forecast.summary.today_total_kwh ?? 0).toFixed(0)} kWh</p>
                     {Object.keys(actualReadings).length > 0 && (
                       <p className="text-sm font-semibold text-emerald-600">
-                        Ist: {Object.values(actualReadings).reduce((s, v) => s + v, 0).toFixed(1)} kWh
+                        {T("pv.actual")}: {Object.values(actualReadings).reduce((s, v) => s + v, 0).toFixed(1)} kWh
                       </p>
                     )}
                   </div>
                   <div className="border rounded-lg p-3 text-center">
-                    <p className="text-xs text-muted-foreground">Morgen gesamt</p>
+                    <p className="text-xs text-muted-foreground">{T("pv.tomorrowTotal")}</p>
                     <p className="text-2xl font-bold">{(forecast.summary.tomorrow_total_kwh ?? 0).toFixed(0)} kWh</p>
                   </div>
                   <div className="border rounded-lg p-3 text-center">
-                    <p className="text-xs text-muted-foreground">Spitze</p>
+                    <p className="text-xs text-muted-foreground">{T("pv.peak")}</p>
                     <p className="text-2xl font-bold">{(forecast.summary.peak_kwh ?? 0).toFixed(1)} kW</p>
-                    <p className="text-xs text-muted-foreground">{forecast.summary.peak_hour ? toLocalTime(forecast.summary.peak_hour) : "–"} Uhr</p>
+                    <p className="text-xs text-muted-foreground">{forecast.summary.peak_hour ? `${toLocalTime(forecast.summary.peak_hour)} ${T("pv.clock")}`.trim() : "–"}</p>
                   </div>
                   {forecast.summary.ai_confidence && (
                     <div className="border rounded-lg p-3 text-center">
-                      <p className="text-xs text-muted-foreground">KI-Konfidenz</p>
+                      <p className="text-xs text-muted-foreground">{T("pv.aiConfidence")}</p>
                       <Badge variant="secondary" className="mt-1 gap-1">
                         <Sparkles className="h-3 w-3" />
                         {forecast.summary.ai_confidence}
@@ -276,9 +269,8 @@ export function PvForecastSection({ locationId }: PvForecastSectionProps) {
                   )}
                 </div>
 
-                {/* 48h Chart */}
                 <div>
-                  <h4 className="text-sm font-medium mb-2">48-Stunden-Prognose{hasActual ? " vs. Ist-Erzeugung" : ""}</h4>
+                  <h4 className="text-sm font-medium mb-2">{T("pv.chartTitle")}{hasActual ? ` ${T("pv.vsActual")}` : ""}</h4>
                   <ResponsiveContainer width="100%" height={240}>
                     <BarChart data={chartData} margin={{ left: -10, bottom: 30 }}>
                       <CartesianGrid strokeDasharray="3 3" />
@@ -291,16 +283,16 @@ export function PvForecastSection({ locationId }: PvForecastSectionProps) {
                       <YAxis tick={{ fontSize: 10 }} width={35} label={{ value: "kWh", angle: -90, position: "insideLeft", style: { fontSize: 10 } }} />
                       <Tooltip
                         formatter={(v: number, name: string) => {
-                          if (name === "prognose") return [`${v.toFixed(2)} kWh`, "Prognose"];
-                          if (name === "ist") return [`${v.toFixed(2)} kWh`, "Ist-Erzeugung"];
+                          if (name === "prognose") return [`${v.toFixed(2)} kWh`, T("pv.forecast")];
+                          if (name === "ist") return [`${v.toFixed(2)} kWh`, T("pv.actualGeneration")];
                           return [v, name];
                         }}
                         labelFormatter={(_l: string, payload: any[]) => {
                           const entry = payload?.[0]?.payload;
-                          return entry ? `${entry.dayLabel} ${entry.time} Uhr` : _l;
+                          return entry ? `${entry.dayLabel} ${entry.time} ${T("pv.clock")}`.trim() : _l;
                         }}
                       />
-                      {hasActual && <Legend formatter={(v) => v === "prognose" ? "Prognose" : "Ist-Erzeugung"} />}
+                      {hasActual && <Legend formatter={(v) => v === "prognose" ? T("pv.forecast") : T("pv.actualGeneration")} />}
                       <Bar dataKey="prognose" fill={PV_YELLOW} radius={[2, 2, 0, 0]} />
                       {hasActual && <Bar dataKey="ist" fill={ACTUAL_GREEN} radius={[2, 2, 0, 0]} />}
                     </BarChart>
@@ -316,7 +308,7 @@ export function PvForecastSection({ locationId }: PvForecastSectionProps) {
               </div>
             ) : (
               <p className="text-muted-foreground text-center py-8">
-                Konfigurieren Sie oben die PV-Einstellungen, um eine Prognose zu erhalten.
+                {T("pv.configureHint")}
               </p>
             )}
           </CardContent>

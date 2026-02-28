@@ -81,10 +81,10 @@ function isActuator(sensor: LoxoneSensor): boolean {
 }
 
 const ACTION_TYPES = [
-  { value: "pulse", label: "Pulse (Taster)" },
-  { value: "On", label: "Einschalten" },
-  { value: "Off", label: "Ausschalten" },
-  { value: "toggle", label: "Umschalten (Toggle)" },
+  { value: "pulse", label: "arb.pulse" },
+  { value: "On", label: "arb.turnOn" },
+  { value: "Off", label: "arb.turnOff" },
+  { value: "toggle", label: "arb.toggle" },
 ];
 
 interface LocationAutomationProps {
@@ -92,14 +92,14 @@ interface LocationAutomationProps {
 }
 
 /** Summary badges for conditions */
-function ConditionSummary({ auto }: { auto: LocationAutomationRecord }) {
+function ConditionSummary({ auto, t }: { auto: LocationAutomationRecord; t: (key: any) => string }) {
   if (!auto.conditions || auto.conditions.length === 0) return null;
   const icons: { icon: typeof Clock; label: string }[] = [];
   const types = new Set(auto.conditions.map((c) => c.type));
-  if (types.has("sensor_value")) icons.push({ icon: Thermometer, label: "Sensorwert" });
-  if (types.has("time")) icons.push({ icon: Clock, label: "Uhrzeit" });
-  if (types.has("weekday")) icons.push({ icon: CalendarDays, label: "Wochentage" });
-  if (types.has("status")) icons.push({ icon: ToggleLeft, label: "Status" });
+  if (types.has("sensor_value")) icons.push({ icon: Thermometer, label: t("auto.sensorValue" as any) });
+  if (types.has("time")) icons.push({ icon: Clock, label: t("auto.time" as any) });
+  if (types.has("weekday")) icons.push({ icon: CalendarDays, label: t("auto.weekdays" as any) });
+  if (types.has("status")) icons.push({ icon: ToggleLeft, label: t("auto.status" as any) });
 
   return (
     <div className="flex items-center gap-1 flex-wrap">
@@ -114,7 +114,7 @@ function ConditionSummary({ auto }: { auto: LocationAutomationRecord }) {
         const hasAnd = auto.conditions.some((c) => c.connector === "AND" || !c.connector);
         return (
           <Badge variant="outline" className="text-[10px] font-mono py-0">
-            {hasAnd && hasOr ? "UND+ODER" : hasOr ? "ODER" : "UND"}
+            {hasAnd && hasOr ? t("arb.andOr" as any) : hasOr ? t("arb.or" as any) : t("arb.and" as any)}
           </Badge>
         );
       })()}
@@ -125,6 +125,7 @@ function ConditionSummary({ auto }: { auto: LocationAutomationRecord }) {
 export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
   const [isOpen, setIsOpen] = useState(false);
   const { t } = useTranslation();
+  const T = (key: string) => t(key as any);
   const [configOpen, setConfigOpen] = useState(false);
   const [ruleBuilderOpen, setRuleBuilderOpen] = useState(false);
   const [editAutomation, setEditAutomation] = useState<LocationAutomationRecord | null>(null);
@@ -173,7 +174,7 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
   };
 
   const handleSaveRule = async (data: AutomationRuleData) => {
-    if (!loxoneIntegration) throw new Error("Keine Integration");
+    if (!loxoneIntegration) throw new Error(T("auto.noIntegration"));
 
     // Use first action as primary actuator for backward compatibility
     const primary = data.actions[0];
@@ -193,7 +194,7 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
         is_active: data.is_active,
       } as any);
       if (error) throw error;
-      toast.success("Automation aktualisiert");
+      toast.success(T("auto.updated"));
     } else {
       const { error } = await createAutomation({
         location_id: locationId,
@@ -211,16 +212,16 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
         is_active: data.is_active,
       });
       if (error) throw error;
-      toast.success("Automation erstellt");
+      toast.success(T("auto.created"));
     }
   };
 
   const handleExecute = async (auto: LocationAutomationRecord) => {
     const result = await executeAutomation(auto);
     if (result.success) {
-      toast.success(`„${auto.name}" ausgeführt`);
+      toast.success(T("auto.executed").replace("{name}", auto.name));
     } else {
-      toast.error(result.error || "Ausführung fehlgeschlagen");
+      toast.error(result.error || T("auto.executeFailed"));
     }
   };
 
@@ -228,9 +229,9 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
     if (!deleteTarget) return;
     const { error } = await deleteAutomation(deleteTarget.id);
     if (error) {
-      toast.error("Fehler beim Löschen");
+      toast.error(T("auto.deleteError"));
     } else {
-      toast.success("Automation gelöscht");
+      toast.success(T("auto.deleted"));
     }
     setDeleteTarget(null);
   };
@@ -251,16 +252,16 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
                   <div>
                     <CardTitle className="flex items-center gap-2">
                       <Cpu className="h-5 w-5" />
-                      Automation
-                      <HelpTooltip text={t("tooltip.automation" as any)} />
+                      {T("common.automation")}
+                      <HelpTooltip text={T("tooltip.automation")} />
                       {automations.length > 0 && (
                         <Badge variant="secondary" className="ml-1 text-xs">
-                          {automations.filter((a) => a.is_active).length} aktiv
+                          {automations.filter((a) => a.is_active).length} {T("auto.active")}
                         </Badge>
                       )}
                     </CardTitle>
                     <CardDescription>
-                      Automatisierte Steuerungsszenarien für diesen Standort
+                      {T("auto.automationDesc")}
                     </CardDescription>
                   </div>
                 </button>
@@ -312,13 +313,13 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
                         <div className="flex items-center gap-2 flex-wrap">
                           <p className="font-medium text-sm">{auto.name}</p>
                           {actionsCount > 1 && (
-                            <Badge variant="secondary" className="text-[10px]">{actionsCount} Aktionen</Badge>
+                            <Badge variant="secondary" className="text-[10px]">{actionsCount} {T("auto.actions")}</Badge>
                           )}
                         </div>
                         {auto.description && (
                           <p className="text-xs text-muted-foreground mt-0.5">{auto.description}</p>
                         )}
-                        <ConditionSummary auto={auto} />
+                        <ConditionSummary auto={auto} t={t} />
                         <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
                           <span className="flex items-center gap-1">
                             <Server className="h-3 w-3" />
@@ -339,7 +340,7 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
                           className="h-8 w-8"
                           onClick={() => handleExecute(auto)}
                           disabled={isExecuting || !auto.is_active}
-                          title="Jetzt ausführen"
+                          title={T("auto.executeNow")}
                         >
                           {isExecuting ? (
                             <Loader2 className="h-4 w-4 animate-spin" />
@@ -352,7 +353,7 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
                           variant="ghost"
                           className="h-8 w-8"
                           onClick={() => openEditRule(auto)}
-                          title="Bearbeiten"
+                          title={T("common.edit")}
                         >
                           <Pencil className="h-3.5 w-3.5" />
                         </Button>
@@ -361,7 +362,7 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
                           variant="ghost"
                           className="h-8 w-8 text-destructive hover:text-destructive"
                           onClick={() => setDeleteTarget(auto)}
-                          title="Löschen"
+                          title={T("common.delete")}
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </Button>
@@ -378,7 +379,7 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
                 })
               ) : (
                 <div className="text-center py-4 text-sm text-muted-foreground">
-                  Noch keine Automationen konfiguriert.
+                  {T("auto.noAutomations")}
                 </div>
               )}
 
@@ -391,10 +392,10 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
                   onClick={() => setConfigOpen(true)}
                 >
                   <Settings2 className="h-4 w-4" />
-                  Verfügbare Aktoren
+                  {T("auto.availableActuators")}
                   {!intLoading && loxoneIntegration && (
                     <Badge variant="secondary" className="ml-1 text-[10px]">
-                      {actuators.length} Aktoren
+                      {actuators.length} {T("auto.actuators")}
                     </Badge>
                   )}
                 </Button>
@@ -406,7 +407,7 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
                   disabled={!loxoneIntegration}
                 >
                   <Plus className="h-4 w-4" />
-                  Automation hinzufügen
+                  {T("auto.addAutomation")}
                 </Button>
               </div>
             </CardContent>
@@ -420,10 +421,10 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Settings2 className="h-5 w-5" />
-              Verfügbare Aktoren – Loxone Miniserver
+              {T("auto.actuatorsTitle")}
             </DialogTitle>
             <DialogDescription>
-              Steuerbare Aktoren des verbundenen Miniservers, die für Automationen genutzt werden können.
+              {T("auto.actuatorsDesc")}
             </DialogDescription>
           </DialogHeader>
 
@@ -431,8 +432,8 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
             <div className="flex flex-col items-center gap-3 py-8 text-center">
               <AlertTriangle className="h-10 w-10 text-muted-foreground" />
               <p className="text-sm text-muted-foreground">
-                Kein Loxone Miniserver mit diesem Standort verbunden.<br />
-                Verbinden Sie einen Miniserver unter „Integrationen".
+                {T("auto.noMiniserver")}<br />
+                {T("auto.connectHint")}
               </p>
             </div>
           ) : sensorsLoading || intLoading ? (
@@ -444,14 +445,14 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
           ) : (
             <div className="space-y-4 mt-2">
               <Input
-                placeholder="Suche nach Name, Raum oder Typ..."
+                placeholder={T("auto.searchPlaceholder")}
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="h-9"
               />
               <Badge variant="secondary" className="gap-1">
                 <ToggleLeft className="h-3 w-3" />
-                {actuators.length} Aktoren (steuerbar)
+                {actuators.length} {T("auto.actuators")} ({T("auto.controllable")})
               </Badge>
               {filteredActuators.length > 0 ? (
                 <div className="space-y-2">
@@ -488,8 +489,8 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
                   ))}
                 </div>
               ) : (
-                <div className="text-center py-6 text-sm text-muted-foreground">
-                  {searchTerm ? "Keine Ergebnisse für diese Suche." : "Keine steuerbaren Aktoren gefunden."}
+              <div className="text-center py-6 text-sm text-muted-foreground">
+                  {searchTerm ? T("auto.noResults") : T("auto.noActuators")}
                 </div>
               )}
             </div>
@@ -527,15 +528,15 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
       <AlertDialog open={!!deleteTarget} onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Automation löschen?</AlertDialogTitle>
+            <AlertDialogTitle>{T("auto.deleteTitle")}</AlertDialogTitle>
             <AlertDialogDescription>
-              „{deleteTarget?.name}" wird unwiderruflich gelöscht.
+              {T("auto.deleteDesc").replace("{name}", deleteTarget?.name || "")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Abbrechen</AlertDialogCancel>
+            <AlertDialogCancel>{T("common.cancel")}</AlertDialogCancel>
             <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-              Löschen
+              {T("common.delete")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
