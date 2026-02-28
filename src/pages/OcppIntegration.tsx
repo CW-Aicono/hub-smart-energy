@@ -118,7 +118,7 @@ const OcppIntegration = () => {
                 {/* Short URL (if configured) */}
                 {OCPP_WS_URL_SHORT && (
                   <div>
-                    <p className="text-xs font-medium text-primary mb-1">Kurze URL (empfohlen)</p>
+                    <p className="text-xs font-medium text-primary mb-1">{t("ocppIntegration.shortUrl" as any)}</p>
                     <div className="flex items-center gap-2">
                       <code className="text-sm bg-background border rounded px-3 py-2 break-all select-all flex-1 font-semibold">
                         {OCPP_WS_URL_SHORT}/{"<OCPP_ID>"}
@@ -133,7 +133,7 @@ const OcppIntegration = () => {
                 {/* Long URL */}
                 <div>
                   {OCPP_WS_URL_SHORT && (
-                    <p className="text-xs text-muted-foreground mb-1">Vollständige URL</p>
+                    <p className="text-xs text-muted-foreground mb-1">{t("ocppIntegration.fullUrl" as any)}</p>
                   )}
                   <div className="flex items-center gap-2">
                     <code className="text-xs bg-background border rounded px-3 py-2 break-all select-all flex-1 text-muted-foreground">
