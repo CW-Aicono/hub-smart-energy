@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from "react";
+import { useCallback } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "./useTenant";
 import { useTenantQuery } from "./useTenantQuery";
@@ -54,12 +55,10 @@ function buildHierarchy(locations: Location[]): Location[] {
   const map = new Map<string, Location>();
   const roots: Location[] = [];
 
-  // First pass: create a map of all locations
   locations.forEach(loc => {
     map.set(loc.id, { ...loc, children: [] });
   });
 
-  // Second pass: build the hierarchy
   locations.forEach(loc => {
     const current = map.get(loc.id)!;
     if (loc.parent_id && map.has(loc.parent_id)) {
@@ -85,76 +84,45 @@ export function useLocations(): UseLocationsReturn {
   const { tenant } = useTenant();
   const isDemo = useDemoMode();
   const { ready, insert: tenantInsert } = useTenantQuery();
-  const [locations, setLocations] = useState<Location[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
 
-  const fetchLocations = useCallback(async () => {
-    if (isDemo) {
-      setLocations(DEMO_LOCATIONS);
-      setLoading(false);
-      return;
-    }
+  const queryKey = ["locations", tenant?.id ?? "none"];
 
-    if (!tenant) {
-      setLocations([]);
-      setLoading(false);
-      return;
-    }
-
-    setLoading(true);
-    setError(null);
-
-    try {
-      const { data, error: fetchError } = await supabase
+  const { data: locations = [], isLoading, error: queryError } = useQuery({
+    queryKey,
+    queryFn: async () => {
+      if (isDemo) return DEMO_LOCATIONS;
+      const { data, error } = await supabase
         .from("locations")
         .select("*")
-        .eq("tenant_id", tenant.id)
+        .eq("tenant_id", tenant!.id)
         .eq("is_archived", false)
         .order("name");
+      if (error) throw error;
+      return (data as Location[]) || [];
+    },
+    enabled: isDemo || !!tenant,
+    staleTime: 30_000,
+  });
 
-      if (fetchError) {
-        setError(fetchError.message);
-      } else {
-        setLocations((data as Location[]) || []);
-      }
-    } catch (err) {
-      setError("Failed to fetch locations");
-    } finally {
-      setLoading(false);
-    }
-  }, [tenant, isDemo]);
-
-  useEffect(() => {
-    if (tenant) {
-      fetchLocations();
-    }
-  }, [fetchLocations, tenant]);
+  const invalidate = useCallback(async () => {
+    await queryClient.invalidateQueries({ queryKey: ["locations"] });
+  }, [queryClient]);
 
   const createLocation = async (location: LocationInsert) => {
     if (!ready) return { error: new Error("No tenant") };
-
     const { error: insertError } = await tenantInsert("locations", location as Omit<LocationInsertDB, "tenant_id">);
-
-    if (!insertError) {
-      await fetchLocations();
-    }
-
+    if (!insertError) await invalidate();
     return { error: insertError as Error | null };
   };
 
   const updateLocation = async (id: string, updates: Partial<Location>) => {
-    // Strip non-DB fields before updating
     const { children: _children, ...dbUpdates } = updates;
     const { error: updateError } = await supabase
       .from("locations")
       .update(dbUpdates as LocationUpdateDB)
       .eq("id", id);
-
-    if (!updateError) {
-      await fetchLocations();
-    }
-
+    if (!updateError) await invalidate();
     return { error: updateError as Error | null };
   };
 
@@ -163,20 +131,16 @@ export function useLocations(): UseLocationsReturn {
       .from("locations")
       .delete()
       .eq("id", id);
-
-    if (!deleteError) {
-      await fetchLocations();
-    }
-
+    if (!deleteError) await invalidate();
     return { error: deleteError as Error | null };
   };
 
   return {
     locations,
     hierarchicalLocations: buildHierarchy(locations),
-    loading,
-    error,
-    refetch: fetchLocations,
+    loading: isLoading,
+    error: queryError ? (queryError as Error).message : null,
+    refetch: invalidate,
     createLocation,
     updateLocation,
     deleteLocation,
