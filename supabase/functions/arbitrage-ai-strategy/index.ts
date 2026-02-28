@@ -135,12 +135,17 @@ Consider:
 - Price spreads must be large enough to compensate for efficiency losses
 - Provide concrete time windows and estimated revenues in Euro
 
+CRITICAL CONSTRAINT: The current time is ${new Date().toISOString()}. 
+ALL charge_windows and discharge_windows MUST have start times IN THE FUTURE (after the current time). 
+Do NOT suggest any time windows that have already passed. Only recommend strategies for the period from NOW until the end of available forecast data.
+The valid_until field of each strategy should be set to the end of the last recommended time window.
+
 IMPORTANT: All text output (strategy names, reasoning, market_summary, window reasons) MUST be written in ${outputLang}.
 The confidence field must use the English values: "high", "medium", or "low".`,
           },
           {
             role: "user",
-            content: `Current spot prices (DE-LU):\n${pricesSummary}\n\nStorages:\n${storagesSummary}\n\nPV forecasts:\n${pvSummary || "No PV data available"}\n\nExisting strategies:\n${existingStr || "None"}\n\nPlease suggest 2-4 optimal strategies.`,
+            content: `Current time: ${new Date().toISOString()}\n\nCurrent spot prices (DE-LU):\n${pricesSummary}\n\nStorages:\n${storagesSummary}\n\nPV forecasts:\n${pvSummary || "No PV data available"}\n\nExisting strategies:\n${existingStr || "None"}\n\nPlease suggest 2-4 optimal strategies. Remember: ONLY future time windows (after ${new Date().toISOString()}).`,
           },
         ],
         tools: [
