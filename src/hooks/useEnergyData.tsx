@@ -1,4 +1,5 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
 import { useMeters } from "./useMeters";
@@ -43,14 +44,12 @@ function isEnergyTypeKey(key: string): key is EnergyTypeKey {
   return ENERGY_TYPE_KEYS.includes(key as EnergyTypeKey);
 }
 
-/** Add a value to the correct energy type bucket */
 function addToTotals(totals: EnergyTypeTotals, energyType: string, value: number): void {
   if (isEnergyTypeKey(energyType)) {
     totals[energyType] += value;
   }
 }
 
-/** Add live auto-meter period totals (totalMonth) into an EnergyTypeTotals bucket */
 function addAutoMeterTotals(
   totals: EnergyTypeTotals,
   meters: { id: string; is_archived: boolean; capture_type: string; energy_type: string; location_id: string }[],
@@ -68,11 +67,6 @@ function addAutoMeterTotals(
   }
 }
 
-/**
- * Aggregate filtered readings into energy-type totals and add live auto-meter data.
- * This is the single source of truth for the repeated pattern across
- * energyDistribution, energyTotals, costOverview, and monthlyData.
- */
 function aggregateEnergyTotals(
   filteredReadings: ReadingRow[],
   meterMap: Record<string, { energy_type: string; location_id: string }>,
@@ -88,6 +82,7 @@ function aggregateEnergyTotals(
   addAutoMeterTotals(totals, meters, livePeriodTotals, meterMap, locationId);
   return totals;
 }
+
 const MONTH_LABELS = ["Jan", "Feb", "Mär", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dez"];
 
 interface ReadingRow {
@@ -106,16 +101,11 @@ interface PeriodTotals {
 export function useEnergyData(locationId?: string | null) {
   const { user } = useAuth();
   const { meters } = useMeters();
-  const [readings, setReadings] = useState<ReadingRow[]>([]);
-  const [virtualSources, setVirtualSources] = useState<{ virtual_meter_id: string; source_meter_id: string; operator: string; sort_order: number }[]>([]);
-  const [loading, setLoading] = useState(true);
 
-  // Fetch manual readings and virtual sources from DB
-  useEffect(() => {
-    if (!user) return;
-
-    const fetchData = async () => {
-      setLoading(true);
+  // Shared react-query cache for readings + virtual sources
+  const { data: dbData, isLoading: dbLoading } = useQuery({
+    queryKey: ["energy-readings-and-sources", user?.id],
+    queryFn: async () => {
       const [readingsRes, sourcesRes] = await Promise.all([
         supabase
           .from("meter_readings")
@@ -126,23 +116,17 @@ export function useEnergyData(locationId?: string | null) {
           .select("virtual_meter_id, source_meter_id, operator, sort_order")
           .order("sort_order"),
       ]);
+      return {
+        readings: (readingsRes.data ?? []) as ReadingRow[],
+        virtualSources: (sourcesRes.data ?? []) as { virtual_meter_id: string; source_meter_id: string; operator: string; sort_order: number }[],
+      };
+    },
+    enabled: !!user,
+    staleTime: 30_000,
+  });
 
-      if (readingsRes.error) {
-        console.error("Error fetching readings:", readingsRes.error);
-        setReadings([]);
-      } else {
-        setReadings((readingsRes.data ?? []) as ReadingRow[]);
-      }
-
-      if (!sourcesRes.error && sourcesRes.data) {
-        setVirtualSources(sourcesRes.data);
-      }
-
-      setLoading(false);
-    };
-
-    fetchData();
-  }, [user]);
+  const readings = dbData?.readings ?? [];
+  const virtualSources = dbData?.virtualSources ?? [];
 
   // Group automatic meters by integration ID
   const integrationIds = useMemo(() => {
@@ -214,7 +198,6 @@ export function useEnergyData(locationId?: string | null) {
     const manualOnly = readings.filter((r) => !autoMeterIds.has(r.meter_id));
     const combined = [...manualOnly, ...liveReadings];
 
-    // Compute virtual meter readings from sources
     const virtualMeterIds = new Set(virtualSources.map((s) => s.virtual_meter_id));
     const readingsByMeter = new Map<string, ReadingRow[]>();
     combined.forEach((r) => {
@@ -288,7 +271,6 @@ export function useEnergyData(locationId?: string | null) {
       }
     });
 
-    // Add auto meter totalMonth for current month
     const currentMonthLabel = MONTH_LABELS[new Date().getMonth()];
     if (buckets[currentMonthLabel]) {
       addAutoMeterTotals(buckets[currentMonthLabel], meters, livePeriodTotals, meterMap, locationId);
@@ -317,7 +299,6 @@ export function useEnergyData(locationId?: string | null) {
       }
     });
 
-    // Add auto meter totalMonth for current month
     const autoTotals = aggregateEnergyTotals([], meterMap, meters, livePeriodTotals, locationId);
     currentTotal += autoTotals.strom + autoTotals.gas + autoTotals.waerme + autoTotals.wasser;
 
@@ -355,7 +336,7 @@ export function useEnergyData(locationId?: string | null) {
   );
 
   const hasData = filteredReadings.length > 0 || Object.keys(livePeriodTotals).length > 0;
-  const isLoading = loading || liveLoading;
+  const isLoading = dbLoading || liveLoading;
 
   return {
     monthlyData,

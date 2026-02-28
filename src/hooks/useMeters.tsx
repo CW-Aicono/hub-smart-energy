@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from "react";
+import { useCallback } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
 import { useTenantQuery } from "./useTenantQuery";
@@ -31,38 +32,29 @@ export interface MeterInsert {
 export function useMeters(locationId?: string) {
   const { user } = useAuth();
   const { tenantId, insert: tenantInsert } = useTenantQuery();
-  const [meters, setMeters] = useState<Meter[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
 
-  const fetchMeters = useCallback(async () => {
-    if (!user || !tenantId) {
-      setLoading(false);
-      return;
-    }
-    setLoading(true);
+  const queryKey = ["meters", tenantId, locationId ?? "all"];
 
-    try {
-      let query = supabase.from("meters").select("*").eq("tenant_id", tenantId).order("name");
+  const { data: meters = [], isLoading: loading } = useQuery({
+    queryKey,
+    queryFn: async () => {
+      let query = supabase.from("meters").select("*").eq("tenant_id", tenantId!).order("name");
       if (locationId) query = query.eq("location_id", locationId);
-
       const { data, error } = await query;
       if (error) {
         console.error("Error fetching meters:", error);
-        setMeters([]);
-      } else {
-        setMeters((data ?? []) as Meter[]);
+        return [];
       }
-    } catch (err) {
-      console.error("Error fetching meters:", err);
-      setMeters([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [user, locationId, tenantId]);
+      return (data ?? []) as Meter[];
+    },
+    enabled: !!user && !!tenantId,
+    staleTime: 30_000,
+  });
 
-  useEffect(() => {
-    fetchMeters();
-  }, [fetchMeters]);
+  const invalidate = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: ["meters"] });
+  }, [queryClient]);
 
   const addMeter = async (
     meter: MeterInsert,
@@ -90,7 +82,6 @@ export function useMeters(locationId?: string) {
       toast.error(getT()("meter.errorCreate"));
       console.error(error);
     } else {
-      // Save virtual meter sources if applicable
       if (virtualSources && virtualSources.length > 0 && inserted?.id) {
         const rows: VirtualMeterSourceInsert[] = virtualSources.map((s, i) => ({
           virtual_meter_id: inserted.id,
@@ -105,7 +96,7 @@ export function useMeters(locationId?: string) {
         }
       }
       toast.success(getT()("meter.created"));
-      fetchMeters();
+      invalidate();
     }
   };
 
@@ -121,7 +112,7 @@ export function useMeters(locationId?: string) {
       console.error(error);
     } else {
       toast.success(getT()("meter.updated"));
-      fetchMeters();
+      invalidate();
     }
   };
 
@@ -132,7 +123,7 @@ export function useMeters(locationId?: string) {
       console.error(error);
     } else {
       toast.success(getT()("meter.deleted"));
-      fetchMeters();
+      invalidate();
     }
   };
 
@@ -143,7 +134,7 @@ export function useMeters(locationId?: string) {
       console.error(error);
     } else {
       toast.success(archived ? getT()("meter.archived") : getT()("meter.restored"));
-      fetchMeters();
+      invalidate();
     }
   };
 
@@ -157,9 +148,9 @@ export function useMeters(locationId?: string) {
       console.error(error);
     } else {
       toast.success(getT()("meter.moved"));
-      fetchMeters();
+      invalidate();
     }
   };
 
-  return { meters, loading, addMeter, updateMeter, deleteMeter, archiveMeter, updateMeterParent, refetch: fetchMeters };
+  return { meters, loading, addMeter, updateMeter, deleteMeter, archiveMeter, updateMeterParent, refetch: invalidate };
 }
