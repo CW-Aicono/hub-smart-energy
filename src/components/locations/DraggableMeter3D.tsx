@@ -96,8 +96,9 @@ export function DraggableMeter3D({
   }, [isAdmin, currentPos, screenToWorld, meter.id, onPositionChange, onDragStart, onDragEnd]);
 
   const handleYChange = useCallback((meterId: string, newY: number) => {
+    const clampedY = Math.max(0.5, newY); // Prevent going below floor level
     setCurrentPos(prev => {
-      const newPos: [number, number, number] = [prev[0], newY, prev[2]];
+      const newPos: [number, number, number] = [prev[0], clampedY, prev[2]];
       onPositionChange(meterId, newPos[0], newPos[1], newPos[2]);
       return newPos;
     });
