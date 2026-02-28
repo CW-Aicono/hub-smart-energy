@@ -11,6 +11,8 @@ interface ForecastWidgetProps {
   locationId: string | null;
 }
 
+const MONTH_KEYS = Array.from({ length: 12 }, (_, i) => `month.short.${i}`);
+
 const ForecastWidget = ({ locationId }: ForecastWidgetProps) => {
   const { monthlyData, loading, hasData } = useEnergyData(locationId);
   const { t } = useTranslation();
@@ -41,15 +43,19 @@ const ForecastWidget = ({ locationId }: ForecastWidgetProps) => {
     );
   }
 
+  // Build localized month labels
+  const localizedMonths = MONTH_KEYS.map((k) => t(k as any));
+
   const actualData = monthlyData.slice(0, currentMonthIndex + 1);
   const avgTotal = actualData.reduce((s, d) => s + d.strom + d.gas + d.waerme + d.wasser, 0) / actualData.length;
 
   const forecastData = monthlyData.map((d, i) => {
     const actual = d.strom + d.gas + d.waerme + d.wasser;
+    const label = localizedMonths[i] || d.month;
     if (i <= currentMonthIndex) {
-      return { month: d.month, ist: actual, prognose: null as number | null };
+      return { month: label, ist: actual, prognose: null as number | null };
     }
-    return { month: d.month, ist: null as number | null, prognose: Math.round(avgTotal) };
+    return { month: label, ist: null as number | null, prognose: Math.round(avgTotal) };
   });
 
   if (currentMonthIndex < forecastData.length - 1) {
@@ -58,6 +64,9 @@ const ForecastWidget = ({ locationId }: ForecastWidgetProps) => {
 
   const totalActual = actualData.reduce((s, d) => s + d.strom + d.gas + d.waerme + d.wasser, 0);
   const totalForecast = totalActual + Math.round(avgTotal) * (12 - actualData.length);
+
+  const actualLabel = t("dashboard.forecastActual" as any);
+  const forecastLabel = t("dashboard.forecastForecast" as any);
 
   return (
     <Card>
@@ -76,7 +85,10 @@ const ForecastWidget = ({ locationId }: ForecastWidgetProps) => {
           <LineChart data={forecastData}>
             <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
             <XAxis dataKey="month" tick={{ fill: "hsl(var(--muted-foreground))" }} />
-            <YAxis tick={{ fill: "hsl(var(--muted-foreground))" }} />
+            <YAxis
+              tick={{ fill: "hsl(var(--muted-foreground))" }}
+              tickFormatter={(value: number) => formatEnergy(value)}
+            />
             <Tooltip
               contentStyle={{
                 backgroundColor: "hsl(var(--card))",
@@ -85,10 +97,10 @@ const ForecastWidget = ({ locationId }: ForecastWidgetProps) => {
                 color: "hsl(var(--card-foreground))",
               }}
               formatter={(value: number | null, name: string) =>
-                value !== null ? [formatEnergy(value), name === "ist" ? "Ist" : "Prognose"] : ["-", name]
+                value !== null ? [formatEnergy(value), name === "ist" ? actualLabel : forecastLabel] : ["-", name]
               }
             />
-            <Legend formatter={(value) => (value === "ist" ? "Ist-Verbrauch" : "Prognose")} />
+            <Legend formatter={(value) => (value === "ist" ? actualLabel : forecastLabel)} />
             <Line type="monotone" dataKey="ist" stroke="hsl(var(--chart-1))" strokeWidth={2} dot={{ fill: "hsl(var(--chart-1))" }} connectNulls={false} />
             <Line type="monotone" dataKey="prognose" stroke="hsl(var(--chart-3))" strokeWidth={2} strokeDasharray="8 4" dot={{ fill: "hsl(var(--chart-3))" }} connectNulls={false} />
           </LineChart>
