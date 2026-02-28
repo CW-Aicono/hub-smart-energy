@@ -21,6 +21,20 @@ export default function LazyWidget({ children, minHeight = 200 }: LazyWidgetProp
     const el = ref.current;
     if (!el) return;
 
+    // Find the nearest scrollable ancestor so the observer works
+    // inside overflow-auto containers (e.g. <main>), not just the viewport.
+    let root: Element | null = null;
+    let parent = el.parentElement;
+    while (parent) {
+      const style = getComputedStyle(parent);
+      if (style.overflow === "auto" || style.overflow === "scroll" ||
+          style.overflowY === "auto" || style.overflowY === "scroll") {
+        root = parent;
+        break;
+      }
+      parent = parent.parentElement;
+    }
+
     const observer = new IntersectionObserver(
       ([entry]) => {
         if (entry.isIntersecting) {
@@ -28,7 +42,7 @@ export default function LazyWidget({ children, minHeight = 200 }: LazyWidgetProp
           observer.disconnect();
         }
       },
-      { rootMargin: "200px" }, // start loading 200px before visible
+      { root, rootMargin: "400px" }, // start loading 400px before visible
     );
 
     observer.observe(el);
