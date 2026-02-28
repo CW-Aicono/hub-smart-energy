@@ -3509,6 +3509,8 @@ export const translations = {
   "dashboard.clickToAnalyze": { de: "Klicken Sie auf \"Analyse starten\", um die Verbrauchsdaten mit KI auszuwerten.", en: "Click \"Start analysis\" to evaluate consumption data with AI.", es: "Haga clic en \"Iniciar análisis\" para evaluar los datos de consumo con IA.", nl: "Klik op \"Analyse starten\" om verbruiksgegevens met AI te evalueren." },
   "dashboard.noDataForForecast": { de: "Noch keine Verbrauchsdaten für eine Prognose vorhanden", en: "No consumption data available for a forecast yet", es: "Aún no hay datos de consumo para un pronóstico", nl: "Nog geen verbruiksgegevens beschikbaar voor een prognose" },
   "dashboard.forecastTotal": { de: "Hochrechnung: ~{value} Gesamtjahr", en: "Forecast: ~{value} full year", es: "Proyección: ~{value} año completo", nl: "Prognose: ~{value} volledig jaar" },
+  "dashboard.forecastActual": { de: "Ist-Verbrauch", en: "Actual", es: "Real", nl: "Werkelijk" },
+  "dashboard.forecastForecast": { de: "Prognose", en: "Forecast", es: "Pronóstico", nl: "Prognose" },
   "dashboard.currentValues": { de: "Aktuelle Momentanwerte", en: "Current instantaneous values", es: "Valores instantáneos actuales", nl: "Huidige momentane waarden" },
   "dashboard.dailyPeak": { de: "Tageshöchstwert", en: "Daily peak", es: "Pico diario", nl: "Dagpiek" },
   "dashboard.noActiveMeters": { de: "Keine aktiven automatischen Hauptzähler vorhanden", en: "No active automatic main meters available", es: "No hay contadores principales automáticos activos", nl: "Geen actieve automatische hoofdmeters beschikbaar" },
