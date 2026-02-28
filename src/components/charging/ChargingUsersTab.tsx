@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useChargingUsers, useChargingUserGroups, ChargingUser } from "@/hooks/useChargingUsers";
 import { useTenant } from "@/hooks/useTenant";
 import { useUserRole } from "@/hooks/useUserRole";
+import { useTranslation } from "@/hooks/useTranslation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -24,6 +25,7 @@ const emptyGroupForm = { name: "", description: "", is_app_user: false };
 const ChargingUsersTab = () => {
   const { tenant } = useTenant();
   const { isAdmin } = useUserRole();
+  const { t } = useTranslation();
   const { users, isLoading: usersLoading, addUser, updateUser, deleteUser } = useChargingUsers();
   const { groups, isLoading: groupsLoading, addGroup, updateGroup, deleteGroup } = useChargingUserGroups();
 
@@ -45,78 +47,38 @@ const ChargingUsersTab = () => {
 
   const statusBadge = (status: string) => {
     switch (status) {
-      case "active": return <Badge variant="default"><Check className="h-3 w-3 mr-1" />Aktiv</Badge>;
-      case "blocked": return <Badge variant="destructive"><Ban className="h-3 w-3 mr-1" />Gesperrt</Badge>;
-      case "archived": return <Badge variant="secondary"><Archive className="h-3 w-3 mr-1" />Archiviert</Badge>;
+      case "active": return <Badge variant="default"><Check className="h-3 w-3 mr-1" />{t("cu.statusActive" as any)}</Badge>;
+      case "blocked": return <Badge variant="destructive"><Ban className="h-3 w-3 mr-1" />{t("cu.statusBlocked" as any)}</Badge>;
+      case "archived": return <Badge variant="secondary"><Archive className="h-3 w-3 mr-1" />{t("cu.statusArchived" as any)}</Badge>;
       default: return <Badge variant="outline">{status}</Badge>;
     }
   };
 
   // --- User CRUD ---
-  const openAddUser = () => {
-    setUserForm(emptyUserForm);
-    setEditingUser(null);
-    setUserDialogOpen(true);
-  };
-
+  const openAddUser = () => { setUserForm(emptyUserForm); setEditingUser(null); setUserDialogOpen(true); };
   const openEditUser = (u: ChargingUser) => {
-    setUserForm({
-      name: u.name,
-      email: u.email || "",
-      rfid_tag: u.rfid_tag || "",
-      phone: u.phone || "",
-      group_id: u.group_id || "",
-      notes: u.notes || "",
-    });
-    setEditingUser(u);
-    setUserDialogOpen(true);
+    setUserForm({ name: u.name, email: u.email || "", rfid_tag: u.rfid_tag || "", phone: u.phone || "", group_id: u.group_id || "", notes: u.notes || "" });
+    setEditingUser(u); setUserDialogOpen(true);
   };
-
   const handleSaveUser = () => {
     if (!tenant?.id) return;
-    const payload = {
-      name: userForm.name,
-      email: userForm.email || undefined,
-      rfid_tag: userForm.rfid_tag || undefined,
-      phone: userForm.phone || undefined,
-      group_id: userForm.group_id || null,
-      notes: userForm.notes || undefined,
-    };
-    if (editingUser) {
-      updateUser.mutate({ id: editingUser.id, ...payload });
-    } else {
-      addUser.mutate({ tenant_id: tenant.id, ...payload });
-    }
+    const payload = { name: userForm.name, email: userForm.email || undefined, rfid_tag: userForm.rfid_tag || undefined, phone: userForm.phone || undefined, group_id: userForm.group_id || null, notes: userForm.notes || undefined };
+    if (editingUser) { updateUser.mutate({ id: editingUser.id, ...payload }); } else { addUser.mutate({ tenant_id: tenant.id, ...payload }); }
     setUserDialogOpen(false);
   };
-
-  const handleSetStatus = (id: string, status: string) => {
-    updateUser.mutate({ id, status });
-  };
+  const handleSetStatus = (id: string, status: string) => { updateUser.mutate({ id, status }); };
 
   // --- Group CRUD ---
-  const openAddGroup = () => {
-    setGroupForm(emptyGroupForm);
-    setEditingGroup(null);
-    setGroupDialogOpen(true);
-  };
-
+  const openAddGroup = () => { setGroupForm(emptyGroupForm); setEditingGroup(null); setGroupDialogOpen(true); };
   const openEditGroup = (g: { id: string; name: string; description: string | null; is_app_user: boolean }) => {
-    setGroupForm({ name: g.name, description: g.description || "", is_app_user: g.is_app_user });
-    setEditingGroup(g);
-    setGroupDialogOpen(true);
+    setGroupForm({ name: g.name, description: g.description || "", is_app_user: g.is_app_user }); setEditingGroup(g); setGroupDialogOpen(true);
   };
-
   const handleSaveGroup = () => {
     if (!tenant?.id) return;
-    if (editingGroup) {
-      updateGroup.mutate({ id: editingGroup.id, name: groupForm.name, description: groupForm.description || undefined, is_app_user: groupForm.is_app_user } as any);
-    } else {
-      addGroup.mutate({ tenant_id: tenant.id, name: groupForm.name, description: groupForm.description || undefined, is_app_user: groupForm.is_app_user } as any);
-    }
+    if (editingGroup) { updateGroup.mutate({ id: editingGroup.id, name: groupForm.name, description: groupForm.description || undefined, is_app_user: groupForm.is_app_user } as any); }
+    else { addGroup.mutate({ tenant_id: tenant.id, name: groupForm.name, description: groupForm.description || undefined, is_app_user: groupForm.is_app_user } as any); }
     setGroupDialogOpen(false);
   };
-
   const handleConfirmDelete = () => {
     if (!deleteTarget) return;
     if (deleteTarget.type === "user") deleteUser.mutate(deleteTarget.id);
@@ -128,45 +90,44 @@ const ChargingUsersTab = () => {
     <div className="space-y-4">
       <Tabs defaultValue="user-list">
         <TabsList>
-          <TabsTrigger value="user-list"><Users className="h-4 w-4 mr-1.5" />Nutzer</TabsTrigger>
-          <TabsTrigger value="user-groups"><FolderOpen className="h-4 w-4 mr-1.5" />Nutzergruppen</TabsTrigger>
+          <TabsTrigger value="user-list"><Users className="h-4 w-4 mr-1.5" />{t("cu.tabUsers" as any)}</TabsTrigger>
+          <TabsTrigger value="user-groups"><FolderOpen className="h-4 w-4 mr-1.5" />{t("cu.tabGroups" as any)}</TabsTrigger>
         </TabsList>
 
-        {/* Users list */}
         <TabsContent value="user-list">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle>Lade-Nutzer</CardTitle>
+              <CardTitle>{t("cu.title" as any)}</CardTitle>
               <div className="flex items-center gap-2">
                 <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as any)}>
                   <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">Alle</SelectItem>
-                    <SelectItem value="active">Aktiv</SelectItem>
-                    <SelectItem value="blocked">Gesperrt</SelectItem>
-                    <SelectItem value="archived">Archiviert</SelectItem>
+                    <SelectItem value="all">{t("cu.statusAll" as any)}</SelectItem>
+                    <SelectItem value="active">{t("cu.statusActive" as any)}</SelectItem>
+                    <SelectItem value="blocked">{t("cu.statusBlocked" as any)}</SelectItem>
+                    <SelectItem value="archived">{t("cu.statusArchived" as any)}</SelectItem>
                   </SelectContent>
                 </Select>
                 {isAdmin && (
-                  <Button size="sm" onClick={openAddUser}><Plus className="h-4 w-4 mr-2" />Nutzer anlegen</Button>
+                  <Button size="sm" onClick={openAddUser}><Plus className="h-4 w-4 mr-2" />{t("cu.addUser" as any)}</Button>
                 )}
               </div>
             </CardHeader>
             <CardContent>
               {usersLoading ? (
-                <p className="text-muted-foreground">Laden...</p>
+                <p className="text-muted-foreground">{t("common.loading")}</p>
               ) : filteredUsers.length === 0 ? (
-                <p className="text-muted-foreground">Keine Nutzer vorhanden.</p>
+                <p className="text-muted-foreground">{t("cu.noUsers" as any)}</p>
               ) : (
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Name</TableHead>
-                      <TableHead>E-Mail</TableHead>
-                      <TableHead>RFID-Tag</TableHead>
-                      <TableHead>Gruppe</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Erstellt</TableHead>
+                      <TableHead>{t("common.name" as any)}</TableHead>
+                      <TableHead>{t("common.email" as any)}</TableHead>
+                      <TableHead>{t("cu.rfidTag" as any)}</TableHead>
+                      <TableHead>{t("cu.userGroup" as any)}</TableHead>
+                      <TableHead>{t("common.status" as any)}</TableHead>
+                      <TableHead>{t("common.created" as any)}</TableHead>
                       {isAdmin && <TableHead className="w-16" />}
                     </TableRow>
                   </TableHeader>
@@ -186,30 +147,11 @@ const ChargingUsersTab = () => {
                                 <Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4" /></Button>
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end">
-                                <DropdownMenuItem onClick={() => openEditUser(u)}>
-                                  <Edit className="h-4 w-4 mr-2" />Bearbeiten
-                                </DropdownMenuItem>
-                                {u.status !== "blocked" && (
-                                  <DropdownMenuItem onClick={() => handleSetStatus(u.id, "blocked")}>
-                                    <Ban className="h-4 w-4 mr-2" />Sperren
-                                  </DropdownMenuItem>
-                                )}
-                                {u.status === "blocked" && (
-                                  <DropdownMenuItem onClick={() => handleSetStatus(u.id, "active")}>
-                                    <Check className="h-4 w-4 mr-2" />Entsperren
-                                  </DropdownMenuItem>
-                                )}
-                                {u.status !== "archived" && (
-                                  <DropdownMenuItem onClick={() => handleSetStatus(u.id, "archived")}>
-                                    <Archive className="h-4 w-4 mr-2" />Archivieren
-                                  </DropdownMenuItem>
-                                )}
-                                <DropdownMenuItem
-                                  className="text-destructive focus:text-destructive"
-                                  onClick={() => setDeleteTarget({ type: "user", id: u.id, name: u.name })}
-                                >
-                                  <Trash2 className="h-4 w-4 mr-2" />Löschen
-                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => openEditUser(u)}><Edit className="h-4 w-4 mr-2" />{t("common.edit")}</DropdownMenuItem>
+                                {u.status !== "blocked" && (<DropdownMenuItem onClick={() => handleSetStatus(u.id, "blocked")}><Ban className="h-4 w-4 mr-2" />{t("cu.block" as any)}</DropdownMenuItem>)}
+                                {u.status === "blocked" && (<DropdownMenuItem onClick={() => handleSetStatus(u.id, "active")}><Check className="h-4 w-4 mr-2" />{t("cu.unblock" as any)}</DropdownMenuItem>)}
+                                {u.status !== "archived" && (<DropdownMenuItem onClick={() => handleSetStatus(u.id, "archived")}><Archive className="h-4 w-4 mr-2" />{t("cu.archive" as any)}</DropdownMenuItem>)}
+                                <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => setDeleteTarget({ type: "user", id: u.id, name: u.name })}><Trash2 className="h-4 w-4 mr-2" />{t("common.delete")}</DropdownMenuItem>
                               </DropdownMenuContent>
                             </DropdownMenu>
                           </TableCell>
@@ -223,30 +165,27 @@ const ChargingUsersTab = () => {
           </Card>
         </TabsContent>
 
-        {/* Groups */}
         <TabsContent value="user-groups">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle>Nutzergruppen</CardTitle>
-              {isAdmin && (
-                <Button size="sm" onClick={openAddGroup}><Plus className="h-4 w-4 mr-2" />Gruppe anlegen</Button>
-              )}
+              <CardTitle>{t("cu.groupsTitle" as any)}</CardTitle>
+              {isAdmin && (<Button size="sm" onClick={openAddGroup}><Plus className="h-4 w-4 mr-2" />{t("cu.addGroup" as any)}</Button>)}
             </CardHeader>
             <CardContent>
               {groupsLoading ? (
-                <p className="text-muted-foreground">Laden...</p>
+                <p className="text-muted-foreground">{t("common.loading")}</p>
               ) : groups.length === 0 ? (
-                <p className="text-muted-foreground">Keine Nutzergruppen vorhanden.</p>
+                <p className="text-muted-foreground">{t("cu.noGroups" as any)}</p>
               ) : (
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Name</TableHead>
-                      <TableHead>Beschreibung</TableHead>
-                      <TableHead>App-Nutzer</TableHead>
-                      <TableHead>Nutzer</TableHead>
-                      <TableHead>Erstellt</TableHead>
-                      {isAdmin && <TableHead className="w-24">Aktionen</TableHead>}
+                      <TableHead>{t("common.name" as any)}</TableHead>
+                      <TableHead>{t("common.description" as any)}</TableHead>
+                      <TableHead>{t("cu.appUser" as any)}</TableHead>
+                      <TableHead>{t("cu.members" as any)}</TableHead>
+                      <TableHead>{t("common.created" as any)}</TableHead>
+                      {isAdmin && <TableHead className="w-24">{t("cu.actions" as any)}</TableHead>}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -257,11 +196,7 @@ const ChargingUsersTab = () => {
                           <TableCell className="font-medium">{g.name}</TableCell>
                           <TableCell>{g.description || "—"}</TableCell>
                           <TableCell>
-                            {g.is_app_user ? (
-                              <Badge variant="default" className="gap-1"><Smartphone className="h-3 w-3" />App-Nutzer</Badge>
-                            ) : (
-                              <span className="text-muted-foreground">—</span>
-                            )}
+                            {g.is_app_user ? (<Badge variant="default" className="gap-1"><Smartphone className="h-3 w-3" />{t("cu.appUser" as any)}</Badge>) : (<span className="text-muted-foreground">—</span>)}
                           </TableCell>
                           <TableCell>{memberCount}</TableCell>
                           <TableCell>{format(new Date(g.created_at), "dd.MM.yyyy")}</TableCell>
@@ -288,47 +223,32 @@ const ChargingUsersTab = () => {
       <Dialog open={userDialogOpen} onOpenChange={setUserDialogOpen}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>{editingUser ? "Nutzer bearbeiten" : "Neuer Lade-Nutzer"}</DialogTitle>
+            <DialogTitle>{editingUser ? t("cu.editUser" as any) : t("cu.newUser" as any)}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
-            <div>
-              <Label>Name *</Label>
-              <Input value={userForm.name} onChange={(e) => setUserForm({ ...userForm, name: e.target.value })} />
+            <div><Label>{t("common.name" as any)} *</Label><Input value={userForm.name} onChange={(e) => setUserForm({ ...userForm, name: e.target.value })} /></div>
+            <div className="grid grid-cols-2 gap-4">
+              <div><Label>{t("common.email" as any)}</Label><Input type="email" value={userForm.email} onChange={(e) => setUserForm({ ...userForm, email: e.target.value })} /></div>
+              <div><Label>{t("cu.phone" as any)}</Label><Input value={userForm.phone} onChange={(e) => setUserForm({ ...userForm, phone: e.target.value })} /></div>
             </div>
             <div className="grid grid-cols-2 gap-4">
+              <div><Label>{t("cu.rfidTag" as any)}</Label><Input value={userForm.rfid_tag} onChange={(e) => setUserForm({ ...userForm, rfid_tag: e.target.value })} placeholder="z. B. AB12CD34" /></div>
               <div>
-                <Label>E-Mail</Label>
-                <Input type="email" value={userForm.email} onChange={(e) => setUserForm({ ...userForm, email: e.target.value })} />
-              </div>
-              <div>
-                <Label>Telefon</Label>
-                <Input value={userForm.phone} onChange={(e) => setUserForm({ ...userForm, phone: e.target.value })} />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label>RFID-Tag</Label>
-                <Input value={userForm.rfid_tag} onChange={(e) => setUserForm({ ...userForm, rfid_tag: e.target.value })} placeholder="z. B. AB12CD34" />
-              </div>
-              <div>
-                <Label>Nutzergruppe</Label>
+                <Label>{t("cu.userGroup" as any)}</Label>
                 <Select value={userForm.group_id} onValueChange={(v) => setUserForm({ ...userForm, group_id: v === "__none__" ? "" : v })}>
-                  <SelectTrigger><SelectValue placeholder="Keine Gruppe" /></SelectTrigger>
+                  <SelectTrigger><SelectValue placeholder={t("cu.noGroup" as any)} /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="__none__">Keine Gruppe</SelectItem>
+                    <SelectItem value="__none__">{t("cu.noGroup" as any)}</SelectItem>
                     {groups.map((g) => <SelectItem key={g.id} value={g.id}>{g.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
             </div>
-            <div>
-              <Label>Notizen</Label>
-              <Textarea value={userForm.notes} onChange={(e) => setUserForm({ ...userForm, notes: e.target.value })} rows={2} />
-            </div>
+            <div><Label>{t("cu.notes" as any)}</Label><Textarea value={userForm.notes} onChange={(e) => setUserForm({ ...userForm, notes: e.target.value })} rows={2} /></div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setUserDialogOpen(false)}>Abbrechen</Button>
-            <Button onClick={handleSaveUser} disabled={!userForm.name}>{editingUser ? "Speichern" : "Erstellen"}</Button>
+            <Button variant="outline" onClick={() => setUserDialogOpen(false)}>{t("common.cancel")}</Button>
+            <Button onClick={handleSaveUser} disabled={!userForm.name}>{editingUser ? t("common.save") : t("common.create")}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -337,25 +257,19 @@ const ChargingUsersTab = () => {
       <Dialog open={groupDialogOpen} onOpenChange={setGroupDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{editingGroup ? "Gruppe bearbeiten" : "Neue Nutzergruppe"}</DialogTitle>
+            <DialogTitle>{editingGroup ? t("cu.editGroup" as any) : t("cu.newGroup" as any)}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
-            <div>
-              <Label>Name *</Label>
-              <Input value={groupForm.name} onChange={(e) => setGroupForm({ ...groupForm, name: e.target.value })} />
-            </div>
-            <div>
-              <Label>Beschreibung</Label>
-             <Textarea value={groupForm.description} onChange={(e) => setGroupForm({ ...groupForm, description: e.target.value })} rows={2} />
-            </div>
+            <div><Label>{t("common.name" as any)} *</Label><Input value={groupForm.name} onChange={(e) => setGroupForm({ ...groupForm, name: e.target.value })} /></div>
+            <div><Label>{t("common.description" as any)}</Label><Textarea value={groupForm.description} onChange={(e) => setGroupForm({ ...groupForm, description: e.target.value })} rows={2} /></div>
             <div className="flex items-center justify-between">
-              <Label>App-Nutzer Gruppe</Label>
+              <Label>{t("cu.appUserGroup" as any)}</Label>
               <Switch checked={groupForm.is_app_user} onCheckedChange={(v) => setGroupForm({ ...groupForm, is_app_user: v })} />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setGroupDialogOpen(false)}>Abbrechen</Button>
-            <Button onClick={handleSaveGroup} disabled={!groupForm.name}>{editingGroup ? "Speichern" : "Erstellen"}</Button>
+            <Button variant="outline" onClick={() => setGroupDialogOpen(false)}>{t("common.cancel")}</Button>
+            <Button onClick={handleSaveGroup} disabled={!groupForm.name}>{editingGroup ? t("common.save") : t("common.create")}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -364,14 +278,16 @@ const ChargingUsersTab = () => {
       <AlertDialog open={!!deleteTarget} onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Löschen bestätigen</AlertDialogTitle>
+            <AlertDialogTitle>{t("cu.deleteConfirm" as any)}</AlertDialogTitle>
             <AlertDialogDescription>
-              Möchten Sie {deleteTarget?.type === "user" ? "den Nutzer" : "die Gruppe"} „{deleteTarget?.name}" wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.
+              {deleteTarget?.type === "user"
+                ? t("cu.deleteUserMsg" as any).replace("{name}", deleteTarget?.name || "")
+                : t("cu.deleteGroupMsg" as any).replace("{name}", deleteTarget?.name || "")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Abbrechen</AlertDialogCancel>
-            <AlertDialogAction onClick={handleConfirmDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Löschen</AlertDialogAction>
+            <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">{t("common.delete")}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

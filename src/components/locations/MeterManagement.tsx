@@ -25,11 +25,11 @@ interface MeterManagementProps {
   locationId: string;
 }
 
-const TIME_UNIT_LABELS: Record<string, string> = {
-  hour: "Stunde",
-  day: "Tag",
-  week: "Woche",
-  month: "Monat",
+const TIME_UNIT_KEYS: Record<string, string> = {
+  hour: "mm.timeHour",
+  day: "mm.timeDay",
+  week: "mm.timeWeek",
+  month: "mm.timeMonth",
 };
 
 export const MeterManagement = ({ locationId }: MeterManagementProps) => {
@@ -58,25 +58,25 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
             {isOpen ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
             <CardTitle className="flex items-center gap-2">
               <Gauge className="h-5 w-5" />
-              Messstellen und Sensoren
+              {t("locSec.metersTitle" as any)}
               <HelpTooltip text={t("tooltip.meterManagement" as any)} />
             </CardTitle>
           </button>
         </CollapsibleTrigger>
         <CardDescription className="ml-6">
-          Verwalten Sie Zähler und Alarmregeln für diesen Standort
+          {t("locSec.metersDesc" as any)}
         </CardDescription>
       </CardHeader>
       <CollapsibleContent>
       <CardContent>
         <Tabs defaultValue="meters">
           <TabsList>
-            <TabsTrigger value="meters">Zähler ({activeMeters.length})</TabsTrigger>
+            <TabsTrigger value="meters">{t("mm.tabs.meters" as any)} ({activeMeters.length})</TabsTrigger>
             <TabsTrigger value="tree" className="gap-1">
               <Network className="h-3.5 w-3.5" />
-              Zählerstruktur
+              {t("mm.tabs.tree" as any)}
             </TabsTrigger>
-            <TabsTrigger value="alerts">Alarmregeln ({alertRules.length})</TabsTrigger>
+            <TabsTrigger value="alerts">{t("mm.tabs.alerts" as any)} ({alertRules.length})</TabsTrigger>
           </TabsList>
 
           <TabsContent value="meters" className="space-y-4">
@@ -84,33 +84,33 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
               {(archivedMeters.length > 0 || showArchived) && (
                 <Button variant={showArchived ? "outline" : "ghost"} size="sm" className="gap-1.5 text-xs" onClick={() => setShowArchived(!showArchived)}>
                   {showArchived ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
-                  {showArchived ? `Aktive anzeigen (${activeMeters.length})` : `Archiv anzeigen (${archivedMeters.length})`}
+                  {showArchived ? `${t("mm.showActive" as any)} (${activeMeters.length})` : `${t("mm.showArchive" as any)} (${archivedMeters.length})`}
                 </Button>
               )}
               <div className="flex-1" />
               {isAdmin && !showArchived && (
                 <Button size="sm" onClick={() => setMeterDialogOpen(true)}>
-                  <Plus className="h-4 w-4 mr-1" /> Zähler anlegen
+                  <Plus className="h-4 w-4 mr-1" /> {t("mm.addMeter" as any)}
                 </Button>
               )}
             </div>
             {metersLoading ? (
-              <p className="text-sm text-muted-foreground">Laden...</p>
+              <p className="text-sm text-muted-foreground">{t("common.loading")}</p>
             ) : displayedMeters.length === 0 ? (
               <p className="text-sm text-muted-foreground py-4">
-                {showArchived ? "Keine archivierten Zähler." : "Keine Zähler angelegt."}
+                {showArchived ? t("mm.noArchivedMeters" as any) : t("mm.noMeters" as any)}
               </p>
             ) : (
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Zählernummer</TableHead>
-                    <TableHead>Erfassung</TableHead>
-                    <TableHead>Energieart</TableHead>
-                    <TableHead>Einheit</TableHead>
-                    {isAdmin && <TableHead className="w-32" />}
-                  </TableRow>
+                     <TableHead>{t("common.name" as any)}</TableHead>
+                     <TableHead>{t("mm.meterNumber" as any)}</TableHead>
+                     <TableHead>{t("mm.captureType" as any)}</TableHead>
+                     <TableHead>{t("mm.energyType" as any)}</TableHead>
+                     <TableHead>{t("mm.unit" as any)}</TableHead>
+                     {isAdmin && <TableHead className="w-32" />}
+                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {displayedMeters.map((m) => (
@@ -119,7 +119,7 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
                       <TableCell>{m.meter_number || "–"}</TableCell>
                       <TableCell>
                         <Badge variant={m.capture_type === "automatic" ? "default" : m.capture_type === "virtual" ? "outline" : "secondary"}>
-                          {m.capture_type === "automatic" ? "Automatisch" : m.capture_type === "virtual" ? "Virtuell" : "Manuell"}
+                          {m.capture_type === "automatic" ? t("mm.captureAutomatic" as any) : m.capture_type === "virtual" ? t("mm.captureVirtual" as any) : t("mm.captureManual" as any)}
                         </Badge>
                       </TableCell>
                       <TableCell>
@@ -169,26 +169,26 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
             {isAdmin && (
               <div className="flex justify-end">
                 <Button size="sm" onClick={() => setAlertDialogOpen(true)}>
-                  <Plus className="h-4 w-4 mr-1" /> Alarmregel anlegen
+                  <Plus className="h-4 w-4 mr-1" /> {t("mm.addAlert" as any)}
                 </Button>
               </div>
             )}
             {rulesLoading ? (
-              <p className="text-sm text-muted-foreground">Laden...</p>
+              <p className="text-sm text-muted-foreground">{t("common.loading")}</p>
             ) : alertRules.length === 0 ? (
-              <p className="text-sm text-muted-foreground py-4">Keine Alarmregeln definiert.</p>
+              <p className="text-sm text-muted-foreground py-4">{t("mm.noAlerts" as any)}</p>
             ) : (
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Energieart</TableHead>
-                    <TableHead>Schwellenwert</TableHead>
-                    <TableHead>Zeiteinheit</TableHead>
-                    <TableHead>Typ</TableHead>
-                    <TableHead>Aktiv</TableHead>
-                    {isAdmin && <TableHead className="w-24" />}
-                  </TableRow>
+                     <TableHead>{t("common.name" as any)}</TableHead>
+                     <TableHead>{t("mm.energyType" as any)}</TableHead>
+                     <TableHead>{t("mm.threshold" as any)}</TableHead>
+                     <TableHead>{t("mm.timeUnit" as any)}</TableHead>
+                     <TableHead>{t("common.status" as any)}</TableHead>
+                     <TableHead>{t("common.active" as any)}</TableHead>
+                     {isAdmin && <TableHead className="w-24" />}
+                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {alertRules.map((r) => (
@@ -198,8 +198,8 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
                         <Badge variant="outline" className={ENERGY_BADGE_CLASSES[r.energy_type] || ""}>{ENERGY_TYPE_LABELS[r.energy_type] || r.energy_type}</Badge>
                       </TableCell>
                       <TableCell>{r.threshold_value} {r.threshold_unit || "kWh"}</TableCell>
-                      <TableCell>{TIME_UNIT_LABELS[r.time_unit] || r.time_unit}</TableCell>
-                      <TableCell>{r.threshold_type === "above" ? "Über" : "Unter"}</TableCell>
+                       <TableCell>{TIME_UNIT_KEYS[r.time_unit] ? t(TIME_UNIT_KEYS[r.time_unit] as any) : r.time_unit}</TableCell>
+                       <TableCell>{r.threshold_type === "above" ? t("mm.thresholdAbove" as any) : t("mm.thresholdBelow" as any)}</TableCell>
                       <TableCell>
                         <Switch
                           checked={r.is_active}
