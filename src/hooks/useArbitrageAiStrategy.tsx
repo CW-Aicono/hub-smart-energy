@@ -55,9 +55,9 @@ export function useArbitrageAiStrategy() {
       if (result?.error) throw new Error(result.error);
 
       queryClient.setQueryData(["arbitrage-ai-strategy", tenantId], result as AiStrategyResult);
-      toast({ title: t("aiArb.generated" as any), description: `${result.suggestions?.length || 0} ${t("aiArb.suggestionsCount" as any)}` });
+      toast({ title: t("aiArb.generated"), description: `${result.suggestions?.length || 0} ${t("aiArb.suggestionsCount")}` });
     } catch (e: any) {
-      toast({ title: t("common.error" as any), description: e.message, variant: "destructive" });
+      toast({ title: t("common.error"), description: e.message, variant: "destructive" });
     } finally {
       setIsGenerating(false);
     }
