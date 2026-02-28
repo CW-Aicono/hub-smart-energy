@@ -111,7 +111,6 @@ export function DraggableMeter3D({
       <Html
         center
         distanceFactor={8}
-        occlude
         style={{
           pointerEvents: isAdmin ? "auto" : "none",
           userSelect: "none",
