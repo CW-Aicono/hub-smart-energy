@@ -89,3 +89,6 @@ verify_jwt = false
 
 [functions.pitch-stats]
 verify_jwt = false
+
+[functions.pitch-session]
+verify_jwt = false
