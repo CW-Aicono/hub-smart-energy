@@ -102,9 +102,9 @@ export const GATEWAY_DEFINITIONS: Record<string, GatewayDefinition> = {
     description: "TP-Link Omada Cloud Controller für Netzwerkinfrastruktur",
     edgeFunctionName: "omada-api",
     configFields: [
-      { name: "api_url", label: "API URL", placeholder: "https://euw1-omada-northbound.tplinkcloud.com", type: "url", description: "Omada Open API Endpunkt (regional)", required: true },
-      { name: "omada_id", label: "Omada Controller ID", placeholder: "z.B. 244500771d29f9dd75dfa5217e04689d", type: "text", description: "Controller-ID aus dem Omada Cloud Portal (omadacId in der URL)", required: true },
-      { name: "device_id", label: "Device ID (optional)", placeholder: "z.B. 15F3D33583523FAD...", type: "text", description: "Geräte-ID falls Controller-ID nicht funktioniert (deviceId aus der URL)", required: false },
+      { name: "api_url", label: "API URL", placeholder: "https://euw1-northbound-omada-controller.tplinkcloud.com", type: "url", description: "Northbound API Endpunkt (regional, z.B. euw1-northbound-omada-controller.tplinkcloud.com)", required: true },
+      { name: "omada_id", label: "Omada Controller ID", placeholder: "z.B. 244500771d29f9dd75dfa5217e04689d", type: "text", description: "omadacId aus der Open API Verwaltung im Omada Cloud Portal", required: true },
+      { name: "device_id", label: "Device ID (optional)", placeholder: "z.B. 15F3D33583523FAD...", type: "text", description: "Geräte-ID als Fallback falls Controller-ID nicht funktioniert", required: false },
       { name: "client_id", label: "Client ID", placeholder: "client-id", type: "text", description: "OAuth2 Client ID aus der Omada Open API Verwaltung", required: true },
       { name: "client_secret", label: "Client Secret", placeholder: "••••••••", type: "password", description: "OAuth2 Client Secret", required: true },
     ],
