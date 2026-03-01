@@ -1,4 +1,5 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { createClient } from "jsr:@supabase/supabase-js@2";
 import { getCorsHeaders } from "../_shared/cors.ts";
 
 Deno.serve(async (req) => {
@@ -34,8 +35,6 @@ Deno.serve(async (req) => {
     }
 
     const userId = userData.user.id;
-
-    // Service role client for DB operations
     const supabase = createClient(supabaseUrl, serviceKey);
 
     // Verify tenant ownership
@@ -46,22 +45,21 @@ Deno.serve(async (req) => {
       .single();
 
     const url = new URL(req.url);
-    const latitude = parseFloat(url.searchParams.get("latitude") || "");
-    const longitude = parseFloat(url.searchParams.get("longitude") || "");
+    const latitude = parseFloat(url.searchParams.get("latitude") ?? "");
+    const longitude = parseFloat(url.searchParams.get("longitude") ?? "");
     const startDate = url.searchParams.get("start_date");
     const endDate = url.searchParams.get("end_date");
     const locationId = url.searchParams.get("location_id");
     const tenantId = url.searchParams.get("tenant_id");
-    const referenceTemp = parseFloat(url.searchParams.get("reference_temperature") || "15");
+    const referenceTemp = parseFloat(url.searchParams.get("reference_temperature") ?? "15");
 
-    if (!latitude || !longitude || !startDate || !endDate || !locationId || !tenantId) {
+    if (isNaN(latitude) || isNaN(longitude) || !startDate || !endDate || !locationId || !tenantId) {
       return new Response(
-        JSON.stringify({ error: "Missing required params: latitude, longitude, start_date, end_date, location_id, tenant_id" }),
+        JSON.stringify({ error: "Missing required params" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    // Validate tenant matches authenticated user
     if (!profile || profile.tenant_id !== tenantId) {
       return new Response(
         JSON.stringify({ error: "Forbidden" }),
@@ -69,7 +67,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Check cache first
+    // Check cache
     const { data: cached } = await supabase
       .from("weather_degree_days")
       .select("*")
@@ -79,19 +77,19 @@ Deno.serve(async (req) => {
       .lte("month", endDate.substring(0, 7) + "-01")
       .order("month", { ascending: true });
 
-    // Determine which months we need
+    // Determine needed months
     const neededMonths: string[] = [];
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-    const cursor = new Date(start.getFullYear(), start.getMonth(), 1);
-    const endMonth = new Date(end.getFullYear(), end.getMonth(), 1);
+    const startD = new Date(startDate);
+    const endD = new Date(endDate);
+    const cursor = new Date(startD.getFullYear(), startD.getMonth(), 1);
+    const endMonth = new Date(endD.getFullYear(), endD.getMonth(), 1);
+    const now = new Date();
+    const currentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
     while (cursor <= endMonth) {
       const monthStr = cursor.toISOString().substring(0, 10);
-      const now = new Date();
-      const currentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
       if (cursor <= currentMonth) {
-        const cachedMonth = cached?.find((c) => c.month === monthStr);
+        const cachedMonth = (cached ?? []).find((c: Record<string, unknown>) => c.month === monthStr);
         if (!cachedMonth || monthStr === currentMonth.toISOString().substring(0, 10)) {
           neededMonths.push(monthStr);
         }
@@ -99,7 +97,7 @@ Deno.serve(async (req) => {
       cursor.setMonth(cursor.getMonth() + 1);
     }
 
-    let freshData: any[] = [];
+    let freshData: Record<string, unknown>[] = [];
 
     if (neededMonths.length > 0) {
       const apiStart = neededMonths[0];
@@ -115,9 +113,11 @@ Deno.serve(async (req) => {
 
       const meteoUrl = `https://archive-api.open-meteo.com/v1/archive?latitude=${latitude}&longitude=${longitude}&start_date=${apiStart}&end_date=${apiEnd}&daily=temperature_2m_mean&timezone=Europe%2FBerlin`;
 
+      console.log("Fetching:", meteoUrl);
       const meteoRes = await fetch(meteoUrl);
       if (!meteoRes.ok) {
         const errText = await meteoRes.text();
+        console.error("Meteo error:", meteoRes.status, errText);
         return new Response(
           JSON.stringify({ error: "Weather data unavailable" }),
           { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -125,8 +125,8 @@ Deno.serve(async (req) => {
       }
 
       const meteoData = await meteoRes.json();
-      const dates: string[] = meteoData.daily?.time || [];
-      const temps: number[] = meteoData.daily?.temperature_2m_mean || [];
+      const dates: string[] = meteoData.daily?.time ?? [];
+      const temps: number[] = meteoData.daily?.temperature_2m_mean ?? [];
 
       const monthlyMap: Record<string, { hdd: number; cdd: number; tempSum: number; count: number }> = {};
 
@@ -143,13 +143,8 @@ Deno.serve(async (req) => {
         const m = monthlyMap[monthKey];
         m.tempSum += temp;
         m.count += 1;
-
-        if (temp < referenceTemp) {
-          m.hdd += referenceTemp - temp;
-        }
-        if (temp > referenceTemp) {
-          m.cdd += temp - referenceTemp;
-        }
+        if (temp < referenceTemp) m.hdd += referenceTemp - temp;
+        if (temp > referenceTemp) m.cdd += temp - referenceTemp;
       }
 
       const upsertRows = Object.entries(monthlyMap).map(([month, val]) => ({
@@ -167,25 +162,23 @@ Deno.serve(async (req) => {
           .from("weather_degree_days")
           .upsert(upsertRows, { onConflict: "location_id,month,reference_temperature" });
 
-        if (upsertErr) {
-          console.error("Upsert error:", upsertErr);
-        }
+        if (upsertErr) console.error("Upsert error:", upsertErr);
       }
 
       freshData = upsertRows;
     }
 
     // Merge cached + fresh
-    const allData: Record<string, any> = {};
-    for (const row of cached || []) {
-      allData[row.month] = row;
+    const allData: Record<string, unknown> = {};
+    for (const row of cached ?? []) {
+      allData[(row as Record<string, string>).month] = row;
     }
     for (const row of freshData) {
-      allData[row.month] = row;
+      allData[(row as Record<string, string>).month] = row;
     }
 
-    const result = Object.values(allData).sort((a: any, b: any) =>
-      a.month.localeCompare(b.month)
+    const result = Object.values(allData).sort((a: unknown, b: unknown) =>
+      ((a as Record<string, string>).month).localeCompare((b as Record<string, string>).month)
     );
 
     return new Response(JSON.stringify(result), {
@@ -194,8 +187,8 @@ Deno.serve(async (req) => {
   } catch (err) {
     console.error("Error:", err);
     return new Response(
-      JSON.stringify({ error: "Internal server error" }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      JSON.stringify({ error: "Internal server error", message: String(err) }),
+      { status: 500, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } }
     );
   }
 });
