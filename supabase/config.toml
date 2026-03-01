@@ -86,3 +86,6 @@ verify_jwt = false
 
 [functions.ha-ws-proxy]
 verify_jwt = false
+
+[functions.pitch-stats]
+verify_jwt = false
