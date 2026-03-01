@@ -64,6 +64,7 @@ const TenantElectricity = lazy(() => import("./pages/TenantElectricity"));
 const TenantEnergyApp = lazy(() => import("./pages/TenantEnergyApp"));
 const Demo = lazy(() => import("./pages/Demo"));
 const SuperAdminMap = lazy(() => import("./pages/SuperAdminMap"));
+const EmbedPitchDashboard = lazy(() => import("./pages/EmbedPitchDashboard"));
 
 const queryClient = new QueryClient();
 
@@ -163,6 +164,7 @@ const App = () => (
                       <Route path="/te" element={<TenantEnergyApp />} />
                       <Route path="/m" element={<MobileApp />} />
                       <Route path="/getting-started" element={<GettingStarted />} />
+                      <Route path="/embed/pitch-dashboard" element={<EmbedPitchDashboard />} />
                       <Route path="*" element={<NotFound />} />
                     </Routes>
                   </Suspense>
