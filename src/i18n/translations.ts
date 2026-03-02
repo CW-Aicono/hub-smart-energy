@@ -3725,7 +3725,11 @@ export const translations = {
   "branding.savedDesc": { de: "Branding-Einstellungen wurden aktualisiert.", en: "Branding settings have been updated.", es: "La configuración de marca se ha actualizado.", nl: "Brandinginstellingen zijn bijgewerkt." },
   "branding.saveError": { de: "Branding konnte nicht gespeichert werden.", en: "Could not save branding.", es: "No se pudo guardar la marca.", nl: "Branding kon niet worden opgeslagen." },
 
-  // ── Week start setting ────────────────────────────────────────────────────
+  // ── Manual meters setting ─────────────────────────────────────────────────
+  "manualMeters.title": { de: "Manuelle Zähler", en: "Manual Meters", es: "Contadores manuales", nl: "Handmatige meters" },
+  "manualMeters.subtitle": { de: "Legen Sie fest, ob manuell erfasste Zählerstände in den Dashboard- und Liegenschafts-Widgets angezeigt werden.", en: "Choose whether manually recorded meter readings are shown in dashboard and property widgets.", es: "Elija si las lecturas de contadores registradas manualmente se muestran en los widgets.", nl: "Kies of handmatig opgenomen meterstanden worden weergegeven in de dashboard- en locatiewidgets." },
+  "manualMeters.label": { de: "Manuelle Zähler in Widgets anzeigen", en: "Show manual meters in widgets", es: "Mostrar contadores manuales en widgets", nl: "Handmatige meters in widgets tonen" },
+
   "weekStart.title": { de: "Standardwoche", en: "Default Week", es: "Semana estándar", nl: "Standaardweek" },
   "weekStart.subtitle": { de: "Legen Sie fest, an welchem Wochentag die Woche für alle Liegenschaften, Grafiken und Berichte beginnt.", en: "Define which day of the week starts the week for all properties, charts and reports.", es: "Defina qué día de la semana comienza la semana para todas las propiedades, gráficos e informes.", nl: "Bepaal op welke weekdag de week begint voor alle locaties, grafieken en rapporten." },
   "weekStart.label": { de: "Wochenbeginn", en: "Week start", es: "Inicio de semana", nl: "Weekbegin" },
