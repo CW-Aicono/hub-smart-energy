@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
 import { useMeters } from "./useMeters";
 import { useLoxoneSensorsMulti } from "./useLoxoneSensors";
+import { useTenant } from "./useTenant";
 import type { GatewaySensor } from "./useLoxoneSensors";
 
 export interface MonthlyEnergyData {
@@ -176,6 +177,8 @@ interface PeriodTotals {
 export function useEnergyData(locationId?: string | null) {
   const { user } = useAuth();
   const { meters } = useMeters();
+  const { tenant } = useTenant();
+  const showManualMeters = tenant?.show_manual_meters ?? false;
 
   // Shared react-query cache for readings + virtual sources
   const { data: dbData, isLoading: dbLoading } = useQuery({
@@ -271,9 +274,15 @@ export function useEnergyData(locationId?: string | null) {
       meters.filter((m) => m.capture_type === "automatic" && !m.is_archived).map((m) => m.id)
     );
     const manualOnly = readings.filter((r) => !autoMeterIds.has(r.meter_id));
-    const manualDeltas = computeConsumptionDeltas(manualOnly);
-    const distributedManual = distributeManualDeltas(manualDeltas, manualOnly);
-    const combined = [...distributedManual, ...liveReadings];
+
+    let combined: ReadingRow[];
+    if (showManualMeters) {
+      const manualDeltas = computeConsumptionDeltas(manualOnly);
+      const distributedManual = distributeManualDeltas(manualDeltas, manualOnly);
+      combined = [...distributedManual, ...liveReadings];
+    } else {
+      combined = [...liveReadings];
+    }
 
     const virtualMeterIds = new Set(virtualSources.map((s) => s.virtual_meter_id));
     const readingsByMeter = new Map<string, ReadingRow[]>();
@@ -315,7 +324,7 @@ export function useEnergyData(locationId?: string | null) {
     }
 
     return [...combined, ...virtualReadings];
-  }, [readings, liveReadings, meters, virtualSources]);
+  }, [readings, liveReadings, meters, virtualSources, showManualMeters]);
 
   // Build a meter_id -> energy_type + location_id map
   const meterMap = useMemo(() => {

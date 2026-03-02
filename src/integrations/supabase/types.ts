@@ -3559,6 +3559,7 @@ export type Database = {
           remote_support_enabled: boolean
           remote_support_enabled_at: string | null
           report_settings: Json | null
+          show_manual_meters: boolean
           slug: string
           street: string | null
           updated_at: string
@@ -3580,6 +3581,7 @@ export type Database = {
           remote_support_enabled?: boolean
           remote_support_enabled_at?: string | null
           report_settings?: Json | null
+          show_manual_meters?: boolean
           slug: string
           street?: string | null
           updated_at?: string
@@ -3601,6 +3603,7 @@ export type Database = {
           remote_support_enabled?: boolean
           remote_support_enabled_at?: string | null
           report_settings?: Json | null
+          show_manual_meters?: boolean
           slug?: string
           street?: string | null
           updated_at?: string

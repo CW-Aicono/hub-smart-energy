@@ -1,0 +1,1 @@
+ALTER TABLE public.tenants ADD COLUMN show_manual_meters boolean NOT NULL DEFAULT false;
