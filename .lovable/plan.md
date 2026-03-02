@@ -1,70 +1,54 @@
 
-# Projekt-Optimierung: Code-Splitting und Lazy Loading
+# Zählerstand-Korrektur und Ablesehistorie
 
-## Problem
-Der Dev-Server wird instabil, weil zu viele Module gleichzeitig geladen werden. Hauptursachen:
-- **DashboardContent.tsx** und **Demo.tsx** importieren alle 16 Widget-Komponenten eagerly (inkl. Recharts, Leaflet, Three.js)
-- **translations.ts** ist 5.572 Zeilen gross und wird synchron geladen
-- Mehrere Seiten importieren schwere Bibliotheken (Recharts, Three.js, Leaflet) direkt statt lazy
+## Probleme
+1. **Niedrigere Werte werden nicht gespeichert** -- Die Warnung wird zwar angezeigt, aber das Speichern funktioniert trotzdem (kein Code-Block verhindert es). Das Problem liegt vermutlich daran, dass die Validierung `numericValue >= 0` zwar erlaubt, aber eventuell ein DB-Constraint oder RLS-Policy das verhindert. Das muss geprueft und ggf. behoben werden.
+2. **Keine Historie sichtbar** -- Der Ablese-Dialog zeigt nur den letzten Stand, nicht alle frueheren Ablesungen.
+3. **Keine Loeschfunktion** -- Es gibt aktuell keine `deleteReading`-Funktion im Hook.
 
-## Optimierungsstrategie
+## Aenderungen
 
-### 1. Dashboard-Widgets lazy importieren
-**DashboardContent.tsx** und **Demo.tsx** importieren alle 16 Widgets direkt. Da `LazyWidget` bereits viewport-basiertes Rendering macht, fehlt nur der entscheidende Schritt: die Widgets selbst per `React.lazy()` laden.
+### 1. `useMeterReadings.tsx` -- Delete-Funktion hinzufuegen
+- Neue Funktion `deleteReading(id: string)` die den Datensatz aus `meter_readings` loescht
+- Nach Loeschung: `fetchReadings()` aufrufen und Toast anzeigen
 
-- Alle Widget-Imports in `DashboardContent.tsx` durch `lazy()` ersetzen
-- Gleiches fuer `Demo.tsx` (identische Widget-Liste)
-- Dadurch laedt Vite nur die Widgets, die tatsaechlich sichtbar werden
+### 2. `AddMeterReadingDialog.tsx` -- Erweitern zum kombinierten Ablese-/Historien-Dialog
+- **Neue Props**: `readings` (alle Ablesungen dieses Zaehlers) und `onDeleteReading` Callback
+- **Neuer Bereich** unterhalb des Eingabeformulars: scrollbare Liste aller bisherigen Ablesungen mit Datum, Wert und Loeschbutton (Muelleimer-Icon)
+- Loeschung mit Bestaetigung (AlertDialog): "Moechten Sie diesen Zaehlerstand wirklich loeschen?"
+- Die Liste wird chronologisch absteigend sortiert (neueste oben)
 
-### 2. Schwere Seiten-Imports optimieren
-Folgende Seiten importieren Recharts/Three.js direkt und sollten ihre schweren Teile lazy laden:
+### 3. `MetersOverview.tsx` -- Readings und Delete-Callback durchreichen
+- Die `readings` aus `useMeterReadings` gefiltert nach `readingDialogMeter.id` an den Dialog uebergeben
+- `onDeleteReading` an `deleteReading` aus dem Hook binden
 
-- **ArbitrageTrading.tsx** - Recharts direkt importiert
-- **ChargePointDetail.tsx** - Recharts direkt importiert  
-- **SuperAdminStatistics.tsx** - Recharts direkt importiert
-- **LocationDetail.tsx** - importiert FloorPlan3DViewer (Three.js)
-
-Loesung: Chart-Komponenten in separate Dateien auslagern und per `lazy()` laden, oder die Recharts-Imports dynamisch gestalten.
-
-### 3. Demo.tsx DashboardContent wiederverwenden
-`Demo.tsx` ist eine fast identische Kopie von `DashboardContent.tsx` mit denselben 16 Widget-Imports. Statt doppeltem Code sollte Demo.tsx das bereits lazy-geladene DashboardContent wiederverwenden.
-
-### 4. Vite-Konfiguration: Weitere Chunk-Trennung
-Aktuelle `manualChunks` trennt bereits translations, leaflet, recharts, three. Zusaetzlich:
-- `xlsx` in eigenen Chunk (schwere Bibliothek, nur fuer Import/Export)
-- `date-fns` in eigenen Chunk (wird breit genutzt)
-
-### 5. DashboardSidebar-Import optimieren
-`DashboardSidebar` wird von ~20 Seiten direkt importiert. Da es beim initialen Seitenload immer sichtbar ist, bleibt es eager - aber es importiert viele Lucide-Icons. Die Icon-Imports sind bereits tree-shakeable, hier ist kein Handlungsbedarf.
+### 4. DB-Pruefung: Niedrigere Werte speichern
+- Sicherstellen, dass kein DB-Constraint oder Trigger das Speichern niedrigerer Werte blockiert. Falls vorhanden, entfernen -- die Warnung im UI reicht als Hinweis.
 
 ## Technische Details
 
-### Widget Lazy-Loading Pattern (DashboardContent.tsx)
-```typescript
-// Vorher: 16 eager imports
-import EnergyChart from "@/components/dashboard/EnergyChart";
-import CostOverview from "@/components/dashboard/CostOverview";
-// ...
-
-// Nachher: lazy imports
-const EnergyChart = lazy(() => import("@/components/dashboard/EnergyChart"));
-const CostOverview = lazy(() => import("@/components/dashboard/CostOverview"));
-// ...
+### Dialog-Layout (erweitert)
+```text
++----------------------------------+
+| Zaehlerstand erfassen            |
+| Zaehler XY (12345)               |
++----------------------------------+
+| Ablesedatum:  [  02.03.2026  ]   |
+| Letzter Stand: 65.487,5 kWh      |
+| Neuer Stand:  [____________]     |
+| Notizen:      [____________]     |
+|                                  |
+|         [Abbrechen] [Speichern]  |
++----------------------------------+
+| Bisherige Ablesungen             |
++----------------------------------+
+| 02.03.26  65.487,5 kWh   [Trash]|
+| 10.02.26     289,0 kWh   [Trash]|
+| 15.01.26     185,0 kWh   [Trash]|
++----------------------------------+
 ```
 
-`LazyWidget` bekommt einen zusaetzlichen `Suspense`-Wrapper, damit lazy-geladene Widgets korrekt rendern.
-
-### Erwartete Dateiaenderungen
-1. **src/pages/DashboardContent.tsx** - 16 Imports auf `lazy()` umstellen
-2. **src/pages/Demo.tsx** - DashboardContent wiederverwenden oder ebenfalls lazy imports
-3. **src/components/dashboard/LazyWidget.tsx** - `Suspense` fuer lazy-Components einbauen
-4. **vite.config.ts** - `xlsx` und `date-fns` als separate Chunks
-5. **src/pages/ArbitrageTrading.tsx** - Recharts-Chart in lazy-Subcomponent
-6. **src/pages/ChargePointDetail.tsx** - Recharts-Chart in lazy-Subcomponent
-7. **src/pages/SuperAdminStatistics.tsx** - Recharts-Chart in lazy-Subcomponent
-
-### Erwartetes Ergebnis
-- Dev-Server verarbeitet deutlich weniger Module beim initialen Load
-- Nur sichtbare Widgets loesen ihre Chunk-Downloads aus
-- Recharts/Three.js/Leaflet werden erst bei Bedarf geladen
-- Gesamter initialer Bundle ~40-50% kleiner
+### Betroffene Dateien
+1. **src/hooks/useMeterReadings.tsx** -- `deleteReading` hinzufuegen
+2. **src/components/meters/AddMeterReadingDialog.tsx** -- Historien-Liste und Loeschfunktion
+3. **src/pages/MetersOverview.tsx** -- Neue Props durchreichen
