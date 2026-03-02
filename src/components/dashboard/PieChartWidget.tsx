@@ -12,8 +12,7 @@ import { startOfDay, startOfWeek, startOfMonth, startOfQuarter, startOfYear, end
 import { useWeekStartDay } from "@/hooks/useWeekStartDay";
 import { gasM3ToKWh } from "@/lib/formatEnergy";
 import { useLocationEnergySources } from "@/hooks/useLocationEnergySources";
-import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { usePeriodSumsWithFallback } from "@/hooks/usePeriodSumsWithFallback";
 
 interface PieChartWidgetProps {
   locationId: string | null;
@@ -79,21 +78,13 @@ const PieChartWidget = ({ locationId }: PieChartWidgetProps) => {
     [meters]
   );
 
-  const { data: dbPeriodSums } = useQuery({
-    queryKey: ["pie-period-sums", mainAutoMeterIds, format(rangeStart, "yyyy-MM-dd"), format(rangeEnd, "yyyy-MM-dd"), selectedPeriod],
-    enabled: selectedPeriod !== "day" && selectedPeriod !== "all" && mainAutoMeterIds.length > 0,
-    queryFn: async () => {
-      const { data, error } = await supabase.rpc("get_meter_period_sums", {
-        p_meter_ids: mainAutoMeterIds,
-        p_from_date: format(rangeStart, "yyyy-MM-dd"),
-        p_to_date: format(rangeEnd, "yyyy-MM-dd"),
-      });
-      if (error) { console.error("Pie period sums error:", error); return {}; }
-      const map: Record<string, number> = {};
-      (data ?? []).forEach((row: any) => { map[row.meter_id] = row.total_value; });
-      return map;
-    },
-  });
+  const { data: dbPeriodSums } = usePeriodSumsWithFallback(
+    "pie-period-sums",
+    mainAutoMeterIds,
+    rangeStart,
+    rangeEnd,
+    selectedPeriod !== "day" && selectedPeriod !== "all",
+  );
 
   const chartData = useMemo(() => {
     const totals: Record<string, number> = { strom: 0, gas: 0, waerme: 0, wasser: 0 };
