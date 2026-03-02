@@ -437,17 +437,7 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
         }
       }
 
-      // Also add manual main meter readings
-      filtered.forEach((r) => {
-        const info = meterMap[r.meter_id];
-        if (!info || !info.is_main_meter) return;
-        if (info.capture_type === "automatic") return;
-        const d = new Date(r.reading_date);
-        const idx = Math.min(d.getHours() * 12 + Math.floor(d.getMinutes() / 5), 287);
-        addToBucket(buckets[idx], r);
-        const et = info.energy_type || "strom";
-        realIndices[et]?.add(idx);
-      });
+      // Manual meters are excluded from day view – no meaningful daily granularity
 
       // Interpolate small gaps (≤ 12 slots = 1 hour) and mark them as gap (not real)
       for (const key of ENERGY_KEYS) {
