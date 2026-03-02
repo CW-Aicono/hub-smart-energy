@@ -209,7 +209,7 @@ export function usePvForecastSettings(locationId: string | null) {
     onSuccess: () => {
       toast.success("PV-Einstellungen gespeichert");
       queryClient.invalidateQueries({ queryKey: ["pv-forecast-settings", locationId] });
-      queryClient.invalidateQueries({ queryKey: ["pv-forecast", locationId] });
+      queryClient.invalidateQueries({ queryKey: ["pv-forecast"] });
     },
     onError: (e) => toast.error("Fehler: " + e.message),
   });
@@ -226,6 +226,7 @@ export function usePvForecastSettings(locationId: string | null) {
     onSuccess: () => {
       toast.success("PV-Einstellungen entfernt");
       queryClient.invalidateQueries({ queryKey: ["pv-forecast-settings", locationId] });
+      queryClient.invalidateQueries({ queryKey: ["pv-forecast"] });
     },
   });
 
