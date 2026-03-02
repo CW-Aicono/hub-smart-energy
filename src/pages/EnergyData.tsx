@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, lazy, Suspense } from "react";
 import { Navigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useLocations } from "@/hooks/useLocations";
@@ -14,10 +14,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Download, Database, Filter, Calendar, FileText } from "lucide-react";
+import { Download, Database, Filter, Calendar, FileText, Upload } from "lucide-react";
 import { downloadCSV, downloadPDF } from "@/lib/exportUtils";
 import ReportSchedulesList from "@/components/energy-data/ReportSchedulesList";
 import { supabase } from "@/integrations/supabase/client";
+
+const DataImportDialog = lazy(() => import("@/components/energy-data/DataImportDialog"));
 
 interface ReadingExportRow {
   meter_id: string;
@@ -41,6 +43,7 @@ const EnergyData = () => {
   const [includeMeters, setIncludeMeters] = useState(true);
   const [readingsCount, setReadingsCount] = useState(0);
   const [loadingReadings, setLoadingReadings] = useState(false);
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
 
   const ENERGY_TYPE_KEYS: Record<string, string> = {
     strom: "energyData.strom",
@@ -287,8 +290,16 @@ const EnergyData = () => {
             </CardContent>
           </Card>
 
-          {/* Export Buttons */}
+          {/* Import & Export Buttons */}
           <div className="flex justify-end gap-3">
+            <Button
+              variant="outline"
+              size="lg"
+              onClick={() => setImportDialogOpen(true)}
+            >
+              <Upload className="h-4 w-4 mr-2" />
+              {t("import.title" as any)}
+            </Button>
             <Button
               variant="outline"
               size="lg"
@@ -311,6 +322,10 @@ const EnergyData = () => {
           {/* Automated Reports */}
           <ReportSchedulesList />
         </div>
+
+        <Suspense fallback={null}>
+          <DataImportDialog open={importDialogOpen} onOpenChange={setImportDialogOpen} />
+        </Suspense>
       </main>
     </div>
   );
