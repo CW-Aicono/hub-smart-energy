@@ -1,13 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { renderHook, act } from "@testing-library/react";
+import { renderHook, waitFor } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import React from "react";
 
-// ── Hoisted mocks with STABLE references ────────────────────────────────────
-const { mockSupabase, stableUser } = vi.hoisted(() => {
-  return {
-    mockSupabase: { from: vi.fn(), auth: {} },
-    stableUser: { id: "u-1" },
-  };
-});
+const { mockSupabase, stableUser } = vi.hoisted(() => ({
+  mockSupabase: { from: vi.fn(), auth: {} },
+  stableUser: { id: "u-1" },
+}));
 vi.mock("@/integrations/supabase/client", () => ({ supabase: mockSupabase }));
 vi.mock("../useAuth", () => ({
   useAuth: () => ({ user: stableUser, session: {}, loading: false }),
@@ -23,6 +22,13 @@ vi.mock("../useMeters", () => ({ useMeters: () => ({ meters: fakeMeters, loading
 vi.mock("../useLoxoneSensors", () => ({ useLoxoneSensorsMulti: () => [] }));
 
 import { useEnergyData } from "../useEnergyData";
+
+function createWrapper() {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return ({ children }: { children: React.ReactNode }) => (
+    <QueryClientProvider client={qc}>{children}</QueryClientProvider>
+  );
+}
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -50,74 +56,64 @@ function setupReadings(readings: any[]) {
 describe("useEnergyData", () => {
   it("returns empty state when no readings exist", async () => {
     setupReadings([]);
-    let hookResult: any;
-    await act(async () => {
-      const { result } = renderHook(() => useEnergyData());
-      hookResult = result;
-    });
-    expect(hookResult.current.loading).toBe(false);
-    expect(hookResult.current.hasData).toBe(false);
-    expect(hookResult.current.energyDistribution).toHaveLength(4);
-    expect(hookResult.current.energyDistribution.every((d: any) => d.value === 0)).toBe(true);
+    const { result } = renderHook(() => useEnergyData(), { wrapper: createWrapper() });
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.hasData).toBe(false);
+    expect(result.current.energyDistribution).toHaveLength(4);
+    expect(result.current.energyDistribution.every((d: any) => d.value === 0)).toBe(true);
   });
 
-  it("aggregates readings by energy type into energyTotals", async () => {
-    const now = new Date().toISOString();
+  it("first reading is baseline with zero consumption", async () => {
     setupReadings([
-      { meter_id: "m-strom", value: 100, reading_date: now },
-      { meter_id: "m-strom", value: 50, reading_date: now },
-      { meter_id: "m-gas", value: 30, reading_date: now },
+      { meter_id: "m-strom", value: 65000, reading_date: "2026-01-15T00:00:00Z" },
     ]);
-    let hookResult: any;
-    await act(async () => {
-      const { result } = renderHook(() => useEnergyData());
-      hookResult = result;
-    });
-    expect(hookResult.current.energyTotals.strom).toBe(150);
-    expect(hookResult.current.energyTotals.gas).toBe(30);
-    expect(hookResult.current.energyTotals.waerme).toBe(0);
-    expect(hookResult.current.energyTotals.wasser).toBe(0);
-    expect(hookResult.current.hasData).toBe(true);
+    const { result } = renderHook(() => useEnergyData(), { wrapper: createWrapper() });
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.energyTotals.strom).toBe(0);
+    expect(result.current.hasData).toBe(false);
   });
 
-  it("calculates energy distribution percentages correctly", async () => {
-    const now = new Date().toISOString();
+  it("calculates delta between two consecutive readings", async () => {
     setupReadings([
-      { meter_id: "m-strom", value: 75, reading_date: now },
-      { meter_id: "m-gas", value: 25, reading_date: now },
+      { meter_id: "m-strom", value: 65000, reading_date: "2026-01-15T00:00:00Z" },
+      { meter_id: "m-strom", value: 65500, reading_date: "2026-02-15T00:00:00Z" },
+      { meter_id: "m-gas", value: 1000, reading_date: "2026-01-15T00:00:00Z" },
+      { meter_id: "m-gas", value: 1030, reading_date: "2026-02-15T00:00:00Z" },
     ]);
-    let hookResult: any;
-    await act(async () => {
-      const { result } = renderHook(() => useEnergyData());
-      hookResult = result;
-    });
-    const strom = hookResult.current.energyDistribution.find((d: any) => d.name === "Strom");
-    const gas = hookResult.current.energyDistribution.find((d: any) => d.name === "Gas");
-    expect(strom?.value).toBe(75);
-    expect(gas?.value).toBe(25);
+    const { result } = renderHook(() => useEnergyData(), { wrapper: createWrapper() });
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.energyTotals.strom).toBe(500);
+    expect(result.current.energyTotals.gas).toBe(30);
+    expect(result.current.hasData).toBe(true);
+  });
+
+  it("clamps negative deltas (meter swap) to zero", async () => {
+    setupReadings([
+      { meter_id: "m-strom", value: 65000, reading_date: "2026-01-15T00:00:00Z" },
+      { meter_id: "m-strom", value: 100, reading_date: "2026-02-15T00:00:00Z" },
+    ]);
+    const { result } = renderHook(() => useEnergyData(), { wrapper: createWrapper() });
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.energyTotals.strom).toBe(0);
   });
 
   it("filters readings by locationId when provided", async () => {
-    const now = new Date().toISOString();
-    setupReadings([{ meter_id: "m-strom", value: 100, reading_date: now }]);
-    let hookResult: any;
-    await act(async () => {
-      const { result } = renderHook(() => useEnergyData("loc-other"));
-      hookResult = result;
-    });
-    expect(hookResult.current.hasData).toBe(false);
-    expect(hookResult.current.energyTotals.strom).toBe(0);
+    setupReadings([
+      { meter_id: "m-strom", value: 100, reading_date: "2026-01-01T00:00:00Z" },
+      { meter_id: "m-strom", value: 200, reading_date: "2026-02-01T00:00:00Z" },
+    ]);
+    const { result } = renderHook(() => useEnergyData("loc-other"), { wrapper: createWrapper() });
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.hasData).toBe(false);
+    expect(result.current.energyTotals.strom).toBe(0);
   });
 
   it("returns 12 months of data in monthlyData", async () => {
     setupReadings([]);
-    let hookResult: any;
-    await act(async () => {
-      const { result } = renderHook(() => useEnergyData());
-      hookResult = result;
-    });
-    expect(hookResult.current.monthlyData).toHaveLength(12);
-    expect(hookResult.current.monthlyData[0].month).toBe("Jan");
-    expect(hookResult.current.monthlyData[11].month).toBe("Dez");
+    const { result } = renderHook(() => useEnergyData(), { wrapper: createWrapper() });
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.monthlyData).toHaveLength(12);
+    expect(result.current.monthlyData[0].month).toBe("Jan");
+    expect(result.current.monthlyData[11].month).toBe("Dez");
   });
 });

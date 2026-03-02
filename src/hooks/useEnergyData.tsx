@@ -83,6 +83,34 @@ function aggregateEnergyTotals(
   return totals;
 }
 
+/**
+ * Converts absolute meter readings into consumption deltas.
+ * First reading per meter = baseline (skipped), subsequent readings = delta to previous.
+ * Negative deltas (e.g. meter swap) are clamped to 0.
+ */
+function computeConsumptionDeltas(readings: ReadingRow[]): ReadingRow[] {
+  const byMeter = new Map<string, ReadingRow[]>();
+  readings.forEach((r) => {
+    const arr = byMeter.get(r.meter_id) || [];
+    arr.push(r);
+    byMeter.set(r.meter_id, arr);
+  });
+
+  const result: ReadingRow[] = [];
+  for (const [, meterReadings] of byMeter) {
+    meterReadings.sort((a, b) => a.reading_date.localeCompare(b.reading_date));
+    for (let i = 1; i < meterReadings.length; i++) {
+      const delta = meterReadings[i].value - meterReadings[i - 1].value;
+      result.push({
+        meter_id: meterReadings[i].meter_id,
+        value: Math.max(0, delta),
+        reading_date: meterReadings[i].reading_date,
+      });
+    }
+  }
+  return result;
+}
+
 const MONTH_LABELS = ["Jan", "Feb", "Mär", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dez"];
 
 interface ReadingRow {
@@ -196,7 +224,8 @@ export function useEnergyData(locationId?: string | null) {
       meters.filter((m) => m.capture_type === "automatic" && !m.is_archived).map((m) => m.id)
     );
     const manualOnly = readings.filter((r) => !autoMeterIds.has(r.meter_id));
-    const combined = [...manualOnly, ...liveReadings];
+    const manualDeltas = computeConsumptionDeltas(manualOnly);
+    const combined = [...manualDeltas, ...liveReadings];
 
     const virtualMeterIds = new Set(virtualSources.map((s) => s.virtual_meter_id));
     const readingsByMeter = new Map<string, ReadingRow[]>();
