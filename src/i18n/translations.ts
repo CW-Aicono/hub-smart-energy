@@ -3994,7 +3994,18 @@ export const translations = {
   "meters.noArchived": { de: "Keine archivierten Messstellen.", en: "No archived meters.", es: "No hay contadores archivados.", nl: "Geen gearchiveerde meters." },
   "meters.noMeters": { de: "Keine Messstellen gefunden.", en: "No meters found.", es: "No se encontraron contadores.", nl: "Geen meters gevonden." },
   "meters.live": { de: "(live)", en: "(live)", es: "(en vivo)", nl: "(live)" },
-
+  "meterReading.deleted": {
+    de: "Zählerstand gelöscht",
+    en: "Meter reading deleted",
+    es: "Lectura del contador eliminada",
+    nl: "Meterstand verwijderd",
+  },
+  "meterReading.errorDelete": {
+    de: "Zählerstand konnte nicht gelöscht werden",
+    en: "Could not delete meter reading",
+    es: "No se pudo eliminar la lectura del contador",
+    nl: "Kon meterstand niet verwijderen",
+  },
 
   // ── Charging Billing ────────────────────────────────────────────────────
   "charging.sessions": { de: "Ladevorgänge", en: "Charging sessions", es: "Sesiones de carga", nl: "Laadsessies" },

@@ -28,7 +28,7 @@ const MetersOverview = () => {
   const { user, loading: authLoading } = useAuth();
   const { locations, loading: locationsLoading } = useLocations();
   const { meters, loading: metersLoading, updateMeter, archiveMeter, deleteMeter } = useMeters();
-  const { readings, loading: readingsLoading, addReading } = useMeterReadings();
+  const { readings, loading: readingsLoading, addReading, deleteReading } = useMeterReadings();
   const { isAdmin } = useUserRole();
   const { t, language } = useTranslation();
   const dateLocale = language === "en" ? enUS : language === "es" ? es : language === "nl" ? nl : de;
@@ -310,6 +310,8 @@ const MetersOverview = () => {
             meterName={`${readingDialogMeter.name}${readingDialogMeter.meter_number ? ` (${readingDialogMeter.meter_number})` : ""}`}
             meterUnit={readingDialogMeter.unit}
             lastReading={getLastReadingForMeter(readingDialogMeter.id)}
+            readings={readings.filter((r) => r.meter_id === readingDialogMeter.id)}
+            onDeleteReading={deleteReading}
             onSubmit={async (data) => {
               return await addReading({
                 meter_id: readingDialogMeter.id,
