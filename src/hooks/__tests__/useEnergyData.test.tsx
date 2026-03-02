@@ -82,8 +82,8 @@ describe("useEnergyData", () => {
     ]);
     const { result } = renderHook(() => useEnergyData(), { wrapper: createWrapper() });
     await waitFor(() => expect(result.current.loading).toBe(false));
-    expect(result.current.energyTotals.strom).toBe(500);
-    expect(result.current.energyTotals.gas).toBe(30);
+    expect(result.current.energyTotals.strom).toBeCloseTo(500, 0);
+    expect(result.current.energyTotals.gas).toBeCloseTo(30, 0);
     expect(result.current.hasData).toBe(true);
   });
 
@@ -95,6 +95,23 @@ describe("useEnergyData", () => {
     const { result } = renderHook(() => useEnergyData(), { wrapper: createWrapper() });
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.energyTotals.strom).toBe(0);
+  });
+
+  it("distributes consumption evenly across days between readings", async () => {
+    // 31 days between Jan 1 and Feb 1 → 310 kWh / 31 days = 10 kWh/day
+    setupReadings([
+      { meter_id: "m-strom", value: 65000, reading_date: "2026-01-01T00:00:00Z" },
+      { meter_id: "m-strom", value: 65310, reading_date: "2026-02-01T00:00:00Z" },
+    ]);
+    const { result } = renderHook(() => useEnergyData(), { wrapper: createWrapper() });
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    // Total should still equal the full delta
+    expect(result.current.energyTotals.strom).toBeCloseTo(310, 0);
+    // Should have 31 individual daily readings
+    const stromReadings = result.current.readings.filter((r: any) => r.meter_id === "m-strom");
+    expect(stromReadings).toHaveLength(31);
+    // Each daily value should be ~10
+    expect(stromReadings[0].value).toBeCloseTo(10, 1);
   });
 
   it("filters readings by locationId when provided", async () => {

@@ -111,6 +111,53 @@ function computeConsumptionDeltas(readings: ReadingRow[]): ReadingRow[] {
   return result;
 }
 
+/**
+ * Distributes manual consumption deltas evenly across the days between readings.
+ * Instead of assigning the entire delta to the reading date, this creates one
+ * synthetic reading per day with value = delta / daysBetween.
+ */
+function distributeManualDeltas(
+  deltas: ReadingRow[],
+  originalReadings: ReadingRow[],
+): ReadingRow[] {
+  const byMeter = new Map<string, ReadingRow[]>();
+  originalReadings.forEach((r) => {
+    const arr = byMeter.get(r.meter_id) || [];
+    arr.push(r);
+    byMeter.set(r.meter_id, arr);
+  });
+
+  // Pre-sort each meter's readings once
+  for (const [, arr] of byMeter) {
+    arr.sort((a, b) => a.reading_date.localeCompare(b.reading_date));
+  }
+
+  const result: ReadingRow[] = [];
+  for (const delta of deltas) {
+    const meterReadings = byMeter.get(delta.meter_id);
+    if (!meterReadings) continue;
+
+    const idx = meterReadings.findIndex((r) => r.reading_date === delta.reading_date);
+    if (idx <= 0) continue;
+
+    const prevDate = new Date(meterReadings[idx - 1].reading_date);
+    const currDate = new Date(delta.reading_date);
+    const daysBetween = Math.max(1, Math.round((currDate.getTime() - prevDate.getTime()) / 86400000));
+    const dailyValue = delta.value / daysBetween;
+
+    for (let d = 1; d <= daysBetween; d++) {
+      const date = new Date(prevDate);
+      date.setDate(date.getDate() + d);
+      result.push({
+        meter_id: delta.meter_id,
+        value: dailyValue,
+        reading_date: date.toISOString(),
+      });
+    }
+  }
+  return result;
+}
+
 const MONTH_LABELS = ["Jan", "Feb", "Mär", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dez"];
 
 interface ReadingRow {
@@ -225,7 +272,8 @@ export function useEnergyData(locationId?: string | null) {
     );
     const manualOnly = readings.filter((r) => !autoMeterIds.has(r.meter_id));
     const manualDeltas = computeConsumptionDeltas(manualOnly);
-    const combined = [...manualDeltas, ...liveReadings];
+    const distributedManual = distributeManualDeltas(manualDeltas, manualOnly);
+    const combined = [...distributedManual, ...liveReadings];
 
     const virtualMeterIds = new Set(virtualSources.map((s) => s.virtual_meter_id));
     const readingsByMeter = new Map<string, ReadingRow[]>();
