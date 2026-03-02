@@ -79,13 +79,13 @@ export const AddMeterReadingDialog = ({
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="sm:max-w-md max-h-[85vh] flex flex-col overflow-hidden">
-          <DialogHeader className="flex-shrink-0">
+        <DialogContent className="sm:max-w-md max-h-[85vh] flex flex-col overflow-hidden p-0">
+          <DialogHeader className="flex-shrink-0 p-6 pb-2">
             <DialogTitle>{t("meterReadingDialog.title")}</DialogTitle>
             <DialogDescription>{meterName}</DialogDescription>
           </DialogHeader>
 
-          <ScrollArea className="flex-1 min-h-0 pr-2">
+          <div className="flex-1 overflow-y-auto px-6 pb-6">
             <div className="space-y-4 pb-1">
               {/* Date picker */}
               <div className="space-y-2">
@@ -171,7 +171,7 @@ export const AddMeterReadingDialog = ({
                 <>
                   <Separator />
                   <div className="space-y-2">
-                    <Label className="text-sm font-medium">{t("meterReadingDialog.previousReadings" as any) || "Bisherige Ablesungen"}</Label>
+                    <Label className="text-sm font-medium">Bisherige Ablesungen</Label>
                     <div className="space-y-1">
                       {sortedReadings.map((r) => (
                         <div key={r.id} className="flex items-center justify-between py-1.5 px-2 rounded hover:bg-muted/50 text-sm">
@@ -200,7 +200,7 @@ export const AddMeterReadingDialog = ({
                 </>
               )}
             </div>
-          </ScrollArea>
+          </div>
         </DialogContent>
       </Dialog>
 
