@@ -286,44 +286,69 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
         results = [];
       }
 
-      // Check if today falls within the range and has no archived daily total yet.
-      // Compute today's running total from DB power readings (written by periodic sync).
-      const todayStr = format(new Date(), "yyyy-MM-dd");
+      // Find days in the range (up to today) that have no archived daily total yet.
+      // Compute their totals from 5-min power readings as fallback.
       const todayDate = new Date();
-      if (todayDate >= rangeStart && todayDate <= rangeEnd) {
-        const hasTodayInResults = results.some(r => {
+      const effectiveEnd = new Date(Math.min(rangeEnd.getTime(), todayDate.getTime()));
+      const daysInRange = eachDayOfInterval({ start: rangeStart, end: effectiveEnd });
+      const daysWithData = new Set(
+        results.map(r => {
           const dayStr = typeof r.day === "string" ? r.day.split("T")[0] : format(new Date(r.day), "yyyy-MM-dd");
-          return dayStr === todayStr;
-        });
+          return dayStr;
+        })
+      );
+      const missingDays = daysInRange
+        .map(d => format(d, "yyyy-MM-dd"))
+        .filter(d => !daysWithData.has(d));
 
-        if (!hasTodayInResults) {
-          try {
-            const todayStart = startOfDay(todayDate).toISOString();
-            const todayEnd = endOfDay(todayDate).toISOString();
+      if (missingDays.length > 0) {
+        try {
+          // Query power readings for the full missing range at once
+          const missingStart = startOfDay(new Date(missingDays[0])).toISOString();
+          const missingEnd = endOfDay(new Date(missingDays[missingDays.length - 1])).toISOString();
 
-            // Fetch 5min aggregates + raw data for today via RPC
-            const { data: powerData } = await supabase.rpc("get_power_readings_5min", {
-              p_meter_ids: mainMeterIds,
-              p_start: todayStart,
-              p_end: todayEnd,
-            });
+          let allPowerData: Array<{ meter_id: string; power_avg: number; bucket: string }> = [];
+          let from = 0;
+          const pageSize = 1000;
+          let hasMore = true;
+          while (hasMore) {
+            const { data: pageData, error: pageError } = await supabase
+              .rpc("get_power_readings_5min", {
+                p_meter_ids: mainMeterIds,
+                p_start: missingStart,
+                p_end: missingEnd,
+              })
+              .range(from, from + pageSize - 1);
+            if (pageError || !pageData || pageData.length === 0) {
+              hasMore = false;
+            } else {
+              allPowerData.push(...(pageData as Array<{ meter_id: string; power_avg: number; bucket: string }>));
+              hasMore = pageData.length === pageSize;
+              from += pageSize;
+            }
+          }
 
-            if (powerData && powerData.length > 0) {
-              // Sum power_avg * 5/60 per meter to get kWh
-              const meterTotals = new Map<string, number>();
-              for (const row of powerData as Array<{ meter_id: string; power_avg: number }>) {
-                const prev = meterTotals.get(row.meter_id) ?? 0;
-                meterTotals.set(row.meter_id, prev + (row.power_avg * 5.0 / 60.0));
-              }
-              for (const [meterId, totalValue] of meterTotals) {
+          if (allPowerData.length > 0) {
+            const missingSet = new Set(missingDays);
+            // Group by day + meter, sum power_avg * 5/60 to get kWh
+            const dayMeterTotals = new Map<string, Map<string, number>>();
+            for (const row of allPowerData) {
+              const dayStr = format(new Date(row.bucket), "yyyy-MM-dd");
+              if (!missingSet.has(dayStr)) continue;
+              if (!dayMeterTotals.has(dayStr)) dayMeterTotals.set(dayStr, new Map());
+              const meterMap = dayMeterTotals.get(dayStr)!;
+              meterMap.set(row.meter_id, (meterMap.get(row.meter_id) ?? 0) + (row.power_avg * 5.0 / 60.0));
+            }
+            for (const [dayStr, meterMap] of dayMeterTotals) {
+              for (const [meterId, totalValue] of meterMap) {
                 if (totalValue > 0) {
-                  results.push({ meter_id: meterId, day: todayStr, total_value: totalValue });
+                  results.push({ meter_id: meterId, day: dayStr, total_value: totalValue });
                 }
               }
             }
-          } catch (e) {
-            console.warn("Error computing today's total from power readings:", e);
           }
+        } catch (e) {
+          console.warn("Error computing missing days from power readings:", e);
         }
       }
 
@@ -518,7 +543,7 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
         manualFiltered.forEach((r) => {
           if (format(new Date(r.reading_date), "yyyy-MM-dd") === dateStr) addToBucket(bucket, r);
         });
-        // For today: inject live totalDay if no DB value exists yet
+        // For today: inject live totalDay if no DB/computed value exists yet
         if (dateStr === todayStr && !dbBucket) {
           addLiveTodayToBucket(bucket);
         }
