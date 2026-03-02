@@ -2,6 +2,7 @@ import { useState, useMemo, useRef } from "react";
 import { Navigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useLocations, Location } from "@/hooks/useLocations";
+
 import { useCo2Factors } from "@/hooks/useCo2Factors";
 import { useBenchmarks } from "@/hooks/useBenchmarks";
 import { useTranslation } from "@/hooks/useTranslation";
@@ -28,7 +29,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
-import { FileText, Download, Building2, Leaf, BarChart3, Settings2, Archive, TrendingUp, Save } from "lucide-react";
+import { FileText, Download, Building2, Leaf, BarChart3, Settings2, Archive, TrendingUp, Save, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 
 const currentYear = new Date().getFullYear();
@@ -36,7 +37,7 @@ const YEARS = Array.from({ length: 5 }, (_, i) => currentYear - i);
 
 const EnergyReport = () => {
   const { user, loading: authLoading } = useAuth();
-  const { locations, loading: locLoading } = useLocations();
+  const { locations, hierarchicalLocations, loading: locLoading } = useLocations();
   const { factors } = useCo2Factors();
   const { t } = useTranslation();
   const { tenant } = useTenant();
@@ -56,9 +57,29 @@ const EnergyReport = () => {
   const { data: consumption } = useLocationYearlyConsumption(selectedLocationIds, trendYears);
   const { data: completenessMap } = useDataCompleteness(selectedLocationIds, yearNum);
 
+  // Get child IDs for a given parent
+  const getChildIds = (parentId: string): string[] => {
+    return locations.filter((l) => l.parent_id === parentId).map((l) => l.id);
+  };
+
   const toggleLocation = (id: string) => {
+    setSelectedLocationIds((prev) => {
+      const childIds = getChildIds(id);
+      if (prev.includes(id)) {
+        // Deselect parent + all children
+        const toRemove = new Set([id, ...childIds]);
+        return prev.filter((x) => !toRemove.has(x));
+      } else {
+        // Select parent + all children
+        const toAdd = [id, ...childIds];
+        return [...new Set([...prev, ...toAdd])];
+      }
+    });
+  };
+
+  const toggleChild = (childId: string) => {
     setSelectedLocationIds((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+      prev.includes(childId) ? prev.filter((x) => x !== childId) : [...prev, childId]
     );
   };
 
@@ -74,6 +95,27 @@ const EnergyReport = () => {
     () => locations.filter((l) => selectedLocationIds.includes(l.id)),
     [locations, selectedLocationIds]
   );
+
+  // Build hierarchical view of selected locations: parents with their selected children
+  const selectedHierarchy = useMemo(() => {
+    const selectedSet = new Set(selectedLocationIds);
+    const result: { parent: Location; children: Location[] }[] = [];
+    
+    // Only iterate top-level (root) locations from hierarchy
+    for (const root of hierarchicalLocations) {
+      if (!selectedSet.has(root.id)) {
+        // Parent not selected, but maybe children are selected as standalone
+        const selectedChildren = (root.children || []).filter((c) => selectedSet.has(c.id));
+        if (selectedChildren.length > 0) {
+          result.push({ parent: root, children: selectedChildren });
+        }
+        continue;
+      }
+      const selectedChildren = (root.children || []).filter((c) => selectedSet.has(c.id));
+      result.push({ parent: root, children: selectedChildren });
+    }
+    return result;
+  }, [hierarchicalLocations, selectedLocationIds]);
 
   const handleGenerateReport = () => {
     setActiveTab("preview");
@@ -278,27 +320,56 @@ const EnergyReport = () => {
                 </CardHeader>
                 <CardContent>
                   <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                    {locations.map((loc) => (
-                      <label
-                        key={loc.id}
-                        className="flex items-center gap-3 rounded-lg border p-3 cursor-pointer hover:bg-accent/50 transition-colors"
-                      >
-                        <Checkbox
-                          checked={selectedLocationIds.includes(loc.id)}
-                          onCheckedChange={() => toggleLocation(loc.id)}
-                        />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium truncate">{loc.name}</p>
-                          <p className="text-xs text-muted-foreground truncate">
-                            {loc.address && `${loc.address}, `}{loc.city || ""}
-                          </p>
-                        </div>
-                        {loc.net_floor_area && (
-                          <Badge variant="secondary" className="text-xs shrink-0">
-                            {loc.net_floor_area} m²
-                          </Badge>
+                    {hierarchicalLocations.map((loc) => (
+                      <div key={loc.id} className="space-y-1">
+                        <label
+                          className="flex items-center gap-3 rounded-lg border p-3 cursor-pointer hover:bg-accent/50 transition-colors"
+                        >
+                          <Checkbox
+                            checked={selectedLocationIds.includes(loc.id)}
+                            onCheckedChange={() => toggleLocation(loc.id)}
+                          />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium truncate">{loc.name}</p>
+                            <p className="text-xs text-muted-foreground truncate">
+                              {loc.address && `${loc.address}, `}{loc.city || ""}
+                            </p>
+                          </div>
+                          {loc.net_floor_area && (
+                            <Badge variant="secondary" className="text-xs shrink-0">
+                              {loc.net_floor_area.toLocaleString("de-DE")} m²
+                            </Badge>
+                          )}
+                        </label>
+                        {/* Child buildings */}
+                        {loc.children && loc.children.length > 0 && (
+                          <div className="ml-6 space-y-1">
+                            {loc.children.map((child) => (
+                              <label
+                                key={child.id}
+                                className="flex items-center gap-3 rounded-lg border border-dashed p-2.5 cursor-pointer hover:bg-accent/50 transition-colors"
+                              >
+                                <ChevronRight className="h-3 w-3 text-muted-foreground shrink-0" />
+                                <Checkbox
+                                  checked={selectedLocationIds.includes(child.id)}
+                                  onCheckedChange={() => toggleChild(child.id)}
+                                />
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm truncate">{child.name}</p>
+                                  <p className="text-xs text-muted-foreground truncate">
+                                    {child.address && `${child.address}, `}{child.city || ""}
+                                  </p>
+                                </div>
+                                {child.net_floor_area && (
+                                  <Badge variant="secondary" className="text-xs shrink-0">
+                                    {child.net_floor_area.toLocaleString("de-DE")} m²
+                                  </Badge>
+                                )}
+                              </label>
+                            ))}
+                          </div>
                         )}
-                      </label>
+                      </div>
                     ))}
                   </div>
                 </CardContent>
@@ -565,20 +636,42 @@ const EnergyReport = () => {
                   </Card>
                 )}
 
-                {/* Property profiles */}
-                {selectedLocations.map((loc) => (
-                  <PropertyProfile
-                    key={loc.id}
-                    location={loc}
-                    reportYear={yearNum}
-                    factors={factors}
-                    consumption={consumption?.[yearNum]?.[loc.id]}
-                    completeness={completenessMap?.[loc.id]}
-                    measures={measures.filter((m) => m.location_id === loc.id)}
-                    prices={prices}
-                    onAddMeasure={(m) => addMeasure(m)}
-                    onDeleteMeasure={deleteMeasure}
-                  />
+                {/* Property profiles – grouped by parent */}
+                {selectedHierarchy.map(({ parent, children }) => (
+                  <div key={parent.id} className="space-y-4">
+                    <PropertyProfile
+                      location={parent}
+                      reportYear={yearNum}
+                      factors={factors}
+                      consumption={consumption?.[yearNum]?.[parent.id]}
+                      completeness={completenessMap?.[parent.id]}
+                      measures={measures.filter((m) => m.location_id === parent.id)}
+                      prices={prices}
+                      onAddMeasure={(m) => addMeasure(m)}
+                      onDeleteMeasure={deleteMeasure}
+                    />
+                    {children.length > 0 && (
+                      <div className="ml-6 space-y-4 border-l-2 border-primary/20 pl-4">
+                        <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">
+                          Gebäude in {parent.name}
+                        </p>
+                        {children.map((child) => (
+                          <PropertyProfile
+                            key={child.id}
+                            location={child}
+                            reportYear={yearNum}
+                            factors={factors}
+                            consumption={consumption?.[yearNum]?.[child.id]}
+                            completeness={completenessMap?.[child.id]}
+                            measures={measures.filter((m) => m.location_id === child.id)}
+                            prices={prices}
+                            onAddMeasure={(m) => addMeasure(m)}
+                            onDeleteMeasure={deleteMeasure}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 ))}
               </div>
             </TabsContent>
