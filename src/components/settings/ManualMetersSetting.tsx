@@ -41,7 +41,7 @@ export function ManualMetersSetting() {
         </CardTitle>
         <CardDescription>{t("manualMeters.subtitle" as any)}</CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="space-y-4">
         <div className="flex items-center gap-3">
           <Switch
             id="show-manual-meters"
@@ -53,6 +53,9 @@ export function ManualMetersSetting() {
             {t("manualMeters.label" as any)}
           </Label>
         </div>
+        <p className="text-sm text-muted-foreground">
+          {t("manualMeters.explanation" as any)}
+        </p>
       </CardContent>
     </Card>
   );
