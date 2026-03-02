@@ -14,8 +14,7 @@ import { startOfDay, startOfWeek, startOfMonth, startOfQuarter, startOfYear, end
 import { useWeekStartDay } from "@/hooks/useWeekStartDay";
 import { useDashboardFilter, TimePeriod } from "@/hooks/useDashboardFilter";
 import { useLocationEnergySources } from "@/hooks/useLocationEnergySources";
-import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { usePeriodSumsWithFallback } from "@/hooks/usePeriodSumsWithFallback";
 
 const PERIOD_LABEL_KEYS: Record<TimePeriod, string> = {
   day: "chart.periodDay",
@@ -96,21 +95,13 @@ const SustainabilityKPIs = ({ locationId }: SustainabilityKPIsProps) => {
     [meters]
   );
 
-  const { data: dbPeriodSums } = useQuery({
-    queryKey: ["sustainability-period-sums", mainAutoMeterIds, format(rangeStart, "yyyy-MM-dd"), format(rangeEnd, "yyyy-MM-dd"), period],
-    enabled: period !== "day" && period !== "all" && mainAutoMeterIds.length > 0,
-    queryFn: async () => {
-      const { data, error } = await supabase.rpc("get_meter_period_sums", {
-        p_meter_ids: mainAutoMeterIds,
-        p_from_date: format(rangeStart, "yyyy-MM-dd"),
-        p_to_date: format(rangeEnd, "yyyy-MM-dd"),
-      });
-      if (error) { console.error("Sustainability period sums error:", error); return {}; }
-      const map: Record<string, number> = {};
-      (data ?? []).forEach((row: any) => { map[row.meter_id] = row.total_value; });
-      return map;
-    },
-  });
+  const { data: dbPeriodSums } = usePeriodSumsWithFallback(
+    "sustainability-period-sums",
+    mainAutoMeterIds,
+    rangeStart,
+    rangeEnd,
+    period !== "day" && period !== "all",
+  );
 
   const filteredTotals = useMemo(() => {
     const totals = { strom: 0, gas: 0, waerme: 0, wasser: 0 };

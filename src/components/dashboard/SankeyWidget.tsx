@@ -16,7 +16,7 @@ import { useDashboardFilter, TimePeriod } from "@/hooks/useDashboardFilter";
 import { useWeekStartDay } from "@/hooks/useWeekStartDay";
 import { useLocationEnergySources } from "@/hooks/useLocationEnergySources";
 import { useSpotPrices } from "@/hooks/useSpotPrices";
-import { useQuery } from "@tanstack/react-query";
+import { usePeriodSumsWithFallback } from "@/hooks/usePeriodSumsWithFallback";
 
 type SankeyViewMode = "leistung" | "kosten";
 
@@ -110,21 +110,13 @@ const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
     [meters]
   );
 
-  const { data: dbPeriodSums } = useQuery({
-    queryKey: ["sankey-period-sums", mainAutoMeterIds, format(rangeStart, "yyyy-MM-dd"), format(rangeEnd, "yyyy-MM-dd"), period],
-    enabled: period !== "day" && mainAutoMeterIds.length > 0,
-    queryFn: async () => {
-      const { data, error } = await supabase.rpc("get_meter_period_sums", {
-        p_meter_ids: mainAutoMeterIds,
-        p_from_date: format(rangeStart, "yyyy-MM-dd"),
-        p_to_date: format(rangeEnd, "yyyy-MM-dd"),
-      });
-      if (error) { console.error("Sankey period sums error:", error); return {}; }
-      const map: Record<string, number> = {};
-      (data ?? []).forEach((row: any) => { map[row.meter_id] = row.total_value; });
-      return map;
-    },
-  });
+  const { data: dbPeriodSums } = usePeriodSumsWithFallback(
+    "sankey-period-sums",
+    mainAutoMeterIds,
+    rangeStart,
+    rangeEnd,
+    period !== "day",
+  );
 
   // Build price lookup: location_id:energy_type -> price_per_unit
   const priceLookup = useMemo(() => {

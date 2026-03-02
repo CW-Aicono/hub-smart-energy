@@ -11,8 +11,7 @@ import { startOfDay, startOfWeek, startOfMonth, startOfQuarter, startOfYear, end
 import { useWeekStartDay } from "@/hooks/useWeekStartDay";
 import { gasM3ToKWh } from "@/lib/formatEnergy";
 import { useSpotPrices } from "@/hooks/useSpotPrices";
-import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { usePeriodSumsWithFallback } from "@/hooks/usePeriodSumsWithFallback";
 
 interface CostOverviewProps {
   locationId: string | null;
@@ -122,69 +121,61 @@ const CostOverview = ({ locationId }: CostOverviewProps) => {
     [meters]
   );
 
-  const { currentRange, prevRange } = useMemo(() => {
+  const { currentRangeDates, prevRangeDates, currentRange, prevRange } = useMemo(() => {
     const now = new Date();
     const computeRange = (period: TimePeriod, offset: number = 0) => {
       switch (period) {
         case "day": {
           const s = offset === 0 ? startOfDay(now) : startOfDay(subDays(now, 1));
           const e = offset === 0 ? now : new Date(startOfDay(now).getTime() - 1);
-          return { from: format(s, "yyyy-MM-dd"), to: format(e, "yyyy-MM-dd") };
+          return { start: s, end: e, from: format(s, "yyyy-MM-dd"), to: format(e, "yyyy-MM-dd") };
         }
         case "week": {
           const s = startOfWeek(offset === 0 ? now : subWeeks(now, 1), { weekStartsOn });
-          return { from: format(s, "yyyy-MM-dd"), to: format(endOfWeek(s, { weekStartsOn }), "yyyy-MM-dd") };
+          const e = endOfWeek(s, { weekStartsOn });
+          return { start: s, end: e, from: format(s, "yyyy-MM-dd"), to: format(e, "yyyy-MM-dd") };
         }
         case "month": {
           const s = offset === 0 ? startOfMonth(now) : startOfMonth(subMonths(now, 1));
-          return { from: format(s, "yyyy-MM-dd"), to: format(endOfMonth(s), "yyyy-MM-dd") };
+          return { start: s, end: endOfMonth(s), from: format(s, "yyyy-MM-dd"), to: format(endOfMonth(s), "yyyy-MM-dd") };
         }
         case "quarter": {
           const s = offset === 0 ? startOfQuarter(now) : startOfQuarter(subQuarters(now, 1));
-          return { from: format(s, "yyyy-MM-dd"), to: format(endOfQuarter(s), "yyyy-MM-dd") };
+          return { start: s, end: endOfQuarter(s), from: format(s, "yyyy-MM-dd"), to: format(endOfQuarter(s), "yyyy-MM-dd") };
         }
         case "year": {
           const s = offset === 0 ? startOfYear(now) : startOfYear(subYears(now, 1));
-          return { from: format(s, "yyyy-MM-dd"), to: format(endOfYear(s), "yyyy-MM-dd") };
+          return { start: s, end: endOfYear(s), from: format(s, "yyyy-MM-dd"), to: format(endOfYear(s), "yyyy-MM-dd") };
         }
         default:
-          return { from: format(startOfDay(now), "yyyy-MM-dd"), to: format(now, "yyyy-MM-dd") };
+          return { start: startOfDay(now), end: now, from: format(startOfDay(now), "yyyy-MM-dd"), to: format(now, "yyyy-MM-dd") };
       }
     };
-    return { currentRange: computeRange(selectedPeriod, 0), prevRange: computeRange(selectedPeriod, -1) };
+    const curr = computeRange(selectedPeriod, 0);
+    const prev = computeRange(selectedPeriod, -1);
+    return {
+      currentRangeDates: { start: curr.start, end: curr.end },
+      prevRangeDates: { start: prev.start, end: prev.end },
+      currentRange: { from: curr.from, to: curr.to },
+      prevRange: { from: prev.from, to: prev.to },
+    };
   }, [selectedPeriod, weekStartsOn]);
 
-  const { data: dbCurrentSums } = useQuery({
-    queryKey: ["cost-current-sums", mainAutoMeterIds, currentRange.from, currentRange.to, selectedPeriod],
-    enabled: selectedPeriod !== "day" && selectedPeriod !== "all" && mainAutoMeterIds.length > 0,
-    queryFn: async () => {
-      const { data, error } = await supabase.rpc("get_meter_period_sums", {
-        p_meter_ids: mainAutoMeterIds,
-        p_from_date: currentRange.from,
-        p_to_date: currentRange.to,
-      });
-      if (error) return {};
-      const map: Record<string, number> = {};
-      (data ?? []).forEach((row: any) => { map[row.meter_id] = row.total_value; });
-      return map;
-    },
-  });
+  const { data: dbCurrentSums } = usePeriodSumsWithFallback(
+    "cost-current-sums",
+    mainAutoMeterIds,
+    currentRangeDates.start,
+    currentRangeDates.end,
+    selectedPeriod !== "day" && selectedPeriod !== "all",
+  );
 
-  const { data: dbPrevSums } = useQuery({
-    queryKey: ["cost-prev-sums", mainAutoMeterIds, prevRange.from, prevRange.to, selectedPeriod],
-    enabled: selectedPeriod !== "all" && mainAutoMeterIds.length > 0,
-    queryFn: async () => {
-      const { data, error } = await supabase.rpc("get_meter_period_sums", {
-        p_meter_ids: mainAutoMeterIds,
-        p_from_date: prevRange.from,
-        p_to_date: prevRange.to,
-      });
-      if (error) return {};
-      const map: Record<string, number> = {};
-      (data ?? []).forEach((row: any) => { map[row.meter_id] = row.total_value; });
-      return map;
-    },
-  });
+  const { data: dbPrevSums } = usePeriodSumsWithFallback(
+    "cost-prev-sums",
+    mainAutoMeterIds,
+    prevRangeDates.start,
+    prevRangeDates.end,
+    selectedPeriod !== "all",
+  );
 
   const costData = useMemo(() => {
     const { start, prevStart, prevEnd } = getPeriodRange(selectedPeriod, weekStartsOn);
