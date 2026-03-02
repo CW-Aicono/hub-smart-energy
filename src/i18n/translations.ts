@@ -5478,6 +5478,29 @@ export const translations = {
   "benchmark.good": { de: "Gut", en: "Good", es: "Bueno", nl: "Goed" },
   "benchmark.hint": { de: "Kennwerte werden aus den Verbrauchsdaten und der Nettogrundfläche berechnet.", en: "Indicators are calculated from consumption data and net floor area.", es: "Los indicadores se calculan a partir de los datos de consumo y la superficie neta.", nl: "Indicatoren worden berekend op basis van verbruiksgegevens en netto vloeroppervlak." },
 
+  // ── Data Import ────────────────────────────────────────────────────────
+  "import.title": { de: "Daten importieren", en: "Import Data", es: "Importar datos", nl: "Gegevens importeren" },
+  "import.typeReadings": { de: "Zählerstände", en: "Meter Readings", es: "Lecturas de contadores", nl: "Meterstanden" },
+  "import.typeConsumption": { de: "Verbrauchsdaten", en: "Consumption Data", es: "Datos de consumo", nl: "Verbruiksgegevens" },
+  "import.dragDrop": { de: "Datei hierher ziehen oder klicken", en: "Drag file here or click to upload", es: "Arrastra el archivo aquí o haz clic", nl: "Sleep bestand hierheen of klik om te uploaden" },
+  "import.downloadTemplate": { de: "CSV-Vorlage herunterladen", en: "Download CSV template", es: "Descargar plantilla CSV", nl: "CSV-sjabloon downloaden" },
+  "import.rows": { de: "Zeilen", en: "rows", es: "filas", nl: "rijen" },
+  "import.back": { de: "Zurück", en: "Back", es: "Atrás", nl: "Terug" },
+  "import.validate": { de: "Validieren", en: "Validate", es: "Validar", nl: "Valideren" },
+  "import.validRows": { de: "Gültige Zeilen", en: "Valid rows", es: "Filas válidas", nl: "Geldige rijen" },
+  "import.warnings": { de: "Warnungen", en: "Warnings", es: "Advertencias", nl: "Waarschuwingen" },
+  "import.errors": { de: "Fehler", en: "Errors", es: "Errores", nl: "Fouten" },
+  "import.meterNumber": { de: "Zählernummer", en: "Meter Number", es: "Nº contador", nl: "Meternummer" },
+  "import.issue": { de: "Problem", en: "Issue", es: "Problema", nl: "Probleem" },
+  "import.execute": { de: "Zeilen importieren", en: "rows import", es: "filas importar", nl: "rijen importeren" },
+  "import.importedRows": { de: "Einträge importiert", en: "entries imported", es: "entradas importadas", nl: "items geïmporteerd" },
+  "import.skippedRows": { de: "Zeilen übersprungen", en: "rows skipped", es: "filas omitidas", nl: "rijen overgeslagen" },
+  "import.errorRows": { de: "Fehler beim Import", en: "import errors", es: "errores de importación", nl: "importfouten" },
+  "import.close": { de: "Schließen", en: "Close", es: "Cerrar", nl: "Sluiten" },
+  "import.success": { de: "Import erfolgreich abgeschlossen", en: "Import completed successfully", es: "Importación completada con éxito", nl: "Import succesvol voltooid" },
+  "import.partialSuccess": { de: "Import mit Fehlern abgeschlossen", en: "Import completed with errors", es: "Importación completada con errores", nl: "Import voltooid met fouten" },
+  "import.error": { de: "Fehler beim Lesen der Datei", en: "Error reading file", es: "Error al leer el archivo", nl: "Fout bij het lezen van het bestand" },
+
 } as const;
 
 export type TranslationKey = keyof typeof translations;
