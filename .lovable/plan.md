@@ -1,165 +1,198 @@
-# Altdaten-Import per CSV/Excel -- Implementierungsplan
-
-## Ziel
-
-Kommunale Energiemanager sollen historische Verbrauchsdaten (z.B. aus alten Excel-Listen oder Abrechnungen) komfortabel in das System importieren koennen. Dies ist essentiell fuer den Energiebericht, da Benchmarking und Trendanalysen mindestens 3 Jahre Datenhistorie benoetigen.
-
----
-
-## Zwei Import-Typen
-
-### 1. Zaehlerstaende importieren (meter_readings)
-
-Fuer historische Zaehlerstaende, z.B. aus Jahresabrechnungen oder manuellen Listen.
-
-**Erwartete CSV-Spalten:**
 
 
-| Spalte        | Pflicht | Beschreibung                                                |
-| ------------- | ------- | ----------------------------------------------------------- |
-| Zaehlernummer | Ja      | Zuordnung zum bestehenden Zaehler via `meters.meter_number` |
-| Datum         | Ja      | Ablesedatum (DD.MM.YYYY oder YYYY-MM-DD)                    |
-| Wert          | Ja      | Zaehlerstand als Zahl                                       |
-| Notiz         | Nein    | Optionaler Kommentar                                        |
+# Erweiterung Kommunaler Energiebericht -- Implementierungsplan
 
+## Uebersicht
 
-### 2. Verbrauchsdaten importieren (meter_period_totals)
-
-Fuer aggregierte Verbrauchswerte (z.B. Monatsverbraeuche aus Energieabrechnungen).
-
-**Erwartete CSV-Spalten:**
-
-
-| Spalte        | Pflicht | Beschreibung                                |
-| ------------- | ------- | ------------------------------------------- |
-| Zaehlernummer | Ja      | Zuordnung zum bestehenden Zaehler           |
-| Zeitraum      | Ja      | Monat oder Tag (MM/YYYY oder DD.MM.YYYY)    |
-| Verbrauch     | Ja      | Verbrauchswert in kWh (oder Zaehlereinheit) |
-| Energieart    | Nein    | Ueberschreibt den Energietyp des Zaehlers   |
-
+Zehn Erweiterungen, die den bestehenden Energiebericht von einem statischen Stammdaten-Bericht zu einem vollwertigen Analyse-Werkzeug fuer kommunale Energiemanager machen. Keine neuen Datenbanktabellen noetig -- alle Erweiterungen nutzen vorhandene Tabellen (`meter_period_totals`, `meters`, `locations`, `energy_benchmarks`, `co2_emission_factors`, `energy_prices`).
 
 ---
 
-## Import-Workflow (UI)
+## 1. Echtdaten-Integration in PropertyProfile und Bericht
+
+**Problem:** PropertyProfile zeigt aktuell nur Stammdaten, keine Verbraeuche.
+
+**Loesung:** Neuer Hook `useLocationYearlyConsumption(locationIds, year)` der fuer jede Liegenschaft die Jahressummen aus `meter_period_totals` (period_type='day' oder 'month') pro Energietraeger laedt. Ergebnis: `Record<locationId, Record<energyType, totalKwh>>`.
+
+**Aenderungen:**
+- Neuer Hook `src/hooks/useLocationYearlyConsumption.tsx` -- RPC `get_meter_period_sums` je Liegenschaft aufrufen, Zaehler-IDs via `meters` nach `location_id` filtern
+- `PropertyProfile.tsx` erhaelt neue Prop `consumption: Record<string, number>` und zeigt Verbrauchstabelle (Strom / Waerme / Gas / Wasser) mit kWh-Werten an
+- `EnergyReport.tsx` ruft den Hook auf und reicht Daten an PropertyProfile und die Management Summary weiter
+- PDF-Druckbereich: Platzhalter-Hinweis wird durch echte Verbrauchstabelle ersetzt
+
+---
+
+## 2. Mehrjahresvergleich (3-5 Jahre Trend)
+
+**Loesung:** Der Hook aus Punkt 1 wird erweitert auf mehrere Jahre. Neuer Hook `useMultiYearConsumption(locationIds, fromYear, toYear)` der fuer bis zu 5 Jahre die Summen laedt.
+
+**Aenderungen:**
+- `useLocationYearlyConsumption.tsx` erhaelt optionalen Parameter `years: number[]` statt nur `year`
+- Neue Komponente `src/components/report/ConsumptionTrendTable.tsx` -- Tabelle mit Spalten: Energietraeger | Jahr-3 | Jahr-2 | Jahr-1 | Berichtsjahr | Trend (Pfeil hoch/runter + Prozent)
+- Neue Komponente `src/components/report/ConsumptionTrendChart.tsx` -- Balkendiagramm (Recharts BarChart) mit gruppierten Balken pro Jahr und Energietraeger
+- Integration in PropertyProfile und in die Portfolio-Uebersicht des Berichts
+- PDF: SVG-Balkendiagramm inline generieren (wie bestehende `buildBarChartSVG` in `exportUtils.ts`)
+
+---
+
+## 3. Wasser-Benchmarks ergaenzen
+
+**Aenderungen:**
+- Seed-Daten per INSERT in `energy_benchmarks` fuer `energy_type = 'wasser'`:
+  - Verwaltung: 100 / 150 / 250 l/m2a
+  - Schule: 80 / 130 / 220 l/m2a
+  - Kita: 100 / 160 / 260 l/m2a
+  - Sportstaette: 200 / 350 / 550 l/m2a
+- `BenchmarkIndicator.tsx` und `useBenchmarks.tsx` funktionieren bereits generisch -- keine Code-Aenderung noetig, nur Daten einfuegen
+
+---
+
+## 4. Massnahmen-Tracking
+
+**Datenbank-Migration:** Neue Tabelle `energy_measures`:
 
 ```text
-+------------------------------------------+
-| 1. Datei hochladen                       |
-|    [CSV waehlen] oder [Excel waehlen]    |
-|    Drag & Drop Zone                      |
-+------------------------------------------+
-           |
-           v
-+------------------------------------------+
-| 2. Spaltenzuordnung (Mapping)            |
-|    Vorschau der ersten 5 Zeilen          |
-|    Dropdown pro erkannte Spalte:         |
-|    "Spalte A" --> [Zaehlernummer v]      |
-|    "Spalte B" --> [Datum v]              |
-|    "Spalte C" --> [Wert v]               |
-|    Auto-Erkennung gaengiger Header       |
-+------------------------------------------+
-           |
-           v
-+------------------------------------------+
-| 3. Validierung & Vorschau                |
-|    - Zaehlernummern pruefen (gefunden?)  |
-|    - Datumsformate validieren            |
-|    - Plausibilitaetspruefung (Werte)     |
-|    - Duplikat-Erkennung                  |
-|                                          |
-|    Zusammenfassung:                      |
-|    [x] 142 gueltige Zeilen              |
-|    [!] 3 unbekannte Zaehlernummern      |
-|    [!] 2 moegliche Duplikate            |
-|    [x] 0 ungueltige Datumswerte         |
-+------------------------------------------+
-           |
-           v
-+------------------------------------------+
-| 4. Import ausfuehren                     |
-|    Fortschrittsbalken                    |
-|    Ergebnis: "139 Eintraege importiert"  |
-+------------------------------------------+
+id (uuid PK), tenant_id (uuid FK), location_id (uuid FK),
+title (text), description (text), category (text),
+implementation_date (date), investment_cost (numeric),
+estimated_annual_savings_kwh (numeric),
+estimated_annual_savings_eur (numeric),
+energy_type (text), status (text: planned/in_progress/completed),
+created_at, updated_at
 ```
+
+RLS: Tenant-basiert, lesen fuer alle authentifizierten Nutzer des Mandanten, schreiben fuer Admins.
+
+**Aenderungen:**
+- Neuer Hook `src/hooks/useEnergyMeasures.tsx` -- CRUD fuer Massnahmen
+- Neue Komponente `src/components/report/MeasuresTable.tsx` -- Tabelle mit Status-Badges, Investition, erwarteter Einsparung
+- Neue Komponente `src/components/report/AddMeasureDialog.tsx` -- Formular zum Anlegen/Bearbeiten
+- Integration in `PropertyProfile` (Abschnitt "Umgesetzte Massnahmen")
+- Integration in EnergyReport PDF (Anhang oder pro Liegenschaft)
 
 ---
 
-## Technische Umsetzung
+## 5. Finanzielle Bewertung (Kostenentwicklung)
 
-### Neue Dateien
+**Loesung:** Bestehende `useEnergyPrices` nutzen, Verbrauch * aktiver Preis pro Energietraeger berechnen.
 
+**Aenderungen:**
+- Neue Hilfsfunktion in `src/lib/co2Calculations.ts` (oder eigene Datei `costCalculations.ts`): `calculateEnergyCost(consumptionKwh, energyType, prices, year)` -- findet den gueltigen Preis und multipliziert
+- `PropertyProfile.tsx`: Neuer Abschnitt "Energiekosten" mit Tabelle: Energietraeger | Verbrauch | Preis/kWh | Gesamtkosten
+- Management Summary: Gesamtkosten aller Liegenschaften als KPI-Box
+- PDF: Kostentabelle pro Liegenschaft und Gesamtsumme in der Summary
 
-| Datei                                             | Zweck                                                           |
-| ------------------------------------------------- | --------------------------------------------------------------- |
-| `src/components/energy-data/DataImportDialog.tsx` | Haupt-Dialog mit Stepper (Upload, Mapping, Validierung, Import) |
-| `src/lib/csvParser.ts`                            | CSV/Excel-Parsing, Spaltenerkennung, Datumskonvertierung        |
-| `src/hooks/useDataImport.tsx`                     | Import-Logik: Validierung, Batch-Insert, Fortschritt            |
+---
 
+## 6. Liegenschafts-Ranking (Top-Verbraucher)
 
-### CSV/Excel Parsing (`csvParser.ts`)
+**Aenderungen:**
+- Neue Komponente `src/components/report/LocationRanking.tsx` -- Sortierbare Tabelle: Rang | Name | Typ | NGF | Kennwert (kWh/m2a) | Ampel | Verbrauch absolut
+- Sortierung nach spezifischem Verbrauch (kWh/m2a), getrennt fuer Strom und Waerme
+- Integration in EnergyReport Tab "Vorschau" als eigener Abschnitt zwischen Summary und Steckbriefen
+- PDF: Ranking-Tabelle im Kapitel "Portfolio-Uebersicht"
 
-- **CSV**: Nativer Browser-Parser (kein externes Paket noetig). Unterstuetzt `;` und `,` als Trennzeichen. BOM-Erkennung fuer deutsche Excel-Exporte.
-- **Excel (.xlsx)**: Verwendung von SheetJS (`xlsx` npm-Paket, ~200kB). Liest erstes Tabellenblatt, konvertiert zu Array-of-Objects.
-- **Datumsformate**: Erkennung von DD.MM.YYYY, YYYY-MM-DD, DD/MM/YYYY, MM/YYYY.
-- **Zahlenformate**: Deutsche Notation (Komma als Dezimaltrennzeichen, Punkt als Tausender) wird automatisch konvertiert.
+---
 
-### Auto-Erkennung der Spalten
+## 7. Berichts-Archivierung und Versionierung
 
-Haeufige Header-Varianten werden automatisch gemappt:
+**Datenbank-Migration:** Neue Tabelle `energy_report_archive`:
 
 ```text
-Zaehlernummer: "Zählernummer", "Zaehlernr", "meter_number", "Zähler-Nr"
-Datum:         "Datum", "Ablesedatum", "date", "reading_date", "Zeitraum"
-Wert:          "Wert", "Zählerstand", "Stand", "value", "Verbrauch"
-Notiz:         "Notiz", "Bemerkung", "notes", "Kommentar"
+id (uuid PK), tenant_id (uuid FK),
+report_year (integer), title (text),
+location_ids (uuid[]), generated_at (timestamptz),
+generated_by (uuid FK auth.users), report_config (jsonb),
+pdf_storage_path (text), created_at
 ```
 
-### Validierungsregeln
+RLS: Tenant-basiert, nur Admins koennen erstellen/loeschen.
 
-1. **Zaehlernummer-Abgleich**: Jede Zaehlernummer wird gegen `meters.meter_number` im Mandanten geprueft. Nicht gefundene Nummern werden als Warnung angezeigt (Import trotzdem moeglich, wenn Nutzer die Zeilen ausschliesst).
-2. **Datumsvalidierung**: Datum muss parsebar sein und darf nicht in der Zukunft liegen.
-3. **Wert-Plausibilitaet**: Negativwerte werden als Warnung markiert. Bei Zaehlerstaenden: Pruefen, ob der neue Wert kleiner als ein bereits vorhandener Wert fuer dasselbe Datum ist.
-4. **Duplikaterkennung**: Gleiche Kombination aus Zaehler + Datum wird als potenzielles Duplikat markiert (Nutzer entscheidet: ueberspringen oder ueberschreiben).
-
-### Batch-Insert (`useDataImport.tsx`)
-
-- Daten werden in Batches von 100 Zeilen eingefuegt (Supabase-Limit beachten).
-- `capture_method` wird auf `"csv_import"` gesetzt fuer Traceability.
-- Fortschrittsanzeige ueber State (0-100%).
-- Bei Fehler in einem Batch: Warnung anzeigen, restliche Batches fortsetzen.
-- Nach erfolgreichem Import: Query-Cache invalidieren (`meter_readings`, `meter_period_totals`).
-
-### Integration in die UI
-
-- **Neuer Button auf der Energiedaten-Seite** (`EnergyData.tsx`): "Daten importieren" (Upload-Icon) neben den Export-Buttons.
-- **Dialog oeffnet den Stepper** mit den 4 Schritten.
-- **Download einer Vorlage**: Button im Dialog zum Herunterladen einer CSV-Vorlage mit den erwarteten Spalten und einer Beispielzeile.
-
-### Uebersetzungen
-
-Neue Keys in `translations.ts` fuer alle vier Sprachen (DE, EN, ES, NL):
-
-- `import.title`, `import.upload`, `import.mapping`, `import.validation`, `import.execute`
-- `import.downloadTemplate`, `import.selectFile`, `import.dragDrop`
-- `import.validRows`, `import.unknownMeters`, `import.duplicates`, `import.invalidDates`
-- `import.success`, `import.partialSuccess`, `import.error`
+**Aenderungen:**
+- Neuer Hook `src/hooks/useReportArchive.tsx` -- Speichern/Laden/Loeschen archivierter Berichte
+- Beim PDF-Generieren: HTML-Blob zusaetzlich als Datei in den `tenant-assets` Storage-Bucket hochladen, Pfad in `energy_report_archive` speichern
+- Neuer Tab "Archiv" in `EnergyReport.tsx` -- Liste gespeicherter Berichte mit Download-Link und Loeschen-Button
+- Versionierung: Jede Generierung erzeugt einen neuen Eintrag, aeltere bleiben erhalten
 
 ---
 
-## Abhaengigkeiten
+## 8. Primaerenergiefaktoren
 
-- **Neues npm-Paket**: `xlsx` (SheetJS) fuer Excel-Support. Falls nur CSV benoetigt wird, entfaellt dieses Paket.
-- **Keine DB-Migration noetig**: `meter_readings` und `meter_period_totals` existieren bereits mit allen benoetigten Spalten. `capture_method = "csv_import"` nutzt das bestehende Text-Feld.
+**Aenderungen:**
+- `co2_emission_factors` Tabelle um Spalte `primary_energy_factor` (numeric, nullable) erweitern per Migration
+- Seed-Daten: Strom = 1.8, Gas = 1.1, Fernwaerme = 0.7, Heizoel = 1.1 (nach EnEV/GEG)
+- `useCo2Factors.tsx`: Interface `Co2Factor` um `primary_energy_factor` erweitern
+- Neue Funktion `calculatePrimaryEnergy(kwh, energyType, factors)` in `co2Calculations.ts`
+- `Co2FactorSettings.tsx`: Zusaetzliche Spalte in der Tabelle fuer Primaerenergiefaktor
+- `PropertyProfile.tsx`: Primaerenergiebedarf (kWh/m2a) als zusaetzlichen Kennwert anzeigen
+- PDF: Primaerenergie in der Kennwerte-Tabelle und im Anhang
+
+---
+
+## 9. Datenqualitaets-Indikatoren
+
+**Loesung:** Pro Liegenschaft und Monat pruefen, ob Verbrauchsdaten vorhanden sind. Vollstaendigkeit als Prozent und als farbcodierte Monats-Matrix anzeigen.
+
+**Aenderungen:**
+- Neuer Hook `src/hooks/useDataCompleteness.tsx` -- Fuer jede Liegenschaft und jeden Monat im Berichtsjahr pruefen: Hat `meter_period_totals` einen Eintrag fuer jeden Hauptzaehler? Ergebnis: `Record<locationId, { monthsComplete: number, totalMonths: number, missingMonths: string[] }>`
+- Neue Komponente `src/components/report/DataCompletenessIndicator.tsx` -- Farbige Monats-Kacheln (gruen = komplett, gelb = teilweise, rot = fehlend) mit Gesamt-Prozent
+- Integration in PropertyProfile als Badge/Indikator oben rechts
+- Management Summary: Durchschnittliche Datenqualitaet als KPI
+- PDF: Completeness-Grid pro Liegenschaft
+
+---
+
+## 10. Visuelle Analytik im PDF
+
+**Aenderungen:**
+- Neue Hilfsfunktionen in `src/lib/exportUtils.ts`:
+  - `buildStackedBarChartSVG()` -- Gestapelte Balken fuer Energiemix
+  - `buildTrendLineSVG()` -- Liniendiagramm fuer Mehrjahrestrend
+  - `buildTrafficLightSVG()` -- Ampel-Grafik fuer Benchmark-Bewertung
+  - `buildDonutChartSVG()` -- Kreisdiagramm fuer Energieverteilung
+- PDF Kapitel "Portfolio-Uebersicht": Gestapeltes Balkendiagramm aller Liegenschaften
+- PDF Steckbrief: Trend-Linie (3 Jahre) und Ampel-Grafik inline
+- PDF Summary: Donut-Chart fuer Energieverteilung
 
 ---
 
 ## Reihenfolge der Implementierung
 
-1. CSV-Parser mit Auto-Erkennung und Datumskonvertierung
-2. Import-Hook mit Validierung und Batch-Insert
-3. Import-Dialog mit Stepper-UI (Upload, Mapping, Validierung, Ergebnis)
-4. Integration in EnergyData-Seite (Button + Dialog)
-5. CSV-Vorlage zum Download
-6. Uebersetzungen ergaenzen
-7. Excel- und CSV als Beispieldatei per Link zum Download anbieten
+1. **Echtdaten-Hook** (`useLocationYearlyConsumption`) -- Grundlage fuer fast alle weiteren Punkte
+2. **Mehrjahresvergleich** -- Erweitert den Hook, Trend-Tabelle und -Chart
+3. **Datenqualitaet** -- Wichtig, damit der Nutzer weiss, welche Daten fehlen
+4. **PropertyProfile mit Echtdaten** -- Verbrauchstabelle, Kennwerte, CO2
+5. **Finanzielle Bewertung** -- Kostenberechnung aus Preisen
+6. **Liegenschafts-Ranking** -- Top-Verbraucher-Tabelle
+7. **Wasser-Benchmarks** -- Nur Seed-Daten einfuegen
+8. **Primaerenergiefaktoren** -- DB-Migration + UI-Erweiterung
+9. **Massnahmen-Tracking** -- Neue Tabelle, Hook, UI
+10. **Berichts-Archivierung** -- Neue Tabelle, Storage-Upload
+11. **Visuelle Analytik PDF** -- SVG-Chart-Funktionen und Integration
+
+---
+
+## Zusammenfassung neue Dateien
+
+| Datei | Zweck |
+|---|---|
+| `src/hooks/useLocationYearlyConsumption.tsx` | Jahresverbrauch pro Liegenschaft und Energietraeger |
+| `src/hooks/useDataCompleteness.tsx` | Datenqualitaet pro Monat pruefen |
+| `src/hooks/useEnergyMeasures.tsx` | CRUD fuer energetische Massnahmen |
+| `src/hooks/useReportArchive.tsx` | Archivierte Berichte verwalten |
+| `src/components/report/ConsumptionTrendTable.tsx` | Mehrjahres-Verbrauchstabelle |
+| `src/components/report/ConsumptionTrendChart.tsx` | Balkendiagramm Mehrjahresvergleich |
+| `src/components/report/LocationRanking.tsx` | Top-Verbraucher-Ranking |
+| `src/components/report/MeasuresTable.tsx` | Massnahmen-Uebersicht |
+| `src/components/report/AddMeasureDialog.tsx` | Massnahme anlegen/bearbeiten |
+| `src/components/report/DataCompletenessIndicator.tsx` | Monats-Kacheln Datenqualitaet |
+| `src/lib/costCalculations.ts` | Kostenberechnung aus Verbrauch + Preise |
+
+## DB-Migrationen
+
+1. Tabelle `energy_measures` (Massnahmen-Tracking)
+2. Tabelle `energy_report_archive` (Berichts-Archivierung)
+3. Spalte `primary_energy_factor` in `co2_emission_factors`
+4. Seed-Daten: Wasser-Benchmarks in `energy_benchmarks`
+5. Seed-Daten: Primaerenergiefaktoren in `co2_emission_factors` (UPDATE)
+
