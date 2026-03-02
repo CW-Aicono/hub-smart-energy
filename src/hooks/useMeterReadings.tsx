@@ -117,5 +117,22 @@ export function useMeterReadings(meterId?: string) {
     return true;
   };
 
-  return { readings, loading, addReading, getLastReading, refetch: fetchReadings };
+  const deleteReading = async (id: string) => {
+    if (!user) return false;
+    const t = getT();
+    const { error } = await supabase
+      .from("meter_readings")
+      .delete()
+      .eq("id", id);
+    if (error) {
+      toast.error(t("meterReading.errorDelete"));
+      console.error(error);
+      return false;
+    }
+    toast.success(t("meterReading.deleted"));
+    fetchReadings();
+    return true;
+  };
+
+  return { readings, loading, addReading, deleteReading, getLastReading, refetch: fetchReadings };
 }
