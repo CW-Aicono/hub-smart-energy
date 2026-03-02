@@ -860,6 +860,7 @@ export type Database = {
           factor_kg_per_m3: number | null
           id: string
           is_default: boolean
+          primary_energy_factor: number | null
           source: string | null
           tenant_id: string
           updated_at: string
@@ -873,6 +874,7 @@ export type Database = {
           factor_kg_per_m3?: number | null
           id?: string
           is_default?: boolean
+          primary_energy_factor?: number | null
           source?: string | null
           tenant_id: string
           updated_at?: string
@@ -886,6 +888,7 @@ export type Database = {
           factor_kg_per_m3?: number | null
           id?: string
           is_default?: boolean
+          primary_energy_factor?: number | null
           source?: string | null
           tenant_id?: string
           updated_at?: string
@@ -1095,6 +1098,72 @@ export type Database = {
         }
         Relationships: []
       }
+      energy_measures: {
+        Row: {
+          category: string
+          created_at: string
+          description: string | null
+          energy_type: string | null
+          estimated_annual_savings_eur: number | null
+          estimated_annual_savings_kwh: number | null
+          id: string
+          implementation_date: string | null
+          investment_cost: number | null
+          location_id: string
+          status: string
+          tenant_id: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          category?: string
+          created_at?: string
+          description?: string | null
+          energy_type?: string | null
+          estimated_annual_savings_eur?: number | null
+          estimated_annual_savings_kwh?: number | null
+          id?: string
+          implementation_date?: string | null
+          investment_cost?: number | null
+          location_id: string
+          status?: string
+          tenant_id: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          description?: string | null
+          energy_type?: string | null
+          estimated_annual_savings_eur?: number | null
+          estimated_annual_savings_kwh?: number | null
+          id?: string
+          implementation_date?: string | null
+          investment_cost?: number | null
+          location_id?: string
+          status?: string
+          tenant_id?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "energy_measures_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "energy_measures_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       energy_prices: {
         Row: {
           created_at: string
@@ -1192,6 +1261,53 @@ export type Database = {
             columns: ["location_id"]
             isOneToOne: false
             referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      energy_report_archive: {
+        Row: {
+          created_at: string
+          generated_at: string
+          generated_by: string | null
+          id: string
+          location_ids: string[]
+          pdf_storage_path: string | null
+          report_config: Json | null
+          report_year: number
+          tenant_id: string
+          title: string
+        }
+        Insert: {
+          created_at?: string
+          generated_at?: string
+          generated_by?: string | null
+          id?: string
+          location_ids?: string[]
+          pdf_storage_path?: string | null
+          report_config?: Json | null
+          report_year: number
+          tenant_id: string
+          title: string
+        }
+        Update: {
+          created_at?: string
+          generated_at?: string
+          generated_by?: string | null
+          id?: string
+          location_ids?: string[]
+          pdf_storage_path?: string | null
+          report_config?: Json | null
+          report_year?: number
+          tenant_id?: string
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "energy_report_archive_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
             referencedColumns: ["id"]
           },
         ]

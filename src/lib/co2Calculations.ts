@@ -27,3 +27,17 @@ export function formatCo2(kg: number): string {
   }
   return `${kg.toLocaleString("de-DE", { minimumFractionDigits: 0, maximumFractionDigits: 0 })} kg CO₂`;
 }
+
+/**
+ * Calculate primary energy from consumption.
+ * @returns primary energy in kWh, or null if no factor found
+ */
+export function calculatePrimaryEnergy(
+  energyKwh: number,
+  energyType: string,
+  factors: Co2Factor[],
+): number | null {
+  const factor = factors.find((f) => f.energy_type === energyType);
+  if (!factor || factor.primary_energy_factor === null || factor.primary_energy_factor === undefined) return null;
+  return energyKwh * factor.primary_energy_factor;
+}

@@ -13,15 +13,16 @@ export interface Co2Factor {
   valid_from: string;
   valid_until: string | null;
   is_default: boolean;
+  primary_energy_factor: number | null;
   created_at: string;
   updated_at: string;
 }
 
 const DEMO_FACTORS: Co2Factor[] = [
-  { id: "demo-co2-1", tenant_id: "demo-tenant-id", energy_type: "strom", factor_kg_per_kwh: 0.420, factor_kg_per_m3: null, source: "UBA 2023", valid_from: "2023-01-01", valid_until: null, is_default: true, created_at: "", updated_at: "" },
-  { id: "demo-co2-2", tenant_id: "demo-tenant-id", energy_type: "gas", factor_kg_per_kwh: 0.201, factor_kg_per_m3: 2.0, source: "GEMIS", valid_from: "2023-01-01", valid_until: null, is_default: true, created_at: "", updated_at: "" },
-  { id: "demo-co2-3", tenant_id: "demo-tenant-id", energy_type: "waerme", factor_kg_per_kwh: 0.180, factor_kg_per_m3: null, source: "Durchschnitt", valid_from: "2023-01-01", valid_until: null, is_default: true, created_at: "", updated_at: "" },
-  { id: "demo-co2-4", tenant_id: "demo-tenant-id", energy_type: "oel", factor_kg_per_kwh: 0.266, factor_kg_per_m3: null, source: "GEMIS", valid_from: "2023-01-01", valid_until: null, is_default: true, created_at: "", updated_at: "" },
+  { id: "demo-co2-1", tenant_id: "demo-tenant-id", energy_type: "strom", factor_kg_per_kwh: 0.420, factor_kg_per_m3: null, source: "UBA 2023", valid_from: "2023-01-01", valid_until: null, is_default: true, primary_energy_factor: 1.8, created_at: "", updated_at: "" },
+  { id: "demo-co2-2", tenant_id: "demo-tenant-id", energy_type: "gas", factor_kg_per_kwh: 0.201, factor_kg_per_m3: 2.0, source: "GEMIS", valid_from: "2023-01-01", valid_until: null, is_default: true, primary_energy_factor: 1.1, created_at: "", updated_at: "" },
+  { id: "demo-co2-3", tenant_id: "demo-tenant-id", energy_type: "waerme", factor_kg_per_kwh: 0.180, factor_kg_per_m3: null, source: "Durchschnitt", valid_from: "2023-01-01", valid_until: null, is_default: true, primary_energy_factor: 0.7, created_at: "", updated_at: "" },
+  { id: "demo-co2-4", tenant_id: "demo-tenant-id", energy_type: "oel", factor_kg_per_kwh: 0.266, factor_kg_per_m3: null, source: "GEMIS", valid_from: "2023-01-01", valid_until: null, is_default: true, primary_energy_factor: 1.1, created_at: "", updated_at: "" },
 ];
 
 export function useCo2Factors() {

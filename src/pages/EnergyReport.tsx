@@ -6,10 +6,21 @@ import { useCo2Factors } from "@/hooks/useCo2Factors";
 import { useBenchmarks } from "@/hooks/useBenchmarks";
 import { useTranslation } from "@/hooks/useTranslation";
 import { useTenant } from "@/hooks/useTenant";
+import { useLocationYearlyConsumption } from "@/hooks/useLocationYearlyConsumption";
+import { useDataCompleteness } from "@/hooks/useDataCompleteness";
+import { useEnergyMeasures } from "@/hooks/useEnergyMeasures";
+import { useEnergyPrices } from "@/hooks/useEnergyPrices";
+import { useReportArchive } from "@/hooks/useReportArchive";
+import { calculateCo2, formatCo2 } from "@/lib/co2Calculations";
+import { formatCurrency, getActivePrice, calculateEnergyCost } from "@/lib/costCalculations";
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
 import { BenchmarkIndicator } from "@/components/report/BenchmarkIndicator";
 import { Co2FactorSettings } from "@/components/settings/Co2FactorSettings";
-import { calculateCo2, formatCo2 } from "@/lib/co2Calculations";
+import { PropertyProfile } from "@/components/report/PropertyProfile";
+import { ConsumptionTrendTable } from "@/components/report/ConsumptionTrendTable";
+import { ConsumptionTrendChart } from "@/components/report/ConsumptionTrendChart";
+import { LocationRanking } from "@/components/report/LocationRanking";
+import { DataCompletenessIndicator } from "@/components/report/DataCompletenessIndicator";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -17,8 +28,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
-import { FileText, Download, Building2, Leaf, BarChart3, Settings2 } from "lucide-react";
-import { PropertyProfile } from "@/components/report/PropertyProfile";
+import { FileText, Download, Building2, Leaf, BarChart3, Settings2, Archive, TrendingUp, Save } from "lucide-react";
+import { toast } from "sonner";
 
 const currentYear = new Date().getFullYear();
 const YEARS = Array.from({ length: 5 }, (_, i) => currentYear - i);
@@ -29,11 +40,21 @@ const EnergyReport = () => {
   const { factors } = useCo2Factors();
   const { t } = useTranslation();
   const { tenant } = useTenant();
+  const { prices } = useEnergyPrices();
+  const { measures, addMeasure, deleteMeasure } = useEnergyMeasures();
+  const { reports, saveReport, deleteReport, getDownloadUrl, loading: archiveLoading } = useReportArchive();
 
   const [reportYear, setReportYear] = useState(String(currentYear - 1));
   const [selectedLocationIds, setSelectedLocationIds] = useState<string[]>([]);
   const [activeTab, setActiveTab] = useState("config");
   const reportRef = useRef<HTMLDivElement>(null);
+
+  const yearNum = parseInt(reportYear);
+  const trendYears = useMemo(() => [yearNum - 2, yearNum - 1, yearNum], [yearNum]);
+
+  // Data hooks
+  const { data: consumption } = useLocationYearlyConsumption(selectedLocationIds, trendYears);
+  const { data: completenessMap } = useDataCompleteness(selectedLocationIds, yearNum);
 
   const toggleLocation = (id: string) => {
     setSelectedLocationIds((prev) =>
@@ -57,6 +78,63 @@ const EnergyReport = () => {
   const handleGenerateReport = () => {
     setActiveTab("preview");
   };
+
+  const handleArchive = async () => {
+    if (!reportRef.current) return;
+    await saveReport({
+      reportYear: yearNum,
+      title: `Energiebericht ${reportYear}`,
+      locationIds: selectedLocationIds,
+      htmlContent: reportRef.current.innerHTML,
+      reportConfig: { selectedLocationIds },
+    });
+  };
+
+  // Aggregate totals for summary
+  const totalConsumption = useMemo(() => {
+    if (!consumption?.[yearNum]) return {};
+    const totals: Record<string, number> = {};
+    for (const locId of selectedLocationIds) {
+      const locData = consumption[yearNum]?.[locId];
+      if (locData) {
+        for (const [eType, val] of Object.entries(locData)) {
+          totals[eType] = (totals[eType] || 0) + val;
+        }
+      }
+    }
+    return totals;
+  }, [consumption, yearNum, selectedLocationIds]);
+
+  const totalCo2 = useMemo(() => {
+    return Object.entries(totalConsumption).reduce((sum, [eType, kwh]) => {
+      const co2 = calculateCo2(kwh, eType, factors);
+      return sum + (co2 || 0);
+    }, 0);
+  }, [totalConsumption, factors]);
+
+  const totalCost = useMemo(() => {
+    if (!prices || prices.length === 0) return 0;
+    let cost = 0;
+    for (const locId of selectedLocationIds) {
+      const locData = consumption?.[yearNum]?.[locId];
+      if (locData) {
+        for (const [eType, kwh] of Object.entries(locData)) {
+          const p = getActivePrice(prices, locId, eType, yearNum);
+          if (p > 0) cost += calculateEnergyCost(kwh, p);
+        }
+      }
+    }
+    return cost;
+  }, [consumption, yearNum, selectedLocationIds, prices]);
+
+  const avgCompleteness = useMemo(() => {
+    if (!completenessMap || selectedLocationIds.length === 0) return null;
+    const vals = selectedLocationIds
+      .map((id) => completenessMap[id]?.completenessPercent)
+      .filter((v): v is number => v !== undefined);
+    if (vals.length === 0) return null;
+    return Math.round(vals.reduce((s, v) => s + v, 0) / vals.length);
+  }, [completenessMap, selectedLocationIds]);
 
   const handlePrint = () => {
     const printWindow = window.open("", "_blank");
@@ -83,9 +161,9 @@ const EnergyReport = () => {
           .cover { display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; min-height: 297mm; }
           .cover h1 { font-size: 32pt; color: #2563eb; }
           .cover p { font-size: 14pt; color: #6b7280; margin-top: 8pt; }
-          .kpi-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12pt; margin: 12pt 0; }
+          .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12pt; margin: 12pt 0; }
           .kpi-box { border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px; text-align: center; }
-          .kpi-box .value { font-size: 20pt; font-weight: 700; color: #2563eb; }
+          .kpi-box .value { font-size: 18pt; font-weight: 700; color: #2563eb; }
           .kpi-box .label { font-size: 9pt; color: #6b7280; }
           .rating-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 4px; }
           .rating-green { background: #10b981; }
@@ -138,15 +216,19 @@ const EnergyReport = () => {
             <TabsList>
               <TabsTrigger value="config" className="gap-2">
                 <Settings2 className="h-4 w-4" />
-                {t("energyReport.configuration" as any) || "Konfiguration"}
+                Konfiguration
               </TabsTrigger>
               <TabsTrigger value="preview" className="gap-2" disabled={selectedLocationIds.length === 0}>
                 <FileText className="h-4 w-4" />
-                {t("energyReport.preview" as any) || "Vorschau"}
+                Vorschau
               </TabsTrigger>
               <TabsTrigger value="co2" className="gap-2">
                 <Leaf className="h-4 w-4" />
-                {t("co2.title" as any) || "CO₂-Faktoren"}
+                CO₂-Faktoren
+              </TabsTrigger>
+              <TabsTrigger value="archive" className="gap-2">
+                <Archive className="h-4 w-4" />
+                Archiv
               </TabsTrigger>
             </TabsList>
 
@@ -156,14 +238,12 @@ const EnergyReport = () => {
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <BarChart3 className="h-5 w-5" />
-                    {t("energyReport.reportSettings" as any) || "Berichtseinstellungen"}
+                    Berichtseinstellungen
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="flex items-center gap-4">
-                    <label className="text-sm font-medium">
-                      {t("energyReport.reportYear" as any) || "Berichtsjahr"}
-                    </label>
+                    <label className="text-sm font-medium">Berichtsjahr</label>
                     <Select value={reportYear} onValueChange={setReportYear}>
                       <SelectTrigger className="w-32">
                         <SelectValue />
@@ -185,16 +265,14 @@ const EnergyReport = () => {
                     <div>
                       <CardTitle className="flex items-center gap-2">
                         <Building2 className="h-5 w-5" />
-                        {t("energyReport.selectLocations" as any) || "Liegenschaften auswählen"}
+                        Liegenschaften auswählen
                       </CardTitle>
                       <CardDescription>
-                        {selectedLocationIds.length} / {locations.length} {t("energyReport.selected" as any) || "ausgewählt"}
+                        {selectedLocationIds.length} / {locations.length} ausgewählt
                       </CardDescription>
                     </div>
                     <Button variant="outline" size="sm" onClick={selectAll}>
-                      {selectedLocationIds.length === locations.length
-                        ? (t("energyReport.deselectAll" as any) || "Alle abwählen")
-                        : (t("energyReport.selectAll" as any) || "Alle auswählen")}
+                      {selectedLocationIds.length === locations.length ? "Alle abwählen" : "Alle auswählen"}
                     </Button>
                   </div>
                 </CardHeader>
@@ -234,16 +312,20 @@ const EnergyReport = () => {
                   className="gap-2"
                 >
                   <FileText className="h-4 w-4" />
-                  {t("energyReport.generate" as any) || "Bericht erstellen"}
+                  Bericht erstellen
                 </Button>
               </div>
             </TabsContent>
 
             <TabsContent value="preview" className="mt-6">
-              <div className="flex justify-end mb-4">
+              <div className="flex justify-end gap-2 mb-4">
+                <Button variant="outline" onClick={handleArchive} className="gap-2">
+                  <Save className="h-4 w-4" />
+                  Archivieren
+                </Button>
                 <Button onClick={handlePrint} className="gap-2">
                   <Download className="h-4 w-4" />
-                  {t("energyReport.downloadPdf" as any) || "Als PDF speichern"}
+                  Als PDF speichern
                 </Button>
               </div>
 
@@ -274,12 +356,20 @@ const EnergyReport = () => {
                       <div className="label">Gesamtfläche (NGF m²)</div>
                     </div>
                     <div className="kpi-box">
-                      <div className="value">
-                        {factors.length > 0 ? "✓" : "–"}
-                      </div>
-                      <div className="label">CO₂-Faktoren hinterlegt</div>
+                      <div className="value">{totalCo2 > 0 ? formatCo2(totalCo2) : "–"}</div>
+                      <div className="label">CO₂-Emissionen gesamt</div>
+                    </div>
+                    <div className="kpi-box">
+                      <div className="value">{totalCost > 0 ? formatCurrency(totalCost) : "–"}</div>
+                      <div className="label">Energiekosten gesamt</div>
                     </div>
                   </div>
+
+                  {avgCompleteness !== null && (
+                    <p style={{ fontSize: "10pt", color: "#6b7280", marginBottom: "8pt" }}>
+                      Durchschnittliche Datenqualität: {avgCompleteness}%
+                    </p>
+                  )}
 
                   <h3>Übersicht der Liegenschaften</h3>
                   <table>
@@ -332,56 +422,66 @@ const EnergyReport = () => {
                 </div>
 
                 {/* Individual property profiles */}
-                {selectedLocations.map((loc) => (
-                  <div key={loc.id} className="page">
-                    <h2>Liegenschaftssteckbrief: {loc.name}</h2>
-                    <div className="profile-meta">
-                      <div>
-                        <dt>Adresse</dt>
-                        <dd>{loc.address ? `${loc.address}, ${loc.postal_code || ""} ${loc.city || ""}` : "–"}</dd>
+                {selectedLocations.map((loc) => {
+                  const locConsumption = consumption?.[yearNum]?.[loc.id] || {};
+                  return (
+                    <div key={loc.id} className="page">
+                      <h2>Liegenschaftssteckbrief: {loc.name}</h2>
+                      <div className="profile-meta">
+                        <div><dt>Adresse</dt><dd>{loc.address ? `${loc.address}, ${loc.postal_code || ""} ${loc.city || ""}` : "–"}</dd></div>
+                        <div><dt>Nutzungsart</dt><dd style={{ textTransform: "capitalize" }}>{loc.usage_type || "–"}</dd></div>
+                        <div><dt>Baujahr</dt><dd>{loc.construction_year || "–"}</dd></div>
+                        <div><dt>Letzte Sanierung</dt><dd>{loc.renovation_year || "–"}</dd></div>
+                        <div><dt>Nettogrundfläche (NGF)</dt><dd>{loc.net_floor_area ? `${loc.net_floor_area.toLocaleString("de-DE")} m²` : "–"}</dd></div>
+                        <div><dt>Bruttogrundfläche (BGF)</dt><dd>{loc.gross_floor_area ? `${loc.gross_floor_area.toLocaleString("de-DE")} m²` : "–"}</dd></div>
+                        <div><dt>Heizungsart</dt><dd>{loc.heating_type || "–"}</dd></div>
+                        <div><dt>Energieträger</dt><dd>{(loc.energy_sources || []).join(", ") || "–"}</dd></div>
                       </div>
-                      <div>
-                        <dt>Nutzungsart</dt>
-                        <dd style={{ textTransform: "capitalize" }}>{loc.usage_type || "–"}</dd>
-                      </div>
-                      <div>
-                        <dt>Baujahr</dt>
-                        <dd>{loc.construction_year || "–"}</dd>
-                      </div>
-                      <div>
-                        <dt>Letzte Sanierung</dt>
-                        <dd>{loc.renovation_year || "–"}</dd>
-                      </div>
-                      <div>
-                        <dt>Nettogrundfläche (NGF)</dt>
-                        <dd>{loc.net_floor_area ? `${loc.net_floor_area.toLocaleString("de-DE")} m²` : "–"}</dd>
-                      </div>
-                      <div>
-                        <dt>Bruttogrundfläche (BGF)</dt>
-                        <dd>{loc.gross_floor_area ? `${loc.gross_floor_area.toLocaleString("de-DE")} m²` : "–"}</dd>
-                      </div>
-                      <div>
-                        <dt>Heizungsart</dt>
-                        <dd>{loc.heating_type || "–"}</dd>
-                      </div>
-                      <div>
-                        <dt>Energieträger</dt>
-                        <dd>{(loc.energy_sources || []).join(", ") || "–"}</dd>
-                      </div>
+
+                      {Object.keys(locConsumption).length > 0 ? (
+                        <>
+                          <h3>Verbrauchsdaten {reportYear}</h3>
+                          <table>
+                            <thead>
+                              <tr>
+                                <th>Energieträger</th>
+                                <th>Verbrauch (kWh)</th>
+                                {loc.net_floor_area && <th>kWh/m²a</th>}
+                                <th>CO₂</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {Object.entries(locConsumption).map(([eType, kwh]) => {
+                                const co2 = calculateCo2(kwh, eType, factors);
+                                const specific = loc.net_floor_area ? kwh / loc.net_floor_area : null;
+                                return (
+                                  <tr key={eType}>
+                                    <td style={{ textTransform: "capitalize" }}>{eType}</td>
+                                    <td>{kwh.toLocaleString("de-DE", { maximumFractionDigits: 0 })}</td>
+                                    {loc.net_floor_area && <td>{specific?.toLocaleString("de-DE", { maximumFractionDigits: 1 })}</td>}
+                                    <td>{co2 !== null ? formatCo2(co2) : "–"}</td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </>
+                      ) : (
+                        <p style={{ marginTop: "16pt", color: "#6b7280", fontStyle: "italic" }}>
+                          Keine Verbrauchsdaten für {reportYear} vorhanden.
+                        </p>
+                      )}
+
+                      <h3>Ansprechpartner</h3>
+                      <p>{loc.contact_person || "–"}{loc.contact_email ? ` · ${loc.contact_email}` : ""}{loc.contact_phone ? ` · ${loc.contact_phone}` : ""}</p>
                     </div>
-
-                    <h3>Ansprechpartner</h3>
-                    <p>{loc.contact_person || "–"}{loc.contact_email ? ` · ${loc.contact_email}` : ""}{loc.contact_phone ? ` · ${loc.contact_phone}` : ""}</p>
-
-                    <p style={{ marginTop: "16pt", color: "#6b7280", fontStyle: "italic" }}>
-                      Hinweis: Verbrauchsdaten und Kennwerte werden automatisch aus den hinterlegten Messstellen berechnet, sobald Daten für das Berichtsjahr {reportYear} vorliegen.
-                    </p>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
 
               {/* On-screen preview */}
               <div className="space-y-6">
+                {/* Summary card */}
                 <Card>
                   <CardHeader>
                     <CardTitle>Kommunaler Energiebericht {reportYear}</CardTitle>
@@ -390,7 +490,7 @@ const EnergyReport = () => {
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <div className="grid gap-4 sm:grid-cols-3">
+                    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                       <div className="rounded-lg border p-4 text-center">
                         <p className="text-3xl font-bold text-primary">{selectedLocations.length}</p>
                         <p className="text-sm text-muted-foreground">Liegenschaften</p>
@@ -403,22 +503,145 @@ const EnergyReport = () => {
                       </div>
                       <div className="rounded-lg border p-4 text-center">
                         <p className="text-3xl font-bold text-primary">
-                          {factors.length > 0 ? `${factors.length} Faktoren` : "–"}
+                          {totalCo2 > 0 ? formatCo2(totalCo2) : "–"}
                         </p>
-                        <p className="text-sm text-muted-foreground">CO₂-Faktoren</p>
+                        <p className="text-sm text-muted-foreground">CO₂-Emissionen</p>
+                      </div>
+                      <div className="rounded-lg border p-4 text-center">
+                        <p className="text-3xl font-bold text-primary">
+                          {totalCost > 0 ? formatCurrency(totalCost) : "–"}
+                        </p>
+                        <p className="text-sm text-muted-foreground">Energiekosten</p>
                       </div>
                     </div>
+                    {avgCompleteness !== null && (
+                      <p className="text-sm text-muted-foreground mt-3">
+                        Durchschnittliche Datenqualität: <span className="font-medium">{avgCompleteness}%</span>
+                      </p>
+                    )}
                   </CardContent>
                 </Card>
 
+                {/* Ranking */}
+                {consumption?.[yearNum] && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <TrendingUp className="h-5 w-5" />
+                        Liegenschafts-Ranking (Strom kWh/m²a)
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <LocationRanking
+                        locations={selectedLocations}
+                        consumption={consumption[yearNum]}
+                        energyType="strom"
+                      />
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Trend chart for first selected location */}
+                {consumption && selectedLocations.length > 0 && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <BarChart3 className="h-5 w-5" />
+                        Mehrjahresvergleich – {selectedLocations[0].name}
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <ConsumptionTrendChart
+                        locationId={selectedLocations[0].id}
+                        consumption={consumption}
+                        years={trendYears}
+                      />
+                      <ConsumptionTrendTable
+                        locationId={selectedLocations[0].id}
+                        consumption={consumption}
+                        years={trendYears}
+                      />
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Property profiles */}
                 {selectedLocations.map((loc) => (
-                  <PropertyProfile key={loc.id} location={loc} reportYear={parseInt(reportYear)} factors={factors} />
+                  <PropertyProfile
+                    key={loc.id}
+                    location={loc}
+                    reportYear={yearNum}
+                    factors={factors}
+                    consumption={consumption?.[yearNum]?.[loc.id]}
+                    completeness={completenessMap?.[loc.id]}
+                    measures={measures.filter((m) => m.location_id === loc.id)}
+                    prices={prices}
+                    onAddMeasure={(m) => addMeasure(m)}
+                    onDeleteMeasure={deleteMeasure}
+                  />
                 ))}
               </div>
             </TabsContent>
 
             <TabsContent value="co2" className="mt-6">
               <Co2FactorSettings />
+            </TabsContent>
+
+            <TabsContent value="archive" className="mt-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Archive className="h-5 w-5" />
+                    Archivierte Berichte
+                  </CardTitle>
+                  <CardDescription>
+                    Gespeicherte Energieberichte zum erneuten Download
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {reports.length === 0 ? (
+                    <p className="text-sm text-muted-foreground text-center py-8">
+                      Noch keine Berichte archiviert. Erstellen Sie einen Bericht und klicken Sie auf "Archivieren".
+                    </p>
+                  ) : (
+                    <div className="space-y-3">
+                      {reports.map((r) => (
+                        <div key={r.id} className="flex items-center justify-between rounded-lg border p-4">
+                          <div>
+                            <p className="font-medium">{r.title}</p>
+                            <p className="text-sm text-muted-foreground">
+                              {new Date(r.generated_at).toLocaleDateString("de-DE")} · {r.location_ids.length} Liegenschaften
+                            </p>
+                          </div>
+                          <div className="flex gap-2">
+                            {r.pdf_storage_path && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={async () => {
+                                  const url = await getDownloadUrl(r.pdf_storage_path!);
+                                  if (url) window.open(url, "_blank");
+                                }}
+                              >
+                                <Download className="h-4 w-4 mr-1" />
+                                Öffnen
+                              </Button>
+                            )}
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-destructive"
+                              onClick={() => deleteReport(r.id, r.pdf_storage_path)}
+                            >
+                              Löschen
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
             </TabsContent>
           </Tabs>
         </div>
