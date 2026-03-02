@@ -1,220 +1,165 @@
+# Altdaten-Import per CSV/Excel -- Implementierungsplan
 
-# Kommunaler Energiebericht -- Implementierungsplan
+## Ziel
 
-## Uebersicht
-
-Implementierung eines umfassenden kommunalen Energieberichts mit vier Saeulen: erweiterte Stammdaten, Witterungsbereinigung (existiert bereits teilweise), Benchmarking mit Vergleichswerten und CO2-Emissionsberechnung. Das Ergebnis ist ein PDF-Bericht mit Management Summary, Gesamtportfolio-Analyse und Liegenschaftssteckbriefen.
-
----
-
-## Phase 1: Stammdaten der Liegenschaften erweitern
-
-### Datenbank-Migration
-
-Neue Spalten in der `locations`-Tabelle:
-
-| Spalte | Typ | Beschreibung |
-|---|---|---|
-| `construction_year` | integer | Baujahr |
-| `renovation_year` | integer | Letztes Sanierungsjahr |
-| `net_floor_area` | numeric | Nettogrundfläche (NGF) in m2 |
-| `gross_floor_area` | numeric | Bruttogrundfläche (BGF) in m2 |
-| `heating_type` | text | Heizungsart (z.B. Gas-Brennwert, Fernwaerme, Waermepumpe) |
-| `photo_url` | text | Gebäudefoto-URL |
-
-### Code-Aenderungen
-
-- **`useLocations.tsx`**: Interface `Location` um die neuen Felder erweitern
-- **`EditLocationDialog.tsx`**: Formular um Eingabefelder fuer Baujahr, Sanierungsjahr, NGF, BGF, Heizungsart erweitern (in einem Collapsible-Bereich "Gebaeudedaten")
-- **`AddLocationDialog.tsx`**: Optionale Felder fuer die Stammdaten ergaenzen
-- **`LocationDetail.tsx`**: Neue Karte "Gebaeudedaten" mit Baujahr, Flaeche, Heizungsart anzeigen
-- **Gebäudefoto-Upload**: Upload-Funktion in den `tenant-assets`-Bucket, Anzeige im Steckbrief
+Kommunale Energiemanager sollen historische Verbrauchsdaten (z.B. aus alten Excel-Listen oder Abrechnungen) komfortabel in das System importieren koennen. Dies ist essentiell fuer den Energiebericht, da Benchmarking und Trendanalysen mindestens 3 Jahre Datenhistorie benoetigen.
 
 ---
 
-## Phase 2: CO2-Emissionsfaktoren
+## Zwei Import-Typen
 
-### Datenbank-Migration
+### 1. Zaehlerstaende importieren (meter_readings)
 
-Neue Tabelle `co2_emission_factors`:
+Fuer historische Zaehlerstaende, z.B. aus Jahresabrechnungen oder manuellen Listen.
+
+**Erwartete CSV-Spalten:**
+
+
+| Spalte        | Pflicht | Beschreibung                                                |
+| ------------- | ------- | ----------------------------------------------------------- |
+| Zaehlernummer | Ja      | Zuordnung zum bestehenden Zaehler via `meters.meter_number` |
+| Datum         | Ja      | Ablesedatum (DD.MM.YYYY oder YYYY-MM-DD)                    |
+| Wert          | Ja      | Zaehlerstand als Zahl                                       |
+| Notiz         | Nein    | Optionaler Kommentar                                        |
+
+
+### 2. Verbrauchsdaten importieren (meter_period_totals)
+
+Fuer aggregierte Verbrauchswerte (z.B. Monatsverbraeuche aus Energieabrechnungen).
+
+**Erwartete CSV-Spalten:**
+
+
+| Spalte        | Pflicht | Beschreibung                                |
+| ------------- | ------- | ------------------------------------------- |
+| Zaehlernummer | Ja      | Zuordnung zum bestehenden Zaehler           |
+| Zeitraum      | Ja      | Monat oder Tag (MM/YYYY oder DD.MM.YYYY)    |
+| Verbrauch     | Ja      | Verbrauchswert in kWh (oder Zaehlereinheit) |
+| Energieart    | Nein    | Ueberschreibt den Energietyp des Zaehlers   |
+
+
+---
+
+## Import-Workflow (UI)
 
 ```text
-+---------------------------+
-| co2_emission_factors      |
-+---------------------------+
-| id (uuid, PK)             |
-| tenant_id (uuid, FK)      |
-| energy_type (text)        |  -- strom, gas, waerme, fernwaerme
-| factor_kg_per_kwh (numeric)| -- kg CO2 pro kWh
-| factor_kg_per_m3 (numeric) | -- kg CO2 pro m3 (fuer Gas)
-| source (text)              | -- z.B. "BAFA 2024", "Oekostrom"
-| valid_from (date)          |
-| valid_until (date)         |
-| is_default (boolean)       |
-| created_at, updated_at     |
-+---------------------------+
++------------------------------------------+
+| 1. Datei hochladen                       |
+|    [CSV waehlen] oder [Excel waehlen]    |
+|    Drag & Drop Zone                      |
++------------------------------------------+
+           |
+           v
++------------------------------------------+
+| 2. Spaltenzuordnung (Mapping)            |
+|    Vorschau der ersten 5 Zeilen          |
+|    Dropdown pro erkannte Spalte:         |
+|    "Spalte A" --> [Zaehlernummer v]      |
+|    "Spalte B" --> [Datum v]              |
+|    "Spalte C" --> [Wert v]               |
+|    Auto-Erkennung gaengiger Header       |
++------------------------------------------+
+           |
+           v
++------------------------------------------+
+| 3. Validierung & Vorschau                |
+|    - Zaehlernummern pruefen (gefunden?)  |
+|    - Datumsformate validieren            |
+|    - Plausibilitaetspruefung (Werte)     |
+|    - Duplikat-Erkennung                  |
+|                                          |
+|    Zusammenfassung:                      |
+|    [x] 142 gueltige Zeilen              |
+|    [!] 3 unbekannte Zaehlernummern      |
+|    [!] 2 moegliche Duplikate            |
+|    [x] 0 ungueltige Datumswerte         |
++------------------------------------------+
+           |
+           v
++------------------------------------------+
+| 4. Import ausfuehren                     |
+|    Fortschrittsbalken                    |
+|    Ergebnis: "139 Eintraege importiert"  |
++------------------------------------------+
 ```
-
-RLS: Tenant-basiert, Admins koennen Faktoren pflegen.
-
-### Standard-Emissionsfaktoren (Seed-Daten)
-
-Vorbefuellte Defaults nach BAFA/GEMIS:
-
-| Energietraeger | kg CO2/kWh | Quelle |
-|---|---|---|
-| Strom (Bundesmix) | 0.420 | UBA 2023 |
-| Erdgas H | 0.201 | GEMIS |
-| Fernwaerme | 0.180 | Durchschnitt |
-| Heizoel | 0.266 | GEMIS |
-
-### Code-Aenderungen
-
-- **Neuer Hook `useCo2Factors.tsx`**: CRUD fuer Emissionsfaktoren
-- **UI-Komponente `Co2FactorSettings.tsx`**: Verwaltung der Faktoren pro Energietraeger (in den Einstellungen oder pro Liegenschaft)
-- **Berechnungslogik in `lib/co2Calculations.ts`**: Funktion `calculateCo2(energyKwh, energyType, factors)` --> kg CO2
 
 ---
 
-## Phase 3: Benchmarking mit Vergleichswerten
+## Technische Umsetzung
 
-### Datenbank-Migration
+### Neue Dateien
 
-Neue Tabelle `energy_benchmarks`:
+
+| Datei                                             | Zweck                                                           |
+| ------------------------------------------------- | --------------------------------------------------------------- |
+| `src/components/energy-data/DataImportDialog.tsx` | Haupt-Dialog mit Stepper (Upload, Mapping, Validierung, Import) |
+| `src/lib/csvParser.ts`                            | CSV/Excel-Parsing, Spaltenerkennung, Datumskonvertierung        |
+| `src/hooks/useDataImport.tsx`                     | Import-Logik: Validierung, Batch-Insert, Fortschritt            |
+
+
+### CSV/Excel Parsing (`csvParser.ts`)
+
+- **CSV**: Nativer Browser-Parser (kein externes Paket noetig). Unterstuetzt `;` und `,` als Trennzeichen. BOM-Erkennung fuer deutsche Excel-Exporte.
+- **Excel (.xlsx)**: Verwendung von SheetJS (`xlsx` npm-Paket, ~200kB). Liest erstes Tabellenblatt, konvertiert zu Array-of-Objects.
+- **Datumsformate**: Erkennung von DD.MM.YYYY, YYYY-MM-DD, DD/MM/YYYY, MM/YYYY.
+- **Zahlenformate**: Deutsche Notation (Komma als Dezimaltrennzeichen, Punkt als Tausender) wird automatisch konvertiert.
+
+### Auto-Erkennung der Spalten
+
+Haeufige Header-Varianten werden automatisch gemappt:
 
 ```text
-+---------------------------+
-| energy_benchmarks         |
-+---------------------------+
-| id (uuid, PK)             |
-| usage_type (enum)         |  -- verwaltungsgebaeude, schule, etc.
-| energy_type (text)        |  -- strom, waerme, wasser
-| target_value (numeric)    |  -- Zielwert kWh/m2*a (gruen)
-| average_value (numeric)   |  -- Mittelwert kWh/m2*a (gelb)
-| high_value (numeric)      |  -- Grenzwert kWh/m2*a (rot)
-| unit (text)               |  -- kWh/m2*a oder l/m2*a
-| source (text)             |  -- z.B. "ages 2024", "EnEV"
-| valid_year (integer)      |
-+---------------------------+
+Zaehlernummer: "Zählernummer", "Zaehlernr", "meter_number", "Zähler-Nr"
+Datum:         "Datum", "Ablesedatum", "date", "reading_date", "Zeitraum"
+Wert:          "Wert", "Zählerstand", "Stand", "value", "Verbrauch"
+Notiz:         "Notiz", "Bemerkung", "notes", "Kommentar"
 ```
 
-### Vorbefuellte Vergleichswerte (ages/VDI 3807)
+### Validierungsregeln
 
-| Gebaeudetyp | Strom (kWh/m2a) Ziel/Mittel/Hoch | Waerme (kWh/m2a) Ziel/Mittel/Hoch |
-|---|---|---|
-| Verwaltung | 15 / 25 / 40 | 50 / 90 / 140 |
-| Schule | 10 / 18 / 30 | 50 / 85 / 130 |
-| Kita | 12 / 20 / 35 | 60 / 95 / 150 |
-| Sportstaette | 25 / 40 / 65 | 80 / 130 / 200 |
-| Universitaet | 20 / 35 / 55 | 55 / 100 / 160 |
+1. **Zaehlernummer-Abgleich**: Jede Zaehlernummer wird gegen `meters.meter_number` im Mandanten geprueft. Nicht gefundene Nummern werden als Warnung angezeigt (Import trotzdem moeglich, wenn Nutzer die Zeilen ausschliesst).
+2. **Datumsvalidierung**: Datum muss parsebar sein und darf nicht in der Zukunft liegen.
+3. **Wert-Plausibilitaet**: Negativwerte werden als Warnung markiert. Bei Zaehlerstaenden: Pruefen, ob der neue Wert kleiner als ein bereits vorhandener Wert fuer dasselbe Datum ist.
+4. **Duplikaterkennung**: Gleiche Kombination aus Zaehler + Datum wird als potenzielles Duplikat markiert (Nutzer entscheidet: ueberspringen oder ueberschreiben).
 
-### Code-Aenderungen
+### Batch-Insert (`useDataImport.tsx`)
 
-- **Hook `useBenchmarks.tsx`**: Laedt Vergleichswerte passend zum `usage_type` der Liegenschaft
-- **Komponente `BenchmarkIndicator.tsx`**: Ampel-Darstellung (gruen/gelb/rot) mit Balken, der den aktuellen Kennwert im Verhaeltnis zu Ziel/Mittel/Hoch zeigt
-- **Integration in LocationDetail**: Neue Karte "Energiekennwerte" mit Ampel-Bewertung fuer Strom und Waerme
-- **Berechnung**: `spezifischerKennwert = Jahresverbrauch_kWh / NGF_m2`
+- Daten werden in Batches von 100 Zeilen eingefuegt (Supabase-Limit beachten).
+- `capture_method` wird auf `"csv_import"` gesetzt fuer Traceability.
+- Fortschrittsanzeige ueber State (0-100%).
+- Bei Fehler in einem Batch: Warnung anzeigen, restliche Batches fortsetzen.
+- Nach erfolgreichem Import: Query-Cache invalidieren (`meter_readings`, `meter_period_totals`).
+
+### Integration in die UI
+
+- **Neuer Button auf der Energiedaten-Seite** (`EnergyData.tsx`): "Daten importieren" (Upload-Icon) neben den Export-Buttons.
+- **Dialog oeffnet den Stepper** mit den 4 Schritten.
+- **Download einer Vorlage**: Button im Dialog zum Herunterladen einer CSV-Vorlage mit den erwarteten Spalten und einer Beispielzeile.
+
+### Uebersetzungen
+
+Neue Keys in `translations.ts` fuer alle vier Sprachen (DE, EN, ES, NL):
+
+- `import.title`, `import.upload`, `import.mapping`, `import.validation`, `import.execute`
+- `import.downloadTemplate`, `import.selectFile`, `import.dragDrop`
+- `import.validRows`, `import.unknownMeters`, `import.duplicates`, `import.invalidDates`
+- `import.success`, `import.partialSuccess`, `import.error`
 
 ---
 
-## Phase 4: Energiebericht-Generator
+## Abhaengigkeiten
 
-### Neue Seite `/energy-report`
-
-Erreichbar ueber die Sidebar (Modul "energy_report"). Bericht-Konfiguration:
-
-1. **Berichtsjahr** auswaehlen
-2. **Liegenschaften** auswaehlen (alle oder Auswahl)
-3. **Energietraeger** auswaehlen
-4. **Bericht generieren** (PDF, oeffnet im neuen Tab)
-
-### PDF-Berichtsstruktur
-
-Der Bericht wird client-seitig als HTML generiert (wie bestehende `downloadPDF`-Funktion in `exportUtils.ts`) und per `window.print()` als PDF gespeichert.
-
-**Gliederung:**
-
-```text
-1. Deckblatt
-   - Titel, Berichtsjahr, Mandantenlogo, Erstellungsdatum
-
-2. Management Summary (1 Seite)
-   - Gesamtverbrauch Strom/Waerme/Wasser mit Vorjahresvergleich
-   - Gesamte CO2-Emissionen mit Trend
-   - Gesamtkosten (sofern Energiepreise hinterlegt)
-   - Top-3 Verbraucher
-
-3. Portfolio-Uebersicht
-   - Balkendiagramm: Verbrauch pro Liegenschaft
-   - Karte aller Liegenschaften (optional, als Screenshot)
-   - Tabellarische Uebersicht: Name, Typ, NGF, Strom, Waerme, CO2
-
-4. Witterungsbereinigung
-   - Erklaerung der Methode
-   - Tabelle: Monat, Ist-HGT, Referenz-HGT, Ist-Verbrauch, bereinigter Verbrauch
-   - Gesamtbilanz: Ist vs. bereinigt
-
-5. Liegenschaftssteckbriefe (je 1 Seite pro Gebaeude)
-   - Gebaeudedaten: Name, Adresse, Baujahr, NGF, Heizungsart, Foto
-   - Verbrauchstabelle: Strom/Waerme/Wasser der letzten 3 Jahre
-   - Kennwerte: kWh/m2*a mit Ampel-Bewertung
-   - CO2-Emissionen mit Trend-Pfeil
-   - Witterungsbereinigter Waermeverbrauch (Chart)
-   - Kostenentwicklung (wenn Preise hinterlegt)
-
-6. Anhang
-   - Verwendete CO2-Faktoren
-   - Quellenangaben (ages, BAFA, UBA)
-```
-
-### Code-Aenderungen
-
-- **Neue Datei `src/lib/energyReportBuilder.ts`**: Kernlogik zur Datensammlung und HTML-Generierung
-- **Neue Seite `src/pages/EnergyReport.tsx`**: Konfigurationsseite mit Vorschau
-- **Neue Komponente `src/components/report/EnergyReportPreview.tsx`**: Live-Vorschau des Berichts
-- **Neue Komponente `src/components/report/PropertyProfile.tsx`**: Einzelner Liegenschaftssteckbrief
-- **Route in `App.tsx`**: `/energy-report` hinzufuegen
-- **Sidebar-Eintrag in `DashboardSidebar.tsx`**: Neuer Menuepunkt "Energiebericht"
-- **Uebersetzungen in `translations.ts`**: Alle Labels fuer den Bericht (DE/EN/ES/NL)
+- **Neues npm-Paket**: `xlsx` (SheetJS) fuer Excel-Support. Falls nur CSV benoetigt wird, entfaellt dieses Paket.
+- **Keine DB-Migration noetig**: `meter_readings` und `meter_period_totals` existieren bereits mit allen benoetigten Spalten. `capture_method = "csv_import"` nutzt das bestehende Text-Feld.
 
 ---
 
-## Technische Details
+## Reihenfolge der Implementierung
 
-### Datenfluss fuer den Bericht
-
-```text
-Jahresverbrauch (meter_period_totals, period_type='month')
-  + NGF (locations.net_floor_area)
-  --> Kennwert (kWh/m2*a)
-  + Benchmarks (energy_benchmarks, nach usage_type)
-  --> Ampelbewertung
-
-Waermeverbrauch
-  + Gradtagszahlen (weather_degree_days via Edge Function)
-  --> Witterungsbereinigter Verbrauch
-
-Verbrauch * CO2-Faktor (co2_emission_factors)
-  --> CO2-Emissionen in kg/t
-```
-
-### Bestehende Infrastruktur die genutzt wird
-
-- `useWeatherNormalization` -- bereits implementiert, wird direkt wiederverwendet
-- `useEnergyPrices` -- fuer Kostenberechnung im Bericht
-- `meter_period_totals` -- Monats-/Jahresaggregate
-- `exportUtils.ts` -- PDF-Generierungsmuster (HTML + print)
-- `weather-degree-days` Edge Function -- fuer Gradtagszahlen
-- `formatEnergy` / `formatEnergyByType` -- Einheitenformatierung
-
-### Reihenfolge der Implementierung
-
-1. DB-Migration: Locations-Stammdaten erweitern
-2. UI: Stammdaten-Formulare und Anzeige
-3. DB-Migration: `co2_emission_factors` + Seed-Daten
-4. Hook + UI: CO2-Faktor-Verwaltung
-5. DB-Migration: `energy_benchmarks` + Seed-Daten
-6. Hook + UI: Benchmarking-Komponente mit Ampel
-7. Energiebericht-Seite mit PDF-Generator
-8. Uebersetzungen ergaenzen
-
+1. CSV-Parser mit Auto-Erkennung und Datumskonvertierung
+2. Import-Hook mit Validierung und Batch-Insert
+3. Import-Dialog mit Stepper-UI (Upload, Mapping, Validierung, Ergebnis)
+4. Integration in EnergyData-Seite (Button + Dialog)
+5. CSV-Vorlage zum Download
+6. Uebersetzungen ergaenzen
+7. Excel- und CSV als Beispieldatei per Link zum Download anbieten
