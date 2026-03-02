@@ -319,58 +319,56 @@ const EnergyReport = () => {
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                    {hierarchicalLocations.map((loc) => (
-                      <div key={loc.id} className="space-y-1">
-                        <label
-                          className="flex items-center gap-3 rounded-lg border p-3 cursor-pointer hover:bg-accent/50 transition-colors"
-                        >
-                          <Checkbox
-                            checked={selectedLocationIds.includes(loc.id)}
-                            onCheckedChange={() => toggleLocation(loc.id)}
-                          />
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium truncate">{loc.name}</p>
-                            <p className="text-xs text-muted-foreground truncate">
-                              {loc.address && `${loc.address}, `}{loc.city || ""}
-                            </p>
-                          </div>
-                          {loc.net_floor_area && (
-                            <Badge variant="secondary" className="text-xs shrink-0">
-                              {loc.net_floor_area.toLocaleString("de-DE")} m²
-                            </Badge>
-                          )}
-                        </label>
-                        {/* Child buildings */}
-                        {loc.children && loc.children.length > 0 && (
-                          <div className="ml-6 space-y-1">
-                            {loc.children.map((child) => (
-                              <label
-                                key={child.id}
-                                className="flex items-center gap-3 rounded-lg border border-dashed p-2.5 cursor-pointer hover:bg-accent/50 transition-colors"
-                              >
-                                <ChevronRight className="h-3 w-3 text-muted-foreground shrink-0" />
-                                <Checkbox
-                                  checked={selectedLocationIds.includes(child.id)}
-                                  onCheckedChange={() => toggleChild(child.id)}
-                                />
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-sm truncate">{child.name}</p>
-                                  <p className="text-xs text-muted-foreground truncate">
-                                    {child.address && `${child.address}, `}{child.city || ""}
-                                  </p>
-                                </div>
-                                {child.net_floor_area && (
-                                  <Badge variant="secondary" className="text-xs shrink-0">
-                                    {child.net_floor_area.toLocaleString("de-DE")} m²
-                                  </Badge>
-                                )}
-                              </label>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    ))}
+                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                    {hierarchicalLocations.map((loc) => {
+                      const hasChildren = loc.children && loc.children.length > 0;
+                      return (
+                        <div key={loc.id} className="rounded-lg border overflow-hidden">
+                          {/* Parent location row */}
+                          <label className="flex items-center gap-3 p-3 cursor-pointer hover:bg-accent/50 transition-colors">
+                            <Checkbox
+                              checked={selectedLocationIds.includes(loc.id)}
+                              onCheckedChange={() => toggleLocation(loc.id)}
+                            />
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium truncate">{loc.name}</p>
+                              <p className="text-xs text-muted-foreground truncate">
+                                {loc.address && `${loc.address}, `}{loc.city || ""}
+                              </p>
+                            </div>
+                            {loc.net_floor_area && (
+                              <Badge variant="secondary" className="text-xs shrink-0">
+                                {loc.net_floor_area.toLocaleString("de-DE")} m²
+                              </Badge>
+                            )}
+                          </label>
+                          {/* Child buildings inside the same card */}
+                          {hasChildren && loc.children!.map((child) => (
+                            <label
+                              key={child.id}
+                              className="flex items-center gap-3 border-t border-dashed px-3 py-2.5 pl-8 cursor-pointer hover:bg-accent/50 transition-colors"
+                            >
+                              <ChevronRight className="h-3 w-3 text-muted-foreground shrink-0" />
+                              <Checkbox
+                                checked={selectedLocationIds.includes(child.id)}
+                                onCheckedChange={() => toggleChild(child.id)}
+                              />
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm truncate">{child.name}</p>
+                                <p className="text-xs text-muted-foreground truncate">
+                                  {child.address && `${child.address}, `}{child.city || ""}
+                                </p>
+                              </div>
+                              {child.net_floor_area && (
+                                <Badge variant="secondary" className="text-xs shrink-0">
+                                  {child.net_floor_area.toLocaleString("de-DE")} m²
+                                </Badge>
+                              )}
+                            </label>
+                          ))}
+                        </div>
+                      );
+                    })}
                   </div>
                 </CardContent>
               </Card>
