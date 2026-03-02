@@ -86,6 +86,7 @@ export function Co2FactorSettings() {
             <TableRow>
               <TableHead>{t("co2.energyType" as any) || "Energieträger"}</TableHead>
               <TableHead>{t("co2.factorKgKwh" as any) || "kg CO₂/kWh"}</TableHead>
+              <TableHead>Primärenergiefaktor</TableHead>
               <TableHead>{t("co2.source" as any) || "Quelle"}</TableHead>
               <TableHead className="w-24" />
             </TableRow>
@@ -107,6 +108,25 @@ export function Co2FactorSettings() {
                           ...factor,
                           ...prev[factor.energy_type],
                           factor_kg_per_kwh: parseFloat(e.target.value) || 0,
+                        },
+                      }))
+                    }
+                  />
+                </TableCell>
+                <TableCell>
+                  <Input
+                    type="number"
+                    step="0.1"
+                    className="w-24"
+                    defaultValue={factor.primary_energy_factor ?? ""}
+                    placeholder="–"
+                    onChange={(e) =>
+                      setEditing((prev) => ({
+                        ...prev,
+                        [factor.energy_type]: {
+                          ...factor,
+                          ...prev[factor.energy_type],
+                          primary_energy_factor: e.target.value ? parseFloat(e.target.value) : null,
                         },
                       }))
                     }
@@ -155,7 +175,7 @@ export function Co2FactorSettings() {
             ))}
             {factors.length === 0 && !loading && (
               <TableRow>
-                <TableCell colSpan={4} className="text-center text-muted-foreground py-8">
+                <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
                   {t("co2.noFactors" as any) || "Keine Emissionsfaktoren hinterlegt. Laden Sie die Standardwerte."}
                 </TableCell>
               </TableRow>

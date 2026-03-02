@@ -101,6 +101,87 @@ function buildDonutSVG(data: { label: string; value: number; color: string }[]):
   </svg>`;
 }
 
+/**
+ * Stacked bar chart SVG for energy mix across locations
+ */
+export function buildStackedBarChartSVG(
+  data: { label: string; values: { type: string; value: number; color: string }[] }[]
+): string {
+  if (!data.length) return "";
+  const maxVal = Math.max(...data.map((d) => d.values.reduce((s, v) => s + v.value, 0)), 1);
+  const barWidth = 50;
+  const gap = 15;
+  const chartHeight = 180;
+  const chartWidth = data.length * (barWidth + gap) + gap + 20;
+
+  const bars = data.map((d, i) => {
+    const total = d.values.reduce((s, v) => s + v.value, 0);
+    const barH = (total / maxVal) * (chartHeight - 40);
+    const x = gap + 10 + i * (barWidth + gap);
+    let currentY = chartHeight - 25;
+    const segments = d.values.map((v) => {
+      const segH = (v.value / maxVal) * (chartHeight - 40);
+      currentY -= segH;
+      return `<rect x="${x}" y="${currentY}" width="${barWidth}" height="${segH}" fill="${v.color}" opacity="0.85"/>`;
+    }).join("");
+    return `${segments}
+      <text x="${x + barWidth / 2}" y="${chartHeight - 25 - barH - 6}" text-anchor="middle" font-size="10" fill="#333" font-weight="600">${formatDE(total)}</text>
+      <text x="${x + barWidth / 2}" y="${chartHeight - 6}" text-anchor="middle" font-size="9" fill="#666">${d.label.substring(0, 10)}</text>`;
+  }).join("");
+
+  return `<svg width="${chartWidth}" height="${chartHeight}" xmlns="http://www.w3.org/2000/svg" style="display:block;margin:0 auto">${bars}</svg>`;
+}
+
+/**
+ * Trend line SVG for multi-year data
+ */
+export function buildTrendLineSVG(
+  data: { year: number; value: number }[],
+  color: string = "#2563eb"
+): string {
+  if (data.length < 2) return "";
+  const maxVal = Math.max(...data.map((d) => d.value), 1);
+  const width = 300;
+  const height = 120;
+  const padX = 40;
+  const padY = 20;
+  const plotW = width - padX * 2;
+  const plotH = height - padY * 2;
+
+  const points = data.map((d, i) => {
+    const x = padX + (i / (data.length - 1)) * plotW;
+    const y = padY + plotH - (d.value / maxVal) * plotH;
+    return { x, y, ...d };
+  });
+
+  const polyline = points.map((p) => `${p.x},${p.y}`).join(" ");
+  const dots = points.map((p) => `
+    <circle cx="${p.x}" cy="${p.y}" r="4" fill="${color}"/>
+    <text x="${p.x}" y="${p.y - 10}" text-anchor="middle" font-size="10" fill="#333" font-weight="600">${formatDE(p.value)}</text>
+  `).join("");
+  const labels = points.map((p) => `
+    <text x="${p.x}" y="${height - 4}" text-anchor="middle" font-size="10" fill="#666">${p.year}</text>
+  `).join("");
+
+  return `<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg" style="display:block;margin:0 auto">
+    <polyline points="${polyline}" fill="none" stroke="${color}" stroke-width="2.5" stroke-linejoin="round"/>
+    ${dots}${labels}
+  </svg>`;
+}
+
+/**
+ * Traffic light SVG for benchmark rating
+ */
+export function buildTrafficLightSVG(rating: "green" | "yellow" | "red", value: string): string {
+  const colors = { green: "#10b981", yellow: "#f59e0b", red: "#ef4444" };
+  const labels = { green: "Gut", yellow: "Mittel", red: "Hoch" };
+  return `<svg width="100" height="30" xmlns="http://www.w3.org/2000/svg" style="display:inline-block;vertical-align:middle">
+    <circle cx="12" cy="15" r="8" fill="${colors[rating]}" opacity="0.9"/>
+    <text x="26" y="19" font-size="11" fill="#333" font-weight="600">${value}</text>
+    <text x="26" y="19" font-size="11" fill="#333" font-weight="600">${value} (${labels[rating]})</text>
+  </svg>`;
+}
+
 const ENERGY_COLORS: Record<string, string> = {
   Strom: "#eab308", Gas: "#f97316", "Wärme": "#ef4444", Wasser: "#3b82f6",
 };
