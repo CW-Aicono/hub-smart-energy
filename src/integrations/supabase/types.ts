@@ -852,6 +852,56 @@ export type Database = {
           },
         ]
       }
+      co2_emission_factors: {
+        Row: {
+          created_at: string
+          energy_type: string
+          factor_kg_per_kwh: number
+          factor_kg_per_m3: number | null
+          id: string
+          is_default: boolean
+          source: string | null
+          tenant_id: string
+          updated_at: string
+          valid_from: string
+          valid_until: string | null
+        }
+        Insert: {
+          created_at?: string
+          energy_type: string
+          factor_kg_per_kwh?: number
+          factor_kg_per_m3?: number | null
+          id?: string
+          is_default?: boolean
+          source?: string | null
+          tenant_id: string
+          updated_at?: string
+          valid_from?: string
+          valid_until?: string | null
+        }
+        Update: {
+          created_at?: string
+          energy_type?: string
+          factor_kg_per_kwh?: number
+          factor_kg_per_m3?: number | null
+          id?: string
+          is_default?: boolean
+          source?: string | null
+          tenant_id?: string
+          updated_at?: string
+          valid_from?: string
+          valid_until?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "co2_emission_factors_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       custom_role_permissions: {
         Row: {
           created_at: string
@@ -1008,6 +1058,42 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      energy_benchmarks: {
+        Row: {
+          average_value: number
+          energy_type: string
+          high_value: number
+          id: string
+          source: string | null
+          target_value: number
+          unit: string
+          usage_type: string
+          valid_year: number
+        }
+        Insert: {
+          average_value: number
+          energy_type: string
+          high_value: number
+          id?: string
+          source?: string | null
+          target_value: number
+          unit?: string
+          usage_type: string
+          valid_year?: number
+        }
+        Update: {
+          average_value?: number
+          energy_type?: string
+          high_value?: number
+          id?: string
+          source?: string | null
+          target_value?: number
+          unit?: string
+          usage_type?: string
+          valid_year?: number
+        }
+        Relationships: []
       }
       energy_prices: {
         Row: {
@@ -1594,6 +1680,7 @@ export type Database = {
         Row: {
           address: string | null
           city: string | null
+          construction_year: number | null
           contact_email: string | null
           contact_person: string | null
           contact_phone: string | null
@@ -1601,14 +1688,19 @@ export type Database = {
           created_at: string
           description: string | null
           energy_sources: string[] | null
+          gross_floor_area: number | null
+          heating_type: string | null
           id: string
           is_archived: boolean
           is_main_location: boolean
           latitude: number | null
           longitude: number | null
           name: string
+          net_floor_area: number | null
           parent_id: string | null
+          photo_url: string | null
           postal_code: string | null
+          renovation_year: number | null
           show_on_map: boolean
           tenant_id: string
           type: Database["public"]["Enums"]["location_type"]
@@ -1618,6 +1710,7 @@ export type Database = {
         Insert: {
           address?: string | null
           city?: string | null
+          construction_year?: number | null
           contact_email?: string | null
           contact_person?: string | null
           contact_phone?: string | null
@@ -1625,14 +1718,19 @@ export type Database = {
           created_at?: string
           description?: string | null
           energy_sources?: string[] | null
+          gross_floor_area?: number | null
+          heating_type?: string | null
           id?: string
           is_archived?: boolean
           is_main_location?: boolean
           latitude?: number | null
           longitude?: number | null
           name: string
+          net_floor_area?: number | null
           parent_id?: string | null
+          photo_url?: string | null
           postal_code?: string | null
+          renovation_year?: number | null
           show_on_map?: boolean
           tenant_id: string
           type?: Database["public"]["Enums"]["location_type"]
@@ -1642,6 +1740,7 @@ export type Database = {
         Update: {
           address?: string | null
           city?: string | null
+          construction_year?: number | null
           contact_email?: string | null
           contact_person?: string | null
           contact_phone?: string | null
@@ -1649,14 +1748,19 @@ export type Database = {
           created_at?: string
           description?: string | null
           energy_sources?: string[] | null
+          gross_floor_area?: number | null
+          heating_type?: string | null
           id?: string
           is_archived?: boolean
           is_main_location?: boolean
           latitude?: number | null
           longitude?: number | null
           name?: string
+          net_floor_area?: number | null
           parent_id?: string | null
+          photo_url?: string | null
           postal_code?: string | null
+          renovation_year?: number | null
           show_on_map?: boolean
           tenant_id?: string
           type?: Database["public"]["Enums"]["location_type"]

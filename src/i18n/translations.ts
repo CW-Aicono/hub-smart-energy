@@ -5438,6 +5438,46 @@ export const translations = {
   "evApp.total": { de: "Gesamt", en: "Total", es: "Total", nl: "Totaal" },
   "evApp.copiedToClipboard": { de: "In Zwischenablage kopiert", en: "Copied to clipboard", es: "Copiado al portapapeles", nl: "Gekopieerd naar klembord" },
 
+  // ── Energy Report ─────────────────────────────────────────────────────
+  "nav.energyReport": { de: "Energiebericht", en: "Energy Report", es: "Informe energético", nl: "Energierapport" },
+  "energyReport.title": { de: "Kommunaler Energiebericht", en: "Municipal Energy Report", es: "Informe energético municipal", nl: "Gemeentelijk energierapport" },
+  "energyReport.subtitle": { de: "Erstellen Sie umfassende Energieberichte mit Liegenschaftssteckbriefen, Benchmarking und CO₂-Bilanz", en: "Create comprehensive energy reports with property profiles, benchmarking and CO₂ balance", es: "Cree informes energéticos completos con perfiles de propiedades, benchmarking y balance de CO₂", nl: "Maak uitgebreide energierapporten met vastgoedprofielen, benchmarking en CO₂-balans" },
+  "energyReport.configuration": { de: "Konfiguration", en: "Configuration", es: "Configuración", nl: "Configuratie" },
+  "energyReport.preview": { de: "Vorschau", en: "Preview", es: "Vista previa", nl: "Voorbeeld" },
+  "energyReport.reportSettings": { de: "Berichtseinstellungen", en: "Report Settings", es: "Configuración del informe", nl: "Rapportinstellingen" },
+  "energyReport.reportYear": { de: "Berichtsjahr", en: "Report Year", es: "Año del informe", nl: "Rapportjaar" },
+  "energyReport.selectLocations": { de: "Liegenschaften auswählen", en: "Select Properties", es: "Seleccionar propiedades", nl: "Vastgoed selecteren" },
+  "energyReport.selected": { de: "ausgewählt", en: "selected", es: "seleccionados", nl: "geselecteerd" },
+  "energyReport.selectAll": { de: "Alle auswählen", en: "Select All", es: "Seleccionar todos", nl: "Alles selecteren" },
+  "energyReport.deselectAll": { de: "Alle abwählen", en: "Deselect All", es: "Deseleccionar todos", nl: "Alles deselecteren" },
+  "energyReport.generate": { de: "Bericht erstellen", en: "Generate Report", es: "Generar informe", nl: "Rapport genereren" },
+  "energyReport.downloadPdf": { de: "Als PDF speichern", en: "Save as PDF", es: "Guardar como PDF", nl: "Opslaan als PDF" },
+
+  // ── Building Data ─────────────────────────────────────────────────────
+  "building.data": { de: "Gebäudedaten", en: "Building Data", es: "Datos del edificio", nl: "Gebouwgegevens" },
+  "building.constructionYear": { de: "Baujahr", en: "Year of Construction", es: "Año de construcción", nl: "Bouwjaar" },
+  "building.renovationYear": { de: "Letztes Sanierungsjahr", en: "Last Renovation Year", es: "Último año de renovación", nl: "Laatste renovatiejaar" },
+  "building.netFloorArea": { de: "Nettogrundfläche (NGF)", en: "Net Floor Area", es: "Superficie neta", nl: "Netto vloeroppervlak" },
+  "building.grossFloorArea": { de: "Bruttogrundfläche (BGF)", en: "Gross Floor Area", es: "Superficie bruta", nl: "Bruto vloeroppervlak" },
+  "building.heatingType": { de: "Heizungsart", en: "Heating Type", es: "Tipo de calefacción", nl: "Verwarmingstype" },
+
+  // ── CO2 Factors ───────────────────────────────────────────────────────
+  "co2.title": { de: "CO₂-Emissionsfaktoren", en: "CO₂ Emission Factors", es: "Factores de emisión de CO₂", nl: "CO₂-emissiefactoren" },
+  "co2.description": { de: "Faktoren zur Berechnung der CO₂-Emissionen pro Energieträger", en: "Factors for calculating CO₂ emissions per energy source", es: "Factores para calcular emisiones de CO₂ por fuente de energía", nl: "Factoren voor het berekenen van CO₂-uitstoot per energiebron" },
+  "co2.initDefaults": { de: "Standardwerte laden", en: "Load Defaults", es: "Cargar valores predeterminados", nl: "Standaardwaarden laden" },
+  "co2.energyType": { de: "Energieträger", en: "Energy Source", es: "Fuente de energía", nl: "Energiebron" },
+  "co2.factorKgKwh": { de: "kg CO₂/kWh", en: "kg CO₂/kWh", es: "kg CO₂/kWh", nl: "kg CO₂/kWh" },
+  "co2.source": { de: "Quelle", en: "Source", es: "Fuente", nl: "Bron" },
+  "co2.noFactors": { de: "Keine Emissionsfaktoren hinterlegt", en: "No emission factors configured", es: "No hay factores de emisión configurados", nl: "Geen emissiefactoren geconfigureerd" },
+
+  // ── Benchmarking ──────────────────────────────────────────────────────
+  "benchmark.title": { de: "Energiekennwerte (Benchmark)", en: "Energy Indicators (Benchmark)", es: "Indicadores energéticos (Benchmark)", nl: "Energie-indicatoren (Benchmark)" },
+  "benchmark.target": { de: "Ziel", en: "Target", es: "Objetivo", nl: "Doel" },
+  "benchmark.average": { de: "Mittel", en: "Average", es: "Promedio", nl: "Gemiddeld" },
+  "benchmark.high": { de: "Grenzwert", en: "High", es: "Alto", nl: "Hoog" },
+  "benchmark.good": { de: "Gut", en: "Good", es: "Bueno", nl: "Goed" },
+  "benchmark.hint": { de: "Kennwerte werden aus den Verbrauchsdaten und der Nettogrundfläche berechnet.", en: "Indicators are calculated from consumption data and net floor area.", es: "Los indicadores se calculan a partir de los datos de consumo y la superficie neta.", nl: "Indicatoren worden berekend op basis van verbruiksgegevens en netto vloeroppervlak." },
+
 } as const;
 
 export type TranslationKey = keyof typeof translations;

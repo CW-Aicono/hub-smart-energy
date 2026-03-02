@@ -8,7 +8,7 @@ import { useModuleGuard } from "@/hooks/useModuleGuard";
 import { useDemoMode, useDemoPath } from "@/contexts/DemoMode";
 import { Button } from "@/components/ui/button";
 import { MobileHeader } from "@/components/dashboard/MobileSidebar";
-import { LayoutDashboard, LogOut, Shield, Settings, Users, ChevronDown, ChevronRight, MapPin, PanelLeftClose, PanelLeft, UserCircle, Key, HelpCircle, Plug, Palette, Database, Gauge, Download, Car, PlugZap, Receipt, Cpu, Activity, Mail, Smartphone, Network, ListChecks, TrendingUp, Home, BookOpen } from "lucide-react";
+import { LayoutDashboard, LogOut, Shield, Settings, Users, ChevronDown, ChevronRight, MapPin, PanelLeftClose, PanelLeft, UserCircle, Key, HelpCircle, Plug, Palette, Database, Gauge, Download, Car, PlugZap, Receipt, Cpu, Activity, Mail, Smartphone, Network, ListChecks, TrendingUp, Home, BookOpen, FileText } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TenantLogo } from "@/components/tenant/TenantLogo";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -137,6 +137,7 @@ const DashboardSidebar = () => {
         { to: "/live-values", icon: Activity, labelKey: "nav.liveValues" as TranslationKey },
         { to: "/meters", icon: Gauge, labelKey: "nav.meters" as TranslationKey },
         { to: "/energy-data", icon: Download, labelKey: "nav.exports" as TranslationKey },
+        { to: "/energy-report", icon: FileText, labelKey: "nav.energyReport" as TranslationKey },
       ]
     },
     {
