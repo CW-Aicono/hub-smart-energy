@@ -187,6 +187,30 @@ const EnergyReport = () => {
     const printWindow = window.open("", "_blank");
     if (!printWindow || !reportRef.current) return;
 
+    // Capture SVG charts from the visible on-screen preview
+    const chartSvgs: Record<string, string> = {};
+    const previewContainer = reportRef.current.parentElement;
+    if (previewContainer) {
+      const chartCards = previewContainer.querySelectorAll("[data-chart-location]");
+      chartCards.forEach((el) => {
+        const locId = el.getAttribute("data-chart-location");
+        const svg = el.querySelector("svg");
+        if (locId && svg) {
+          const clone = svg.cloneNode(true) as SVGElement;
+          clone.setAttribute("width", "100%");
+          clone.setAttribute("height", "250");
+          chartSvgs[locId] = clone.outerHTML;
+        }
+      });
+    }
+
+    // Inject chart SVGs into print content
+    let printHtml = reportRef.current.innerHTML;
+    for (const [locId, svgHtml] of Object.entries(chartSvgs)) {
+      const placeholder = `<!--chart-placeholder-${locId}-->`;
+      printHtml = printHtml.replace(placeholder, svgHtml);
+    }
+
     printWindow.document.write(`
       <!DOCTYPE html>
       <html lang="de">
@@ -196,8 +220,8 @@ const EnergyReport = () => {
         <style>
           * { box-sizing: border-box; margin: 0; padding: 0; }
           body { font-family: system-ui, -apple-system, sans-serif; color: #1a1a1a; font-size: 11pt; line-height: 1.5; }
-          .page { page-break-after: always; padding: 20mm; min-height: 297mm; }
-          .page:last-child { page-break-after: auto; }
+          .page { padding: 20mm; }
+          .page-break { page-break-before: always; }
           h1 { font-size: 24pt; margin-bottom: 8pt; }
           h2 { font-size: 16pt; margin-bottom: 6pt; border-bottom: 2px solid #2563eb; padding-bottom: 4pt; }
           h3 { font-size: 13pt; margin: 12pt 0 6pt; }
@@ -220,10 +244,15 @@ const EnergyReport = () => {
           .profile-meta { display: grid; grid-template-columns: 1fr 1fr; gap: 8pt; }
           .profile-meta dt { font-size: 9pt; color: #6b7280; }
           .profile-meta dd { font-weight: 500; margin-bottom: 4pt; }
+          .chart-container { margin: 12pt 0; }
+          .chart-container svg { max-width: 100%; height: auto; }
+          .trend-row { display: flex; align-items: center; gap: 4px; }
+          .trend-up { color: #dc2626; }
+          .trend-down { color: #059669; }
           @media print { .page { padding: 15mm; } }
         </style>
       </head>
-      <body>${reportRef.current.innerHTML}</body>
+      <body>${printHtml}</body>
       </html>
     `);
     printWindow.document.close();
@@ -433,7 +462,7 @@ const EnergyReport = () => {
                 </div>
 
                 {/* Management Summary */}
-                <div className="page">
+                <div className="page page-break">
                   <h2>Management Summary</h2>
                   <div className="kpi-grid">
                     <div className="kpi-box">
@@ -512,11 +541,21 @@ const EnergyReport = () => {
                   </table>
                 </div>
 
-                {/* Individual property profiles */}
+                {/* Individual property profiles with charts */}
                 {selectedLocations.map((loc) => {
                   const locConsumption = consumption?.[yearNum]?.[loc.id] || {};
+                  // Build trend table data for print
+                  const energyTypes = new Set<string>();
+                  for (const y of trendYears) {
+                    const locData = consumption?.[y]?.[loc.id];
+                    if (locData) Object.keys(locData).forEach((t) => energyTypes.add(t));
+                  }
+                  const sortedYears = [...trendYears].sort((a, b) => a - b);
+                  const latestYear = sortedYears[sortedYears.length - 1];
+                  const prevYear = sortedYears.length > 1 ? sortedYears[sortedYears.length - 2] : null;
+
                   return (
-                    <div key={loc.id} className="page">
+                    <div key={loc.id} className="page page-break">
                       <h2>Liegenschaftssteckbrief: {loc.name}</h2>
                       <div className="profile-meta">
                         <div><dt>Adresse</dt><dd>{loc.address ? `${loc.address}, ${loc.postal_code || ""} ${loc.city || ""}` : "–"}</dd></div>
@@ -561,6 +600,54 @@ const EnergyReport = () => {
                         <p style={{ marginTop: "16pt", color: "#6b7280", fontStyle: "italic" }}>
                           Keine Verbrauchsdaten für {reportYear} vorhanden.
                         </p>
+                      )}
+
+                      {/* Chart placeholder – replaced with SVG at print time */}
+                      {energyTypes.size > 0 && trendYears.length > 1 && (
+                        <>
+                          <h3>Mehrjahresvergleich</h3>
+                          <div className="chart-container" dangerouslySetInnerHTML={{ __html: `<!--chart-placeholder-${loc.id}-->` }} />
+
+                          {/* Trend table for print */}
+                          <table>
+                            <thead>
+                              <tr>
+                                <th>Energieträger</th>
+                                {sortedYears.map((y) => (
+                                  <th key={y} style={{ textAlign: "right" }}>{y}</th>
+                                ))}
+                                <th style={{ textAlign: "right" }}>Trend</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {Array.from(energyTypes).sort().map((eType) => {
+                                const latestVal = consumption?.[latestYear]?.[loc.id]?.[eType] || 0;
+                                const prevVal = prevYear ? (consumption?.[prevYear]?.[loc.id]?.[eType] || 0) : 0;
+                                const trendPct = prevVal > 0 ? ((latestVal - prevVal) / prevVal) * 100 : 0;
+                                return (
+                                  <tr key={eType}>
+                                    <td style={{ textTransform: "capitalize" }}>{eType}</td>
+                                    {sortedYears.map((y) => (
+                                      <td key={y} style={{ textAlign: "right" }}>
+                                        {consumption?.[y]?.[loc.id]?.[eType]
+                                          ? `${consumption[y][loc.id][eType].toLocaleString("de-DE", { maximumFractionDigits: 0 })} kWh`
+                                          : "–"}
+                                      </td>
+                                    ))}
+                                    <td style={{ textAlign: "right" }}>
+                                      {prevVal > 0 ? (
+                                        <span className={trendPct > 2 ? "trend-up" : trendPct < -2 ? "trend-down" : ""}>
+                                          {trendPct > 0 ? "↑ +" : trendPct < -2 ? "↓ " : ""}
+                                          {trendPct.toFixed(1)}%
+                                        </span>
+                                      ) : "–"}
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </>
                       )}
 
                       <h3>Ansprechpartner</h3>
@@ -632,29 +719,31 @@ const EnergyReport = () => {
                   </Card>
                 )}
 
-                {/* Trend chart for first selected location */}
-                {consumption && selectedLocations.length > 0 && (
-                  <Card>
+                {/* Trend charts per location (used for PDF capture) */}
+                {consumption && selectedLocations.map((loc) => (
+                  <Card key={loc.id}>
                     <CardHeader>
                       <CardTitle className="flex items-center gap-2">
                         <BarChart3 className="h-5 w-5" />
-                        Mehrjahresvergleich – {selectedLocations[0].name}
+                        Mehrjahresvergleich – {loc.name}
                       </CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-4">
-                      <ConsumptionTrendChart
-                        locationId={selectedLocations[0].id}
-                        consumption={consumption}
-                        years={trendYears}
-                      />
+                      <div data-chart-location={loc.id}>
+                        <ConsumptionTrendChart
+                          locationId={loc.id}
+                          consumption={consumption}
+                          years={trendYears}
+                        />
+                      </div>
                       <ConsumptionTrendTable
-                        locationId={selectedLocations[0].id}
+                        locationId={loc.id}
                         consumption={consumption}
                         years={trendYears}
                       />
                     </CardContent>
                   </Card>
-                )}
+                ))}
 
                 {/* Property profiles – grouped by parent */}
                 {selectedHierarchy.map(({ parent, children }) => (
