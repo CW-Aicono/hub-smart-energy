@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, lazy, Suspense } from "react";
 import { useDashboardWidgets, WidgetSize } from "@/hooks/useDashboardWidgets";
 import { useTranslation } from "@/hooks/useTranslation";
 import { useModuleGuard } from "@/hooks/useModuleGuard";
@@ -8,26 +8,28 @@ import { useDashboardFilter } from "@/hooks/useDashboardFilter";
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
 import DashboardCustomizer from "@/components/dashboard/DashboardCustomizer";
 import { LocationFilter } from "@/components/dashboard/LocationFilter";
-import EnergyChart from "@/components/dashboard/EnergyChart";
-import CostOverview from "@/components/dashboard/CostOverview";
-import SustainabilityKPIs from "@/components/dashboard/SustainabilityKPIs";
-import AlertsList from "@/components/dashboard/AlertsList";
-import LocationMapWidget from "@/components/dashboard/LocationMapWidget";
-import FloorPlanWidget from "@/components/dashboard/FloorPlanWidget";
-import FloorPlanDashboardWidget from "@/components/dashboard/FloorPlanDashboardWidget";
-import WeatherWidget from "@/components/dashboard/WeatherWidget";
-import PieChartWidget from "@/components/dashboard/PieChartWidget";
-import SankeyWidget from "@/components/dashboard/SankeyWidget";
-import ForecastWidget from "@/components/dashboard/ForecastWidget";
-import AnomalyWidget from "@/components/dashboard/AnomalyWidget";
-import WeatherNormalizationWidget from "@/components/dashboard/WeatherNormalizationWidget";
-import EnergyGaugeWidget from "@/components/dashboard/EnergyGaugeWidget";
-import SpotPriceWidget from "@/components/dashboard/SpotPriceWidget";
-import PvForecastWidget from "@/components/dashboard/PvForecastWidget";
-import ArbitrageAiWidget from "@/components/dashboard/ArbitrageAiWidget";
 import WidgetErrorBoundary from "@/components/dashboard/WidgetErrorBoundary";
 import LazyWidget from "@/components/dashboard/LazyWidget";
 import { useDashboardPrefetch } from "@/hooks/useDashboardPrefetch";
+
+// Lazy-load all widget components – each resolves to its own chunk
+const EnergyChart = lazy(() => import("@/components/dashboard/EnergyChart"));
+const CostOverview = lazy(() => import("@/components/dashboard/CostOverview"));
+const SustainabilityKPIs = lazy(() => import("@/components/dashboard/SustainabilityKPIs"));
+const AlertsList = lazy(() => import("@/components/dashboard/AlertsList"));
+const LocationMapWidget = lazy(() => import("@/components/dashboard/LocationMapWidget"));
+const FloorPlanWidget = lazy(() => import("@/components/dashboard/FloorPlanWidget"));
+const FloorPlanDashboardWidget = lazy(() => import("@/components/dashboard/FloorPlanDashboardWidget"));
+const WeatherWidget = lazy(() => import("@/components/dashboard/WeatherWidget"));
+const PieChartWidget = lazy(() => import("@/components/dashboard/PieChartWidget"));
+const SankeyWidget = lazy(() => import("@/components/dashboard/SankeyWidget"));
+const ForecastWidget = lazy(() => import("@/components/dashboard/ForecastWidget"));
+const AnomalyWidget = lazy(() => import("@/components/dashboard/AnomalyWidget"));
+const WeatherNormalizationWidget = lazy(() => import("@/components/dashboard/WeatherNormalizationWidget"));
+const EnergyGaugeWidget = lazy(() => import("@/components/dashboard/EnergyGaugeWidget"));
+const SpotPriceWidget = lazy(() => import("@/components/dashboard/SpotPriceWidget"));
+const PvForecastWidget = lazy(() => import("@/components/dashboard/PvForecastWidget"));
+const ArbitrageAiWidget = lazy(() => import("@/components/dashboard/ArbitrageAiWidget"));
 
 interface WidgetProps {
   locationId: string | null;
@@ -91,11 +93,9 @@ const DashboardContent = () => {
   const { selectedLocationId, setSelectedLocationId } = useDashboardFilter();
   const { isModuleEnabled } = useModuleGuard();
 
-  // Prefetch shared data at dashboard level – fills React Query cache
-  // BEFORE LazyWidget mounts individual widgets on scroll
+  // Prefetch shared data at dashboard level
   useDashboardPrefetch(selectedLocationId);
 
-  // Filter visible widgets by active modules
   const filteredVisibleWidgets = useMemo(() => {
     return visibleWidgets.filter((w) => {
       const moduleCode = WIDGET_MODULE_MAP[w.widget_type];
@@ -151,7 +151,6 @@ const DashboardContent = () => {
                   ? getLocationWidget(selectedLocationId)
                   : widget.widget_type;
                 const Component = WIDGET_COMPONENTS[widgetType];
-                const sizeClass = SIZE_CLASS[widget.widget_size] || "w-full";
                 return Component ? (
                   <div
                     key={widget.widget_type}
@@ -189,9 +188,11 @@ const DashboardContent = () => {
           {expandedWidget && WIDGET_COMPONENTS[expandedWidget] && (() => {
             const ExpandedComponent = WIDGET_COMPONENTS[expandedWidget];
             return (
-              <WidgetErrorBoundary widgetName={expandedWidget}>
-                <ExpandedComponent locationId={selectedLocationId} onCollapse={() => setExpandedWidget(null)} />
-              </WidgetErrorBoundary>
+              <Suspense fallback={<div className="flex items-center justify-center p-12"><div className="animate-pulse text-muted-foreground">Laden…</div></div>}>
+                <WidgetErrorBoundary widgetName={expandedWidget}>
+                  <ExpandedComponent locationId={selectedLocationId} onCollapse={() => setExpandedWidget(null)} />
+                </WidgetErrorBoundary>
+              </Suspense>
             );
           })()}
         </DialogContent>
