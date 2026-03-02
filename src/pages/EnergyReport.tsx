@@ -1,4 +1,5 @@
 import { useState, useMemo, useRef } from "react";
+import { Input } from "@/components/ui/input";
 import { Navigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useLocations, Location } from "@/hooks/useLocations";
@@ -47,11 +48,15 @@ const EnergyReport = () => {
 
   const [reportYear, setReportYear] = useState(String(currentYear - 1));
   const [selectedLocationIds, setSelectedLocationIds] = useState<string[]>([]);
+  const [compareYears, setCompareYears] = useState(2);
   const [activeTab, setActiveTab] = useState("config");
   const reportRef = useRef<HTMLDivElement>(null);
 
   const yearNum = parseInt(reportYear);
-  const trendYears = useMemo(() => [yearNum - 2, yearNum - 1, yearNum], [yearNum]);
+  const trendYears = useMemo(() => {
+    if (compareYears <= 0) return [yearNum];
+    return Array.from({ length: compareYears + 1 }, (_, i) => yearNum - compareYears + i);
+  }, [yearNum, compareYears]);
 
   // Data hooks
   const { data: consumption } = useLocationYearlyConsumption(selectedLocationIds, trendYears);
@@ -284,18 +289,35 @@ const EnergyReport = () => {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <div className="flex items-center gap-4">
-                    <label className="text-sm font-medium">Berichtsjahr</label>
-                    <Select value={reportYear} onValueChange={setReportYear}>
-                      <SelectTrigger className="w-32">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {YEARS.map((y) => (
-                          <SelectItem key={y} value={String(y)}>{y}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                   <div className="flex flex-wrap items-center gap-6">
+                    <div className="flex items-center gap-4">
+                      <label className="text-sm font-medium">Berichtsjahr</label>
+                      <Select value={reportYear} onValueChange={setReportYear}>
+                        <SelectTrigger className="w-32">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {YEARS.map((y) => (
+                            <SelectItem key={y} value={String(y)}>{y}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <label className="text-sm font-medium">Vergleichsjahre</label>
+                      <Input
+                        type="number"
+                        min={0}
+                        max={10}
+                        step={1}
+                        value={compareYears}
+                        onChange={(e) => setCompareYears(Math.max(0, Math.min(10, parseInt(e.target.value) || 0)))}
+                        className="w-20"
+                      />
+                      <span className="text-xs text-muted-foreground">
+                        {compareYears === 0 ? "Kein Vergleich" : `${compareYears + 1} Jahre (${trendYears[0]}–${trendYears[trendYears.length - 1]})`}
+                      </span>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
