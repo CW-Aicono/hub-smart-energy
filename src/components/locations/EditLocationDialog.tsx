@@ -73,6 +73,11 @@ const locationSchema = z.object({
   latitude: z.coerce.number().min(-90).max(90).optional().or(z.literal("")),
   longitude: z.coerce.number().min(-180).max(180).optional().or(z.literal("")),
   description: z.string().trim().max(500).optional(),
+  construction_year: z.coerce.number().int().min(1800).max(2100).optional().or(z.literal("")),
+  renovation_year: z.coerce.number().int().min(1800).max(2100).optional().or(z.literal("")),
+  net_floor_area: z.coerce.number().min(0).optional().or(z.literal("")),
+  gross_floor_area: z.coerce.number().min(0).optional().or(z.literal("")),
+  heating_type: z.string().trim().max(100).optional(),
 });
 
 type LocationFormData = z.infer<typeof locationSchema>;
@@ -108,6 +113,11 @@ export function EditLocationDialog({ location, onSuccess, trigger }: EditLocatio
       latitude: location.latitude ?? "",
       longitude: location.longitude ?? "",
       description: location.description || "",
+      construction_year: location.construction_year ?? "",
+      renovation_year: location.renovation_year ?? "",
+      net_floor_area: location.net_floor_area ?? "",
+      gross_floor_area: location.gross_floor_area ?? "",
+      heating_type: location.heating_type || "",
     },
   });
 
@@ -131,6 +141,11 @@ export function EditLocationDialog({ location, onSuccess, trigger }: EditLocatio
       latitude: location.latitude ?? "",
       longitude: location.longitude ?? "",
       description: location.description || "",
+      construction_year: location.construction_year ?? "",
+      renovation_year: location.renovation_year ?? "",
+      net_floor_area: location.net_floor_area ?? "",
+      gross_floor_area: location.gross_floor_area ?? "",
+      heating_type: location.heating_type || "",
     });
     setOpen(true);
   };
@@ -152,6 +167,11 @@ export function EditLocationDialog({ location, onSuccess, trigger }: EditLocatio
       latitude: typeof data.latitude === "number" ? data.latitude : null,
       longitude: typeof data.longitude === "number" ? data.longitude : null,
       description: data.description || null,
+      construction_year: typeof data.construction_year === "number" ? data.construction_year : null,
+      renovation_year: typeof data.renovation_year === "number" ? data.renovation_year : null,
+      net_floor_area: typeof data.net_floor_area === "number" ? data.net_floor_area : null,
+      gross_floor_area: typeof data.gross_floor_area === "number" ? data.gross_floor_area : null,
+      heating_type: data.heating_type || null,
     };
 
     const { error } = await updateLocation(location.id, updates);
@@ -397,6 +417,50 @@ export function EditLocationDialog({ location, onSuccess, trigger }: EditLocatio
                   </FormItem>
                 )}
               />
+
+              {/* Building Data */}
+              <div className="space-y-4">
+                <h4 className="text-sm font-medium">{t("building.data" as any)}</h4>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <FormField control={form.control} name="construction_year" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{t("building.constructionYear" as any)}</FormLabel>
+                      <FormControl><Input type="number" placeholder="z.B. 1985" {...field} value={field.value ?? ""} /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )} />
+                  <FormField control={form.control} name="renovation_year" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{t("building.renovationYear" as any)}</FormLabel>
+                      <FormControl><Input type="number" placeholder="z.B. 2020" {...field} value={field.value ?? ""} /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )} />
+                </div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <FormField control={form.control} name="net_floor_area" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{t("building.netFloorArea" as any)}</FormLabel>
+                      <FormControl><Input type="number" step="any" placeholder="m²" {...field} value={field.value ?? ""} /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )} />
+                  <FormField control={form.control} name="gross_floor_area" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{t("building.grossFloorArea" as any)}</FormLabel>
+                      <FormControl><Input type="number" step="any" placeholder="m²" {...field} value={field.value ?? ""} /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )} />
+                </div>
+                <FormField control={form.control} name="heating_type" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t("building.heatingType" as any)}</FormLabel>
+                    <FormControl><Input placeholder="z.B. Gas-Brennwert, Fernwärme" {...field} /></FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+              </div>
 
               {/* Coordinates */}
               <div className="space-y-4">

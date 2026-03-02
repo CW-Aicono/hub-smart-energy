@@ -21,7 +21,7 @@ import { Badge } from "@/components/ui/badge";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EditLocationDialog } from "@/components/locations/EditLocationDialog";
-import { ArrowLeft, Building2, MapPin, Mail, Phone, User, Star, Layers, ChevronDown, ChevronRight, Cpu, Pencil } from "lucide-react";
+import { ArrowLeft, Building2, MapPin, Mail, Phone, User, Star, Layers, ChevronDown, ChevronRight, Cpu, Pencil, Calendar, Ruler, Flame } from "lucide-react";
 
 const FloorsCollapsible = ({ locationId, isAdmin, floors, floorsLoading, refetchFloors, t }: { locationId: string; isAdmin: boolean; floors: any[]; floorsLoading: boolean; refetchFloors: () => void; t: (key: any) => string }) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -161,6 +161,46 @@ const LocationDetail = () => {
               </CardContent>
             </Card>
           </div>
+
+          {/* Building Data Card */}
+          {(location.construction_year || location.net_floor_area || location.heating_type) && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2"><Building2 className="h-5 w-5" />{t("building.data" as any) || "Gebäudedaten"}</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                  {location.construction_year && (
+                    <div className="flex items-start gap-2">
+                      <Calendar className="h-4 w-4 mt-0.5 text-muted-foreground" />
+                      <div>
+                        <p className="text-xs text-muted-foreground">{t("building.constructionYear" as any)}</p>
+                        <p className="font-medium">{location.construction_year}{location.renovation_year ? ` (San. ${location.renovation_year})` : ""}</p>
+                      </div>
+                    </div>
+                  )}
+                  {location.net_floor_area && (
+                    <div className="flex items-start gap-2">
+                      <Ruler className="h-4 w-4 mt-0.5 text-muted-foreground" />
+                      <div>
+                        <p className="text-xs text-muted-foreground">{t("building.netFloorArea" as any)}</p>
+                        <p className="font-medium">{location.net_floor_area.toLocaleString("de-DE")} m²{location.gross_floor_area ? ` / ${location.gross_floor_area.toLocaleString("de-DE")} m² BGF` : ""}</p>
+                      </div>
+                    </div>
+                  )}
+                  {location.heating_type && (
+                    <div className="flex items-start gap-2">
+                      <Flame className="h-4 w-4 mt-0.5 text-muted-foreground" />
+                      <div>
+                        <p className="text-xs text-muted-foreground">{t("building.heatingType" as any)}</p>
+                        <p className="font-medium">{location.heating_type}</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {isModuleEnabled("floor_plans") && (
             <FloorsCollapsible locationId={location.id} isAdmin={isAdmin} floors={floors} floorsLoading={floorsLoading} refetchFloors={refetchFloors} t={t} />
