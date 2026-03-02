@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "./useAuth";
 import { useTenantQuery } from "./useTenantQuery";
 import { toast } from "sonner";
@@ -22,6 +23,7 @@ export interface MeterReading {
 export function useMeterReadings(meterId?: string) {
   const { user } = useAuth();
   const { tenantId, ready, insert: tenantInsert } = useTenantQuery();
+  const queryClient = useQueryClient();
   const [readings, setReadings] = useState<MeterReading[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -90,6 +92,7 @@ export function useMeterReadings(meterId?: string) {
     }
     toast.success(t("meterReading.created"));
     fetchReadings();
+    queryClient.invalidateQueries({ queryKey: ["energy-readings-and-sources"] });
 
     // Auto-sync to BrightHub if enabled (check per-location settings)
     try {
@@ -131,6 +134,7 @@ export function useMeterReadings(meterId?: string) {
     }
     toast.success(t("meterReading.deleted"));
     fetchReadings();
+    queryClient.invalidateQueries({ queryKey: ["energy-readings-and-sources"] });
     return true;
   };
 
