@@ -1,5 +1,5 @@
-import { useState, useMemo } from "react";
-import { useDashboardWidgets, WidgetSize } from "@/hooks/useDashboardWidgets";
+import { useState, useMemo, lazy, Suspense } from "react";
+import { useDashboardWidgets } from "@/hooks/useDashboardWidgets";
 import { useTranslation } from "@/hooks/useTranslation";
 import { useModuleGuard } from "@/hooks/useModuleGuard";
 import { DashboardFilterProvider, useDashboardFilter } from "@/hooks/useDashboardFilter";
@@ -7,23 +7,25 @@ import { DemoLayout } from "@/components/layout/DemoLayout";
 import { LocationFilter } from "@/components/dashboard/LocationFilter";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { ZoomIn } from "lucide-react";
-import EnergyChart from "@/components/dashboard/EnergyChart";
-import CostOverview from "@/components/dashboard/CostOverview";
-import SustainabilityKPIs from "@/components/dashboard/SustainabilityKPIs";
-import AlertsList from "@/components/dashboard/AlertsList";
-import LocationMapWidget from "@/components/dashboard/LocationMapWidget";
-import FloorPlanWidget from "@/components/dashboard/FloorPlanWidget";
-import FloorPlanDashboardWidget from "@/components/dashboard/FloorPlanDashboardWidget";
-import WeatherWidget from "@/components/dashboard/WeatherWidget";
-import PieChartWidget from "@/components/dashboard/PieChartWidget";
-import SankeyWidget from "@/components/dashboard/SankeyWidget";
-import ForecastWidget from "@/components/dashboard/ForecastWidget";
-import AnomalyWidget from "@/components/dashboard/AnomalyWidget";
-import WeatherNormalizationWidget from "@/components/dashboard/WeatherNormalizationWidget";
-import EnergyGaugeWidget from "@/components/dashboard/EnergyGaugeWidget";
-import SpotPriceWidget from "@/components/dashboard/SpotPriceWidget";
-import PvForecastWidget from "@/components/dashboard/PvForecastWidget";
-import ArbitrageAiWidget from "@/components/dashboard/ArbitrageAiWidget";
+
+// Lazy-load all widget components
+const EnergyChart = lazy(() => import("@/components/dashboard/EnergyChart"));
+const CostOverview = lazy(() => import("@/components/dashboard/CostOverview"));
+const SustainabilityKPIs = lazy(() => import("@/components/dashboard/SustainabilityKPIs"));
+const AlertsList = lazy(() => import("@/components/dashboard/AlertsList"));
+const LocationMapWidget = lazy(() => import("@/components/dashboard/LocationMapWidget"));
+const FloorPlanWidget = lazy(() => import("@/components/dashboard/FloorPlanWidget"));
+const FloorPlanDashboardWidget = lazy(() => import("@/components/dashboard/FloorPlanDashboardWidget"));
+const WeatherWidget = lazy(() => import("@/components/dashboard/WeatherWidget"));
+const PieChartWidget = lazy(() => import("@/components/dashboard/PieChartWidget"));
+const SankeyWidget = lazy(() => import("@/components/dashboard/SankeyWidget"));
+const ForecastWidget = lazy(() => import("@/components/dashboard/ForecastWidget"));
+const AnomalyWidget = lazy(() => import("@/components/dashboard/AnomalyWidget"));
+const WeatherNormalizationWidget = lazy(() => import("@/components/dashboard/WeatherNormalizationWidget"));
+const EnergyGaugeWidget = lazy(() => import("@/components/dashboard/EnergyGaugeWidget"));
+const SpotPriceWidget = lazy(() => import("@/components/dashboard/SpotPriceWidget"));
+const PvForecastWidget = lazy(() => import("@/components/dashboard/PvForecastWidget"));
+const ArbitrageAiWidget = lazy(() => import("@/components/dashboard/ArbitrageAiWidget"));
 
 interface WidgetProps {
   locationId: string | null;
@@ -128,7 +130,9 @@ const DemoContent = () => {
                       <ZoomIn className="h-4 w-4 text-muted-foreground" />
                     </button>
                   )}
-                  <Component locationId={selectedLocationId} />
+                  <Suspense fallback={<div className="h-[200px] animate-pulse bg-muted rounded-lg" />}>
+                    <Component locationId={selectedLocationId} />
+                  </Suspense>
                 </div>
               ) : null;
             })
@@ -143,7 +147,11 @@ const DemoContent = () => {
         <DialogContent className="max-w-[90vw] w-full max-h-[90vh] overflow-auto p-6" hideCloseButton>
           {expandedWidget && WIDGET_COMPONENTS[expandedWidget] && (() => {
             const ExpandedComponent = WIDGET_COMPONENTS[expandedWidget];
-            return <ExpandedComponent locationId={selectedLocationId} onCollapse={() => setExpandedWidget(null)} />;
+            return (
+              <Suspense fallback={<div className="flex items-center justify-center p-12"><div className="animate-pulse text-muted-foreground">Laden…</div></div>}>
+                <ExpandedComponent locationId={selectedLocationId} onCollapse={() => setExpandedWidget(null)} />
+              </Suspense>
+            );
           })()}
         </DialogContent>
       </Dialog>

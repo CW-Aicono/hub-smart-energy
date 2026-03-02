@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect, ReactNode } from "react";
+import { useRef, useState, useEffect, ReactNode, Suspense } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent } from "@/components/ui/card";
 
@@ -8,10 +8,20 @@ interface LazyWidgetProps {
   minHeight?: number;
 }
 
+const WidgetPlaceholder = ({ minHeight }: { minHeight: number }) => (
+  <Card>
+    <CardContent className="p-4 space-y-3" style={{ minHeight }}>
+      <Skeleton className="h-5 w-1/3" />
+      <Skeleton className="h-[140px] w-full rounded-md" />
+    </CardContent>
+  </Card>
+);
+
 /**
  * Renders children only once the wrapper scrolls into the viewport.
  * Uses IntersectionObserver with a generous rootMargin so widgets
  * start loading slightly before they become visible.
+ * Wraps children in Suspense so React.lazy() components work correctly.
  */
 export default function LazyWidget({ children, minHeight = 200 }: LazyWidgetProps) {
   const ref = useRef<HTMLDivElement>(null);
@@ -52,15 +62,16 @@ export default function LazyWidget({ children, minHeight = 200 }: LazyWidgetProp
   if (!visible) {
     return (
       <div ref={ref} style={{ minHeight }}>
-        <Card>
-          <CardContent className="p-4 space-y-3">
-            <Skeleton className="h-5 w-1/3" />
-            <Skeleton className="h-[140px] w-full rounded-md" />
-          </CardContent>
-        </Card>
+        <WidgetPlaceholder minHeight={minHeight} />
       </div>
     );
   }
 
-  return <div ref={ref}>{children}</div>;
+  return (
+    <div ref={ref}>
+      <Suspense fallback={<WidgetPlaceholder minHeight={minHeight} />}>
+        {children}
+      </Suspense>
+    </div>
+  );
 }
