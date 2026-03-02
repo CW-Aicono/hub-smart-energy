@@ -14,7 +14,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Download, Database, Filter, Calendar, FileText, Upload } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Download, Database, Filter, Calendar, FileText, Upload, Info, FileSpreadsheet, CheckCircle2, ArrowRight } from "lucide-react";
 import { downloadCSV, downloadPDF } from "@/lib/exportUtils";
 import ReportSchedulesList from "@/components/energy-data/ReportSchedulesList";
 import { supabase } from "@/integrations/supabase/client";
@@ -52,7 +53,6 @@ const EnergyData = () => {
     wasser: "energyData.wasser",
   };
 
-  // Fetch reading count for badge
   useEffect(() => {
     if (!user) return;
     const fetchCount = async () => {
@@ -182,145 +182,234 @@ const EnergyData = () => {
           </p>
         </header>
 
-        <div className="p-3 md:p-6 space-y-6">
-          <div className="grid gap-6 md:grid-cols-3">
-            {/* Filter: Location */}
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm flex items-center gap-2">
-                  <Filter className="h-4 w-4" />
-                  {t("energyData.location" as any)}
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <Select value={selectedLocationId} onValueChange={setSelectedLocationId}>
-                  <SelectTrigger>
-                    <SelectValue placeholder={t("energyData.selectLocation" as any)} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">{t("energyData.allLocations" as any)}</SelectItem>
-                    {locations.map((loc) => (
-                      <SelectItem key={loc.id} value={loc.id}>{loc.name}</SelectItem>
+        <div className="p-3 md:p-6">
+          <Tabs defaultValue="export" className="space-y-6">
+            <TabsList>
+              <TabsTrigger value="export" className="gap-2">
+                <Download className="h-4 w-4" />
+                {t("energyData.tabExport" as any)}
+              </TabsTrigger>
+              <TabsTrigger value="import" className="gap-2">
+                <Upload className="h-4 w-4" />
+                {t("energyData.tabImport" as any)}
+              </TabsTrigger>
+            </TabsList>
+
+            {/* === Export Tab === */}
+            <TabsContent value="export" className="space-y-6">
+              <div className="grid gap-6 md:grid-cols-3">
+                {/* Filter: Location */}
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-sm flex items-center gap-2">
+                      <Filter className="h-4 w-4" />
+                      {t("energyData.location" as any)}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <Select value={selectedLocationId} onValueChange={setSelectedLocationId}>
+                      <SelectTrigger>
+                        <SelectValue placeholder={t("energyData.selectLocation" as any)} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">{t("energyData.allLocations" as any)}</SelectItem>
+                        {locations.map((loc) => (
+                          <SelectItem key={loc.id} value={loc.id}>{loc.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </CardContent>
+                </Card>
+
+                {/* Filter: Energy Types */}
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-sm">{t("energyData.energyTypes" as any)}</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-2">
+                    {Object.entries(ENERGY_TYPE_KEYS).map(([key, tKey]) => (
+                      <div key={key} className="flex items-center gap-2">
+                        <Checkbox
+                          id={`energy-${key}`}
+                          checked={selectedEnergyTypes.includes(key)}
+                          onCheckedChange={() => toggleEnergyType(key)}
+                        />
+                        <Label htmlFor={`energy-${key}`} className="text-sm cursor-pointer">{t(tKey as any)}</Label>
+                      </div>
                     ))}
-                  </SelectContent>
-                </Select>
-              </CardContent>
-            </Card>
+                  </CardContent>
+                </Card>
 
-            {/* Filter: Energy Types */}
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm">{t("energyData.energyTypes" as any)}</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                {Object.entries(ENERGY_TYPE_KEYS).map(([key, tKey]) => (
-                  <div key={key} className="flex items-center gap-2">
-                    <Checkbox
-                      id={`energy-${key}`}
-                      checked={selectedEnergyTypes.includes(key)}
-                      onCheckedChange={() => toggleEnergyType(key)}
-                    />
-                    <Label htmlFor={`energy-${key}`} className="text-sm cursor-pointer">{t(tKey as any)}</Label>
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-
-            {/* Filter: Date Range */}
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm flex items-center gap-2">
-                  <Calendar className="h-4 w-4" />
-                  {t("energyData.dateRange" as any)}
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div>
-                  <Label className="text-xs">{t("energyData.from" as any)}</Label>
-                  <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
-                </div>
-                <div>
-                  <Label className="text-xs">{t("energyData.to" as any)}</Label>
-                  <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Data Sources */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">{t("energyData.dataSources" as any)}</CardTitle>
-              <CardDescription>{t("energyData.dataSourcesDesc" as any)}</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center justify-between p-3 rounded-md border">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <Checkbox
-                      id="source-readings"
-                      checked={includeReadings}
-                      onCheckedChange={(c) => setIncludeReadings(!!c)}
-                    />
-                    <Label htmlFor="source-readings" className="cursor-pointer font-medium">
-                      {t("energyData.meterReadings" as any)}
-                    </Label>
-                  </div>
-                  <p className="text-xs text-muted-foreground ml-6">{t("energyData.meterReadingsDesc" as any)}</p>
-                </div>
-                <Badge variant="secondary">{readingsCount} {t("energyData.readings" as any)}</Badge>
+                {/* Filter: Date Range */}
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-sm flex items-center gap-2">
+                      <Calendar className="h-4 w-4" />
+                      {t("energyData.dateRange" as any)}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <div>
+                      <Label className="text-xs">{t("energyData.from" as any)}</Label>
+                      <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
+                    </div>
+                    <div>
+                      <Label className="text-xs">{t("energyData.to" as any)}</Label>
+                      <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
+                    </div>
+                  </CardContent>
+                </Card>
               </div>
 
-              <div className="flex items-center justify-between p-3 rounded-md border">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <Checkbox
-                      id="source-meters"
-                      checked={includeMeters}
-                      onCheckedChange={(c) => setIncludeMeters(!!c)}
-                    />
-                    <Label htmlFor="source-meters" className="cursor-pointer font-medium">
-                      {t("energyData.meters" as any)}
-                    </Label>
+              {/* Data Sources */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">{t("energyData.dataSources" as any)}</CardTitle>
+                  <CardDescription>{t("energyData.dataSourcesDesc" as any)}</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex items-center justify-between p-3 rounded-md border">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <Checkbox
+                          id="source-readings"
+                          checked={includeReadings}
+                          onCheckedChange={(c) => setIncludeReadings(!!c)}
+                        />
+                        <Label htmlFor="source-readings" className="cursor-pointer font-medium">
+                          {t("energyData.meterReadings" as any)}
+                        </Label>
+                      </div>
+                      <p className="text-xs text-muted-foreground ml-6">{t("energyData.meterReadingsDesc" as any)}</p>
+                    </div>
+                    <Badge variant="secondary">{readingsCount} {t("energyData.readings" as any)}</Badge>
                   </div>
-                  <p className="text-xs text-muted-foreground ml-6">{t("energyData.metersDesc" as any)}</p>
-                </div>
-                <Badge variant="secondary">{filteredMeters.length} {t("energyData.metersCount" as any)}</Badge>
+
+                  <div className="flex items-center justify-between p-3 rounded-md border">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <Checkbox
+                          id="source-meters"
+                          checked={includeMeters}
+                          onCheckedChange={(c) => setIncludeMeters(!!c)}
+                        />
+                        <Label htmlFor="source-meters" className="cursor-pointer font-medium">
+                          {t("energyData.meters" as any)}
+                        </Label>
+                      </div>
+                      <p className="text-xs text-muted-foreground ml-6">{t("energyData.metersDesc" as any)}</p>
+                    </div>
+                    <Badge variant="secondary">{filteredMeters.length} {t("energyData.metersCount" as any)}</Badge>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Export Buttons */}
+              <div className="flex justify-end gap-3">
+                <Button
+                  variant="outline"
+                  size="lg"
+                  onClick={handlePdfExport}
+                  disabled={(!includeReadings && !includeMeters) || loadingReadings}
+                >
+                  <FileText className="h-4 w-4 mr-2" />
+                  {t("energyData.exportPdf" as any)}
+                </Button>
+                <Button
+                  size="lg"
+                  onClick={handleExport}
+                  disabled={(!includeReadings && !includeMeters) || loadingReadings}
+                >
+                  <Download className="h-4 w-4 mr-2" />
+                  {t("energyData.exportCsv" as any)}
+                </Button>
               </div>
-            </CardContent>
-          </Card>
 
-          {/* Import & Export Buttons */}
-          <div className="flex justify-end gap-3">
-            <Button
-              variant="outline"
-              size="lg"
-              onClick={() => setImportDialogOpen(true)}
-            >
-              <Upload className="h-4 w-4 mr-2" />
-              {t("import.title" as any)}
-            </Button>
-            <Button
-              variant="outline"
-              size="lg"
-              onClick={handlePdfExport}
-              disabled={(!includeReadings && !includeMeters) || loadingReadings}
-            >
-              <FileText className="h-4 w-4 mr-2" />
-              {t("energyData.exportPdf" as any)}
-            </Button>
-            <Button
-              size="lg"
-              onClick={handleExport}
-              disabled={(!includeReadings && !includeMeters) || loadingReadings}
-            >
-              <Download className="h-4 w-4 mr-2" />
-              {t("energyData.exportCsv" as any)}
-            </Button>
-          </div>
+              {/* Automated Reports */}
+              <ReportSchedulesList />
+            </TabsContent>
 
-          {/* Automated Reports */}
-          <ReportSchedulesList />
+            {/* === Import Tab === */}
+            <TabsContent value="import" className="space-y-6">
+              {/* Description */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Info className="h-5 w-5 text-primary" />
+                    {t("energyData.tabImport" as any)}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-sm text-muted-foreground leading-relaxed">
+                    {t("energyData.importDescription" as any)}
+                  </p>
+                </CardContent>
+              </Card>
+
+              {/* Import types */}
+              <div className="grid gap-6 md:grid-cols-2">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-sm flex items-center gap-2">
+                      <FileSpreadsheet className="h-4 w-4 text-primary" />
+                      {t("energyData.importReadingsTitle" as any)}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-sm text-muted-foreground">
+                      {t("energyData.importReadingsDesc" as any)}
+                    </p>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-sm flex items-center gap-2">
+                      <FileSpreadsheet className="h-4 w-4 text-primary" />
+                      {t("energyData.importConsumptionTitle" as any)}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-sm text-muted-foreground">
+                      {t("energyData.importConsumptionDesc" as any)}
+                    </p>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Requirements */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-sm">{t("energyData.importRequirements" as any)}</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <ul className="space-y-2 text-sm text-muted-foreground">
+                    <li className="flex items-start gap-2">
+                      <CheckCircle2 className="h-4 w-4 text-primary mt-0.5 shrink-0" />
+                      {t("energyData.importReq1" as any)}
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <CheckCircle2 className="h-4 w-4 text-primary mt-0.5 shrink-0" />
+                      {t("energyData.importReq2" as any)}
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <CheckCircle2 className="h-4 w-4 text-primary mt-0.5 shrink-0" />
+                      {t("energyData.importReq3" as any)}
+                    </li>
+                  </ul>
+                </CardContent>
+              </Card>
+
+              {/* Import Button */}
+              <div className="flex justify-end">
+                <Button size="lg" onClick={() => setImportDialogOpen(true)}>
+                  <Upload className="h-4 w-4 mr-2" />
+                  {t("import.title" as any)}
+                  <ArrowRight className="h-4 w-4 ml-2" />
+                </Button>
+              </div>
+            </TabsContent>
+          </Tabs>
         </div>
 
         <Suspense fallback={null}>
