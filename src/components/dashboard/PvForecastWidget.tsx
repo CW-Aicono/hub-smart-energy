@@ -10,6 +10,7 @@ import { HelpTooltip } from "@/components/ui/help-tooltip";
 import { useTranslation } from "@/hooks/useTranslation";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import { supabase } from "@/integrations/supabase/client";
+import { formatEnergy } from "@/lib/formatEnergy";
 import { useDashboardFilter, type TimePeriod } from "@/hooks/useDashboardFilter";
 import { useTenant } from "@/hooks/useTenant";
 import { useQuery } from "@tanstack/react-query";
@@ -338,6 +339,32 @@ const PvForecastWidget = ({ locationId }: PvForecastWidgetProps) => {
     })();
   }, [locationId, settings?.pv_meter_id, isDay, fromDateStr, toDateStr]);
 
+  // Fetch real-time PV power from meter_power_readings (sum of latest per PV meter)
+  const { data: realtimePowerKw } = useQuery({
+    queryKey: ["current-pv-power", locationId ?? "all", settings?.pv_meter_id],
+    queryFn: async () => {
+      const meterIds = await resolvePvMeterIds();
+      if (meterIds.length === 0) return 0;
+
+      let totalKw = 0;
+      for (const mid of meterIds) {
+        const { data } = await supabase
+          .from("meter_power_readings")
+          .select("power_value")
+          .eq("meter_id", mid)
+          .order("recorded_at", { ascending: false })
+          .limit(1);
+        if (data && data.length > 0) {
+          totalKw += Math.abs(data[0].power_value);
+        }
+      }
+      return totalKw;
+    },
+    enabled: isToday,
+    refetchInterval: 60_000,
+    staleTime: 30_000,
+  });
+
   if (isLoading) {
     return (
       <Card>
@@ -358,7 +385,6 @@ const PvForecastWidget = ({ locationId }: PvForecastWidgetProps) => {
 
   const { summary } = forecast ?? { summary: { ai_confidence: "", ai_notes: "" } };
 
-  // Determine which hourly data to use for the day view
   const liveHourly = forecast?.hourly ?? [];
   const dayHourly = isDay && offset < 0 && dbHourlyData
     ? dbHourlyData.map((h) => ({
@@ -370,12 +396,10 @@ const PvForecastWidget = ({ locationId }: PvForecastWidgetProps) => {
       }))
     : liveHourly;
 
-  // Filter hourly data to the selected date (day view)
   const filteredHourly = isDay
     ? dayHourly.filter((h) => toLocalDateStr(new Date(h.timestamp)) === refDateStr)
     : [];
 
-  // For multi-day periods, build bar chart from dbForecastDays with actual data
   const hasMultiDayActuals = Object.keys(multiDayActuals).length > 0;
   const multiDayChart = !isDay && dbForecastDays
     ? dbForecastDays.map((d) => ({
@@ -386,11 +410,7 @@ const PvForecastWidget = ({ locationId }: PvForecastWidgetProps) => {
     : [];
 
   const now = new Date();
-  const currentEntry = filteredHourly.find((h) => {
-    const t = new Date(h.timestamp);
-    return t.getTime() <= now.getTime() && now.getTime() < t.getTime() + 3600000;
-  });
-  const currentKw = currentEntry ? (currentEntry.ai_adjusted_kwh ?? currentEntry.estimated_kwh) : 0;
+  const currentKw = realtimePowerKw ?? 0;
 
   // Compute actual daily total from readings
   const actualTotalKwh = isDay
@@ -465,7 +485,7 @@ const PvForecastWidget = ({ locationId }: PvForecastWidgetProps) => {
           {isToday && (
             <div>
               <p className="text-xs text-muted-foreground">{T("pv.now")}</p>
-              <p className="text-xl font-bold text-amber-600">{currentKw.toFixed(1)} kW</p>
+              <p className="text-xl font-bold text-amber-600">{formatEnergy(currentKw * 1000, "W")}</p>
             </div>
           )}
           <div>
