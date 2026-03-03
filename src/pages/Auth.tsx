@@ -7,9 +7,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { Zap, ArrowLeft } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { z } from "zod";
 import { supabase } from "@/integrations/supabase/client";
+import aiconoLogo from "@/assets/aicono-logo.png";
 
 type AuthView = "login" | "forgotPassword";
 
@@ -94,15 +95,9 @@ const Auth = () => {
       {/* Left branding panel */}
       <div className="hidden lg:flex lg:w-1/2 bg-primary items-center justify-center p-12">
         <div className="max-w-md text-primary-foreground">
-          <div className="flex items-center gap-3 mb-8">
-            <div className="h-12 w-12 rounded-lg bg-accent flex items-center justify-center">
-              <Zap className="h-7 w-7 text-accent-foreground" />
-            </div>
-            <h1 className="text-3xl font-display font-bold">Smart Energy Hub</h1>
+          <div className="flex flex-col items-start gap-4 mb-8">
+            <img src={aiconoLogo} alt="AICONO" className="h-24 object-contain" />
           </div>
-          <p className="text-lg opacity-80 leading-relaxed">
-            {t("auth.appDescription")}
-          </p>
         </div>
       </div>
 
@@ -110,11 +105,8 @@ const Auth = () => {
       <div className="flex w-full lg:w-1/2 items-center justify-center p-8 bg-background">
         <Card className="w-full max-w-md border-0 shadow-lg">
           <CardHeader className="text-center">
-            <div className="flex items-center justify-center gap-2 mb-2 lg:hidden">
-              <div className="h-9 w-9 rounded-lg bg-accent flex items-center justify-center">
-                <Zap className="h-5 w-5 text-accent-foreground" />
-              </div>
-              <span className="text-xl font-display font-bold">Smart Energy Hub</span>
+            <div className="flex items-center justify-center mb-2 lg:hidden">
+              <img src={aiconoLogo} alt="AICONO" className="h-16 object-contain" />
             </div>
             <CardTitle className="text-2xl font-display">
               {view === "forgotPassword" ? t("auth.forgotPassword") : t("auth.welcomeBack")}
