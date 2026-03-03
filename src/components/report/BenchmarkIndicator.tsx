@@ -44,11 +44,18 @@ export function BenchmarkIndicator({ specificValue, usageType, energyType, compa
     );
   }
 
+  const energyLabelMap: Record<string, string> = {
+    strom: t("energy.electricity" as any) || "Strom",
+    waerme: t("energy.heat" as any) || "Wärme",
+    wasser: t("energy.water" as any) || "Wasser",
+    gas: t("energy.gas" as any) || "Gas",
+  };
+
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between text-sm">
         <span className="font-medium">
-          {energyType === "strom" ? (t("energy.electricity" as any) || "Strom") : (t("energy.heat" as any) || "Wärme")}
+          {energyLabelMap[energyType] || energyType}
         </span>
         <span className={cn("font-semibold", rating === "green" ? "text-emerald-600" : rating === "yellow" ? "text-amber-600" : "text-red-600")}>
           {specificValue.toLocaleString("de-DE", { maximumFractionDigits: 1 })} {bm.unit}
