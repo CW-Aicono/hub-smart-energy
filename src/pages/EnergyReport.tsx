@@ -126,13 +126,83 @@ const EnergyReport = () => {
     setActiveTab("preview");
   };
 
+  const buildFullReportHtml = (): string | null => {
+    if (!reportRef.current) return null;
+
+    const chartSvgs: Record<string, string> = {};
+    const previewContainer = reportRef.current.parentElement;
+    if (previewContainer) {
+      const chartCards = previewContainer.querySelectorAll("[data-chart-location]");
+      chartCards.forEach((el) => {
+        const locId = el.getAttribute("data-chart-location");
+        const svg = el.querySelector("svg");
+        if (locId && svg) {
+          const clone = svg.cloneNode(true) as SVGElement;
+          clone.setAttribute("width", "100%");
+          clone.setAttribute("height", "250");
+          chartSvgs[locId] = clone.outerHTML;
+        }
+      });
+    }
+
+    let contentHtml = reportRef.current.innerHTML;
+    for (const [locId, svgHtml] of Object.entries(chartSvgs)) {
+      const placeholder = `<!--chart-placeholder-${locId}-->`;
+      contentHtml = contentHtml.replace(placeholder, svgHtml);
+    }
+
+    return `<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <title>Energiebericht ${reportYear}</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, -apple-system, sans-serif; color: #1a1a1a; font-size: 11pt; line-height: 1.5; }
+    .page { padding: 20mm; }
+    .page-break { page-break-before: always; }
+    h1 { font-size: 24pt; margin-bottom: 8pt; }
+    h2 { font-size: 16pt; margin-bottom: 6pt; border-bottom: 2px solid #2563eb; padding-bottom: 4pt; }
+    h3 { font-size: 13pt; margin: 12pt 0 6pt; }
+    table { width: 100%; border-collapse: collapse; margin: 8pt 0; }
+    th, td { border: 1px solid #d1d5db; padding: 6px 10px; text-align: left; font-size: 10pt; }
+    th { background: #f3f4f6; font-weight: 600; }
+    tr:nth-child(even) { background: #f9fafb; }
+    .cover { display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; min-height: 297mm; }
+    .cover h1 { font-size: 32pt; color: #2563eb; }
+    .cover p { font-size: 14pt; color: #6b7280; margin-top: 8pt; }
+    .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12pt; margin: 12pt 0; }
+    .kpi-box { border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px; text-align: center; }
+    .kpi-box .value { font-size: 18pt; font-weight: 700; color: #2563eb; }
+    .kpi-box .label { font-size: 9pt; color: #6b7280; }
+    .rating-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 4px; }
+    .rating-green { background: #10b981; }
+    .rating-yellow { background: #f59e0b; }
+    .rating-red { background: #ef4444; }
+    .profile-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12pt; }
+    .profile-meta { display: grid; grid-template-columns: 1fr 1fr; gap: 8pt; }
+    .profile-meta dt { font-size: 9pt; color: #6b7280; }
+    .profile-meta dd { font-weight: 500; margin-bottom: 4pt; }
+    .chart-container { margin: 12pt 0; }
+    .chart-container svg { max-width: 100%; height: auto; }
+    .trend-row { display: flex; align-items: center; gap: 4px; }
+    .trend-up { color: #dc2626; }
+    .trend-down { color: #059669; }
+    @media print { .page { padding: 15mm; } }
+  </style>
+</head>
+<body>${contentHtml}</body>
+</html>`;
+  };
+
   const handleArchive = async () => {
-    if (!reportRef.current) return;
+    const fullHtml = buildFullReportHtml();
+    if (!fullHtml) return;
     await saveReport({
       reportYear: yearNum,
       title: `Energiebericht ${reportYear}`,
       locationIds: selectedLocationIds,
-      htmlContent: reportRef.current.innerHTML,
+      htmlContent: fullHtml,
       reportConfig: { selectedLocationIds },
     });
   };
@@ -184,77 +254,11 @@ const EnergyReport = () => {
   }, [completenessMap, selectedLocationIds]);
 
   const handlePrint = () => {
+    const fullHtml = buildFullReportHtml();
+    if (!fullHtml) return;
     const printWindow = window.open("", "_blank");
-    if (!printWindow || !reportRef.current) return;
-
-    // Capture SVG charts from the visible on-screen preview
-    const chartSvgs: Record<string, string> = {};
-    const previewContainer = reportRef.current.parentElement;
-    if (previewContainer) {
-      const chartCards = previewContainer.querySelectorAll("[data-chart-location]");
-      chartCards.forEach((el) => {
-        const locId = el.getAttribute("data-chart-location");
-        const svg = el.querySelector("svg");
-        if (locId && svg) {
-          const clone = svg.cloneNode(true) as SVGElement;
-          clone.setAttribute("width", "100%");
-          clone.setAttribute("height", "250");
-          chartSvgs[locId] = clone.outerHTML;
-        }
-      });
-    }
-
-    // Inject chart SVGs into print content
-    let printHtml = reportRef.current.innerHTML;
-    for (const [locId, svgHtml] of Object.entries(chartSvgs)) {
-      const placeholder = `<!--chart-placeholder-${locId}-->`;
-      printHtml = printHtml.replace(placeholder, svgHtml);
-    }
-
-    printWindow.document.write(`
-      <!DOCTYPE html>
-      <html lang="de">
-      <head>
-        <meta charset="UTF-8" />
-        <title>Energiebericht ${reportYear}</title>
-        <style>
-          * { box-sizing: border-box; margin: 0; padding: 0; }
-          body { font-family: system-ui, -apple-system, sans-serif; color: #1a1a1a; font-size: 11pt; line-height: 1.5; }
-          .page { padding: 20mm; }
-          .page-break { page-break-before: always; }
-          h1 { font-size: 24pt; margin-bottom: 8pt; }
-          h2 { font-size: 16pt; margin-bottom: 6pt; border-bottom: 2px solid #2563eb; padding-bottom: 4pt; }
-          h3 { font-size: 13pt; margin: 12pt 0 6pt; }
-          table { width: 100%; border-collapse: collapse; margin: 8pt 0; }
-          th, td { border: 1px solid #d1d5db; padding: 6px 10px; text-align: left; font-size: 10pt; }
-          th { background: #f3f4f6; font-weight: 600; }
-          tr:nth-child(even) { background: #f9fafb; }
-          .cover { display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; min-height: 297mm; }
-          .cover h1 { font-size: 32pt; color: #2563eb; }
-          .cover p { font-size: 14pt; color: #6b7280; margin-top: 8pt; }
-          .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12pt; margin: 12pt 0; }
-          .kpi-box { border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px; text-align: center; }
-          .kpi-box .value { font-size: 18pt; font-weight: 700; color: #2563eb; }
-          .kpi-box .label { font-size: 9pt; color: #6b7280; }
-          .rating-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 4px; }
-          .rating-green { background: #10b981; }
-          .rating-yellow { background: #f59e0b; }
-          .rating-red { background: #ef4444; }
-          .profile-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12pt; }
-          .profile-meta { display: grid; grid-template-columns: 1fr 1fr; gap: 8pt; }
-          .profile-meta dt { font-size: 9pt; color: #6b7280; }
-          .profile-meta dd { font-weight: 500; margin-bottom: 4pt; }
-          .chart-container { margin: 12pt 0; }
-          .chart-container svg { max-width: 100%; height: auto; }
-          .trend-row { display: flex; align-items: center; gap: 4px; }
-          .trend-up { color: #dc2626; }
-          .trend-down { color: #059669; }
-          @media print { .page { padding: 15mm; } }
-        </style>
-      </head>
-      <body>${printHtml}</body>
-      </html>
-    `);
+    if (!printWindow) return;
+    printWindow.document.write(fullHtml);
     printWindow.document.close();
     setTimeout(() => printWindow.print(), 500);
   };
