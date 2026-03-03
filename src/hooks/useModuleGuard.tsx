@@ -20,6 +20,7 @@ const ROUTE_MODULE_MAP: Record<string, string> = {
   "/settings/branding": "integrations",
   "/arbitrage": "arbitrage_trading",
   "/tenant-electricity": "tenant_electricity",
+  "/energy-report": "energy_report",
 };
 
 /**
@@ -37,6 +38,7 @@ const NAV_MODULE_MAP: Record<string, string> = {
   "/tasks": "task_management",
   "/arbitrage": "arbitrage_trading",
   "/tenant-electricity": "tenant_electricity",
+  "/energy-report": "energy_report",
 };
 
 export function useModuleGuard() {
