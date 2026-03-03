@@ -96,7 +96,7 @@ const Auth = () => {
       <div className="hidden lg:flex lg:w-1/2 bg-primary items-center justify-center p-12">
         <div className="max-w-md text-center">
           <div className="flex flex-col items-center gap-6 mb-8">
-            <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-8">
+            <div className="bg-white/20 backdrop-blur-sm rounded-2xl p-8">
               <img src={aiconoLogo} alt="AICONO" className="h-28 object-contain drop-shadow-lg" />
             </div>
           </div>
