@@ -1,57 +1,28 @@
 
 
-## Analyse: PV-Prognose viel zu niedrig
+## Status: Azimut-Fix revertiert, Sonnenzeit-Korrektur aktiv
 
-### Datenquellen
+### Erkenntnis
 
-Die Prognose verwendet:
-1. **Open-Meteo API** – liefert stündliche Strahlungswerte (GHI, Diffusstrahlung, Bewölkung) für 48h
-2. **Physikalisches Transpositionsmodell** – berechnet die Einstrahlung auf die geneigte Fläche (POA)
-3. **Formel:** `E(kWh) = (POA_W/m² × kWp × PR) / 1000` mit PR = 0.80
+Die ursprüngliche Analyse im Plan war **falsch**. Der Sonnenazimut (`solarAz`) wird durch `acos(cosAz)` in **Kompass-Konvention** (0°=Nord, 180°=Süd) berechnet – nicht in "0=Süd"-Konvention, wie der alte Kommentar fälschlich behauptete.
 
-Die Formel selbst ist korrekt. Bei 160 kWp und 800 W/m² POA sollte die Spitzenleistung ~102 kWh/h betragen.
+- `panelAzRad = deg2rad(azimuthDeg)` war **korrekt** (beide in Kompass-Konvention)
+- `panelAzRad = deg2rad(azimuthDeg - 180)` hat die Konventionen **desynchronisiert** und die Beam-Komponente fast eliminiert
+- Die KI-Kalibrierung hat das mit einem 2.85x-Faktor kompensiert → Tagessumme stimmte, aber Verteilung war falsch
 
-### Der Bug: Azimut-Konvertierung fehlt
+### Aktive Änderung: Sonnenzeit-Korrektur
 
-In `supabase/functions/pv-forecast/index.ts`, Zeile 100–101:
+Die **True Solar Time**-Korrektur in `pv-forecast/index.ts` ist weiterhin aktiv und korrekt:
 
-```typescript
-// Panel azimuth: user input is compass bearing (180=South), convert to math convention (0=South)
-const panelAzRad = deg2rad(azimuthDeg);  // ← BUG: Konvertierung wird NICHT gemacht!
-```
+1. **Equation of Time** (Spencer-Formel): saisonale Abweichung
+2. **Längengradkorrektur**: 4 Min/Grad relativ zu CET-Referenzmeridian (15°E)
+3. **Robustes Timestamp-Parsing**: Stunde direkt aus CET-String statt `new Date().getHours()`
 
-Der Kommentar sagt "convert to math convention (0=South)" – aber die Konvertierung wird **nicht durchgeführt**. Der Sonnenazimut (`solarAz`) wird in der Konvention "0 = Süd" berechnet, der Panel-Azimut bleibt aber bei "180 = Süd" (Kompass).
-
-**Auswirkung bei Südausrichtung (180°):**
-
-```text
-cos(solarAz - panelAzRad) = cos(0 - π) = -1
-
-Heute (3. März, Sonnenhöhe ~33° mittags, Neigung 30°):
-  cosAOI = sin(33°)·cos(30°) + cos(33°)·sin(30°)·cos(0 − π)
-         = 0.472 + 0.420 · (−1) = 0.052  ← fast keine Direktstrahlung!
-
-MIT FIX (panelAz = 0 für Süd):
-  cosAOI = 0.472 + 0.420 · cos(0) = 0.892  ← korrekte Direktstrahlung
-```
-
-Die Direktstrahlung (der größte Anteil) wird durch den Bug fast vollständig eliminiert. Nur die Diffusstrahlung bleibt übrig – daher die viel zu niedrige Prognose.
-
-### Fix
-
-**`supabase/functions/pv-forecast/index.ts`** – Zeile 101 ändern:
-
-```typescript
-// Vorher (BUG):
-const panelAzRad = deg2rad(azimuthDeg);
-
-// Nachher (FIX):
-const panelAzRad = deg2rad(azimuthDeg - 180);
-```
-
-Damit wird der Kompass-Wert (180° = Süd) korrekt in die mathematische Konvention (0° = Süd) umgerechnet, die auch für den Sonnenazimut verwendet wird.
+Für AICONO Zentrale (Längengrad 7.42°E):
+- Längengradkorrektur: 4 × (7.42 - 15) = −30.3 Minuten
+- Zeitgleichung Anfang März: ca. −12 Minuten
+- Gesamt: solarer Mittag liegt ~42 Min nach 12:00 CET → Prognosekurve verschiebt sich entsprechend
 
 ### Betroffene Datei
 
-- `supabase/functions/pv-forecast/index.ts` – eine Zeile (101)
-
+- `supabase/functions/pv-forecast/index.ts`

@@ -109,8 +109,8 @@ serve(async (req) => {
         if (hourAngle > 0) solarAz = -solarAz; // afternoon = west
       }
 
-      // Panel azimuth: user input is compass bearing (180=South), convert to math convention (0=South)
-      const panelAzRad = deg2rad(azimuthDeg - 180);
+      // Panel azimuth: compass bearing (0=North, 180=South) – same convention as solarAz
+      const panelAzRad = deg2rad(azimuthDeg);
 
       // Angle of incidence on tilted surface
       const cosAOI = Math.sin(solarAlt) * Math.cos(tiltRad)
