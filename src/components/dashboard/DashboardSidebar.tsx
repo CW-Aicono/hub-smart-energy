@@ -217,8 +217,8 @@ const DashboardSidebar = () => {
               className={cn(
                 "flex items-center w-full rounded-lg text-sm font-medium transition-colors gap-3 px-3 py-2.5",
                 isActive || isChildActive
-                  ? "bg-gradient-to-r from-accent/30 to-accent/10 text-sidebar-accent-foreground border-l-2 border-accent"
-                  : "text-sidebar-foreground/60 hover:bg-sidebar-accent/20 hover:text-sidebar-foreground"
+                  ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                  : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
               )}
             >
               <item.icon className="h-4 w-4 shrink-0" />
@@ -238,8 +238,8 @@ const DashboardSidebar = () => {
                   className={cn(
                     "flex items-center rounded-lg text-sm font-medium transition-colors gap-3 px-3 py-2",
                     isChildItemActive
-                      ? "bg-gradient-to-r from-accent/30 to-accent/10 text-sidebar-accent-foreground border-l-2 border-accent"
-                      : "text-sidebar-foreground/60 hover:bg-sidebar-accent/20 hover:text-sidebar-foreground"
+                      ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                      : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
                   )}
                 >
                   <child.icon className="h-4 w-4 shrink-0" />
@@ -261,8 +261,8 @@ const DashboardSidebar = () => {
               className={cn(
                 "flex items-center rounded-lg text-sm font-medium transition-colors justify-center p-2.5 w-full",
                 isActive || isChildActive
-                  ? "bg-gradient-to-r from-accent/30 to-accent/10 text-sidebar-accent-foreground"
-                  : "text-sidebar-foreground/60 hover:bg-sidebar-accent/20 hover:text-sidebar-foreground"
+                  ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                  : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
               )}
             >
               <item.icon className="h-4 w-4 shrink-0" />
@@ -292,8 +292,8 @@ const DashboardSidebar = () => {
           "flex items-center rounded-lg text-sm font-medium transition-colors",
           collapsed ? "justify-center p-2.5" : "gap-3 px-3 py-2.5",
           isActive
-            ? "bg-gradient-to-r from-accent/30 to-accent/10 text-sidebar-accent-foreground border-l-2 border-accent"
-            : "text-sidebar-foreground/60 hover:bg-sidebar-accent/20 hover:text-sidebar-foreground"
+            ? "bg-sidebar-accent text-sidebar-accent-foreground"
+            : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
         )}
       >
         <item.icon className="h-4 w-4 shrink-0" />

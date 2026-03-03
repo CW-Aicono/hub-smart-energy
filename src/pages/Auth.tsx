@@ -93,27 +93,27 @@ const Auth = () => {
   return (
     <div className="flex min-h-screen">
       {/* Left branding panel */}
-      <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-b from-[hsl(198,47%,20%)] to-[hsl(234,47%,11%)] items-center justify-center p-12">
+      <div className="hidden lg:flex lg:w-1/2 bg-primary items-center justify-center p-12">
         <div className="max-w-md text-center">
           <div className="flex flex-col items-center gap-6 mb-8">
-            <div className="rounded-[2rem] p-8">
-              <img src={aiconoLogo} alt="AICONO" className="h-32 object-contain drop-shadow-2xl" />
+            <div className="bg-white/50 backdrop-blur-sm rounded-2xl p-8">
+              <img src={aiconoLogo} alt="AICONO" className="h-28 object-contain drop-shadow-lg" />
             </div>
           </div>
-          <p className="text-sm uppercase tracking-[0.15em] text-white/60 leading-relaxed font-display">
-            Energie. Verstehen. Verändern.
+          <p className="text-base text-primary-foreground/70 leading-relaxed">
+            Ihr intelligentes B2B-Dashboard für Energiemanagement. Verbrauch analysieren, Kosten optimieren und Nachhaltigkeitsziele erreichen.
           </p>
         </div>
       </div>
 
       {/* Right auth form */}
       <div className="flex w-full lg:w-1/2 items-center justify-center p-8 bg-background">
-        <Card className="w-full max-w-md border-[hsl(0_0%_100%/0.08)] shadow-2xl shadow-black/30">
+        <Card className="w-full max-w-md border-0 shadow-lg">
           <CardHeader className="text-center">
             <div className="flex items-center justify-center mb-2 lg:hidden">
               <img src={aiconoLogo} alt="AICONO" className="h-16 object-contain" />
             </div>
-            <CardTitle className="text-2xl font-display uppercase tracking-[0.1em]">
+            <CardTitle className="text-2xl font-display">
               {view === "forgotPassword" ? t("auth.forgotPassword") : t("auth.welcomeBack")}
             </CardTitle>
             <CardDescription>
