@@ -17,7 +17,8 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { HeadsetIcon, RotateCcw, UserPlus, Mail, Shield, User, Copy, Check, Building2, MapPin, UserCircle } from "lucide-react";
+import { HeadsetIcon, RotateCcw, UserPlus, Mail, Shield, User, Copy, Check, Building2, MapPin, UserCircle, Package, Gauge, Users } from "lucide-react";
+import { useModuleBundles } from "@/hooks/useModuleBundles";
 import { useState } from "react";
 import { toast } from "sonner";
 import {
@@ -135,6 +136,7 @@ const SuperAdminTenantDetail = () => {
   const { modules, toggleModule } = useTenantModules(id ?? null);
   const { license, upsertLicense } = useTenantLicense(id ?? null);
   const { getPrice: getGlobalPrice } = useModulePrices();
+  const { bundles: allBundles, bundleItems: allBundleItems, getBundleModules } = useModuleBundles();
   const { t } = useSATranslation();
   const queryClient = useQueryClient();
   const [licenseForm, setLicenseForm] = useState<Record<string, string | number>>({});
@@ -158,6 +160,38 @@ const SuperAdminTenantDetail = () => {
       return data;
     },
   });
+
+  const { data: locationCount = 0 } = useQuery({
+    queryKey: ["tenant-location-count", id],
+    enabled: !!id,
+    queryFn: async () => {
+      const { count, error } = await supabase.from("locations").select("id", { count: "exact", head: true }).eq("tenant_id", id!).eq("is_archived", false);
+      if (error) throw error;
+      return count ?? 0;
+    },
+  });
+
+  const { data: meterCount = 0 } = useQuery({
+    queryKey: ["tenant-meter-count", id],
+    enabled: !!id,
+    queryFn: async () => {
+      const { count, error } = await supabase.from("meters").select("id", { count: "exact", head: true }).eq("tenant_id", id!);
+      if (error) throw error;
+      return count ?? 0;
+    },
+  });
+
+  const { data: tenantBundleIds = [] } = useQuery({
+    queryKey: ["tenant-bundles", id],
+    enabled: !!id,
+    queryFn: async () => {
+      const { data, error } = await supabase.from("tenant_bundles").select("bundle_id").eq("tenant_id", id!);
+      if (error) throw error;
+      return data.map((r: any) => r.bundle_id as string);
+    },
+  });
+
+  const tenantBundles = allBundles.filter((b) => tenantBundleIds.includes(b.id));
 
   if (authLoading || roleLoading) {
     return <div className="flex min-h-screen items-center justify-center bg-background"><div className="animate-pulse text-muted-foreground">{t("common.loading")}</div></div>;
@@ -219,7 +253,63 @@ const SuperAdminTenantDetail = () => {
               <TabsTrigger value="users">{t("nav.users")}</TabsTrigger>
             </TabsList>
 
-            <TabsContent value="info" className="mt-6">
+            <TabsContent value="info" className="mt-6 space-y-6">
+              {/* Stats tiles */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <Card>
+                  <CardContent className="pt-6">
+                    <div className="flex items-center gap-3">
+                      <div className="rounded-lg bg-primary/10 p-2"><Package className="h-5 w-5 text-primary" /></div>
+                      <div>
+                        <p className="text-sm text-muted-foreground">Gebuchte Bundles</p>
+                        <p className="text-2xl font-bold">{tenantBundles.length}</p>
+                      </div>
+                    </div>
+                    {tenantBundles.length > 0 && (
+                      <div className="mt-3 flex flex-wrap gap-1">
+                        {tenantBundles.map((b) => (
+                          <Badge key={b.id} variant="secondary" className="text-xs">{b.name}</Badge>
+                        ))}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="pt-6">
+                    <div className="flex items-center gap-3">
+                      <div className="rounded-lg bg-primary/10 p-2"><MapPin className="h-5 w-5 text-primary" /></div>
+                      <div>
+                        <p className="text-sm text-muted-foreground">Liegenschaften</p>
+                        <p className="text-2xl font-bold">{locationCount}</p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="pt-6">
+                    <div className="flex items-center gap-3">
+                      <div className="rounded-lg bg-primary/10 p-2"><Gauge className="h-5 w-5 text-primary" /></div>
+                      <div>
+                        <p className="text-sm text-muted-foreground">Zähler</p>
+                        <p className="text-2xl font-bold">{meterCount}</p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="pt-6">
+                    <div className="flex items-center gap-3">
+                      <div className="rounded-lg bg-primary/10 p-2"><Users className="h-5 w-5 text-primary" /></div>
+                      <div>
+                        <p className="text-sm text-muted-foreground">Nutzer</p>
+                        <p className="text-2xl font-bold">{users.length}</p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Existing tenant info card */}
               <Card>
                 <CardHeader><CardTitle>Mandanten-Informationen</CardTitle></CardHeader>
                 <CardContent className="space-y-4">
