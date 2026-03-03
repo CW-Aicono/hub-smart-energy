@@ -3,6 +3,7 @@ import { Navigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useSuperAdmin } from "@/hooks/useSuperAdmin";
 import { useModuleBundles } from "@/hooks/useModuleBundles";
+import { useModulePrices } from "@/hooks/useModulePrices";
 import { ALL_MODULES } from "@/hooks/useTenantModules";
 import { useSATranslation } from "@/hooks/useSATranslation";
 import SuperAdminSidebar from "@/components/super-admin/SuperAdminSidebar";
@@ -38,6 +39,7 @@ const SuperAdminBundles = () => {
   const { isSuperAdmin, loading: roleLoading } = useSuperAdmin();
   const { t } = useSATranslation();
   const { bundles, isLoading, createBundle, updateBundle, deleteBundle, getBundleModules } = useModuleBundles();
+  const { getPrice } = useModulePrices();
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -166,9 +168,24 @@ const SuperAdminBundles = () => {
               <div>
                 <Label>{t("bundles.price_monthly")}</Label>
                 <div className="flex items-center gap-2">
-                  <Input type="number" min={0} step={0.01} value={form.price_monthly} onChange={(e) => setForm((p) => ({ ...p, price_monthly: e.target.value }))} className="text-right" />
+                  <Input type="number" min={0} step={0.01} value={form.price_monthly} onChange={(e) => setForm((p) => ({ ...p, price_monthly: e.target.value }))} className="text-right [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
                   <span className="text-sm text-muted-foreground">€/Mo</span>
                 </div>
+                {(() => {
+                  const regularPrice = form.module_codes.reduce((sum, code) => sum + getPrice(code), 0);
+                  const bundlePrice = parseFloat(form.price_monthly) || 0;
+                  const discount = regularPrice > 0 ? Math.round((1 - bundlePrice / regularPrice) * 100) : 0;
+                  return (
+                    <div className="mt-2 text-sm text-muted-foreground flex items-center justify-between">
+                      <span>Regulärer Preis: {regularPrice.toFixed(2)} €/Mo</span>
+                      {regularPrice > 0 && bundlePrice > 0 && (
+                        <span className={discount > 0 ? "text-green-600 font-medium" : "text-destructive font-medium"}>
+                          {discount > 0 ? `−${discount}% Rabatt` : discount === 0 ? "Kein Rabatt" : `+${Math.abs(discount)}% Aufschlag`}
+                        </span>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
               <div>
                 <Label className="mb-2 block">{t("bundles.select_modules")}</Label>
