@@ -46,7 +46,7 @@ const SuperAdminModulePricing = () => {
                         <Input
                           type="number" min={0} step={0.01}
                           defaultValue={currentPrice}
-                          className="text-right"
+                          className="text-right [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                           onBlur={(e) => {
                             const val = parseFloat(e.target.value);
                             if (!isNaN(val) && val !== currentPrice) updatePrice.mutate({ moduleCode: mod.code, priceMonthly: val });

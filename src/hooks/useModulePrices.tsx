@@ -30,8 +30,10 @@ export function useModulePrices() {
     mutationFn: async ({ moduleCode, priceMonthly }: { moduleCode: string; priceMonthly: number }) => {
       const { error } = await supabase
         .from("module_prices")
-        .update({ price_monthly: priceMonthly, updated_at: new Date().toISOString() })
-        .eq("module_code", moduleCode);
+        .upsert(
+          { module_code: moduleCode, price_monthly: priceMonthly, updated_at: new Date().toISOString() },
+          { onConflict: "module_code" }
+        );
       if (error) throw error;
     },
     onSuccess: () => {
