@@ -93,11 +93,14 @@ const Auth = () => {
   return (
     <div className="flex min-h-screen">
       {/* Left branding panel */}
-      <div className="hidden lg:flex lg:w-1/2 bg-primary items-center justify-center p-12">
-        <div className="max-w-md text-primary-foreground">
-          <div className="flex flex-col items-start gap-4 mb-8">
-            <img src={aiconoLogo} alt="AICONO" className="h-24 object-contain" />
+      <div className="hidden lg:flex lg:w-1/2 bg-[hsl(220,50%,15%)] items-center justify-center p-12">
+        <div className="max-w-md text-white text-center">
+          <div className="flex flex-col items-center gap-6 mb-8">
+            <img src={aiconoLogo} alt="AICONO" className="h-28 object-contain drop-shadow-lg" />
           </div>
+          <p className="text-base opacity-70 leading-relaxed">
+            Ihr intelligentes B2B-Dashboard für Energiemanagement. Verbrauch analysieren, Kosten optimieren und Nachhaltigkeitsziele erreichen.
+          </p>
         </div>
       </div>
 
