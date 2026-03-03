@@ -4648,7 +4648,7 @@ export const translations = {
   // BrightHub Settings
   "bh.title": { de: "BrightHub Synchronisation", en: "BrightHub Synchronization", es: "Sincronización BrightHub", nl: "BrightHub Synchronisatie" },
   "bh.active": { de: "Aktiv", en: "Active", es: "Activo", nl: "Actief" },
-  "bh.subtitle": { de: "Verbinden Sie diesen Standort mit der BrightHub Eventmanagement-Plattform.", en: "Connect this location to the BrightHub event management platform.", es: "Conecte esta ubicación con la plataforma de gestión de eventos BrightHub.", nl: "Verbind deze locatie met het BrightHub evenementbeheerplatform." },
+  "bh.subtitle": { de: "Aktivieren Sie hier die BrightHub API, um Messdaten an externe System zu übergeben.", en: "Enable the BrightHub API here to transfer measurement data to external systems.", es: "Active aquí la API de BrightHub para transferir datos de medición a sistemas externos.", nl: "Activeer hier de BrightHub API om meetgegevens aan externe systemen over te dragen." },
   "bh.enable": { de: "BrightHub aktivieren", en: "Enable BrightHub", es: "Activar BrightHub", nl: "BrightHub activeren" },
   "bh.enableDesc": { de: "Synchronisation für diesen Standort ein-/ausschalten", en: "Enable/disable sync for this location", es: "Activar/desactivar sincronización para esta ubicación", nl: "Synchronisatie voor deze locatie in-/uitschakelen" },
   "bh.apiKey": { de: "API-Key", en: "API Key", es: "Clave API", nl: "API-sleutel" },
