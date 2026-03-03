@@ -136,7 +136,7 @@ const Auth = () => {
                     required
                   />
                 </div>
-                <Button type="submit" className="w-full" disabled={submitting}>
+                <Button type="submit" style={{ backgroundColor: 'hsl(220, 60%, 20%)' }} className="w-full text-white hover:opacity-90" disabled={submitting}>
                   {submitting ? t("common.loading") : t("profile.passwordResetViaEmail")}
                 </Button>
                 <div className="text-center">
@@ -185,7 +185,7 @@ const Auth = () => {
                     autoComplete="current-password"
                   />
                 </div>
-                <Button type="submit" className="w-full" disabled={submitting}>
+                <Button type="submit" style={{ backgroundColor: 'hsl(220, 60%, 20%)' }} className="w-full text-white hover:opacity-90" disabled={submitting}>
                   {submitting ? t("common.loading") : t("auth.login")}
                 </Button>
               </form>
