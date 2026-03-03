@@ -264,16 +264,25 @@ const PvForecastWidget = ({ locationId }: PvForecastWidgetProps) => {
         }
         if (allData.length === 0) { setActualReadings({}); return; }
 
-        const hourBuckets: Record<string, { sum: number; count: number }> = {};
-        for (const r of allData) {
+        // Convert power readings to energy: each reading ≈ 5-min interval
+        // Sort by time to compute actual intervals between readings
+        allData.sort((a, b) => a.recorded_at.localeCompare(b.recorded_at));
+        const hourBuckets: Record<string, number> = {};
+        for (let i = 0; i < allData.length; i++) {
+          const r = allData[i];
           const hour = toLocalHourKey(r.recorded_at);
-          if (!hourBuckets[hour]) hourBuckets[hour] = { sum: 0, count: 0 };
-          hourBuckets[hour].sum += r.power_value;
-          hourBuckets[hour].count += 1;
+          // Estimate interval: use gap to next reading, or 5 min for the last one
+          let intervalMin = 5;
+          if (i < allData.length - 1) {
+            const gap = (new Date(allData[i + 1].recorded_at).getTime() - new Date(r.recorded_at).getTime()) / 60000;
+            if (gap > 0 && gap <= 15) intervalMin = gap; // cap at 15 min to avoid gaps
+          }
+          const energyKwh = r.power_value * (intervalMin / 60);
+          hourBuckets[hour] = (hourBuckets[hour] ?? 0) + energyKwh;
         }
         const result: Record<string, number> = {};
-        for (const [hour, b] of Object.entries(hourBuckets)) {
-          result[hour] = b.sum / b.count;
+        for (const [hour, kwh] of Object.entries(hourBuckets)) {
+          result[hour] = Math.round(kwh * 100) / 100;
         }
         setActualReadings(result);
       } else {

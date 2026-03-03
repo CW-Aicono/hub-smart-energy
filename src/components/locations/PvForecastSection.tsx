@@ -96,16 +96,23 @@ export function PvForecastSection({ locationId }: PvForecastSectionProps) {
         return;
       }
 
-      const hourBuckets: Record<string, { sum: number; count: number }> = {};
-      for (const r of data) {
+      // Convert power readings to energy: estimate interval between readings
+      data.sort((a, b) => a.recorded_at.localeCompare(b.recorded_at));
+      const hourBuckets: Record<string, number> = {};
+      for (let i = 0; i < data.length; i++) {
+        const r = data[i];
         const hour = toLocalHourKey(r.recorded_at);
-        if (!hourBuckets[hour]) hourBuckets[hour] = { sum: 0, count: 0 };
-        hourBuckets[hour].sum += r.power_value;
-        hourBuckets[hour].count += 1;
+        let intervalMin = 5;
+        if (i < data.length - 1) {
+          const gap = (new Date(data[i + 1].recorded_at).getTime() - new Date(r.recorded_at).getTime()) / 60000;
+          if (gap > 0 && gap <= 15) intervalMin = gap;
+        }
+        const energyKwh = r.power_value * (intervalMin / 60);
+        hourBuckets[hour] = (hourBuckets[hour] ?? 0) + energyKwh;
       }
       const result: Record<string, number> = {};
-      for (const [hour, b] of Object.entries(hourBuckets)) {
-        result[hour] = b.sum / b.count;
+      for (const [hour, kwh] of Object.entries(hourBuckets)) {
+        result[hour] = Math.round(kwh * 100) / 100;
       }
       setActualReadings(result);
     })();
