@@ -2989,6 +2989,42 @@ export type Database = {
         }
         Relationships: []
       }
+      tenant_bundles: {
+        Row: {
+          assigned_at: string
+          bundle_id: string
+          id: string
+          tenant_id: string
+        }
+        Insert: {
+          assigned_at?: string
+          bundle_id: string
+          id?: string
+          tenant_id: string
+        }
+        Update: {
+          assigned_at?: string
+          bundle_id?: string
+          id?: string
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tenant_bundles_bundle_id_fkey"
+            columns: ["bundle_id"]
+            isOneToOne: false
+            referencedRelation: "module_bundles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tenant_bundles_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tenant_electricity_invoices: {
         Row: {
           base_fee: number
