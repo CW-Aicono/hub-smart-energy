@@ -17,7 +17,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { HeadsetIcon, RotateCcw, UserPlus, Mail, Shield, User, Copy, Check, Building2, MapPin, UserCircle, Package, Gauge, Users } from "lucide-react";
+import { HeadsetIcon, RotateCcw, UserPlus, Mail, Shield, User, Copy, Check, Building2, MapPin, UserCircle, Package, Gauge, Users, Receipt, Clock } from "lucide-react";
 import { useModuleBundles } from "@/hooks/useModuleBundles";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -193,6 +193,21 @@ const SuperAdminTenantDetail = () => {
 
   const tenantBundles = allBundles.filter((b) => tenantBundleIds.includes(b.id));
 
+  // Support sessions for billing
+  const { data: supportSessions = [] } = useQuery({
+    queryKey: ["tenant-support-sessions", id],
+    enabled: !!id,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("support_sessions")
+        .select("id, started_at, ended_at, expires_at, reason")
+        .eq("tenant_id", id!)
+        .order("started_at", { ascending: false });
+      if (error) throw error;
+      return data;
+    },
+  });
+
   if (authLoading || roleLoading) {
     return <div className="flex min-h-screen items-center justify-center bg-background"><div className="animate-pulse text-muted-foreground">{t("common.loading")}</div></div>;
   }
@@ -225,6 +240,31 @@ const SuperAdminTenantDetail = () => {
     .filter((m) => !("alwaysOn" in m) && getModuleEnabled(m.code))
     .reduce((sum, m) => sum + getEffectivePrice(m.code), 0);
 
+  const hasRemoteSupport = getModuleEnabled("remote_support");
+  const supportPricePer15min = (tenant as any)?.support_price_per_15min ?? 25;
+
+  const calcSessionDurationMin = (s: any): number => {
+    const start = new Date(s.started_at).getTime();
+    const end = s.ended_at ? new Date(s.ended_at).getTime() : new Date(s.expires_at).getTime();
+    return Math.max(1, Math.round((end - start) / 60000));
+  };
+
+  const calcSessionCost = (s: any): number => {
+    if (hasRemoteSupport) return 0;
+    const min = calcSessionDurationMin(s);
+    const blocks = Math.ceil(min / 15);
+    return blocks * supportPricePer15min;
+  };
+
+  const updateSupportPrice = async (val: number) => {
+    if (!id) return;
+    await supabase.from("tenants").update({ support_price_per_15min: val } as any).eq("id", id);
+    queryClient.invalidateQueries({ queryKey: ["tenant-detail", id] });
+    toast.success(t("tenant_detail.support_price_saved"));
+  };
+
+  const totalSupportCost = supportSessions.reduce((sum, s) => sum + calcSessionCost(s), 0);
+
   return (
     <div className="flex min-h-screen bg-background">
       <SuperAdminSidebar />
@@ -251,6 +291,7 @@ const SuperAdminTenantDetail = () => {
               <TabsTrigger value="modules">{t("tenant_detail.modules")}</TabsTrigger>
               <TabsTrigger value="license">{t("tenant_detail.license")}</TabsTrigger>
               <TabsTrigger value="users">{t("nav.users")}</TabsTrigger>
+              <TabsTrigger value="billing"><Receipt className="h-4 w-4 mr-1" />{t("tenant_detail.billing")}</TabsTrigger>
             </TabsList>
 
             <TabsContent value="info" className="mt-6 space-y-6">
@@ -520,6 +561,117 @@ const SuperAdminTenantDetail = () => {
                       )}
                     </TableBody>
                   </Table>
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="billing" className="mt-6 space-y-6">
+              {/* Module costs */}
+              <Card>
+                <CardHeader><CardTitle>{t("tenant_detail.module_costs")}</CardTitle></CardHeader>
+                <CardContent className="p-0">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>{t("tenant_detail.modules")}</TableHead>
+                        <TableHead className="text-right">{t("billing.price_month")}</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {ALL_MODULES.filter((m) => !("alwaysOn" in m) && getModuleEnabled(m.code)).map((mod) => (
+                        <TableRow key={mod.code}>
+                          <TableCell className="font-medium">{mod.label}</TableCell>
+                          <TableCell className="text-right">{getEffectivePrice(mod.code).toFixed(2)} €</TableCell>
+                        </TableRow>
+                      ))}
+                      {ALL_MODULES.filter((m) => !("alwaysOn" in m) && getModuleEnabled(m.code)).length === 0 && (
+                        <TableRow><TableCell colSpan={2} className="text-center py-4 text-muted-foreground">{t("common.none")}</TableCell></TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
+                  <div className="flex justify-end p-4 border-t">
+                    <div className="text-right">
+                      <p className="text-sm text-muted-foreground">{t("tenant_detail.monthly_total")}</p>
+                      <p className="text-lg font-bold">{totalMonthly.toFixed(2)} €</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Support session costs */}
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <CardTitle>{t("tenant_detail.support_sessions_billing")}</CardTitle>
+                    <div className="flex items-center gap-2">
+                      {hasRemoteSupport && (
+                        <Badge variant="secondary" className="bg-primary/10 text-primary">{t("tenant_detail.flatrate_included")}</Badge>
+                      )}
+                    </div>
+                  </div>
+                  {!hasRemoteSupport && (
+                    <div className="flex items-center gap-2 mt-2">
+                      <Label className="text-sm shrink-0">{t("tenant_detail.price_per_15min")}</Label>
+                      <Input
+                        type="number" min={0} step={0.01}
+                        defaultValue={supportPricePer15min}
+                        className="w-28 text-right h-8 text-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                        onBlur={(e) => {
+                          const val = parseFloat(e.target.value);
+                          if (!isNaN(val) && val !== supportPricePer15min) updateSupportPrice(val);
+                        }}
+                      />
+                    </div>
+                  )}
+                </CardHeader>
+                <CardContent className="p-0">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>{t("tenant_detail.date_time")}</TableHead>
+                        <TableHead>{t("support.reason")}</TableHead>
+                        <TableHead className="text-right">{t("tenant_detail.duration")}</TableHead>
+                        <TableHead className="text-right">{t("tenant_detail.cost")}</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {supportSessions.length === 0 ? (
+                        <TableRow><TableCell colSpan={4} className="text-center py-8 text-muted-foreground">{t("tenant_detail.no_support_sessions")}</TableCell></TableRow>
+                      ) : (
+                        supportSessions.map((s: any) => {
+                          const durMin = calcSessionDurationMin(s);
+                          const cost = calcSessionCost(s);
+                          return (
+                            <TableRow key={s.id}>
+                              <TableCell className="text-muted-foreground">
+                                <div className="flex items-center gap-1.5">
+                                  <Clock className="h-3.5 w-3.5" />
+                                  {new Date(s.started_at).toLocaleString("de-DE")}
+                                </div>
+                              </TableCell>
+                              <TableCell>{s.reason ?? "–"}</TableCell>
+                              <TableCell className="text-right">{durMin} {t("tenant_detail.minutes_short")}</TableCell>
+                              <TableCell className="text-right font-medium">
+                                {hasRemoteSupport ? (
+                                  <span className="text-muted-foreground">0,00 €</span>
+                                ) : (
+                                  <span>{cost.toFixed(2)} €</span>
+                                )}
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })
+                      )}
+                    </TableBody>
+                  </Table>
+                  {supportSessions.length > 0 && (
+                    <div className="flex justify-end p-4 border-t">
+                      <div className="text-right">
+                        <p className="text-sm text-muted-foreground">Gesamt Support-Kosten</p>
+                        <p className="text-lg font-bold">{totalSupportCost.toFixed(2)} €</p>
+                      </div>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </TabsContent>

@@ -3604,6 +3604,7 @@ export type Database = {
           show_manual_meters: boolean
           slug: string
           street: string | null
+          support_price_per_15min: number
           updated_at: string
           week_start_day: number
         }
@@ -3626,6 +3627,7 @@ export type Database = {
           show_manual_meters?: boolean
           slug: string
           street?: string | null
+          support_price_per_15min?: number
           updated_at?: string
           week_start_day?: number
         }
@@ -3648,6 +3650,7 @@ export type Database = {
           show_manual_meters?: boolean
           slug?: string
           street?: string | null
+          support_price_per_15min?: number
           updated_at?: string
           week_start_day?: number
         }

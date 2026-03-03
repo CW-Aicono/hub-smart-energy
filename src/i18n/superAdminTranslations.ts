@@ -202,6 +202,17 @@ export const saTranslations: SATranslations = {
   "tenant_detail.no_users": { de: "Keine Benutzer", en: "No users", fr: "Aucun utilisateur", pl: "Brak użytkowników" },
   "tenant_detail.price_updated": { de: "Preis aktualisiert", en: "Price updated", fr: "Prix mis à jour", pl: "Cena zaktualizowana" },
   "tenant_detail.address": { de: "Adresse", en: "Address", fr: "Adresse", pl: "Adres" },
+  "tenant_detail.billing": { de: "Abrechnung", en: "Billing", fr: "Facturation", pl: "Rozliczenia" },
+  "tenant_detail.module_costs": { de: "Monatliche Modulkosten", en: "Monthly Module Costs", fr: "Coûts mensuels des modules", pl: "Miesięczne koszty modułów" },
+  "tenant_detail.support_sessions_billing": { de: "Support-Sitzungen", en: "Support Sessions", fr: "Sessions de support", pl: "Sesje wsparcia" },
+  "tenant_detail.date_time": { de: "Datum / Uhrzeit", en: "Date / Time", fr: "Date / Heure", pl: "Data / Godzina" },
+  "tenant_detail.duration": { de: "Dauer", en: "Duration", fr: "Durée", pl: "Czas trwania" },
+  "tenant_detail.cost": { de: "Kosten", en: "Cost", fr: "Coût", pl: "Koszt" },
+  "tenant_detail.flatrate_included": { de: "Flatrate", en: "Flatrate", fr: "Forfait", pl: "Ryczałt" },
+  "tenant_detail.price_per_15min": { de: "Preis je 15 Min. (€)", en: "Price per 15 min (€)", fr: "Prix par 15 min (€)", pl: "Cena za 15 min (€)" },
+  "tenant_detail.support_price_saved": { de: "Support-Preis gespeichert", en: "Support price saved", fr: "Prix de support enregistré", pl: "Cena wsparcia zapisana" },
+  "tenant_detail.no_support_sessions": { de: "Keine Support-Sitzungen", en: "No support sessions", fr: "Aucune session de support", pl: "Brak sesji wsparcia" },
+  "tenant_detail.minutes_short": { de: "Min.", en: "min", fr: "min", pl: "min" },
 
   // Location types
   "location.einzelgebaeude": { de: "Einzelgebäude", en: "Single Building", fr: "Bâtiment unique", pl: "Pojedynczy budynek" },
