@@ -110,7 +110,7 @@ const ForecastWidget = ({ locationId }: ForecastWidgetProps) => {
       </CardHeader>
       <CardContent>
         <ResponsiveContainer width="100%" height={300}>
-          <LineChart data={forecastData}>
+          <LineChart data={forecastData} margin={{ left: 10, right: 10, top: 5, bottom: 5 }}>
             <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
             <XAxis dataKey="month" tick={{ fill: "hsl(var(--muted-foreground))" }} />
             <YAxis
