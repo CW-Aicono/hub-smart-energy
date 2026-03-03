@@ -822,7 +822,16 @@ const EnergyReport = () => {
                                 size="sm"
                                 onClick={async () => {
                                   const url = await getDownloadUrl(r.pdf_storage_path!);
-                                  if (url) window.open(url, "_blank");
+                                  if (!url) return;
+                                  try {
+                                    const res = await fetch(url);
+                                    const html = await res.text();
+                                    const blob = new Blob([html], { type: "text/html" });
+                                    const blobUrl = URL.createObjectURL(blob);
+                                    window.open(blobUrl, "_blank");
+                                  } catch {
+                                    window.open(url, "_blank");
+                                  }
                                 }}
                               >
                                 <Download className="h-4 w-4 mr-1" />
