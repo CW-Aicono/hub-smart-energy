@@ -21,6 +21,7 @@ export const ALL_MODULES = [
   { code: "brighthub_api", label: "BrightHub API" },
   { code: "arbitrage_trading", label: "Arbitragehandel (Strom)" },
   { code: "tenant_electricity", label: "Mieterstrom" },
+  { code: "energy_report", label: "Energiebericht" },
 ] as const;
 
 export function useTenantModules(tenantId: string | null) {
