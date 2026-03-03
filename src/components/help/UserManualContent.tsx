@@ -24,12 +24,16 @@ import {
   Link,
   TrendingUp,
   Battery,
+  ClipboardList,
+  Home,
+  FileText,
+  Database,
 } from "lucide-react";
 
 interface UserManualContentProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  chapter: "gettingStarted" | "locationManagement" | "floorManagement" | "energyAnalysis" | "meterManagement" | "mobileApp" | "automation" | "evCharging" | "integrations" | "arbitrageTrading";
+  chapter: "gettingStarted" | "locationManagement" | "floorManagement" | "energyAnalysis" | "meterManagement" | "mobileApp" | "automation" | "evCharging" | "integrations" | "arbitrageTrading" | "tasks" | "tenantElectricity" | "energyReport" | "dataManagement";
 }
 
 const UserManualContent = ({ open, onOpenChange, chapter }: UserManualContentProps) => {
@@ -683,6 +687,169 @@ const UserManualContent = ({ open, onOpenChange, chapter }: UserManualContentPro
           <section>
             <h4 className="font-semibold mb-2">{T("manual.arb.historyTitle")}</h4>
             <p className="text-sm text-muted-foreground">{T("manual.arb.historyText")}</p>
+          </section>
+        </div>
+      ),
+    },
+    tasks: {
+      title: T("help.tasksTitle"),
+      icon: <ClipboardList className="h-5 w-5" />,
+      content: (
+        <div className="space-y-6">
+          <section>
+            <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
+              <ClipboardList className="h-4 w-4 text-primary" />
+              {T("manual.tasks.title")}
+            </h3>
+            <p className="text-muted-foreground mb-4">{T("manual.tasks.intro")}</p>
+          </section>
+          <Separator />
+          <section>
+            <h4 className="font-semibold mb-2">{T("manual.tasks.createTitle")}</h4>
+            <ol className="list-decimal list-inside text-sm text-muted-foreground space-y-2 ml-4">
+              <li>{T("manual.tasks.createStep1")}</li>
+              <li>{T("manual.tasks.createStep2")}</li>
+              <li>{T("manual.tasks.createStep3")}</li>
+              <li>{T("manual.tasks.createStep4")}</li>
+            </ol>
+          </section>
+          <section>
+            <h4 className="font-semibold mb-2">{T("manual.tasks.statusTitle")}</h4>
+            <ul className="list-disc list-inside text-sm text-muted-foreground space-y-1 ml-4">
+              <li>{T("manual.tasks.statusOpen")}</li>
+              <li>{T("manual.tasks.statusInProgress")}</li>
+              <li>{T("manual.tasks.statusDone")}</li>
+            </ul>
+          </section>
+          <section>
+            <h4 className="font-semibold mb-2">{T("manual.tasks.detailTitle")}</h4>
+            <p className="text-sm text-muted-foreground">{T("manual.tasks.detailText")}</p>
+          </section>
+          <section>
+            <h4 className="font-semibold mb-2">{T("manual.tasks.filterTitle")}</h4>
+            <p className="text-sm text-muted-foreground">{T("manual.tasks.filterText")}</p>
+          </section>
+        </div>
+      ),
+    },
+    tenantElectricity: {
+      title: T("help.tenantElectricityTitle"),
+      icon: <Home className="h-5 w-5" />,
+      content: (
+        <div className="space-y-6">
+          <section>
+            <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
+              <Home className="h-4 w-4 text-primary" />
+              {T("manual.te.title")}
+            </h3>
+            <p className="text-muted-foreground mb-4">{T("manual.te.intro")}</p>
+          </section>
+          <Separator />
+          <section>
+            <h4 className="font-semibold mb-2">{T("manual.te.setupTitle")}</h4>
+            <ol className="list-decimal list-inside text-sm text-muted-foreground space-y-2 ml-4">
+              <li>{T("manual.te.setupStep1")}</li>
+              <li>{T("manual.te.setupStep2")}</li>
+              <li>{T("manual.te.setupStep3")}</li>
+              <li>{T("manual.te.setupStep4")}</li>
+            </ol>
+          </section>
+          <section>
+            <h4 className="font-semibold mb-2">{T("manual.te.tenantAppTitle")}</h4>
+            <p className="text-sm text-muted-foreground mb-2">{T("manual.te.tenantAppText")}</p>
+            <ul className="list-disc list-inside text-sm text-muted-foreground space-y-1 ml-4">
+              <li>{T("manual.te.tenantAppItem1")}</li>
+              <li>{T("manual.te.tenantAppItem2")}</li>
+              <li>{T("manual.te.tenantAppItem3")}</li>
+              <li>{T("manual.te.tenantAppItem4")}</li>
+            </ul>
+          </section>
+          <section>
+            <h4 className="font-semibold mb-2">{T("manual.te.billingTitle")}</h4>
+            <p className="text-sm text-muted-foreground">{T("manual.te.billingText")}</p>
+          </section>
+          <section>
+            <h4 className="font-semibold mb-2">{T("manual.te.tariffsTitle")}</h4>
+            <p className="text-sm text-muted-foreground">{T("manual.te.tariffsText")}</p>
+          </section>
+        </div>
+      ),
+    },
+    energyReport: {
+      title: T("help.energyReportTitle"),
+      icon: <FileText className="h-5 w-5" />,
+      content: (
+        <div className="space-y-6">
+          <section>
+            <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
+              <FileText className="h-4 w-4 text-primary" />
+              {T("manual.report.title")}
+            </h3>
+            <p className="text-muted-foreground mb-4">{T("manual.report.intro")}</p>
+          </section>
+          <Separator />
+          <section>
+            <h4 className="font-semibold mb-2">{T("manual.report.profileTitle")}</h4>
+            <p className="text-sm text-muted-foreground">{T("manual.report.profileText")}</p>
+          </section>
+          <section>
+            <h4 className="font-semibold mb-2">{T("manual.report.trendTitle")}</h4>
+            <p className="text-sm text-muted-foreground">{T("manual.report.trendText")}</p>
+          </section>
+          <section>
+            <h4 className="font-semibold mb-2">{T("manual.report.benchmarkTitle")}</h4>
+            <p className="text-sm text-muted-foreground">{T("manual.report.benchmarkText")}</p>
+          </section>
+          <section>
+            <h4 className="font-semibold mb-2">{T("manual.report.measuresTitle")}</h4>
+            <p className="text-sm text-muted-foreground">{T("manual.report.measuresText")}</p>
+          </section>
+          <section>
+            <h4 className="font-semibold mb-2">{T("manual.report.rankingTitle")}</h4>
+            <p className="text-sm text-muted-foreground">{T("manual.report.rankingText")}</p>
+          </section>
+        </div>
+      ),
+    },
+    dataManagement: {
+      title: T("help.dataManagementTitle"),
+      icon: <Database className="h-5 w-5" />,
+      content: (
+        <div className="space-y-6">
+          <section>
+            <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
+              <Database className="h-4 w-4 text-primary" />
+              {T("manual.data.title")}
+            </h3>
+            <p className="text-muted-foreground mb-4">{T("manual.data.intro")}</p>
+          </section>
+          <Separator />
+          <section>
+            <h4 className="font-semibold mb-2">{T("manual.data.importTitle")}</h4>
+            <ol className="list-decimal list-inside text-sm text-muted-foreground space-y-2 ml-4">
+              <li>{T("manual.data.importStep1")}</li>
+              <li>{T("manual.data.importStep2")}</li>
+              <li>{T("manual.data.importStep3")}</li>
+              <li>{T("manual.data.importStep4")}</li>
+              <li>{T("manual.data.importStep5")}</li>
+            </ol>
+          </section>
+          <section>
+            <h4 className="font-semibold mb-2">{T("manual.data.exportTitle")}</h4>
+            <p className="text-sm text-muted-foreground">{T("manual.data.exportText")}</p>
+          </section>
+          <section>
+            <h4 className="font-semibold mb-2">{T("manual.data.scheduleTitle")}</h4>
+            <p className="text-sm text-muted-foreground mb-2">{T("manual.data.scheduleText")}</p>
+            <ol className="list-decimal list-inside text-sm text-muted-foreground space-y-2 ml-4">
+              <li>{T("manual.data.scheduleStep1")}</li>
+              <li>{T("manual.data.scheduleStep2")}</li>
+              <li>{T("manual.data.scheduleStep3")}</li>
+            </ol>
+          </section>
+          <section>
+            <h4 className="font-semibold mb-2">{T("manual.data.backupTitle")}</h4>
+            <p className="text-sm text-muted-foreground">{T("manual.data.backupText")}</p>
           </section>
         </div>
       ),
