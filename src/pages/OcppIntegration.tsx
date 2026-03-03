@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import DOMPurify from "dompurify";
 import { useTranslation } from "@/hooks/useTranslation";
 import { useOcppGuides } from "@/hooks/useOcppGuides";
 import { useChargerModels } from "@/hooks/useChargerModels";
@@ -249,7 +250,7 @@ const OcppIntegration = () => {
                       <div className="prose prose-sm dark:prose-invert max-w-none">
                         <div
                           className="text-sm leading-relaxed whitespace-pre-wrap"
-                          dangerouslySetInnerHTML={{ __html: item.guide.content_md }}
+                          dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(item.guide.content_md) }}
                         />
                       </div>
                     </div>
