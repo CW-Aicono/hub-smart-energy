@@ -30,6 +30,8 @@ export interface ChargePoint {
   latitude: number | null;
   longitude: number | null;
   access_settings: ChargePointAccessSettings;
+  ws_connected: boolean;
+  ws_connected_since: string | null;
   created_at: string;
   updated_at: string;
 }

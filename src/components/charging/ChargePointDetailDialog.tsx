@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Zap, PlugZap, AlertTriangle, ZapOff, WifiOff, Camera, Trash2, Edit, Save, X, Clock, MapPin, Search, Shield, Info as InfoIcon, Settings } from "lucide-react";
+import { Zap, PlugZap, AlertTriangle, ZapOff, WifiOff, Wifi, Camera, Trash2, Edit, Save, X, Clock, MapPin, Search, Shield, Info as InfoIcon, Settings } from "lucide-react";
 import { format } from "date-fns";
 import { fmtKwh, fmtKw } from "@/lib/formatCharging";
 import { supabase } from "@/integrations/supabase/client";
@@ -148,7 +148,18 @@ export default function ChargePointDetailDialog({
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <div className="flex items-center justify-between">
-            <DialogTitle className="text-xl">{cp.name}</DialogTitle>
+            <div className="flex items-center gap-2">
+              <DialogTitle className="text-xl">{cp.name}</DialogTitle>
+              {cp.ws_connected ? (
+                <Badge className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30 text-xs gap-1">
+                  <Wifi className="h-3 w-3" /> WS Online
+                </Badge>
+              ) : (
+                <Badge className="bg-muted text-muted-foreground border-muted text-xs gap-1">
+                  <WifiOff className="h-3 w-3" /> WS Offline
+                </Badge>
+              )}
+            </div>
             <Badge variant={cfg.variant} className="ml-2">
               <StatusIcon className="h-3 w-3 mr-1" />
               {cfg.label}
@@ -254,6 +265,11 @@ export default function ChargePointDetailDialog({
                   <div><span className="text-muted-foreground">Max. Leistung:</span> {fmtKw(cp.max_power_kw)}</div>
                   <div><span className="text-muted-foreground">Firmware:</span> {cp.firmware_version || "—"}</div>
                   <div><span className="text-muted-foreground">Letzter Heartbeat:</span> {cp.last_heartbeat ? format(new Date(cp.last_heartbeat), "dd.MM.yyyy HH:mm") : "—"}</div>
+                  <div><span className="text-muted-foreground">WS-Verbindung:</span> {cp.ws_connected ? (
+                    <span className="text-emerald-600 dark:text-emerald-400 font-medium">Online{cp.ws_connected_since ? ` seit ${format(new Date(cp.ws_connected_since), "dd.MM. HH:mm")}` : ""}</span>
+                  ) : (
+                    <span className="text-muted-foreground">Offline</span>
+                  )}</div>
                   {cp.latitude && cp.longitude && (
                     <div className="col-span-2 flex items-center gap-1 text-muted-foreground">
                       <MapPin className="h-3 w-3" /> {cp.latitude.toFixed(5)}, {cp.longitude.toFixed(5)}

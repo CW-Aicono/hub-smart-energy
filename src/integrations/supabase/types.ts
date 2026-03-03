@@ -454,6 +454,8 @@ export type Database = {
           tenant_id: string
           updated_at: string
           vendor: string | null
+          ws_connected: boolean
+          ws_connected_since: string | null
         }
         Insert: {
           access_settings?: Json
@@ -479,6 +481,8 @@ export type Database = {
           tenant_id: string
           updated_at?: string
           vendor?: string | null
+          ws_connected?: boolean
+          ws_connected_since?: string | null
         }
         Update: {
           access_settings?: Json
@@ -504,6 +508,8 @@ export type Database = {
           tenant_id?: string
           updated_at?: string
           vendor?: string | null
+          ws_connected?: boolean
+          ws_connected_since?: string | null
         }
         Relationships: [
           {
