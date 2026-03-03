@@ -3396,10 +3396,13 @@ export type Database = {
           created_at: string
           id: string
           invoice_number: string
+          line_items: Json | null
+          module_total: number
           pdf_url: string | null
           period_end: string
           period_start: string
           status: string
+          support_total: number
           tenant_id: string
           updated_at: string
         }
@@ -3408,10 +3411,13 @@ export type Database = {
           created_at?: string
           id?: string
           invoice_number: string
+          line_items?: Json | null
+          module_total?: number
           pdf_url?: string | null
           period_end: string
           period_start: string
           status?: string
+          support_total?: number
           tenant_id: string
           updated_at?: string
         }
@@ -3420,10 +3426,13 @@ export type Database = {
           created_at?: string
           id?: string
           invoice_number?: string
+          line_items?: Json | null
+          module_total?: number
           pdf_url?: string | null
           period_end?: string
           period_start?: string
           status?: string
+          support_total?: number
           tenant_id?: string
           updated_at?: string
         }

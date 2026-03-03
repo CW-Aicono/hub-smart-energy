@@ -19,7 +19,13 @@ const SuperAdminBilling = () => {
     queryFn: async () => {
       const { data, error } = await supabase.from("tenant_invoices").select("*, tenants(name)").order("created_at", { ascending: false });
       if (error) throw error;
-      return data;
+      // Sort by tenant name alphabetically, then by date descending
+      return (data ?? []).sort((a: any, b: any) => {
+        const nameA = (a.tenants?.name ?? "").toLowerCase();
+        const nameB = (b.tenants?.name ?? "").toLowerCase();
+        if (nameA !== nameB) return nameA.localeCompare(nameB);
+        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+      });
     },
   });
 
@@ -91,20 +97,24 @@ const SuperAdminBilling = () => {
                     <TableHead>{t("billing.invoice_number")}</TableHead>
                     <TableHead>{t("billing.tenant")}</TableHead>
                     <TableHead>{t("billing.period")}</TableHead>
+                    <TableHead>Module</TableHead>
+                    <TableHead>Support</TableHead>
                     <TableHead>{t("billing.amount")}</TableHead>
                     <TableHead>{t("common.status")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {invoices.length === 0 ? (
-                    <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">{t("billing.no_invoices")}</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">{t("billing.no_invoices")}</TableCell></TableRow>
                   ) : (
                     invoices.map((inv: any) => (
                       <TableRow key={inv.id}>
                         <TableCell className="font-medium">{inv.invoice_number}</TableCell>
                         <TableCell>{inv.tenants?.name ?? "–"}</TableCell>
                         <TableCell className="text-muted-foreground">{inv.period_start} – {inv.period_end}</TableCell>
-                        <TableCell>{inv.amount} €</TableCell>
+                        <TableCell>{Number(inv.module_total ?? 0).toFixed(2)} €</TableCell>
+                        <TableCell>{Number(inv.support_total ?? 0).toFixed(2)} €</TableCell>
+                        <TableCell className="font-medium">{Number(inv.amount).toFixed(2)} €</TableCell>
                         <TableCell><Badge variant={statusColor(inv.status) as any}>{inv.status}</Badge></TableCell>
                       </TableRow>
                     ))
