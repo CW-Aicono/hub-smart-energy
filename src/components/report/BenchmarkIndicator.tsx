@@ -45,12 +45,12 @@ export function BenchmarkIndicator({ specificValue, usageType, energyType, compa
   }
 
   const energyLabelMap: Record<string, string> = {
-    strom: t("energy.electricity" as any) || "Strom",
-    electricity: t("energy.electricity" as any) || "Strom",
-    waerme: t("energy.heat" as any) || "Wärme",
-    heat: t("energy.heat" as any) || "Wärme",
-    wasser: t("energy.water" as any) || "Wasser",
-    water: t("energy.water" as any) || "Wasser",
+    strom: t("energy.strom" as any) || "Strom",
+    electricity: t("energy.strom" as any) || "Strom",
+    waerme: t("energy.waerme" as any) || "Wärme",
+    heat: t("energy.waerme" as any) || "Wärme",
+    wasser: t("energy.wasser" as any) || "Wasser",
+    water: t("energy.wasser" as any) || "Wasser",
     gas: t("energy.gas" as any) || "Gas",
   };
 
