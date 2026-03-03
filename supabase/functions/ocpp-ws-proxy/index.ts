@@ -184,8 +184,13 @@ Deno.serve(async (req) => {
     }
   }
 
-  socket.onopen = () => {
+  socket.onopen = async () => {
     console.log(`[ocpp-ws-proxy] Socket open for ${chargePointId}`);
+    // Mark charge point as WS-connected
+    await supabase
+      .from("charge_points")
+      .update({ ws_connected: true, ws_connected_since: new Date().toISOString() } as any)
+      .eq("ocpp_id", chargePointId);
     // Start polling for pending commands
     commandPollTimer = setInterval(pollPendingCommands, COMMAND_POLL_INTERVAL);
   };
@@ -261,9 +266,14 @@ Deno.serve(async (req) => {
     }
   };
 
-  socket.onclose = (event) => {
+  socket.onclose = async (event) => {
     console.log(`[ocpp-ws-proxy] Socket closed for ${chargePointId}: code=${event.code} reason=${event.reason}`);
     if (commandPollTimer) clearInterval(commandPollTimer);
+    // Mark charge point as WS-disconnected
+    await supabase
+      .from("charge_points")
+      .update({ ws_connected: false, ws_connected_since: null } as any)
+      .eq("ocpp_id", chargePointId);
   };
 
   socket.onerror = (error) => {

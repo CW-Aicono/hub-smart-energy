@@ -1,12 +1,13 @@
 import { useState } from "react";
 import { useOcppLogs, OcppLogEntry } from "@/hooks/useOcppLogs";
+import { useChargePoints } from "@/hooks/useChargePoints";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { RefreshCw, ChevronDown, ChevronRight, ArrowDownUp, Pause, Play } from "lucide-react";
+import { RefreshCw, ChevronDown, ChevronRight, ArrowDownUp, Pause, Play, Wifi, WifiOff } from "lucide-react";
 import { format } from "date-fns";
 
 interface OcppLogViewerProps {
@@ -16,6 +17,7 @@ interface OcppLogViewerProps {
 
 const OcppLogViewer = ({ chargePointId, showCpColumn = false }: OcppLogViewerProps) => {
   const { logs, loading, paused, setPaused, refetch } = useOcppLogs(chargePointId);
+  const { chargePoints } = useChargePoints();
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [filterText, setFilterText] = useState("");
   const [directionFilter, setDirectionFilter] = useState<"all" | "incoming" | "outgoing">("all");
@@ -90,7 +92,22 @@ const OcppLogViewer = ({ chargePointId, showCpColumn = false }: OcppLogViewerPro
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between pb-3">
-        <CardTitle className="text-base">OCPP-Nachrichtenlog</CardTitle>
+        <div className="flex items-center gap-3">
+          <CardTitle className="text-base">OCPP-Nachrichtenlog</CardTitle>
+          {chargePointId && (() => {
+            const cp = chargePoints.find(c => c.ocpp_id === chargePointId);
+            if (!cp) return null;
+            return cp.ws_connected ? (
+              <Badge className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30 text-xs gap-1">
+                <Wifi className="h-3 w-3" /> WS Online
+              </Badge>
+            ) : (
+              <Badge className="bg-muted text-muted-foreground border-muted text-xs gap-1">
+                <WifiOff className="h-3 w-3" /> WS Offline
+              </Badge>
+            );
+          })()}
+        </div>
         <div className="flex items-center gap-2">
           <Select value={messageTypeFilter} onValueChange={setMessageTypeFilter}>
             <SelectTrigger className="h-8 w-44 text-xs">
@@ -171,7 +188,18 @@ const OcppLogViewer = ({ chargePointId, showCpColumn = false }: OcppLogViewerPro
                       </TableCell>
                       <TableCell>{directionBadge(log.direction)}</TableCell>
                       {showCpColumn && (
-                        <TableCell className="font-mono text-xs">{log.charge_point_id}</TableCell>
+                        <TableCell className="font-mono text-xs">
+                          <span className="flex items-center gap-1.5">
+                            {(() => {
+                              const cp = chargePoints.find(c => c.ocpp_id === log.charge_point_id);
+                              const connected = cp?.ws_connected;
+                              return connected
+                                ? <Wifi className="h-3 w-3 text-emerald-500 shrink-0" />
+                                : <WifiOff className="h-3 w-3 text-muted-foreground shrink-0" />;
+                            })()}
+                            {log.charge_point_id}
+                          </span>
+                        </TableCell>
                       )}
                       <TableCell className="flex items-center gap-2 flex-wrap">
                         {messageTypeBadge(log.message_type)}
