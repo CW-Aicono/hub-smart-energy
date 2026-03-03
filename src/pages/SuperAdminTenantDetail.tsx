@@ -522,6 +522,99 @@ const SuperAdminTenantDetail = () => {
                   </Button>
                 </CardContent>
               </Card>
+
+              {/* Payment method & SEPA */}
+              <Card className="mt-6">
+                <CardHeader><CardTitle>{t("tenant_detail.payment_method")}</CardTitle></CardHeader>
+                <CardContent className="space-y-4 max-w-md">
+                  <div className="space-y-2">
+                    <Label>{t("tenant_detail.payment_method")}</Label>
+                    <Select
+                      defaultValue={(tenant as any)?.payment_method ?? "invoice"}
+                      onValueChange={async (v) => {
+                        if (!id) return;
+                        await supabase.from("tenants").update({ payment_method: v } as any).eq("id", id);
+                        queryClient.invalidateQueries({ queryKey: ["tenant-detail", id] });
+                        toast.success(t("tenant_detail.sepa_saved"));
+                      }}
+                    >
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="invoice">{t("tenant_detail.invoice")}</SelectItem>
+                        <SelectItem value="sepa">{t("tenant_detail.sepa_direct_debit")}</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {((tenant as any)?.payment_method === "sepa") && (
+                    <>
+                      <div className="space-y-2">
+                        <Label>{t("tenant_detail.sepa_account_holder")}</Label>
+                        <Input
+                          defaultValue={(tenant as any)?.sepa_account_holder ?? ""}
+                          onBlur={async (e) => {
+                            if (!id) return;
+                            await supabase.from("tenants").update({ sepa_account_holder: e.target.value.trim() || null } as any).eq("id", id);
+                            queryClient.invalidateQueries({ queryKey: ["tenant-detail", id] });
+                          }}
+                          placeholder="Max Mustermann GmbH"
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label>{t("tenant_detail.sepa_iban")}</Label>
+                          <Input
+                            defaultValue={(tenant as any)?.sepa_iban ?? ""}
+                            onBlur={async (e) => {
+                              if (!id) return;
+                              await supabase.from("tenants").update({ sepa_iban: e.target.value.trim() || null } as any).eq("id", id);
+                              queryClient.invalidateQueries({ queryKey: ["tenant-detail", id] });
+                            }}
+                            placeholder="DE89 3704 0044 0532 0130 00"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>{t("tenant_detail.sepa_bic")}</Label>
+                          <Input
+                            defaultValue={(tenant as any)?.sepa_bic ?? ""}
+                            onBlur={async (e) => {
+                              if (!id) return;
+                              await supabase.from("tenants").update({ sepa_bic: e.target.value.trim() || null } as any).eq("id", id);
+                              queryClient.invalidateQueries({ queryKey: ["tenant-detail", id] });
+                            }}
+                            placeholder="COBADEFFXXX"
+                          />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label>{t("tenant_detail.sepa_mandate_ref")}</Label>
+                          <Input
+                            defaultValue={(tenant as any)?.sepa_mandate_ref ?? ""}
+                            onBlur={async (e) => {
+                              if (!id) return;
+                              await supabase.from("tenants").update({ sepa_mandate_ref: e.target.value.trim() || null } as any).eq("id", id);
+                              queryClient.invalidateQueries({ queryKey: ["tenant-detail", id] });
+                            }}
+                            placeholder="MNDT-001"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>{t("tenant_detail.sepa_mandate_date")}</Label>
+                          <Input
+                            type="date"
+                            defaultValue={(tenant as any)?.sepa_mandate_date ?? ""}
+                            onBlur={async (e) => {
+                              if (!id) return;
+                              await supabase.from("tenants").update({ sepa_mandate_date: e.target.value || null } as any).eq("id", id);
+                              queryClient.invalidateQueries({ queryKey: ["tenant-detail", id] });
+                            }}
+                          />
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </CardContent>
+              </Card>
             </TabsContent>
 
             <TabsContent value="users" className="mt-6">

@@ -3606,10 +3606,16 @@ export type Database = {
           id: string
           logo_url: string | null
           name: string
+          payment_method: string
           postal_code: string | null
           remote_support_enabled: boolean
           remote_support_enabled_at: string | null
           report_settings: Json | null
+          sepa_account_holder: string | null
+          sepa_bic: string | null
+          sepa_iban: string | null
+          sepa_mandate_date: string | null
+          sepa_mandate_ref: string | null
           show_manual_meters: boolean
           slug: string
           street: string | null
@@ -3629,10 +3635,16 @@ export type Database = {
           id?: string
           logo_url?: string | null
           name: string
+          payment_method?: string
           postal_code?: string | null
           remote_support_enabled?: boolean
           remote_support_enabled_at?: string | null
           report_settings?: Json | null
+          sepa_account_holder?: string | null
+          sepa_bic?: string | null
+          sepa_iban?: string | null
+          sepa_mandate_date?: string | null
+          sepa_mandate_ref?: string | null
           show_manual_meters?: boolean
           slug: string
           street?: string | null
@@ -3652,10 +3664,16 @@ export type Database = {
           id?: string
           logo_url?: string | null
           name?: string
+          payment_method?: string
           postal_code?: string | null
           remote_support_enabled?: boolean
           remote_support_enabled_at?: string | null
           report_settings?: Json | null
+          sepa_account_holder?: string | null
+          sepa_bic?: string | null
+          sepa_iban?: string | null
+          sepa_mandate_date?: string | null
+          sepa_mandate_ref?: string | null
           show_manual_meters?: boolean
           slug?: string
           street?: string | null
