@@ -79,9 +79,21 @@ serve(async (req) => {
       const doy = dayOfYear(ts);
       const declination = deg2rad(23.45 * Math.sin(deg2rad(360 * (284 + doy) / 365)));
 
-      // Hour angle (solar noon = 0)
-      const hour = new Date(ts).getHours() + new Date(ts).getMinutes() / 60;
-      const hourAngle = deg2rad((hour - 12) * 15);
+      // True Solar Time correction
+      // 1. Parse hour from timestamp (Open-Meteo returns CET strings like "2026-03-03T12:00")
+      const tsParts = ts.match(/T(\d{2}):(\d{2})/);
+      const clockHour = tsParts ? parseInt(tsParts[1]) + parseInt(tsParts[2]) / 60 : 12;
+
+      // 2. Equation of Time (Spencer, 1971) in minutes
+      const B = deg2rad(360 * (doy - 81) / 365);
+      const EoT = 9.87 * Math.sin(2 * B) - 7.53 * Math.cos(B) - 1.5 * Math.sin(B);
+
+      // 3. Longitude correction: CET reference meridian = 15°E, 4 min per degree
+      const longCorrection = 4 * (location.longitude - 15);
+
+      // 4. Solar hour = clock hour + corrections (in hours)
+      const solarHour = clockHour + (longCorrection + EoT) / 60;
+      const hourAngle = deg2rad((solarHour - 12) * 15);
 
       // Solar altitude angle
       const sinAlt = Math.sin(latRad) * Math.sin(declination)
