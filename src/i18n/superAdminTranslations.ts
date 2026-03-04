@@ -31,6 +31,7 @@ export const saTranslations: SATranslations = {
   "nav.users": { de: "Benutzer", en: "Users", fr: "Utilisateurs", pl: "Użytkownicy" },
   "nav.roles_permissions": { de: "Rollen & Rechte", en: "Roles & Permissions", fr: "Rôles & droits", pl: "Role i uprawnienia" },
   "nav.support": { de: "Support", en: "Support", fr: "Support", pl: "Wsparcie" },
+  "nav.settings": { de: "Einstellungen", en: "Settings", fr: "Paramètres", pl: "Ustawienia" },
   "nav.to_customer_dashboard": { de: "← Zum Kunden-Dashboard", en: "← To Customer Dashboard", fr: "← Vers le tableau client", pl: "← Do panelu klienta" },
   "nav.sign_out": { de: "Abmelden", en: "Sign Out", fr: "Déconnexion", pl: "Wyloguj" },
 
