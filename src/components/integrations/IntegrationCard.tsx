@@ -12,6 +12,7 @@ import { useTranslation } from "@/hooks/useTranslation";
 import { Server, Trash2, Pencil, CheckCircle2, XCircle, Clock, Loader2, Gauge } from "lucide-react";
 import { LocationIntegration } from "@/hooks/useIntegrations";
 import { SensorsDialog } from "./SensorsDialog";
+import { MiniserverStatus } from "./MiniserverStatus";
 import { EditIntegrationDialog } from "./EditIntegrationDialog";
 import { getGatewayDefinition } from "@/lib/gatewayRegistry";
 
@@ -95,6 +96,11 @@ export function IntegrationCard({ locationIntegration, onUpdate, onDelete }: Int
                   {getSyncStatusBadge()}
                 </div>
                 <p className="text-sm text-muted-foreground">{configSubtitle}</p>
+                <MiniserverStatus
+                  locationIntegrationId={locationIntegration.id}
+                  integrationType={integration?.type}
+                  lastSyncAt={locationIntegration.last_sync_at}
+                />
                 {integration?.description && <p className="text-xs text-muted-foreground">{integration.description}</p>}
               </div>
             </div>
