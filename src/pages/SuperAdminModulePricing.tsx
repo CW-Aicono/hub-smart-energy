@@ -52,7 +52,7 @@ const SuperAdminModulePricing = () => {
                             if (!isNaN(val) && val !== currentPrice) updatePrice.mutate({ moduleCode: mod.code, priceMonthly: val });
                           }}
                         />
-                        <span className="text-sm text-muted-foreground">€/Mo</span>
+                        <span className="text-sm text-muted-foreground">{mod.code === "support_billing" ? "€/15Min" : "€/Mo"}</span>
                       </div>
                     </div>
                   );
