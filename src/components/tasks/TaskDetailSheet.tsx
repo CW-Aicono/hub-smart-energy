@@ -240,7 +240,7 @@ export const TaskDetailSheet = ({ task, open, onOpenChange }: TaskDetailSheetPro
                 )}
                 <span className="flex items-center gap-1 text-xs text-muted-foreground">
                   <Clock className="h-3.5 w-3.5" />
-                  {format(new Date(task.created_at), "dd.MM.yy", { locale: dateLocale })}
+                  {format(new Date(task.created_at), "dd.MM.yy, HH:mm", { locale: dateLocale })}
                 </span>
               </div>
             </div>

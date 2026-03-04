@@ -44,9 +44,10 @@ const SOURCE_LABELS: Record<string, string> = {
 
 interface TaskCardProps {
   task: Task;
+  duplicateCount?: number;
 }
 
-export const TaskCard = ({ task }: TaskCardProps) => {
+export const TaskCard = ({ task, duplicateCount }: TaskCardProps) => {
   const { updateTask, deleteTask } = useTasks();
   const [detailOpen, setDetailOpen] = useState(false);
 
@@ -101,6 +102,9 @@ export const TaskCard = ({ task }: TaskCardProps) => {
                   onClick={() => setDetailOpen(true)}
                 >
                   {task.title}
+                  {duplicateCount && duplicateCount > 1 && (
+                    <span className="ml-1.5 text-xs font-normal text-muted-foreground">({duplicateCount}×)</span>
+                  )}
                 </button>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
@@ -175,7 +179,7 @@ export const TaskCard = ({ task }: TaskCardProps) => {
                   title="Protokoll anzeigen"
                 >
                   <Clock className="h-3 w-3" />
-                  {format(new Date(task.created_at), "dd.MM.yy", { locale: de })}
+                  {format(new Date(task.created_at), "dd.MM.yy, HH:mm", { locale: de })}
                 </button>
               </div>
             </div>

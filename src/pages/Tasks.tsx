@@ -38,6 +38,31 @@ const Tasks = () => {
   const activeTasks = useMemo(() => tasks.filter((tk) => tk.status !== "done" && tk.status !== "cancelled"), [tasks]);
   const archivedTasks = useMemo(() => tasks.filter((tk) => tk.status === "done" || tk.status === "cancelled"), [tasks]);
 
+  // Deduplicate: group by title + source_type, keep newest, count duplicates
+  const filtered = useMemo(() => {
+    const filteredAll = activeTasks.filter((tk) => {
+      const matchSearch = !search || tk.title.toLowerCase().includes(search.toLowerCase()) || tk.description?.toLowerCase().includes(search.toLowerCase());
+      const matchStatus = statusFilter === "all" || tk.status === statusFilter;
+      const matchPriority = priorityFilter === "all" || tk.priority === priorityFilter;
+      const matchSource = sourceFilter === "all" || tk.source_type === sourceFilter;
+      const matchOverdue = !overdueFilter || (tk.due_date && new Date(tk.due_date) < new Date());
+      const matchExternal = !externalFilter || !!tk.external_contact_name;
+      return matchSearch && matchStatus && matchPriority && matchSource && matchOverdue && matchExternal;
+    });
+
+    const map = new Map<string, { task: typeof filteredAll[0]; count: number }>();
+    for (const tk of filteredAll) {
+      const key = `${tk.title}||${tk.source_type}`;
+      const existing = map.get(key);
+      if (!existing || new Date(tk.created_at) > new Date(existing.task.created_at)) {
+        map.set(key, { task: tk, count: (existing?.count || 0) + 1 });
+      } else {
+        existing.count++;
+      }
+    }
+    return Array.from(map.values());
+  }, [activeTasks, search, statusFilter, priorityFilter, sourceFilter, overdueFilter, externalFilter]);
+
   if (authLoading) {
     return (
       <div className="flex flex-col md:flex-row min-h-screen bg-background">
@@ -48,16 +73,6 @@ const Tasks = () => {
   }
 
   if (!user) return <Navigate to="/auth" replace />;
-
-  const filtered = activeTasks.filter((tk) => {
-    const matchSearch = !search || tk.title.toLowerCase().includes(search.toLowerCase()) || tk.description?.toLowerCase().includes(search.toLowerCase());
-    const matchStatus = statusFilter === "all" || tk.status === statusFilter;
-    const matchPriority = priorityFilter === "all" || tk.priority === priorityFilter;
-    const matchSource = sourceFilter === "all" || tk.source_type === sourceFilter;
-    const matchOverdue = !overdueFilter || (tk.due_date && new Date(tk.due_date) < new Date());
-    const matchExternal = !externalFilter || !!tk.external_contact_name;
-    return matchSearch && matchStatus && matchPriority && matchSource && matchOverdue && matchExternal;
-  });
 
   const countOpen = activeTasks.filter((tk) => tk.status === "open").length;
   const countInProgress = activeTasks.filter((tk) => tk.status === "in_progress").length;
@@ -144,7 +159,7 @@ const Tasks = () => {
                 <EmptyState t={t} hasFilters={search !== "" || statusFilter !== "all" || priorityFilter !== "all" || overdueFilter || externalFilter} onCreateTask={() => setCreateOpen(true)} />
               ) : (
                 <div className="space-y-3">
-                  {filtered.map((task) => (<TaskCard key={task.id} task={task} />))}
+                  {filtered.map(({ task, count }) => (<TaskCard key={task.id} task={task} duplicateCount={count} />))}
                   <p className="text-xs text-center text-muted-foreground pt-2">
                     {filtered.length} von {activeTasks.length} aktiven Aufgaben
                   </p>
