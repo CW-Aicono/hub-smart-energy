@@ -361,10 +361,36 @@ serve(async (req) => {
         throw new Error(`Struktur konnte nicht geladen werden: ${structureResponse.status}`);
       }
 
-      const structure: LoxoneStructure = await structureResponse.json();
+      const structure = await structureResponse.json() as LoxoneStructure & { messageCenter?: any };
       const controls = structure.controls || {};
       const rooms = structure.rooms || {};
       const categories = structure.cats || {};
+
+      // ── Parse messageCenter for system status messages ──
+      const systemMessages: Array<{ uid: string; title: string; message: string; level: number; timestamp: string }> = [];
+      try {
+        const mc = (structure as any).messageCenter;
+        if (mc) {
+          // messageCenter can have different structures; look for entries/notifications
+          const entries = mc.notifications || mc.entries || [];
+          const entryList = Array.isArray(entries) ? entries : Object.values(entries);
+          for (const entry of entryList) {
+            const lvl = entry?.data?.lvl ?? entry?.lvl ?? 0;
+            if (lvl >= 2) {
+              systemMessages.push({
+                uid: entry.uid || entry.id || String(entry.ts),
+                title: entry.title || "",
+                message: entry.desc || entry.message || "",
+                level: lvl,
+                timestamp: entry.ts ? new Date(entry.ts * 1000).toISOString() : new Date().toISOString(),
+              });
+            }
+          }
+        }
+        console.log(`Parsed ${systemMessages.length} system status messages from messageCenter`);
+      } catch (mcErr) {
+        console.warn("Failed to parse messageCenter:", mcErr);
+      }
 
       console.log(`Loaded structure with ${Object.keys(controls).length} controls`);
 
@@ -757,7 +783,7 @@ serve(async (req) => {
       await updateSyncStatus(supabase, locationIntegrationId, "success");
 
       return new Response(
-        JSON.stringify({ success: true, sensors }),
+        JSON.stringify({ success: true, sensors, systemMessages }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
