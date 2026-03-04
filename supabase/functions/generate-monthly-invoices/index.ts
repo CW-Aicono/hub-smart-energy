@@ -66,18 +66,23 @@ Deno.serve(async (req) => {
     // Match by month: any invoice whose period overlaps this billing month
     const { data: existingInvoices } = await supabase
       .from("tenant_invoices")
-      .select("id, tenant_id, line_items, module_total, support_total, amount, period_start, period_end, status")
+      .select("id, tenant_id, line_items, module_total, support_total, amount, period_start, period_end, status, lexware_invoice_id")
       .gte("period_start", fmt(lastMonthStart))
       .lte("period_start", fmt(lastMonthEnd))
       .neq("status", "voided");
-    // Group by tenant – if multiple exist for same tenant+month, pick the first and merge
+    // Group by tenant – only merge invoices not yet sent to Lexware
     const existingByTenant: Record<string, any> = {};
     const duplicatesToDelete: string[] = [];
     for (const inv of existingInvoices ?? []) {
+      // Never merge into or delete Lexware-synced invoices
+      if (inv.lexware_invoice_id) {
+        // Keep Lexware-synced invoices as-is, don't use as merge target
+        continue;
+      }
       if (!existingByTenant[inv.tenant_id]) {
         existingByTenant[inv.tenant_id] = inv;
       } else {
-        // Merge this duplicate into the primary invoice
+        // Merge this duplicate into the primary invoice (both are non-Lexware)
         const primary = existingByTenant[inv.tenant_id];
         const extraLines = Array.isArray(inv.line_items) ? inv.line_items : [];
         const primaryLines = Array.isArray(primary.line_items) ? primary.line_items : [];
