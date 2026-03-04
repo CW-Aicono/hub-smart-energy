@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import { Navigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useSuperAdmin } from "@/hooks/useSuperAdmin";
@@ -8,7 +9,40 @@ import SuperAdminSidebar from "@/components/super-admin/SuperAdminSidebar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Euro } from "lucide-react";
+
+const editableModules = ALL_MODULES.filter((m) => !("alwaysOn" in m));
+
+interface PriceInputProps {
+  moduleCode: string;
+  currentPrice: number;
+  unit: string;
+  onSave: (val: number) => void;
+}
+
+const PriceInput = ({ moduleCode, currentPrice, unit, onSave }: PriceInputProps) => {
+  const [value, setValue] = useState(String(currentPrice));
+
+  // Sync when data loads or changes
+  useEffect(() => {
+    setValue(String(currentPrice));
+  }, [currentPrice]);
+
+  return (
+    <div className="flex items-center gap-2 w-48">
+      <Input
+        type="number" min={0} step={0.01}
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        className="text-right [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+        onBlur={() => {
+          const val = parseFloat(value);
+          if (!isNaN(val) && val !== currentPrice) onSave(val);
+        }}
+      />
+      <span className="text-sm text-muted-foreground">{unit}</span>
+    </div>
+  );
+};
 
 const SuperAdminModulePricing = () => {
   const { user, loading: authLoading } = useAuth();
@@ -16,13 +50,11 @@ const SuperAdminModulePricing = () => {
   const { prices, isLoading, updatePrice, getPrice } = useModulePrices();
   const { t } = useSATranslation();
 
-  if (authLoading || roleLoading) {
+  if (authLoading || roleLoading || isLoading) {
     return <div className="flex min-h-screen items-center justify-center bg-background"><div className="animate-pulse text-muted-foreground">{t("common.loading")}</div></div>;
   }
   if (!user) return <Navigate to="/auth" replace />;
   if (!isSuperAdmin) return <Navigate to="/" replace />;
-
-  const editableModules = ALL_MODULES.filter((m) => !("alwaysOn" in m));
 
   return (
     <div className="flex min-h-screen bg-background">
@@ -37,26 +69,17 @@ const SuperAdminModulePricing = () => {
             <CardHeader><CardTitle>{t("module_pricing.monthly_defaults")}</CardTitle></CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {editableModules.map((mod) => {
-                  const currentPrice = getPrice(mod.code);
-                  return (
-                    <div key={mod.code} className="flex items-center justify-between gap-4">
-                      <Label className="text-base flex-1">{mod.label}</Label>
-                      <div className="flex items-center gap-2 w-48">
-                        <Input
-                          type="number" min={0} step={0.01}
-                          defaultValue={currentPrice}
-                          className="text-right [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                          onBlur={(e) => {
-                            const val = parseFloat(e.target.value);
-                            if (!isNaN(val) && val !== currentPrice) updatePrice.mutate({ moduleCode: mod.code, priceMonthly: val });
-                          }}
-                        />
-                        <span className="text-sm text-muted-foreground">{mod.code === "support_billing" ? "€/15Min" : "€/Mo"}</span>
-                      </div>
-                    </div>
-                  );
-                })}
+                {editableModules.map((mod) => (
+                  <div key={mod.code} className="flex items-center justify-between gap-4">
+                    <Label className="text-base flex-1">{mod.label}</Label>
+                    <PriceInput
+                      moduleCode={mod.code}
+                      currentPrice={getPrice(mod.code)}
+                      unit={mod.code === "support_billing" ? "€/15Min" : "€/Mo"}
+                      onSave={(val) => updatePrice.mutate({ moduleCode: mod.code, priceMonthly: val })}
+                    />
+                  </div>
+                ))}
               </div>
               <p className="text-xs text-muted-foreground mt-6">{t("module_pricing.hint")}</p>
             </CardContent>
