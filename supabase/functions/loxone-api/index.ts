@@ -901,6 +901,61 @@ serve(async (req) => {
       );
     }
 
+    // ── ACTION: getSystemStatus ──
+    if (action === "getSystemStatus") {
+      const statusUrl = `${baseUrl}/jdev/sys/status`;
+      console.log(`Fetching system status: ${statusUrl}`);
+      const response = await fetch(statusUrl, {
+        method: "GET",
+        headers: { Authorization: loxoneAuth },
+      });
+      if (!response.ok) {
+        throw new Error(`Systemstatus konnte nicht abgerufen werden: HTTP ${response.status}`);
+      }
+      const statusText = await response.text();
+      console.log(`System status raw: ${statusText.substring(0, 500)}`);
+
+      // Parse XML response – Loxone returns XML like <Status ... CPU="..." Temp="..." Mem="..." />
+      let cpu: string | null = null;
+      let temp: string | null = null;
+      let mem: string | null = null;
+
+      // Try parsing as XML attributes
+      const cpuMatch = statusText.match(/CPU="([^"]+)"/i);
+      const tempMatch = statusText.match(/Temp="([^"]+)"/i);
+      const memMatch = statusText.match(/Mem="([^"]+)"/i);
+
+      if (cpuMatch) cpu = cpuMatch[1];
+      if (tempMatch) temp = tempMatch[1];
+      if (memMatch) mem = memMatch[1];
+
+      // Fallback: try JSON
+      if (!cpu && !temp && !mem) {
+        try {
+          const jsonData = JSON.parse(statusText);
+          if (jsonData?.LL?.value) {
+            const val = jsonData.LL.value;
+            // value may be a string like "CPU:12.3% Temp:45.6 Mem:78.9"
+            const cpuJ = String(val).match(/CPU[:\s]*([0-9.]+)/i);
+            const tempJ = String(val).match(/Temp[:\s]*([0-9.]+)/i);
+            const memJ = String(val).match(/Mem[:\s]*([0-9.]+)/i);
+            if (cpuJ) cpu = cpuJ[1];
+            if (tempJ) temp = tempJ[1];
+            if (memJ) mem = memJ[1];
+          }
+        } catch { /* not JSON */ }
+      }
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          systemStatus: { cpu, temperature: temp, memory: mem },
+          lastSync: locationIntegration.last_sync_at,
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     throw new Error(`Unbekannte Aktion: ${action}`);
   } catch (error) {
     console.error("Loxone API error:", error);
