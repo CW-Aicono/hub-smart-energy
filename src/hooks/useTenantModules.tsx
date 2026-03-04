@@ -42,26 +42,46 @@ export function useTenantModules(tenantId: string | null) {
     },
   });
 
+  const SUPPORT_PAIR: Record<string, string> = {
+    remote_support: "support_billing",
+    support_billing: "remote_support",
+  };
+
+  const upsertModule = async (code: string, enabled: boolean) => {
+    const existing = modules.find((m) => m.module_code === code);
+    if (existing) {
+      const { error } = await supabase
+        .from("tenant_modules")
+        .update({
+          is_enabled: enabled,
+          enabled_at: enabled ? new Date().toISOString() : existing.enabled_at,
+          disabled_at: enabled ? null : new Date().toISOString(),
+        })
+        .eq("id", existing.id);
+      if (error) throw error;
+    } else {
+      const { error } = await supabase
+        .from("tenant_modules")
+        .insert({ tenant_id: tenantId!, module_code: code, is_enabled: enabled });
+      if (error) throw error;
+    }
+  };
+
   const toggleModule = useMutation({
     mutationFn: async ({ moduleCode, enabled }: { moduleCode: string; enabled: boolean }) => {
       if (!tenantId) throw new Error("No tenant");
-      const existing = modules.find((m) => m.module_code === moduleCode);
-      if (existing) {
-        const { error } = await supabase
-          .from("tenant_modules")
-          .update({
-            is_enabled: enabled,
-            enabled_at: enabled ? new Date().toISOString() : existing.enabled_at,
-            disabled_at: enabled ? null : new Date().toISOString(),
-          })
-          .eq("id", existing.id);
-        if (error) throw error;
-      } else {
-        const { error } = await supabase
-          .from("tenant_modules")
-          .insert({ tenant_id: tenantId, module_code: moduleCode, is_enabled: enabled });
-        if (error) throw error;
+
+      // Support modules are mutually exclusive – enabling one disables the other
+      const counterpart = SUPPORT_PAIR[moduleCode];
+      if (counterpart && enabled) {
+        await upsertModule(counterpart, false);
       }
+      // Prevent disabling both – if user tries to disable, enable the counterpart
+      if (counterpart && !enabled) {
+        await upsertModule(counterpart, true);
+      }
+
+      await upsertModule(moduleCode, enabled);
     },
     onSuccess: () => {
       const t = getT();
