@@ -88,7 +88,15 @@ export default function SuperAdminSidebar() {
     { to: "/super-admin", icon: LayoutDashboard, label: t("nav.dashboard") },
     { to: "/super-admin/tenants", icon: Building2, label: t("nav.tenants") },
     { to: "/super-admin/statistics", icon: BarChart3, label: t("nav.statistics") },
-    { to: "/super-admin/billing", icon: Receipt, label: t("nav.billing") },
+    {
+      to: "/super-admin/billing",
+      icon: Receipt,
+      label: t("nav.accounting"),
+      children: [
+        { to: "/super-admin/billing", icon: Receipt, label: t("nav.billing") },
+        { to: "/super-admin/licenses", icon: Euro, label: t("nav.active_licenses") },
+      ],
+    },
     {
       to: "/super-admin/modules",
       icon: Euro,
@@ -130,6 +138,9 @@ export default function SuperAdminSidebar() {
     }
     if (location.pathname === "/super-admin/module-pricing" || location.pathname === "/super-admin/bundles") {
       setOpenMenus((prev) => prev.includes("/super-admin/modules") ? prev : [...prev, "/super-admin/modules"]);
+    }
+    if (location.pathname === "/super-admin/billing" || location.pathname === "/super-admin/licenses") {
+      setOpenMenus((prev) => prev.includes("/super-admin/billing") ? prev : [...prev, "/super-admin/billing"]);
     }
   }, [location.pathname]);
 

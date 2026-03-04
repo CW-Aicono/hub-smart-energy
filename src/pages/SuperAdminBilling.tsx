@@ -70,14 +70,6 @@ const SuperAdminBilling = () => {
     },
   });
 
-  const { data: licenses = [] } = useQuery({
-    queryKey: ["super-admin-licenses"],
-    queryFn: async () => {
-      const { data, error } = await supabase.from("tenant_licenses").select("*, tenants(name)").order("created_at", { ascending: false });
-      if (error) throw error;
-      return data;
-    },
-  });
 
   if (authLoading || roleLoading) {
     return <div className="flex min-h-screen items-center justify-center bg-background"><div className="animate-pulse text-muted-foreground">{t("common.loading")}</div></div>;
@@ -211,44 +203,12 @@ const SuperAdminBilling = () => {
         </header>
         <div className="p-6 space-y-6">
           <Card>
-            <CardHeader><CardTitle>{t("billing.active_licenses")}</CardTitle></CardHeader>
-            <CardContent className="p-0">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>{t("billing.tenant")}</TableHead>
-                    <TableHead>{t("billing.plan")}</TableHead>
-                    <TableHead>{t("billing.price_month")}</TableHead>
-                    <TableHead>{t("billing.cycle")}</TableHead>
-                    <TableHead>{t("common.status")}</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {licenses.length === 0 ? (
-                    <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">{t("billing.no_licenses")}</TableCell></TableRow>
-                  ) : (
-                    licenses.map((lic: any) => (
-                      <TableRow key={lic.id}>
-                        <TableCell className="font-medium">{lic.tenants?.name ?? "–"}</TableCell>
-                        <TableCell>{lic.plan_name}</TableCell>
-                        <TableCell>{lic.price_monthly} €</TableCell>
-                        <TableCell>{lic.billing_cycle === "monthly" ? t("billing.monthly") : t("billing.yearly")}</TableCell>
-                        <TableCell><Badge variant={lic.status === "active" ? "default" : "destructive"}>{lic.status}</Badge></TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-          <Card>
             <CardHeader><CardTitle>{t("billing.invoices")}</CardTitle></CardHeader>
             <CardContent className="p-0">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>{t("billing.invoice_number")}</TableHead>
-                    <TableHead>{t("billing.tenant")}</TableHead>
+                     <TableHead>{t("billing.tenant")}</TableHead>
                     <TableHead>{t("billing.period")}</TableHead>
                     <TableHead>Module</TableHead>
                     <TableHead>Support</TableHead>
@@ -260,12 +220,11 @@ const SuperAdminBilling = () => {
                 </TableHeader>
                 <TableBody>
                   {invoices.length === 0 ? (
-                    <TableRow><TableCell colSpan={9} className="text-center py-8 text-muted-foreground">{t("billing.no_invoices")}</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">{t("billing.no_invoices")}</TableCell></TableRow>
                   ) : (
                     invoices.map((inv: any) => (
-                      <TableRow key={inv.id}>
-                        <TableCell className="font-medium">{inv.invoice_number}</TableCell>
-                        <TableCell>{inv.tenants?.name ?? "–"}</TableCell>
+                       <TableRow key={inv.id}>
+                         <TableCell className="font-medium">{inv.tenants?.name ?? "–"}</TableCell>
                         <TableCell className="text-muted-foreground">{inv.period_start} – {inv.period_end}</TableCell>
                         <TableCell>{Number(inv.module_total ?? 0).toFixed(2)} €</TableCell>
                         <TableCell>{Number(inv.support_total ?? 0).toFixed(2)} €</TableCell>
