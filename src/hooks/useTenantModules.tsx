@@ -23,6 +23,7 @@ export const ALL_MODULES = [
   { code: "tenant_electricity", label: "Mieterstrom" },
   { code: "energy_report", label: "Energiebericht" },
   { code: "remote_support", label: "Remote-Support (Flatrate)" },
+  { code: "support_billing", label: "Support (mit Berechnung)" },
 ] as const;
 
 export function useTenantModules(tenantId: string | null) {
