@@ -52,8 +52,8 @@ export function MiniserverStatus({ locationIntegrationId, integrationType, lastS
     },
     systemStatus?.memory != null && {
       icon: HardDrive,
-      label: "RAM",
-      value: `${systemStatus.memory}%`,
+      label: "RAM frei",
+      value: `${systemStatus.memory} KB`,
     },
     syncTime && {
       icon: RefreshCw,
