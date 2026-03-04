@@ -169,12 +169,13 @@ serve(async (req) => {
               const controlType = sensor.controlType || sensor.type || "";
 
               // Check if an unresolved error already exists for this sensor
+              // Check if an unresolved OR ignored error already exists for this sensor
               const { data: existing } = await supabase
                 .from("integration_errors")
                 .select("id")
                 .eq("location_integration_id", integrationId)
                 .eq("sensor_name", sensorName)
-                .eq("is_resolved", false)
+                .or("is_resolved.eq.false,is_ignored.eq.true")
                 .maybeSingle();
 
               if (!existing) {
@@ -204,13 +205,14 @@ serve(async (req) => {
               const errorMessage = msg.title || msg.message || "Systemfehler";
 
               // Check if an unresolved error already exists for this message uid
+              // Check if an unresolved OR ignored error already exists for this message uid
               const { data: existing } = await supabase
                 .from("integration_errors")
                 .select("id")
                 .eq("location_integration_id", integrationId)
                 .eq("sensor_name", msgUid)
                 .eq("error_type", "system_status")
-                .eq("is_resolved", false)
+                .or("is_resolved.eq.false,is_ignored.eq.true")
                 .maybeSingle();
 
               if (!existing) {
@@ -261,6 +263,7 @@ serve(async (req) => {
               }
             }
           }
+        } else {
           console.error(`Sync failed for integration ${integrationId}:`, data.error);
           results.push({ id: integrationId, success: false, error: data.error });
 
@@ -273,17 +276,28 @@ serve(async (req) => {
               .single();
 
             if (locData?.tenant_id) {
-              const { data: errRow } = await supabase.from("integration_errors").insert({
-                tenant_id: locData.tenant_id,
-                location_id: locationId,
-                location_integration_id: integrationId,
-                integration_type: integrationType,
-                error_type: "connection",
-                error_message: data.error || "Sync fehlgeschlagen",
-                severity: "error",
-              }).select("id").single();
-              if (errRow) {
-                await createLinkedTask(supabase, locData.tenant_id, data.error || "Sync fehlgeschlagen", errRow.id);
+              // Check if an unresolved or ignored connection error already exists
+              const { data: existingConnErr } = await supabase
+                .from("integration_errors")
+                .select("id")
+                .eq("location_integration_id", integrationId)
+                .eq("error_type", "connection")
+                .or("is_resolved.eq.false,is_ignored.eq.true")
+                .maybeSingle();
+
+              if (!existingConnErr) {
+                const { data: errRow } = await supabase.from("integration_errors").insert({
+                  tenant_id: locData.tenant_id,
+                  location_id: locationId,
+                  location_integration_id: integrationId,
+                  integration_type: integrationType,
+                  error_type: "connection",
+                  error_message: data.error || "Sync fehlgeschlagen",
+                  severity: "error",
+                }).select("id").single();
+                if (errRow) {
+                  await createLinkedTask(supabase, locData.tenant_id, data.error || "Sync fehlgeschlagen", errRow.id);
+                }
               }
             }
           }
@@ -302,17 +316,28 @@ serve(async (req) => {
             .single();
 
           if (locData?.tenant_id) {
-              const { data: errRow } = await supabase.from("integration_errors").insert({
-                tenant_id: locData.tenant_id,
-                location_id: locationId,
-                location_integration_id: integrationId,
-                integration_type: integrationType,
-                error_type: "connection",
-                error_message: errMsg,
-                severity: "error",
-              }).select("id").single();
-              if (errRow) {
-                await createLinkedTask(supabase, locData.tenant_id, errMsg, errRow.id);
+              // Check if an unresolved or ignored connection error already exists
+              const { data: existingConnErr } = await supabase
+                .from("integration_errors")
+                .select("id")
+                .eq("location_integration_id", integrationId)
+                .eq("error_type", "connection")
+                .or("is_resolved.eq.false,is_ignored.eq.true")
+                .maybeSingle();
+
+              if (!existingConnErr) {
+                const { data: errRow } = await supabase.from("integration_errors").insert({
+                  tenant_id: locData.tenant_id,
+                  location_id: locationId,
+                  location_integration_id: integrationId,
+                  integration_type: integrationType,
+                  error_type: "connection",
+                  error_message: errMsg,
+                  severity: "error",
+                }).select("id").single();
+                if (errRow) {
+                  await createLinkedTask(supabase, locData.tenant_id, errMsg, errRow.id);
+                }
               }
           }
         }
