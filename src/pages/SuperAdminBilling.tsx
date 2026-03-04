@@ -81,6 +81,10 @@ const SuperAdminBilling = () => {
     switch (s) { case "paid": return "default"; case "sent": return "secondary"; case "overdue": return "destructive"; default: return "outline"; }
   };
 
+  const statusLabel = (s: string) => {
+    switch (s) { case "draft": return "Entwurf"; case "sent": return "Gesendet"; case "paid": return "Bezahlt"; case "overdue": return "Überfällig"; default: return s; }
+  };
+
   const handleSepaExport = () => {
     if (!creditor.name || !creditor.iban || !creditor.bic || !creditor.id) {
       toast.error(t("billing.sepa_creditor_missing"));
@@ -234,7 +238,7 @@ const SuperAdminBilling = () => {
                             {inv.tenants?.payment_method === "sepa" ? "SEPA" : "Rechnung"}
                           </Badge>
                         </TableCell>
-                        <TableCell><Badge variant={statusColor(inv.status) as any}>{inv.status}</Badge></TableCell>
+                        <TableCell><Badge variant={statusColor(inv.status) as any}>{statusLabel(inv.status)}</Badge></TableCell>
                         <TableCell>
                           {inv.lexware_invoice_id ? (
                             <Badge variant="default" className="text-xs gap-1">
