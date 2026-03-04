@@ -362,6 +362,8 @@ const SuperAdminBilling = () => {
                             <Badge variant="default" className="text-xs gap-1">
                               <CheckCircle2 className="h-3 w-3" />{t("billing.lexware_synced")}
                             </Badge>
+                          ) : inv.status === "voided" ? (
+                            <Badge variant="outline" className="text-xs text-muted-foreground">—</Badge>
                           ) : (
                             <Button size="sm" variant="ghost" disabled={sendingIds.has(inv.id) || lexwareMutation.isPending} onClick={() => lexwareMutation.mutate([inv.id])}>
                               {sendingIds.has(inv.id) ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
