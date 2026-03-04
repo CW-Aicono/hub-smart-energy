@@ -3,16 +3,16 @@ import { useAuth } from "@/hooks/useAuth";
 import { useSuperAdmin } from "@/hooks/useSuperAdmin";
 import { useSATranslation } from "@/hooks/useSATranslation";
 import SuperAdminSidebar from "@/components/super-admin/SuperAdminSidebar";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Download, Send, CheckCircle2, Loader2 } from "lucide-react";
+import { Download, Send, CheckCircle2, Loader2, ArrowUpDown, Pencil, Euro, AlertTriangle, Clock, FileCheck } from "lucide-react";
 import { generateSepaDirectDebitXml, downloadXml } from "@/lib/sepaXml";
 import { toast } from "sonner";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter,
@@ -20,6 +20,12 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+
+type SortKey = "tenant" | "period" | "module" | "support" | "amount" | "payment" | "lexware";
+type SortDir = "asc" | "desc";
 
 const SuperAdminBilling = () => {
   const { user, loading: authLoading } = useAuth();
@@ -28,6 +34,10 @@ const SuperAdminBilling = () => {
   const [sepaOpen, setSepaOpen] = useState(false);
   const [creditor, setCreditor] = useState({ name: "", iban: "", bic: "", id: "" });
   const [sendingIds, setSendingIds] = useState<Set<string>>(new Set());
+  const [editInv, setEditInv] = useState<any>(null);
+  const [editStatus, setEditStatus] = useState("");
+  const [sortKey, setSortKey] = useState<SortKey>("tenant");
+  const [sortDir, setSortDir] = useState<SortDir>("asc");
   const queryClient = useQueryClient();
 
   const lexwareMutation = useMutation({
@@ -44,16 +54,26 @@ const SuperAdminBilling = () => {
       const successes = data.results?.filter((r: any) => r.status === "success").length ?? 0;
       const errors = data.results?.filter((r: any) => r.status === "error") ?? [];
       const skipped = data.results?.filter((r: any) => r.status === "skipped").length ?? 0;
-      
       if (successes > 0) toast.success(`${t("billing.lexware_success")} (${successes})`);
       if (skipped > 0) toast.info(`${skipped} bereits in Lexware`);
-      if (errors.length > 0) {
-        errors.forEach((e: any) => toast.error(`${t("billing.lexware_error")}: ${e.reason}`));
-      }
+      if (errors.length > 0) errors.forEach((e: any) => toast.error(`${t("billing.lexware_error")}: ${e.reason}`));
       queryClient.invalidateQueries({ queryKey: ["super-admin-invoices"] });
     },
     onError: (err: Error) => toast.error(`${t("billing.lexware_error")}: ${err.message}`),
     onSettled: () => setSendingIds(new Set()),
+  });
+
+  const statusMutation = useMutation({
+    mutationFn: async ({ id, status }: { id: string; status: string }) => {
+      const { error } = await supabase.from("tenant_invoices").update({ status }).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["super-admin-invoices"] });
+      toast.success("Status aktualisiert");
+      setEditInv(null);
+    },
+    onError: (err: Error) => toast.error(err.message),
   });
 
   const { data: invoices = [] } = useQuery({
@@ -61,25 +81,60 @@ const SuperAdminBilling = () => {
     queryFn: async () => {
       const { data, error } = await supabase.from("tenant_invoices").select("*, tenants(name, payment_method, sepa_iban, sepa_bic, sepa_account_holder, sepa_mandate_ref, sepa_mandate_date)").order("created_at", { ascending: false });
       if (error) throw error;
-      return (data ?? []).sort((a: any, b: any) => {
-        const nameA = (a.tenants?.name ?? "").toLowerCase();
-        const nameB = (b.tenants?.name ?? "").toLowerCase();
-        if (nameA !== nameB) return nameA.localeCompare(nameB);
-        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-      });
+      return data ?? [];
     },
   });
 
+  const toggleSort = (key: SortKey) => {
+    if (sortKey === key) setSortDir(d => d === "asc" ? "desc" : "asc");
+    else { setSortKey(key); setSortDir("asc"); }
+  };
+
+  const sorted = useMemo(() => {
+    const arr = [...invoices];
+    const dir = sortDir === "asc" ? 1 : -1;
+    arr.sort((a: any, b: any) => {
+      switch (sortKey) {
+        case "tenant": return dir * (a.tenants?.name ?? "").localeCompare(b.tenants?.name ?? "");
+        case "period": return dir * ((a.period_start ?? "").localeCompare(b.period_start ?? ""));
+        case "module": return dir * (Number(a.module_total ?? 0) - Number(b.module_total ?? 0));
+        case "support": return dir * (Number(a.support_total ?? 0) - Number(b.support_total ?? 0));
+        case "amount": return dir * (Number(a.amount ?? 0) - Number(b.amount ?? 0));
+        case "payment": return dir * ((a.tenants?.payment_method ?? "").localeCompare(b.tenants?.payment_method ?? ""));
+        case "lexware": {
+          const aVal = a.lexware_invoice_id ? 1 : 0;
+          const bVal = b.lexware_invoice_id ? 1 : 0;
+          return dir * (aVal - bVal);
+        }
+        default: return 0;
+      }
+    });
+    return arr;
+  }, [invoices, sortKey, sortDir]);
+
+  // Summary stats
+  const stats = useMemo(() => {
+    const open = invoices.filter((i: any) => i.status === "draft" || i.status === "sent");
+    const paid = invoices.filter((i: any) => i.status === "paid");
+    const overdue = invoices.filter((i: any) => i.status === "overdue");
+    const inLexware = invoices.filter((i: any) => !!i.lexware_invoice_id);
+    return {
+      openAmount: open.reduce((s: number, i: any) => s + Number(i.amount ?? 0), 0),
+      openCount: open.length,
+      paidAmount: paid.reduce((s: number, i: any) => s + Number(i.amount ?? 0), 0),
+      paidCount: paid.length,
+      overdueAmount: overdue.reduce((s: number, i: any) => s + Number(i.amount ?? 0), 0),
+      overdueCount: overdue.length,
+      lexwareCount: inLexware.length,
+      totalCount: invoices.length,
+    };
+  }, [invoices]);
 
   if (authLoading || roleLoading) {
     return <div className="flex min-h-screen items-center justify-center bg-background"><div className="animate-pulse text-muted-foreground">{t("common.loading")}</div></div>;
   }
   if (!user) return <Navigate to="/auth" replace />;
   if (!isSuperAdmin) return <Navigate to="/" replace />;
-
-  const statusColor = (s: string) => {
-    switch (s) { case "paid": return "default"; case "sent": return "secondary"; case "overdue": return "destructive"; default: return "outline"; }
-  };
 
   const statusLabel = (s: string) => {
     switch (s) { case "draft": return "Entwurf"; case "sent": return "Gesendet"; case "paid": return "Bezahlt"; case "overdue": return "Überfällig"; default: return s; }
@@ -90,8 +145,6 @@ const SuperAdminBilling = () => {
       toast.error(t("billing.sepa_creditor_missing"));
       return;
     }
-
-    // Find open invoices for SEPA tenants
     const sepaInvoices = invoices.filter((inv: any) =>
       (inv.tenants?.payment_method === "sepa") &&
       (inv.status === "draft" || inv.status === "sent") &&
@@ -99,23 +152,15 @@ const SuperAdminBilling = () => {
       inv.tenants?.sepa_iban &&
       inv.tenants?.sepa_mandate_ref
     );
-
     if (sepaInvoices.length === 0) {
       toast.error(t("billing.sepa_no_debit_tenants"));
       return;
     }
-
     const now = new Date();
     const collectionDate = new Date(now.getTime() + 5 * 86400000).toISOString().split("T")[0];
     const msgId = `SEPA-${now.toISOString().replace(/[-:T.Z]/g, "").slice(0, 14)}`;
-
     const xml = generateSepaDirectDebitXml({
-      msgId,
-      creditorName: creditor.name,
-      creditorIban: creditor.iban,
-      creditorBic: creditor.bic,
-      creditorId: creditor.id,
-      collectionDate,
+      msgId, creditorName: creditor.name, creditorIban: creditor.iban, creditorBic: creditor.bic, creditorId: creditor.id, collectionDate,
       payments: sepaInvoices.map((inv: any) => ({
         endToEndId: inv.invoice_number || inv.id.slice(0, 35),
         amount: Number(inv.amount),
@@ -127,11 +172,19 @@ const SuperAdminBilling = () => {
         remittanceInfo: `${inv.invoice_number ?? "Rechnung"} ${inv.period_start ?? ""} - ${inv.period_end ?? ""}`.trim(),
       })),
     });
-
     downloadXml(xml, `SEPA-Lastschrift-${now.toISOString().split("T")[0]}.xml`);
     toast.success(`${t("billing.sepa_exported")} (${sepaInvoices.length} Positionen)`);
     setSepaOpen(false);
   };
+
+  const SortableHead = ({ label, sortId }: { label: string; sortId: SortKey }) => (
+    <TableHead>
+      <button onClick={() => toggleSort(sortId)} className="flex items-center gap-1 hover:text-foreground transition-colors">
+        {label}
+        <ArrowUpDown className={`h-3 w-3 ${sortKey === sortId ? "text-foreground" : "text-muted-foreground/50"}`} />
+      </button>
+    </TableHead>
+  );
 
   return (
     <div className="flex min-h-screen bg-background">
@@ -143,92 +196,120 @@ const SuperAdminBilling = () => {
             <p className="text-sm text-muted-foreground mt-1">{t("billing.subtitle")}</p>
           </div>
           <div className="flex gap-2">
-            <Button
-              variant="outline"
-              disabled={lexwareMutation.isPending}
-              onClick={() => {
-                const openIds = invoices
-                  .filter((inv: any) => !inv.lexware_invoice_id && (inv.status === "draft" || inv.status === "sent"))
-                  .map((inv: any) => inv.id);
-                if (openIds.length === 0) {
-                  toast.info(t("billing.lexware_no_open"));
-                  return;
-                }
-                lexwareMutation.mutate(openIds);
-              }}
-            >
+            <Button variant="outline" disabled={lexwareMutation.isPending} onClick={() => {
+              const openIds = invoices.filter((inv: any) => !inv.lexware_invoice_id && (inv.status === "draft" || inv.status === "sent")).map((inv: any) => inv.id);
+              if (openIds.length === 0) { toast.info(t("billing.lexware_no_open")); return; }
+              lexwareMutation.mutate(openIds);
+            }}>
               {lexwareMutation.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Send className="h-4 w-4 mr-2" />}
               {t("billing.lexware_send_all")}
             </Button>
             <Dialog open={sepaOpen} onOpenChange={setSepaOpen}>
               <DialogTrigger asChild>
-                <Button variant="outline">
-                  <Download className="h-4 w-4 mr-2" />
-                  {t("billing.sepa_export")}
-                </Button>
+                <Button variant="outline"><Download className="h-4 w-4 mr-2" />{t("billing.sepa_export")}</Button>
               </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>{t("billing.sepa_export")}</DialogTitle>
-                <DialogDescription>
-                  Gläubiger-Daten eingeben und SEPA pain.008 XML-Datei erzeugen.
-                </DialogDescription>
-              </DialogHeader>
-              <div className="space-y-4 py-4">
-                <div className="space-y-2">
-                  <Label>Gläubiger-Name</Label>
-                  <Input value={creditor.name} onChange={(e) => setCreditor(c => ({ ...c, name: e.target.value }))} placeholder="Ihre Firma GmbH" />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>{t("billing.sepa_export")}</DialogTitle>
+                  <DialogDescription>Gläubiger-Daten eingeben und SEPA pain.008 XML-Datei erzeugen.</DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
                   <div className="space-y-2">
-                    <Label>IBAN</Label>
-                    <Input value={creditor.iban} onChange={(e) => setCreditor(c => ({ ...c, iban: e.target.value }))} placeholder="DE89 3704 0044 0532 0130 00" />
+                    <Label>Gläubiger-Name</Label>
+                    <Input value={creditor.name} onChange={(e) => setCreditor(c => ({ ...c, name: e.target.value }))} placeholder="Ihre Firma GmbH" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>IBAN</Label>
+                      <Input value={creditor.iban} onChange={(e) => setCreditor(c => ({ ...c, iban: e.target.value }))} placeholder="DE89 3704 0044 0532 0130 00" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>BIC</Label>
+                      <Input value={creditor.bic} onChange={(e) => setCreditor(c => ({ ...c, bic: e.target.value }))} placeholder="COBADEFFXXX" />
+                    </div>
                   </div>
                   <div className="space-y-2">
-                    <Label>BIC</Label>
-                    <Input value={creditor.bic} onChange={(e) => setCreditor(c => ({ ...c, bic: e.target.value }))} placeholder="COBADEFFXXX" />
+                    <Label>Gläubiger-ID</Label>
+                    <Input value={creditor.id} onChange={(e) => setCreditor(c => ({ ...c, id: e.target.value }))} placeholder="DE98ZZZ09999999999" />
                   </div>
                 </div>
-                <div className="space-y-2">
-                  <Label>Gläubiger-ID</Label>
-                  <Input value={creditor.id} onChange={(e) => setCreditor(c => ({ ...c, id: e.target.value }))} placeholder="DE98ZZZ09999999999" />
-                </div>
-              </div>
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setSepaOpen(false)}>{t("common.cancel")}</Button>
-                <Button onClick={handleSepaExport}>
-                  <Download className="h-4 w-4 mr-2" />
-                  XML exportieren
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-           </Dialog>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setSepaOpen(false)}>{t("common.cancel")}</Button>
+                  <Button onClick={handleSepaExport}><Download className="h-4 w-4 mr-2" />XML exportieren</Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
           </div>
         </header>
+
         <div className="p-6 space-y-6">
+          {/* Summary Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <Card>
+              <CardContent className="p-4 flex items-center gap-4">
+                <div className="rounded-lg bg-accent p-2.5"><Clock className="h-5 w-5 text-accent-foreground" /></div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Offene Beträge</p>
+                  <p className="text-2xl font-bold">{stats.openAmount.toFixed(2)} €</p>
+                  <p className="text-xs text-muted-foreground">{stats.openCount} Rechnungen</p>
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-4 flex items-center gap-4">
+                <div className="rounded-lg bg-secondary p-2.5"><Euro className="h-5 w-5 text-secondary-foreground" /></div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Bezahlt</p>
+                  <p className="text-2xl font-bold">{stats.paidAmount.toFixed(2)} €</p>
+                  <p className="text-xs text-muted-foreground">{stats.paidCount} Rechnungen</p>
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-4 flex items-center gap-4">
+                <div className="rounded-lg bg-destructive/10 p-2.5"><AlertTriangle className="h-5 w-5 text-destructive" /></div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Überfällig</p>
+                  <p className="text-2xl font-bold">{stats.overdueAmount.toFixed(2)} €</p>
+                  <p className="text-xs text-muted-foreground">{stats.overdueCount} Rechnungen</p>
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-4 flex items-center gap-4">
+                <div className="rounded-lg bg-primary/10 p-2.5"><FileCheck className="h-5 w-5 text-primary" /></div>
+                <div>
+                  <p className="text-sm text-muted-foreground">In Lexware</p>
+                  <p className="text-2xl font-bold">{stats.lexwareCount} / {stats.totalCount}</p>
+                  <p className="text-xs text-muted-foreground">synchronisiert</p>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Table */}
           <Card>
-            <CardHeader><CardTitle>{t("billing.invoices")}</CardTitle></CardHeader>
             <CardContent className="p-0">
               <Table>
                 <TableHeader>
                   <TableRow>
-                     <TableHead>{t("billing.tenant")}</TableHead>
-                    <TableHead>{t("billing.period")}</TableHead>
-                    <TableHead>Module</TableHead>
-                    <TableHead>Support</TableHead>
-                    <TableHead>{t("billing.amount")}</TableHead>
-                    <TableHead>{t("billing.payment_method")}</TableHead>
-                    <TableHead>{t("common.status")}</TableHead>
-                    <TableHead>Lexware</TableHead>
+                    <SortableHead label={t("billing.tenant")} sortId="tenant" />
+                    <SortableHead label={t("billing.period")} sortId="period" />
+                    <SortableHead label="Module" sortId="module" />
+                    <SortableHead label="Support" sortId="support" />
+                    <SortableHead label={t("billing.amount")} sortId="amount" />
+                    <SortableHead label={t("billing.payment_method")} sortId="payment" />
+                    <TableHead className="text-center">Bearbeiten</TableHead>
+                    <SortableHead label="Lexware" sortId="lexware" />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {invoices.length === 0 ? (
+                  {sorted.length === 0 ? (
                     <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">{t("billing.no_invoices")}</TableCell></TableRow>
                   ) : (
-                    invoices.map((inv: any) => (
-                       <TableRow key={inv.id}>
-                         <TableCell className="font-medium">{inv.tenants?.name ?? "–"}</TableCell>
+                    sorted.map((inv: any) => (
+                      <TableRow key={inv.id}>
+                        <TableCell className="font-medium">{inv.tenants?.name ?? "–"}</TableCell>
                         <TableCell className="text-muted-foreground">{inv.period_start} – {inv.period_end}</TableCell>
                         <TableCell>{Number(inv.module_total ?? 0).toFixed(2)} €</TableCell>
                         <TableCell>{Number(inv.support_total ?? 0).toFixed(2)} €</TableCell>
@@ -238,25 +319,19 @@ const SuperAdminBilling = () => {
                             {inv.tenants?.payment_method === "sepa" ? "SEPA" : "Rechnung"}
                           </Badge>
                         </TableCell>
-                        <TableCell><Badge variant={statusColor(inv.status) as any}>{statusLabel(inv.status)}</Badge></TableCell>
+                        <TableCell className="text-center">
+                          <Button size="sm" variant="ghost" onClick={() => { setEditInv(inv); setEditStatus(inv.status); }}>
+                            <Pencil className="h-3.5 w-3.5" />
+                          </Button>
+                        </TableCell>
                         <TableCell>
                           {inv.lexware_invoice_id ? (
                             <Badge variant="default" className="text-xs gap-1">
-                              <CheckCircle2 className="h-3 w-3" />
-                              {t("billing.lexware_synced")}
+                              <CheckCircle2 className="h-3 w-3" />{t("billing.lexware_synced")}
                             </Badge>
                           ) : (
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              disabled={sendingIds.has(inv.id) || lexwareMutation.isPending}
-                              onClick={() => lexwareMutation.mutate([inv.id])}
-                            >
-                              {sendingIds.has(inv.id) ? (
-                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                              ) : (
-                                <Send className="h-3.5 w-3.5" />
-                              )}
+                            <Button size="sm" variant="ghost" disabled={sendingIds.has(inv.id) || lexwareMutation.isPending} onClick={() => lexwareMutation.mutate([inv.id])}>
+                              {sendingIds.has(inv.id) ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
                             </Button>
                           )}
                         </TableCell>
@@ -268,6 +343,42 @@ const SuperAdminBilling = () => {
             </CardContent>
           </Card>
         </div>
+
+        {/* Edit Invoice Dialog */}
+        <Dialog open={!!editInv} onOpenChange={(o) => { if (!o) setEditInv(null); }}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Abrechnung bearbeiten</DialogTitle>
+              <DialogDescription>{editInv?.tenants?.name} — {editInv?.period_start} – {editInv?.period_end}</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label>Status</Label>
+                <Select value={editStatus} onValueChange={setEditStatus}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="draft">Entwurf</SelectItem>
+                    <SelectItem value="sent">Gesendet</SelectItem>
+                    <SelectItem value="paid">Bezahlt</SelectItem>
+                    <SelectItem value="overdue">Überfällig</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid grid-cols-3 gap-4 text-sm">
+                <div><span className="text-muted-foreground">Module:</span> <span className="font-medium">{Number(editInv?.module_total ?? 0).toFixed(2)} €</span></div>
+                <div><span className="text-muted-foreground">Support:</span> <span className="font-medium">{Number(editInv?.support_total ?? 0).toFixed(2)} €</span></div>
+                <div><span className="text-muted-foreground">Gesamt:</span> <span className="font-medium">{Number(editInv?.amount ?? 0).toFixed(2)} €</span></div>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setEditInv(null)}>{t("common.cancel")}</Button>
+              <Button disabled={statusMutation.isPending} onClick={() => { if (editInv) statusMutation.mutate({ id: editInv.id, status: editStatus }); }}>
+                {statusMutation.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
+                {t("common.save")}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </main>
     </div>
   );
