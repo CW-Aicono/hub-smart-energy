@@ -186,6 +186,28 @@ async function ensureContact(
   return contactId;
 }
 
+const MODULE_LABELS_DE: Record<string, string> = {
+  locations: "Standortverwaltung (alle Liegenschaften)",
+  integrations: "Integrationen",
+  floor_plans: "Grundrisse",
+  energy_monitoring: "Energiemonitoring",
+  reporting: "Berichte",
+  automation_building: "Automation (Gebäudeebene)",
+  automation_multi: "Multi-Location Automation",
+  ev_charging: "Ladeinfrastruktur",
+  alerts: "Alarmregeln",
+  meter_scanning: "Zähler-Scanning (OCR)",
+  live_values: "Live-Sensorwerte",
+  network_infra: "Netzwerkinfrastruktur",
+  task_management: "Aufgabenverwaltung",
+  brighthub_api: "BrightHub API",
+  arbitrage_trading: "Arbitragehandel (Strom)",
+  tenant_electricity: "Mieterstrom",
+  energy_report: "Energiebericht",
+  remote_support: "Remote-Support (Flatrate)",
+  support_billing: "Support (mit Berechnung)",
+};
+
 function buildLineItems(invoice: any): any[] {
   const items: any[] = [];
   const lineItemsRaw = invoice.line_items;
@@ -193,9 +215,10 @@ function buildLineItems(invoice: any): any[] {
   if (Array.isArray(lineItemsRaw)) {
     for (const li of lineItemsRaw) {
       if (li.type === "module") {
+        const code = li.code || li.label;
         items.push({
           type: "custom",
-          name: `Modul: ${li.label || li.code}`,
+          name: MODULE_LABELS_DE[code] || code,
           quantity: 1,
           unitName: "Monat",
           unitPrice: {
