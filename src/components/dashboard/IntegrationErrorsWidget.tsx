@@ -35,10 +35,26 @@ const IntegrationErrorsWidget = ({ locationId }: IntegrationErrorsWidgetProps) =
   const { errors, loading } = useIntegrationErrors();
   const { locations } = useLocations();
 
-  const filtered = locationId
+  const locationFiltered = locationId
     ? errors.filter((e) => e.location_id === locationId)
     : errors;
 
+  // Deduplicate: group by error_message + integration_type + sensor_name, keep newest
+  const deduped = (() => {
+    const map = new Map<string, { error: typeof locationFiltered[0]; count: number }>();
+    for (const err of locationFiltered) {
+      const key = `${err.error_message}||${err.integration_type}||${err.sensor_name || ""}`;
+      const existing = map.get(key);
+      if (!existing || new Date(err.created_at) > new Date(existing.error.created_at)) {
+        map.set(key, { error: err, count: (existing?.count || 0) + 1 });
+      } else {
+        existing.count++;
+      }
+    }
+    return Array.from(map.values());
+  })();
+
+  const filtered = deduped;
   const locationMap = new Map(locations.map((l) => [l.id, l.name]));
 
   if (loading) {
@@ -73,7 +89,7 @@ const IntegrationErrorsWidget = ({ locationId }: IntegrationErrorsWidgetProps) =
           </div>
         ) : (
           <div className="space-y-2 max-h-[400px] overflow-y-auto">
-            {filtered.map((err) => {
+            {filtered.map(({ error: err, count }) => {
               const locationName = err.location_id ? locationMap.get(err.location_id) : null;
               const timeStr = formatErrorTime(err.created_at);
               const hasSensor = !!(err as any).sensor_name;
@@ -98,7 +114,12 @@ const IntegrationErrorsWidget = ({ locationId }: IntegrationErrorsWidgetProps) =
                   <div className="flex items-start gap-2.5">
                     <CircleAlert className="h-5 w-5 mt-0.5 shrink-0 text-destructive" />
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm font-semibold">{err.error_message}</p>
+                      <p className="text-sm font-semibold">
+                        {err.error_message}
+                        {count > 1 && (
+                          <span className="ml-1.5 text-xs font-normal text-muted-foreground">({count}×)</span>
+                        )}
+                      </p>
                       {hasSensor && (
                         <p className="text-sm text-muted-foreground">
                           {(err as any).sensor_name}

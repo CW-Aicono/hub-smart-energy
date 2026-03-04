@@ -12,6 +12,24 @@ serve(async (req) => {
   const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const supabase = createClient(supabaseUrl, supabaseKey);
 
+  // Helper: create a task linked to an integration error
+  async function createLinkedTask(
+    sb: any, tenantId: string, errorTitle: string, errorId: string
+  ) {
+    const { data: task } = await sb.from("tasks").insert({
+      tenant_id: tenantId,
+      title: errorTitle,
+      status: "open",
+      priority: "high",
+      source_type: "automation",
+      source_label: "Integrationsfehler",
+    }).select("id").single();
+    if (task) {
+      await sb.from("integration_errors").update({ task_id: task.id }).eq("id", errorId);
+    }
+    return task;
+  }
+
   console.log("loxone-periodic-sync: Starting sync for all active Loxone integrations...");
 
   try {
@@ -86,34 +104,59 @@ serve(async (req) => {
           }
 
           // Auto-resolve connection-level errors (sync itself succeeded)
-          await supabase
+          const { data: resolvedConnErrors } = await supabase
             .from("integration_errors")
-            .update({ is_resolved: true, resolved_at: new Date().toISOString() })
+            .select("id, task_id")
             .eq("location_integration_id", integrationId)
             .eq("is_resolved", false)
             .eq("error_type", "connection");
 
+          if (resolvedConnErrors && resolvedConnErrors.length > 0) {
+            const ids = resolvedConnErrors.map((e: any) => e.id);
+            await supabase
+              .from("integration_errors")
+              .update({ is_resolved: true, resolved_at: new Date().toISOString() })
+              .in("id", ids);
+            // Auto-complete linked tasks
+            const taskIds = resolvedConnErrors.map((e: any) => e.task_id).filter(Boolean);
+            if (taskIds.length > 0) {
+              await supabase
+                .from("tasks")
+                .update({ status: "done", completed_at: new Date().toISOString() })
+                .in("id", taskIds)
+                .neq("status", "done");
+            }
+          }
+
           // Auto-resolve data errors for sensors that are now online again
           if (onlineSensors.length > 0) {
             const onlineNames = onlineSensors.map((s: any) => s.name);
-            // Resolve errors whose sensor_name is now online
             const { data: activeDataErrors } = await supabase
               .from("integration_errors")
-              .select("id, sensor_name")
+              .select("id, sensor_name, task_id")
               .eq("location_integration_id", integrationId)
               .eq("is_resolved", false)
               .eq("error_type", "data");
 
             if (activeDataErrors && activeDataErrors.length > 0) {
-              const toResolve = activeDataErrors
-                .filter((e: any) => e.sensor_name && onlineNames.includes(e.sensor_name))
-                .map((e: any) => e.id);
-              if (toResolve.length > 0) {
+              const toResolveEntries = activeDataErrors
+                .filter((e: any) => e.sensor_name && onlineNames.includes(e.sensor_name));
+              const toResolveIds = toResolveEntries.map((e: any) => e.id);
+              if (toResolveIds.length > 0) {
                 await supabase
                   .from("integration_errors")
                   .update({ is_resolved: true, resolved_at: new Date().toISOString() })
-                  .in("id", toResolve);
-                console.log(`Auto-resolved ${toResolve.length} sensor data errors`);
+                  .in("id", toResolveIds);
+                // Auto-complete linked tasks
+                const taskIds = toResolveEntries.map((e: any) => e.task_id).filter(Boolean);
+                if (taskIds.length > 0) {
+                  await supabase
+                    .from("tasks")
+                    .update({ status: "done", completed_at: new Date().toISOString() })
+                    .in("id", taskIds)
+                    .neq("status", "done");
+                }
+                console.log(`Auto-resolved ${toResolveIds.length} sensor data errors`);
               }
             }
           }
@@ -134,7 +177,7 @@ serve(async (req) => {
                 .maybeSingle();
 
               if (!existing) {
-                await supabase.from("integration_errors").insert({
+                const { data: errRow } = await supabase.from("integration_errors").insert({
                   tenant_id: tenantId,
                   location_id: locationId,
                   location_integration_id: integrationId,
@@ -144,7 +187,10 @@ serve(async (req) => {
                   sensor_name: sensorName,
                   sensor_type: controlType,
                   severity: "error",
-                });
+                }).select("id").single();
+                if (errRow) {
+                  await createLinkedTask(supabase, tenantId, `${sensorName}: Liefert keine Werte`, errRow.id);
+                }
                 console.log(`Logged offline sensor error: ${sensorName} (${controlType})`);
               }
             }
@@ -162,7 +208,7 @@ serve(async (req) => {
               .single();
 
             if (locData?.tenant_id) {
-              await supabase.from("integration_errors").insert({
+              const { data: errRow } = await supabase.from("integration_errors").insert({
                 tenant_id: locData.tenant_id,
                 location_id: locationId,
                 location_integration_id: integrationId,
@@ -170,7 +216,10 @@ serve(async (req) => {
                 error_type: "connection",
                 error_message: data.error || "Sync fehlgeschlagen",
                 severity: "error",
-              });
+              }).select("id").single();
+              if (errRow) {
+                await createLinkedTask(supabase, locData.tenant_id, data.error || "Sync fehlgeschlagen", errRow.id);
+              }
             }
           }
         }
@@ -188,15 +237,18 @@ serve(async (req) => {
             .single();
 
           if (locData?.tenant_id) {
-            await supabase.from("integration_errors").insert({
-              tenant_id: locData.tenant_id,
-              location_id: locationId,
-              location_integration_id: integrationId,
-              integration_type: integrationType,
-              error_type: "connection",
-              error_message: errMsg,
-              severity: "error",
-            });
+              const { data: errRow } = await supabase.from("integration_errors").insert({
+                tenant_id: locData.tenant_id,
+                location_id: locationId,
+                location_integration_id: integrationId,
+                integration_type: integrationType,
+                error_type: "connection",
+                error_message: errMsg,
+                severity: "error",
+              }).select("id").single();
+              if (errRow) {
+                await createLinkedTask(supabase, locData.tenant_id, errMsg, errRow.id);
+              }
           }
         }
       }
