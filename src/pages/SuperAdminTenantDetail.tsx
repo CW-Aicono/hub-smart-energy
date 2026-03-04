@@ -17,7 +17,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { HeadsetIcon, RotateCcw, UserPlus, Mail, Shield, User, Copy, Check, Building2, MapPin, UserCircle, Package, Gauge, Users, Receipt, Clock } from "lucide-react";
+import { HeadsetIcon, RotateCcw, UserPlus, Mail, Shield, User, Copy, Check, Building2, MapPin, UserCircle, Package, Gauge, Users, Receipt, Clock, Pencil, Save } from "lucide-react";
 import { useModuleBundles } from "@/hooks/useModuleBundles";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -140,6 +140,9 @@ const SuperAdminTenantDetail = () => {
   const { t } = useSATranslation();
   const queryClient = useQueryClient();
   const [licenseForm, setLicenseForm] = useState<Record<string, string | number>>({});
+  const [editingTenantInfo, setEditingTenantInfo] = useState(false);
+  const [savingTenantInfo, setSavingTenantInfo] = useState(false);
+  const [tenantInfoForm, setTenantInfoForm] = useState({ name: "", street: "", house_number: "", postal_code: "", city: "", contact_person: "", contact_email: "" });
 
   const { data: tenant } = useQuery({
     queryKey: ["tenant-detail", id],
@@ -352,51 +355,125 @@ const SuperAdminTenantDetail = () => {
 
               {/* Existing tenant info card */}
               <Card>
-                <CardHeader><CardTitle>Mandanten-Informationen</CardTitle></CardHeader>
+                <CardHeader className="flex flex-row items-center justify-between">
+                  <CardTitle>Mandanten-Informationen</CardTitle>
+                  {!editingTenantInfo ? (
+                    <Button variant="ghost" size="icon" onClick={() => {
+                      setTenantInfoForm({
+                        name: tenant?.name ?? "",
+                        street: (tenant as any)?.street ?? "",
+                        house_number: (tenant as any)?.house_number ?? "",
+                        postal_code: (tenant as any)?.postal_code ?? "",
+                        city: (tenant as any)?.city ?? "",
+                        contact_person: (tenant as any)?.contact_person ?? "",
+                        contact_email: tenant?.contact_email ?? "",
+                      });
+                      setEditingTenantInfo(true);
+                    }}>
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                  ) : (
+                    <div className="flex gap-1">
+                      <Button variant="ghost" size="sm" onClick={() => setEditingTenantInfo(false)}>Abbrechen</Button>
+                      <Button size="sm" disabled={savingTenantInfo} onClick={async () => {
+                        setSavingTenantInfo(true);
+                        const { error } = await supabase.from("tenants").update({
+                          name: tenantInfoForm.name.trim() || tenant?.name,
+                          street: tenantInfoForm.street.trim() || null,
+                          house_number: tenantInfoForm.house_number.trim() || null,
+                          postal_code: tenantInfoForm.postal_code.trim() || null,
+                          city: tenantInfoForm.city.trim() || null,
+                          contact_person: tenantInfoForm.contact_person.trim() || null,
+                          contact_email: tenantInfoForm.contact_email.trim() || null,
+                        }).eq("id", tenant!.id);
+                        setSavingTenantInfo(false);
+                        if (error) { toast.error("Fehler beim Speichern"); }
+                        else {
+                          toast.success("Gespeichert");
+                          queryClient.invalidateQueries({ queryKey: ["super-admin-tenants"] });
+                          setEditingTenantInfo(false);
+                        }
+                      }}>
+                        <Save className="h-4 w-4 mr-1" />
+                        {savingTenantInfo ? "Speichere..." : "Speichern"}
+                      </Button>
+                    </div>
+                  )}
+                </CardHeader>
                 <CardContent className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="space-y-3">
-                      <div className="flex items-start gap-2">
-                        <Building2 className="h-4 w-4 mt-0.5 text-muted-foreground shrink-0" />
-                        <div>
-                          <p className="text-sm font-medium text-muted-foreground">Name</p>
-                          <p>{tenant?.name ?? "–"}</p>
+                  {editingTenantInfo ? (
+                    <div className="space-y-4">
+                      <div className="space-y-2">
+                        <Label>Name</Label>
+                        <Input value={tenantInfoForm.name} onChange={(e) => setTenantInfoForm(f => ({ ...f, name: e.target.value }))} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Anschrift</Label>
+                        <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-3">
+                          <Input value={tenantInfoForm.street} onChange={(e) => setTenantInfoForm(f => ({ ...f, street: e.target.value }))} placeholder="Straße" />
+                          <Input value={tenantInfoForm.house_number} onChange={(e) => setTenantInfoForm(f => ({ ...f, house_number: e.target.value }))} placeholder="Nr." className="w-full sm:w-24" />
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-[auto_1fr] gap-3">
+                          <Input value={tenantInfoForm.postal_code} onChange={(e) => setTenantInfoForm(f => ({ ...f, postal_code: e.target.value }))} placeholder="PLZ" className="w-full sm:w-28" />
+                          <Input value={tenantInfoForm.city} onChange={(e) => setTenantInfoForm(f => ({ ...f, city: e.target.value }))} placeholder="Stadt" />
                         </div>
                       </div>
-                      <div className="flex items-start gap-2">
-                        <MapPin className="h-4 w-4 mt-0.5 text-muted-foreground shrink-0" />
-                        <div>
-                          <p className="text-sm font-medium text-muted-foreground">Anschrift</p>
-                          <p>
-                            {(tenant as any)?.street || (tenant as any)?.house_number
-                              ? `${(tenant as any)?.street ?? ""} ${(tenant as any)?.house_number ?? ""}`.trim()
-                              : "–"}
-                          </p>
-                          <p>
-                            {(tenant as any)?.postal_code || (tenant as any)?.city
-                              ? `${(tenant as any)?.postal_code ?? ""} ${(tenant as any)?.city ?? ""}`.trim()
-                              : ""}
-                          </p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label>Hauptansprechpartner</Label>
+                          <Input value={tenantInfoForm.contact_person} onChange={(e) => setTenantInfoForm(f => ({ ...f, contact_person: e.target.value }))} />
                         </div>
-                      </div>
-                    </div>
-                    <div className="space-y-3">
-                      <div className="flex items-start gap-2">
-                        <UserCircle className="h-4 w-4 mt-0.5 text-muted-foreground shrink-0" />
-                        <div>
-                          <p className="text-sm font-medium text-muted-foreground">Hauptansprechpartner</p>
-                          <p>{(tenant as any)?.contact_person ?? "–"}</p>
-                        </div>
-                      </div>
-                      <div className="flex items-start gap-2">
-                        <Mail className="h-4 w-4 mt-0.5 text-muted-foreground shrink-0" />
-                        <div>
-                          <p className="text-sm font-medium text-muted-foreground">Kontakt-E-Mail</p>
-                          <p>{tenant?.contact_email ?? "–"}</p>
+                        <div className="space-y-2">
+                          <Label>Kontakt-E-Mail</Label>
+                          <Input type="email" value={tenantInfoForm.contact_email} onChange={(e) => setTenantInfoForm(f => ({ ...f, contact_email: e.target.value }))} />
                         </div>
                       </div>
                     </div>
-                  </div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="space-y-3">
+                        <div className="flex items-start gap-2">
+                          <Building2 className="h-4 w-4 mt-0.5 text-muted-foreground shrink-0" />
+                          <div>
+                            <p className="text-sm font-medium text-muted-foreground">Name</p>
+                            <p>{tenant?.name ?? "–"}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-start gap-2">
+                          <MapPin className="h-4 w-4 mt-0.5 text-muted-foreground shrink-0" />
+                          <div>
+                            <p className="text-sm font-medium text-muted-foreground">Anschrift</p>
+                            <p>
+                              {(tenant as any)?.street || (tenant as any)?.house_number
+                                ? `${(tenant as any)?.street ?? ""} ${(tenant as any)?.house_number ?? ""}`.trim()
+                                : "–"}
+                            </p>
+                            <p>
+                              {(tenant as any)?.postal_code || (tenant as any)?.city
+                                ? `${(tenant as any)?.postal_code ?? ""} ${(tenant as any)?.city ?? ""}`.trim()
+                                : ""}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="space-y-3">
+                        <div className="flex items-start gap-2">
+                          <UserCircle className="h-4 w-4 mt-0.5 text-muted-foreground shrink-0" />
+                          <div>
+                            <p className="text-sm font-medium text-muted-foreground">Hauptansprechpartner</p>
+                            <p>{(tenant as any)?.contact_person ?? "–"}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-start gap-2">
+                          <Mail className="h-4 w-4 mt-0.5 text-muted-foreground shrink-0" />
+                          <div>
+                            <p className="text-sm font-medium text-muted-foreground">Kontakt-E-Mail</p>
+                            <p>{tenant?.contact_email ?? "–"}</p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </TabsContent>
