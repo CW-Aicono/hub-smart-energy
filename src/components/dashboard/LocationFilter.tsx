@@ -1,4 +1,4 @@
-import { Building2, ChevronDown, MapPin } from "lucide-react";
+import { AlertTriangle, Building2, ChevronDown, MapPin } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -11,6 +11,7 @@ import { useLocations } from "@/hooks/useLocations";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useTranslation } from "@/hooks/useTranslation";
 import { useModuleGuard } from "@/hooks/useModuleGuard";
+import { useIntegrationErrors } from "@/hooks/useIntegrationErrors";
 import { useEffect } from "react";
 
 interface LocationFilterProps {
@@ -23,6 +24,8 @@ export function LocationFilter({ selectedLocationId, onLocationChange }: Locatio
   const { t } = useTranslation();
   const T = (key: string) => t(key as any);
   const { locationsFullEnabled } = useModuleGuard();
+  const { errorLocationIds } = useIntegrationErrors();
+  const hasAnyErrors = errorLocationIds.size > 0;
 
   const mainLocation = locations.find((loc) => loc.is_main_location) || locations[0];
 
@@ -64,12 +67,20 @@ export function LocationFilter({ selectedLocationId, onLocationChange }: Locatio
           <span className="flex items-center gap-2 truncate">
             {selectedLocation ? (
               <>
-                <Building2 className="h-4 w-4 shrink-0" />
+                {errorLocationIds.has(selectedLocation.id) ? (
+                  <AlertTriangle className="h-4 w-4 shrink-0 text-destructive" />
+                ) : (
+                  <Building2 className="h-4 w-4 shrink-0" />
+                )}
                 <span className="truncate">{selectedLocation.name}</span>
               </>
             ) : (
               <>
-                <MapPin className="h-4 w-4 shrink-0" />
+                {hasAnyErrors ? (
+                  <AlertTriangle className="h-4 w-4 shrink-0 text-destructive" />
+                ) : (
+                  <MapPin className="h-4 w-4 shrink-0" />
+                )}
                 <span>{T("loc.allLocations")}</span>
               </>
             )}
@@ -82,7 +93,11 @@ export function LocationFilter({ selectedLocationId, onLocationChange }: Locatio
           onClick={() => onLocationChange(null)}
           className={!selectedLocationId ? "bg-accent" : ""}
         >
-          <MapPin className="h-4 w-4 mr-2" />
+          {hasAnyErrors ? (
+            <AlertTriangle className="h-4 w-4 mr-2 text-destructive" />
+          ) : (
+            <MapPin className="h-4 w-4 mr-2" />
+          )}
           {T("loc.allLocations")}
         </DropdownMenuItem>
         
@@ -94,7 +109,11 @@ export function LocationFilter({ selectedLocationId, onLocationChange }: Locatio
             onClick={() => onLocationChange(location.id)}
             className={selectedLocationId === location.id ? "bg-accent" : ""}
           >
-            <Building2 className="h-4 w-4 mr-2 shrink-0" />
+            {errorLocationIds.has(location.id) ? (
+              <AlertTriangle className="h-4 w-4 mr-2 shrink-0 text-destructive" />
+            ) : (
+              <Building2 className="h-4 w-4 mr-2 shrink-0" />
+            )}
             <span className="truncate flex-1">{location.name}</span>
             {location.is_main_location && (
               <span className="text-xs text-muted-foreground ml-2">{T("loc.mainBadge")}</span>
