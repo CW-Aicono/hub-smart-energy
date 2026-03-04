@@ -32,8 +32,8 @@ export default function EditInvoiceContent({ invoice, editStatus, setEditStatus,
 
   const initialItems: LineItem[] = Array.isArray(invoice.line_items) ? invoice.line_items.map((item: any) => ({
     code: item.code ?? "",
-    label: item.label ?? item.code ?? "",
-    amount: Number(item.amount ?? 0),
+    label: item.label ?? item.description ?? item.reason ?? item.code ?? "",
+    amount: Number(item.amount ?? item.unit_price ?? item.total ?? 0),
     type: item.type ?? "module",
     quantity: item.quantity ?? 1,
   })) : [];
