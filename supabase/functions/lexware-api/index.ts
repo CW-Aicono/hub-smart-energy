@@ -1,4 +1,4 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "jsr:@supabase/supabase-js@2";
 import { getCorsHeaders } from "../_shared/cors.ts";
 
 const LEXWARE_BASE = "https://api.lexware.io/v1";
@@ -40,7 +40,7 @@ Deno.serve(async (req) => {
       // Fetch invoices with tenant data
       const { data: invoices, error: invErr } = await supabase
         .from("tenant_invoices")
-        .select("*, tenants(id, name, street, city, zip, country, tax_id, vat_id, email, lexware_contact_id)")
+        .select("*, tenants(id, name, street, house_number, city, postal_code, contact_email, lexware_contact_id)")
         .in("id", invoiceIds);
       if (invErr) throw invErr;
       if (!invoices || invoices.length === 0) throw new Error("No invoices found");
@@ -70,11 +70,9 @@ Deno.serve(async (req) => {
           // 2. Create invoice in Lexware
           const lineItems = buildLineItems(inv);
           const lexwareInvoice = {
-            voucherDate: inv.period_end || new Date().toISOString().split("T")[0],
+            voucherDate: (inv.period_end || new Date().toISOString().split("T")[0]) + "T00:00:00.000+01:00",
             address: { contactId: lexwareContactId },
-            lineItems: {
-              custom: lineItems,
-            },
+            lineItems: lineItems,
             totalPrice: {
               currency: "EUR",
             },
@@ -136,30 +134,30 @@ async function ensureContact(
   supabase: any,
   tenant: any
 ): Promise<string> {
-  // Create contact in Lexware
+  const street = [tenant.street, tenant.house_number].filter(Boolean).join(" ");
   const contactPayload: any = {
     version: 0,
     roles: { customer: {} },
     company: {
       name: tenant.name || "Unbenannt",
-      street: tenant.street || undefined,
-      city: tenant.city || undefined,
-      zip: tenant.zip || undefined,
-      countryCode: "DE",
     },
   };
 
-  if (tenant.email) {
-    contactPayload.emailAddresses = {
-      business: [tenant.email],
+  if (street) {
+    contactPayload.addresses = {
+      billing: [{
+        street,
+        city: tenant.city || undefined,
+        zip: tenant.postal_code || undefined,
+        countryCode: "DE",
+      }],
     };
   }
 
-  if (tenant.tax_id) {
-    contactPayload.company.taxNumber = tenant.tax_id;
-  }
-  if (tenant.vat_id) {
-    contactPayload.company.vatRegistrationId = tenant.vat_id;
+  if (tenant.contact_email) {
+    contactPayload.emailAddresses = {
+      business: [tenant.contact_email],
+    };
   }
 
   const res = await fetch(`${LEXWARE_BASE}/contacts`, {
