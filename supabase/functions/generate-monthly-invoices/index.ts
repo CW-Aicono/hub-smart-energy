@@ -63,14 +63,35 @@ Deno.serve(async (req) => {
     }
 
     // 5. Check for existing invoices this month (prevent duplicates)
+    // Match by month: any invoice whose period overlaps this billing month
     const { data: existingInvoices } = await supabase
       .from("tenant_invoices")
-      .select("id, tenant_id, line_items, module_total, support_total, amount")
-      .eq("period_start", fmt(lastMonthStart))
-      .eq("period_end", fmt(lastMonthEnd));
+      .select("id, tenant_id, line_items, module_total, support_total, amount, period_start, period_end, status")
+      .gte("period_start", fmt(lastMonthStart))
+      .lte("period_start", fmt(lastMonthEnd))
+      .neq("status", "voided");
+    // Group by tenant – if multiple exist for same tenant+month, pick the first and merge
     const existingByTenant: Record<string, any> = {};
+    const duplicatesToDelete: string[] = [];
     for (const inv of existingInvoices ?? []) {
-      existingByTenant[inv.tenant_id] = inv;
+      if (!existingByTenant[inv.tenant_id]) {
+        existingByTenant[inv.tenant_id] = inv;
+      } else {
+        // Merge this duplicate into the primary invoice
+        const primary = existingByTenant[inv.tenant_id];
+        const extraLines = Array.isArray(inv.line_items) ? inv.line_items : [];
+        const primaryLines = Array.isArray(primary.line_items) ? primary.line_items : [];
+        primary.line_items = [...primaryLines, ...extraLines];
+        primary.module_total = Number(primary.module_total ?? 0) + Number(inv.module_total ?? 0);
+        primary.support_total = Number(primary.support_total ?? 0) + Number(inv.support_total ?? 0);
+        primary.amount = Number(primary.amount ?? 0) + Number(inv.amount ?? 0);
+        duplicatesToDelete.push(inv.id);
+      }
+    }
+
+    // Delete duplicates that were merged
+    for (const dupId of duplicatesToDelete) {
+      await supabase.from("tenant_invoices").delete().eq("id", dupId);
     }
 
     const invoicesToInsert: any[] = [];
@@ -149,6 +170,8 @@ Deno.serve(async (req) => {
 
         invoicesToUpdate.push({
           id: existing.id,
+          period_start: fmt(lastMonthStart),
+          period_end: fmt(lastMonthEnd),
           line_items: mergedLines,
           module_total: moduleTotal,
           support_total: mergedSupportTotal,
@@ -183,6 +206,8 @@ Deno.serve(async (req) => {
       const { error: updErr } = await supabase
         .from("tenant_invoices")
         .update({
+          period_start: upd.period_start,
+          period_end: upd.period_end,
           line_items: upd.line_items,
           module_total: upd.module_total,
           support_total: upd.support_total,
