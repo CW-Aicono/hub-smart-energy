@@ -338,7 +338,7 @@ const SuperAdminBilling = () => {
                     sorted.map((inv: any) => (
                       <TableRow key={inv.id}>
                         <TableCell className="font-medium">{inv.tenants?.name ?? "–"}</TableCell>
-                        <TableCell className="text-muted-foreground">{inv.period_start} – {inv.period_end}</TableCell>
+                        <TableCell className="text-muted-foreground">{inv.period_start ? new Date(inv.period_start + "T00:00:00").toLocaleDateString("de-DE") : "–"} – {inv.period_end ? new Date(inv.period_end + "T00:00:00").toLocaleDateString("de-DE") : "–"}</TableCell>
                         <TableCell>{Number(inv.module_total ?? 0).toFixed(2)} €</TableCell>
                         <TableCell>{Number(inv.support_total ?? 0).toFixed(2)} €</TableCell>
                         <TableCell className="font-medium">{Number(inv.amount).toFixed(2)} €</TableCell>
