@@ -35,6 +35,7 @@ const WIDGET_LABEL_KEYS: Record<string, string> = {
   spot_price: "widget.spotPrice",
   pv_forecast: "widget.pvForecast",
   arbitrage_ai: "widget.arbitrageAi",
+  integration_errors: "widget.integrationErrors",
 };
 
 const SIZE_LABEL_KEYS: Record<WidgetSize, string> = {

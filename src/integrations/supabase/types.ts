@@ -1589,6 +1589,73 @@ export type Database = {
           },
         ]
       }
+      integration_errors: {
+        Row: {
+          created_at: string
+          error_message: string
+          error_type: string
+          id: string
+          integration_type: string
+          is_resolved: boolean
+          location_id: string | null
+          location_integration_id: string | null
+          resolved_at: string | null
+          severity: string
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          error_message: string
+          error_type?: string
+          id?: string
+          integration_type: string
+          is_resolved?: boolean
+          location_id?: string | null
+          location_integration_id?: string | null
+          resolved_at?: string | null
+          severity?: string
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          error_message?: string
+          error_type?: string
+          id?: string
+          integration_type?: string
+          is_resolved?: boolean
+          location_id?: string | null
+          location_integration_id?: string | null
+          resolved_at?: string | null
+          severity?: string
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "integration_errors_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "integration_errors_location_integration_id_fkey"
+            columns: ["location_integration_id"]
+            isOneToOne: false
+            referencedRelation: "location_integrations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "integration_errors_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       integrations: {
         Row: {
           category: string

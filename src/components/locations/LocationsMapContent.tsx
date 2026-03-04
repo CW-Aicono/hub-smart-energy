@@ -19,10 +19,21 @@ const defaultIcon = new Icon({
   shadowSize: [41, 41],
 });
 
+const errorIcon = new Icon({
+  iconUrl: "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-red.png",
+  iconRetinaUrl: "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png",
+  shadowUrl: "/images/marker-shadow.png",
+  iconSize: [25, 41],
+  iconAnchor: [12, 41],
+  popupAnchor: [1, -34],
+  shadowSize: [41, 41],
+});
+
 interface LocationsMapContentProps {
   locations: Location[];
   onLocationClick?: (location: Location) => void;
   className?: string;
+  errorLocationIds?: Set<string>;
 }
 
 function MapController({ locations, isTouchDevice }: { locations: Location[]; isTouchDevice: boolean }) {
@@ -61,7 +72,7 @@ function MapController({ locations, isTouchDevice }: { locations: Location[]; is
   return null;
 }
 
-function LocationsMapContent({ locations, onLocationClick, className }: LocationsMapContentProps) {
+function LocationsMapContent({ locations, onLocationClick, className, errorLocationIds }: LocationsMapContentProps) {
   const { t } = useTranslation();
   const [mapReady, setMapReady] = useState(false);
   const isTouchDevice = "ontouchstart" in window || navigator.maxTouchPoints > 0;
@@ -103,7 +114,7 @@ function LocationsMapContent({ locations, onLocationClick, className }: Location
           <Marker
             key={location.id}
             position={[location.latitude!, location.longitude!]}
-            icon={defaultIcon}
+            icon={errorLocationIds?.has(location.id) ? errorIcon : defaultIcon}
             eventHandlers={{
               click: () => onLocationClick?.(location),
             }}

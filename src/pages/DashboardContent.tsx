@@ -30,6 +30,7 @@ const EnergyGaugeWidget = lazy(() => import("@/components/dashboard/EnergyGaugeW
 const SpotPriceWidget = lazy(() => import("@/components/dashboard/SpotPriceWidget"));
 const PvForecastWidget = lazy(() => import("@/components/dashboard/PvForecastWidget"));
 const ArbitrageAiWidget = lazy(() => import("@/components/dashboard/ArbitrageAiWidget"));
+const IntegrationErrorsWidget = lazy(() => import("@/components/dashboard/IntegrationErrorsWidget"));
 
 interface WidgetProps {
   locationId: string | null;
@@ -55,6 +56,7 @@ const WIDGET_COMPONENTS: Record<string, React.ComponentType<WidgetProps>> = {
   spot_price: SpotPriceWidget,
   pv_forecast: PvForecastWidget,
   arbitrage_ai: ArbitrageAiWidget,
+  integration_errors: IntegrationErrorsWidget,
 };
 
 const SIZE_CLASS: Record<WidgetSize, string> = {

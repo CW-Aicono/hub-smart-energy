@@ -2,6 +2,7 @@ import { useLocations } from "@/hooks/useLocations";
 import { LocationsMap } from "@/components/locations/LocationsMap";
 import { Card, CardContent } from "@/components/ui/card";
 import { useNavigate } from "react-router-dom";
+import { useIntegrationErrors } from "@/hooks/useIntegrationErrors";
 
 interface LocationMapWidgetProps {
   locationId: string | null;
@@ -10,6 +11,7 @@ interface LocationMapWidgetProps {
 const LocationMapWidget = ({ locationId }: LocationMapWidgetProps) => {
   const { locations, loading } = useLocations();
   const navigate = useNavigate();
+  const { errorLocationIds } = useIntegrationErrors();
 
   // Filter locations based on selection
   let mapLocations = locations.filter((loc) => loc.show_on_map && !loc.parent_id);
@@ -34,6 +36,7 @@ const LocationMapWidget = ({ locationId }: LocationMapWidgetProps) => {
               locations={mapLocations} 
               onLocationClick={handleLocationClick}
               className="h-full rounded-b-lg border-0"
+              errorLocationIds={errorLocationIds}
             />
           </div>
         )}
