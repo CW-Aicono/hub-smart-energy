@@ -214,20 +214,22 @@ function buildLineItems(invoice: any): any[] {
 
   if (Array.isArray(lineItemsRaw)) {
     for (const li of lineItemsRaw) {
-      if (li.type === "module") {
-        const code = li.code || li.label;
+      const liType = li.type ?? "module";
+      if (liType === "module") {
+        const code = li.code || li.label || li.description || "";
+        const amount = Number(li.amount ?? li.unit_price ?? li.total ?? 0);
         items.push({
           type: "custom",
           name: MODULE_LABELS_DE[code] || code,
-          quantity: 1,
+          quantity: li.quantity ?? 1,
           unitName: "Monat",
           unitPrice: {
             currency: "EUR",
-            netAmount: Number(li.amount || 0),
+            netAmount: amount,
             taxRatePercentage: 19,
           },
         });
-      } else if (li.type === "support") {
+      } else if (liType === "support") {
         items.push({
           type: "custom",
           name: `Support-Sitzung ${li.started_at ? new Date(li.started_at).toLocaleDateString("de-DE") : ""}`.trim(),
@@ -236,7 +238,7 @@ function buildLineItems(invoice: any): any[] {
           unitName: "Block (15 Min.)",
           unitPrice: {
             currency: "EUR",
-            netAmount: Number(li.price_per_block || 0),
+            netAmount: Number(li.price_per_block || li.amount || 0),
             taxRatePercentage: 19,
           },
         });
