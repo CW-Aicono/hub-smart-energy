@@ -22,6 +22,83 @@ const ACTIONS = [
   { value: "other", label: "Sonstiges" },
 ];
 
+async function upsertSupportInvoiceEntry(tenantId: string, session: any) {
+  const now = new Date(session.started_at);
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+  const fmt = (d: Date) => d.toISOString().split("T")[0];
+
+  // Check if tenant has remote_support (flatrate)
+  const { data: flatrateMod } = await supabase
+    .from("tenant_modules")
+    .select("id")
+    .eq("tenant_id", tenantId)
+    .eq("module_code", "remote_support")
+    .eq("is_enabled", true)
+    .maybeSingle();
+
+  // Get tenant support price
+  const { data: tenant } = await supabase
+    .from("tenants")
+    .select("support_price_per_15min")
+    .eq("id", tenantId)
+    .single();
+
+  const hasFlat = !!flatrateMod;
+  const price15 = Number(tenant?.support_price_per_15min ?? 25);
+  const durationMin = session.duration_minutes ?? Math.max(1, Math.round((new Date(session.ended_at).getTime() - new Date(session.started_at).getTime()) / 60000));
+  const blocks = Math.ceil(durationMin / 15);
+  const cost = hasFlat ? 0 : blocks * price15;
+
+  const newLineItem = {
+    type: "support",
+    session_id: session.id,
+    started_at: session.started_at,
+    duration_min: durationMin,
+    blocks_15min: blocks,
+    price_per_block: hasFlat ? 0 : price15,
+    amount: cost,
+    reason: session.reason,
+  };
+
+  // Find existing invoice for this tenant+month
+  const { data: existing } = await supabase
+    .from("tenant_invoices")
+    .select("*")
+    .eq("tenant_id", tenantId)
+    .eq("period_start", fmt(monthStart))
+    .maybeSingle();
+
+  if (existing) {
+    const lineItems = [...(Array.isArray(existing.line_items) ? existing.line_items : []), newLineItem] as any;
+    const supportTotal = Number(existing.support_total ?? 0) + cost;
+    const { error } = await supabase
+      .from("tenant_invoices")
+      .update({
+        line_items: lineItems,
+        support_total: supportTotal,
+        amount: Number(existing.module_total ?? 0) + supportTotal,
+      })
+      .eq("id", existing.id);
+    if (error) throw error;
+  } else {
+    const { error } = await supabase
+      .from("tenant_invoices")
+      .insert({
+        tenant_id: tenantId,
+        invoice_number: `DRAFT`,
+        period_start: fmt(monthStart),
+        period_end: fmt(monthEnd),
+        amount: cost,
+        module_total: 0,
+        support_total: cost,
+        status: "draft",
+        line_items: [newLineItem],
+      } as any);
+    if (error) throw error;
+  }
+}
+
 const CreateSupportEntryDialog = () => {
   const [open, setOpen] = useState(false);
   const [tenantId, setTenantId] = useState("");
@@ -52,8 +129,10 @@ const CreateSupportEntryDialog = () => {
       const now = new Date();
       const endedAt = new Date(now.getTime());
       const startedAt = new Date(now.getTime() - durationMin * 60000);
+      const reasonText = ACTIONS.find((a) => a.value === action)?.label ?? action;
 
-      const { error } = await supabase.from("support_sessions").insert({
+      // 1. Insert support session
+      const { data: session, error } = await supabase.from("support_sessions").insert({
         tenant_id: tenantId,
         super_admin_user_id: user!.id,
         started_at: startedAt.toISOString(),
@@ -61,13 +140,17 @@ const CreateSupportEntryDialog = () => {
         expires_at: endedAt.toISOString(),
         duration_minutes: durationMin,
         is_manual: true,
-        reason: ACTIONS.find((a) => a.value === action)?.label ?? action,
+        reason: reasonText,
         notes: notes || null,
-      } as any);
+      } as any).select().single();
       if (error) throw error;
+
+      // 2. Upsert current-month invoice with new support line item
+      await upsertSupportInvoiceEntry(tenantId, session as any);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["support-sessions"] });
+      queryClient.invalidateQueries({ queryKey: ["tenant-invoices"] });
       toast.success("Support-Eintrag erstellt");
       setOpen(false);
       setTenantId("");
