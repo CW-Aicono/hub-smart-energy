@@ -1,8 +1,9 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "./useTenant";
 import { useDemoMode } from "@/contexts/DemoMode";
 import { useEffect } from "react";
+import { toast } from "@/hooks/use-toast";
 
 export interface IntegrationError {
   id: string;
@@ -37,6 +38,7 @@ export function useIntegrationErrors() {
         .select("*, task:tasks!integration_errors_task_id_fkey(status)")
         .eq("tenant_id", tenant!.id)
         .eq("is_resolved", false)
+        .eq("is_ignored", false)
         .order("created_at", { ascending: false });
       if (error) throw error;
       // Only show errors whose linked task is still "open" (or has no task)
@@ -49,6 +51,40 @@ export function useIntegrationErrors() {
     },
     enabled: !isDemo && !!tenant,
     staleTime: 60_000,
+  });
+
+  const queryClient = useQueryClient();
+
+  // Ignore errors (bulk) — sets is_ignored=true and resolves linked tasks
+  const ignoreErrors = useMutation({
+    mutationFn: async (errorIds: string[]) => {
+      const { error } = await supabase
+        .from("integration_errors")
+        .update({ is_ignored: true, is_resolved: true, resolved_at: new Date().toISOString() })
+        .in("id", errorIds);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["integration-errors"] });
+      queryClient.invalidateQueries({ queryKey: ["tasks"] });
+      toast({ title: "Meldungen ignoriert" });
+    },
+  });
+
+  // Bulk resolve errors — marks as resolved and sets linked tasks to done
+  const resolveErrors = useMutation({
+    mutationFn: async (errorIds: string[]) => {
+      const { error } = await supabase
+        .from("integration_errors")
+        .update({ is_resolved: true, resolved_at: new Date().toISOString() })
+        .in("id", errorIds);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["integration-errors"] });
+      queryClient.invalidateQueries({ queryKey: ["tasks"] });
+      toast({ title: "Meldungen als erledigt markiert" });
+    },
   });
 
   // Subscribe to realtime changes
@@ -70,5 +106,5 @@ export function useIntegrationErrors() {
     errors.filter((e) => e.location_id).map((e) => e.location_id!)
   );
 
-  return { errors, loading: isLoading, refetch, errorLocationIds };
+  return { errors, loading: isLoading, refetch, errorLocationIds, ignoreErrors, resolveErrors };
 }

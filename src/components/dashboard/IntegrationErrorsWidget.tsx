@@ -1,11 +1,13 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useIntegrationErrors } from "@/hooks/useIntegrationErrors";
 import { useLocations } from "@/hooks/useLocations";
-import { AlertOctagon, CheckCircle2, Wifi, Database, Server, CircleAlert } from "lucide-react";
+import { AlertOctagon, CheckCircle2, Wifi, Database, Server, CircleAlert, EyeOff, Check } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { format, isToday, isYesterday } from "date-fns";
 import { de } from "date-fns/locale";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface IntegrationErrorsWidgetProps {
   locationId: string | null;
@@ -33,7 +35,7 @@ function formatErrorTime(dateStr: string): string {
 }
 
 const IntegrationErrorsWidget = ({ locationId }: IntegrationErrorsWidgetProps) => {
-  const { errors, loading } = useIntegrationErrors();
+  const { errors, loading, ignoreErrors, resolveErrors } = useIntegrationErrors();
   const { locations } = useLocations();
 
   const locationFiltered = locationId
@@ -42,14 +44,18 @@ const IntegrationErrorsWidget = ({ locationId }: IntegrationErrorsWidgetProps) =
 
   // Deduplicate: group by error_message + integration_type + sensor_name, keep newest
   const deduped = (() => {
-    const map = new Map<string, { error: typeof locationFiltered[0]; count: number }>();
+    const map = new Map<string, { error: typeof locationFiltered[0]; count: number; allIds: string[] }>();
     for (const err of locationFiltered) {
       const key = `${err.error_message}||${err.integration_type}||${err.sensor_name || ""}`;
       const existing = map.get(key);
-      if (!existing || new Date(err.created_at) > new Date(existing.error.created_at)) {
-        map.set(key, { error: err, count: (existing?.count || 0) + 1 });
+      if (!existing) {
+        map.set(key, { error: err, count: 1, allIds: [err.id] });
       } else {
+        existing.allIds.push(err.id);
         existing.count++;
+        if (new Date(err.created_at) > new Date(existing.error.created_at)) {
+          existing.error = err;
+        }
       }
     }
     return Array.from(map.values());
@@ -90,7 +96,7 @@ const IntegrationErrorsWidget = ({ locationId }: IntegrationErrorsWidgetProps) =
           </div>
         ) : (
           <div className="space-y-2 max-h-[400px] overflow-y-auto">
-            {filtered.map(({ error: err, count }) => {
+            {filtered.map(({ error: err, count, allIds }) => {
               const locationName = err.location_id ? locationMap.get(err.location_id) : null;
               const timeStr = formatErrorTime(err.created_at);
               const hasSensor = !!(err as any).sensor_name;
@@ -110,6 +116,41 @@ const IntegrationErrorsWidget = ({ locationId }: IntegrationErrorsWidgetProps) =
                         <span>{locationName}</span>
                       </>
                     )}
+                    {/* Action buttons */}
+                    <div className="ml-auto flex items-center gap-1">
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6"
+                            onClick={() => resolveErrors.mutate(allIds)}
+                            disabled={resolveErrors.isPending}
+                          >
+                            <Check className="h-3.5 w-3.5" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          {count > 1 ? `Alle ${count} als erledigt markieren` : "Als erledigt markieren"}
+                        </TooltipContent>
+                      </Tooltip>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6"
+                            onClick={() => ignoreErrors.mutate(allIds)}
+                            disabled={ignoreErrors.isPending}
+                          >
+                            <EyeOff className="h-3.5 w-3.5" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          {count > 1 ? `Alle ${count} ignorieren` : "Ignorieren"}
+                        </TooltipContent>
+                      </Tooltip>
+                    </div>
                   </div>
                   {/* Error content */}
                   <div className="flex items-start gap-2.5">

@@ -185,6 +185,39 @@ export const useTasks = () => {
     },
   });
 
+  // Bulk update status for multiple tasks at once (e.g. grouped duplicates)
+  const bulkUpdateStatus = useMutation({
+    mutationFn: async ({ ids, status }: { ids: string[]; status: TaskStatus }) => {
+      const completedAt = status === "done" ? new Date().toISOString() : null;
+      const { error } = await supabase
+        .from("tasks")
+        .update({ status, completed_at: completedAt })
+        .in("id", ids)
+        .eq("tenant_id", tenant!.id);
+      if (error) throw error;
+      // Write history for each
+      await supabase.from("task_history").insert(
+        ids.map((id) => ({
+          task_id: id,
+          tenant_id: tenant!.id,
+          actor_id: user?.id ?? null,
+          actor_name: user?.email ?? null,
+          action: "status_changed",
+          new_value: status,
+        }))
+      );
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["tasks", tenant?.id] });
+      queryClient.invalidateQueries({ queryKey: ["task-history"] });
+      queryClient.invalidateQueries({ queryKey: ["integration-errors"] });
+      toast({ title: "Alle Aufgaben aktualisiert" });
+    },
+    onError: () => {
+      toast({ title: "Fehler beim Aktualisieren", variant: "destructive" });
+    },
+  });
+
   const deleteTask = useMutation({
     mutationFn: async (id: string) => {
       const { error } = await supabase
@@ -223,7 +256,7 @@ export const useTasks = () => {
     },
   });
 
-  return { tasks, isLoading, tenantUsers, createTask, updateTask, deleteTask, addComment };
+  return { tasks, isLoading, tenantUsers, createTask, updateTask, bulkUpdateStatus, deleteTask, addComment };
 };
 
 export const useTaskHistory = (taskId: string) => {

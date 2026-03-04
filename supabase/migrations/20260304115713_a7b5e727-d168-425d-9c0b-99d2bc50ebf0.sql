@@ -1,0 +1,1 @@
+ALTER TABLE public.integration_errors ADD COLUMN IF NOT EXISTS is_ignored boolean NOT NULL DEFAULT false;

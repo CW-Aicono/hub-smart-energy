@@ -45,10 +45,11 @@ const SOURCE_LABELS: Record<string, string> = {
 interface TaskCardProps {
   task: Task;
   duplicateCount?: number;
+  duplicateIds?: string[];
 }
 
-export const TaskCard = ({ task, duplicateCount }: TaskCardProps) => {
-  const { updateTask, deleteTask } = useTasks();
+export const TaskCard = ({ task, duplicateCount, duplicateIds }: TaskCardProps) => {
+  const { updateTask, deleteTask, bulkUpdateStatus } = useTasks();
   const [detailOpen, setDetailOpen] = useState(false);
 
   const StatusIcon = STATUS_CONFIG[task.status]?.icon ?? Circle;
@@ -60,14 +61,19 @@ export const TaskCard = ({ task, duplicateCount }: TaskCardProps) => {
     && new Date(task.due_date) < new Date();
 
   const handleStatusChange = (status: TaskStatus) => {
-    updateTask.mutate({
-      id: task.id,
-      status,
-      completed_at: status === "done" ? new Date().toISOString() : null,
-      historyAction: "status_changed",
-      historyOldValue: task.status,
-      historyNewValue: status,
-    });
+    const ids = duplicateIds && duplicateIds.length > 1 ? duplicateIds : null;
+    if (ids) {
+      bulkUpdateStatus.mutate({ ids, status });
+    } else {
+      updateTask.mutate({
+        id: task.id,
+        status,
+        completed_at: status === "done" ? new Date().toISOString() : null,
+        historyAction: "status_changed",
+        historyOldValue: task.status,
+        historyNewValue: status,
+      });
+    }
   };
 
   return (

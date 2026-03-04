@@ -1596,6 +1596,7 @@ export type Database = {
           error_type: string
           id: string
           integration_type: string
+          is_ignored: boolean
           is_resolved: boolean
           location_id: string | null
           location_integration_id: string | null
@@ -1613,6 +1614,7 @@ export type Database = {
           error_type?: string
           id?: string
           integration_type: string
+          is_ignored?: boolean
           is_resolved?: boolean
           location_id?: string | null
           location_integration_id?: string | null
@@ -1630,6 +1632,7 @@ export type Database = {
           error_type?: string
           id?: string
           integration_type?: string
+          is_ignored?: boolean
           is_resolved?: boolean
           location_id?: string | null
           location_integration_id?: string | null

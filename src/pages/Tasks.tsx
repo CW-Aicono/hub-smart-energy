@@ -50,14 +50,18 @@ const Tasks = () => {
       return matchSearch && matchStatus && matchPriority && matchSource && matchOverdue && matchExternal;
     });
 
-    const map = new Map<string, { task: typeof filteredAll[0]; count: number }>();
+    const map = new Map<string, { task: typeof filteredAll[0]; count: number; allIds: string[] }>();
     for (const tk of filteredAll) {
       const key = `${tk.title}||${tk.source_type}`;
       const existing = map.get(key);
-      if (!existing || new Date(tk.created_at) > new Date(existing.task.created_at)) {
-        map.set(key, { task: tk, count: (existing?.count || 0) + 1 });
+      if (!existing) {
+        map.set(key, { task: tk, count: 1, allIds: [tk.id] });
       } else {
+        existing.allIds.push(tk.id);
         existing.count++;
+        if (new Date(tk.created_at) > new Date(existing.task.created_at)) {
+          existing.task = tk;
+        }
       }
     }
     return Array.from(map.values());
@@ -159,7 +163,7 @@ const Tasks = () => {
                 <EmptyState t={t} hasFilters={search !== "" || statusFilter !== "all" || priorityFilter !== "all" || overdueFilter || externalFilter} onCreateTask={() => setCreateOpen(true)} />
               ) : (
                 <div className="space-y-3">
-                  {filtered.map(({ task, count }) => (<TaskCard key={task.id} task={task} duplicateCount={count} />))}
+                  {filtered.map(({ task, count, allIds }) => (<TaskCard key={task.id} task={task} duplicateCount={count} duplicateIds={allIds} />))}
                   <p className="text-xs text-center text-muted-foreground pt-2">
                     {filtered.length} von {activeTasks.length} aktiven Aufgaben
                   </p>
