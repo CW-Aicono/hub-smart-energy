@@ -22,7 +22,8 @@ Deno.serve(async (req) => {
     const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
     const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0); // last day of prev month
 
-    const fmt = (d: Date) => d.toISOString().split("T")[0];
+    const fmt = (d: Date) =>
+      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
     // 1. Get all tenants
     const { data: tenants, error: tErr } = await supabase

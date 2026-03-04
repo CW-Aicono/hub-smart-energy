@@ -26,7 +26,8 @@ async function upsertSupportInvoiceEntry(tenantId: string, session: any) {
   const now = new Date(session.started_at);
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
   const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-  const fmt = (d: Date) => d.toISOString().split("T")[0];
+  const fmt = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
   // Check if tenant has remote_support (flatrate)
   const { data: flatrateMod } = await supabase

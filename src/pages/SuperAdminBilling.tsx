@@ -277,7 +277,7 @@ const SuperAdminBilling = () => {
                 <div className="rounded-lg bg-accent p-2.5"><Clock className="h-5 w-5 text-accent-foreground" /></div>
                 <div>
                   <p className="text-sm text-muted-foreground">Offene Beträge</p>
-                  <p className="text-2xl font-bold">{stats.openAmount.toFixed(2)} €</p>
+                  <p className="text-2xl font-bold">{stats.openAmount.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €</p>
                   <p className="text-xs text-muted-foreground">{stats.openCount} Rechnungen</p>
                 </div>
               </CardContent>
@@ -287,7 +287,7 @@ const SuperAdminBilling = () => {
                 <div className="rounded-lg bg-secondary p-2.5"><Euro className="h-5 w-5 text-secondary-foreground" /></div>
                 <div>
                   <p className="text-sm text-muted-foreground">Bezahlt</p>
-                  <p className="text-2xl font-bold">{stats.paidAmount.toFixed(2)} €</p>
+                  <p className="text-2xl font-bold">{stats.paidAmount.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €</p>
                   <p className="text-xs text-muted-foreground">{stats.paidCount} Rechnungen</p>
                 </div>
               </CardContent>
@@ -297,7 +297,7 @@ const SuperAdminBilling = () => {
                 <div className="rounded-lg bg-destructive/10 p-2.5"><AlertTriangle className="h-5 w-5 text-destructive" /></div>
                 <div>
                   <p className="text-sm text-muted-foreground">Überfällig</p>
-                  <p className="text-2xl font-bold">{stats.overdueAmount.toFixed(2)} €</p>
+                  <p className="text-2xl font-bold">{stats.overdueAmount.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €</p>
                   <p className="text-xs text-muted-foreground">{stats.overdueCount} Rechnungen</p>
                 </div>
               </CardContent>
@@ -339,9 +339,9 @@ const SuperAdminBilling = () => {
                       <TableRow key={inv.id}>
                         <TableCell className="font-medium">{inv.tenants?.name ?? "–"}</TableCell>
                         <TableCell className="text-muted-foreground">{inv.period_start ? new Date(inv.period_start + "T00:00:00").toLocaleDateString("de-DE") : "–"} – {inv.period_end ? new Date(inv.period_end + "T00:00:00").toLocaleDateString("de-DE") : "–"}</TableCell>
-                        <TableCell>{Number(inv.module_total ?? 0).toFixed(2)} €</TableCell>
-                        <TableCell>{Number(inv.support_total ?? 0).toFixed(2)} €</TableCell>
-                        <TableCell className="font-medium">{Number(inv.amount).toFixed(2)} €</TableCell>
+                        <TableCell>{Number(inv.module_total ?? 0).toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €</TableCell>
+                        <TableCell>{Number(inv.support_total ?? 0).toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €</TableCell>
+                        <TableCell className="font-medium">{Number(inv.amount).toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €</TableCell>
                         <TableCell>
                           <Badge variant="outline" className="text-xs">
                             {inv.tenants?.payment_method === "sepa" ? "SEPA" : "Rechnung"}
