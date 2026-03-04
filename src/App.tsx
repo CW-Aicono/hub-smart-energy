@@ -64,6 +64,7 @@ const TenantElectricity = lazy(() => import("./pages/TenantElectricity"));
 const TenantEnergyApp = lazy(() => import("./pages/TenantEnergyApp"));
 const Demo = lazy(() => import("./pages/Demo"));
 const SuperAdminMap = lazy(() => import("./pages/SuperAdminMap"));
+const SuperAdminSettings = lazy(() => import("./pages/SuperAdminSettings"));
 const EmbedPitchDashboard = lazy(() => import("./pages/EmbedPitchDashboard"));
 const EnergyReport = lazy(() => import("./pages/EnergyReport"));
 
@@ -148,6 +149,7 @@ const App = () => (
                       <Route path="/super-admin/module-pricing" element={<SA><SuperAdminModulePricing /></SA>} />
                       <Route path="/super-admin/bundles" element={<SA><SuperAdminBundles /></SA>} />
                       <Route path="/super-admin/support" element={<SA><SuperAdminSupport /></SA>} />
+                      <Route path="/super-admin/settings" element={<SA><SuperAdminSettings /></SA>} />
                       <Route path="/super-admin/ocpp/integrations" element={<SA><SuperAdminOcppIntegrations /></SA>} />
                       <Route path="/super-admin/ocpp/control" element={<SA><SuperAdminOcppControl /></SA>} />
                       <Route path="/super-admin/map" element={<SA><SuperAdminMap /></SA>} />
