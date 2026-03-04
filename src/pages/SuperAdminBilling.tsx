@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Download, Send, CheckCircle2, Loader2, ArrowUpDown, Pencil, Euro, AlertTriangle, Clock, FileCheck } from "lucide-react";
+import { Download, Send, CheckCircle2, Loader2, ArrowUpDown, Pencil, Euro, AlertTriangle, Clock, FileCheck, RefreshCw } from "lucide-react";
 import { generateSepaDirectDebitXml, downloadXml } from "@/lib/sepaXml";
 import EditInvoiceContent from "@/components/super-admin/EditInvoiceContent";
 import { toast } from "sonner";
@@ -25,7 +25,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 
-type SortKey = "tenant" | "period" | "module" | "support" | "amount" | "payment" | "lexware";
+type SortKey = "tenant" | "period" | "module" | "support" | "amount" | "payment" | "status" | "lexware";
 type SortDir = "asc" | "desc";
 
 const SuperAdminBilling = () => {
@@ -39,6 +39,7 @@ const SuperAdminBilling = () => {
   const [editStatus, setEditStatus] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("tenant");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
+  const [syncing, setSyncing] = useState(false);
   const queryClient = useQueryClient();
 
   const lexwareMutation = useMutation({
@@ -104,6 +105,7 @@ const SuperAdminBilling = () => {
         case "support": return dir * (Number(a.support_total ?? 0) - Number(b.support_total ?? 0));
         case "amount": return dir * (Number(a.amount ?? 0) - Number(b.amount ?? 0));
         case "payment": return dir * ((a.tenants?.payment_method ?? "").localeCompare(b.tenants?.payment_method ?? ""));
+        case "status": return dir * ((a.status ?? "").localeCompare(b.status ?? ""));
         case "lexware": {
           const aVal = a.lexware_invoice_id ? 1 : 0;
           const bVal = b.lexware_invoice_id ? 1 : 0;
@@ -140,7 +142,25 @@ const SuperAdminBilling = () => {
   if (!isSuperAdmin) return <Navigate to="/" replace />;
 
   const statusLabel = (s: string) => {
-    switch (s) { case "draft": return "Entwurf"; case "sent": return "Gesendet"; case "paid": return "Bezahlt"; case "overdue": return "Überfällig"; default: return s; }
+    switch (s) { case "draft": return "Entwurf"; case "sent": return "Gesendet"; case "paid": return "Bezahlt"; case "overdue": return "Überfällig"; case "voided": return "Storniert"; default: return s; }
+  };
+
+  const statusBadgeVariant = (s: string): "default" | "secondary" | "destructive" | "success" | "outline" => {
+    switch (s) { case "paid": return "success"; case "overdue": return "destructive"; case "sent": return "default"; case "voided": return "outline"; default: return "secondary"; }
+  };
+
+  const handleSyncStatus = async () => {
+    setSyncing(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("lexware-sync-status");
+      if (error) throw error;
+      queryClient.invalidateQueries({ queryKey: ["super-admin-invoices"] });
+      toast.success(`Status synchronisiert (${data?.updated ?? 0} aktualisiert)`);
+    } catch (err: any) {
+      toast.error(`Sync fehlgeschlagen: ${err.message}`);
+    } finally {
+      setSyncing(false);
+    }
   };
 
   const handleSepaExport = () => {
@@ -199,6 +219,10 @@ const SuperAdminBilling = () => {
             <p className="text-sm text-muted-foreground mt-1">{t("billing.subtitle")}</p>
           </div>
           <div className="flex gap-2">
+            <Button variant="outline" disabled={syncing} onClick={handleSyncStatus}>
+              {syncing ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-2" />}
+              Status aktualisieren
+            </Button>
             <Button variant="outline" disabled={lexwareMutation.isPending} onClick={() => {
               const openIds = invoices.filter((inv: any) => !inv.lexware_invoice_id && (inv.status === "draft" || inv.status === "sent")).map((inv: any) => inv.id);
               if (openIds.length === 0) { toast.info(t("billing.lexware_no_open")); return; }
@@ -302,13 +326,14 @@ const SuperAdminBilling = () => {
                     <SortableHead label="Support" sortId="support" />
                     <SortableHead label={t("billing.amount")} sortId="amount" />
                     <SortableHead label={t("billing.payment_method")} sortId="payment" />
+                    <SortableHead label="Status" sortId="status" />
                     <TableHead className="text-center">Bearbeiten</TableHead>
                     <SortableHead label="Lexware" sortId="lexware" />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {sorted.length === 0 ? (
-                    <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">{t("billing.no_invoices")}</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={9} className="text-center py-8 text-muted-foreground">{t("billing.no_invoices")}</TableCell></TableRow>
                   ) : (
                     sorted.map((inv: any) => (
                       <TableRow key={inv.id}>
@@ -320,6 +345,11 @@ const SuperAdminBilling = () => {
                         <TableCell>
                           <Badge variant="outline" className="text-xs">
                             {inv.tenants?.payment_method === "sepa" ? "SEPA" : "Rechnung"}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={statusBadgeVariant(inv.status)} className="text-xs">
+                            {statusLabel(inv.status)}
                           </Badge>
                         </TableCell>
                         <TableCell className="text-center">
