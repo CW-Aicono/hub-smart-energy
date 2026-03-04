@@ -903,53 +903,67 @@ serve(async (req) => {
 
     // ── ACTION: getSystemStatus ──
     if (action === "getSystemStatus") {
-      const statusUrl = `${baseUrl}/jdev/sys/status`;
-      console.log(`Fetching system status: ${statusUrl}`);
-      const response = await fetch(statusUrl, {
-        method: "GET",
-        headers: { Authorization: loxoneAuth },
-      });
-      if (!response.ok) {
-        throw new Error(`Systemstatus konnte nicht abgerufen werden: HTTP ${response.status}`);
-      }
-      const statusText = await response.text();
-      console.log(`System status raw: ${statusText.substring(0, 500)}`);
+      console.log("Fetching system status via individual endpoints");
 
-      // Parse XML response – Loxone returns XML like <Status ... CPU="..." Temp="..." Mem="..." />
-      let cpu: string | null = null;
-      let temp: string | null = null;
-      let mem: string | null = null;
-
-      // Try parsing as XML attributes
-      const cpuMatch = statusText.match(/CPU="([^"]+)"/i);
-      const tempMatch = statusText.match(/Temp="([^"]+)"/i);
-      const memMatch = statusText.match(/Mem="([^"]+)"/i);
-
-      if (cpuMatch) cpu = cpuMatch[1];
-      if (tempMatch) temp = tempMatch[1];
-      if (memMatch) mem = memMatch[1];
-
-      // Fallback: try JSON
-      if (!cpu && !temp && !mem) {
+      // Helper to fetch a single Loxone value endpoint
+      async function fetchLoxoneValue(path: string): Promise<string | null> {
         try {
-          const jsonData = JSON.parse(statusText);
-          if (jsonData?.LL?.value) {
-            const val = jsonData.LL.value;
-            // value may be a string like "CPU:12.3% Temp:45.6 Mem:78.9"
-            const cpuJ = String(val).match(/CPU[:\s]*([0-9.]+)/i);
-            const tempJ = String(val).match(/Temp[:\s]*([0-9.]+)/i);
-            const memJ = String(val).match(/Mem[:\s]*([0-9.]+)/i);
-            if (cpuJ) cpu = cpuJ[1];
-            if (tempJ) temp = tempJ[1];
-            if (memJ) mem = memJ[1];
-          }
-        } catch { /* not JSON */ }
+          const url = `${baseUrl}${path}`;
+          console.log(`Fetching: ${url}`);
+          const resp = await fetch(url, { method: "GET", headers: { Authorization: loxoneAuth } });
+          if (!resp.ok) { console.warn(`${path} returned HTTP ${resp.status}`); return null; }
+          const text = await resp.text();
+          console.log(`${path} raw: ${text.substring(0, 300)}`);
+          // Loxone returns XML like <LL control="..." value="123" Code="200"/>
+          const valMatch = text.match(/value="([^"]+)"/i);
+          if (valMatch) return valMatch[1];
+          // Try JSON fallback
+          try {
+            const json = JSON.parse(text);
+            if (json?.LL?.value !== undefined) return String(json.LL.value);
+          } catch { /* not JSON */ }
+          return null;
+        } catch (err) {
+          console.error(`Error fetching ${path}:`, err);
+          return null;
+        }
+      }
+
+      // Fetch CPU and heap in parallel; temperature is not directly available via HTTP API
+      const [cpuRaw, heapRaw] = await Promise.all([
+        fetchLoxoneValue("/jdev/sys/cpu"),
+        fetchLoxoneValue("/jdev/sys/heap"),
+      ]);
+
+      // CPU value is a percentage number
+      const cpu = cpuRaw;
+      // Heap is free bytes – not a percentage, show as free KB
+      let memory: string | null = null;
+      if (heapRaw != null) {
+        const heapNum = parseFloat(heapRaw);
+        if (!isNaN(heapNum)) {
+          memory = (heapNum / 1024).toFixed(0); // free KB
+        }
+      }
+
+      // Try to get temperature from /data/status XML
+      let temp: string | null = null;
+      try {
+        const statusResp = await fetch(`${baseUrl}/data/status`, { method: "GET", headers: { Authorization: loxoneAuth } });
+        if (statusResp.ok) {
+          const statusText = await statusResp.text();
+          console.log(`/data/status raw: ${statusText.substring(0, 500)}`);
+          const tempMatch = statusText.match(/Temp(?:erature)?="([^"]+)"/i);
+          if (tempMatch) temp = tempMatch[1];
+        }
+      } catch (err) {
+        console.warn("Could not fetch /data/status for temperature:", err);
       }
 
       return new Response(
         JSON.stringify({
           success: true,
-          systemStatus: { cpu, temperature: temp, memory: mem },
+          systemStatus: { cpu, temperature: temp, memory },
           lastSync: locationIntegration.last_sync_at,
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
