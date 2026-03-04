@@ -61,7 +61,7 @@ async function upsertSupportInvoiceEntry(tenantId: string, session: any) {
     reason: session.reason,
   };
 
-  // Find existing invoice for this tenant+month (match any period_start within the same month)
+  // Find existing non-Lexware invoice for this tenant+month to merge into
   const { data: existingList } = await supabase
     .from("tenant_invoices")
     .select("*")
@@ -69,6 +69,7 @@ async function upsertSupportInvoiceEntry(tenantId: string, session: any) {
     .gte("period_start", fmt(monthStart))
     .lte("period_start", fmt(monthEnd))
     .neq("status", "voided")
+    .is("lexware_invoice_id", null)
     .order("created_at", { ascending: true })
     .limit(1);
   const existing = existingList?.[0] ?? null;
