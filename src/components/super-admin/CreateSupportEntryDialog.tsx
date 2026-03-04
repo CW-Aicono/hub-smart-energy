@@ -61,13 +61,17 @@ async function upsertSupportInvoiceEntry(tenantId: string, session: any) {
     reason: session.reason,
   };
 
-  // Find existing invoice for this tenant+month
-  const { data: existing } = await supabase
+  // Find existing invoice for this tenant+month (match any period_start within the same month)
+  const { data: existingList } = await supabase
     .from("tenant_invoices")
     .select("*")
     .eq("tenant_id", tenantId)
-    .eq("period_start", fmt(monthStart))
-    .maybeSingle();
+    .gte("period_start", fmt(monthStart))
+    .lte("period_start", fmt(monthEnd))
+    .neq("status", "voided")
+    .order("created_at", { ascending: true })
+    .limit(1);
+  const existing = existingList?.[0] ?? null;
 
   if (existing) {
     const lineItems = [...(Array.isArray(existing.line_items) ? existing.line_items : []), newLineItem] as any;
@@ -75,6 +79,8 @@ async function upsertSupportInvoiceEntry(tenantId: string, session: any) {
     const { error } = await supabase
       .from("tenant_invoices")
       .update({
+        period_start: fmt(monthStart),
+        period_end: fmt(monthEnd),
         line_items: lineItems,
         support_total: supportTotal,
         amount: Number(existing.module_total ?? 0) + supportTotal,
