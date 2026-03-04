@@ -65,6 +65,19 @@ Deno.serve(async (req) => {
 
           // 1. Ensure contact exists in Lexware (use cache to prevent duplicates)
           let lexwareContactId = tenant.lexware_contact_id || contactCache.get(tenant.id);
+          if (lexwareContactId) {
+            // Verify the contact still exists in Lexware
+            const checkRes = await fetch(`${LEXWARE_BASE}/contacts/${lexwareContactId}`, { headers: { Authorization: headers.Authorization, Accept: "application/json" } });
+            if (!checkRes.ok) {
+              console.log(`Contact ${lexwareContactId} no longer exists in Lexware (${checkRes.status}), creating new one`);
+              await checkRes.text(); // consume body
+              lexwareContactId = null;
+              // Clear stale contact ID
+              await supabase.from("tenants").update({ lexware_contact_id: null }).eq("id", tenant.id);
+            } else {
+              await checkRes.text(); // consume body
+            }
+          }
           if (!lexwareContactId) {
             lexwareContactId = await ensureContact(headers, supabase, tenant);
             contactCache.set(tenant.id, lexwareContactId);
@@ -89,6 +102,8 @@ Deno.serve(async (req) => {
               shippingType: "none",
             },
           };
+
+          console.log("Sending to Lexware:", JSON.stringify(lexwareInvoice, null, 2));
 
           const lexRes = await fetch(`${LEXWARE_BASE}/invoices`, {
             method: "POST",
@@ -137,7 +152,6 @@ async function ensureContact(
   supabase: any,
   tenant: any
 ): Promise<string> {
-  const street = [tenant.street, tenant.house_number].filter(Boolean).join(" ");
   const contactPayload: any = {
     version: 0,
     roles: { customer: {} },
@@ -145,6 +159,8 @@ async function ensureContact(
       name: tenant.name || "Unbenannt",
     },
   };
+
+  const street = [tenant.street, tenant.house_number].filter(Boolean).join(" ");
 
   if (street) {
     contactPayload.addresses = {
@@ -163,6 +179,8 @@ async function ensureContact(
     };
   }
 
+  console.log("Contact payload:", JSON.stringify(contactPayload, null, 2));
+
   const res = await fetch(`${LEXWARE_BASE}/contacts`, {
     method: "POST",
     headers,
@@ -171,6 +189,7 @@ async function ensureContact(
 
   if (!res.ok) {
     const errText = await res.text();
+    console.log(`Contact creation failed: ${res.status} ${errText}`);
     throw new Error(`Failed to create Lexware contact: ${res.status} ${errText}`);
   }
 
