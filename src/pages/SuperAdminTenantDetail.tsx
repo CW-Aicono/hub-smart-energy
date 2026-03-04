@@ -17,7 +17,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { HeadsetIcon, RotateCcw, UserPlus, Mail, Shield, User, Copy, Check, Building2, MapPin, UserCircle, Package, Gauge, Users, Receipt, Clock, Pencil, Save } from "lucide-react";
+import { HeadsetIcon, RotateCcw, UserPlus, Mail, Shield, User, Copy, Check, Building2, MapPin, UserCircle, Package, Gauge, Users, Receipt, Clock, Pencil, Save, Blocks, Plus, X } from "lucide-react";
 import { useModuleBundles } from "@/hooks/useModuleBundles";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -143,6 +143,7 @@ const SuperAdminTenantDetail = () => {
   const [editingTenantInfo, setEditingTenantInfo] = useState(false);
   const [savingTenantInfo, setSavingTenantInfo] = useState(false);
   const [tenantInfoForm, setTenantInfoForm] = useState({ name: "", street: "", house_number: "", postal_code: "", city: "", contact_person: "", contact_email: "" });
+  const [bundleDialogOpen, setBundleDialogOpen] = useState(false);
 
   const { data: tenant } = useQuery({
     queryKey: ["tenant-detail", id],
@@ -299,8 +300,9 @@ const SuperAdminTenantDetail = () => {
 
             <TabsContent value="info" className="mt-6 space-y-6">
               {/* Stats tiles */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                <Card>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+                {/* Gebuchte Bundles tile with dialog */}
+                <Card className="cursor-pointer hover:border-primary/50 transition-colors" onClick={() => setBundleDialogOpen(true)}>
                   <CardContent className="pt-6">
                     <div className="flex items-center gap-3">
                       <div className="rounded-lg bg-primary/10 p-2"><Package className="h-5 w-5 text-primary" /></div>
@@ -310,14 +312,36 @@ const SuperAdminTenantDetail = () => {
                       </div>
                     </div>
                     {tenantBundles.length > 0 && (
-                      <div className="mt-3 flex flex-wrap gap-1">
-                        {tenantBundles.map((b) => (
-                          <Badge key={b.id} variant="secondary" className="text-xs">{b.name}</Badge>
-                        ))}
-                      </div>
+                      <>
+                        <div className="mt-3 flex flex-wrap gap-1">
+                          {tenantBundles.map((b) => (
+                            <Badge key={b.id} variant="secondary" className="text-xs">{b.name}</Badge>
+                          ))}
+                        </div>
+                        <p className="mt-2 text-sm font-semibold text-primary">
+                          {tenantBundles.reduce((s, b) => s + Number(b.price_monthly), 0).toFixed(2)} € / Monat
+                        </p>
+                      </>
                     )}
                   </CardContent>
                 </Card>
+
+                {/* Gebuchte Module tile */}
+                <Card>
+                  <CardContent className="pt-6">
+                    <div className="flex items-center gap-3">
+                      <div className="rounded-lg bg-primary/10 p-2"><Blocks className="h-5 w-5 text-primary" /></div>
+                      <div>
+                        <p className="text-sm text-muted-foreground">Gebuchte Module</p>
+                        <p className="text-2xl font-bold">{ALL_MODULES.filter((m) => !("alwaysOn" in m) && getModuleEnabled(m.code)).length}</p>
+                      </div>
+                    </div>
+                    {totalMonthly > 0 && (
+                      <p className="mt-3 text-sm font-semibold text-primary">{totalMonthly.toFixed(2)} € / Monat</p>
+                    )}
+                  </CardContent>
+                </Card>
+
                 <Card>
                   <CardContent className="pt-6">
                     <div className="flex items-center gap-3">
@@ -352,6 +376,54 @@ const SuperAdminTenantDetail = () => {
                   </CardContent>
                 </Card>
               </div>
+
+              {/* Bundle booking dialog */}
+              <Dialog open={bundleDialogOpen} onOpenChange={setBundleDialogOpen}>
+                <DialogContent className="max-w-lg">
+                  <DialogHeader>
+                    <DialogTitle>Bundles verwalten – {tenant?.name}</DialogTitle>
+                    <DialogDescription>Bundles für diesen Mandanten buchen oder entfernen.</DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-3 mt-2 max-h-[60vh] overflow-y-auto">
+                    {allBundles.filter(b => b.is_active).map((bundle) => {
+                      const isBooked = tenantBundleIds.includes(bundle.id);
+                      const bundleModules = getBundleModules(bundle.id);
+                      return (
+                        <div key={bundle.id} className="flex items-center justify-between p-3 rounded-lg border">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <p className="font-medium text-sm">{bundle.name}</p>
+                              <Badge variant="outline" className="text-xs">{Number(bundle.price_monthly).toFixed(2)} €/m</Badge>
+                            </div>
+                            {bundle.description && <p className="text-xs text-muted-foreground mt-0.5">{bundle.description}</p>}
+                            <p className="text-xs text-muted-foreground mt-0.5">{bundleModules.length} Module</p>
+                          </div>
+                          {isBooked ? (
+                            <Button variant="destructive" size="sm" onClick={async () => {
+                              await supabase.from("tenant_bundles").delete().eq("tenant_id", id!).eq("bundle_id", bundle.id);
+                              queryClient.invalidateQueries({ queryKey: ["tenant-bundles", id] });
+                              toast.success(`${bundle.name} entfernt`);
+                            }}>
+                              <X className="h-3 w-3 mr-1" />Entfernen
+                            </Button>
+                          ) : (
+                            <Button size="sm" onClick={async () => {
+                              await supabase.from("tenant_bundles").insert({ tenant_id: id!, bundle_id: bundle.id });
+                              queryClient.invalidateQueries({ queryKey: ["tenant-bundles", id] });
+                              toast.success(`${bundle.name} gebucht`);
+                            }}>
+                              <Plus className="h-3 w-3 mr-1" />Buchen
+                            </Button>
+                          )}
+                        </div>
+                      );
+                    })}
+                    {allBundles.filter(b => b.is_active).length === 0 && (
+                      <p className="text-sm text-muted-foreground text-center py-4">Keine aktiven Bundles vorhanden.</p>
+                    )}
+                  </div>
+                </DialogContent>
+              </Dialog>
 
               {/* Existing tenant info card */}
               <Card>
