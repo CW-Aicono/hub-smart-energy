@@ -68,15 +68,87 @@ serve(async (req) => {
         const data = await response.json();
 
         if (data.success) {
-          console.log(`Successfully synced integration ${integrationId}: ${data.sensors?.length ?? 0} sensors`);
+          const sensors = data.sensors || [];
+          const offlineSensors = sensors.filter((s: any) => s.status === "offline");
+          const onlineSensors = sensors.filter((s: any) => s.status !== "offline");
+          console.log(`Successfully synced integration ${integrationId}: ${sensors.length} sensors (${offlineSensors.length} offline)`);
           results.push({ id: integrationId, success: true });
 
-          // Auto-resolve any active errors for this integration
+          // Get tenant_id for error logging
+          let tenantId: string | null = null;
+          if (locationId) {
+            const { data: locData } = await supabase
+              .from("locations")
+              .select("tenant_id")
+              .eq("id", locationId)
+              .single();
+            tenantId = locData?.tenant_id || null;
+          }
+
+          // Auto-resolve connection-level errors (sync itself succeeded)
           await supabase
             .from("integration_errors")
             .update({ is_resolved: true, resolved_at: new Date().toISOString() })
             .eq("location_integration_id", integrationId)
-            .eq("is_resolved", false);
+            .eq("is_resolved", false)
+            .eq("error_type", "connection");
+
+          // Auto-resolve data errors for sensors that are now online again
+          if (onlineSensors.length > 0) {
+            const onlineNames = onlineSensors.map((s: any) => s.name);
+            // Resolve errors whose sensor_name is now online
+            const { data: activeDataErrors } = await supabase
+              .from("integration_errors")
+              .select("id, sensor_name")
+              .eq("location_integration_id", integrationId)
+              .eq("is_resolved", false)
+              .eq("error_type", "data");
+
+            if (activeDataErrors && activeDataErrors.length > 0) {
+              const toResolve = activeDataErrors
+                .filter((e: any) => e.sensor_name && onlineNames.includes(e.sensor_name))
+                .map((e: any) => e.id);
+              if (toResolve.length > 0) {
+                await supabase
+                  .from("integration_errors")
+                  .update({ is_resolved: true, resolved_at: new Date().toISOString() })
+                  .in("id", toResolve);
+                console.log(`Auto-resolved ${toResolve.length} sensor data errors`);
+              }
+            }
+          }
+
+          // Log offline sensors as data errors
+          if (tenantId && offlineSensors.length > 0) {
+            for (const sensor of offlineSensors) {
+              const sensorName = sensor.name || "Unbekannt";
+              const controlType = sensor.controlType || sensor.type || "";
+
+              // Check if an unresolved error already exists for this sensor
+              const { data: existing } = await supabase
+                .from("integration_errors")
+                .select("id")
+                .eq("location_integration_id", integrationId)
+                .eq("sensor_name", sensorName)
+                .eq("is_resolved", false)
+                .maybeSingle();
+
+              if (!existing) {
+                await supabase.from("integration_errors").insert({
+                  tenant_id: tenantId,
+                  location_id: locationId,
+                  location_integration_id: integrationId,
+                  integration_type: integrationType,
+                  error_type: "data",
+                  error_message: `Liefert keine Werte`,
+                  sensor_name: sensorName,
+                  sensor_type: controlType,
+                  severity: "error",
+                });
+                console.log(`Logged offline sensor error: ${sensorName} (${controlType})`);
+              }
+            }
+          }
         } else {
           console.error(`Sync failed for integration ${integrationId}:`, data.error);
           results.push({ id: integrationId, success: false, error: data.error });

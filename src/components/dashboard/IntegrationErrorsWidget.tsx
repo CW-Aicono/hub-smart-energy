@@ -1,10 +1,10 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useIntegrationErrors } from "@/hooks/useIntegrationErrors";
 import { useLocations } from "@/hooks/useLocations";
-import { AlertOctagon, CheckCircle2, Wifi, Database, Server } from "lucide-react";
+import { AlertOctagon, CheckCircle2, Wifi, Database, Server, CircleAlert } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
-import { formatDistanceToNow } from "date-fns";
+import { format, isToday, isYesterday } from "date-fns";
 import { de } from "date-fns/locale";
 
 interface IntegrationErrorsWidgetProps {
@@ -22,6 +22,14 @@ const ERROR_TYPE_ICONS: Record<string, typeof Wifi> = {
   data: Database,
   auth: Server,
 };
+
+function formatErrorTime(dateStr: string): string {
+  const date = new Date(dateStr);
+  const time = format(date, "HH:mm", { locale: de });
+  if (isToday(date)) return `Heute, ${time}`;
+  if (isYesterday(date)) return `Gestern, ${time}`;
+  return format(date, "dd.MM.yyyy, HH:mm", { locale: de });
+}
 
 const IntegrationErrorsWidget = ({ locationId }: IntegrationErrorsWidgetProps) => {
   const { errors, loading } = useIntegrationErrors();
@@ -48,7 +56,7 @@ const IntegrationErrorsWidget = ({ locationId }: IntegrationErrorsWidgetProps) =
       <CardHeader>
         <CardTitle className="font-display text-lg flex items-center gap-2">
           <AlertOctagon className="h-5 w-5 text-destructive" />
-          Integrations-Fehlermeldungen
+          Aktive Meldungen
           {filtered.length > 0 && (
             <Badge variant="destructive" className="ml-auto text-xs">
               {filtered.length}
@@ -64,34 +72,43 @@ const IntegrationErrorsWidget = ({ locationId }: IntegrationErrorsWidgetProps) =
             <p className="text-xs">Alle Integrationen laufen fehlerfrei</p>
           </div>
         ) : (
-          <div className="space-y-3 max-h-[400px] overflow-y-auto">
+          <div className="space-y-2 max-h-[400px] overflow-y-auto">
             {filtered.map((err) => {
-              const IconComp = ERROR_TYPE_ICONS[err.error_type] || AlertOctagon;
               const locationName = err.location_id ? locationMap.get(err.location_id) : null;
-              const timeAgo = formatDistanceToNow(new Date(err.created_at), {
-                addSuffix: true,
-                locale: de,
-              });
+              const timeStr = formatErrorTime(err.created_at);
+              const hasSensor = !!(err as any).sensor_name;
 
               return (
                 <div
                   key={err.id}
-                  className={`flex gap-3 p-3 rounded-lg border ${SEVERITY_STYLES[err.severity] || SEVERITY_STYLES.error}`}
+                  className={`p-3 rounded-lg border ${SEVERITY_STYLES[err.severity] || SEVERITY_STYLES.error}`}
                 >
-                  <IconComp className="h-5 w-5 mt-0.5 shrink-0" />
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <Badge variant="outline" className="text-xs font-normal">
-                        {err.integration_type}
-                      </Badge>
-                      {locationName && (
-                        <span className="text-xs text-muted-foreground">
-                          {locationName}
-                        </span>
+                  {/* Top line: timestamp • location */}
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1.5">
+                    <span className="inline-block h-2 w-2 rounded-full bg-destructive shrink-0" />
+                    <span>{timeStr}</span>
+                    {locationName && (
+                      <>
+                        <span>•</span>
+                        <span>{locationName}</span>
+                      </>
+                    )}
+                  </div>
+                  {/* Error content */}
+                  <div className="flex items-start gap-2.5">
+                    <CircleAlert className="h-5 w-5 mt-0.5 shrink-0 text-destructive" />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold">{err.error_message}</p>
+                      {hasSensor && (
+                        <p className="text-sm text-muted-foreground">
+                          {(err as any).sensor_name}
+                          {(err as any).sensor_type && ` (${(err as any).sensor_type})`}
+                        </p>
+                      )}
+                      {!hasSensor && (
+                        <p className="text-sm text-muted-foreground">{err.integration_type}</p>
                       )}
                     </div>
-                    <p className="text-sm mt-1">{err.error_message}</p>
-                    <p className="text-xs text-muted-foreground mt-1">{timeAgo}</p>
                   </div>
                 </div>
               );

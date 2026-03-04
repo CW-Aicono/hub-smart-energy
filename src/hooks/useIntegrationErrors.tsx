@@ -13,6 +13,8 @@ export interface IntegrationError {
   error_type: string;
   error_message: string;
   severity: string;
+  sensor_name: string | null;
+  sensor_type: string | null;
   is_resolved: boolean;
   resolved_at: string | null;
   created_at: string;

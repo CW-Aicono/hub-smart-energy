@@ -1600,6 +1600,8 @@ export type Database = {
           location_id: string | null
           location_integration_id: string | null
           resolved_at: string | null
+          sensor_name: string | null
+          sensor_type: string | null
           severity: string
           tenant_id: string
           updated_at: string
@@ -1614,6 +1616,8 @@ export type Database = {
           location_id?: string | null
           location_integration_id?: string | null
           resolved_at?: string | null
+          sensor_name?: string | null
+          sensor_type?: string | null
           severity?: string
           tenant_id: string
           updated_at?: string
@@ -1628,6 +1632,8 @@ export type Database = {
           location_id?: string | null
           location_integration_id?: string | null
           resolved_at?: string | null
+          sensor_name?: string | null
+          sensor_type?: string | null
           severity?: string
           tenant_id?: string
           updated_at?: string
