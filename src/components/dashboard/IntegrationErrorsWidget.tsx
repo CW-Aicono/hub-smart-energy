@@ -21,6 +21,7 @@ const ERROR_TYPE_ICONS: Record<string, typeof Wifi> = {
   connection: Wifi,
   data: Database,
   auth: Server,
+  system_status: Server,
 };
 
 function formatErrorTime(dateStr: string): string {

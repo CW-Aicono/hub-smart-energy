@@ -87,9 +87,10 @@ serve(async (req) => {
 
         if (data.success) {
           const sensors = data.sensors || [];
+          const systemMessages = data.systemMessages || [];
           const offlineSensors = sensors.filter((s: any) => s.status === "offline");
           const onlineSensors = sensors.filter((s: any) => s.status !== "offline");
-          console.log(`Successfully synced integration ${integrationId}: ${sensors.length} sensors (${offlineSensors.length} offline)`);
+          console.log(`Successfully synced integration ${integrationId}: ${sensors.length} sensors (${offlineSensors.length} offline), ${systemMessages.length} system messages`);
           results.push({ id: integrationId, success: true });
 
           // Get tenant_id for error logging
@@ -195,7 +196,71 @@ serve(async (req) => {
               }
             }
           }
-        } else {
+
+          // ── Process Loxone messageCenter system status messages ──
+          if (tenantId && systemMessages.length > 0) {
+            for (const msg of systemMessages) {
+              const msgUid = msg.uid || "";
+              const errorMessage = msg.title || msg.message || "Systemfehler";
+
+              // Check if an unresolved error already exists for this message uid
+              const { data: existing } = await supabase
+                .from("integration_errors")
+                .select("id")
+                .eq("location_integration_id", integrationId)
+                .eq("sensor_name", msgUid)
+                .eq("error_type", "system_status")
+                .eq("is_resolved", false)
+                .maybeSingle();
+
+              if (!existing) {
+                await supabase.from("integration_errors").insert({
+                  tenant_id: tenantId,
+                  location_id: locationId,
+                  location_integration_id: integrationId,
+                  integration_type: integrationType,
+                  error_type: "system_status",
+                  error_message: errorMessage,
+                  sensor_name: msgUid,
+                  sensor_type: msg.message || "",
+                  severity: msg.level >= 3 ? "error" : "warning",
+                });
+                console.log(`Logged system status error: ${errorMessage} (uid: ${msgUid})`);
+              }
+            }
+          }
+
+          // Auto-resolve system_status errors that are no longer in messageCenter
+          if (tenantId) {
+            const { data: activeSystemErrors } = await supabase
+              .from("integration_errors")
+              .select("id, sensor_name, task_id")
+              .eq("location_integration_id", integrationId)
+              .eq("error_type", "system_status")
+              .eq("is_resolved", false);
+
+            if (activeSystemErrors && activeSystemErrors.length > 0) {
+              const currentUids = new Set(systemMessages.map((m: any) => m.uid));
+              const toResolve = activeSystemErrors.filter((e: any) => !currentUids.has(e.sensor_name));
+              if (toResolve.length > 0) {
+                const resolveIds = toResolve.map((e: any) => e.id);
+                await supabase
+                  .from("integration_errors")
+                  .update({ is_resolved: true, resolved_at: new Date().toISOString() })
+                  .in("id", resolveIds);
+                // Auto-complete linked tasks
+                const taskIds = toResolve.map((e: any) => e.task_id).filter(Boolean);
+                if (taskIds.length > 0) {
+                  await supabase
+                    .from("tasks")
+                    .update({ status: "done", completed_at: new Date().toISOString() })
+                    .in("id", taskIds)
+                    .neq("status", "done");
+                }
+                console.log(`Auto-resolved ${toResolve.length} system status errors no longer in messageCenter`);
+              }
+            }
+          }
           console.error(`Sync failed for integration ${integrationId}:`, data.error);
           results.push({ id: integrationId, success: false, error: data.error });
 
