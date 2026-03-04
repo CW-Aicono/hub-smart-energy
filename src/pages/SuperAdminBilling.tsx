@@ -9,10 +9,11 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Download } from "lucide-react";
+import { Download, Send, CheckCircle2, Loader2 } from "lucide-react";
 import { generateSepaDirectDebitXml, downloadXml } from "@/lib/sepaXml";
 import { toast } from "sonner";
 import { useState } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter,
   DialogHeader, DialogTitle, DialogTrigger,
@@ -26,6 +27,34 @@ const SuperAdminBilling = () => {
   const { t } = useSATranslation();
   const [sepaOpen, setSepaOpen] = useState(false);
   const [creditor, setCreditor] = useState({ name: "", iban: "", bic: "", id: "" });
+  const [sendingIds, setSendingIds] = useState<Set<string>>(new Set());
+  const queryClient = useQueryClient();
+
+  const lexwareMutation = useMutation({
+    mutationFn: async (invoiceIds: string[]) => {
+      setSendingIds(new Set(invoiceIds));
+      const { data, error } = await supabase.functions.invoke("lexware-api", {
+        body: { action: "send-invoices", invoiceIds },
+      });
+      if (error) throw error;
+      if (!data?.success) throw new Error(data?.error || "Unknown error");
+      return data;
+    },
+    onSuccess: (data) => {
+      const successes = data.results?.filter((r: any) => r.status === "success").length ?? 0;
+      const errors = data.results?.filter((r: any) => r.status === "error") ?? [];
+      const skipped = data.results?.filter((r: any) => r.status === "skipped").length ?? 0;
+      
+      if (successes > 0) toast.success(`${t("billing.lexware_success")} (${successes})`);
+      if (skipped > 0) toast.info(`${skipped} bereits in Lexware`);
+      if (errors.length > 0) {
+        errors.forEach((e: any) => toast.error(`${t("billing.lexware_error")}: ${e.reason}`));
+      }
+      queryClient.invalidateQueries({ queryKey: ["super-admin-invoices"] });
+    },
+    onError: (err: Error) => toast.error(`${t("billing.lexware_error")}: ${err.message}`),
+    onSettled: () => setSendingIds(new Set()),
+  });
 
   const { data: invoices = [] } = useQuery({
     queryKey: ["super-admin-invoices"],
@@ -117,13 +146,31 @@ const SuperAdminBilling = () => {
             <h1 className="text-2xl font-bold">{t("billing.title")}</h1>
             <p className="text-sm text-muted-foreground mt-1">{t("billing.subtitle")}</p>
           </div>
-          <Dialog open={sepaOpen} onOpenChange={setSepaOpen}>
-            <DialogTrigger asChild>
-              <Button variant="outline">
-                <Download className="h-4 w-4 mr-2" />
-                {t("billing.sepa_export")}
-              </Button>
-            </DialogTrigger>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              disabled={lexwareMutation.isPending}
+              onClick={() => {
+                const openIds = invoices
+                  .filter((inv: any) => !inv.lexware_invoice_id && (inv.status === "draft" || inv.status === "sent"))
+                  .map((inv: any) => inv.id);
+                if (openIds.length === 0) {
+                  toast.info(t("billing.lexware_no_open"));
+                  return;
+                }
+                lexwareMutation.mutate(openIds);
+              }}
+            >
+              {lexwareMutation.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Send className="h-4 w-4 mr-2" />}
+              {t("billing.lexware_send_all")}
+            </Button>
+            <Dialog open={sepaOpen} onOpenChange={setSepaOpen}>
+              <DialogTrigger asChild>
+                <Button variant="outline">
+                  <Download className="h-4 w-4 mr-2" />
+                  {t("billing.sepa_export")}
+                </Button>
+              </DialogTrigger>
             <DialogContent>
               <DialogHeader>
                 <DialogTitle>{t("billing.sepa_export")}</DialogTitle>
@@ -159,7 +206,8 @@ const SuperAdminBilling = () => {
                 </Button>
               </DialogFooter>
             </DialogContent>
-          </Dialog>
+           </Dialog>
+          </div>
         </header>
         <div className="p-6 space-y-6">
           <Card>
@@ -207,11 +255,12 @@ const SuperAdminBilling = () => {
                     <TableHead>{t("billing.amount")}</TableHead>
                     <TableHead>{t("billing.payment_method")}</TableHead>
                     <TableHead>{t("common.status")}</TableHead>
+                    <TableHead>Lexware</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {invoices.length === 0 ? (
-                    <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">{t("billing.no_invoices")}</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={9} className="text-center py-8 text-muted-foreground">{t("billing.no_invoices")}</TableCell></TableRow>
                   ) : (
                     invoices.map((inv: any) => (
                       <TableRow key={inv.id}>
@@ -227,6 +276,27 @@ const SuperAdminBilling = () => {
                           </Badge>
                         </TableCell>
                         <TableCell><Badge variant={statusColor(inv.status) as any}>{inv.status}</Badge></TableCell>
+                        <TableCell>
+                          {inv.lexware_invoice_id ? (
+                            <Badge variant="default" className="text-xs gap-1">
+                              <CheckCircle2 className="h-3 w-3" />
+                              {t("billing.lexware_synced")}
+                            </Badge>
+                          ) : (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              disabled={sendingIds.has(inv.id) || lexwareMutation.isPending}
+                              onClick={() => lexwareMutation.mutate([inv.id])}
+                            >
+                              {sendingIds.has(inv.id) ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <Send className="h-3.5 w-3.5" />
+                              )}
+                            </Button>
+                          )}
+                        </TableCell>
                       </TableRow>
                     ))
                   )}

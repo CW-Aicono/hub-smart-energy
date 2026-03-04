@@ -92,3 +92,6 @@ verify_jwt = false
 
 [functions.pitch-session]
 verify_jwt = false
+
+[functions.lexware-api]
+verify_jwt = false

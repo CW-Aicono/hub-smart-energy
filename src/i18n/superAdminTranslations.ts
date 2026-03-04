@@ -228,6 +228,13 @@ export const saTranslations: SATranslations = {
   "billing.sepa_creditor_missing": { de: "Bitte Gläubiger-Daten in den Einstellungen hinterlegen", en: "Please configure creditor data in settings", fr: "Veuillez configurer les données du créancier", pl: "Proszę skonfigurować dane wierzyciela" },
   "billing.sepa_exported": { de: "SEPA-Datei erstellt", en: "SEPA file created", fr: "Fichier SEPA créé", pl: "Plik SEPA utworzony" },
   "billing.payment_method": { de: "Zahlart", en: "Payment", fr: "Paiement", pl: "Płatność" },
+  "billing.lexware_send": { de: "An Lexware senden", en: "Send to Lexware", fr: "Envoyer à Lexware", pl: "Wyślij do Lexware" },
+  "billing.lexware_send_all": { de: "Alle an Lexware senden", en: "Send all to Lexware", fr: "Tout envoyer à Lexware", pl: "Wyślij wszystko do Lexware" },
+  "billing.lexware_synced": { de: "In Lexware", en: "In Lexware", fr: "Dans Lexware", pl: "W Lexware" },
+  "billing.lexware_sending": { de: "Sende...", en: "Sending...", fr: "Envoi...", pl: "Wysyłanie..." },
+  "billing.lexware_success": { de: "Erfolgreich an Lexware gesendet", en: "Successfully sent to Lexware", fr: "Envoyé avec succès à Lexware", pl: "Pomyślnie wysłano do Lexware" },
+  "billing.lexware_error": { de: "Fehler beim Senden an Lexware", en: "Error sending to Lexware", fr: "Erreur lors de l'envoi à Lexware", pl: "Błąd wysyłania do Lexware" },
+  "billing.lexware_no_open": { de: "Keine offenen Rechnungen zum Senden", en: "No open invoices to send", fr: "Aucune facture ouverte à envoyer", pl: "Brak otwartych faktur do wysłania" },
 
   // Location types
   "location.einzelgebaeude": { de: "Einzelgebäude", en: "Single Building", fr: "Bâtiment unique", pl: "Pojedynczy budynek" },

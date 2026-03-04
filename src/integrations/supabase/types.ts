@@ -3506,6 +3506,7 @@ export type Database = {
           created_at: string
           id: string
           invoice_number: string
+          lexware_invoice_id: string | null
           line_items: Json | null
           module_total: number
           pdf_url: string | null
@@ -3521,6 +3522,7 @@ export type Database = {
           created_at?: string
           id?: string
           invoice_number: string
+          lexware_invoice_id?: string | null
           line_items?: Json | null
           module_total?: number
           pdf_url?: string | null
@@ -3536,6 +3538,7 @@ export type Database = {
           created_at?: string
           id?: string
           invoice_number?: string
+          lexware_invoice_id?: string | null
           line_items?: Json | null
           module_total?: number
           pdf_url?: string | null
@@ -3714,6 +3717,7 @@ export type Database = {
           created_at: string
           house_number: string | null
           id: string
+          lexware_contact_id: string | null
           logo_url: string | null
           name: string
           payment_method: string
@@ -3743,6 +3747,7 @@ export type Database = {
           created_at?: string
           house_number?: string | null
           id?: string
+          lexware_contact_id?: string | null
           logo_url?: string | null
           name: string
           payment_method?: string
@@ -3772,6 +3777,7 @@ export type Database = {
           created_at?: string
           house_number?: string | null
           id?: string
+          lexware_contact_id?: string | null
           logo_url?: string | null
           name?: string
           payment_method?: string
