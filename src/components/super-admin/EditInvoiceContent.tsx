@@ -6,7 +6,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { DialogFooter } from "@/components/ui/dialog";
-import { Loader2, Plus, Trash2, AlertTriangle } from "lucide-react";
+import { Loader2, Plus, Trash2, AlertTriangle, Ban } from "lucide-react";
 import { useSATranslation } from "@/hooks/useSATranslation";
 
 interface LineItem {
@@ -75,6 +75,7 @@ export default function EditInvoiceContent({ invoice, editStatus, setEditStatus,
             <SelectItem value="sent">Gesendet</SelectItem>
             <SelectItem value="paid">Bezahlt</SelectItem>
             <SelectItem value="overdue">Überfällig</SelectItem>
+            {!isLocked && <SelectItem value="voided">Storniert</SelectItem>}
           </SelectContent>
         </Select>
       </div>
@@ -154,11 +155,16 @@ export default function EditInvoiceContent({ invoice, editStatus, setEditStatus,
         <div><span className="text-muted-foreground">Gesamt:</span> <span className="font-bold">{totals.total.toFixed(2)} €</span></div>
       </div>
 
-      <DialogFooter>
+      <DialogFooter className="flex-col sm:flex-row gap-2">
+        {!isLocked && editStatus !== "voided" && (
+          <Button variant="destructive" className="mr-auto" onClick={() => setEditStatus("voided")}>
+            <Ban className="h-4 w-4 mr-1" /> Stornieren
+          </Button>
+        )}
         <Button variant="outline" onClick={onCancel}>{t("common.cancel")}</Button>
         <Button disabled={isPending} onClick={handleSave}>
           {isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
-          {t("common.save")}
+          {editStatus === "voided" ? "Stornieren & Speichern" : t("common.save")}
         </Button>
       </DialogFooter>
     </div>
