@@ -2945,9 +2945,12 @@ export type Database = {
       support_sessions: {
         Row: {
           created_at: string
+          duration_minutes: number | null
           ended_at: string | null
           expires_at: string
           id: string
+          is_manual: boolean
+          notes: string | null
           reason: string | null
           started_at: string
           super_admin_user_id: string
@@ -2955,9 +2958,12 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          duration_minutes?: number | null
           ended_at?: string | null
           expires_at?: string
           id?: string
+          is_manual?: boolean
+          notes?: string | null
           reason?: string | null
           started_at?: string
           super_admin_user_id: string
@@ -2965,9 +2971,12 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          duration_minutes?: number | null
           ended_at?: string | null
           expires_at?: string
           id?: string
+          is_manual?: boolean
+          notes?: string | null
           reason?: string | null
           started_at?: string
           super_admin_user_id?: string

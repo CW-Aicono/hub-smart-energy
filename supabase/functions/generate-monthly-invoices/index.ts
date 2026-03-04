@@ -50,7 +50,7 @@ Deno.serve(async (req) => {
     // 4. Get support sessions from last month for all tenants
     const { data: supportSessions, error: sErr } = await supabase
       .from("support_sessions")
-      .select("id, tenant_id, started_at, ended_at, expires_at, reason")
+      .select("id, tenant_id, started_at, ended_at, expires_at, reason, duration_minutes, is_manual")
       .gte("started_at", lastMonthStart.toISOString())
       .lt("started_at", currentMonthStart.toISOString());
     if (sErr) throw sErr;
@@ -109,11 +109,9 @@ Deno.serve(async (req) => {
       const supportLineItems: any[] = [];
       let supportTotal = 0;
       for (const s of sessions) {
-        const start = new Date(s.started_at).getTime();
-        const end = s.ended_at
-          ? new Date(s.ended_at).getTime()
-          : new Date(s.expires_at).getTime();
-        const durationMin = Math.max(1, Math.round((end - start) / 60000));
+        const durationMin = s.duration_minutes
+          ? s.duration_minutes
+          : Math.max(1, Math.round(((s.ended_at ? new Date(s.ended_at).getTime() : new Date(s.expires_at).getTime()) - new Date(s.started_at).getTime()) / 60000));
         const blocks = Math.ceil(durationMin / 15);
         const cost = hasRemoteSupport ? 0 : blocks * supportPrice15min;
 
