@@ -17,7 +17,7 @@ interface SystemStatus {
 }
 
 export function MiniserverStatus({ locationIntegrationId, integrationType, lastSyncAt }: MiniserverStatusProps) {
-  const isLoxone = !integrationType || integrationType === "loxone";
+  const isLoxone = !integrationType || integrationType === "loxone" || integrationType === "loxone_miniserver";
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["miniserver-status", locationIntegrationId],
@@ -35,32 +35,22 @@ export function MiniserverStatus({ locationIntegrationId, integrationType, lastS
 
   if (!isLoxone) return null;
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center gap-1.5 mt-1.5">
-        <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
-        <span className="text-xs text-muted-foreground">Systemstatus wird geladen…</span>
-      </div>
-    );
-  }
+  const systemStatus = data?.systemStatus;
+  const syncTime = lastSyncAt || data?.lastSync;
 
-  if (error || !data) return null;
-
-  const { systemStatus } = data;
-  const syncTime = lastSyncAt || data.lastSync;
-
+  // Show last sync even while loading or on error
   const items = [
-    systemStatus.cpu != null && {
+    systemStatus?.cpu != null && {
       icon: Cpu,
       label: "CPU",
       value: `${systemStatus.cpu}%`,
     },
-    systemStatus.temperature != null && {
+    systemStatus?.temperature != null && {
       icon: Thermometer,
       label: "Temp",
       value: `${systemStatus.temperature}°C`,
     },
-    systemStatus.memory != null && {
+    systemStatus?.memory != null && {
       icon: HardDrive,
       label: "RAM",
       value: `${systemStatus.memory}%`,
@@ -71,6 +61,15 @@ export function MiniserverStatus({ locationIntegrationId, integrationType, lastS
       value: formatDistanceToNow(new Date(syncTime), { addSuffix: true, locale: de }),
     },
   ].filter(Boolean) as Array<{ icon: typeof Cpu; label: string; value: string }>;
+
+  if (isLoading && !syncTime) {
+    return (
+      <div className="flex items-center gap-1.5 mt-1.5">
+        <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+        <span className="text-xs text-muted-foreground">Systemstatus wird geladen…</span>
+      </div>
+    );
+  }
 
   if (items.length === 0) return null;
 
