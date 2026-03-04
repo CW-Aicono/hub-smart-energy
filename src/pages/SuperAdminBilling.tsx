@@ -11,6 +11,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Download, Send, CheckCircle2, Loader2, ArrowUpDown, Pencil, Euro, AlertTriangle, Clock, FileCheck } from "lucide-react";
 import { generateSepaDirectDebitXml, downloadXml } from "@/lib/sepaXml";
+import EditInvoiceContent from "@/components/super-admin/EditInvoiceContent";
 import { toast } from "sonner";
 import { useState, useMemo } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -64,13 +65,15 @@ const SuperAdminBilling = () => {
   });
 
   const statusMutation = useMutation({
-    mutationFn: async ({ id, status }: { id: string; status: string }) => {
-      const { error } = await supabase.from("tenant_invoices").update({ status }).eq("id", id);
+    mutationFn: async ({ id, status, line_items, module_total, support_total, amount }: { id: string; status: string; line_items?: any[]; module_total?: number; support_total?: number; amount?: number }) => {
+      const updates: any = { status };
+      if (line_items !== undefined) { updates.line_items = line_items; updates.module_total = module_total; updates.support_total = support_total; updates.amount = amount; }
+      const { error } = await supabase.from("tenant_invoices").update(updates).eq("id", id);
       if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["super-admin-invoices"] });
-      toast.success("Status aktualisiert");
+      toast.success("Abrechnung aktualisiert");
       setEditInv(null);
     },
     onError: (err: Error) => toast.error(err.message),
@@ -346,37 +349,21 @@ const SuperAdminBilling = () => {
 
         {/* Edit Invoice Dialog */}
         <Dialog open={!!editInv} onOpenChange={(o) => { if (!o) setEditInv(null); }}>
-          <DialogContent>
+          <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Abrechnung bearbeiten</DialogTitle>
               <DialogDescription>{editInv?.tenants?.name} — {editInv?.period_start} – {editInv?.period_end}</DialogDescription>
             </DialogHeader>
-            <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <Label>Status</Label>
-                <Select value={editStatus} onValueChange={setEditStatus}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="draft">Entwurf</SelectItem>
-                    <SelectItem value="sent">Gesendet</SelectItem>
-                    <SelectItem value="paid">Bezahlt</SelectItem>
-                    <SelectItem value="overdue">Überfällig</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="grid grid-cols-3 gap-4 text-sm">
-                <div><span className="text-muted-foreground">Module:</span> <span className="font-medium">{Number(editInv?.module_total ?? 0).toFixed(2)} €</span></div>
-                <div><span className="text-muted-foreground">Support:</span> <span className="font-medium">{Number(editInv?.support_total ?? 0).toFixed(2)} €</span></div>
-                <div><span className="text-muted-foreground">Gesamt:</span> <span className="font-medium">{Number(editInv?.amount ?? 0).toFixed(2)} €</span></div>
-              </div>
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setEditInv(null)}>{t("common.cancel")}</Button>
-              <Button disabled={statusMutation.isPending} onClick={() => { if (editInv) statusMutation.mutate({ id: editInv.id, status: editStatus }); }}>
-                {statusMutation.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
-                {t("common.save")}
-              </Button>
-            </DialogFooter>
+            {editInv && <EditInvoiceContent
+              invoice={editInv}
+              editStatus={editStatus}
+              setEditStatus={setEditStatus}
+              onSave={(updates) => {
+                statusMutation.mutate({ id: editInv.id, status: editStatus, ...updates });
+              }}
+              onCancel={() => setEditInv(null)}
+              isPending={statusMutation.isPending}
+            />}
           </DialogContent>
         </Dialog>
       </main>
