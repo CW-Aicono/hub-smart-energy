@@ -46,6 +46,8 @@ Deno.serve(async (req) => {
       if (!invoices || invoices.length === 0) throw new Error("No invoices found");
 
       const results: any[] = [];
+      // Cache contact IDs per tenant to avoid creating duplicates
+      const contactCache = new Map<string, string>();
 
       for (const inv of invoices) {
         try {
@@ -61,10 +63,11 @@ Deno.serve(async (req) => {
             continue;
           }
 
-          // 1. Ensure contact exists in Lexware
-          let lexwareContactId = tenant.lexware_contact_id;
+          // 1. Ensure contact exists in Lexware (use cache to prevent duplicates)
+          let lexwareContactId = tenant.lexware_contact_id || contactCache.get(tenant.id);
           if (!lexwareContactId) {
             lexwareContactId = await ensureContact(headers, supabase, tenant);
+            contactCache.set(tenant.id, lexwareContactId);
           }
 
           // 2. Create invoice in Lexware
