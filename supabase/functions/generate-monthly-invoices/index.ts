@@ -65,18 +65,19 @@ Deno.serve(async (req) => {
     // 5. Check for existing invoices this month (prevent duplicates)
     const { data: existingInvoices } = await supabase
       .from("tenant_invoices")
-      .select("tenant_id")
-      .eq("period_start", fmt(currentMonthStart));
-    const alreadyBilled = new Set(
-      (existingInvoices ?? []).map((i: any) => i.tenant_id)
-    );
+      .select("id, tenant_id, line_items, module_total, support_total, amount")
+      .eq("period_start", fmt(lastMonthStart))
+      .eq("period_end", fmt(lastMonthEnd));
+    const existingByTenant: Record<string, any> = {};
+    for (const inv of existingInvoices ?? []) {
+      existingByTenant[inv.tenant_id] = inv;
+    }
 
     const invoicesToInsert: any[] = [];
+    const invoicesToUpdate: any[] = [];
     let invoiceCounter = 0;
 
     for (const tenant of tenants ?? []) {
-      if (alreadyBilled.has(tenant.id)) continue;
-
       const tenantModules = (allModules ?? []).filter(
         (m: any) => m.tenant_id === tenant.id && m.is_enabled
       );
@@ -89,7 +90,6 @@ Deno.serve(async (req) => {
       const moduleLineItems: any[] = [];
       let moduleTotal = 0;
       for (const tm of tenantModules) {
-        // Skip always-on modules (dashboard)
         if (tm.module_code === "dashboard") continue;
         const price =
           tm.price_override != null
@@ -130,32 +130,46 @@ Deno.serve(async (req) => {
 
       const totalAmount = moduleTotal + supportTotal;
 
-      // Skip tenants with zero cost and no line items
       if (moduleLineItems.length === 0 && supportLineItems.length === 0)
         continue;
 
-      invoiceCounter++;
-      const invNum = `INV-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}-${String(invoiceCounter).padStart(4, "0")}`;
+      const allLineItems = [...moduleLineItems, ...supportLineItems];
+      const existing = existingByTenant[tenant.id];
 
-      // period_start = current month for modules, but we reference last month for support
-      const periodStart = fmt(
-        supportLineItems.length > 0 ? lastMonthStart : currentMonthStart
-      );
-      const periodEnd = fmt(
-        new Date(currentMonthStart.getFullYear(), currentMonthStart.getMonth() + 1, 0)
-      );
+      if (existing) {
+        // Merge: keep existing support items not in new sessions, replace modules, add new support
+        const existingLines = Array.isArray(existing.line_items) ? existing.line_items : [];
+        const newSessionIds = new Set(supportLineItems.map((li: any) => li.session_id));
+        const keptSupportLines = (existingLines as any[]).filter(
+          (li: any) => li.type === "support" && !newSessionIds.has(li.session_id)
+        );
+        const keptSupportTotal = keptSupportLines.reduce((s: number, li: any) => s + Number(li.amount ?? 0), 0);
+        const mergedLines = [...moduleLineItems, ...keptSupportLines, ...supportLineItems];
+        const mergedSupportTotal = keptSupportTotal + supportTotal;
 
-      invoicesToInsert.push({
-        tenant_id: tenant.id,
-        invoice_number: invNum,
-        period_start: fmt(lastMonthStart),
-        period_end: fmt(lastMonthEnd),
-        amount: totalAmount,
-        module_total: moduleTotal,
-        support_total: supportTotal,
-        status: "draft",
-        line_items: [...moduleLineItems, ...supportLineItems],
-      });
+        invoicesToUpdate.push({
+          id: existing.id,
+          line_items: mergedLines,
+          module_total: moduleTotal,
+          support_total: mergedSupportTotal,
+          amount: moduleTotal + mergedSupportTotal,
+        });
+      } else {
+        invoiceCounter++;
+        const invNum = `DRAFT`;
+
+        invoicesToInsert.push({
+          tenant_id: tenant.id,
+          invoice_number: invNum,
+          period_start: fmt(lastMonthStart),
+          period_end: fmt(lastMonthEnd),
+          amount: totalAmount,
+          module_total: moduleTotal,
+          support_total: supportTotal,
+          status: "draft",
+          line_items: allLineItems,
+        });
+      }
     }
 
     if (invoicesToInsert.length > 0) {
@@ -165,11 +179,25 @@ Deno.serve(async (req) => {
       if (insErr) throw insErr;
     }
 
+    for (const upd of invoicesToUpdate) {
+      const { error: updErr } = await supabase
+        .from("tenant_invoices")
+        .update({
+          line_items: upd.line_items,
+          module_total: upd.module_total,
+          support_total: upd.support_total,
+          amount: upd.amount,
+        })
+        .eq("id", upd.id);
+      if (updErr) throw updErr;
+    }
+
     return new Response(
       JSON.stringify({
         success: true,
         invoices_created: invoicesToInsert.length,
-        month: fmt(currentMonthStart),
+        invoices_updated: invoicesToUpdate.length,
+        month: fmt(lastMonthStart),
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
