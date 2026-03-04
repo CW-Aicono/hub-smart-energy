@@ -387,10 +387,10 @@ const SuperAdminTenantDetail = () => {
                           contact_email: tenantInfoForm.contact_email.trim() || null,
                         }).eq("id", tenant!.id);
                         setSavingTenantInfo(false);
-                        if (error) { toast.error("Fehler beim Speichern"); }
+                        if (error) { toast.error("Fehler beim Speichern"); console.error(error); }
                         else {
                           toast.success("Gespeichert");
-                          queryClient.invalidateQueries({ queryKey: ["super-admin-tenants"] });
+                          queryClient.invalidateQueries({ queryKey: ["tenant-detail", id] });
                           setEditingTenantInfo(false);
                         }
                       }}>
