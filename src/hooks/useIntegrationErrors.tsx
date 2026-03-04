@@ -19,6 +19,7 @@ export interface IntegrationError {
   resolved_at: string | null;
   created_at: string;
   updated_at: string;
+  task_id: string | null;
 }
 
 export function useIntegrationErrors() {
@@ -33,12 +34,18 @@ export function useIntegrationErrors() {
       if (isDemo) return [];
       const { data, error } = await supabase
         .from("integration_errors")
-        .select("*")
+        .select("*, task:tasks!integration_errors_task_id_fkey(status)")
         .eq("tenant_id", tenant!.id)
         .eq("is_resolved", false)
         .order("created_at", { ascending: false });
       if (error) throw error;
-      return (data as IntegrationError[]) || [];
+      // Only show errors whose linked task is still "open" (or has no task)
+      return ((data || []) as any[])
+        .filter((e) => {
+          const taskStatus = e.task?.status;
+          return !taskStatus || taskStatus === "open";
+        })
+        .map(({ task, ...rest }) => rest as IntegrationError);
     },
     enabled: !isDemo && !!tenant,
     staleTime: 60_000,
