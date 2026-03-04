@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Navigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useTranslation } from "@/hooks/useTranslation";
@@ -6,12 +6,14 @@ import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
 import { useTasks } from "@/hooks/useTasks";
 import { CreateTaskDialog } from "@/components/tasks/CreateTaskDialog";
 import { TaskCard } from "@/components/tasks/TaskCard";
+import { TaskArchive } from "@/components/tasks/TaskArchive";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import { Plus, Search, CheckCircle2, Circle, ArrowRight, AlertTriangle, ListChecks, Zap, PlugZap, ExternalLink } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Plus, Search, CheckCircle2, Circle, ArrowRight, AlertTriangle, ListChecks, Zap, PlugZap, ExternalLink, Archive } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 
 const Tasks = () => {
@@ -25,11 +27,16 @@ const Tasks = () => {
   const [sourceFilter, setSourceFilter] = useState("all");
   const [overdueFilter, setOverdueFilter] = useState(false);
   const [externalFilter, setExternalFilter] = useState(false);
+  const [activeTab, setActiveTab] = useState("active");
 
   const toggleStatus = (val: string) => { setPriorityFilter("all"); setOverdueFilter(false); setExternalFilter(false); setStatusFilter((prev) => (prev === val ? "all" : val)); };
   const togglePriority = (val: string) => { setStatusFilter("all"); setOverdueFilter(false); setExternalFilter(false); setPriorityFilter((prev) => (prev === val ? "all" : val)); };
   const toggleOverdue = () => { setStatusFilter("all"); setPriorityFilter("all"); setExternalFilter(false); setOverdueFilter((prev) => !prev); };
   const toggleExternal = () => { setStatusFilter("all"); setPriorityFilter("all"); setOverdueFilter(false); setExternalFilter((prev) => !prev); };
+
+  // Split tasks into active (open, in_progress) and archived (done, cancelled)
+  const activeTasks = useMemo(() => tasks.filter((tk) => tk.status !== "done" && tk.status !== "cancelled"), [tasks]);
+  const archivedTasks = useMemo(() => tasks.filter((tk) => tk.status === "done" || tk.status === "cancelled"), [tasks]);
 
   if (authLoading) {
     return (
@@ -42,22 +49,22 @@ const Tasks = () => {
 
   if (!user) return <Navigate to="/auth" replace />;
 
-  const filtered = tasks.filter((tk) => {
+  const filtered = activeTasks.filter((tk) => {
     const matchSearch = !search || tk.title.toLowerCase().includes(search.toLowerCase()) || tk.description?.toLowerCase().includes(search.toLowerCase());
     const matchStatus = statusFilter === "all" || tk.status === statusFilter;
     const matchPriority = priorityFilter === "all" || tk.priority === priorityFilter;
     const matchSource = sourceFilter === "all" || tk.source_type === sourceFilter;
-    const matchOverdue = !overdueFilter || (tk.due_date && tk.status !== "done" && tk.status !== "cancelled" && new Date(tk.due_date) < new Date());
-    const matchExternal = !externalFilter || (tk.external_contact_name && tk.status !== "done" && tk.status !== "cancelled");
+    const matchOverdue = !overdueFilter || (tk.due_date && new Date(tk.due_date) < new Date());
+    const matchExternal = !externalFilter || !!tk.external_contact_name;
     return matchSearch && matchStatus && matchPriority && matchSource && matchOverdue && matchExternal;
   });
 
-  const countOpen = tasks.filter((tk) => tk.status === "open").length;
-  const countInProgress = tasks.filter((tk) => tk.status === "in_progress").length;
-  const countDone = tasks.filter((tk) => tk.status === "done").length;
-  const countCritical = tasks.filter((tk) => tk.priority === "critical" && tk.status !== "done" && tk.status !== "cancelled").length;
-  const countOverdue = tasks.filter((tk) => tk.due_date && tk.status !== "done" && tk.status !== "cancelled" && new Date(tk.due_date) < new Date()).length;
-  const countExternal = tasks.filter((tk) => tk.external_contact_name && tk.status !== "done" && tk.status !== "cancelled").length;
+  const countOpen = activeTasks.filter((tk) => tk.status === "open").length;
+  const countInProgress = activeTasks.filter((tk) => tk.status === "in_progress").length;
+  const countArchived = archivedTasks.length;
+  const countCritical = activeTasks.filter((tk) => tk.priority === "critical").length;
+  const countOverdue = activeTasks.filter((tk) => tk.due_date && new Date(tk.due_date) < new Date()).length;
+  const countExternal = activeTasks.filter((tk) => !!tk.external_contact_name).length;
 
   return (
     <div className="flex flex-col md:flex-row min-h-screen bg-background">
@@ -77,56 +84,84 @@ const Tasks = () => {
             </Button>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-            <KpiCard icon={<Circle className="h-4 w-4 text-muted-foreground" />} label={t("tasks.open" as any)} value={countOpen} onClick={() => toggleStatus("open")} active={statusFilter === "open"} />
-            <KpiCard icon={<ArrowRight className="h-4 w-4 text-primary" />} label={t("tasks.inProgress" as any)} value={countInProgress} onClick={() => toggleStatus("in_progress")} active={statusFilter === "in_progress"} />
-            <KpiCard icon={<CheckCircle2 className="h-4 w-4 text-success" />} label={t("tasks.done" as any)} value={countDone} onClick={() => toggleStatus("done")} active={statusFilter === "done"} />
-            <KpiCard icon={<AlertTriangle className="h-4 w-4 text-destructive" />} label={t("tasks.critical" as any)} value={countCritical} variant={countCritical > 0 ? "destructive" : "default"} onClick={() => togglePriority("critical")} active={priorityFilter === "critical"} />
-            <KpiCard icon={<Zap className="h-4 w-4 text-warning" />} label={t("tasks.overdue" as any)} value={countOverdue} variant={countOverdue > 0 ? "warning" : "default"} onClick={toggleOverdue} active={overdueFilter} />
-            <KpiCard icon={<ExternalLink className="h-4 w-4 text-secondary-foreground" />} label={t("tasks.externalOpen" as any)} value={countExternal} onClick={toggleExternal} active={externalFilter} />
-          </div>
+          <Tabs value={activeTab} onValueChange={setActiveTab}>
+            <TabsList>
+              <TabsTrigger value="active" className="gap-1.5">
+                <ListChecks className="h-4 w-4" />
+                Aktiv
+                {(countOpen + countInProgress) > 0 && (
+                  <Badge variant="secondary" className="text-xs ml-1">{countOpen + countInProgress}</Badge>
+                )}
+              </TabsTrigger>
+              <TabsTrigger value="archive" className="gap-1.5">
+                <Archive className="h-4 w-4" />
+                Archiv
+                {countArchived > 0 && (
+                  <Badge variant="secondary" className="text-xs ml-1">{countArchived}</Badge>
+                )}
+              </TabsTrigger>
+            </TabsList>
 
-          <div className="flex flex-wrap gap-3 items-center">
-            <div className="relative flex-1 min-w-48">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input className="pl-9" placeholder={t("tasks.searchPlaceholder" as any)} value={search} onChange={(e) => setSearch(e.target.value)} />
-            </div>
-            <Select value={priorityFilter} onValueChange={setPriorityFilter}>
-              <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">{t("tasks.allPriorities" as any)}</SelectItem>
-                <SelectItem value="low">🟢 {t("tasks.low" as any)}</SelectItem>
-                <SelectItem value="medium">🟡 {t("tasks.medium" as any)}</SelectItem>
-                <SelectItem value="high">🟠 {t("tasks.high" as any)}</SelectItem>
-                <SelectItem value="critical">🔴 {t("tasks.critical" as any)}</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={sourceFilter} onValueChange={setSourceFilter}>
-              <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">{t("tasks.allSources" as any)}</SelectItem>
-                <SelectItem value="manual">👤 {t("tasks.sourceManual" as any)}</SelectItem>
-                <SelectItem value="alert">⚠️ {t("tasks.sourceAlert" as any)}</SelectItem>
-                <SelectItem value="charging">⚡ {t("tasks.sourceCharging" as any)}</SelectItem>
-                <SelectItem value="automation">🤖 {t("tasks.sourceAutomation" as any)}</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+            <TabsContent value="active" className="space-y-6 mt-4">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+                <KpiCard icon={<Circle className="h-4 w-4 text-muted-foreground" />} label={t("tasks.open" as any)} value={countOpen} onClick={() => toggleStatus("open")} active={statusFilter === "open"} />
+                <KpiCard icon={<ArrowRight className="h-4 w-4 text-primary" />} label={t("tasks.inProgress" as any)} value={countInProgress} onClick={() => toggleStatus("in_progress")} active={statusFilter === "in_progress"} />
+                <KpiCard icon={<AlertTriangle className="h-4 w-4 text-destructive" />} label={t("tasks.critical" as any)} value={countCritical} variant={countCritical > 0 ? "destructive" : "default"} onClick={() => togglePriority("critical")} active={priorityFilter === "critical"} />
+                <KpiCard icon={<Zap className="h-4 w-4 text-warning" />} label={t("tasks.overdue" as any)} value={countOverdue} variant={countOverdue > 0 ? "warning" : "default"} onClick={toggleOverdue} active={overdueFilter} />
+                <KpiCard icon={<ExternalLink className="h-4 w-4 text-secondary-foreground" />} label={t("tasks.externalOpen" as any)} value={countExternal} onClick={toggleExternal} active={externalFilter} />
+              </div>
 
-          {isLoading ? (
-            <div className="space-y-3">{[...Array(4)].map((_, i) => (<Skeleton key={i} className="h-24 w-full rounded-lg" />))}</div>
-          ) : filtered.length === 0 ? (
-            <EmptyState t={t} hasFilters={search !== "" || statusFilter !== "all" || priorityFilter !== "all" || overdueFilter || externalFilter} onCreateTask={() => setCreateOpen(true)} />
-          ) : (
-            <div className="space-y-3">
-              {filtered.map((task) => (<TaskCard key={task.id} task={task} />))}
-              <p className="text-xs text-center text-muted-foreground pt-2">
-                {filtered.length} {t("tasks.showing" as any)} {tasks.length} {t("tasks.tasksShown" as any)}
-              </p>
-            </div>
-          )}
+              <div className="flex flex-wrap gap-3 items-center">
+                <div className="relative flex-1 min-w-48">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input className="pl-9" placeholder={t("tasks.searchPlaceholder" as any)} value={search} onChange={(e) => setSearch(e.target.value)} />
+                </div>
+                <Select value={priorityFilter} onValueChange={setPriorityFilter}>
+                  <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">{t("tasks.allPriorities" as any)}</SelectItem>
+                    <SelectItem value="low">🟢 {t("tasks.low" as any)}</SelectItem>
+                    <SelectItem value="medium">🟡 {t("tasks.medium" as any)}</SelectItem>
+                    <SelectItem value="high">🟠 {t("tasks.high" as any)}</SelectItem>
+                    <SelectItem value="critical">🔴 {t("tasks.critical" as any)}</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Select value={sourceFilter} onValueChange={setSourceFilter}>
+                  <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">{t("tasks.allSources" as any)}</SelectItem>
+                    <SelectItem value="manual">👤 {t("tasks.sourceManual" as any)}</SelectItem>
+                    <SelectItem value="alert">⚠️ {t("tasks.sourceAlert" as any)}</SelectItem>
+                    <SelectItem value="charging">⚡ {t("tasks.sourceCharging" as any)}</SelectItem>
+                    <SelectItem value="automation">🤖 {t("tasks.sourceAutomation" as any)}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
 
-          <ConceptInfoBoxes t={t} />
+              {isLoading ? (
+                <div className="space-y-3">{[...Array(4)].map((_, i) => (<Skeleton key={i} className="h-24 w-full rounded-lg" />))}</div>
+              ) : filtered.length === 0 ? (
+                <EmptyState t={t} hasFilters={search !== "" || statusFilter !== "all" || priorityFilter !== "all" || overdueFilter || externalFilter} onCreateTask={() => setCreateOpen(true)} />
+              ) : (
+                <div className="space-y-3">
+                  {filtered.map((task) => (<TaskCard key={task.id} task={task} />))}
+                  <p className="text-xs text-center text-muted-foreground pt-2">
+                    {filtered.length} von {activeTasks.length} aktiven Aufgaben
+                  </p>
+                </div>
+              )}
+
+              <ConceptInfoBoxes t={t} />
+            </TabsContent>
+
+            <TabsContent value="archive" className="mt-4">
+              {isLoading ? (
+                <div className="space-y-3">{[...Array(3)].map((_, i) => (<Skeleton key={i} className="h-20 w-full rounded-lg" />))}</div>
+              ) : (
+                <TaskArchive tasks={archivedTasks} />
+              )}
+            </TabsContent>
+          </Tabs>
         </div>
       </main>
       <CreateTaskDialog open={createOpen} onOpenChange={setCreateOpen} />
