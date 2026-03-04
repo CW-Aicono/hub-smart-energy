@@ -3669,6 +3669,7 @@ export const translations = {
   "widget.spotPrice": { de: "Spotpreis-Verlauf", en: "Spot Price Trend", es: "Tendencia de precios spot", nl: "Spotprijsverloop" },
   "widget.pvForecast": { de: "PV-Prognose", en: "PV Forecast", es: "Pronóstico FV", nl: "PV-prognose" },
   "widget.arbitrageAi": { de: "KI-Handelsempfehlung", en: "AI Trading Recommendation", es: "Recomendación de trading con IA", nl: "AI-handelsaanbeveling" },
+  "widget.integrationErrors": { de: "Integrations-Fehlermeldungen", en: "Integration Errors", es: "Errores de integración", nl: "Integratiefouten" },
 
   // Widget size labels
   "widget.sizeFull": { de: "Volle Breite", en: "Full Width", es: "Ancho completo", nl: "Volledige breedte" },

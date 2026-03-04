@@ -7,12 +7,13 @@ interface LocationsMapProps {
   locations: Location[];
   onLocationClick?: (location: Location) => void;
   className?: string;
+  errorLocationIds?: Set<string>;
 }
 
 // Lazy load the actual map implementation
 const LazyMapContent = lazy(() => import("./LocationsMapContent"));
 
-export function LocationsMap({ locations, onLocationClick, className }: LocationsMapProps) {
+export function LocationsMap({ locations, onLocationClick, className, errorLocationIds }: LocationsMapProps) {
   const [isClient, setIsClient] = useState(false);
 
   useEffect(() => {
@@ -56,6 +57,7 @@ export function LocationsMap({ locations, onLocationClick, className }: Location
         locations={validLocations}
         onLocationClick={onLocationClick}
         className={className}
+        errorLocationIds={errorLocationIds}
       />
     </Suspense>
   );

@@ -2,8 +2,6 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders } from "../_shared/cors.ts";
 
-// Maps integration type to edge function name
-// Note: loxone/loxone_miniserver are handled by loxone-periodic-sync
 const GATEWAY_EDGE_FUNCTIONS: Record<string, string> = {
   shelly_cloud: "shelly-api",
   abb_free_at_home: "abb-api",
@@ -27,10 +25,9 @@ serve(async (req) => {
   console.log("gateway-periodic-sync: Starting sync for all active gateway integrations...");
 
   try {
-    // Fetch all enabled location integrations with their integration type
     const { data: locationIntegrations, error } = await supabase
       .from("location_integrations")
-      .select("id, integration:integrations(type)")
+      .select("id, location_id, integration:integrations(type)")
       .eq("is_enabled", true);
 
     if (error) {
@@ -41,7 +38,6 @@ serve(async (req) => {
       });
     }
 
-    // Filter only supported non-Loxone gateways
     const gatewayIntegrations = (locationIntegrations || []).filter(
       (li: any) => li.integration?.type && GATEWAY_EDGE_FUNCTIONS[li.integration.type]
     );
@@ -59,6 +55,7 @@ serve(async (req) => {
 
     for (const li of gatewayIntegrations) {
       const integrationId = li.id;
+      const locationId = (li as any).location_id;
       const integrationType = (li.integration as any).type;
       const edgeFunction = GATEWAY_EDGE_FUNCTIONS[integrationType];
 
@@ -85,14 +82,62 @@ serve(async (req) => {
         if (data.success) {
           console.log(`Successfully synced ${integrationType} ${integrationId}: ${data.sensors?.length ?? 0} sensors`);
           results.push({ id: integrationId, type: integrationType, success: true });
+
+          // Auto-resolve active errors
+          await supabase
+            .from("integration_errors")
+            .update({ is_resolved: true, resolved_at: new Date().toISOString() })
+            .eq("location_integration_id", integrationId)
+            .eq("is_resolved", false);
         } else {
           console.error(`Sync failed for ${integrationType} ${integrationId}:`, data.error);
           results.push({ id: integrationId, type: integrationType, success: false, error: data.error });
+
+          // Log error
+          if (locationId) {
+            const { data: locData } = await supabase
+              .from("locations")
+              .select("tenant_id")
+              .eq("id", locationId)
+              .single();
+
+            if (locData?.tenant_id) {
+              await supabase.from("integration_errors").insert({
+                tenant_id: locData.tenant_id,
+                location_id: locationId,
+                location_integration_id: integrationId,
+                integration_type: integrationType,
+                error_type: "connection",
+                error_message: data.error || "Sync fehlgeschlagen",
+                severity: "error",
+              });
+            }
+          }
         }
       } catch (err) {
         const errMsg = err instanceof Error ? err.message : String(err);
         console.error(`Error syncing ${integrationType} ${integrationId}:`, errMsg);
         results.push({ id: integrationId, type: integrationType, success: false, error: errMsg });
+
+        if (locationId) {
+          const { data: locData } = await supabase
+            .from("locations")
+            .select("tenant_id")
+            .eq("id", locationId)
+            .single();
+
+          if (locData?.tenant_id) {
+            await supabase.from("integration_errors").insert({
+              tenant_id: locData.tenant_id,
+              location_id: locationId,
+              location_integration_id: integrationId,
+              integration_type: integrationType,
+              error_type: "connection",
+              error_message: errMsg,
+              severity: "error",
+            });
+          }
+        }
       }
     }
 
