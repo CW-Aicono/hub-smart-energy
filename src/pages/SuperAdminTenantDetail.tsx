@@ -241,7 +241,7 @@ const SuperAdminTenantDetail = () => {
   };
 
   const totalMonthly = ALL_MODULES
-    .filter((m) => !("alwaysOn" in m) && getModuleEnabled(m.code))
+    .filter((m) => !("alwaysOn" in m) && m.code !== "support_billing" && getModuleEnabled(m.code))
     .reduce((sum, m) => sum + getEffectivePrice(m.code), 0);
 
   const hasRemoteSupport = getModuleEnabled("remote_support");
@@ -820,13 +820,13 @@ const SuperAdminTenantDetail = () => {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {ALL_MODULES.filter((m) => !("alwaysOn" in m) && getModuleEnabled(m.code)).map((mod) => (
+                      {ALL_MODULES.filter((m) => !("alwaysOn" in m) && m.code !== "support_billing" && getModuleEnabled(m.code)).map((mod) => (
                         <TableRow key={mod.code}>
                           <TableCell className="font-medium">{mod.label}</TableCell>
                           <TableCell className="text-right">{getEffectivePrice(mod.code).toFixed(2)} €</TableCell>
                         </TableRow>
                       ))}
-                      {ALL_MODULES.filter((m) => !("alwaysOn" in m) && getModuleEnabled(m.code)).length === 0 && (
+                      {ALL_MODULES.filter((m) => !("alwaysOn" in m) && m.code !== "support_billing" && getModuleEnabled(m.code)).length === 0 && (
                         <TableRow><TableCell colSpan={2} className="text-center py-4 text-muted-foreground">{t("common.none")}</TableCell></TableRow>
                       )}
                     </TableBody>
