@@ -105,10 +105,10 @@ Deno.serve(async (req) => {
           const lexData = await lexRes.json();
           const lexwareInvoiceId = lexData.id;
 
-          // 3. Store Lexware invoice ID
+          // 3. Store Lexware invoice ID and set status to 'sent'
           await supabase
             .from("tenant_invoices")
-            .update({ lexware_invoice_id: lexwareInvoiceId })
+            .update({ lexware_invoice_id: lexwareInvoiceId, status: "sent" })
             .eq("id", inv.id);
 
           results.push({ invoiceId: inv.id, status: "success", lexwareId: lexwareInvoiceId });
