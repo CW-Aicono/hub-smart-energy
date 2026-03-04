@@ -31,7 +31,7 @@ Deno.serve(async (req) => {
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
   );
 
-  const headers = {
+  const lexHeaders = {
     Authorization: `Bearer ${LEXWARE_API_KEY}`,
     Accept: "application/json",
   };
@@ -51,27 +51,58 @@ Deno.serve(async (req) => {
       );
     }
 
+    // Build a map of lexware_invoice_id -> local invoice
+    const lexIdMap = new Map<string, { id: string; status: string }>();
+    for (const inv of invoices) {
+      lexIdMap.set(inv.lexware_invoice_id, { id: inv.id, status: inv.status });
+    }
+
+    // Use voucherlist endpoint to fetch statuses in bulk
+    // Query each status type to find matching invoices
+    const statusesToCheck = ["draft", "open", "paid", "paidoff", "overdue", "voided"];
     let updated = 0;
 
-    for (const inv of invoices) {
-      try {
-        const res = await fetch(`${LEXWARE_BASE}/invoices/${inv.lexware_invoice_id}`, { headers });
-        if (!res.ok) continue;
+    for (const voucherStatus of statusesToCheck) {
+      let page = 0;
+      let hasMore = true;
 
-        const lexData = await res.json();
-        const lexStatus = lexData.voucherStatus || lexData.status;
-        const mappedStatus = STATUS_MAP[lexStatus] || inv.status;
+      while (hasMore) {
+        const url = `${LEXWARE_BASE}/voucherlist?voucherType=invoice&voucherStatus=${voucherStatus}&page=${page}&size=250`;
+        const res = await fetch(url, { headers: lexHeaders });
 
-        if (mappedStatus !== inv.status) {
-          await supabase
-            .from("tenant_invoices")
-            .update({ status: mappedStatus })
-            .eq("id", inv.id);
-          updated++;
+        if (!res.ok) {
+          const errBody = await res.text();
+          console.log(`Voucherlist ${voucherStatus} page ${page}: HTTP ${res.status} - ${errBody}`);
+          break;
         }
-      } catch {
-        // Skip individual failures silently
+
+        const data = await res.json();
+        const content = data.content || [];
+
+        for (const voucher of content) {
+          const localInv = lexIdMap.get(voucher.voucherId);
+          if (!localInv) continue;
+
+          const mappedStatus = STATUS_MAP[voucherStatus] || localInv.status;
+          if (mappedStatus !== localInv.status) {
+            await supabase
+              .from("tenant_invoices")
+              .update({ status: mappedStatus })
+              .eq("id", localInv.id);
+            updated++;
+            console.log(`Updated ${localInv.id}: ${localInv.status} -> ${mappedStatus}`);
+          }
+
+          // Remove from map so we don't check again
+          lexIdMap.delete(voucher.voucherId);
+        }
+
+        hasMore = !data.last && content.length > 0;
+        page++;
       }
+
+      // Stop early if all invoices are matched
+      if (lexIdMap.size === 0) break;
     }
 
     return new Response(
@@ -79,6 +110,7 @@ Deno.serve(async (req) => {
       { headers: { ...cors, "Content-Type": "application/json" } },
     );
   } catch (err: any) {
+    console.error("Sync error:", err.message);
     return new Response(
       JSON.stringify({ success: false, error: err.message }),
       { status: 500, headers: { ...cors, "Content-Type": "application/json" } },
