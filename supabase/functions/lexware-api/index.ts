@@ -5,6 +5,14 @@ const LEXWARE_BASE = "https://api.lexware.io/v1";
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+/** Converts "2026-02-01" to "01.02.2026" */
+function fmtDateDE(dateStr: string | null | undefined): string {
+  if (!dateStr) return "";
+  const parts = dateStr.split("-");
+  if (parts.length !== 3) return dateStr;
+  return `${parts[2]}.${parts[1]}.${parts[0]}`;
+}
+
 async function lexFetch(url: string, options: RequestInit, maxRetries = 3): Promise<Response> {
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     const res = await fetch(url, options);
@@ -117,7 +125,7 @@ Deno.serve(async (req) => {
               taxType: "net",
             },
             title: `Rechnung ${inv.invoice_number || ""}`.trim(),
-            introduction: `Abrechnungszeitraum: ${inv.period_start || ""} – ${inv.period_end || ""}`,
+            introduction: `Abrechnungszeitraum: ${fmtDateDE(inv.period_start)} – ${fmtDateDE(inv.period_end)}`,
             remark: "Vielen Dank für Ihr Vertrauen.",
             shippingConditions: {
               shippingType: "none",
