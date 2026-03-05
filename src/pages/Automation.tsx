@@ -6,7 +6,8 @@ import { useMLAutomations, MLAutomationRecord } from "@/hooks/useMLAutomations";
 import { useAutomationAI } from "@/hooks/useAutomationAI";
 import { useLocations } from "@/hooks/useLocations";
 import { useIntegrations } from "@/hooks/useIntegrations";
-import { useLoxoneSensors } from "@/hooks/useLoxoneSensors";
+import { AutomationRuleBuilder, AutomationRuleData } from "@/components/locations/AutomationRuleBuilder";
+// removed duplicate
 import { AutomationRuleBuilder, AutomationRuleData } from "@/components/locations/AutomationRuleBuilder";
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
 import { Card, CardContent } from "@/components/ui/card";
