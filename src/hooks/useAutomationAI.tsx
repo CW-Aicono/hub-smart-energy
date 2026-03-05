@@ -71,7 +71,9 @@ export function useAutomationAI() {
         setCachedRecommendations(tenant.id, data.recommendations);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Fehler beim Laden der KI-Empfehlungen");
+      const msg = err instanceof Error ? err.message : "Fehler beim Laden der KI-Empfehlungen";
+      setError(msg);
+      throw err;
     } finally {
       setLoading(false);
     }
