@@ -68,7 +68,7 @@ const Automation = () => {
     deleteAutomation, executeAutomation,
   } = useMLAutomations();
 
-  const { recommendations, loading: aiLoading, totalSavingsPotential, fetchRecommendations } = useAutomationAI();
+  const { recommendations, loading: aiLoading, error: aiError, totalSavingsPotential, fetchRecommendations } = useAutomationAI();
   const { locations } = useLocations();
   const { integrations } = useIntegrations();
 
