@@ -9,7 +9,7 @@ import { useIntegrations } from "@/hooks/useIntegrations";
 import { useTenant } from "@/hooks/useTenant";
 import { useLoxoneSensorsMulti, LoxoneSensor } from "@/hooks/useLoxoneSensors";
 import { supabase } from "@/integrations/supabase/client";
-import { AutomationRuleBuilder, AutomationRuleData } from "@/components/locations/AutomationRuleBuilder";
+import { AutomationRuleBuilder, AutomationRuleData, GatewayOption } from "@/components/locations/AutomationRuleBuilder";
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -118,24 +118,23 @@ const Automation = () => {
   const gatewayTypes = useMemo(() => gateways.filter(g => g.isEnabled).map(g => g.type), [gateways]);
   const sensorQueries = useLoxoneSensorsMulti(gatewayIds, gatewayTypes);
 
+  // Build GatewayOption[] with per-gateway sensor lists for two-step selection
+  const gatewayOptionsForBuilder: GatewayOption[] = useMemo(() => {
+    return gateways.filter(g => g.isEnabled).map((gw, idx) => ({
+      id: gw.locationIntegrationId,
+      name: gw.name,
+      locationName: gw.locationName,
+      sensors: sensorQueries[idx]?.data || [],
+      isOnline: gw.isOnline,
+    }));
+  }, [gateways, sensorQueries]);
+
+  // Flat sensor list (fallback for single-location usage)
   const allSensors = useMemo(() => {
-    const result: (LoxoneSensor & { gatewayName?: string; locationName?: string })[] = [];
-    sensorQueries.forEach((q, idx) => {
-      if (q.data) {
-        const gw = gateways.find(g => g.locationIntegrationId === gatewayIds[idx]);
-        q.data.forEach((s) => {
-          result.push({
-            ...s,
-            gatewayName: gw?.name,
-            locationName: gw?.locationName,
-            // Prefix name with location for disambiguation
-            name: gw && gateways.length > 1 ? `${s.name} (${gw.locationName})` : s.name,
-          });
-        });
-      }
-    });
+    const result: LoxoneSensor[] = [];
+    sensorQueries.forEach((q) => { if (q.data) result.push(...q.data); });
     return result;
-  }, [sensorQueries, gateways, gatewayIds]);
+  }, [sensorQueries]);
 
   const sensorsLoading = sensorQueries.some((q) => q.isLoading);
 
@@ -639,12 +638,13 @@ const Automation = () => {
         </div>
       </main>
 
-      {/* Rule Builder Sheet – now with sensors from ALL gateways */}
+      {/* Rule Builder Sheet – MLA mode with gateway-first selection */}
       <AutomationRuleBuilder
         open={ruleBuilderOpen}
         onOpenChange={setRuleBuilderOpen}
         sensors={allSensors}
         sensorsLoading={sensorsLoading}
+        gatewayOptions={gatewayOptionsForBuilder.length > 0 ? gatewayOptionsForBuilder : undefined}
         initialData={editTarget ? {
           name: editTarget.name,
           description: editTarget.description || "",
