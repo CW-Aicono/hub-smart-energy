@@ -208,6 +208,104 @@ export type Database = {
           },
         ]
       }
+      automation_execution_log: {
+        Row: {
+          actions_executed: Json | null
+          automation_id: string
+          created_at: string
+          duration_ms: number | null
+          error_message: string | null
+          executed_at: string
+          id: string
+          status: string
+          tenant_id: string
+          trigger_type: string
+        }
+        Insert: {
+          actions_executed?: Json | null
+          automation_id: string
+          created_at?: string
+          duration_ms?: number | null
+          error_message?: string | null
+          executed_at?: string
+          id?: string
+          status?: string
+          tenant_id: string
+          trigger_type?: string
+        }
+        Update: {
+          actions_executed?: Json | null
+          automation_id?: string
+          created_at?: string
+          duration_ms?: number | null
+          error_message?: string | null
+          executed_at?: string
+          id?: string
+          status?: string
+          tenant_id?: string
+          trigger_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "automation_execution_log_automation_id_fkey"
+            columns: ["automation_id"]
+            isOneToOne: false
+            referencedRelation: "location_automations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "automation_execution_log_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      automation_scenes: {
+        Row: {
+          color: string | null
+          created_at: string
+          description: string | null
+          icon: string | null
+          id: string
+          is_template: boolean
+          name: string
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          color?: string | null
+          created_at?: string
+          description?: string | null
+          icon?: string | null
+          id?: string
+          is_template?: boolean
+          name: string
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          color?: string | null
+          created_at?: string
+          description?: string | null
+          icon?: string | null
+          id?: string
+          is_template?: boolean
+          name?: string
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "automation_scenes_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       backup_snapshots: {
         Row: {
           backup_type: string
@@ -1842,9 +1940,12 @@ export type Database = {
           actuator_control_type: string
           actuator_name: string
           actuator_uuid: string
+          category: string | null
+          color: string | null
           conditions: Json
           created_at: string
           description: string | null
+          estimated_savings_kwh: number | null
           id: string
           is_active: boolean
           last_executed_at: string | null
@@ -1852,7 +1953,15 @@ export type Database = {
           location_integration_id: string
           logic_operator: string
           name: string
+          notify_email: string | null
+          notify_on_error: boolean
+          scene_id: string | null
           schedule: Json | null
+          scope_floor_id: string | null
+          scope_room_id: string | null
+          scope_type: string
+          tags: string[] | null
+          target_location_ids: string[] | null
           tenant_id: string
           updated_at: string
         }
@@ -1863,9 +1972,12 @@ export type Database = {
           actuator_control_type: string
           actuator_name: string
           actuator_uuid: string
+          category?: string | null
+          color?: string | null
           conditions?: Json
           created_at?: string
           description?: string | null
+          estimated_savings_kwh?: number | null
           id?: string
           is_active?: boolean
           last_executed_at?: string | null
@@ -1873,7 +1985,15 @@ export type Database = {
           location_integration_id: string
           logic_operator?: string
           name: string
+          notify_email?: string | null
+          notify_on_error?: boolean
+          scene_id?: string | null
           schedule?: Json | null
+          scope_floor_id?: string | null
+          scope_room_id?: string | null
+          scope_type?: string
+          tags?: string[] | null
+          target_location_ids?: string[] | null
           tenant_id: string
           updated_at?: string
         }
@@ -1884,9 +2004,12 @@ export type Database = {
           actuator_control_type?: string
           actuator_name?: string
           actuator_uuid?: string
+          category?: string | null
+          color?: string | null
           conditions?: Json
           created_at?: string
           description?: string | null
+          estimated_savings_kwh?: number | null
           id?: string
           is_active?: boolean
           last_executed_at?: string | null
@@ -1894,7 +2017,15 @@ export type Database = {
           location_integration_id?: string
           logic_operator?: string
           name?: string
+          notify_email?: string | null
+          notify_on_error?: boolean
+          scene_id?: string | null
           schedule?: Json | null
+          scope_floor_id?: string | null
+          scope_room_id?: string | null
+          scope_type?: string
+          tags?: string[] | null
+          target_location_ids?: string[] | null
           tenant_id?: string
           updated_at?: string
         }
@@ -1911,6 +2042,27 @@ export type Database = {
             columns: ["location_integration_id"]
             isOneToOne: false
             referencedRelation: "location_integrations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "location_automations_scene_id_fkey"
+            columns: ["scene_id"]
+            isOneToOne: false
+            referencedRelation: "automation_scenes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "location_automations_scope_floor_id_fkey"
+            columns: ["scope_floor_id"]
+            isOneToOne: false
+            referencedRelation: "floors"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "location_automations_scope_room_id_fkey"
+            columns: ["scope_room_id"]
+            isOneToOne: false
+            referencedRelation: "floor_rooms"
             referencedColumns: ["id"]
           },
         ]
