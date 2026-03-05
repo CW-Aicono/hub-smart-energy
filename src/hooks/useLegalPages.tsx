@@ -1,12 +1,11 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { useTenant } from "./useTenant";
 import { useAuth } from "./useAuth";
 import { toast } from "./use-toast";
 
 export interface LegalPage {
   id: string;
-  tenant_id: string;
+  tenant_id: string | null;
   page_key: string;
   title: string;
   content_html: string;
@@ -15,18 +14,15 @@ export interface LegalPage {
 }
 
 /**
- * Fetch a legal page by key for the current tenant.
- * Works without auth (public read via RLS).
+ * Fetch a single legal page by key (platform-wide, no tenant needed).
  */
-export function useLegalPage(pageKey: string, tenantId?: string | null) {
+export function useLegalPage(pageKey: string) {
   return useQuery({
-    queryKey: ["legal-page", tenantId, pageKey],
-    enabled: !!tenantId,
+    queryKey: ["legal-page", pageKey],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("legal_pages" as any)
         .select("*")
-        .eq("tenant_id", tenantId!)
         .eq("page_key", pageKey)
         .maybeSingle();
       if (error) throw error;
@@ -36,21 +32,18 @@ export function useLegalPage(pageKey: string, tenantId?: string | null) {
 }
 
 /**
- * Fetch all legal pages for the current tenant (admin use).
+ * Fetch all legal pages (platform-wide, for super-admin use).
  */
 export function useLegalPages() {
-  const { tenant } = useTenant();
   const queryClient = useQueryClient();
   const { user } = useAuth();
 
   const query = useQuery({
-    queryKey: ["legal-pages", tenant?.id],
-    enabled: !!tenant?.id,
+    queryKey: ["legal-pages"],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("legal_pages" as any)
-        .select("*")
-        .eq("tenant_id", tenant!.id);
+        .select("*");
       if (error) throw error;
       return (data as unknown as LegalPage[]) ?? [];
     },
@@ -58,9 +51,8 @@ export function useLegalPages() {
 
   const upsert = useMutation({
     mutationFn: async ({ pageKey, title, contentHtml }: { pageKey: string; title: string; contentHtml: string }) => {
-      if (!tenant?.id || !user?.id) throw new Error("Not authenticated");
+      if (!user?.id) throw new Error("Not authenticated");
 
-      // Check if page exists
       const existing = query.data?.find((p) => p.page_key === pageKey);
 
       if (existing) {
@@ -72,12 +64,12 @@ export function useLegalPages() {
       } else {
         const { error } = await supabase
           .from("legal_pages" as any)
-          .insert({ tenant_id: tenant.id, page_key: pageKey, title, content_html: contentHtml, updated_by: user.id });
+          .insert({ page_key: pageKey, title, content_html: contentHtml, updated_by: user.id, tenant_id: null });
         if (error) throw error;
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["legal-pages", tenant?.id] });
+      queryClient.invalidateQueries({ queryKey: ["legal-pages"] });
       queryClient.invalidateQueries({ queryKey: ["legal-page"] });
       toast({ title: "Gespeichert", description: "Die Seite wurde erfolgreich aktualisiert." });
     },
