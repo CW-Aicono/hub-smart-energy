@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   Sheet,
   SheetContent,
@@ -33,6 +33,7 @@ import {
   Zap,
   GitBranch,
   ArrowRight,
+  Building2,
 } from "lucide-react";
 import { LoxoneSensor } from "@/hooks/useLoxoneSensors";
 import { toast } from "sonner";
@@ -42,7 +43,7 @@ import { toast } from "sonner";
 export interface AutomationCondition {
   id: string;
   type: "sensor_value" | "time" | "weekday" | "status";
-  connector?: "AND" | "OR"; // how this condition connects to the previous one
+  connector?: "AND" | "OR";
   sensor_uuid?: string;
   sensor_name?: string;
   operator?: ">" | "<" | "=" | ">=" | "<=";
@@ -54,6 +55,8 @@ export interface AutomationCondition {
   actuator_uuid?: string;
   actuator_name?: string;
   expected_status?: string;
+  /** MLA: which gateway this condition's sensor belongs to */
+  gateway_id?: string;
 }
 
 export interface AutomationAction {
@@ -63,6 +66,8 @@ export interface AutomationAction {
   control_type: string;
   action_type: string;
   action_value?: string;
+  /** MLA: which gateway this action's actuator belongs to */
+  gateway_id?: string;
 }
 
 export interface AutomationRuleData {
@@ -74,6 +79,15 @@ export interface AutomationRuleData {
   is_active: boolean;
 }
 
+/** Gateway option for MLA mode – each gateway has its own sensor list */
+export interface GatewayOption {
+  id: string;              // locationIntegrationId
+  name: string;            // integration name
+  locationName: string;    // location name
+  sensors: LoxoneSensor[]; // sensors for this specific gateway
+  isOnline: boolean;
+}
+
 interface AutomationRuleBuilderProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -82,6 +96,8 @@ interface AutomationRuleBuilderProps {
   initialData?: Partial<AutomationRuleData> & { actuator_uuid?: string; actuator_name?: string; actuator_control_type?: string; action_type?: string; action_value?: string | null };
   onSave: (data: AutomationRuleData) => Promise<void>;
   isEdit?: boolean;
+  /** MLA mode: provide gateway options for two-step selection */
+  gatewayOptions?: GatewayOption[];
 }
 
 // ── Helpers ──
@@ -145,6 +161,44 @@ function isActuator(sensor: LoxoneSensor): boolean {
   return actuatorTypes.includes(sensor.type) || actuatorControlTypes.includes(sensor.controlType);
 }
 
+// ── Gateway Selector (MLA two-step) ──
+
+function GatewaySelector({
+  gatewayOptions,
+  selectedGatewayId,
+  onSelect,
+  label,
+}: {
+  gatewayOptions: GatewayOption[];
+  selectedGatewayId: string | undefined;
+  onSelect: (id: string) => void;
+  label?: string;
+}) {
+  return (
+    <div className="space-y-1">
+      <Label className="text-xs flex items-center gap-1">
+        <Building2 className="h-3 w-3" />
+        {label || "Liegenschaft / Gateway"}
+      </Label>
+      <Select value={selectedGatewayId || ""} onValueChange={onSelect}>
+        <SelectTrigger className="h-9 text-xs">
+          <SelectValue placeholder="Gateway wählen..." />
+        </SelectTrigger>
+        <SelectContent>
+          {gatewayOptions.map((gw) => (
+            <SelectItem key={gw.id} value={gw.id} className="text-xs">
+              <span className="flex items-center gap-2">
+                <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${gw.isOnline ? "bg-emerald-500" : "bg-destructive"}`} />
+                {gw.locationName} – {gw.name}
+              </span>
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  );
+}
+
 // ── Sub-Components ──
 
 function ConditionCard({
@@ -152,14 +206,30 @@ function ConditionCard({
   sensors,
   onUpdate,
   onRemove,
+  gatewayOptions,
 }: {
   condition: AutomationCondition;
   sensors: LoxoneSensor[];
   onUpdate: (c: AutomationCondition) => void;
   onRemove: () => void;
+  gatewayOptions?: GatewayOption[];
 }) {
   const condType = CONDITION_TYPES.find((t) => t.value === condition.type);
   const CondIcon = condType?.icon || Zap;
+
+  const isMLA = !!gatewayOptions && gatewayOptions.length > 0;
+
+  // In MLA mode, filter sensors by selected gateway
+  const effectiveSensors = useMemo(() => {
+    if (!isMLA || !condition.gateway_id) return isMLA ? [] : sensors;
+    const gw = gatewayOptions!.find((g) => g.id === condition.gateway_id);
+    return gw?.sensors || [];
+  }, [isMLA, condition.gateway_id, gatewayOptions, sensors]);
+
+  const handleGatewayChange = (gwId: string) => {
+    // Reset sensor when gateway changes
+    onUpdate({ ...condition, gateway_id: gwId, sensor_uuid: "", sensor_name: "", unit: "", actuator_uuid: "", actuator_name: "" });
+  };
 
   return (
     <Card className="border-border/60">
@@ -178,20 +248,29 @@ function ConditionCard({
 
         {condition.type === "sensor_value" && (
           <div className="space-y-3">
+            {/* MLA: Gateway selector first */}
+            {isMLA && (
+              <GatewaySelector
+                gatewayOptions={gatewayOptions!}
+                selectedGatewayId={condition.gateway_id}
+                onSelect={handleGatewayChange}
+              />
+            )}
             <div className="space-y-1">
               <Label className="text-xs">Sensor</Label>
               <Select
                 value={condition.sensor_uuid || ""}
                 onValueChange={(val) => {
-                  const s = sensors.find((s) => s.id === val);
+                  const s = effectiveSensors.find((s) => s.id === val);
                   onUpdate({ ...condition, sensor_uuid: val, sensor_name: s?.name || "", unit: s?.unit || "" });
                 }}
+                disabled={isMLA && !condition.gateway_id}
               >
                 <SelectTrigger className="h-9 text-xs">
-                  <SelectValue placeholder="Sensor wählen..." />
+                  <SelectValue placeholder={isMLA && !condition.gateway_id ? "Zuerst Gateway wählen..." : "Sensor wählen..."} />
                 </SelectTrigger>
                 <SelectContent>
-                  {sensors.map((s) => (
+                  {effectiveSensors.map((s) => (
                     <SelectItem key={s.id} value={s.id} className="text-xs">
                       {s.name} ({s.room}) {s.unit && `– ${s.unit}`}
                     </SelectItem>
@@ -282,20 +361,29 @@ function ConditionCard({
 
         {condition.type === "status" && (
           <div className="space-y-3">
+            {/* MLA: Gateway selector first */}
+            {isMLA && (
+              <GatewaySelector
+                gatewayOptions={gatewayOptions!}
+                selectedGatewayId={condition.gateway_id}
+                onSelect={handleGatewayChange}
+              />
+            )}
             <div className="space-y-1">
               <Label className="text-xs">Aktor</Label>
               <Select
                 value={condition.actuator_uuid || ""}
                 onValueChange={(val) => {
-                  const s = sensors.find((s) => s.id === val);
+                  const s = effectiveSensors.find((s) => s.id === val);
                   onUpdate({ ...condition, actuator_uuid: val, actuator_name: s?.name || "" });
                 }}
+                disabled={isMLA && !condition.gateway_id}
               >
                 <SelectTrigger className="h-9 text-xs">
-                  <SelectValue placeholder="Aktor wählen..." />
+                  <SelectValue placeholder={isMLA && !condition.gateway_id ? "Zuerst Gateway wählen..." : "Aktor wählen..."} />
                 </SelectTrigger>
                 <SelectContent>
-                  {sensors.filter(isActuator).map((s) => (
+                  {effectiveSensors.filter(isActuator).map((s) => (
                     <SelectItem key={s.id} value={s.id} className="text-xs">
                       {s.name} ({s.room})
                     </SelectItem>
@@ -330,15 +418,31 @@ function ActionCard({
   sensors,
   onUpdate,
   onRemove,
+  gatewayOptions,
 }: {
   action: AutomationAction;
   sensors: LoxoneSensor[];
   onUpdate: (a: AutomationAction) => void;
   onRemove: () => void;
+  gatewayOptions?: GatewayOption[];
 }) {
-  const actuators = sensors.filter(isActuator);
+  const isMLA = !!gatewayOptions && gatewayOptions.length > 0;
+
+  // In MLA mode, filter actuators by selected gateway
+  const effectiveSensors = useMemo(() => {
+    if (!isMLA || !action.gateway_id) return isMLA ? [] : sensors;
+    const gw = gatewayOptions!.find((g) => g.id === action.gateway_id);
+    return gw?.sensors || [];
+  }, [isMLA, action.gateway_id, gatewayOptions, sensors]);
+
+  const actuators = effectiveSensors.filter(isActuator);
   const selected = actuators.find((s) => s.id === action.actuator_uuid);
   const SIcon = selected ? getSensorIcon(selected.type) : Server;
+
+  const handleGatewayChange = (gwId: string) => {
+    // Reset actuator when gateway changes
+    onUpdate({ ...action, gateway_id: gwId, actuator_uuid: "", actuator_name: "", control_type: "" });
+  };
 
   return (
     <Card className="border-border/60">
@@ -355,6 +459,15 @@ function ActionCard({
           </Button>
         </div>
 
+        {/* MLA: Gateway selector first */}
+        {isMLA && (
+          <GatewaySelector
+            gatewayOptions={gatewayOptions!}
+            selectedGatewayId={action.gateway_id}
+            onSelect={handleGatewayChange}
+          />
+        )}
+
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1">
             <Label className="text-xs">Aktor</Label>
@@ -364,9 +477,10 @@ function ActionCard({
                 const s = actuators.find((s) => s.id === val);
                 if (s) onUpdate({ ...action, actuator_uuid: s.id, actuator_name: s.name, control_type: s.controlType });
               }}
+              disabled={isMLA && !action.gateway_id}
             >
               <SelectTrigger className="h-9 text-xs">
-                <SelectValue placeholder="Wählen..." />
+                <SelectValue placeholder={isMLA && !action.gateway_id ? "Zuerst Gateway wählen..." : "Wählen..."} />
               </SelectTrigger>
               <SelectContent>
                 {actuators.map((s) => (
@@ -409,6 +523,7 @@ export function AutomationRuleBuilder({
   initialData,
   onSave,
   isEdit,
+  gatewayOptions,
 }: AutomationRuleBuilderProps) {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -519,7 +634,9 @@ export function AutomationRuleBuilder({
               {isEdit ? "Automation bearbeiten" : "Neue Automation"}
             </SheetTitle>
             <SheetDescription>
-              Definieren Sie Bedingungen und Aktionen für die automatische Steuerung.
+              {gatewayOptions && gatewayOptions.length > 0
+                ? "Wählen Sie pro Bedingung/Aktion das Gateway und dann den Sensor oder Aktor."
+                : "Definieren Sie Bedingungen und Aktionen für die automatische Steuerung."}
             </SheetDescription>
           </SheetHeader>
 
@@ -604,6 +721,7 @@ export function AutomationRuleBuilder({
                     sensors={sensors}
                     onUpdate={(c) => updateCondition(cond.id, c)}
                     onRemove={() => removeCondition(cond.id)}
+                    gatewayOptions={gatewayOptions}
                   />
                 </div>
               ))}
@@ -676,6 +794,7 @@ export function AutomationRuleBuilder({
                   sensors={sensors}
                   onUpdate={(a) => updateAction(action.id, a)}
                   onRemove={() => removeAction(action.id)}
+                  gatewayOptions={gatewayOptions}
                 />
               ))}
 
