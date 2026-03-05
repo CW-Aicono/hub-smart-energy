@@ -51,20 +51,22 @@ export function useLegalPages() {
 
   const upsert = useMutation({
     mutationFn: async ({ pageKey, title, contentHtml }: { pageKey: string; title: string; contentHtml: string }) => {
-      if (!user?.id) throw new Error("Not authenticated");
+      // Get user directly from supabase to avoid context timing issues
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      if (!currentUser?.id) throw new Error("Not authenticated");
 
       const existing = query.data?.find((p) => p.page_key === pageKey);
 
       if (existing) {
         const { error } = await supabase
           .from("legal_pages" as any)
-          .update({ title, content_html: contentHtml, updated_by: user.id })
+          .update({ title, content_html: contentHtml, updated_by: currentUser.id })
           .eq("id", existing.id);
         if (error) throw error;
       } else {
         const { error } = await supabase
           .from("legal_pages" as any)
-          .insert({ page_key: pageKey, title, content_html: contentHtml, updated_by: user.id, tenant_id: null });
+          .insert({ page_key: pageKey, title, content_html: contentHtml, updated_by: currentUser.id, tenant_id: null });
         if (error) throw error;
       }
     },
