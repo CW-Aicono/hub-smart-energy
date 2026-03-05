@@ -447,6 +447,7 @@ const SuperAdminTenantDetail = () => {
                         contact_person: (tenant as any)?.contact_person ?? "",
                         contact_email: tenant?.contact_email ?? "",
                         is_aicono_member: (tenant as any)?.is_aicono_member ?? false,
+                        is_kommune: (tenant as any)?.is_kommune !== false,
                       });
                       setEditingTenantInfo(true);
                     }}>
@@ -466,6 +467,7 @@ const SuperAdminTenantDetail = () => {
                           contact_person: tenantInfoForm.contact_person.trim() || null,
                           contact_email: tenantInfoForm.contact_email.trim() || null,
                           is_aicono_member: tenantInfoForm.is_aicono_member,
+                          is_kommune: tenantInfoForm.is_kommune,
                         }).eq("id", tenant!.id);
                         setSavingTenantInfo(false);
                         if (error) { toast.error("Fehler beim Speichern"); console.error(error); }
