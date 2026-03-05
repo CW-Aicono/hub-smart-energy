@@ -30,7 +30,7 @@ export function useLegalPage(pageKey: string, tenantId?: string | null) {
         .eq("page_key", pageKey)
         .maybeSingle();
       if (error) throw error;
-      return data as LegalPage | null;
+      return (data as unknown as LegalPage) ?? null;
     },
   });
 }
@@ -52,7 +52,7 @@ export function useLegalPages() {
         .select("*")
         .eq("tenant_id", tenant!.id);
       if (error) throw error;
-      return (data as LegalPage[]) ?? [];
+      return (data as unknown as LegalPage[]) ?? [];
     },
   });
 
