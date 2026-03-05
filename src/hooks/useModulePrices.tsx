@@ -8,6 +8,8 @@ export interface ModulePrice {
   module_code: string;
   price_monthly: number;
   standard_price: number;
+  industry_price_monthly: number;
+  industry_standard_price: number;
   created_at: string;
   updated_at: string;
 }
@@ -28,10 +30,24 @@ export function useModulePrices() {
   });
 
   const updatePrice = useMutation({
-    mutationFn: async ({ moduleCode, priceMonthly, standardPrice }: { moduleCode: string; priceMonthly?: number; standardPrice?: number }) => {
+    mutationFn: async ({
+      moduleCode,
+      priceMonthly,
+      standardPrice,
+      industryPriceMonthly,
+      industryStandardPrice,
+    }: {
+      moduleCode: string;
+      priceMonthly?: number;
+      standardPrice?: number;
+      industryPriceMonthly?: number;
+      industryStandardPrice?: number;
+    }) => {
       const updates: any = { module_code: moduleCode, updated_at: new Date().toISOString() };
       if (priceMonthly !== undefined) updates.price_monthly = priceMonthly;
       if (standardPrice !== undefined) updates.standard_price = standardPrice;
+      if (industryPriceMonthly !== undefined) updates.industry_price_monthly = industryPriceMonthly;
+      if (industryStandardPrice !== undefined) updates.industry_standard_price = industryStandardPrice;
       const { error } = await supabase
         .from("module_prices")
         .upsert(updates, { onConflict: "module_code" });
@@ -58,5 +74,15 @@ export function useModulePrices() {
     return p ? Number(p.standard_price) : 0;
   };
 
-  return { prices, isLoading, updatePrice, getPrice, getStandardPrice };
+  const getIndustryPrice = (moduleCode: string): number => {
+    const p = prices.find((pr) => pr.module_code === moduleCode);
+    return p ? Number(p.industry_price_monthly) : 0;
+  };
+
+  const getIndustryStandardPrice = (moduleCode: string): number => {
+    const p = prices.find((pr) => pr.module_code === moduleCode);
+    return p ? Number(p.industry_standard_price) : 0;
+  };
+
+  return { prices, isLoading, updatePrice, getPrice, getStandardPrice, getIndustryPrice, getIndustryStandardPrice };
 }

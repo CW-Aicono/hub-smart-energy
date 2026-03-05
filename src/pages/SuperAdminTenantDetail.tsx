@@ -135,14 +135,14 @@ const SuperAdminTenantDetail = () => {
   const { isSuperAdmin, loading: roleLoading } = useSuperAdmin();
   const { modules, toggleModule } = useTenantModules(id ?? null);
   const { license, upsertLicense } = useTenantLicense(id ?? null);
-  const { getPrice: getGlobalPrice, getStandardPrice: getGlobalStandardPrice } = useModulePrices();
+  const { getPrice: getGlobalPrice, getStandardPrice: getGlobalStandardPrice, getIndustryPrice: getGlobalIndustryPrice, getIndustryStandardPrice: getGlobalIndustryStandardPrice } = useModulePrices();
   const { bundles: allBundles, bundleItems: allBundleItems, getBundleModules } = useModuleBundles();
   const { t } = useSATranslation();
   const queryClient = useQueryClient();
   const [licenseForm, setLicenseForm] = useState<Record<string, string | number>>({});
   const [editingTenantInfo, setEditingTenantInfo] = useState(false);
   const [savingTenantInfo, setSavingTenantInfo] = useState(false);
-  const [tenantInfoForm, setTenantInfoForm] = useState({ name: "", street: "", house_number: "", postal_code: "", city: "", contact_person: "", contact_email: "", is_aicono_member: false });
+  const [tenantInfoForm, setTenantInfoForm] = useState({ name: "", street: "", house_number: "", postal_code: "", city: "", contact_person: "", contact_email: "", is_aicono_member: false, is_kommune: true });
   const [bundleDialogOpen, setBundleDialogOpen] = useState(false);
 
   const { data: tenant } = useQuery({
@@ -227,7 +227,12 @@ const SuperAdminTenantDetail = () => {
     const override = getModulePriceOverride(code);
     if (override != null) return override;
     const isMember = (tenant as any)?.is_aicono_member;
-    return isMember ? getGlobalPrice(code) : getGlobalStandardPrice(code);
+    const isKommune = (tenant as any)?.is_kommune !== false;
+    if (isKommune) {
+      return isMember ? getGlobalPrice(code) : getGlobalStandardPrice(code);
+    } else {
+      return isMember ? getGlobalIndustryPrice(code) : getGlobalIndustryStandardPrice(code);
+    }
   };
 
   const updatePriceOverride = async (moduleCode: string, value: number | null) => {
@@ -442,6 +447,7 @@ const SuperAdminTenantDetail = () => {
                         contact_person: (tenant as any)?.contact_person ?? "",
                         contact_email: tenant?.contact_email ?? "",
                         is_aicono_member: (tenant as any)?.is_aicono_member ?? false,
+                        is_kommune: (tenant as any)?.is_kommune !== false,
                       });
                       setEditingTenantInfo(true);
                     }}>
@@ -461,6 +467,7 @@ const SuperAdminTenantDetail = () => {
                           contact_person: tenantInfoForm.contact_person.trim() || null,
                           contact_email: tenantInfoForm.contact_email.trim() || null,
                           is_aicono_member: tenantInfoForm.is_aicono_member,
+                          is_kommune: tenantInfoForm.is_kommune,
                         }).eq("id", tenant!.id);
                         setSavingTenantInfo(false);
                         if (error) { toast.error("Fehler beim Speichern"); console.error(error); }
@@ -504,16 +511,29 @@ const SuperAdminTenantDetail = () => {
                           <Input type="email" value={tenantInfoForm.contact_email} onChange={(e) => setTenantInfoForm(f => ({ ...f, contact_email: e.target.value }))} />
                         </div>
                       </div>
-                      <div className="flex items-center gap-3 pt-2">
-                        <Switch
-                          id="aicono-member"
-                          checked={tenantInfoForm.is_aicono_member}
-                          onCheckedChange={(v) => setTenantInfoForm(f => ({ ...f, is_aicono_member: v }))}
-                        />
-                        <Label htmlFor="aicono-member" className="flex items-center gap-2">
-                          <Award className="h-4 w-4" />
-                          Mitglied im AICONO e.&thinsp;V.
-                        </Label>
+                      <div className="flex items-center gap-6 pt-2 flex-wrap">
+                        <div className="flex items-center gap-3">
+                          <Switch
+                            id="aicono-member"
+                            checked={tenantInfoForm.is_aicono_member}
+                            onCheckedChange={(v) => setTenantInfoForm(f => ({ ...f, is_aicono_member: v }))}
+                          />
+                          <Label htmlFor="aicono-member" className="flex items-center gap-2">
+                            <Award className="h-4 w-4" />
+                            Mitglied im AICONO e.&thinsp;V.
+                          </Label>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <Switch
+                            id="is-kommune"
+                            checked={tenantInfoForm.is_kommune}
+                            onCheckedChange={(v) => setTenantInfoForm(f => ({ ...f, is_kommune: v }))}
+                          />
+                          <Label htmlFor="is-kommune" className="flex items-center gap-2">
+                            <Building2 className="h-4 w-4" />
+                            Kommune
+                          </Label>
+                        </div>
                       </div>
                     </div>
                   ) : (
@@ -565,6 +585,13 @@ const SuperAdminTenantDetail = () => {
                             <p>{(tenant as any)?.is_aicono_member ? <Badge variant="default" className="text-xs">Ja</Badge> : "Nein"}</p>
                           </div>
                         </div>
+                        <div className="flex items-start gap-2">
+                          <Building2 className="h-4 w-4 mt-0.5 text-muted-foreground shrink-0" />
+                          <div>
+                            <p className="text-sm font-medium text-muted-foreground">Sektor</p>
+                            <p>{(tenant as any)?.is_kommune !== false ? <Badge variant="outline" className="text-xs">Kommune</Badge> : <Badge variant="outline" className="text-xs">Industrie</Badge>}</p>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   )}
@@ -595,7 +622,10 @@ const SuperAdminTenantDetail = () => {
                       {ALL_MODULES.map((mod) => {
                         const isAlwaysOn = "alwaysOn" in mod;
                         const isMember = !!(tenant as any)?.is_aicono_member;
-                        const globalPrice = isMember ? getGlobalPrice(mod.code) : getGlobalStandardPrice(mod.code);
+                        const isKommune = (tenant as any)?.is_kommune !== false;
+                        const globalPrice = isKommune
+                          ? (isMember ? getGlobalPrice(mod.code) : getGlobalStandardPrice(mod.code))
+                          : (isMember ? getGlobalIndustryPrice(mod.code) : getGlobalIndustryStandardPrice(mod.code));
                         const override = getModulePriceOverride(mod.code);
                         const effective = getEffectivePrice(mod.code);
                         return (

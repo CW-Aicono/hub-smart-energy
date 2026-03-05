@@ -28,7 +28,7 @@ Deno.serve(async (req) => {
     // 1. Get all tenants
     const { data: tenants, error: tErr } = await supabase
       .from("tenants")
-      .select("id, name, support_price_per_15min, is_aicono_member");
+      .select("id, name, support_price_per_15min, is_aicono_member, is_kommune");
     if (tErr) throw tErr;
 
     // 2. Get all tenant_modules (active)
@@ -40,14 +40,16 @@ Deno.serve(async (req) => {
     // 3. Get global module prices (member + standard)
     const { data: globalPrices, error: gpErr } = await supabase
       .from("module_prices")
-      .select("module_code, price_monthly, standard_price");
+      .select("module_code, price_monthly, standard_price, industry_price_monthly, industry_standard_price");
     if (gpErr) throw gpErr;
 
-    const globalPriceMap: Record<string, { member: number; standard: number }> = {};
+    const globalPriceMap: Record<string, { member: number; standard: number; industryMember: number; industryStandard: number }> = {};
     for (const gp of globalPrices ?? []) {
       globalPriceMap[gp.module_code] = {
         member: Number(gp.price_monthly),
         standard: Number(gp.standard_price ?? gp.price_monthly),
+        industryMember: Number(gp.industry_price_monthly ?? 0),
+        industryStandard: Number(gp.industry_standard_price ?? 0),
       };
     }
 
@@ -116,6 +118,7 @@ Deno.serve(async (req) => {
       );
       const supportPrice15min = Number(tenant.support_price_per_15min ?? 25);
       const isMember = !!(tenant as any).is_aicono_member;
+      const isKommune = (tenant as any).is_kommune !== false;
 
       // Module line items (for current month)
       const moduleLineItems: any[] = [];
@@ -123,9 +126,14 @@ Deno.serve(async (req) => {
       for (const tm of tenantModules) {
         if (tm.module_code === "dashboard") continue;
         const priceEntry = globalPriceMap[tm.module_code];
-        const globalPrice = priceEntry
-          ? (isMember ? priceEntry.member : priceEntry.standard)
-          : 0;
+        let globalPrice = 0;
+        if (priceEntry) {
+          if (isKommune) {
+            globalPrice = isMember ? priceEntry.member : priceEntry.standard;
+          } else {
+            globalPrice = isMember ? priceEntry.industryMember : priceEntry.industryStandard;
+          }
+        }
         const price =
           tm.price_override != null
             ? Number(tm.price_override)
