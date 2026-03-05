@@ -585,6 +585,13 @@ const SuperAdminTenantDetail = () => {
                             <p>{(tenant as any)?.is_aicono_member ? <Badge variant="default" className="text-xs">Ja</Badge> : "Nein"}</p>
                           </div>
                         </div>
+                        <div className="flex items-start gap-2">
+                          <Building2 className="h-4 w-4 mt-0.5 text-muted-foreground shrink-0" />
+                          <div>
+                            <p className="text-sm font-medium text-muted-foreground">Sektor</p>
+                            <p>{(tenant as any)?.is_kommune !== false ? <Badge variant="outline" className="text-xs">Kommune</Badge> : <Badge variant="outline" className="text-xs">Industrie</Badge>}</p>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   )}
@@ -615,7 +622,10 @@ const SuperAdminTenantDetail = () => {
                       {ALL_MODULES.map((mod) => {
                         const isAlwaysOn = "alwaysOn" in mod;
                         const isMember = !!(tenant as any)?.is_aicono_member;
-                        const globalPrice = isMember ? getGlobalPrice(mod.code) : getGlobalStandardPrice(mod.code);
+                        const isKommune = (tenant as any)?.is_kommune !== false;
+                        const globalPrice = isKommune
+                          ? (isMember ? getGlobalPrice(mod.code) : getGlobalStandardPrice(mod.code))
+                          : (isMember ? getGlobalIndustryPrice(mod.code) : getGlobalIndustryStandardPrice(mod.code));
                         const override = getModulePriceOverride(mod.code);
                         const effective = getEffectivePrice(mod.code);
                         return (
