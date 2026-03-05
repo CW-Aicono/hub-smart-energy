@@ -1,12 +1,16 @@
 import { useState, useMemo } from "react";
-import { Task } from "@/hooks/useTasks";
+import { Task, useTasks } from "@/hooks/useTasks";
 import { TaskCard } from "./TaskCard";
 import { Input } from "@/components/ui/input";
-import { Search, Archive, ChevronDown, ChevronRight, CalendarDays } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Search, Archive, ChevronDown, ChevronRight, CalendarDays, Trash2 } from "lucide-react";
 import { format, isToday, isYesterday, isThisWeek, isThisMonth } from "date-fns";
 import { de } from "date-fns/locale";
-import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 interface TaskArchiveProps {
   tasks: Task[];
@@ -28,6 +32,7 @@ function getDateKey(dateStr: string): string {
 export const TaskArchive = ({ tasks }: TaskArchiveProps) => {
   const [search, setSearch] = useState("");
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+  const { deleteAllArchived } = useTasks();
 
   const filtered = useMemo(() => {
     if (!search) return tasks;
@@ -50,7 +55,6 @@ export const TaskArchive = ({ tasks }: TaskArchiveProps) => {
       }
       map.get(key)!.tasks.push(task);
     }
-    // Sort groups by date descending
     return Array.from(map.values()).sort((a, b) => b.date.localeCompare(a.date));
   }, [filtered]);
 
@@ -77,15 +81,42 @@ export const TaskArchive = ({ tasks }: TaskArchiveProps) => {
 
   return (
     <div className="space-y-4">
-      {/* Search */}
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input
-          className="pl-9"
-          placeholder="Archiv durchsuchen…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
+      {/* Search + Delete all */}
+      <div className="flex gap-2">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            className="pl-9"
+            placeholder="Archiv durchsuchen…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+        <AlertDialog>
+          <AlertDialogTrigger asChild>
+            <Button variant="destructive" size="sm" className="shrink-0">
+              <Trash2 className="h-4 w-4 mr-2" />
+              Archiv leeren
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Archiv komplett leeren?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Alle {tasks.length} archivierten Aufgaben und deren verknüpfte Integrationsfehler werden unwiderruflich gelöscht.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Abbrechen</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={() => deleteAllArchived.mutate()}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                Endgültig löschen
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
 
       {filtered.length === 0 ? (
@@ -98,7 +129,6 @@ export const TaskArchive = ({ tasks }: TaskArchiveProps) => {
             const isCollapsed = !isSearching && collapsedGroups.has(group.date);
             return (
               <div key={group.date} className="space-y-2">
-                {/* Group header */}
                 <button
                   onClick={() => toggleGroup(group.date)}
                   className="flex items-center gap-2 w-full text-left py-1.5 px-1 hover:bg-muted/40 rounded-md transition-colors group"
@@ -117,7 +147,6 @@ export const TaskArchive = ({ tasks }: TaskArchiveProps) => {
                   </Badge>
                 </button>
 
-                {/* Tasks (collapsed or expanded) */}
                 {!isCollapsed && (
                   <div className="space-y-2 pl-2 border-l-2 border-muted ml-2">
                     {group.tasks.map((task) => (
