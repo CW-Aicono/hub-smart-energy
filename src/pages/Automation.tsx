@@ -121,8 +121,9 @@ const Automation = () => {
   };
 
   const handleSaveRule = async (data: AutomationRuleData) => {
-    if (!firstLoxoneIntId && !editTarget) {
-      throw new Error("Keine Integration verfügbar");
+    if (!editTarget) {
+      toast.info("Bitte erstellen Sie neue Regeln über die Standort-Detailseite.");
+      return;
     }
     const primary = data.actions[0];
     if (editTarget) {
@@ -190,7 +191,7 @@ const Automation = () => {
               </h1>
               <p className="text-sm text-muted-foreground mt-1">{T("automation.subtitle")}</p>
             </div>
-            <Button onClick={openCreate} disabled={!firstLoxoneIntId}>
+            <Button onClick={openCreate}>
               <Plus className="h-4 w-4 mr-2" />
               {T("automation.newAutomation")}
             </Button>
@@ -408,7 +409,7 @@ const Automation = () => {
                   </div>
                 </>
               )}
-              <AiDisclaimer />
+              <AiDisclaimer text={T("automation.aiDisclaimer")} />
             </TabsContent>
 
             {/* ── Tab: Gateways ── */}
@@ -420,20 +421,29 @@ const Automation = () => {
                 </div>
               ) : (
                 gatewayIntegrations.map((gw) => {
-                  // Find all location integrations for this gateway
-                  const gwLocInts = locationIntegrations.filter((li) => li.integration?.id === gw.id);
-                  const isOnline = gwLocInts.some((li) => {
-                    if (!li.last_sync_at) return false;
-                    const diff = Date.now() - new Date(li.last_sync_at).getTime();
-                    return diff < 15 * 60 * 1000; // 15 min
-                  });
-                  const lastSync = gwLocInts
-                    .map((li) => li.last_sync_at)
-                    .filter(Boolean)
-                    .sort()
-                    .reverse()[0];
+                  const gwType = gw.type;
 
                   return (
+                    <Card key={gw.id}>
+                      <CardContent className="p-4">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className="h-10 w-10 rounded-lg flex items-center justify-center bg-emerald-500/10">
+                              <Server className="h-5 w-5 text-emerald-600" />
+                            </div>
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <h3 className="font-semibold">{gw.name}</h3>
+                                <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20"><Activity className="h-3 w-3 mr-1" /> {T("automation.online")}</Badge>
+                              </div>
+                              <p className="text-xs text-muted-foreground mt-1">{gwType}</p>
+                            </div>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })
                     <Card key={gw.id}>
                       <CardContent className="p-4">
                         <div className="flex items-center justify-between">
