@@ -266,7 +266,47 @@ export const useTasks = () => {
     },
   });
 
-  return { tasks, isLoading, tenantUsers, createTask, updateTask, bulkUpdateStatus, deleteTask, addComment };
+  const deleteAllArchived = useMutation({
+    mutationFn: async () => {
+      // Get all archived task IDs (done/cancelled)
+      const { data: archivedTasks, error: fetchErr } = await supabase
+        .from("tasks")
+        .select("id")
+        .eq("tenant_id", tenant!.id)
+        .in("status", ["done", "cancelled"]);
+      if (fetchErr) throw fetchErr;
+      if (!archivedTasks || archivedTasks.length === 0) return;
+
+      const ids = archivedTasks.map((t: any) => t.id);
+      // Delete linked integration_errors first
+      const { error: ieErr } = await supabase
+        .from("integration_errors")
+        .delete()
+        .in("task_id", ids)
+        .eq("tenant_id", tenant!.id);
+      if (ieErr) console.error("Error deleting integration_errors:", ieErr);
+      // Delete tasks in batches of 100
+      for (let i = 0; i < ids.length; i += 100) {
+        const batch = ids.slice(i, i + 100);
+        const { error } = await supabase
+          .from("tasks")
+          .delete()
+          .in("id", batch)
+          .eq("tenant_id", tenant!.id);
+        if (error) throw error;
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["tasks", tenant?.id] });
+      queryClient.invalidateQueries({ queryKey: ["integration-errors"] });
+      toast({ title: "Archiv gelöscht" });
+    },
+    onError: () => {
+      toast({ title: "Fehler beim Löschen", variant: "destructive" });
+    },
+  });
+
+  return { tasks, isLoading, tenantUsers, createTask, updateTask, bulkUpdateStatus, deleteTask, addComment, deleteAllArchived };
 };
 
 export const useTaskHistory = (taskId: string) => {
