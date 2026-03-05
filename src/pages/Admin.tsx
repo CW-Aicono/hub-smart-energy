@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Navigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
@@ -5,11 +6,15 @@ import { useTranslation } from "@/hooks/useTranslation";
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
 import UserManagement from "@/components/admin/UserManagement";
 import InviteUserDialog from "@/components/admin/InviteUserDialog";
+import ExternalContactsManager from "@/components/admin/ExternalContactsManager";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Users, BookUser } from "lucide-react";
 
 const Admin = () => {
   const { user, loading: authLoading } = useAuth();
   const { isAdmin, loading: roleLoading } = useUserRole();
   const { t } = useTranslation();
+  const [tab, setTab] = useState("users");
 
   if (authLoading || roleLoading) {
     return (
@@ -33,10 +38,25 @@ const Admin = () => {
               {t("users.subtitle")}
             </p>
           </div>
-          <InviteUserDialog />
+          {tab === "users" && <InviteUserDialog />}
         </header>
         <div className="p-3 md:p-6">
-          <UserManagement />
+          <Tabs value={tab} onValueChange={setTab}>
+            <TabsList className="mb-4">
+              <TabsTrigger value="users" className="gap-1.5">
+                <Users className="h-4 w-4" /> Benutzerverwaltung
+              </TabsTrigger>
+              <TabsTrigger value="external" className="gap-1.5">
+                <BookUser className="h-4 w-4" /> Externe Dienstleister
+              </TabsTrigger>
+            </TabsList>
+            <TabsContent value="users">
+              <UserManagement />
+            </TabsContent>
+            <TabsContent value="external">
+              <ExternalContactsManager />
+            </TabsContent>
+          </Tabs>
         </div>
       </main>
     </div>
