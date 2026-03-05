@@ -3,6 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Brain, TrendingUp, Loader2, Clock, Zap, CheckCircle2, ChevronDown, ChevronUp } from "lucide-react";
+import { AiDisclaimer } from "@/components/ui/ai-disclaimer";
 import { useArbitrageAiStrategy, AiStrategySuggestion } from "@/hooks/useArbitrageAiStrategy";
 import { useArbitrageStrategies } from "@/hooks/useArbitrageStrategies";
 import { useTranslation } from "@/hooks/useTranslation";
@@ -206,6 +207,8 @@ export default function ArbitrageAiSuggestions() {
                 )}
               </div>
             ))}
+
+            <AiDisclaimer text="KI-gestützte Analyse – keine Gewähr für Vollständigkeit oder Richtigkeit. Handelsempfehlungen stellen keine Finanzberatung dar. Entscheidungen erfolgen auf eigenes Risiko." />
 
             {result.generated_at && (
               <p className="text-xs text-muted-foreground text-right">

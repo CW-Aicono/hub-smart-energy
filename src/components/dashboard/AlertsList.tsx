@@ -1,6 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAlertRules } from "@/hooks/useAlertRules";
 import { AlertTriangle, Info, CheckCircle, Bell } from "lucide-react";
+import { AiDisclaimer } from "@/components/ui/ai-disclaimer";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useTranslation } from "@/hooks/useTranslation";
 
@@ -59,6 +60,10 @@ const AlertsList = ({ locationId }: AlertsListProps) => {
                 </div>
               </div>
             ))}
+            <AiDisclaimer
+              text="Schwellenwert-Alarme dienen der Orientierung. Keine Haftung für verspätete oder ausbleibende Benachrichtigungen."
+              showAgbLink={true}
+            />
           </div>
         )}
       </CardContent>

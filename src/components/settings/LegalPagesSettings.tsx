@@ -7,11 +7,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RichTextEditor } from "@/components/ui/rich-text-editor";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { FileText, Save, Shield } from "lucide-react";
+import { FileText, Save, Shield, ScrollText } from "lucide-react";
 
 const PAGES = [
   { key: "datenschutz", label: "Datenschutzerklärung", icon: Shield },
   { key: "impressum", label: "Impressum", icon: FileText },
+  { key: "agb", label: "Nutzungsbedingungen (AGB)", icon: ScrollText },
 ] as const;
 
 export function LegalPagesSettings() {

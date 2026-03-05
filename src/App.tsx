@@ -174,6 +174,7 @@ const App = () => (
                       <Route path="/embed/pitch-dashboard" element={<EmbedPitchDashboard />} />
                       <Route path="/datenschutz" element={<LegalPageView pageKey="datenschutz" />} />
                       <Route path="/impressum" element={<LegalPageView pageKey="impressum" />} />
+                      <Route path="/agb" element={<LegalPageView pageKey="agb" />} />
                       <Route path="*" element={<NotFound />} />
                     </Routes>
                   </Suspense>
