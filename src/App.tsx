@@ -70,7 +70,6 @@ const EmbedPitchDashboard = lazy(() => import("./pages/EmbedPitchDashboard"));
 const EnergyReport = lazy(() => import("./pages/EnergyReport"));
 const LegalPageView = lazy(() => import("./pages/LegalPageView"));
 const Impressum = lazy(() => import("./pages/Impressum"));
-const Impressum = lazy(() => import("./pages/Impressum"));
 
 const queryClient = new QueryClient();
 
