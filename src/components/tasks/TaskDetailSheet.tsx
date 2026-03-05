@@ -83,6 +83,8 @@ interface TaskDetailSheetProps {
 
 export const TaskDetailSheet = ({ task, open, onOpenChange }: TaskDetailSheetProps) => {
   const { updateTask, addComment, tenantUsers } = useTasks();
+  const { contacts: externalContacts, findMatches, createContact } = useExternalContacts();
+  const { tenant } = useTenant();
   const { data: history = [], isLoading: historyLoading } = useTaskHistory(task.id);
   const { t, language } = useTranslation();
   const T = (key: string) => t(key as any);
@@ -105,6 +107,27 @@ export const TaskDetailSheet = ({ task, open, onOpenChange }: TaskDetailSheetPro
   const [externalPhone, setExternalPhone] = useState(task.external_contact_phone ?? "");
   const [transferNote, setTransferNote] = useState("");
   const [transferSaved, setTransferSaved] = useState(false);
+
+  // Auto-suggest for external contacts
+  const [suggestions, setSuggestions] = useState<ReturnType<typeof findMatches>>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const suggestRef = useRef<HTMLDivElement>(null);
+
+  const handleExternalFieldChange = (field: "name" | "email" | "phone", value: string) => {
+    if (field === "name") setExternalName(value);
+    if (field === "email") setExternalEmail(value);
+    if (field === "phone") setExternalPhone(value);
+    const matches = findMatches(value);
+    setSuggestions(matches);
+    setShowSuggestions(matches.length > 0);
+  };
+
+  const selectSuggestion = (contact: typeof externalContacts[0]) => {
+    setExternalName(contact.name);
+    setExternalEmail(contact.email ?? "");
+    setExternalPhone(contact.phone ?? "");
+    setShowSuggestions(false);
+  };
 
   const SourceIcon = SOURCE_ICONS[task.source_type] ?? User;
   const priorityColor = PRIORITY_COLORS[task.priority];
