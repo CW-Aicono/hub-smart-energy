@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Cookie, ChevronDown, ChevronUp } from "lucide-react";
 
@@ -96,8 +97,14 @@ const CookieConsent = () => {
 
           </div>
 
-          {/* Action buttons */}
-          <div className="mt-4 flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 sm:justify-end">
+          {/* Legal links & action buttons */}
+          <div className="mt-4 flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 sm:justify-between">
+            <div className="flex items-center gap-3 text-xs text-muted-foreground">
+              <Link to="/datenschutz" className="hover:underline">Datenschutzerklärung</Link>
+              <span>·</span>
+              <Link to="/impressum" className="hover:underline">Impressum</Link>
+            </div>
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3">
             <Button
               variant="outline"
               size="sm"
@@ -119,6 +126,7 @@ const CookieConsent = () => {
             >
               Alle akzeptieren
             </Button>
+            </div>
           </div>
         </div>
       </div>

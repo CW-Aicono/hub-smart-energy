@@ -68,6 +68,8 @@ const SuperAdminMap = lazy(() => import("./pages/SuperAdminMap"));
 const SuperAdminSettings = lazy(() => import("./pages/SuperAdminSettings"));
 const EmbedPitchDashboard = lazy(() => import("./pages/EmbedPitchDashboard"));
 const EnergyReport = lazy(() => import("./pages/EnergyReport"));
+const Datenschutz = lazy(() => import("./pages/Datenschutz"));
+const Impressum = lazy(() => import("./pages/Impressum"));
 
 const queryClient = new QueryClient();
 
@@ -171,6 +173,8 @@ const App = () => (
                       <Route path="/m" element={<MobileApp />} />
                       <Route path="/getting-started" element={<GettingStarted />} />
                       <Route path="/embed/pitch-dashboard" element={<EmbedPitchDashboard />} />
+                      <Route path="/datenschutz" element={<Datenschutz />} />
+                      <Route path="/impressum" element={<Impressum />} />
                       <Route path="*" element={<NotFound />} />
                     </Routes>
                   </Suspense>
