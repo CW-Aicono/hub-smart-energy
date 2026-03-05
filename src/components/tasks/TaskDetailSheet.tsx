@@ -1,5 +1,8 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useTasks, Task, TaskStatus, useTaskHistory } from "@/hooks/useTasks";
+import { useExternalContacts } from "@/hooks/useExternalContacts";
+import { useTenant } from "@/hooks/useTenant";
+import { supabase } from "@/integrations/supabase/client";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -80,6 +83,8 @@ interface TaskDetailSheetProps {
 
 export const TaskDetailSheet = ({ task, open, onOpenChange }: TaskDetailSheetProps) => {
   const { updateTask, addComment, tenantUsers } = useTasks();
+  const { contacts: externalContacts, findMatches, createContact } = useExternalContacts();
+  const { tenant } = useTenant();
   const { data: history = [], isLoading: historyLoading } = useTaskHistory(task.id);
   const { t, language } = useTranslation();
   const T = (key: string) => t(key as any);
@@ -102,6 +107,27 @@ export const TaskDetailSheet = ({ task, open, onOpenChange }: TaskDetailSheetPro
   const [externalPhone, setExternalPhone] = useState(task.external_contact_phone ?? "");
   const [transferNote, setTransferNote] = useState("");
   const [transferSaved, setTransferSaved] = useState(false);
+
+  // Auto-suggest for external contacts
+  const [suggestions, setSuggestions] = useState<ReturnType<typeof findMatches>>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const suggestRef = useRef<HTMLDivElement>(null);
+
+  const handleExternalFieldChange = (field: "name" | "email" | "phone", value: string) => {
+    if (field === "name") setExternalName(value);
+    if (field === "email") setExternalEmail(value);
+    if (field === "phone") setExternalPhone(value);
+    const matches = findMatches(value);
+    setSuggestions(matches);
+    setShowSuggestions(matches.length > 0);
+  };
+
+  const selectSuggestion = (contact: typeof externalContacts[0]) => {
+    setExternalName(contact.name);
+    setExternalEmail(contact.email ?? "");
+    setExternalPhone(contact.phone ?? "");
+    setShowSuggestions(false);
+  };
 
   const SourceIcon = SOURCE_ICONS[task.source_type] ?? User;
   const priorityColor = PRIORITY_COLORS[task.priority];
@@ -171,6 +197,41 @@ export const TaskDetailSheet = ({ task, open, onOpenChange }: TaskDetailSheetPro
         historyNewValue: externalName,
         historyComment: transferNote || null,
       });
+
+      // Auto-create contact if not already in the contact list
+      if (externalName.trim()) {
+        const existing = externalContacts.find(
+          (c) =>
+            c.name.toLowerCase() === externalName.trim().toLowerCase() ||
+            (externalEmail && c.email?.toLowerCase() === externalEmail.trim().toLowerCase())
+        );
+        if (!existing) {
+          createContact.mutate({
+            name: externalName.trim(),
+            email: externalEmail.trim() || undefined,
+            phone: externalPhone.trim() || undefined,
+          });
+        }
+      }
+
+      // Send email notification if email provided
+      if (externalEmail.trim() && tenant?.id) {
+        try {
+          await supabase.functions.invoke("send-task-transfer-email", {
+            body: {
+              contactName: externalName,
+              contactEmail: externalEmail,
+              taskTitle: task.title,
+              taskDescription: task.description,
+              dueDate: task.due_date,
+              transferNote: transferNote || undefined,
+              tenantId: tenant.id,
+            },
+          });
+        } catch (e) {
+          console.error("Failed to send task transfer email:", e);
+        }
+      }
     }
     setTransferNote("");
     setTransferSaved(true);
@@ -411,21 +472,41 @@ export const TaskDetailSheet = ({ task, open, onOpenChange }: TaskDetailSheetPro
                     </SelectContent>
                   </Select>
                 </TabsContent>
-                <TabsContent value="external" className="mt-3 space-y-2">
-                  <Input
-                    value={externalName}
-                    onChange={(e) => setExternalName(e.target.value)}
-                    placeholder={T("task.serviceProvider")}
-                  />
+                <TabsContent value="external" className="mt-3 space-y-2 relative">
+                  <div className="relative" ref={suggestRef}>
+                    <Input
+                      value={externalName}
+                      onChange={(e) => handleExternalFieldChange("name", e.target.value)}
+                      onFocus={() => { if (suggestions.length > 0) setShowSuggestions(true); }}
+                      onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+                      placeholder={T("task.serviceProvider")}
+                    />
+                    {showSuggestions && suggestions.length > 0 && (
+                      <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-popover border rounded-md shadow-md max-h-40 overflow-y-auto">
+                        {suggestions.map((c) => (
+                          <button
+                            key={c.id}
+                            className="w-full text-left px-3 py-2 text-sm hover:bg-accent flex flex-col"
+                            onMouseDown={() => selectSuggestion(c)}
+                          >
+                            <span className="font-medium">{c.name}</span>
+                            <span className="text-xs text-muted-foreground">
+                              {[c.company, c.email, c.phone].filter(Boolean).join(" · ")}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                   <Input
                     value={externalEmail}
-                    onChange={(e) => setExternalEmail(e.target.value)}
+                    onChange={(e) => handleExternalFieldChange("email", e.target.value)}
                     placeholder={T("common.email") + "..."}
                     type="email"
                   />
                   <Input
                     value={externalPhone}
-                    onChange={(e) => setExternalPhone(e.target.value)}
+                    onChange={(e) => handleExternalFieldChange("phone", e.target.value)}
                     placeholder={T("common.phone") + "..."}
                     type="tel"
                   />

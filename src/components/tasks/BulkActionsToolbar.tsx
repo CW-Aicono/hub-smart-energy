@@ -1,5 +1,8 @@
 import { useState } from "react";
 import { useTasks, TaskStatus, TaskPriority } from "@/hooks/useTasks";
+import { useExternalContacts } from "@/hooks/useExternalContacts";
+import { useTenant } from "@/hooks/useTenant";
+import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -20,13 +23,17 @@ interface BulkActionsToolbarProps {
 }
 
 export const BulkActionsToolbar = ({ selectedIds, onClearSelection }: BulkActionsToolbarProps) => {
-  const { bulkUpdateFields, bulkUpdateStatus, deleteTask, tenantUsers } = useTasks();
+  const { bulkUpdateFields, bulkUpdateStatus, deleteTask, tenantUsers, tasks } = useTasks();
+  const { contacts: externalContacts, findMatches, createContact } = useExternalContacts();
+  const { tenant } = useTenant();
   const [assignOpen, setAssignOpen] = useState(false);
   const [dateOpen, setDateOpen] = useState(false);
   const [assignTab, setAssignTab] = useState<"team" | "external">("team");
   const [extName, setExtName] = useState("");
   const [extEmail, setExtEmail] = useState("");
   const [extPhone, setExtPhone] = useState("");
+  const [extSuggestions, setExtSuggestions] = useState<ReturnType<typeof findMatches>>([]);
+  const [showExtSuggestions, setShowExtSuggestions] = useState(false);
 
   const count = selectedIds.length;
   if (count === 0) return null;
@@ -57,7 +64,7 @@ export const BulkActionsToolbar = ({ selectedIds, onClearSelection }: BulkAction
     onClearSelection();
   };
 
-  const handleAssignExternal = () => {
+  const handleAssignExternal = async () => {
     if (!extName.trim()) return;
     bulkUpdateFields.mutate({
       ids: selectedIds,
@@ -69,11 +76,65 @@ export const BulkActionsToolbar = ({ selectedIds, onClearSelection }: BulkAction
         external_contact_phone: extPhone || null,
       },
     });
+
+    // Auto-create contact if not exists
+    const existing = externalContacts.find(
+      (c) =>
+        c.name.toLowerCase() === extName.trim().toLowerCase() ||
+        (extEmail && c.email?.toLowerCase() === extEmail.trim().toLowerCase())
+    );
+    if (!existing) {
+      createContact.mutate({
+        name: extName.trim(),
+        email: extEmail.trim() || undefined,
+        phone: extPhone.trim() || undefined,
+      });
+    }
+
+    // Send email for each selected task if email provided
+    if (extEmail.trim() && tenant?.id) {
+      for (const id of selectedIds) {
+        const task = tasks.find((t) => t.id === id);
+        if (task) {
+          try {
+            await supabase.functions.invoke("send-task-transfer-email", {
+              body: {
+                contactName: extName,
+                contactEmail: extEmail,
+                taskTitle: task.title,
+                taskDescription: task.description,
+                dueDate: task.due_date,
+                tenantId: tenant.id,
+              },
+            });
+          } catch (e) {
+            console.error("Failed to send task transfer email:", e);
+          }
+        }
+      }
+    }
+
     setAssignOpen(false);
     setExtName("");
     setExtEmail("");
     setExtPhone("");
     onClearSelection();
+  };
+
+  const handleExtFieldChange = (field: "name" | "email" | "phone", value: string) => {
+    if (field === "name") setExtName(value);
+    if (field === "email") setExtEmail(value);
+    if (field === "phone") setExtPhone(value);
+    const matches = findMatches(value);
+    setExtSuggestions(matches);
+    setShowExtSuggestions(matches.length > 0);
+  };
+
+  const selectExtSuggestion = (contact: typeof externalContacts[0]) => {
+    setExtName(contact.name);
+    setExtEmail(contact.email ?? "");
+    setExtPhone(contact.phone ?? "");
+    setShowExtSuggestions(false);
   };
 
   const handleDueDate = (date: Date | undefined) => {
@@ -145,10 +206,26 @@ export const BulkActionsToolbar = ({ selectedIds, onClearSelection }: BulkAction
               ))}
               {tenantUsers.length === 0 && <p className="text-xs text-muted-foreground p-2">Keine Benutzer</p>}
             </TabsContent>
-            <TabsContent value="external" className="mt-2 space-y-2">
-              <div><Label className="text-xs">Name *</Label><Input value={extName} onChange={(e) => setExtName(e.target.value)} className="h-8 text-xs" /></div>
-              <div><Label className="text-xs">E-Mail</Label><Input value={extEmail} onChange={(e) => setExtEmail(e.target.value)} className="h-8 text-xs" /></div>
-              <div><Label className="text-xs">Telefon</Label><Input value={extPhone} onChange={(e) => setExtPhone(e.target.value)} className="h-8 text-xs" /></div>
+            <TabsContent value="external" className="mt-2 space-y-2 relative">
+              <div className="relative">
+                <Input value={extName} onChange={(e) => handleExtFieldChange("name", e.target.value)}
+                  onFocus={() => { if (extSuggestions.length > 0) setShowExtSuggestions(true); }}
+                  onBlur={() => setTimeout(() => setShowExtSuggestions(false), 200)}
+                  className="h-8 text-xs" placeholder="Name *" />
+                {showExtSuggestions && extSuggestions.length > 0 && (
+                  <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-popover border rounded-md shadow-md max-h-32 overflow-y-auto">
+                    {extSuggestions.map((c) => (
+                      <button key={c.id} className="w-full text-left px-2 py-1.5 text-xs hover:bg-accent"
+                        onMouseDown={() => selectExtSuggestion(c)}>
+                        <span className="font-medium">{c.name}</span>
+                        {c.email && <span className="text-muted-foreground ml-1">· {c.email}</span>}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div><Label className="text-xs">E-Mail</Label><Input value={extEmail} onChange={(e) => handleExtFieldChange("email", e.target.value)} className="h-8 text-xs" /></div>
+              <div><Label className="text-xs">Telefon</Label><Input value={extPhone} onChange={(e) => handleExtFieldChange("phone", e.target.value)} className="h-8 text-xs" /></div>
               <Button size="sm" className="w-full h-8 text-xs" onClick={handleAssignExternal} disabled={!extName.trim()}>Zuweisen</Button>
             </TabsContent>
           </Tabs>
