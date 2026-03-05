@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useTasks, Task, TaskStatus } from "@/hooks/useTasks";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -46,9 +47,12 @@ interface TaskCardProps {
   task: Task;
   duplicateCount?: number;
   duplicateIds?: string[];
+  selectable?: boolean;
+  selected?: boolean;
+  onToggleSelect?: (ids: string[]) => void;
 }
 
-export const TaskCard = ({ task, duplicateCount, duplicateIds }: TaskCardProps) => {
+export const TaskCard = ({ task, duplicateCount, duplicateIds, selectable, selected, onToggleSelect }: TaskCardProps) => {
   const { updateTask, deleteTask, bulkUpdateStatus } = useTasks();
   const [detailOpen, setDetailOpen] = useState(false);
 
@@ -85,6 +89,14 @@ export const TaskCard = ({ task, duplicateCount, duplicateIds }: TaskCardProps) 
       )}>
         <CardContent className="p-4">
           <div className="flex items-start gap-3">
+            {/* Selection checkbox */}
+            {selectable && (
+              <Checkbox
+                checked={selected}
+                onCheckedChange={() => onToggleSelect?.(duplicateIds && duplicateIds.length > 0 ? duplicateIds : [task.id])}
+                className="mt-1 shrink-0"
+              />
+            )}
             {/* Status icon */}
             <button
               onClick={() => {

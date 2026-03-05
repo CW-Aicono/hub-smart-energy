@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { Navigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useTranslation } from "@/hooks/useTranslation";
@@ -7,8 +7,10 @@ import { useTasks } from "@/hooks/useTasks";
 import { CreateTaskDialog } from "@/components/tasks/CreateTaskDialog";
 import { TaskCard } from "@/components/tasks/TaskCard";
 import { TaskArchive } from "@/components/tasks/TaskArchive";
+import { BulkActionsToolbar } from "@/components/tasks/BulkActionsToolbar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -28,6 +30,26 @@ const Tasks = () => {
   const [overdueFilter, setOverdueFilter] = useState(false);
   const [externalFilter, setExternalFilter] = useState(false);
   const [activeTab, setActiveTab] = useState("active");
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  const toggleSelect = useCallback((ids: string[]) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      const allSelected = ids.every((id) => next.has(id));
+      if (allSelected) { ids.forEach((id) => next.delete(id)); }
+      else { ids.forEach((id) => next.add(id)); }
+      return next;
+    });
+  }, []);
+
+  const selectAll = useCallback((items: { allIds: string[] }[]) => {
+    const allIds = items.flatMap((i) => i.allIds);
+    const allSelected = allIds.every((id) => selectedIds.has(id));
+    if (allSelected) { setSelectedIds(new Set()); }
+    else { setSelectedIds(new Set(allIds)); }
+  }, [selectedIds]);
+
+  const clearSelection = useCallback(() => setSelectedIds(new Set()), []);
 
   const toggleStatus = (val: string) => { setPriorityFilter("all"); setOverdueFilter(false); setExternalFilter(false); setStatusFilter((prev) => (prev === val ? "all" : val)); };
   const togglePriority = (val: string) => { setStatusFilter("all"); setOverdueFilter(false); setExternalFilter(false); setPriorityFilter((prev) => (prev === val ? "all" : val)); };
@@ -163,7 +185,24 @@ const Tasks = () => {
                 <EmptyState t={t} hasFilters={search !== "" || statusFilter !== "all" || priorityFilter !== "all" || overdueFilter || externalFilter} onCreateTask={() => setCreateOpen(true)} />
               ) : (
                 <div className="space-y-3">
-                  {filtered.map(({ task, count, allIds }) => (<TaskCard key={task.id} task={task} duplicateCount={count} duplicateIds={allIds} />))}
+                  <div className="flex items-center gap-2 px-1">
+                    <Checkbox
+                      checked={filtered.length > 0 && filtered.flatMap(f => f.allIds).every(id => selectedIds.has(id))}
+                      onCheckedChange={() => selectAll(filtered)}
+                    />
+                    <span className="text-xs text-muted-foreground">Alle auswählen</span>
+                  </div>
+                  {filtered.map(({ task, count, allIds }) => (
+                    <TaskCard
+                      key={task.id}
+                      task={task}
+                      duplicateCount={count}
+                      duplicateIds={allIds}
+                      selectable
+                      selected={allIds.every(id => selectedIds.has(id))}
+                      onToggleSelect={toggleSelect}
+                    />
+                  ))}
                   <p className="text-xs text-center text-muted-foreground pt-2">
                     {filtered.length} von {activeTasks.length} aktiven Aufgaben
                   </p>
@@ -184,6 +223,7 @@ const Tasks = () => {
         </div>
       </main>
       <CreateTaskDialog open={createOpen} onOpenChange={setCreateOpen} />
+      <BulkActionsToolbar selectedIds={Array.from(selectedIds)} onClearSelection={clearSelection} />
     </div>
   );
 };
