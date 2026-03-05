@@ -28,7 +28,7 @@ Deno.serve(async (req) => {
     // 1. Get all tenants
     const { data: tenants, error: tErr } = await supabase
       .from("tenants")
-      .select("id, name, support_price_per_15min");
+      .select("id, name, support_price_per_15min, is_aicono_member");
     if (tErr) throw tErr;
 
     // 2. Get all tenant_modules (active)
@@ -37,15 +37,18 @@ Deno.serve(async (req) => {
       .select("tenant_id, module_code, is_enabled, price_override");
     if (mErr) throw mErr;
 
-    // 3. Get global module prices
+    // 3. Get global module prices (member + standard)
     const { data: globalPrices, error: gpErr } = await supabase
       .from("module_prices")
-      .select("module_code, price_monthly");
+      .select("module_code, price_monthly, standard_price");
     if (gpErr) throw gpErr;
 
-    const globalPriceMap: Record<string, number> = {};
+    const globalPriceMap: Record<string, { member: number; standard: number }> = {};
     for (const gp of globalPrices ?? []) {
-      globalPriceMap[gp.module_code] = Number(gp.price_monthly);
+      globalPriceMap[gp.module_code] = {
+        member: Number(gp.price_monthly),
+        standard: Number(gp.standard_price ?? gp.price_monthly),
+      };
     }
 
     // 4. Get support sessions from last month for all tenants
@@ -112,16 +115,21 @@ Deno.serve(async (req) => {
         (m: any) => m.module_code === "remote_support"
       );
       const supportPrice15min = Number(tenant.support_price_per_15min ?? 25);
+      const isMember = !!(tenant as any).is_aicono_member;
 
       // Module line items (for current month)
       const moduleLineItems: any[] = [];
       let moduleTotal = 0;
       for (const tm of tenantModules) {
         if (tm.module_code === "dashboard") continue;
+        const priceEntry = globalPriceMap[tm.module_code];
+        const globalPrice = priceEntry
+          ? (isMember ? priceEntry.member : priceEntry.standard)
+          : 0;
         const price =
           tm.price_override != null
             ? Number(tm.price_override)
-            : globalPriceMap[tm.module_code] ?? 0;
+            : globalPrice;
         moduleLineItems.push({
           type: "module",
           code: tm.module_code,

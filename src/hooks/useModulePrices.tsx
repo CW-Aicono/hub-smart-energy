@@ -7,6 +7,7 @@ export interface ModulePrice {
   id: string;
   module_code: string;
   price_monthly: number;
+  standard_price: number;
   created_at: string;
   updated_at: string;
 }
@@ -27,13 +28,13 @@ export function useModulePrices() {
   });
 
   const updatePrice = useMutation({
-    mutationFn: async ({ moduleCode, priceMonthly }: { moduleCode: string; priceMonthly: number }) => {
+    mutationFn: async ({ moduleCode, priceMonthly, standardPrice }: { moduleCode: string; priceMonthly?: number; standardPrice?: number }) => {
+      const updates: any = { module_code: moduleCode, updated_at: new Date().toISOString() };
+      if (priceMonthly !== undefined) updates.price_monthly = priceMonthly;
+      if (standardPrice !== undefined) updates.standard_price = standardPrice;
       const { error } = await supabase
         .from("module_prices")
-        .upsert(
-          { module_code: moduleCode, price_monthly: priceMonthly, updated_at: new Date().toISOString() },
-          { onConflict: "module_code" }
-        );
+        .upsert(updates, { onConflict: "module_code" });
       if (error) throw error;
     },
     onSuccess: () => {
@@ -52,5 +53,10 @@ export function useModulePrices() {
     return p ? Number(p.price_monthly) : 0;
   };
 
-  return { prices, isLoading, updatePrice, getPrice };
+  const getStandardPrice = (moduleCode: string): number => {
+    const p = prices.find((pr) => pr.module_code === moduleCode);
+    return p ? Number(p.standard_price) : 0;
+  };
+
+  return { prices, isLoading, updatePrice, getPrice, getStandardPrice };
 }

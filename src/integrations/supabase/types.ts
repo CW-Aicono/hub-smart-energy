@@ -2444,6 +2444,7 @@ export type Database = {
           id: string
           module_code: string
           price_monthly: number
+          standard_price: number
           updated_at: string
         }
         Insert: {
@@ -2451,6 +2452,7 @@ export type Database = {
           id?: string
           module_code: string
           price_monthly?: number
+          standard_price?: number
           updated_at?: string
         }
         Update: {
@@ -2458,6 +2460,7 @@ export type Database = {
           id?: string
           module_code?: string
           price_monthly?: number
+          standard_price?: number
           updated_at?: string
         }
         Relationships: []
@@ -3726,6 +3729,7 @@ export type Database = {
           created_at: string
           house_number: string | null
           id: string
+          is_aicono_member: boolean
           lexware_contact_id: string | null
           logo_url: string | null
           name: string
@@ -3756,6 +3760,7 @@ export type Database = {
           created_at?: string
           house_number?: string | null
           id?: string
+          is_aicono_member?: boolean
           lexware_contact_id?: string | null
           logo_url?: string | null
           name: string
@@ -3786,6 +3791,7 @@ export type Database = {
           created_at?: string
           house_number?: string | null
           id?: string
+          is_aicono_member?: boolean
           lexware_contact_id?: string | null
           logo_url?: string | null
           name?: string

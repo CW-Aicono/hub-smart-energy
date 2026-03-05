@@ -13,22 +13,20 @@ import { Label } from "@/components/ui/label";
 const editableModules = ALL_MODULES.filter((m) => !("alwaysOn" in m));
 
 interface PriceInputProps {
-  moduleCode: string;
   currentPrice: number;
   unit: string;
   onSave: (val: number) => void;
 }
 
-const PriceInput = ({ moduleCode, currentPrice, unit, onSave }: PriceInputProps) => {
+const PriceInput = ({ currentPrice, unit, onSave }: PriceInputProps) => {
   const [value, setValue] = useState(String(currentPrice));
 
-  // Sync when data loads or changes
   useEffect(() => {
     setValue(String(currentPrice));
   }, [currentPrice]);
 
   return (
-    <div className="flex items-center gap-2 w-48">
+    <div className="flex items-center gap-2 w-36">
       <Input
         type="number" min={0} step={0.01}
         value={value}
@@ -39,7 +37,7 @@ const PriceInput = ({ moduleCode, currentPrice, unit, onSave }: PriceInputProps)
           if (!isNaN(val) && val !== currentPrice) onSave(val);
         }}
       />
-      <span className="text-sm text-muted-foreground">{unit}</span>
+      <span className="text-sm text-muted-foreground whitespace-nowrap">{unit}</span>
     </div>
   );
 };
@@ -47,7 +45,7 @@ const PriceInput = ({ moduleCode, currentPrice, unit, onSave }: PriceInputProps)
 const SuperAdminModulePricing = () => {
   const { user, loading: authLoading } = useAuth();
   const { isSuperAdmin, loading: roleLoading } = useSuperAdmin();
-  const { prices, isLoading, updatePrice, getPrice } = useModulePrices();
+  const { prices, isLoading, updatePrice, getPrice, getStandardPrice } = useModulePrices();
   const { t } = useSATranslation();
 
   if (authLoading || roleLoading || isLoading) {
@@ -68,18 +66,35 @@ const SuperAdminModulePricing = () => {
           <Card>
             <CardHeader><CardTitle>{t("module_pricing.monthly_defaults")}</CardTitle></CardHeader>
             <CardContent>
+              {/* Column headers */}
+              <div className="flex items-center justify-between gap-4 mb-4 pb-2 border-b">
+                <Label className="text-base flex-1 font-semibold">Modul</Label>
+                <div className="flex gap-4">
+                  <span className="text-sm font-semibold text-muted-foreground w-36 text-center">AICONO e.&thinsp;V.</span>
+                  <span className="text-sm font-semibold text-muted-foreground w-36 text-center">Standardpreis</span>
+                </div>
+              </div>
               <div className="space-y-4">
-                {editableModules.map((mod) => (
-                  <div key={mod.code} className="flex items-center justify-between gap-4">
-                    <Label className="text-base flex-1">{mod.label}</Label>
-                    <PriceInput
-                      moduleCode={mod.code}
-                      currentPrice={getPrice(mod.code)}
-                      unit={mod.code === "support_billing" ? "€/15Min" : "€/Mo"}
-                      onSave={(val) => updatePrice.mutate({ moduleCode: mod.code, priceMonthly: val })}
-                    />
-                  </div>
-                ))}
+                {editableModules.map((mod) => {
+                  const unit = mod.code === "support_billing" ? "€/15Min" : "€/Mo";
+                  return (
+                    <div key={mod.code} className="flex items-center justify-between gap-4">
+                      <Label className="text-base flex-1">{mod.label}</Label>
+                      <div className="flex gap-4">
+                        <PriceInput
+                          currentPrice={getPrice(mod.code)}
+                          unit={unit}
+                          onSave={(val) => updatePrice.mutate({ moduleCode: mod.code, priceMonthly: val })}
+                        />
+                        <PriceInput
+                          currentPrice={getStandardPrice(mod.code)}
+                          unit={unit}
+                          onSave={(val) => updatePrice.mutate({ moduleCode: mod.code, standardPrice: val })}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
               <p className="text-xs text-muted-foreground mt-6">{t("module_pricing.hint")}</p>
             </CardContent>
