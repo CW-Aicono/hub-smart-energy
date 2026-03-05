@@ -1,5 +1,6 @@
 import { useState, useMemo, useRef } from "react";
 import { Input } from "@/components/ui/input";
+import { AiDisclaimer } from "@/components/ui/ai-disclaimer";
 import { Navigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useLocations, Location } from "@/hooks/useLocations";
@@ -859,6 +860,7 @@ const EnergyReport = () => {
               </Card>
             </TabsContent>
           </Tabs>
+          <AiDisclaimer text="Die im Energiebericht dargestellten Kennwerte und CO₂-Bilanzen basieren auf den erfassten Verbrauchsdaten und hinterlegten Faktoren. Keine Gewähr für Vollständigkeit oder Richtigkeit. Ergebnisse ersetzen keine fachliche Prüfung." />
         </div>
       </main>
     </div>

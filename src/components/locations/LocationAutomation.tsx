@@ -46,6 +46,7 @@ import {
   GitBranch,
 } from "lucide-react";
 import { HelpTooltip } from "@/components/ui/help-tooltip";
+import { AiDisclaimer } from "@/components/ui/ai-disclaimer";
 import { useTranslation } from "@/hooks/useTranslation";
 import { useLocationIntegrations } from "@/hooks/useIntegrations";
 import { useLoxoneSensors, LoxoneSensor } from "@/hooks/useLoxoneSensors";
@@ -545,6 +546,8 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <AiDisclaimer text="Automatisierungsregeln steuern Geräte und Systeme basierend auf Sensordaten. Keine Haftung für Fehlfunktionen oder unerwartetes Verhalten automatisierter Schaltvorgänge." />
     </>
   );
 };
