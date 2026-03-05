@@ -443,36 +443,7 @@ const Automation = () => {
                       </CardContent>
                     </Card>
                   );
-                })
-                    <Card key={gw.id}>
-                      <CardContent className="p-4">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                            <div className={`h-10 w-10 rounded-lg flex items-center justify-center ${isOnline ? "bg-emerald-500/10" : "bg-muted"}`}>
-                              <Server className={`h-5 w-5 ${isOnline ? "text-emerald-600" : "text-muted-foreground"}`} />
-                            </div>
-                            <div>
-                              <div className="flex items-center gap-2">
-                                <h3 className="font-semibold">{gw.name}</h3>
-                                {isOnline ? (
-                                  <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20"><Activity className="h-3 w-3 mr-1" /> {T("automation.online")}</Badge>
-                                ) : (
-                                  <Badge variant="secondary"><AlertTriangle className="h-3 w-3 mr-1" /> Offline</Badge>
-                                )}
-                              </div>
-                              <div className="flex items-center gap-4 mt-1 text-xs text-muted-foreground">
-                                <span><MapPin className="h-3 w-3 inline mr-1" />{gwLocInts.length} {T("nav.locations")}</span>
-                                {lastSync && (
-                                  <span>{T("automation.lastSync")} {formatDistanceToNow(new Date(lastSync), { addSuffix: true, locale: de })}</span>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  );
-                })
+                )
               )}
 
               <Card className="border-dashed">
