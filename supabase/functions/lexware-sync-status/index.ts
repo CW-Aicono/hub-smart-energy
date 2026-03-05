@@ -57,10 +57,11 @@ Deno.serve(async (req) => {
       lexIdMap.set(inv.lexware_invoice_id, { id: inv.id, status: inv.status });
     }
 
-    // Use voucherlist endpoint to fetch statuses in bulk
-    // Query each status type to find matching invoices
-    const statusesToCheck = ["draft", "open", "paid", "paidoff", "overdue", "voided"];
+    // Query each status type with delay to avoid rate limiting
+    const statusesToCheck = ["open", "paid", "paidoff", "overdue", "voided"];
     let updated = 0;
+    const summaryByStatus: Record<string, { count: number; totalAmount: number; openAmount: number }> = {};
+    const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 
     for (const voucherStatus of statusesToCheck) {
       let page = 0;
@@ -73,27 +74,62 @@ Deno.serve(async (req) => {
         if (!res.ok) {
           const errBody = await res.text();
           console.log(`Voucherlist ${voucherStatus} page ${page}: HTTP ${res.status} - ${errBody}`);
+          if (res.status === 429) {
+            // Wait and retry once
+            await sleep(2000);
+            const retryRes = await fetch(url, { headers: lexHeaders });
+            if (!retryRes.ok) { await retryRes.text(); break; }
+            const retryData = await retryRes.json();
+            const retryContent = retryData.content || [];
+            // Process retry content same as below
+            if (page === 0 && retryContent.length > 0) {
+              console.log(`[DEBUG] Sample ${voucherStatus} voucher:`, JSON.stringify(retryContent[0], null, 2));
+            }
+            for (const voucher of retryContent) {
+              if (!summaryByStatus[voucherStatus]) summaryByStatus[voucherStatus] = { count: 0, totalAmount: 0, openAmount: 0 };
+              summaryByStatus[voucherStatus].count++;
+              summaryByStatus[voucherStatus].totalAmount += Number(voucher.totalAmount ?? 0);
+              summaryByStatus[voucherStatus].openAmount += Number(voucher.openAmount ?? 0);
+              const localInv = lexIdMap.get(voucher.voucherId);
+              if (!localInv) continue;
+              const mappedStatus = STATUS_MAP[voucherStatus] || localInv.status;
+              if (mappedStatus !== localInv.status) {
+                await supabase.from("tenant_invoices").update({ status: mappedStatus }).eq("id", localInv.id);
+                updated++;
+              }
+              lexIdMap.delete(voucher.voucherId);
+            }
+            hasMore = !retryData.last && retryContent.length > 0;
+            page++;
+            continue;
+          }
           break;
         }
 
         const data = await res.json();
         const content = data.content || [];
 
+        // DEBUG: Log first voucher to see all available fields
+        if (page === 0 && content.length > 0) {
+          console.log(`[DEBUG] Sample ${voucherStatus} voucher:`, JSON.stringify(content[0], null, 2));
+        }
+
         for (const voucher of content) {
+          if (!summaryByStatus[voucherStatus]) summaryByStatus[voucherStatus] = { count: 0, totalAmount: 0, openAmount: 0 };
+          summaryByStatus[voucherStatus].count++;
+          summaryByStatus[voucherStatus].totalAmount += Number(voucher.totalAmount ?? 0);
+          summaryByStatus[voucherStatus].openAmount += Number(voucher.openAmount ?? 0);
+
           const localInv = lexIdMap.get(voucher.voucherId);
           if (!localInv) continue;
 
           const mappedStatus = STATUS_MAP[voucherStatus] || localInv.status;
           if (mappedStatus !== localInv.status) {
-            await supabase
-              .from("tenant_invoices")
-              .update({ status: mappedStatus })
-              .eq("id", localInv.id);
+            await supabase.from("tenant_invoices").update({ status: mappedStatus }).eq("id", localInv.id);
             updated++;
             console.log(`Updated ${localInv.id}: ${localInv.status} -> ${mappedStatus}`);
           }
 
-          // Remove from map so we don't check again
           lexIdMap.delete(voucher.voucherId);
         }
 
@@ -102,11 +138,16 @@ Deno.serve(async (req) => {
       }
 
       // Stop early if all invoices are matched
-      if (lexIdMap.size === 0) break;
+      if (lexIdMap.size === 0 && Object.keys(summaryByStatus).length >= statusesToCheck.length) break;
+
+      // Delay between status types to avoid rate limiting
+      await sleep(500);
     }
 
+    console.log("[DEBUG] Summary by status:", JSON.stringify(summaryByStatus, null, 2));
+
     return new Response(
-      JSON.stringify({ success: true, updated, checked: invoices.length }),
+      JSON.stringify({ success: true, updated, checked: invoices.length, summaryByStatus }),
       { headers: { ...cors, "Content-Type": "application/json" } },
     );
   } catch (err: any) {
