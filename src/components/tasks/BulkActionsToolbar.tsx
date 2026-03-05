@@ -64,7 +64,7 @@ export const BulkActionsToolbar = ({ selectedIds, onClearSelection }: BulkAction
     onClearSelection();
   };
 
-  const handleAssignExternal = () => {
+  const handleAssignExternal = async () => {
     if (!extName.trim()) return;
     bulkUpdateFields.mutate({
       ids: selectedIds,
@@ -76,11 +76,65 @@ export const BulkActionsToolbar = ({ selectedIds, onClearSelection }: BulkAction
         external_contact_phone: extPhone || null,
       },
     });
+
+    // Auto-create contact if not exists
+    const existing = externalContacts.find(
+      (c) =>
+        c.name.toLowerCase() === extName.trim().toLowerCase() ||
+        (extEmail && c.email?.toLowerCase() === extEmail.trim().toLowerCase())
+    );
+    if (!existing) {
+      createContact.mutate({
+        name: extName.trim(),
+        email: extEmail.trim() || undefined,
+        phone: extPhone.trim() || undefined,
+      });
+    }
+
+    // Send email for each selected task if email provided
+    if (extEmail.trim() && tenant?.id) {
+      for (const id of selectedIds) {
+        const task = tasks.find((t) => t.id === id);
+        if (task) {
+          try {
+            await supabase.functions.invoke("send-task-transfer-email", {
+              body: {
+                contactName: extName,
+                contactEmail: extEmail,
+                taskTitle: task.title,
+                taskDescription: task.description,
+                dueDate: task.due_date,
+                tenantId: tenant.id,
+              },
+            });
+          } catch (e) {
+            console.error("Failed to send task transfer email:", e);
+          }
+        }
+      }
+    }
+
     setAssignOpen(false);
     setExtName("");
     setExtEmail("");
     setExtPhone("");
     onClearSelection();
+  };
+
+  const handleExtFieldChange = (field: "name" | "email" | "phone", value: string) => {
+    if (field === "name") setExtName(value);
+    if (field === "email") setExtEmail(value);
+    if (field === "phone") setExtPhone(value);
+    const matches = findMatches(value);
+    setExtSuggestions(matches);
+    setShowExtSuggestions(matches.length > 0);
+  };
+
+  const selectExtSuggestion = (contact: typeof externalContacts[0]) => {
+    setExtName(contact.name);
+    setExtEmail(contact.email ?? "");
+    setExtPhone(contact.phone ?? "");
+    setShowExtSuggestions(false);
   };
 
   const handleDueDate = (date: Date | undefined) => {
