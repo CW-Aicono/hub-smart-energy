@@ -1752,6 +1752,44 @@ export type Database = {
         }
         Relationships: []
       }
+      legal_pages: {
+        Row: {
+          content_html: string
+          id: string
+          page_key: string
+          tenant_id: string
+          title: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          content_html?: string
+          id?: string
+          page_key: string
+          tenant_id: string
+          title?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          content_html?: string
+          id?: string
+          page_key?: string
+          tenant_id?: string
+          title?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "legal_pages_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       location_automations: {
         Row: {
           action_type: string
