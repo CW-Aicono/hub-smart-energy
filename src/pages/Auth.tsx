@@ -107,7 +107,7 @@ const Auth = () => {
       </div>
 
       {/* Right auth form */}
-      <div className="flex w-full lg:w-1/2 items-center justify-center p-8 bg-background">
+      <div className="flex flex-col w-full lg:w-1/2 items-center justify-center p-8 bg-background">
         <Card className="w-full max-w-md border-0 shadow-lg">
           <CardHeader className="text-center">
             <div className="flex items-center justify-center mb-2 lg:hidden">
