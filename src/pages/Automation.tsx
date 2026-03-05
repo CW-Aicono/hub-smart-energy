@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Navigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useTranslation } from "@/hooks/useTranslation";
@@ -6,6 +6,9 @@ import { useMLAutomations, MLAutomationRecord } from "@/hooks/useMLAutomations";
 import { useAutomationAI } from "@/hooks/useAutomationAI";
 import { useLocations } from "@/hooks/useLocations";
 import { useIntegrations } from "@/hooks/useIntegrations";
+import { useTenant } from "@/hooks/useTenant";
+import { useLoxoneSensorsMulti, LoxoneSensor } from "@/hooks/useLoxoneSensors";
+import { supabase } from "@/integrations/supabase/client";
 import { AutomationRuleBuilder, AutomationRuleData } from "@/components/locations/AutomationRuleBuilder";
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
 import { Card, CardContent } from "@/components/ui/card";
@@ -19,13 +22,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { AiDisclaimer } from "@/components/ui/ai-disclaimer";
 import { toast } from "sonner";
-import { formatDistanceToNow, format } from "date-fns";
+import { formatDistanceToNow, format, differenceInMinutes } from "date-fns";
 import { de } from "date-fns/locale";
 import {
   Cpu, Zap, BrainCircuit, Thermometer, Lightbulb, Wind, TrendingDown, ArrowRight, Plus,
   Settings2, Activity, Server, Clock, CheckCircle2, AlertTriangle, Sparkles, MapPin,
   Building2, Layers, DoorOpen, ChevronRight, Play, Loader2, Pencil, Trash2,
-  RefreshCw, Download, XCircle, Timer, FileText, Search, Filter, GitBranch,
+  RefreshCw, Download, XCircle, Timer, FileText, Search, Filter, GitBranch, WifiOff,
 } from "lucide-react";
 
 const CATEGORY_CONFIG: Record<string, { label: string; icon: typeof Thermometer; color: string }> = {
@@ -36,9 +39,25 @@ const CATEGORY_CONFIG: Record<string, { label: string; icon: typeof Thermometer;
   custom: { label: "Sonstige", icon: Zap, color: "#10b981" },
 };
 
+/** Consider a gateway offline if last sync > 10 minutes ago */
+const OFFLINE_THRESHOLD_MIN = 10;
+
+interface GatewayInfo {
+  id: string;
+  name: string;
+  type: string;
+  locationName: string;
+  locationId: string;
+  locationIntegrationId: string;
+  isOnline: boolean;
+  lastSyncAt: string | null;
+  isEnabled: boolean;
+}
+
 const Automation = () => {
   const { user, loading: authLoading } = useAuth();
   const { t } = useTranslation();
+  const { tenant } = useTenant();
   const T = (key: string) => t(key as any);
   const [activeTab, setActiveTab] = useState("automations");
 
@@ -53,6 +72,73 @@ const Automation = () => {
   const { locations } = useLocations();
   const { integrations } = useIntegrations();
 
+  // ── Gateway status from location_integrations ──
+  const [gateways, setGateways] = useState<GatewayInfo[]>([]);
+  const [gatewaysLoading, setGatewaysLoading] = useState(true);
+
+  useEffect(() => {
+    if (!tenant?.id) { setGateways([]); setGatewaysLoading(false); return; }
+    const fetch = async () => {
+      setGatewaysLoading(true);
+      const { data } = await supabase
+        .from("location_integrations")
+        .select("id, location_id, integration_id, is_enabled, last_sync_at, sync_status, integrations(name, type), locations!location_integrations_location_id_fkey(name)")
+        .order("created_at");
+
+      if (data) {
+        const gwTypes = ["loxone_miniserver", "loxone_miniserver_go", "home_assistant"];
+        const mapped: GatewayInfo[] = (data as any[])
+          .filter((row) => gwTypes.includes(row.integrations?.type))
+          .map((row) => {
+            const lastSync = row.last_sync_at ? new Date(row.last_sync_at) : null;
+            const isOnline = row.is_enabled && lastSync != null && differenceInMinutes(new Date(), lastSync) <= OFFLINE_THRESHOLD_MIN;
+            return {
+              id: row.id,
+              name: row.integrations?.name || "Gateway",
+              type: row.integrations?.type || "",
+              locationName: row.locations?.name || "",
+              locationId: row.location_id,
+              locationIntegrationId: row.id,
+              isOnline,
+              lastSyncAt: row.last_sync_at,
+              isEnabled: row.is_enabled,
+            };
+          });
+        setGateways(mapped);
+      }
+      setGatewaysLoading(false);
+    };
+    fetch();
+  }, [tenant?.id]);
+
+  const onlineGatewayCount = gateways.filter((g) => g.isOnline).length;
+
+  // ── Load sensors from all gateways for cross-location rule building ──
+  const gatewayIds = useMemo(() => gateways.filter(g => g.isEnabled).map(g => g.locationIntegrationId), [gateways]);
+  const gatewayTypes = useMemo(() => gateways.filter(g => g.isEnabled).map(g => g.type), [gateways]);
+  const sensorQueries = useLoxoneSensorsMulti(gatewayIds, gatewayTypes);
+
+  const allSensors = useMemo(() => {
+    const result: (LoxoneSensor & { gatewayName?: string; locationName?: string })[] = [];
+    sensorQueries.forEach((q, idx) => {
+      if (q.data) {
+        const gw = gateways.find(g => g.locationIntegrationId === gatewayIds[idx]);
+        q.data.forEach((s) => {
+          result.push({
+            ...s,
+            gatewayName: gw?.name,
+            locationName: gw?.locationName,
+            // Prefix name with location for disambiguation
+            name: gw && gateways.length > 1 ? `${s.name} (${gw.locationName})` : s.name,
+          });
+        });
+      }
+    });
+    return result;
+  }, [sensorQueries, gateways, gatewayIds]);
+
+  const sensorsLoading = sensorQueries.some((q) => q.isLoading);
+
   // Filters
   const [filterLocation, setFilterLocation] = useState<string>("all");
   const [filterCategory, setFilterCategory] = useState<string>("all");
@@ -62,10 +148,6 @@ const Automation = () => {
   // Rule builder state
   const [ruleBuilderOpen, setRuleBuilderOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<MLAutomationRecord | null>(null);
-
-  // Sensors: empty for now (rule editing for MLA uses location-level builder)
-  const sensors: any[] = [];
-  const sensorsLoading = false;
 
   // Fetch log when tab switches
   useEffect(() => {
@@ -85,11 +167,6 @@ const Automation = () => {
     status: filterStatus as any,
     search: searchTerm,
   });
-
-  // Gateway data from real integrations
-  const gatewayIntegrations = integrations.filter((i) =>
-    ["loxone_miniserver", "loxone_miniserver_go", "home_assistant"].includes(i.type)
-  );
 
   const handleExecute = async (auto: MLAutomationRecord) => {
     const result = await executeAutomation(auto);
@@ -143,13 +220,12 @@ const Automation = () => {
       if (error) throw error;
       toast.success(T("automation.updated"));
     } else {
-      // For new rules we need a location + integration
       toast.info("Bitte erstellen Sie neue Regeln über die Standort-Detailseite.");
     }
   };
 
   const exportLogCsv = () => {
-    const headers = ["Zeitpunkt", "Regelname", "Trigger", "Status", "Fehler", "Dauer (ms)"];
+    const headers = [T("automation.logTime"), T("automation.logRule"), T("automation.logTrigger"), T("automation.logStatus"), "Fehler", T("automation.logDuration")];
     const rows = executionLog.map((log) => [
       format(new Date(log.executed_at), "dd.MM.yyyy HH:mm:ss"),
       log.automation_name || "",
@@ -167,6 +243,16 @@ const Automation = () => {
     a.click();
     URL.revokeObjectURL(url);
   };
+
+  // Translated AI disclaimer with fallback
+  const aiDisclaimerText = (() => {
+    const val = T("automation.aiDisclaimer");
+    // If translation not yet loaded, use German fallback
+    if (val === "automation.aiDisclaimer") {
+      return "KI-Empfehlungen sind Schätzungen und ersetzen keine professionelle Energieberatung.";
+    }
+    return val;
+  })();
 
   if (authLoading) {
     return (
@@ -204,7 +290,7 @@ const Automation = () => {
             <Card><CardContent className="p-4 flex items-center gap-3"><div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center"><Zap className="h-5 w-5 text-primary" /></div><div><p className="text-2xl font-bold">{loading ? "–" : stats.total}</p><p className="text-xs text-muted-foreground">{T("automation.automations")}</p></div></CardContent></Card>
             <Card><CardContent className="p-4 flex items-center gap-3"><div className="h-10 w-10 rounded-lg bg-emerald-500/10 flex items-center justify-center"><CheckCircle2 className="h-5 w-5 text-emerald-600" /></div><div><p className="text-2xl font-bold">{loading ? "–" : stats.active}</p><p className="text-xs text-muted-foreground">{T("automation.activeCount")}</p></div></CardContent></Card>
             <Card><CardContent className="p-4 flex items-center gap-3"><div className="h-10 w-10 rounded-lg bg-violet-500/10 flex items-center justify-center"><BrainCircuit className="h-5 w-5 text-violet-600" /></div><div><p className="text-2xl font-bold">{aiLoading ? "–" : recommendations.length}</p><p className="text-xs text-muted-foreground">{T("automation.aiRecommendations")}</p></div></CardContent></Card>
-            <Card><CardContent className="p-4 flex items-center gap-3"><div className="h-10 w-10 rounded-lg bg-cyan-500/10 flex items-center justify-center"><Server className="h-5 w-5 text-cyan-600" /></div><div><p className="text-2xl font-bold">{gatewayIntegrations.length}</p><p className="text-xs text-muted-foreground">{T("automation.gatewayOnline")}</p></div></CardContent></Card>
+            <Card><CardContent className="p-4 flex items-center gap-3"><div className="h-10 w-10 rounded-lg bg-cyan-500/10 flex items-center justify-center"><Server className="h-5 w-5 text-cyan-600" /></div><div><p className="text-2xl font-bold">{gatewaysLoading ? "–" : `${onlineGatewayCount}/${gateways.length}`}</p><p className="text-xs text-muted-foreground">{T("automation.gatewayOnline")}</p></div></CardContent></Card>
             <Card><CardContent className="p-4 flex items-center gap-3"><div className="h-10 w-10 rounded-lg bg-amber-500/10 flex items-center justify-center"><TrendingDown className="h-5 w-5 text-amber-600" /></div><div><p className="text-2xl font-bold">{stats.totalSavingsKwh > 0 ? `~${Math.round(stats.totalSavingsKwh)}` : "–"}</p><p className="text-xs text-muted-foreground">{T("automation.savingsKwh")}</p></div></CardContent></Card>
           </div>
 
@@ -291,7 +377,7 @@ const Automation = () => {
                                   <h3 className="font-semibold">{auto.name}</h3>
                                   <Badge variant="outline" className="text-[10px]">{catCfg.label}</Badge>
                                   {auto.actions?.length > 1 && (
-                                    <Badge variant="secondary" className="text-[10px]">{auto.actions.length} Aktionen</Badge>
+                                    <Badge variant="secondary" className="text-[10px]">{auto.actions.length} {T("automation.actions")}</Badge>
                                   )}
                                   {auto.tags?.map((tag) => (
                                     <Badge key={tag} variant="secondary" className="text-[10px] bg-muted">{tag}</Badge>
@@ -320,7 +406,7 @@ const Automation = () => {
                                     <span className="text-muted-foreground ml-1">({auto.scope_type})</span>
                                   )}
                                   {auto.scope_type === "cross_location" && (
-                                    <span className="text-muted-foreground ml-1">+ {(auto.target_location_ids?.length || 0)} weitere</span>
+                                    <span className="text-muted-foreground ml-1">+ {(auto.target_location_ids?.length || 0)} {T("automation.moreLocations")}</span>
                                   )}
                                 </div>
                               </div>
@@ -409,41 +495,60 @@ const Automation = () => {
                   </div>
                 </>
               )}
-              <AiDisclaimer text={T("automation.aiDisclaimer")} />
+              <AiDisclaimer text={aiDisclaimerText} />
             </TabsContent>
 
             {/* ── Tab: Gateways ── */}
             <TabsContent value="gateways" className="space-y-4 mt-4">
-              {gatewayIntegrations.length === 0 ? (
+              {gatewaysLoading ? (
+                <div className="space-y-3">{Array.from({ length: 2 }).map((_, i) => <Skeleton key={i} className="h-24" />)}</div>
+              ) : gateways.length === 0 ? (
                 <div className="text-center py-8 text-sm text-muted-foreground">
                   <Server className="h-10 w-10 mx-auto mb-3 text-muted-foreground/50" />
                   <p>{T("automation.noGateways")}</p>
                 </div>
               ) : (
-                gatewayIntegrations.map((gw) => {
-                  const gwType = gw.type;
-
-                  return (
-                    <Card key={gw.id}>
-                      <CardContent className="p-4">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                            <div className="h-10 w-10 rounded-lg flex items-center justify-center bg-emerald-500/10">
+                gateways.map((gw) => (
+                  <Card key={gw.id}>
+                    <CardContent className="p-4">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className={`h-10 w-10 rounded-lg flex items-center justify-center ${gw.isOnline ? "bg-emerald-500/10" : "bg-destructive/10"}`}>
+                            {gw.isOnline ? (
                               <Server className="h-5 w-5 text-emerald-600" />
+                            ) : (
+                              <WifiOff className="h-5 w-5 text-destructive" />
+                            )}
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <h3 className="font-semibold">{gw.name}</h3>
+                              {gw.isOnline ? (
+                                <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20">
+                                  <Activity className="h-3 w-3 mr-1" /> {T("automation.online")}
+                                </Badge>
+                              ) : (
+                                <Badge variant="outline" className="bg-destructive/10 text-destructive border-destructive/20">
+                                  <WifiOff className="h-3 w-3 mr-1" /> Offline
+                                </Badge>
+                              )}
                             </div>
-                            <div>
-                              <div className="flex items-center gap-2">
-                                <h3 className="font-semibold">{gw.name}</h3>
-                                <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20"><Activity className="h-3 w-3 mr-1" /> {T("automation.online")}</Badge>
-                              </div>
-                              <p className="text-xs text-muted-foreground mt-1">{gwType}</p>
+                            <div className="flex items-center gap-3 text-xs text-muted-foreground mt-1">
+                              <span className="flex items-center gap-1"><Building2 className="h-3 w-3" /> {gw.locationName}</span>
+                              <span>{gw.type}</span>
+                              {gw.lastSyncAt && (
+                                <span className="flex items-center gap-1">
+                                  <Clock className="h-3 w-3" />
+                                  {T("automation.lastSync")} {formatDistanceToNow(new Date(gw.lastSyncAt), { addSuffix: true, locale: de })}
+                                </span>
+                              )}
                             </div>
                           </div>
                         </div>
-                      </CardContent>
-                    </Card>
-                  );
-                })
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))
               )}
 
               <Card className="border-dashed">
@@ -501,18 +606,18 @@ const Automation = () => {
                           <TableCell className="font-medium text-sm">{log.automation_name}</TableCell>
                           <TableCell>
                             <Badge variant="outline" className="text-[10px]">
-                              {log.trigger_type === "manual" ? "Manuell" : log.trigger_type === "schedule" ? "Zeitplan" : log.trigger_type}
+                              {log.trigger_type === "manual" ? T("automation.triggerManual") : log.trigger_type === "schedule" ? T("automation.triggerSchedule") : log.trigger_type}
                             </Badge>
                           </TableCell>
                           <TableCell>
                             {log.status === "success" ? (
                               <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20 text-[10px]">
-                                <CheckCircle2 className="h-3 w-3 mr-1" /> Erfolg
+                                <CheckCircle2 className="h-3 w-3 mr-1" /> {T("automation.statusSuccess")}
                               </Badge>
                             ) : (
                               <div>
                                 <Badge variant="outline" className="bg-destructive/10 text-destructive border-destructive/20 text-[10px]">
-                                  <XCircle className="h-3 w-3 mr-1" /> Fehler
+                                  <XCircle className="h-3 w-3 mr-1" /> {T("automation.statusError")}
                                 </Badge>
                                 {log.error_message && (
                                   <p className="text-[10px] text-destructive mt-1">{log.error_message}</p>
@@ -534,11 +639,11 @@ const Automation = () => {
         </div>
       </main>
 
-      {/* Rule Builder Sheet */}
+      {/* Rule Builder Sheet – now with sensors from ALL gateways */}
       <AutomationRuleBuilder
         open={ruleBuilderOpen}
         onOpenChange={setRuleBuilderOpen}
-        sensors={sensors || []}
+        sensors={allSensors}
         sensorsLoading={sensorsLoading}
         initialData={editTarget ? {
           name: editTarget.name,

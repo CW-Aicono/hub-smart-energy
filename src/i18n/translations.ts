@@ -4209,6 +4209,13 @@ export const translations = {
   "automation.logTrigger": { de: "Trigger", en: "Trigger", es: "Disparador", nl: "Trigger" },
   "automation.logStatus": { de: "Status", en: "Status", es: "Estado", nl: "Status" },
   "automation.logDuration": { de: "Dauer", en: "Duration", es: "Duración", nl: "Duur" },
+  "automation.actions": { de: "Aktionen", en: "Actions", es: "Acciones", nl: "Acties" },
+  "automation.moreLocations": { de: "weitere", en: "more", es: "más", nl: "meer" },
+  "automation.triggerManual": { de: "Manuell", en: "Manual", es: "Manual", nl: "Handmatig" },
+  "automation.triggerSchedule": { de: "Zeitplan", en: "Schedule", es: "Horario", nl: "Tijdschema" },
+  "automation.statusSuccess": { de: "Erfolg", en: "Success", es: "Éxito", nl: "Succes" },
+  "automation.statusError": { de: "Fehler", en: "Error", es: "Error", nl: "Fout" },
+  "automation.offline": { de: "Offline", en: "Offline", es: "Fuera de línea", nl: "Offline" },
 
   // ── Network Infrastructure Page (additional) ────────────────────────────
   "network.title": { de: "Netzwerkinfrastruktur", en: "Network Infrastructure", es: "Infraestructura de red", nl: "Netwerkinfrastructuur" },
