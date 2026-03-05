@@ -51,7 +51,7 @@ const Automation = () => {
 
   const { recommendations, loading: aiLoading, totalSavingsPotential, fetchRecommendations } = useAutomationAI();
   const { locations } = useLocations();
-  const { integrations, locationIntegrations } = useIntegrations();
+  const { integrations } = useIntegrations();
 
   // Filters
   const [filterLocation, setFilterLocation] = useState<string>("all");
@@ -63,12 +63,9 @@ const Automation = () => {
   const [ruleBuilderOpen, setRuleBuilderOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<MLAutomationRecord | null>(null);
 
-  // Get sensors for the rule builder - use first available integration
-  const loxoneIntegrations = locationIntegrations.filter(
-    (li) => li.integration?.type?.startsWith("loxone") && li.is_enabled
-  );
-  const firstLoxoneIntId = loxoneIntegrations[0]?.id;
-  const { data: sensors, isLoading: sensorsLoading } = useLoxoneSensors(firstLoxoneIntId);
+  // Sensors: empty for now (rule editing for MLA uses location-level builder)
+  const sensors: any[] = [];
+  const sensorsLoading = false;
 
   // Fetch log when tab switches
   useEffect(() => {
