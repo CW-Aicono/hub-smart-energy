@@ -40,6 +40,7 @@ const SuperAdminBilling = () => {
   const [sortKey, setSortKey] = useState<SortKey>("tenant");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [syncing, setSyncing] = useState(false);
+  const [lexwareSummary, setLexwareSummary] = useState<Record<string, { count: number; totalAmount: number; openAmount: number }> | null>(null);
   const queryClient = useQueryClient();
 
   const lexwareMutation = useMutation({
@@ -154,6 +155,7 @@ const SuperAdminBilling = () => {
     try {
       const { data, error } = await supabase.functions.invoke("lexware-sync-status");
       if (error) throw error;
+      if (data?.summaryByStatus) setLexwareSummary(data.summaryByStatus);
       queryClient.invalidateQueries({ queryKey: ["super-admin-invoices"] });
       toast.success(`Status synchronisiert (${data?.updated ?? 0} aktualisiert)`);
     } catch (err: any) {
@@ -277,8 +279,15 @@ const SuperAdminBilling = () => {
                 <div className="rounded-lg bg-accent p-2.5"><Clock className="h-5 w-5 text-accent-foreground" /></div>
                 <div>
                   <p className="text-sm text-muted-foreground">Offene Beträge</p>
-                  <p className="text-2xl font-bold">{stats.openAmount.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €</p>
-                  <p className="text-xs text-muted-foreground">{stats.openCount} Rechnungen</p>
+                  <p className="text-2xl font-bold">
+                    {(lexwareSummary
+                      ? (lexwareSummary.open?.openAmount ?? 0)
+                      : stats.openAmount
+                    ).toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {lexwareSummary ? `${lexwareSummary.open?.count ?? 0} Belege (Lexware)` : `${stats.openCount} Rechnungen`}
+                  </p>
                 </div>
               </CardContent>
             </Card>
@@ -287,8 +296,15 @@ const SuperAdminBilling = () => {
                 <div className="rounded-lg bg-secondary p-2.5"><Euro className="h-5 w-5 text-secondary-foreground" /></div>
                 <div>
                   <p className="text-sm text-muted-foreground">Bezahlt</p>
-                  <p className="text-2xl font-bold">{stats.paidAmount.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €</p>
-                  <p className="text-xs text-muted-foreground">{stats.paidCount} Rechnungen</p>
+                  <p className="text-2xl font-bold">
+                    {(lexwareSummary
+                      ? ((lexwareSummary.paid?.totalAmount ?? 0) + (lexwareSummary.paidoff?.totalAmount ?? 0))
+                      : stats.paidAmount
+                    ).toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {lexwareSummary ? `${(lexwareSummary.paid?.count ?? 0) + (lexwareSummary.paidoff?.count ?? 0)} Belege (Lexware)` : `${stats.paidCount} Rechnungen`}
+                  </p>
                 </div>
               </CardContent>
             </Card>
@@ -297,8 +313,15 @@ const SuperAdminBilling = () => {
                 <div className="rounded-lg bg-destructive/10 p-2.5"><AlertTriangle className="h-5 w-5 text-destructive" /></div>
                 <div>
                   <p className="text-sm text-muted-foreground">Überfällig</p>
-                  <p className="text-2xl font-bold">{stats.overdueAmount.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €</p>
-                  <p className="text-xs text-muted-foreground">{stats.overdueCount} Rechnungen</p>
+                  <p className="text-2xl font-bold">
+                    {(lexwareSummary
+                      ? (lexwareSummary.overdue?.openAmount ?? 0)
+                      : stats.overdueAmount
+                    ).toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {lexwareSummary ? `${lexwareSummary.overdue?.count ?? 0} Belege (Lexware)` : `${stats.overdueCount} Rechnungen`}
+                  </p>
                 </div>
               </CardContent>
             </Card>
