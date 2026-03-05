@@ -3,6 +3,25 @@ import { getCorsHeaders } from "../_shared/cors.ts";
 
 const LEXWARE_BASE = "https://api.lexware.io/v1";
 
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+async function lexFetch(url: string, options: RequestInit, maxRetries = 3): Promise<Response> {
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    const res = await fetch(url, options);
+    if (res.status === 429) {
+      const retryAfter = Number(res.headers.get("retry-after") || 2);
+      const waitMs = Math.max(retryAfter * 1000, 1500) * (attempt + 1);
+      console.log(`Rate limited (429), waiting ${waitMs}ms before retry ${attempt + 1}/${maxRetries}`);
+      await res.text(); // consume body
+      await sleep(waitMs);
+      continue;
+    }
+    return res;
+  }
+  // Final attempt
+  return fetch(url, options);
+}
+
 Deno.serve(async (req) => {
   const cors = getCorsHeaders(req);
   if (req.method === "OPTIONS") {
