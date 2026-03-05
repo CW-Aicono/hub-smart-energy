@@ -63,6 +63,9 @@ export function useAutomationAI() {
 
       if (fnError) throw fnError;
 
+      // Edge function may return error in body (e.g. 429, 402)
+      if (data?.error) throw new Error(data.error);
+
       if (data?.recommendations) {
         setRecommendations(data.recommendations);
         setCachedRecommendations(tenant.id, data.recommendations);
