@@ -135,7 +135,7 @@ const SuperAdminTenantDetail = () => {
   const { isSuperAdmin, loading: roleLoading } = useSuperAdmin();
   const { modules, toggleModule } = useTenantModules(id ?? null);
   const { license, upsertLicense } = useTenantLicense(id ?? null);
-  const { getPrice: getGlobalPrice, getStandardPrice: getGlobalStandardPrice } = useModulePrices();
+  const { getPrice: getGlobalPrice, getStandardPrice: getGlobalStandardPrice, getIndustryPrice: getGlobalIndustryPrice, getIndustryStandardPrice: getGlobalIndustryStandardPrice } = useModulePrices();
   const { bundles: allBundles, bundleItems: allBundleItems, getBundleModules } = useModuleBundles();
   const { t } = useSATranslation();
   const queryClient = useQueryClient();
