@@ -20,8 +20,8 @@ const defaultIcon = new Icon({
 });
 
 const errorIcon = new Icon({
-  iconUrl: "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-red.png",
-  iconRetinaUrl: "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png",
+  iconUrl: "/images/marker-icon-red.png",
+  iconRetinaUrl: "/images/marker-icon-2x-red.png",
   shadowUrl: "/images/marker-shadow.png",
   iconSize: [25, 41],
   iconAnchor: [12, 41],
