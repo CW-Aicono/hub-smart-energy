@@ -185,7 +185,24 @@ const Tasks = () => {
                 <EmptyState t={t} hasFilters={search !== "" || statusFilter !== "all" || priorityFilter !== "all" || overdueFilter || externalFilter} onCreateTask={() => setCreateOpen(true)} />
               ) : (
                 <div className="space-y-3">
-                  {filtered.map(({ task, count, allIds }) => (<TaskCard key={task.id} task={task} duplicateCount={count} duplicateIds={allIds} />))}
+                  <div className="flex items-center gap-2 px-1">
+                    <Checkbox
+                      checked={filtered.length > 0 && filtered.flatMap(f => f.allIds).every(id => selectedIds.has(id))}
+                      onCheckedChange={() => selectAll(filtered)}
+                    />
+                    <span className="text-xs text-muted-foreground">Alle auswählen</span>
+                  </div>
+                  {filtered.map(({ task, count, allIds }) => (
+                    <TaskCard
+                      key={task.id}
+                      task={task}
+                      duplicateCount={count}
+                      duplicateIds={allIds}
+                      selectable
+                      selected={allIds.every(id => selectedIds.has(id))}
+                      onToggleSelect={toggleSelect}
+                    />
+                  ))}
                   <p className="text-xs text-center text-muted-foreground pt-2">
                     {filtered.length} von {activeTasks.length} aktiven Aufgaben
                   </p>
