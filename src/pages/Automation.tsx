@@ -638,12 +638,13 @@ const Automation = () => {
         </div>
       </main>
 
-      {/* Rule Builder Sheet – now with sensors from ALL gateways */}
+      {/* Rule Builder Sheet – MLA mode with gateway-first selection */}
       <AutomationRuleBuilder
         open={ruleBuilderOpen}
         onOpenChange={setRuleBuilderOpen}
         sensors={allSensors}
         sensorsLoading={sensorsLoading}
+        gatewayOptions={gatewayOptionsForBuilder.length > 0 ? gatewayOptionsForBuilder : undefined}
         initialData={editTarget ? {
           name: editTarget.name,
           description: editTarget.description || "",
