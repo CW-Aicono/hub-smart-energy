@@ -511,16 +511,29 @@ const SuperAdminTenantDetail = () => {
                           <Input type="email" value={tenantInfoForm.contact_email} onChange={(e) => setTenantInfoForm(f => ({ ...f, contact_email: e.target.value }))} />
                         </div>
                       </div>
-                      <div className="flex items-center gap-3 pt-2">
-                        <Switch
-                          id="aicono-member"
-                          checked={tenantInfoForm.is_aicono_member}
-                          onCheckedChange={(v) => setTenantInfoForm(f => ({ ...f, is_aicono_member: v }))}
-                        />
-                        <Label htmlFor="aicono-member" className="flex items-center gap-2">
-                          <Award className="h-4 w-4" />
-                          Mitglied im AICONO e.&thinsp;V.
-                        </Label>
+                      <div className="flex items-center gap-6 pt-2 flex-wrap">
+                        <div className="flex items-center gap-3">
+                          <Switch
+                            id="aicono-member"
+                            checked={tenantInfoForm.is_aicono_member}
+                            onCheckedChange={(v) => setTenantInfoForm(f => ({ ...f, is_aicono_member: v }))}
+                          />
+                          <Label htmlFor="aicono-member" className="flex items-center gap-2">
+                            <Award className="h-4 w-4" />
+                            Mitglied im AICONO e.&thinsp;V.
+                          </Label>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <Switch
+                            id="is-kommune"
+                            checked={tenantInfoForm.is_kommune}
+                            onCheckedChange={(v) => setTenantInfoForm(f => ({ ...f, is_kommune: v }))}
+                          />
+                          <Label htmlFor="is-kommune" className="flex items-center gap-2">
+                            <Building2 className="h-4 w-4" />
+                            Kommune
+                          </Label>
+                        </div>
                       </div>
                     </div>
                   ) : (
