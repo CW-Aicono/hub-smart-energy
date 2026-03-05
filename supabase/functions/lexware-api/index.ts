@@ -70,6 +70,8 @@ Deno.serve(async (req) => {
 
       for (const inv of invoices) {
         try {
+          // Delay between invoices to avoid rate limits
+          if (results.length > 0) await sleep(600);
           // Skip already synced
           if (inv.lexware_invoice_id) {
             results.push({ invoiceId: inv.id, status: "skipped", reason: "already_synced", lexwareId: inv.lexware_invoice_id });
