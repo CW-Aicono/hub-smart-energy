@@ -41,7 +41,7 @@ const Settings = () => {
         </header>
         <div className="p-3 md:p-6">
           <Tabs defaultValue="tenant-info">
-            <TabsList>
+            <TabsList className="flex-wrap h-auto gap-1">
               <TabsTrigger value="tenant-info" className="gap-2">
                 <Building2 className="h-4 w-4" />
                 {t("settings.tabTenant" as any)}
