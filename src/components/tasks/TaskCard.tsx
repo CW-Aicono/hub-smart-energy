@@ -134,7 +134,10 @@ export const TaskCard = ({ task, duplicateCount, duplicateIds }: TaskCardProps) 
                       <History className="h-4 w-4 mr-2" /> Protokoll anzeigen
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={() => deleteTask.mutate(task.id)} className="text-destructive focus:text-destructive">
+                    <DropdownMenuItem onClick={() => {
+                      const allIds = duplicateIds && duplicateIds.length > 0 ? duplicateIds : [task.id];
+                      deleteTask.mutate(allIds);
+                    }} className="text-destructive focus:text-destructive">
                       <Trash2 className="h-4 w-4 mr-2" /> Löschen
                     </DropdownMenuItem>
                   </DropdownMenuContent>
