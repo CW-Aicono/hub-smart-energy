@@ -46,9 +46,12 @@ interface TaskCardProps {
   task: Task;
   duplicateCount?: number;
   duplicateIds?: string[];
+  selectable?: boolean;
+  selected?: boolean;
+  onToggleSelect?: (ids: string[]) => void;
 }
 
-export const TaskCard = ({ task, duplicateCount, duplicateIds }: TaskCardProps) => {
+export const TaskCard = ({ task, duplicateCount, duplicateIds, selectable, selected, onToggleSelect }: TaskCardProps) => {
   const { updateTask, deleteTask, bulkUpdateStatus } = useTasks();
   const [detailOpen, setDetailOpen] = useState(false);
 
