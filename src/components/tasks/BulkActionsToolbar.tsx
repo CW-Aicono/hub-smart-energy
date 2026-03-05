@@ -1,5 +1,8 @@
 import { useState } from "react";
 import { useTasks, TaskStatus, TaskPriority } from "@/hooks/useTasks";
+import { useExternalContacts } from "@/hooks/useExternalContacts";
+import { useTenant } from "@/hooks/useTenant";
+import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -20,13 +23,17 @@ interface BulkActionsToolbarProps {
 }
 
 export const BulkActionsToolbar = ({ selectedIds, onClearSelection }: BulkActionsToolbarProps) => {
-  const { bulkUpdateFields, bulkUpdateStatus, deleteTask, tenantUsers } = useTasks();
+  const { bulkUpdateFields, bulkUpdateStatus, deleteTask, tenantUsers, tasks } = useTasks();
+  const { contacts: externalContacts, findMatches, createContact } = useExternalContacts();
+  const { tenant } = useTenant();
   const [assignOpen, setAssignOpen] = useState(false);
   const [dateOpen, setDateOpen] = useState(false);
   const [assignTab, setAssignTab] = useState<"team" | "external">("team");
   const [extName, setExtName] = useState("");
   const [extEmail, setExtEmail] = useState("");
   const [extPhone, setExtPhone] = useState("");
+  const [extSuggestions, setExtSuggestions] = useState<ReturnType<typeof findMatches>>([]);
+  const [showExtSuggestions, setShowExtSuggestions] = useState(false);
 
   const count = selectedIds.length;
   if (count === 0) return null;
