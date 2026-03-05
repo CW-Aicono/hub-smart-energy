@@ -288,25 +288,21 @@ export default function SuperAdminSidebar() {
       <div className={cn("border-t mt-auto", collapsed ? "p-2" : "p-4")} style={{ borderColor: `hsl(var(--sa-sidebar-border))` }}>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            {collapsed ? (
-              <Tooltip delayDuration={0}>
-                <TooltipTrigger asChild>
-                  <Button variant="ghost" size="icon" className="w-full h-10 opacity-70 hover:opacity-100">
-                    <Avatar className="h-8 w-8"><AvatarFallback className="text-xs" style={{ backgroundColor: `hsl(var(--sa-primary))`, color: `hsl(var(--sa-primary-foreground))` }}>{userInitials}</AvatarFallback></Avatar>
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="right" className="bg-popover">{user?.email}</TooltipContent>
-              </Tooltip>
-            ) : (
-              <Button variant="ghost" className="w-full justify-start gap-3 px-3 py-6 h-auto opacity-70 hover:opacity-100">
-                <Avatar className="h-8 w-8"><AvatarFallback className="text-xs" style={{ backgroundColor: `hsl(var(--sa-primary))`, color: `hsl(var(--sa-primary-foreground))` }}>{userInitials}</AvatarFallback></Avatar>
-                <div className="flex-1 text-left overflow-hidden">
-                  <p className="text-sm font-medium truncate">{user?.email}</p>
-                  <p className="text-xs opacity-50">{t("nav.super_admin")}</p>
-                </div>
-                <ChevronDown className="h-4 w-4 opacity-50" />
-              </Button>
-            )}
+            <Button variant="ghost" className={cn(
+              "opacity-70 hover:opacity-100",
+              collapsed ? "w-full h-10 p-0 justify-center" : "w-full justify-start gap-3 px-3 py-6 h-auto"
+            )}>
+              <Avatar className="h-8 w-8"><AvatarFallback className="text-xs" style={{ backgroundColor: `hsl(var(--sa-primary))`, color: `hsl(var(--sa-primary-foreground))` }}>{userInitials}</AvatarFallback></Avatar>
+              {!collapsed && (
+                <>
+                  <div className="flex-1 text-left overflow-hidden">
+                    <p className="text-sm font-medium truncate">{user?.email}</p>
+                    <p className="text-xs opacity-50">{t("nav.super_admin")}</p>
+                  </div>
+                  <ChevronDown className="h-4 w-4 opacity-50" />
+                </>
+              )}
+            </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align={collapsed ? "center" : "end"} side="top" className="w-64 bg-popover">
             {/* Color Preset */}
