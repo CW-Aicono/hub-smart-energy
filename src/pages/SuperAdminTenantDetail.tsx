@@ -17,7 +17,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { HeadsetIcon, RotateCcw, UserPlus, Mail, Shield, User, Copy, Check, Building2, MapPin, UserCircle, Package, Gauge, Users, Receipt, Clock, Pencil, Save, Blocks, Plus, X } from "lucide-react";
+import { HeadsetIcon, RotateCcw, UserPlus, Mail, Shield, User, Copy, Check, Building2, MapPin, UserCircle, Package, Gauge, Users, Receipt, Clock, Pencil, Save, Blocks, Plus, X, Award } from "lucide-react";
 import { useModuleBundles } from "@/hooks/useModuleBundles";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -135,14 +135,14 @@ const SuperAdminTenantDetail = () => {
   const { isSuperAdmin, loading: roleLoading } = useSuperAdmin();
   const { modules, toggleModule } = useTenantModules(id ?? null);
   const { license, upsertLicense } = useTenantLicense(id ?? null);
-  const { getPrice: getGlobalPrice } = useModulePrices();
+  const { getPrice: getGlobalPrice, getStandardPrice: getGlobalStandardPrice } = useModulePrices();
   const { bundles: allBundles, bundleItems: allBundleItems, getBundleModules } = useModuleBundles();
   const { t } = useSATranslation();
   const queryClient = useQueryClient();
   const [licenseForm, setLicenseForm] = useState<Record<string, string | number>>({});
   const [editingTenantInfo, setEditingTenantInfo] = useState(false);
   const [savingTenantInfo, setSavingTenantInfo] = useState(false);
-  const [tenantInfoForm, setTenantInfoForm] = useState({ name: "", street: "", house_number: "", postal_code: "", city: "", contact_person: "", contact_email: "" });
+  const [tenantInfoForm, setTenantInfoForm] = useState({ name: "", street: "", house_number: "", postal_code: "", city: "", contact_person: "", contact_email: "", is_aicono_member: false });
   const [bundleDialogOpen, setBundleDialogOpen] = useState(false);
 
   const { data: tenant } = useQuery({
@@ -225,7 +225,9 @@ const SuperAdminTenantDetail = () => {
   };
   const getEffectivePrice = (code: string): number => {
     const override = getModulePriceOverride(code);
-    return override != null ? override : getGlobalPrice(code);
+    if (override != null) return override;
+    const isMember = (tenant as any)?.is_aicono_member;
+    return isMember ? getGlobalPrice(code) : getGlobalStandardPrice(code);
   };
 
   const updatePriceOverride = async (moduleCode: string, value: number | null) => {
@@ -439,6 +441,7 @@ const SuperAdminTenantDetail = () => {
                         city: (tenant as any)?.city ?? "",
                         contact_person: (tenant as any)?.contact_person ?? "",
                         contact_email: tenant?.contact_email ?? "",
+                        is_aicono_member: (tenant as any)?.is_aicono_member ?? false,
                       });
                       setEditingTenantInfo(true);
                     }}>
@@ -457,6 +460,7 @@ const SuperAdminTenantDetail = () => {
                           city: tenantInfoForm.city.trim() || null,
                           contact_person: tenantInfoForm.contact_person.trim() || null,
                           contact_email: tenantInfoForm.contact_email.trim() || null,
+                          is_aicono_member: tenantInfoForm.is_aicono_member,
                         }).eq("id", tenant!.id);
                         setSavingTenantInfo(false);
                         if (error) { toast.error("Fehler beim Speichern"); console.error(error); }
@@ -500,6 +504,17 @@ const SuperAdminTenantDetail = () => {
                           <Input type="email" value={tenantInfoForm.contact_email} onChange={(e) => setTenantInfoForm(f => ({ ...f, contact_email: e.target.value }))} />
                         </div>
                       </div>
+                      <div className="flex items-center gap-3 pt-2">
+                        <Switch
+                          id="aicono-member"
+                          checked={tenantInfoForm.is_aicono_member}
+                          onCheckedChange={(v) => setTenantInfoForm(f => ({ ...f, is_aicono_member: v }))}
+                        />
+                        <Label htmlFor="aicono-member" className="flex items-center gap-2">
+                          <Award className="h-4 w-4" />
+                          Mitglied im AICONO e.&thinsp;V.
+                        </Label>
+                      </div>
                     </div>
                   ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -541,6 +556,13 @@ const SuperAdminTenantDetail = () => {
                           <div>
                             <p className="text-sm font-medium text-muted-foreground">Kontakt-E-Mail</p>
                             <p>{tenant?.contact_email ?? "–"}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-start gap-2">
+                          <Award className="h-4 w-4 mt-0.5 text-muted-foreground shrink-0" />
+                          <div>
+                            <p className="text-sm font-medium text-muted-foreground">Mitglied im AICONO e.&thinsp;V.</p>
+                            <p>{(tenant as any)?.is_aicono_member ? <Badge variant="default" className="text-xs">Ja</Badge> : "Nein"}</p>
                           </div>
                         </div>
                       </div>
