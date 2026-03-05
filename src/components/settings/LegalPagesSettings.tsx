@@ -95,20 +95,11 @@ function LegalPageEditor({
         />
       </div>
       <div className="space-y-2">
-        <Label htmlFor={`${pageKey}-content`}>
-          Inhalt (HTML)
-        </Label>
-        <Textarea
-          id={`${pageKey}-content`}
-          value={content}
-          onChange={(e) => setContent(e.target.value)}
-          placeholder={`Inhalt der ${label} als HTML eingeben…`}
-          rows={16}
-          className="font-mono text-sm"
+        <Label htmlFor={`${pageKey}-content`}>Inhalt</Label>
+        <RichTextEditor
+          content={content}
+          onChange={(html) => setContent(html)}
         />
-        <p className="text-xs text-muted-foreground">
-          Sie können HTML-Tags wie &lt;h2&gt;, &lt;p&gt;, &lt;ul&gt;, &lt;li&gt;, &lt;strong&gt; verwenden.
-        </p>
       </div>
       {existing?.updated_at && (
         <p className="text-xs text-muted-foreground">
