@@ -197,6 +197,41 @@ export const TaskDetailSheet = ({ task, open, onOpenChange }: TaskDetailSheetPro
         historyNewValue: externalName,
         historyComment: transferNote || null,
       });
+
+      // Auto-create contact if not already in the contact list
+      if (externalName.trim()) {
+        const existing = externalContacts.find(
+          (c) =>
+            c.name.toLowerCase() === externalName.trim().toLowerCase() ||
+            (externalEmail && c.email?.toLowerCase() === externalEmail.trim().toLowerCase())
+        );
+        if (!existing) {
+          createContact.mutate({
+            name: externalName.trim(),
+            email: externalEmail.trim() || undefined,
+            phone: externalPhone.trim() || undefined,
+          });
+        }
+      }
+
+      // Send email notification if email provided
+      if (externalEmail.trim() && tenant?.id) {
+        try {
+          await supabase.functions.invoke("send-task-transfer-email", {
+            body: {
+              contactName: externalName,
+              contactEmail: externalEmail,
+              taskTitle: task.title,
+              taskDescription: task.description,
+              dueDate: task.due_date,
+              transferNote: transferNote || undefined,
+              tenantId: tenant.id,
+            },
+          });
+        } catch (e) {
+          console.error("Failed to send task transfer email:", e);
+        }
+      }
     }
     setTransferNote("");
     setTransferSaved(true);
