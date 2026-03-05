@@ -9,6 +9,7 @@ import { useEnergyData } from "@/hooks/useEnergyData";
 import { useTranslation } from "@/hooks/useTranslation";
 import { supabase } from "@/integrations/supabase/client";
 import { BrainCircuit, AlertTriangle, ShieldAlert, Info, RefreshCw } from "lucide-react";
+import { AiDisclaimer } from "@/components/ui/ai-disclaimer";
 import { toast } from "sonner";
 
 interface AnomalyWidgetProps {
@@ -148,6 +149,7 @@ const AnomalyWidget = ({ locationId }: AnomalyWidgetProps) => {
                 })}
               </div>
             )}
+            <AiDisclaimer text="KI-gestützte Analyse – keine Gewähr für Vollständigkeit oder Richtigkeit. Keine Grundlage für geschäftskritische Entscheidungen ohne fachliche Prüfung." />
           </div>
         )}
       </CardContent>

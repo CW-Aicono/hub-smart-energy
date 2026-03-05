@@ -2,6 +2,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Brain, TrendingUp, Loader2 } from "lucide-react";
+import { AiDisclaimer } from "@/components/ui/ai-disclaimer";
 import { HelpTooltip } from "@/components/ui/help-tooltip";
 import { useArbitrageAiStrategy } from "@/hooks/useArbitrageAiStrategy";
 import { useTranslation } from "@/hooks/useTranslation";
@@ -76,6 +77,7 @@ export default function ArbitrageAiWidget({ locationId }: ArbitrageAiWidgetProps
                 </p>
               </div>
             ))}
+            <AiDisclaimer text="KI-gestützte Analyse – keine Gewähr für Vollständigkeit oder Richtigkeit. Keine Grundlage für geschäftskritische Entscheidungen ohne fachliche Prüfung." />
             <Button
               variant="link"
               size="sm"

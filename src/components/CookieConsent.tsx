@@ -103,6 +103,8 @@ const CookieConsent = () => {
               <Link to="/datenschutz" className="hover:underline">Datenschutzerklärung</Link>
               <span>·</span>
               <Link to="/impressum" className="hover:underline">Impressum</Link>
+              <span>·</span>
+              <Link to="/agb" className="hover:underline">AGB</Link>
             </div>
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3">
             <Button

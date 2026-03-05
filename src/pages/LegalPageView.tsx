@@ -29,10 +29,31 @@ const DEFAULTS: Record<string, { title: string; html: string }> = {
 <p>[USt-IdNr.]</p>
 <p><em>Hinweis: Dieses Impressum ist ein Platzhalter und muss mit Ihren Unternehmensdaten ausgefüllt werden.</em></p>`,
   },
+  agb: {
+    title: "Nutzungsbedingungen (AGB)",
+    html: `<h2>1. Geltungsbereich</h2>
+<p>Diese Nutzungsbedingungen gelten für die Nutzung der Energiemanagement-Plattform. Mit der Nutzung erkennen Sie diese Bedingungen an.</p>
+<h2>2. Leistungsbeschreibung</h2>
+<p>Die Plattform stellt Werkzeuge zur Erfassung, Auswertung und Visualisierung von Energiedaten bereit. KI-gestützte Analysen, Anomalie-Erkennungen und Handelsempfehlungen dienen ausschließlich der Orientierung.</p>
+<h2>3. Haftungsbeschränkung</h2>
+<p>Die Plattform übernimmt keine Haftung für die Richtigkeit, Vollständigkeit oder Aktualität der bereitgestellten Daten, Analysen und Empfehlungen. Insbesondere:</p>
+<ul>
+<li>KI-basierte Analysen und Anomalie-Erkennungen können fehlerhaft sein und ersetzen keine fachliche Prüfung.</li>
+<li>Arbitrage- und Handelsempfehlungen stellen keine Finanzberatung dar. Entscheidungen auf Basis dieser Empfehlungen erfolgen auf eigenes Risiko.</li>
+<li>Schwellenwert-Alarme und automatisierte Benachrichtigungen können verzögert, unvollständig oder fehlerhaft sein.</li>
+<li>Automatisierte Schaltvorgänge und Steuerungen erfolgen ohne Gewähr. Der Betreiber haftet nicht für Schäden durch fehlerhafte Automatisierungen.</li>
+</ul>
+<p>Die Haftung für indirekte Schäden, entgangenen Gewinn oder Folgeschäden ist – soweit gesetzlich zulässig – ausgeschlossen.</p>
+<h2>4. Datenschutz</h2>
+<p>Informationen zur Datenverarbeitung finden Sie in unserer <a href="/datenschutz">Datenschutzerklärung</a>.</p>
+<h2>5. Änderungen</h2>
+<p>Wir behalten uns vor, diese Nutzungsbedingungen jederzeit anzupassen. Änderungen werden über die Plattform bekannt gegeben.</p>
+<p><em>Hinweis: Diese AGB sind ein Platzhalter und müssen rechtlich an Ihr Unternehmen angepasst werden.</em></p>`,
+  },
 };
 
 interface LegalPageViewProps {
-  pageKey: "datenschutz" | "impressum";
+  pageKey: "datenschutz" | "impressum" | "agb";
 }
 
 const LegalPageView = ({ pageKey }: LegalPageViewProps) => {
