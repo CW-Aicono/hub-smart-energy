@@ -1,9 +1,7 @@
-import { useParams, Link } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useLegalPage } from "@/hooks/useLegalPages";
-import { useTenant } from "@/hooks/useTenant";
-import { useDemoMode } from "@/contexts/DemoMode";
 import DOMPurify from "dompurify";
 
 const DEFAULTS: Record<string, { title: string; html: string }> = {
@@ -38,10 +36,7 @@ interface LegalPageViewProps {
 }
 
 const LegalPageView = ({ pageKey }: LegalPageViewProps) => {
-  const isDemo = useDemoMode();
-  const { tenant } = useTenant();
-  const tenantId = isDemo ? null : tenant?.id;
-  const { data: page, isLoading } = useLegalPage(pageKey, tenantId);
+  const { data: page, isLoading } = useLegalPage(pageKey);
 
   const fallback = DEFAULTS[pageKey];
   const title = page?.title || fallback?.title || pageKey;
