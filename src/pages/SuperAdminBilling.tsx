@@ -222,6 +222,22 @@ const SuperAdminBilling = () => {
             <p className="text-sm text-muted-foreground mt-1">{t("billing.subtitle")}</p>
           </div>
           <div className="flex gap-2">
+            <Button variant="outline" disabled={generating} onClick={async () => {
+              setGenerating(true);
+              try {
+                const { data, error } = await supabase.functions.invoke("generate-monthly-invoices");
+                if (error) throw error;
+                queryClient.invalidateQueries({ queryKey: ["super-admin-invoices"] });
+                toast.success(`Rechnungen generiert: ${data?.invoices_created ?? 0} neu, ${data?.invoices_updated ?? 0} aktualisiert`);
+              } catch (err: any) {
+                toast.error(`Fehler: ${err.message}`);
+              } finally {
+                setGenerating(false);
+              }
+            }}>
+              {generating ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Receipt className="h-4 w-4 mr-2" />}
+              Rechnungen generieren
+            </Button>
             <Button variant="outline" disabled={syncing} onClick={handleSyncStatus}>
               {syncing ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-2" />}
               Status aktualisieren
