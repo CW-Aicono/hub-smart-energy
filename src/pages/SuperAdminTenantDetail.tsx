@@ -581,7 +581,12 @@ const SuperAdminTenantDetail = () => {
                       <TableRow>
                         <TableHead>{t("tenant_detail.modules")}</TableHead>
                         <TableHead className="w-24 text-center">{t("common.active")}</TableHead>
-                        <TableHead className="w-36 text-right">{t("tenant_detail.global_price")}</TableHead>
+                        <TableHead className="w-36 text-right">
+                          <span className="inline-flex items-center gap-1 justify-end">
+                            Standardpreis
+                            {(tenant as any)?.is_aicono_member && <Award className="h-4 w-4 text-primary" />}
+                          </span>
+                        </TableHead>
                         <TableHead className="w-44 text-right">{t("tenant_detail.individual_price")}</TableHead>
                         <TableHead className="w-32 text-right">{t("tenant_detail.effective")}</TableHead>
                       </TableRow>
@@ -589,7 +594,8 @@ const SuperAdminTenantDetail = () => {
                     <TableBody>
                       {ALL_MODULES.map((mod) => {
                         const isAlwaysOn = "alwaysOn" in mod;
-                        const globalPrice = getGlobalPrice(mod.code);
+                        const isMember = !!(tenant as any)?.is_aicono_member;
+                        const globalPrice = isMember ? getGlobalPrice(mod.code) : getGlobalStandardPrice(mod.code);
                         const override = getModulePriceOverride(mod.code);
                         const effective = getEffectivePrice(mod.code);
                         return (
