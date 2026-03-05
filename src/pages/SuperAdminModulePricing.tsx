@@ -9,6 +9,8 @@ import SuperAdminSidebar from "@/components/super-admin/SuperAdminSidebar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { Building2, Factory } from "lucide-react";
 
 const editableModules = ALL_MODULES.filter((m) => !("alwaysOn" in m));
 
@@ -45,8 +47,9 @@ const PriceInput = ({ currentPrice, unit, onSave }: PriceInputProps) => {
 const SuperAdminModulePricing = () => {
   const { user, loading: authLoading } = useAuth();
   const { isSuperAdmin, loading: roleLoading } = useSuperAdmin();
-  const { prices, isLoading, updatePrice, getPrice, getStandardPrice } = useModulePrices();
+  const { prices, isLoading, updatePrice, getPrice, getStandardPrice, getIndustryPrice, getIndustryStandardPrice } = useModulePrices();
   const { t } = useSATranslation();
+  const [sector, setSector] = useState<"kommune" | "industrie">("kommune");
 
   if (authLoading || roleLoading || isLoading) {
     return <div className="flex min-h-screen items-center justify-center bg-background"><div className="animate-pulse text-muted-foreground">{t("common.loading")}</div></div>;
@@ -64,7 +67,27 @@ const SuperAdminModulePricing = () => {
         </header>
         <div className="p-6">
           <Card>
-            <CardHeader><CardTitle>{t("module_pricing.monthly_defaults")}</CardTitle></CardHeader>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle>{t("module_pricing.monthly_defaults")}</CardTitle>
+                <ToggleGroup
+                  type="single"
+                  value={sector}
+                  onValueChange={(v) => { if (v) setSector(v as "kommune" | "industrie"); }}
+                  variant="outline"
+                  size="sm"
+                >
+                  <ToggleGroupItem value="kommune" className="gap-1.5">
+                    <Building2 className="h-4 w-4" />
+                    Kommunen
+                  </ToggleGroupItem>
+                  <ToggleGroupItem value="industrie" className="gap-1.5">
+                    <Factory className="h-4 w-4" />
+                    Industrie
+                  </ToggleGroupItem>
+                </ToggleGroup>
+              </div>
+            </CardHeader>
             <CardContent>
               {/* Column headers */}
               <div className="flex items-center justify-between gap-4 mb-4 pb-2 border-b">
@@ -77,19 +100,33 @@ const SuperAdminModulePricing = () => {
               <div className="space-y-4">
                 {editableModules.map((mod) => {
                   const unit = mod.code === "support_billing" ? "€/15Min" : "€/Mo";
+                  const memberPrice = sector === "kommune" ? getPrice(mod.code) : getIndustryPrice(mod.code);
+                  const stdPrice = sector === "kommune" ? getStandardPrice(mod.code) : getIndustryStandardPrice(mod.code);
                   return (
                     <div key={mod.code} className="flex items-center justify-between gap-4">
                       <Label className="text-base flex-1">{mod.label}</Label>
                       <div className="flex gap-4">
                         <PriceInput
-                          currentPrice={getPrice(mod.code)}
+                          currentPrice={memberPrice}
                           unit={unit}
-                          onSave={(val) => updatePrice.mutate({ moduleCode: mod.code, priceMonthly: val })}
+                          onSave={(val) =>
+                            updatePrice.mutate(
+                              sector === "kommune"
+                                ? { moduleCode: mod.code, priceMonthly: val }
+                                : { moduleCode: mod.code, industryPriceMonthly: val }
+                            )
+                          }
                         />
                         <PriceInput
-                          currentPrice={getStandardPrice(mod.code)}
+                          currentPrice={stdPrice}
                           unit={unit}
-                          onSave={(val) => updatePrice.mutate({ moduleCode: mod.code, standardPrice: val })}
+                          onSave={(val) =>
+                            updatePrice.mutate(
+                              sector === "kommune"
+                                ? { moduleCode: mod.code, standardPrice: val }
+                                : { moduleCode: mod.code, industryStandardPrice: val }
+                            )
+                          }
                         />
                       </div>
                     </div>
