@@ -266,6 +266,37 @@ export const useTasks = () => {
     },
   });
 
+  const bulkUpdateFields = useMutation({
+    mutationFn: async ({ ids, updates }: { ids: string[]; updates: Partial<Pick<Task, 'status' | 'priority' | 'assigned_to' | 'assigned_to_name' | 'external_contact_name' | 'external_contact_email' | 'external_contact_phone' | 'due_date' | 'completed_at'>> }) => {
+      const { error } = await supabase
+        .from("tasks")
+        .update(updates)
+        .in("id", ids)
+        .eq("tenant_id", tenant!.id);
+      if (error) throw error;
+      // Write history
+      const action = Object.keys(updates).join(",");
+      await supabase.from("task_history").insert(
+        ids.map((id) => ({
+          task_id: id,
+          tenant_id: tenant!.id,
+          actor_id: user?.id ?? null,
+          actor_name: user?.email ?? null,
+          action: "bulk_update",
+          new_value: action,
+        }))
+      );
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["tasks", tenant?.id] });
+      queryClient.invalidateQueries({ queryKey: ["task-history"] });
+      toast({ title: "Aufgaben aktualisiert" });
+    },
+    onError: () => {
+      toast({ title: "Fehler beim Aktualisieren", variant: "destructive" });
+    },
+  });
+
   const deleteAllArchived = useMutation({
     mutationFn: async () => {
       // Get all archived task IDs (done/cancelled)
@@ -306,7 +337,7 @@ export const useTasks = () => {
     },
   });
 
-  return { tasks, isLoading, tenantUsers, createTask, updateTask, bulkUpdateStatus, deleteTask, addComment, deleteAllArchived };
+  return { tasks, isLoading, tenantUsers, createTask, updateTask, bulkUpdateStatus, bulkUpdateFields, deleteTask, addComment, deleteAllArchived };
 };
 
 export const useTaskHistory = (taskId: string) => {
