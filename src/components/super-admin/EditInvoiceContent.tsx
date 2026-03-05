@@ -8,6 +8,7 @@ import {
 import { DialogFooter } from "@/components/ui/dialog";
 import { Loader2, Plus, Trash2, AlertTriangle, Ban } from "lucide-react";
 import { useSATranslation } from "@/hooks/useSATranslation";
+import { fmtCurrency } from "@/lib/formatCharging";
 
 interface LineItem {
   code: string;
@@ -120,7 +121,7 @@ export default function EditInvoiceContent({ invoice, editStatus, setEditStatus,
                 className="text-sm text-right"
               />
               <span className="text-sm text-muted-foreground text-right">
-                {(item.amount * (item.quantity ?? 1)).toFixed(2)} €
+                {fmtCurrency(item.amount * (item.quantity ?? 1))}
               </span>
               {!isLocked && (
                 <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => removeItem(idx)}>
@@ -150,9 +151,9 @@ export default function EditInvoiceContent({ invoice, editStatus, setEditStatus,
 
       {/* Totals */}
       <div className="grid grid-cols-3 gap-4 text-sm border-t pt-3">
-        <div><span className="text-muted-foreground">Module:</span> <span className="font-medium">{totals.module.toFixed(2)} €</span></div>
-        <div><span className="text-muted-foreground">Support:</span> <span className="font-medium">{totals.support.toFixed(2)} €</span></div>
-        <div><span className="text-muted-foreground">Gesamt:</span> <span className="font-bold">{totals.total.toFixed(2)} €</span></div>
+        <div><span className="text-muted-foreground">Module:</span> <span className="font-medium">{fmtCurrency(totals.module)}</span></div>
+        <div><span className="text-muted-foreground">Support:</span> <span className="font-medium">{fmtCurrency(totals.support)}</span></div>
+        <div><span className="text-muted-foreground">Gesamt:</span> <span className="font-bold">{fmtCurrency(totals.total)}</span></div>
       </div>
 
       <DialogFooter className="flex-col sm:flex-row gap-2">
