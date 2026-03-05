@@ -88,7 +88,7 @@ Deno.serve(async (req) => {
           let lexwareContactId = tenant.lexware_contact_id || contactCache.get(tenant.id);
           if (lexwareContactId) {
             // Verify the contact still exists in Lexware
-            const checkRes = await fetch(`${LEXWARE_BASE}/contacts/${lexwareContactId}`, { headers: { Authorization: headers.Authorization, Accept: "application/json" } });
+            const checkRes = await lexFetch(`${LEXWARE_BASE}/contacts/${lexwareContactId}`, { headers: { Authorization: headers.Authorization, Accept: "application/json" } });
             if (!checkRes.ok) {
               console.log(`Contact ${lexwareContactId} no longer exists in Lexware (${checkRes.status}), creating new one`);
               await checkRes.text(); // consume body
@@ -126,7 +126,7 @@ Deno.serve(async (req) => {
 
           console.log("Sending to Lexware:", JSON.stringify(lexwareInvoice, null, 2));
 
-          const lexRes = await fetch(`${LEXWARE_BASE}/invoices`, {
+          const lexRes = await lexFetch(`${LEXWARE_BASE}/invoices`, {
             method: "POST",
             headers,
             body: JSON.stringify(lexwareInvoice),
