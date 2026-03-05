@@ -102,17 +102,17 @@ const OcppIntegration = () => {
 
   return (
     <AppLayout>
-      <div className="space-y-6">
+      <div className="space-y-4 max-w-5xl">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">{t("ocppIntegration.title" as any)}</h1>
-          <p className="text-muted-foreground mt-1">{t("ocppIntegration.subtitle" as any)}</p>
+          <h1 className="text-xl font-bold tracking-tight">{t("ocppIntegration.title" as any)}</h1>
+          <p className="text-muted-foreground text-sm mt-0.5">{t("ocppIntegration.subtitle" as any)}</p>
         </div>
 
         {/* OCPP Backend URL Card */}
         <Card className="border-primary/20 bg-primary/5">
-          <CardContent className="pt-6">
-            <div className="flex items-start gap-3">
-              <Server className="h-5 w-5 text-primary mt-0.5 shrink-0" />
+          <CardContent className="pt-4 pb-4">
+            <div className="flex items-start gap-2">
+              <Server className="h-4 w-4 text-primary mt-0.5 shrink-0" />
               <div className="flex-1 min-w-0 space-y-3">
                 <p className="text-sm font-medium">{t("ocppIntegration.backendUrl" as any)}</p>
 
