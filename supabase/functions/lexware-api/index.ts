@@ -202,7 +202,7 @@ async function ensureContact(
 
   console.log("Contact payload:", JSON.stringify(contactPayload, null, 2));
 
-  const res = await fetch(`${LEXWARE_BASE}/contacts`, {
+  const res = await lexFetch(`${LEXWARE_BASE}/contacts`, {
     method: "POST",
     headers,
     body: JSON.stringify(contactPayload),
