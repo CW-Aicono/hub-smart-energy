@@ -9,7 +9,7 @@ import { useIntegrations } from "@/hooks/useIntegrations";
 import { useTenant } from "@/hooks/useTenant";
 import { useLoxoneSensorsMulti, LoxoneSensor } from "@/hooks/useLoxoneSensors";
 import { supabase } from "@/integrations/supabase/client";
-import { AutomationRuleBuilder, AutomationRuleData } from "@/components/locations/AutomationRuleBuilder";
+import { AutomationRuleBuilder, AutomationRuleData, GatewayOption } from "@/components/locations/AutomationRuleBuilder";
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
