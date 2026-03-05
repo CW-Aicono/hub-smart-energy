@@ -442,8 +442,7 @@ const Automation = () => {
                         </div>
                       </CardContent>
                     </Card>
-                  );
-                )
+                })
               )}
 
               <Card className="border-dashed">
