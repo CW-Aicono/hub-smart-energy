@@ -142,7 +142,7 @@ const SuperAdminTenantDetail = () => {
   const [licenseForm, setLicenseForm] = useState<Record<string, string | number>>({});
   const [editingTenantInfo, setEditingTenantInfo] = useState(false);
   const [savingTenantInfo, setSavingTenantInfo] = useState(false);
-  const [tenantInfoForm, setTenantInfoForm] = useState({ name: "", street: "", house_number: "", postal_code: "", city: "", contact_person: "", contact_email: "", is_aicono_member: false });
+  const [tenantInfoForm, setTenantInfoForm] = useState({ name: "", street: "", house_number: "", postal_code: "", city: "", contact_person: "", contact_email: "", is_aicono_member: false, is_kommune: true });
   const [bundleDialogOpen, setBundleDialogOpen] = useState(false);
 
   const { data: tenant } = useQuery({
@@ -227,7 +227,12 @@ const SuperAdminTenantDetail = () => {
     const override = getModulePriceOverride(code);
     if (override != null) return override;
     const isMember = (tenant as any)?.is_aicono_member;
-    return isMember ? getGlobalPrice(code) : getGlobalStandardPrice(code);
+    const isKommune = (tenant as any)?.is_kommune !== false;
+    if (isKommune) {
+      return isMember ? getGlobalPrice(code) : getGlobalStandardPrice(code);
+    } else {
+      return isMember ? getGlobalIndustryPrice(code) : getGlobalIndustryStandardPrice(code);
+    }
   };
 
   const updatePriceOverride = async (moduleCode: string, value: number | null) => {
