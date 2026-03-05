@@ -33,6 +33,7 @@ const SuperAdminBilling = () => {
   const { isSuperAdmin, loading: roleLoading } = useSuperAdmin();
   const { t } = useSATranslation();
   const [sepaOpen, setSepaOpen] = useState(false);
+  const [generating, setGenerating] = useState(false);
   const [creditor, setCreditor] = useState({ name: "", iban: "", bic: "", id: "" });
   const [sendingIds, setSendingIds] = useState<Set<string>>(new Set());
   const [editInv, setEditInv] = useState<any>(null);
