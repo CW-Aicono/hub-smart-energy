@@ -577,8 +577,46 @@ function MeterTab({ tenantRecord, lang }: { tenantRecord: TenantRecord; lang: Te
         supabase.from("meter_period_totals").select("*").in("meter_id", meterIds).eq("period_type", "month").order("period_start", { ascending: false }).limit(120),
         supabase.from("meter_readings").select("meter_id, value, reading_date").in("meter_id", meterIds).order("reading_date", { ascending: false }).limit(120),
       ]);
+
+      // Fallback: aggregate from 5min data for months missing in period_totals
+      const existingKeys = new Set(
+        (tData || []).map((t: any) => `${t.meter_id}::${(t.period_start as string).substring(0, 7)}`)
+      );
+
+      let fallbackTotals: any[] = [];
+      const moveInFilter = tenantRecord.move_in_date || "1900-01-01";
+      let aggQuery = supabase
+        .from("meter_power_readings_5min")
+        .select("meter_id, bucket, power_avg")
+        .in("meter_id", meterIds)
+        .gte("bucket", moveInFilter)
+        .order("bucket", { ascending: true });
+      const { data: aggData } = await aggQuery;
+
+      if (aggData && aggData.length > 0) {
+        const monthlyMap: Record<string, number> = {};
+        for (const row of aggData) {
+          const month = (row.bucket as string).substring(0, 7);
+          const key = `${row.meter_id}::${month}`;
+          if (existingKeys.has(key)) continue;
+          monthlyMap[key] = (monthlyMap[key] || 0) + Number(row.power_avg) * (5.0 / 60.0);
+        }
+        for (const [key, total] of Object.entries(monthlyMap)) {
+          const [meterId, month] = key.split("::");
+          const meter = (mData || []).find((m: any) => m.id === meterId);
+          fallbackTotals.push({
+            meter_id: meterId,
+            period_type: "month",
+            period_start: `${month}-01`,
+            total_value: total,
+            energy_type: meter?.energy_type || "strom",
+            source: "5min_aggregate",
+          });
+        }
+      }
+
       setMeters(mData || []);
-      setAllTotals(tData || []);
+      setAllTotals([...(tData || []), ...fallbackTotals]);
       setAllReadings(rData || []);
       setLoading(false);
 
