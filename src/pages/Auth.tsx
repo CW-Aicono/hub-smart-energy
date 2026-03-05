@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Navigate, useSearchParams } from "react-router-dom";
+import { Navigate, useSearchParams, Link } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useTranslation } from "@/hooks/useTranslation";
 import { Button } from "@/components/ui/button";
@@ -192,6 +192,11 @@ const Auth = () => {
             )}
           </CardContent>
         </Card>
+        <div className="mt-4 flex items-center justify-center gap-3 text-xs text-muted-foreground">
+          <Link to="/datenschutz" className="hover:underline">Datenschutz</Link>
+          <span>·</span>
+          <Link to="/impressum" className="hover:underline">Impressum</Link>
+        </div>
       </div>
     </div>
   );
