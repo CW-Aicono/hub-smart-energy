@@ -442,6 +442,7 @@ const Automation = () => {
                         </div>
                       </CardContent>
                     </Card>
+                  );
                 })
               )}
 
