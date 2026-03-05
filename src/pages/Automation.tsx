@@ -91,7 +91,8 @@ const Automation = () => {
           .filter((row) => gwTypes.includes(row.integrations?.type))
           .map((row) => {
             const lastSync = row.last_sync_at ? new Date(row.last_sync_at) : null;
-            const isOnline = row.is_enabled && lastSync != null && differenceInMinutes(new Date(), lastSync) <= OFFLINE_THRESHOLD_MIN;
+            const syncOk = row.sync_status !== "error" && row.sync_status !== "failed";
+            const isOnline = row.is_enabled && syncOk && lastSync != null && differenceInMinutes(new Date(), lastSync) <= OFFLINE_THRESHOLD_MIN;
             return {
               id: row.id,
               name: row.integrations?.name || "Gateway",
@@ -477,7 +478,11 @@ const Automation = () => {
                                 <span className="text-xs text-muted-foreground">{T("automation.confidence")} {rec.confidence}%</span>
                               </div>
                             </div>
-                            <Button variant="outline" size="sm" className="shrink-0 ml-4" disabled>
+                            <Button variant="outline" size="sm" className="shrink-0 ml-4" onClick={() => {
+                              setEditTarget(null);
+                              setRuleBuilderOpen(true);
+                              toast.info(`Empfehlung "${rec.title}" als Vorlage übernommen. Bitte Aktor und Bedingungen konfigurieren.`);
+                            }}>
                               {T("automation.createAutomation")}<ArrowRight className="h-3 w-3 ml-1" />
                             </Button>
                           </div>
