@@ -155,18 +155,18 @@ const OcppIntegration = () => {
         </Card>
 
         {/* Filters */}
-        <div className="flex flex-col sm:flex-row gap-3">
+        <div className="flex flex-col sm:flex-row gap-2">
           <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
             <Input
               placeholder={t("common.search" as any)}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="pl-9"
+              className="pl-8 h-8 text-sm"
             />
           </div>
           <Select value={selectedVendor} onValueChange={(v) => { setSelectedVendor(v); setSelectedModel("all"); }}>
-            <SelectTrigger className="w-full sm:w-[200px]">
+            <SelectTrigger className="w-full sm:w-[180px] h-8 text-sm">
               <SelectValue placeholder={t("ocppIntegration.allVendors" as any)} />
             </SelectTrigger>
             <SelectContent>
@@ -178,7 +178,7 @@ const OcppIntegration = () => {
           </Select>
           {selectedVendor !== "all" && modelsForVendor.length > 0 && (
             <Select value={selectedModel} onValueChange={setSelectedModel}>
-              <SelectTrigger className="w-full sm:w-[200px]">
+              <SelectTrigger className="w-full sm:w-[180px] h-8 text-sm">
                 <SelectValue placeholder={t("ocppIntegration.allModels" as any)} />
               </SelectTrigger>
               <SelectContent>
@@ -193,52 +193,52 @@ const OcppIntegration = () => {
 
         {/* Results */}
         {isLoading ? (
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {[1, 2, 3, 4, 5, 6].map((i) => (
-              <Skeleton key={i} className="h-36 rounded-lg" />
+          <div className="grid gap-2.5 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
+              <Skeleton key={i} className="h-24 rounded-lg" />
             ))}
           </div>
         ) : filteredItems.length === 0 ? (
           <Card>
-            <CardContent className="flex flex-col items-center justify-center py-12 text-muted-foreground">
-              <PlugZap className="h-10 w-10 mb-3 opacity-50" />
-              <p className="text-sm">{t("ocppIntegration.noResults" as any)}</p>
+            <CardContent className="flex flex-col items-center justify-center py-8 text-muted-foreground">
+              <PlugZap className="h-8 w-8 mb-2 opacity-50" />
+              <p className="text-xs">{t("ocppIntegration.noResults" as any)}</p>
             </CardContent>
           </Card>
         ) : (
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-2.5 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {filteredItems.map((item) => (
               <Card
                 key={item.id}
                 className={`cursor-pointer transition-all hover:shadow-md ${expandedGuide === item.id ? "ring-2 ring-primary" : ""}`}
                 onClick={() => setExpandedGuide(expandedGuide === item.id ? null : item.id)}
               >
-                <CardHeader className="pb-3">
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <p className="text-xs text-muted-foreground font-medium">{item.vendor}</p>
-                      <CardTitle className="text-base mt-0.5">{item.model}</CardTitle>
+                <CardHeader className="p-3 pb-1.5">
+                  <div className="flex items-start justify-between gap-1.5">
+                    <div className="min-w-0">
+                      <p className="text-[11px] text-muted-foreground font-medium">{item.vendor}</p>
+                      <CardTitle className="text-sm mt-0.5 truncate">{item.model}</CardTitle>
                     </div>
-                    <div className="flex flex-col items-end gap-1">
+                    <div className="flex flex-col items-end gap-0.5 shrink-0">
                       {item.power_kw && (
-                        <Badge variant="secondary" className="text-xs">{item.power_kw} kW</Badge>
+                        <Badge variant="secondary" className="text-[10px] px-1.5 py-0">{item.power_kw} kW</Badge>
                       )}
-                      <Badge variant="outline" className="text-xs uppercase">{item.charging_type}</Badge>
+                      <Badge variant="outline" className="text-[10px] px-1.5 py-0 uppercase">{item.charging_type}</Badge>
                     </div>
                   </div>
                 </CardHeader>
-                <CardContent className="pt-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <Badge variant="outline" className="text-xs">
+                <CardContent className="p-3 pt-0">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <Badge variant="outline" className="text-[10px] px-1.5 py-0">
                       OCPP {item.protocol || "1.6"}
                     </Badge>
                     {item.guide ? (
-                      <Badge className={`text-xs ${DIFFICULTY_COLORS[item.guide.difficulty] || ""}`}>
-                        <BookOpen className="h-3 w-3 mr-1" />
+                      <Badge className={`text-[10px] px-1.5 py-0 ${DIFFICULTY_COLORS[item.guide.difficulty] || ""}`}>
+                        <BookOpen className="h-2.5 w-2.5 mr-0.5" />
                         {t(`ocppIntegration.difficulty.${item.guide.difficulty}` as any)}
                       </Badge>
                     ) : (
-                      <Badge variant="secondary" className="text-xs opacity-60">
+                      <Badge variant="secondary" className="text-[10px] px-1.5 py-0 opacity-60">
                         {t("ocppIntegration.noGuide" as any)}
                       </Badge>
                     )}
@@ -246,10 +246,10 @@ const OcppIntegration = () => {
 
                   {/* Expanded guide content */}
                   {expandedGuide === item.id && item.guide && (
-                    <div className="mt-4 pt-4 border-t" onClick={(e) => e.stopPropagation()}>
+                    <div className="mt-3 pt-3 border-t" onClick={(e) => e.stopPropagation()}>
                       <div className="prose prose-sm dark:prose-invert max-w-none">
                         <div
-                          className="text-sm leading-relaxed whitespace-pre-wrap"
+                          className="text-xs leading-relaxed whitespace-pre-wrap"
                           dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(item.guide.content_md) }}
                         />
                       </div>
@@ -257,11 +257,11 @@ const OcppIntegration = () => {
                   )}
 
                   {expandedGuide === item.id && !item.guide && (
-                    <div className="mt-4 pt-4 border-t text-sm text-muted-foreground">
+                    <div className="mt-3 pt-3 border-t text-xs text-muted-foreground">
                       <p>{t("ocppIntegration.noGuideAvailable" as any)}</p>
-                      <div className="mt-3 p-3 bg-muted rounded-md">
-                        <p className="font-medium text-foreground mb-1">{t("ocppIntegration.generalSteps" as any)}</p>
-                        <ol className="list-decimal list-inside space-y-1 text-xs">
+                      <div className="mt-2 p-2 bg-muted rounded-md">
+                        <p className="font-medium text-foreground mb-1 text-xs">{t("ocppIntegration.generalSteps" as any)}</p>
+                        <ol className="list-decimal list-inside space-y-0.5 text-[11px]">
                           <li>{t("ocppIntegration.step1" as any)}</li>
                           <li>{t("ocppIntegration.step2" as any)}</li>
                           <li>{t("ocppIntegration.step3" as any)}</li>
