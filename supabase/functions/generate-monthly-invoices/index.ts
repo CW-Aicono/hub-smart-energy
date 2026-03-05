@@ -150,9 +150,13 @@ Deno.serve(async (req) => {
         const blocks = Math.ceil(durationMin / 15);
         const cost = hasRemoteSupport ? 0 : blocks * supportPrice15min;
 
+        const sessionDate = new Date(s.started_at).toLocaleDateString("de-DE");
+        const label = s.reason ? `${sessionDate} – ${s.reason}` : `${sessionDate} – Support`;
+
         supportLineItems.push({
           type: "support",
           session_id: s.id,
+          label,
           started_at: s.started_at,
           duration_min: durationMin,
           blocks_15min: blocks,

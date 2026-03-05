@@ -31,13 +31,22 @@ export default function EditInvoiceContent({ invoice, editStatus, setEditStatus,
   const { t } = useSATranslation();
   const isLocked = !!invoice.lexware_invoice_id;
 
-  const initialItems: LineItem[] = Array.isArray(invoice.line_items) ? invoice.line_items.map((item: any) => ({
-    code: item.code ?? "",
-    label: item.label ?? item.description ?? item.reason ?? item.code ?? "",
-    amount: Number(item.amount ?? item.unit_price ?? item.total ?? 0),
-    type: item.type ?? "module",
-    quantity: item.quantity ?? 1,
-  })) : [];
+  const initialItems: LineItem[] = Array.isArray(invoice.line_items) ? invoice.line_items.map((item: any) => {
+    let label = item.label ?? item.description ?? item.reason ?? item.code ?? "";
+    // For support items, prefix with the session date if available
+    if (item.type === "support" && item.started_at) {
+      const d = new Date(item.started_at);
+      const dateStr = d.toLocaleDateString("de-DE");
+      if (!label.startsWith(dateStr)) label = `${dateStr} – ${label || "Support"}`;
+    }
+    return {
+      code: item.code ?? "",
+      label,
+      amount: Number(item.amount ?? item.unit_price ?? item.total ?? 0),
+      type: item.type ?? "module",
+      quantity: item.quantity ?? 1,
+    };
+  }) : [];
 
   const [items, setItems] = useState<LineItem[]>(initialItems);
 
