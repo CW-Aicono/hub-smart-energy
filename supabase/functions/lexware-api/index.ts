@@ -3,6 +3,25 @@ import { getCorsHeaders } from "../_shared/cors.ts";
 
 const LEXWARE_BASE = "https://api.lexware.io/v1";
 
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+async function lexFetch(url: string, options: RequestInit, maxRetries = 3): Promise<Response> {
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    const res = await fetch(url, options);
+    if (res.status === 429) {
+      const retryAfter = Number(res.headers.get("retry-after") || 2);
+      const waitMs = Math.max(retryAfter * 1000, 1500) * (attempt + 1);
+      console.log(`Rate limited (429), waiting ${waitMs}ms before retry ${attempt + 1}/${maxRetries}`);
+      await res.text(); // consume body
+      await sleep(waitMs);
+      continue;
+    }
+    return res;
+  }
+  // Final attempt
+  return fetch(url, options);
+}
+
 Deno.serve(async (req) => {
   const cors = getCorsHeaders(req);
   if (req.method === "OPTIONS") {
@@ -51,6 +70,8 @@ Deno.serve(async (req) => {
 
       for (const inv of invoices) {
         try {
+          // Delay between invoices to avoid rate limits
+          if (results.length > 0) await sleep(600);
           // Skip already synced
           if (inv.lexware_invoice_id) {
             results.push({ invoiceId: inv.id, status: "skipped", reason: "already_synced", lexwareId: inv.lexware_invoice_id });
@@ -67,7 +88,7 @@ Deno.serve(async (req) => {
           let lexwareContactId = tenant.lexware_contact_id || contactCache.get(tenant.id);
           if (lexwareContactId) {
             // Verify the contact still exists in Lexware
-            const checkRes = await fetch(`${LEXWARE_BASE}/contacts/${lexwareContactId}`, { headers: { Authorization: headers.Authorization, Accept: "application/json" } });
+            const checkRes = await lexFetch(`${LEXWARE_BASE}/contacts/${lexwareContactId}`, { headers: { Authorization: headers.Authorization, Accept: "application/json" } });
             if (!checkRes.ok) {
               console.log(`Contact ${lexwareContactId} no longer exists in Lexware (${checkRes.status}), creating new one`);
               await checkRes.text(); // consume body
@@ -105,7 +126,7 @@ Deno.serve(async (req) => {
 
           console.log("Sending to Lexware:", JSON.stringify(lexwareInvoice, null, 2));
 
-          const lexRes = await fetch(`${LEXWARE_BASE}/invoices`, {
+          const lexRes = await lexFetch(`${LEXWARE_BASE}/invoices`, {
             method: "POST",
             headers,
             body: JSON.stringify(lexwareInvoice),
@@ -181,7 +202,7 @@ async function ensureContact(
 
   console.log("Contact payload:", JSON.stringify(contactPayload, null, 2));
 
-  const res = await fetch(`${LEXWARE_BASE}/contacts`, {
+  const res = await lexFetch(`${LEXWARE_BASE}/contacts`, {
     method: "POST",
     headers,
     body: JSON.stringify(contactPayload),
