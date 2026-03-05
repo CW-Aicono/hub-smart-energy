@@ -472,21 +472,41 @@ export const TaskDetailSheet = ({ task, open, onOpenChange }: TaskDetailSheetPro
                     </SelectContent>
                   </Select>
                 </TabsContent>
-                <TabsContent value="external" className="mt-3 space-y-2">
-                  <Input
-                    value={externalName}
-                    onChange={(e) => setExternalName(e.target.value)}
-                    placeholder={T("task.serviceProvider")}
-                  />
+                <TabsContent value="external" className="mt-3 space-y-2 relative">
+                  <div className="relative" ref={suggestRef}>
+                    <Input
+                      value={externalName}
+                      onChange={(e) => handleExternalFieldChange("name", e.target.value)}
+                      onFocus={() => { if (suggestions.length > 0) setShowSuggestions(true); }}
+                      onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+                      placeholder={T("task.serviceProvider")}
+                    />
+                    {showSuggestions && suggestions.length > 0 && (
+                      <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-popover border rounded-md shadow-md max-h-40 overflow-y-auto">
+                        {suggestions.map((c) => (
+                          <button
+                            key={c.id}
+                            className="w-full text-left px-3 py-2 text-sm hover:bg-accent flex flex-col"
+                            onMouseDown={() => selectSuggestion(c)}
+                          >
+                            <span className="font-medium">{c.name}</span>
+                            <span className="text-xs text-muted-foreground">
+                              {[c.company, c.email, c.phone].filter(Boolean).join(" · ")}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                   <Input
                     value={externalEmail}
-                    onChange={(e) => setExternalEmail(e.target.value)}
+                    onChange={(e) => handleExternalFieldChange("email", e.target.value)}
                     placeholder={T("common.email") + "..."}
                     type="email"
                   />
                   <Input
                     value={externalPhone}
-                    onChange={(e) => setExternalPhone(e.target.value)}
+                    onChange={(e) => handleExternalFieldChange("phone", e.target.value)}
                     placeholder={T("common.phone") + "..."}
                     type="tel"
                   />
