@@ -117,7 +117,7 @@ Deno.serve(async (req) => {
               taxType: "net",
             },
             title: `Rechnung ${inv.invoice_number || ""}`.trim(),
-            introduction: `Abrechnungszeitraum: ${inv.period_start || ""} – ${inv.period_end || ""}`,
+            introduction: `Abrechnungszeitraum: ${fmtDateDE(inv.period_start)} – ${fmtDateDE(inv.period_end)}`,
             remark: "Vielen Dank für Ihr Vertrauen.",
             shippingConditions: {
               shippingType: "none",
