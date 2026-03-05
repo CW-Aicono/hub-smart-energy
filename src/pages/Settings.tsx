@@ -8,8 +8,9 @@ import { BackupSettings } from "@/components/settings/BackupSettings";
 import { WeekStartSetting } from "@/components/settings/WeekStartSetting";
 import { ManualMetersSetting } from "@/components/settings/ManualMetersSetting";
 import { TenantInfoSettings } from "@/components/settings/TenantInfoSettings";
+import { LegalPagesSettings } from "@/components/settings/LegalPagesSettings";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Palette, HardDrive, Building2, Globe } from "lucide-react";
+import { Palette, HardDrive, Building2, Globe, FileText } from "lucide-react";
 import { ApiSettings } from "@/components/settings/ApiSettings";
 
 const Settings = () => {
@@ -57,6 +58,10 @@ const Settings = () => {
                 <Globe className="h-4 w-4" />
                 {t("api.title")}
               </TabsTrigger>
+              <TabsTrigger value="legal" className="gap-2">
+                <FileText className="h-4 w-4" />
+                Rechtliches
+              </TabsTrigger>
             </TabsList>
             <TabsContent value="tenant-info">
               <TenantInfoSettings />
@@ -71,6 +76,9 @@ const Settings = () => {
             </TabsContent>
             <TabsContent value="api">
               <ApiSettings />
+            </TabsContent>
+            <TabsContent value="legal">
+              <LegalPagesSettings />
             </TabsContent>
           </Tabs>
         </div>
