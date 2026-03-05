@@ -2442,6 +2442,8 @@ export type Database = {
         Row: {
           created_at: string
           id: string
+          industry_price_monthly: number
+          industry_standard_price: number
           module_code: string
           price_monthly: number
           standard_price: number
@@ -2450,6 +2452,8 @@ export type Database = {
         Insert: {
           created_at?: string
           id?: string
+          industry_price_monthly?: number
+          industry_standard_price?: number
           module_code: string
           price_monthly?: number
           standard_price?: number
@@ -2458,6 +2462,8 @@ export type Database = {
         Update: {
           created_at?: string
           id?: string
+          industry_price_monthly?: number
+          industry_standard_price?: number
           module_code?: string
           price_monthly?: number
           standard_price?: number
@@ -3730,6 +3736,7 @@ export type Database = {
           house_number: string | null
           id: string
           is_aicono_member: boolean
+          is_kommune: boolean
           lexware_contact_id: string | null
           logo_url: string | null
           name: string
@@ -3761,6 +3768,7 @@ export type Database = {
           house_number?: string | null
           id?: string
           is_aicono_member?: boolean
+          is_kommune?: boolean
           lexware_contact_id?: string | null
           logo_url?: string | null
           name: string
@@ -3792,6 +3800,7 @@ export type Database = {
           house_number?: string | null
           id?: string
           is_aicono_member?: boolean
+          is_kommune?: boolean
           lexware_contact_id?: string | null
           logo_url?: string | null
           name?: string
