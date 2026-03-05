@@ -118,24 +118,23 @@ const Automation = () => {
   const gatewayTypes = useMemo(() => gateways.filter(g => g.isEnabled).map(g => g.type), [gateways]);
   const sensorQueries = useLoxoneSensorsMulti(gatewayIds, gatewayTypes);
 
+  // Build GatewayOption[] with per-gateway sensor lists for two-step selection
+  const gatewayOptionsForBuilder: GatewayOption[] = useMemo(() => {
+    return gateways.filter(g => g.isEnabled).map((gw, idx) => ({
+      id: gw.locationIntegrationId,
+      name: gw.name,
+      locationName: gw.locationName,
+      sensors: sensorQueries[idx]?.data || [],
+      isOnline: gw.isOnline,
+    }));
+  }, [gateways, sensorQueries]);
+
+  // Flat sensor list (fallback for single-location usage)
   const allSensors = useMemo(() => {
-    const result: (LoxoneSensor & { gatewayName?: string; locationName?: string })[] = [];
-    sensorQueries.forEach((q, idx) => {
-      if (q.data) {
-        const gw = gateways.find(g => g.locationIntegrationId === gatewayIds[idx]);
-        q.data.forEach((s) => {
-          result.push({
-            ...s,
-            gatewayName: gw?.name,
-            locationName: gw?.locationName,
-            // Prefix name with location for disambiguation
-            name: gw && gateways.length > 1 ? `${s.name} (${gw.locationName})` : s.name,
-          });
-        });
-      }
-    });
+    const result: LoxoneSensor[] = [];
+    sensorQueries.forEach((q) => { if (q.data) result.push(...q.data); });
     return result;
-  }, [sensorQueries, gateways, gatewayIds]);
+  }, [sensorQueries]);
 
   const sensorsLoading = sensorQueries.some((q) => q.isLoading);
 
