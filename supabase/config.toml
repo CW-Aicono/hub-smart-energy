@@ -98,3 +98,6 @@ verify_jwt = false
 
 [functions.lexware-sync-status]
 verify_jwt = false
+
+[functions.automation-ai-recommendations]
+verify_jwt = false
