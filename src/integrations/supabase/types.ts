@@ -1375,6 +1375,50 @@ export type Database = {
           },
         ]
       }
+      external_contacts: {
+        Row: {
+          company: string | null
+          created_at: string
+          email: string | null
+          id: string
+          name: string
+          notes: string | null
+          phone: string | null
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          company?: string | null
+          created_at?: string
+          email?: string | null
+          id?: string
+          name: string
+          notes?: string | null
+          phone?: string | null
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          company?: string | null
+          created_at?: string
+          email?: string | null
+          id?: string
+          name?: string
+          notes?: string | null
+          phone?: string | null
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "external_contacts_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       floor_rooms: {
         Row: {
           color: string | null
