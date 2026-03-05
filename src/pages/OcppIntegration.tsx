@@ -113,19 +113,19 @@ const OcppIntegration = () => {
           <CardContent className="pt-4 pb-4">
             <div className="flex items-start gap-2">
               <Server className="h-4 w-4 text-primary mt-0.5 shrink-0" />
-              <div className="flex-1 min-w-0 space-y-3">
-                <p className="text-sm font-medium">{t("ocppIntegration.backendUrl" as any)}</p>
+              <div className="flex-1 min-w-0 space-y-2">
+                <p className="text-xs font-medium">{t("ocppIntegration.backendUrl" as any)}</p>
 
                 {/* Short URL (if configured) */}
                 {OCPP_WS_URL_SHORT && (
                   <div>
-                    <p className="text-xs font-medium text-primary mb-1">{t("ocppIntegration.shortUrl" as any)}</p>
-                    <div className="flex items-center gap-2">
-                      <code className="text-sm bg-background border rounded px-3 py-2 break-all select-all flex-1 font-semibold">
+                    <p className="text-[11px] font-medium text-primary mb-0.5">{t("ocppIntegration.shortUrl" as any)}</p>
+                    <div className="flex items-center gap-1.5">
+                      <code className="text-xs bg-background border rounded px-2 py-1.5 break-all select-all flex-1 font-semibold">
                         {OCPP_WS_URL_SHORT}/{"<OCPP_ID>"}
                       </code>
-                      <Button variant="outline" size="icon" className="shrink-0" onClick={() => copyUrl(OCPP_WS_URL_SHORT)}>
-                        <Copy className="h-4 w-4" />
+                      <Button variant="outline" size="icon" className="shrink-0 h-8 w-8" onClick={() => copyUrl(OCPP_WS_URL_SHORT)}>
+                        <Copy className="h-3.5 w-3.5" />
                       </Button>
                     </div>
                   </div>
@@ -134,19 +134,19 @@ const OcppIntegration = () => {
                 {/* Long URL */}
                 <div>
                   {OCPP_WS_URL_SHORT && (
-                    <p className="text-xs text-muted-foreground mb-1">{t("ocppIntegration.fullUrl" as any)}</p>
+                    <p className="text-[11px] text-muted-foreground mb-0.5">{t("ocppIntegration.fullUrl" as any)}</p>
                   )}
-                  <div className="flex items-center gap-2">
-                    <code className="text-xs bg-background border rounded px-3 py-2 break-all select-all flex-1 text-muted-foreground">
+                  <div className="flex items-center gap-1.5">
+                    <code className="text-[11px] bg-background border rounded px-2 py-1.5 break-all select-all flex-1 text-muted-foreground">
                       {OCPP_WS_URL_LONG}/{"<OCPP_ID>"}
                     </code>
-                    <Button variant="outline" size="icon" className="shrink-0" onClick={() => copyUrl(OCPP_WS_URL_LONG)}>
-                      <Copy className="h-4 w-4" />
+                    <Button variant="outline" size="icon" className="shrink-0 h-8 w-8" onClick={() => copyUrl(OCPP_WS_URL_LONG)}>
+                      <Copy className="h-3.5 w-3.5" />
                     </Button>
                   </div>
                 </div>
 
-                <p className="text-xs text-muted-foreground">
+                <p className="text-[11px] text-muted-foreground">
                   {t("ocppIntegration.backendUrlHint" as any)}
                 </p>
               </div>
