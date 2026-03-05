@@ -68,7 +68,7 @@ const Automation = () => {
     deleteAutomation, executeAutomation,
   } = useMLAutomations();
 
-  const { recommendations, loading: aiLoading, totalSavingsPotential, fetchRecommendations } = useAutomationAI();
+  const { recommendations, loading: aiLoading, error: aiError, totalSavingsPotential, fetchRecommendations } = useAutomationAI();
   const { locations } = useLocations();
   const { integrations } = useIntegrations();
 
@@ -439,20 +439,46 @@ const Automation = () => {
                       <p className="text-xs text-muted-foreground">{T("automation.aiActiveDesc")}</p>
                     </div>
                   </div>
-                  <Button variant="outline" size="sm" onClick={() => fetchRecommendations(true)} disabled={aiLoading} className="gap-1.5">
+                  <Button variant="outline" size="sm" onClick={async () => {
+                    try {
+                      await fetchRecommendations(true);
+                      toast.success("KI-Empfehlungen aktualisiert");
+                    } catch (e) {
+                      toast.error(e instanceof Error ? e.message : "Fehler beim Laden der Empfehlungen");
+                    }
+                  }} disabled={aiLoading} className="gap-1.5">
                     <RefreshCw className={`h-3.5 w-3.5 ${aiLoading ? "animate-spin" : ""}`} />
                     {T("automation.refresh")}
                   </Button>
                 </CardContent>
               </Card>
 
+              {aiError && (
+                <Card className="border-destructive/30 bg-destructive/5">
+                  <CardContent className="p-4 flex items-center gap-3">
+                    <AlertTriangle className="h-5 w-5 text-destructive shrink-0" />
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-destructive">Fehler</p>
+                      <p className="text-xs text-muted-foreground">{aiError}</p>
+                    </div>
+                    <Button variant="outline" size="sm" onClick={() => fetchRecommendations(true)}>Erneut versuchen</Button>
+                  </CardContent>
+                </Card>
+              )}
+
               {aiLoading ? (
                 <div className="space-y-3">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-24" />)}</div>
-              ) : recommendations.length === 0 ? (
+              ) : recommendations.length === 0 && !aiError ? (
                 <div className="text-center py-8 text-sm text-muted-foreground">
                   <BrainCircuit className="h-10 w-10 mx-auto mb-3 text-muted-foreground/50" />
                   <p>{T("automation.noRecommendations")}</p>
-                  <Button variant="outline" size="sm" className="mt-3" onClick={() => fetchRecommendations(true)}>
+                  <Button variant="outline" size="sm" className="mt-3" onClick={async () => {
+                    try {
+                      await fetchRecommendations(true);
+                    } catch (e) {
+                      toast.error(e instanceof Error ? e.message : "Fehler beim Laden der Empfehlungen");
+                    }
+                  }}>
                     {T("automation.generateRecommendations")}
                   </Button>
                 </div>
