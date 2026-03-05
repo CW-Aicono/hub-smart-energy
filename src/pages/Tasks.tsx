@@ -223,6 +223,7 @@ const Tasks = () => {
         </div>
       </main>
       <CreateTaskDialog open={createOpen} onOpenChange={setCreateOpen} />
+      <BulkActionsToolbar selectedIds={Array.from(selectedIds)} onClearSelection={clearSelection} />
     </div>
   );
 };
