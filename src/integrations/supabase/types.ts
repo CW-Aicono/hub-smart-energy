@@ -1693,6 +1693,33 @@ export type Database = {
           },
         ]
       }
+      infrastructure_metrics: {
+        Row: {
+          id: string
+          metadata: Json | null
+          metric_name: string
+          metric_type: string
+          metric_value: number | null
+          recorded_at: string | null
+        }
+        Insert: {
+          id?: string
+          metadata?: Json | null
+          metric_name: string
+          metric_type: string
+          metric_value?: number | null
+          recorded_at?: string | null
+        }
+        Update: {
+          id?: string
+          metadata?: Json | null
+          metric_name?: string
+          metric_type?: string
+          metric_value?: number | null
+          recorded_at?: string | null
+        }
+        Relationships: []
+      }
       integration_categories: {
         Row: {
           created_at: string
@@ -4334,6 +4361,8 @@ export type Database = {
         Returns: Database["public"]["Enums"]["app_role"]
       }
       cleanup_expired_backups: { Args: never; Returns: number }
+      cleanup_old_infra_metrics: { Args: never; Returns: number }
+      collect_db_metrics: { Args: never; Returns: Json }
       compact_power_readings_day: {
         Args: { p_day?: string }
         Returns: {
