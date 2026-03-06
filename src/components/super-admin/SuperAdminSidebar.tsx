@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import {
   LayoutDashboard, LogOut, Building2, BarChart3, Receipt, HeadsetIcon,
   ChevronDown, ChevronRight, PanelLeftClose, PanelLeft, Users, ShieldCheck, Shield, Euro,
-  Sun, Moon, Monitor, Globe, Palette, Check, Server, PlugZap, Settings,
+  Sun, Moon, Monitor, Globe, Palette, Check, Server, PlugZap, Settings, Activity,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -124,6 +124,7 @@ export default function SuperAdminSidebar() {
         { to: "/super-admin/ocpp/control", icon: Server, label: "OCPP Control" },
       ],
     },
+    { to: "/super-admin/monitoring", icon: Activity, label: t("nav.monitoring") },
     { to: "/super-admin/support", icon: HeadsetIcon, label: t("nav.support") },
     { to: "/super-admin/settings", icon: Settings, label: t("nav.settings") },
   ];

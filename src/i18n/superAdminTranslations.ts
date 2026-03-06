@@ -273,6 +273,26 @@ export const saTranslations: SATranslations = {
   "common.saving": { de: "Speichere...", en: "Saving...", fr: "Enregistrement...", pl: "Zapisywanie..." },
   "createRole.creating": { de: "Wird erstellt...", en: "Creating...", fr: "Création...", pl: "Tworzenie..." },
   "createRole.create": { de: "Erstellen", en: "Create", fr: "Créer", pl: "Utwórz" },
+
+  // Monitoring
+  "nav.monitoring": { de: "Monitoring", en: "Monitoring", fr: "Monitoring", pl: "Monitoring" },
+  "monitoring.title": { de: "Infrastruktur-Monitoring", en: "Infrastructure Monitoring", fr: "Surveillance d'infrastructure", pl: "Monitoring infrastruktury" },
+  "monitoring.subtitle": { de: "Systemstatus, Datenbankauslastung und Applikationsmetriken", en: "System status, database utilization and application metrics", fr: "État du système, utilisation de la base de données et métriques", pl: "Status systemu, wykorzystanie bazy danych i metryki aplikacji" },
+  "monitoring.collect_now": { de: "Jetzt erfassen", en: "Collect Now", fr: "Collecter maintenant", pl: "Zbierz teraz" },
+  "monitoring.system_health": { de: "Systemstatus", en: "System Health", fr: "État du système", pl: "Stan systemu" },
+  "monitoring.db_connections": { de: "DB-Verbindungen", en: "DB Connections", fr: "Connexions DB", pl: "Połączenia DB" },
+  "monitoring.db_size": { de: "Datenbankgröße", en: "Database Size", fr: "Taille de la base", pl: "Rozmiar bazy" },
+  "monitoring.app_tenants": { de: "Mandanten", en: "Tenants", fr: "Locataires", pl: "Najemcy" },
+  "monitoring.meters_locations": { de: "Zähler", en: "Meters", fr: "Compteurs", pl: "Liczniki" },
+  "monitoring.users": { de: "Benutzer", en: "Users", fr: "Utilisateurs", pl: "Użytkownicy" },
+  "monitoring.locations": { de: "Standorte", en: "Locations", fr: "Sites", pl: "Lokalizacje" },
+  "monitoring.tables": { de: "Tabellen", en: "Tables", fr: "Tables", pl: "Tabele" },
+  "monitoring.utilization": { de: "Auslastung", en: "utilization", fr: "utilisation", pl: "wykorzystanie" },
+  "monitoring.connections_chart": { de: "DB-Verbindungen (Zeitverlauf)", en: "DB Connections (Over Time)", fr: "Connexions DB (historique)", pl: "Połączenia DB (historia)" },
+  "monitoring.db_size_chart": { de: "Datenbankgröße (Zeitverlauf)", en: "Database Size (Over Time)", fr: "Taille de la base (historique)", pl: "Rozmiar bazy (historia)" },
+  "monitoring.table_sizes": { de: "Tabellengrößen (Top 10)", en: "Table Sizes (Top 10)", fr: "Tailles des tables (Top 10)", pl: "Rozmiary tabel (Top 10)" },
+  "monitoring.not_enough_data": { de: "Noch nicht genügend Datenpunkte", en: "Not enough data points yet", fr: "Pas encore assez de données", pl: "Za mało punktów danych" },
+  "monitoring.no_data": { de: "Keine Daten vorhanden", en: "No data available", fr: "Aucune donnée disponible", pl: "Brak danych" },
 };
 
 // Color preset names
