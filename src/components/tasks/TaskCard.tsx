@@ -142,16 +142,17 @@ export const TaskCard = ({ task, duplicateCount, duplicateIds, selectable, selec
                     <DropdownMenuItem onClick={() => setDetailOpen(true)}>
                       <ArrowLeftRight className="h-4 w-4 mr-2" /> Übergeben / Bearbeiten
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => setDetailOpen(true)}>
-                      <History className="h-4 w-4 mr-2" /> Protokoll anzeigen
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={() => {
-                      const allIds = duplicateIds && duplicateIds.length > 0 ? duplicateIds : [task.id];
-                      deleteTask.mutate(allIds);
-                    }} className="text-destructive focus:text-destructive">
-                      <Trash2 className="h-4 w-4 mr-2" /> Löschen
-                    </DropdownMenuItem>
+                    {(task.status === "open" || task.status === "done" || task.status === "cancelled") && (
+                      <>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem onClick={() => {
+                          const allIds = duplicateIds && duplicateIds.length > 0 ? duplicateIds : [task.id];
+                          deleteTask.mutate(allIds);
+                        }} className="text-destructive focus:text-destructive">
+                          <Trash2 className="h-4 w-4 mr-2" /> Löschen
+                        </DropdownMenuItem>
+                      </>
+                    )}
                   </DropdownMenuContent>
                 </DropdownMenu>
               </div>
