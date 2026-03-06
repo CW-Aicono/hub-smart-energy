@@ -105,10 +105,33 @@ function TenantsTab() {
   const [editForm, setEditForm] = useState({ name: "", unit_label: "", email: "", location_id: "", meter_ids: [] as string[], move_in_date: "", move_out_date: "", is_mieterstrom: false });
 
   const toggleMeter = (meterId: string, isEdit: boolean) => {
+    const meter = meters.find((m) => m.id === meterId);
+    if (!meter) return;
+    const energyType = meter.energy_type;
+
     if (isEdit) {
-      setEditForm((f) => ({ ...f, meter_ids: f.meter_ids.includes(meterId) ? f.meter_ids.filter((id) => id !== meterId) : [...f.meter_ids, meterId] }));
+      setEditForm((f) => {
+        if (f.meter_ids.includes(meterId)) {
+          return { ...f, meter_ids: f.meter_ids.filter((id) => id !== meterId) };
+        }
+        // Remove any existing meter of the same energy_type, then add this one
+        const withoutSameType = f.meter_ids.filter((id) => {
+          const m = meters.find((me) => me.id === id);
+          return m?.energy_type !== energyType;
+        });
+        return { ...f, meter_ids: [...withoutSameType, meterId] };
+      });
     } else {
-      setForm((f) => ({ ...f, meter_ids: f.meter_ids.includes(meterId) ? f.meter_ids.filter((id) => id !== meterId) : [...f.meter_ids, meterId] }));
+      setForm((f) => {
+        if (f.meter_ids.includes(meterId)) {
+          return { ...f, meter_ids: f.meter_ids.filter((id) => id !== meterId) };
+        }
+        const withoutSameType = f.meter_ids.filter((id) => {
+          const m = meters.find((me) => me.id === id);
+          return m?.energy_type !== energyType;
+        });
+        return { ...f, meter_ids: [...withoutSameType, meterId] };
+      });
     }
   };
 
