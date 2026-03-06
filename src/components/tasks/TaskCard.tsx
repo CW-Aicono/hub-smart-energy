@@ -9,7 +9,7 @@ import { TaskDetailSheet } from "@/components/tasks/TaskDetailSheet";
 import {
   MoreHorizontal, User, ExternalLink, Zap, AlertTriangle, PlugZap,
   Clock, CheckCircle2, Circle, ArrowRight, XCircle, CalendarDays, Trash2,
-  History, ArrowLeftRight,
+  ArrowLeftRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
