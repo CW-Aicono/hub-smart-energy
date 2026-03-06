@@ -258,19 +258,34 @@ function DashboardTab({ tenantRecord, invoices, lang }: { tenantRecord: TenantRe
       );
 
       let fallbackTotals: any[] = [];
-      let aggQuery = supabase
-        .from("meter_power_readings_5min")
-        .select("meter_id, bucket, power_avg")
-        .in("meter_id", meterIds)
-        .order("bucket", { ascending: true });
-      if (tenantRecord.move_in_date) {
-        aggQuery = aggQuery.gte("bucket", tenantRecord.move_in_date);
+      // Paginate 5min readings to avoid the 1000-row PostgREST limit
+      const PAGE_SIZE = 1000;
+      let allAggData: any[] = [];
+      let offset = 0;
+      let hasMore = true;
+      while (hasMore) {
+        let aggQuery = supabase
+          .from("meter_power_readings_5min")
+          .select("meter_id, bucket, power_avg")
+          .in("meter_id", meterIds)
+          .order("bucket", { ascending: true })
+          .range(offset, offset + PAGE_SIZE - 1);
+        if (tenantRecord.move_in_date) {
+          aggQuery = aggQuery.gte("bucket", tenantRecord.move_in_date);
+        }
+        const { data: aggData } = await aggQuery;
+        if (aggData && aggData.length > 0) {
+          allAggData = allAggData.concat(aggData);
+          offset += PAGE_SIZE;
+          hasMore = aggData.length === PAGE_SIZE;
+        } else {
+          hasMore = false;
+        }
       }
-      const { data: aggData } = await aggQuery;
 
-      if (aggData && aggData.length > 0) {
+      if (allAggData.length > 0) {
         const monthlyMap: Record<string, number> = {};
-        for (const row of aggData) {
+        for (const row of allAggData) {
           const month = (row.bucket as string).substring(0, 7);
           const key = `${row.meter_id}::${month}`;
           if (existingKeys.has(key)) continue;
