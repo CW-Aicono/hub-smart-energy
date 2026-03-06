@@ -55,14 +55,23 @@ export function useIntegrationErrors() {
 
   const queryClient = useQueryClient();
 
+  // Helper: batch .in() calls to avoid PostgREST URL length limits
+  const batchUpdate = async (errorIds: string[], payload: Record<string, unknown>) => {
+    const BATCH = 100;
+    for (let i = 0; i < errorIds.length; i += BATCH) {
+      const chunk = errorIds.slice(i, i + BATCH);
+      const { error } = await supabase
+        .from("integration_errors")
+        .update(payload)
+        .in("id", chunk);
+      if (error) throw error;
+    }
+  };
+
   // Ignore errors (bulk) — sets is_ignored=true and resolves linked tasks
   const ignoreErrors = useMutation({
     mutationFn: async (errorIds: string[]) => {
-      const { error } = await supabase
-        .from("integration_errors")
-        .update({ is_ignored: true, is_resolved: true, resolved_at: new Date().toISOString() })
-        .in("id", errorIds);
-      if (error) throw error;
+      await batchUpdate(errorIds, { is_ignored: true, is_resolved: true, resolved_at: new Date().toISOString() });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["integration-errors"] });
@@ -74,11 +83,7 @@ export function useIntegrationErrors() {
   // Bulk resolve errors — marks as resolved and sets linked tasks to done
   const resolveErrors = useMutation({
     mutationFn: async (errorIds: string[]) => {
-      const { error } = await supabase
-        .from("integration_errors")
-        .update({ is_resolved: true, resolved_at: new Date().toISOString() })
-        .in("id", errorIds);
-      if (error) throw error;
+      await batchUpdate(errorIds, { is_resolved: true, resolved_at: new Date().toISOString() });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["integration-errors"] });
