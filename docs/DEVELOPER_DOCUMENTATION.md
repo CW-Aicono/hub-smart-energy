@@ -1340,4 +1340,86 @@ Der Worker ergänzt die Cron-Jobs – er ersetzt sie nicht. Bei Ausfall des Work
 
 ---
 
+## 21. Infrastruktur-Monitoring
+
+### 21.1 Eingebautes Monitoring (Super-Admin)
+
+Die Plattform enthält ein integriertes Infrastruktur-Monitoring unter `/super-admin/monitoring`:
+
+- **DB-Verbindungen**: Aktive vs. maximale Connections mit Zeitverlauf
+- **Datenbankgröße**: Gesamtgröße und Top-10-Tabellen
+- **Systemstatus**: Health-Checks für Datenbank, Auth und Storage
+- **Applikationsmetriken**: Mandanten, Benutzer, Standorte, Zähler
+
+Die Metriken werden durch die Edge Function `collect-metrics` gesammelt, die periodisch via pg_cron oder manuell aufgerufen werden kann.
+
+**Tabelle:** `infrastructure_metrics` – automatische Retention nach 30 Tagen.
+
+### 21.2 Prometheus + Grafana (Self-Hosting)
+
+Für das Hetzner-Self-Hosting wird ein optionaler Prometheus/Grafana-Stack empfohlen:
+
+```yaml
+# docker-compose.monitoring.yml
+version: '3.8'
+
+services:
+  prometheus:
+    image: prom/prometheus:latest
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    ports:
+      - "9090:9090"
+    restart: unless-stopped
+
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:latest
+    environment:
+      DATA_SOURCE_NAME: "postgresql://postgres:${POSTGRES_PASSWORD}@db:5432/postgres?sslmode=disable"
+    ports:
+      - "9187:9187"
+    depends_on:
+      - db
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:latest
+    volumes:
+      - grafana_data:/var/lib/grafana
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}
+    restart: unless-stopped
+
+volumes:
+  prometheus_data:
+  grafana_data:
+```
+
+```yaml
+# monitoring/prometheus.yml
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: 'postgres'
+    static_configs:
+      - targets: ['postgres-exporter:9187']
+
+  - job_name: 'supabase-api'
+    metrics_path: /metrics
+    static_configs:
+      - targets: ['kong:8001']
+```
+
+**Empfohlene Grafana-Dashboards:**
+- PostgreSQL Database (ID: 9628)
+- Node Exporter Full (ID: 1860)
+
+> **Hinweis:** Das eingebaute Monitoring-Dashboard deckt die Basis-Anforderungen ab. Für produktives Alerting (E-Mail, Slack, PagerDuty) wird der Grafana-Stack empfohlen.
+
+---
+
 *Dokumentation erstellt: Februar 2026 | Für Änderungen: Pull Request gegen `main`-Branch*

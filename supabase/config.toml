@@ -101,3 +101,6 @@ verify_jwt = false
 
 [functions.automation-ai-recommendations]
 verify_jwt = false
+
+[functions.collect-metrics]
+verify_jwt = false

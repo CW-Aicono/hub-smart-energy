@@ -1,85 +1,54 @@
 
 
-## Was ist damit gemeint?
+## Plan: Automatischer Status-Sync mit Lexware API
 
-Der Softwareprüfer bemängelt, dass es kein **zentrales Infrastruktur-Monitoring** gibt, das folgende Metriken an einem Ort bündelt:
+### Recherche-Ergebnis
 
-- **Datenbank-Last**: CPU, RAM, Connections, Query-Performance
-- **API-Request-Counts**: HTTP-Anfragen pro Endpunkt, Fehlerrate, Latenz
-- **Edge Function Execution**: Aufrufe, Dauer, Fehler pro Funktion
-- **System-Health**: Uptime, Disk-Usage, Netzwerk
+Die Lexware Office API bietet zwei Wege, um den Status einer Rechnung abzufragen:
 
-Aktuell existiert zwar ein `platform_statistics`-Table und ein Super-Admin-Dashboard mit KPIs (Tenants, Users, Locations), aber das sind **Applikations-Metriken** -- keine Infrastruktur-Metriken.
+1. **Voucherlist-Endpoint** (`GET /v1/voucherlist`): Kann nach Status filtern (`draft`, `open`, `paid`, `overdue`, etc.) und liefert den aktuellen Status aller Belege zurück.
+2. **Webhooks** (`invoice.status.changed`): Lexware ruft eine Callback-URL auf, sobald sich der Rechnungsstatus ändert. Dies erfordert allerdings eine öffentlich erreichbare URL und eine Event-Subscription.
 
----
+**Empfohlener Ansatz:** Polling via Voucherlist-Endpoint (einfacher, kein Webhook-Setup nötig). Eine neue Edge Function wird periodisch (z. B. stündlich via pg_cron) den Status aller Rechnungen mit `lexware_invoice_id` bei Lexware abfragen und lokal aktualisieren.
 
-## Extern vs. selbst gebaut?
+### Status-Mapping
 
-### Option A: Externes Tooling (Grafana + Prometheus)
-- **Klassischer Ansatz** bei Self-Hosting auf Hetzner
-- Prometheus scraped Metriken von PostgreSQL (pg_exporter), GoTrue, Kong/API-Gateway
-- Grafana visualisiert alles in einem Dashboard
-- **Vorteil**: Industriestandard, Alerting eingebaut, riesiges Ecosystem
-- **Nachteil**: Separater Service, muss bei Hetzner-Deployment mitinstalliert werden (Docker Compose)
-
-### Option B: Eigenes Monitoring-Dashboard in der App (empfohlen als Ergänzung)
-- Wir können ein **Infrastruktur-Monitoring-Widget** direkt im Super-Admin-Bereich bauen
-- Datenquellen: Eine Edge Function sammelt regelmässig Metriken und schreibt sie in eine DB-Tabelle
-- Visualisierung via Recharts (bereits installiert)
-- **Machbar ohne externe Tools**, deckt die wichtigsten Punkte ab
-
-### Empfehlung: Kombination
-
-Für das Hetzner-Self-Hosting ist der Grafana/Prometheus-Stack Teil des Docker-Compose-Setups (Dokumentation). Parallel dazu bauen wir ein **eingebautes Monitoring-Dashboard** im Super-Admin, das die wichtigsten Metriken direkt in der App zeigt -- das adressiert die Prüfer-Kritik direkt.
-
----
-
-## Plan: Eingebautes Infrastruktur-Monitoring
-
-### 1. Neue DB-Tabelle `infrastructure_metrics`
-```sql
-CREATE TABLE infrastructure_metrics (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  metric_type text NOT NULL,        -- 'db_connections', 'api_requests', 'edge_function', 'disk_usage'
-  metric_name text NOT NULL,        -- z.B. 'active_connections', 'gateway-ingest'
-  metric_value double precision,
-  metadata jsonb DEFAULT '{}',
-  recorded_at timestamptz DEFAULT now()
-);
-```
-- RLS: Nur Super-Admins lesen/schreiben
-- Retention: Automatisches Cleanup nach 30 Tagen
-
-### 2. Edge Function `collect-metrics`
-- Wird periodisch aufgerufen (Cron via pg_cron oder externer Trigger)
-- Sammelt per SQL: DB-Connections (`pg_stat_activity`), Table-Sizes, Slow Queries
-- Sammelt Edge Function Aufrufstatistiken aus Logs
-- Schreibt alles in `infrastructure_metrics`
-
-### 3. Super-Admin Seite "Infrastruktur-Monitoring"
-- Neue Route `/super-admin/monitoring`
-- Sidebar-Eintrag im Super-Admin-Menü
-- Widgets:
-  - **DB-Connections** (Zeitverlauf, Recharts Line Chart)
-  - **API-Requests pro Stunde** (Bar Chart)
-  - **Edge Function Performance** (Tabelle: Name, Avg Duration, Error Rate)
-  - **Speicherverbrauch** (Gauge/Progress Bars)
-  - **System-Status** (Health-Badges: DB, Auth, Storage, Functions)
-
-### 4. Dokumentation für Hetzner-Deployment
-- Ergänzung in `docs/DEVELOPER_DOCUMENTATION.md`
-- Docker-Compose-Snippet für Prometheus + Grafana als optionalen Stack
-- Hinweis: Das eingebaute Dashboard deckt Basis-Monitoring ab; für tiefgreifendes Alerting wird Grafana empfohlen
-
-### Dateien die erstellt/geändert werden
-
-| Datei | Aktion |
+| Lexware-Status | Lokaler Status |
 |---|---|
-| Migration SQL | Neue Tabelle `infrastructure_metrics` |
-| `supabase/functions/collect-metrics/index.ts` | Neue Edge Function |
-| `src/pages/SuperAdminMonitoring.tsx` | Neue Seite |
-| `src/hooks/useInfraMetrics.tsx` | Neuer Hook |
-| `src/components/super-admin/SuperAdminSidebar.tsx` | Menüeintrag |
-| `src/App.tsx` | Route hinzufügen |
-| `docs/DEVELOPER_DOCUMENTATION.md` | Grafana/Prometheus Doku |
+| `draft` | `draft` (Entwurf) |
+| `open` | `sent` (Gesendet) |
+| `paid` / `paidoff` | `paid` (Bezahlt) |
+| `overdue` | `overdue` (Überfällig) |
+| `voided` | `voided` (Storniert) |
+
+### Änderungen
+
+**1. Neue Edge Function `supabase/functions/lexware-sync-status/index.ts`**
+
+- Alle `tenant_invoices` mit gesetzter `lexware_invoice_id` laden
+- Für jeden Beleg den aktuellen Status über `GET /v1/invoices/{id}` abfragen (einzeln, da Voucherlist nur IDs liefert)
+- Status-Mapping anwenden und `tenant_invoices.status` updaten, wenn sich der Status geändert hat
+- Rückgabe: Anzahl aktualisierter Belege
+
+**2. Edge Function auch manuell aufrufbar machen**
+
+- Button "Status aktualisieren" auf der Billing-Seite hinzufügen (neben "Alle an Lexware senden")
+- Ruft `lexware-sync-status` auf und invalidiert danach die Query
+
+**3. Bestehende `lexware-api` anpassen**
+
+- Nach erfolgreichem Senden: Status automatisch auf `sent` setzen (statt `draft` zu belassen)
+
+**4. Automatischer Cron-Job (pg_cron)**
+
+- Stündlicher Aufruf der `lexware-sync-status` Function, damit Statusänderungen (bezahlt, überfällig) zeitnah übernommen werden
+
+**5. UI-Anpassungen (`src/pages/SuperAdminBilling.tsx`)**
+
+- Neue Spalte "Status" wieder einblenden (read-only, zeigt den von Lexware synchronisierten Status)
+- "Status aktualisieren"-Button in der Header-Leiste
+- Status-Badge farblich kodiert (Entwurf: grau, Gesendet: blau, Bezahlt: grün, Überfällig: rot)
+
+### Keine DB-Migration nötig
+Das Feld `status` existiert bereits in `tenant_invoices`. Ggf. `verify_jwt = false` in `config.toml` für die neue Function setzen.
 
