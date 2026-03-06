@@ -221,20 +221,24 @@ export const useTasks = () => {
   const deleteTask = useMutation({
     mutationFn: async (ids: string | string[]) => {
       const idArray = Array.isArray(ids) ? ids : [ids];
-      // First delete linked integration_errors
-      const { error: ieErr } = await supabase
-        .from("integration_errors")
-        .delete()
-        .in("task_id", idArray)
-        .eq("tenant_id", tenant!.id);
-      if (ieErr) console.error("Error deleting integration_errors:", ieErr);
-      // Then delete the tasks
-      const { error } = await supabase
-        .from("tasks")
-        .delete()
-        .in("id", idArray)
-        .eq("tenant_id", tenant!.id);
-      if (error) throw error;
+      // Delete in batches of 100 to avoid query size limits
+      for (let i = 0; i < idArray.length; i += 100) {
+        const batch = idArray.slice(i, i + 100);
+        // First delete linked integration_errors
+        const { error: ieErr } = await supabase
+          .from("integration_errors")
+          .delete()
+          .in("task_id", batch)
+          .eq("tenant_id", tenant!.id);
+        if (ieErr) console.error("Error deleting integration_errors:", ieErr);
+        // Then delete the tasks
+        const { error } = await supabase
+          .from("tasks")
+          .delete()
+          .in("id", batch)
+          .eq("tenant_id", tenant!.id);
+        if (error) throw error;
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["tasks", tenant?.id] });
