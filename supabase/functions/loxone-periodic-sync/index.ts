@@ -107,7 +107,7 @@ serve(async (req) => {
           // Auto-resolve connection-level errors (sync itself succeeded)
           const { data: resolvedConnErrors } = await supabase
             .from("integration_errors")
-            .select("id, task_id")
+            .select("id, task_id, created_at")
             .eq("location_integration_id", integrationId)
             .eq("is_resolved", false)
             .eq("error_type", "connection");
@@ -126,6 +126,49 @@ serve(async (req) => {
                 .update({ status: "done", completed_at: new Date().toISOString() })
                 .in("id", taskIds)
                 .neq("status", "done");
+            }
+
+            // ── Auto-backfill: Fetch missing data from Miniserver statistics ──
+            // Determine the gap period from the earliest unresolved connection error
+            try {
+              const earliestError = resolvedConnErrors.reduce((earliest: any, e: any) =>
+                !earliest || e.created_at < earliest.created_at ? e : earliest, null);
+              
+              if (earliestError?.created_at) {
+                const gapStart = new Date(earliestError.created_at);
+                const gapEnd = new Date();
+                // Format as YYYY-MM-DD
+                const fromDate = gapStart.toISOString().slice(0, 10);
+                const toDate = gapEnd.toISOString().slice(0, 10);
+
+                console.log(`[Backfill] Connection restored for ${integrationId}. Gap: ${fromDate} to ${toDate}. Triggering backfill...`);
+
+                const backfillResponse = await fetch(
+                  `${supabaseUrl}/functions/v1/loxone-api`,
+                  {
+                    method: "POST",
+                    headers: {
+                      "Content-Type": "application/json",
+                      "Authorization": `Bearer ${supabaseKey}`,
+                    },
+                    body: JSON.stringify({
+                      locationIntegrationId: integrationId,
+                      action: "backfillStatistics",
+                      fromDate,
+                      toDate,
+                    }),
+                  }
+                );
+
+                const backfillResult = await backfillResponse.json();
+                if (backfillResult.success) {
+                  console.log(`[Backfill] Success: ${backfillResult.message}`);
+                } else {
+                  console.error(`[Backfill] Failed:`, backfillResult.error);
+                }
+              }
+            } catch (backfillErr) {
+              console.error(`[Backfill] Error triggering backfill for ${integrationId}:`, backfillErr);
             }
           }
 
