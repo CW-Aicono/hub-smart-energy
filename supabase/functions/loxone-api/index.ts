@@ -1177,20 +1177,31 @@ serve(async (req) => {
             continue;
           }
 
-          // Parse XML entries: <S T="timestamp" V="value" .../>
+          // Parse XML entries: <S T="2026-03-01 01:00:00" V="value" .../>
           const entries: Array<{ timestamp: Date; value: number }> = [];
-          const entryRegex = /<S\s+T="(\d+)"([^/]*)\/?>/gi;
+          const entryRegex = /<S\s+T="([^"]+)"([^/]*)\/?>/gi;
           let match;
           while ((match = entryRegex.exec(text)) !== null) {
-            const loxTimestamp = parseInt(match[1], 10);
-            const date = new Date((loxTimestamp + LOXONE_EPOCH_OFFSET) * 1000);
+            const tStr = match[1].trim();
+            let date: Date;
+            
+            // Try date string format "YYYY-MM-DD HH:MM:SS"
+            if (tStr.includes("-")) {
+              date = new Date(tStr.replace(" ", "T") + "Z");
+            } else {
+              // Loxone numeric timestamp (seconds since 2009-01-01)
+              const loxTimestamp = parseInt(tStr, 10);
+              date = new Date((loxTimestamp + LOXONE_EPOCH_OFFSET) * 1000);
+            }
+            
+            if (isNaN(date.getTime())) continue;
 
             // Filter by date range
             if (date < startD || date > endD) continue;
 
-            // Extract V="value" (first value attribute = primary reading, typically power in kW)
-            const attrs = match[2];
-            const valMatch = attrs.match(/\bV="([^"]+)"/);
+            // Extract V="value"
+            const fullMatch = match[0];
+            const valMatch = fullMatch.match(/\bV="([^"]+)"/);
             if (valMatch) {
               const val = parseFloat(valMatch[1]);
               if (isFinite(val)) {
