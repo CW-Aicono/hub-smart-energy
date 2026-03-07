@@ -1212,6 +1212,30 @@ serve(async (req) => {
           console.log(`Parsed ${entries.length} entries from ${file.filename} in date range`);
           if (entries.length === 0) continue;
 
+          // ── Outlier detection: first entry in monthly files often contains
+          //    the cumulative meter reading instead of an instantaneous power value.
+          //    Detect & remove entries that are >20x the median of the rest.
+          if (entries.length >= 3) {
+            const sorted = entries.map(e => e.value).sort((a, b) => a - b);
+            const median = sorted[Math.floor(sorted.length / 2)];
+            const threshold = Math.max(median * 20, 100); // at least 100 to avoid false positives on small values
+            const before = entries.length;
+            const removed: Array<{ timestamp: Date; value: number }> = [];
+            const filtered = entries.filter(e => {
+              if (e.value > threshold) {
+                removed.push(e);
+                return false;
+              }
+              return true;
+            });
+            if (removed.length > 0) {
+              console.log(`Outlier detection: removed ${removed.length} entries (threshold=${threshold.toFixed(1)}, median=${median.toFixed(3)}): ${removed.map(r => `${r.timestamp.toISOString()}=${r.value}`).join(", ")}`);
+              entries.length = 0;
+              entries.push(...filtered);
+            }
+          }
+          if (entries.length === 0) continue;
+
           processedCount++;
           entries.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
 
