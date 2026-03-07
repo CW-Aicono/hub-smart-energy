@@ -1135,10 +1135,15 @@ serve(async (req) => {
       const errors: string[] = [];
       let processedCount = 0;
 
-      // 3) Download and parse each binary stat file
+      // 3) Download and parse each stat file (XML format)
+      // Loxone stats XML format:
+      // <Statistics>
+      //   <Statistic UUID="..." Name="...">
+      //     <S T="LoxoneTimestamp" V="value1" V2="value2" .../>
+      //   </Statistic>
+      // </Statistics>
       for (const file of filesToProcess) {
         const fileUrl = `${baseUrl}/stats/${file.filename}`;
-        console.log(`Downloading binary stat file: ${fileUrl}`);
 
         try {
           const resp = await fetch(fileUrl, { method: "GET", headers: { Authorization: loxoneAuth } });
@@ -1148,34 +1153,18 @@ serve(async (req) => {
             continue;
           }
 
-          const arrayBuf = await resp.arrayBuffer();
-          const data = new DataView(arrayBuf);
-          const byteLen = arrayBuf.length;
-          console.log(`Downloaded ${file.filename}: ${byteLen} bytes`);
-
-          if (byteLen < 12) {
-            console.warn(`File ${file.filename} too small (${byteLen} bytes), skipping`);
+          const text = await resp.text();
+          const byteLen = text.length;
+          
+          if (byteLen < 20) {
+            console.warn(`File ${file.filename} too small (${byteLen} chars), skipping`);
             continue;
           }
 
-          // Parse header: 3x uint32 LE
-          const rawValueCount = data.getUint32(0, true);
-          const controlType = data.getUint32(4, true);
-          const nameLength = data.getUint32(8, true);
-
-          const valueCount = rawValueCount & 0x7FFFFFFF; // strip top bit
-          const entrySize = computeEntrySize(valueCount);
-
-          // Skip name (zero-terminated string after header)
-          const firstPos = Math.ceil((12 + nameLength + 1) / entrySize) * entrySize;
-
-          // Read name for logging
-          let name = "";
-          try {
-            const nameBytes = new Uint8Array(arrayBuf, 12, Math.min(nameLength, 200));
-            name = new TextDecoder().decode(nameBytes).replace(/\0/g, "");
-          } catch { /* ignore */ }
-          console.log(`Stat file: name="${name}", valueCount=${valueCount}, controlType=${controlType}, entrySize=${entrySize}, firstPos=${firstPos}, totalBytes=${byteLen}`);
+          // Log first 500 chars to understand format
+          if (processedCount === 0) {
+            console.log(`First file content sample (${file.filename}): ${text.substring(0, 500)}`);
+          }
 
           // Determine which meter this file belongs to
           let meter = meterBySensorUuid.get(file.uuid);
@@ -1188,19 +1177,22 @@ serve(async (req) => {
             continue;
           }
 
-          // Parse entries
+          // Parse XML entries: <S T="timestamp" V="value" .../>
           const entries: Array<{ timestamp: Date; value: number }> = [];
-          for (let pos = firstPos; pos + entrySize <= byteLen; pos += entrySize) {
-            // Entry: uint16 + uint16 + uint32 (Loxone timestamp) + N x float64
-            const loxTimestamp = data.getUint32(pos + 4, true);
+          const entryRegex = /<S\s+T="(\d+)"([^/]*)\/?>/gi;
+          let match;
+          while ((match = entryRegex.exec(text)) !== null) {
+            const loxTimestamp = parseInt(match[1], 10);
             const date = new Date((loxTimestamp + LOXONE_EPOCH_OFFSET) * 1000);
 
             // Filter by date range
             if (date < startD || date > endD) continue;
 
-            // First double value is the primary reading
-            if (valueCount >= 1 && pos + 8 + 8 <= byteLen) {
-              const val = data.getFloat64(pos + 8, true);
+            // Extract V="value" (first value attribute = primary reading, typically power in kW)
+            const attrs = match[2];
+            const valMatch = attrs.match(/\bV="([^"]+)"/);
+            if (valMatch) {
+              const val = parseFloat(valMatch[1]);
               if (isFinite(val)) {
                 entries.push({ timestamp: date, value: Math.abs(val) });
               }
