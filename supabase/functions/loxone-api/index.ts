@@ -1308,6 +1308,9 @@ serve(async (req) => {
           filesProcessed: processedCount,
           totalFilesFound: availableFiles.length,
           matchedFiles: filesToProcess.length,
+          linkedMeterCount: linkedMeters.length,
+          sensorUuids: linkedMeters.map(m => m.sensor_uuid).filter(Boolean),
+          statsIndexSample: statsIndexText.substring(0, 1000),
           errors: errors.length > 0 ? errors : undefined,
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
