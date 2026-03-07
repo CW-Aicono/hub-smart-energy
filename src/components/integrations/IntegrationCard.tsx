@@ -9,12 +9,15 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useTranslation } from "@/hooks/useTranslation";
-import { Server, Trash2, Pencil, CheckCircle2, XCircle, Clock, Loader2, Gauge } from "lucide-react";
+import { Server, Trash2, Pencil, CheckCircle2, XCircle, Clock, Loader2, Gauge, RefreshCw } from "lucide-react";
 import { LocationIntegration } from "@/hooks/useIntegrations";
 import { SensorsDialog } from "./SensorsDialog";
 import { MiniserverStatus } from "./MiniserverStatus";
 import { EditIntegrationDialog } from "./EditIntegrationDialog";
 import { getGatewayDefinition } from "@/lib/gatewayRegistry";
+import { supabase } from "@/integrations/supabase/client";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 interface IntegrationCardProps {
   locationIntegration: LocationIntegration;
@@ -27,6 +30,12 @@ export function IntegrationCard({ locationIntegration, onUpdate, onDelete }: Int
   const [isToggling, setIsToggling] = useState(false);
   const [sensorsOpen, setSensorsOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
+  const [isBackfilling, setIsBackfilling] = useState(false);
+  const [backfillFrom, setBackfillFrom] = useState(() => {
+    const d = new Date(); d.setDate(d.getDate() - 2);
+    return d.toISOString().slice(0, 10);
+  });
+  const [backfillTo, setBackfillTo] = useState(() => new Date().toISOString().slice(0, 10));
   const { toast } = useToast();
   const { t } = useTranslation();
 
@@ -56,6 +65,25 @@ export function IntegrationCard({ locationIntegration, onUpdate, onDelete }: Int
       toast({ title: t("intCard.error" as any), description: t("intCard.deleteError" as any), variant: "destructive" });
     } else {
       toast({ title: t("intCard.deleted" as any), description: t("intCard.deletedDesc" as any) });
+    }
+  };
+
+  const handleBackfill = async () => {
+    setIsBackfilling(true);
+    try {
+      const edgeFn = integration?.type === "loxone" ? "loxone-api" : "loxone-api";
+      const { data, error } = await supabase.functions.invoke(edgeFn, {
+        body: { locationIntegrationId: locationIntegration.id, action: "backfillStatistics", fromDate: backfillFrom, toDate: backfillTo },
+      });
+      if (error || !data?.success) {
+        toast({ title: "Fehler", description: data?.error || "Backfill fehlgeschlagen", variant: "destructive" });
+      } else {
+        toast({ title: "Backfill gestartet", description: `Daten von ${backfillFrom} bis ${backfillTo} werden nachgetragen.` });
+      }
+    } catch (e: any) {
+      toast({ title: "Fehler", description: e.message, variant: "destructive" });
+    } finally {
+      setIsBackfilling(false);
     }
   };
 
@@ -106,6 +134,43 @@ export function IntegrationCard({ locationIntegration, onUpdate, onDelete }: Int
             </div>
             <div className="flex items-center gap-2">
               <Button variant="ghost" size="icon" onClick={() => setSensorsOpen(true)} title={t("intCard.showSensors" as any)}><Gauge className="h-4 w-4" /></Button>
+              {/* Backfill Re-Sync Button */}
+              {integration?.type === "loxone" && isConfigured && (
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button variant="ghost" size="icon" title="Daten nachträglich abrufen">
+                      <RefreshCw className="h-4 w-4" />
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Historische Daten nachträglich abrufen</AlertDialogTitle>
+                      <AlertDialogDescription className="space-y-3">
+                        <span>Fehlende Messdaten werden für den gewählten Zeitraum vom Miniserver abgerufen und nachgetragen.</span>
+                        <span className="block p-3 rounded-md bg-muted text-muted-foreground text-xs leading-relaxed">
+                          <strong>Hinweis:</strong> Die Genauigkeit hängt von der im Miniserver konfigurierten Statistik-Frequenz ab (z.B. 5 Min, 15 Min). Je feiner die Frequenz, desto genauer die nachgetragenen Daten.
+                        </span>
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <div className="grid grid-cols-2 gap-3 py-2">
+                      <div className="space-y-1.5">
+                        <Label htmlFor="backfill-from" className="text-sm">Von</Label>
+                        <Input id="backfill-from" type="date" value={backfillFrom} onChange={(e) => setBackfillFrom(e.target.value)} />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="backfill-to" className="text-sm">Bis</Label>
+                        <Input id="backfill-to" type="date" value={backfillTo} onChange={(e) => setBackfillTo(e.target.value)} />
+                      </div>
+                    </div>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
+                      <AlertDialogAction onClick={handleBackfill} disabled={isBackfilling}>
+                        {isBackfilling ? (<><Loader2 className="mr-2 h-4 w-4 animate-spin" />Wird abgerufen…</>) : "Daten abrufen"}
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              )}
               <Switch checked={locationIntegration.is_enabled} onCheckedChange={handleToggleEnabled} disabled={isToggling} />
               <Button variant="ghost" size="icon" onClick={() => setEditOpen(true)} title={t("common.edit")}><Pencil className="h-4 w-4" /></Button>
               <AlertDialog>
