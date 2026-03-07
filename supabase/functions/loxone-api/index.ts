@@ -1025,7 +1025,6 @@ serve(async (req) => {
 
       // 2) Fetch LoxAPP3.json to get statistics UUIDs for each control
       const structureUrl = `${baseUrl}/data/LoxAPP3.json`;
-      console.log(`Fetching structure for statistics UUIDs: ${structureUrl}`);
       const structureResponse = await fetch(structureUrl, { method: "GET", headers: { Authorization: loxoneAuth } });
       if (!structureResponse.ok) {
         throw new Error(`Struktur konnte nicht geladen werden: ${structureResponse.status}`);
@@ -1033,13 +1032,14 @@ serve(async (req) => {
       const structure = await structureResponse.json() as LoxoneStructure;
       const controls = structure.controls || {};
 
-      // Build map: control UUID -> list of statistics output UUIDs
+      // Build map: control UUID -> list of statistics UUIDs to try
+      // Strategy: use statistic.outputs UUIDs if available, otherwise fall back to control UUID
       const controlToStatsUuids = new Map<string, string[]>();
       for (const [controlUuid, control] of Object.entries(controls)) {
         const stat = (control as any).statistic;
+        const statsUuids: string[] = [];
         if (stat?.outputs) {
           const outputs = stat.outputs;
-          const statsUuids: string[] = [];
           if (typeof outputs === "object") {
             for (const outputKey of Object.keys(outputs)) {
               const output = outputs[outputKey];
@@ -1048,12 +1048,50 @@ serve(async (req) => {
               }
             }
           }
-          if (statsUuids.length > 0) {
-            controlToStatsUuids.set(controlUuid.toLowerCase(), statsUuids);
-          }
         }
+        // Always include the control UUID itself as a fallback
+        // Loxone Meter controls store stats under the control UUID without explicit statistic.outputs
+        if (!statsUuids.includes(controlUuid)) {
+          statsUuids.push(controlUuid);
+        }
+        controlToStatsUuids.set(controlUuid.toLowerCase(), statsUuids);
       }
-      console.log(`Found statistics UUIDs for ${controlToStatsUuids.size} controls`);
+      console.log(`Built stats UUID map for ${controlToStatsUuids.size} controls`);
+
+      // 3) Also fetch the /stats/ index to discover what's actually available
+      let availableStatsFiles: string[] = [];
+      try {
+        const statsIndexUrl = `${baseUrl}/stats/`;
+        console.log(`Fetching stats index: ${statsIndexUrl}`);
+        const statsIndexResp = await fetch(statsIndexUrl, { method: "GET", headers: { Authorization: loxoneAuth } });
+        if (statsIndexResp.ok) {
+          const statsIndexText = await statsIndexResp.text();
+          console.log(`Stats index response (${statsIndexText.length} chars): ${statsIndexText.substring(0, 2000)}`);
+          // Extract linked filenames or UUIDs from the HTML/XML listing
+          const hrefRegex = /href="([^"]+)"/gi;
+          let hrefMatch;
+          while ((hrefMatch = hrefRegex.exec(statsIndexText)) !== null) {
+            availableStatsFiles.push(hrefMatch[1]);
+          }
+          // Also try to find UUIDs in the raw text
+          const uuidRegex = /([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{16})/gi;
+          let uuidMatch;
+          while ((uuidMatch = uuidRegex.exec(statsIndexText)) !== null) {
+            if (!availableStatsFiles.includes(uuidMatch[1])) {
+              availableStatsFiles.push(uuidMatch[1]);
+            }
+          }
+          console.log(`Found ${availableStatsFiles.length} entries in stats index`);
+          if (availableStatsFiles.length > 0) {
+            console.log(`First 10 stats entries: ${availableStatsFiles.slice(0, 10).join(", ")}`);
+          }
+        } else {
+          console.warn(`Stats index returned HTTP ${statsIndexResp.status}`);
+          await statsIndexResp.text(); // consume body
+        }
+      } catch (e) {
+        console.warn("Failed to fetch stats index:", e);
+      }
 
       // Determine which months we need based on date range
       const startD = new Date(fromDate + "T00:00:00Z");
@@ -1068,21 +1106,14 @@ serve(async (req) => {
       const errors: string[] = [];
       let processedCount = 0;
 
-      // 3) For each linked meter, resolve its statistics UUIDs, then fetch XML
+      // 4) For each linked meter, try all candidate UUIDs
       for (const meter of linkedMeters) {
         if (!meter.sensor_uuid) continue;
 
-        const statsUuids = controlToStatsUuids.get(meter.sensor_uuid.toLowerCase());
-        if (!statsUuids || statsUuids.length === 0) {
-          console.log(`No statistics UUIDs found for meter ${meter.id} (control ${meter.sensor_uuid}) – statistics may not be enabled`);
-          continue;
-        }
+        const candidateUuids = controlToStatsUuids.get(meter.sensor_uuid.toLowerCase()) || [meter.sensor_uuid];
 
-        console.log(`Meter ${meter.id} (${meter.sensor_uuid}) has ${statsUuids.length} statistics outputs: ${statsUuids.join(", ")}`);
-
-        for (const statsUuid of statsUuids) {
+        for (const statsUuid of candidateUuids) {
           for (const ym of neededMonths) {
-            // Use statistics UUID (not control UUID) for the XML endpoint
             const statsUrl = `${baseUrl}/stats/statisticdata.xml/${statsUuid}/${ym}`;
             console.log(`Fetching stats XML: ${statsUrl}`);
 
