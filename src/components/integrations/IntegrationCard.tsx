@@ -68,6 +68,25 @@ export function IntegrationCard({ locationIntegration, onUpdate, onDelete }: Int
     }
   };
 
+  const handleBackfill = async () => {
+    setIsBackfilling(true);
+    try {
+      const edgeFn = integration?.type === "loxone" ? "loxone-api" : "loxone-api";
+      const { data, error } = await supabase.functions.invoke(edgeFn, {
+        body: { locationIntegrationId: locationIntegration.id, action: "backfillStatistics", fromDate: backfillFrom, toDate: backfillTo },
+      });
+      if (error || !data?.success) {
+        toast({ title: "Fehler", description: data?.error || "Backfill fehlgeschlagen", variant: "destructive" });
+      } else {
+        toast({ title: "Backfill gestartet", description: `Daten von ${backfillFrom} bis ${backfillTo} werden nachgetragen.` });
+      }
+    } catch (e: any) {
+      toast({ title: "Fehler", description: e.message, variant: "destructive" });
+    } finally {
+      setIsBackfilling(false);
+    }
+  };
+
   const isConfigured = (() => {
     if (!gatewayDef || !config) return false;
     return gatewayDef.configFields.filter((f) => f.required).every((f) => { const val = config[f.name]; return val && String(val).length > 0; });
