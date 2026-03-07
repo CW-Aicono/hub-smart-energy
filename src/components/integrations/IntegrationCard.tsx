@@ -71,14 +71,17 @@ export function IntegrationCard({ locationIntegration, onUpdate, onDelete }: Int
   const handleBackfill = async () => {
     setIsBackfilling(true);
     try {
-      const edgeFn = integration?.type === "loxone" ? "loxone-api" : "loxone-api";
-      const { data, error } = await supabase.functions.invoke(edgeFn, {
+      const { data, error } = await supabase.functions.invoke("loxone-api", {
         body: { locationIntegrationId: locationIntegration.id, action: "backfillStatistics", fromDate: backfillFrom, toDate: backfillTo },
       });
       if (error || !data?.success) {
-        toast({ title: "Fehler", description: data?.error || "Backfill fehlgeschlagen", variant: "destructive" });
+        toast({ title: "Fehler", description: data?.error || error?.message || "Backfill fehlgeschlagen", variant: "destructive" });
       } else {
-        toast({ title: "Backfill gestartet", description: `Daten von ${backfillFrom} bis ${backfillTo} werden nachgetragen.` });
+        const msg = data.message || `${data.backfilled} Datenpunkte nachgetragen`;
+        toast({ title: "Backfill abgeschlossen", description: msg });
+        if (data.errors && data.errors.length > 0) {
+          console.warn("Backfill warnings:", data.errors);
+        }
       }
     } catch (e: any) {
       toast({ title: "Fehler", description: e.message, variant: "destructive" });
