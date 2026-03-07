@@ -135,7 +135,7 @@ export function IntegrationCard({ locationIntegration, onUpdate, onDelete }: Int
             <div className="flex items-center gap-2">
               <Button variant="ghost" size="icon" onClick={() => setSensorsOpen(true)} title={t("intCard.showSensors" as any)}><Gauge className="h-4 w-4" /></Button>
               {/* Backfill Re-Sync Button */}
-              {integration?.type === "loxone" && isConfigured && (
+              {integration?.type === "loxone_miniserver" && isConfigured && (
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
                     <Button variant="ghost" size="icon" title="Daten nachträglich abrufen">
