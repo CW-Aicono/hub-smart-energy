@@ -78,7 +78,9 @@ export function IntegrationCard({ locationIntegration, onUpdate, onDelete }: Int
         toast({ title: "Fehler", description: data?.error || error?.message || "Backfill fehlgeschlagen", variant: "destructive" });
       } else {
         const msg = data.message || `${data.backfilled} Datenpunkte nachgetragen`;
-        toast({ title: "Backfill abgeschlossen", description: msg });
+        const details = `Dateien gefunden: ${data.totalFilesFound ?? '?'}, Matched: ${data.matchedFiles ?? '?'}, Meter: ${data.linkedMeterCount ?? '?'}`;
+        toast({ title: "Backfill abgeschlossen", description: `${msg}\n${details}` });
+        console.log("Backfill result:", JSON.stringify(data, null, 2));
         if (data.errors && data.errors.length > 0) {
           console.warn("Backfill warnings:", data.errors);
         }

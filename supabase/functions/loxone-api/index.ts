@@ -1060,17 +1060,35 @@ serve(async (req) => {
       console.log(`Stats index first 3000 chars: ${statsIndexText.substring(0, 3000)}`);
 
       // Extract filenames from directory listing (HTML or plain text)
-      // Filenames look like: {UUID}{YYYYMM} e.g. "1cf1bfe6-030f-201d-ffffed57184a04d2202603"
-      // They appear in href attributes or as plain text in the listing
-      const fileRegex = /([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{16})(\d{6})/gi;
+      // Filenames can be:
+      //   With hyphens: "1cf1bfe6-030f-201d-ffffed57184a04d2202603"
+      //   Without hyphens: "1cf1bfe6030f201dffffed57184a04d2202603"
       const availableFiles: Array<{ filename: string; uuid: string; yearMonth: string }> = [];
+
+      // Pattern 1: UUID with hyphens + YYYYMM
+      const hyphenRegex = /([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{16})(\d{6})/gi;
       let fileMatch;
-      while ((fileMatch = fileRegex.exec(statsIndexText)) !== null) {
+      while ((fileMatch = hyphenRegex.exec(statsIndexText)) !== null) {
         availableFiles.push({
           filename: fileMatch[0],
           uuid: fileMatch[1].toLowerCase(),
           yearMonth: fileMatch[2],
         });
+      }
+
+      // Pattern 2: UUID without hyphens (32 hex chars) + YYYYMM
+      if (availableFiles.length === 0) {
+        const flatRegex = /([0-9a-f]{32})(\d{6})/gi;
+        while ((fileMatch = flatRegex.exec(statsIndexText)) !== null) {
+          const raw = fileMatch[1].toLowerCase();
+          // Convert flat UUID to hyphenated: 8-4-4-16
+          const uuid = `${raw.slice(0,8)}-${raw.slice(8,12)}-${raw.slice(12,16)}-${raw.slice(16)}`;
+          availableFiles.push({
+            filename: fileMatch[0],
+            uuid,
+            yearMonth: fileMatch[2],
+          });
+        }
       }
       console.log(`Found ${availableFiles.length} stat files in index`);
       if (availableFiles.length > 0) {
@@ -1290,6 +1308,9 @@ serve(async (req) => {
           filesProcessed: processedCount,
           totalFilesFound: availableFiles.length,
           matchedFiles: filesToProcess.length,
+          linkedMeterCount: linkedMeters.length,
+          sensorUuids: linkedMeters.map(m => m.sensor_uuid).filter(Boolean),
+          statsIndexSample: statsIndexText.substring(0, 1000),
           errors: errors.length > 0 ? errors : undefined,
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
