@@ -1061,7 +1061,7 @@ serve(async (req) => {
 
       // Extract filenames from directory listing HTML
       // Actual format from Loxone: "UUID_N.YYYYMM.xml" e.g. "1d575aad-03db-6497-ffffed57184a04d2_1.202501.xml"
-      const availableFiles: Array<{ filename: string; uuid: string; yearMonth: string }> = [];
+      const availableFiles: Array<{ filename: string; uuid: string; yearMonth: string; statsGroup: number }> = [];
 
       // Extract href values from the HTML listing
       const hrefRegex = /href="([^"]+)"/gi;
@@ -1076,10 +1076,14 @@ serve(async (req) => {
             filename: href,
             uuid: m[1].toLowerCase(),
             yearMonth: m[3],
+            statsGroup: parseInt(m[2], 10),
           });
         }
       }
-      console.log(`Found ${availableFiles.length} stat files in index`);
+      // Only use StatsGroup 1 ("actual" = power in kW). 
+      // StatsGroup 2 ("total") contains cumulative meter readings, not power values.
+      const powerFiles = availableFiles.filter(f => f.statsGroup === 1);
+      console.log(`Found ${availableFiles.length} total stat files, ${powerFiles.length} power files (group 1)`)
       if (availableFiles.length > 0) {
         console.log(`First 10 files: ${availableFiles.slice(0, 10).map(f => `${f.filename} -> uuid=${f.uuid}, month=${f.yearMonth}`).join(" | ")}`);
       }
@@ -1116,20 +1120,15 @@ serve(async (req) => {
         console.log(`Built stats-to-control UUID map with ${statsUuidToControlUuid.size} entries`);
       }
 
-      // Filter files: match by sensor_uuid OR by stats UUID that maps to a sensor_uuid
-      const filesToProcess = availableFiles.filter(f => {
+      // Filter power files: match by sensor_uuid OR by stats UUID that maps to a sensor_uuid
+      const filesToProcess = powerFiles.filter(f => {
         if (!neededMonths.has(f.yearMonth)) return false;
-        // Direct match: file UUID is a meter's sensor_uuid
         if (meterBySensorUuid.has(f.uuid)) return true;
-        // Indirect match: file UUID is a stats output that maps to a meter's control UUID
         const controlUuid = statsUuidToControlUuid.get(f.uuid);
         if (controlUuid && meterBySensorUuid.has(controlUuid)) return true;
         return false;
       });
       console.log(`Files to process after filtering: ${filesToProcess.length}`);
-      if (filesToProcess.length > 0) {
-        console.log(`Processing files: ${filesToProcess.slice(0, 10).map(f => f.filename).join(", ")}`);
-      }
 
       let totalInserted = 0;
       const errors: string[] = [];
