@@ -1215,6 +1215,7 @@ serve(async (req) => {
             console.error(`Error processing stats for ${meter.sensor_uuid}/${ym}:`, errMsg);
             errors.push(`${meter.sensor_uuid}/${ym}: ${errMsg}`);
           }
+          }
         }
       }
 
