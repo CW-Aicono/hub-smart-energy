@@ -1023,6 +1023,38 @@ serve(async (req) => {
 
       console.log(`Found ${linkedMeters.length} linked meters for backfill`);
 
+      // 2) Fetch LoxAPP3.json to get statistics UUIDs for each control
+      const structureUrl = `${baseUrl}/data/LoxAPP3.json`;
+      console.log(`Fetching structure for statistics UUIDs: ${structureUrl}`);
+      const structureResponse = await fetch(structureUrl, { method: "GET", headers: { Authorization: loxoneAuth } });
+      if (!structureResponse.ok) {
+        throw new Error(`Struktur konnte nicht geladen werden: ${structureResponse.status}`);
+      }
+      const structure = await structureResponse.json() as LoxoneStructure;
+      const controls = structure.controls || {};
+
+      // Build map: control UUID -> list of statistics output UUIDs
+      const controlToStatsUuids = new Map<string, string[]>();
+      for (const [controlUuid, control] of Object.entries(controls)) {
+        const stat = (control as any).statistic;
+        if (stat?.outputs) {
+          const outputs = stat.outputs;
+          const statsUuids: string[] = [];
+          if (typeof outputs === "object") {
+            for (const outputKey of Object.keys(outputs)) {
+              const output = outputs[outputKey];
+              if (output?.uuid) {
+                statsUuids.push(output.uuid);
+              }
+            }
+          }
+          if (statsUuids.length > 0) {
+            controlToStatsUuids.set(controlUuid.toLowerCase(), statsUuids);
+          }
+        }
+      }
+      console.log(`Found statistics UUIDs for ${controlToStatsUuids.size} controls`);
+
       // Determine which months we need based on date range
       const startD = new Date(fromDate + "T00:00:00Z");
       const endD = new Date(toDate + "T23:59:59Z");
@@ -1036,15 +1068,23 @@ serve(async (req) => {
       const errors: string[] = [];
       let processedCount = 0;
 
-      // 2) For each linked meter, fetch statistics XML for each needed month
+      // 3) For each linked meter, resolve its statistics UUIDs, then fetch XML
       for (const meter of linkedMeters) {
         if (!meter.sensor_uuid) continue;
 
-        for (const ym of neededMonths) {
-          // Loxone HTTP statistics XML endpoint:
-          // /stats/statisticdata.xml/{controlUUID}/{YYYYMM}
-          const statsUrl = `${baseUrl}/stats/statisticdata.xml/${meter.sensor_uuid}/${ym}`;
-          console.log(`Fetching stats XML: ${statsUrl}`);
+        const statsUuids = controlToStatsUuids.get(meter.sensor_uuid.toLowerCase());
+        if (!statsUuids || statsUuids.length === 0) {
+          console.log(`No statistics UUIDs found for meter ${meter.id} (control ${meter.sensor_uuid}) – statistics may not be enabled`);
+          continue;
+        }
+
+        console.log(`Meter ${meter.id} (${meter.sensor_uuid}) has ${statsUuids.length} statistics outputs: ${statsUuids.join(", ")}`);
+
+        for (const statsUuid of statsUuids) {
+          for (const ym of neededMonths) {
+            // Use statistics UUID (not control UUID) for the XML endpoint
+            const statsUrl = `${baseUrl}/stats/statisticdata.xml/${statsUuid}/${ym}`;
+            console.log(`Fetching stats XML: ${statsUrl}`);
 
           try {
             const resp = await fetch(statsUrl, { method: "GET", headers: { Authorization: loxoneAuth } });
@@ -1174,6 +1214,7 @@ serve(async (req) => {
             const errMsg = err instanceof Error ? err.message : String(err);
             console.error(`Error processing stats for ${meter.sensor_uuid}/${ym}:`, errMsg);
             errors.push(`${meter.sensor_uuid}/${ym}: ${errMsg}`);
+          }
           }
         }
       }
