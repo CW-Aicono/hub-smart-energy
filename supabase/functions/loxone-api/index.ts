@@ -997,16 +997,14 @@ serve(async (req) => {
     }
 
     // ── ACTION: backfillStatistics ──
-    // Fetches historical statistics from the Miniserver's SD card (binary format)
-    // and inserts them as 5-min aggregates + daily totals to fill gaps after outages.
+    // Fetches historical statistics via the Miniserver's HTTP XML API:
+    //   /stats/statisticdata.xml/{controlUUID}/{YYYYMM}
+    // and inserts them as 5-min aggregates + daily totals to fill gaps.
     if (action === "backfillStatistics") {
       const { fromDate, toDate } = requestBody;
       if (!fromDate || !toDate) throw new Error("fromDate und toDate sind erforderlich (YYYY-MM-DD)");
 
       console.log(`Backfill statistics: ${fromDate} to ${toDate} for integration ${locationIntegrationId}`);
-
-      // Loxone timestamp epoch offset (1.1.2009 00:00:00 UTC)
-      const LOXONE_EPOCH_OFFSET = 1230768000;
 
       // 1) Get linked automatic meters with sensor_uuid
       const { data: linkedMeters } = await supabase
@@ -1023,259 +1021,169 @@ serve(async (req) => {
         );
       }
 
-      console.log(`Found ${linkedMeters.length} linked meters`);
-
-      // 2) List available statistics files on the Miniserver SD card
-      const fsListUrl = `${baseUrl}/dev/fslist/stats/`;
-      console.log(`Listing stats directory: ${fsListUrl}`);
-      const fsListResponse = await fetch(fsListUrl, { method: "GET", headers: { Authorization: loxoneAuth } });
-      if (!fsListResponse.ok) {
-        throw new Error(`Statistik-Verzeichnis konnte nicht geladen werden: HTTP ${fsListResponse.status}`);
-      }
-      const fsListText = await fsListResponse.text();
-      console.log(`Stats directory listing (first 1000 chars): ${fsListText.substring(0, 1000)}`);
-
-      // Parse file listing - extract filenames from the response
-      // Format varies: could be XML or plain text listing
-      const fileNames: string[] = [];
-      // Try to extract filenames - they look like: {uuid}{YYYYMM} (hex UUID + year/month)
-      const fileRegex = /([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{16})(\d{6})/gi;
-      let fileMatch;
-      while ((fileMatch = fileRegex.exec(fsListText)) !== null) {
-        fileNames.push(fileMatch[0]);
-      }
-
-      // Also try without hyphens in UUID format
-      const fileRegex2 = /[\w.]+/g;
-      let fileMatch2;
-      while ((fileMatch2 = fileRegex2.exec(fsListText)) !== null) {
-        const fn = fileMatch2[0];
-        if (fn.length > 10 && !fileNames.includes(fn)) {
-          fileNames.push(fn);
-        }
-      }
-
-      console.log(`Found ${fileNames.length} statistics files on Miniserver`);
+      console.log(`Found ${linkedMeters.length} linked meters for backfill`);
 
       // Determine which months we need based on date range
       const startD = new Date(fromDate + "T00:00:00Z");
       const endD = new Date(toDate + "T23:59:59Z");
-      const neededMonths = new Set<string>();
-      for (let d = new Date(startD); d <= endD; d.setMonth(d.getMonth() + 1)) {
-        const ym = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}`;
-        neededMonths.add(ym);
+      const neededMonths: string[] = [];
+      for (let d = new Date(startD.getFullYear(), startD.getMonth(), 1); d <= endD; d.setMonth(d.getMonth() + 1)) {
+        neededMonths.push(`${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}`);
       }
-      // Also add the end month
-      neededMonths.add(`${endD.getFullYear()}${String(endD.getMonth() + 1).padStart(2, "0")}`);
-      console.log(`Needed months: ${Array.from(neededMonths).join(", ")}`);
-
-      // Build a map of sensor_uuid (normalized) -> meter
-      const sensorToMeter = new Map<string, typeof linkedMeters[0]>();
-      for (const m of linkedMeters) {
-        if (m.sensor_uuid) {
-          // Normalize UUID: lowercase, keep hyphens
-          sensorToMeter.set(m.sensor_uuid.toLowerCase(), m);
-          // Also store without hyphens for matching
-          sensorToMeter.set(m.sensor_uuid.toLowerCase().replace(/-/g, ""), m);
-        }
-      }
+      console.log(`Needed months: ${neededMonths.join(", ")}`);
 
       let totalInserted = 0;
       const errors: string[] = [];
-      const processedFiles: string[] = [];
+      let processedCount = 0;
 
-      // Helper: parse numberOfValues (from Loxone binary stats format)
-      function entryByteSize(valueCount: number): number {
-        let effectiveValues: number;
-        if (valueCount > 7) effectiveValues = 10;
-        else if (valueCount > 3) effectiveValues = 7;
-        else if (valueCount > 1) effectiveValues = 3;
-        else effectiveValues = 1;
-        return 8 + effectiveValues * 8; // 2x uint16 + 1x uint32 + N x float64
-      }
+      // 2) For each linked meter, fetch statistics XML for each needed month
+      for (const meter of linkedMeters) {
+        if (!meter.sensor_uuid) continue;
 
-      // 3) For each stat file that matches a linked meter and the needed months
-      for (const fileName of fileNames) {
-        // Try to extract UUID and YYYYMM from filename
-        // Files are named like: {uuid-with-hyphens}{YYYYMM} or similar
-        let fileUuid = "";
-        let fileYearMonth = "";
+        for (const ym of neededMonths) {
+          // Loxone HTTP statistics XML endpoint:
+          // /stats/statisticdata.xml/{controlUUID}/{YYYYMM}
+          const statsUrl = `${baseUrl}/stats/statisticdata.xml/${meter.sensor_uuid}/${ym}`;
+          console.log(`Fetching stats XML: ${statsUrl}`);
 
-        // Try format: UUID (with hyphens) followed by YYYYMM
-        const matchHyphen = fileName.match(/^([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{16})(\d{6})$/i);
-        if (matchHyphen) {
-          fileUuid = matchHyphen[1].toLowerCase();
-          fileYearMonth = matchHyphen[2];
-        } else {
-          // Try other formats - last 6 chars are YYYYMM, rest is UUID
-          if (fileName.length > 6) {
-            fileYearMonth = fileName.slice(-6);
-            fileUuid = fileName.slice(0, -6).toLowerCase();
-          }
-        }
-
-        if (!fileYearMonth || !neededMonths.has(fileYearMonth)) continue;
-
-        // Check if this UUID matches any of our linked meters
-        const meter = sensorToMeter.get(fileUuid) || sensorToMeter.get(fileUuid.replace(/-/g, ""));
-        if (!meter) continue;
-
-        console.log(`Processing stats file: ${fileName} for meter ${meter.id} (${fileYearMonth})`);
-
-        try {
-          // Download the binary statistics file
-          const fileUrl = `${baseUrl}/dev/fsget/stats/${fileName}`;
-          const fileResponse = await fetch(fileUrl, { method: "GET", headers: { Authorization: loxoneAuth } });
-          if (!fileResponse.ok) {
-            console.warn(`Failed to download stats file ${fileName}: HTTP ${fileResponse.status}`);
-            errors.push(`${fileName}: HTTP ${fileResponse.status}`);
-            continue;
-          }
-
-          const arrayBuf = await fileResponse.arrayBuffer();
-          const dataView = new DataView(arrayBuf);
-          const byteLen = arrayBuf.byteLength;
-
-          if (byteLen < 12) {
-            console.warn(`Stats file ${fileName} too small (${byteLen} bytes)`);
-            continue;
-          }
-
-          // Parse header: first 3 uint32 LE
-          const rawValueCount = dataView.getUint32(0, true);
-          const controlType = dataView.getUint32(4, true);
-          const nameLength = dataView.getUint32(8, true);
-
-          const valueCount = rawValueCount & 0x7FFFFFFF;
-          const eSize = entryByteSize(valueCount);
-
-          // Calculate first entry position (aligned)
-          const headerAndName = 12 + nameLength + 1; // header + name + null terminator
-          const firstPos = Math.ceil(headerAndName / eSize) * eSize;
-
-          console.log(`Stats file ${fileName}: valueCount=${valueCount}, controlType=${controlType}, nameLength=${nameLength}, entrySize=${eSize}, firstPos=${firstPos}, totalBytes=${byteLen}`);
-
-          // Parse entries
-          const entries: Array<{ timestamp: Date; value: number }> = [];
-
-          for (let pos = firstPos; pos + eSize <= byteLen; pos += eSize) {
-            // Entry format: uint16, uint16, uint32 (Loxone timestamp), then float64 values
-            // const uuidPart1 = dataView.getUint16(pos, true);
-            // const uuidPart2 = dataView.getUint16(pos + 2, true);
-            const loxoneTimestamp = dataView.getUint32(pos + 4, true);
-            const unixTimestamp = loxoneTimestamp + LOXONE_EPOCH_OFFSET;
-            const date = new Date(unixTimestamp * 1000);
-
-            // First double value is the primary measurement
-            const value = dataView.getFloat64(pos + 8, true);
-
-            // Filter by date range
-            if (date >= startD && date <= endD && !isNaN(value) && isFinite(value)) {
-              entries.push({ timestamp: date, value: Math.abs(value) });
+          try {
+            const resp = await fetch(statsUrl, { method: "GET", headers: { Authorization: loxoneAuth } });
+            if (!resp.ok) {
+              if (resp.status === 404) {
+                console.log(`No statistics found for ${meter.sensor_uuid} / ${ym} (404)`);
+                continue;
+              }
+              console.warn(`Stats XML fetch failed for ${meter.sensor_uuid}/${ym}: HTTP ${resp.status}`);
+              errors.push(`${meter.sensor_uuid}/${ym}: HTTP ${resp.status}`);
+              continue;
             }
-          }
 
-          if (entries.length === 0) {
-            console.log(`No entries in date range for ${fileName}`);
-            continue;
-          }
+            const xmlText = await resp.text();
+            console.log(`Stats XML response for ${meter.sensor_uuid}/${ym}: ${xmlText.length} chars, first 500: ${xmlText.substring(0, 500)}`);
 
-          console.log(`Parsed ${entries.length} entries from ${fileName} in date range`);
-          processedFiles.push(fileName);
+            // Parse XML entries. Format:
+            // <Statistics UUID="...">
+            //   <S T="loxoneTimestamp" V="value" />
+            //   ...
+            // </Statistics>
+            // where T is seconds since 2009-01-01 00:00:00 UTC
+            const LOXONE_EPOCH_OFFSET = 1230768000; // 2009-01-01 00:00:00 UTC
 
-          // Sort entries by timestamp
-          entries.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+            // Extract all <S T="..." V="..." /> entries
+            const entryRegex = /<S\s+T="(\d+)"\s+V="([^"]+)"\s*\/?>/gi;
+            const entries: Array<{ timestamp: Date; value: number }> = [];
+            let match;
+            while ((match = entryRegex.exec(xmlText)) !== null) {
+              const loxTs = parseInt(match[1], 10);
+              const val = parseFloat(match[2]);
+              if (isNaN(loxTs) || isNaN(val) || !isFinite(val)) continue;
 
-          // Group into 5-min buckets
-          const buckets = new Map<string, { sum: number; count: number; max: number; day: string }>();
-          for (const entry of entries) {
-            const t = entry.timestamp;
-            const bucketDate = new Date(t);
-            bucketDate.setMinutes(Math.floor(t.getMinutes() / 5) * 5, 0, 0);
-            const bucketKey = bucketDate.toISOString();
-            const dayKey = t.toISOString().slice(0, 10);
-
-            const existing = buckets.get(bucketKey);
-            if (existing) {
-              existing.sum += entry.value;
-              existing.count += 1;
-              existing.max = Math.max(existing.max, entry.value);
-            } else {
-              buckets.set(bucketKey, { sum: entry.value, count: 1, max: entry.value, day: dayKey });
-            }
-          }
-
-          // Upsert into meter_power_readings_5min
-          const fiveMinInserts = Array.from(buckets.entries()).map(([bucket, data]) => ({
-            meter_id: meter.id,
-            tenant_id: meter.tenant_id,
-            energy_type: meter.energy_type,
-            bucket,
-            power_avg: data.sum / data.count,
-            power_max: data.max,
-            sample_count: data.count,
-          }));
-
-          if (fiveMinInserts.length > 0) {
-            // Batch in chunks of 500 to avoid payload limits
-            for (let i = 0; i < fiveMinInserts.length; i += 500) {
-              const chunk = fiveMinInserts.slice(i, i + 500);
-              const { error: insertError } = await supabase
-                .from("meter_power_readings_5min")
-                .upsert(chunk, { onConflict: "meter_id,bucket" });
-
-              if (insertError) {
-                console.error(`Error upserting 5min data for ${fileName} (chunk ${i}):`, insertError);
-                errors.push(`${fileName}: ${insertError.message}`);
-              } else {
-                totalInserted += chunk.length;
+              const date = new Date((loxTs + LOXONE_EPOCH_OFFSET) * 1000);
+              // Filter by date range
+              if (date >= startD && date <= endD) {
+                entries.push({ timestamp: date, value: Math.abs(val) });
               }
             }
-            console.log(`Upserted ${fiveMinInserts.length} 5-min buckets from ${fileName}`);
-          }
 
-          // Compute and upsert daily totals grouped by day
-          const dailyTotals = new Map<string, number>();
-          for (const [, data] of buckets) {
-            const avg = data.sum / data.count;
-            const kwh = avg * (5 / 60); // 5-min bucket -> kWh
-            dailyTotals.set(data.day, (dailyTotals.get(data.day) || 0) + kwh);
-          }
+            if (entries.length === 0) {
+              console.log(`No entries in date range for ${meter.sensor_uuid}/${ym}`);
+              continue;
+            }
 
-          for (const [day, totalKwh] of dailyTotals) {
-            if (totalKwh > 0) {
-              const { error: dayError } = await supabase
-                .from("meter_period_totals")
-                .upsert({
-                  tenant_id: meter.tenant_id,
-                  meter_id: meter.id,
-                  period_type: "day",
-                  period_start: day,
-                  total_value: Math.round(totalKwh * 100) / 100,
-                  energy_type: meter.energy_type,
-                  source: "loxone_backfill",
-                }, { onConflict: "meter_id,period_type,period_start" });
+            console.log(`Parsed ${entries.length} XML entries for ${meter.sensor_uuid}/${ym}`);
+            processedCount++;
 
-              if (dayError) {
-                console.error(`Error upserting daily total for ${day}:`, dayError);
+            // Sort by timestamp
+            entries.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+
+            // Group into 5-min buckets
+            const buckets = new Map<string, { sum: number; count: number; max: number; day: string }>();
+            for (const entry of entries) {
+              const t = entry.timestamp;
+              const bucketDate = new Date(t);
+              bucketDate.setUTCMinutes(Math.floor(t.getUTCMinutes() / 5) * 5, 0, 0);
+              const bucketKey = bucketDate.toISOString();
+              const dayKey = t.toISOString().slice(0, 10);
+
+              const existing = buckets.get(bucketKey);
+              if (existing) {
+                existing.sum += entry.value;
+                existing.count += 1;
+                existing.max = Math.max(existing.max, entry.value);
               } else {
-                console.log(`Upserted daily total ${totalKwh.toFixed(2)} kWh for ${day}`);
+                buckets.set(bucketKey, { sum: entry.value, count: 1, max: entry.value, day: dayKey });
               }
             }
+
+            // Upsert into meter_power_readings_5min
+            const fiveMinInserts = Array.from(buckets.entries()).map(([bucket, data]) => ({
+              meter_id: meter.id,
+              tenant_id: meter.tenant_id,
+              energy_type: meter.energy_type,
+              bucket,
+              power_avg: data.sum / data.count,
+              power_max: data.max,
+              sample_count: data.count,
+            }));
+
+            if (fiveMinInserts.length > 0) {
+              for (let i = 0; i < fiveMinInserts.length; i += 500) {
+                const chunk = fiveMinInserts.slice(i, i + 500);
+                const { error: insertError } = await supabase
+                  .from("meter_power_readings_5min")
+                  .upsert(chunk, { onConflict: "meter_id,bucket" });
+
+                if (insertError) {
+                  console.error(`Error upserting 5min data for ${meter.sensor_uuid}/${ym}:`, insertError);
+                  errors.push(`${meter.sensor_uuid}/${ym}: ${insertError.message}`);
+                } else {
+                  totalInserted += chunk.length;
+                }
+              }
+              console.log(`Upserted ${fiveMinInserts.length} 5-min buckets for ${meter.sensor_uuid}/${ym}`);
+            }
+
+            // Compute and upsert daily totals
+            const dailyTotals = new Map<string, number>();
+            for (const [, data] of buckets) {
+              const avg = data.sum / data.count;
+              const kwh = avg * (5 / 60); // 5-min bucket → kWh
+              dailyTotals.set(data.day, (dailyTotals.get(data.day) || 0) + kwh);
+            }
+
+            for (const [day, totalKwh] of dailyTotals) {
+              if (totalKwh > 0) {
+                const { error: dayError } = await supabase
+                  .from("meter_period_totals")
+                  .upsert({
+                    tenant_id: meter.tenant_id,
+                    meter_id: meter.id,
+                    period_type: "day",
+                    period_start: day,
+                    total_value: Math.round(totalKwh * 100) / 100,
+                    energy_type: meter.energy_type,
+                    source: "loxone_backfill",
+                  }, { onConflict: "meter_id,period_type,period_start" });
+
+                if (dayError) {
+                  console.error(`Error upserting daily total for ${day}:`, dayError);
+                }
+              }
+            }
+          } catch (err) {
+            const errMsg = err instanceof Error ? err.message : String(err);
+            console.error(`Error processing stats for ${meter.sensor_uuid}/${ym}:`, errMsg);
+            errors.push(`${meter.sensor_uuid}/${ym}: ${errMsg}`);
           }
-        } catch (err) {
-          const errMsg = err instanceof Error ? err.message : String(err);
-          console.error(`Error processing stats file ${fileName}:`, errMsg);
-          errors.push(`${fileName}: ${errMsg}`);
         }
       }
 
       return new Response(
         JSON.stringify({
           success: true,
-          message: `Backfill abgeschlossen: ${totalInserted} Datenpunkte aus ${processedFiles.length} Dateien nachgetragen`,
+          message: `Backfill abgeschlossen: ${totalInserted} Datenpunkte aus ${processedCount} Statistik-Abfragen nachgetragen`,
           backfilled: totalInserted,
-          filesProcessed: processedFiles.length,
+          filesProcessed: processedCount,
           errors: errors.length > 0 ? errors : undefined,
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
