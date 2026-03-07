@@ -315,6 +315,7 @@ const PvForecastWidget = ({ locationId }: PvForecastWidgetProps) => {
   }, [locationId, settings?.pv_meter_id, isDay, refDateStr, offset]);
 
   // Fetch actual daily totals for multi-day periods from meter_period_totals
+  // + live calculation for today from meter_power_readings
   useEffect(() => {
     if (isDay) { setMultiDayActuals({}); return; }
 
@@ -322,19 +323,61 @@ const PvForecastWidget = ({ locationId }: PvForecastWidgetProps) => {
       const meterIds = await resolvePvMeterIds();
       if (meterIds.length === 0) { setMultiDayActuals({}); return; }
 
+      const dayMap: Record<string, number> = {};
+
+      // 1) Fetch archived daily totals
       const { data, error } = await supabase.rpc("get_meter_daily_totals", {
         p_meter_ids: meterIds,
         p_from_date: fromDateStr,
         p_to_date: toDateStr,
       });
-      if (error || !data || data.length === 0) { setMultiDayActuals({}); return; }
-
-      // Sum across meters per day
-      const dayMap: Record<string, number> = {};
-      for (const row of data) {
-        const dayKey = String(row.day);
-        dayMap[dayKey] = (dayMap[dayKey] ?? 0) + (row.total_value ?? 0);
+      if (!error && data) {
+        for (const row of data) {
+          const dayKey = String(row.day);
+          dayMap[dayKey] = (dayMap[dayKey] ?? 0) + (row.total_value ?? 0);
+        }
       }
+
+      // 2) For today: compute from raw meter_power_readings if within range
+      const todayStr = toLocalDateStr(new Date());
+      if (todayStr >= fromDateStr && todayStr <= toDateStr && !dayMap[todayStr]) {
+        const dayStart = startOfDay(new Date());
+        const dayEnd = new Date(dayStart);
+        dayEnd.setDate(dayEnd.getDate() + 1);
+
+        const allData: { power_value: number; recorded_at: string }[] = [];
+        let from = 0;
+        const PAGE = 1000;
+        while (true) {
+          const { data: page } = await supabase
+            .from("meter_power_readings")
+            .select("power_value, recorded_at")
+            .in("meter_id", meterIds)
+            .gte("recorded_at", dayStart.toISOString())
+            .lt("recorded_at", dayEnd.toISOString())
+            .order("recorded_at", { ascending: true })
+            .range(from, from + PAGE - 1);
+          if (!page || page.length === 0) break;
+          allData.push(...page);
+          if (page.length < PAGE) break;
+          from += PAGE;
+        }
+
+        if (allData.length > 0) {
+          allData.sort((a, b) => a.recorded_at.localeCompare(b.recorded_at));
+          let totalKwh = 0;
+          for (let i = 0; i < allData.length; i++) {
+            let intervalMin = 5;
+            if (i < allData.length - 1) {
+              const gap = (new Date(allData[i + 1].recorded_at).getTime() - new Date(allData[i].recorded_at).getTime()) / 60000;
+              if (gap > 0 && gap <= 15) intervalMin = gap;
+            }
+            totalKwh += allData[i].power_value * (intervalMin / 60);
+          }
+          dayMap[todayStr] = Math.round(totalKwh * 10) / 10;
+        }
+      }
+
       setMultiDayActuals(dayMap);
     })();
   }, [locationId, settings?.pv_meter_id, isDay, fromDateStr, toDateStr]);
