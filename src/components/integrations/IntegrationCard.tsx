@@ -30,6 +30,12 @@ export function IntegrationCard({ locationIntegration, onUpdate, onDelete }: Int
   const [isToggling, setIsToggling] = useState(false);
   const [sensorsOpen, setSensorsOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
+  const [isBackfilling, setIsBackfilling] = useState(false);
+  const [backfillFrom, setBackfillFrom] = useState(() => {
+    const d = new Date(); d.setDate(d.getDate() - 2);
+    return d.toISOString().slice(0, 10);
+  });
+  const [backfillTo, setBackfillTo] = useState(() => new Date().toISOString().slice(0, 10));
   const { toast } = useToast();
   const { t } = useTranslation();
 
