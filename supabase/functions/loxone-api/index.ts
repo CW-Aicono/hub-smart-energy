@@ -1061,7 +1061,7 @@ serve(async (req) => {
 
       // Extract filenames from directory listing HTML
       // Actual format from Loxone: "UUID_N.YYYYMM.xml" e.g. "1d575aad-03db-6497-ffffed57184a04d2_1.202501.xml"
-      const availableFiles: Array<{ filename: string; uuid: string; yearMonth: string }> = [];
+      const availableFiles: Array<{ filename: string; uuid: string; yearMonth: string; statsGroup: number }> = [];
 
       // Extract href values from the HTML listing
       const hrefRegex = /href="([^"]+)"/gi;
@@ -1076,10 +1076,14 @@ serve(async (req) => {
             filename: href,
             uuid: m[1].toLowerCase(),
             yearMonth: m[3],
+            statsGroup: parseInt(m[2], 10),
           });
         }
       }
-      console.log(`Found ${availableFiles.length} stat files in index`);
+      // Only use StatsGroup 1 ("actual" = power in kW). 
+      // StatsGroup 2 ("total") contains cumulative meter readings, not power values.
+      const powerFiles = availableFiles.filter(f => f.statsGroup === 1);
+      console.log(`Found ${availableFiles.length} total stat files, ${powerFiles.length} power files (group 1)`)
       if (availableFiles.length > 0) {
         console.log(`First 10 files: ${availableFiles.slice(0, 10).map(f => `${f.filename} -> uuid=${f.uuid}, month=${f.yearMonth}`).join(" | ")}`);
       }
