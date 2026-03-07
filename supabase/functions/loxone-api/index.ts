@@ -1059,40 +1059,29 @@ serve(async (req) => {
       console.log(`Stats index length: ${statsIndexText.length} chars`);
       console.log(`Stats index first 3000 chars: ${statsIndexText.substring(0, 3000)}`);
 
-      // Extract filenames from directory listing (HTML or plain text)
-      // Filenames can be:
-      //   With hyphens: "1cf1bfe6-030f-201d-ffffed57184a04d2202603"
-      //   Without hyphens: "1cf1bfe6030f201dffffed57184a04d2202603"
+      // Extract filenames from directory listing HTML
+      // Actual format from Loxone: "UUID_N.YYYYMM.xml" e.g. "1d575aad-03db-6497-ffffed57184a04d2_1.202501.xml"
       const availableFiles: Array<{ filename: string; uuid: string; yearMonth: string }> = [];
 
-      // Pattern 1: UUID with hyphens + YYYYMM
-      const hyphenRegex = /([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{16})(\d{6})/gi;
-      let fileMatch;
-      while ((fileMatch = hyphenRegex.exec(statsIndexText)) !== null) {
-        availableFiles.push({
-          filename: fileMatch[0],
-          uuid: fileMatch[1].toLowerCase(),
-          yearMonth: fileMatch[2],
-        });
-      }
-
-      // Pattern 2: UUID without hyphens (32 hex chars) + YYYYMM
-      if (availableFiles.length === 0) {
-        const flatRegex = /([0-9a-f]{32})(\d{6})/gi;
-        while ((fileMatch = flatRegex.exec(statsIndexText)) !== null) {
-          const raw = fileMatch[1].toLowerCase();
-          // Convert flat UUID to hyphenated: 8-4-4-16
-          const uuid = `${raw.slice(0,8)}-${raw.slice(8,12)}-${raw.slice(12,16)}-${raw.slice(16)}`;
+      // Extract href values from the HTML listing
+      const hrefRegex = /href="([^"]+)"/gi;
+      let hrefMatch;
+      while ((hrefMatch = hrefRegex.exec(statsIndexText)) !== null) {
+        const href = hrefMatch[1];
+        // Pattern: UUID_N.YYYYMM.xml  (UUID may have hyphens, N is stat group number)
+        const filePattern = /^([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{16})_(\d+)\.(\d{6})\.xml$/i;
+        const m = href.match(filePattern);
+        if (m) {
           availableFiles.push({
-            filename: fileMatch[0],
-            uuid,
-            yearMonth: fileMatch[2],
+            filename: href,
+            uuid: m[1].toLowerCase(),
+            yearMonth: m[3],
           });
         }
       }
       console.log(`Found ${availableFiles.length} stat files in index`);
       if (availableFiles.length > 0) {
-        console.log(`First 5 files: ${availableFiles.slice(0, 5).map(f => f.filename).join(", ")}`);
+        console.log(`First 10 files: ${availableFiles.slice(0, 10).map(f => `${f.filename} -> uuid=${f.uuid}, month=${f.yearMonth}`).join(" | ")}`);
       }
 
       // Determine needed months
