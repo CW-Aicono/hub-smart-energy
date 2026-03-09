@@ -130,6 +130,13 @@ export function PvForecastSection({ locationId }: PvForecastSectionProps) {
   };
 
   const dayNames = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
+
+  // Build today's date string in local timezone for filtering
+  const todayLocalStr = (() => {
+    const n = new Date();
+    return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}-${String(n.getDate()).padStart(2, "0")}`;
+  })();
+
   const chartData = forecast?.hourly
     .map((h) => {
       const d = new Date(h.timestamp);
@@ -140,12 +147,27 @@ export function PvForecastSection({ locationId }: PvForecastSectionProps) {
         time: toLocalTime(h.timestamp),
         hour,
         dayLabel,
+        dateStr: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`,
         prognose: h.ai_adjusted_kwh ?? h.estimated_kwh,
         ist: actualReadings[hourKey] ?? null,
         cloud: h.cloud_cover_pct,
         radiation: h.radiation_w_m2,
       };
     }) ?? [];
+
+  // Compute today / tomorrow totals client-side from hourly data (consistent with Dashboard)
+  const tomorrowLocalStr = (() => {
+    const n = new Date();
+    n.setDate(n.getDate() + 1);
+    return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}-${String(n.getDate()).padStart(2, "0")}`;
+  })();
+
+  const computedTodayTotal = chartData
+    .filter((d) => d.dateStr === todayLocalStr)
+    .reduce((s, d) => s + d.prognose, 0);
+  const computedTomorrowTotal = chartData
+    .filter((d) => d.dateStr === tomorrowLocalStr)
+    .reduce((s, d) => s + d.prognose, 0);
 
   const hasActual = Object.keys(actualReadings).length > 0;
 
@@ -258,7 +280,7 @@ export function PvForecastSection({ locationId }: PvForecastSectionProps) {
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   <div className="border rounded-lg p-3 text-center">
                     <p className="text-xs text-muted-foreground">{T("pv.todayTotal")}</p>
-                    <p className="text-2xl font-bold">{(forecast.summary.today_total_kwh ?? 0).toFixed(0)} kWh</p>
+                    <p className="text-2xl font-bold">{computedTodayTotal.toFixed(0)} kWh</p>
                     {Object.keys(actualReadings).length > 0 && (
                       <p className="text-sm font-semibold text-emerald-600">
                         {T("pv.actual")}: {Object.values(actualReadings).reduce((s, v) => s + v, 0).toFixed(1)} kWh
@@ -267,7 +289,7 @@ export function PvForecastSection({ locationId }: PvForecastSectionProps) {
                   </div>
                   <div className="border rounded-lg p-3 text-center">
                     <p className="text-xs text-muted-foreground">{T("pv.tomorrowTotal")}</p>
-                    <p className="text-2xl font-bold">{(forecast.summary.tomorrow_total_kwh ?? 0).toFixed(0)} kWh</p>
+                    <p className="text-2xl font-bold">{computedTomorrowTotal.toFixed(0)} kWh</p>
                   </div>
                   <div className="border rounded-lg p-3 text-center">
                     <p className="text-xs text-muted-foreground">{T("pv.peak")}</p>
