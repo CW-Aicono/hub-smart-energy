@@ -3,14 +3,15 @@ import { render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
+const mockWidgets = [{ id: "w1", widget_type: "cost_overview", is_visible: true, position: 0, widget_size: "full" }];
 vi.mock("@/hooks/useDashboardWidgets", () => ({
   useDashboardWidgets: () => ({
-    widgets: [{ id: "w1", widget_type: "cost_overview", is_visible: true, position: 0, widget_size: "normal" }],
-    isLoading: false,
-    updateWidget: vi.fn(),
-    addWidget: vi.fn(),
-    removeWidget: vi.fn(),
+    widgets: mockWidgets,
+    visibleWidgets: mockWidgets,
+    loading: false,
+    toggleWidgetVisibility: vi.fn(),
     reorderWidgets: vi.fn(),
+    updateWidgetSize: vi.fn(),
   }),
 }));
 vi.mock("@/hooks/useTranslation", () => ({
