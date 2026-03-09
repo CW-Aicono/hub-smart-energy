@@ -27,11 +27,21 @@
 - `src/hooks/__tests__/useEnergyPrices.test.tsx` (4 Tests)
 - `src/hooks/__tests__/usePvForecast.test.tsx` (3 Tests)
 
-**Gesamt: 18 neue Testdateien, 78 neue Tests, 182/192 Tests bestanden**
+**Gesamt: 28 neue Testdateien, ~94 neue Tests**
+
+### ✅ Batch 5 abgeschlossen (10 Testdateien, 16 Tests)
+- `src/pages/__tests__/Auth.test.tsx` (2 Tests)
+- `src/pages/__tests__/Locations.test.tsx` (2 Tests)
+- `src/pages/__tests__/ChargingPoints.test.tsx` (1 Test)
+- `src/pages/__tests__/Integrations.test.tsx` (1 Test)
+- `src/pages/__tests__/Tasks.test.tsx` (2 Tests)
+- `src/pages/__tests__/Settings.test.tsx` (2 Tests)
+- `src/pages/__tests__/Admin.test.tsx` (1 Test)
+- `src/pages/__tests__/EnergyData.test.tsx` (1 Test)
+- `src/pages/__tests__/DashboardContent.test.tsx` (1 Test)
+- `src/pages/__tests__/NotFound.test.tsx` (2 Tests)
 
 ### 🔲 Nächste Schritte
-- Batch 4: Komponenten-Tests (15 Dateien)
-- Batch 5: Seiten-Smoke-Tests (10 Dateien)
 - Batch 6: Edge Function Integration Tests (8 Dateien)
 
 ### Bekannte vorbestehende Probleme
