@@ -13,18 +13,16 @@ import { useCustomRoles } from "../useCustomRoles";
 
 function chainMock(data: any, error: any = null) {
   const resolveValue = { data, error };
-  const obj: any = {
-    select: vi.fn().mockReturnValue(obj),
-    insert: vi.fn().mockReturnValue(obj),
-    update: vi.fn().mockReturnValue(obj),
-    delete: vi.fn().mockReturnValue(obj),
-    eq: vi.fn().mockReturnValue(obj),
-    order: vi.fn().mockReturnValue(obj),
-    single: vi.fn().mockResolvedValue(resolveValue),
-    then(onFulfilled: any, onRejected?: any) {
-      return Promise.resolve(resolveValue).then(onFulfilled, onRejected);
-    },
-  };
+  const obj: Record<string, any> = {};
+  obj.select = vi.fn(() => obj);
+  obj.insert = vi.fn(() => obj);
+  obj.update = vi.fn(() => obj);
+  obj.delete = vi.fn(() => obj);
+  obj.eq = vi.fn(() => obj);
+  obj.order = vi.fn(() => obj);
+  obj.single = vi.fn(() => Promise.resolve(resolveValue));
+  obj.then = (onFulfilled: any, onRejected?: any) =>
+    Promise.resolve(resolveValue).then(onFulfilled, onRejected);
   return obj;
 }
 
