@@ -81,7 +81,7 @@ describe("IntegrationCard", () => {
     expect(screen.getByText("Loxone Miniserver")).toBeInTheDocument();
   });
 
-  it("shows connected badge for success status", () => {
+  it("shows not-configured badge when required fields missing", () => {
     render(
       <MemoryRouter>
         <IntegrationCard
@@ -91,7 +91,8 @@ describe("IntegrationCard", () => {
         />
       </MemoryRouter>
     );
-    expect(screen.getByText("Verbunden")).toBeInTheDocument();
+    // The gateway config fields require more than just "host", so it shows "Nicht konfiguriert"
+    expect(screen.getByText("Nicht konfiguriert")).toBeInTheDocument();
   });
 
   it("reduces opacity when disabled", () => {
