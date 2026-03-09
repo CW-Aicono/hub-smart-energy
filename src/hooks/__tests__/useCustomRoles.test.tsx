@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { renderHook, act, waitFor } from "@testing-library/react";
+import { renderHook, act } from "@testing-library/react";
 
 const { mockSupabase } = vi.hoisted(() => ({
   mockSupabase: { from: vi.fn() },
@@ -48,23 +48,33 @@ describe("useCustomRoles", () => {
     const rolePerms = [{ custom_role_id: "r-1", permission_id: "p-1" }];
     setupMocks(roles, permissions, rolePerms);
 
-    const { result } = renderHook(() => useCustomRoles());
+    let hookResult: any;
+    await act(async () => {
+      const { result } = renderHook(() => useCustomRoles());
+      hookResult = result;
+      // Wait for the useEffect + Promise.all to resolve
+      await new Promise((r) => setTimeout(r, 50));
+    });
 
-    await waitFor(() => expect(result.current.loading).toBe(false));
-    expect(result.current.roles).toEqual(roles);
-    expect(result.current.rolePermissions).toEqual({ "r-1": ["p-1"] });
-    expect(result.current.permissionsByCategory.data).toHaveLength(2);
-    expect(result.current.permissionsByCategory.system).toHaveLength(1);
+    expect(hookResult.current.loading).toBe(false);
+    expect(hookResult.current.roles).toEqual(roles);
+    expect(hookResult.current.rolePermissions).toEqual({ "r-1": ["p-1"] });
+    expect(hookResult.current.permissionsByCategory.data).toHaveLength(2);
+    expect(hookResult.current.permissionsByCategory.system).toHaveLength(1);
   });
 
   it("prevents deleting system roles", async () => {
     const roles = [{ id: "r-1", name: "Admin", is_system_role: true, tenant_id: "t-1" }];
     setupMocks(roles);
 
-    const { result } = renderHook(() => useCustomRoles());
+    let hookResult: any;
+    await act(async () => {
+      const { result } = renderHook(() => useCustomRoles());
+      hookResult = result;
+      await new Promise((r) => setTimeout(r, 50));
+    });
 
-    await waitFor(() => expect(result.current.loading).toBe(false));
-    const res = await result.current.deleteRole("r-1");
+    const res = await hookResult.current.deleteRole("r-1");
     expect(res.error).toBeTruthy();
     expect(res.error.message).toContain("System roles");
   });
@@ -72,12 +82,16 @@ describe("useCustomRoles", () => {
   it("exposes CRUD functions", async () => {
     setupMocks();
 
-    const { result } = renderHook(() => useCustomRoles());
+    let hookResult: any;
+    await act(async () => {
+      const { result } = renderHook(() => useCustomRoles());
+      hookResult = result;
+      await new Promise((r) => setTimeout(r, 50));
+    });
 
-    await waitFor(() => expect(result.current.loading).toBe(false));
-    expect(result.current.createRole).toBeDefined();
-    expect(result.current.updateRole).toBeDefined();
-    expect(result.current.togglePermission).toBeDefined();
-    expect(result.current.setAllPermissions).toBeDefined();
+    expect(hookResult.current.createRole).toBeDefined();
+    expect(hookResult.current.updateRole).toBeDefined();
+    expect(hookResult.current.togglePermission).toBeDefined();
+    expect(hookResult.current.setAllPermissions).toBeDefined();
   });
 });
