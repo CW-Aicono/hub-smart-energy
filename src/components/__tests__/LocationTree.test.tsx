@@ -42,24 +42,14 @@ describe("LocationTree", () => {
   it("calls onSelect when location is clicked", () => {
     const onSelect = vi.fn();
     const locations = [
-      {
-        id: "loc-1",
-        name: "Büro",
-        type: "sonstiges" as const,
-        is_main_location: false,
-        tenant_id: "t-1",
-        created_at: "",
-        updated_at: "",
-        is_archived: false,
-      },
-    ];
+      mockLocation({ id: "loc-1", name: "Büro", type: "sonstiges" }),
+    ] as any[];
     render(
       <MemoryRouter>
         <LocationTree locations={locations} onSelect={onSelect} />
       </MemoryRouter>
     );
-    // Click the location row (not the link)
-    const row = screen.getByText("Büro").closest(".cursor-pointer");
+    const row = screen.getByText("Büro").closest(".cursor-pointer") as HTMLElement;
     if (row) row.click();
     expect(onSelect).toHaveBeenCalledWith(locations[0]);
   });
