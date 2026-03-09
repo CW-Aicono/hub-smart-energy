@@ -230,6 +230,13 @@ export function PvForecastSection({ locationId }: PvForecastSectionProps) {
                       </SelectContent>
                     </Select>
                   </div>
+                  <div>
+                    <Label className="flex items-center gap-1">Performance Ratio <HelpTooltip text="Systemwirkungsgrad (0.70–0.95). Berücksichtigt Verluste durch Wechselrichter, Kabel, Verschmutzung etc. Standard: 0.85" iconSize={12} /></Label>
+                    <Input type="number" min={0.5} max={1} step={0.01} value={form.performance_ratio} onChange={(e) => {
+                      const v = Number(e.target.value);
+                      setForm({ ...form, performance_ratio: Math.min(1, Math.max(0.5, v)) });
+                    }} />
+                  </div>
                 </div>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
