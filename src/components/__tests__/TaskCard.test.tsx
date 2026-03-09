@@ -11,6 +11,16 @@ vi.mock("@/hooks/useTasks", () => ({
   }),
 }));
 
+vi.mock("@/hooks/useTenant", () => ({
+  useTenant: () => ({ tenant: { id: "t-1" } }),
+  TenantProvider: ({ children }: any) => children,
+}));
+
+vi.mock("@/hooks/useAuth", () => ({
+  useAuth: () => ({ user: { id: "u-1" }, session: {} }),
+  AuthProvider: ({ children }: any) => children,
+}));
+
 const baseTask = {
   id: "t-1",
   title: "Zähler prüfen",
