@@ -20,10 +20,16 @@
 - `src/hooks/__tests__/useFloors.test.tsx` (3 Tests)
 - `src/hooks/__tests__/useChargingTariffs.test.tsx` (2 Tests)
 
-**Gesamt: 13 neue Testdateien, 62 neue Tests, 166/176 Tests bestanden**
+### ✅ Batch 2b abgeschlossen (5 Testdateien, 16 Tests)
+- `src/hooks/__tests__/useCustomRoles.test.tsx` (4 Tests)
+- `src/hooks/__tests__/useTasks.test.tsx` (2 Tests)
+- `src/hooks/__tests__/useAlertRules.test.tsx` (3 Tests)
+- `src/hooks/__tests__/useEnergyPrices.test.tsx` (4 Tests)
+- `src/hooks/__tests__/usePvForecast.test.tsx` (3 Tests)
+
+**Gesamt: 18 neue Testdateien, 78 neue Tests, 182/192 Tests bestanden**
 
 ### 🔲 Nächste Schritte
-- Batch 2b: Weitere Hooks (useCustomRoles, useTasks, useAlertRules, useEnergyPrices, usePvForecast)
 - Batch 4: Komponenten-Tests (15 Dateien)
 - Batch 5: Seiten-Smoke-Tests (10 Dateien)
 - Batch 6: Edge Function Integration Tests (8 Dateien)
