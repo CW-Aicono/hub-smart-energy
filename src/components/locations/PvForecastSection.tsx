@@ -130,6 +130,13 @@ export function PvForecastSection({ locationId }: PvForecastSectionProps) {
   };
 
   const dayNames = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
+
+  // Build today's date string in local timezone for filtering
+  const todayLocalStr = (() => {
+    const n = new Date();
+    return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}-${String(n.getDate()).padStart(2, "0")}`;
+  })();
+
   const chartData = forecast?.hourly
     .map((h) => {
       const d = new Date(h.timestamp);
@@ -140,12 +147,27 @@ export function PvForecastSection({ locationId }: PvForecastSectionProps) {
         time: toLocalTime(h.timestamp),
         hour,
         dayLabel,
+        dateStr: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`,
         prognose: h.ai_adjusted_kwh ?? h.estimated_kwh,
         ist: actualReadings[hourKey] ?? null,
         cloud: h.cloud_cover_pct,
         radiation: h.radiation_w_m2,
       };
     }) ?? [];
+
+  // Compute today / tomorrow totals client-side from hourly data (consistent with Dashboard)
+  const tomorrowLocalStr = (() => {
+    const n = new Date();
+    n.setDate(n.getDate() + 1);
+    return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}-${String(n.getDate()).padStart(2, "0")}`;
+  })();
+
+  const computedTodayTotal = chartData
+    .filter((d) => d.dateStr === todayLocalStr)
+    .reduce((s, d) => s + d.prognose, 0);
+  const computedTomorrowTotal = chartData
+    .filter((d) => d.dateStr === tomorrowLocalStr)
+    .reduce((s, d) => s + d.prognose, 0);
 
   const hasActual = Object.keys(actualReadings).length > 0;
 
