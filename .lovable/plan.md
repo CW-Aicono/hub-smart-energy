@@ -1,54 +1,33 @@
 
+## Fortschritt: Massive Test-Erweiterung auf 50%+ Coverage
 
-## Plan: Automatischer Status-Sync mit Lexware API
+### ✅ Batch 1 abgeschlossen (3 Testdateien, 28 Tests)
+- `src/lib/__tests__/gatewayRegistry.test.ts` (10 Tests)
+- `src/lib/__tests__/exportUtils.test.ts` (12 Tests)
+- `src/lib/__tests__/utils.test.ts` (6 Tests)
 
-### Recherche-Ergebnis
+### ✅ Batch 3 abgeschlossen (4 Testdateien, 18 Tests)
+- `src/contexts/__tests__/DemoMode.test.tsx` (6 Tests)
+- `src/i18n/__tests__/getT.test.ts` (5 Tests)
+- `src/i18n/__tests__/translations.test.ts` (5 Tests)
+- `src/hooks/__tests__/useTranslation.test.tsx` (2 Tests)
 
-Die Lexware Office API bietet zwei Wege, um den Status einer Rechnung abzufragen:
+### ✅ Batch 2a abgeschlossen (6 Testdateien, 16 Tests)
+- `src/hooks/__tests__/useLocations.test.tsx` (2 Tests)
+- `src/hooks/__tests__/useChargePoints.test.tsx` (2 Tests)
+- `src/hooks/__tests__/useChargingSessions.test.tsx` (3 Tests)
+- `src/hooks/__tests__/useIntegrations.test.tsx` (4 Tests)
+- `src/hooks/__tests__/useFloors.test.tsx` (3 Tests)
+- `src/hooks/__tests__/useChargingTariffs.test.tsx` (2 Tests)
 
-1. **Voucherlist-Endpoint** (`GET /v1/voucherlist`): Kann nach Status filtern (`draft`, `open`, `paid`, `overdue`, etc.) und liefert den aktuellen Status aller Belege zurück.
-2. **Webhooks** (`invoice.status.changed`): Lexware ruft eine Callback-URL auf, sobald sich der Rechnungsstatus ändert. Dies erfordert allerdings eine öffentlich erreichbare URL und eine Event-Subscription.
+**Gesamt: 13 neue Testdateien, 62 neue Tests, 166/176 Tests bestanden**
 
-**Empfohlener Ansatz:** Polling via Voucherlist-Endpoint (einfacher, kein Webhook-Setup nötig). Eine neue Edge Function wird periodisch (z. B. stündlich via pg_cron) den Status aller Rechnungen mit `lexware_invoice_id` bei Lexware abfragen und lokal aktualisieren.
+### 🔲 Nächste Schritte
+- Batch 2b: Weitere Hooks (useCustomRoles, useTasks, useAlertRules, useEnergyPrices, usePvForecast)
+- Batch 4: Komponenten-Tests (15 Dateien)
+- Batch 5: Seiten-Smoke-Tests (10 Dateien)
+- Batch 6: Edge Function Integration Tests (8 Dateien)
 
-### Status-Mapping
-
-| Lexware-Status | Lokaler Status |
-|---|---|
-| `draft` | `draft` (Entwurf) |
-| `open` | `sent` (Gesendet) |
-| `paid` / `paidoff` | `paid` (Bezahlt) |
-| `overdue` | `overdue` (Überfällig) |
-| `voided` | `voided` (Storniert) |
-
-### Änderungen
-
-**1. Neue Edge Function `supabase/functions/lexware-sync-status/index.ts`**
-
-- Alle `tenant_invoices` mit gesetzter `lexware_invoice_id` laden
-- Für jeden Beleg den aktuellen Status über `GET /v1/invoices/{id}` abfragen (einzeln, da Voucherlist nur IDs liefert)
-- Status-Mapping anwenden und `tenant_invoices.status` updaten, wenn sich der Status geändert hat
-- Rückgabe: Anzahl aktualisierter Belege
-
-**2. Edge Function auch manuell aufrufbar machen**
-
-- Button "Status aktualisieren" auf der Billing-Seite hinzufügen (neben "Alle an Lexware senden")
-- Ruft `lexware-sync-status` auf und invalidiert danach die Query
-
-**3. Bestehende `lexware-api` anpassen**
-
-- Nach erfolgreichem Senden: Status automatisch auf `sent` setzen (statt `draft` zu belassen)
-
-**4. Automatischer Cron-Job (pg_cron)**
-
-- Stündlicher Aufruf der `lexware-sync-status` Function, damit Statusänderungen (bezahlt, überfällig) zeitnah übernommen werden
-
-**5. UI-Anpassungen (`src/pages/SuperAdminBilling.tsx`)**
-
-- Neue Spalte "Status" wieder einblenden (read-only, zeigt den von Lexware synchronisierten Status)
-- "Status aktualisieren"-Button in der Header-Leiste
-- Status-Badge farblich kodiert (Entwurf: grau, Gesendet: blau, Bezahlt: grün, Überfällig: rot)
-
-### Keine DB-Migration nötig
-Das Feld `status` existiert bereits in `tenant_invoices`. Ggf. `verify_jwt = false` in `config.toml` für die neue Function setzen.
-
+### Bekannte vorbestehende Probleme
+- `useMeters.test.tsx` braucht QueryClientProvider-Wrapper (seit useMeters auf react-query migriert wurde)
+- `useEnergyData.test.tsx` braucht TenantProvider-Wrapper
