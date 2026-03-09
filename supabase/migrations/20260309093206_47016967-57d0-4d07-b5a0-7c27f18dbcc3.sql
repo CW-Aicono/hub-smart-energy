@@ -1,0 +1,1 @@
+ALTER TABLE public.pv_forecast_settings ADD COLUMN IF NOT EXISTS performance_ratio double precision NOT NULL DEFAULT 0.85;

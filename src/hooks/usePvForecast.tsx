@@ -33,6 +33,7 @@ export interface PvForecastSettings {
   peak_power_kwp: number;
   tilt_deg: number;
   azimuth_deg: number;
+  performance_ratio: number;
   is_active: boolean;
 }
 
@@ -181,6 +182,7 @@ export function usePvForecastSettings(locationId: string | null) {
       peak_power_kwp: number;
       tilt_deg: number;
       azimuth_deg: number;
+      performance_ratio: number;
       pv_meter_id: string | null;
       is_active: boolean;
     }) => {

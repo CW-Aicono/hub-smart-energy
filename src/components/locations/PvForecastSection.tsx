@@ -50,6 +50,7 @@ export function PvForecastSection({ locationId }: PvForecastSectionProps) {
     peak_power_kwp: 10,
     tilt_deg: 30,
     azimuth_deg: 180,
+    performance_ratio: 0.85,
     pv_meter_id: "" as string,
     is_active: true,
   });
@@ -60,6 +61,7 @@ export function PvForecastSection({ locationId }: PvForecastSectionProps) {
         peak_power_kwp: settings.peak_power_kwp,
         tilt_deg: settings.tilt_deg,
         azimuth_deg: settings.azimuth_deg,
+        performance_ratio: settings.performance_ratio ?? 0.85,
         pv_meter_id: settings.pv_meter_id || "",
         is_active: settings.is_active,
       });
@@ -191,7 +193,7 @@ export function PvForecastSection({ locationId }: PvForecastSectionProps) {
             {isAdmin && (
               <div className="border rounded-lg p-4 space-y-4">
                 <h4 className="font-medium text-sm">{T("pv.settings")}</h4>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                   <div>
                     <Label className="flex items-center gap-1">{T("pv.peakPower")} <HelpTooltip text={T("tooltip.pvPeakPower")} iconSize={12} /></Label>
                     <Input type="number" value={form.peak_power_kwp} onChange={(e) => setForm({ ...form, peak_power_kwp: Number(e.target.value) })} />
@@ -227,6 +229,13 @@ export function PvForecastSection({ locationId }: PvForecastSectionProps) {
                         ))}
                       </SelectContent>
                     </Select>
+                  </div>
+                  <div>
+                    <Label className="flex items-center gap-1">Performance Ratio <HelpTooltip text="Systemwirkungsgrad (0.70–0.95). Berücksichtigt Verluste durch Wechselrichter, Kabel, Verschmutzung etc. Standard: 0.85" iconSize={12} /></Label>
+                    <Input type="number" min={0.5} max={1} step={0.01} value={form.performance_ratio} onChange={(e) => {
+                      const v = Number(e.target.value);
+                      setForm({ ...form, performance_ratio: Math.min(1, Math.max(0.5, v)) });
+                    }} />
                   </div>
                 </div>
                 <div className="flex items-center justify-between">

@@ -3044,6 +3044,7 @@ export type Database = {
           is_active: boolean | null
           location_id: string
           peak_power_kwp: number
+          performance_ratio: number
           pv_meter_id: string | null
           tenant_id: string
           tilt_deg: number | null
@@ -3056,6 +3057,7 @@ export type Database = {
           is_active?: boolean | null
           location_id: string
           peak_power_kwp?: number
+          performance_ratio?: number
           pv_meter_id?: string | null
           tenant_id: string
           tilt_deg?: number | null
@@ -3068,6 +3070,7 @@ export type Database = {
           is_active?: boolean | null
           location_id?: string
           peak_power_kwp?: number
+          performance_ratio?: number
           pv_meter_id?: string | null
           tenant_id?: string
           tilt_deg?: number | null
