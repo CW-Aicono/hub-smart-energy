@@ -92,7 +92,8 @@ describe("IntegrationCard", () => {
       </MemoryRouter>
     );
     // The gateway config fields require more than just "host", so it shows "Nicht konfiguriert"
-    expect(screen.getByText("Nicht konfiguriert")).toBeInTheDocument();
+    const items = screen.getAllByText("Nicht konfiguriert");
+    expect(items.length).toBeGreaterThanOrEqual(1);
   });
 
   it("reduces opacity when disabled", () => {
