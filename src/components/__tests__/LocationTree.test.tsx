@@ -28,17 +28,8 @@ describe("LocationTree", () => {
 
   it("renders location names", () => {
     const locations = [
-      {
-        id: "loc-1",
-        name: "Hauptgebäude",
-        type: "einzelgebaeude" as const,
-        is_main_location: true,
-        tenant_id: "t-1",
-        created_at: "",
-        updated_at: "",
-        is_archived: false,
-      },
-    ];
+      mockLocation({ id: "loc-1", name: "Hauptgebäude", is_main_location: true }),
+    ] as any[];
     render(
       <MemoryRouter>
         <LocationTree locations={locations} />
