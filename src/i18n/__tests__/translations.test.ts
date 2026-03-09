@@ -27,7 +27,7 @@ describe("translations consistency", () => {
   it("no German value is empty string", () => {
     const empty: string[] = [];
     for (const key of keys) {
-      if (translations[key].de === "") empty.push(key);
+      if ((translations[key].de as string).length === 0) empty.push(key);
     }
     expect(empty).toEqual([]);
   });
@@ -35,7 +35,7 @@ describe("translations consistency", () => {
   it("no English value is empty string", () => {
     const empty: string[] = [];
     for (const key of keys) {
-      if (translations[key].en === "") empty.push(key);
+      if ((translations[key].en as string).length === 0) empty.push(key);
     }
     expect(empty).toEqual([]);
   });
