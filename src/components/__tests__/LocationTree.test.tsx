@@ -16,6 +16,20 @@ vi.mock("@/hooks/useUserRole", () => ({
   useUserRole: () => ({ isAdmin: false, role: "viewer" }),
 }));
 
+function mockLocation(overrides: Record<string, any> = {}) {
+  return {
+    id: "loc-1", tenant_id: "t-1", parent_id: null, name: "Test",
+    type: "einzelgebaeude", usage_type: null, address: null, city: null,
+    postal_code: null, country: null, latitude: null, longitude: null,
+    description: null, contact_person: null, contact_email: null,
+    contact_phone: null, energy_sources: [], show_on_map: true,
+    is_main_location: false, construction_year: null, renovation_year: null,
+    net_floor_area: null, gross_floor_area: null, heating_type: null,
+    photo_url: null, created_at: "", updated_at: "",
+    ...overrides,
+  };
+}
+
 describe("LocationTree", () => {
   it("shows empty state when no locations", () => {
     render(

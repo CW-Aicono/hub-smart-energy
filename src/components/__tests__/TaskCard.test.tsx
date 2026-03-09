@@ -17,7 +17,8 @@ const baseTask = {
   description: "Monatliche Prüfung",
   status: "open" as const,
   priority: "high" as const,
-  source_type: "manual",
+  source_type: "manual" as const,
+  source_id: null,
   source_label: null,
   tenant_id: "ten-1",
   created_at: "2025-01-15T10:00:00Z",
@@ -29,10 +30,8 @@ const baseTask = {
   external_contact_email: null,
   external_contact_phone: null,
   completed_at: null,
-  location_id: null,
-  location_name: null,
-  is_archived: false,
   created_by: null,
+  created_by_name: null,
 };
 
 describe("TaskCard", () => {
