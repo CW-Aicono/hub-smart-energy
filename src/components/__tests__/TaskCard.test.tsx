@@ -13,6 +13,10 @@ vi.mock("@/hooks/useTasks", () => ({
   useTaskHistory: () => ({ history: [], isLoading: false }),
 }));
 
+vi.mock("@/components/tasks/TaskDetailSheet", () => ({
+  TaskDetailSheet: () => null,
+}));
+
 vi.mock("@/hooks/useTenant", () => ({
   useTenant: () => ({ tenant: { id: "t-1" } }),
   TenantProvider: ({ children }: any) => children,
