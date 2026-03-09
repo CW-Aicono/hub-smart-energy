@@ -31,10 +31,23 @@ serve(async (req) => {
     const { tenant_id, language = "de" } = await req.json();
     if (!tenant_id) throw new Error("tenant_id is required");
 
+    // Verify caller belongs to requested tenant
+    const serviceClient = createClient(supabaseUrl, serviceKey);
+    const { data: profile } = await serviceClient
+      .from("profiles")
+      .select("tenant_id")
+      .eq("user_id", user.id)
+      .single();
+    if (!profile || profile.tenant_id !== tenant_id) {
+      return new Response(JSON.stringify({ error: "Forbidden" }), {
+        status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
 
-    const supabase = createClient(supabaseUrl, serviceKey);
+    const supabase = serviceClient;
 
     const langMap: Record<string, string> = {
       de: "German",

@@ -32,6 +32,18 @@ serve(async (req) => {
     const { tenantId } = await req.json();
     if (!tenantId) throw new Error("tenantId required");
 
+    // Verify caller belongs to requested tenant
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("tenant_id")
+      .eq("user_id", user.id)
+      .single();
+    if (!profile || profile.tenant_id !== tenantId) {
+      return new Response(JSON.stringify({ error: "Forbidden" }), {
+        status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     // Fetch context data for AI analysis
     const [automationsRes, locationsRes, metersRes] = await Promise.all([
       supabase.from("location_automations").select("name, category, conditions, actions, is_active, estimated_savings_kwh").eq("tenant_id", tenantId),
