@@ -1,31 +1,54 @@
 
 
-## Analyse: Solar-Azimut Vorzeichenfehler
+## Plan: Automatischer Status-Sync mit Lexware API
 
-Das Problem liegt in Zeile 110 der Edge Function:
+### Recherche-Ergebnis
 
-```typescript
-if (hourAngle > 0) solarAz = -solarAz; // afternoon = west
-```
+Die Lexware Office API bietet zwei Wege, um den Status einer Rechnung abzufragen:
 
-Die Konvention soll sein: **"von Süd gemessen, positiv nach Westen"**. Aber `acos()` gibt immer einen positiven Wert zurück, und der Code negiert ihn nachmittags (`hourAngle > 0`). Das führt zu:
+1. **Voucherlist-Endpoint** (`GET /v1/voucherlist`): Kann nach Status filtern (`draft`, `open`, `paid`, `overdue`, etc.) und liefert den aktuellen Status aller Belege zurück.
+2. **Webhooks** (`invoice.status.changed`): Lexware ruft eine Callback-URL auf, sobald sich der Rechnungsstatus ändert. Dies erfordert allerdings eine öffentlich erreichbare URL und eine Event-Subscription.
 
-- **Vormittag** (Sonne im Osten): `solarAz = +positiv` → falsch, sollte negativ sein
-- **Nachmittag** (Sonne im Westen): `solarAz = -negativ` → falsch, sollte positiv sein
+**Empfohlener Ansatz:** Polling via Voucherlist-Endpoint (einfacher, kein Webhook-Setup nötig). Eine neue Edge Function wird periodisch (z. B. stündlich via pg_cron) den Status aller Rechnungen mit `lexware_invoice_id` bei Lexware abfragen und lokal aktualisieren.
 
-Die Vorzeichen sind genau vertauscht. Bei einem Panel mit Azimut 150° (Südost, `panelAzRad = -30°`) wird der Einfallswinkel am Vormittag dadurch zu groß statt zu klein berechnet – der Ertrag verschiebt sich in den Nachmittag.
+### Status-Mapping
 
-### Fix
+| Lexware-Status | Lokaler Status |
+|---|---|
+| `draft` | `draft` (Entwurf) |
+| `open` | `sent` (Gesendet) |
+| `paid` / `paidoff` | `paid` (Bezahlt) |
+| `overdue` | `overdue` (Überfällig) |
+| `voided` | `voided` (Storniert) |
 
-Zeile 110 in `supabase/functions/pv-forecast/index.ts` ändern:
+### Änderungen
 
-```typescript
-// Vorher (falsch):
-if (hourAngle > 0) solarAz = -solarAz;
+**1. Neue Edge Function `supabase/functions/lexware-sync-status/index.ts`**
 
-// Nachher (korrekt):
-if (hourAngle < 0) solarAz = -solarAz; // morning = east = negative
-```
+- Alle `tenant_invoices` mit gesetzter `lexware_invoice_id` laden
+- Für jeden Beleg den aktuellen Status über `GET /v1/invoices/{id}` abfragen (einzeln, da Voucherlist nur IDs liefert)
+- Status-Mapping anwenden und `tenant_invoices.status` updaten, wenn sich der Status geändert hat
+- Rückgabe: Anzahl aktualisierter Belege
 
-Das ist eine Ein-Zeichen-Änderung (`>` → `<`), die die gesamte Azimut-Abhängigkeit der Prognose korrigiert.
+**2. Edge Function auch manuell aufrufbar machen**
+
+- Button "Status aktualisieren" auf der Billing-Seite hinzufügen (neben "Alle an Lexware senden")
+- Ruft `lexware-sync-status` auf und invalidiert danach die Query
+
+**3. Bestehende `lexware-api` anpassen**
+
+- Nach erfolgreichem Senden: Status automatisch auf `sent` setzen (statt `draft` zu belassen)
+
+**4. Automatischer Cron-Job (pg_cron)**
+
+- Stündlicher Aufruf der `lexware-sync-status` Function, damit Statusänderungen (bezahlt, überfällig) zeitnah übernommen werden
+
+**5. UI-Anpassungen (`src/pages/SuperAdminBilling.tsx`)**
+
+- Neue Spalte "Status" wieder einblenden (read-only, zeigt den von Lexware synchronisierten Status)
+- "Status aktualisieren"-Button in der Header-Leiste
+- Status-Badge farblich kodiert (Entwurf: grau, Gesendet: blau, Bezahlt: grün, Überfällig: rot)
+
+### Keine DB-Migration nötig
+Das Feld `status` existiert bereits in `tenant_invoices`. Ggf. `verify_jwt = false` in `config.toml` für die neue Function setzen.
 

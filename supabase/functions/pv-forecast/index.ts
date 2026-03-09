@@ -107,7 +107,7 @@ serve(async (req) => {
         const cosAz = (Math.sin(declination) - Math.sin(solarAlt) * Math.sin(latRad))
                       / (Math.cos(solarAlt) * Math.cos(latRad));
         solarAz = Math.acos(Math.max(-1, Math.min(1, cosAz)));
-        if (hourAngle > 0) solarAz = -solarAz; // afternoon = west
+        if (hourAngle < 0) solarAz = -solarAz; // morning = east = negative
       }
 
       // Panel azimuth: convert compass bearing (0°=N, 180°=S) to south-reference (0°=S)
