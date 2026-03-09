@@ -193,7 +193,7 @@ export function PvForecastSection({ locationId }: PvForecastSectionProps) {
             {isAdmin && (
               <div className="border rounded-lg p-4 space-y-4">
                 <h4 className="font-medium text-sm">{T("pv.settings")}</h4>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                   <div>
                     <Label className="flex items-center gap-1">{T("pv.peakPower")} <HelpTooltip text={T("tooltip.pvPeakPower")} iconSize={12} /></Label>
                     <Input type="number" value={form.peak_power_kwp} onChange={(e) => setForm({ ...form, peak_power_kwp: Number(e.target.value) })} />
