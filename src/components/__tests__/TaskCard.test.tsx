@@ -10,6 +10,7 @@ vi.mock("@/hooks/useTasks", () => ({
     deleteTask: { mutate: vi.fn() },
     bulkUpdateStatus: { mutate: vi.fn() },
   }),
+  useTaskHistory: () => ({ history: [], isLoading: false }),
 }));
 
 vi.mock("@/hooks/useTenant", () => ({
