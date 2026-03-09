@@ -19,7 +19,7 @@ vi.mock("@/hooks/useTranslation", () => ({
   TranslationProvider: ({ children }: any) => <>{children}</>,
 }));
 vi.mock("@/hooks/useModuleGuard", () => ({
-  useModuleGuard: () => ({ isRouteAllowed: () => true, isLoading: false }),
+  useModuleGuard: () => ({ isRouteAllowed: () => true, isLoading: false, isModuleEnabled: () => true }),
 }));
 vi.mock("@/hooks/useDashboardFilter", () => ({
   useDashboardFilter: () => ({ selectedLocationId: null, setSelectedLocationId: vi.fn() }),

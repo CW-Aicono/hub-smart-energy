@@ -35,7 +35,7 @@ describe("Settings page", () => {
   it("renders title and tabs", async () => {
     const Settings = (await import("../Settings")).default;
     render(<W><Settings /></W>);
-    expect(screen.getByText("settings.title")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("settings.title");
   });
 
   it("redirects non-admin to /", async () => {

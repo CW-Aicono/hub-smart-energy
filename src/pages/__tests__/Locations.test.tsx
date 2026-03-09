@@ -23,7 +23,7 @@ vi.mock("@/hooks/useModuleGuard", () => ({
   useModuleGuard: () => ({ isRouteAllowed: () => true, isLoading: false, locationsFullEnabled: true }),
 }));
 vi.mock("@/hooks/useLocationStatus", () => ({
-  useLocationStatus: () => ({ statusMap: {}, loading: false }),
+  useLocationStatus: () => ({ locationStatuses: new Map(), loading: false }),
 }));
 vi.mock("@/hooks/useTranslation", () => ({
   useTranslation: () => ({ t: (k: string) => k, language: "de" }),
