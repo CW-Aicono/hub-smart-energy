@@ -58,7 +58,8 @@ serve(async (req) => {
     // 4. Physical model with tilt & azimuth correction
     // Uses a simplified transposition model: POA = DNI * cos(AOI) + DHI * (1+cos(tilt))/2
     // where DNI ≈ GHI - DHI, and AOI depends on solar position + panel orientation.
-    const PR = 0.80;
+    const PR = 0.85;
+    const ALBEDO = 0.2;
     const deg2rad = (d: number) => (d * Math.PI) / 180;
     const tiltRad = deg2rad(tiltDeg);
     const latRad = deg2rad(location.latitude);
@@ -109,17 +110,18 @@ serve(async (req) => {
         if (hourAngle > 0) solarAz = -solarAz; // afternoon = west
       }
 
-      // Panel azimuth: compass bearing (0=North, 180=South) – same convention as solarAz
-      const panelAzRad = deg2rad(azimuthDeg);
+      // Panel azimuth: convert compass bearing (0°=N, 180°=S) to south-reference (0°=S)
+      const panelAzRad = deg2rad(azimuthDeg - 180);
 
       // Angle of incidence on tilted surface
       const cosAOI = Math.sin(solarAlt) * Math.cos(tiltRad)
                     + Math.cos(solarAlt) * Math.sin(tiltRad) * Math.cos(solarAz - panelAzRad);
 
-      // Plane-of-array irradiance
+      // Plane-of-array irradiance (beam + diffuse + ground-reflected)
       const beam = directWm2 * Math.max(0, cosAOI);
       const diffuse = diffuseWm2 * (1 + Math.cos(tiltRad)) / 2;
-      const poaWm2 = beam + diffuse;
+      const ground = radiationWm2 * ALBEDO * (1 - Math.cos(tiltRad)) / 2;
+      const poaWm2 = beam + diffuse + ground;
 
       const estimatedKwh = (poaWm2 * peakKwp * PR) / 1000;
 
