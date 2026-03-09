@@ -52,43 +52,24 @@ const baseTask = {
 
 describe("TaskCard", () => {
   it("renders title and priority badge", () => {
-    render(
-      <MemoryRouter>
-        <TaskCard task={baseTask} />
-      </MemoryRouter>
-    );
+    render(<W><TaskCard task={baseTask} /></W>);
     expect(screen.getByText("Zähler prüfen")).toBeInTheDocument();
     expect(screen.getByText("Hoch")).toBeInTheDocument();
   });
 
   it("renders description when provided", () => {
-    render(
-      <MemoryRouter>
-        <TaskCard task={baseTask} />
-      </MemoryRouter>
-    );
+    render(<W><TaskCard task={baseTask} /></W>);
     expect(screen.getByText("Monatliche Prüfung")).toBeInTheDocument();
   });
 
   it("shows overdue indicator when due date is past", () => {
-    const overdueTask = {
-      ...baseTask,
-      due_date: "2024-01-01",
-    };
-    render(
-      <MemoryRouter>
-        <TaskCard task={overdueTask} />
-      </MemoryRouter>
-    );
+    const overdueTask = { ...baseTask, due_date: "2024-01-01" };
+    render(<W><TaskCard task={overdueTask} /></W>);
     expect(screen.getByText(/überfällig/)).toBeInTheDocument();
   });
 
   it("shows duplicate count when provided", () => {
-    render(
-      <MemoryRouter>
-        <TaskCard task={baseTask} duplicateCount={3} duplicateIds={["t-1", "t-2", "t-3"]} />
-      </MemoryRouter>
-    );
+    render(<W><TaskCard task={baseTask} duplicateCount={3} duplicateIds={["t-1", "t-2", "t-3"]} /></W>);
     expect(screen.getByText("(3×)")).toBeInTheDocument();
   });
 });
