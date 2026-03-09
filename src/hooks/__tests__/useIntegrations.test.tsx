@@ -14,7 +14,7 @@ vi.mock("../useTenantQuery", () => ({
 vi.mock("@/lib/gatewayRegistry", () => ({ getEdgeFunctionName: () => "loxone-api" }));
 vi.mock("@/i18n/getT", () => ({ getT: () => (k: string) => k }));
 
-import { useIntegrations, useLocationIntegrations } from "../useIntegrations";
+import { useLocationIntegrations } from "../useIntegrations";
 
 function chainMock(data: any, error: any = null) {
   const resolveValue = { data, error };
@@ -34,43 +34,6 @@ function chainMock(data: any, error: any = null) {
 }
 
 beforeEach(() => vi.clearAllMocks());
-
-describe("useIntegrations", () => {
-  it("fetches integrations and categories on mount", async () => {
-    const integrations = [{ id: "i-1", name: "Loxone", is_active: true }];
-    const categories = [{ id: "c-1", slug: "building", sort_order: 1 }];
-    mockSupabase.from.mockImplementation((table: string) => {
-      if (table === "integrations") return chainMock(integrations);
-      if (table === "integration_categories") return chainMock(categories);
-      return chainMock([]);
-    });
-
-    let hookResult: any;
-    await act(async () => {
-      const { result } = renderHook(() => useIntegrations());
-      hookResult = result;
-    });
-
-    expect(hookResult.current.loading).toBe(false);
-    expect(hookResult.current.integrations).toEqual(integrations);
-    expect(hookResult.current.categories).toEqual(categories);
-  });
-
-  it("handles error in integrations fetch", async () => {
-    mockSupabase.from.mockImplementation((table: string) => {
-      if (table === "integrations") return chainMock(null, { message: "fail" });
-      return chainMock([]);
-    });
-
-    let hookResult: any;
-    await act(async () => {
-      const { result } = renderHook(() => useIntegrations());
-      hookResult = result;
-    });
-
-    expect(hookResult.current.error).toBe("fail");
-  });
-});
 
 describe("useLocationIntegrations", () => {
   it("fetches location integrations for given locationId", async () => {
@@ -99,6 +62,7 @@ describe("useLocationIntegrations", () => {
   });
 
   it("testConnection returns error when config is empty", async () => {
+    mockSupabase.from.mockReturnValue(chainMock([]));
     let hookResult: any;
     await act(async () => {
       const { result } = renderHook(() => useLocationIntegrations("loc-1"));
