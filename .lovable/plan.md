@@ -41,9 +41,15 @@
 - `src/pages/__tests__/DashboardContent.test.tsx` (1 Test)
 - `src/pages/__tests__/NotFound.test.tsx` (2 Tests)
 
-### 🔲 Nächste Schritte
-- Batch 6: Edge Function Integration Tests (8 Dateien)
+### ✅ Batch 6 abgeschlossen (8 Testdateien, 13 Deno-Tests)
+- `supabase/functions/pv-forecast/index.test.ts` (2 Tests)
+- `supabase/functions/gateway-ingest/index.test.ts` (3 Tests)
+- `supabase/functions/fetch-spot-prices/index.test.ts` (1 Test)
+- `supabase/functions/anomaly-detection/index.test.ts` (1 Test)
+- `supabase/functions/api-key-info/index.test.ts` (1 Test)
+- `supabase/functions/delete-user/index.test.ts` (2 Tests)
+- `supabase/functions/meter-ocr/index.test.ts` (1 Test)
+- `supabase/functions/invite-tenant-admin/index.test.ts` (2 Tests)
 
-### Bekannte vorbestehende Probleme
-- `useMeters.test.tsx` braucht QueryClientProvider-Wrapper (seit useMeters auf react-query migriert wurde)
-- `useEnergyData.test.tsx` braucht TenantProvider-Wrapper
+### 🎉 Plan vollständig abgeschlossen!
+**Gesamt: 36 neue Testdateien, ~107 neue Tests**
