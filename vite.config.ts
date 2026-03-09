@@ -71,7 +71,7 @@ export default defineConfig(({ mode }) => ({
           leaflet: ["leaflet", "react-leaflet", "@react-leaflet/core"],
           recharts: ["recharts"],
           three: ["three", "@react-three/fiber", "@react-three/drei"],
-          xlsx: ["xlsx"],
+          xlsx: ["@e965/xlsx"],
           "date-fns": ["date-fns"],
         },
       },

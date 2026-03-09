@@ -13,6 +13,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@e965/xlsx": "^0.20.3",
     "@hookform/resolvers": "^3.10.0",
     "@radix-ui/react-accordion": "^1.2.11",
     "@radix-ui/react-alert-dialog": "^1.1.14",
@@ -84,8 +85,7 @@
     "tailwindcss-animate": "^1.0.7",
     "three": "^0.170.0",
     "vaul": "^0.9.9",
-    "vite-plugin-pwa": "^1.2.0",
-    "xlsx": "^0.18.5",
+    "vite-plugin-pwa": "1.2.0",
     "zod": "^3.25.76"
   },
   "devDependencies": {
