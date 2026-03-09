@@ -35,6 +35,7 @@ vi.mock("@/hooks/useTenant", () => ({
   TenantProvider: ({ children }: any) => <>{children}</>,
 }));
 vi.mock("@/components/dashboard/DashboardSidebar", () => ({ default: () => <div data-testid="sidebar" /> }));
+vi.mock("@/components/dashboard/MobileSidebar", () => ({ MobileHeader: () => <div data-testid="mobile-header" /> }));
 vi.mock("@/components/dashboard/DashboardCustomizer", () => ({ default: () => <div data-testid="customizer" /> }));
 vi.mock("@/components/dashboard/LocationFilter", () => ({ LocationFilter: () => <div data-testid="filter" /> }));
 vi.mock("@/components/dashboard/WidgetErrorBoundary", () => ({ default: ({ children }: any) => <>{children}</> }));

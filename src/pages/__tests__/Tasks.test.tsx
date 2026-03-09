@@ -28,9 +28,19 @@ vi.mock("@/hooks/useLocations", () => ({
 vi.mock("@/hooks/useChargePoints", () => ({
   useChargePoints: () => ({ chargePoints: [], isLoading: false }),
 }));
-vi.mock("@/hooks/useExternalContacts", () => ({
-  useExternalContacts: () => ({ contacts: [], loading: false }),
+vi.mock("@/hooks/useUserRole", () => ({
+  useUserRole: () => ({ isAdmin: true, loading: false }),
 }));
+vi.mock("@/hooks/useAuth", () => ({
+  ...vi.importActual("@/hooks/useAuth"),
+  useAuth: () => ({ user: { id: "u1" }, loading: false }),
+  AuthProvider: ({ children }: any) => <>{children}</>,
+}));
+vi.mock("@/components/tasks/CreateTaskDialog", () => ({ CreateTaskDialog: () => <div data-testid="create-dialog" /> }));
+vi.mock("@/components/tasks/TaskCard", () => ({ TaskCard: ({ task }: any) => <div data-testid="task-card">{task.title}</div> }));
+vi.mock("@/components/tasks/TaskArchive", () => ({ TaskArchive: () => <div data-testid="archive" /> }));
+vi.mock("@/components/tasks/BulkActionsToolbar", () => ({ BulkActionsToolbar: () => <div /> }));
+vi.mock("@/components/tasks/TaskDetailSheet", () => ({ TaskDetailSheet: () => <div /> }));
 vi.mock("@/hooks/useTenant", () => ({
   useTenant: () => ({ tenant: { id: "t1" }, loading: false }),
   TenantProvider: ({ children }: any) => <>{children}</>,
