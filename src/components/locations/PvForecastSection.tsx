@@ -50,6 +50,7 @@ export function PvForecastSection({ locationId }: PvForecastSectionProps) {
     peak_power_kwp: 10,
     tilt_deg: 30,
     azimuth_deg: 180,
+    performance_ratio: 0.85,
     pv_meter_id: "" as string,
     is_active: true,
   });
@@ -60,6 +61,7 @@ export function PvForecastSection({ locationId }: PvForecastSectionProps) {
         peak_power_kwp: settings.peak_power_kwp,
         tilt_deg: settings.tilt_deg,
         azimuth_deg: settings.azimuth_deg,
+        performance_ratio: settings.performance_ratio ?? 0.85,
         pv_meter_id: settings.pv_meter_id || "",
         is_active: settings.is_active,
       });
