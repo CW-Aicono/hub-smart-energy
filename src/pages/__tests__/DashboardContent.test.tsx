@@ -3,17 +3,19 @@ import { render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
-const mockWidgets = [{ id: "w1", widget_type: "cost_overview", is_visible: true, position: 0, widget_size: "full" }];
-vi.mock("@/hooks/useDashboardWidgets", () => ({
-  useDashboardWidgets: () => ({
-    widgets: mockWidgets,
-    visibleWidgets: mockWidgets,
-    loading: false,
-    toggleWidgetVisibility: vi.fn(),
-    reorderWidgets: vi.fn(),
-    updateWidgetSize: vi.fn(),
-  }),
-}));
+vi.mock("@/hooks/useDashboardWidgets", () => {
+  const w = [{ id: "w1", widget_type: "cost_overview", is_visible: true, position: 0, widget_size: "full" }];
+  return {
+    useDashboardWidgets: () => ({
+      widgets: w,
+      visibleWidgets: w,
+      loading: false,
+      toggleWidgetVisibility: vi.fn(),
+      reorderWidgets: vi.fn(),
+      updateWidgetSize: vi.fn(),
+    }),
+  };
+});
 vi.mock("@/hooks/useTranslation", () => ({
   useTranslation: () => ({ t: (k: string) => k, language: "de" }),
   TranslationProvider: ({ children }: any) => <>{children}</>,
