@@ -246,17 +246,26 @@ serve(async (req) => {
       console.error("Persist forecast error:", persistErr);
     }
 
-    // 7. Build summary
-    const now = new Date();
-    const todayStr = now.toISOString().slice(0, 10);
-    const tomorrowStr = new Date(now.getTime() + 86400000).toISOString().slice(0, 10);
+    // 7. Build summary – use Europe/Berlin date to match Open-Meteo timestamps
     const getValue = (h: typeof hourly[0]) => h.ai_adjusted_kwh ?? h.estimated_kwh;
+
+    // Open-Meteo returns timestamps in Europe/Berlin timezone, so we must
+    // derive "today" and "tomorrow" in that same timezone for correct filtering.
+    const berlinNow = new Date().toLocaleString("sv-SE", { timeZone: "Europe/Berlin" });
+    const todayStr = berlinNow.slice(0, 10); // "YYYY-MM-DD"
+    const tomorrowDate = new Date(berlinNow);
+    tomorrowDate.setDate(tomorrowDate.getDate() + 1);
+    const tomorrowStr = tomorrowDate.toISOString().slice(0, 10);
+    // Safer: compute tomorrow from the Berlin date string
+    const [tY, tM, tD] = todayStr.split("-").map(Number);
+    const tomorrowDt = new Date(tY, tM - 1, tD + 1);
+    const tomorrowStrBerlin = `${tomorrowDt.getFullYear()}-${String(tomorrowDt.getMonth() + 1).padStart(2, "0")}-${String(tomorrowDt.getDate()).padStart(2, "0")}`;
 
     const todayTotal = hourly
       .filter((h) => h.timestamp.startsWith(todayStr))
       .reduce((s, h) => s + getValue(h), 0);
     const tomorrowTotal = hourly
-      .filter((h) => h.timestamp.startsWith(tomorrowStr))
+      .filter((h) => h.timestamp.startsWith(tomorrowStrBerlin))
       .reduce((s, h) => s + getValue(h), 0);
 
     const peakEntry = hourly.reduce((best, h) => (getValue(h) > getValue(best) ? h : best), hourly[0]);
