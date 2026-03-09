@@ -58,7 +58,8 @@ serve(async (req) => {
     // 4. Physical model with tilt & azimuth correction
     // Uses a simplified transposition model: POA = DNI * cos(AOI) + DHI * (1+cos(tilt))/2
     // where DNI ≈ GHI - DHI, and AOI depends on solar position + panel orientation.
-    const PR = 0.80;
+    const PR = 0.85;
+    const ALBEDO = 0.2;
     const deg2rad = (d: number) => (d * Math.PI) / 180;
     const tiltRad = deg2rad(tiltDeg);
     const latRad = deg2rad(location.latitude);
