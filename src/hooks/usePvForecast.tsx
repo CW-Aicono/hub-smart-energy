@@ -33,6 +33,7 @@ export interface PvForecastSettings {
   peak_power_kwp: number;
   tilt_deg: number;
   azimuth_deg: number;
+  performance_ratio: number;
   is_active: boolean;
 }
 
