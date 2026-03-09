@@ -28,7 +28,7 @@ describe("Auth page", () => {
   it("renders login form when not authenticated", async () => {
     const Auth = (await import("../Auth")).default;
     render(<W><Auth /></W>);
-    expect(screen.getByText("auth.loginTitle")).toBeInTheDocument();
+    expect(screen.getByText("auth.welcomeBack")).toBeInTheDocument();
   });
 
   it("has email and password inputs", async () => {

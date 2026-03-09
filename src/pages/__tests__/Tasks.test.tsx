@@ -20,6 +20,16 @@ vi.mock("@/hooks/useTasks", () => ({
     archiveTask: vi.fn(),
     deleteTask: vi.fn(),
   }),
+  useTaskHistory: () => ({ history: [], isLoading: false }),
+}));
+vi.mock("@/hooks/useLocations", () => ({
+  useLocations: () => ({ locations: [], loading: false }),
+}));
+vi.mock("@/hooks/useChargePoints", () => ({
+  useChargePoints: () => ({ chargePoints: [], isLoading: false }),
+}));
+vi.mock("@/hooks/useExternalContacts", () => ({
+  useExternalContacts: () => ({ contacts: [], loading: false }),
 }));
 vi.mock("@/hooks/useTenant", () => ({
   useTenant: () => ({ tenant: { id: "t1" }, loading: false }),

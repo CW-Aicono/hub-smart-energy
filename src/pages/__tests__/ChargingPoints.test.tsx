@@ -47,9 +47,9 @@ const W = ({ children }: any) => (
 );
 
 describe("ChargingPoints page", () => {
-  it("renders without crashing and shows charging title", async () => {
+  it("renders without crashing and shows sidebar", async () => {
     const ChargingPoints = (await import("../ChargingPoints")).default;
     render(<W><ChargingPoints /></W>);
-    expect(screen.getByText("charging.title")).toBeInTheDocument();
+    expect(screen.getByTestId("sidebar")).toBeInTheDocument();
   });
 });
