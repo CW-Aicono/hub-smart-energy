@@ -22,6 +22,11 @@ vi.mock("@/hooks/useAuth", () => ({
   AuthProvider: ({ children }: any) => children,
 }));
 
+const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+const W = ({ children }: any) => (
+  <QueryClientProvider client={qc}><MemoryRouter>{children}</MemoryRouter></QueryClientProvider>
+);
+
 const baseTask = {
   id: "t-1",
   title: "Zähler prüfen",
