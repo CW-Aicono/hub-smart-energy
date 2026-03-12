@@ -34,17 +34,20 @@ serve(async (req) => {
       global: { headers: { Authorization: authHeader } },
     });
 
-    const { data: { user }, error: userError } = await authClient.auth.getUser();
-    if (userError || !user) {
-      return jsonError("Nicht authentifiziert", 401);
+    const token = authHeader.replace("Bearer ", "");
+    const { data: claimsData, error: claimsError } = await authClient.auth.getClaims(token);
+    if (claimsError || !claimsData?.claims) {
+      console.error("[extract-invoice] Auth failed:", claimsError?.message);
+      return jsonError("Nicht authentifiziert", 401, claimsError?.message || "JWT-Validierung fehlgeschlagen");
     }
+    const userId = claimsData.claims.sub;
 
     // Get tenant_id
     const serviceClient = createClient(supabaseUrl, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
     const { data: profile } = await serviceClient
       .from("profiles")
       .select("tenant_id")
-      .eq("user_id", user.id)
+      .eq("user_id", userId)
       .single();
 
     if (!profile?.tenant_id) {
@@ -69,7 +72,7 @@ serve(async (req) => {
 
     const mimeType = file_type === "pdf" ? "application/pdf" : `image/${file_type || "jpeg"}`;
 
-    console.log(`[extract-invoice] Calling AI gateway for user ${user.id}, file_type=${file_type}, base64_length=${file_base64.length}`);
+    console.log(`[extract-invoice] Calling AI gateway for user ${userId}, file_type=${file_type}, base64_length=${file_base64.length}`);
 
     const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
