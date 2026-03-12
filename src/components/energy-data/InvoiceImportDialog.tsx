@@ -58,6 +58,8 @@ export default function InvoiceImportDialog({ open, onOpenChange, correctionOfId
   const [filePath, setFilePath] = useState<string | null>(null);
   const [extracted, setExtracted] = useState<ExtractedData>({});
   const [aiRaw, setAiRaw] = useState<any>(null);
+  const [aiFailed, setAiFailed] = useState(false);
+  const [aiErrorMessage, setAiErrorMessage] = useState("");
 
   // Editable form fields
   const [form, setForm] = useState({
