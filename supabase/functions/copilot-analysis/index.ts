@@ -55,13 +55,14 @@ serve(async (req) => {
     if (targetLocationIds.length === 0) return jsonError("Mindestens ein Standort erforderlich", 400);
 
     // Verify locations belong to tenant
-    const { data: locations } = await db
+    const { data: locations, error: locError } = await db
       .from("locations")
-      .select("id, name, address, city, state, area_sqm, latitude, longitude")
+      .select("id, name, address, city, postal_code, country, latitude, longitude, usage_type, net_floor_area, gross_floor_area, heating_type")
       .eq("tenant_id", tenantId)
       .in("id", targetLocationIds);
 
-    if (!locations || locations.length === 0) return jsonError("Standort nicht gefunden", 404);
+    console.log("Location query result:", locations?.length, "error:", locError?.message);
+    if (!locations || locations.length === 0) return jsonError("Standort nicht gefunden", 404, locError?.message || `IDs: ${targetLocationIds.join(", ")}`);
 
     // Aggregate data for each location
     const locationData = [];
@@ -114,7 +115,8 @@ serve(async (req) => {
     }
 
     // Fetch matching funding programs
-    const states = [...new Set(locations.map((l: any) => l.state).filter(Boolean))];
+    // Bundesland aus Adresse ableiten (kein state-Feld in locations)
+    const states: string[] = [];
     let fundingQuery = db
       .from("funding_programs")
       .select("*")
@@ -143,8 +145,8 @@ serve(async (req) => {
       return {
         name: loc.name,
         address: `${loc.address || ""}, ${loc.city || ""}`.trim(),
-        state: loc.state || "unbekannt",
-        area_sqm: loc.area_sqm || input_params.roof_area_sqm,
+        usage_type: loc.usage_type || "unbekannt",
+        net_floor_area_sqm: loc.net_floor_area || input_params.roof_area_sqm,
         grid_connection_kva: input_params.grid_connection_kva || (mainMeter?.max_power_kw ?? null),
         existing_pv_kwp: existingPV,
         existing_storage_kwh: existingStorage,
