@@ -72,7 +72,7 @@ serve(async (req) => {
 
     const mimeType = file_type === "pdf" ? "application/pdf" : `image/${file_type || "jpeg"}`;
 
-    console.log(`[extract-invoice] Calling AI gateway for user ${user.id}, file_type=${file_type}, base64_length=${file_base64.length}`);
+    console.log(`[extract-invoice] Calling AI gateway for user ${userId}, file_type=${file_type}, base64_length=${file_base64.length}`);
 
     const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
