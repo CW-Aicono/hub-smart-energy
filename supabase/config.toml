@@ -107,3 +107,6 @@ verify_jwt = false
 
 [functions.extract-invoice]
 verify_jwt = false
+
+[functions.copilot-analysis]
+verify_jwt = false

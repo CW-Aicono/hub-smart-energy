@@ -3449,6 +3449,9 @@ export const translations = {
   // Arbitrage Trading
   "nav.arbitrageTrading": { de: "Arbitragehandel", en: "Arbitrage Trading", es: "Comercio de arbitraje", nl: "Arbitragehandel" },
 
+  // EMS-Copilot
+  "nav.copilot": { de: "EMS-Copilot", en: "EMS Copilot", es: "EMS Copilot", nl: "EMS Copilot" },
+
   // Tenant Electricity (Mieterstrom)
   "nav.tenantElectricity": { de: "Mieterstrom", en: "Tenant Electricity", es: "Electricidad inquilinos", nl: "Huurderstroom" },
 
