@@ -15,12 +15,13 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Download, Database, Filter, Calendar, FileText, Upload, Info, FileSpreadsheet, CheckCircle2, ArrowRight } from "lucide-react";
+import { Download, Database, Filter, Calendar, FileText, Upload, Info, FileSpreadsheet, CheckCircle2, ArrowRight, Receipt } from "lucide-react";
 import { downloadCSV, downloadPDF } from "@/lib/exportUtils";
 import ReportSchedulesList from "@/components/energy-data/ReportSchedulesList";
 import { supabase } from "@/integrations/supabase/client";
 
 const DataImportDialog = lazy(() => import("@/components/energy-data/DataImportDialog"));
+const InvoicesList = lazy(() => import("@/components/energy-data/InvoicesList"));
 
 interface ReadingExportRow {
   meter_id: string;
@@ -192,6 +193,10 @@ const EnergyData = () => {
               <TabsTrigger value="import" className="gap-2">
                 <Upload className="h-4 w-4" />
                 {t("energyData.tabImport" as any)}
+              </TabsTrigger>
+              <TabsTrigger value="invoices" className="gap-2">
+                <Receipt className="h-4 w-4" />
+                {t("energyData.tabInvoices" as any)}
               </TabsTrigger>
             </TabsList>
 
@@ -408,6 +413,12 @@ const EnergyData = () => {
                   <ArrowRight className="h-4 w-4 ml-2" />
                 </Button>
               </div>
+            </TabsContent>
+            {/* === Invoices Tab === */}
+            <TabsContent value="invoices" className="space-y-6">
+              <Suspense fallback={<Skeleton className="h-64" />}>
+                <InvoicesList />
+              </Suspense>
             </TabsContent>
           </Tabs>
         </div>

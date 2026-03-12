@@ -104,3 +104,6 @@ verify_jwt = false
 
 [functions.collect-metrics]
 verify_jwt = false
+
+[functions.extract-invoice]
+verify_jwt = false
