@@ -318,7 +318,16 @@ export default function InvoiceImportDialog({ open, onOpenChange, correctionOfId
         {/* Review */}
         {step === "review" && (
           <div className="space-y-4">
-            {extracted.confidence && (
+            {aiFailed && (
+              <Alert className="border-yellow-500/50 bg-yellow-50 dark:bg-yellow-950/20">
+                <AlertTriangle className="h-4 w-4 text-yellow-600" />
+                <AlertDescription className="text-sm text-yellow-800 dark:text-yellow-200">
+                  KI-Extraktion fehlgeschlagen{aiErrorMessage ? `: ${aiErrorMessage}` : ""}. Bitte Daten manuell eingeben.
+                </AlertDescription>
+              </Alert>
+            )}
+
+            {!aiFailed && extracted.confidence && (
               <div className="flex items-center gap-2 p-3 rounded-md border bg-muted/30">
                 <Sparkles className="h-5 w-5 text-primary" />
                 <span className="text-sm font-medium">{t("invoices.aiConfidence" as any)}:</span>
