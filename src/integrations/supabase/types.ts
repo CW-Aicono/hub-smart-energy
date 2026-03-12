@@ -1473,6 +1473,103 @@ export type Database = {
           },
         ]
       }
+      energy_supplier_invoices: {
+        Row: {
+          ai_confidence: string | null
+          ai_raw_response: Json | null
+          consumption_kwh: number | null
+          consumption_unit: string | null
+          correction_of_id: string | null
+          created_at: string
+          currency: string | null
+          energy_type: string | null
+          file_path: string | null
+          id: string
+          invoice_number: string | null
+          location_id: string | null
+          notes: string | null
+          period_end: string | null
+          period_start: string | null
+          status: string | null
+          supplier_name: string | null
+          tax_amount: number | null
+          tenant_id: string
+          total_gross: number | null
+          total_net: number | null
+          updated_at: string
+        }
+        Insert: {
+          ai_confidence?: string | null
+          ai_raw_response?: Json | null
+          consumption_kwh?: number | null
+          consumption_unit?: string | null
+          correction_of_id?: string | null
+          created_at?: string
+          currency?: string | null
+          energy_type?: string | null
+          file_path?: string | null
+          id?: string
+          invoice_number?: string | null
+          location_id?: string | null
+          notes?: string | null
+          period_end?: string | null
+          period_start?: string | null
+          status?: string | null
+          supplier_name?: string | null
+          tax_amount?: number | null
+          tenant_id: string
+          total_gross?: number | null
+          total_net?: number | null
+          updated_at?: string
+        }
+        Update: {
+          ai_confidence?: string | null
+          ai_raw_response?: Json | null
+          consumption_kwh?: number | null
+          consumption_unit?: string | null
+          correction_of_id?: string | null
+          created_at?: string
+          currency?: string | null
+          energy_type?: string | null
+          file_path?: string | null
+          id?: string
+          invoice_number?: string | null
+          location_id?: string | null
+          notes?: string | null
+          period_end?: string | null
+          period_start?: string | null
+          status?: string | null
+          supplier_name?: string | null
+          tax_amount?: number | null
+          tenant_id?: string
+          total_gross?: number | null
+          total_net?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "energy_supplier_invoices_correction_of_id_fkey"
+            columns: ["correction_of_id"]
+            isOneToOne: false
+            referencedRelation: "energy_supplier_invoices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "energy_supplier_invoices_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "energy_supplier_invoices_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       external_contacts: {
         Row: {
           company: string | null
