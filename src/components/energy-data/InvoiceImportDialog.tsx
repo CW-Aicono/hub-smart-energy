@@ -158,7 +158,23 @@ export default function InvoiceImportDialog({ open, onOpenChange, correctionOfId
         },
       });
 
-      if (fnError) throw fnError;
+      if (fnError) {
+        // Try to extract meaningful error from FunctionsHttpError
+        let errorDetail = "";
+        try {
+          if (fnError.context && typeof fnError.context === "object" && "json" in fnError.context) {
+            const body = await (fnError.context as Response).json();
+            errorDetail = body.detail || body.error || "";
+          }
+        } catch { /* ignore parse errors */ }
+        const displayMsg = errorDetail || fnError.message || "Unbekannter Fehler";
+        console.error("AI extraction error:", fnError, errorDetail);
+        toast.error(`KI-Extraktion fehlgeschlagen: ${displayMsg}`);
+        setAiFailed(true);
+        setAiErrorMessage(displayMsg);
+        setStep("review");
+        return;
+      }
 
       if (fnData?.data) {
         const d = fnData.data as ExtractedData;
@@ -180,11 +196,20 @@ export default function InvoiceImportDialog({ open, onOpenChange, correctionOfId
         });
         setStep("review");
       } else {
-        throw new Error(fnData?.error || "Extraction failed");
+        const serverError = fnData?.error || "Extraktion fehlgeschlagen";
+        const serverDetail = fnData?.detail || "";
+        const displayMsg = serverDetail ? `${serverError}: ${serverDetail}` : serverError;
+        toast.error(displayMsg);
+        setAiFailed(true);
+        setAiErrorMessage(displayMsg);
+        setStep("review");
       }
     } catch (err: any) {
       console.error("AI extraction failed:", err);
-      toast.error("KI-Extraktion fehlgeschlagen. Bitte Daten manuell eingeben.");
+      const msg = err?.message || "Unbekannter Fehler";
+      toast.error(`KI-Extraktion fehlgeschlagen: ${msg}`);
+      setAiFailed(true);
+      setAiErrorMessage(msg);
       setStep("review");
     }
   };
