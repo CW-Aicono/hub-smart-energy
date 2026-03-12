@@ -15,12 +15,13 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Download, Database, Filter, Calendar, FileText, Upload, Info, FileSpreadsheet, CheckCircle2, ArrowRight } from "lucide-react";
+import { Download, Database, Filter, Calendar, FileText, Upload, Info, FileSpreadsheet, CheckCircle2, ArrowRight, Receipt } from "lucide-react";
 import { downloadCSV, downloadPDF } from "@/lib/exportUtils";
 import ReportSchedulesList from "@/components/energy-data/ReportSchedulesList";
 import { supabase } from "@/integrations/supabase/client";
 
 const DataImportDialog = lazy(() => import("@/components/energy-data/DataImportDialog"));
+const InvoicesList = lazy(() => import("@/components/energy-data/InvoicesList"));
 
 interface ReadingExportRow {
   meter_id: string;
