@@ -7,6 +7,15 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+function jsonError(message: string, status: number, detail?: string) {
+  const body: Record<string, string> = { error: message };
+  if (detail) body.detail = detail;
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -16,10 +25,7 @@ serve(async (req) => {
     // Auth check
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return jsonError("Nicht authentifiziert", 401);
     }
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
@@ -30,10 +36,7 @@ serve(async (req) => {
 
     const { data: { user }, error: userError } = await authClient.auth.getUser();
     if (userError || !user) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return jsonError("Nicht authentifiziert", 401);
     }
 
     // Get tenant_id
@@ -45,27 +48,18 @@ serve(async (req) => {
       .single();
 
     if (!profile?.tenant_id) {
-      return new Response(JSON.stringify({ error: "No tenant" }), {
-        status: 403,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return jsonError("Kein Mandant zugeordnet", 403, "Bitte stellen Sie sicher, dass Ihr Benutzerprofil einem Mandanten zugeordnet ist.");
     }
 
     const { file_base64, file_type, locations } = await req.json();
 
     if (!file_base64) {
-      return new Response(JSON.stringify({ error: "No file provided" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return jsonError("Keine Datei übermittelt", 400);
     }
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) {
-      return new Response(JSON.stringify({ error: "AI not configured" }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return jsonError("KI-Dienst nicht konfiguriert", 500, "Der LOVABLE_API_KEY ist nicht gesetzt. Bitte kontaktieren Sie den Administrator.");
     }
 
     // Build location context for fuzzy matching
@@ -74,6 +68,8 @@ serve(async (req) => {
       .join("\n");
 
     const mimeType = file_type === "pdf" ? "application/pdf" : `image/${file_type || "jpeg"}`;
+
+    console.log(`[extract-invoice] Calling AI gateway for user ${user.id}, file_type=${file_type}, base64_length=${file_base64.length}`);
 
     const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -184,54 +180,40 @@ Regeln:
 
     if (!aiResponse.ok) {
       const status = aiResponse.status;
+      const errText = await aiResponse.text();
+      console.error(`[extract-invoice] AI gateway error: status=${status}, body=${errText}`);
+
       if (status === 429) {
-        return new Response(JSON.stringify({ error: "Rate limit exceeded, please try again later." }), {
-          status: 429,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+        return jsonError("Rate-Limit überschritten", 429, "Bitte versuchen Sie es in einer Minute erneut.");
       }
       if (status === 402) {
-        return new Response(JSON.stringify({ error: "AI credits exhausted." }), {
-          status: 402,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+        return jsonError("KI-Guthaben aufgebraucht", 402, "Bitte laden Sie Ihr Guthaben unter Einstellungen → Workspace → Nutzung auf.");
       }
-      const errText = await aiResponse.text();
-      console.error("AI gateway error:", status, errText);
-      return new Response(JSON.stringify({ error: "AI extraction failed" }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return jsonError("KI-Analyse fehlgeschlagen", 500, `AI-Gateway antwortete mit Status ${status}. ${errText.substring(0, 200)}`);
     }
 
     const aiData = await aiResponse.json();
     const toolCall = aiData.choices?.[0]?.message?.tool_calls?.[0];
 
     if (!toolCall?.function?.arguments) {
-      return new Response(JSON.stringify({ error: "AI returned no structured data" }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      console.error("[extract-invoice] No tool call in AI response:", JSON.stringify(aiData).substring(0, 500));
+      return jsonError("KI hat keine strukturierten Daten zurückgegeben", 500, "Das KI-Modell hat die Rechnung nicht im erwarteten Format analysiert. Bitte versuchen Sie es erneut oder geben Sie die Daten manuell ein.");
     }
 
     let extracted: Record<string, any>;
     try {
       extracted = JSON.parse(toolCall.function.arguments);
     } catch {
-      return new Response(JSON.stringify({ error: "Failed to parse AI response" }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      console.error("[extract-invoice] Failed to parse tool_call arguments:", toolCall.function.arguments);
+      return jsonError("KI-Antwort konnte nicht verarbeitet werden", 500, "Die Antwort des KI-Modells war kein gültiges JSON.");
     }
 
     return new Response(JSON.stringify({ success: true, data: extracted, raw: aiData }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {
-    console.error("extract-invoice error:", e);
-    return new Response(JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    console.error("[extract-invoice] Unhandled error:", e);
+    const msg = e instanceof Error ? e.message : "Unbekannter Fehler";
+    return jsonError("Verarbeitungsfehler", 500, msg);
   }
 });

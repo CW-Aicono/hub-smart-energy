@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Upload, FileText, Loader2, CheckCircle2, AlertTriangle, Sparkles } from "lucide-react";
 import { useTranslation } from "@/hooks/useTranslation";
 import { useLocations } from "@/hooks/useLocations";
@@ -57,6 +58,8 @@ export default function InvoiceImportDialog({ open, onOpenChange, correctionOfId
   const [filePath, setFilePath] = useState<string | null>(null);
   const [extracted, setExtracted] = useState<ExtractedData>({});
   const [aiRaw, setAiRaw] = useState<any>(null);
+  const [aiFailed, setAiFailed] = useState(false);
+  const [aiErrorMessage, setAiErrorMessage] = useState("");
 
   // Editable form fields
   const [form, setForm] = useState({
@@ -82,6 +85,8 @@ export default function InvoiceImportDialog({ open, onOpenChange, correctionOfId
     setFilePath(null);
     setExtracted({});
     setAiRaw(null);
+    setAiFailed(false);
+    setAiErrorMessage("");
     setForm({
       supplier_name: "",
       invoice_number: "",
@@ -153,7 +158,23 @@ export default function InvoiceImportDialog({ open, onOpenChange, correctionOfId
         },
       });
 
-      if (fnError) throw fnError;
+      if (fnError) {
+        // Try to extract meaningful error from FunctionsHttpError
+        let errorDetail = "";
+        try {
+          if (fnError.context && typeof fnError.context === "object" && "json" in fnError.context) {
+            const body = await (fnError.context as Response).json();
+            errorDetail = body.detail || body.error || "";
+          }
+        } catch { /* ignore parse errors */ }
+        const displayMsg = errorDetail || fnError.message || "Unbekannter Fehler";
+        console.error("AI extraction error:", fnError, errorDetail);
+        toast.error(`KI-Extraktion fehlgeschlagen: ${displayMsg}`);
+        setAiFailed(true);
+        setAiErrorMessage(displayMsg);
+        setStep("review");
+        return;
+      }
 
       if (fnData?.data) {
         const d = fnData.data as ExtractedData;
@@ -175,11 +196,20 @@ export default function InvoiceImportDialog({ open, onOpenChange, correctionOfId
         });
         setStep("review");
       } else {
-        throw new Error(fnData?.error || "Extraction failed");
+        const serverError = fnData?.error || "Extraktion fehlgeschlagen";
+        const serverDetail = fnData?.detail || "";
+        const displayMsg = serverDetail ? `${serverError}: ${serverDetail}` : serverError;
+        toast.error(displayMsg);
+        setAiFailed(true);
+        setAiErrorMessage(displayMsg);
+        setStep("review");
       }
     } catch (err: any) {
       console.error("AI extraction failed:", err);
-      toast.error("KI-Extraktion fehlgeschlagen. Bitte Daten manuell eingeben.");
+      const msg = err?.message || "Unbekannter Fehler";
+      toast.error(`KI-Extraktion fehlgeschlagen: ${msg}`);
+      setAiFailed(true);
+      setAiErrorMessage(msg);
       setStep("review");
     }
   };
@@ -288,7 +318,16 @@ export default function InvoiceImportDialog({ open, onOpenChange, correctionOfId
         {/* Review */}
         {step === "review" && (
           <div className="space-y-4">
-            {extracted.confidence && (
+            {aiFailed && (
+              <Alert className="border-yellow-500/50 bg-yellow-50 dark:bg-yellow-950/20">
+                <AlertTriangle className="h-4 w-4 text-yellow-600" />
+                <AlertDescription className="text-sm text-yellow-800 dark:text-yellow-200">
+                  KI-Extraktion fehlgeschlagen{aiErrorMessage ? `: ${aiErrorMessage}` : ""}. Bitte Daten manuell eingeben.
+                </AlertDescription>
+              </Alert>
+            )}
+
+            {!aiFailed && extracted.confidence && (
               <div className="flex items-center gap-2 p-3 rounded-md border bg-muted/30">
                 <Sparkles className="h-5 w-5 text-primary" />
                 <span className="text-sm font-medium">{t("invoices.aiConfidence" as any)}:</span>
