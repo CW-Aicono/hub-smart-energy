@@ -1009,6 +1009,151 @@ export type Database = {
           },
         ]
       }
+      copilot_analyses: {
+        Row: {
+          analysis_type: string
+          best_roi_years: number | null
+          created_at: string
+          created_by: string | null
+          funding_matches: Json | null
+          id: string
+          input_params: Json | null
+          location_id: string | null
+          recommendations: Json | null
+          roi_scenarios: Json | null
+          status: string
+          tenant_id: string
+          total_funding: number | null
+          total_investment: number | null
+        }
+        Insert: {
+          analysis_type?: string
+          best_roi_years?: number | null
+          created_at?: string
+          created_by?: string | null
+          funding_matches?: Json | null
+          id?: string
+          input_params?: Json | null
+          location_id?: string | null
+          recommendations?: Json | null
+          roi_scenarios?: Json | null
+          status?: string
+          tenant_id: string
+          total_funding?: number | null
+          total_investment?: number | null
+        }
+        Update: {
+          analysis_type?: string
+          best_roi_years?: number | null
+          created_at?: string
+          created_by?: string | null
+          funding_matches?: Json | null
+          id?: string
+          input_params?: Json | null
+          location_id?: string | null
+          recommendations?: Json | null
+          roi_scenarios?: Json | null
+          status?: string
+          tenant_id?: string
+          total_funding?: number | null
+          total_investment?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "copilot_analyses_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "copilot_analyses_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      copilot_projects: {
+        Row: {
+          analysis_id: string | null
+          created_at: string
+          estimated_funding: number | null
+          estimated_investment: number | null
+          estimated_roi_years: number | null
+          estimated_savings_year: number | null
+          id: string
+          location_id: string | null
+          notes: string | null
+          priority: number | null
+          status: string
+          target_year: number | null
+          technology: string | null
+          tenant_id: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          analysis_id?: string | null
+          created_at?: string
+          estimated_funding?: number | null
+          estimated_investment?: number | null
+          estimated_roi_years?: number | null
+          estimated_savings_year?: number | null
+          id?: string
+          location_id?: string | null
+          notes?: string | null
+          priority?: number | null
+          status?: string
+          target_year?: number | null
+          technology?: string | null
+          tenant_id: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          analysis_id?: string | null
+          created_at?: string
+          estimated_funding?: number | null
+          estimated_investment?: number | null
+          estimated_roi_years?: number | null
+          estimated_savings_year?: number | null
+          id?: string
+          location_id?: string | null
+          notes?: string | null
+          priority?: number | null
+          status?: string
+          target_year?: number | null
+          technology?: string | null
+          tenant_id?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "copilot_projects_analysis_id_fkey"
+            columns: ["analysis_id"]
+            isOneToOne: false
+            referencedRelation: "copilot_analyses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "copilot_projects_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "copilot_projects_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       custom_role_permissions: {
         Row: {
           created_at: string
@@ -1789,6 +1934,66 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      funding_programs: {
+        Row: {
+          amount_description: string | null
+          created_at: string
+          funding_type: string
+          id: string
+          is_active: boolean
+          level: string
+          max_amount: number | null
+          min_capacity: number | null
+          municipality: string | null
+          name: string
+          notes: string | null
+          state: string | null
+          technology: string[] | null
+          updated_at: string
+          url: string | null
+          valid_from: string | null
+          valid_until: string | null
+        }
+        Insert: {
+          amount_description?: string | null
+          created_at?: string
+          funding_type?: string
+          id?: string
+          is_active?: boolean
+          level?: string
+          max_amount?: number | null
+          min_capacity?: number | null
+          municipality?: string | null
+          name: string
+          notes?: string | null
+          state?: string | null
+          technology?: string[] | null
+          updated_at?: string
+          url?: string | null
+          valid_from?: string | null
+          valid_until?: string | null
+        }
+        Update: {
+          amount_description?: string | null
+          created_at?: string
+          funding_type?: string
+          id?: string
+          is_active?: boolean
+          level?: string
+          max_amount?: number | null
+          min_capacity?: number | null
+          municipality?: string | null
+          name?: string
+          notes?: string | null
+          state?: string | null
+          technology?: string[] | null
+          updated_at?: string
+          url?: string | null
+          valid_from?: string | null
+          valid_until?: string | null
+        }
+        Relationships: []
       }
       infrastructure_metrics: {
         Row: {
