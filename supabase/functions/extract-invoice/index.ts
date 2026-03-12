@@ -34,10 +34,13 @@ serve(async (req) => {
       global: { headers: { Authorization: authHeader } },
     });
 
-    const { data: { user }, error: userError } = await authClient.auth.getUser();
-    if (userError || !user) {
-      return jsonError("Nicht authentifiziert", 401);
+    const token = authHeader.replace("Bearer ", "");
+    const { data: claimsData, error: claimsError } = await authClient.auth.getClaims(token);
+    if (claimsError || !claimsData?.claims) {
+      console.error("[extract-invoice] Auth failed:", claimsError?.message);
+      return jsonError("Nicht authentifiziert", 401, claimsError?.message || "JWT-Validierung fehlgeschlagen");
     }
+    const userId = claimsData.claims.sub;
 
     // Get tenant_id
     const serviceClient = createClient(supabaseUrl, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
