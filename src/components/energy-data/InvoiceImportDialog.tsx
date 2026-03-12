@@ -85,6 +85,8 @@ export default function InvoiceImportDialog({ open, onOpenChange, correctionOfId
     setFilePath(null);
     setExtracted({});
     setAiRaw(null);
+    setAiFailed(false);
+    setAiErrorMessage("");
     setForm({
       supplier_name: "",
       invoice_number: "",
