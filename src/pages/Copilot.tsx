@@ -236,6 +236,35 @@ const Copilot = () => {
 
                 {result && !isAnalyzing && (
                   <>
+                    {/* Meta info: user + params */}
+                    <Card>
+                      <CardContent className="py-3 px-4 flex flex-wrap gap-x-6 gap-y-1 text-sm text-muted-foreground">
+                        <span>
+                          <span className="font-medium text-foreground">Standort:</span>{" "}
+                          {locations.find((l) => l.id === (result.analysis as any)?.location_id)?.name || selectedLocationId ? locations.find((l) => l.id === selectedLocationId)?.name || "–" : "–"}
+                        </span>
+                        <span>
+                          <span className="font-medium text-foreground">Erstellt:</span>{" "}
+                          {result.analysis?.created_at
+                            ? new Date(result.analysis.created_at).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })
+                            : "–"}
+                        </span>
+                        {(() => {
+                          const params = (result.analysis as any)?.input_params || {};
+                          const parts: string[] = [];
+                          if (params.roof_area_sqm) parts.push(`Dachfläche: ${params.roof_area_sqm} m²`);
+                          if (params.grid_connection_kva) parts.push(`Netzanschluss: ${params.grid_connection_kva} kVA`);
+                          if (params.budget_limit) parts.push(`Budget: ${formatEur(params.budget_limit)}`);
+                          return parts.length > 0 ? (
+                            <span>
+                              <span className="font-medium text-foreground">Parameter:</span>{" "}
+                              {parts.join(" · ")}
+                            </span>
+                          ) : null;
+                        })()}
+                      </CardContent>
+                    </Card>
+
                     {/* Summary Cards */}
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                       <Card>
