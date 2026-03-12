@@ -115,7 +115,8 @@ serve(async (req) => {
     }
 
     // Fetch matching funding programs
-    const states = [...new Set(locations.map((l: any) => l.state).filter(Boolean))];
+    // Bundesland aus Adresse ableiten (kein state-Feld in locations)
+    const states: string[] = [];
     let fundingQuery = db
       .from("funding_programs")
       .select("*")
