@@ -8,7 +8,7 @@ import { useModuleGuard } from "@/hooks/useModuleGuard";
 import { useDemoMode, useDemoPath } from "@/contexts/DemoMode";
 import { Button } from "@/components/ui/button";
 import { MobileHeader } from "@/components/dashboard/MobileSidebar";
-import { LayoutDashboard, LogOut, Shield, Settings, Users, ChevronDown, ChevronRight, MapPin, PanelLeftClose, PanelLeft, UserCircle, Key, HelpCircle, Plug, Palette, Database, Gauge, Download, Car, PlugZap, Receipt, Cpu, Activity, Mail, Smartphone, Network, ListChecks, TrendingUp, Home, BookOpen, FileText } from "lucide-react";
+import { LayoutDashboard, LogOut, Shield, Settings, Users, ChevronDown, ChevronRight, MapPin, PanelLeftClose, PanelLeft, UserCircle, Key, HelpCircle, Plug, Palette, Database, Gauge, Download, Car, PlugZap, Receipt, Cpu, Activity, Mail, Smartphone, Network, ListChecks, TrendingUp, Home, BookOpen, FileText, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TenantLogo } from "@/components/tenant/TenantLogo";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -153,6 +153,7 @@ const DashboardSidebar = () => {
     },
     { to: "/automation", icon: Cpu, labelKey: "nav.multiLocationAutomation" as TranslationKey },
     { to: "/arbitrage", icon: TrendingUp, labelKey: "nav.arbitrageTrading" as TranslationKey },
+    { to: "/copilot", icon: Sparkles, labelKey: "nav.copilot" as TranslationKey },
     { to: "/tenant-electricity", icon: Home, labelKey: "nav.tenantElectricity" as TranslationKey },
     { to: "/network", icon: Network, labelKey: "nav.networkInfrastructure" as TranslationKey },
     { to: "/tasks", icon: ListChecks, labelKey: "nav.tasks" as TranslationKey },
