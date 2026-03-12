@@ -414,6 +414,12 @@ const EnergyData = () => {
                 </Button>
               </div>
             </TabsContent>
+            {/* === Invoices Tab === */}
+            <TabsContent value="invoices" className="space-y-6">
+              <Suspense fallback={<Skeleton className="h-64" />}>
+                <InvoicesList />
+              </Suspense>
+            </TabsContent>
           </Tabs>
         </div>
 
