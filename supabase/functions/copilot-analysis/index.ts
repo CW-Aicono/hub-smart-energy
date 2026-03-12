@@ -55,13 +55,14 @@ serve(async (req) => {
     if (targetLocationIds.length === 0) return jsonError("Mindestens ein Standort erforderlich", 400);
 
     // Verify locations belong to tenant
-    const { data: locations } = await db
+    const { data: locations, error: locError } = await db
       .from("locations")
-      .select("id, name, address, city, state, area_sqm, latitude, longitude")
+      .select("id, name, address, city, postal_code, country, latitude, longitude, usage_type, net_floor_area, gross_floor_area, heating_type")
       .eq("tenant_id", tenantId)
       .in("id", targetLocationIds);
 
-    if (!locations || locations.length === 0) return jsonError("Standort nicht gefunden", 404);
+    console.log("Location query result:", locations?.length, "error:", locError?.message);
+    if (!locations || locations.length === 0) return jsonError("Standort nicht gefunden", 404, locError?.message || `IDs: ${targetLocationIds.join(", ")}`);
 
     // Aggregate data for each location
     const locationData = [];
