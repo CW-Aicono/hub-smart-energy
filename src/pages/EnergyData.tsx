@@ -194,6 +194,10 @@ const EnergyData = () => {
                 <Upload className="h-4 w-4" />
                 {t("energyData.tabImport" as any)}
               </TabsTrigger>
+              <TabsTrigger value="invoices" className="gap-2">
+                <Receipt className="h-4 w-4" />
+                {t("energyData.tabInvoices" as any)}
+              </TabsTrigger>
             </TabsList>
 
             {/* === Export Tab === */}
