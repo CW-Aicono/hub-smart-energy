@@ -402,9 +402,10 @@ const Copilot = () => {
                   <Card>
                     <Table>
                       <TableHeader>
-                        <TableRow>
+                         <TableRow>
                           <TableHead>#</TableHead>
                           <TableHead>Projekt</TableHead>
+                          <TableHead>Standort</TableHead>
                           <TableHead>Technologie</TableHead>
                           <TableHead className="text-right">Investition</TableHead>
                           <TableHead className="text-right">ROI</TableHead>
@@ -416,6 +417,7 @@ const Copilot = () => {
                           <TableRow key={proj.id}>
                             <TableCell>{i + 1}</TableCell>
                             <TableCell className="font-medium">{proj.title}</TableCell>
+                            <TableCell className="text-muted-foreground">{locations.find((l) => l.id === proj.location_id)?.name || "–"}</TableCell>
                             <TableCell>{TECH_LABELS[proj.technology || ""] || proj.technology}</TableCell>
                             <TableCell className="text-right">{formatEur(proj.estimated_investment)}</TableCell>
                             <TableCell className="text-right">{proj.estimated_roi_years ? `${proj.estimated_roi_years.toFixed(1)} J.` : "–"}</TableCell>
