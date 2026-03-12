@@ -476,19 +476,32 @@ const Copilot = () => {
                           setActiveTab("analysis");
                         }}
                       >
-                        <CardContent className="py-3 px-4 flex items-center justify-between">
-                          <div>
-                            <p className="font-medium text-foreground">
-                              {a.analysis_type === "portfolio" ? "Portfolio-Analyse" : "Standort-Analyse"}
-                            </p>
-                            <p className="text-sm text-muted-foreground">
-                              {new Date(a.created_at).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}
-                            </p>
+                        <CardContent className="py-3 px-4 space-y-1">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <p className="font-medium text-foreground">
+                                {a.analysis_type === "portfolio" ? "Portfolio-Analyse" : "Standort-Analyse"}
+                              </p>
+                              <p className="text-sm text-muted-foreground">
+                                {locations.find((l) => l.id === a.location_id)?.name || "–"}
+                                {" · "}
+                                {new Date(a.created_at).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+                              </p>
+                            </div>
+                            <div className="text-right">
+                              <p className="font-semibold text-foreground">{formatEur(a.total_investment || 0)}</p>
+                              <p className="text-sm text-green-600 dark:text-green-400">{a.best_roi_years ? `ROI: ${a.best_roi_years} J.` : ""}</p>
+                            </div>
                           </div>
-                          <div className="text-right">
-                            <p className="font-semibold text-foreground">{formatEur(a.total_investment || 0)}</p>
-                            <p className="text-sm text-green-600 dark:text-green-400">{a.best_roi_years ? `ROI: ${a.best_roi_years} J.` : ""}</p>
-                          </div>
+                          {Array.isArray(a.recommendations) && a.recommendations.length > 0 && (
+                            <div className="flex flex-wrap gap-1 pt-1">
+                              {(a.recommendations as any[]).map((r: any, i: number) => (
+                                <Badge key={i} variant="secondary" className="text-[11px] font-normal">
+                                  {TECH_LABELS[r.technology] || r.technology}
+                                </Badge>
+                              ))}
+                            </div>
+                          )}
                         </CardContent>
                       </Card>
                     ))}
