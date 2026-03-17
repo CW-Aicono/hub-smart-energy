@@ -63,14 +63,15 @@ serve(async (req) => {
     const tiltDeg = settings.tilt_deg;
     const azimuthDeg = settings.azimuth_deg;
 
-    // 3. Fetch Open-Meteo solar radiation forecast (48h) – now including temperature
-    const meteoUrl = `https://api.open-meteo.com/v1/forecast?latitude=${location.latitude}&longitude=${location.longitude}&hourly=shortwave_radiation,direct_radiation,diffuse_radiation,cloud_cover,temperature_2m&timezone=Europe/Berlin&forecast_days=2`;
+    // 3. Fetch Open-Meteo solar radiation forecast (48h) – now including DNI and temperature
+    const meteoUrl = `https://api.open-meteo.com/v1/forecast?latitude=${location.latitude}&longitude=${location.longitude}&hourly=shortwave_radiation,direct_normal_irradiance,diffuse_radiation,cloud_cover,temperature_2m&timezone=Europe/Berlin&forecast_days=2`;
     const meteoRes = await fetch(meteoUrl);
     if (!meteoRes.ok) throw new Error("Open-Meteo API error");
     const meteo = await meteoRes.json();
 
     const times: string[] = meteo.hourly.time;
     const ghi: number[] = meteo.hourly.shortwave_radiation;
+    const dniRaw: number[] | undefined = meteo.hourly.direct_normal_irradiance;
     const dhi: number[] = meteo.hourly.diffuse_radiation;
     const clouds: number[] = meteo.hourly.cloud_cover;
     const temps: number[] = meteo.hourly.temperature_2m;
@@ -164,21 +165,36 @@ serve(async (req) => {
       return Math.floor((d.getTime() - start.getTime()) / 86400000);
     };
 
+    // Helper: detect if a date is in CEST (last Sunday of March to last Sunday of October)
+    const isCEST = (dateStr: string): boolean => {
+      const d = new Date(dateStr);
+      const year = d.getFullYear();
+      const month = d.getMonth(); // 0-indexed
+      if (month < 2 || month > 9) return false; // Jan/Feb/Nov/Dec → CET
+      if (month > 2 && month < 9) return true;  // Apr–Sep → CEST
+      // March (2) or October (9): find last Sunday
+      const lastDay = new Date(year, month + 1, 0).getDate();
+      let lastSunday = lastDay;
+      while (new Date(year, month, lastSunday).getDay() !== 0) lastSunday--;
+      const switchDate = new Date(year, month, lastSunday, 2);
+      return month === 2 ? d >= switchDate : d < switchDate;
+    };
+
     const hourly = times.map((ts: string, i: number) => {
       const radiationWm2 = ghi[i] ?? 0;
       const diffuseWm2 = dhi[i] ?? 0;
-      const directWm2 = Math.max(0, radiationWm2 - diffuseWm2);
 
       // Solar declination (Cooper's equation)
       const doy = dayOfYear(ts);
       const declination = deg2rad(23.45 * Math.sin(deg2rad(360 * (284 + doy) / 365)));
 
-      // True Solar Time
+      // True Solar Time with DST-aware reference meridian
       const tsParts = ts.match(/T(\d{2}):(\d{2})/);
       const clockHour = tsParts ? parseInt(tsParts[1]) + parseInt(tsParts[2]) / 60 : 12;
       const B = deg2rad(360 * (doy - 81) / 365);
       const EoT = 9.87 * Math.sin(2 * B) - 7.53 * Math.cos(B) - 1.5 * Math.sin(B);
-      const longCorrection = 4 * (location.longitude - 15);
+      const refMeridian = isCEST(ts) ? 30 : 15; // CEST → 30°E, CET → 15°E
+      const longCorrection = 4 * (location.longitude - refMeridian);
       const solarHour = clockHour + (longCorrection + EoT) / 60;
       const hourAngle = deg2rad((solarHour - 12) * 15);
 
@@ -202,8 +218,19 @@ serve(async (req) => {
       const cosAOI = Math.sin(solarAlt) * Math.cos(tiltRad)
                     + Math.cos(solarAlt) * Math.sin(tiltRad) * Math.cos(solarAz - panelAzRad);
 
-      // POA irradiance
-      const beam = directWm2 * Math.max(0, cosAOI);
+      // DNI: use direct_normal_irradiance from API, or derive from GHI-DHI with correction
+      let dniValue: number;
+      if (dniRaw && dniRaw[i] != null) {
+        dniValue = dniRaw[i];
+      } else {
+        // Fallback: derive DNI from direct horizontal (GHI - DHI)
+        const directHoriz = Math.max(0, radiationWm2 - diffuseWm2);
+        const sinAltClamped = Math.max(Math.sin(solarAlt), 0.05);
+        dniValue = directHoriz / sinAltClamped;
+      }
+
+      // POA irradiance – beam uses DNI directly (not horizontal direct)
+      const beam = dniValue * Math.max(0, cosAOI);
       const diffuse = diffuseWm2 * (1 + Math.cos(tiltRad)) / 2;
       const ground = radiationWm2 * ALBEDO * (1 - Math.cos(tiltRad)) / 2;
       const poaWm2 = beam + diffuse + ground;
