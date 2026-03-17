@@ -63,14 +63,15 @@ serve(async (req) => {
     const tiltDeg = settings.tilt_deg;
     const azimuthDeg = settings.azimuth_deg;
 
-    // 3. Fetch Open-Meteo solar radiation forecast (48h) – now including temperature
-    const meteoUrl = `https://api.open-meteo.com/v1/forecast?latitude=${location.latitude}&longitude=${location.longitude}&hourly=shortwave_radiation,direct_radiation,diffuse_radiation,cloud_cover,temperature_2m&timezone=Europe/Berlin&forecast_days=2`;
+    // 3. Fetch Open-Meteo solar radiation forecast (48h) – now including DNI and temperature
+    const meteoUrl = `https://api.open-meteo.com/v1/forecast?latitude=${location.latitude}&longitude=${location.longitude}&hourly=shortwave_radiation,direct_normal_irradiance,diffuse_radiation,cloud_cover,temperature_2m&timezone=Europe/Berlin&forecast_days=2`;
     const meteoRes = await fetch(meteoUrl);
     if (!meteoRes.ok) throw new Error("Open-Meteo API error");
     const meteo = await meteoRes.json();
 
     const times: string[] = meteo.hourly.time;
     const ghi: number[] = meteo.hourly.shortwave_radiation;
+    const dniRaw: number[] | undefined = meteo.hourly.direct_normal_irradiance;
     const dhi: number[] = meteo.hourly.diffuse_radiation;
     const clouds: number[] = meteo.hourly.cloud_cover;
     const temps: number[] = meteo.hourly.temperature_2m;
