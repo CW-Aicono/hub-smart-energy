@@ -3285,39 +3285,63 @@ export type Database = {
         Row: {
           ai_adjusted_kwh: number | null
           cloud_cover_pct: number
+          corrected_ai_adjusted_kwh: number | null
+          corrected_estimated_kwh: number | null
           created_at: string
+          dhi_w_m2: number | null
+          dni_w_m2: number | null
           estimated_kwh: number
           forecast_date: string
           hour_timestamp: string
           id: string
+          legacy_ai_adjusted_kwh: number | null
+          legacy_estimated_kwh: number | null
+          legacy_poa_w_m2: number | null
           location_id: string
           peak_power_kwp: number
+          poa_w_m2: number | null
           radiation_w_m2: number
           tenant_id: string
         }
         Insert: {
           ai_adjusted_kwh?: number | null
           cloud_cover_pct?: number
+          corrected_ai_adjusted_kwh?: number | null
+          corrected_estimated_kwh?: number | null
           created_at?: string
+          dhi_w_m2?: number | null
+          dni_w_m2?: number | null
           estimated_kwh?: number
           forecast_date: string
           hour_timestamp: string
           id?: string
+          legacy_ai_adjusted_kwh?: number | null
+          legacy_estimated_kwh?: number | null
+          legacy_poa_w_m2?: number | null
           location_id: string
           peak_power_kwp?: number
+          poa_w_m2?: number | null
           radiation_w_m2?: number
           tenant_id: string
         }
         Update: {
           ai_adjusted_kwh?: number | null
           cloud_cover_pct?: number
+          corrected_ai_adjusted_kwh?: number | null
+          corrected_estimated_kwh?: number | null
           created_at?: string
+          dhi_w_m2?: number | null
+          dni_w_m2?: number | null
           estimated_kwh?: number
           forecast_date?: string
           hour_timestamp?: string
           id?: string
+          legacy_ai_adjusted_kwh?: number | null
+          legacy_estimated_kwh?: number | null
+          legacy_poa_w_m2?: number | null
           location_id?: string
           peak_power_kwp?: number
+          poa_w_m2?: number | null
           radiation_w_m2?: number
           tenant_id?: string
         }
@@ -4705,6 +4729,30 @@ export type Database = {
           bucket: string
           meter_id: string
           power_avg: number
+        }[]
+      }
+      get_pv_forecast_daily_compare: {
+        Args: { p_from_date: string; p_location_id: string; p_to_date: string }
+        Returns: {
+          ai_adjusted_kwh: number
+          corrected_ai_adjusted_kwh: number
+          corrected_estimated_kwh: number
+          day: string
+          estimated_kwh: number
+          legacy_ai_adjusted_kwh: number
+          legacy_estimated_kwh: number
+        }[]
+      }
+      get_pv_forecast_daily_compare_all: {
+        Args: { p_from_date: string; p_tenant_id: string; p_to_date: string }
+        Returns: {
+          ai_adjusted_kwh: number
+          corrected_ai_adjusted_kwh: number
+          corrected_estimated_kwh: number
+          day: string
+          estimated_kwh: number
+          legacy_ai_adjusted_kwh: number
+          legacy_estimated_kwh: number
         }[]
       }
       get_pv_forecast_daily_sums: {
