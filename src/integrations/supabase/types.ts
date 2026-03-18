@@ -3284,6 +3284,7 @@ export type Database = {
       pv_forecast_hourly: {
         Row: {
           ai_adjusted_kwh: number | null
+          cell_temp_c: number | null
           cloud_cover_pct: number
           corrected_ai_adjusted_kwh: number | null
           corrected_estimated_kwh: number | null
@@ -3301,10 +3302,12 @@ export type Database = {
           peak_power_kwp: number
           poa_w_m2: number | null
           radiation_w_m2: number
+          temperature_2m: number | null
           tenant_id: string
         }
         Insert: {
           ai_adjusted_kwh?: number | null
+          cell_temp_c?: number | null
           cloud_cover_pct?: number
           corrected_ai_adjusted_kwh?: number | null
           corrected_estimated_kwh?: number | null
@@ -3322,10 +3325,12 @@ export type Database = {
           peak_power_kwp?: number
           poa_w_m2?: number | null
           radiation_w_m2?: number
+          temperature_2m?: number | null
           tenant_id: string
         }
         Update: {
           ai_adjusted_kwh?: number | null
+          cell_temp_c?: number | null
           cloud_cover_pct?: number
           corrected_ai_adjusted_kwh?: number | null
           corrected_estimated_kwh?: number | null
@@ -3343,6 +3348,7 @@ export type Database = {
           peak_power_kwp?: number
           poa_w_m2?: number | null
           radiation_w_m2?: number
+          temperature_2m?: number | null
           tenant_id?: string
         }
         Relationships: [
