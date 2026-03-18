@@ -17,8 +17,8 @@ import { useTranslation } from "@/hooks/useTranslation";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from "recharts";
 import { supabase } from "@/integrations/supabase/client";
 
-const PV_YELLOW = "hsl(45, 93%, 47%)";
-const ACTUAL_GREEN = "hsl(142, 71%, 45%)";
+const PV_YELLOW = "hsl(var(--energy-strom))";
+const ACTUAL_GREEN = "hsl(var(--accent))";
 
 function toLocalHourKey(ts: string): string {
   const d = new Date(ts);
@@ -155,7 +155,9 @@ export function PvForecastSection({ locationId }: PvForecastSectionProps) {
       };
     }) ?? [];
 
-  // Compute today / tomorrow totals client-side from hourly data (consistent with Dashboard)
+  const weatherSource = forecast?.weather_source ?? null;
+  const dwdReference = forecast?.validation?.dwd_reference ?? null;
+
   const tomorrowLocalStr = (() => {
     const n = new Date();
     n.setDate(n.getDate() + 1);
@@ -198,7 +200,7 @@ export function PvForecastSection({ locationId }: PvForecastSectionProps) {
               {isOpen ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
               <div>
                 <CardTitle className="flex items-center gap-2">
-                  <Sun className="h-5 w-5 text-amber-500" />
+                  <Sun className="h-5 w-5 text-energy-strom" />
                   {T("pv.sectionTitle")}
                   <HelpTooltip text={T("tooltip.pvForecast")} />
                 </CardTitle>
@@ -282,7 +284,7 @@ export function PvForecastSection({ locationId }: PvForecastSectionProps) {
                     <p className="text-xs text-muted-foreground">{T("pv.todayTotal")}</p>
                     <p className="text-2xl font-bold">{computedTodayTotal.toFixed(0)} kWh</p>
                     {Object.keys(actualReadings).length > 0 && (
-                      <p className="text-sm font-semibold text-emerald-600">
+                      <p className="text-sm font-semibold text-accent">
                         {T("pv.actual")}: {Object.values(actualReadings).reduce((s, v) => s + v, 0).toFixed(1)} kWh
                       </p>
                     )}
@@ -306,6 +308,42 @@ export function PvForecastSection({ locationId }: PvForecastSectionProps) {
                     </div>
                   )}
                 </div>
+
+                {(weatherSource || dwdReference) && (
+                  <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-3">
+                    <div className="flex flex-wrap gap-2">
+                      {weatherSource && (
+                        <>
+                          <Badge variant="outline">Quelle: {weatherSource.provider}</Badge>
+                          <Badge variant="outline">Modell: {weatherSource.model}</Badge>
+                          <Badge variant="outline">TZ: {weatherSource.response_timezone}</Badge>
+                        </>
+                      )}
+                      {dwdReference && (
+                        <Badge variant="secondary">DWD-Referenz: {dwdReference.response_timezone}</Badge>
+                      )}
+                    </div>
+
+                    {weatherSource && (
+                      <p className="text-xs text-muted-foreground">
+                        {weatherSource.profile} · {weatherSource.requested_coordinates.latitude.toFixed(4)}, {weatherSource.requested_coordinates.longitude.toFixed(4)} · {weatherSource.hourly_variables.join(", ")}
+                      </p>
+                    )}
+
+                    {dwdReference?.hourly_cloud_cover_today?.length ? (
+                      <div className="space-y-2">
+                        <p className="text-xs text-muted-foreground">DWD Cloud Cover heute</p>
+                        <div className="flex flex-wrap gap-1">
+                          {dwdReference.hourly_cloud_cover_today.map((entry) => (
+                            <span key={entry.timestamp} className="rounded-md border border-border bg-background px-2 py-1 text-[11px] text-foreground">
+                              {entry.timestamp.split("T")[1]?.slice(0, 5)} {entry.cloud_cover_pct}%
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+                )}
 
                 <div>
                   <h4 className="text-sm font-medium mb-2">{T("pv.chartTitle")}{hasActual ? ` ${T("pv.vsActual")}` : ""}</h4>
@@ -339,7 +377,7 @@ export function PvForecastSection({ locationId }: PvForecastSectionProps) {
 
                 {forecast.summary.ai_notes && (
                   <p className="text-sm text-muted-foreground bg-muted/50 rounded-lg p-3 flex items-start gap-2">
-                    <Sparkles className="h-4 w-4 mt-0.5 flex-shrink-0 text-amber-500" />
+                    <Sparkles className="h-4 w-4 mt-0.5 flex-shrink-0 text-energy-strom" />
                     {forecast.summary.ai_notes}
                   </p>
                 )}

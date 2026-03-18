@@ -26,8 +26,8 @@ interface PvForecastWidgetProps {
   onCollapse?: () => void;
 }
 
-const PV_YELLOW = "hsl(45, 93%, 47%)";
-const ACTUAL_GREEN = "hsl(142, 71%, 45%)";
+const PV_YELLOW = "hsl(var(--energy-strom))";
+const ACTUAL_GREEN = "hsl(var(--accent))";
 
 /** Convert a UTC ISO timestamp to a local-hour key like "2026-02-22T16" */
 function toLocalHourKey(ts: string): string {
@@ -411,7 +411,7 @@ const PvForecastWidget = ({ locationId }: PvForecastWidgetProps) => {
   if (isLoading) {
     return (
       <Card>
-        <CardHeader><CardTitle className="flex items-center gap-2"><Sun className="h-5 w-5 text-amber-500" />{T("dashboard.pvForecast")}</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="flex items-center gap-2"><Sun className="h-5 w-5 text-energy-strom" />{T("dashboard.pvForecast")}</CardTitle></CardHeader>
         <CardContent><Skeleton className="h-48 w-full" /></CardContent>
       </Card>
     );
@@ -420,13 +420,15 @@ const PvForecastWidget = ({ locationId }: PvForecastWidgetProps) => {
   if (!forecast && !needsDbForecast && !isLoading) {
     return (
       <Card>
-        <CardHeader><CardTitle className="flex items-center gap-2"><Sun className="h-5 w-5 text-amber-500" />{T("dashboard.pvForecast")}</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="flex items-center gap-2"><Sun className="h-5 w-5 text-energy-strom" />{T("dashboard.pvForecast")}</CardTitle></CardHeader>
         <CardContent><p className="text-muted-foreground text-sm">{T("pv.noDataAvailable")}</p></CardContent>
       </Card>
     );
   }
 
   const { summary } = forecast ?? { summary: { ai_confidence: "", ai_notes: "" } };
+  const weatherSource = forecast?.weather_source ?? null;
+  const dwdReference = forecast?.validation?.dwd_reference ?? null;
 
   const liveHourly = forecast?.hourly ?? [];
   const dayHourly = isDay && offset < 0 && dbHourlyData
@@ -452,10 +454,7 @@ const PvForecastWidget = ({ locationId }: PvForecastWidgetProps) => {
       }))
     : [];
 
-  const now = new Date();
   const currentKw = realtimePowerKw ?? 0;
-
-  // Compute actual daily total from readings
   const actualTotalKwh = isDay
     ? Object.values(actualReadings).reduce((sum, v) => sum + v, 0)
     : Object.values(multiDayActuals).reduce((sum, v) => sum + v, 0);
@@ -463,7 +462,6 @@ const PvForecastWidget = ({ locationId }: PvForecastWidgetProps) => {
     ? Object.keys(actualReadings).length > 0
     : hasMultiDayActuals;
 
-  // Compute forecast total for the selected day
   const forecastDayTotal = isDay
     ? filteredHourly.reduce((sum, h) => sum + (h.ai_adjusted_kwh ?? h.estimated_kwh), 0)
     : multiDayChart.reduce((sum, d) => sum + d.prognose, 0);
@@ -487,7 +485,7 @@ const PvForecastWidget = ({ locationId }: PvForecastWidgetProps) => {
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
           <CardTitle className="flex items-center gap-2 text-lg">
-            <Sun className="h-5 w-5 text-amber-500" />
+            <Sun className="h-5 w-5 text-energy-strom" />
             {t("dashboard.pvForecast" as any)}
             <HelpTooltip text={t("tooltip.pvForecastWidget" as any)} />
           </CardTitle>
@@ -528,18 +526,54 @@ const PvForecastWidget = ({ locationId }: PvForecastWidgetProps) => {
           {isToday && (
             <div>
               <p className="text-xs text-muted-foreground">{T("pv.now")}</p>
-              <p className="text-xl font-bold text-amber-600">{formatEnergy(currentKw * 1000, "W")}</p>
+              <p className="text-xl font-bold text-energy-strom">{formatEnergy(currentKw * 1000, "W")}</p>
             </div>
           )}
           <div>
             <p className="text-xs text-muted-foreground">{isDay ? (isToday ? T("pv.todayForecast") : T("pv.dateForecast").replace("{date}", format(refDate, "d. MMM", { locale: dateLocale }))) : T("pv.periodForecast").replace("{period}", T(PERIOD_LABEL_KEYS[selectedPeriod]))}</p>
-            <p className="text-xl font-bold text-amber-600">{forecastDayTotal > 0 ? `${forecastDayTotal.toFixed(0)} kWh` : "–"}</p>
+            <p className="text-xl font-bold text-energy-strom">{forecastDayTotal > 0 ? `${forecastDayTotal.toFixed(0)} kWh` : "–"}</p>
           </div>
           <div>
             <p className="text-xs text-muted-foreground">{isDay ? (isToday ? T("pv.todayActual") : T("pv.dateActual").replace("{date}", format(refDate, "d. MMM", { locale: dateLocale }))) : T("pv.periodActual").replace("{period}", T(PERIOD_LABEL_KEYS[selectedPeriod]))}</p>
-            <p className="text-xl font-bold text-emerald-600">{hasActualTotal ? `${actualTotalKwh.toFixed(1)} kWh` : "–"}</p>
+            <p className="text-xl font-bold text-accent">{hasActualTotal ? `${actualTotalKwh.toFixed(1)} kWh` : "–"}</p>
           </div>
         </div>
+
+        {isToday && (weatherSource || dwdReference) && (
+          <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-3">
+            <div className="flex flex-wrap gap-2">
+              {weatherSource && (
+                <>
+                  <Badge variant="outline">Quelle: {weatherSource.provider}</Badge>
+                  <Badge variant="outline">Modell: {weatherSource.model}</Badge>
+                  <Badge variant="outline">TZ: {weatherSource.response_timezone}</Badge>
+                </>
+              )}
+              {dwdReference && (
+                <Badge variant="secondary">DWD-Referenz: {dwdReference.response_timezone}</Badge>
+              )}
+            </div>
+
+            {weatherSource && (
+              <p className="text-xs text-muted-foreground">
+                {weatherSource.profile} · {weatherSource.requested_coordinates.latitude.toFixed(4)}, {weatherSource.requested_coordinates.longitude.toFixed(4)} · {weatherSource.hourly_variables.join(", ")}
+              </p>
+            )}
+
+            {dwdReference?.hourly_cloud_cover_today?.length ? (
+              <div className="space-y-2">
+                <p className="text-xs text-muted-foreground">DWD Cloud Cover heute</p>
+                <div className="flex flex-wrap gap-1">
+                  {dwdReference.hourly_cloud_cover_today.map((entry) => (
+                    <span key={entry.timestamp} className="rounded-md border border-border bg-background px-2 py-1 text-[11px] text-foreground">
+                      {entry.timestamp.split("T")[1]?.slice(0, 5)} {entry.cloud_cover_pct}%
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+          </div>
+        )}
 
         {hasData ? (
           isDay && chartData ? (
