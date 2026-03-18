@@ -19,7 +19,6 @@ import { supabase } from "@/integrations/supabase/client";
 
 const PV_YELLOW = "hsl(var(--energy-strom))";
 const ACTUAL_GREEN = "hsl(var(--accent))";
-const LEGACY_FORECAST = "hsl(var(--muted-foreground))";
 
 function toLocalHourKey(ts: string): string {
   const d = new Date(ts);
@@ -31,12 +30,10 @@ function toLocalTime(ts: string): string {
   return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 }
 
-function getCorrectedValue(h: any) {
-  return h.corrected_ai_adjusted_kwh ?? h.ai_adjusted_kwh ?? h.corrected_estimated_kwh ?? h.estimated_kwh ?? 0;
-}
-
-function getLegacyValue(h: any) {
-  return h.legacy_ai_adjusted_kwh ?? h.legacy_estimated_kwh ?? h.estimated_kwh ?? 0;
+function getDisplayValue(hour: { ai_adjusted_kwh?: number | null; estimated_kwh?: number | null }) {
+  return hour.ai_adjusted_kwh != null && hour.ai_adjusted_kwh > 0
+    ? hour.ai_adjusted_kwh
+    : hour.estimated_kwh ?? 0;
 }
 
 function formatDeltaPercent(reference: number | null, actual: number | null) {
@@ -58,13 +55,13 @@ export function PvForecastSection({ locationId }: PvForecastSectionProps) {
   const { meters } = useMeters(locationId);
   const [actualReadings, setActualReadings] = useState<Record<string, number>>({});
 
-  const solarMeters = meters.filter((m) => m.meter_function === "generation" || m.energy_type === "solar" || m.energy_type === "pv" || m.energy_type === "strom" && m.meter_function === "generation");
+  const solarMeters = meters.filter((meter) => meter.meter_function === "generation" || meter.energy_type === "solar" || meter.energy_type === "pv" || meter.energy_type === "strom" && meter.meter_function === "generation");
 
   const [form, setForm] = useState({
     peak_power_kwp: 10,
     tilt_deg: 30,
     azimuth_deg: 180,
-    performance_ratio: 0.85,
+    performance_ratio: 0.8,
     pv_meter_id: "" as string,
     is_active: true,
   });
@@ -75,7 +72,7 @@ export function PvForecastSection({ locationId }: PvForecastSectionProps) {
         peak_power_kwp: settings.peak_power_kwp,
         tilt_deg: settings.tilt_deg,
         azimuth_deg: settings.azimuth_deg,
-        performance_ratio: settings.performance_ratio ?? 0.85,
+        performance_ratio: settings.performance_ratio ?? 0.8,
         pv_meter_id: settings.pv_meter_id || "",
         is_active: settings.is_active,
       });
@@ -91,7 +88,7 @@ export function PvForecastSection({ locationId }: PvForecastSectionProps) {
     (async () => {
       const allData: { power_value: number; recorded_at: string }[] = [];
       let from = 0;
-      const PAGE = 1000;
+      const pageSize = 1000;
       while (true) {
         const { data: page } = await supabase
           .from("meter_power_readings")
@@ -99,11 +96,11 @@ export function PvForecastSection({ locationId }: PvForecastSectionProps) {
           .eq("meter_id", meterId)
           .gte("recorded_at", todayStart.toISOString())
           .order("recorded_at", { ascending: true })
-          .range(from, from + PAGE - 1);
+          .range(from, from + pageSize - 1);
         if (!page || page.length === 0) break;
         allData.push(...page);
-        if (page.length < PAGE) break;
-        from += PAGE;
+        if (page.length < pageSize) break;
+        from += pageSize;
       }
 
       if (!allData.length) {
@@ -113,17 +110,18 @@ export function PvForecastSection({ locationId }: PvForecastSectionProps) {
 
       allData.sort((a, b) => a.recorded_at.localeCompare(b.recorded_at));
       const hourBuckets: Record<string, number> = {};
-      for (let i = 0; i < allData.length; i++) {
-        const r = allData[i];
-        const hour = toLocalHourKey(r.recorded_at);
+      for (let index = 0; index < allData.length; index += 1) {
+        const reading = allData[index];
+        const hour = toLocalHourKey(reading.recorded_at);
         let intervalMin = 5;
-        if (i < allData.length - 1) {
-          const gap = (new Date(allData[i + 1].recorded_at).getTime() - new Date(r.recorded_at).getTime()) / 60000;
+        if (index < allData.length - 1) {
+          const gap = (new Date(allData[index + 1].recorded_at).getTime() - new Date(reading.recorded_at).getTime()) / 60000;
           if (gap > 0 && gap <= 15) intervalMin = gap;
         }
-        const energyKwh = r.power_value * (intervalMin / 60);
+        const energyKwh = reading.power_value * (intervalMin / 60);
         hourBuckets[hour] = (hourBuckets[hour] ?? 0) + energyKwh;
       }
+
       const result: Record<string, number> = {};
       for (const [hour, kwh] of Object.entries(hourBuckets)) result[hour] = Math.round(kwh * 100) / 100;
       setActualReadings(result);
@@ -141,42 +139,39 @@ export function PvForecastSection({ locationId }: PvForecastSectionProps) {
 
   const dayNames = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
   const todayLocalStr = (() => {
-    const n = new Date();
-    return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}-${String(n.getDate()).padStart(2, "0")}`;
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
   })();
   const tomorrowLocalStr = (() => {
-    const n = new Date();
-    n.setDate(n.getDate() + 1);
-    return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}-${String(n.getDate()).padStart(2, "0")}`;
+    const now = new Date();
+    now.setDate(now.getDate() + 1);
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
   })();
 
-  const chartData = forecast?.hourly
-    .map((h) => {
-      const d = new Date(h.timestamp);
-      const dayLabel = `${dayNames[d.getDay()]} ${d.getDate()}.${d.getMonth() + 1}.`;
-      const hourKey = toLocalHourKey(h.timestamp);
-      return {
-        time: toLocalTime(h.timestamp),
-        dayLabel,
-        dateStr: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`,
-        alt: getLegacyValue(h),
-        neu: getCorrectedValue(h),
-        ist: actualReadings[hourKey] ?? null,
-        cloud: h.cloud_cover_pct,
-        radiation: h.radiation_w_m2,
-        poa: h.poa_w_m2 ?? null,
-        dni: h.dni_w_m2 ?? null,
-      };
-    }) ?? [];
+  const chartData = forecast?.hourly.map((hour) => {
+    const date = new Date(hour.timestamp);
+    const hourKey = toLocalHourKey(hour.timestamp);
+    return {
+      time: toLocalTime(hour.timestamp),
+      dayLabel: `${dayNames[date.getDay()]} ${date.getDate()}.${date.getMonth() + 1}.`,
+      dateStr: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`,
+      forecast: getDisplayValue(hour),
+      actual: actualReadings[hourKey] ?? null,
+      cloud: hour.cloud_cover_pct,
+      radiation: hour.radiation_w_m2,
+      poa: hour.poa_w_m2 ?? null,
+      dhi: hour.dhi_w_m2 ?? null,
+      moduleTemp: hour.cell_temp_c ?? null,
+      ambientTemp: hour.temperature_2m ?? null,
+    };
+  }) ?? [];
 
   const weatherSource = forecast?.weather_source ?? null;
   const dwdReference = forecast?.validation?.dwd_reference ?? null;
-  const computedTodayLegacyTotal = chartData.filter((d) => d.dateStr === todayLocalStr).reduce((s, d) => s + d.alt, 0);
-  const computedTodayCorrectedTotal = chartData.filter((d) => d.dateStr === todayLocalStr).reduce((s, d) => s + d.neu, 0);
-  const computedTomorrowCorrectedTotal = chartData.filter((d) => d.dateStr === tomorrowLocalStr).reduce((s, d) => s + d.neu, 0);
-  const actualTodayTotal = Object.values(actualReadings).reduce((s, v) => s + v, 0);
-  const legacyDelta = formatDeltaPercent(computedTodayLegacyTotal, actualTodayTotal || null);
-  const correctedDelta = formatDeltaPercent(computedTodayCorrectedTotal, actualTodayTotal || null);
+  const computedTodayTotal = chartData.filter((entry) => entry.dateStr === todayLocalStr).reduce((sum, entry) => sum + entry.forecast, 0);
+  const computedTomorrowTotal = chartData.filter((entry) => entry.dateStr === tomorrowLocalStr).reduce((sum, entry) => sum + entry.forecast, 0);
+  const actualTodayTotal = Object.values(actualReadings).reduce((sum, value) => sum + value, 0);
+  const delta = formatDeltaPercent(computedTodayTotal, actualTodayTotal || null);
   const hasActual = Object.keys(actualReadings).length > 0;
 
   const CustomXTick = ({ x, y, payload }: any) => {
@@ -218,7 +213,7 @@ export function PvForecastSection({ locationId }: PvForecastSectionProps) {
             {isAdmin && (
               <div className="border rounded-lg p-4 space-y-4">
                 <h4 className="font-medium text-sm">{T("pv.settings")}</h4>
-                <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   <div>
                     <Label className="flex items-center gap-1">{T("pv.peakPower")} <HelpTooltip text={T("tooltip.pvPeakPower")} iconSize={12} /></Label>
                     <Input type="number" value={form.peak_power_kwp} onChange={(e) => setForm({ ...form, peak_power_kwp: Number(e.target.value) })} />
@@ -226,40 +221,33 @@ export function PvForecastSection({ locationId }: PvForecastSectionProps) {
                   <div>
                     <Label className="flex items-center gap-1">{T("pv.tilt")} <HelpTooltip text={T("tooltip.pvTilt")} iconSize={12} /></Label>
                     <Input type="number" min={0} max={90} value={form.tilt_deg} onChange={(e) => {
-                      const v = Number(e.target.value);
-                      setForm({ ...form, tilt_deg: Math.min(90, Math.max(0, v)) });
+                      const value = Number(e.target.value);
+                      setForm({ ...form, tilt_deg: Math.min(90, Math.max(0, value)) });
                     }} />
                   </div>
                   <div>
                     <Label className="flex items-center gap-1">{T("pv.azimuth")} <HelpTooltip text={T("tooltip.pvAzimuth")} iconSize={12} /></Label>
                     <Input type="number" min={0} max={360} value={form.azimuth_deg} onChange={(e) => {
-                      const v = Number(e.target.value);
-                      setForm({ ...form, azimuth_deg: Math.min(360, Math.max(0, v)) });
+                      const value = Number(e.target.value);
+                      setForm({ ...form, azimuth_deg: Math.min(360, Math.max(0, value)) });
                     }} />
                   </div>
                   <div>
                     <Label className="flex items-center gap-1">{T("pv.meter")} <HelpTooltip text={T("tooltip.pvMeter")} iconSize={12} /></Label>
-                    <Select value={form.pv_meter_id || "__none__"} onValueChange={(v) => setForm({ ...form, pv_meter_id: v === "__none__" ? "" : v })}>
+                    <Select value={form.pv_meter_id || "__none__"} onValueChange={(value) => setForm({ ...form, pv_meter_id: value === "__none__" ? "" : value })}>
                       <SelectTrigger><SelectValue placeholder="Optional" /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="__none__">{T("pv.none")}</SelectItem>
-                        {solarMeters.map((m) => (
-                          <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
+                        {solarMeters.map((meter) => (
+                          <SelectItem key={meter.id} value={meter.id}>{meter.name}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                   </div>
-                  <div>
-                    <Label className="flex items-center gap-1">Performance Ratio <HelpTooltip text="Systemwirkungsgrad (0.70–0.95)." iconSize={12} /></Label>
-                    <Input type="number" min={0.5} max={1} step={0.01} value={form.performance_ratio} onChange={(e) => {
-                      const v = Number(e.target.value);
-                      setForm({ ...form, performance_ratio: Math.min(1, Math.max(0.5, v)) });
-                    }} />
-                  </div>
                 </div>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <Switch checked={form.is_active} onCheckedChange={(v) => setForm({ ...form, is_active: v })} />
+                    <Switch checked={form.is_active} onCheckedChange={(value) => setForm({ ...form, is_active: value })} />
                     <Label>{T("pv.forecastActive")}</Label>
                   </div>
                   <Button onClick={handleSave} disabled={upsertSettings.isPending || settingsLoading} size="sm">
@@ -274,16 +262,11 @@ export function PvForecastSection({ locationId }: PvForecastSectionProps) {
               <Skeleton className="h-64 w-full" />
             ) : forecast && forecast.summary && forecast.hourly ? (
               <div className="space-y-4">
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                   <div className="border rounded-lg p-3 text-center">
-                    <p className="text-xs text-muted-foreground">Alt-Prognose heute</p>
-                    <p className="text-2xl font-bold" style={{ color: LEGACY_FORECAST }}>{computedTodayLegacyTotal.toFixed(0)} kWh</p>
-                    {legacyDelta != null && <p className="text-xs text-muted-foreground">Δ {legacyDelta > 0 ? "+" : ""}{legacyDelta}%</p>}
-                  </div>
-                  <div className="border rounded-lg p-3 text-center">
-                    <p className="text-xs text-muted-foreground">Neue Prognose heute</p>
-                    <p className="text-2xl font-bold text-energy-strom">{computedTodayCorrectedTotal.toFixed(0)} kWh</p>
-                    {correctedDelta != null && <p className="text-xs text-muted-foreground">Δ {correctedDelta > 0 ? "+" : ""}{correctedDelta}%</p>}
+                    <p className="text-xs text-muted-foreground">{T("dashboard.pvForecast")}</p>
+                    <p className="text-2xl font-bold text-energy-strom">{computedTodayTotal.toFixed(0)} kWh</p>
+                    {delta != null && <p className="text-xs text-muted-foreground">Δ {delta > 0 ? "+" : ""}{delta}%</p>}
                   </div>
                   <div className="border rounded-lg p-3 text-center">
                     <p className="text-xs text-muted-foreground">{T("pv.actual")}</p>
@@ -291,7 +274,7 @@ export function PvForecastSection({ locationId }: PvForecastSectionProps) {
                   </div>
                   <div className="border rounded-lg p-3 text-center">
                     <p className="text-xs text-muted-foreground">{T("pv.tomorrowTotal")}</p>
-                    <p className="text-2xl font-bold">{computedTomorrowCorrectedTotal.toFixed(0)} kWh</p>
+                    <p className="text-2xl font-bold">{computedTomorrowTotal.toFixed(0)} kWh</p>
                     {typeof forecast.summary.ai_correction_factor === "number" && <p className="text-xs text-muted-foreground">KI-Faktor {forecast.summary.ai_correction_factor.toFixed(2)}</p>}
                   </div>
                 </div>
@@ -332,24 +315,22 @@ export function PvForecastSection({ locationId }: PvForecastSectionProps) {
                 )}
 
                 <div>
-                  <h4 className="text-sm font-medium mb-2">Alt vs. Neu vs. Ist</h4>
+                  <h4 className="text-sm font-medium mb-2">{T("dashboard.pvForecast")} vs. {T("pv.actual")}</h4>
                   <ResponsiveContainer width="100%" height={260}>
                     <BarChart data={chartData} margin={{ left: -10, bottom: 30 }}>
                       <CartesianGrid strokeDasharray="3 3" />
                       <XAxis dataKey="time" tick={<CustomXTick />} interval={2} height={55} />
                       <YAxis tick={{ fontSize: 10 }} width={35} label={{ value: "kWh", angle: -90, position: "insideLeft", style: { fontSize: 10 } }} />
                       <Tooltip
-                        formatter={(v: number, name: string) => {
-                          if (name === "alt") return [`${v.toFixed(2)} kWh`, "Alt-Prognose"];
-                          if (name === "neu") return [`${v.toFixed(2)} kWh`, "Neue Prognose"];
-                          if (name === "ist") return [`${v.toFixed(2)} kWh`, T("pv.actualGeneration")];
-                          return [v, name];
+                        formatter={(value: number, name: string) => {
+                          if (name === "forecast") return [`${value.toFixed(2)} kWh`, T("dashboard.pvForecast")];
+                          if (name === "actual") return [`${value.toFixed(2)} kWh`, T("pv.actualGeneration")];
+                          return [value, name];
                         }}
                       />
-                      <Legend formatter={(v) => v === "alt" ? "Alt-Prognose" : v === "neu" ? "Neue Prognose" : T("pv.actualGeneration")} />
-                      <Bar dataKey="alt" fill={LEGACY_FORECAST} radius={[2, 2, 0, 0]} />
-                      <Bar dataKey="neu" fill={PV_YELLOW} radius={[2, 2, 0, 0]} />
-                      {hasActual && <Bar dataKey="ist" fill={ACTUAL_GREEN} radius={[2, 2, 0, 0]} />}
+                      <Legend formatter={(value) => value === "forecast" ? T("dashboard.pvForecast") : T("pv.actualGeneration")} />
+                      <Bar dataKey="forecast" fill={PV_YELLOW} radius={[2, 2, 0, 0]} />
+                      {hasActual && <Bar dataKey="actual" fill={ACTUAL_GREEN} radius={[2, 2, 0, 0]} />}
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
