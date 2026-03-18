@@ -26,8 +26,8 @@ interface PvForecastWidgetProps {
   onCollapse?: () => void;
 }
 
-const PV_YELLOW = "hsl(45, 93%, 47%)";
-const ACTUAL_GREEN = "hsl(142, 71%, 45%)";
+const PV_YELLOW = "hsl(var(--energy-strom))";
+const ACTUAL_GREEN = "hsl(var(--accent))";
 
 /** Convert a UTC ISO timestamp to a local-hour key like "2026-02-22T16" */
 function toLocalHourKey(ts: string): string {

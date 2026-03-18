@@ -17,8 +17,8 @@ import { useTranslation } from "@/hooks/useTranslation";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from "recharts";
 import { supabase } from "@/integrations/supabase/client";
 
-const PV_YELLOW = "hsl(45, 93%, 47%)";
-const ACTUAL_GREEN = "hsl(142, 71%, 45%)";
+const PV_YELLOW = "hsl(var(--energy-strom))";
+const ACTUAL_GREEN = "hsl(var(--accent))";
 
 function toLocalHourKey(ts: string): string {
   const d = new Date(ts);
