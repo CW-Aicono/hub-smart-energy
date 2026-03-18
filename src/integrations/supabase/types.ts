@@ -3372,6 +3372,9 @@ export type Database = {
           peak_power_kwp: number
           performance_ratio: number
           pv_meter_id: string | null
+          recalibration_baseline_started_at: string | null
+          recalibration_locked: boolean
+          recalibration_locked_until: string | null
           tenant_id: string
           tilt_deg: number | null
           updated_at: string
@@ -3385,6 +3388,9 @@ export type Database = {
           peak_power_kwp?: number
           performance_ratio?: number
           pv_meter_id?: string | null
+          recalibration_baseline_started_at?: string | null
+          recalibration_locked?: boolean
+          recalibration_locked_until?: string | null
           tenant_id: string
           tilt_deg?: number | null
           updated_at?: string
@@ -3398,6 +3404,9 @@ export type Database = {
           peak_power_kwp?: number
           performance_ratio?: number
           pv_meter_id?: string | null
+          recalibration_baseline_started_at?: string | null
+          recalibration_locked?: boolean
+          recalibration_locked_until?: string | null
           tenant_id?: string
           tilt_deg?: number | null
           updated_at?: string
