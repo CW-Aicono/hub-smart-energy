@@ -28,6 +28,50 @@ serve(async (req) => {
       });
     }
 
+    const FORECAST_ENDPOINT = "https://api.open-meteo.com/v1/forecast";
+    const WEATHER_MODEL = "icon_seamless";
+    const WEATHER_VARIABLES = [
+      "shortwave_radiation",
+      "direct_normal_irradiance",
+      "diffuse_radiation",
+      "cloud_cover",
+      "temperature_2m",
+    ];
+    const FORECAST_TIMEZONE = "Europe/Berlin";
+    const FORECAST_DAYS = 2;
+    const DWD_REFERENCE_TIMEZONE = "GMT";
+    const DWD_REFERENCE_DAYS = 1;
+
+    const buildWeatherUrl = ({
+      latitude,
+      longitude,
+      hourly,
+      forecastDays,
+      timezone,
+    }: {
+      latitude: number;
+      longitude: number;
+      hourly: string[];
+      forecastDays: number;
+      timezone: string;
+    }) => {
+      const params = new URLSearchParams({
+        latitude: String(latitude),
+        longitude: String(longitude),
+        hourly: hourly.join(","),
+        models: WEATHER_MODEL,
+        forecast_days: String(forecastDays),
+        timezone,
+      });
+
+      return `${FORECAST_ENDPOINT}?${params.toString()}`;
+    };
+
+    const getTodayKeyForTimezone = (timeZone: string) => {
+      const normalizedTimeZone = timeZone === "GMT" ? "UTC" : timeZone;
+      return new Date().toLocaleString("sv-SE", { timeZone: normalizedTimeZone }).slice(0, 10);
+    };
+
     const { location_id } = await req.json();
     if (!location_id) throw new Error("location_id is required");
 
@@ -50,24 +94,106 @@ serve(async (req) => {
       .eq("is_active", true)
       .maybeSingle();
 
+    const meteoUrl = buildWeatherUrl({
+      latitude: location.latitude,
+      longitude: location.longitude,
+      hourly: WEATHER_VARIABLES,
+      forecastDays: FORECAST_DAYS,
+      timezone: FORECAST_TIMEZONE,
+    });
+
+    const dwdReferenceUrl = buildWeatherUrl({
+      latitude: location.latitude,
+      longitude: location.longitude,
+      hourly: ["cloud_cover"],
+      forecastDays: DWD_REFERENCE_DAYS,
+      timezone: DWD_REFERENCE_TIMEZONE,
+    });
+
+    const [meteoRes, dwdReferenceRes] = await Promise.all([fetch(meteoUrl), fetch(dwdReferenceUrl)]);
+    if (!meteoRes.ok) throw new Error("Open-Meteo API error");
+
+    const meteo = await meteoRes.json();
+    let dwdReference: any = null;
+
+    if (dwdReferenceRes.ok) {
+      dwdReference = await dwdReferenceRes.json();
+    } else {
+      console.error("DWD reference fetch failed:", dwdReferenceRes.status, await dwdReferenceRes.text());
+    }
+
+    const weatherSource = {
+      provider: "Open-Meteo",
+      profile: "PV-Erzeugungsprognose",
+      model: WEATHER_MODEL,
+      endpoint: FORECAST_ENDPOINT,
+      request_timezone: FORECAST_TIMEZONE,
+      response_timezone: meteo.timezone ?? FORECAST_TIMEZONE,
+      forecast_days: FORECAST_DAYS,
+      hourly_variables: WEATHER_VARIABLES,
+      requested_url: meteoUrl,
+      requested_coordinates: {
+        latitude: location.latitude,
+        longitude: location.longitude,
+      },
+      resolved_coordinates: {
+        latitude: meteo.latitude ?? location.latitude,
+        longitude: meteo.longitude ?? location.longitude,
+      },
+    };
+
+    const dwdReferenceProfile = dwdReference
+      ? {
+          provider: "Open-Meteo",
+          profile: "DWD-Cloud-Cover-Referenz",
+          model: WEATHER_MODEL,
+          endpoint: FORECAST_ENDPOINT,
+          request_timezone: DWD_REFERENCE_TIMEZONE,
+          response_timezone: dwdReference.timezone ?? DWD_REFERENCE_TIMEZONE,
+          forecast_days: DWD_REFERENCE_DAYS,
+          hourly_variables: ["cloud_cover"],
+          requested_url: dwdReferenceUrl,
+          requested_coordinates: {
+            latitude: location.latitude,
+            longitude: location.longitude,
+          },
+          resolved_coordinates: {
+            latitude: dwdReference.latitude ?? location.latitude,
+            longitude: dwdReference.longitude ?? location.longitude,
+          },
+          hourly_cloud_cover_today: (dwdReference.hourly?.time ?? [])
+            .map((timestamp: string, index: number) => ({
+              timestamp,
+              cloud_cover_pct: dwdReference.hourly?.cloud_cover?.[index] ?? 0,
+            }))
+            .filter((entry: { timestamp: string }) => entry.timestamp.startsWith(getTodayKeyForTimezone(dwdReference.timezone ?? DWD_REFERENCE_TIMEZONE))),
+        }
+      : null;
+
     // If no active PV settings exist for this location, return empty forecast
     if (!settings) {
       return new Response(JSON.stringify({
         location: { name: location.name, city: location.city ?? "" },
+        settings: { peak_power_kwp: 0, tilt_deg: 0, azimuth_deg: 0 },
         hourly: [],
-        summary: { total_kwh: 0, ai_confidence: "", ai_notes: "" },
+        summary: {
+          today_total_kwh: 0,
+          tomorrow_total_kwh: 0,
+          peak_hour: null,
+          peak_kwh: 0,
+          ai_confidence: "",
+          ai_notes: "",
+          performance_ratio: 0,
+          pr_auto_updated: false,
+        },
+        weather_source: weatherSource,
+        validation: { dwd_reference: dwdReferenceProfile },
       }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
     const peakKwp = settings.peak_power_kwp;
     const tiltDeg = settings.tilt_deg;
     const azimuthDeg = settings.azimuth_deg;
-
-    // 3. Fetch Open-Meteo solar radiation forecast (48h) – now including DNI and temperature
-    const meteoUrl = `https://api.open-meteo.com/v1/forecast?latitude=${location.latitude}&longitude=${location.longitude}&hourly=shortwave_radiation,direct_normal_irradiance,diffuse_radiation,cloud_cover,temperature_2m&timezone=Europe/Berlin&forecast_days=2`;
-    const meteoRes = await fetch(meteoUrl);
-    if (!meteoRes.ok) throw new Error("Open-Meteo API error");
-    const meteo = await meteoRes.json();
 
     const times: string[] = meteo.hourly.time;
     const ghi: number[] = meteo.hourly.shortwave_radiation;
@@ -92,7 +218,6 @@ serve(async (req) => {
           .order("period_start", { ascending: true });
 
         if (history && history.length >= 7) {
-          // Fetch stored forecast data for the same period to compare
           const firstDay = history[0].period_start.slice(0, 10);
           const lastDay = history[history.length - 1].period_start.slice(0, 10);
 
@@ -104,14 +229,12 @@ serve(async (req) => {
             .lte("forecast_date", lastDay);
 
           if (forecastHistory && forecastHistory.length > 0) {
-            // Sum forecast by day (estimated_kwh uses the stored PR)
             const forecastByDay = new Map<string, number>();
             for (const fh of forecastHistory) {
               const day = fh.forecast_date;
               forecastByDay.set(day, (forecastByDay.get(day) ?? 0) + fh.estimated_kwh);
             }
 
-            // Compare actual vs forecast for matching days
             let sumActual = 0;
             let sumForecast = 0;
             let matchedDays = 0;
@@ -126,16 +249,12 @@ serve(async (req) => {
             }
 
             if (matchedDays >= 5 && sumForecast > 0) {
-              // The stored forecasts used the current PR, so the ratio actual/forecast
-              // tells us how much to scale PR
               const ratio = sumActual / sumForecast;
               const newPR = PR * ratio;
-              // Clamp PR to a plausible range (0.5 – 0.95)
               PR = Math.max(0.5, Math.min(0.95, Math.round(newPR * 1000) / 1000));
               prAutoUpdated = true;
               console.log(`Auto-PR: ratio=${ratio.toFixed(3)}, newPR=${PR} (${matchedDays} days matched)`);
 
-              // Persist updated PR (fire-and-forget)
               supabase
                 .from("pv_forecast_settings")
                 .update({ performance_ratio: PR })
@@ -153,8 +272,8 @@ serve(async (req) => {
 
     // 5. Physical model with tilt, azimuth & temperature correction
     const ALBEDO = 0.2;
-    const TEMP_COEFF = -0.004; // −0.4% per °C above 25°C (crystalline silicon)
-    const NOCT = 45; // Nominal Operating Cell Temperature
+    const TEMP_COEFF = -0.004;
+    const NOCT = 45;
     const deg2rad = (d: number) => (d * Math.PI) / 180;
     const tiltRad = deg2rad(tiltDeg);
     const latRad = deg2rad(location.latitude);
@@ -165,14 +284,12 @@ serve(async (req) => {
       return Math.floor((d.getTime() - start.getTime()) / 86400000);
     };
 
-    // Helper: detect if a date is in CEST (last Sunday of March to last Sunday of October)
     const isCEST = (dateStr: string): boolean => {
       const d = new Date(dateStr);
       const year = d.getFullYear();
-      const month = d.getMonth(); // 0-indexed
-      if (month < 2 || month > 9) return false; // Jan/Feb/Nov/Dec → CET
-      if (month > 2 && month < 9) return true;  // Apr–Sep → CEST
-      // March (2) or October (9): find last Sunday
+      const month = d.getMonth();
+      if (month < 2 || month > 9) return false;
+      if (month > 2 && month < 9) return true;
       const lastDay = new Date(year, month + 1, 0).getDate();
       let lastSunday = lastDay;
       while (new Date(year, month, lastSunday).getDay() !== 0) lastSunday--;
@@ -183,64 +300,51 @@ serve(async (req) => {
     const hourly = times.map((ts: string, i: number) => {
       const radiationWm2 = ghi[i] ?? 0;
       const diffuseWm2 = dhi[i] ?? 0;
-
-      // Solar declination (Cooper's equation)
       const doy = dayOfYear(ts);
       const declination = deg2rad(23.45 * Math.sin(deg2rad(360 * (284 + doy) / 365)));
 
-      // True Solar Time with DST-aware reference meridian
       const tsParts = ts.match(/T(\d{2}):(\d{2})/);
       const clockHour = tsParts ? parseInt(tsParts[1]) + parseInt(tsParts[2]) / 60 : 12;
       const B = deg2rad(360 * (doy - 81) / 365);
       const EoT = 9.87 * Math.sin(2 * B) - 7.53 * Math.cos(B) - 1.5 * Math.sin(B);
-      const refMeridian = isCEST(ts) ? 30 : 15; // CEST → 30°E, CET → 15°E
+      const refMeridian = isCEST(ts) ? 30 : 15;
       const longCorrection = 4 * (location.longitude - refMeridian);
       const solarHour = clockHour + (longCorrection + EoT) / 60;
       const hourAngle = deg2rad((solarHour - 12) * 15);
 
-      // Solar altitude angle
       const sinAlt = Math.sin(latRad) * Math.sin(declination)
-                    + Math.cos(latRad) * Math.cos(declination) * Math.cos(hourAngle);
+        + Math.cos(latRad) * Math.cos(declination) * Math.cos(hourAngle);
       const solarAlt = Math.asin(Math.max(-1, Math.min(1, sinAlt)));
 
-      // Solar azimuth angle
       let solarAz = 0;
       if (solarAlt > 0.01) {
         const cosAz = (Math.sin(declination) - Math.sin(solarAlt) * Math.sin(latRad))
-                      / (Math.cos(solarAlt) * Math.cos(latRad));
+          / (Math.cos(solarAlt) * Math.cos(latRad));
         solarAz = Math.acos(Math.max(-1, Math.min(1, cosAz)));
         if (hourAngle < 0) solarAz = -solarAz;
       }
 
       const panelAzRad = deg2rad(azimuthDeg - 180);
-
-      // Angle of incidence on tilted surface
       const cosAOI = Math.sin(solarAlt) * Math.cos(tiltRad)
-                    + Math.cos(solarAlt) * Math.sin(tiltRad) * Math.cos(solarAz - panelAzRad);
+        + Math.cos(solarAlt) * Math.sin(tiltRad) * Math.cos(solarAz - panelAzRad);
 
-      // DNI: use direct_normal_irradiance from API, or derive from GHI-DHI with correction
       let dniValue: number;
       if (dniRaw && dniRaw[i] != null) {
         dniValue = dniRaw[i];
       } else {
-        // Fallback: derive DNI from direct horizontal (GHI - DHI)
         const directHoriz = Math.max(0, radiationWm2 - diffuseWm2);
         const sinAltClamped = Math.max(Math.sin(solarAlt), 0.05);
         dniValue = directHoriz / sinAltClamped;
       }
 
-      // POA irradiance – beam uses DNI directly (not horizontal direct)
       const beam = dniValue * Math.max(0, cosAOI);
       const diffuse = diffuseWm2 * (1 + Math.cos(tiltRad)) / 2;
       const ground = radiationWm2 * ALBEDO * (1 - Math.cos(tiltRad)) / 2;
       const poaWm2 = beam + diffuse + ground;
 
-      // Option 3: Temperature correction
-      // Cell temperature estimate: T_cell = T_ambient + (NOCT - 20) / 800 * GHI
       const ambientTemp = temps[i] ?? 25;
       const cellTemp = ambientTemp + ((NOCT - 20) / 800) * radiationWm2;
-      const tempFactor = 1 + TEMP_COEFF * (cellTemp - 25); // < 1 when hot, > 1 when cold
-
+      const tempFactor = 1 + TEMP_COEFF * (cellTemp - 25);
       const estimatedKwh = (poaWm2 * peakKwp * PR * Math.max(0.5, tempFactor)) / 1000;
 
       return {
@@ -253,7 +357,7 @@ serve(async (req) => {
       };
     });
 
-    // 6. AI calibration (optional) — only if historical data exists AND LOVABLE_API_KEY is set
+    // 6. AI calibration (optional)
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     let aiNotes = "";
     let aiConfidence = "";
@@ -324,8 +428,6 @@ serve(async (req) => {
             if (toolCall) {
               const args = JSON.parse(toolCall.function.arguments);
               let factor = Number(args.correction_factor) || 1;
-
-              // Option 1: CLAMP correction factor to [0.5, 1.5]
               const rawFactor = factor;
               factor = Math.max(0.5, Math.min(1.5, factor));
               if (rawFactor !== factor) {
@@ -335,7 +437,6 @@ serve(async (req) => {
               aiConfidence = args.confidence || "";
               aiNotes = args.notes || "";
 
-              // Apply clamped correction factor
               for (const h of hourly) {
                 h.ai_adjusted_kwh = Math.round(h.estimated_kwh * factor * 100) / 100;
               }
@@ -373,8 +474,7 @@ serve(async (req) => {
 
     // 8. Build summary – use Europe/Berlin date to match Open-Meteo timestamps
     const getValue = (h: typeof hourly[0]) => h.ai_adjusted_kwh ?? h.estimated_kwh;
-
-    const berlinNow = new Date().toLocaleString("sv-SE", { timeZone: "Europe/Berlin" });
+    const berlinNow = new Date().toLocaleString("sv-SE", { timeZone: FORECAST_TIMEZONE });
     const todayStr = berlinNow.slice(0, 10);
     const [tY, tM, tD] = todayStr.split("-").map(Number);
     const tomorrowDt = new Date(tY, tM - 1, tD + 1);
@@ -392,7 +492,7 @@ serve(async (req) => {
     const result = {
       location: { name: location.name, city: location.city },
       settings: { peak_power_kwp: peakKwp, tilt_deg: tiltDeg, azimuth_deg: azimuthDeg },
-      hourly: hourly.map(({ cell_temp_c, ...rest }) => rest), // exclude internal field from response
+      hourly: hourly.map(({ cell_temp_c, ...rest }) => rest),
       summary: {
         today_total_kwh: Math.round(todayTotal * 10) / 10,
         tomorrow_total_kwh: Math.round(tomorrowTotal * 10) / 10,
@@ -402,6 +502,10 @@ serve(async (req) => {
         ai_notes: aiNotes,
         performance_ratio: PR,
         pr_auto_updated: prAutoUpdated,
+      },
+      weather_source: weatherSource,
+      validation: {
+        dwd_reference: dwdReferenceProfile,
       },
     };
 

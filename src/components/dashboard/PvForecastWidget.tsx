@@ -427,6 +427,8 @@ const PvForecastWidget = ({ locationId }: PvForecastWidgetProps) => {
   }
 
   const { summary } = forecast ?? { summary: { ai_confidence: "", ai_notes: "" } };
+  const weatherSource = forecast?.weather_source ?? null;
+  const dwdReference = forecast?.validation?.dwd_reference ?? null;
 
   const liveHourly = forecast?.hourly ?? [];
   const dayHourly = isDay && offset < 0 && dbHourlyData
@@ -452,10 +454,7 @@ const PvForecastWidget = ({ locationId }: PvForecastWidgetProps) => {
       }))
     : [];
 
-  const now = new Date();
   const currentKw = realtimePowerKw ?? 0;
-
-  // Compute actual daily total from readings
   const actualTotalKwh = isDay
     ? Object.values(actualReadings).reduce((sum, v) => sum + v, 0)
     : Object.values(multiDayActuals).reduce((sum, v) => sum + v, 0);
@@ -463,7 +462,6 @@ const PvForecastWidget = ({ locationId }: PvForecastWidgetProps) => {
     ? Object.keys(actualReadings).length > 0
     : hasMultiDayActuals;
 
-  // Compute forecast total for the selected day
   const forecastDayTotal = isDay
     ? filteredHourly.reduce((sum, h) => sum + (h.ai_adjusted_kwh ?? h.estimated_kwh), 0)
     : multiDayChart.reduce((sum, d) => sum + d.prognose, 0);
@@ -540,6 +538,42 @@ const PvForecastWidget = ({ locationId }: PvForecastWidgetProps) => {
             <p className="text-xl font-bold text-emerald-600">{hasActualTotal ? `${actualTotalKwh.toFixed(1)} kWh` : "–"}</p>
           </div>
         </div>
+
+        {isToday && (weatherSource || dwdReference) && (
+          <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-3">
+            <div className="flex flex-wrap gap-2">
+              {weatherSource && (
+                <>
+                  <Badge variant="outline">Quelle: {weatherSource.provider}</Badge>
+                  <Badge variant="outline">Modell: {weatherSource.model}</Badge>
+                  <Badge variant="outline">TZ: {weatherSource.response_timezone}</Badge>
+                </>
+              )}
+              {dwdReference && (
+                <Badge variant="secondary">DWD-Referenz: {dwdReference.response_timezone}</Badge>
+              )}
+            </div>
+
+            {weatherSource && (
+              <p className="text-xs text-muted-foreground">
+                {weatherSource.profile} · {weatherSource.requested_coordinates.latitude.toFixed(4)}, {weatherSource.requested_coordinates.longitude.toFixed(4)} · {weatherSource.hourly_variables.join(", ")}
+              </p>
+            )}
+
+            {dwdReference?.hourly_cloud_cover_today?.length ? (
+              <div className="space-y-2">
+                <p className="text-xs text-muted-foreground">DWD Cloud Cover heute</p>
+                <div className="flex flex-wrap gap-1">
+                  {dwdReference.hourly_cloud_cover_today.map((entry) => (
+                    <span key={entry.timestamp} className="rounded-md border border-border bg-background px-2 py-1 text-[11px] text-foreground">
+                      {entry.timestamp.split("T")[1]?.slice(0, 5)} {entry.cloud_cover_pct}%
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+          </div>
+        )}
 
         {hasData ? (
           isDay && chartData ? (

@@ -11,6 +11,35 @@ export interface PvHourlyEntry {
   ai_adjusted_kwh: number | null;
 }
 
+export interface PvForecastWeatherSource {
+  provider: string;
+  profile: string;
+  model: string;
+  endpoint: string;
+  request_timezone: string;
+  response_timezone: string;
+  forecast_days: number;
+  hourly_variables: string[];
+  requested_url: string;
+  requested_coordinates: {
+    latitude: number;
+    longitude: number;
+  };
+  resolved_coordinates: {
+    latitude: number;
+    longitude: number;
+  };
+}
+
+export interface PvForecastCloudCoverEntry {
+  timestamp: string;
+  cloud_cover_pct: number;
+}
+
+export interface PvForecastValidationProfile extends PvForecastWeatherSource {
+  hourly_cloud_cover_today: PvForecastCloudCoverEntry[];
+}
+
 export interface PvForecast {
   location: { name: string; city: string | null };
   settings: { peak_power_kwp: number; tilt_deg: number; azimuth_deg: number };
@@ -22,7 +51,13 @@ export interface PvForecast {
     peak_kwh: number;
     ai_confidence: string;
     ai_notes: string;
+    performance_ratio?: number;
+    pr_auto_updated?: boolean;
   };
+  weather_source: PvForecastWeatherSource | null;
+  validation: {
+    dwd_reference: PvForecastValidationProfile | null;
+  } | null;
 }
 
 export interface PvForecastSettings {
@@ -40,7 +75,6 @@ export interface PvForecastSettings {
 function aggregateForecasts(forecasts: PvForecast[]): PvForecast {
   if (forecasts.length === 1) return forecasts[0];
 
-  // Build a map of timestamp -> summed values
   const hourlyMap = new Map<string, PvHourlyEntry>();
   for (const fc of forecasts) {
     for (const h of fc.hourly) {
@@ -83,6 +117,8 @@ function aggregateForecasts(forecasts: PvForecast[]): PvForecast {
       ai_confidence: "",
       ai_notes: "",
     },
+    weather_source: null,
+    validation: null,
   };
 }
 
@@ -93,14 +129,71 @@ function buildDemoForecast(locationId: string | null): PvForecast {
     const h = `${todayStr}T${String(i).padStart(2, "0")}:00`;
     const sun = i >= 6 && i <= 20 ? Math.sin(((i - 6) / 14) * Math.PI) : 0;
     const kwh = Math.round(sun * 8.5 * 100) / 100;
-    return { timestamp: h, radiation_w_m2: Math.round(sun * 850), cloud_cover_pct: Math.round(Math.random() * 30), estimated_kwh: kwh, ai_adjusted_kwh: Math.round(kwh * 0.95 * 100) / 100 };
+    return {
+      timestamp: h,
+      radiation_w_m2: Math.round(sun * 850),
+      cloud_cover_pct: Math.round(Math.random() * 30),
+      estimated_kwh: kwh,
+      ai_adjusted_kwh: Math.round(kwh * 0.95 * 100) / 100,
+    };
   });
-  const locName = locationId === "demo-loc-1" ? "Hauptverwaltung" : locationId === "demo-loc-2" ? "Wasserwerk Nord" : locationId === "demo-loc-3" ? "Kläranlage Süd" : locationId === "demo-loc-4" ? "Stadtbücherei" : "Alle Anlagen (4)";
+
+  const locName = locationId === "demo-loc-1"
+    ? "Hauptverwaltung"
+    : locationId === "demo-loc-2"
+      ? "Wasserwerk Nord"
+      : locationId === "demo-loc-3"
+        ? "Kläranlage Süd"
+        : locationId === "demo-loc-4"
+          ? "Stadtbücherei"
+          : "Alle Anlagen (4)";
+
   return {
     location: { name: locName, city: "Musterstadt" },
     settings: { peak_power_kwp: 42, tilt_deg: 30, azimuth_deg: 180 },
     hourly,
-    summary: { today_total_kwh: 48.3, tomorrow_total_kwh: 52.1, peak_hour: `${todayStr}T12:00`, peak_kwh: 8.1, ai_confidence: "hoch", ai_notes: "Klarer Himmel erwartet, leichte Bewölkung am Nachmittag." },
+    summary: {
+      today_total_kwh: 48.3,
+      tomorrow_total_kwh: 52.1,
+      peak_hour: `${todayStr}T12:00`,
+      peak_kwh: 8.1,
+      ai_confidence: "hoch",
+      ai_notes: "Klarer Himmel erwartet, leichte Bewölkung am Nachmittag.",
+      performance_ratio: 0.85,
+      pr_auto_updated: false,
+    },
+    weather_source: {
+      provider: "Open-Meteo",
+      profile: "PV-Erzeugungsprognose (Demo)",
+      model: "icon_seamless",
+      endpoint: "https://api.open-meteo.com/v1/forecast",
+      request_timezone: "Europe/Berlin",
+      response_timezone: "Europe/Berlin",
+      forecast_days: 1,
+      hourly_variables: ["shortwave_radiation", "direct_normal_irradiance", "diffuse_radiation", "cloud_cover", "temperature_2m"],
+      requested_url: "demo://pv-forecast",
+      requested_coordinates: { latitude: 52.09, longitude: 7.42 },
+      resolved_coordinates: { latitude: 52.09, longitude: 7.42 },
+    },
+    validation: {
+      dwd_reference: {
+        provider: "Open-Meteo",
+        profile: "DWD-Cloud-Cover-Referenz (Demo)",
+        model: "icon_seamless",
+        endpoint: "https://api.open-meteo.com/v1/forecast",
+        request_timezone: "GMT",
+        response_timezone: "GMT",
+        forecast_days: 1,
+        hourly_variables: ["cloud_cover"],
+        requested_url: "demo://pv-forecast-reference",
+        requested_coordinates: { latitude: 52.09, longitude: 7.42 },
+        resolved_coordinates: { latitude: 52.09, longitude: 7.42 },
+        hourly_cloud_cover_today: hourly.map((entry) => ({
+          timestamp: entry.timestamp,
+          cloud_cover_pct: entry.cloud_cover_pct,
+        })),
+      },
+    },
   };
 }
 
