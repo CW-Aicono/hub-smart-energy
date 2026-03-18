@@ -27,7 +27,7 @@ interface PvForecastWidgetProps {
 }
 
 const PV_YELLOW = "hsl(var(--energy-strom))";
-const ACTUAL_GREEN = "hsl(var(--accent))";
+const ACTUAL_GREEN = "hsl(var(--pv-actual))";
 
 function toLocalHourKey(ts: string): string {
   const d = new Date(ts);
