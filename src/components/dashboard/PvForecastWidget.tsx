@@ -413,7 +413,19 @@ const PvForecastWidget = ({ locationId }: PvForecastWidgetProps) => {
     );
   }
 
-  const { summary } = forecast ?? { summary: { ai_confidence: "", ai_notes: "" } };
+  const summary = forecast?.summary ?? {
+    today_total_kwh: 0,
+    tomorrow_total_kwh: 0,
+    peak_hour: null,
+    peak_kwh: 0,
+    ai_confidence: "",
+    ai_notes: "",
+    legacy_today_total_kwh: 0,
+    corrected_today_total_kwh: 0,
+    legacy_tomorrow_total_kwh: 0,
+    corrected_tomorrow_total_kwh: 0,
+    ai_correction_factor: undefined,
+  };
   const weatherSource = forecast?.weather_source ?? null;
   const dwdReference = forecast?.validation?.dwd_reference ?? null;
 
