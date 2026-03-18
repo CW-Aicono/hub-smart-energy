@@ -9,14 +9,11 @@ export interface PvHourlyEntry {
   cloud_cover_pct: number;
   estimated_kwh: number;
   ai_adjusted_kwh: number | null;
-  legacy_estimated_kwh?: number | null;
-  corrected_estimated_kwh?: number | null;
-  legacy_ai_adjusted_kwh?: number | null;
-  corrected_ai_adjusted_kwh?: number | null;
   poa_w_m2?: number | null;
-  legacy_poa_w_m2?: number | null;
   dni_w_m2?: number | null;
   dhi_w_m2?: number | null;
+  cell_temp_c?: number | null;
+  temperature_2m?: number | null;
 }
 
 export interface PvForecastWeatherSource {
@@ -61,10 +58,6 @@ export interface PvForecast {
     ai_notes: string;
     performance_ratio?: number;
     pr_auto_updated?: boolean;
-    legacy_today_total_kwh?: number;
-    corrected_today_total_kwh?: number;
-    legacy_tomorrow_total_kwh?: number;
-    corrected_tomorrow_total_kwh?: number;
     ai_correction_factor?: number;
   };
   weather_source: PvForecastWeatherSource | null;
@@ -83,23 +76,18 @@ export interface PvForecastSettings {
   azimuth_deg: number;
   performance_ratio: number;
   is_active: boolean;
+  recalibration_locked?: boolean;
+  recalibration_locked_until?: string | null;
 }
 
 function toLocalDateStr(date: Date): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
-function getCorrectedValue(entry: PvHourlyEntry) {
-  return entry.corrected_ai_adjusted_kwh
-    ?? entry.ai_adjusted_kwh
-    ?? entry.corrected_estimated_kwh
-    ?? entry.estimated_kwh;
-}
-
-function getLegacyValue(entry: PvHourlyEntry) {
-  return entry.legacy_ai_adjusted_kwh
-    ?? entry.legacy_estimated_kwh
-    ?? entry.estimated_kwh;
+function getDisplayValue(entry: PvHourlyEntry) {
+  return entry.ai_adjusted_kwh != null && entry.ai_adjusted_kwh > 0
+    ? entry.ai_adjusted_kwh
+    : entry.estimated_kwh;
 }
 
 function sumOptional(current?: number | null, incoming?: number | null) {
@@ -107,42 +95,41 @@ function sumOptional(current?: number | null, incoming?: number | null) {
   return Math.round((((current ?? 0) + (incoming ?? 0)) * 100)) / 100;
 }
 
+function averageOptional(values: Array<number | null | undefined>) {
+  const filtered = values.filter((value): value is number => typeof value === "number");
+  if (filtered.length === 0) return null;
+  return Math.round((filtered.reduce((sum, value) => sum + value, 0) / filtered.length) * 100) / 100;
+}
+
 function aggregateForecasts(forecasts: PvForecast[]): PvForecast {
   if (forecasts.length === 1) return forecasts[0];
 
-  const hourlyMap = new Map<string, PvHourlyEntry>();
-  for (const fc of forecasts) {
-    for (const h of fc.hourly) {
-      const existing = hourlyMap.get(h.timestamp);
+  const hourlyMap = new Map<string, PvHourlyEntry & { count: number }>();
+
+  for (const forecast of forecasts) {
+    for (const hour of forecast.hourly) {
+      const existing = hourlyMap.get(hour.timestamp);
       if (existing) {
-        existing.radiation_w_m2 = Math.max(existing.radiation_w_m2, h.radiation_w_m2);
-        existing.cloud_cover_pct = Math.round((existing.cloud_cover_pct + h.cloud_cover_pct) / 2);
-        existing.estimated_kwh = Math.round((existing.estimated_kwh + h.estimated_kwh) * 100) / 100;
-        existing.ai_adjusted_kwh = sumOptional(existing.ai_adjusted_kwh, h.ai_adjusted_kwh);
-        existing.legacy_estimated_kwh = sumOptional(existing.legacy_estimated_kwh, h.legacy_estimated_kwh);
-        existing.corrected_estimated_kwh = sumOptional(existing.corrected_estimated_kwh, h.corrected_estimated_kwh ?? h.estimated_kwh);
-        existing.legacy_ai_adjusted_kwh = sumOptional(existing.legacy_ai_adjusted_kwh, h.legacy_ai_adjusted_kwh);
-        existing.corrected_ai_adjusted_kwh = sumOptional(existing.corrected_ai_adjusted_kwh, h.corrected_ai_adjusted_kwh ?? h.ai_adjusted_kwh);
-        existing.poa_w_m2 = h.poa_w_m2 != null || existing.poa_w_m2 != null
-          ? Math.round(Math.max(existing.poa_w_m2 ?? 0, h.poa_w_m2 ?? 0) * 100) / 100
-          : null;
-        existing.legacy_poa_w_m2 = h.legacy_poa_w_m2 != null || existing.legacy_poa_w_m2 != null
-          ? Math.round(Math.max(existing.legacy_poa_w_m2 ?? 0, h.legacy_poa_w_m2 ?? 0) * 100) / 100
-          : null;
-        existing.dni_w_m2 = h.dni_w_m2 != null || existing.dni_w_m2 != null
-          ? Math.round(Math.max(existing.dni_w_m2 ?? 0, h.dni_w_m2 ?? 0) * 100) / 100
-          : null;
-        existing.dhi_w_m2 = h.dhi_w_m2 != null || existing.dhi_w_m2 != null
-          ? Math.round(Math.max(existing.dhi_w_m2 ?? 0, h.dhi_w_m2 ?? 0) * 100) / 100
-          : null;
+        existing.estimated_kwh = Math.round((existing.estimated_kwh + hour.estimated_kwh) * 100) / 100;
+        existing.ai_adjusted_kwh = sumOptional(existing.ai_adjusted_kwh, hour.ai_adjusted_kwh);
+        existing.radiation_w_m2 = averageOptional([existing.radiation_w_m2, hour.radiation_w_m2]) ?? existing.radiation_w_m2;
+        existing.cloud_cover_pct = Math.round((existing.cloud_cover_pct * existing.count + hour.cloud_cover_pct) / (existing.count + 1));
+        existing.poa_w_m2 = averageOptional([existing.poa_w_m2, hour.poa_w_m2]);
+        existing.dni_w_m2 = averageOptional([existing.dni_w_m2, hour.dni_w_m2]);
+        existing.dhi_w_m2 = averageOptional([existing.dhi_w_m2, hour.dhi_w_m2]);
+        existing.cell_temp_c = averageOptional([existing.cell_temp_c, hour.cell_temp_c]);
+        existing.temperature_2m = averageOptional([existing.temperature_2m, hour.temperature_2m]);
+        existing.count += 1;
       } else {
-        hourlyMap.set(h.timestamp, { ...h });
+        hourlyMap.set(hour.timestamp, { ...hour, count: 1 });
       }
     }
   }
 
-  const hourly = Array.from(hourlyMap.values()).sort((a, b) => a.timestamp.localeCompare(b.timestamp));
-  const totalKwp = forecasts.reduce((s, f) => s + f.settings.peak_power_kwp, 0);
+  const hourly = Array.from(hourlyMap.values())
+    .sort((a, b) => a.timestamp.localeCompare(b.timestamp))
+    .map(({ count: _count, ...rest }) => rest);
+  const totalKwp = forecasts.reduce((sum, forecast) => sum + forecast.settings.peak_power_kwp, 0);
 
   const now = new Date();
   const todayStr = toLocalDateStr(now);
@@ -150,11 +137,9 @@ function aggregateForecasts(forecasts: PvForecast[]): PvForecast {
   tomorrow.setDate(tomorrow.getDate() + 1);
   const tomorrowStr = toLocalDateStr(tomorrow);
 
-  const todayTotal = hourly.filter((h) => h.timestamp.startsWith(todayStr)).reduce((s, h) => s + getCorrectedValue(h), 0);
-  const tomorrowTotal = hourly.filter((h) => h.timestamp.startsWith(tomorrowStr)).reduce((s, h) => s + getCorrectedValue(h), 0);
-  const legacyTodayTotal = hourly.filter((h) => h.timestamp.startsWith(todayStr)).reduce((s, h) => s + getLegacyValue(h), 0);
-  const legacyTomorrowTotal = hourly.filter((h) => h.timestamp.startsWith(tomorrowStr)).reduce((s, h) => s + getLegacyValue(h), 0);
-  const peakEntry = hourly.reduce((best, h) => (getCorrectedValue(h) > getCorrectedValue(best) ? h : best), hourly[0]);
+  const todayTotal = hourly.filter((hour) => hour.timestamp.startsWith(todayStr)).reduce((sum, hour) => sum + getDisplayValue(hour), 0);
+  const tomorrowTotal = hourly.filter((hour) => hour.timestamp.startsWith(tomorrowStr)).reduce((sum, hour) => sum + getDisplayValue(hour), 0);
+  const peakEntry = hourly.reduce((best, hour) => (!best || getDisplayValue(hour) > getDisplayValue(best) ? hour : best), hourly[0] ?? null);
 
   return {
     location: { name: `Alle Anlagen (${forecasts.length})`, city: null },
@@ -164,13 +149,9 @@ function aggregateForecasts(forecasts: PvForecast[]): PvForecast {
       today_total_kwh: Math.round(todayTotal * 10) / 10,
       tomorrow_total_kwh: Math.round(tomorrowTotal * 10) / 10,
       peak_hour: peakEntry?.timestamp || null,
-      peak_kwh: peakEntry ? Math.round(getCorrectedValue(peakEntry) * 100) / 100 : 0,
+      peak_kwh: peakEntry ? Math.round(getDisplayValue(peakEntry) * 100) / 100 : 0,
       ai_confidence: "",
       ai_notes: "",
-      legacy_today_total_kwh: Math.round(legacyTodayTotal * 10) / 10,
-      corrected_today_total_kwh: Math.round(todayTotal * 10) / 10,
-      legacy_tomorrow_total_kwh: Math.round(legacyTomorrowTotal * 10) / 10,
-      corrected_tomorrow_total_kwh: Math.round(tomorrowTotal * 10) / 10,
     },
     weather_source: null,
     validation: null,
@@ -180,26 +161,26 @@ function aggregateForecasts(forecasts: PvForecast[]): PvForecast {
 function buildDemoForecast(locationId: string | null): PvForecast {
   const now = new Date();
   const todayStr = now.toISOString().slice(0, 10);
-  const hourly: PvHourlyEntry[] = Array.from({ length: 24 }, (_, i) => {
-    const h = `${todayStr}T${String(i).padStart(2, "0")}:00`;
-    const sun = i >= 6 && i <= 20 ? Math.sin(((i - 6) / 14) * Math.PI) : 0;
-    const legacy = Math.round(sun * 5.9 * 100) / 100;
-    const corrected = Math.round(sun * 8.5 * 100) / 100;
-    const factor = 0.95;
+  const hourly: PvHourlyEntry[] = Array.from({ length: 24 }, (_, index) => {
+    const timestamp = `${todayStr}T${String(index).padStart(2, "0")}:00`;
+    const sun = index >= 6 && index <= 20 ? Math.sin(((index - 6) / 14) * Math.PI) : 0;
+    const poa = Math.round(sun * 980);
+    const ambientTemp = Math.round((12 + sun * 14) * 10) / 10;
+    const moduleTemp = Math.round((ambientTemp + ((45 - 20) / 800) * poa) * 10) / 10;
+    const estimated = Math.round(((poa / 1000) * 42 * Math.max(0.7, 1 - 0.004 * (moduleTemp - 25)) * 0.86 * 0.97) * 100) / 100;
+    const aiAdjusted = Math.round(estimated * 0.98 * 100) / 100;
+
     return {
-      timestamp: h,
-      radiation_w_m2: Math.round(sun * 850),
+      timestamp,
+      radiation_w_m2: poa,
       cloud_cover_pct: Math.round(Math.random() * 30),
-      estimated_kwh: corrected,
-      ai_adjusted_kwh: Math.round(corrected * factor * 100) / 100,
-      legacy_estimated_kwh: legacy,
-      corrected_estimated_kwh: corrected,
-      legacy_ai_adjusted_kwh: Math.round(legacy * factor * 100) / 100,
-      corrected_ai_adjusted_kwh: Math.round(corrected * factor * 100) / 100,
-      poa_w_m2: Math.round(sun * 910),
-      legacy_poa_w_m2: Math.round(sun * 610),
-      dni_w_m2: Math.round(sun * 780),
-      dhi_w_m2: Math.round(sun * 130),
+      estimated_kwh: estimated,
+      ai_adjusted_kwh: aiAdjusted,
+      poa_w_m2: poa,
+      dni_w_m2: null,
+      dhi_w_m2: Math.round(sun * 180),
+      cell_temp_c: moduleTemp,
+      temperature_2m: ambientTemp,
     };
   });
 
@@ -223,24 +204,20 @@ function buildDemoForecast(locationId: string | null): PvForecast {
       peak_hour: `${todayStr}T12:00`,
       peak_kwh: 8.1,
       ai_confidence: "hoch",
-      ai_notes: "Klarer Himmel erwartet, leichte Bewölkung am Nachmittag.",
-      performance_ratio: 0.85,
+      ai_notes: "GTI-basierte Demo-Prognose mit leichter KI-Korrektur.",
+      performance_ratio: 0.8,
       pr_auto_updated: false,
-      legacy_today_total_kwh: 33.5,
-      corrected_today_total_kwh: 48.3,
-      legacy_tomorrow_total_kwh: 35.8,
-      corrected_tomorrow_total_kwh: 52.1,
-      ai_correction_factor: 0.95,
+      ai_correction_factor: 0.98,
     },
     weather_source: {
       provider: "Open-Meteo",
-      profile: "PV-Erzeugungsprognose (Demo)",
+      profile: "PV-Erzeugungsprognose (GTI Demo)",
       model: "icon_seamless",
       endpoint: "https://api.open-meteo.com/v1/forecast",
       request_timezone: "Europe/Berlin",
       response_timezone: "Europe/Berlin",
-      forecast_days: 1,
-      hourly_variables: ["shortwave_radiation", "direct_normal_irradiance", "diffuse_radiation", "cloud_cover", "temperature_2m"],
+      forecast_days: 2,
+      hourly_variables: ["global_tilted_irradiance", "diffuse_radiation", "temperature_2m", "wind_speed_10m", "cloud_cover"],
       requested_url: "demo://pv-forecast",
       requested_coordinates: { latitude: 52.09, longitude: 7.42 },
       resolved_coordinates: { latitude: 52.09, longitude: 7.42 },
@@ -287,25 +264,26 @@ export function usePvForecast(locationId: string | null) {
       }
 
       if (!tenantId) return null;
-      const { data: allSettings, error: sErr } = await supabase
+      const { data: allSettings, error: settingsError } = await supabase
         .from("pv_forecast_settings")
         .select("location_id")
         .eq("tenant_id", tenantId)
         .eq("is_active", true);
-      if (sErr) throw sErr;
+      if (settingsError) throw settingsError;
       if (!allSettings || allSettings.length === 0) return null;
 
       const results = await Promise.allSettled(
-        allSettings.map((s) =>
-          supabase.functions.invoke("pv-forecast", { body: { location_id: s.location_id } }).then((r) => {
-            if (r.error) throw r.error;
-            return r.data as PvForecast;
+        allSettings.map((setting) =>
+          supabase.functions.invoke("pv-forecast", { body: { location_id: setting.location_id } }).then((response) => {
+            if (response.error) throw response.error;
+            return response.data as PvForecast;
           })
         )
       );
+
       const forecasts = results
-        .filter((r): r is PromiseFulfilledResult<PvForecast> => r.status === "fulfilled")
-        .map((r) => r.value);
+        .filter((result): result is PromiseFulfilledResult<PvForecast> => result.status === "fulfilled")
+        .map((result) => result.value);
 
       if (forecasts.length === 0) return null;
       return aggregateForecasts(forecasts);
@@ -372,7 +350,7 @@ export function usePvForecastSettings(locationId: string | null) {
       queryClient.invalidateQueries({ queryKey: ["pv-forecast-settings", locationId] });
       queryClient.invalidateQueries({ queryKey: ["pv-forecast"] });
     },
-    onError: (e) => toast.error("Fehler: " + e.message),
+    onError: (error) => toast.error("Fehler: " + error.message),
   });
 
   const deleteSettings = useMutation({
