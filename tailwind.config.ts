@@ -74,6 +74,9 @@ export default {
           waerme: "hsl(var(--energy-waerme))",
           wasser: "hsl(var(--energy-wasser))",
         },
+        pv: {
+          actual: "hsl(var(--pv-actual))",
+        },
       },
       borderRadius: {
         lg: "var(--radius)",

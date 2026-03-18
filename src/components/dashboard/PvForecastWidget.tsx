@@ -27,7 +27,7 @@ interface PvForecastWidgetProps {
 }
 
 const PV_YELLOW = "hsl(var(--energy-strom))";
-const ACTUAL_GREEN = "hsl(var(--accent))";
+const ACTUAL_GREEN = "hsl(var(--pv-actual))";
 
 function toLocalHourKey(ts: string): string {
   const d = new Date(ts);
@@ -542,7 +542,7 @@ const PvForecastWidget = ({ locationId }: PvForecastWidgetProps) => {
           </div>
           <div>
             <p className="text-xs text-muted-foreground">{isDay ? (isToday ? T("pv.todayActual") : T("pv.dateActual").replace("{date}", format(refDate, "d. MMM", { locale: dateLocale }))) : T("pv.periodActual").replace("{period}", T(PERIOD_LABEL_KEYS[selectedPeriod]))}</p>
-            <p className="text-xl font-bold text-accent">{hasActualTotal ? `${actualTotalKwh.toFixed(1)} kWh` : "–"}</p>
+            <p className="text-xl font-bold text-pv-actual">{hasActualTotal ? `${actualTotalKwh.toFixed(1)} kWh` : "–"}</p>
           </div>
         </div>
 

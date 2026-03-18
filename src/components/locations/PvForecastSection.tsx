@@ -18,7 +18,7 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGri
 import { supabase } from "@/integrations/supabase/client";
 
 const PV_YELLOW = "hsl(var(--energy-strom))";
-const ACTUAL_GREEN = "hsl(var(--accent))";
+const ACTUAL_GREEN = "hsl(var(--pv-actual))";
 
 function toLocalHourKey(ts: string): string {
   const d = new Date(ts);
@@ -270,7 +270,7 @@ export function PvForecastSection({ locationId }: PvForecastSectionProps) {
                   </div>
                   <div className="border rounded-lg p-3 text-center">
                     <p className="text-xs text-muted-foreground">{T("pv.actual")}</p>
-                    <p className="text-2xl font-bold text-accent">{hasActual ? `${actualTodayTotal.toFixed(1)} kWh` : "–"}</p>
+                    <p className="text-2xl font-bold text-pv-actual">{hasActual ? `${actualTodayTotal.toFixed(1)} kWh` : "–"}</p>
                   </div>
                   <div className="border rounded-lg p-3 text-center">
                     <p className="text-xs text-muted-foreground">{T("pv.tomorrowTotal")}</p>
