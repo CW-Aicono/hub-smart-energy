@@ -200,7 +200,7 @@ export function PvForecastSection({ locationId }: PvForecastSectionProps) {
               {isOpen ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
               <div>
                 <CardTitle className="flex items-center gap-2">
-                  <Sun className="h-5 w-5 text-amber-500" />
+                  <Sun className="h-5 w-5 text-energy-strom" />
                   {T("pv.sectionTitle")}
                   <HelpTooltip text={T("tooltip.pvForecast")} />
                 </CardTitle>
@@ -284,7 +284,7 @@ export function PvForecastSection({ locationId }: PvForecastSectionProps) {
                     <p className="text-xs text-muted-foreground">{T("pv.todayTotal")}</p>
                     <p className="text-2xl font-bold">{computedTodayTotal.toFixed(0)} kWh</p>
                     {Object.keys(actualReadings).length > 0 && (
-                      <p className="text-sm font-semibold text-emerald-600">
+                      <p className="text-sm font-semibold text-accent">
                         {T("pv.actual")}: {Object.values(actualReadings).reduce((s, v) => s + v, 0).toFixed(1)} kWh
                       </p>
                     )}
@@ -377,7 +377,7 @@ export function PvForecastSection({ locationId }: PvForecastSectionProps) {
 
                 {forecast.summary.ai_notes && (
                   <p className="text-sm text-muted-foreground bg-muted/50 rounded-lg p-3 flex items-start gap-2">
-                    <Sparkles className="h-4 w-4 mt-0.5 flex-shrink-0 text-amber-500" />
+                    <Sparkles className="h-4 w-4 mt-0.5 flex-shrink-0 text-energy-strom" />
                     {forecast.summary.ai_notes}
                   </p>
                 )}

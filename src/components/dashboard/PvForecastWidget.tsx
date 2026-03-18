@@ -411,7 +411,7 @@ const PvForecastWidget = ({ locationId }: PvForecastWidgetProps) => {
   if (isLoading) {
     return (
       <Card>
-        <CardHeader><CardTitle className="flex items-center gap-2"><Sun className="h-5 w-5 text-amber-500" />{T("dashboard.pvForecast")}</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="flex items-center gap-2"><Sun className="h-5 w-5 text-energy-strom" />{T("dashboard.pvForecast")}</CardTitle></CardHeader>
         <CardContent><Skeleton className="h-48 w-full" /></CardContent>
       </Card>
     );
@@ -420,7 +420,7 @@ const PvForecastWidget = ({ locationId }: PvForecastWidgetProps) => {
   if (!forecast && !needsDbForecast && !isLoading) {
     return (
       <Card>
-        <CardHeader><CardTitle className="flex items-center gap-2"><Sun className="h-5 w-5 text-amber-500" />{T("dashboard.pvForecast")}</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="flex items-center gap-2"><Sun className="h-5 w-5 text-energy-strom" />{T("dashboard.pvForecast")}</CardTitle></CardHeader>
         <CardContent><p className="text-muted-foreground text-sm">{T("pv.noDataAvailable")}</p></CardContent>
       </Card>
     );
@@ -485,7 +485,7 @@ const PvForecastWidget = ({ locationId }: PvForecastWidgetProps) => {
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
           <CardTitle className="flex items-center gap-2 text-lg">
-            <Sun className="h-5 w-5 text-amber-500" />
+            <Sun className="h-5 w-5 text-energy-strom" />
             {t("dashboard.pvForecast" as any)}
             <HelpTooltip text={t("tooltip.pvForecastWidget" as any)} />
           </CardTitle>
@@ -526,16 +526,16 @@ const PvForecastWidget = ({ locationId }: PvForecastWidgetProps) => {
           {isToday && (
             <div>
               <p className="text-xs text-muted-foreground">{T("pv.now")}</p>
-              <p className="text-xl font-bold text-amber-600">{formatEnergy(currentKw * 1000, "W")}</p>
+              <p className="text-xl font-bold text-energy-strom">{formatEnergy(currentKw * 1000, "W")}</p>
             </div>
           )}
           <div>
             <p className="text-xs text-muted-foreground">{isDay ? (isToday ? T("pv.todayForecast") : T("pv.dateForecast").replace("{date}", format(refDate, "d. MMM", { locale: dateLocale }))) : T("pv.periodForecast").replace("{period}", T(PERIOD_LABEL_KEYS[selectedPeriod]))}</p>
-            <p className="text-xl font-bold text-amber-600">{forecastDayTotal > 0 ? `${forecastDayTotal.toFixed(0)} kWh` : "–"}</p>
+            <p className="text-xl font-bold text-energy-strom">{forecastDayTotal > 0 ? `${forecastDayTotal.toFixed(0)} kWh` : "–"}</p>
           </div>
           <div>
             <p className="text-xs text-muted-foreground">{isDay ? (isToday ? T("pv.todayActual") : T("pv.dateActual").replace("{date}", format(refDate, "d. MMM", { locale: dateLocale }))) : T("pv.periodActual").replace("{period}", T(PERIOD_LABEL_KEYS[selectedPeriod]))}</p>
-            <p className="text-xl font-bold text-emerald-600">{hasActualTotal ? `${actualTotalKwh.toFixed(1)} kWh` : "–"}</p>
+            <p className="text-xl font-bold text-accent">{hasActualTotal ? `${actualTotalKwh.toFixed(1)} kWh` : "–"}</p>
           </div>
         </div>
 
