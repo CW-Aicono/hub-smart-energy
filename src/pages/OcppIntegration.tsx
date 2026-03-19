@@ -155,10 +155,10 @@ const OcppIntegration = () => {
         </Card>
 
         {/* ws:// Fallback Proxy Info */}
-        <Card className="border-yellow-500/30 bg-yellow-50/50 dark:bg-yellow-900/10">
+        <Card className="border-destructive/20 bg-destructive/5">
           <CardContent className="pt-4 pb-4">
             <div className="flex items-start gap-2">
-              <Shield className="h-4 w-4 text-yellow-600 dark:text-yellow-400 mt-0.5 shrink-0" />
+              <Shield className="h-4 w-4 text-destructive mt-0.5 shrink-0" />
               <div className="flex-1 min-w-0 space-y-2">
                 <p className="text-xs font-medium">{t("ocppIntegration.wsProxyTitle" as any)}</p>
                 <p className="text-[11px] text-muted-foreground">
