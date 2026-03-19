@@ -85,9 +85,8 @@ function toLocalDateStr(date: Date): string {
 }
 
 function getDisplayValue(entry: PvHourlyEntry) {
-  return entry.ai_adjusted_kwh != null && entry.ai_adjusted_kwh > 0
-    ? entry.ai_adjusted_kwh
-    : entry.estimated_kwh;
+  // KI-Korrekturfaktor temporär deaktiviert – nur Rohmodell-Prognose anzeigen
+  return entry.estimated_kwh;
 }
 
 function sumOptional(current?: number | null, incoming?: number | null) {
