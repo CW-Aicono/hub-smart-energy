@@ -5,9 +5,28 @@ export type MeterPowerReading = {
   recorded_at: string;
 };
 
+export type PvForecastWeightHour = {
+  timestamp: string;
+  estimated_kwh?: number | null;
+  ai_adjusted_kwh?: number | null;
+};
+
+export type PvActualHourlyState = {
+  readings: Record<string, number>;
+  isEstimated: boolean;
+  isStored: boolean;
+};
+
+const round2 = (value: number) => Math.round(value * 100) / 100;
+
 export function toLocalHourKey(ts: string): string {
   const d = new Date(ts);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}T${String(d.getHours()).padStart(2, "0")}`;
+}
+
+export function toLocalDateKey(value: string | Date): string {
+  const d = value instanceof Date ? value : new Date(value);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
 export function getReadingIntervalMinutes(readings: MeterPowerReading[], index: number) {
@@ -55,7 +74,7 @@ export function buildHourlyActuals(readings: MeterPowerReading[]) {
   }
 
   return Object.fromEntries(
-    Object.entries(hourBuckets).map(([hour, kwh]) => [hour, Math.round(kwh * 100) / 100])
+    Object.entries(hourBuckets).map(([hour, kwh]) => [hour, round2(kwh)])
   );
 }
 
@@ -81,7 +100,7 @@ function buildDefaultHourlyWeights(dayStr: string) {
 export function estimateHourlyActualsFromDailyTotal(
   dayStr: string,
   dailyTotalKwh: number,
-  forecastHours: Array<{ timestamp: string; estimated_kwh?: number | null; ai_adjusted_kwh?: number | null }> = [],
+  forecastHours: Array<PvForecastWeightHour & { weight?: number }> = [],
 ) {
   const rawWeights = (forecastHours.length > 0 ? forecastHours : buildDefaultHourlyWeights(dayStr))
     .map((hour) => ({
@@ -109,11 +128,223 @@ export function estimateHourlyActualsFromDailyTotal(
     weights.map((hour, index) => {
       const isLast = index === weights.length - 1;
       const value = isLast
-        ? Math.round((dailyTotalKwh - allocated) * 100) / 100
-        : Math.round(((dailyTotalKwh * hour.weight) / totalWeight) * 100) / 100;
+        ? round2(dailyTotalKwh - allocated)
+        : round2((dailyTotalKwh * hour.weight) / totalWeight);
 
       allocated += value;
       return [hour.hourKey, Math.max(0, value)];
     })
   );
+}
+
+type StoredHourlyActualRow = {
+  hour_start: string;
+  actual_kwh: number;
+  source: string;
+  coverage_minutes: number;
+};
+
+type StoredDailyActualRow = {
+  day: string;
+  actual_kwh: number;
+};
+
+async function fetchStoredHourlyActuals(
+  locationId: string | null | undefined,
+  tenantId: string | null | undefined,
+  rangeStart: Date,
+  rangeEnd: Date,
+) {
+  if (locationId) {
+    const { data, error } = await supabase.rpc("get_pv_actual_hourly", {
+      p_location_id: locationId,
+      p_from: rangeStart.toISOString(),
+      p_to: rangeEnd.toISOString(),
+    });
+
+    if (error) {
+      console.error("get_pv_actual_hourly error:", error);
+      return [] as StoredHourlyActualRow[];
+    }
+
+    return (data ?? []) as StoredHourlyActualRow[];
+  }
+
+  if (tenantId) {
+    const { data, error } = await supabase.rpc("get_pv_actual_hourly_all", {
+      p_tenant_id: tenantId,
+      p_from: rangeStart.toISOString(),
+      p_to: rangeEnd.toISOString(),
+    });
+
+    if (error) {
+      console.error("get_pv_actual_hourly_all error:", error);
+      return [] as StoredHourlyActualRow[];
+    }
+
+    return (data ?? []) as StoredHourlyActualRow[];
+  }
+
+  return [] as StoredHourlyActualRow[];
+}
+
+async function fetchStoredDailyActuals(
+  locationId: string | null | undefined,
+  tenantId: string | null | undefined,
+  fromDate: string,
+  toDate: string,
+) {
+  if (locationId) {
+    const { data, error } = await supabase.rpc("get_pv_actual_daily_sums", {
+      p_location_id: locationId,
+      p_from_date: fromDate,
+      p_to_date: toDate,
+    });
+
+    if (error) {
+      console.error("get_pv_actual_daily_sums error:", error);
+      return [] as StoredDailyActualRow[];
+    }
+
+    return (data ?? []) as StoredDailyActualRow[];
+  }
+
+  if (tenantId) {
+    const { data, error } = await supabase.rpc("get_pv_actual_daily_sums_all", {
+      p_tenant_id: tenantId,
+      p_from_date: fromDate,
+      p_to_date: toDate,
+    });
+
+    if (error) {
+      console.error("get_pv_actual_daily_sums_all error:", error);
+      return [] as StoredDailyActualRow[];
+    }
+
+    return (data ?? []) as StoredDailyActualRow[];
+  }
+
+  return [] as StoredDailyActualRow[];
+}
+
+export async function fetchPvActualHourly({
+  meterIds,
+  locationId,
+  tenantId,
+  rangeStart,
+  rangeEnd,
+  forecastHours = [],
+}: {
+  meterIds: string[];
+  locationId?: string | null;
+  tenantId?: string | null;
+  rangeStart: Date;
+  rangeEnd: Date;
+  forecastHours?: PvForecastWeightHour[];
+}): Promise<PvActualHourlyState> {
+  if (meterIds.length === 0) {
+    return { readings: {}, isEstimated: false, isStored: false };
+  }
+
+  const rawReadings = await fetchMeterPowerReadings(meterIds, rangeStart, rangeEnd);
+  if (rawReadings.length > 0) {
+    return { readings: buildHourlyActuals(rawReadings), isEstimated: false, isStored: false };
+  }
+
+  const storedRows = await fetchStoredHourlyActuals(locationId, tenantId, rangeStart, rangeEnd);
+  if (storedRows.length > 0) {
+    return {
+      readings: Object.fromEntries(
+        storedRows.map((row) => [toLocalHourKey(row.hour_start), round2(row.actual_kwh ?? 0)])
+      ),
+      isEstimated: false,
+      isStored: true,
+    };
+  }
+
+  const dayStr = toLocalDateKey(rangeStart);
+  const todayStr = toLocalDateKey(new Date());
+  if (dayStr >= todayStr) {
+    return { readings: {}, isEstimated: false, isStored: false };
+  }
+
+  const { data, error } = await supabase.rpc("get_meter_daily_totals", {
+    p_meter_ids: meterIds,
+    p_from_date: dayStr,
+    p_to_date: dayStr,
+  });
+
+  if (error || !data || data.length === 0) {
+    if (error) console.error("get_meter_daily_totals error:", error);
+    return { readings: {}, isEstimated: false, isStored: false };
+  }
+
+  const dailyTotal = data.reduce((sum, row) => sum + (row.total_value ?? 0), 0);
+  if (dailyTotal <= 0) {
+    return { readings: {}, isEstimated: false, isStored: false };
+  }
+
+  return {
+    readings: estimateHourlyActualsFromDailyTotal(dayStr, dailyTotal, forecastHours),
+    isEstimated: true,
+    isStored: false,
+  };
+}
+
+export async function fetchPvActualDailyTotals({
+  meterIds,
+  locationId,
+  tenantId,
+  rangeStart,
+  rangeEnd,
+}: {
+  meterIds: string[];
+  locationId?: string | null;
+  tenantId?: string | null;
+  rangeStart: Date;
+  rangeEnd: Date;
+}) {
+  if (meterIds.length === 0) return {} as Record<string, number>;
+
+  const fromDate = toLocalDateKey(rangeStart);
+  const toDate = toLocalDateKey(new Date(rangeEnd.getTime() - 1));
+  const dayMap: Record<string, number> = {};
+
+  const storedRows = await fetchStoredDailyActuals(locationId, tenantId, fromDate, toDate);
+  for (const row of storedRows) {
+    dayMap[String(row.day)] = (dayMap[String(row.day)] ?? 0) + (row.actual_kwh ?? 0);
+  }
+
+  const { data, error } = await supabase.rpc("get_meter_daily_totals", {
+    p_meter_ids: meterIds,
+    p_from_date: fromDate,
+    p_to_date: toDate,
+  });
+
+  if (!error && data) {
+    for (const row of data) {
+      const dayKey = String(row.day);
+      if (dayMap[dayKey] == null) {
+        dayMap[dayKey] = (dayMap[dayKey] ?? 0) + (row.total_value ?? 0);
+      }
+    }
+  } else if (error) {
+    console.error("get_meter_daily_totals error:", error);
+  }
+
+  const today = new Date();
+  const todayStr = toLocalDateKey(today);
+  if (todayStr >= fromDate && todayStr <= toDate) {
+    const todayStart = new Date(today);
+    todayStart.setHours(0, 0, 0, 0);
+    const todayEnd = new Date(todayStart);
+    todayEnd.setDate(todayEnd.getDate() + 1);
+
+    const todayReadings = await fetchMeterPowerReadings(meterIds, todayStart, todayEnd);
+    if (todayReadings.length > 0) {
+      dayMap[todayStr] = buildDailyActualTotal(todayReadings);
+    }
+  }
+
+  return dayMap;
 }
