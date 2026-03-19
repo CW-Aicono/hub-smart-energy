@@ -458,7 +458,8 @@ async function handleMeterValues(
 async function handleRemoteCommand(
   supabase: ReturnType<typeof createSupabase>,
   command: string,
-  body: Record<string, unknown>
+  body: Record<string, unknown>,
+  tenantId: string
 ) {
   const chargePointOcppId = body.chargePointId as string;
 
