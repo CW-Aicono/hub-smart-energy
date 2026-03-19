@@ -47,4 +47,8 @@ ENV NODE_ENV=production
 ENV LOG_LEVEL=info
 ENV POLL_INTERVAL_MS=30000
 
+# OCPP ws:// Proxy Port (optional – nur setzen wenn benötigt)
+# ENV OCPP_PROXY_PORT=9000
+# ENV OCPP_PROXY_TARGET=wss://ocpp.aicono.org
+
 CMD ["node", "index.js"]
