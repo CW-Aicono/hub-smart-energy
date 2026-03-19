@@ -42,6 +42,10 @@ const POLL_INTERVAL_MS = parseInt(process.env.POLL_INTERVAL_MS || "30000", 10);
 const FLUSH_INTERVAL_MS = parseInt(process.env.FLUSH_INTERVAL_MS || "1000", 10);
 const LOG_LEVEL = (process.env.LOG_LEVEL || "info") as "debug" | "info" | "warn" | "error";
 
+// OCPP ws:// Proxy (optional – für ältere Ladepunkte ohne TLS-Unterstützung)
+const OCPP_PROXY_PORT = process.env.OCPP_PROXY_PORT ? parseInt(process.env.OCPP_PROXY_PORT, 10) : null;
+const OCPP_PROXY_TARGET = process.env.OCPP_PROXY_TARGET || "wss://ocpp.aicono.org";
+
 const GATEWAY_INGEST_URL = process.env.GATEWAY_INGEST_URL ||
   `${SUPABASE_URL}/functions/v1/gateway-ingest`;
 
