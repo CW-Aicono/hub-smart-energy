@@ -17,7 +17,7 @@ import { useQuery } from "@tanstack/react-query";
 import { format, addDays, startOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfQuarter, endOfQuarter, startOfYear, endOfYear, addWeeks, addMonths, addQuarters, addYears } from "date-fns";
 import { de, enUS, es, nl } from "date-fns/locale";
 import type { Locale } from "date-fns";
-import { buildDailyActualTotal, buildHourlyActuals, estimateHourlyActualsFromDailyTotal, fetchMeterPowerReadings, toLocalHourKey } from "@/lib/pvActuals";
+import { fetchPvActualDailyTotals, fetchPvActualHourly, toLocalDateKey, toLocalHourKey } from "@/lib/pvActuals";
 
 const dfLocaleMap: Record<string, Locale> = { de, en: enUS, es, nl };
 
@@ -280,53 +280,22 @@ const PvForecastWidget = ({ locationId }: PvForecastWidgetProps) => {
     const dayStart = startOfDay(refDate);
     const dayEnd = new Date(dayStart);
     dayEnd.setDate(dayEnd.getDate() + 1);
-    const todayStr = toLocalDateStr(new Date());
-    const isHistoricalDay = refDateStr < todayStr;
 
     (async () => {
       const meterIds = await resolvePvMeterIds();
-      if (meterIds.length === 0) {
-        setActualReadings({});
-        setActualReadingsEstimated(false);
-        return;
-      }
-
-      const readings = await fetchMeterPowerReadings(meterIds, dayStart, dayEnd);
-      if (readings.length > 0) {
-        setActualReadings(buildHourlyActuals(readings));
-        setActualReadingsEstimated(false);
-        return;
-      }
-
-      if (!isHistoricalDay) {
-        setActualReadings({});
-        setActualReadingsEstimated(false);
-        return;
-      }
-
-      const { data, error } = await supabase.rpc("get_meter_daily_totals", {
-        p_meter_ids: meterIds,
-        p_from_date: refDateStr,
-        p_to_date: refDateStr,
+      const result = await fetchPvActualHourly({
+        meterIds,
+        locationId,
+        tenantId,
+        rangeStart: dayStart,
+        rangeEnd: dayEnd,
+        forecastHours: filteredHourly,
       });
 
-      if (error || !data || data.length === 0) {
-        setActualReadings({});
-        setActualReadingsEstimated(false);
-        return;
-      }
-
-      const dailyTotal = data.reduce((sum, row) => sum + (row.total_value ?? 0), 0);
-      if (dailyTotal <= 0) {
-        setActualReadings({});
-        setActualReadingsEstimated(false);
-        return;
-      }
-
-      setActualReadings(estimateHourlyActualsFromDailyTotal(refDateStr, dailyTotal, filteredHourly));
-      setActualReadingsEstimated(true);
+      setActualReadings(result.readings);
+      setActualReadingsEstimated(result.isEstimated);
     })();
-  }, [locationId, settings?.pv_meter_id, isDay, refDate, refDateStr, tenantId, filteredHourly]);
+  }, [locationId, settings?.pv_meter_id, isDay, refDate, tenantId, filteredHourly]);
 
   useEffect(() => {
     if (isDay) {
@@ -336,40 +305,17 @@ const PvForecastWidget = ({ locationId }: PvForecastWidgetProps) => {
 
     (async () => {
       const meterIds = await resolvePvMeterIds();
-      if (meterIds.length === 0) {
-        setMultiDayActuals({});
-        return;
-      }
-
-      const dayMap: Record<string, number> = {};
-      const { data, error } = await supabase.rpc("get_meter_daily_totals", {
-        p_meter_ids: meterIds,
-        p_from_date: fromDateStr,
-        p_to_date: toDateStr,
+      const dayMap = await fetchPvActualDailyTotals({
+        meterIds,
+        locationId,
+        tenantId,
+        rangeStart,
+        rangeEnd,
       });
-      if (!error && data) {
-        for (const row of data) {
-          const dayKey = String(row.day);
-          dayMap[dayKey] = (dayMap[dayKey] ?? 0) + (row.total_value ?? 0);
-        }
-      }
-
-      const today = new Date();
-      const todayStr = toLocalDateStr(today);
-      if (todayStr >= fromDateStr && todayStr <= toDateStr) {
-        const todayStart = startOfDay(today);
-        const todayEnd = new Date(todayStart);
-        todayEnd.setDate(todayEnd.getDate() + 1);
-
-        const readings = await fetchMeterPowerReadings(meterIds, todayStart, todayEnd);
-        if (readings.length > 0) {
-          dayMap[todayStr] = buildDailyActualTotal(readings);
-        }
-      }
 
       setMultiDayActuals(dayMap);
     })();
-  }, [locationId, settings?.pv_meter_id, isDay, fromDateStr, toDateStr]);
+  }, [locationId, settings?.pv_meter_id, isDay, tenantId, rangeStart, rangeEnd]);
 
   const { data: realtimePowerKw } = useQuery({
     queryKey: ["current-pv-power", locationId ?? "all", settings?.pv_meter_id],

@@ -15,15 +15,10 @@ import { Sun, ChevronDown, ChevronRight, Sparkles, Save } from "lucide-react";
 import { HelpTooltip } from "@/components/ui/help-tooltip";
 import { useTranslation } from "@/hooks/useTranslation";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from "recharts";
-import { supabase } from "@/integrations/supabase/client";
+import { fetchPvActualHourly, toLocalHourKey } from "@/lib/pvActuals";
 
 const PV_YELLOW = "hsl(var(--energy-strom))";
 const ACTUAL_GREEN = "hsl(var(--pv-actual))";
-
-function toLocalHourKey(ts: string): string {
-  const d = new Date(ts);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}T${String(d.getHours()).padStart(2, "0")}`;
-}
 
 function toLocalTime(ts: string): string {
   const d = new Date(ts);
@@ -54,6 +49,7 @@ export function PvForecastSection({ locationId }: PvForecastSectionProps) {
   const { forecast, isLoading: forecastLoading } = usePvForecast(isOpen ? locationId : null);
   const { meters } = useMeters(locationId);
   const [actualReadings, setActualReadings] = useState<Record<string, number>>({});
+  const [actualReadingsEstimated, setActualReadingsEstimated] = useState(false);
 
   const solarMeters = meters.filter((meter) => meter.meter_function === "generation" || meter.energy_type === "solar" || meter.energy_type === "pv" || meter.energy_type === "strom" && meter.meter_function === "generation");
 
@@ -81,52 +77,25 @@ export function PvForecastSection({ locationId }: PvForecastSectionProps) {
 
   useEffect(() => {
     if (!settings?.pv_meter_id || !isOpen) return;
-    const meterId = settings.pv_meter_id;
+
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
+    const todayEnd = new Date(todayStart);
+    todayEnd.setDate(todayEnd.getDate() + 1);
 
     (async () => {
-      const allData: { power_value: number; recorded_at: string }[] = [];
-      let from = 0;
-      const pageSize = 1000;
-      while (true) {
-        const { data: page } = await supabase
-          .from("meter_power_readings")
-          .select("power_value, recorded_at")
-          .eq("meter_id", meterId)
-          .gte("recorded_at", todayStart.toISOString())
-          .order("recorded_at", { ascending: true })
-          .range(from, from + pageSize - 1);
-        if (!page || page.length === 0) break;
-        allData.push(...page);
-        if (page.length < pageSize) break;
-        from += pageSize;
-      }
+      const result = await fetchPvActualHourly({
+        meterIds: [settings.pv_meter_id],
+        locationId,
+        rangeStart: todayStart,
+        rangeEnd: todayEnd,
+        forecastHours: forecast?.hourly ?? [],
+      });
 
-      if (!allData.length) {
-        setActualReadings({});
-        return;
-      }
-
-      allData.sort((a, b) => a.recorded_at.localeCompare(b.recorded_at));
-      const hourBuckets: Record<string, number> = {};
-      for (let index = 0; index < allData.length; index += 1) {
-        const reading = allData[index];
-        const hour = toLocalHourKey(reading.recorded_at);
-        let intervalMin = 5;
-        if (index < allData.length - 1) {
-          const gap = (new Date(allData[index + 1].recorded_at).getTime() - new Date(reading.recorded_at).getTime()) / 60000;
-          if (gap > 0 && gap <= 15) intervalMin = gap;
-        }
-        const energyKwh = reading.power_value * (intervalMin / 60);
-        hourBuckets[hour] = (hourBuckets[hour] ?? 0) + energyKwh;
-      }
-
-      const result: Record<string, number> = {};
-      for (const [hour, kwh] of Object.entries(hourBuckets)) result[hour] = Math.round(kwh * 100) / 100;
-      setActualReadings(result);
+      setActualReadings(result.readings);
+      setActualReadingsEstimated(result.isEstimated);
     })();
-  }, [settings?.pv_meter_id, isOpen]);
+  }, [settings?.pv_meter_id, isOpen, locationId, forecast?.hourly]);
 
   const handleSave = () => {
     if (form.tilt_deg < 0 || form.tilt_deg > 90) return;
@@ -173,6 +142,7 @@ export function PvForecastSection({ locationId }: PvForecastSectionProps) {
   const actualTodayTotal = Object.values(actualReadings).reduce((sum, value) => sum + value, 0);
   const delta = formatDeltaPercent(computedTodayTotal, actualTodayTotal || null);
   const hasActual = Object.keys(actualReadings).length > 0;
+  const actualSeriesLabel = actualReadingsEstimated ? T("pv.actualGenerationEstimated") : T("pv.actualGeneration");
 
   const CustomXTick = ({ x, y, payload }: any) => {
     const entry = chartData[payload?.index];
@@ -271,6 +241,7 @@ export function PvForecastSection({ locationId }: PvForecastSectionProps) {
                   <div className="border rounded-lg p-3 text-center">
                     <p className="text-xs text-muted-foreground">{T("pv.actual")}</p>
                     <p className="text-2xl font-bold text-pv-actual">{hasActual ? `${actualTodayTotal.toFixed(1)} kWh` : "–"}</p>
+                    {actualReadingsEstimated && hasActual && <p className="text-xs text-muted-foreground">{T("pv.estimatedFromDailyTotal")}</p>}
                   </div>
                   <div className="border rounded-lg p-3 text-center">
                     <p className="text-xs text-muted-foreground">{T("pv.tomorrowTotal")}</p>
@@ -324,11 +295,11 @@ export function PvForecastSection({ locationId }: PvForecastSectionProps) {
                       <Tooltip
                         formatter={(value: number, name: string) => {
                           if (name === "forecast") return [`${value.toFixed(2)} kWh`, T("dashboard.pvForecast")];
-                          if (name === "actual") return [`${value.toFixed(2)} kWh`, T("pv.actualGeneration")];
+                          if (name === "actual") return [`${value.toFixed(2)} kWh`, actualSeriesLabel];
                           return [value, name];
                         }}
                       />
-                      <Legend formatter={(value) => value === "forecast" ? T("dashboard.pvForecast") : T("pv.actualGeneration")} />
+                      <Legend formatter={(value) => value === "forecast" ? T("dashboard.pvForecast") : actualSeriesLabel} />
                       <Bar dataKey="forecast" fill={PV_YELLOW} radius={[2, 2, 0, 0]} />
                       {hasActual && <Bar dataKey="actual" fill={ACTUAL_GREEN} radius={[2, 2, 0, 0]} />}
                     </BarChart>
