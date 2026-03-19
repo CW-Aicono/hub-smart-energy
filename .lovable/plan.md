@@ -1,80 +1,118 @@
 
 Ziel
 
-Historische Ist-Erzeugung in der Tagesansicht wieder sichtbar machen, obwohl für ältere Tage oft keine Rohwerte mehr in `meter_power_readings` liegen, die Tagessummen aber weiterhin in `meter_period_totals` verfügbar sind.
+Für die PV-Prognose künftig echte stündliche Ist-Erzeugung dauerhaft speichern, damit historische Stundenwerte nicht mehr verloren gehen, wenn Rohdaten später verdichtet oder gelöscht werden.
 
-Wahrscheinliche Fehlerursache
+Was ich im aktuellen Stand gefunden habe
 
-- Die Tagesansicht in `src/components/dashboard/PvForecastWidget.tsx` baut `actualReadings` ausschließlich aus `meter_power_readings`.
-- Für historische Tage sind diese Rohdaten teils nicht mehr vorhanden, weil sie später verdichtet/gelöscht werden.
-- Die Wochenansicht funktioniert trotzdem, weil sie `get_meter_daily_totals` nutzt und damit `meter_period_totals` liest.
-- Ergebnis:
-  - Woche/Monat zeigt Ist-Tageswerte
-  - Tagesansicht zeigt für dieselben Tage keine Ist-Werte mehr
+- Die Tagesansicht der PV-Prognose baut Ist-Stundenwerte aktuell aus `meter_power_readings`.
+- Historische Fallbacks nutzen nur Tagessummen aus `get_meter_daily_totals`, daher müssen Stundenwerte derzeit geschätzt werden.
+- Es gibt bereits eine stabile 5-Minuten-Historie:
+  - Rohdaten werden in `meter_power_readings_5min` verdichtet
+  - Rohdaten können anschließend gelöscht werden
+  - `get_power_readings_5min` liefert 5-Minuten-Buckets aus 5min-Tabelle plus Raw-Fallback
+- Es gibt aber noch keinen persistenten Speicher für echte PV-Istwerte auf Stundenebene.
+- `pv_forecast_hourly` speichert nur Prognosedaten; fachlich sollte man echte Istwerte nicht dort “hineinmischen”.
 
-Umsetzungsplan
+Empfohlener Ansatz
 
-1. Ist-Datenlogik vereinheitlichen
-- Die Ermittlung historischer Ist-Werte in der Tagesansicht auf einen Fallback erweitern:
-  - zuerst echte Rohwerte aus `meter_power_readings`
-  - wenn leer: Tagessumme aus `get_meter_daily_totals`
-- Damit bleibt die Live-Ansicht für heute exakt, historische Tage brechen aber nicht mehr weg.
+1. Eigene Tabelle für PV-Ist-Stundenwerte einführen
+- Neue Tabelle z. B. `pv_actual_hourly`
+- Inhalte:
+  - `tenant_id`
+  - `location_id`
+  - `meter_id`
+  - `hour_start`
+  - `actual_kwh`
+  - optional `source`, `sample_count`, `coverage_minutes`
+  - `created_at`, `updated_at`
+- Unique Key auf `(meter_id, hour_start)`
+- Vorteil: saubere Trennung zwischen Prognose und Realität, einfache Abfragen für Tages-/Wochenansicht
 
-2. Stundenwerte aus Tagessummen schätzen
-- Da du „Stunden aus Summen schätzen“ gewählt hast, verteile ich die historische Tagessumme auf Stundenbalken.
-- Verteilungslogik:
-  - bevorzugt anhand der vorhandenen Forecast-Stundenkurve des selben Tages
-  - jede Stunde erhält Anteil `forecast_hour / forecast_day_total`
-  - geschätzte Ist-Stunde = `daily_actual_total * hourly_share`
-- Falls die Forecast-Summe eines Tages 0 oder leer ist:
-  - Fallback auf einfache Tageslichtverteilung (z. B. nur 08–18 Uhr, glockenförmig/gewichtet statt flach)
+2. Stündliche Aggregationslogik auf vorhandener 5-Minuten-Basis aufbauen
+- Für abgeschlossene Stunden die Energie aus 5-Minuten-Werten berechnen:
+  - `actual_kwh = Summe(power_avg * 5 / 60)`
+- Dafür nicht direkt auf Rohdaten setzen, sondern auf `get_power_readings_5min` bzw. `meter_power_readings_5min`
+- Das ist robuster, weil die 5-Minuten-Daten historisch erhalten bleiben und Raw-Daten nicht
 
-3. Kennzeichnung geschätzter Historienwerte
-- Intern trenne ich zwischen:
-  - echten stündlichen Ist-Werten
-  - geschätzten stündlichen Ist-Werten aus Tagessummen
-- In der UI soll die Tagesansicht weiter grüne Balken zeigen, aber der Tooltip/Untertitel sollte klar machen, wenn es sich um „geschätzte Verteilung aus Tagessumme“ handelt.
-- So bleibt die Darstellung nützlich, ohne Rohdaten vorzutäuschen.
+3. Backend-Job für laufende Persistierung ergänzen
+- Ein stündlicher Backend-Job schreibt jeweils die zuletzt abgeschlossene Stunde weg
+- Beispiel:
+  - um 13:05 wird die Stunde 12:00–12:59 aggregiert und gespeichert
+- Der Job sollte zusätzlich kleine Nachholung unterstützen:
+  - falls eine Stunde fehlte, die letzten z. B. 24–48 Stunden erneut prüfen und per Upsert vervollständigen
 
-4. Gemeinsame Hilfsfunktionen extrahieren
-- Die bisher doppelte Integrationslogik für Ist-Werte in Widget/Section ist fehleranfällig.
-- Ich würde kleine gemeinsame Helper einführen für:
-  - Rohdaten -> Stundenwerte
-  - Rohdaten -> Tagessumme
-  - Tagessumme + Forecast-Kurve -> geschätzte Stundenwerte
-- Das reduziert Folgefehler zwischen Tages-, Wochen- und Detailansicht.
+4. PV-Meter automatisch aus den aktiven PV-Einstellungen ableiten
+- Scope: nur aktive PV-Konfigurationen aus `pv_forecast_settings` mit gesetztem `pv_meter_id`
+- So bleibt die Funktion exakt auf die PV-Prognose beschränkt und aggregiert nicht unnötig andere Zähler
 
-5. Betroffene Stellen
-- `src/components/dashboard/PvForecastWidget.tsx`
-  - Tagesansicht-Fallback ergänzen
-  - historische Stundenwerte aus Tagessumme schätzen
-  - Kennzeichnung „geschätzt“ ergänzen
-- optional auch `src/components/locations/PvForecastSection.tsx`
-  - aktuell ebenfalls nur Rohwerte für Ist-Vergleich
-  - sollte dieselbe Historienlogik bekommen, damit beide PV-Ansichten konsistent bleiben
+5. Frontend schrittweise auf echte Stundenhistorie umstellen
+- Tagesansicht:
+  - heute / laufender Tag weiterhin live aus Rohdaten bzw. aktueller Integrationslogik
+  - vergangene Tage zuerst aus `pv_actual_hourly`
+  - nur wenn dort nichts vorhanden ist: bestehender Fallback über Tagessumme + Schätzung
+- Wochen-/Monatsansicht:
+  - Tagessummen bevorzugt aus aufsummierten `pv_actual_hourly`
+  - Live-Override für heute beibehalten
+- `PvForecastSection` sollte dieselbe Logik bekommen, damit Widget und Detailansicht konsistent sind
 
-Technische Details
+6. Optionaler Initial-Backfill
+- Da du “für die Zukunft” schreibst, ist ein historischer Voll-Backfill nicht zwingend
+- Sinnvoll wäre aber ein optionaler Start-Backfill aus vorhandenen 5-Minuten-Daten, soweit diese noch vorhanden sind
+- Für ältere Zeiträume ohne 5-Minuten-Daten bleibt die aktuelle Schätzlogik aus Tagessummen bestehen
+
+Technische Umsetzung
 
 ```text
-Historischer Tag:
-1. Lade meter_power_readings für den Tag
-2. Wenn vorhanden:
-   -> echte hourly actuals
-3. Sonst:
-   -> lade daily total via get_meter_daily_totals
-   -> verteile daily total proportional auf forecast.hourly
-   -> markiere Ergebnis als estimated_actuals
+Datenfluss künftig
+
+meter_power_readings
+   -> meter_power_readings_5min
+   -> stündlicher PV-Aggregator
+   -> pv_actual_hourly
+   -> PV-Widget / PV-Detailansicht
 ```
 
-Geplantes Ergebnis
+```text
+Abfrage-Priorität Tagesansicht
 
-- Historische Tagesansichten zeigen wieder grüne Ist-Balken.
-- Die Summe der grünen Stundenbalken entspricht der vorhandenen Tagessumme.
-- Heute bleibt weiterhin live und exakt aus Rohwerten berechnet.
-- Woche und Tag verwenden keine widersprüchlichen Datenpfade mehr.
+1. Live heute: Rohdaten / aktuelle Integrationslogik
+2. Historisch: pv_actual_hourly
+3. Wenn leer: get_meter_daily_totals
+4. Wenn nur Tagessumme vorhanden: Stunden schätzen
+```
+
+Betroffene Bereiche
+
+- Datenbank
+  - neue Tabelle für stündliche PV-Istwerte
+  - RLS-Policies
+  - ggf. RPC für Stunden-/Tagesabfragen
+- Backend
+  - Aggregationsfunktion / geplanter Job
+  - Upsert-Logik und Catch-up
+- Frontend
+  - `src/components/dashboard/PvForecastWidget.tsx`
+  - `src/components/locations/PvForecastSection.tsx`
+  - `src/lib/pvActuals.ts` als gemeinsame Lade-/Summenlogik
+
+Wichtige Designentscheidung
+
+- Ich würde dafür eine neue Tabelle bauen statt `pv_forecast_hourly` zu erweitern.
+- Grund:
+  - Forecast und Actuals haben unterschiedliche Lebenszyklen
+  - Forecast wird pro Modelllauf neu geschrieben
+  - Actuals sind Messhistorie und sollten unabhängig, stabil und dauerhaft sein
 
 Annahmen
 
-- Die fehlenden historischen Tageswerte sind kein RLS-Problem, sondern ein Datenquellenproblem zwischen Rohwerten und verdichteten Tagessummen.
-- Für den betroffenen Zeitraum existieren Forecast-Stundenwerte in `pv_forecast_hourly`, sodass die Tagessumme sinnvoll auf Stunden verteilt werden kann.
-- Wenn für einzelne historische Tage keine Forecast-Stundenwerte vorliegen, wird ein neutraler Stunden-Fallback benötigt.
+- “Nach voller Stunde aggregieren” bedeutet: nur abgeschlossene Stunden persistent speichern; die aktuelle angebrochene Stunde bleibt live berechnet.
+- Der relevante PV-Zähler ist der in `pv_forecast_settings.pv_meter_id`.
+- Die Leistungswerte in den 5-Minuten-Daten sind weiterhin in kW, sodass `kW * 5/60 = kWh` korrekt ist.
+
+Ergebnis nach Umsetzung
+
+- Historische PV-Tagesansichten können echte Stundenwerte anzeigen, statt sie nur zu schätzen.
+- Wochen- und Monatsansichten bleiben konsistent mit denselben echten Ist-Daten.
+- Der Verlust von Rohdaten ist für die PV-Historie künftig kein Problem mehr.
+- Die bisherige Schätzung aus Tagessummen bleibt nur noch als Notfall-Fallback erhalten.
