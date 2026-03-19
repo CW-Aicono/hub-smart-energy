@@ -469,7 +469,8 @@ async function handleRemoteCommand(
         .from("charge_points")
         .select("id, tenant_id, status")
         .eq("ocpp_id", chargePointOcppId)
-        .single();
+        .eq("tenant_id", tenantId)
+        .maybeSingle();
 
       if (!cp) return { status: "Rejected", message: "Charge point not found" };
       if (cp.status !== "available" && cp.status !== "unavailable") return { status: "Rejected", message: "Charge point not available" };
