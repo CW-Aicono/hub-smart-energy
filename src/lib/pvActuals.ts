@@ -1,3 +1,5 @@
+import { supabase } from "@/integrations/supabase/client";
+
 export type MeterPowerReading = {
   power_value: number;
   recorded_at: string;
@@ -15,6 +17,30 @@ export function getReadingIntervalMinutes(readings: MeterPowerReading[], index: 
   }
 
   return 5;
+}
+
+export async function fetchMeterPowerReadings(meterIds: string[], rangeStart: Date, rangeEnd: Date) {
+  const allData: MeterPowerReading[] = [];
+  let from = 0;
+  const pageSize = 1000;
+
+  while (true) {
+    const { data: page } = await supabase
+      .from("meter_power_readings")
+      .select("power_value, recorded_at")
+      .in("meter_id", meterIds)
+      .gte("recorded_at", rangeStart.toISOString())
+      .lt("recorded_at", rangeEnd.toISOString())
+      .order("recorded_at", { ascending: true })
+      .range(from, from + pageSize - 1);
+
+    if (!page || page.length === 0) break;
+    allData.push(...page);
+    if (page.length < pageSize) break;
+    from += pageSize;
+  }
+
+  return allData.sort((a, b) => a.recorded_at.localeCompare(b.recorded_at));
 }
 
 export function buildHourlyActuals(readings: MeterPowerReading[]) {

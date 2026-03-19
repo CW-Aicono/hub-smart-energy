@@ -5318,6 +5318,8 @@ export const translations = {
   "pv.vsActual": { de: "vs. Ist-Erzeugung", en: "vs. Actual Generation", es: "vs. generación real", nl: "vs. werkelijke opwekking" },
   "pv.forecast": { de: "Prognose", en: "Forecast", es: "Pronóstico", nl: "Prognose" },
   "pv.actualGeneration": { de: "Ist-Erzeugung", en: "Actual Generation", es: "Generación real", nl: "Werkelijke opwekking" },
+  "pv.actualGenerationEstimated": { de: "Ist-Erzeugung (geschätzt)", en: "Actual Generation (estimated)", es: "Generación real (estimada)", nl: "Werkelijke opwekking (geschat)" },
+  "pv.estimatedFromDailyTotal": { de: "Stundenwerte aus Tagessumme geschätzt", en: "Hourly values estimated from daily total", es: "Valores horarios estimados a partir del total diario", nl: "Uurwaarden geschat op basis van dagsom" },
   "pv.configureHint": { de: "Konfigurieren Sie oben die PV-Einstellungen, um eine Prognose zu erhalten.", en: "Configure the PV settings above to get a forecast.", es: "Configure los ajustes FV arriba para obtener un pronóstico.", nl: "Configureer de PV-instellingen hierboven voor een prognose." },
   "pv.tiltRange": { de: "Wert muss zwischen 0° und 90° liegen", en: "Value must be between 0° and 90°", es: "El valor debe estar entre 0° y 90°", nl: "Waarde moet tussen 0° en 90° liggen" },
   "pv.azimuthRange": { de: "Wert muss zwischen 0° und 360° liegen", en: "Value must be between 0° and 360°", es: "El valor debe estar entre 0° y 360°", nl: "Waarde moet tussen 0° en 360° liggen" },
