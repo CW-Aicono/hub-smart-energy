@@ -4821,8 +4821,24 @@ export type Database = {
           day: string
         }[]
       }
+      get_pv_actual_daily_sums_all: {
+        Args: { p_from_date: string; p_tenant_id: string; p_to_date: string }
+        Returns: {
+          actual_kwh: number
+          day: string
+        }[]
+      }
       get_pv_actual_hourly: {
         Args: { p_from: string; p_location_id: string; p_to: string }
+        Returns: {
+          actual_kwh: number
+          coverage_minutes: number
+          hour_start: string
+          source: string
+        }[]
+      }
+      get_pv_actual_hourly_all: {
+        Args: { p_from: string; p_tenant_id: string; p_to: string }
         Returns: {
           actual_kwh: number
           coverage_minutes: number
