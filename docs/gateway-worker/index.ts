@@ -42,6 +42,10 @@ const POLL_INTERVAL_MS = parseInt(process.env.POLL_INTERVAL_MS || "30000", 10);
 const FLUSH_INTERVAL_MS = parseInt(process.env.FLUSH_INTERVAL_MS || "1000", 10);
 const LOG_LEVEL = (process.env.LOG_LEVEL || "info") as "debug" | "info" | "warn" | "error";
 
+// OCPP ws:// Proxy (optional – für ältere Ladepunkte ohne TLS-Unterstützung)
+const OCPP_PROXY_PORT = process.env.OCPP_PROXY_PORT ? parseInt(process.env.OCPP_PROXY_PORT, 10) : null;
+const OCPP_PROXY_TARGET = process.env.OCPP_PROXY_TARGET || "wss://ocpp.aicono.org";
+
 const GATEWAY_INGEST_URL = process.env.GATEWAY_INGEST_URL ||
   `${SUPABASE_URL}/functions/v1/gateway-ingest`;
 
@@ -746,15 +750,131 @@ async function httpPollCycle(meters: MeterWithSensor[]): Promise<void> {
 
 // ─── Entry Point ─────────────────────────────────────────────────────────────
 
+// ─── OCPP ws:// → wss:// Proxy ───────────────────────────────────────────────
+//
+// Für ältere Ladepunkte die kein TLS/WSS unterstützen.
+// Aktiviert durch OCPP_PROXY_PORT Umgebungsvariable.
+// ACHTUNG: Nur in geschützten Netzwerken (LAN/VPN) betreiben!
+
+function startOcppProxy(): void {
+  if (!OCPP_PROXY_PORT) return;
+
+  const OCPP_SUBPROTOCOL = "ocpp1.6";
+  const proxyServer = new WebSocket.Server({ port: OCPP_PROXY_PORT });
+
+  log("info", `[OCPP-Proxy] Listening on ws://0.0.0.0:${OCPP_PROXY_PORT}`);
+  log("info", `[OCPP-Proxy] Target: ${OCPP_PROXY_TARGET}`);
+  log("warn", `[OCPP-Proxy] ⚠ ws:// ist unverschlüsselt – nur in geschützten Netzwerken verwenden!`);
+
+  proxyServer.on("connection", (clientWs, req) => {
+    // Charge-Point-ID aus dem URL-Pfad extrahieren: /chargePointId
+    const pathParts = (req.url || "").split("/").filter(Boolean);
+    const chargePointId = pathParts[pathParts.length - 1];
+
+    if (!chargePointId) {
+      log("warn", `[OCPP-Proxy] Verbindung ohne Charge-Point-ID abgelehnt`);
+      clientWs.close(1008, "Missing charge point ID");
+      return;
+    }
+
+    log("info", `[OCPP-Proxy] Neue Verbindung: ${chargePointId} von ${req.socket.remoteAddress}`);
+
+    // Basic Auth Header vom Ladepunkt durchreichen (falls vorhanden)
+    const upstreamHeaders: Record<string, string> = {};
+    const authHeader = req.headers["authorization"];
+    if (authHeader) {
+      upstreamHeaders["Authorization"] = authHeader;
+      log("debug", `[OCPP-Proxy] Basic Auth wird weitergeleitet für ${chargePointId}`);
+    }
+
+    // Upstream-WSS-Verbindung aufbauen
+    const upstreamUrl = `${OCPP_PROXY_TARGET}/${chargePointId}`;
+    const upstream = new WebSocket(upstreamUrl, [OCPP_SUBPROTOCOL], {
+      headers: upstreamHeaders,
+    });
+
+    let upstreamReady = false;
+    const clientBuffer: (string | Buffer)[] = [];
+
+    upstream.on("open", () => {
+      upstreamReady = true;
+      log("info", `[OCPP-Proxy] Upstream verbunden: ${chargePointId}`);
+
+      // Gepufferte Nachrichten senden
+      for (const msg of clientBuffer) {
+        upstream.send(msg);
+      }
+      clientBuffer.length = 0;
+    });
+
+    upstream.on("error", (err) => {
+      log("error", `[OCPP-Proxy] Upstream-Fehler für ${chargePointId}: ${err.message}`);
+      if (clientWs.readyState === WebSocket.OPEN) {
+        clientWs.close(1011, "Upstream connection failed");
+      }
+    });
+
+    // Bidirektionales Forwarding
+    clientWs.on("message", (data) => {
+      const msg = typeof data === "string" ? data : data as Buffer;
+      log("debug", `[OCPP-Proxy] ${chargePointId} → upstream: ${String(msg).substring(0, 200)}`);
+
+      if (upstreamReady && upstream.readyState === WebSocket.OPEN) {
+        upstream.send(msg);
+      } else {
+        clientBuffer.push(msg);
+      }
+    });
+
+    upstream.on("message", (data) => {
+      const msg = typeof data === "string" ? data : data as Buffer;
+      log("debug", `[OCPP-Proxy] upstream → ${chargePointId}: ${String(msg).substring(0, 200)}`);
+
+      if (clientWs.readyState === WebSocket.OPEN) {
+        clientWs.send(msg);
+      }
+    });
+
+    // Disconnect-Propagation
+    clientWs.on("close", (code, reason) => {
+      log("info", `[OCPP-Proxy] Client getrennt: ${chargePointId} (code=${code})`);
+      if (upstream.readyState === WebSocket.OPEN || upstream.readyState === WebSocket.CONNECTING) {
+        upstream.close(1000, "Client disconnected");
+      }
+    });
+
+    upstream.on("close", (code, reason) => {
+      log("info", `[OCPP-Proxy] Upstream getrennt: ${chargePointId} (code=${code})`);
+      if (clientWs.readyState === WebSocket.OPEN) {
+        clientWs.close(code, "Upstream disconnected");
+      }
+    });
+
+    clientWs.on("error", (err) => {
+      log("warn", `[OCPP-Proxy] Client-Fehler für ${chargePointId}: ${err.message}`);
+    });
+  });
+
+  proxyServer.on("error", (err) => {
+    log("error", `[OCPP-Proxy] Server-Fehler: ${err.message}`);
+  });
+}
+
 async function main(): Promise<void> {
   log("info", `Gateway Worker v3.0 starting (lxcommunicator mode)...`);
   log("info", `  Supabase URL:      ${SUPABASE_URL}`);
   log("info", `  HTTP Poll interval: ${POLL_INTERVAL_MS}ms`);
   log("info", `  WS Flush interval:  ${FLUSH_INTERVAL_MS}ms`);
   log("info", `  Log level:          ${LOG_LEVEL}`);
+  if (OCPP_PROXY_PORT) {
+    log("info", `  OCPP Proxy:         ws://0.0.0.0:${OCPP_PROXY_PORT} → ${OCPP_PROXY_TARGET}`);
+  }
 
   process.on("SIGTERM", () => { log("info", "SIGTERM – shutting down..."); process.exit(0); });
   process.on("SIGINT", () => { log("info", "SIGINT – shutting down..."); process.exit(0); });
+
+  // OCPP ws:// Proxy starten (falls konfiguriert)
+  startOcppProxy();
 
   let nonLoxoneMeters: MeterWithSensor[] = [];
 

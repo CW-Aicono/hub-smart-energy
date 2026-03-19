@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Copy, PlugZap, BookOpen, Search, ExternalLink, Server } from "lucide-react";
+import { Copy, PlugZap, BookOpen, Search, ExternalLink, Server, Shield, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/hooks/use-toast";
@@ -149,6 +149,45 @@ const OcppIntegration = () => {
                 <p className="text-[11px] text-muted-foreground">
                   {t("ocppIntegration.backendUrlHint" as any)}
                 </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* ws:// Fallback Proxy Info */}
+        <Card className="border-destructive/20 bg-destructive/5">
+          <CardContent className="pt-4 pb-4">
+            <div className="flex items-start gap-2">
+              <Shield className="h-4 w-4 text-destructive mt-0.5 shrink-0" />
+              <div className="flex-1 min-w-0 space-y-2">
+                <p className="text-xs font-medium">{t("ocppIntegration.wsProxyTitle" as any)}</p>
+                <p className="text-[11px] text-muted-foreground">
+                  {t("ocppIntegration.wsProxyDesc" as any)}
+                </p>
+
+                <div className="p-2 bg-background border rounded-md space-y-1.5">
+                  <p className="text-[11px] font-medium">{t("ocppIntegration.wsProxyConfig" as any)}</p>
+                  <code className="text-[11px] block bg-muted rounded px-2 py-1 break-all select-all">
+                    OCPP_PROXY_PORT=9000
+                  </code>
+                  <code className="text-[11px] block bg-muted rounded px-2 py-1 break-all select-all">
+                    OCPP_PROXY_TARGET=wss://ocpp.aicono.org
+                  </code>
+                </div>
+
+                <div>
+                  <p className="text-[11px] font-medium mb-0.5">{t("ocppIntegration.wsProxyUrl" as any)}</p>
+                  <code className="text-[11px] block bg-background border rounded px-2 py-1.5 break-all select-all">
+                    ws://{"<GATEWAY_IP>"}:9000/{"<OCPP_ID>"}
+                  </code>
+                </div>
+
+                <div className="flex items-start gap-1.5 text-destructive">
+                  <AlertTriangle className="h-3 w-3 mt-0.5 shrink-0" />
+                  <p className="text-[11px]">
+                    {t("ocppIntegration.wsProxyWarning" as any)}
+                  </p>
+                </div>
               </div>
             </div>
           </CardContent>
