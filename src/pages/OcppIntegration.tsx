@@ -182,7 +182,7 @@ const OcppIntegration = () => {
                   </code>
                 </div>
 
-                <div className="flex items-start gap-1.5 text-yellow-700 dark:text-yellow-400">
+                <div className="flex items-start gap-1.5 text-destructive">
                   <AlertTriangle className="h-3 w-3 mt-0.5 shrink-0" />
                   <p className="text-[11px]">
                     {t("ocppIntegration.wsProxyWarning" as any)}
