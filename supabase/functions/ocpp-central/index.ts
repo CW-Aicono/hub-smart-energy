@@ -56,33 +56,44 @@ async function handleBootNotification(
       })
       .eq("ocpp_id", chargePointId);
   } else {
-    // Auto-registration: unknown OCPP-ID → create new charge point
-    // Find the first tenant (single-tenant or pick the first available)
-    const { data: tenants } = await supabase
-      .from("tenants")
-      .select("id")
+    // Auto-registration: unknown OCPP-ID → check if it exists in ANY tenant first
+    const { data: anyExisting } = await supabase
+      .from("charge_points")
+      .select("id, tenant_id")
+      .eq("ocpp_id", chargePointId)
       .limit(1);
 
-    const tenantId = tenants?.[0]?.id;
-    if (tenantId) {
-      const vendor = (payload.chargePointVendor as string) || "Unknown";
-      const model = (payload.chargePointModel as string) || "Unknown";
-      await supabase.from("charge_points").insert({
-        ocpp_id: chargePointId,
-        tenant_id: tenantId,
-        name: `${vendor} ${model} (${chargePointId})`,
-        status: "unconfigured",
-        vendor,
-        model,
-        firmware_version: (payload.firmwareVersion as string) || null,
-        last_heartbeat: new Date().toISOString(),
-        connector_count: 1,
-        connector_type: "Type2",
-        max_power_kw: 0,
-      });
-      console.log(`[ocpp-central] Auto-registered new charge point: ${chargePointId} for tenant ${tenantId}`);
+    if (anyExisting && anyExisting.length > 0) {
+      // ocpp_id already exists in another tenant – skip auto-registration to prevent duplicates
+      console.log(`[ocpp-central] Skipping auto-registration: ocpp_id ${chargePointId} already exists in tenant ${anyExisting[0].tenant_id}`);
     } else {
-      console.error(`[ocpp-central] Cannot auto-register ${chargePointId}: no tenant found`);
+      // Find the first tenant (single-tenant or pick the first available)
+      const { data: tenants } = await supabase
+        .from("tenants")
+        .select("id")
+        .limit(1);
+
+      const tenantId = tenants?.[0]?.id;
+      if (tenantId) {
+        const vendor = (payload.chargePointVendor as string) || "Unknown";
+        const model = (payload.chargePointModel as string) || "Unknown";
+        await supabase.from("charge_points").insert({
+          ocpp_id: chargePointId,
+          tenant_id: tenantId,
+          name: `${vendor} ${model} (${chargePointId})`,
+          status: "unconfigured",
+          vendor,
+          model,
+          firmware_version: (payload.firmwareVersion as string) || null,
+          last_heartbeat: new Date().toISOString(),
+          connector_count: 1,
+          connector_type: "Type2",
+          max_power_kw: 0,
+        });
+        console.log(`[ocpp-central] Auto-registered new charge point: ${chargePointId} for tenant ${tenantId}`);
+      } else {
+        console.error(`[ocpp-central] Cannot auto-register ${chargePointId}: no tenant found`);
+      }
     }
   }
 
