@@ -17,6 +17,7 @@ import { useQuery } from "@tanstack/react-query";
 import { format, addDays, startOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfQuarter, endOfQuarter, startOfYear, endOfYear, addWeeks, addMonths, addQuarters, addYears } from "date-fns";
 import { de, enUS, es, nl } from "date-fns/locale";
 import type { Locale } from "date-fns";
+import { buildDailyActualTotal, buildHourlyActuals, estimateHourlyActualsFromDailyTotal, fetchMeterPowerReadings, toLocalHourKey } from "@/lib/pvActuals";
 
 const dfLocaleMap: Record<string, Locale> = { de, en: enUS, es, nl };
 
@@ -28,16 +29,6 @@ interface PvForecastWidgetProps {
 
 const PV_YELLOW = "hsl(var(--energy-strom))";
 const ACTUAL_GREEN = "hsl(var(--pv-actual))";
-
-type MeterPowerReading = {
-  power_value: number;
-  recorded_at: string;
-};
-
-function toLocalHourKey(ts: string): string {
-  const d = new Date(ts);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}T${String(d.getHours()).padStart(2, "0")}`;
-}
 
 function toLocalTime(ts: string): string {
   const d = new Date(ts);
@@ -57,64 +48,6 @@ function getDisplayValue(hour: Partial<PvHourlyEntry>) {
 function formatDeltaPercent(reference: number | null, actual: number | null) {
   if (!reference || !actual) return null;
   return Math.round((((reference - actual) / actual) * 100) * 10) / 10;
-}
-
-function getReadingIntervalMinutes(readings: MeterPowerReading[], index: number) {
-  if (index < readings.length - 1) {
-    const gap = (new Date(readings[index + 1].recorded_at).getTime() - new Date(readings[index].recorded_at).getTime()) / 60000;
-    if (gap > 0 && gap <= 15) return gap;
-  }
-
-  return 5;
-}
-
-async function fetchMeterPowerReadings(meterIds: string[], rangeStart: Date, rangeEnd: Date) {
-  const allData: MeterPowerReading[] = [];
-  let from = 0;
-  const pageSize = 1000;
-
-  while (true) {
-    const { data: page } = await supabase
-      .from("meter_power_readings")
-      .select("power_value, recorded_at")
-      .in("meter_id", meterIds)
-      .gte("recorded_at", rangeStart.toISOString())
-      .lt("recorded_at", rangeEnd.toISOString())
-      .order("recorded_at", { ascending: true })
-      .range(from, from + pageSize - 1);
-
-    if (!page || page.length === 0) break;
-    allData.push(...page);
-    if (page.length < pageSize) break;
-    from += pageSize;
-  }
-
-  return allData.sort((a, b) => a.recorded_at.localeCompare(b.recorded_at));
-}
-
-function buildHourlyActuals(readings: MeterPowerReading[]) {
-  const hourBuckets: Record<string, number> = {};
-
-  for (let index = 0; index < readings.length; index += 1) {
-    const reading = readings[index];
-    const hour = toLocalHourKey(reading.recorded_at);
-    const intervalMin = getReadingIntervalMinutes(readings, index);
-    const energyKwh = reading.power_value * (intervalMin / 60);
-    hourBuckets[hour] = (hourBuckets[hour] ?? 0) + energyKwh;
-  }
-
-  return Object.fromEntries(
-    Object.entries(hourBuckets).map(([hour, kwh]) => [hour, Math.round(kwh * 100) / 100])
-  );
-}
-
-function buildDailyActualTotal(readings: MeterPowerReading[]) {
-  const totalKwh = readings.reduce((sum, reading, index) => {
-    const intervalMin = getReadingIntervalMinutes(readings, index);
-    return sum + reading.power_value * (intervalMin / 60);
-  }, 0);
-
-  return Math.round(totalKwh * 10) / 10;
 }
 
 const PERIOD_LABEL_KEYS: Record<string, string> = {
@@ -180,6 +113,7 @@ const PvForecastWidget = ({ locationId }: PvForecastWidgetProps) => {
   const { selectedPeriod, setSelectedPeriod } = useDashboardFilter();
   const [offset, setOffset] = useState(0);
   const [actualReadings, setActualReadings] = useState<Record<string, number>>({});
+  const [actualReadingsEstimated, setActualReadingsEstimated] = useState(false);
   const [multiDayActuals, setMultiDayActuals] = useState<Record<string, number>>({});
 
   useEffect(() => {
@@ -315,32 +249,84 @@ const PvForecastWidget = ({ locationId }: PvForecastWidgetProps) => {
     return [];
   };
 
+  const liveHourly = forecast?.hourly ?? [];
+  const dayHourly = isDay && offset < 0 && dbHourlyData
+    ? dbHourlyData.map((hour: any) => ({
+        timestamp: hour.hour_timestamp,
+        estimated_kwh: hour.estimated_kwh,
+        ai_adjusted_kwh: hour.ai_adjusted_kwh,
+        radiation_w_m2: hour.radiation_w_m2,
+        cloud_cover_pct: hour.cloud_cover_pct,
+        poa_w_m2: hour.poa_w_m2,
+        dni_w_m2: hour.dni_w_m2,
+        dhi_w_m2: hour.dhi_w_m2,
+        cell_temp_c: hour.cell_temp_c,
+        temperature_2m: hour.temperature_2m,
+      }))
+    : liveHourly;
+
+  const filteredHourly = useMemo(
+    () => (isDay ? dayHourly.filter((hour) => toLocalDateStr(new Date(hour.timestamp)) === refDateStr) : []),
+    [isDay, dayHourly, refDateStr]
+  );
+
   useEffect(() => {
     if (!isDay) {
       setActualReadings({});
+      setActualReadingsEstimated(false);
       return;
     }
 
     const dayStart = startOfDay(refDate);
     const dayEnd = new Date(dayStart);
     dayEnd.setDate(dayEnd.getDate() + 1);
+    const todayStr = toLocalDateStr(new Date());
+    const isHistoricalDay = refDateStr < todayStr;
 
     (async () => {
       const meterIds = await resolvePvMeterIds();
       if (meterIds.length === 0) {
         setActualReadings({});
+        setActualReadingsEstimated(false);
         return;
       }
 
       const readings = await fetchMeterPowerReadings(meterIds, dayStart, dayEnd);
-      if (readings.length === 0) {
-        setActualReadings({});
+      if (readings.length > 0) {
+        setActualReadings(buildHourlyActuals(readings));
+        setActualReadingsEstimated(false);
         return;
       }
 
-      setActualReadings(buildHourlyActuals(readings));
+      if (!isHistoricalDay) {
+        setActualReadings({});
+        setActualReadingsEstimated(false);
+        return;
+      }
+
+      const { data, error } = await supabase.rpc("get_meter_daily_totals", {
+        p_meter_ids: meterIds,
+        p_from_date: refDateStr,
+        p_to_date: refDateStr,
+      });
+
+      if (error || !data || data.length === 0) {
+        setActualReadings({});
+        setActualReadingsEstimated(false);
+        return;
+      }
+
+      const dailyTotal = data.reduce((sum, row) => sum + (row.total_value ?? 0), 0);
+      if (dailyTotal <= 0) {
+        setActualReadings({});
+        setActualReadingsEstimated(false);
+        return;
+      }
+
+      setActualReadings(estimateHourlyActualsFromDailyTotal(refDateStr, dailyTotal, filteredHourly));
+      setActualReadingsEstimated(true);
     })();
-  }, [locationId, settings?.pv_meter_id, isDay, refDateStr]);
+  }, [locationId, settings?.pv_meter_id, isDay, refDate, refDateStr, tenantId, filteredHourly]);
 
   useEffect(() => {
     if (isDay) {
@@ -437,24 +423,6 @@ const PvForecastWidget = ({ locationId }: PvForecastWidgetProps) => {
   };
   const weatherSource = forecast?.weather_source ?? null;
   const dwdReference = forecast?.validation?.dwd_reference ?? null;
-
-  const liveHourly = forecast?.hourly ?? [];
-  const dayHourly = isDay && offset < 0 && dbHourlyData
-    ? dbHourlyData.map((hour: any) => ({
-        timestamp: hour.hour_timestamp,
-        estimated_kwh: hour.estimated_kwh,
-        ai_adjusted_kwh: hour.ai_adjusted_kwh,
-        radiation_w_m2: hour.radiation_w_m2,
-        cloud_cover_pct: hour.cloud_cover_pct,
-        poa_w_m2: hour.poa_w_m2,
-        dni_w_m2: hour.dni_w_m2,
-        dhi_w_m2: hour.dhi_w_m2,
-        cell_temp_c: hour.cell_temp_c,
-        temperature_2m: hour.temperature_2m,
-      }))
-    : liveHourly;
-
-  const filteredHourly = isDay ? dayHourly.filter((hour) => toLocalDateStr(new Date(hour.timestamp)) === refDateStr) : [];
   const hasMultiDayActuals = Object.keys(multiDayActuals).length > 0;
 
   const multiDayChart = !isDay && dbForecastDays
@@ -474,8 +442,18 @@ const PvForecastWidget = ({ locationId }: PvForecastWidgetProps) => {
     ? filteredHourly.reduce((sum, hour) => sum + getDisplayValue(hour), 0)
     : multiDayChart.reduce((sum, day) => sum + day.forecast, 0);
 
+  const chartHours = isDay
+    ? filteredHourly.length > 0
+      ? filteredHourly
+      : actualReadingsEstimated
+        ? Object.keys(actualReadings)
+            .sort()
+            .map((hourKey) => ({ timestamp: `${hourKey}:00:00`, estimated_kwh: 0, ai_adjusted_kwh: null }))
+        : []
+    : [];
+
   const chartData = isDay
-    ? filteredHourly.map((hour) => {
+    ? chartHours.map((hour) => {
         const hourKey = toLocalHourKey(hour.timestamp);
         return {
           time: toLocalTime(hour.timestamp),
@@ -486,8 +464,9 @@ const PvForecastWidget = ({ locationId }: PvForecastWidgetProps) => {
     : null;
 
   const hasActual = isDay ? Object.keys(actualReadings).length > 0 : hasMultiDayActuals;
-  const hasData = isDay ? filteredHourly.length > 0 : multiDayChart.length > 0;
+  const hasData = isDay ? (chartData?.length ?? 0) > 0 : multiDayChart.length > 0;
   const delta = formatDeltaPercent(forecastDayTotal, hasActualTotal ? actualTotalKwh : null);
+  const actualSeriesLabel = actualReadingsEstimated ? T("pv.actualGenerationEstimated") : T("pv.actualGeneration");
 
   return (
     <Card>
@@ -546,6 +525,9 @@ const PvForecastWidget = ({ locationId }: PvForecastWidgetProps) => {
           <div>
             <p className="text-xs text-muted-foreground">{isDay ? (isToday ? T("pv.todayActual") : T("pv.dateActual").replace("{date}", format(refDate, "d. MMM", { locale: dateLocale }))) : T("pv.periodActual").replace("{period}", T(PERIOD_LABEL_KEYS[selectedPeriod]))}</p>
             <p className="text-xl font-bold text-pv-actual">{hasActualTotal ? `${actualTotalKwh.toFixed(1)} kWh` : "–"}</p>
+            {isDay && actualReadingsEstimated && hasActualTotal && (
+              <p className="text-xs text-muted-foreground">{T("pv.estimatedFromDailyTotal")}</p>
+            )}
           </div>
         </div>
 
@@ -595,10 +577,10 @@ const PvForecastWidget = ({ locationId }: PvForecastWidgetProps) => {
                 <Tooltip
                   formatter={(value: number, name: string) => [
                     `${value.toFixed(2)} kWh`,
-                    name === "forecast" ? T("dashboard.pvForecast") : T("pv.actualGeneration"),
+                    name === "forecast" ? T("dashboard.pvForecast") : actualSeriesLabel,
                   ]}
                 />
-                <Legend formatter={(value) => value === "forecast" ? T("dashboard.pvForecast") : T("pv.actualGeneration")} />
+                <Legend formatter={(value) => value === "forecast" ? T("dashboard.pvForecast") : actualSeriesLabel} />
                 <Bar dataKey="forecast" fill={PV_YELLOW} radius={[2, 2, 0, 0]} />
                 {hasActual && <Bar dataKey="actual" fill={ACTUAL_GREEN} radius={[2, 2, 0, 0]} />}
               </BarChart>
