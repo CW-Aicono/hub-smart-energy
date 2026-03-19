@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX IF NOT EXISTS charge_points_ocpp_id_unique ON public.charge_points (ocpp_id);
