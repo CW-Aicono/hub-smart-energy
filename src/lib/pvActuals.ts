@@ -171,7 +171,8 @@ async function fetchStoredHourlyActuals(
   }
 
   if (tenantId) {
-    const { data, error } = await supabase.rpc("get_pv_actual_hourly_all", {
+    const api = supabase as any;
+    const { data, error } = await api.rpc("get_pv_actual_hourly_all", {
       p_tenant_id: tenantId,
       p_from: rangeStart.toISOString(),
       p_to: rangeEnd.toISOString(),
@@ -182,7 +183,7 @@ async function fetchStoredHourlyActuals(
       return [] as StoredHourlyActualRow[];
     }
 
-    return (data ?? []) as StoredHourlyActualRow[];
+    return ((data ?? []) as unknown[]) as StoredHourlyActualRow[];
   }
 
   return [] as StoredHourlyActualRow[];
@@ -206,11 +207,12 @@ async function fetchStoredDailyActuals(
       return [] as StoredDailyActualRow[];
     }
 
-    return (data ?? []) as StoredDailyActualRow[];
+    return ((data ?? []) as unknown[]) as StoredDailyActualRow[];
   }
 
   if (tenantId) {
-    const { data, error } = await supabase.rpc("get_pv_actual_daily_sums_all", {
+    const api = supabase as any;
+    const { data, error } = await api.rpc("get_pv_actual_daily_sums_all", {
       p_tenant_id: tenantId,
       p_from_date: fromDate,
       p_to_date: toDate,
@@ -221,7 +223,7 @@ async function fetchStoredDailyActuals(
       return [] as StoredDailyActualRow[];
     }
 
-    return (data ?? []) as StoredDailyActualRow[];
+    return ((data ?? []) as unknown[]) as StoredDailyActualRow[];
   }
 
   return [] as StoredDailyActualRow[];
