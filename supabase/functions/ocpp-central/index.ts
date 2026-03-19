@@ -649,7 +649,7 @@ Deno.serve(async (req) => {
         }
       }
 
-      const result = await handleRemoteCommand(supabase, command, body);
+      const result = await handleRemoteCommand(supabase, command, body, profile.tenant_id);
       return new Response(JSON.stringify(result), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
