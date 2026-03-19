@@ -2789,6 +2789,36 @@ export const translations = {
     es: "Difícil",
     nl: "Moeilijk",
   },
+  "ocppIntegration.wsProxyTitle": {
+    de: "ws:// Fallback für ältere Ladepunkte",
+    en: "ws:// Fallback for Legacy Charge Points",
+    es: "ws:// Fallback para puntos de carga antiguos",
+    nl: "ws:// Fallback voor oudere laadpunten",
+  },
+  "ocppIntegration.wsProxyDesc": {
+    de: "Ältere Ladepunkte, die kein TLS/WSS unterstützen, können über den Gateway Worker als ws://-Proxy angebunden werden. Der Gateway Worker terminiert TLS und leitet die Verbindung verschlüsselt an das OCPP-Backend weiter.",
+    en: "Legacy charge points that do not support TLS/WSS can be connected via the Gateway Worker as a ws:// proxy. The Gateway Worker terminates TLS and forwards the connection encrypted to the OCPP backend.",
+    es: "Los puntos de carga antiguos sin soporte TLS/WSS pueden conectarse a través del Gateway Worker como proxy ws://.",
+    nl: "Oudere laadpunten zonder TLS/WSS-ondersteuning kunnen worden aangesloten via de Gateway Worker als ws://-proxy.",
+  },
+  "ocppIntegration.wsProxyConfig": {
+    de: "Konfiguration im Gateway Worker",
+    en: "Gateway Worker Configuration",
+    es: "Configuración del Gateway Worker",
+    nl: "Gateway Worker configuratie",
+  },
+  "ocppIntegration.wsProxyUrl": {
+    de: "Ladepunkt-URL (im Ladepunkt konfigurieren)",
+    en: "Charge Point URL (configure in charge point)",
+    es: "URL del punto de carga (configurar en el punto de carga)",
+    nl: "Laadpunt-URL (configureren in laadpunt)",
+  },
+  "ocppIntegration.wsProxyWarning": {
+    de: "⚠ ws:// ist unverschlüsselt. Nur in geschützten Netzwerken (LAN/VPN) verwenden!",
+    en: "⚠ ws:// is unencrypted. Only use in protected networks (LAN/VPN)!",
+    es: "⚠ ws:// no está cifrado. ¡Usar solo en redes protegidas (LAN/VPN)!",
+    nl: "⚠ ws:// is onversleuteld. Gebruik alleen in beschermde netwerken (LAN/VPN)!",
+  },
   "charging.chargePoints": {
     de: "Ladepunkte",
     en: "Charge Points",
