@@ -3281,6 +3281,70 @@ export type Database = {
           },
         ]
       }
+      pv_actual_hourly: {
+        Row: {
+          actual_kwh: number
+          coverage_minutes: number
+          created_at: string
+          hour_start: string
+          id: string
+          location_id: string
+          meter_id: string
+          sample_count: number
+          source: string
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          actual_kwh?: number
+          coverage_minutes?: number
+          created_at?: string
+          hour_start: string
+          id?: string
+          location_id: string
+          meter_id: string
+          sample_count?: number
+          source?: string
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          actual_kwh?: number
+          coverage_minutes?: number
+          created_at?: string
+          hour_start?: string
+          id?: string
+          location_id?: string
+          meter_id?: string
+          sample_count?: number
+          source?: string
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pv_actual_hourly_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pv_actual_hourly_meter_id_fkey"
+            columns: ["meter_id"]
+            isOneToOne: false
+            referencedRelation: "meters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pv_actual_hourly_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pv_forecast_hourly: {
         Row: {
           ai_adjusted_kwh: number | null
@@ -4700,6 +4764,10 @@ export type Database = {
       }
     }
     Functions: {
+      aggregate_pv_actual_hourly: {
+        Args: { p_from?: string; p_to?: string }
+        Returns: number
+      }
       bootstrap_user_role: {
         Args: never
         Returns: Database["public"]["Enums"]["app_role"]
@@ -4744,6 +4812,22 @@ export type Database = {
           bucket: string
           meter_id: string
           power_avg: number
+        }[]
+      }
+      get_pv_actual_daily_sums: {
+        Args: { p_from_date: string; p_location_id: string; p_to_date: string }
+        Returns: {
+          actual_kwh: number
+          day: string
+        }[]
+      }
+      get_pv_actual_hourly: {
+        Args: { p_from: string; p_location_id: string; p_to: string }
+        Returns: {
+          actual_kwh: number
+          coverage_minutes: number
+          hour_start: string
+          source: string
         }[]
       }
       get_pv_forecast_daily_compare: {
