@@ -154,6 +154,45 @@ const OcppIntegration = () => {
           </CardContent>
         </Card>
 
+        {/* ws:// Fallback Proxy Info */}
+        <Card className="border-yellow-500/30 bg-yellow-50/50 dark:bg-yellow-900/10">
+          <CardContent className="pt-4 pb-4">
+            <div className="flex items-start gap-2">
+              <Shield className="h-4 w-4 text-yellow-600 dark:text-yellow-400 mt-0.5 shrink-0" />
+              <div className="flex-1 min-w-0 space-y-2">
+                <p className="text-xs font-medium">{t("ocppIntegration.wsProxyTitle" as any)}</p>
+                <p className="text-[11px] text-muted-foreground">
+                  {t("ocppIntegration.wsProxyDesc" as any)}
+                </p>
+
+                <div className="p-2 bg-background border rounded-md space-y-1.5">
+                  <p className="text-[11px] font-medium">{t("ocppIntegration.wsProxyConfig" as any)}</p>
+                  <code className="text-[11px] block bg-muted rounded px-2 py-1 break-all select-all">
+                    OCPP_PROXY_PORT=9000
+                  </code>
+                  <code className="text-[11px] block bg-muted rounded px-2 py-1 break-all select-all">
+                    OCPP_PROXY_TARGET=wss://ocpp.aicono.org
+                  </code>
+                </div>
+
+                <div>
+                  <p className="text-[11px] font-medium mb-0.5">{t("ocppIntegration.wsProxyUrl" as any)}</p>
+                  <code className="text-[11px] block bg-background border rounded px-2 py-1.5 break-all select-all">
+                    ws://{"<GATEWAY_IP>"}:9000/{"<OCPP_ID>"}
+                  </code>
+                </div>
+
+                <div className="flex items-start gap-1.5 text-yellow-700 dark:text-yellow-400">
+                  <AlertTriangle className="h-3 w-3 mt-0.5 shrink-0" />
+                  <p className="text-[11px]">
+                    {t("ocppIntegration.wsProxyWarning" as any)}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
         {/* Filters */}
         <div className="flex flex-col sm:flex-row gap-2">
           <div className="relative flex-1">
