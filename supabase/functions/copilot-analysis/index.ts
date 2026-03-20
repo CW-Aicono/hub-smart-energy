@@ -268,10 +268,12 @@ async function handleSavingsPotential(
   if (!location) return jsonError("Standort nicht gefunden", 404);
 
   // Get meters for this location
-  const { data: meters } = await db
+  const { data: meters, error: metersError } = await db
     .from("meters")
     .select("id, name, energy_type, is_main_meter, max_power_kw")
     .eq("tenant_id", tenantId).eq("location_id", locationId);
+
+  console.log("Savings: tenantId=", tenantId, "locationId=", locationId, "metersCount=", meters?.length ?? 0, "metersError=", metersError);
 
   if (!meters || meters.length === 0) {
     return jsonOk({
@@ -281,7 +283,9 @@ async function handleSavingsPotential(
         total_savings_kwh_year: 0,
         total_savings_eur_year: 0,
         total_co2_savings_kg_year: 0,
-        key_insight: "Für diesen Standort sind keine Zähler konfiguriert. Bitte weisen Sie dem Standort zunächst Messstellen zu, damit Verbrauchsdaten analysiert werden können.",
+        key_insight: metersError
+          ? `Datenbankfehler beim Laden der Zähler: ${metersError.message}`
+          : "Für diesen Standort sind keine Zähler konfiguriert. Bitte weisen Sie dem Standort zunächst Messstellen zu, damit Verbrauchsdaten analysiert werden können.",
       },
     });
   }
