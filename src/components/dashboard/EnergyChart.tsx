@@ -253,6 +253,7 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
       setDailyTotals([]);
       return;
     }
+    let stale = false;
     const fetchDailyTotals = async () => {
       const mainMeterIds = meters
         .filter(m => !m.is_archived && m.is_main_meter && m.capture_type === "automatic")
@@ -260,7 +261,7 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
         .map(m => m.id);
 
       if (mainMeterIds.length === 0) {
-        setDailyTotals([]);
+        if (!stale) setDailyTotals([]);
         return;
       }
 
@@ -274,6 +275,8 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
         p_to_date: toDate,
       });
 
+      if (stale) return;
+
       let results = (data ?? []) as Array<{ meter_id: string; day: string; total_value: number }>;
 
       if (error) {
@@ -281,8 +284,6 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
         results = [];
       }
 
-      // Find days in the range (up to today) that have no archived daily total yet.
-      // Compute their totals from 5-min power readings as fallback.
       const todayDate = new Date();
       const effectiveEnd = new Date(Math.min(rangeEnd.getTime(), todayDate.getTime()));
       const daysInRange = eachDayOfInterval({ start: rangeStart, end: effectiveEnd });
@@ -296,9 +297,8 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
         .map(d => format(d, "yyyy-MM-dd"))
         .filter(d => !daysWithData.has(d));
 
-      if (missingDays.length > 0) {
+      if (missingDays.length > 0 && !stale) {
         try {
-          // Query power readings for the full missing range at once
           const missingStart = startOfDay(new Date(missingDays[0])).toISOString();
           const missingEnd = endOfDay(new Date(missingDays[missingDays.length - 1])).toISOString();
 
@@ -306,7 +306,7 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
           let from = 0;
           const pageSize = 1000;
           let hasMore = true;
-          while (hasMore) {
+          while (hasMore && !stale) {
             const { data: pageData, error: pageError } = await supabase
               .rpc("get_power_readings_5min", {
                 p_meter_ids: mainMeterIds,
@@ -323,9 +323,8 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
             }
           }
 
-          if (allPowerData.length > 0) {
+          if (!stale && allPowerData.length > 0) {
             const missingSet = new Set(missingDays);
-            // Group by day + meter, sum power_avg * 5/60 to get kWh
             const dayMeterTotals = new Map<string, Map<string, number>>();
             for (const row of allPowerData) {
               const dayStr = format(new Date(row.bucket), "yyyy-MM-dd");
@@ -347,10 +346,13 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
         }
       }
 
-      setDailyTotals(results);
-      setDailyTotalsLoading(false);
+      if (!stale) {
+        setDailyTotals(results);
+        setDailyTotalsLoading(false);
+      }
     };
     fetchDailyTotals();
+    return () => { stale = true; };
   }, [period, rangeStart.toISOString(), rangeEnd.toISOString(), meters, locationId]);
 
   const chartData = useMemo(() => {
