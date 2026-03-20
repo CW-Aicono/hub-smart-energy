@@ -106,7 +106,7 @@ async function handleInvestmentAnalysis(
       db.from("pv_forecast_settings").select("*").eq("location_id", loc.id).eq("is_active", true),
       db.from("energy_storages").select("*").eq("tenant_id", tenantId).eq("location_id", loc.id),
       db.from("energy_prices").select("*").eq("tenant_id", tenantId).eq("location_id", loc.id).order("valid_from", { ascending: false }).limit(5),
-      db.from("meters").select("id, name, energy_type, is_main_meter, max_power_kw").eq("tenant_id", tenantId).eq("location_id", loc.id),
+      db.from("meters").select("id, name, energy_type, is_main_meter").eq("tenant_id", tenantId).eq("location_id", loc.id),
       db.from("spot_prices").select("price_eur_mwh, hour_start").order("hour_start", { ascending: false }).limit(48),
     ]);
     locationData.push({ location: loc, pvSettings: pvSettings || [], storages: storages || [], prices: prices || [], meters: meters || [], recentSpotPrices: spotPrices || [] });
