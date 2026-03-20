@@ -2,7 +2,7 @@ import { useState } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { useTranslation } from "@/hooks/useTranslation";
 import { useLocations } from "@/hooks/useLocations";
-import { useCopilotAnalysis, CopilotAnalysisResult } from "@/hooks/useCopilotAnalysis";
+import { useCopilotAnalysis, CopilotAnalysisResult, SavingsPotentialResult, SavingsFinding } from "@/hooks/useCopilotAnalysis";
 import { useCopilotProjects } from "@/hooks/useCopilotProjects";
 import { AiDisclaimer } from "@/components/ui/ai-disclaimer";
 import { Button } from "@/components/ui/button";
@@ -13,7 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Sparkles, TrendingUp, Landmark, FolderKanban, History, Loader2, Sun, Battery, Flame, Zap, Shield, ArrowRight, ExternalLink } from "lucide-react";
+import { Sparkles, TrendingUp, Landmark, FolderKanban, History, Loader2, Sun, Battery, Flame, Zap, Shield, ArrowRight, Search, Leaf, Clock, BarChart3, AlertTriangle } from "lucide-react";
 import { useDemoMode } from "@/contexts/DemoMode";
 
 const TECH_ICONS: Record<string, typeof Sun> = {
@@ -46,15 +46,55 @@ const LEVEL_LABELS: Record<string, string> = {
   kommune: "Kommune",
 };
 
+const CATEGORY_ICONS: Record<string, typeof Zap> = {
+  base_load: Zap,
+  peak_load: AlertTriangle,
+  operating_hours: Clock,
+  pv_optimization: Sun,
+  seasonal: BarChart3,
+  behavior: Search,
+};
+
+const CATEGORY_LABELS: Record<string, string> = {
+  base_load: "Grundlast",
+  peak_load: "Lastspitzen",
+  operating_hours: "Betriebszeiten",
+  pv_optimization: "PV-Optimierung",
+  seasonal: "Saisonal",
+  behavior: "Nutzerverhalten",
+};
+
+const PRIORITY_COLORS: Record<string, string> = {
+  high: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300",
+  medium: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300",
+  low: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300",
+};
+
+const PRIORITY_LABELS: Record<string, string> = {
+  high: "Hoch",
+  medium: "Mittel",
+  low: "Niedrig",
+};
+
 function formatEur(value: number) {
   return new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(value);
+}
+
+function formatKwh(value: number) {
+  if (value >= 1000) return `${(value / 1000).toLocaleString("de-DE", { maximumFractionDigits: 1 })} MWh`;
+  return `${value.toLocaleString("de-DE", { maximumFractionDigits: 0 })} kWh`;
+}
+
+function formatCo2(kg: number) {
+  if (kg >= 1000) return `${(kg / 1000).toLocaleString("de-DE", { maximumFractionDigits: 1 })} t`;
+  return `${kg.toLocaleString("de-DE", { maximumFractionDigits: 0 })} kg`;
 }
 
 const Copilot = () => {
   const { t } = useTranslation();
   const isDemo = useDemoMode();
   const { locations = [] } = useLocations();
-  const { analyses, isLoadingHistory, runAnalysis, isAnalyzing } = useCopilotAnalysis();
+  const { analyses, isLoadingHistory, runAnalysis, isAnalyzing, runSavingsAnalysis, isAnalyzingSavings } = useCopilotAnalysis();
   const { projects, createProject, updateProjectStatus } = useCopilotProjects();
 
   const [selectedLocationId, setSelectedLocationId] = useState<string>("");
@@ -62,7 +102,9 @@ const Copilot = () => {
   const [gridConnection, setGridConnection] = useState("");
   const [budgetLimit, setBudgetLimit] = useState("");
   const [result, setResult] = useState<CopilotAnalysisResult | null>(null);
+  const [savingsResult, setSavingsResult] = useState<SavingsPotentialResult | null>(null);
   const [activeTab, setActiveTab] = useState("analysis");
+  const [savingsPeriod, setSavingsPeriod] = useState("30");
 
   const handleAnalyze = async () => {
     if (!selectedLocationId) return;
@@ -77,6 +119,15 @@ const Copilot = () => {
     });
     setResult(res);
     setActiveTab("analysis");
+  };
+
+  const handleSavingsAnalyze = async () => {
+    if (!selectedLocationId) return;
+    const res = await runSavingsAnalysis.mutateAsync({
+      location_id: selectedLocationId,
+      period_days: Number(savingsPeriod),
+    });
+    setSavingsResult(res);
   };
 
   const handleAddProject = (rec: any, analysisId: string) => {
@@ -180,7 +231,7 @@ const Copilot = () => {
                   ) : (
                     <>
                       <Sparkles className="mr-2 h-4 w-4" />
-                      Analyse starten
+                      Investitions-Analyse starten
                     </>
                   )}
                 </Button>
@@ -193,10 +244,14 @@ const Copilot = () => {
           {/* Right: Results */}
           <div className="lg:col-span-8">
             <Tabs value={activeTab} onValueChange={setActiveTab}>
-              <TabsList className="grid w-full grid-cols-4">
+              <TabsList className="grid w-full grid-cols-5">
                 <TabsTrigger value="analysis" className="gap-1">
                   <TrendingUp className="h-3.5 w-3.5" />
                   <span className="hidden sm:inline">Analyse</span>
+                </TabsTrigger>
+                <TabsTrigger value="savings" className="gap-1">
+                  <Leaf className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">Einsparpotentiale</span>
                 </TabsTrigger>
                 <TabsTrigger value="funding" className="gap-1">
                   <Landmark className="h-3.5 w-3.5" />
@@ -236,7 +291,7 @@ const Copilot = () => {
 
                 {result && !isAnalyzing && (
                   <>
-                    {/* Meta info: user + params */}
+                    {/* Meta info */}
                     <Card>
                       <CardContent className="py-3 px-4 flex flex-wrap gap-x-6 gap-y-1 text-sm text-muted-foreground">
                         <span>
@@ -378,11 +433,181 @@ const Copilot = () => {
                 )}
               </TabsContent>
 
+              {/* Savings Potential Tab */}
+              <TabsContent value="savings" className="space-y-4 mt-4">
+                {/* Controls */}
+                <Card>
+                  <CardContent className="py-4 px-4">
+                    <div className="flex flex-col sm:flex-row items-start sm:items-end gap-4">
+                      <div className="space-y-1.5 flex-1">
+                        <Label className="text-xs text-muted-foreground">Analysezeitraum</Label>
+                        <Select value={savingsPeriod} onValueChange={setSavingsPeriod}>
+                          <SelectTrigger className="w-[180px]">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="30">Letzte 30 Tage</SelectItem>
+                            <SelectItem value="90">Letzte 90 Tage</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <Button
+                        disabled={!selectedLocationId || isAnalyzingSavings}
+                        onClick={handleSavingsAnalyze}
+                      >
+                        {isAnalyzingSavings ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Analyse läuft...
+                          </>
+                        ) : (
+                          <>
+                            <Search className="mr-2 h-4 w-4" />
+                            Einsparpotentiale analysieren
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Loading */}
+                {isAnalyzingSavings && (
+                  <Card>
+                    <CardContent className="py-12 text-center">
+                      <Loader2 className="h-12 w-12 mx-auto mb-4 animate-spin text-primary" />
+                      <p className="font-medium">Messdaten werden analysiert...</p>
+                      <p className="text-sm text-muted-foreground mt-1">Lastprofile, Grundlast, Spitzenwerte und Betriebszeiten werden ausgewertet.</p>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Empty state */}
+                {!savingsResult && !isAnalyzingSavings && (
+                  <Card>
+                    <CardContent className="py-12 text-center text-muted-foreground">
+                      <Leaf className="h-12 w-12 mx-auto mb-4 opacity-20" />
+                      <p>Wählen Sie einen Standort und starten Sie die Einsparpotential-Analyse.</p>
+                      <p className="text-sm mt-1">Die KI analysiert Ihre Messdaten und identifiziert konkrete Optimierungsmöglichkeiten — ohne neue Investitionen.</p>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Results */}
+                {savingsResult && !isAnalyzingSavings && (
+                  <>
+                    {/* Summary Cards */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <Card>
+                        <CardContent className="pt-4 pb-3 px-4">
+                          <p className="text-xs text-muted-foreground">Einsparpotential/Jahr</p>
+                          <p className="text-lg font-bold text-foreground">{formatKwh(savingsResult.savings_summary.total_savings_kwh_year)}</p>
+                        </CardContent>
+                      </Card>
+                      <Card>
+                        <CardContent className="pt-4 pb-3 px-4">
+                          <p className="text-xs text-muted-foreground">Kostenersparnis/Jahr</p>
+                          <p className="text-lg font-bold text-green-600 dark:text-green-400">{formatEur(savingsResult.savings_summary.total_savings_eur_year)}</p>
+                        </CardContent>
+                      </Card>
+                      <Card>
+                        <CardContent className="pt-4 pb-3 px-4">
+                          <p className="text-xs text-muted-foreground">CO₂-Einsparung/Jahr</p>
+                          <p className="text-lg font-bold text-emerald-600 dark:text-emerald-400">{formatCo2(savingsResult.savings_summary.total_co2_savings_kg_year)}</p>
+                        </CardContent>
+                      </Card>
+                    </div>
+
+                    {/* Key Insight */}
+                    {savingsResult.savings_summary.key_insight && (
+                      <Card className="border-primary/20 bg-primary/5">
+                        <CardContent className="py-3 px-4 flex items-start gap-2">
+                          <Sparkles className="h-4 w-4 mt-0.5 text-primary shrink-0" />
+                          <p className="text-sm text-foreground">{savingsResult.savings_summary.key_insight}</p>
+                        </CardContent>
+                      </Card>
+                    )}
+
+                    {/* Findings */}
+                    <div className="space-y-3">
+                      <h3 className="font-semibold text-foreground">Identifizierte Einsparpotentiale</h3>
+                      {savingsResult.findings
+                        .sort((a, b) => {
+                          const prio = { high: 0, medium: 1, low: 2 };
+                          return (prio[a.priority] ?? 2) - (prio[b.priority] ?? 2);
+                        })
+                        .map((finding: SavingsFinding, i: number) => {
+                          const Icon = CATEGORY_ICONS[finding.category] || Search;
+                          return (
+                            <Card key={i}>
+                              <CardContent className="py-4 px-4">
+                                <div className="flex items-start gap-3">
+                                  <div className="p-2 rounded-md bg-muted shrink-0">
+                                    <Icon className="h-5 w-5 text-muted-foreground" />
+                                  </div>
+                                  <div className="flex-1 min-w-0 space-y-2">
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                      <h4 className="font-medium text-foreground">{finding.title}</h4>
+                                      <Badge variant="outline" className={PRIORITY_COLORS[finding.priority]}>
+                                        {PRIORITY_LABELS[finding.priority]}
+                                      </Badge>
+                                      <Badge variant="secondary" className="text-[11px]">
+                                        {CATEGORY_LABELS[finding.category] || finding.category}
+                                      </Badge>
+                                    </div>
+                                    <p className="text-sm text-muted-foreground">{finding.description}</p>
+
+                                    {/* Metrics */}
+                                    <div className="flex flex-wrap gap-4 text-sm">
+                                      <span className="flex items-center gap-1">
+                                        <Zap className="h-3.5 w-3.5 text-yellow-500" />
+                                        <strong>{formatKwh(finding.estimated_savings_kwh_year)}</strong>/Jahr
+                                      </span>
+                                      <span className="flex items-center gap-1">
+                                        <TrendingUp className="h-3.5 w-3.5 text-green-500" />
+                                        <strong>{formatEur(finding.estimated_savings_eur_year)}</strong>/Jahr
+                                      </span>
+                                      <span className="flex items-center gap-1">
+                                        <Leaf className="h-3.5 w-3.5 text-emerald-500" />
+                                        <strong>{formatCo2(finding.estimated_co2_savings_kg_year)}</strong> CO₂/Jahr
+                                      </span>
+                                    </div>
+
+                                    {/* Action item */}
+                                    <div className="bg-muted/50 rounded-md p-3 border border-border/50">
+                                      <p className="text-xs font-medium text-muted-foreground mb-1">Handlungsempfehlung</p>
+                                      <p className="text-sm text-foreground">{finding.action_item}</p>
+                                    </div>
+
+                                    {finding.data_basis && (
+                                      <p className="text-xs text-muted-foreground italic">Datenbasis: {finding.data_basis}</p>
+                                    )}
+                                  </div>
+                                </div>
+                              </CardContent>
+                            </Card>
+                          );
+                        })}
+                    </div>
+
+                    {/* Data quality note */}
+                    {savingsResult.savings_summary.data_quality_note && (
+                      <Card className="border-muted">
+                        <CardContent className="py-3 px-4 text-xs text-muted-foreground">
+                          <strong>Hinweis zur Datenqualität:</strong> {savingsResult.savings_summary.data_quality_note}
+                        </CardContent>
+                      </Card>
+                    )}
+
+                    <AiDisclaimer text="Die Einsparpotentiale basieren auf KI-Analyse der Messdaten und sind Schätzwerte. Eine detaillierte Prüfung vor Ort wird empfohlen." />
+                  </>
+                )}
+              </TabsContent>
+
               {/* Funding Tab */}
               <TabsContent value="funding" className="space-y-4 mt-4">
                 {result?.funding_matches && result.funding_matches.length > 0 ? (
                   <>
-                    {/* Funding by level */}
                     {(["bund", "land", "kommune"] as const).map((level) => {
                       const matches = result.funding_matches.filter((f) => f.level === level);
                       if (matches.length === 0) return null;
@@ -491,27 +716,45 @@ const Copilot = () => {
                         key={a.id}
                         className="cursor-pointer hover:border-primary/30 transition-colors"
                         onClick={() => {
-                          setResult({
-                            analysis: a,
-                            summary: {
-                              total_investment_eur: a.total_investment || 0,
-                              total_funding_eur: a.total_funding || 0,
-                              best_roi_years: a.best_roi_years || 0,
-                              annual_savings_eur: 0,
-                              key_insight: "",
-                            },
-                            recommendations: a.recommendations || [],
-                            roi_scenarios: a.roi_scenarios || [],
-                            funding_matches: a.funding_matches || [],
-                          });
-                          setActiveTab("analysis");
+                          if (a.analysis_type === "savings_potential") {
+                            setSavingsResult({
+                              analysis: a,
+                              findings: a.recommendations || [],
+                              savings_summary: {
+                                total_savings_kwh_year: (a.recommendations || []).reduce((s: number, f: any) => s + (f.estimated_savings_kwh_year || 0), 0),
+                                total_savings_eur_year: (a.recommendations || []).reduce((s: number, f: any) => s + (f.estimated_savings_eur_year || 0), 0),
+                                total_co2_savings_kg_year: (a.recommendations || []).reduce((s: number, f: any) => s + (f.estimated_co2_savings_kg_year || 0), 0),
+                                key_insight: "",
+                              },
+                            });
+                            setActiveTab("savings");
+                          } else {
+                            setResult({
+                              analysis: a,
+                              summary: {
+                                total_investment_eur: a.total_investment || 0,
+                                total_funding_eur: a.total_funding || 0,
+                                best_roi_years: a.best_roi_years || 0,
+                                annual_savings_eur: 0,
+                                key_insight: "",
+                              },
+                              recommendations: a.recommendations || [],
+                              roi_scenarios: a.roi_scenarios || [],
+                              funding_matches: a.funding_matches || [],
+                            });
+                            setActiveTab("analysis");
+                          }
                         }}
                       >
                         <CardContent className="py-3 px-4 space-y-1">
                           <div className="flex items-center justify-between">
                             <div>
                               <p className="font-medium text-foreground">
-                                {a.analysis_type === "portfolio" ? "Portfolio-Analyse" : "Standort-Analyse"}
+                                {a.analysis_type === "savings_potential"
+                                  ? "Einsparpotential-Analyse"
+                                  : a.analysis_type === "portfolio"
+                                  ? "Portfolio-Analyse"
+                                  : "Standort-Analyse"}
                               </p>
                               <p className="text-sm text-muted-foreground">
                                 {locations.find((l) => l.id === a.location_id)?.name || "–"}
@@ -520,15 +763,33 @@ const Copilot = () => {
                               </p>
                             </div>
                             <div className="text-right">
-                              <p className="font-semibold text-foreground">{formatEur(a.total_investment || 0)}</p>
-                              <p className="text-sm text-green-600 dark:text-green-400">{a.best_roi_years ? `ROI: ${a.best_roi_years} J.` : ""}</p>
+                              {a.analysis_type === "savings_potential" ? (
+                                <Badge variant="outline" className="bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300">
+                                  <Leaf className="h-3 w-3 mr-1" />
+                                  Einsparung
+                                </Badge>
+                              ) : (
+                                <>
+                                  <p className="font-semibold text-foreground">{formatEur(a.total_investment || 0)}</p>
+                                  <p className="text-sm text-green-600 dark:text-green-400">{a.best_roi_years ? `ROI: ${a.best_roi_years} J.` : ""}</p>
+                                </>
+                              )}
                             </div>
                           </div>
-                          {Array.isArray(a.recommendations) && a.recommendations.length > 0 && (
+                          {a.analysis_type !== "savings_potential" && Array.isArray(a.recommendations) && a.recommendations.length > 0 && (
                             <div className="flex flex-wrap gap-1 pt-1">
                               {(a.recommendations as any[]).map((r: any, i: number) => (
                                 <Badge key={i} variant="secondary" className="text-[11px] font-normal">
                                   {TECH_LABELS[r.technology] || r.technology}
+                                </Badge>
+                              ))}
+                            </div>
+                          )}
+                          {a.analysis_type === "savings_potential" && Array.isArray(a.recommendations) && a.recommendations.length > 0 && (
+                            <div className="flex flex-wrap gap-1 pt-1">
+                              {(a.recommendations as any[]).map((r: any, i: number) => (
+                                <Badge key={i} variant="secondary" className="text-[11px] font-normal">
+                                  {CATEGORY_LABELS[r.category] || r.category}
                                 </Badge>
                               ))}
                             </div>
