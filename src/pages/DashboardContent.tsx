@@ -92,7 +92,7 @@ const DashboardContent = () => {
   const { widgets, visibleWidgets, loading: widgetsLoading, toggleWidgetVisibility, reorderWidgets, updateWidgetSize } = useDashboardWidgets();
   const [expandedWidget, setExpandedWidget] = useState<string | null>(null);
   const { t } = useTranslation();
-  const { selectedLocationId, setSelectedLocationId } = useDashboardFilter();
+  const { selectedLocationId, setSelectedLocationId, isPending } = useDashboardFilter();
   const { isModuleEnabled } = useModuleGuard();
 
   // Prefetch shared data at dashboard level
