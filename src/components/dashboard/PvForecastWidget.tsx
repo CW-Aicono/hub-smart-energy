@@ -276,6 +276,7 @@ const PvForecastWidget = ({ locationId }: PvForecastWidgetProps) => {
       setActualReadingsEstimated(false);
       return;
     }
+    let stale = false;
 
     const dayStart = startOfDay(refDate);
     const dayEnd = new Date(dayStart);
@@ -283,6 +284,7 @@ const PvForecastWidget = ({ locationId }: PvForecastWidgetProps) => {
 
     (async () => {
       const meterIds = await resolvePvMeterIds();
+      if (stale) return;
       const result = await fetchPvActualHourly({
         meterIds,
         locationId,
@@ -292,9 +294,12 @@ const PvForecastWidget = ({ locationId }: PvForecastWidgetProps) => {
         forecastHours: filteredHourly,
       });
 
-      setActualReadings(result.readings);
-      setActualReadingsEstimated(result.isEstimated);
+      if (!stale) {
+        setActualReadings(result.readings);
+        setActualReadingsEstimated(result.isEstimated);
+      }
     })();
+    return () => { stale = true; };
   }, [locationId, settings?.pv_meter_id, isDay, refDate, tenantId, filteredHourly]);
 
   useEffect(() => {
@@ -302,9 +307,11 @@ const PvForecastWidget = ({ locationId }: PvForecastWidgetProps) => {
       setMultiDayActuals({});
       return;
     }
+    let stale = false;
 
     (async () => {
       const meterIds = await resolvePvMeterIds();
+      if (stale) return;
       const dayMap = await fetchPvActualDailyTotals({
         meterIds,
         locationId,
@@ -313,8 +320,9 @@ const PvForecastWidget = ({ locationId }: PvForecastWidgetProps) => {
         rangeEnd,
       });
 
-      setMultiDayActuals(dayMap);
+      if (!stale) setMultiDayActuals(dayMap);
     })();
+    return () => { stale = true; };
   }, [locationId, settings?.pv_meter_id, isDay, tenantId, rangeStart, rangeEnd]);
 
   const { data: realtimePowerKw } = useQuery({

@@ -92,7 +92,7 @@ const DashboardContent = () => {
   const { widgets, visibleWidgets, loading: widgetsLoading, toggleWidgetVisibility, reorderWidgets, updateWidgetSize } = useDashboardWidgets();
   const [expandedWidget, setExpandedWidget] = useState<string | null>(null);
   const { t } = useTranslation();
-  const { selectedLocationId, setSelectedLocationId } = useDashboardFilter();
+  const { selectedLocationId, setSelectedLocationId, isPending } = useDashboardFilter();
   const { isModuleEnabled } = useModuleGuard();
 
   // Prefetch shared data at dashboard level
@@ -145,7 +145,12 @@ const DashboardContent = () => {
             </div>
           </div>
         </header>
-        <div className="p-3 md:p-6">
+        <div className="p-3 md:p-6 relative">
+          {isPending && (
+            <div className="absolute inset-0 z-10 bg-background/50 flex items-center justify-center pointer-events-none">
+              <div className="animate-pulse text-muted-foreground text-sm">{t("common.loading")}</div>
+            </div>
+          )}
           <div className="flex flex-wrap gap-4">
             {filteredVisibleWidgets.length > 0 ? (
               filteredVisibleWidgets.map((widget) => {
