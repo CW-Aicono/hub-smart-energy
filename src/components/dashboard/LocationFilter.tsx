@@ -12,7 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useTranslation } from "@/hooks/useTranslation";
 import { useModuleGuard } from "@/hooks/useModuleGuard";
 import { useIntegrationErrors } from "@/hooks/useIntegrationErrors";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
 interface LocationFilterProps {
   selectedLocationId: string | null;
@@ -26,6 +26,7 @@ export function LocationFilter({ selectedLocationId, onLocationChange }: Locatio
   const { locationsFullEnabled } = useModuleGuard();
   const { errorLocationIds } = useIntegrationErrors();
   const hasAnyErrors = errorLocationIds.size > 0;
+  const [open, setOpen] = useState(false);
 
   const mainLocation = locations.find((loc) => loc.is_main_location) || locations[0];
 
@@ -35,6 +36,16 @@ export function LocationFilter({ selectedLocationId, onLocationChange }: Locatio
       onLocationChange(mainLocation.id);
     }
   }, [locationsFullEnabled, mainLocation?.id]);
+
+  const handleLocationSelect = (locationId: string | null) => {
+    onLocationChange(locationId);
+    setOpen(false);
+
+    requestAnimationFrame(() => {
+      document.body.style.pointerEvents = "";
+      document.body.style.overflow = "";
+    });
+  };
 
   const selectedLocation = selectedLocationId
     ? locations.find((loc) => loc.id === selectedLocationId)
@@ -61,7 +72,7 @@ export function LocationFilter({ selectedLocationId, onLocationChange }: Locatio
   }
 
   return (
-    <DropdownMenu modal={false}>
+    <DropdownMenu modal={false} open={open} onOpenChange={setOpen}>
       <DropdownMenuTrigger asChild>
         <Button variant="outline" className="min-w-[200px] justify-between">
           <span className="flex items-center gap-2 truncate">
@@ -90,7 +101,7 @@ export function LocationFilter({ selectedLocationId, onLocationChange }: Locatio
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-[250px] bg-popover z-50">
         <DropdownMenuItem
-          onClick={() => onLocationChange(null)}
+          onSelect={() => handleLocationSelect(null)}
           className={!selectedLocationId ? "bg-accent" : ""}
         >
           {hasAnyErrors ? (
@@ -100,13 +111,13 @@ export function LocationFilter({ selectedLocationId, onLocationChange }: Locatio
           )}
           {T("loc.allLocations")}
         </DropdownMenuItem>
-        
+
         {locations.length > 0 && <DropdownMenuSeparator />}
-        
+
         {sortedLocations.map((location) => (
           <DropdownMenuItem
             key={location.id}
-            onClick={() => onLocationChange(location.id)}
+            onSelect={() => handleLocationSelect(location.id)}
             className={selectedLocationId === location.id ? "bg-accent" : ""}
           >
             {errorLocationIds.has(location.id) ? (
@@ -120,7 +131,7 @@ export function LocationFilter({ selectedLocationId, onLocationChange }: Locatio
             )}
           </DropdownMenuItem>
         ))}
-        
+
         {locations.length === 0 && (
           <DropdownMenuItem disabled>
             <span className="text-muted-foreground">{T("loc.noLocations")}</span>
