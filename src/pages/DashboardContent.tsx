@@ -145,8 +145,12 @@ const DashboardContent = () => {
             </div>
           </div>
         </header>
-        <div className="p-3 md:p-6">
-          <div className="flex flex-wrap gap-4">
+        <div className="p-3 md:p-6 relative">
+          {isPending && (
+            <div className="absolute inset-0 z-10 bg-background/50 flex items-center justify-center pointer-events-none">
+              <div className="animate-pulse text-muted-foreground text-sm">{t("common.loading")}</div>
+            </div>
+          )}
             {filteredVisibleWidgets.length > 0 ? (
               filteredVisibleWidgets.map((widget) => {
                 const widgetType = widget.widget_type === "location_map"
