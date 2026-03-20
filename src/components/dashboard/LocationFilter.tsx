@@ -61,7 +61,7 @@ export function LocationFilter({ selectedLocationId, onLocationChange }: Locatio
   }
 
   return (
-    <DropdownMenu>
+    <DropdownMenu modal={false}>
       <DropdownMenuTrigger asChild>
         <Button variant="outline" className="min-w-[200px] justify-between">
           <span className="flex items-center gap-2 truncate">
