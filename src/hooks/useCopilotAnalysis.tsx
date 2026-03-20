@@ -55,6 +55,34 @@ export interface CopilotAnalysisResult {
   funding_matches: CopilotFundingMatch[];
 }
 
+// ── Savings Potential types ──
+
+export interface SavingsFinding {
+  title: string;
+  description: string;
+  category: "base_load" | "peak_load" | "operating_hours" | "pv_optimization" | "seasonal" | "behavior";
+  priority: "high" | "medium" | "low";
+  estimated_savings_kwh_year: number;
+  estimated_savings_eur_year: number;
+  estimated_co2_savings_kg_year: number;
+  action_item: string;
+  data_basis?: string;
+}
+
+export interface SavingsSummary {
+  total_savings_kwh_year: number;
+  total_savings_eur_year: number;
+  total_co2_savings_kg_year: number;
+  key_insight: string;
+  data_quality_note?: string;
+}
+
+export interface SavingsPotentialResult {
+  analysis: any;
+  findings: SavingsFinding[];
+  savings_summary: SavingsSummary;
+}
+
 export function useCopilotAnalysis() {
   const { tenant } = useTenant();
   const queryClient = useQueryClient();
@@ -84,7 +112,6 @@ export function useCopilotAnalysis() {
         body: params,
       });
       if (error) {
-        // Try to extract detail
         let detail = "";
         try {
           if ((error as any).context?.json) {
@@ -109,10 +136,45 @@ export function useCopilotAnalysis() {
     },
   });
 
+  const runSavingsAnalysis = useMutation({
+    mutationFn: async (params: {
+      location_id: string;
+      period_days?: number;
+    }): Promise<SavingsPotentialResult> => {
+      const { data, error } = await supabase.functions.invoke("copilot-analysis", {
+        body: { ...params, analysis_mode: "savings_potential" },
+      });
+      if (error) {
+        let detail = "";
+        try {
+          if ((error as any).context?.json) {
+            const body = await ((error as any).context as Response).json();
+            detail = body.detail || body.error || "";
+          }
+        } catch {}
+        throw new Error(detail || error.message || "Analyse fehlgeschlagen");
+      }
+      if (data?.error) throw new Error(data.detail || data.error);
+      return data as SavingsPotentialResult;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["copilot-analyses", tenantId] });
+    },
+    onError: (e: Error) => {
+      toast({
+        title: "Einsparpotential-Analyse fehlgeschlagen",
+        description: e.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   return {
     analyses,
     isLoadingHistory,
     runAnalysis,
     isAnalyzing: runAnalysis.isPending,
+    runSavingsAnalysis,
+    isAnalyzingSavings: runSavingsAnalysis.isPending,
   };
 }
