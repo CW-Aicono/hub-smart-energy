@@ -64,29 +64,8 @@ export function LocationFilter({ selectedLocationId, onLocationChange }: Locatio
         onLocationChange(nextLocationId);
       }}
     >
-      <SelectTrigger className="min-w-[200px] justify-between">
-        <span className="flex items-center gap-2 truncate">
-          {selectedLocation ? (
-            <>
-              {errorLocationIds.has(selectedLocation.id) ? (
-                <AlertTriangle className="h-4 w-4 shrink-0 text-destructive" />
-              ) : (
-                <Building2 className="h-4 w-4 shrink-0" />
-              )}
-              <span className="truncate">{selectedLocation.name}</span>
-            </>
-          ) : (
-            <>
-              {hasAnyErrors ? (
-                <AlertTriangle className="h-4 w-4 shrink-0 text-destructive" />
-              ) : (
-                <MapPin className="h-4 w-4 shrink-0" />
-              )}
-              <span>{T("loc.allLocations")}</span>
-            </>
-          )}
-        </span>
-        <SelectValue className="hidden" />
+      <SelectTrigger className="min-w-[200px]">
+        <SelectValue />
       </SelectTrigger>
       <SelectContent className="w-[250px] bg-popover z-50">
         <SelectItem value={ALL_LOCATIONS_VALUE}>
