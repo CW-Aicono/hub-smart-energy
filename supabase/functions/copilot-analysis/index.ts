@@ -270,7 +270,7 @@ async function handleSavingsPotential(
   // Get meters for this location
   const { data: meters, error: metersError } = await db
     .from("meters")
-    .select("id, name, energy_type, is_main_meter, max_power_kw")
+    .select("id, name, energy_type, is_main_meter")
     .eq("tenant_id", tenantId).eq("location_id", locationId);
 
   console.log("Savings: tenantId=", tenantId, "locationId=", locationId, "metersCount=", meters?.length ?? 0, "metersError=", metersError);
