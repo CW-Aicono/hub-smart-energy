@@ -273,7 +273,18 @@ async function handleSavingsPotential(
     .select("id, name, energy_type, is_main_meter, max_power_kw")
     .eq("tenant_id", tenantId).eq("location_id", locationId);
 
-  if (!meters || meters.length === 0) return jsonError("Keine Zähler am Standort", 400);
+  if (!meters || meters.length === 0) {
+    return jsonOk({
+      analysis: null,
+      findings: [],
+      savings_summary: {
+        total_savings_kwh_year: 0,
+        total_savings_eur_year: 0,
+        total_co2_savings_kg_year: 0,
+        key_insight: "Für diesen Standort sind keine Zähler konfiguriert. Bitte weisen Sie dem Standort zunächst Messstellen zu, damit Verbrauchsdaten analysiert werden können.",
+      },
+    });
+  }
 
   const meterIds = meters.map((m: any) => m.id);
   const now = new Date();
