@@ -106,7 +106,7 @@ async function handleInvestmentAnalysis(
       db.from("pv_forecast_settings").select("*").eq("location_id", loc.id).eq("is_active", true),
       db.from("energy_storages").select("*").eq("tenant_id", tenantId).eq("location_id", loc.id),
       db.from("energy_prices").select("*").eq("tenant_id", tenantId).eq("location_id", loc.id).order("valid_from", { ascending: false }).limit(5),
-      db.from("meters").select("id, name, energy_type, is_main_meter, max_power_kw").eq("tenant_id", tenantId).eq("location_id", loc.id),
+      db.from("meters").select("id, name, energy_type, is_main_meter").eq("tenant_id", tenantId).eq("location_id", loc.id),
       db.from("spot_prices").select("price_eur_mwh, hour_start").order("hour_start", { ascending: false }).limit(48),
     ]);
     locationData.push({ location: loc, pvSettings: pvSettings || [], storages: storages || [], prices: prices || [], meters: meters || [], recentSpotPrices: spotPrices || [] });
@@ -128,7 +128,7 @@ async function handleInvestmentAnalysis(
       name: loc.name, address: `${loc.address || ""}, ${loc.city || ""}`.trim(),
       usage_type: loc.usage_type || "unbekannt",
       net_floor_area_sqm: loc.net_floor_area || input_params.roof_area_sqm,
-      grid_connection_kva: input_params.grid_connection_kva || (mainMeter?.max_power_kw ?? null),
+      grid_connection_kva: input_params.grid_connection_kva || null,
       existing_pv_kwp: existingPV, existing_storage_kwh: existingStorage,
       meter_count: ld.meters.length,
       energy_types: [...new Set(ld.meters.map((m: any) => m.energy_type))],
@@ -270,7 +270,7 @@ async function handleSavingsPotential(
   // Get meters for this location
   const { data: meters, error: metersError } = await db
     .from("meters")
-    .select("id, name, energy_type, is_main_meter, max_power_kw")
+    .select("id, name, energy_type, is_main_meter")
     .eq("tenant_id", tenantId).eq("location_id", locationId);
 
   console.log("Savings: tenantId=", tenantId, "locationId=", locationId, "metersCount=", meters?.length ?? 0, "metersError=", metersError);
