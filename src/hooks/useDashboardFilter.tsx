@@ -20,13 +20,13 @@ export function DashboardFilterProvider({ children }: { children: ReactNode }) {
 
   const setSelectedLocationId = useCallback((id: string | null) => {
     startTransition(() => {
-      setLocationId(id);
+      setLocationId((prev) => (prev === id ? prev : id));
     });
   }, []);
 
   const setSelectedPeriod = useCallback((period: TimePeriod) => {
     startTransition(() => {
-      setPeriodRaw(period);
+      setPeriodRaw((prev) => (prev === period ? prev : period));
     });
   }, []);
 
