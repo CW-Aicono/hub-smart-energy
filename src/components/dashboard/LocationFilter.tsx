@@ -1,23 +1,18 @@
-import { AlertTriangle, Building2, ChevronDown, MapPin } from "lucide-react";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Button } from "@/components/ui/button";
+import { AlertTriangle, Building2, MapPin } from "lucide-react";
 import { useLocations } from "@/hooks/useLocations";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useTranslation } from "@/hooks/useTranslation";
 import { useModuleGuard } from "@/hooks/useModuleGuard";
 import { useIntegrationErrors } from "@/hooks/useIntegrationErrors";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useEffect } from "react";
 
 interface LocationFilterProps {
   selectedLocationId: string | null;
   onLocationChange: (locationId: string | null) => void;
 }
+
+const ALL_LOCATIONS_VALUE = "__all_locations__";
 
 export function LocationFilter({ selectedLocationId, onLocationChange }: LocationFilterProps) {
   const { locations, loading } = useLocations();
@@ -29,7 +24,6 @@ export function LocationFilter({ selectedLocationId, onLocationChange }: Locatio
 
   const mainLocation = locations.find((loc) => loc.is_main_location) || locations[0];
 
-  // When locations module is disabled, auto-select the main location
   useEffect(() => {
     if (!locationsFullEnabled && mainLocation && selectedLocationId !== mainLocation.id) {
       onLocationChange(mainLocation.id);
@@ -50,7 +44,6 @@ export function LocationFilter({ selectedLocationId, onLocationChange }: Locatio
     return <Skeleton className="h-9 w-48" />;
   }
 
-  // Module disabled: show only main location name, no dropdown
   if (!locationsFullEnabled) {
     return (
       <div className="flex items-center gap-2 px-3 py-2 text-sm font-medium">
@@ -60,73 +53,69 @@ export function LocationFilter({ selectedLocationId, onLocationChange }: Locatio
     );
   }
 
-  return (
-    <DropdownMenu modal={false}>
-      <DropdownMenuTrigger asChild>
-        <Button variant="outline" className="min-w-[200px] justify-between">
-          <span className="flex items-center gap-2 truncate">
-            {selectedLocation ? (
-              <>
-                {errorLocationIds.has(selectedLocation.id) ? (
-                  <AlertTriangle className="h-4 w-4 shrink-0 text-destructive" />
-                ) : (
-                  <Building2 className="h-4 w-4 shrink-0" />
-                )}
-                <span className="truncate">{selectedLocation.name}</span>
-              </>
-            ) : (
-              <>
-                {hasAnyErrors ? (
-                  <AlertTriangle className="h-4 w-4 shrink-0 text-destructive" />
-                ) : (
-                  <MapPin className="h-4 w-4 shrink-0" />
-                )}
-                <span>{T("loc.allLocations")}</span>
-              </>
-            )}
-          </span>
-          <ChevronDown className="h-4 w-4 shrink-0 opacity-50 ml-2" />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-[250px] bg-popover z-50">
-        <DropdownMenuItem
-          onClick={() => onLocationChange(null)}
-          className={!selectedLocationId ? "bg-accent" : ""}
-        >
-          {hasAnyErrors ? (
-            <AlertTriangle className="h-4 w-4 mr-2 text-destructive" />
-          ) : (
-            <MapPin className="h-4 w-4 mr-2" />
-          )}
-          {T("loc.allLocations")}
-        </DropdownMenuItem>
+  const currentValue = selectedLocationId ?? ALL_LOCATIONS_VALUE;
 
-        {locations.length > 0 && <DropdownMenuSeparator />}
+  return (
+    <Select
+      value={currentValue}
+      onValueChange={(value) => {
+        const nextLocationId = value === ALL_LOCATIONS_VALUE ? null : value;
+        if (nextLocationId === selectedLocationId) return;
+        onLocationChange(nextLocationId);
+      }}
+    >
+      <SelectTrigger className="min-w-[200px] justify-between">
+        <span className="flex items-center gap-2 truncate">
+          {selectedLocation ? (
+            <>
+              {errorLocationIds.has(selectedLocation.id) ? (
+                <AlertTriangle className="h-4 w-4 shrink-0 text-destructive" />
+              ) : (
+                <Building2 className="h-4 w-4 shrink-0" />
+              )}
+              <span className="truncate">{selectedLocation.name}</span>
+            </>
+          ) : (
+            <>
+              {hasAnyErrors ? (
+                <AlertTriangle className="h-4 w-4 shrink-0 text-destructive" />
+              ) : (
+                <MapPin className="h-4 w-4 shrink-0" />
+              )}
+              <span>{T("loc.allLocations")}</span>
+            </>
+          )}
+        </span>
+        <SelectValue className="hidden" />
+      </SelectTrigger>
+      <SelectContent className="w-[250px] bg-popover z-50">
+        <SelectItem value={ALL_LOCATIONS_VALUE}>
+          <span className="flex items-center gap-2">
+            {hasAnyErrors ? (
+              <AlertTriangle className="h-4 w-4 shrink-0 text-destructive" />
+            ) : (
+              <MapPin className="h-4 w-4 shrink-0" />
+            )}
+            <span>{T("loc.allLocations")}</span>
+          </span>
+        </SelectItem>
 
         {sortedLocations.map((location) => (
-          <DropdownMenuItem
-            key={location.id}
-            onClick={() => onLocationChange(location.id)}
-            className={selectedLocationId === location.id ? "bg-accent" : ""}
-          >
-            {errorLocationIds.has(location.id) ? (
-              <AlertTriangle className="h-4 w-4 mr-2 shrink-0 text-destructive" />
-            ) : (
-              <Building2 className="h-4 w-4 mr-2 shrink-0" />
-            )}
-            <span className="truncate flex-1">{location.name}</span>
-            {location.is_main_location && (
-              <span className="text-xs text-muted-foreground ml-2">{T("loc.mainBadge")}</span>
-            )}
-          </DropdownMenuItem>
+          <SelectItem key={location.id} value={location.id}>
+            <span className="flex items-center gap-2 w-full">
+              {errorLocationIds.has(location.id) ? (
+                <AlertTriangle className="h-4 w-4 shrink-0 text-destructive" />
+              ) : (
+                <Building2 className="h-4 w-4 shrink-0" />
+              )}
+              <span className="truncate flex-1">{location.name}</span>
+              {location.is_main_location && (
+                <span className="text-xs text-muted-foreground">{T("loc.mainBadge")}</span>
+              )}
+            </span>
+          </SelectItem>
         ))}
-
-        {locations.length === 0 && (
-          <DropdownMenuItem disabled>
-            <span className="text-muted-foreground">{T("loc.noLocations")}</span>
-          </DropdownMenuItem>
-        )}
-      </DropdownMenuContent>
-    </DropdownMenu>
+      </SelectContent>
+    </Select>
   );
 }
