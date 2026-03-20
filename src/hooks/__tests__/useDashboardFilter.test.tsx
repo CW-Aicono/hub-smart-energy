@@ -25,32 +25,40 @@ describe("useDashboardFilter", () => {
     const { result } = renderHook(() => useDashboardFilter(), { wrapper: createWrapper() });
     expect(result.current.selectedLocationId).toBeNull();
     expect(result.current.selectedPeriod).toBe("day");
+    expect(result.current.isPending).toBe(false);
   });
 
-  it("updates selected location", () => {
+  it("updates selected location", async () => {
     const { result } = renderHook(() => useDashboardFilter(), { wrapper: createWrapper() });
 
     act(() => {
       result.current.setSelectedLocationId("loc-123");
     });
 
-    expect(result.current.selectedLocationId).toBe("loc-123");
+    await waitFor(() => {
+      expect(result.current.selectedLocationId).toBe("loc-123");
+    });
   });
 
-  it("clears selected location to null", () => {
+  it("clears selected location to null", async () => {
     const { result } = renderHook(() => useDashboardFilter(), { wrapper: createWrapper() });
 
     act(() => {
       result.current.setSelectedLocationId("loc-123");
     });
+    await waitFor(() => {
+      expect(result.current.selectedLocationId).toBe("loc-123");
+    });
+
     act(() => {
       result.current.setSelectedLocationId(null);
     });
-
-    expect(result.current.selectedLocationId).toBeNull();
+    await waitFor(() => {
+      expect(result.current.selectedLocationId).toBeNull();
+    });
   });
 
-  it("updates selected period", () => {
+  it("updates selected period", async () => {
     const { result } = renderHook(() => useDashboardFilter(), { wrapper: createWrapper() });
 
     const periods: TimePeriod[] = ["day", "week", "month", "quarter", "year", "all"];
@@ -58,11 +66,13 @@ describe("useDashboardFilter", () => {
       act(() => {
         result.current.setSelectedPeriod(period);
       });
-      expect(result.current.selectedPeriod).toBe(period);
+      await waitFor(() => {
+        expect(result.current.selectedPeriod).toBe(period);
+      });
     }
   });
 
-  it("maintains independent state for location and period", () => {
+  it("maintains independent state for location and period", async () => {
     const { result } = renderHook(() => useDashboardFilter(), { wrapper: createWrapper() });
 
     act(() => {
@@ -70,15 +80,18 @@ describe("useDashboardFilter", () => {
       result.current.setSelectedPeriod("year");
     });
 
-    expect(result.current.selectedLocationId).toBe("loc-456");
-    expect(result.current.selectedPeriod).toBe("year");
+    await waitFor(() => {
+      expect(result.current.selectedLocationId).toBe("loc-456");
+      expect(result.current.selectedPeriod).toBe("year");
+    });
 
     act(() => {
       result.current.setSelectedPeriod("month");
     });
 
-    // Location should remain unchanged
-    expect(result.current.selectedLocationId).toBe("loc-456");
-    expect(result.current.selectedPeriod).toBe("month");
+    await waitFor(() => {
+      expect(result.current.selectedLocationId).toBe("loc-456");
+      expect(result.current.selectedPeriod).toBe("month");
+    });
   });
 });
