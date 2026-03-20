@@ -128,7 +128,7 @@ async function handleInvestmentAnalysis(
       name: loc.name, address: `${loc.address || ""}, ${loc.city || ""}`.trim(),
       usage_type: loc.usage_type || "unbekannt",
       net_floor_area_sqm: loc.net_floor_area || input_params.roof_area_sqm,
-      grid_connection_kva: input_params.grid_connection_kva || (mainMeter?.max_power_kw ?? null),
+      grid_connection_kva: input_params.grid_connection_kva || null,
       existing_pv_kwp: existingPV, existing_storage_kwh: existingStorage,
       meter_count: ld.meters.length,
       energy_types: [...new Set(ld.meters.map((m: any) => m.energy_type))],
