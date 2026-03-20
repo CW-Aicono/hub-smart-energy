@@ -1,5 +1,4 @@
 import { AlertTriangle, Building2, MapPin } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { useLocations } from "@/hooks/useLocations";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useTranslation } from "@/hooks/useTranslation";
