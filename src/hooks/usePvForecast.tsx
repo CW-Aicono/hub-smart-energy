@@ -254,6 +254,14 @@ export function usePvForecast(locationId: string | null) {
       if (isDemo) return buildDemoForecast(locationId);
 
       if (locationId) {
+        // Check if location has coordinates before calling the edge function
+        const { data: loc } = await supabase
+          .from("locations")
+          .select("latitude,longitude")
+          .eq("id", locationId)
+          .maybeSingle();
+        if (!loc?.latitude || !loc?.longitude) return null;
+
         const { data, error } = await supabase.functions.invoke("pv-forecast", {
           body: { location_id: locationId },
         });
