@@ -60,6 +60,25 @@ const Copilot = () => {
   const { analyses, isLoadingHistory, runAnalysis, isAnalyzing, runSavingsAnalysis, isAnalyzingSavings } = useCopilotAnalysis();
   const { projects, createProject, updateProjectStatus } = useCopilotProjects();
 
+  // Data completeness check for savings analysis (last 3 months)
+  const currentYear = new Date().getFullYear();
+  const locationIdsForCheck = useMemo(() => selectedLocationId ? [selectedLocationId] : [], [selectedLocationId]);
+  const { data: completenessData } = useDataCompleteness(locationIdsForCheck, currentYear);
+
+  const hasEnoughData = useMemo(() => {
+    if (!selectedLocationId || !completenessData?.[selectedLocationId]) return false;
+    const loc = completenessData[selectedLocationId];
+    const currentMonth = new Date().getMonth() + 1;
+    let monthsWithData = 0;
+    for (let i = 0; i < 3; i++) {
+      const checkMonth = currentMonth - i;
+      if (checkMonth < 1) break;
+      const monthStatus = loc.months.find(m => m.month === checkMonth);
+      if (monthStatus?.hasData) monthsWithData++;
+    }
+    return monthsWithData >= 3;
+  }, [selectedLocationId, completenessData]);
+
   const [selectedLocationId, setSelectedLocationId] = useState<string>("");
   const [roofArea, setRoofArea] = useState("");
   const [gridConnection, setGridConnection] = useState("");
