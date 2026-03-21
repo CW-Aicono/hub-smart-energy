@@ -60,6 +60,17 @@ const Copilot = () => {
   const { analyses, isLoadingHistory, runAnalysis, isAnalyzing, runSavingsAnalysis, isAnalyzingSavings } = useCopilotAnalysis();
   const { projects, createProject, updateProjectStatus } = useCopilotProjects();
 
+  const [selectedLocationId, setSelectedLocationId] = useState<string>("");
+  const [roofArea, setRoofArea] = useState("");
+  const [gridConnection, setGridConnection] = useState("");
+  const [budgetLimit, setBudgetLimit] = useState("");
+  const [result, setResult] = useState<CopilotAnalysisResult | null>(null);
+  const [savingsResult, setSavingsResult] = useState<SavingsPotentialResult | null>(null);
+  const [topTab, setTopTab] = useState("savings");
+  const [investorTab, setInvestorTab] = useState("analysis");
+  const [savingsPeriod, setSavingsPeriod] = useState("30");
+  const [savingsTab, setSavingsTab] = useState("analysis");
+
   // Data completeness check for savings analysis (last 3 months)
   const currentYear = new Date().getFullYear();
   const locationIdsForCheck = useMemo(() => selectedLocationId ? [selectedLocationId] : [], [selectedLocationId]);
@@ -78,17 +89,6 @@ const Copilot = () => {
     }
     return monthsWithData >= 3;
   }, [selectedLocationId, completenessData]);
-
-  const [selectedLocationId, setSelectedLocationId] = useState<string>("");
-  const [roofArea, setRoofArea] = useState("");
-  const [gridConnection, setGridConnection] = useState("");
-  const [budgetLimit, setBudgetLimit] = useState("");
-  const [result, setResult] = useState<CopilotAnalysisResult | null>(null);
-  const [savingsResult, setSavingsResult] = useState<SavingsPotentialResult | null>(null);
-  const [topTab, setTopTab] = useState("savings");
-  const [investorTab, setInvestorTab] = useState("analysis");
-  const [savingsPeriod, setSavingsPeriod] = useState("30");
-  const [savingsTab, setSavingsTab] = useState("analysis");
 
   const savingsAnalyses = analyses.filter((a: any) => a.analysis_type === "savings_potential");
   const investorAnalyses = analyses.filter((a: any) => a.analysis_type !== "savings_potential");
