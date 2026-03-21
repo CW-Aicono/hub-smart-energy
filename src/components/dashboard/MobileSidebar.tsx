@@ -14,7 +14,7 @@ import {
   LayoutDashboard, LogOut, Shield, Settings, Users, ChevronRight,
   MapPin, UserCircle, Key, HelpCircle, Plug, Palette, Database, Gauge, Download,
   Car, PlugZap, Receipt, Cpu, Activity, Mail, Smartphone, Network, ListChecks,
-  TrendingUp, Home, Menu,
+  TrendingUp, Home, Menu, Sparkles,
 } from "lucide-react";
 import {
   Collapsible, CollapsibleContent, CollapsibleTrigger,
