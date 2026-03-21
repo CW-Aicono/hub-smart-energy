@@ -189,9 +189,18 @@ const Copilot = () => {
                       </Select>
                     </div>
 
+                    {selectedLocationId && !hasEnoughData && (
+                      <Alert className="border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30">
+                        <Info className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                        <AlertDescription className="text-sm text-amber-800 dark:text-amber-300">
+                          Für eine seriöse Einsparpotential-Analyse werden mindestens drei Monate an Messdaten benötigt. Bitte stellen Sie sicher, dass für diesen Standort ausreichend Daten vorliegen.
+                        </AlertDescription>
+                      </Alert>
+                    )}
+
                     <Button
                       className="w-full"
-                      disabled={!selectedLocationId || isAnalyzingSavings}
+                      disabled={!selectedLocationId || isAnalyzingSavings || !hasEnoughData}
                       onClick={handleSavingsAnalyze}
                     >
                       {isAnalyzingSavings ? (
