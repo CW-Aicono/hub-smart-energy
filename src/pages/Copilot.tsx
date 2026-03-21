@@ -1,9 +1,11 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { useLocations } from "@/hooks/useLocations";
 import { useCopilotAnalysis, CopilotAnalysisResult, SavingsPotentialResult, SavingsFinding } from "@/hooks/useCopilotAnalysis";
 import { useCopilotProjects } from "@/hooks/useCopilotProjects";
+import { useDataCompleteness } from "@/hooks/useDataCompleteness";
 import { AiDisclaimer } from "@/components/ui/ai-disclaimer";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -12,7 +14,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Sparkles, TrendingUp, Landmark, FolderKanban, History, Loader2, Sun, Battery, Flame, Zap, Shield, ArrowRight, Search, Leaf, Clock, BarChart3, AlertTriangle, Lightbulb } from "lucide-react";
+import { Sparkles, TrendingUp, Landmark, FolderKanban, History, Loader2, Sun, Battery, Flame, Zap, Shield, ArrowRight, Search, Leaf, Clock, BarChart3, AlertTriangle, Lightbulb, Info } from "lucide-react";
 import { useDemoMode } from "@/contexts/DemoMode";
 
 const TECH_ICONS: Record<string, typeof Sun> = {
