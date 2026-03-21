@@ -14,7 +14,7 @@ import {
   LayoutDashboard, LogOut, Shield, Settings, Users, ChevronRight,
   MapPin, UserCircle, Key, HelpCircle, Plug, Palette, Database, Gauge, Download,
   Car, PlugZap, Receipt, Cpu, Activity, Mail, Smartphone, Network, ListChecks,
-  TrendingUp, Home, Menu,
+  TrendingUp, Home, Menu, Sparkles,
 } from "lucide-react";
 import {
   Collapsible, CollapsibleContent, CollapsibleTrigger,
@@ -67,6 +67,7 @@ export function MobileHeader() {
     },
     { to: "/automation", icon: Cpu, labelKey: "nav.multiLocationAutomation" as TranslationKey },
     { to: "/arbitrage", icon: TrendingUp, labelKey: "nav.arbitrageTrading" as TranslationKey },
+    { to: "/copilot", icon: Sparkles, labelKey: "nav.copilot" as TranslationKey },
     { to: "/tenant-electricity", icon: Home, labelKey: "nav.tenantElectricity" as TranslationKey },
     { to: "/network", icon: Network, labelKey: "nav.networkInfrastructure" as TranslationKey },
     { to: "/tasks", icon: ListChecks, labelKey: "nav.tasks" as TranslationKey },
