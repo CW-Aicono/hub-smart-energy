@@ -1,9 +1,11 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { useLocations } from "@/hooks/useLocations";
 import { useCopilotAnalysis, CopilotAnalysisResult, SavingsPotentialResult, SavingsFinding } from "@/hooks/useCopilotAnalysis";
 import { useCopilotProjects } from "@/hooks/useCopilotProjects";
+import { useDataCompleteness } from "@/hooks/useDataCompleteness";
 import { AiDisclaimer } from "@/components/ui/ai-disclaimer";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -12,7 +14,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Sparkles, TrendingUp, Landmark, FolderKanban, History, Loader2, Sun, Battery, Flame, Zap, Shield, ArrowRight, Search, Leaf, Clock, BarChart3, AlertTriangle, Lightbulb } from "lucide-react";
+import { Sparkles, TrendingUp, Landmark, FolderKanban, History, Loader2, Sun, Battery, Flame, Zap, Shield, ArrowRight, Search, Leaf, Clock, BarChart3, AlertTriangle, Lightbulb, Info } from "lucide-react";
 import { useDemoMode } from "@/contexts/DemoMode";
 
 const TECH_ICONS: Record<string, typeof Sun> = {
@@ -68,6 +70,25 @@ const Copilot = () => {
   const [investorTab, setInvestorTab] = useState("analysis");
   const [savingsPeriod, setSavingsPeriod] = useState("30");
   const [savingsTab, setSavingsTab] = useState("analysis");
+
+  // Data completeness check for savings analysis (last 3 months)
+  const currentYear = new Date().getFullYear();
+  const locationIdsForCheck = useMemo(() => selectedLocationId ? [selectedLocationId] : [], [selectedLocationId]);
+  const { data: completenessData } = useDataCompleteness(locationIdsForCheck, currentYear);
+
+  const hasEnoughData = useMemo(() => {
+    if (!selectedLocationId || !completenessData?.[selectedLocationId]) return false;
+    const loc = completenessData[selectedLocationId];
+    const currentMonth = new Date().getMonth() + 1;
+    let monthsWithData = 0;
+    for (let i = 0; i < 3; i++) {
+      const checkMonth = currentMonth - i;
+      if (checkMonth < 1) break;
+      const monthStatus = loc.months.find(m => m.month === checkMonth);
+      if (monthStatus?.hasData) monthsWithData++;
+    }
+    return monthsWithData >= 3;
+  }, [selectedLocationId, completenessData]);
 
   const savingsAnalyses = analyses.filter((a: any) => a.analysis_type === "savings_potential");
   const investorAnalyses = analyses.filter((a: any) => a.analysis_type !== "savings_potential");
@@ -168,9 +189,18 @@ const Copilot = () => {
                       </Select>
                     </div>
 
+                    {selectedLocationId && !hasEnoughData && (
+                      <Alert className="border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30">
+                        <Info className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                        <AlertDescription className="text-sm text-amber-800 dark:text-amber-300">
+                          Für eine seriöse Einsparpotential-Analyse werden mindestens drei Monate an Messdaten benötigt. Bitte stellen Sie sicher, dass für diesen Standort ausreichend Daten vorliegen.
+                        </AlertDescription>
+                      </Alert>
+                    )}
+
                     <Button
                       className="w-full"
-                      disabled={!selectedLocationId || isAnalyzingSavings}
+                      disabled={!selectedLocationId || isAnalyzingSavings || !hasEnoughData}
                       onClick={handleSavingsAnalyze}
                     >
                       {isAnalyzingSavings ? (
