@@ -1332,6 +1332,79 @@ serve(async (req) => {
       );
     }
 
+    // ── ACTION: getVersion ──
+    if (action === "getVersion") {
+      console.log("Fetching Miniserver firmware version...");
+
+      // Fetch version string
+      const versionRes = await fetch(`${baseUrl}/jdev/cfg/version`, {
+        method: "GET",
+        headers: { Authorization: loxoneAuth },
+      });
+      if (!versionRes.ok) {
+        throw new Error(`Firmware-Version konnte nicht abgerufen werden: HTTP ${versionRes.status}`);
+      }
+      const versionData = await versionRes.json();
+      const version = versionData?.LL?.value || "unbekannt";
+
+      // Fetch version date
+      let versionDate = "unbekannt";
+      try {
+        const dateRes = await fetch(`${baseUrl}/jdev/cfg/versiondate`, {
+          method: "GET",
+          headers: { Authorization: loxoneAuth },
+        });
+        if (dateRes.ok) {
+          const dateData = await dateRes.json();
+          versionDate = dateData?.LL?.value || "unbekannt";
+        }
+      } catch (e) {
+        console.warn("Could not fetch version date:", e);
+      }
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          version,
+          versionDate,
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // ── ACTION: triggerUpdate ──
+    if (action === "triggerUpdate") {
+      const { confirmed } = requestBody;
+      if (!confirmed) {
+        throw new Error("Update muss explizit bestätigt werden (confirmed: true)");
+      }
+
+      console.log("Triggering Miniserver firmware update...");
+      const updateRes = await fetch(`${baseUrl}/jdev/sys/updatetolatestrelease`, {
+        method: "GET",
+        headers: { Authorization: loxoneAuth },
+      });
+
+      if (!updateRes.ok) {
+        if (updateRes.status === 401 || updateRes.status === 403) {
+          throw new Error("Keine Berechtigung für Firmware-Update. Der konfigurierte Benutzer benötigt das Recht 'Firmware Update' auf dem Miniserver.");
+        }
+        throw new Error(`Firmware-Update fehlgeschlagen: HTTP ${updateRes.status}`);
+      }
+
+      const updateData = await updateRes.json();
+      console.log("Update response:", JSON.stringify(updateData));
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          message: "Firmware-Update wurde gestartet. Der Miniserver startet automatisch neu.",
+          data: updateData,
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     throw new Error(`Unbekannte Aktion: ${action}`);
   } catch (error) {
     console.error("Loxone API error:", error);

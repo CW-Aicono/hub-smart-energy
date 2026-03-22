@@ -15,6 +15,7 @@ import { SensorsDialog } from "./SensorsDialog";
 import { MiniserverStatus } from "./MiniserverStatus";
 import { EditIntegrationDialog } from "./EditIntegrationDialog";
 import { getGatewayDefinition } from "@/lib/gatewayRegistry";
+import { LoxoneFirmwareSection } from "./LoxoneFirmwareSection";
 import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -135,6 +136,9 @@ export function IntegrationCard({ locationIntegration, onUpdate, onDelete }: Int
                   lastSyncAt={locationIntegration.last_sync_at}
                 />
                 {integration?.description && <p className="text-xs text-muted-foreground">{integration.description}</p>}
+                {integration?.type === "loxone_miniserver" && isConfigured && (
+                  <LoxoneFirmwareSection locationIntegrationId={locationIntegration.id} />
+                )}
               </div>
             </div>
             <div className="flex items-center gap-2">
