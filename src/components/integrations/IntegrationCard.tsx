@@ -15,6 +15,7 @@ import { SensorsDialog } from "./SensorsDialog";
 import { MiniserverStatus } from "./MiniserverStatus";
 import { EditIntegrationDialog } from "./EditIntegrationDialog";
 import { getGatewayDefinition } from "@/lib/gatewayRegistry";
+import { LoxoneFirmwareSection } from "./LoxoneFirmwareSection";
 import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
