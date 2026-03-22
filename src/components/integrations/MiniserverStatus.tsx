@@ -43,7 +43,7 @@ export function MiniserverStatus({ locationIntegrationId, integrationType, lastS
     systemStatus?.cpu != null && {
       icon: Cpu,
       label: "CPU",
-      value: `${systemStatus.cpu}%`,
+      value: String(systemStatus.cpu).replace(/%$/, '') + '%',
     },
     systemStatus?.temperature != null && {
       icon: Thermometer,
