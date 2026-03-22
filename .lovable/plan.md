@@ -1,82 +1,66 @@
 
-Ziel: den Freeze beim Wechsel der Liegenschaft im Dashboard als Root-Cause beheben (nicht nur Workaround).
 
-**Ausgangslage aus Analyse**
-- Der Freeze tritt bei **jeder** Location auf.
-- Das Problem ist sehr wahrscheinlich **kein reines Dropdown-Problem** mehr, sondern ein Blockieren des Main-Threads beim Location-Wechsel:
-  - Beim Wechsel werden viele Widgets gleichzeitig neu gerechnet und neu geladen.
-  - Dabei laufen mehrere große Datenabfragen (u. a. 5‑Min-/Rohleistungsdaten) parallel.
-  - Zusätzlich gibt es React-Warnungen im FloorPlan-Widget (`Function components cannot be given refs`), die in Dev zusätzlich Performance kosten.
-- Die bisherige `pointerEvents/overflow`-Bereinigung im LocationFilter adressiert Symptome, nicht die Ursache.
+# Firmware-Update-Check & -Trigger für Loxone Gateways
 
-## Umsetzungsplan (Root-Cause-Fix)
+## Analyse der Loxone API
 
-### 1) Saubere Reproduktion + Messpunkte im Code
-- In `DashboardContent` und `LocationFilter` gezielte Performance-Marker einbauen:
-  - Start/Ende „Location selected“
-  - Zeit bis „widgets settled“ (erste stabile Renderphase)
-- In den datenintensiven Widgets Logging für Request-Dauer und Ergebnisgröße ergänzen:
-  - `EnergyChart`, `PvForecastWidget`, `usePeriodSumsWithFallback`
-- Ziel: klarer Nachweis, welche 1–2 Pfade den Freeze dominieren.
+Die offizielle Loxone Web Services Dokumentation bietet folgende relevante Endpunkte:
 
-### 2) Location-Wechsel entkoppeln (UI bleibt bedienbar)
-- `setSelectedLocationId` in `DashboardContent` auf `startTransition` umstellen.
-- Während Transition:
-  - leichte „Lade über Dashboard“-State-Anzeige
-  - Widget-Neuberechnung nicht blockierend starten
-- Im `LocationFilter` den manuellen Body-Style-Hack entfernen (oder nur als Fallback hinter Feature-Flag), damit kein zusätzlicher Seiteneffekt in den Event-Lifecycle kommt.
-
-### 3) Datenlast beim Wechsel massiv reduzieren (Hauptfix)
-- **Energy/PV-Pfade auf aggregierte Backend-Funktionen priorisieren**, keine Rohdaten-Scans wenn nicht nötig.
-- `PvForecastWidget`:
-  - für Ist-Werte bevorzugt die vorhandenen stündlichen/täglichen Aggregat-Funktionen nutzen
-  - Rohleistungs-Reads nur noch als gezielte Ausnahme (heute, kurze Fenster)
-- `EnergyChart` + `usePeriodSumsWithFallback`:
-  - harte Begrenzung und frühes Abbrechen von Pagination-Loops bei Location-Wechsel
-  - stale requests verwerfen (nur letzter Request darf State schreiben)
-- Ergebnis: deutlich weniger JSON-Parsing, weniger Renderdruck.
-
-### 4) Render-Kosten senken (zweiter Hauptfix)
-- `useEnergyData`-Ableitungen nur einmal zentral berechnen und an Widgets verteilen (statt n-fach pro Widget-Instanz).
-- Schwere Berechnungen memoisiert nach stabilen Schlüsseln (`locationId`, `period`, Meter-Hash).
-- Für FloorPlan-Widgets:
-  - „latest reading pro Meter“ als Map vorbereiten statt wiederholtes `filter+sort` je Meter.
-
-### 5) FloorPlan-Warnungen beheben
-- `FloorPlanDashboardWidget` (und analog `FloorPlanWidget`) auf korrektes `react-zoom-pan-pinch`-Pattern umbauen (keine Ref-Warnungen mehr).
-- Ziel: Warn-Noise entfernen und unnötige Renderkosten senken.
-
-### 6) Absicherung per Tests + E2E-Check
-- Unit/Integration:
-  - Request-Cancel/Stale-Response wird korrekt gehandhabt.
-  - Location-Wechsel setzt final konsistenten Zustand.
-- E2E:
-  - 10x schneller Location-Wechsel nacheinander
-  - Seite bleibt klickbar + scrollbar
-  - keine dauerhaften Overlays/Locks
-  - TTI/Interaktionszeit nach Wechsel innerhalb Zielkorridor.
-
-## Betroffene Dateien (geplant)
-- `src/components/dashboard/LocationFilter.tsx`
-- `src/pages/DashboardContent.tsx`
-- `src/hooks/useEnergyData.tsx`
-- `src/components/dashboard/EnergyChart.tsx`
-- `src/hooks/usePeriodSumsWithFallback.ts`
-- `src/components/dashboard/PvForecastWidget.tsx`
-- `src/components/dashboard/FloorPlanDashboardWidget.tsx`
-- `src/components/dashboard/FloorPlanWidget.tsx`
-
-## Technische Details (kurz)
 ```text
-Location-Wechsel
-  -> transition statt sofortigem blockierendem Full-Recompute
-  -> alte Requests abbrechen / ignorieren
-  -> Aggregatdaten bevorzugen
-  -> zentrale, einmalige Datenableitung
-  -> Widgets rendern mit deutlich kleinerem Payload
+Lesen:
+  jdev/cfg/version          → aktuelle Firmware-Version
+  jdev/cfg/versiondate      → Firmware-Erstellungsdatum
+  data/status               → XML mit allen Geräten + Versionen (Extensions, Tree, Air)
+
+Update auslösen:
+  jdev/sys/updatetolatestrelease     → Miniserver auf neueste Firmware aktualisieren
+  jdev/sys/wsextension/<serial>/ForceUpdate/0C000001/DeviceIndex  → Extension-Update
+  jdev/sys/wsdevice/<serial>/ForceUpdate/0C000001/DeviceIndex     → Tree/Air-Geräte-Update
 ```
 
-Erwartetes Ergebnis:
-- Kein Einfrieren mehr beim Klick auf eine Liegenschaft.
-- Dashboard bleibt bedienbar (inkl. Scrollen) während Daten nachladen.
-- Spürbar kürzere Stabilisationszeit nach Location-Wechsel.
+### Wichtige Einschränkung
+
+Die Loxone API bietet **keinen Endpunkt**, um die neueste verfügbare Version abzufragen. Man kann nur die aktuelle Version lesen und blind ein Update triggern. Das Update lädt dann automatisch die neueste Release-Version von den Loxone-Servern.
+
+## Umsetzungsplan
+
+### 1) Edge Function erweitern (`loxone-api/index.ts`)
+
+Zwei neue Actions hinzufügen:
+
+- **`getVersion`**: Ruft `jdev/cfg/version` und `jdev/cfg/versiondate` ab, optional `data/status` für Extension-Versionen. Gibt strukturiertes JSON zurück mit Miniserver-Version, Datum und Liste der Extensions mit deren Versionen.
+
+- **`triggerUpdate`**: Ruft `jdev/sys/updatetolatestrelease` auf. Erfordert Full-Access-User. Gibt Erfolg/Fehler zurück. Vor dem Aufruf wird eine Bestätigungsprüfung erzwungen (Parameter `confirmed: true` im Request).
+
+### 2) UI auf der Integrationen-Seite (`IntegrationCard.tsx`)
+
+Pro Loxone-Gateway-Karte:
+- Neuer Button **"Firmware prüfen"** (neben "Verbindung testen")
+- Beim Klick: Version + Datum abrufen und anzeigen (z.B. „Version 14.5.12.4 vom 15.01.2026")
+- Falls Extensions vorhanden: deren Versionen in einer kleinen Liste darunter
+- Button **"Update starten"** mit Bestätigungs-Dialog (AlertDialog): „Das Miniserver-Update wird gestartet. Der Miniserver ist während des Updates nicht erreichbar. Fortfahren?"
+- Nach Trigger: Hinweis „Update wurde gestartet. Der Miniserver startet automatisch neu."
+
+### 3) Nur für Loxone-Typ
+
+Die Firmware-Update-Funktionalität wird nur für `loxone_miniserver`-Integrationen angeboten, da die anderen Gateway-Typen (Shelly, ABB, Siemens, etc.) keine vergleichbaren Update-Endpunkte über ihre Cloud-APIs bereitstellen.
+
+## Betroffene Dateien
+
+- `supabase/functions/loxone-api/index.ts` – neue Actions `getVersion` und `triggerUpdate`
+- `src/components/integrations/IntegrationCard.tsx` – Firmware-Buttons und Versionsanzeige
+- Ggf. `src/i18n/translations.ts` – neue Übersetzungsschlüssel
+
+## Technische Details
+
+```text
+IntegrationCard (Loxone)
+  [Firmware prüfen] → invoke("loxone-api", { action: "getVersion" })
+                     → zeigt Version + Datum + Extension-Liste
+  [Update starten]  → AlertDialog Bestätigung
+                     → invoke("loxone-api", { action: "triggerUpdate", confirmed: true })
+                     → Erfolgsmeldung / Fehlermeldung via Toast
+```
+
+User mit `Trigger Update`-Recht auf dem Miniserver ist Voraussetzung (Loxone-Berechtigung `0x00008000`). Fehlt das Recht, gibt der Miniserver HTTP 401/403 zurück – wird als klare Fehlermeldung angezeigt.
+
