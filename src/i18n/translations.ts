@@ -4949,6 +4949,18 @@ export const translations = {
   "dashboard.totalConsumption": { de: "Gesamtverbrauch", en: "Total Consumption", es: "Consumo total", nl: "Totaalverbruik" },
   "dashboard.noConsumptionData": { de: "Noch keine Verbrauchsdaten vorhanden", en: "No consumption data available yet", es: "Aún no hay datos de consumo", nl: "Nog geen verbruiksgegevens beschikbaar" },
   "dashboard.ecoScore": { de: "Öko-Score", en: "Eco Score", es: "Eco-Score", nl: "Eco-Score" },
+  "intCard.checkFirmware": { de: "Firmware prüfen", en: "Check Firmware", es: "Verificar firmware", nl: "Firmware controleren" },
+  "intCard.firmwareVersion": { de: "Firmware-Version", en: "Firmware Version", es: "Versión de firmware", nl: "Firmwareversie" },
+  "intCard.firmwareDate": { de: "Erstellt am", en: "Built on", es: "Creado el", nl: "Gemaakt op" },
+  "intCard.firmwareCheckError": { de: "Firmware-Version konnte nicht abgerufen werden.", en: "Could not retrieve firmware version.", es: "No se pudo obtener la versión del firmware.", nl: "Firmwareversie kon niet worden opgehaald." },
+  "intCard.triggerUpdate": { de: "Update starten", en: "Start Update", es: "Iniciar actualización", nl: "Update starten" },
+  "intCard.updateTitle": { de: "Firmware-Update starten?", en: "Start Firmware Update?", es: "¿Iniciar actualización de firmware?", nl: "Firmware-update starten?" },
+  "intCard.updateDesc": { de: "Das Miniserver-Update wird gestartet. Der Miniserver ist während des Updates nicht erreichbar (ca. 5–10 Minuten). Fortfahren?", en: "The Miniserver update will be started. The Miniserver will be unreachable during the update (approx. 5–10 minutes). Continue?", es: "Se iniciará la actualización del Miniserver. El Miniserver no estará disponible durante la actualización (aprox. 5–10 minutos). ¿Continuar?", nl: "De Miniserver-update wordt gestart. De Miniserver is niet bereikbaar tijdens de update (ca. 5–10 minuten). Doorgaan?" },
+  "intCard.updateStarted": { de: "Update gestartet", en: "Update Started", es: "Actualización iniciada", nl: "Update gestart" },
+  "intCard.updateStartedDesc": { de: "Das Firmware-Update wurde gestartet. Der Miniserver startet automatisch neu.", en: "The firmware update has been started. The Miniserver will restart automatically.", es: "La actualización del firmware se ha iniciado. El Miniserver se reiniciará automáticamente.", nl: "De firmware-update is gestart. De Miniserver herstart automatisch." },
+  "intCard.updateError": { de: "Firmware-Update konnte nicht gestartet werden.", en: "Could not start firmware update.", es: "No se pudo iniciar la actualización del firmware.", nl: "Firmware-update kon niet worden gestart." },
+  "intCard.updating": { de: "Wird gestartet...", en: "Starting...", es: "Iniciando...", nl: "Wordt gestart..." },
+  "intCard.checking": { de: "Prüfe...", en: "Checking...", es: "Verificando...", nl: "Controleren..." },
 
 
   // ── Sankey Widget ─────────────────────────────────────────────────────────
