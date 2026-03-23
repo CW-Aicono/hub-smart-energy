@@ -340,6 +340,16 @@
   display: none;
 }
 
+/* PWA safe-area insets for notch / home-indicator on iOS */
+@supports (padding-top: env(safe-area-inset-top)) {
+  body {
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+}
+
 /* Dashboard widget sizing: full width on mobile, configured size on desktop */
 @media (min-width: 768px) {
   [data-widget-size="2/3"] { flex: 0 0 calc(66.666% - 8px) !important; width: auto !important; max-width: calc(66.666% - 8px); }
