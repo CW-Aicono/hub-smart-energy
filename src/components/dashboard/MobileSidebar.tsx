@@ -117,7 +117,7 @@ export function MobileHeader() {
             <Menu className="h-5 w-5" />
           </Button>
         </SheetTrigger>
-        <SheetContent side="left" className="w-72 p-0 bg-sidebar text-sidebar-foreground border-sidebar-border">
+        <SheetContent side="left" className="w-72 p-0 bg-sidebar text-sidebar-foreground border-sidebar-border" style={{ paddingTop: "env(safe-area-inset-top)" }}>
           <div className="border-b border-sidebar-border p-4">
             <TenantLogo size="sm" />
           </div>
