@@ -59,7 +59,7 @@ interface UseLocationsReturn {
   loading: boolean;
   error: string | null;
   refetch: () => Promise<void>;
-  createLocation: (location: LocationInsert) => Promise<{ error: Error | null }>;
+  createLocation: (location: LocationInsert) => Promise<{ error: Error | null; id?: string }>;
   updateLocation: (id: string, updates: Partial<Location>) => Promise<{ error: Error | null }>;
   deleteLocation: (id: string) => Promise<{ error: Error | null }>;
 }
@@ -141,7 +141,7 @@ export function useLocations(): UseLocationsReturn {
       });
       await invalidate();
     }
-    return { error: insertError as Error | null };
+    return { error: insertError as Error | null, id: data?.id };
   };
 
   const updateLocation = async (id: string, updates: Partial<Location>) => {
