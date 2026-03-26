@@ -507,6 +507,123 @@ async function handlePostReadings(req: Request): Promise<Response> {
   });
 }
 
+/* ── Schneider Panel Server Push handler ──────────────────────────────────────── */
+
+interface SchneiderMeasurement {
+  deviceId?: string;
+  deviceName?: string;
+  values?: Array<{ name: string; timestamp?: string; value: number }>;
+}
+
+interface SchneiderPayload {
+  header?: { senderId?: string; timestamp?: string };
+  measurements?: SchneiderMeasurement[];
+}
+
+/**
+ * Parses a device_mapping string like "modbus:2=uuid1,modbus:3=uuid2"
+ * into a Map<deviceId, meterUuid>.
+ */
+function parseDeviceMapping(raw: string): Map<string, string> {
+  const map = new Map<string, string>();
+  if (!raw) return map;
+  for (const pair of raw.split(",")) {
+    const [deviceId, meterUuid] = pair.split("=").map((s) => s.trim());
+    if (deviceId && meterUuid) map.set(deviceId, meterUuid);
+  }
+  return map;
+}
+
+/** Power-related measurement names from Schneider devices (kW values) */
+const SCHNEIDER_POWER_FIELDS = new Set([
+  "PkWD",     // Active power demand (total)
+  "PkWDA",    // Active power phase A
+  "PkWDB",    // Active power phase B
+  "PkWDC",    // Active power phase C
+  "TotPF",    // Total power factor
+]);
+
+async function handleSchneiderPush(req: Request): Promise<Response> {
+  const authErr = validateApiKey(req);
+  if (authErr) return authErr;
+
+  let payload: SchneiderPayload;
+  try {
+    payload = await req.json();
+  } catch {
+    return json({ error: "Invalid JSON body" }, 400);
+  }
+
+  const measurements = payload?.measurements;
+  if (!Array.isArray(measurements) || measurements.length === 0) {
+    return json({ error: "No measurements in payload" }, 400);
+  }
+
+  const senderId = payload?.header?.senderId || "unknown";
+  console.log(`[schneider-push] Received ${measurements.length} device(s) from ${senderId}`);
+
+  // Parse optional device_mapping and tenant_id from query params
+  const url = new URL(req.url);
+  const tenantId = url.searchParams.get("tenant_id");
+  const deviceMappingRaw = url.searchParams.get("device_mapping") || "";
+  const deviceMapping = parseDeviceMapping(deviceMappingRaw);
+
+  if (!tenantId) {
+    return json({ error: "tenant_id query parameter required" }, 400);
+  }
+
+  const supabase = getSupabase();
+  const readings: PowerReading[] = [];
+  const skipped: string[] = [];
+
+  for (const measurement of measurements) {
+    const deviceId = measurement.deviceId || "unknown";
+    const meterId = deviceMapping.get(deviceId);
+
+    if (!meterId) {
+      skipped.push(`${deviceId}: no meter mapping found`);
+      continue;
+    }
+
+    for (const val of measurement.values || []) {
+      // Only ingest power-related fields
+      if (!SCHNEIDER_POWER_FIELDS.has(val.name)) continue;
+
+      const powerValue = Number(val.value);
+      if (isSpike(powerValue, "strom")) {
+        skipped.push(`${deviceId}/${val.name}: spike (${powerValue})`);
+        continue;
+      }
+
+      readings.push({
+        meter_id: meterId,
+        tenant_id: tenantId,
+        power_value: powerValue,
+        energy_type: "strom",
+        recorded_at: val.timestamp || payload?.header?.timestamp || new Date().toISOString(),
+      });
+    }
+  }
+
+  if (readings.length === 0) {
+    return json({ success: true, inserted: 0, skipped: skipped.length, skipped_details: skipped });
+  }
+
+  const { error } = await supabase.from("meter_power_readings").insert(readings);
+  if (error) {
+    console.error("[schneider-push] DB insert error:", error.message);
+    return json({ error: "Database error" }, 500);
+  }
+
+  return json({
+    success: true,
+    inserted: readings.length,
+    skipped: skipped.length,
+    skipped_details: skipped.length > 0 ? skipped : undefined,
+    sender: senderId,
+  });
+}
+
 /* ── Main router ─────────────────────────────────────────────────────────────── */
 
 Deno.serve(async (req) => {
@@ -532,6 +649,7 @@ Deno.serve(async (req) => {
   // POST routes
   if (req.method === "POST") {
     if (action === "compact-day") return handleCompactDay(req);
+    if (action === "schneider-push") return handleSchneiderPush(req);
     return handlePostReadings(req);
   }
 

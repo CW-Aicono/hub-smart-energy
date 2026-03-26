@@ -52,6 +52,8 @@ describe("gatewayRegistry", () => {
       expect(getEdgeFunctionName("shelly_cloud")).toBe("shelly-api");
       expect(getEdgeFunctionName("home_assistant")).toBe("home-assistant-api");
       expect(getEdgeFunctionName("omada_cloud")).toBe("omada-api");
+      expect(getEdgeFunctionName("schneider_panel_server")).toBe("gateway-ingest");
+      expect(getEdgeFunctionName("schneider_cloud")).toBe("schneider-api");
     });
 
     it("falls back to loxone-api for unknown type", () => {
@@ -82,6 +84,23 @@ describe("gatewayRegistry", () => {
       const filter = fields.find((f) => f.name === "entity_filter");
       expect(filter).toBeDefined();
       expect(filter!.required).toBe(false);
+    });
+
+    it("schneider_panel_server has optional webhook_secret and device_mapping", () => {
+      const fields = GATEWAY_DEFINITIONS.schneider_panel_server.configFields;
+      expect(fields.every((f) => !f.required)).toBe(true);
+      expect(fields.map((f) => f.name)).toContain("webhook_secret");
+      expect(fields.map((f) => f.name)).toContain("device_mapping");
+    });
+
+    it("schneider_cloud requires api_url, client_id, client_secret, site_id", () => {
+      const fields = GATEWAY_DEFINITIONS.schneider_cloud.configFields;
+      const names = fields.map((f) => f.name);
+      expect(names).toContain("api_url");
+      expect(names).toContain("client_id");
+      expect(names).toContain("client_secret");
+      expect(names).toContain("site_id");
+      expect(fields.every((f) => f.required)).toBe(true);
     });
   });
 });

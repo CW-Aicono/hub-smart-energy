@@ -110,3 +110,6 @@ verify_jwt = false
 
 [functions.copilot-analysis]
 verify_jwt = false
+
+[functions.schneider-api]
+verify_jwt = false
