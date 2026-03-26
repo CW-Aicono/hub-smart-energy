@@ -3,6 +3,8 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useLocations, LocationType } from "@/hooks/useLocations";
+import { useLocationEnergySources, type LocationEnergySourceInsert } from "@/hooks/useLocationEnergySources";
+import { LocationEnergySourcesEditor } from "@/components/locations/LocationEnergySourcesEditor";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useGeocode } from "@/hooks/useGeocode";
 import { useTranslation } from "@/hooks/useTranslation";
