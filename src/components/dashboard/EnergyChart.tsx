@@ -791,7 +791,7 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
               selectedMeterIds={selectedMeterIds}
               onToggleMeter={handleToggleMeter}
               showSoc={showSoc}
-              onToggleSoc={() => setShowSoc(s => !s)}
+              onToggleSoc={handleToggleSoc}
               hasSocMeters={hasSocMeters}
             />
             <Select value={period} onValueChange={handlePeriodChange}>
