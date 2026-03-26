@@ -126,6 +126,7 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
   const { locations } = useLocations();
   const { readings, livePeriodTotals, loading, hasData } = useEnergyData(locationId);
   const { meters } = useMeters();
+  const { user } = useAuth();
   const { selectedPeriod, setSelectedPeriod } = useDashboardFilter();
   const { t, language } = useTranslation();
   const T = (key: string) => t(key as any);
