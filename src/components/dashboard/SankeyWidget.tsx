@@ -72,7 +72,7 @@ const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
   const { selectedPeriod: period, setSelectedPeriod: setPeriod } = useDashboardFilter();
   const weekStartsOn = useWeekStartDay();
   const [viewMode, setViewMode] = useState<SankeyViewMode>("leistung");
-  const allowedTypes = useLocationEnergySources(locationId);
+  const allowedTypes = useLocationEnergyTypesSet(locationId);
   const { currentPrice: currentSpotPrice } = useSpotPrices();
 
   // Compute date range for DB query (always current period, no offset)

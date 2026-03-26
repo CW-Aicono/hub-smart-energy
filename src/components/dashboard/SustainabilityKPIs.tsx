@@ -48,7 +48,7 @@ const SustainabilityKPIs = ({ locationId }: SustainabilityKPIsProps) => {
   const { meters } = useMeters(locationId || undefined);
   const { selectedPeriod: period, setSelectedPeriod: setPeriod } = useDashboardFilter();
   const weekStartsOn = useWeekStartDay();
-  const allowedTypes = useLocationEnergySources(locationId);
+  const allowedTypes = useLocationEnergyTypesSet(locationId);
 
   // Build meter metadata map
   const meterMap = useMemo(() => {

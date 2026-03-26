@@ -45,7 +45,7 @@ const PieChartWidget = ({ locationId }: PieChartWidgetProps) => {
   const ENERGY_UNITS: Record<string, string> = { strom: "kWh", gas: "kWh", waerme: "kWh", wasser: "m³" };
   const PERIOD_LABELS: Record<TimePeriod, string> = { day: T("chart.periodDay"), week: T("chart.periodWeek"), month: T("chart.periodMonth"), quarter: T("chart.periodQuarter"), year: T("chart.periodYear"), all: T("chart.periodAll") };
   const subtitle = selectedLocation ? T("chart.dataFor").replace("{name}", selectedLocation.name) : T("chart.allLocations");
-  const allowedTypes = useLocationEnergySources(locationId);
+  const allowedTypes = useLocationEnergyTypesSet(locationId);
 
   const configuredTypes = useMemo(() => {
     const types = new Set<string>();

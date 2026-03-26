@@ -49,7 +49,7 @@ function computeEcoScore(gaugeData: GaugeData[]): number {
 const EnergyGaugeWidget = ({ locationId }: EnergyGaugeWidgetProps) => {
   const { meters } = useMeters();
   const { t } = useTranslation();
-  const allowedTypes = useLocationEnergySources(locationId);
+  const allowedTypes = useLocationEnergyTypesSet(locationId);
   const [initialPeaksLoaded, setInitialPeaksLoaded] = useState(false);
   const [initialCurrentLoaded, setInitialCurrentLoaded] = useState(false);
 
