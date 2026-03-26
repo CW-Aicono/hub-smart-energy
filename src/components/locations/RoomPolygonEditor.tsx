@@ -417,7 +417,7 @@ export function RoomPolygonEditor({ floorId, floorPlanUrl }: RoomPolygonEditorPr
       <div
         className="flex-1 relative border rounded-lg overflow-hidden bg-muted/20 min-h-0"
       >
-        <img
+        <FloorPlanImage
           ref={imageRef}
           src={floorPlanUrl}
           alt="Grundriss"
