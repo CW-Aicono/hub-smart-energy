@@ -159,12 +159,12 @@ function getSensorIcon(type: string) {
 }
 
 function isActuator(sensor: LoxoneSensor): boolean {
-  const actuatorTypes = ["switch", "light", "blind", "button", "digital"];
+  const actuatorTypes = ["switch", "light", "blind", "button", "digital", "power"];
   const actuatorControlTypes = [
     "Switch", "Dimmer", "Jalousie", "LightController", "LightControllerV2",
     "Pushbutton", "IRoomController", "IRoomControllerV2", "Gate", "Ventilation",
     "Daytimer", "Alarm", "CentralAlarm", "Intercom", "AalSmartAlarm",
-    "Sauna", "Pool", "Hourcounter",
+    "Sauna", "Pool", "Hourcounter", "Meter", "EFM", "EnergyManager2",
   ];
   return actuatorTypes.includes(sensor.type) || actuatorControlTypes.includes(sensor.controlType);
 }
