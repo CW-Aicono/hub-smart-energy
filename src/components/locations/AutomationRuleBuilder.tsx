@@ -501,19 +501,25 @@ function ActionCard({
           </div>
           <div className="space-y-1">
             <Label className="text-xs">Aktion</Label>
-            <Select
-              value={action.action_type || "pulse"}
-              onValueChange={(val) => onUpdate({ ...action, action_type: val, action_value: val })}
-            >
-              <SelectTrigger className="h-9 text-xs">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {ACTION_TYPES.map((at) => (
-                  <SelectItem key={at.value} value={at.value} className="text-xs">{at.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {(() => {
+              const isMeterControl = action.control_type === "Meter" || action.control_type === "EFM" || action.control_type === "EnergyManager2";
+              const availableActions = isMeterControl ? METER_ACTION_TYPES : ACTION_TYPES;
+              return (
+                <Select
+                  value={action.action_type || "pulse"}
+                  onValueChange={(val) => onUpdate({ ...action, action_type: val, action_value: val })}
+                >
+                  <SelectTrigger className="h-9 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableActions.map((at) => (
+                      <SelectItem key={at.value} value={at.value} className="text-xs">{at.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              );
+            })()}
           </div>
         </div>
       </CardContent>
