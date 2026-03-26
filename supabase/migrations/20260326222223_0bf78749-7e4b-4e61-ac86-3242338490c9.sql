@@ -1,0 +1,2 @@
+-- Remove duplicate tenant-level SELECT policy since the updated "App users" policy already covers tenant access
+DROP POLICY IF EXISTS "Users can view charging sessions in their tenant" ON public.charging_sessions;

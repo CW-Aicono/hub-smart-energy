@@ -5,7 +5,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useChargePoints, ChargePoint } from "@/hooks/useChargePoints";
 import { useChargerModels } from "@/hooks/useChargerModels";
-import { useChargingSessions } from "@/hooks/useChargingSessions";
+import { useChargingSessions, useIdTagResolver } from "@/hooks/useChargingSessions";
 import { useTenant } from "@/hooks/useTenant";
 import { useTasks } from "@/hooks/useTasks";
 import { useChargePointGroups } from "@/hooks/useChargePointGroups";
@@ -59,6 +59,7 @@ const ChargePointDetail = () => {
   const { groups, assignChargePointToGroup } = useChargePointGroups();
   const { createTask } = useTasks();
   const { sessions } = useChargingSessions(id);
+  const resolveTag = useIdTagResolver();
   const { vendors: knownVendors, getModelsForVendor } = useChargerModels();
 
   const [editing, setEditing] = useState(false);
@@ -747,7 +748,7 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
                               <TableCell className="text-sm">{end ? format(end, "dd.MM.yyyy HH:mm") : "—"}</TableCell>
                               <TableCell className="text-sm">{durationStr}</TableCell>
                               <TableCell>{fmtKwh(s.energy_kwh)}</TableCell>
-                              <TableCell className="font-mono text-sm">{s.id_tag || "—"}</TableCell>
+                              <TableCell className="text-sm">{resolveTag(s.id_tag) ? <span>{resolveTag(s.id_tag)} <span className="text-muted-foreground font-mono text-xs">({s.id_tag})</span></span> : s.id_tag || "—"}</TableCell>
                               <TableCell>
                                 <Badge variant={statusVariant}>{statusLabel}</Badge>
                               </TableCell>
