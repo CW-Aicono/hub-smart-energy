@@ -1,59 +1,55 @@
 
+Ziel: Den Grundriss-Upload stabil beheben (nicht nur Workaround), inkl. sauberer Ursachenbehebung auf Datenbank-/RLS-Ebene.
 
-## Fix: Grundriss-Upload für Etagen
+1) Tiefenanalyse-Ergebnis (Root Cause)
+- Der Fehler ist serverseitig/RLS, nicht im Frontend-Upload-Code:
+  - Console: `new row violates row-level security policy`
+  - Sowohl XHR-Upload als auch SDK-Fallback schlagen identisch fehl.
+- Die aktuell aktiven Storage-Policies für `floor-plans` sind logisch kaputt:
+  - In `floor_plans_insert` (und analog select/update/delete) wird intern effektiv auf `storage.foldername(l.name)` geprüft statt auf den Objektpfad `storage.objects.name`.
+  - Ursache: In der Policy wurde `storage.foldername(name)` innerhalb einer Subquery mit Tabelle `locations l` verwendet; dadurch wird `name` als `l.name` gebunden (Shadowing).
+  - Ergebnis: Der Vergleich mit `location_id` ist fast immer false → Upload blockiert.
+- Der letzte Migrationsschritt (Drop alter Admin-Policies) hat den Fehler sichtbar gemacht:
+  - Früher gab es noch permissive Alt-Policies als „Rettungsnetz“.
+  - Nach deren Entfernung bleibt nur die defekte Policy → kompletter Upload-Ausfall.
 
-### Problem
-Der Upload von Grundrissen schlägt fehl ("Grundriss konnte nicht hochgeladen werden"). Die `uploadWithProgress`-Funktion nutzt einen manuellen XHR-Request an die Storage-API, was fehleranfällig ist (fehlende CORS-Header, Content-Type-Probleme, etc.).
+2) Umsetzung (Migration-Fix)
+- Neue Migration erstellen, die die fehlerhaften Policies für `floor-plans` explizit droppt und korrekt neu anlegt.
+- Neue Policy-Logik so schreiben, dass der Dateipfad außerhalb der Subquery ausgewertet wird (kein Namenskonflikt möglich), z. B.:
+  - `split_part(name, '/', 1)` oder `(storage.foldername(name))[1]` nur außerhalb der Subquery
+  - Vergleich gegen erlaubte `location_id`s der User-Tenant-Zugehörigkeit.
+- Betroffene Policies:
+  - `floor_plans_select`
+  - `floor_plans_insert`
+  - `floor_plans_update`
+  - `floor_plans_delete`
 
-### Ursachenanalyse
-- Der XHR-basierte Upload setzt keinen `Content-Type`-Header — der Browser setzt ihn zwar automatisch bei `File`-Objekten, aber Supabase Storage kann damit Probleme haben
-- Zudem fehlt der Response-Body im Error-Handling, sodass der genaue Fehlergrund nicht sichtbar ist
-- Alte RLS-Policies ("Admins can upload/update/delete floor plans") wurden nie aufgeräumt und koexistieren mit den neuen Policies — das sollte kein Problem sein (OR-Logik), erhöht aber die Komplexität
+3) Systematische Härtung (gleich mit beheben)
+- Dieselbe Shadowing-Problematik ist auch bei weiteren Storage-Policies sichtbar (z. B. `floor_3d_models_*`, `meter_photos_*`).
+- Ich plane, in derselben Migration auch diese Policies auf die gleiche robuste Formel umzustellen, damit nicht der nächste Upload-Fehler unmittelbar folgt.
+- Zusätzlich prüfe ich überlappende Alt-Policies (z. B. sehr permissive 3D-Policies) und bereinige sie, damit Zugriff konsistent tenant-/location-basiert bleibt.
 
-### Lösung
+4) Frontend/Hook-Anpassungen (minimal)
+- `useFloors.tsx` Upload-Logik bleibt grundsätzlich erhalten (Progress + SDK-Fallback ist okay).
+- Optional: Fehlertext bei RLS-Fehlern präzisieren (z. B. „Keine Berechtigung für diesen Speicherpfad“), damit künftige Diagnosen schneller sind.
 
-**1. Upload-Funktion umstellen (src/hooks/useFloors.tsx)**
+5) Validierung nach Fix
+- DB-Validierung:
+  - `pg_policies` prüfen: keine Referenzen mehr wie `storage.foldername(l.name)` / `storage.foldername(m.name)`.
+- E2E-Tests im UI:
+  - Edit Floor: PNG/PDF hochladen → speichern erfolgreich.
+  - Add Floor mit direktem Grundriss-Upload → erfolgreich.
+  - Optional: 3D-Upload (GLB/OBJ+MTL) weiterhin erfolgreich.
+- Sicherheitscheck:
+  - Upload in fremde Location bleibt verboten (RLS greift korrekt).
 
-Die `uploadWithProgress`-Funktion wird so angepasst, dass sie:
-- Den `Content-Type`-Header explizit auf den MIME-Type der Datei setzt
-- Den Response-Body bei Fehlern loggt, um Debugging zu ermöglichen
-- Als Fallback den Standard-Supabase-SDK-Upload nutzt, falls der XHR fehlschlägt
+Technische Details (SQL-Ansatz, gekürzt)
+- Muster für INSERT:
+  - `bucket_id = 'floor-plans'`
+  - `AND split_part(name, '/', 1) IN (SELECT l.id::text FROM public.locations l JOIN public.profiles p ON p.tenant_id = l.tenant_id WHERE p.user_id = auth.uid())`
+- Analog für SELECT/UPDATE/DELETE mit `USING (...)`.
 
-```typescript
-// Im XHR-Setup ergänzen:
-xhr.setRequestHeader("Content-Type", file.type || "application/octet-stream");
-
-// Im Error-Handler den Response-Body loggen:
-xhr.addEventListener("load", async () => {
-  if (xhr.status >= 200 && xhr.status < 300) {
-    // ... bestehende Logik
-  } else {
-    console.error("Floor plan upload failed:", xhr.status, xhr.responseText);
-    resolve({ publicUrl: null, error: new Error(`Upload failed: ${xhr.status} ${xhr.statusText}`) });
-  }
-});
-```
-
-**2. Fallback auf Supabase SDK (src/hooks/useFloors.tsx)**
-
-Falls der XHR-Upload weiterhin fehlschlägt, wird als robustere Alternative der Standard-SDK-Upload genutzt:
-
-```typescript
-const { data, error } = await supabase.storage
-  .from(bucket)
-  .upload(path, file, { upsert: true });
-```
-
-Der Progress-Callback wird dann vereinfacht (0% → 100% am Ende).
-
-**3. Alte Storage-Policies aufräumen (Migration)**
-
-Die nicht gelöschten alten Policies bereinigen:
-- `DROP POLICY IF EXISTS "Admins can upload floor plans"`
-- `DROP POLICY IF EXISTS "Admins can update floor plans"`  
-- `DROP POLICY IF EXISTS "Admins can delete floor plans"`
-
-### Dateien
-- `src/hooks/useFloors.tsx` — Upload-Funktion mit Content-Type-Header und Fallback
-- Neue SQL-Migration — Alte Policies aufräumen
-
+Erwartetes Ergebnis
+- Grundriss-Upload funktioniert wieder zuverlässig.
+- Kein Rückfall auf alte, zu breite Admin-Policies nötig.
+- Storage-RLS ist zugleich robuster und konsistenter über verwandte Buckets.
