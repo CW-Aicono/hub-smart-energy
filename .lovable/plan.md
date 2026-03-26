@@ -1,55 +1,48 @@
 
-Ziel: Den Grundriss-Upload stabil beheben (nicht nur Workaround), inkl. sauberer Ursachenbehebung auf Datenbank-/RLS-Ebene.
 
-1) Tiefenanalyse-Ergebnis (Root Cause)
-- Der Fehler ist serverseitig/RLS, nicht im Frontend-Upload-Code:
-  - Console: `new row violates row-level security policy`
-  - Sowohl XHR-Upload als auch SDK-Fallback schlagen identisch fehl.
-- Die aktuell aktiven Storage-Policies für `floor-plans` sind logisch kaputt:
-  - In `floor_plans_insert` (und analog select/update/delete) wird intern effektiv auf `storage.foldername(l.name)` geprüft statt auf den Objektpfad `storage.objects.name`.
-  - Ursache: In der Policy wurde `storage.foldername(name)` innerhalb einer Subquery mit Tabelle `locations l` verwendet; dadurch wird `name` als `l.name` gebunden (Shadowing).
-  - Ergebnis: Der Vergleich mit `location_id` ist fast immer false → Upload blockiert.
-- Der letzte Migrationsschritt (Drop alter Admin-Policies) hat den Fehler sichtbar gemacht:
-  - Früher gab es noch permissive Alt-Policies als „Rettungsnetz“.
-  - Nach deren Entfernung bleibt nur die defekte Policy → kompletter Upload-Ausfall.
+## Problem Analysis
 
-2) Umsetzung (Migration-Fix)
-- Neue Migration erstellen, die die fehlerhaften Policies für `floor-plans` explizit droppt und korrekt neu anlegt.
-- Neue Policy-Logik so schreiben, dass der Dateipfad außerhalb der Subquery ausgewertet wird (kein Namenskonflikt möglich), z. B.:
-  - `split_part(name, '/', 1)` oder `(storage.foldername(name))[1]` nur außerhalb der Subquery
-  - Vergleich gegen erlaubte `location_id`s der User-Tenant-Zugehörigkeit.
-- Betroffene Policies:
-  - `floor_plans_select`
-  - `floor_plans_insert`
-  - `floor_plans_update`
-  - `floor_plans_delete`
+The **HTTP 404** error when executing an automation occurs because the `commandValue` sent to the Loxone Miniserver is invalid. 
 
-3) Systematische Härtung (gleich mit beheben)
-- Dieselbe Shadowing-Problematik ist auch bei weiteren Storage-Policies sichtbar (z. B. `floor_3d_models_*`, `meter_photos_*`).
-- Ich plane, in derselben Migration auch diese Policies auf die gleiche robuste Formel umzustellen, damit nicht der nächste Upload-Fehler unmittelbar folgt.
-- Zusätzlich prüfe ich überlappende Alt-Policies (z. B. sehr permissive 3D-Policies) und bereinige sie, damit Zugriff konsistent tenant-/location-basiert bleibt.
+The screenshot shows the automation "Testautomation" with action **"Reset Max Gesamt"**. This value gets passed directly into the Loxone HTTP API URL:
 
-4) Frontend/Hook-Anpassungen (minimal)
-- `useFloors.tsx` Upload-Logik bleibt grundsätzlich erhalten (Progress + SDK-Fallback ist okay).
-- Optional: Fehlertext bei RLS-Fehlern präzisieren (z. B. „Keine Berechtigung für diesen Speicherpfad“), damit künftige Diagnosen schneller sind.
+```
+/jdev/sps/io/{controlUuid}/Reset Max Gesamt
+```
 
-5) Validierung nach Fix
-- DB-Validierung:
-  - `pg_policies` prüfen: keine Referenzen mehr wie `storage.foldername(l.name)` / `storage.foldername(m.name)`.
-- E2E-Tests im UI:
-  - Edit Floor: PNG/PDF hochladen → speichern erfolgreich.
-  - Add Floor mit direktem Grundriss-Upload → erfolgreich.
-  - Optional: 3D-Upload (GLB/OBJ+MTL) weiterhin erfolgreich.
-- Sicherheitscheck:
-  - Upload in fremde Location bleibt verboten (RLS greift korrekt).
+Loxone doesn't recognize this as a valid command path → **404**.
 
-Technische Details (SQL-Ansatz, gekürzt)
-- Muster für INSERT:
-  - `bucket_id = 'floor-plans'`
-  - `AND split_part(name, '/', 1) IN (SELECT l.id::text FROM public.locations l JOIN public.profiles p ON p.tenant_id = l.tenant_id WHERE p.user_id = auth.uid())`
-- Analog für SELECT/UPDATE/DELETE mit `USING (...)`.
+### Root Cause
 
-Erwartetes Ergebnis
-- Grundriss-Upload funktioniert wieder zuverlässig.
-- Kein Rückfall auf alte, zu breite Admin-Policies nötig.
-- Storage-RLS ist zugleich robuster und konsistenter über verwandte Buckets.
+The `executeAutomation` function in `useLocationAutomations.tsx` uses `action.action_value || action.action_type || "pulse"` as the command. For older automations created before the multi-action builder was added, `action_value` contains free-text descriptions like "Reset Max Gesamt" instead of valid Loxone commands (`pulse`, `On`, `Off`, `toggle`, or numeric values).
+
+Loxone Miniserver Meter controls support resetting via sub-control UUIDs (found in `states` of the control structure), not via text commands on the main control UUID.
+
+### Fix Plan
+
+**1. Update `executeCommand` in `loxone-api/index.ts`** (edge function)
+- URL-encode the `commandValue` to handle spaces
+- For Meter controls: map special commands like "Reset Max Gesamt" to the correct Loxone sub-control reset approach (`/jdev/sps/io/{resetUuid}/pulse`)
+- Alternatively, if the command is not a recognized Loxone primitive, look up the control's `states` in the structure file to find the correct sub-UUID for the reset operation
+
+**2. Update `useLocationAutomations.tsx`** (client-side)
+- Sanitize/validate `commandValue` before sending — if it doesn't match known Loxone commands, either:
+  - Map it to the correct command format
+  - Or fall back to `pulse`
+
+**3. Add "Reset" action types to `AutomationRuleBuilder.tsx`**
+- Extend `ACTION_TYPES` with Meter-specific reset options:
+  - `{ value: "resetDay", label: "Tageswert zurücksetzen" }`  
+  - `{ value: "resetMonth", label: "Monatswert zurücksetzen" }`
+  - `{ value: "resetYear", label: "Jahreswert zurücksetzen" }`
+  - `{ value: "resetAll", label: "Alle Werte zurücksetzen" }`
+
+**4. Handle reset commands in the edge function**
+- When `commandValue` starts with `reset`, fetch the control's structure to find the correct reset sub-control UUID from `states`, then issue `pulse` on that sub-UUID
+- This is the proper Loxone API pattern for resetting meter values
+
+### Files to Modify
+- `supabase/functions/loxone-api/index.ts` — add reset command mapping logic in `executeCommand` handler
+- `src/hooks/useLocationAutomations.tsx` — clean up command value resolution
+- `src/components/locations/AutomationRuleBuilder.tsx` — add reset action types (conditionally for Meter controls)
+
