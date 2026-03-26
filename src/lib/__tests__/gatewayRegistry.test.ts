@@ -93,6 +93,14 @@ describe("gatewayRegistry", () => {
       expect(fields.map((f) => f.name)).toContain("device_mapping");
     });
 
+    it("siemens_iot2050 has optional device_name and node_red_url", () => {
+      const fields = GATEWAY_DEFINITIONS.siemens_iot2050.configFields;
+      expect(fields.every((f) => !f.required)).toBe(true);
+      expect(fields.map((f) => f.name)).toContain("device_name");
+      expect(fields.map((f) => f.name)).toContain("node_red_url");
+      expect(GATEWAY_DEFINITIONS.siemens_iot2050.edgeFunctionName).toBe("gateway-ingest");
+    });
+
     it("schneider_cloud requires api_url, client_id, client_secret, site_id", () => {
       const fields = GATEWAY_DEFINITIONS.schneider_cloud.configFields;
       const names = fields.map((f) => f.name);

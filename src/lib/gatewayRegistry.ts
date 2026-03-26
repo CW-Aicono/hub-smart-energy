@@ -132,6 +132,17 @@ export const GATEWAY_DEFINITIONS: Record<string, GatewayDefinition> = {
       { name: "device_mapping", label: "Device-Mapping (optional)", placeholder: "modbus:2=meter-uuid,modbus:3=meter-uuid", type: "text", description: "Zuordnung von Schneider Device-IDs zu Meter-UUIDs (kommagetrennt, Format: deviceId=meterUuid)", required: false },
     ],
   },
+  siemens_iot2050: {
+    type: "siemens_iot2050",
+    label: "Siemens IOT2050",
+    icon: "cpu",
+    description: "Siemens IOT2050 Edge-Gateway mit Node-RED (HTTP Push)",
+    edgeFunctionName: "gateway-ingest",
+    configFields: [
+      { name: "device_name", label: "Gerätename", placeholder: "IOT2050-Energie-01", type: "text", description: "Bezeichnung des IOT2050 zur Identifikation", required: false },
+      { name: "node_red_url", label: "Node-RED URL (optional)", placeholder: "http://192.168.1.100:1880", type: "url", description: "Lokale URL der Node-RED-Instanz (nur für Dokumentation)", required: false },
+    ],
+  },
   schneider_cloud: {
     type: "schneider_cloud",
     label: "Schneider EcoStruxure Cloud",
