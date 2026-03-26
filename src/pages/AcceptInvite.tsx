@@ -4,7 +4,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useTranslation } from "@/hooks/useTranslation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Zap, AlertCircle, ArrowRight } from "lucide-react";
+import { AlertCircle, ArrowRight } from "lucide-react";
+import aiconoLogo from "@/assets/aicono-logo.png";
 
 const AcceptInvite = () => {
   const [searchParams] = useSearchParams();
@@ -34,6 +35,9 @@ const AcceptInvite = () => {
         setStatus("error");
         return;
       }
+      // Redirect to the Supabase recovery action link.
+      // The RecoveryGuard + useAuth isRecovery flag will ensure the user
+      // lands on /set-password and cannot navigate away until PW is set.
       window.location.href = data.actionLink;
     } catch {
       setErrorMessage(t("invite.genericError" as any));
@@ -43,21 +47,21 @@ const AcceptInvite = () => {
 
   return (
     <div className="flex min-h-screen">
-      <div className="hidden lg:flex lg:w-1/2 bg-primary items-center justify-center p-12">
-        <div className="max-w-md text-primary-foreground">
-          <div className="flex items-center gap-3 mb-8">
-            <div className="h-12 w-12 rounded-lg bg-accent flex items-center justify-center"><Zap className="h-7 w-7 text-accent-foreground" /></div>
-            <h1 className="text-3xl font-display font-bold">Smart Energy Hub</h1>
+      <div className="hidden lg:flex lg:w-1/2 items-center justify-center p-12" style={{ backgroundColor: 'hsl(220, 60%, 20%)' }}>
+        <div className="max-w-md text-center">
+          <div className="flex flex-col items-center gap-6 mb-8">
+            <div className="bg-white/50 backdrop-blur-sm rounded-2xl p-8">
+              <img src={aiconoLogo} alt="AICONO" className="h-28 object-contain drop-shadow-lg" />
+            </div>
           </div>
-          <p className="text-lg opacity-80 leading-relaxed">{t("invite.brandingText" as any)}</p>
+          <p className="text-base text-primary-foreground/70 leading-relaxed">{t("invite.brandingText" as any)}</p>
         </div>
       </div>
       <div className="flex w-full lg:w-1/2 items-center justify-center p-8 bg-background">
         <Card className="w-full max-w-md border-0 shadow-lg">
           <CardHeader className="text-center">
-            <div className="flex items-center justify-center gap-2 mb-2 lg:hidden">
-              <div className="h-9 w-9 rounded-lg bg-accent flex items-center justify-center"><Zap className="h-5 w-5 text-accent-foreground" /></div>
-              <span className="text-xl font-display font-bold">Smart Energy Hub</span>
+            <div className="flex items-center justify-center mb-2 lg:hidden">
+              <img src={aiconoLogo} alt="AICONO" className="h-16 object-contain" />
             </div>
             <CardTitle className="text-2xl font-display">
               {status === "error" ? t("invite.linkInvalid" as any) : t("invite.acceptTitle" as any)}
@@ -76,7 +80,13 @@ const AcceptInvite = () => {
             ) : (
               <div className="flex flex-col items-center gap-6 py-4">
                 <p className="text-center text-muted-foreground text-sm">{t("invite.mainText" as any)}</p>
-                <Button className="w-full" size="lg" onClick={handleAccept} disabled={status === "loading"}>
+                <Button
+                  className="w-full text-white hover:opacity-90"
+                  style={{ backgroundColor: 'hsl(220, 60%, 20%)' }}
+                  size="lg"
+                  onClick={handleAccept}
+                  disabled={status === "loading"}
+                >
                   {status === "loading" ? (
                     <><span className="animate-spin mr-2 h-4 w-4 border-2 border-current border-t-transparent rounded-full inline-block" />{t("invite.loading" as any)}</>
                   ) : (
