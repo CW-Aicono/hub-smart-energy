@@ -77,15 +77,8 @@ export function AddLocationDialog({ parentId }: AddLocationDialogProps) {
   const { t } = useTranslation();
   const T = (key: string) => t(key as any);
 
-  const ENERGY_SOURCES = [
-    { id: "strom", label: T("addLoc.energyStrom") },
-    { id: "gas", label: T("addLoc.energyGas") },
-    { id: "waerme", label: T("addLoc.energyWaerme") },
-    { id: "solar", label: T("addLoc.energySolar") },
-    { id: "wasser", label: T("addLoc.energyWasser") },
-    { id: "oel", label: T("addLoc.energyOel") },
-    { id: "pellets", label: T("addLoc.energyPellets") },
-  ];
+
+
 
   const form = useForm<LocationFormData>({
     resolver: zodResolver(locationSchema),
