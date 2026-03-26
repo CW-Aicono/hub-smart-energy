@@ -101,6 +101,18 @@ describe("gatewayRegistry", () => {
       expect(GATEWAY_DEFINITIONS.siemens_iot2050.edgeFunctionName).toBe("gateway-ingest");
     });
 
+    it("sentron_powercenter_3000 requires api_url and device_ids, poll_interval optional", () => {
+      const fields = GATEWAY_DEFINITIONS.sentron_powercenter_3000.configFields;
+      const names = fields.map((f) => f.name);
+      expect(names).toContain("api_url");
+      expect(names).toContain("device_ids");
+      expect(names).toContain("poll_interval");
+      expect(fields.find((f) => f.name === "api_url")!.required).toBe(true);
+      expect(fields.find((f) => f.name === "device_ids")!.required).toBe(true);
+      expect(fields.find((f) => f.name === "poll_interval")!.required).toBe(false);
+      expect(GATEWAY_DEFINITIONS.sentron_powercenter_3000.edgeFunctionName).toBe("sentron-poc3000-api");
+    });
+
     it("schneider_cloud requires api_url, client_id, client_secret, site_id", () => {
       const fields = GATEWAY_DEFINITIONS.schneider_cloud.configFields;
       const names = fields.map((f) => f.name);

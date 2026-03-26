@@ -143,6 +143,18 @@ export const GATEWAY_DEFINITIONS: Record<string, GatewayDefinition> = {
       { name: "node_red_url", label: "Node-RED URL (optional)", placeholder: "http://192.168.1.100:1880", type: "url", description: "Lokale URL der Node-RED-Instanz (nur für Dokumentation)", required: false },
     ],
   },
+  sentron_powercenter_3000: {
+    type: "sentron_powercenter_3000",
+    label: "Siemens Sentron Powercenter 3000",
+    icon: "gauge",
+    description: "Siemens Sentron Powercenter 3000 – lokale REST API für Energiemonitoring",
+    edgeFunctionName: "sentron-poc3000-api",
+    configFields: [
+      { name: "api_url", label: "API URL", placeholder: "https://poc3000.meingebaeude.de", type: "url", description: "Externe URL des Powercenter 3000 (Reverse Proxy / VPN)", required: true },
+      { name: "device_ids", label: "Device IDs", placeholder: "uuid1,uuid2", type: "text", description: "Kommagetrennte Device-UUIDs aus der Powercenter Web-Oberfläche", required: true },
+      { name: "poll_interval", label: "Abrufintervall (Sekunden)", placeholder: "60", type: "text", description: "Intervall in Sekunden für den Datenabruf (Standard: 60)", required: false },
+    ],
+  },
   schneider_cloud: {
     type: "schneider_cloud",
     label: "Schneider EcoStruxure Cloud",
