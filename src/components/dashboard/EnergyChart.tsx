@@ -141,6 +141,7 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
   // ── Meter config state ────────────────────────────────────────────────────
   const [showSoc, setShowSoc] = useState(false);
   const [configuredMeterIds, setConfiguredMeterIds] = useState<Set<string> | null>(null);
+  const [configLoaded, setConfigLoaded] = useState(false);
 
   // Relevant meters for this location
   const relevantMeters = useMemo(
@@ -156,11 +157,67 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
 
   const selectedMeterIds = configuredMeterIds ?? defaultMeterIds;
 
+  // Load saved config from dashboard_widgets on mount
+  useEffect(() => {
+    if (!user) return;
+    let stale = false;
+    (async () => {
+      const { data } = await supabase
+        .from("dashboard_widgets")
+        .select("config")
+        .eq("user_id", user.id)
+        .eq("widget_type", "energy_chart")
+        .maybeSingle();
+      if (stale) return;
+      const cfg = data?.config as Record<string, unknown> | null;
+      if (cfg) {
+        if (Array.isArray(cfg.selectedMeterIds)) {
+          setConfiguredMeterIds(new Set(cfg.selectedMeterIds as string[]));
+        }
+        if (typeof cfg.showSoc === "boolean") {
+          setShowSoc(cfg.showSoc);
+        }
+      }
+      setConfigLoaded(true);
+    })();
+    return () => { stale = true; };
+  }, [user]);
+
+  // Persist config to DB when it changes
+  const persistConfig = useCallback(async (meterIds: Set<string> | null, soc: boolean) => {
+    if (!user) return;
+    const cfgPatch: Record<string, unknown> = {};
+    if (meterIds) cfgPatch.selectedMeterIds = Array.from(meterIds);
+    cfgPatch.showSoc = soc;
+
+    // Read current config to merge (preserve layout etc.)
+    const { data: row } = await supabase
+      .from("dashboard_widgets")
+      .select("id, config")
+      .eq("user_id", user.id)
+      .eq("widget_type", "energy_chart")
+      .maybeSingle();
+
+    if (row) {
+      const merged = { ...((row.config as Record<string, unknown>) ?? {}), ...cfgPatch };
+      await supabase.from("dashboard_widgets").update({ config: merged as any }).eq("id", row.id);
+    }
+  }, [user]);
+
   const handleToggleMeter = (meterId: string) => {
     setConfiguredMeterIds(prev => {
       const base = prev ?? new Set(defaultMeterIds);
       const next = new Set(base);
       if (next.has(meterId)) next.delete(meterId); else next.add(meterId);
+      persistConfig(next, showSoc);
+      return next;
+    });
+  };
+
+  const handleToggleSoc = () => {
+    setShowSoc(s => {
+      const next = !s;
+      persistConfig(configuredMeterIds, next);
       return next;
     });
   };
