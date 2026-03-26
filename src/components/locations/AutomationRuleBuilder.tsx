@@ -129,6 +129,14 @@ const ACTION_TYPES = [
   { value: "toggle", label: "Umschalten (Toggle)" },
 ];
 
+const METER_ACTION_TYPES = [
+  { value: "pulse", label: "Pulse (Taster)" },
+  { value: "resetDay", label: "Tageswert zurücksetzen" },
+  { value: "resetMonth", label: "Monatswert zurücksetzen" },
+  { value: "resetYear", label: "Jahreswert zurücksetzen" },
+  { value: "resetAll", label: "Alle Werte zurücksetzen" },
+];
+
 const CONDITION_TYPES = [
   { value: "sensor_value", label: "Sensorwert", icon: Thermometer, desc: "Wenn ein Messwert einen Schwellenwert über-/unterschreitet" },
   { value: "time", label: "Uhrzeit", icon: Clock, desc: "Innerhalb eines Zeitfensters aktiv" },
@@ -151,12 +159,12 @@ function getSensorIcon(type: string) {
 }
 
 function isActuator(sensor: LoxoneSensor): boolean {
-  const actuatorTypes = ["switch", "light", "blind", "button", "digital"];
+  const actuatorTypes = ["switch", "light", "blind", "button", "digital", "power"];
   const actuatorControlTypes = [
     "Switch", "Dimmer", "Jalousie", "LightController", "LightControllerV2",
     "Pushbutton", "IRoomController", "IRoomControllerV2", "Gate", "Ventilation",
     "Daytimer", "Alarm", "CentralAlarm", "Intercom", "AalSmartAlarm",
-    "Sauna", "Pool", "Hourcounter",
+    "Sauna", "Pool", "Hourcounter", "Meter", "EFM", "EnergyManager2",
   ];
   return actuatorTypes.includes(sensor.type) || actuatorControlTypes.includes(sensor.controlType);
 }
@@ -493,19 +501,25 @@ function ActionCard({
           </div>
           <div className="space-y-1">
             <Label className="text-xs">Aktion</Label>
-            <Select
-              value={action.action_type || "pulse"}
-              onValueChange={(val) => onUpdate({ ...action, action_type: val, action_value: val })}
-            >
-              <SelectTrigger className="h-9 text-xs">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {ACTION_TYPES.map((at) => (
-                  <SelectItem key={at.value} value={at.value} className="text-xs">{at.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {(() => {
+              const isMeterControl = action.control_type === "Meter" || action.control_type === "EFM" || action.control_type === "EnergyManager2";
+              const availableActions = isMeterControl ? METER_ACTION_TYPES : ACTION_TYPES;
+              return (
+                <Select
+                  value={action.action_type || "pulse"}
+                  onValueChange={(val) => onUpdate({ ...action, action_type: val, action_value: val })}
+                >
+                  <SelectTrigger className="h-9 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableActions.map((at) => (
+                      <SelectItem key={at.value} value={at.value} className="text-xs">{at.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              );
+            })()}
           </div>
         </div>
       </CardContent>
