@@ -11,6 +11,7 @@ import { useMeters } from "@/hooks/useMeters";
 import { useMeterReadings } from "@/hooks/useMeterReadings";
 import { useFloorSensorPositions } from "@/hooks/useFloorSensorPositions";
 import { ENERGY_CARD_CLASSES, ENERGY_ICON_CLASSES } from "@/lib/energyTypeColors";
+import { isPdfUrl } from "@/components/locations/FloorPlanRenderer";
 
 interface FloorPlanWidgetProps {
   locationId: string | null;
