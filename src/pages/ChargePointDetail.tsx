@@ -59,6 +59,7 @@ const ChargePointDetail = () => {
   const { groups, assignChargePointToGroup } = useChargePointGroups();
   const { createTask } = useTasks();
   const { sessions } = useChargingSessions(id);
+  const resolveTag = useIdTagResolver();
   const { vendors: knownVendors, getModelsForVendor } = useChargerModels();
 
   const [editing, setEditing] = useState(false);
