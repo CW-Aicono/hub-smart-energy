@@ -1421,6 +1421,7 @@ export type Database = {
           id: string
           is_dynamic: boolean
           location_id: string
+          meter_id: string | null
           price_per_unit: number
           spot_markup_per_unit: number
           tenant_id: string
@@ -1436,6 +1437,7 @@ export type Database = {
           id?: string
           is_dynamic?: boolean
           location_id: string
+          meter_id?: string | null
           price_per_unit?: number
           spot_markup_per_unit?: number
           tenant_id: string
@@ -1451,6 +1453,7 @@ export type Database = {
           id?: string
           is_dynamic?: boolean
           location_id?: string
+          meter_id?: string | null
           price_per_unit?: number
           spot_markup_per_unit?: number
           tenant_id?: string
@@ -1465,6 +1468,13 @@ export type Database = {
             columns: ["location_id"]
             isOneToOne: false
             referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "energy_prices_meter_id_fkey"
+            columns: ["meter_id"]
+            isOneToOne: false
+            referencedRelation: "meters"
             referencedColumns: ["id"]
           },
           {
