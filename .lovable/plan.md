@@ -1,62 +1,47 @@
 
 
-## Schneider Electric EcoStruxure Panel Server – Gateway-Integration
+## Siemens IOT2050 – Gateway-Integration
 
-### Ansatz
+### Recherche-Ergebnis
 
-Es gibt zwei sinnvolle Integrationswege. Ich empfehle, **beide** als Gateway-Typen anzubieten:
+Das Siemens IOT2050 ist ein **industrieller Edge-PC** (kein Cloud-Service). Es hat keine eigene REST-API, über die man Daten abrufen kann. Stattdessen läuft darauf typischerweise **Node-RED**, das Daten von Modbus-Zählern (z.B. Siemens SENTRON PAC) liest und per **MQTT oder HTTP POST** an einen Endpunkt weiterleitet.
+
+**Integrationsstrategie:** Das IOT2050 wird so konfiguriert, dass es Messwerte per HTTP POST an unseren bestehenden `gateway-ingest`-Endpunkt pusht. Wir brauchen also **keine neue Edge Function**, sondern nur einen neuen Gateway-Typ im Registry, der dem Nutzer die Konfigurationsanleitung und den API-Key bereitstellt.
+
+Das ist identisch zum Muster des bestehenden Gateway-Worker-Containers (siehe `docs/gateway-worker/`).
 
 ---
 
-### Gateway-Typ 1: `schneider_panel_server` (HTTPS Push-Empfang)
+### Lösung
 
-Der Panel Server pusht JSON/CSV-Dateien an einen HTTPS-Endpunkt. Wir erweitern die bestehende `gateway-ingest` Edge Function um eine Route, die das Schneider-Publikationsformat entgegennimmt und in `meter_power_readings` schreibt.
+**1. `src/lib/gatewayRegistry.ts` – Neuer Gateway-Typ `siemens_iot2050`**
 
-**Dateien:**
-- `src/lib/gatewayRegistry.ts` – Neuer Gateway-Typ `schneider_panel_server` mit Feldern:
-  - `webhook_secret` (Password) – optionaler Shared Secret zur Authentifizierung der eingehenden Pushes
-  - `device_mapping` (Text) – optionale Zuordnung Schneider Device-IDs zu Meter-IDs
-- `supabase/functions/gateway-ingest/index.ts` – Neue Route `POST ?action=schneider-push` die das Schneider JSON-Format parst (Geräte-Messwerte mit Zeitstempeln) und als Power-Readings einfügt
-
-**Schneider JSON-Format** (vereinfacht):
-```json
-{
-  "header": { "senderId": "PAS800_xxxx", "timestamp": "..." },
-  "measurements": [
-    {
-      "deviceId": "modbus:2",
-      "deviceName": "PM5560",
-      "values": [
-        { "name": "PkWD", "timestamp": "...", "value": 12.5 }
-      ]
-    }
-  ]
+```typescript
+siemens_iot2050: {
+  type: "siemens_iot2050",
+  label: "Siemens IOT2050",
+  icon: "cpu",
+  description: "Siemens IOT2050 Edge-Gateway mit Node-RED (HTTP Push)",
+  edgeFunctionName: "gateway-ingest",
+  configFields: [
+    { name: "device_name", label: "Gerätename", placeholder: "IOT2050-Energie-01", type: "text",
+      description: "Bezeichnung des IOT2050 zur Identifikation", required: false },
+    { name: "node_red_url", label: "Node-RED URL (optional)", placeholder: "http://192.168.1.100:1880", type: "url",
+      description: "Lokale URL der Node-RED-Instanz (nur für Dokumentation)", required: false },
+  ],
 }
 ```
 
-### Gateway-Typ 2: `schneider_cloud` (EcoStruxure Energy Hub API)
+Da das IOT2050 Daten an `gateway-ingest` pusht (wie der Gateway Worker), wird als `edgeFunctionName` `"gateway-ingest"` gesetzt. Die eigentliche Authentifizierung erfolgt über den `GATEWAY_API_KEY`, der bereits im System existiert.
 
-Für Kunden, die bereits die Schneider Cloud nutzen. Abruf über OAuth2 Client Credentials.
+**2. `src/lib/__tests__/gatewayRegistry.test.ts` – Tests erweitern**
 
-**Dateien:**
-- `src/lib/gatewayRegistry.ts` – Neuer Gateway-Typ `schneider_cloud` mit Feldern:
-  - `api_url` (URL) – EcoStruxure API-Endpunkt
-  - `client_id` (Text) – OAuth2 Client ID
-  - `client_secret` (Password) – OAuth2 Client Secret
-  - `site_id` (Text) – Site/Building ID
-- `supabase/functions/schneider-api/index.ts` – Neue Edge Function für OAuth2-Token-Abruf und Polling der Energy Hub API
-- `supabase/config.toml` – Eintrag für `schneider-api`
+Test für den neuen Gateway-Typ hinzufügen (Existenz, Felder, edgeFunctionName).
 
-### Gateway-Typ 1 zuerst, da:
-- Kein Schneider-Cloud-Konto nötig
-- Funktioniert mit jedem Panel Server (PAS600, PAS800)
-- Nutzt das native HTTPS-Publikationsfeature des Geräts
-- Schnellste Time-to-Value für den Kunden
+### Dateien
+- `src/lib/gatewayRegistry.ts` – 1 neuer Gateway-Typ
+- `src/lib/__tests__/gatewayRegistry.test.ts` – Tests erweitern
 
-### Zusammenfassung der Änderungen
-1. **`src/lib/gatewayRegistry.ts`** – Zwei neue Gateway-Definitionen hinzufügen
-2. **`supabase/functions/gateway-ingest/index.ts`** – Schneider-JSON-Parser-Route
-3. **`supabase/functions/schneider-api/index.ts`** – Neue Edge Function (Cloud-Variante)
-4. **`supabase/config.toml`** – Config für `schneider-api`
-5. **`src/lib/__tests__/gatewayRegistry.test.ts`** – Tests für neue Typen erweitern
+### Hinweis
+Es wird keine neue Edge Function benötigt – der IOT2050 nutzt denselben `gateway-ingest`-Endpunkt wie der Gateway Worker. Der Kunde muss in Node-RED einen HTTP-Request-Node konfigurieren, der die Messwerte im bestehenden Format an `POST /functions/v1/gateway-ingest` mit `Authorization: Bearer <GATEWAY_API_KEY>` sendet.
 
