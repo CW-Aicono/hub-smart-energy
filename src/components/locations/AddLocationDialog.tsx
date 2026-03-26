@@ -112,27 +112,28 @@ export function AddLocationDialog({ parentId }: AddLocationDialogProps) {
   const currentMainLocation = locations.find(loc => loc.is_main_location);
 
   const onSubmit = async (data: LocationFormData) => {
+    const { energy_sources: energySourceItems, ...rest } = data;
     const locationData = {
-      name: data.name,
-      type: data.type as LocationType,
-      usage_type: data.usage_type as any,
-      address: data.address || null,
-      postal_code: data.postal_code || null,
-      city: data.city || null,
+      name: rest.name,
+      type: rest.type as LocationType,
+      usage_type: rest.usage_type as any,
+      address: rest.address || null,
+      postal_code: rest.postal_code || null,
+      city: rest.city || null,
       country: "Deutschland",
-      contact_person: data.contact_person || null,
-      contact_email: data.contact_email || null,
-      contact_phone: data.contact_phone || null,
-      energy_sources: data.energy_sources,
-      show_on_map: data.show_on_map,
-      is_main_location: data.is_main_location,
-      latitude: typeof data.latitude === "number" ? data.latitude : null,
-      longitude: typeof data.longitude === "number" ? data.longitude : null,
-      description: data.description || null,
-      parent_id: (data.parent_id && data.parent_id !== "none") ? data.parent_id : (parentId || null),
+      contact_person: rest.contact_person || null,
+      contact_email: rest.contact_email || null,
+      contact_phone: rest.contact_phone || null,
+      energy_sources: energySourceItems.map((s) => s.energy_type),
+      show_on_map: rest.show_on_map,
+      is_main_location: rest.is_main_location,
+      latitude: typeof rest.latitude === "number" ? rest.latitude : null,
+      longitude: typeof rest.longitude === "number" ? rest.longitude : null,
+      description: rest.description || null,
+      parent_id: (rest.parent_id && rest.parent_id !== "none") ? rest.parent_id : (parentId || null),
     };
 
-    const { error } = await createLocation(locationData);
+    const { error, id: newLocationId } = await createLocation(locationData);
 
     if (error) {
       toast({
@@ -141,6 +142,10 @@ export function AddLocationDialog({ parentId }: AddLocationDialogProps) {
         variant: "destructive",
       });
     } else {
+      // Save energy sources to new table
+      if (newLocationId && energySourceItems.length > 0) {
+        await saveEnergySources(newLocationId, energySourceItems);
+      }
       toast({
         title: T("common.success"),
         description: T("addLoc.success"),
