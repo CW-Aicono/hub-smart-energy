@@ -144,7 +144,7 @@ export function AddLocationDialog({ parentId }: AddLocationDialogProps) {
     } else {
       // Save energy sources to new table
       if (newLocationId && energySourceItems.length > 0) {
-        await saveEnergySources(newLocationId, energySourceItems);
+        await saveEnergySources(newLocationId, energySourceItems as LocationEnergySourceInsert[]);
       }
       toast({
         title: T("common.success"),
