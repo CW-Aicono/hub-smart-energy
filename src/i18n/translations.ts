@@ -4959,6 +4959,10 @@ export const translations = {
   "chart.periodQuarter": { de: "Quartal", en: "Quarter", es: "Trimestre", nl: "Kwartaal" },
   "chart.periodYear": { de: "Jahr", en: "Year", es: "Año", nl: "Jaar" },
   "chart.periodAll": { de: "Gesamt", en: "Total", es: "Total", nl: "Totaal" },
+  "chart.configTitle": { de: "Angezeigte Zähler", en: "Displayed Meters", es: "Contadores mostrados", nl: "Weergegeven meters" },
+  "chart.mainMeter": { de: "Haupt", en: "Main", es: "Principal", nl: "Hoofd" },
+  "chart.socLabel": { de: "Batteriestand (SOC)", en: "Battery Level (SOC)", es: "Nivel de batería (SOC)", nl: "Batterijniveau (SOC)" },
+  "chart.socHint": { de: "Zeigt 0–100 % auf rechter Y-Achse", en: "Shows 0–100% on right Y-axis", es: "Muestra 0–100% en eje Y derecho", nl: "Toont 0–100% op rechter Y-as" },
 
   // ── Cost Overview ─────────────────────────────────────────────────────────
   "cost.costs": { de: "Kosten", en: "Costs", es: "Costes", nl: "Kosten" },
@@ -4985,7 +4989,6 @@ export const translations = {
   "dashboard.totalConsumption": { de: "Gesamtverbrauch", en: "Total Consumption", es: "Consumo total", nl: "Totaalverbruik" },
   "dashboard.noConsumptionData": { de: "Noch keine Verbrauchsdaten vorhanden", en: "No consumption data available yet", es: "Aún no hay datos de consumo", nl: "Nog geen verbruiksgegevens beschikbaar" },
   "dashboard.ecoScore": { de: "Öko-Score", en: "Eco Score", es: "Eco-Score", nl: "Eco-Score" },
-
 
   // ── Sankey Widget ─────────────────────────────────────────────────────────
   "sankey.power": { de: "Leistung", en: "Power", es: "Potencia", nl: "Vermogen" },
