@@ -583,26 +583,49 @@ async function validateBasicAuth(
     return locIntegrations || [];
   }
 
-  // Try Basic Auth first
-  if (authHeader.startsWith("Basic ")) {
-    const decoded = atob(authHeader.slice(6));
-    const colonIdx = decoded.indexOf(":");
-    if (colonIdx === -1) return json({ error: "Invalid Basic Auth format" }, 401);
+  const wwwAuthHeader = { "WWW-Authenticate": 'Basic realm="Schneider"' };
 
-    const username = decoded.slice(0, colonIdx);
-    const password = decoded.slice(colonIdx + 1);
+  // Try Basic Auth first (case-insensitive scheme)
+  if (/^basic\s/i.test(authHeader)) {
+    let decoded: string;
+    try {
+      decoded = atob(authHeader.replace(/^basic\s+/i, ""));
+    } catch {
+      console.warn(`[schneider-push] Invalid base64 in Basic Auth for tenant ${tenantId}`);
+      return new Response(JSON.stringify({ error: "Invalid Basic Auth encoding" }), {
+        status: 401,
+        headers: { ...corsHeaders, ...wwwAuthHeader, "Content-Type": "application/json" },
+      });
+    }
+
+    const colonIdx = decoded.indexOf(":");
+    if (colonIdx === -1) {
+      return new Response(JSON.stringify({ error: "Invalid Basic Auth format" }), {
+        status: 401,
+        headers: { ...corsHeaders, ...wwwAuthHeader, "Content-Type": "application/json" },
+      });
+    }
+
+    const username = decoded.slice(0, colonIdx).trim();
+    const password = decoded.slice(colonIdx + 1).trim();
 
     const locIntegrations = await findSchneiderIntegrations();
 
     for (const li of locIntegrations) {
       const cfg = (li.config || {}) as Record<string, unknown>;
-      if (cfg.push_username === username && cfg.push_password === password) {
+      if (
+        String(cfg.push_username || "").trim() === username &&
+        String(cfg.push_password || "").trim() === password
+      ) {
         return { config: cfg };
       }
     }
 
     console.warn(`[schneider-push] Basic Auth failed for tenant ${tenantId}, user="${username}", found ${locIntegrations.length} integration(s)`);
-    return json({ error: "Invalid credentials" }, 401);
+    return new Response(JSON.stringify({ error: "Invalid credentials" }), {
+      status: 401,
+      headers: { ...corsHeaders, ...wwwAuthHeader, "Content-Type": "application/json" },
+    });
   }
 
   // Fall back to API key auth
@@ -728,6 +751,16 @@ Deno.serve(async (req) => {
   if (req.method === "POST") {
     if (action === "compact-day") return handleCompactDay(req);
     if (action === "schneider-push") return handleSchneiderPush(req);
+
+    // Fallback: if tenant_id is present and Basic Auth is used, route to Schneider handler
+    // even if action is missing (some devices may not send the query parameter)
+    const hasTenantId = url.searchParams.has("tenant_id");
+    const hasBasicAuth = /^basic\s/i.test(req.headers.get("Authorization") || "");
+    if (hasTenantId && hasBasicAuth) {
+      console.log("[gateway-ingest] Fallback routing to schneider-push (Basic Auth + tenant_id, no action)");
+      return handleSchneiderPush(req);
+    }
+
     return handlePostReadings(req);
   }
 
