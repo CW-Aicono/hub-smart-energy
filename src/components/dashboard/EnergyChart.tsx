@@ -425,7 +425,7 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
       const todayStr = format(new Date(), "yyyy-MM-dd");
       for (const [meterId, pt] of Object.entries(livePeriodTotals)) {
         const info = meterMap[meterId];
-        if (!info || !info.is_main_meter) continue;
+        if (!info || !selectedMeterIds.has(meterId)) continue;
         if (locationId && info.location_id !== locationId) continue;
         if (pt.totalDay != null) {
           const converted = info.energy_type === "gas" && info.unit === "m³"
