@@ -7,6 +7,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import EnergyChartConfig from "./EnergyChartConfig";
 import { useEnergyData } from "@/hooks/useEnergyData";
 import { useMeters } from "@/hooks/useMeters";
 import { useLocations } from "@/hooks/useLocations";
