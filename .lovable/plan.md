@@ -1,66 +1,59 @@
 
 
-# Firmware-Update-Check & -Trigger für Loxone Gateways
+## Fix: Grundriss-Upload für Etagen
 
-## Analyse der Loxone API
+### Problem
+Der Upload von Grundrissen schlägt fehl ("Grundriss konnte nicht hochgeladen werden"). Die `uploadWithProgress`-Funktion nutzt einen manuellen XHR-Request an die Storage-API, was fehleranfällig ist (fehlende CORS-Header, Content-Type-Probleme, etc.).
 
-Die offizielle Loxone Web Services Dokumentation bietet folgende relevante Endpunkte:
+### Ursachenanalyse
+- Der XHR-basierte Upload setzt keinen `Content-Type`-Header — der Browser setzt ihn zwar automatisch bei `File`-Objekten, aber Supabase Storage kann damit Probleme haben
+- Zudem fehlt der Response-Body im Error-Handling, sodass der genaue Fehlergrund nicht sichtbar ist
+- Alte RLS-Policies ("Admins can upload/update/delete floor plans") wurden nie aufgeräumt und koexistieren mit den neuen Policies — das sollte kein Problem sein (OR-Logik), erhöht aber die Komplexität
 
-```text
-Lesen:
-  jdev/cfg/version          → aktuelle Firmware-Version
-  jdev/cfg/versiondate      → Firmware-Erstellungsdatum
-  data/status               → XML mit allen Geräten + Versionen (Extensions, Tree, Air)
+### Lösung
 
-Update auslösen:
-  jdev/sys/updatetolatestrelease     → Miniserver auf neueste Firmware aktualisieren
-  jdev/sys/wsextension/<serial>/ForceUpdate/0C000001/DeviceIndex  → Extension-Update
-  jdev/sys/wsdevice/<serial>/ForceUpdate/0C000001/DeviceIndex     → Tree/Air-Geräte-Update
+**1. Upload-Funktion umstellen (src/hooks/useFloors.tsx)**
+
+Die `uploadWithProgress`-Funktion wird so angepasst, dass sie:
+- Den `Content-Type`-Header explizit auf den MIME-Type der Datei setzt
+- Den Response-Body bei Fehlern loggt, um Debugging zu ermöglichen
+- Als Fallback den Standard-Supabase-SDK-Upload nutzt, falls der XHR fehlschlägt
+
+```typescript
+// Im XHR-Setup ergänzen:
+xhr.setRequestHeader("Content-Type", file.type || "application/octet-stream");
+
+// Im Error-Handler den Response-Body loggen:
+xhr.addEventListener("load", async () => {
+  if (xhr.status >= 200 && xhr.status < 300) {
+    // ... bestehende Logik
+  } else {
+    console.error("Floor plan upload failed:", xhr.status, xhr.responseText);
+    resolve({ publicUrl: null, error: new Error(`Upload failed: ${xhr.status} ${xhr.statusText}`) });
+  }
+});
 ```
 
-### Wichtige Einschränkung
+**2. Fallback auf Supabase SDK (src/hooks/useFloors.tsx)**
 
-Die Loxone API bietet **keinen Endpunkt**, um die neueste verfügbare Version abzufragen. Man kann nur die aktuelle Version lesen und blind ein Update triggern. Das Update lädt dann automatisch die neueste Release-Version von den Loxone-Servern.
+Falls der XHR-Upload weiterhin fehlschlägt, wird als robustere Alternative der Standard-SDK-Upload genutzt:
 
-## Umsetzungsplan
-
-### 1) Edge Function erweitern (`loxone-api/index.ts`)
-
-Zwei neue Actions hinzufügen:
-
-- **`getVersion`**: Ruft `jdev/cfg/version` und `jdev/cfg/versiondate` ab, optional `data/status` für Extension-Versionen. Gibt strukturiertes JSON zurück mit Miniserver-Version, Datum und Liste der Extensions mit deren Versionen.
-
-- **`triggerUpdate`**: Ruft `jdev/sys/updatetolatestrelease` auf. Erfordert Full-Access-User. Gibt Erfolg/Fehler zurück. Vor dem Aufruf wird eine Bestätigungsprüfung erzwungen (Parameter `confirmed: true` im Request).
-
-### 2) UI auf der Integrationen-Seite (`IntegrationCard.tsx`)
-
-Pro Loxone-Gateway-Karte:
-- Neuer Button **"Firmware prüfen"** (neben "Verbindung testen")
-- Beim Klick: Version + Datum abrufen und anzeigen (z.B. „Version 14.5.12.4 vom 15.01.2026")
-- Falls Extensions vorhanden: deren Versionen in einer kleinen Liste darunter
-- Button **"Update starten"** mit Bestätigungs-Dialog (AlertDialog): „Das Miniserver-Update wird gestartet. Der Miniserver ist während des Updates nicht erreichbar. Fortfahren?"
-- Nach Trigger: Hinweis „Update wurde gestartet. Der Miniserver startet automatisch neu."
-
-### 3) Nur für Loxone-Typ
-
-Die Firmware-Update-Funktionalität wird nur für `loxone_miniserver`-Integrationen angeboten, da die anderen Gateway-Typen (Shelly, ABB, Siemens, etc.) keine vergleichbaren Update-Endpunkte über ihre Cloud-APIs bereitstellen.
-
-## Betroffene Dateien
-
-- `supabase/functions/loxone-api/index.ts` – neue Actions `getVersion` und `triggerUpdate`
-- `src/components/integrations/IntegrationCard.tsx` – Firmware-Buttons und Versionsanzeige
-- Ggf. `src/i18n/translations.ts` – neue Übersetzungsschlüssel
-
-## Technische Details
-
-```text
-IntegrationCard (Loxone)
-  [Firmware prüfen] → invoke("loxone-api", { action: "getVersion" })
-                     → zeigt Version + Datum + Extension-Liste
-  [Update starten]  → AlertDialog Bestätigung
-                     → invoke("loxone-api", { action: "triggerUpdate", confirmed: true })
-                     → Erfolgsmeldung / Fehlermeldung via Toast
+```typescript
+const { data, error } = await supabase.storage
+  .from(bucket)
+  .upload(path, file, { upsert: true });
 ```
 
-User mit `Trigger Update`-Recht auf dem Miniserver ist Voraussetzung (Loxone-Berechtigung `0x00008000`). Fehlt das Recht, gibt der Miniserver HTTP 401/403 zurück – wird als klare Fehlermeldung angezeigt.
+Der Progress-Callback wird dann vereinfacht (0% → 100% am Ende).
+
+**3. Alte Storage-Policies aufräumen (Migration)**
+
+Die nicht gelöschten alten Policies bereinigen:
+- `DROP POLICY IF EXISTS "Admins can upload floor plans"`
+- `DROP POLICY IF EXISTS "Admins can update floor plans"`  
+- `DROP POLICY IF EXISTS "Admins can delete floor plans"`
+
+### Dateien
+- `src/hooks/useFloors.tsx` — Upload-Funktion mit Content-Type-Header und Fallback
+- Neue SQL-Migration — Alte Policies aufräumen
 
