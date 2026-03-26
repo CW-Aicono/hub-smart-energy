@@ -138,6 +138,39 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
   const allowedTypes = useLocationEnergyTypesSet(locationId);
   const visibleEnergyKeys = useMemo(() => ENERGY_KEYS.filter(k => allowedTypes.has(k)), [allowedTypes]);
 
+  // ── Meter config state ────────────────────────────────────────────────────
+  const [showSoc, setShowSoc] = useState(false);
+  const [configuredMeterIds, setConfiguredMeterIds] = useState<Set<string> | null>(null);
+
+  // Relevant meters for this location
+  const relevantMeters = useMemo(
+    () => meters.filter(m => !m.is_archived && (!locationId || m.location_id === locationId)),
+    [meters, locationId],
+  );
+
+  // Default selection: all main meters
+  const defaultMeterIds = useMemo(
+    () => new Set(relevantMeters.filter(m => m.is_main_meter).map(m => m.id)),
+    [relevantMeters],
+  );
+
+  const selectedMeterIds = configuredMeterIds ?? defaultMeterIds;
+
+  const handleToggleMeter = (meterId: string) => {
+    setConfiguredMeterIds(prev => {
+      const base = prev ?? new Set(defaultMeterIds);
+      const next = new Set(base);
+      if (next.has(meterId)) next.delete(meterId); else next.add(meterId);
+      return next;
+    });
+  };
+
+  // Check if any meter could provide SOC data (battery-related names)
+  const hasSocMeters = useMemo(
+    () => relevantMeters.some(m => /soc|batter|speicher/i.test(m.name) || /soc|batter/i.test(m.energy_type)),
+    [relevantMeters],
+  );
+
   // DB-based daily totals for non-day periods
   const [dailyTotals, setDailyTotals] = useState<Array<{ meter_id: string; day: string; total_value: number }>>([]);
   const [dailyTotalsLoading, setDailyTotalsLoading] = useState(false);
