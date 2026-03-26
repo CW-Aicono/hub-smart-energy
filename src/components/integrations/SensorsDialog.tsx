@@ -184,21 +184,29 @@ export function SensorsDialog({ locationIntegration, open, onOpenChange, locatio
           </DialogHeader>
 
           <div className="flex-1 overflow-auto">
-            {error && (
+            {isPushGateway ? (
+              <div className="text-center py-12 text-muted-foreground space-y-2">
+                <p className="font-medium">Push-basiertes Gateway</p>
+                <p className="text-sm">
+                  Dieses Gateway sendet Daten aktiv an das System. Zähler können nicht automatisch abgerufen werden.
+                  Bitte ordnen Sie die Zähler manuell über das Device-Mapping in der Integrationskonfiguration zu.
+                </p>
+              </div>
+            ) : error ? (
               <Alert variant="destructive" className="mb-4">
                 <AlertCircle className="h-4 w-4" />
                 <AlertDescription>{error}</AlertDescription>
               </Alert>
-            )}
+            ) : null}
 
-            {loading ? (
+            {!isPushGateway && loading ? (
               <div className="flex items-center justify-center py-12">
                 <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
                 <span className="ml-2 text-muted-foreground">
                   Lade Geräte von {integrationName}...
                 </span>
               </div>
-            ) : meterSensors.length === 0 && !error ? (
+            ) : !isPushGateway && meterSensors.length === 0 && !error ? (
               <div className="text-center py-12 text-muted-foreground">
                 Keine Zähler gefunden
               </div>
