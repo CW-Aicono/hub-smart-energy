@@ -16,6 +16,7 @@ import { MiniserverStatus } from "./MiniserverStatus";
 import { EditIntegrationDialog } from "./EditIntegrationDialog";
 import { getGatewayDefinition } from "@/lib/gatewayRegistry";
 import { LoxoneFirmwareSection } from "./LoxoneFirmwareSection";
+import { SchneiderSetupInfo } from "./SchneiderSetupInfo";
 import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -138,6 +139,9 @@ export function IntegrationCard({ locationIntegration, onUpdate, onDelete }: Int
                 {integration?.description && <p className="text-xs text-muted-foreground">{integration.description}</p>}
                 {integration?.type === "loxone_miniserver" && isConfigured && (
                   <LoxoneFirmwareSection locationIntegrationId={locationIntegration.id} />
+                )}
+                {integration?.type === "schneider_panel_server" && isConfigured && gatewayDef?.setupInstructions && (
+                  <SchneiderSetupInfo config={config} setupInstructions={gatewayDef.setupInstructions} />
                 )}
               </div>
             </div>

@@ -543,9 +543,77 @@ const SCHNEIDER_POWER_FIELDS = new Set([
   "TotPF",    // Total power factor
 ]);
 
+/**
+ * Validates Basic Auth credentials against stored push_username/push_password
+ * in the location_integration config for schneider_panel_server integrations.
+ */
+async function validateBasicAuth(
+  req: Request,
+  tenantId: string,
+): Promise<{ config: Record<string, unknown> } | Response> {
+  const authHeader = req.headers.get("Authorization") || "";
+
+  // Try Basic Auth first
+  if (authHeader.startsWith("Basic ")) {
+    const decoded = atob(authHeader.slice(6));
+    const colonIdx = decoded.indexOf(":");
+    if (colonIdx === -1) return json({ error: "Invalid Basic Auth format" }, 401);
+
+    const username = decoded.slice(0, colonIdx);
+    const password = decoded.slice(colonIdx + 1);
+
+    const supabase = getSupabase();
+    const { data: integrations, error } = await supabase
+      .from("location_integrations")
+      .select("config, integration:integrations!location_integrations_integration_id_fkey(type)")
+      .eq("is_enabled", true)
+      .filter("integration.type", "eq", "schneider_panel_server");
+
+    if (error) {
+      console.error("[schneider-push] DB lookup error:", error.message);
+      return json({ error: "Internal error" }, 500);
+    }
+
+    // Find matching integration by tenant (via location) and credentials
+    for (const li of integrations || []) {
+      const cfg = (li.config || {}) as Record<string, unknown>;
+      if (cfg.push_username === username && cfg.push_password === password) {
+        return { config: cfg };
+      }
+    }
+
+    return json({ error: "Invalid credentials" }, 401);
+  }
+
+  // Fall back to API key auth
+  const apiKeyErr = validateApiKey(req);
+  if (apiKeyErr) return apiKeyErr;
+
+  // If using API key, load config from any matching integration for this tenant
+  const supabase = getSupabase();
+  const { data } = await supabase
+    .from("location_integrations")
+    .select("config, integration:integrations!location_integrations_integration_id_fkey(type)")
+    .eq("is_enabled", true)
+    .filter("integration.type", "eq", "schneider_panel_server")
+    .limit(1)
+    .maybeSingle();
+
+  return { config: ((data?.config || {}) as Record<string, unknown>) };
+}
+
 async function handleSchneiderPush(req: Request): Promise<Response> {
-  const authErr = validateApiKey(req);
-  if (authErr) return authErr;
+  const url = new URL(req.url);
+  const tenantId = url.searchParams.get("tenant_id");
+
+  if (!tenantId) {
+    return json({ error: "tenant_id query parameter required" }, 400);
+  }
+
+  // Authenticate via Basic Auth (Panel Server) or API key
+  const authResult = await validateBasicAuth(req, tenantId);
+  if (authResult instanceof Response) return authResult;
+  const storedConfig = authResult.config;
 
   let payload: SchneiderPayload;
   try {
@@ -562,15 +630,9 @@ async function handleSchneiderPush(req: Request): Promise<Response> {
   const senderId = payload?.header?.senderId || "unknown";
   console.log(`[schneider-push] Received ${measurements.length} device(s) from ${senderId}`);
 
-  // Parse optional device_mapping and tenant_id from query params
-  const url = new URL(req.url);
-  const tenantId = url.searchParams.get("tenant_id");
-  const deviceMappingRaw = url.searchParams.get("device_mapping") || "";
+  // Device mapping: from stored config or query param
+  const deviceMappingRaw = url.searchParams.get("device_mapping") || String(storedConfig.device_mapping || "");
   const deviceMapping = parseDeviceMapping(deviceMappingRaw);
-
-  if (!tenantId) {
-    return json({ error: "tenant_id query parameter required" }, 400);
-  }
 
   const supabase = getSupabase();
   const readings: PowerReading[] = [];
