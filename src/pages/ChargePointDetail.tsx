@@ -748,7 +748,7 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
                               <TableCell className="text-sm">{end ? format(end, "dd.MM.yyyy HH:mm") : "—"}</TableCell>
                               <TableCell className="text-sm">{durationStr}</TableCell>
                               <TableCell>{fmtKwh(s.energy_kwh)}</TableCell>
-                              <TableCell className="font-mono text-sm">{s.id_tag || "—"}</TableCell>
+                              <TableCell className="text-sm">{resolveTag(s.id_tag) ? <span>{resolveTag(s.id_tag)} <span className="text-muted-foreground font-mono text-xs">({s.id_tag})</span></span> : s.id_tag || "—"}</TableCell>
                               <TableCell>
                                 <Badge variant={statusVariant}>{statusLabel}</Badge>
                               </TableCell>
