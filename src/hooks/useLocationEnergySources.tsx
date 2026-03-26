@@ -1,5 +1,6 @@
-import { useCallback } from "react";
+import { useCallback, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useLocations } from "./useLocations";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "./useTenant";
 
