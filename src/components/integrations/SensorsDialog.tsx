@@ -97,7 +97,7 @@ export function SensorsDialog({ locationIntegration, open, onOpenChange, locatio
   }, [meters]);
 
   const fetchSensors = async () => {
-    if (!locationIntegration) return;
+    if (!locationIntegration || isPushGateway) return;
 
     setLoading(true);
     setError(null);
@@ -124,7 +124,7 @@ export function SensorsDialog({ locationIntegration, open, onOpenChange, locatio
   };
 
   useEffect(() => {
-    if (open && locationIntegration) {
+    if (open && locationIntegration && !isPushGateway) {
       fetchSensors();
       setSelectedSensorIds(new Set());
     }
