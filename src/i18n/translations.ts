@@ -5534,9 +5534,13 @@ export const translations = {
 
   // ── EnergyPrice section titles ────────────────────────────────────────────
   "ep.sectionTitle": { de: "Energiepreise", en: "Energy Prices", es: "Precios de energía", nl: "Energieprijzen" },
-  "ep.sectionDesc": { de: "Preise pro Energieträger für die Kostenberechnung", en: "Prices per energy type for cost calculation", es: "Precios por tipo de energía para el cálculo de costos", nl: "Prijzen per energiedrager voor kostenberekening" },
+  "ep.sectionDesc": { de: "Preise pro Energieträger und Hauptzähler für die Kostenberechnung", en: "Prices per energy type and main meter for cost calculation", es: "Precios por tipo de energía y contador principal para el cálculo de costos", nl: "Prijzen per energiedrager en hoofdmeter voor kostenberekening" },
   "ep.addPrice": { de: "Preis hinzufügen", en: "Add Price", es: "Añadir precio", nl: "Prijs toevoegen" },
   "ep.spotPlus": { de: "Spot +", en: "Spot +", es: "Spot +", nl: "Spot +" },
+  "ep.meter": { de: "Zähler", en: "Meter", es: "Contador", nl: "Meter" },
+  "ep.allMeters": { de: "Alle Zähler (Standort-Standard)", en: "All meters (location default)", es: "Todos los contadores (predeterminado)", nl: "Alle meters (locatie-standaard)" },
+  "ep.meterAssignment": { de: "Zähler-Zuordnung", en: "Meter Assignment", es: "Asignación de contador", nl: "Metertoewijzing" },
+  "ep.meterAssignmentDesc": { de: "Preis einem Hauptzähler zuordnen. Unterzähler erben den Preis automatisch.", en: "Assign price to a main meter. Sub-meters inherit the price automatically.", es: "Asignar precio a un contador principal. Los subcontadores heredan el precio automáticamente.", nl: "Prijs toewijzen aan een hoofdmeter. Submeters erven de prijs automatisch." },
 
   // ── PV Forecast section titles ────────────────────────────────────────────
   "pv.sectionTitle": { de: "PV-Prognose", en: "PV Forecast", es: "Pronóstico FV", nl: "PV-prognose" },
