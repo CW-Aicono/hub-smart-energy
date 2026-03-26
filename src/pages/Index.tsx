@@ -9,11 +9,18 @@ import { DashboardFilterProvider } from "@/hooks/useDashboardFilter";
 const DashboardContent = lazy(() => import("./DashboardContent"));
 
 const Index = () => {
-  const { user, loading } = useAuth();
+  const { user, loading, isRecovery } = useAuth();
   const { isSuperAdmin, loading: superAdminLoading } = useSuperAdmin();
   const { t } = useTranslation();
   const navigate = useNavigate();
   const [onboardingChecked, setOnboardingChecked] = useState(false);
+
+  // If user is in recovery mode, force them to /set-password
+  useEffect(() => {
+    if (isRecovery && user) {
+      navigate("/set-password", { replace: true });
+    }
+  }, [isRecovery, user, navigate]);
 
   useEffect(() => {
     if (!user || onboardingChecked) return;

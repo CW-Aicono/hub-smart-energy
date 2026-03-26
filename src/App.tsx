@@ -12,6 +12,7 @@ import { ThemeProvider } from "@/hooks/useTheme";
 import { DemoModeDetector } from "@/contexts/DemoMode";
 import ModuleGuard from "@/components/ModuleGuard";
 import { SuperAdminWrapper } from "@/components/super-admin/SuperAdminWrapper";
+import RecoveryGuard from "@/components/RecoveryGuard";
 import UpdateBanner from "./components/UpdateBanner";
 import SupportSessionBanner from "./components/SupportSessionBanner";
 import CookieConsent from "./components/CookieConsent";
@@ -94,6 +95,7 @@ const App = () => (
                 <TooltipProvider>
                   <Toaster />
                   <Sonner />
+                  <RecoveryGuard />
                   <UpdateBanner />
                   <SupportSessionBanner />
                   <CookieConsent />

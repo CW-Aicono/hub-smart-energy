@@ -61,7 +61,7 @@ const Auth = () => {
     }
     setSubmitting(true);
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/profile`,
+      redirectTo: `${window.location.origin}/set-password`,
     });
     setSubmitting(false);
     if (error) {

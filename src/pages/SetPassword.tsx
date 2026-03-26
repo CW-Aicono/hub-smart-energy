@@ -1,16 +1,19 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { Zap, Eye, EyeOff, CheckCircle, AlertCircle } from "lucide-react";
+import { Eye, EyeOff, CheckCircle, AlertCircle } from "lucide-react";
+import aiconoLogo from "@/assets/aicono-logo.png";
 
 const SetPassword = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { clearRecovery } = useAuth();
   const [password, setPassword] = useState("");
   const [passwordConfirm, setPasswordConfirm] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -20,7 +23,6 @@ const SetPassword = () => {
   const [linkError, setLinkError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Check for error in URL hash (e.g. token already consumed by email scanners)
     const hash = window.location.hash;
     const params = new URLSearchParams(hash.replace("#", "?").replace(/^\\?/, ""));
     const errorCode = params.get("error_code") || params.get("error");
@@ -35,20 +37,16 @@ const SetPassword = () => {
       return;
     }
 
-    // Supabase exchanges the recovery token from the URL hash automatically
-    // and fires an onAuthStateChange with event "PASSWORD_RECOVERY"
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
       if (event === "PASSWORD_RECOVERY" || event === "SIGNED_IN") {
         setSessionReady(true);
       }
     });
 
-    // Also check if we already have a session (e.g. page reload after token exchange)
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) setSessionReady(true);
     });
 
-    // Timeout: if after 10s no session, show error
     const timeout = setTimeout(() => {
       setSessionReady((ready) => {
         if (!ready) {
@@ -68,20 +66,12 @@ const SetPassword = () => {
     e.preventDefault();
 
     if (password.length < 8) {
-      toast({
-        title: "Fehler",
-        description: "Das Passwort muss mindestens 8 Zeichen lang sein.",
-        variant: "destructive",
-      });
+      toast({ title: "Fehler", description: "Das Passwort muss mindestens 8 Zeichen lang sein.", variant: "destructive" });
       return;
     }
 
     if (password !== passwordConfirm) {
-      toast({
-        title: "Fehler",
-        description: "Die Passwörter stimmen nicht überein.",
-        variant: "destructive",
-      });
+      toast({ title: "Fehler", description: "Die Passwörter stimmen nicht überein.", variant: "destructive" });
       return;
     }
 
@@ -90,30 +80,27 @@ const SetPassword = () => {
     setSubmitting(false);
 
     if (error) {
-      toast({
-        title: "Fehler",
-        description: error.message,
-        variant: "destructive",
-      });
+      toast({ title: "Fehler", description: error.message, variant: "destructive" });
       return;
     }
 
+    // Clear recovery flag so user can navigate freely
+    clearRecovery();
     setDone(true);
-    setTimeout(() => navigate("/"), 2500);
+    setTimeout(() => navigate("/", { replace: true }), 2500);
   };
 
   return (
     <div className="flex min-h-screen">
-      {/* Left branding panel */}
-      <div className="hidden lg:flex lg:w-1/2 bg-primary items-center justify-center p-12">
-        <div className="max-w-md text-primary-foreground">
-          <div className="flex items-center gap-3 mb-8">
-            <div className="h-12 w-12 rounded-lg bg-accent flex items-center justify-center">
-              <Zap className="h-7 w-7 text-accent-foreground" />
+      {/* Left branding panel – matches Auth.tsx */}
+      <div className="hidden lg:flex lg:w-1/2 items-center justify-center p-12" style={{ backgroundColor: 'hsl(220, 60%, 20%)' }}>
+        <div className="max-w-md text-center">
+          <div className="flex flex-col items-center gap-6 mb-8">
+            <div className="bg-white/50 backdrop-blur-sm rounded-2xl p-8">
+              <img src={aiconoLogo} alt="AICONO" className="h-28 object-contain drop-shadow-lg" />
             </div>
-            <h1 className="text-3xl font-display font-bold">Smart Energy Hub</h1>
           </div>
-          <p className="text-lg opacity-80 leading-relaxed">
+          <p className="text-base text-primary-foreground/70 leading-relaxed">
             Legen Sie jetzt Ihr Passwort fest, um auf Ihren Zugang zuzugreifen.
           </p>
         </div>
@@ -123,11 +110,8 @@ const SetPassword = () => {
       <div className="flex w-full lg:w-1/2 items-center justify-center p-8 bg-background">
         <Card className="w-full max-w-md border-0 shadow-lg">
           <CardHeader className="text-center">
-            <div className="flex items-center justify-center gap-2 mb-2 lg:hidden">
-              <div className="h-9 w-9 rounded-lg bg-accent flex items-center justify-center">
-                <Zap className="h-5 w-5 text-accent-foreground" />
-              </div>
-              <span className="text-xl font-display font-bold">Smart Energy Hub</span>
+            <div className="flex items-center justify-center mb-2 lg:hidden">
+              <img src={aiconoLogo} alt="AICONO" className="h-16 object-contain" />
             </div>
             <CardTitle className="text-2xl font-display">
               {done ? "Passwort gespeichert" : "Passwort festlegen"}
@@ -207,7 +191,8 @@ const SetPassword = () => {
 
                 <Button
                   type="submit"
-                  className="w-full"
+                  style={{ backgroundColor: 'hsl(220, 60%, 20%)' }}
+                  className="w-full text-white hover:opacity-90"
                   disabled={submitting || password !== passwordConfirm || password.length < 8}
                 >
                   {submitting ? "Wird gespeichert …" : "Passwort speichern & anmelden"}
