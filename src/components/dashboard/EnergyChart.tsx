@@ -556,7 +556,7 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
     const autoMeterIds = new Set(
       meters.filter(m => m.capture_type === "automatic" && !m.is_archived).map(m => m.id)
     );
-    const manualFiltered = filtered.filter(r => !autoMeterIds.has(r.meter_id));
+    const manualFiltered = filtered.filter(r => !autoMeterIds.has(r.meter_id) && selectedMeterIds.has(r.meter_id));
 
     if (period === "week") {
       const days = eachDayOfInterval({ start: rangeStart, end: rangeEnd });
@@ -658,7 +658,7 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
       addToBucket(buckets[month], r);
     });
     return buckets;
-  }, [readings, meterMap, period, rangeStart.toISOString(), rangeEnd.toISOString(), livePeriodTotals, offset, periodLabel, locationId, powerReadings, dailyTotals]);
+  }, [readings, meterMap, period, rangeStart.toISOString(), rangeEnd.toISOString(), livePeriodTotals, offset, periodLabel, locationId, powerReadings, dailyTotals, selectedMeterIds]);
 
   // Reset offset when period changes
   const handlePeriodChange = (v: string) => {
