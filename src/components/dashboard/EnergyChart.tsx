@@ -769,15 +769,19 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
           <>
             <ResponsiveContainer width="100%" height={300}>
               {isLineChart ? (
-                <LineChart data={filteredChartData} margin={{ top: 5, right: 10, left: 5, bottom: 5 }}>
+                <LineChart data={filteredChartData} margin={{ top: 5, right: showSoc ? 50 : 10, left: 5, bottom: 5 }}>
                   <CartesianGrid strokeDasharray="3 3" className="stroke-border" vertical={false} />
                   <XAxis dataKey="label" tick={tickStyle} tickLine={false} axisLine={false} interval={11} tickFormatter={(v: string) => v.includes(":00") ? v.split(" ")[0] : ""} />
-                  <YAxis width={50} tick={tickStyle} tickLine={false} axisLine={false} domain={visibleKeys.length === 0 ? [0, 1] : ['auto', 'auto']} />
+                  <YAxis yAxisId="left" width={50} tick={tickStyle} tickLine={false} axisLine={false} domain={visibleKeys.length === 0 ? [0, 1] : ['auto', 'auto']} />
+                  {showSoc && (
+                    <YAxis yAxisId="right" orientation="right" width={45} tick={tickStyle} tickLine={false} axisLine={false} domain={[0, 100]} tickFormatter={(v: number) => `${v}%`} />
+                  )}
                   <Tooltip
                     contentStyle={tooltipStyle}
                     formatter={(value, name, item) => {
                       const nameStr = typeof name === "string" ? name : "";
                       if (nameStr.startsWith("__gap_")) return null;
+                      if (nameStr === T("chart.socLabel")) return [`${(value as number).toFixed(0)} %`, nameStr];
                       return tooltipFormatter(value as number, nameStr);
                     }}
                     itemSorter={(item) => ((item as any)?.dataKey as string ?? "").startsWith("real_") ? -1 : 1}
@@ -787,22 +791,35 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
                     const displayName = T(`energy.${key}`);
                     return (
                       <React.Fragment key={key}>
-                        <Line type="monotone" dataKey={key} name={`__gap_${key}`} stroke={ENERGY_CHART_COLORS[key]} strokeWidth={hidden ? 0 : 1.5} strokeDasharray="4 4" dot={false} connectNulls={false} legendType="none" tooltipType="none" />
-                        <Line type="monotone" dataKey={hidden ? key : `real_${key}`} name={displayName} stroke={ENERGY_CHART_COLORS[key]} strokeWidth={hidden ? 0 : 2.5} dot={false} connectNulls={false} legendType="line" />
+                        <Line yAxisId="left" type="monotone" dataKey={key} name={`__gap_${key}`} stroke={ENERGY_CHART_COLORS[key]} strokeWidth={hidden ? 0 : 1.5} strokeDasharray="4 4" dot={false} connectNulls={false} legendType="none" tooltipType="none" />
+                        <Line yAxisId="left" type="monotone" dataKey={hidden ? key : `real_${key}`} name={displayName} stroke={ENERGY_CHART_COLORS[key]} strokeWidth={hidden ? 0 : 2.5} dot={false} connectNulls={false} legendType="line" />
                       </React.Fragment>
                     );
                   })}
+                  {showSoc && (
+                    <Line yAxisId="right" type="monotone" dataKey="soc" name={T("chart.socLabel")} stroke="hsl(var(--accent-foreground))" strokeWidth={2} dot={false} connectNulls strokeDasharray="6 3" />
+                  )}
                 </LineChart>
               ) : (
-                <BarChart data={filteredChartData} barGap={2} margin={{ top: 5, right: 10, left: 5, bottom: 5 }}>
+                <BarChart data={filteredChartData} barGap={2} margin={{ top: 5, right: showSoc ? 50 : 10, left: 5, bottom: 5 }}>
                   <CartesianGrid strokeDasharray="3 3" className="stroke-border" vertical={false} />
                   <XAxis dataKey="label" tick={tickStyle} tickLine={false} axisLine={false} />
-                  <YAxis width={50} tick={tickStyle} tickLine={false} axisLine={false} domain={visibleKeys.length === 0 ? [0, 1] : ['auto', 'auto']} />
-                  <Tooltip contentStyle={tooltipStyle} formatter={tooltipFormatter} />
-                  {visibleEnergyKeys.includes("strom") && <Bar dataKey="strom" name={T("energy.strom")} fill={ENERGY_CHART_COLORS.strom} radius={[3, 3, 0, 0]} hide={hiddenKeys.has("strom")} />}
-                  {visibleEnergyKeys.includes("gas") && <Bar dataKey="gas" name={T("energy.gas")} fill={ENERGY_CHART_COLORS.gas} radius={[3, 3, 0, 0]} hide={hiddenKeys.has("gas")} />}
-                  {visibleEnergyKeys.includes("waerme") && <Bar dataKey="waerme" name={T("energy.waerme")} fill={ENERGY_CHART_COLORS.waerme} radius={[3, 3, 0, 0]} hide={hiddenKeys.has("waerme")} />}
-                  {visibleEnergyKeys.includes("wasser") && <Bar dataKey="wasser" name={T("energy.wasser")} fill={ENERGY_CHART_COLORS.wasser} radius={[3, 3, 0, 0]} hide={hiddenKeys.has("wasser")} />}
+                  <YAxis yAxisId="left" width={50} tick={tickStyle} tickLine={false} axisLine={false} domain={visibleKeys.length === 0 ? [0, 1] : ['auto', 'auto']} />
+                  {showSoc && (
+                    <YAxis yAxisId="right" orientation="right" width={45} tick={tickStyle} tickLine={false} axisLine={false} domain={[0, 100]} tickFormatter={(v: number) => `${v}%`} />
+                  )}
+                  <Tooltip contentStyle={tooltipStyle} formatter={(value, name) => {
+                    const nameStr = typeof name === "string" ? name : "";
+                    if (nameStr === T("chart.socLabel")) return [`${(value as number).toFixed(0)} %`, nameStr];
+                    return tooltipFormatter(value as number, nameStr);
+                  }} />
+                  {visibleEnergyKeys.includes("strom") && <Bar yAxisId="left" dataKey="strom" name={T("energy.strom")} fill={ENERGY_CHART_COLORS.strom} radius={[3, 3, 0, 0]} hide={hiddenKeys.has("strom")} />}
+                  {visibleEnergyKeys.includes("gas") && <Bar yAxisId="left" dataKey="gas" name={T("energy.gas")} fill={ENERGY_CHART_COLORS.gas} radius={[3, 3, 0, 0]} hide={hiddenKeys.has("gas")} />}
+                  {visibleEnergyKeys.includes("waerme") && <Bar yAxisId="left" dataKey="waerme" name={T("energy.waerme")} fill={ENERGY_CHART_COLORS.waerme} radius={[3, 3, 0, 0]} hide={hiddenKeys.has("waerme")} />}
+                  {visibleEnergyKeys.includes("wasser") && <Bar yAxisId="left" dataKey="wasser" name={T("energy.wasser")} fill={ENERGY_CHART_COLORS.wasser} radius={[3, 3, 0, 0]} hide={hiddenKeys.has("wasser")} />}
+                  {showSoc && (
+                    <Line yAxisId="right" type="monotone" dataKey="soc" name={T("chart.socLabel")} stroke="hsl(var(--accent-foreground))" strokeWidth={2} dot={false} connectNulls strokeDasharray="6 3" />
+                  )}
                 </BarChart>
               )}
             </ResponsiveContainer>
