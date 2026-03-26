@@ -76,6 +76,9 @@ export function SensorsDialog({ locationIntegration, open, onOpenChange, locatio
   const integrationType = locationIntegration?.integration?.type || "";
   const edgeFunctionName = getEdgeFunctionName(integrationType);
 
+  // Push-based gateways (gateway-ingest) don't support getSensors – they receive data, not poll it
+  const isPushGateway = edgeFunctionName === "gateway-ingest";
+
   // For non-Loxone gateways, show all sensors; for Loxone filter to meter types
   const meterSensors = integrationType === "loxone_miniserver"
     ? sensors.filter((s) => METER_CONTROL_TYPES.has(s.controlType || ""))
