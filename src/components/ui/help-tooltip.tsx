@@ -11,7 +11,7 @@ interface HelpTooltipProps {
 
 export function HelpTooltip({ text, className, side = "top", iconSize = 14 }: HelpTooltipProps) {
   return (
-    <Tooltip>
+    <Tooltip delayDuration={0}>
       <TooltipTrigger asChild>
         <span
           className={cn(
