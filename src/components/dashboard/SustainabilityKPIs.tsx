@@ -13,7 +13,7 @@ import { gasM3ToKWh } from "@/lib/formatEnergy";
 import { startOfDay, startOfWeek, startOfMonth, startOfQuarter, startOfYear, endOfWeek, endOfMonth, endOfQuarter, endOfYear, format } from "date-fns";
 import { useWeekStartDay } from "@/hooks/useWeekStartDay";
 import { useDashboardFilter, TimePeriod } from "@/hooks/useDashboardFilter";
-import { useLocationEnergySources } from "@/hooks/useLocationEnergySources";
+import { useLocationEnergyTypesSet } from "@/hooks/useLocationEnergySources";
 import { usePeriodSumsWithFallback } from "@/hooks/usePeriodSumsWithFallback";
 
 const PERIOD_LABEL_KEYS: Record<TimePeriod, string> = {
@@ -48,7 +48,7 @@ const SustainabilityKPIs = ({ locationId }: SustainabilityKPIsProps) => {
   const { meters } = useMeters(locationId || undefined);
   const { selectedPeriod: period, setSelectedPeriod: setPeriod } = useDashboardFilter();
   const weekStartsOn = useWeekStartDay();
-  const allowedTypes = useLocationEnergySources(locationId);
+  const allowedTypes = useLocationEnergyTypesSet(locationId);
 
   // Build meter metadata map
   const meterMap = useMemo(() => {

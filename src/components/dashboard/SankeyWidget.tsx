@@ -14,7 +14,7 @@ import { ENERGY_CHART_COLORS, ENERGY_TYPE_LABELS } from "@/lib/energyTypeColors"
 import { startOfDay, startOfWeek, startOfMonth, startOfQuarter, startOfYear, endOfWeek, endOfMonth, endOfQuarter, endOfYear, format } from "date-fns";
 import { useDashboardFilter, TimePeriod } from "@/hooks/useDashboardFilter";
 import { useWeekStartDay } from "@/hooks/useWeekStartDay";
-import { useLocationEnergySources } from "@/hooks/useLocationEnergySources";
+import { useLocationEnergyTypesSet } from "@/hooks/useLocationEnergySources";
 import { useSpotPrices } from "@/hooks/useSpotPrices";
 import { usePeriodSumsWithFallback } from "@/hooks/usePeriodSumsWithFallback";
 
@@ -72,7 +72,7 @@ const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
   const { selectedPeriod: period, setSelectedPeriod: setPeriod } = useDashboardFilter();
   const weekStartsOn = useWeekStartDay();
   const [viewMode, setViewMode] = useState<SankeyViewMode>("leistung");
-  const allowedTypes = useLocationEnergySources(locationId);
+  const allowedTypes = useLocationEnergyTypesSet(locationId);
   const { currentPrice: currentSpotPrice } = useSpotPrices();
 
   // Compute date range for DB query (always current period, no offset)

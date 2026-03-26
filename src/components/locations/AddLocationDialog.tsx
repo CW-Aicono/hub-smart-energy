@@ -3,6 +3,8 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useLocations, LocationType } from "@/hooks/useLocations";
+import { useLocationEnergySources, type LocationEnergySourceInsert } from "@/hooks/useLocationEnergySources";
+import { LocationEnergySourcesEditor } from "@/components/locations/LocationEnergySourcesEditor";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useGeocode } from "@/hooks/useGeocode";
 import { useTranslation } from "@/hooks/useTranslation";
@@ -50,7 +52,7 @@ const locationSchema = z.object({
   contact_person: z.string().trim().max(100).optional(),
   contact_email: z.string().trim().email().max(255).optional().or(z.literal("")),
   contact_phone: z.string().trim().max(30).optional(),
-  energy_sources: z.array(z.string()).default([]),
+  energy_sources: z.array(z.object({ energy_type: z.string(), custom_name: z.string(), sort_order: z.number().optional() })).default([]),
   show_on_map: z.boolean().default(true),
   is_main_location: z.boolean().default(false),
   latitude: z.coerce.number().min(-90).max(90).optional().or(z.literal("")),
@@ -67,6 +69,7 @@ interface AddLocationDialogProps {
 export function AddLocationDialog({ parentId }: AddLocationDialogProps) {
   const [open, setOpen] = useState(false);
   const { locations, createLocation } = useLocations();
+  const { saveBulk: saveEnergySources } = useLocationEnergySources(null);
   const availableComplexes = locations.filter(loc => loc.type === "gebaeudekomplex");
   const { isAdmin } = useUserRole();
   const { geocodeAddress, isLoading: isGeocoding } = useGeocode();
@@ -74,15 +77,8 @@ export function AddLocationDialog({ parentId }: AddLocationDialogProps) {
   const { t } = useTranslation();
   const T = (key: string) => t(key as any);
 
-  const ENERGY_SOURCES = [
-    { id: "strom", label: T("addLoc.energyStrom") },
-    { id: "gas", label: T("addLoc.energyGas") },
-    { id: "waerme", label: T("addLoc.energyWaerme") },
-    { id: "solar", label: T("addLoc.energySolar") },
-    { id: "wasser", label: T("addLoc.energyWasser") },
-    { id: "oel", label: T("addLoc.energyOel") },
-    { id: "pellets", label: T("addLoc.energyPellets") },
-  ];
+
+
 
   const form = useForm<LocationFormData>({
     resolver: zodResolver(locationSchema),
@@ -109,27 +105,28 @@ export function AddLocationDialog({ parentId }: AddLocationDialogProps) {
   const currentMainLocation = locations.find(loc => loc.is_main_location);
 
   const onSubmit = async (data: LocationFormData) => {
+    const { energy_sources: energySourceItems, ...rest } = data;
     const locationData = {
-      name: data.name,
-      type: data.type as LocationType,
-      usage_type: data.usage_type as any,
-      address: data.address || null,
-      postal_code: data.postal_code || null,
-      city: data.city || null,
+      name: rest.name,
+      type: rest.type as LocationType,
+      usage_type: rest.usage_type as any,
+      address: rest.address || null,
+      postal_code: rest.postal_code || null,
+      city: rest.city || null,
       country: "Deutschland",
-      contact_person: data.contact_person || null,
-      contact_email: data.contact_email || null,
-      contact_phone: data.contact_phone || null,
-      energy_sources: data.energy_sources,
-      show_on_map: data.show_on_map,
-      is_main_location: data.is_main_location,
-      latitude: typeof data.latitude === "number" ? data.latitude : null,
-      longitude: typeof data.longitude === "number" ? data.longitude : null,
-      description: data.description || null,
-      parent_id: (data.parent_id && data.parent_id !== "none") ? data.parent_id : (parentId || null),
+      contact_person: rest.contact_person || null,
+      contact_email: rest.contact_email || null,
+      contact_phone: rest.contact_phone || null,
+      energy_sources: energySourceItems.map((s) => s.energy_type),
+      show_on_map: rest.show_on_map,
+      is_main_location: rest.is_main_location,
+      latitude: typeof rest.latitude === "number" ? rest.latitude : null,
+      longitude: typeof rest.longitude === "number" ? rest.longitude : null,
+      description: rest.description || null,
+      parent_id: (rest.parent_id && rest.parent_id !== "none") ? rest.parent_id : (parentId || null),
     };
 
-    const { error } = await createLocation(locationData);
+    const { error, id: newLocationId } = await createLocation(locationData);
 
     if (error) {
       toast({
@@ -138,6 +135,10 @@ export function AddLocationDialog({ parentId }: AddLocationDialogProps) {
         variant: "destructive",
       });
     } else {
+      // Save energy sources to new table
+      if (newLocationId && energySourceItems.length > 0) {
+        await saveEnergySources(newLocationId, energySourceItems as LocationEnergySourceInsert[]);
+      }
       toast({
         title: T("common.success"),
         description: T("addLoc.success"),
@@ -398,41 +399,16 @@ export function AddLocationDialog({ parentId }: AddLocationDialogProps) {
             <FormField
               control={form.control}
               name="energy_sources"
-              render={() => (
+              render={({ field }) => (
                 <FormItem>
                   <FormLabel>{T("addLoc.energySources")}</FormLabel>
                   <FormDescription>
                     {T("addLoc.energySourcesDesc")}
                   </FormDescription>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-2">
-                    {ENERGY_SOURCES.map((source) => (
-                      <FormField
-                        key={source.id}
-                        control={form.control}
-                        name="energy_sources"
-                        render={({ field }) => (
-                          <FormItem className="flex items-center space-x-2 space-y-0">
-                            <FormControl>
-                              <Checkbox
-                                checked={field.value?.includes(source.id)}
-                                onCheckedChange={(checked) => {
-                                  const current = field.value || [];
-                                  if (checked) {
-                                    field.onChange([...current, source.id]);
-                                  } else {
-                                    field.onChange(current.filter((v) => v !== source.id));
-                                  }
-                                }}
-                              />
-                            </FormControl>
-                            <FormLabel className="text-sm font-normal cursor-pointer">
-                              {source.label}
-                            </FormLabel>
-                          </FormItem>
-                        )}
-                      />
-                    ))}
-                  </div>
+                  <LocationEnergySourcesEditor
+                    value={field.value as LocationEnergySourceInsert[]}
+                    onChange={field.onChange}
+                  />
                   <FormMessage />
                 </FormItem>
               )}

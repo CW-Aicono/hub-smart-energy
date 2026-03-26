@@ -27,7 +27,7 @@ import type { Locale } from "date-fns";
 const localeMap: Record<string, Locale> = { de, en: enUS, es, nl };
 import { useDashboardFilter, TimePeriod } from "@/hooks/useDashboardFilter";
 import { useWeekStartDay } from "@/hooks/useWeekStartDay";
-import { useLocationEnergySources } from "@/hooks/useLocationEnergySources";
+import { useLocationEnergyTypesSet } from "@/hooks/useLocationEnergySources";
 
 type ChartPeriod = "day" | "week" | "month" | "quarter" | "year";
 
@@ -134,7 +134,7 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
   const [hiddenKeys, setHiddenKeys] = useState<Set<string>>(new Set());
   const [powerReadings, setPowerReadings] = useState<Array<{ meter_id: string; power_value: number; recorded_at: string }>>([]);
   const [powerLoading, setPowerLoading] = useState(false);
-  const allowedTypes = useLocationEnergySources(locationId);
+  const allowedTypes = useLocationEnergyTypesSet(locationId);
   const visibleEnergyKeys = useMemo(() => ENERGY_KEYS.filter(k => allowedTypes.has(k)), [allowedTypes]);
 
   // DB-based daily totals for non-day periods

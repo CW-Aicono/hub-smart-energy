@@ -2396,6 +2396,54 @@ export type Database = {
           },
         ]
       }
+      location_energy_sources: {
+        Row: {
+          created_at: string
+          custom_name: string
+          energy_type: string
+          id: string
+          location_id: string
+          sort_order: number
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          custom_name: string
+          energy_type?: string
+          id?: string
+          location_id: string
+          sort_order?: number
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          custom_name?: string
+          energy_type?: string
+          id?: string
+          location_id?: string
+          sort_order?: number
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "location_energy_sources_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "location_energy_sources_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       location_integrations: {
         Row: {
           config: Json | null
