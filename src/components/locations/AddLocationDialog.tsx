@@ -69,6 +69,7 @@ interface AddLocationDialogProps {
 export function AddLocationDialog({ parentId }: AddLocationDialogProps) {
   const [open, setOpen] = useState(false);
   const { locations, createLocation } = useLocations();
+  const { saveBulk: saveEnergySources } = useLocationEnergySources(null);
   const availableComplexes = locations.filter(loc => loc.type === "gebaeudekomplex");
   const { isAdmin } = useUserRole();
   const { geocodeAddress, isLoading: isGeocoding } = useGeocode();
