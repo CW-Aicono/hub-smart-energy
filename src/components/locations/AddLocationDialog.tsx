@@ -406,41 +406,16 @@ export function AddLocationDialog({ parentId }: AddLocationDialogProps) {
             <FormField
               control={form.control}
               name="energy_sources"
-              render={() => (
+              render={({ field }) => (
                 <FormItem>
                   <FormLabel>{T("addLoc.energySources")}</FormLabel>
                   <FormDescription>
                     {T("addLoc.energySourcesDesc")}
                   </FormDescription>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-2">
-                    {ENERGY_SOURCES.map((source) => (
-                      <FormField
-                        key={source.id}
-                        control={form.control}
-                        name="energy_sources"
-                        render={({ field }) => (
-                          <FormItem className="flex items-center space-x-2 space-y-0">
-                            <FormControl>
-                              <Checkbox
-                                checked={field.value?.includes(source.id)}
-                                onCheckedChange={(checked) => {
-                                  const current = field.value || [];
-                                  if (checked) {
-                                    field.onChange([...current, source.id]);
-                                  } else {
-                                    field.onChange(current.filter((v) => v !== source.id));
-                                  }
-                                }}
-                              />
-                            </FormControl>
-                            <FormLabel className="text-sm font-normal cursor-pointer">
-                              {source.label}
-                            </FormLabel>
-                          </FormItem>
-                        )}
-                      />
-                    ))}
-                  </div>
+                  <LocationEnergySourcesEditor
+                    value={field.value as LocationEnergySourceInsert[]}
+                    onChange={field.onChange}
+                  />
                   <FormMessage />
                 </FormItem>
               )}
