@@ -183,12 +183,20 @@ const FloorPlanWidget = ({ locationId }: FloorPlanWidgetProps) => {
                 contentStyle={{ width: "100%", height: "100%", display: "flex", justifyContent: "center", alignItems: "center", touchAction: "pan-y" }}
               >
                 <div className="relative inline-block">
-                  <img
-                    src={selectedFloor.floor_plan_url}
-                    alt={selectedFloor.name}
-                    className="max-w-full max-h-[350px] object-contain"
-                    draggable={false}
-                  />
+                  {isPdfUrl(selectedFloor.floor_plan_url) ? (
+                    <iframe
+                      src={`${selectedFloor.floor_plan_url}#toolbar=0&navpanes=0&scrollbar=0`}
+                      title={selectedFloor.name}
+                      className="w-full h-[350px] border-none"
+                    />
+                  ) : (
+                    <img
+                      src={selectedFloor.floor_plan_url}
+                      alt={selectedFloor.name}
+                      className="max-w-full max-h-[350px] object-contain"
+                      draggable={false}
+                    />
+                  )}
                   
                    {/* Sensor Overlays - positioned relative to image */}
                   {positions.map((pos) => {
