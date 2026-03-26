@@ -28,18 +28,12 @@ export const FloorPlanImage = forwardRef<HTMLImageElement, FloorPlanRendererProp
   ({ src, alt, className, draggable, onLoad, style }, ref) => {
     if (isPdfUrl(src)) {
       return (
-        <object
-          data={src}
-          type="application/pdf"
+        <iframe
+          src={`${src}#toolbar=0&navpanes=0&scrollbar=0`}
+          title={alt}
           className={className}
-          style={{ ...style, minHeight: "400px" }}
-        >
-          <div className="flex items-center justify-center h-full text-muted-foreground text-sm p-4">
-            <a href={src} target="_blank" rel="noopener noreferrer" className="underline">
-              PDF-Grundriss öffnen
-            </a>
-          </div>
-        </object>
+          style={{ ...style, minHeight: "400px", width: "100%", height: "100%", border: "none" }}
+        />
       );
     }
 
