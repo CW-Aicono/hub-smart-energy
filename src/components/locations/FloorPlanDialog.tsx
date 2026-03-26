@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Loader2, Trash2, GripVertical, AlertCircle, Image, MapPin, Maximize2, Minimize2, Box, Gauge, DoorOpen, ZoomIn, ZoomOut, RotateCcw } from "lucide-react";
+import { FloorPlanImage, isPdfUrl } from "./FloorPlanRenderer";
 import { ENERGY_SENSOR_CLASSES } from "@/lib/energyTypeColors";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Floor } from "@/hooks/useFloors";
@@ -507,7 +508,7 @@ export function FloorPlanDialog({ floor, locationId, open, onOpenChange }: Floor
                           contentStyle={{ width: "100%", height: "100%", display: "flex", justifyContent: "center", alignItems: "center" }}
                         >
                           <div className="relative inline-block" style={{ maxWidth: "100%", maxHeight: "100%" }}>
-                            <img
+                            <FloorPlanImage
                               ref={viewImageRef}
                               src={floor.floor_plan_url!}
                               alt={floor.name}
@@ -600,7 +601,7 @@ export function FloorPlanDialog({ floor, locationId, open, onOpenChange }: Floor
                     onDragLeave={handleDragLeave}
                     onDrop={handleDrop}
                   >
-                    <img
+                    <FloorPlanImage
                       ref={imageRef}
                       src={floor.floor_plan_url!}
                       alt={floor.name}
@@ -733,7 +734,7 @@ export function FloorPlanDialog({ floor, locationId, open, onOpenChange }: Floor
 
               <TabsContent value="view" className="flex-1 m-0 overflow-hidden">
                 <div className="relative w-full h-full border rounded-lg overflow-hidden bg-muted/10">
-                  <img
+                  <FloorPlanImage
                     src={floor.floor_plan_url!}
                     alt={floor.name}
                     className="w-full h-full object-contain"
