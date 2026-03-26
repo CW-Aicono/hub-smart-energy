@@ -23,6 +23,7 @@ import { Plus, PlugZap, Trash2, Zap, ZapOff, AlertTriangle, WifiOff, Info, Searc
 import { ChargePointGroupsManager } from "@/components/charging/ChargePointGroupsManager";
 import { Checkbox } from "@/components/ui/checkbox";
 import ChargePointQrCode from "@/components/charging/ChargePointQrCode";
+import ConnectorTypeIcons from "@/components/charging/ConnectorTypeIcons";
 import { format } from "date-fns";
 import { fmtKwh, fmtKw } from "@/lib/formatCharging";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -304,7 +305,7 @@ const ChargingPoints = () => {
                       <TableHeader>
                         <TableRow>
                           <TableHead>{t("charging.name" as any)}</TableHead>
-                          <TableHead>OCPP-ID</TableHead>
+                          <TableHead>{t("charging.connectorTypes" as any)}</TableHead>
                           <TableHead>{t("common.status" as any)}</TableHead>
                           <TableHead>{t("charging.location" as any)}</TableHead>
                           <TableHead>{t("charging.power" as any)}</TableHead>
@@ -320,7 +321,9 @@ const ChargingPoints = () => {
                           return (
                             <TableRow key={cp.id}>
                               <TableCell className="font-medium cursor-pointer hover:text-primary transition-colors" onClick={() => navigate(demoPath(`/charging/points/${cp.id}`))}>{cp.name}</TableCell>
-                              <TableCell className="font-mono text-sm">{cp.ocpp_id}</TableCell>
+                              <TableCell>
+                                <ConnectorTypeIcons connectorType={cp.connector_type} connectorCount={cp.connector_count} />
+                              </TableCell>
                               <TableCell>
                                 <Badge variant={cfg.variant}>{t(cfg.labelKey as any)}</Badge>
                                 {activeSession && (
