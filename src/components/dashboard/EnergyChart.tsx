@@ -206,7 +206,7 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
     const fetchPower = async () => {
       setPowerLoading(true);
       const mainMeterIds = meters
-        .filter(m => !m.is_archived && m.is_main_meter && m.capture_type === "automatic")
+        .filter(m => !m.is_archived && m.capture_type === "automatic" && selectedMeterIds.has(m.id))
         .filter(m => !locationId || m.location_id === locationId)
         .map(m => m.id);
 
