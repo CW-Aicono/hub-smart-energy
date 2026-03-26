@@ -52,7 +52,7 @@ const locationSchema = z.object({
   contact_person: z.string().trim().max(100).optional(),
   contact_email: z.string().trim().email().max(255).optional().or(z.literal("")),
   contact_phone: z.string().trim().max(30).optional(),
-  energy_sources: z.array(z.string()).default([]),
+  energy_sources: z.array(z.object({ energy_type: z.string(), custom_name: z.string(), sort_order: z.number().optional() })).default([]),
   show_on_map: z.boolean().default(true),
   is_main_location: z.boolean().default(false),
   latitude: z.coerce.number().min(-90).max(90).optional().or(z.literal("")),
