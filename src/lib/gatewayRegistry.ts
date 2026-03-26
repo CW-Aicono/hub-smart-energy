@@ -144,7 +144,7 @@ export const GATEWAY_DEFINITIONS: Record<string, GatewayDefinition> = {
     setupInstructions: {
       serverField: "__supabase_host__",
       port: "443",
-      pathTemplate: "/functions/v1/gateway-ingest?action=schneider-push&tenant_id={tenant_id}",
+      pathTemplate: "functions/v1/gateway-ingest?action=schneider-push&tenant_id={tenant_id}",
       authMethod: "ID-Authentifizierung (Benutzername / Passwort)",
     },
   },
