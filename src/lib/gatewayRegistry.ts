@@ -121,6 +121,30 @@ export const GATEWAY_DEFINITIONS: Record<string, GatewayDefinition> = {
       { name: "entity_filter", label: "Entity-Filter (optional)", placeholder: "sensor.energy,switch.", type: "text", description: "Kommagetrennte Entity-ID-Präfixe zum Filtern, z.B. sensor.energy,switch.", required: false },
     ],
   },
+  schneider_panel_server: {
+    type: "schneider_panel_server",
+    label: "Schneider EcoStruxure Panel Server",
+    icon: "gauge",
+    description: "Schneider Electric Panel Server (PAS600/PAS800) via HTTPS Push",
+    edgeFunctionName: "gateway-ingest",
+    configFields: [
+      { name: "webhook_secret", label: "Webhook Secret (optional)", placeholder: "••••••••", type: "password", description: "Shared Secret zur Authentifizierung der eingehenden Pushes vom Panel Server", required: false },
+      { name: "device_mapping", label: "Device-Mapping (optional)", placeholder: "modbus:2=meter-uuid,modbus:3=meter-uuid", type: "text", description: "Zuordnung von Schneider Device-IDs zu Meter-UUIDs (kommagetrennt, Format: deviceId=meterUuid)", required: false },
+    ],
+  },
+  schneider_cloud: {
+    type: "schneider_cloud",
+    label: "Schneider EcoStruxure Cloud",
+    icon: "cloud",
+    description: "Schneider Electric EcoStruxure Energy Hub Cloud API",
+    edgeFunctionName: "schneider-api",
+    configFields: [
+      { name: "api_url", label: "API URL", placeholder: "https://api.exchange.se.com", type: "url", description: "EcoStruxure Energy Hub API-Endpunkt", required: true },
+      { name: "client_id", label: "Client ID", placeholder: "client-id", type: "text", description: "OAuth2 Client ID aus dem Schneider Exchange Portal", required: true },
+      { name: "client_secret", label: "Client Secret", placeholder: "••••••••", type: "password", description: "OAuth2 Client Secret", required: true },
+      { name: "site_id", label: "Site ID", placeholder: "site-uuid", type: "text", description: "Site/Building ID aus dem EcoStruxure Portal", required: true },
+    ],
+  },
 };
 
 /** Get ordered list of gateway types for dropdowns */
