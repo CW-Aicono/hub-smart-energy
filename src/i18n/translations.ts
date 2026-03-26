@@ -766,6 +766,30 @@ export const translations = {
     es: "Pellets",
     nl: "Pellets",
   },
+  "energy.otherGeneration": {
+    de: "Sonstige Erzeugung",
+    en: "Other Generation",
+    es: "Otra generación",
+    nl: "Overige opwekking",
+  },
+  "energy.other": {
+    de: "Sonstiges",
+    en: "Other",
+    es: "Otros",
+    nl: "Overig",
+  },
+  "energy.addSource": {
+    de: "Energiequelle hinzufügen",
+    en: "Add energy source",
+    es: "Añadir fuente de energía",
+    nl: "Energiebron toevoegen",
+  },
+  "energy.customNamePlaceholder": {
+    de: "z.B. PV-Anlage Dach Süd",
+    en: "e.g. Rooftop PV South",
+    es: "p. ej. PV Tejado Sur",
+    nl: "bijv. PV Dak Zuid",
+  },
   // DB-key aliases used in alert_rules.energy_type
   "energy.strom": {
     de: "Strom",
