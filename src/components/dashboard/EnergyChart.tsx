@@ -387,7 +387,7 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
     };
     fetchDailyTotals();
     return () => { stale = true; };
-  }, [period, rangeStart.toISOString(), rangeEnd.toISOString(), meters, locationId]);
+  }, [period, rangeStart.toISOString(), rangeEnd.toISOString(), meters, locationId, selectedMeterIds]);
 
   const chartData = useMemo(() => {
     const emptyBucket = () => ({ strom: 0, gas: 0, waerme: 0, wasser: 0 });
