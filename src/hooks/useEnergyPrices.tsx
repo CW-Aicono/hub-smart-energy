@@ -19,6 +19,7 @@ export interface EnergyPrice {
   updated_at: string;
   is_dynamic: boolean;
   spot_markup_per_unit: number;
+  meter_id: string | null;
 }
 
 export function useEnergyPrices(locationId?: string) {
@@ -47,10 +48,19 @@ export function useEnergyPrices(locationId?: string) {
     fetchPrices();
   }, [fetchPrices]);
 
-  const addPrice = async (price: { location_id: string; energy_type: string; price_per_unit: number; unit: string; valid_from: string; tenant_id?: string; is_dynamic?: boolean; spot_markup_per_unit?: number }) => {
+  const addPrice = async (price: {
+    location_id: string;
+    energy_type: string;
+    price_per_unit: number;
+    unit: string;
+    valid_from: string;
+    tenant_id?: string;
+    is_dynamic?: boolean;
+    spot_markup_per_unit?: number;
+    meter_id?: string | null;
+  }) => {
     if (!ready) return false;
     const t = getT();
-    // Strip manually passed tenant_id – tenantInsert injects it automatically
     const { tenant_id: _ignored, ...rest } = price;
     const { error } = await tenantInsert("energy_prices", rest as any);
     if (error) {
@@ -86,13 +96,38 @@ export function useEnergyPrices(locationId?: string) {
     return true;
   };
 
-  const getActivePrice = (locId: string, energyType: string): number => {
+  /**
+   * Resolves the active price for a meter or location+energyType.
+   * Resolution order:
+   * 1. Direct price on this meter_id
+   * 2. Price on the parent meter (if sub-meter)
+   * 3. Location-wide fallback (meter_id IS NULL)
+   */
+  const getActivePrice = (locId: string, energyType: string, meterId?: string, parentMeterId?: string | null): number => {
     const today = new Date().toISOString().split("T")[0];
-    const matching = prices.filter(
-      (p) => p.location_id === locId && p.energy_type === energyType && p.valid_from <= today && (!p.valid_until || p.valid_until >= today)
-    );
-    if (matching.length === 0) return 0;
-    return matching[0].price_per_unit;
+    const isActive = (p: EnergyPrice) =>
+      p.location_id === locId &&
+      p.energy_type === energyType &&
+      p.valid_from <= today &&
+      (!p.valid_until || p.valid_until >= today);
+
+    // 1. Direct meter price
+    if (meterId) {
+      const meterPrice = prices.find((p) => isActive(p) && p.meter_id === meterId);
+      if (meterPrice) return meterPrice.price_per_unit;
+    }
+
+    // 2. Parent meter price (sub-meter inherits)
+    if (parentMeterId) {
+      const parentPrice = prices.find((p) => isActive(p) && p.meter_id === parentMeterId);
+      if (parentPrice) return parentPrice.price_per_unit;
+    }
+
+    // 3. Location-wide fallback (no meter assigned)
+    const locationPrice = prices.find((p) => isActive(p) && !p.meter_id);
+    if (locationPrice) return locationPrice.price_per_unit;
+
+    return 0;
   };
 
   return { prices, loading, addPrice, updatePrice, deletePrice, getActivePrice, refetch: fetchPrices };

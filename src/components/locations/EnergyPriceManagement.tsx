@@ -11,6 +11,7 @@ import { ChevronDown, ChevronRight, Euro, Plus, Pencil, Trash2, Zap } from "luci
 import { HelpTooltip } from "@/components/ui/help-tooltip";
 import { useTranslation } from "@/hooks/useTranslation";
 import { useEnergyPrices, EnergyPrice } from "@/hooks/useEnergyPrices";
+import { useMeters } from "@/hooks/useMeters";
 import { useTenant } from "@/hooks/useTenant";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
@@ -42,8 +43,12 @@ export function EnergyPriceManagement({ locationId }: EnergyPriceManagementProps
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingPrice, setEditingPrice] = useState<EnergyPrice | null>(null);
   const { prices, loading, addPrice, updatePrice, deletePrice } = useEnergyPrices(locationId);
+  const { meters } = useMeters(locationId);
   const { tenant } = useTenant();
   const { currentPrice: currentSpotPrice } = useSpotPrices();
+
+  // Only main meters (is_main_meter or no parent) can have prices assigned
+  const mainMeters = meters.filter((m) => m.is_main_meter || !m.parent_meter_id);
 
   const [formData, setFormData] = useState({
     energy_type: "strom",
@@ -51,6 +56,7 @@ export function EnergyPriceManagement({ locationId }: EnergyPriceManagementProps
     valid_from: new Date().toISOString().split("T")[0],
     is_dynamic: false,
     spot_markup_per_unit: "",
+    meter_id: "" as string,
   });
 
   const openAddDialog = () => {
@@ -61,6 +67,7 @@ export function EnergyPriceManagement({ locationId }: EnergyPriceManagementProps
       valid_from: new Date().toISOString().split("T")[0],
       is_dynamic: false,
       spot_markup_per_unit: "",
+      meter_id: "",
     });
     setDialogOpen(true);
   };
@@ -73,6 +80,7 @@ export function EnergyPriceManagement({ locationId }: EnergyPriceManagementProps
       valid_from: price.valid_from,
       is_dynamic: price.is_dynamic ?? false,
       spot_markup_per_unit: price.spot_markup_per_unit ? String(price.spot_markup_per_unit) : "",
+      meter_id: price.meter_id ?? "",
     });
     setDialogOpen(true);
   };
@@ -89,6 +97,7 @@ export function EnergyPriceManagement({ locationId }: EnergyPriceManagementProps
     }
 
     const priceValue = isDynamic ? 0 : parseFloat(formData.price_per_unit.replace(",", "."));
+    const meterId = formData.meter_id || null;
 
     if (editingPrice) {
       await updatePrice(editingPrice.id, {
@@ -98,6 +107,7 @@ export function EnergyPriceManagement({ locationId }: EnergyPriceManagementProps
         valid_from: formData.valid_from,
         is_dynamic: isDynamic,
         spot_markup_per_unit: isDynamic ? markupValue : 0,
+        meter_id: meterId,
       });
     } else {
       await addPrice({
@@ -109,10 +119,22 @@ export function EnergyPriceManagement({ locationId }: EnergyPriceManagementProps
         tenant_id: tenant?.id || "",
         is_dynamic: isDynamic,
         spot_markup_per_unit: isDynamic ? markupValue : 0,
+        meter_id: meterId,
       });
     }
     setDialogOpen(false);
   };
+
+  const getMeterName = (meterId: string | null) => {
+    if (!meterId) return null;
+    const meter = meters.find((m) => m.id === meterId);
+    return meter?.name ?? meterId;
+  };
+
+  // Filter main meters by selected energy type for the dropdown
+  const metersForEnergyType = mainMeters.filter(
+    (m) => m.energy_type === formData.energy_type
+  );
 
   return (
     <>
@@ -152,6 +174,7 @@ export function EnergyPriceManagement({ locationId }: EnergyPriceManagementProps
                   <TableHeader>
                     <TableRow>
                       <TableHead>{T("ep.carrier")}</TableHead>
+                      <TableHead>{T("ep.meter")}</TableHead>
                       <TableHead>{T("ep.price")}</TableHead>
                       <TableHead>{T("ep.validFrom")}</TableHead>
                       <TableHead className="w-[80px]"></TableHead>
@@ -165,6 +188,15 @@ export function EnergyPriceManagement({ locationId }: EnergyPriceManagementProps
                             {T(ENERGY_TYPE_KEYS[p.energy_type] || `ep.${p.energy_type}`)}
                             {p.is_dynamic && <Badge variant="secondary" className="text-[10px] px-1.5 py-0 gap-0.5"><Zap className="h-2.5 w-2.5" />{T("ep.dynamic")}</Badge>}
                           </div>
+                        </TableCell>
+                        <TableCell>
+                          {p.meter_id ? (
+                            <Badge variant="outline" className="font-normal text-xs">
+                              {getMeterName(p.meter_id)}
+                            </Badge>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">{T("ep.allMeters")}</span>
+                          )}
                         </TableCell>
                         <TableCell>
                           {p.is_dynamic ? (
@@ -209,7 +241,7 @@ export function EnergyPriceManagement({ locationId }: EnergyPriceManagementProps
           <div className="space-y-4">
             <div>
               <Label>{T("ep.carrier")}</Label>
-              <Select value={formData.energy_type} onValueChange={(v) => setFormData({ ...formData, energy_type: v, is_dynamic: v !== "strom" ? false : formData.is_dynamic })}>
+              <Select value={formData.energy_type} onValueChange={(v) => setFormData({ ...formData, energy_type: v, is_dynamic: v !== "strom" ? false : formData.is_dynamic, meter_id: "" })}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -220,6 +252,26 @@ export function EnergyPriceManagement({ locationId }: EnergyPriceManagementProps
                 </SelectContent>
               </Select>
             </div>
+
+            {/* Meter assignment */}
+            <div>
+              <Label>{T("ep.meterAssignment")}</Label>
+              <Select value={formData.meter_id || "_all"} onValueChange={(v) => setFormData({ ...formData, meter_id: v === "_all" ? "" : v })}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="_all">{T("ep.allMeters")}</SelectItem>
+                  {metersForEnergyType.map((m) => (
+                    <SelectItem key={m.id} value={m.id}>
+                      {m.name}{m.meter_number ? ` (${m.meter_number})` : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground mt-1">{T("ep.meterAssignmentDesc")}</p>
+            </div>
+
             {formData.energy_type === "strom" && (
               <div className="flex items-center justify-between rounded-lg border p-3">
                 <div className="space-y-0.5">
