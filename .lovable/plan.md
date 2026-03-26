@@ -1,55 +1,66 @@
 
+## Analyse-Ergebnis (aus Logs + Code + Endpoint-Checks)
 
-## Schneider Panel Server – HTTPS Publication Setup-Anweisungen & Credentials
+1. In den Backend-HTTP-Logs gibt es **keinen einzigen POST** auf `gateway-ingest` für Schneider (`action=schneider-push`).
+2. Der korrekte Endpoint (`https://xnveugycurplszevdxtw.supabase.co/functions/v1/gateway-ingest?...`) antwortet erreichbar mit `{"error":"Unauthorized"}` (erwartbar ohne gültige Auth).
+3. Der App-/Published-Domain-Pfad (`https://hub-smart-energy.lovable.app/functions/v1/gateway-ingest?...`) liefert **404 Website-Seite** statt Function.
+4. Damit ist der wahrscheinlichste Root Cause: **Panel Server sendet nicht gegen den echten Backend-Host** (oder mit falschem Pfadformat), daher kommt der Push gar nicht in `gateway-ingest` an.
 
-### Was sich ändert
+## Strategie
 
-Der Schneider EcoStruxure Panel Server benötigt eine konfigurierte HTTPS-Publikation mit Server-URL, Port, Pfad sowie Benutzername/Passwort. Diese Informationen müssen dem Nutzer nach Anlage der Integration angezeigt werden, und die Credentials müssen bei eingehenden Pushes validiert werden.
+### Phase 1 – Sofortige Betriebs-Validierung (ohne Code)
+- Im Schneider Panel Server prüfen/korrigieren:
+  - **Server:** `xnveugycurplszevdxtw.supabase.co`
+  - **Port:** `443`
+  - **Pfad:** `/functions/v1/gateway-ingest?action=schneider-push&tenant_id=0ce0c43a-c0b4-417b-9fd5-4131907e7504`
+  - **Auth-Methode:** ID/Basis-Auth mit `SecurityAdmin` / `Esb2024`
+- Ziel: Es muss danach ein POST im `gateway-ingest`-Traffic erscheinen.
 
-### Änderungen
+### Phase 2 – Robuster machen (Code-Hardening)
+1. **`src/components/integrations/SchneiderSetupInfo.tsx`**
+   - Zusätzlich zum Server/Port/Pfad eine kopierbare Zeile **„Vollständige URL“** anzeigen.
+   - Klarer Warnhinweis: „Nicht die App-Domain (`hub-smart-energy.lovable.app`) verwenden.“
+   - Tenant-ID direkt aus der Integration/Location-Datenquelle ableiten (nicht nur aus `useTenant`-Fallback), damit nie `<tenant_id>` kopiert wird.
 
-**1. `src/lib/gatewayRegistry.ts`**
-- Neue Felder `push_username` und `push_password` zum `schneider_panel_server` Gateway-Typ hinzufügen (required)
-- Neues optionales Feld `setupInstructions` zur `GatewayDefinition` Interface hinzufügen (Typ: String-Array oder Objekt mit Server/Port/Pfad-Infos)
+2. **`supabase/functions/gateway-ingest/index.ts`**
+   - Basic-Auth-Parsing robuster:
+     - Schema case-insensitive (`basic`, `Basic`, etc.)
+     - Base64-Decode in `try/catch`
+     - `trim()` auf Username/Passwort
+   - Bei Auth-Fehlern `WWW-Authenticate: Basic realm="Schneider"` zurückgeben (bessere Geräte-Kompatibilität).
+   - Tenant-Scoping für Credential-Lookup über **Location-Zuordnung** absichern (tenant über `locations`), nicht nur indirekt über Integrationsfilter.
+   - Fallback-Handling: Wenn POST mit Basic-Auth und `tenant_id`, aber `action` fehlt/abweicht, auf Schneider-Handler routen (toleranter gegenüber Geräte-Eigenheiten).
 
-**2. `src/components/integrations/IntegrationCard.tsx`**
-- Für `schneider_panel_server`-Typ: Setup-Infobox anzeigen mit den Verbindungsinformationen, die im Panel Server konfiguriert werden müssen:
-  - **Server**: `xnveugycurplszevdxtw.supabase.co` (aus VITE_SUPABASE_URL)
-  - **Port**: `443`
-  - **Pfad**: `/functions/v1/gateway-ingest?action=schneider-push&tenant_id=...`
-  - **Verbindungsmethode**: ID-Authentifizierung
-  - **Benutzername / Passwort**: aus der gespeicherten Config anzeigen
-- Die Box wird nur angezeigt, wenn die Integration konfiguriert ist
+3. **`supabase/functions/gateway-ingest/index.test.ts`**
+   - Neue Tests für:
+     - Basic-Auth happy path
+     - falsche Credentials
+     - lowercase auth scheme
+     - fehlendes/ungültiges base64
+     - falscher Host kann nicht getestet werden, aber fehlendes `action`-Fallback kann getestet werden.
 
-**3. `supabase/functions/gateway-ingest/index.ts`**
-- In `handleSchneiderPush`: Zusätzlich zur bestehenden GATEWAY_API_KEY-Validierung auch Basic-Auth-Credentials aus dem Request-Header prüfen
-- Credentials werden gegen die in der `location_integrations.config` gespeicherten `push_username`/`push_password` validiert
-- Damit kann der Panel Server sich per Benutzername/Passwort authentifizieren (Standard-HTTPS-Publikation), ohne dass ein API-Key im Gerät hinterlegt werden muss
+### Phase 3 – Nachweis & Abnahme
+- Erfolg gilt erst, wenn:
+  1. `gateway-ingest` POST-Calls in Logs sichtbar sind,
+  2. keine 401 mehr für Schneider-Push auftreten,
+  3. `meter_power_readings` Einträge mit korrekter `tenant_id` entstehen,
+  4. optional `device_mapping`-Skips separat im Response/Log nachvollziehbar sind (nicht als Auth-Fehler).
 
-**4. `src/lib/__tests__/gatewayRegistry.test.ts`**
-- Tests für die neuen Felder erweitern
-
-### Technischer Ablauf
+## Technische Details
 
 ```text
-Panel Server                    gateway-ingest
-    |                                |
-    |  POST /gateway-ingest          |
-    |  ?action=schneider-push        |
-    |  &tenant_id=xxx                |
-    |  Authorization: Basic user:pw  |
-    |  Body: { measurements: [...] } |
-    | -----------------------------> |
-    |                                | 1. Parse Basic Auth
-    |                                | 2. Lookup location_integration by tenant_id + type
-    |                                | 3. Verify username/password vs config
-    |                                | 4. Insert readings
-    |  <-- { success: true }         |
+Wahrscheinliche Fehlerkette:
+Schneider Panel -> falscher Host (App-Domain) oder falsches Pfadformat
+-> Request landet nicht bei gateway-ingest
+-> Gerät meldet generisch "Authentifizierung HTTPS fehlgeschlagen"
+
+Soll-Ziel:
+Schneider Panel -> xnveugycurplszevdxtw.supabase.co:443/functions/v1/gateway-ingest?action=schneider-push&tenant_id=...
+-> gateway-ingest verarbeitet Basic Auth
+-> Messwerte werden gespeichert
 ```
 
-### Dateien
-1. `src/lib/gatewayRegistry.ts` – 2 neue Felder + setupInstructions
-2. `src/components/integrations/IntegrationCard.tsx` – Setup-Infobox für Schneider
-3. `supabase/functions/gateway-ingest/index.ts` – Basic-Auth-Validierung im Schneider-Push-Handler
-4. `src/lib/__tests__/gatewayRegistry.test.ts` – Tests anpassen
-
+## Geplante Dateien für Umsetzung
+1. `src/components/integrations/SchneiderSetupInfo.tsx`
+2. `supabase/functions/gateway-ingest/index.ts`
+3. `supabase/functions/gateway-ingest/index.test.ts`
