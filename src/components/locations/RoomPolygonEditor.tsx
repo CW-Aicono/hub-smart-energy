@@ -6,6 +6,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { DoorOpen, Plus, Trash2, Pencil, Check, X, Undo2, Crosshair } from "lucide-react";
 import { toast } from "sonner";
 import { RoomOverlay2D } from "./RoomOverlay2D";
+import { FloorPlanImage } from "./FloorPlanRenderer";
 import { useTranslation } from "@/hooks/useTranslation";
 
 interface PolygonPoint {
@@ -417,7 +418,7 @@ export function RoomPolygonEditor({ floorId, floorPlanUrl }: RoomPolygonEditorPr
       <div
         className="flex-1 relative border rounded-lg overflow-hidden bg-muted/20 min-h-0"
       >
-        <img
+        <FloorPlanImage
           ref={imageRef}
           src={floorPlanUrl}
           alt="Grundriss"
