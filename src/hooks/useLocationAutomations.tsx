@@ -116,17 +116,27 @@ export function useLocationAutomations(locationId: string | undefined) {
   const executeAutomation = async (automation: LocationAutomationRecord) => {
     setExecuting(automation.id);
     try {
+      // Valid Loxone command primitives (including reset commands handled by edge function)
+      const VALID_COMMANDS = new Set(["pulse", "On", "Off", "toggle", "on", "off", "resetDay", "resetMonth", "resetYear", "resetAll"]);
+      const sanitizeCommand = (val?: string | null): string => {
+        if (!val) return "pulse";
+        if (VALID_COMMANDS.has(val)) return val;
+        if (!isNaN(Number(val))) return val;
+        return "pulse";
+      };
+
       const actionsToRun = automation.actions.length > 0
         ? automation.actions
-        : [{ actuator_uuid: automation.actuator_uuid, action_type: automation.action_value || automation.action_type || "pulse", action_value: automation.action_value }];
+        : [{ actuator_uuid: automation.actuator_uuid, action_type: automation.action_type || "pulse", action_value: automation.action_value }];
 
       for (const action of actionsToRun) {
+        const commandValue = sanitizeCommand(action.action_value || action.action_type);
         const { data, error } = await supabase.functions.invoke("loxone-api", {
           body: {
             locationIntegrationId: automation.location_integration_id,
             action: "executeCommand",
             controlUuid: action.actuator_uuid,
-            commandValue: action.action_value || action.action_type || "pulse",
+            commandValue,
           },
         });
         if (error || !data?.success) {

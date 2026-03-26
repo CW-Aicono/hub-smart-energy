@@ -899,8 +899,60 @@ serve(async (req) => {
       if (!controlUuid) throw new Error("controlUuid ist erforderlich");
       
       // Default command: "pulse" (for Pushbutton), or specific value
-      const cmd = commandValue !== undefined ? commandValue : "pulse";
-      const cmdUrl = `${baseUrl}/jdev/sps/io/${controlUuid}/${cmd}`;
+      let cmd = commandValue !== undefined ? String(commandValue) : "pulse";
+
+      // ── Reset command mapping for Meter controls ──
+      // Loxone Meter controls have sub-control UUIDs in their `states` for reset operations.
+      // Commands like "resetDay", "resetMonth", "resetYear", "resetAll" must be resolved
+      // to the correct sub-control UUID and then issued as "pulse".
+      const RESET_STATE_MAP: Record<string, string[]> = {
+        resetDay:   ["resetDay", "Rdc", "Rd"],
+        resetMonth: ["resetMonth", "Rmc", "Rm"],
+        resetYear:  ["resetYear", "Ryc", "Ry"],
+        resetAll:   ["resetAll", "reset"],
+      };
+
+      let targetUuid = controlUuid;
+
+      if (RESET_STATE_MAP[cmd]) {
+        // Fetch structure to find the control's states
+        const structUrl = `${baseUrl}/data/LoxAPP3.json`;
+        const structResp = await fetch(structUrl, { method: "GET", headers: { Authorization: loxoneAuth } });
+        if (!structResp.ok) {
+          throw new Error(`Struktur konnte nicht geladen werden: ${structResp.status}`);
+        }
+        const struct = await structResp.json();
+        const control = struct?.controls?.[controlUuid];
+        const states = control?.states || {};
+
+        // Try to find the correct sub-control UUID for the reset
+        let resetUuid: string | null = null;
+        for (const candidate of RESET_STATE_MAP[cmd]) {
+          if (states[candidate]) {
+            resetUuid = states[candidate];
+            break;
+          }
+        }
+
+        if (resetUuid) {
+          targetUuid = resetUuid;
+          cmd = "pulse";
+          console.log(`Reset command "${commandValue}" resolved to sub-control ${resetUuid} with pulse`);
+        } else {
+          // Fallback: try pulse on the main control
+          console.warn(`No reset state found for "${cmd}" on control ${controlUuid}, falling back to pulse on main control`);
+          cmd = "pulse";
+        }
+      }
+
+      // Validate command: only allow known Loxone primitives or numeric values
+      const VALID_COMMANDS = new Set(["pulse", "On", "Off", "toggle", "on", "off"]);
+      if (!VALID_COMMANDS.has(cmd) && isNaN(Number(cmd))) {
+        console.warn(`Invalid command "${cmd}" detected, falling back to "pulse"`);
+        cmd = "pulse";
+      }
+
+      const cmdUrl = `${baseUrl}/jdev/sps/io/${targetUuid}/${encodeURIComponent(cmd)}`;
       console.log(`Executing command: ${cmdUrl}`);
       
       const response = await fetch(cmdUrl, {

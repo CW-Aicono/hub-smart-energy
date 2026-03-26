@@ -129,6 +129,14 @@ const ACTION_TYPES = [
   { value: "toggle", label: "Umschalten (Toggle)" },
 ];
 
+const METER_ACTION_TYPES = [
+  { value: "pulse", label: "Pulse (Taster)" },
+  { value: "resetDay", label: "Tageswert zurücksetzen" },
+  { value: "resetMonth", label: "Monatswert zurücksetzen" },
+  { value: "resetYear", label: "Jahreswert zurücksetzen" },
+  { value: "resetAll", label: "Alle Werte zurücksetzen" },
+];
+
 const CONDITION_TYPES = [
   { value: "sensor_value", label: "Sensorwert", icon: Thermometer, desc: "Wenn ein Messwert einen Schwellenwert über-/unterschreitet" },
   { value: "time", label: "Uhrzeit", icon: Clock, desc: "Innerhalb eines Zeitfensters aktiv" },
