@@ -1,25 +1,62 @@
 
 
-## Fix: Case-insensitive RFID-Tag-Validierung
+## Schneider Electric EcoStruxure Panel Server – Gateway-Integration
 
-### Problem
-Die RFID-Validierung in der `ocpp-central` Edge Function verwendet einen exakten, case-sensitiven Vergleich (`.eq("rfid_tag", idTag)`). Bender/Nidec Controller senden die Tag-ID möglicherweise in Kleinbuchstaben (`345230cf`), während sie in der Datenbank in Großbuchstaben gespeichert ist (`345230CF`) — oder umgekehrt.
+### Ansatz
 
-### Lösung
+Es gibt zwei sinnvolle Integrationswege. Ich empfehle, **beide** als Gateway-Typen anzubieten:
 
-**Datei: `supabase/functions/ocpp-central/index.ts`**
+---
 
-An allen Stellen, wo `rfid_tag` abgefragt wird, `.ilike()` statt `.eq()` verwenden:
+### Gateway-Typ 1: `schneider_panel_server` (HTTPS Push-Empfang)
 
-1. **`validateIdTag`** (Zeile 291-296): `.eq("rfid_tag", idTag)` → `.ilike("rfid_tag", idTag)`
-2. **`isUserInAllowedGroups`** — gleiche Änderung, falls dort ebenfalls per `rfid_tag` gesucht wird
-3. **`handleStartTransaction`** — gleiche Änderung bei der RFID-Suche
+Der Panel Server pusht JSON/CSV-Dateien an einen HTTPS-Endpunkt. Wir erweitern die bestehende `gateway-ingest` Edge Function um eine Route, die das Schneider-Publikationsformat entgegennimmt und in `meter_power_readings` schreibt.
 
-Das ist eine minimale, risikoarme Änderung (3-4 Zeilen), die das Kern-Problem löst.
+**Dateien:**
+- `src/lib/gatewayRegistry.ts` – Neuer Gateway-Typ `schneider_panel_server` mit Feldern:
+  - `webhook_secret` (Password) – optionaler Shared Secret zur Authentifizierung der eingehenden Pushes
+  - `device_mapping` (Text) – optionale Zuordnung Schneider Device-IDs zu Meter-IDs
+- `supabase/functions/gateway-ingest/index.ts` – Neue Route `POST ?action=schneider-push` die das Schneider JSON-Format parst (Geräte-Messwerte mit Zeitstempeln) und als Power-Readings einfügt
 
-### Zusätzlich: Debug-Logging
-Temporäres Logging des empfangenen `idTag` im Klartext hinzufügen, damit wir in den Edge Function Logs sehen können, was genau der Controller sendet — falls das Problem doch woanders liegt.
+**Schneider JSON-Format** (vereinfacht):
+```json
+{
+  "header": { "senderId": "PAS800_xxxx", "timestamp": "..." },
+  "measurements": [
+    {
+      "deviceId": "modbus:2",
+      "deviceName": "PM5560",
+      "values": [
+        { "name": "PkWD", "timestamp": "...", "value": 12.5 }
+      ]
+    }
+  ]
+}
+```
 
-### Dateien
-- `supabase/functions/ocpp-central/index.ts` — `.eq` → `.ilike` für RFID-Lookups + Debug-Log
+### Gateway-Typ 2: `schneider_cloud` (EcoStruxure Energy Hub API)
+
+Für Kunden, die bereits die Schneider Cloud nutzen. Abruf über OAuth2 Client Credentials.
+
+**Dateien:**
+- `src/lib/gatewayRegistry.ts` – Neuer Gateway-Typ `schneider_cloud` mit Feldern:
+  - `api_url` (URL) – EcoStruxure API-Endpunkt
+  - `client_id` (Text) – OAuth2 Client ID
+  - `client_secret` (Password) – OAuth2 Client Secret
+  - `site_id` (Text) – Site/Building ID
+- `supabase/functions/schneider-api/index.ts` – Neue Edge Function für OAuth2-Token-Abruf und Polling der Energy Hub API
+- `supabase/config.toml` – Eintrag für `schneider-api`
+
+### Gateway-Typ 1 zuerst, da:
+- Kein Schneider-Cloud-Konto nötig
+- Funktioniert mit jedem Panel Server (PAS600, PAS800)
+- Nutzt das native HTTPS-Publikationsfeature des Geräts
+- Schnellste Time-to-Value für den Kunden
+
+### Zusammenfassung der Änderungen
+1. **`src/lib/gatewayRegistry.ts`** – Zwei neue Gateway-Definitionen hinzufügen
+2. **`supabase/functions/gateway-ingest/index.ts`** – Schneider-JSON-Parser-Route
+3. **`supabase/functions/schneider-api/index.ts`** – Neue Edge Function (Cloud-Variante)
+4. **`supabase/config.toml`** – Config für `schneider-api`
+5. **`src/lib/__tests__/gatewayRegistry.test.ts`** – Tests für neue Typen erweitern
 
