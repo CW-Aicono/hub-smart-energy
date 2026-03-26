@@ -3,6 +3,8 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Location, LocationType, LocationUsageType, useLocations } from "@/hooks/useLocations";
+import { useLocationEnergySources, type LocationEnergySourceInsert } from "@/hooks/useLocationEnergySources";
+import { LocationEnergySourcesEditor } from "@/components/locations/LocationEnergySourcesEditor";
 import { useTranslation } from "@/hooks/useTranslation";
 import { useGeocode } from "@/hooks/useGeocode";
 import { Button } from "@/components/ui/button";
@@ -37,15 +39,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Pencil, MapPin, LocateFixed, Loader2, AlertTriangle } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
-const ENERGY_SOURCES = [
-  { id: "strom", labelKey: "energy.electricity" },
-  { id: "gas", labelKey: "energy.gas" },
-  { id: "waerme", labelKey: "energy.districtHeating" },
-  { id: "solar", labelKey: "energy.solar" },
-  { id: "wasser", labelKey: "energy.water" },
-  { id: "oel", labelKey: "energy.oil" },
-  { id: "pellets", labelKey: "energy.pellets" },
-] as const;
+// ENERGY_SOURCES constant removed — now using LocationEnergySourcesEditor
 
 const USAGE_TYPES: { value: LocationUsageType; labelKey: string }[] = [
   { value: "verwaltungsgebaeude", labelKey: "locations.usage.verwaltungsgebaeude" },
@@ -69,7 +63,7 @@ const locationSchema = z.object({
   contact_person: z.string().trim().max(100).optional(),
   contact_email: z.string().trim().email().max(255).optional().or(z.literal("")),
   contact_phone: z.string().trim().max(30).optional(),
-  energy_sources: z.array(z.string()).default([]),
+  energy_sources: z.array(z.object({ energy_type: z.string(), custom_name: z.string(), sort_order: z.number().optional() })).default([]),
   show_on_map: z.boolean().default(true),
   is_main_location: z.boolean().default(false),
   latitude: z.coerce.number().min(-90).max(90).optional().or(z.literal("")),
