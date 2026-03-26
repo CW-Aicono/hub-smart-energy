@@ -158,6 +158,17 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
 
   const selectedMeterIds = configuredMeterIds ?? defaultMeterIds;
 
+  // Extend visible energy keys with types from selected meters
+  const visibleEnergyKeys = useMemo(() => {
+    const fromSources = new Set(ENERGY_KEYS.filter(k => allowedTypes.has(k)));
+    for (const m of meters) {
+      if (selectedMeterIds.has(m.id) && ENERGY_KEYS.includes(m.energy_type as any)) {
+        fromSources.add(m.energy_type as typeof ENERGY_KEYS[number]);
+      }
+    }
+    return ENERGY_KEYS.filter(k => fromSources.has(k));
+  }, [allowedTypes, meters, selectedMeterIds]);
+
   // Load saved config from dashboard_widgets on mount
   useEffect(() => {
     if (!user) return;
