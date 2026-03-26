@@ -87,6 +87,7 @@ interface EditLocationDialogProps {
 export function EditLocationDialog({ location, onSuccess, trigger }: EditLocationDialogProps) {
   const [open, setOpen] = useState(false);
   const { locations, updateLocation } = useLocations();
+  const { sources: existingSources, saveBulk: saveEnergySources } = useLocationEnergySources(location.id);
   const { t } = useTranslation();
   const { geocodeAddress, isLoading: isGeocoding } = useGeocode();
   const { toast } = useToast();
