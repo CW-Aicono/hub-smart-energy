@@ -43,7 +43,7 @@ const locationSchema = z.object({
   name: z.string().trim().min(1, "Name ist erforderlich").max(100),
   type: z.enum(["einzelgebaeude", "gebaeudekomplex", "sonstiges"] as const),
   parent_id: z.string().nullable().optional(),
-  usage_type: z.enum(["verwaltungsgebaeude", "universitaet", "schule", "kindertageseinrichtung", "sportstaette", "jugendzentrum", "sonstiges"] as const),
+  usage_type: z.enum(["verwaltungsgebaeude", "universitaet", "schule", "kindertageseinrichtung", "sportstaette", "jugendzentrum", "gewerbe", "privat", "sonstiges"] as const),
   address: z.string().trim().max(200).optional(),
   postal_code: z.string().trim().max(10).optional(),
   city: z.string().trim().max(100).optional(),
@@ -292,6 +292,8 @@ export function AddLocationDialog({ parentId }: AddLocationDialogProps) {
                       <SelectItem value="kindertageseinrichtung">{T("locations.usage.kindertageseinrichtung")}</SelectItem>
                       <SelectItem value="sportstaette">{T("locations.usage.sportstaette")}</SelectItem>
                       <SelectItem value="jugendzentrum">{T("locations.usage.jugendzentrum")}</SelectItem>
+                      <SelectItem value="gewerbe">{T("locations.usage.gewerbe")}</SelectItem>
+                      <SelectItem value="privat">{T("locations.usage.privat")}</SelectItem>
                       <SelectItem value="sonstiges">{T("locations.usage.sonstiges")}</SelectItem>
                     </SelectContent>
                   </Select>

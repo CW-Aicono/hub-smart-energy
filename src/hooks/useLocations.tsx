@@ -11,7 +11,7 @@ type LocationInsertDB = Database["public"]["Tables"]["locations"]["Insert"];
 type LocationUpdateDB = Database["public"]["Tables"]["locations"]["Update"];
 
 export type LocationType = "einzelgebaeude" | "gebaeudekomplex" | "sonstiges";
-export type LocationUsageType = "verwaltungsgebaeude" | "universitaet" | "schule" | "kindertageseinrichtung" | "sportstaette" | "jugendzentrum" | "sonstiges";
+export type LocationUsageType = "verwaltungsgebaeude" | "universitaet" | "schule" | "kindertageseinrichtung" | "sportstaette" | "jugendzentrum" | "gewerbe" | "privat" | "sonstiges";
 
 export interface Location {
   id: string;

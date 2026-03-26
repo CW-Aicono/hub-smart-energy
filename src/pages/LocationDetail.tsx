@@ -64,6 +64,8 @@ const LocationDetail = () => {
     kindertageseinrichtung: "locations.usage.kindertageseinrichtung",
     sportstaette: "locations.usage.sportstaette",
     jugendzentrum: "locations.usage.jugendzentrum",
+    gewerbe: "locations.usage.gewerbe",
+    privat: "locations.usage.privat",
     sonstiges: "locations.usage.sonstiges",
   };
 
