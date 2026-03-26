@@ -104,7 +104,7 @@ export function EditLocationDialog({ location, onSuccess, trigger }: EditLocatio
       contact_person: location.contact_person || "",
       contact_email: location.contact_email || "",
       contact_phone: location.contact_phone || "",
-      energy_sources: location.energy_sources || [],
+      energy_sources: existingSources.map((s) => ({ energy_type: s.energy_type, custom_name: s.custom_name, sort_order: s.sort_order })),
       show_on_map: location.show_on_map,
       is_main_location: location.is_main_location,
       latitude: location.latitude ?? "",
@@ -132,7 +132,7 @@ export function EditLocationDialog({ location, onSuccess, trigger }: EditLocatio
       contact_person: location.contact_person || "",
       contact_email: location.contact_email || "",
       contact_phone: location.contact_phone || "",
-      energy_sources: location.energy_sources || [],
+      energy_sources: existingSources.map((s) => ({ energy_type: s.energy_type, custom_name: s.custom_name, sort_order: s.sort_order })),
       show_on_map: location.show_on_map,
       is_main_location: location.is_main_location,
       latitude: location.latitude ?? "",
@@ -148,27 +148,28 @@ export function EditLocationDialog({ location, onSuccess, trigger }: EditLocatio
   };
 
   const onSubmit = async (data: LocationFormData) => {
+    const { energy_sources: energySourceItems, ...rest } = data;
     const updates = {
-      name: data.name,
-      type: data.type as LocationType,
-      usage_type: data.usage_type as LocationUsageType,
-      address: data.address || null,
-      postal_code: data.postal_code || null,
-      city: data.city || null,
-      contact_person: data.contact_person || null,
-      contact_email: data.contact_email || null,
-      contact_phone: data.contact_phone || null,
-      energy_sources: data.energy_sources,
-      show_on_map: data.show_on_map,
-      is_main_location: data.is_main_location,
-      latitude: typeof data.latitude === "number" ? data.latitude : null,
-      longitude: typeof data.longitude === "number" ? data.longitude : null,
-      description: data.description || null,
-      construction_year: typeof data.construction_year === "number" ? data.construction_year : null,
-      renovation_year: typeof data.renovation_year === "number" ? data.renovation_year : null,
-      net_floor_area: typeof data.net_floor_area === "number" ? data.net_floor_area : null,
-      gross_floor_area: typeof data.gross_floor_area === "number" ? data.gross_floor_area : null,
-      heating_type: data.heating_type || null,
+      name: rest.name,
+      type: rest.type as LocationType,
+      usage_type: rest.usage_type as LocationUsageType,
+      address: rest.address || null,
+      postal_code: rest.postal_code || null,
+      city: rest.city || null,
+      contact_person: rest.contact_person || null,
+      contact_email: rest.contact_email || null,
+      contact_phone: rest.contact_phone || null,
+      energy_sources: energySourceItems.map((s) => s.energy_type),
+      show_on_map: rest.show_on_map,
+      is_main_location: rest.is_main_location,
+      latitude: typeof rest.latitude === "number" ? rest.latitude : null,
+      longitude: typeof rest.longitude === "number" ? rest.longitude : null,
+      description: rest.description || null,
+      construction_year: typeof rest.construction_year === "number" ? rest.construction_year : null,
+      renovation_year: typeof rest.renovation_year === "number" ? rest.renovation_year : null,
+      net_floor_area: typeof rest.net_floor_area === "number" ? rest.net_floor_area : null,
+      gross_floor_area: typeof rest.gross_floor_area === "number" ? rest.gross_floor_area : null,
+      heating_type: rest.heating_type || null,
     };
 
     const { error } = await updateLocation(location.id, updates);
@@ -180,6 +181,8 @@ export function EditLocationDialog({ location, onSuccess, trigger }: EditLocatio
         variant: "destructive",
       });
     } else {
+      // Save energy sources to new table
+      await saveEnergySources(location.id, energySourceItems as LocationEnergySourceInsert[]);
       toast({
         title: t("common.success"),
         description: t("locations.updated"),
@@ -378,38 +381,13 @@ export function EditLocationDialog({ location, onSuccess, trigger }: EditLocatio
               <FormField
                 control={form.control}
                 name="energy_sources"
-                render={() => (
+                render={({ field }) => (
                   <FormItem>
                     <FormLabel>{t("addLocation.energySources")}</FormLabel>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-2">
-                      {ENERGY_SOURCES.map((source) => (
-                        <FormField
-                          key={source.id}
-                          control={form.control}
-                          name="energy_sources"
-                          render={({ field }) => (
-                            <FormItem className="flex items-center space-x-2 space-y-0">
-                              <FormControl>
-                                <Checkbox
-                                  checked={field.value?.includes(source.id)}
-                                  onCheckedChange={(checked) => {
-                                    const current = field.value || [];
-                                    if (checked) {
-                                      field.onChange([...current, source.id]);
-                                    } else {
-                                      field.onChange(current.filter((v) => v !== source.id));
-                                    }
-                                  }}
-                                />
-                              </FormControl>
-                              <FormLabel className="text-sm font-normal cursor-pointer">
-                                {t(source.labelKey as any)}
-                              </FormLabel>
-                            </FormItem>
-                          )}
-                        />
-                      ))}
-                    </div>
+                    <LocationEnergySourcesEditor
+                      value={field.value as LocationEnergySourceInsert[]}
+                      onChange={field.onChange}
+                    />
                     <FormMessage />
                   </FormItem>
                 )}
