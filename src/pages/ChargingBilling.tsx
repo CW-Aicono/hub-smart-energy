@@ -4,7 +4,7 @@ import { Navigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useTranslation } from "@/hooks/useTranslation";
-import { useChargingSessions } from "@/hooks/useChargingSessions";
+import { useChargingSessions, useIdTagResolver } from "@/hooks/useChargingSessions";
 import { useChargingTariffs, ChargingTariff } from "@/hooks/useChargingTariffs";
 import { useChargingInvoices } from "@/hooks/useChargingInvoices";
 import { useChargePoints } from "@/hooks/useChargePoints";
@@ -30,6 +30,7 @@ const ChargingBilling = () => {
   const { t } = useTranslation();
   const { tenant } = useTenant();
   const { sessions, isLoading: sessionsLoading } = useChargingSessions();
+  const resolveTag = useIdTagResolver();
   const { tariffs, isLoading: tariffsLoading, addTariff, updateTariff, deleteTariff } = useChargingTariffs();
   const { invoices, createInvoice } = useChargingInvoices();
   const { chargePoints } = useChargePoints();
@@ -196,7 +197,7 @@ const ChargingBilling = () => {
                             <TableCell>{s.stop_time ? format(new Date(s.stop_time), "dd.MM.yyyy HH:mm") : "—"}</TableCell>
                             <TableCell>{fmtKwh(s.energy_kwh)}</TableCell>
                             <TableCell><Badge variant={s.status === "active" ? "default" : s.status === "completed" ? "secondary" : "destructive"}>{s.status === "active" ? t("charging.statusActive" as any) : s.status === "completed" ? t("charging.statusCompleted" as any) : t("charging.statusError" as any)}</Badge></TableCell>
-                            <TableCell className="font-mono text-sm">{s.id_tag || "—"}</TableCell>
+                            <TableCell className="text-sm">{resolveTag(s.id_tag) || s.id_tag || "—"}</TableCell>
                           </TableRow>
                         ))}
                       </TableBody>

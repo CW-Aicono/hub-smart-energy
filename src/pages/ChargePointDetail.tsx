@@ -5,7 +5,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useChargePoints, ChargePoint } from "@/hooks/useChargePoints";
 import { useChargerModels } from "@/hooks/useChargerModels";
-import { useChargingSessions } from "@/hooks/useChargingSessions";
+import { useChargingSessions, useIdTagResolver } from "@/hooks/useChargingSessions";
 import { useTenant } from "@/hooks/useTenant";
 import { useTasks } from "@/hooks/useTasks";
 import { useChargePointGroups } from "@/hooks/useChargePointGroups";
