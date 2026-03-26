@@ -138,7 +138,16 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
   const [powerReadings, setPowerReadings] = useState<Array<{ meter_id: string; power_value: number; recorded_at: string }>>([]);
   const [powerLoading, setPowerLoading] = useState(false);
   const allowedTypes = useLocationEnergyTypesSet(locationId);
-  const visibleEnergyKeys = useMemo(() => ENERGY_KEYS.filter(k => allowedTypes.has(k)), [allowedTypes]);
+  // Extend visible energy keys with types from selected meters
+  const visibleEnergyKeys = useMemo(() => {
+    const fromSources = new Set(ENERGY_KEYS.filter(k => allowedTypes.has(k)));
+    for (const m of meters) {
+      if (selectedMeterIds.has(m.id) && ENERGY_KEYS.includes(m.energy_type as any)) {
+        fromSources.add(m.energy_type as typeof ENERGY_KEYS[number]);
+      }
+    }
+    return ENERGY_KEYS.filter(k => fromSources.has(k));
+  }, [allowedTypes, meters, selectedMeterIds]);
 
   // ── Meter config state ────────────────────────────────────────────────────
   const [showSoc, setShowSoc] = useState(false);
