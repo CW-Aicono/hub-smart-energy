@@ -725,16 +725,27 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
           <CardTitle className="font-display text-lg">
             {t("chart.title" as any)} ({unitLabel})
           </CardTitle>
-          <Select value={period} onValueChange={handlePeriodChange}>
-            <SelectTrigger className="w-[120px] h-8 text-xs">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {(Object.keys(PERIOD_LABEL_KEYS) as ChartPeriod[]).map((key) => (
-                <SelectItem key={key} value={key}>{t(PERIOD_LABEL_KEYS[key] as any)}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <div className="flex items-center gap-1">
+            <EnergyChartConfig
+              meters={meters}
+              locationId={locationId}
+              selectedMeterIds={selectedMeterIds}
+              onToggleMeter={handleToggleMeter}
+              showSoc={showSoc}
+              onToggleSoc={() => setShowSoc(s => !s)}
+              hasSocMeters={hasSocMeters}
+            />
+            <Select value={period} onValueChange={handlePeriodChange}>
+              <SelectTrigger className="w-[120px] h-8 text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {(Object.keys(PERIOD_LABEL_KEYS) as ChartPeriod[]).map((key) => (
+                  <SelectItem key={key} value={key}>{t(PERIOD_LABEL_KEYS[key] as any)}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
         <div className="flex items-center justify-between">
           <p className="text-sm text-muted-foreground">{subtitle}</p>
