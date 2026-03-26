@@ -686,6 +686,18 @@ export const translations = {
     es: "Centro juvenil",
     nl: "Jongerencentrum",
   },
+  "locations.usage.gewerbe": {
+    de: "Gewerbe",
+    en: "Commercial",
+    es: "Comercial",
+    nl: "Commercieel",
+  },
+  "locations.usage.privat": {
+    de: "Privat",
+    en: "Residential",
+    es: "Residencial",
+    nl: "Residentieel",
+  },
   "locations.usage.sonstiges": {
     de: "Sonstiges",
     en: "Other",
