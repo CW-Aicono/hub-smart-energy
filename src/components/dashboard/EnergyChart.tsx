@@ -27,7 +27,7 @@ import type { Locale } from "date-fns";
 const localeMap: Record<string, Locale> = { de, en: enUS, es, nl };
 import { useDashboardFilter, TimePeriod } from "@/hooks/useDashboardFilter";
 import { useWeekStartDay } from "@/hooks/useWeekStartDay";
-import { useLocationEnergySources } from "@/hooks/useLocationEnergySources";
+import { useLocationEnergyTypesSet } from "@/hooks/useLocationEnergySources";
 
 type ChartPeriod = "day" | "week" | "month" | "quarter" | "year";
 

@@ -6,7 +6,7 @@ import { RotateCcw } from "lucide-react";
 import { HelpTooltip } from "@/components/ui/help-tooltip";
 import { useTranslation } from "@/hooks/useTranslation";
 import { useMeters } from "@/hooks/useMeters";
-import { useLocationEnergySources } from "@/hooks/useLocationEnergySources";
+import { useLocationEnergyTypesSet } from "@/hooks/useLocationEnergySources";
 import { useRealtimePower } from "@/hooks/useRealtimePower";
 import { ENERGY_TYPE_LABELS, ENERGY_HEX_COLORS } from "@/lib/energyTypeColors";
 import { supabase } from "@/integrations/supabase/client";
