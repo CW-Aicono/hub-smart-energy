@@ -41,12 +41,13 @@ async function uploadWithProgress(
 
   const url = `${supabaseUrl}/storage/v1/object/${bucket}/${path}`;
 
-  return new Promise((resolve) => {
+  const xhrResult = await new Promise<{ publicUrl: string | null; error: Error | null }>((resolve) => {
     const xhr = new XMLHttpRequest();
     xhr.open("POST", url, true);
     xhr.setRequestHeader("Authorization", `Bearer ${token || anonKey}`);
     xhr.setRequestHeader("apikey", anonKey);
     xhr.setRequestHeader("x-upsert", "true");
+    xhr.setRequestHeader("Content-Type", file.type || "application/octet-stream");
 
     if (onProgress) {
       xhr.upload.addEventListener("progress", (e) => {
@@ -58,12 +59,12 @@ async function uploadWithProgress(
 
     xhr.addEventListener("load", async () => {
       if (xhr.status >= 200 && xhr.status < 300) {
-        // Use public URL (bucket is public) instead of signed URL that expires
         const { data: publicData } = supabase.storage
           .from(bucket)
           .getPublicUrl(path);
         resolve({ publicUrl: publicData?.publicUrl ?? null, error: null });
       } else {
+        console.error("Storage upload failed:", xhr.status, xhr.responseText);
         resolve({ publicUrl: null, error: new Error(`Upload failed: ${xhr.status} ${xhr.statusText}`) });
       }
     });
@@ -74,6 +75,28 @@ async function uploadWithProgress(
 
     xhr.send(file);
   });
+
+  // Fallback to Supabase SDK if XHR failed
+  if (xhrResult.error) {
+    console.warn("XHR upload failed, falling back to SDK upload:", xhrResult.error.message);
+    onProgress?.(0);
+    const { error: sdkError } = await supabase.storage
+      .from(bucket)
+      .upload(path, file, { upsert: true });
+
+    if (sdkError) {
+      console.error("SDK upload also failed:", sdkError.message);
+      return { publicUrl: null, error: sdkError as unknown as Error };
+    }
+
+    const { data: publicData } = supabase.storage
+      .from(bucket)
+      .getPublicUrl(path);
+    onProgress?.(100);
+    return { publicUrl: publicData?.publicUrl ?? null, error: null };
+  }
+
+  return xhrResult;
 }
 
 interface UseFloorsReturn {
