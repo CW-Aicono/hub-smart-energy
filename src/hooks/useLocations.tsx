@@ -124,8 +124,23 @@ export function useLocations(): UseLocationsReturn {
 
   const createLocation = async (location: LocationInsert) => {
     if (!ready) return { error: new Error("No tenant") };
-    const { error: insertError } = await tenantInsert("locations", location as Omit<LocationInsertDB, "tenant_id">);
-    if (!insertError) await invalidate();
+    const { data, error: insertError } = await supabase
+      .from("locations")
+      .insert({ ...location, tenant_id: tenant!.id } as LocationInsertDB)
+      .select("id")
+      .single();
+    if (!insertError && data) {
+      // Auto-create ground floor (Erdgeschoss)
+      await supabase.from("floors").insert({
+        location_id: data.id,
+        name: "Erdgeschoss",
+        floor_number: 0,
+        description: null,
+        area_sqm: null,
+        floor_plan_url: null,
+      });
+      await invalidate();
+    }
     return { error: insertError as Error | null };
   };
 
