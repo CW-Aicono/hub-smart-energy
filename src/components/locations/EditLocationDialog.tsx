@@ -54,13 +54,15 @@ const USAGE_TYPES: { value: LocationUsageType; labelKey: string }[] = [
   { value: "kindertageseinrichtung", labelKey: "locations.usage.kindertageseinrichtung" },
   { value: "sportstaette", labelKey: "locations.usage.sportstaette" },
   { value: "jugendzentrum", labelKey: "locations.usage.jugendzentrum" },
+  { value: "gewerbe", labelKey: "locations.usage.gewerbe" },
+  { value: "privat", labelKey: "locations.usage.privat" },
   { value: "sonstiges", labelKey: "locations.usage.sonstiges" },
 ];
 
 const locationSchema = z.object({
   name: z.string().trim().min(1, "Name ist erforderlich").max(100),
   type: z.enum(["einzelgebaeude", "gebaeudekomplex", "sonstiges"] as const),
-  usage_type: z.enum(["verwaltungsgebaeude", "universitaet", "schule", "kindertageseinrichtung", "sportstaette", "jugendzentrum", "sonstiges"] as const),
+  usage_type: z.enum(["verwaltungsgebaeude", "universitaet", "schule", "kindertageseinrichtung", "sportstaette", "jugendzentrum", "gewerbe", "privat", "sonstiges"] as const),
   address: z.string().trim().max(200).optional(),
   postal_code: z.string().trim().max(10).optional(),
   city: z.string().trim().max(100).optional(),
