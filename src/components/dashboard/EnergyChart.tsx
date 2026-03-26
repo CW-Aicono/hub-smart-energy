@@ -278,7 +278,7 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
     };
     fetchPower();
     return () => { stale = true; };
-  }, [period, rangeStart.toISOString(), rangeEnd.toISOString(), meters, locationId, offset]);
+  }, [period, rangeStart.toISOString(), rangeEnd.toISOString(), meters, locationId, offset, selectedMeterIds]);
 
   // Fetch daily totals from DB for non-day periods (week, month, quarter, year)
   // Also compute today's running total from power readings as fallback
@@ -290,7 +290,7 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
     let stale = false;
     const fetchDailyTotals = async () => {
       const mainMeterIds = meters
-        .filter(m => !m.is_archived && m.is_main_meter && m.capture_type === "automatic")
+        .filter(m => !m.is_archived && m.capture_type === "automatic" && selectedMeterIds.has(m.id))
         .filter(m => !locationId || m.location_id === locationId)
         .map(m => m.id);
 
