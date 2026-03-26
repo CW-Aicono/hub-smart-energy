@@ -1,58 +1,72 @@
 
 
-## Fehleranalyse aus den Schneider Gateway-Logs
+## Fehleranalyse: Einladungs- und Passwort-vergessen-Flow
 
-Die `system.log` enthält die exakten Fehlermeldungen der HTTPS-Publikation. Es gibt **zwei separate Probleme**, die beide den Push verhindern:
+### Kernproblem
 
-### Problem 1: „URI path begins with multiple slashes"
+**Der Einladungslink loggt den User ein, ohne dass ein Passwort vergeben wurde.**
 
-```text
-2026-03-26T15:25:15 ERR HttpsMessageTransport
-  Failed https publication request: URI path begins with multiple slashes
-```
+Der Flow ist:
+1. `/accept-invite?t=...` → User klickt Button → Edge Function gibt `actionLink` (Supabase Recovery-URL) zurück
+2. `window.location.href = actionLink` → Supabase tauscht den Recovery-Token automatisch aus und erstellt eine **vollständige Session**
+3. Redirect zu `/set-password` mit Token im Hash → **aber**: Supabase hat den User bereits eingeloggt
+4. `onAuthStateChange` feuert `SIGNED_IN` → `useAuth` setzt `user` → App-Routing sieht authentifizierten User
+5. **Race Condition**: Wenn der User auf `/` navigiert (oder die App ihn dorthin leitet), wird er direkt ins Dashboard weitergeleitet, obwohl er nie ein Passwort gesetzt hat
 
-**Ursache:** Der Panel Server baut die URL intern zusammen als `https://{server}:{port}{pfad}`. Wenn im Pfad-Feld ein führender `/` steht UND gleichzeitig der Server-Wert auf `/` endet (oder `https://` enthält), entsteht ein doppelter Slash (`//`), den die Java HTTP-Bibliothek (`org.apache.hc.core5`) als ungültig ablehnt.
+Das `/set-password`-Formular zeigt zwar an, **aber der User ist bereits vollständig eingeloggt** und kann einfach zu `/` navigieren – oder die App leitet ihn automatisch weiter.
 
-**Lösung:** Im Panel Server den **Pfad ohne führenden Slash** eingeben oder sicherstellen, dass der Server-Wert **kein** `https://` und keinen Trailing-Slash enthält. Konkret:
-- **Server:** `xnveugycurplszevdxtw.supabase.co` (ohne `https://`, ohne `/` am Ende)
-- **Pfad:** `functions/v1/gateway-ingest?action=schneider-push&tenant_id=...` (ohne führenden `/`)
+### Zweites Problem: Passwort-Vergessen-Redirect
 
-Alternativ den Pfad mit führendem `/` belassen, aber den Server-Wert bereinigen.
+In `Auth.tsx` Zeile 64 wird `redirectTo: window.location.origin + '/profile'` verwendet. Das leitet nach dem Recovery-Token-Austausch zum Profil weiter, **nicht zu einer Passwort-Setzen-Seite**. Der User wird eingeloggt und kann das Passwort nur manuell im Profil ändern – es gibt keinen erzwungenen Passwort-Setzen-Schritt.
 
-### Problem 2: TLS-Zertifikatsfehler (SHA384withECDSA)
+---
 
-```text
-2026-03-26T15:27:09 ERR HttpsMessageTransport
-  PKIX path validation failed: Algorithm constraints check failed
-  on signature algorithm: SHA384withECDSA
-```
+## Geplante Fixes
 
-**Ursache:** Die Java-Runtime auf dem PAS800L (ältere eingebettete JVM) unterstützt den Signaturalgorithmus `SHA384withECDSA` nicht oder hat ihn in den Security-Constraints blockiert. Das Backend-TLS-Zertifikat verwendet diesen Algorithmus, und der Panel Server lehnt den TLS-Handshake ab.
+### 1. SetPassword: Passwort-Pflicht erzwingen
 
-**Lösung:** Im Panel Server muss die **TLS-Zertifikatsvalidierung deaktiviert** werden (Option „Serverzertifikat nicht prüfen" / „Trust all certificates" / „SSL-Verifikation deaktivieren"). Dies ist bei IoT-Geräten mit HTTPS-Push zu Cloud-Endpoints üblich und sicher, solange die Daten nur an den bekannten Host gesendet werden.
+**Datei:** `src/pages/SetPassword.tsx`
 
-### Zeitliche Korrelation mit dem Audit-Log
+- **Vor** dem Rendern des Passwort-Formulars prüfen, ob die Session vom Typ `PASSWORD_RECOVERY` ist
+- **Navigation blockieren**: Solange kein Passwort gesetzt wurde, darf der User nicht weg navigieren
+- Nach erfolgreichem Passwort-Setzen erst dann zum Dashboard weiterleiten
 
-Das `audit.log` zeigt, dass heute um **14:57 – 15:28 Uhr** mehrere `CONFIGURATION_CHANGE`-Einträge für HTTPS vorgenommen wurden (Zeilen 102-110). Diese korrelieren exakt mit den Fehlermeldungen in der `system.log`. Das bestätigt, dass der Benutzer die HTTPS-Publikation aktiv konfiguriert hat, aber beide Fehler auftreten.
+### 2. Auth.tsx: Passwort-Vergessen auf /set-password umleiten
 
-### Zusammenfassung der nächsten Schritte
+**Datei:** `src/pages/Auth.tsx`
 
-| Schritt | Aktion | Wo |
-|---------|--------|----|
-| 1 | Server-Feld bereinigen: nur `xnveugycurplszevdxtw.supabase.co` (kein `https://`, kein `/`) | Panel Server UI |
-| 2 | Pfad-Feld: `functions/v1/gateway-ingest?action=schneider-push&tenant_id=...` (ggf. ohne führenden `/` testen) | Panel Server UI |
-| 3 | TLS-Zertifikatsvalidierung deaktivieren (Option in HTTPS-Publikation) | Panel Server UI |
-| 4 | Erneut testen und `system.log` prüfen | Panel Server |
+- `redirectTo` von `/profile` auf `/set-password` ändern, damit der User nach dem Klick auf den Reset-Link zum Passwort-Formular gelangt statt direkt ins Profil
 
-### Code-Anpassung: SchneiderSetupInfo verbessern
+### 3. Index.tsx: Recovery-Session erkennen und umleiten
 
-**Datei:** `src/components/integrations/SchneiderSetupInfo.tsx`
+**Datei:** `src/pages/Index.tsx`
 
-- Pfad-Anzeige **ohne führenden `/`** anbieten (mit Hinweis, dass manche Firmware den `/` nicht akzeptiert)
-- Warnung ergänzen: „TLS-Zertifikatsvalidierung im Panel Server deaktivieren"
-- Hinweis zum Server-Feld: „Ohne `https://` und ohne `/` am Ende eingeben"
+- Beim Laden prüfen, ob die aktuelle Session eine Recovery-Session ist (Hash enthält `type=recovery`)
+- Falls ja, sofort nach `/set-password` umleiten statt das Dashboard zu laden
+- Dies verhindert, dass ein User mit Recovery-Token direkt ins Dashboard gelangt
 
-**Datei:** `src/lib/gatewayRegistry.ts`
+### 4. App.tsx: Recovery-Hash global abfangen
 
-- `pathTemplate` anpassen: führenden `/` entfernen → `functions/v1/gateway-ingest?action=schneider-push&tenant_id={tenant_id}`
+**Datei:** `src/App.tsx`
+
+- Globaler Check am App-Root: Wenn die URL einen Recovery-Hash enthält (`type=recovery` im Fragment), sofort zu `/set-password` navigieren
+- Dies fängt alle Einstiegspunkte ab, nicht nur `/`
+
+### 5. AcceptInvite: Kein direkter actionLink-Redirect mehr
+
+**Datei:** `src/pages/AcceptInvite.tsx`
+
+- Statt `window.location.href = data.actionLink` (was den Supabase-Token direkt austauscht und den User einloggt), den `actionLink` als State speichern und in einem versteckten iframe/fetch den Token austauschen, **oder** besser: den actionLink direkt an `/set-password` weiterleiten, damit der Token-Austausch dort kontrolliert passiert
+
+---
+
+## Zusammenfassung der Änderungen
+
+| Datei | Änderung |
+|-------|----------|
+| `src/App.tsx` | Globaler Recovery-Hash-Guard → redirect zu `/set-password` |
+| `src/pages/Auth.tsx` | `redirectTo` von `/profile` auf `/set-password` ändern |
+| `src/pages/SetPassword.tsx` | Recovery-Session erzwingen, Navigation blockieren bis PW gesetzt |
+| `src/pages/Index.tsx` | Recovery-Session erkennen → redirect zu `/set-password` |
+| `src/pages/AcceptInvite.tsx` | actionLink-Handling absichern |
 
