@@ -1,41 +1,55 @@
 
 
-## Siemens Sentron Powercenter 3000 – Gateway-Integration
+## Schneider Panel Server – HTTPS Publication Setup-Anweisungen & Credentials
 
-### Recherche-Ergebnis
+### Was sich ändert
 
-Der Powercenter 3000 bietet eine **lokale REST API** (kein Cloud-Service):
-- `GET /api/v1/items/{deviceId}/values` — aktuelle Messwerte
-- `GET /api/v1/items/{deviceId}/archives/{1|2}/_?internal_name=...&start_time=...&end_time=...&format=json` — historische Daten (10s oder 15min Intervalle)
-- Keine Authentifizierung (OAuth blockiert den API-Zugang, wenn aktiviert)
-- Das Gerät muss über eine externe URL erreichbar sein (Reverse Proxy, VPN, o.ä.) — genau wie Home Assistant
-
-### Integrationsstrategie
-
-Neue Edge Function `sentron-poc3000-api`, die:
-1. Die aktuelle Werte aller konfigurierten Geräte vom Powercenter 3000 abruft
-2. Die relevanten Power-Werte (W) extrahiert und als `meter_power_readings` speichert
+Der Schneider EcoStruxure Panel Server benötigt eine konfigurierte HTTPS-Publikation mit Server-URL, Port, Pfad sowie Benutzername/Passwort. Diese Informationen müssen dem Nutzer nach Anlage der Integration angezeigt werden, und die Credentials müssen bei eingehenden Pushes validiert werden.
 
 ### Änderungen
 
-**1. `src/lib/gatewayRegistry.ts`** — Neuer Gateway-Typ `sentron_powercenter_3000`:
-- `api_url` (URL, required) — Externe URL des Powercenter 3000 (z.B. `https://poc3000.meingebaeude.de`)
-- `device_ids` (Text, required) — Kommagetrennte Device-UUIDs aus dem Powercenter (aus der Web-Oberfläche kopierbar)
-- `poll_interval` (Text, optional) — Abrufintervall in Sekunden (Standard: 60)
+**1. `src/lib/gatewayRegistry.ts`**
+- Neue Felder `push_username` und `push_password` zum `schneider_panel_server` Gateway-Typ hinzufügen (required)
+- Neues optionales Feld `setupInstructions` zur `GatewayDefinition` Interface hinzufügen (Typ: String-Array oder Objekt mit Server/Port/Pfad-Infos)
 
-**2. `supabase/functions/sentron-poc3000-api/index.ts`** — Neue Edge Function:
-- Ruft `/api/v1/items/{deviceId}/values` für jede konfigurierte Device-ID ab
-- Filtert nach Power-Werten (W) mit Aggregation1 (10s-Werte)
-- Schreibt die Werte als `meter_power_readings` in die Datenbank
-- Unterstützt `action=sync` (aktuelle Werte) und `action=discover` (Geräteliste abrufen)
+**2. `src/components/integrations/IntegrationCard.tsx`**
+- Für `schneider_panel_server`-Typ: Setup-Infobox anzeigen mit den Verbindungsinformationen, die im Panel Server konfiguriert werden müssen:
+  - **Server**: `xnveugycurplszevdxtw.supabase.co` (aus VITE_SUPABASE_URL)
+  - **Port**: `443`
+  - **Pfad**: `/functions/v1/gateway-ingest?action=schneider-push&tenant_id=...`
+  - **Verbindungsmethode**: ID-Authentifizierung
+  - **Benutzername / Passwort**: aus der gespeicherten Config anzeigen
+- Die Box wird nur angezeigt, wenn die Integration konfiguriert ist
 
-**3. `supabase/config.toml`** — Eintrag für `sentron-poc3000-api`
+**3. `supabase/functions/gateway-ingest/index.ts`**
+- In `handleSchneiderPush`: Zusätzlich zur bestehenden GATEWAY_API_KEY-Validierung auch Basic-Auth-Credentials aus dem Request-Header prüfen
+- Credentials werden gegen die in der `location_integrations.config` gespeicherten `push_username`/`push_password` validiert
+- Damit kann der Panel Server sich per Benutzername/Passwort authentifizieren (Standard-HTTPS-Publikation), ohne dass ein API-Key im Gerät hinterlegt werden muss
 
-**4. `src/lib/__tests__/gatewayRegistry.test.ts`** — Tests für den neuen Gateway-Typ
+**4. `src/lib/__tests__/gatewayRegistry.test.ts`**
+- Tests für die neuen Felder erweitern
+
+### Technischer Ablauf
+
+```text
+Panel Server                    gateway-ingest
+    |                                |
+    |  POST /gateway-ingest          |
+    |  ?action=schneider-push        |
+    |  &tenant_id=xxx                |
+    |  Authorization: Basic user:pw  |
+    |  Body: { measurements: [...] } |
+    | -----------------------------> |
+    |                                | 1. Parse Basic Auth
+    |                                | 2. Lookup location_integration by tenant_id + type
+    |                                | 3. Verify username/password vs config
+    |                                | 4. Insert readings
+    |  <-- { success: true }         |
+```
 
 ### Dateien
-1. `src/lib/gatewayRegistry.ts` — 1 neuer Gateway-Typ
-2. `supabase/functions/sentron-poc3000-api/index.ts` — Neue Edge Function
-3. `supabase/config.toml` — Config-Eintrag
-4. `src/lib/__tests__/gatewayRegistry.test.ts` — Tests erweitern
+1. `src/lib/gatewayRegistry.ts` – 2 neue Felder + setupInstructions
+2. `src/components/integrations/IntegrationCard.tsx` – Setup-Infobox für Schneider
+3. `supabase/functions/gateway-ingest/index.ts` – Basic-Auth-Validierung im Schneider-Push-Handler
+4. `src/lib/__tests__/gatewayRegistry.test.ts` – Tests anpassen
 
