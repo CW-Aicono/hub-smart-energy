@@ -110,3 +110,28 @@ export function useLocationEnergySources(locationId: string | null) {
 
   return { sources, loading: isLoading, error, addSource, updateSource, deleteSource, saveBulk, refetch: invalidate };
 }
+
+const ALL_ENERGY_TYPES = ["strom", "gas", "waerme", "wasser"] as const;
+
+/**
+ * Backward-compatible hook: returns a Set<string> of energy types for filtering.
+ * Falls back to the locations.energy_sources array if no DB sources exist yet.
+ */
+export function useLocationEnergyTypesSet(locationId: string | null): Set<string> {
+  const { sources } = useLocationEnergySources(locationId);
+  const { locations } = useLocations();
+
+  return useMemo(() => {
+    // If we have sources from the new table, use them
+    if (sources.length > 0) {
+      return new Set(sources.map((s) => s.energy_type));
+    }
+    // Fallback to old array on location
+    if (!locationId) return new Set(ALL_ENERGY_TYPES);
+    const loc = locations.find((l) => l.id === locationId);
+    if (!loc || !loc.energy_sources || loc.energy_sources.length === 0) {
+      return new Set(ALL_ENERGY_TYPES);
+    }
+    return new Set(loc.energy_sources);
+  }, [sources, locationId, locations]);
+}
