@@ -4,7 +4,7 @@ import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 vi.mock("@/hooks/useAuth", () => ({
-  useAuth: () => ({ user: null, loading: false, signIn: vi.fn() }),
+  useAuth: () => ({ user: null, loading: false, signIn: vi.fn(), isRecovery: false, clearRecovery: vi.fn() }),
   AuthProvider: ({ children }: any) => <>{children}</>,
 }));
 vi.mock("@/hooks/useTranslation", () => ({
