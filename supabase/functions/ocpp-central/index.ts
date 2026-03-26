@@ -244,7 +244,7 @@ async function isUserInAllowedGroups(
       .from("charging_users")
       .select("group_id")
       .eq("tenant_id", tenantId)
-      .eq("rfid_tag", idTag)
+      .ilike("rfid_tag", idTag)
       .single();
     userGroupId = data?.group_id ?? null;
   }
@@ -258,6 +258,7 @@ async function validateIdTag(
   chargePointId: string,
   idTag: string | null | undefined
 ): Promise<string> {
+  console.log(`[ocpp-central] validateIdTag called: cp=${chargePointId}, idTag=${idTag}`);
   // Find the charge point
   const { data: cp } = await supabase
     .from("charge_points")
@@ -292,9 +293,12 @@ async function validateIdTag(
       .from("charging_users")
       .select("id, status, group_id")
       .eq("tenant_id", cp.tenant_id)
-      .eq("rfid_tag", idTag)
+      .ilike("rfid_tag", idTag)
       .single();
-    if (!user) return "Invalid";
+    if (!user) {
+      console.log(`[ocpp-central] RFID tag not found: "${idTag}" in tenant ${cp.tenant_id}`);
+      return "Invalid";
+    }
     if (user.status !== "active") return "Blocked";
     userId = user.id;
   }
