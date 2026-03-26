@@ -12,6 +12,13 @@ export interface GatewayConfigField {
   required: boolean;
 }
 
+export interface GatewaySetupInstructions {
+  serverField: string; // which config field or derived value to show as server
+  port: string;
+  pathTemplate: string; // may contain {tenant_id}
+  authMethod: string;
+}
+
 export interface GatewayDefinition {
   type: string;
   label: string;
@@ -19,6 +26,7 @@ export interface GatewayDefinition {
   description: string;
   edgeFunctionName: string;
   configFields: GatewayConfigField[];
+  setupInstructions?: GatewaySetupInstructions;
 }
 
 export const GATEWAY_DEFINITIONS: Record<string, GatewayDefinition> = {
@@ -128,9 +136,17 @@ export const GATEWAY_DEFINITIONS: Record<string, GatewayDefinition> = {
     description: "Schneider Electric Panel Server (PAS600/PAS800) via HTTPS Push",
     edgeFunctionName: "gateway-ingest",
     configFields: [
+      { name: "push_username", label: "Benutzername", placeholder: "panel-server-user", type: "text", description: "Benutzername für die HTTPS-Publikation (wird im Panel Server hinterlegt)", required: true },
+      { name: "push_password", label: "Passwort", placeholder: "••••••••", type: "password", description: "Passwort für die HTTPS-Publikation", required: true },
       { name: "webhook_secret", label: "Webhook Secret (optional)", placeholder: "••••••••", type: "password", description: "Shared Secret zur Authentifizierung der eingehenden Pushes vom Panel Server", required: false },
       { name: "device_mapping", label: "Device-Mapping (optional)", placeholder: "modbus:2=meter-uuid,modbus:3=meter-uuid", type: "text", description: "Zuordnung von Schneider Device-IDs zu Meter-UUIDs (kommagetrennt, Format: deviceId=meterUuid)", required: false },
     ],
+    setupInstructions: {
+      serverField: "__supabase_host__",
+      port: "443",
+      pathTemplate: "/functions/v1/gateway-ingest?action=schneider-push&tenant_id={tenant_id}",
+      authMethod: "ID-Authentifizierung (Benutzername / Passwort)",
+    },
   },
   siemens_iot2050: {
     type: "siemens_iot2050",

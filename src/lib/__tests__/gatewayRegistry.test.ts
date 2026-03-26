@@ -86,11 +86,23 @@ describe("gatewayRegistry", () => {
       expect(filter!.required).toBe(false);
     });
 
-    it("schneider_panel_server has optional webhook_secret and device_mapping", () => {
+    it("schneider_panel_server requires push_username and push_password, has optional webhook_secret and device_mapping", () => {
       const fields = GATEWAY_DEFINITIONS.schneider_panel_server.configFields;
-      expect(fields.every((f) => !f.required)).toBe(true);
-      expect(fields.map((f) => f.name)).toContain("webhook_secret");
-      expect(fields.map((f) => f.name)).toContain("device_mapping");
+      const names = fields.map((f) => f.name);
+      expect(names).toContain("push_username");
+      expect(names).toContain("push_password");
+      expect(names).toContain("webhook_secret");
+      expect(names).toContain("device_mapping");
+      expect(fields.find((f) => f.name === "push_username")!.required).toBe(true);
+      expect(fields.find((f) => f.name === "push_password")!.required).toBe(true);
+      expect(fields.find((f) => f.name === "webhook_secret")!.required).toBe(false);
+    });
+
+    it("schneider_panel_server has setupInstructions", () => {
+      const def = GATEWAY_DEFINITIONS.schneider_panel_server;
+      expect(def.setupInstructions).toBeDefined();
+      expect(def.setupInstructions!.port).toBe("443");
+      expect(def.setupInstructions!.pathTemplate).toContain("schneider-push");
     });
 
     it("siemens_iot2050 has optional device_name and node_red_url", () => {
