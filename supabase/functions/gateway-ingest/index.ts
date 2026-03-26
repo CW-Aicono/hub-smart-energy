@@ -552,6 +552,36 @@ async function validateBasicAuth(
   tenantId: string,
 ): Promise<{ config: Record<string, unknown> } | Response> {
   const authHeader = req.headers.get("Authorization") || "";
+  const supabase = getSupabase();
+
+  // Helper: find schneider location_integrations for this tenant
+  async function findSchneiderIntegrations() {
+    // First get schneider integrations for this tenant
+    const { data: integrations, error: intErr } = await supabase
+      .from("integrations")
+      .select("id")
+      .eq("type", "schneider_panel_server")
+      .eq("tenant_id", tenantId);
+
+    if (intErr || !integrations?.length) {
+      if (intErr) console.error("[schneider-push] integrations lookup error:", intErr.message);
+      return [];
+    }
+
+    const integrationIds = integrations.map((i: { id: string }) => i.id);
+
+    const { data: locIntegrations, error: liErr } = await supabase
+      .from("location_integrations")
+      .select("config")
+      .in("integration_id", integrationIds)
+      .eq("is_enabled", true);
+
+    if (liErr) {
+      console.error("[schneider-push] location_integrations lookup error:", liErr.message);
+      return [];
+    }
+    return locIntegrations || [];
+  }
 
   // Try Basic Auth first
   if (authHeader.startsWith("Basic ")) {
@@ -562,26 +592,16 @@ async function validateBasicAuth(
     const username = decoded.slice(0, colonIdx);
     const password = decoded.slice(colonIdx + 1);
 
-    const supabase = getSupabase();
-    const { data: integrations, error } = await supabase
-      .from("location_integrations")
-      .select("config, integration:integrations!location_integrations_integration_id_fkey(type)")
-      .eq("is_enabled", true)
-      .filter("integration.type", "eq", "schneider_panel_server");
+    const locIntegrations = await findSchneiderIntegrations();
 
-    if (error) {
-      console.error("[schneider-push] DB lookup error:", error.message);
-      return json({ error: "Internal error" }, 500);
-    }
-
-    // Find matching integration by tenant (via location) and credentials
-    for (const li of integrations || []) {
+    for (const li of locIntegrations) {
       const cfg = (li.config || {}) as Record<string, unknown>;
       if (cfg.push_username === username && cfg.push_password === password) {
         return { config: cfg };
       }
     }
 
+    console.warn(`[schneider-push] Basic Auth failed for tenant ${tenantId}, user="${username}", found ${locIntegrations.length} integration(s)`);
     return json({ error: "Invalid credentials" }, 401);
   }
 
@@ -590,16 +610,12 @@ async function validateBasicAuth(
   if (apiKeyErr) return apiKeyErr;
 
   // If using API key, load config from any matching integration for this tenant
-  const supabase = getSupabase();
-  const { data } = await supabase
-    .from("location_integrations")
-    .select("config, integration:integrations!location_integrations_integration_id_fkey(type)")
-    .eq("is_enabled", true)
-    .filter("integration.type", "eq", "schneider_panel_server")
-    .limit(1)
-    .maybeSingle();
+  const locIntegrations = await findSchneiderIntegrations();
+  const cfg = locIntegrations.length > 0
+    ? (locIntegrations[0].config || {}) as Record<string, unknown>
+    : {};
 
-  return { config: ((data?.config || {}) as Record<string, unknown>) };
+  return { config: cfg };
 }
 
 async function handleSchneiderPush(req: Request): Promise<Response> {
