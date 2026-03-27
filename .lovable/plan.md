@@ -1,66 +1,40 @@
 
 
-## Plan: Multi-Array PV-Prognose pro Liegenschaft
+## Plan: 12-15 Seiten PPTX-Präsentation — AME Hub × Smart Energy Hub
 
-### Kontext
+### Ziel
+Eine professionelle PowerPoint-Präsentation für Vorstände, Geschäftsführer und Entscheider aus Bau, Politik und Projektierung. Fokus: Zusammenspiel von Hardware (AME Mobile Energy Hub) und Software (Smart Energy Hub Plattform).
 
-Aktuell unterstützt das System genau **eine** PV-Konfiguration (Neigung, Azimut, kWp) pro Standort (`pv_forecast_settings` mit `isOneToOne: false`, aber die Abfragen nutzen `.maybeSingle()`). Bei Flachdächern mit Panels in mehreren Himmelsrichtungen (z.B. Ost/West-Aufständerung) ist das unzureichend.
+### Vorgehen
+- pptxgenjs-Script erstellen und ausführen
+- Alp-Mann Logo aus den PDFs einbetten
+- System-Architektur-Grafiken aus den PDFs einbetten
+- Farbpalette: Dunkelblau/Petrol (#1A3C5E) + Grün (#4CAF50) + Weiß — passend zu beiden Marken
+- Font: Georgia (Header) / Calibri (Body)
+- Alle Texte auf Deutsch
 
-### Ansatz: Mehrere PV-Teilanlagen pro Standort
+### Folienstruktur (14 Folien)
 
-Ja — der sauberste Ansatz ist, mehrere Einträge in `pv_forecast_settings` pro `location_id` zuzulassen und jeder Teilanlage einen eigenen Namen, Neigung, Azimut und kWp zu geben. Die Prognosen werden einzeln berechnet und dann summiert.
+| # | Folie | Inhalt |
+|---|-------|--------|
+| 1 | **Titelfolie** | „Die Infrastruktur für ein CO₂-freies Europa — Mobil. Intelligent. Sofort einsatzbereit." Logos beider Projekte, Datum |
+| 2 | **Das Problem** | 3 Kernprobleme: Abregelung/Verschwendung, Netzüberlastung, Unwirtschaftlichkeit herk. Speicher. Icons + Kurztext |
+| 3 | **Die Hardware-Lösung: AME Hub** | Systemarchitektur-Grafik (aus PDF), Kerndaten: 5 MWh, 150 kW WP, R290, Wechselbrücke |
+| 4 | **4 USPs des AME Hub** | Visuelles Grid: Kosteneffizienz (100 €/kWh), Thermischer Turbo (>90% Wirkungsgrad), Mobilität (Plug & Play), Sicherheit (LFP + Schwarzstart) |
+| 5 | **Die Software-Lösung: Smart Energy Hub** | Dashboard-Screenshot/Beschreibung, KI-Arbitrage, Echtzeit-Monitoring, Multi-Standort, PV-Prognose, Ladeinfrastruktur |
+| 6 | **Das Zusammenspiel: Hardware × Software** | Flussdiagramm: AME Hub ↔ Smart Energy Hub. KI-Steuerung, Wetterdaten, Börsenpreise, Wärmelastprofile → optimierte Betriebsstrategie |
+| 7 | **Revenue Stacking: 4 Erlösströme** | Strom-Arbitrage, Wärme-Direktvermarktung, Reduzierte Netzentgelte, CO₂-Vermeidung. Große Zahlen mit Beschreibung |
+| 8 | **ROI & Wirtschaftlichkeit** | Vergleichstabelle: Standard-Speicher vs. AME Hub (CAPEX, Erlöse, Amortisation 11 vs. 4,5 Jahre). Förder-Stacking bis 45% |
+| 9 | **Marktvergleich: AME Hub vs. Tesla Megapack** | Feature-Vergleichstabelle (Sektorkopplung, Mobilität, Förderfähigkeit, Zielgruppe) |
+| 10 | **CO₂-Impact & Nachhaltigkeit** | CO₂-Balkendiagramm (45t → 12t, >70% Reduktion), R290 Kältemittel, LFP recycelbar, Grid-Balancing |
+| 11 | **Technische Spezifikationen** | Kompakte Spec-Tabelle: Speicher, Wärmepumpe, Bauform, Steuerung, Zertifizierungen |
+| 12 | **Anwendungsszenarien** | 3 Use-Cases: Quartiersentwicklung, Industriebetrieb, Kommunale Wärmeplanung — jeweils mit Icon und Kurzbeschreibung |
+| 13 | **Skalierung & Marktpotenzial** | GuV-Auszug 2026-2030 (Einheiten, Umsatz, Marktgebiete), Cluster-Architektur, Fabless Assembly |
+| 14 | **Call to Action / Kontakt** | Abschluss-Statement, Kontaktdaten, Logos |
 
-### Änderungen
-
-#### 1. Datenbank-Migration
-- Spalte `name` (text, default `'Anlage 1'`) zu `pv_forecast_settings` hinzufügen
-- Bestehender UNIQUE-Constraint auf `(location_id)` entfernen (falls vorhanden), sodass mehrere Zeilen pro Standort möglich sind
-- Bestehende Einträge erhalten automatisch den Default-Namen
-
-#### 2. Backend: Edge Function `pv-forecast`
-- Statt `.maybeSingle()` → `.select("*").eq("is_active", true)` → **Array** aller aktiven Teilanlagen laden
-- Für jede Teilanlage separat die Open-Meteo GTI-API mit individuellem Neigung/Azimut aufrufen
-- Stündliche kWh-Werte aller Teilanlagen **summieren** → ein kombiniertes `hourly[]`-Array zurückgeben
-- Zusätzlich ein `arrays`-Feld mit den Einzelergebnissen zurückgeben (für Detail-Ansicht)
-- Performance-Ratio-Kalibrierung pro Teilanlage beibehalten
-
-#### 3. Frontend: Settings-UI (`PvForecastSection.tsx`)
-- Statt eines einzelnen Formulars → **Liste** von Teilanlagen mit Hinzufügen/Löschen-Buttons
-- Jede Teilanlage zeigt: Name, kWp, Neigung, Azimut, Zähler-Zuordnung, Aktiv-Schalter
-- "Teilanlage hinzufügen"-Button erstellt einen neuen Eintrag
-- Löschen-Button mit Bestätigungsdialog
-
-#### 4. Frontend: Hook `usePvForecast.tsx`
-- `usePvForecastSettings` liefert ein **Array** statt ein einzelnes Objekt
-- `upsertSettings` wird pro Teilanlage aufgerufen
-- Neue Mutation `deleteSettings` zum Entfernen einer Teilanlage
-
-#### 5. Frontend: Prognose-Anzeige
-- Summen-Kacheln (Heute/Morgen) zeigen weiterhin den **Gesamtertrag**
-- Im Chart: Option, die Teilanlagen als gestapelte Balken oder als Summe darzustellen
-- Badge pro Teilanlage mit Name und Ausrichtung
-
-#### 6. Dashboard-Widget & Copilot
-- `PvForecastWidget` und `copilot-analysis` nutzen bereits die summierte Antwort → keine Änderung nötig, solange die API-Antwortstruktur abwärtskompatibel bleibt
-
-### Abwärtskompatibilität
-- Standorte mit nur einem Eintrag funktionieren identisch wie bisher
-- Die API-Antwort behält `settings`, `hourly`, `summary` auf Top-Level (Summe) bei und ergänzt optional `arrays[]` mit den Einzeldaten
-
-### Technische Details
-
-```text
-pv_forecast_settings
-┌──────────┬─────────────┬──────┬────────┬─────────┬──────┐
-│ location │ name        │ kWp  │ tilt   │ azimuth │ meter│
-├──────────┼─────────────┼──────┼────────┼─────────┼──────┤
-│ loc-1    │ Ost-Seite   │ 15   │ 10°    │ 90°     │ m-1  │
-│ loc-1    │ West-Seite  │ 15   │ 10°    │ 270°    │ m-2  │
-└──────────┴─────────────┴──────┴────────┴─────────┴──────┘
-
-API Response (summiert):
-  summary.today_total_kwh = Ost + West
-  hourly[h].estimated_kwh = Ost[h] + West[h]
-  arrays: [{ name: "Ost", hourly: [...] }, { name: "West", hourly: [...] }]
-```
+### Technische Umsetzung
+- pptxgenjs-Script in `/tmp/create_presentation.js`
+- Logo und Systemarchitektur-Grafiken als base64 einbetten
+- Output: `/mnt/documents/AME_Hub_Smart_Energy_Hub_Praesentation.pptx`
+- QA: LibreOffice → PDF → pdftoppm → visuelle Inspektion aller Folien
 
