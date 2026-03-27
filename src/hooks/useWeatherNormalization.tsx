@@ -198,15 +198,16 @@ export function useWeatherNormalization({
       const refLocation = locations[0];
 
       // Refresh the session to ensure a valid token
-      const { data: sessionData } = await supabase.auth.getSession();
-      let validToken = sessionData?.session?.access_token;
-      if (!validToken) {
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+      if (!token) {
+        // Try refreshing the session
         const { data: refreshed } = await supabase.auth.refreshSession();
-        validToken = refreshed.session?.access_token;
-        if (!validToken) {
+        if (!refreshed.session?.access_token) {
           throw new Error("Nicht authentifiziert – bitte neu anmelden");
         }
       }
+      const validToken = token || (await supabase.auth.getSession()).data.session?.access_token;
 
       const params = new URLSearchParams({
         latitude: String(refLocation.latitude),
