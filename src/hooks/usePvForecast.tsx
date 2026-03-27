@@ -243,6 +243,50 @@ function buildDemoForecast(locationId: string | null): PvForecast {
   };
 }
 
+async function callPvForecastEdge(locationId: string, token: string) {
+  const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/pv-forecast`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+      apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+    },
+    body: JSON.stringify({ location_id: locationId }),
+  });
+
+  return response;
+}
+
+async function fetchPvForecastForLocation(locationId: string): Promise<PvForecast | null> {
+  const { data: sessionData } = await supabase.auth.getSession();
+  let token = sessionData.session?.access_token ?? null;
+
+  if (!token) {
+    const { data: refreshed } = await supabase.auth.refreshSession();
+    token = refreshed.session?.access_token ?? null;
+  }
+
+  if (!token) return null;
+
+  let response = await callPvForecastEdge(locationId, token);
+
+  if (response.status === 401) {
+    const { data: refreshed } = await supabase.auth.refreshSession();
+    const refreshedToken = refreshed.session?.access_token ?? null;
+    if (!refreshedToken) return null;
+    response = await callPvForecastEdge(locationId, refreshedToken);
+  }
+
+  if (!response.ok) {
+    const message = await response.text();
+    throw new Error(`PV-Prognose fehlgeschlagen (${response.status}): ${message}`);
+  }
+
+  const data = await response.json();
+  if (!data || !data.hourly || !data.summary) return null;
+  return data as PvForecast;
+}
+
 export function usePvForecast(locationId: string | null) {
   const { tenant } = useTenant();
   const tenantId = tenant?.id ?? null;
@@ -254,7 +298,6 @@ export function usePvForecast(locationId: string | null) {
       if (isDemo) return buildDemoForecast(locationId);
 
       if (locationId) {
-        // Check if location has coordinates before calling the edge function
         const { data: loc } = await supabase
           .from("locations")
           .select("latitude,longitude")
@@ -262,12 +305,7 @@ export function usePvForecast(locationId: string | null) {
           .maybeSingle();
         if (!loc?.latitude || !loc?.longitude) return null;
 
-        const { data, error } = await supabase.functions.invoke("pv-forecast", {
-          body: { location_id: locationId },
-        });
-        if (error) throw error;
-        if (!data || !data.hourly || !data.summary) return null;
-        return data as PvForecast;
+        return fetchPvForecastForLocation(locationId);
       }
 
       if (!tenantId) return null;
@@ -280,17 +318,13 @@ export function usePvForecast(locationId: string | null) {
       if (!allSettings || allSettings.length === 0) return null;
 
       const results = await Promise.allSettled(
-        allSettings.map((setting) =>
-          supabase.functions.invoke("pv-forecast", { body: { location_id: setting.location_id } }).then((response) => {
-            if (response.error) throw response.error;
-            return response.data as PvForecast;
-          })
-        )
+        allSettings.map((setting) => fetchPvForecastForLocation(setting.location_id))
       );
 
       const forecasts = results
-        .filter((result): result is PromiseFulfilledResult<PvForecast> => result.status === "fulfilled")
-        .map((result) => result.value);
+        .filter((result): result is PromiseFulfilledResult<PvForecast | null> => result.status === "fulfilled")
+        .map((result) => result.value)
+        .filter((value): value is PvForecast => value !== null);
 
       if (forecasts.length === 0) return null;
       return aggregateForecasts(forecasts);
