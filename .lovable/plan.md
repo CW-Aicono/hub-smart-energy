@@ -1,72 +1,66 @@
 
 
-## Fehleranalyse: Einladungs- und Passwort-vergessen-Flow
+## Plan: Multi-Array PV-Prognose pro Liegenschaft
 
-### Kernproblem
+### Kontext
 
-**Der Einladungslink loggt den User ein, ohne dass ein Passwort vergeben wurde.**
+Aktuell unterstützt das System genau **eine** PV-Konfiguration (Neigung, Azimut, kWp) pro Standort (`pv_forecast_settings` mit `isOneToOne: false`, aber die Abfragen nutzen `.maybeSingle()`). Bei Flachdächern mit Panels in mehreren Himmelsrichtungen (z.B. Ost/West-Aufständerung) ist das unzureichend.
 
-Der Flow ist:
-1. `/accept-invite?t=...` → User klickt Button → Edge Function gibt `actionLink` (Supabase Recovery-URL) zurück
-2. `window.location.href = actionLink` → Supabase tauscht den Recovery-Token automatisch aus und erstellt eine **vollständige Session**
-3. Redirect zu `/set-password` mit Token im Hash → **aber**: Supabase hat den User bereits eingeloggt
-4. `onAuthStateChange` feuert `SIGNED_IN` → `useAuth` setzt `user` → App-Routing sieht authentifizierten User
-5. **Race Condition**: Wenn der User auf `/` navigiert (oder die App ihn dorthin leitet), wird er direkt ins Dashboard weitergeleitet, obwohl er nie ein Passwort gesetzt hat
+### Ansatz: Mehrere PV-Teilanlagen pro Standort
 
-Das `/set-password`-Formular zeigt zwar an, **aber der User ist bereits vollständig eingeloggt** und kann einfach zu `/` navigieren – oder die App leitet ihn automatisch weiter.
+Ja — der sauberste Ansatz ist, mehrere Einträge in `pv_forecast_settings` pro `location_id` zuzulassen und jeder Teilanlage einen eigenen Namen, Neigung, Azimut und kWp zu geben. Die Prognosen werden einzeln berechnet und dann summiert.
 
-### Zweites Problem: Passwort-Vergessen-Redirect
+### Änderungen
 
-In `Auth.tsx` Zeile 64 wird `redirectTo: window.location.origin + '/profile'` verwendet. Das leitet nach dem Recovery-Token-Austausch zum Profil weiter, **nicht zu einer Passwort-Setzen-Seite**. Der User wird eingeloggt und kann das Passwort nur manuell im Profil ändern – es gibt keinen erzwungenen Passwort-Setzen-Schritt.
+#### 1. Datenbank-Migration
+- Spalte `name` (text, default `'Anlage 1'`) zu `pv_forecast_settings` hinzufügen
+- Bestehender UNIQUE-Constraint auf `(location_id)` entfernen (falls vorhanden), sodass mehrere Zeilen pro Standort möglich sind
+- Bestehende Einträge erhalten automatisch den Default-Namen
 
----
+#### 2. Backend: Edge Function `pv-forecast`
+- Statt `.maybeSingle()` → `.select("*").eq("is_active", true)` → **Array** aller aktiven Teilanlagen laden
+- Für jede Teilanlage separat die Open-Meteo GTI-API mit individuellem Neigung/Azimut aufrufen
+- Stündliche kWh-Werte aller Teilanlagen **summieren** → ein kombiniertes `hourly[]`-Array zurückgeben
+- Zusätzlich ein `arrays`-Feld mit den Einzelergebnissen zurückgeben (für Detail-Ansicht)
+- Performance-Ratio-Kalibrierung pro Teilanlage beibehalten
 
-## Geplante Fixes
+#### 3. Frontend: Settings-UI (`PvForecastSection.tsx`)
+- Statt eines einzelnen Formulars → **Liste** von Teilanlagen mit Hinzufügen/Löschen-Buttons
+- Jede Teilanlage zeigt: Name, kWp, Neigung, Azimut, Zähler-Zuordnung, Aktiv-Schalter
+- "Teilanlage hinzufügen"-Button erstellt einen neuen Eintrag
+- Löschen-Button mit Bestätigungsdialog
 
-### 1. SetPassword: Passwort-Pflicht erzwingen
+#### 4. Frontend: Hook `usePvForecast.tsx`
+- `usePvForecastSettings` liefert ein **Array** statt ein einzelnes Objekt
+- `upsertSettings` wird pro Teilanlage aufgerufen
+- Neue Mutation `deleteSettings` zum Entfernen einer Teilanlage
 
-**Datei:** `src/pages/SetPassword.tsx`
+#### 5. Frontend: Prognose-Anzeige
+- Summen-Kacheln (Heute/Morgen) zeigen weiterhin den **Gesamtertrag**
+- Im Chart: Option, die Teilanlagen als gestapelte Balken oder als Summe darzustellen
+- Badge pro Teilanlage mit Name und Ausrichtung
 
-- **Vor** dem Rendern des Passwort-Formulars prüfen, ob die Session vom Typ `PASSWORD_RECOVERY` ist
-- **Navigation blockieren**: Solange kein Passwort gesetzt wurde, darf der User nicht weg navigieren
-- Nach erfolgreichem Passwort-Setzen erst dann zum Dashboard weiterleiten
+#### 6. Dashboard-Widget & Copilot
+- `PvForecastWidget` und `copilot-analysis` nutzen bereits die summierte Antwort → keine Änderung nötig, solange die API-Antwortstruktur abwärtskompatibel bleibt
 
-### 2. Auth.tsx: Passwort-Vergessen auf /set-password umleiten
+### Abwärtskompatibilität
+- Standorte mit nur einem Eintrag funktionieren identisch wie bisher
+- Die API-Antwort behält `settings`, `hourly`, `summary` auf Top-Level (Summe) bei und ergänzt optional `arrays[]` mit den Einzeldaten
 
-**Datei:** `src/pages/Auth.tsx`
+### Technische Details
 
-- `redirectTo` von `/profile` auf `/set-password` ändern, damit der User nach dem Klick auf den Reset-Link zum Passwort-Formular gelangt statt direkt ins Profil
+```text
+pv_forecast_settings
+┌──────────┬─────────────┬──────┬────────┬─────────┬──────┐
+│ location │ name        │ kWp  │ tilt   │ azimuth │ meter│
+├──────────┼─────────────┼──────┼────────┼─────────┼──────┤
+│ loc-1    │ Ost-Seite   │ 15   │ 10°    │ 90°     │ m-1  │
+│ loc-1    │ West-Seite  │ 15   │ 10°    │ 270°    │ m-2  │
+└──────────┴─────────────┴──────┴────────┴─────────┴──────┘
 
-### 3. Index.tsx: Recovery-Session erkennen und umleiten
-
-**Datei:** `src/pages/Index.tsx`
-
-- Beim Laden prüfen, ob die aktuelle Session eine Recovery-Session ist (Hash enthält `type=recovery`)
-- Falls ja, sofort nach `/set-password` umleiten statt das Dashboard zu laden
-- Dies verhindert, dass ein User mit Recovery-Token direkt ins Dashboard gelangt
-
-### 4. App.tsx: Recovery-Hash global abfangen
-
-**Datei:** `src/App.tsx`
-
-- Globaler Check am App-Root: Wenn die URL einen Recovery-Hash enthält (`type=recovery` im Fragment), sofort zu `/set-password` navigieren
-- Dies fängt alle Einstiegspunkte ab, nicht nur `/`
-
-### 5. AcceptInvite: Kein direkter actionLink-Redirect mehr
-
-**Datei:** `src/pages/AcceptInvite.tsx`
-
-- Statt `window.location.href = data.actionLink` (was den Supabase-Token direkt austauscht und den User einloggt), den `actionLink` als State speichern und in einem versteckten iframe/fetch den Token austauschen, **oder** besser: den actionLink direkt an `/set-password` weiterleiten, damit der Token-Austausch dort kontrolliert passiert
-
----
-
-## Zusammenfassung der Änderungen
-
-| Datei | Änderung |
-|-------|----------|
-| `src/App.tsx` | Globaler Recovery-Hash-Guard → redirect zu `/set-password` |
-| `src/pages/Auth.tsx` | `redirectTo` von `/profile` auf `/set-password` ändern |
-| `src/pages/SetPassword.tsx` | Recovery-Session erzwingen, Navigation blockieren bis PW gesetzt |
-| `src/pages/Index.tsx` | Recovery-Session erkennen → redirect zu `/set-password` |
-| `src/pages/AcceptInvite.tsx` | actionLink-Handling absichern |
+API Response (summiert):
+  summary.today_total_kwh = Ost + West
+  hourly[h].estimated_kwh = Ost[h] + West[h]
+  arrays: [{ name: "Ost", hourly: [...] }, { name: "West", hourly: [...] }]
+```
 
