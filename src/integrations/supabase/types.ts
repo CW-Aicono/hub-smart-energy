@@ -3497,6 +3497,7 @@ export type Database = {
           id: string
           is_active: boolean | null
           location_id: string
+          name: string
           peak_power_kwp: number
           performance_ratio: number
           pv_meter_id: string | null
@@ -3513,6 +3514,7 @@ export type Database = {
           id?: string
           is_active?: boolean | null
           location_id: string
+          name?: string
           peak_power_kwp?: number
           performance_ratio?: number
           pv_meter_id?: string | null
@@ -3529,6 +3531,7 @@ export type Database = {
           id?: string
           is_active?: boolean | null
           location_id?: string
+          name?: string
           peak_power_kwp?: number
           performance_ratio?: number
           pv_meter_id?: string | null

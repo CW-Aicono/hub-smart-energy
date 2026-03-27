@@ -5557,6 +5557,10 @@ export const translations = {
   "pv.noForecastPeriod": { de: "Keine Prognosedaten für diesen Zeitraum", en: "No forecast data for this period", es: "Sin datos de pronóstico para este período", nl: "Geen prognosegegevens voor deze periode" },
   "pv.noDataAvailable": { de: "Keine Prognosedaten verfügbar. Konfigurieren Sie PV-Einstellungen in der Liegenschaft.", en: "No forecast data available. Configure PV settings in the property.", es: "Sin datos de pronóstico. Configure los ajustes FV en la propiedad.", nl: "Geen prognosegegevens beschikbaar. Configureer PV-instellingen in het pand." },
   "pv.ai": { de: "KI", en: "AI", es: "IA", nl: "AI" },
+  "pv.arrays": { de: "Teilanlagen", en: "Arrays", es: "Subarreglos", nl: "Deelsystemen" },
+  "pv.addArray": { de: "Teilanlage hinzufügen", en: "Add array", es: "Agregar subarreglo", nl: "Deelsysteem toevoegen" },
+  "pv.arrayName": { de: "Anlagenname", en: "Array name", es: "Nombre del subarreglo", nl: "Naam deelsysteem" },
+  "pv.noArraysYet": { de: "Noch keine PV-Teilanlage konfiguriert. Klicken Sie auf \"Teilanlage hinzufügen\".", en: "No PV array configured yet. Click \"Add array\".", es: "Aún no hay subarreglo FV configurado.", nl: "Nog geen PV-deelsysteem geconfigureerd." },
 
   // ── EnergyChart day-view label ────────────────────────────────────────────
   "chart.timeLabel": { de: "Uhr", en: "", es: "", nl: "" },

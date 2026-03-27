@@ -5,17 +5,14 @@ import { useUserRole } from "@/hooks/useUserRole";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Sun, ChevronDown, ChevronRight, Sparkles, Save } from "lucide-react";
+import { Sun, ChevronDown, ChevronRight, Sparkles, Plus } from "lucide-react";
 import { HelpTooltip } from "@/components/ui/help-tooltip";
 import { useTranslation } from "@/hooks/useTranslation";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from "recharts";
 import { fetchPvActualHourly, toLocalHourKey } from "@/lib/pvActuals";
+import { PvArraySettingsCard } from "./PvArraySettingsCard";
 
 const PV_YELLOW = "hsl(var(--energy-strom))";
 const ACTUAL_GREEN = "hsl(var(--pv-actual))";
@@ -45,7 +42,7 @@ export function PvForecastSection({ locationId }: PvForecastSectionProps) {
   const { t } = useTranslation();
   const T = (key: string) => t(key as any);
   const { isAdmin } = useUserRole();
-  const { settings, isLoading: settingsLoading, upsertSettings } = usePvForecastSettings(locationId);
+  const { settingsList, isLoading: settingsLoading, upsertSettings, deleteSettings } = usePvForecastSettings(locationId);
   const { forecast, isLoading: forecastLoading } = usePvForecast(isOpen ? locationId : null);
   const { meters } = useMeters(locationId);
   const [actualReadings, setActualReadings] = useState<Record<string, number>>({});
@@ -53,30 +50,13 @@ export function PvForecastSection({ locationId }: PvForecastSectionProps) {
 
   const solarMeters = meters.filter((meter) => meter.meter_function === "generation" || meter.energy_type === "solar" || meter.energy_type === "pv" || meter.energy_type === "strom" && meter.meter_function === "generation");
 
-  const [form, setForm] = useState({
-    peak_power_kwp: 10,
-    tilt_deg: 30,
-    azimuth_deg: 180,
-    performance_ratio: 0.8,
-    pv_meter_id: "" as string,
-    is_active: true,
-  });
+  // Collect all pv_meter_ids from all arrays
+  const allPvMeterIds = settingsList
+    .map((s) => s.pv_meter_id)
+    .filter((id): id is string => !!id);
 
   useEffect(() => {
-    if (settings) {
-      setForm({
-        peak_power_kwp: settings.peak_power_kwp,
-        tilt_deg: settings.tilt_deg,
-        azimuth_deg: settings.azimuth_deg,
-        performance_ratio: settings.performance_ratio ?? 0.8,
-        pv_meter_id: settings.pv_meter_id || "",
-        is_active: settings.is_active,
-      });
-    }
-  }, [settings]);
-
-  useEffect(() => {
-    if (!settings?.pv_meter_id || !isOpen) return;
+    if (allPvMeterIds.length === 0 || !isOpen) return;
 
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
@@ -85,7 +65,7 @@ export function PvForecastSection({ locationId }: PvForecastSectionProps) {
 
     (async () => {
       const result = await fetchPvActualHourly({
-        meterIds: [settings.pv_meter_id],
+        meterIds: allPvMeterIds,
         locationId,
         rangeStart: todayStart,
         rangeEnd: todayEnd,
@@ -95,14 +75,17 @@ export function PvForecastSection({ locationId }: PvForecastSectionProps) {
       setActualReadings(result.readings);
       setActualReadingsEstimated(result.isEstimated);
     })();
-  }, [settings?.pv_meter_id, isOpen, locationId, forecast?.hourly]);
+  }, [allPvMeterIds.join(","), isOpen, locationId, forecast?.hourly]);
 
-  const handleSave = () => {
-    if (form.tilt_deg < 0 || form.tilt_deg > 90) return;
-    if (form.azimuth_deg < 0 || form.azimuth_deg > 360) return;
+  const handleAddArray = () => {
     upsertSettings.mutate({
-      ...form,
-      pv_meter_id: form.pv_meter_id || null,
+      name: `Anlage ${settingsList.length + 1}`,
+      peak_power_kwp: 10,
+      tilt_deg: 30,
+      azimuth_deg: 180,
+      performance_ratio: 0.8,
+      pv_meter_id: null,
+      is_active: true,
     });
   };
 
@@ -170,6 +153,11 @@ export function PvForecastSection({ locationId }: PvForecastSectionProps) {
                 <CardTitle className="flex items-center gap-2">
                   <Sun className="h-5 w-5 text-energy-strom" />
                   {T("pv.sectionTitle")}
+                  {settingsList.length > 1 && (
+                    <Badge variant="secondary" className="text-xs">
+                      {settingsList.length} {T("pv.arrays")}
+                    </Badge>
+                  )}
                   <HelpTooltip text={T("tooltip.pvForecast")} />
                 </CardTitle>
                 <CardDescription>{T("pv.sectionDesc")}</CardDescription>
@@ -181,50 +169,30 @@ export function PvForecastSection({ locationId }: PvForecastSectionProps) {
         <CollapsibleContent>
           <CardContent className="space-y-6">
             {isAdmin && (
-              <div className="border rounded-lg p-4 space-y-4">
-                <h4 className="font-medium text-sm">{T("pv.settings")}</h4>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <div>
-                    <Label className="flex items-center gap-1">{T("pv.peakPower")} <HelpTooltip text={T("tooltip.pvPeakPower")} iconSize={12} /></Label>
-                    <Input type="number" value={form.peak_power_kwp} onChange={(e) => setForm({ ...form, peak_power_kwp: Number(e.target.value) })} />
-                  </div>
-                  <div>
-                    <Label className="flex items-center gap-1">{T("pv.tilt")} <HelpTooltip text={T("tooltip.pvTilt")} iconSize={12} /></Label>
-                    <Input type="number" min={0} max={90} value={form.tilt_deg} onChange={(e) => {
-                      const value = Number(e.target.value);
-                      setForm({ ...form, tilt_deg: Math.min(90, Math.max(0, value)) });
-                    }} />
-                  </div>
-                  <div>
-                    <Label className="flex items-center gap-1">{T("pv.azimuth")} <HelpTooltip text={T("tooltip.pvAzimuth")} iconSize={12} /></Label>
-                    <Input type="number" min={0} max={360} value={form.azimuth_deg} onChange={(e) => {
-                      const value = Number(e.target.value);
-                      setForm({ ...form, azimuth_deg: Math.min(360, Math.max(0, value)) });
-                    }} />
-                  </div>
-                  <div>
-                    <Label className="flex items-center gap-1">{T("pv.meter")} <HelpTooltip text={T("tooltip.pvMeter")} iconSize={12} /></Label>
-                    <Select value={form.pv_meter_id || "__none__"} onValueChange={(value) => setForm({ ...form, pv_meter_id: value === "__none__" ? "" : value })}>
-                      <SelectTrigger><SelectValue placeholder="Optional" /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="__none__">{T("pv.none")}</SelectItem>
-                        {solarMeters.map((meter) => (
-                          <SelectItem key={meter.id} value={meter.id}>{meter.name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
+              <div className="space-y-4">
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Switch checked={form.is_active} onCheckedChange={(value) => setForm({ ...form, is_active: value })} />
-                    <Label>{T("pv.forecastActive")}</Label>
-                  </div>
-                  <Button onClick={handleSave} disabled={upsertSettings.isPending || settingsLoading} size="sm">
-                    <Save className="h-4 w-4 mr-1" />
-                    {T("common.save")}
+                  <h4 className="font-medium text-sm">{T("pv.settings")}</h4>
+                  <Button variant="outline" size="sm" onClick={handleAddArray} disabled={upsertSettings.isPending}>
+                    <Plus className="h-4 w-4 mr-1" />
+                    {T("pv.addArray")}
                   </Button>
                 </div>
+
+                {settingsList.map((arraySettings, idx) => (
+                  <PvArraySettingsCard
+                    key={arraySettings.id}
+                    initial={arraySettings}
+                    solarMeters={solarMeters}
+                    index={idx}
+                    saving={upsertSettings.isPending}
+                    onSave={(values) => upsertSettings.mutate(values)}
+                    onDelete={settingsList.length > 1 ? () => deleteSettings.mutate(arraySettings.id) : undefined}
+                  />
+                ))}
+
+                {settingsList.length === 0 && !settingsLoading && (
+                  <p className="text-sm text-muted-foreground text-center py-4">{T("pv.noArraysYet")}</p>
+                )}
               </div>
             )}
 
@@ -249,6 +217,17 @@ export function PvForecastSection({ locationId }: PvForecastSectionProps) {
                     {typeof forecast.summary.ai_correction_factor === "number" && <p className="text-xs text-muted-foreground">KI-Faktor {forecast.summary.ai_correction_factor.toFixed(2)}</p>}
                   </div>
                 </div>
+
+                {/* Array badges */}
+                {forecast.arrays && forecast.arrays.length > 1 && (
+                  <div className="flex flex-wrap gap-2">
+                    {forecast.arrays.map((arr, idx) => (
+                      <Badge key={idx} variant="outline" className="text-xs">
+                        {arr.name} · {arr.peak_power_kwp} kWp · {arr.azimuth_deg}°
+                      </Badge>
+                    ))}
+                  </div>
+                )}
 
                 {(weatherSource || dwdReference) && (
                   <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-3">

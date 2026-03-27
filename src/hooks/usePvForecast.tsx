@@ -45,10 +45,19 @@ export interface PvForecastValidationProfile extends PvForecastWeatherSource {
   hourly_cloud_cover_today: PvForecastCloudCoverEntry[];
 }
 
+export interface PvArrayForecast {
+  name: string;
+  peak_power_kwp: number;
+  tilt_deg: number;
+  azimuth_deg: number;
+  hourly: PvHourlyEntry[];
+}
+
 export interface PvForecast {
   location: { name: string; city: string | null };
   settings: { peak_power_kwp: number; tilt_deg: number; azimuth_deg: number };
   hourly: PvHourlyEntry[];
+  arrays?: PvArrayForecast[];
   summary: {
     today_total_kwh: number;
     tomorrow_total_kwh: number;
@@ -70,6 +79,7 @@ export interface PvForecastSettings {
   id: string;
   tenant_id: string;
   location_id: string;
+  name: string;
   pv_meter_id: string | null;
   peak_power_kwp: number;
   tilt_deg: number;
@@ -85,7 +95,6 @@ function toLocalDateStr(date: Date): string {
 }
 
 function getDisplayValue(entry: PvHourlyEntry) {
-  // KI-Korrekturfaktor temporär deaktiviert – nur Rohmodell-Prognose anzeigen
   return entry.estimated_kwh;
 }
 
@@ -254,7 +263,6 @@ export function usePvForecast(locationId: string | null) {
       if (isDemo) return buildDemoForecast(locationId);
 
       if (locationId) {
-        // Check if location has coordinates before calling the edge function
         const { data: loc } = await supabase
           .from("locations")
           .select("latitude,longitude")
@@ -279,9 +287,12 @@ export function usePvForecast(locationId: string | null) {
       if (settingsError) throw settingsError;
       if (!allSettings || allSettings.length === 0) return null;
 
+      // Deduplicate location_ids (multiple arrays per location now)
+      const uniqueLocationIds = [...new Set(allSettings.map((s) => s.location_id))];
+
       const results = await Promise.allSettled(
-        allSettings.map((setting) =>
-          supabase.functions.invoke("pv-forecast", { body: { location_id: setting.location_id } }).then((response) => {
+        uniqueLocationIds.map((locId) =>
+          supabase.functions.invoke("pv-forecast", { body: { location_id: locId } }).then((response) => {
             if (response.error) throw response.error;
             return response.data as PvForecast;
           })
@@ -308,7 +319,7 @@ export function usePvForecastSettings(locationId: string | null) {
   const tenantId = tenant?.id ?? null;
   const queryClient = useQueryClient();
 
-  const { data: settings, isLoading } = useQuery({
+  const { data: settingsList, isLoading } = useQuery({
     queryKey: ["pv-forecast-settings", locationId],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -316,15 +327,17 @@ export function usePvForecastSettings(locationId: string | null) {
         .select("*")
         .eq("tenant_id", tenantId!)
         .eq("location_id", locationId!)
-        .maybeSingle();
+        .order("created_at", { ascending: true });
       if (error) throw error;
-      return data as PvForecastSettings | null;
+      return (data ?? []) as PvForecastSettings[];
     },
     enabled: !!tenantId && !!locationId,
   });
 
   const upsertSettings = useMutation({
     mutationFn: async (values: {
+      id?: string;
+      name: string;
       peak_power_kwp: number;
       tilt_deg: number;
       azimuth_deg: number;
@@ -334,21 +347,18 @@ export function usePvForecastSettings(locationId: string | null) {
     }) => {
       if (!locationId || !tenantId) throw new Error("Missing context");
 
-      const currentSettings = queryClient.getQueryData<PvForecastSettings | null>(["pv-forecast-settings", locationId]);
+      const { id, ...rest } = values;
 
-      if (currentSettings?.id) {
+      if (id) {
         const { error } = await supabase
           .from("pv_forecast_settings")
-          .update(values)
-          .eq("id", currentSettings.id);
+          .update(rest)
+          .eq("id", id);
         if (error) throw error;
       } else {
         const { error } = await supabase
           .from("pv_forecast_settings")
-          .upsert(
-            { ...values, location_id: locationId, tenant_id: tenantId },
-            { onConflict: "tenant_id,location_id" }
-          );
+          .insert({ ...rest, location_id: locationId, tenant_id: tenantId });
         if (error) throw error;
       }
     },
@@ -361,20 +371,23 @@ export function usePvForecastSettings(locationId: string | null) {
   });
 
   const deleteSettings = useMutation({
-    mutationFn: async () => {
-      if (!settings?.id) return;
+    mutationFn: async (settingsId: string) => {
       const { error } = await supabase
         .from("pv_forecast_settings")
         .delete()
-        .eq("id", settings.id);
+        .eq("id", settingsId);
       if (error) throw error;
     },
     onSuccess: () => {
-      toast.success("PV-Einstellungen entfernt");
+      toast.success("PV-Teilanlage entfernt");
       queryClient.invalidateQueries({ queryKey: ["pv-forecast-settings", locationId] });
       queryClient.invalidateQueries({ queryKey: ["pv-forecast"] });
     },
+    onError: (error) => toast.error("Fehler: " + error.message),
   });
 
-  return { settings: settings ?? null, isLoading, upsertSettings, deleteSettings };
+  // Backward compatibility: also expose single "settings" for simpler consumers
+  const settings = settingsList && settingsList.length > 0 ? settingsList[0] : null;
+
+  return { settings, settingsList: settingsList ?? [], isLoading, upsertSettings, deleteSettings };
 }
