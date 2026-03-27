@@ -32,6 +32,7 @@ export default function EnergyChartConfig({
   const relevantMeters = useMemo(() => {
     return meters
       .filter((m) => !m.is_archived)
+      .filter((m) => m.is_main_meter)
       .filter((m) => !locationId || m.location_id === locationId);
   }, [meters, locationId]);
 
