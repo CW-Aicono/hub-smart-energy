@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { ChevronDown, ChevronRight, Euro, Plus, Pencil, Trash2, Zap } from "lucide-react";
+import { ChevronDown, ChevronRight, Euro, Plus, Pencil, Trash2, Zap, ArrowDownToLine, ArrowUpFromLine } from "lucide-react";
 import { HelpTooltip } from "@/components/ui/help-tooltip";
 import { useTranslation } from "@/hooks/useTranslation";
 import { useEnergyPrices, EnergyPrice } from "@/hooks/useEnergyPrices";
@@ -192,6 +192,7 @@ export function EnergyPriceManagement({ locationId }: EnergyPriceManagementProps
                           <div className="flex items-center gap-1.5">
                             {T(ENERGY_TYPE_KEYS[p.energy_type] || `ep.${p.energy_type}`)}
                             {p.is_dynamic && <Badge variant="secondary" className="text-[10px] px-1.5 py-0 gap-0.5"><Zap className="h-2.5 w-2.5" />{T("ep.dynamic")}</Badge>}
+                            {p.direction === "feed_in" && <Badge variant="outline" className="text-[10px] px-1.5 py-0 gap-0.5 text-green-600 border-green-300"><ArrowUpFromLine className="h-2.5 w-2.5" />{T("ep.feedIn")}</Badge>}
                           </div>
                         </TableCell>
                         <TableCell>
