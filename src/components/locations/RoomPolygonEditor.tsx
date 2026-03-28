@@ -35,6 +35,7 @@ export function RoomPolygonEditor({ floorId, floorPlanUrl }: RoomPolygonEditorPr
   const [saving, setSaving] = useState(false);
   const [imgLoaded, setImgLoaded] = useState(false);
   const [overlayStyle, setOverlayStyle] = useState<React.CSSProperties>({});
+  const containerRef = useRef<HTMLDivElement>(null);
 
   // Calculate the actual rendered image area within the object-contain container
   const updateOverlayStyle = useCallback(() => {
