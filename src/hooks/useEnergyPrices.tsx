@@ -61,6 +61,7 @@ export function useEnergyPrices(locationId?: string) {
     is_dynamic?: boolean;
     spot_markup_per_unit?: number;
     meter_id?: string | null;
+    direction?: EnergyPriceDirection;
   }) => {
     if (!ready) return false;
     const t = getT();
