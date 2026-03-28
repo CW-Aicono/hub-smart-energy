@@ -259,6 +259,20 @@ export function EnergyPriceManagement({ locationId }: EnergyPriceManagementProps
               </Select>
             </div>
 
+            {/* Direction: Bezug vs. Einspeisung */}
+            <div>
+              <Label>{T("ep.direction")}</Label>
+              <Select value={formData.direction} onValueChange={(v) => setFormData({ ...formData, direction: v as "consumption" | "feed_in" })}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="consumption">{T("ep.directionConsumption")}</SelectItem>
+                  <SelectItem value="feed_in">{T("ep.directionFeedIn")}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
             {/* Meter assignment */}
             <div>
               <Label>{T("ep.meterAssignment")}</Label>
