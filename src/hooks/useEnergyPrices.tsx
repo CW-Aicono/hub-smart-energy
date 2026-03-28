@@ -5,6 +5,8 @@ import { useTenantQuery } from "./useTenantQuery";
 import { toast } from "@/hooks/use-toast";
 import { getT } from "@/i18n/getT";
 
+export type EnergyPriceDirection = "consumption" | "feed_in";
+
 export interface EnergyPrice {
   id: string;
   location_id: string;
@@ -20,6 +22,7 @@ export interface EnergyPrice {
   is_dynamic: boolean;
   spot_markup_per_unit: number;
   meter_id: string | null;
+  direction: EnergyPriceDirection;
 }
 
 export function useEnergyPrices(locationId?: string) {
