@@ -4962,6 +4962,7 @@ export const translations = {
 
   // ── Cost Overview ─────────────────────────────────────────────────────────
   "cost.costs": { de: "Kosten", en: "Costs", es: "Costes", nl: "Kosten" },
+  "cost.revenue": { de: "Erträge", en: "Revenue", es: "Ingresos", nl: "Opbrengsten" },
   "cost.prevPeriod": { de: "Vorperiode", en: "Previous Period", es: "Periodo anterior", nl: "Vorige periode" },
   "cost.difference": { de: "Differenz", en: "Difference", es: "Diferencia", nl: "Verschil" },
   "cost.less": { de: "weniger", en: "less", es: "menos", nl: "minder" },
@@ -5534,7 +5535,11 @@ export const translations = {
 
   // ── EnergyPrice section titles ────────────────────────────────────────────
   "ep.sectionTitle": { de: "Energiepreise", en: "Energy Prices", es: "Precios de energía", nl: "Energieprijzen" },
-  "ep.sectionDesc": { de: "Preise pro Energieträger und Hauptzähler für die Kostenberechnung", en: "Prices per energy type and main meter for cost calculation", es: "Precios por tipo de energía y contador principal para el cálculo de costos", nl: "Prijzen per energiedrager en hoofdmeter voor kostenberekening" },
+  "ep.sectionDesc": { de: "Preise pro Energieträger für die Kosten- und Ertragsberechnung", en: "Prices per energy type for cost and revenue calculation", es: "Precios por tipo de energía para cálculo de costos e ingresos", nl: "Prijzen per energiedrager voor kosten- en opbrengstberekening" },
+  "ep.direction": { de: "Richtung", en: "Direction", es: "Dirección", nl: "Richting" },
+  "ep.directionConsumption": { de: "Bezug (Kosten)", en: "Consumption (Cost)", es: "Consumo (Costo)", nl: "Verbruik (Kosten)" },
+  "ep.directionFeedIn": { de: "Einspeisung (Ertrag)", en: "Feed-in (Revenue)", es: "Inyección (Ingreso)", nl: "Teruglevering (Opbrengst)" },
+  "ep.feedIn": { de: "Einspeisung", en: "Feed-in", es: "Inyección", nl: "Teruglevering" },
   "ep.addPrice": { de: "Preis hinzufügen", en: "Add Price", es: "Añadir precio", nl: "Prijs toevoegen" },
   "ep.spotPlus": { de: "Spot +", en: "Spot +", es: "Spot +", nl: "Spot +" },
   "ep.meter": { de: "Zähler", en: "Meter", es: "Contador", nl: "Meter" },

@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { ChevronDown, ChevronRight, Euro, Plus, Pencil, Trash2, Zap } from "lucide-react";
+import { ChevronDown, ChevronRight, Euro, Plus, Pencil, Trash2, Zap, ArrowDownToLine, ArrowUpFromLine } from "lucide-react";
 import { HelpTooltip } from "@/components/ui/help-tooltip";
 import { useTranslation } from "@/hooks/useTranslation";
 import { useEnergyPrices, EnergyPrice } from "@/hooks/useEnergyPrices";
@@ -57,6 +57,7 @@ export function EnergyPriceManagement({ locationId }: EnergyPriceManagementProps
     is_dynamic: false,
     spot_markup_per_unit: "",
     meter_id: "" as string,
+    direction: "consumption" as "consumption" | "feed_in",
   });
 
   const openAddDialog = () => {
@@ -68,6 +69,7 @@ export function EnergyPriceManagement({ locationId }: EnergyPriceManagementProps
       is_dynamic: false,
       spot_markup_per_unit: "",
       meter_id: "",
+      direction: "consumption",
     });
     setDialogOpen(true);
   };
@@ -81,6 +83,7 @@ export function EnergyPriceManagement({ locationId }: EnergyPriceManagementProps
       is_dynamic: price.is_dynamic ?? false,
       spot_markup_per_unit: price.spot_markup_per_unit ? String(price.spot_markup_per_unit) : "",
       meter_id: price.meter_id ?? "",
+      direction: price.direction ?? "consumption",
     });
     setDialogOpen(true);
   };
@@ -108,6 +111,7 @@ export function EnergyPriceManagement({ locationId }: EnergyPriceManagementProps
         is_dynamic: isDynamic,
         spot_markup_per_unit: isDynamic ? markupValue : 0,
         meter_id: meterId,
+        direction: formData.direction,
       });
     } else {
       await addPrice({
@@ -120,6 +124,7 @@ export function EnergyPriceManagement({ locationId }: EnergyPriceManagementProps
         is_dynamic: isDynamic,
         spot_markup_per_unit: isDynamic ? markupValue : 0,
         meter_id: meterId,
+        direction: formData.direction,
       });
     }
     setDialogOpen(false);
@@ -187,6 +192,7 @@ export function EnergyPriceManagement({ locationId }: EnergyPriceManagementProps
                           <div className="flex items-center gap-1.5">
                             {T(ENERGY_TYPE_KEYS[p.energy_type] || `ep.${p.energy_type}`)}
                             {p.is_dynamic && <Badge variant="secondary" className="text-[10px] px-1.5 py-0 gap-0.5"><Zap className="h-2.5 w-2.5" />{T("ep.dynamic")}</Badge>}
+                            {p.direction === "feed_in" && <Badge variant="outline" className="text-[10px] px-1.5 py-0 gap-0.5 text-green-600 border-green-300"><ArrowUpFromLine className="h-2.5 w-2.5" />{T("ep.feedIn")}</Badge>}
                           </div>
                         </TableCell>
                         <TableCell>
@@ -249,6 +255,20 @@ export function EnergyPriceManagement({ locationId }: EnergyPriceManagementProps
                   {Object.entries(ENERGY_TYPE_KEYS).map(([key, tKey]) => (
                     <SelectItem key={key} value={key}>{T(tKey)}</SelectItem>
                   ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Direction: Bezug vs. Einspeisung */}
+            <div>
+              <Label>{T("ep.direction")}</Label>
+              <Select value={formData.direction} onValueChange={(v) => setFormData({ ...formData, direction: v as "consumption" | "feed_in" })}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="consumption">{T("ep.directionConsumption")}</SelectItem>
+                  <SelectItem value="feed_in">{T("ep.directionFeedIn")}</SelectItem>
                 </SelectContent>
               </Select>
             </div>

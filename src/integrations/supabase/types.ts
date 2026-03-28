@@ -1417,6 +1417,7 @@ export type Database = {
         Row: {
           created_at: string
           currency: string
+          direction: string
           energy_type: string
           id: string
           is_dynamic: boolean
@@ -1433,6 +1434,7 @@ export type Database = {
         Insert: {
           created_at?: string
           currency?: string
+          direction?: string
           energy_type?: string
           id?: string
           is_dynamic?: boolean
@@ -1449,6 +1451,7 @@ export type Database = {
         Update: {
           created_at?: string
           currency?: string
+          direction?: string
           energy_type?: string
           id?: string
           is_dynamic?: boolean

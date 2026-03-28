@@ -5,7 +5,7 @@ import { useEnergyData } from "@/hooks/useEnergyData";
 import { useEnergyPrices } from "@/hooks/useEnergyPrices";
 import { useMeters } from "@/hooks/useMeters";
 import { useDashboardFilter, TimePeriod } from "@/hooks/useDashboardFilter";
-import { Euro, TrendingDown, TrendingUp, ArrowDownRight } from "lucide-react";
+import { Euro, TrendingDown, TrendingUp, ArrowDownRight, ArrowUpFromLine } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { startOfDay, startOfWeek, startOfMonth, startOfQuarter, startOfYear, endOfWeek, endOfMonth, endOfQuarter, endOfYear, subDays, subWeeks, subMonths, subQuarters, subYears, format } from "date-fns";
 import { useWeekStartDay } from "@/hooks/useWeekStartDay";
@@ -96,23 +96,25 @@ const CostOverview = ({ locationId }: CostOverviewProps) => {
     return map;
   }, [meters]);
 
-  const priceLookup = useMemo(() => {
-    const lookup = new Map<string, number>();
+  const { costLookup, revenueLookup } = useMemo(() => {
+    const cLookup = new Map<string, number>();
+    const rLookup = new Map<string, number>();
     const today = new Date().toISOString().split("T")[0];
     prices.forEach((p) => {
       if (p.valid_from <= today && (!p.valid_until || p.valid_until >= today)) {
         const key = `${p.location_id}:${p.energy_type}`;
-        if (!lookup.has(key)) {
+        const target = (p as any).direction === "feed_in" ? rLookup : cLookup;
+        if (!target.has(key)) {
           if (p.is_dynamic && currentSpotPrice) {
             const spotEurKwh = currentSpotPrice.price_eur_mwh / 1000;
-            lookup.set(key, spotEurKwh + Number(p.spot_markup_per_unit));
+            target.set(key, spotEurKwh + Number(p.spot_markup_per_unit));
           } else if (!p.is_dynamic) {
-            lookup.set(key, Number(p.price_per_unit));
+            target.set(key, Number(p.price_per_unit));
           }
         }
       }
     });
-    return lookup;
+    return { costLookup: cLookup, revenueLookup: rLookup };
   }, [prices, currentSpotPrice]);
 
   // DB-backed period sums for current + previous period
@@ -182,6 +184,7 @@ const CostOverview = ({ locationId }: CostOverviewProps) => {
 
     let currentCost = 0;
     let prevCost = 0;
+    let currentRevenue = 0;
     let currentConsumption = 0;
 
     readings.forEach((r) => {
@@ -195,13 +198,15 @@ const CostOverview = ({ locationId }: CostOverviewProps) => {
       }
 
       const priceKey = `${meta.location_id}:${meta.energy_type}`;
-      const price = priceLookup.get(priceKey) || 0;
+      const costPrice = costLookup.get(priceKey) || 0;
+      const revenuePrice = revenueLookup.get(priceKey) || 0;
 
       if (date >= start) {
-        currentCost += consumptionVal * price;
+        currentCost += consumptionVal * costPrice;
+        currentRevenue += consumptionVal * revenuePrice;
         currentConsumption += consumptionVal;
       } else if (selectedPeriod !== "all" && date >= prevStart && date <= prevEnd) {
-        prevCost += consumptionVal * price;
+        prevCost += consumptionVal * costPrice;
       }
     });
 
@@ -212,7 +217,8 @@ const CostOverview = ({ locationId }: CostOverviewProps) => {
       const meta = meterMap[m.id];
       if (!meta) return;
       const priceKey = `${meta.location_id}:${meta.energy_type}`;
-      const price = priceLookup.get(priceKey) || 0;
+      const costPrice = costLookup.get(priceKey) || 0;
+      const revenuePrice = revenueLookup.get(priceKey) || 0;
 
       const toConsumption = (rawVal: number) => {
         if (meta.energy_type === "gas" && meta.unit === "m³") {
@@ -234,7 +240,8 @@ const CostOverview = ({ locationId }: CostOverviewProps) => {
       }
       if (currentRaw != null && currentRaw > 0) {
         const c = toConsumption(currentRaw);
-        currentCost += c * price;
+        currentCost += c * costPrice;
+        currentRevenue += c * revenuePrice;
         currentConsumption += c;
       }
 
@@ -242,24 +249,24 @@ const CostOverview = ({ locationId }: CostOverviewProps) => {
       if (selectedPeriod !== "all") {
         const prevRaw = dbPrevSums?.[m.id] ?? 0;
         if (prevRaw > 0) {
-          prevCost += toConsumption(prevRaw) * price;
+          prevCost += toConsumption(prevRaw) * costPrice;
         }
       }
     });
 
     const diff = prevCost - currentCost;
     const diffPercent = prevCost > 0 ? Math.round((diff / prevCost) * 1000) / 10 : 0;
-    const hasPrices = priceLookup.size > 0;
+    const hasPrices = costLookup.size > 0 || revenueLookup.size > 0;
 
-    return { currentCost, prevCost, diff, diffPercent, hasPrices, currentConsumption };
-  }, [readings, meterMap, priceLookup, selectedPeriod, livePeriodTotals, meters, locationId, dbCurrentSums, dbPrevSums]);
+    return { currentCost, prevCost, diff, diffPercent, hasPrices, currentConsumption, currentRevenue };
+  }, [readings, meterMap, costLookup, revenueLookup, selectedPeriod, livePeriodTotals, meters, locationId, dbCurrentSums, dbPrevSums]);
 
   const loading = dataLoading || pricesLoading;
 
   if (loading) {
     return (
-      <div className="grid gap-4 md:grid-cols-3">
-        {[1, 2, 3].map((i) => (
+      <div className="grid gap-4 md:grid-cols-4">
+        {[1, 2, 3, 4].map((i) => (
           <Card key={i}><CardContent className="p-6"><Skeleton className="h-16" /></CardContent></Card>
         ))}
       </div>
@@ -269,12 +276,21 @@ const CostOverview = ({ locationId }: CostOverviewProps) => {
   const formatCurrency = (value: number) =>
     value.toLocaleString("de-DE", { style: "currency", currency: "EUR", minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+  const hasRevenue = revenueLookup.size > 0;
+
   const kpis = [
     {
       label: T("cost.costs"),
       value: costData.hasPrices && costData.currentCost > 0 ? formatCurrency(costData.currentCost) : "–",
       icon: Euro,
       subtitle: T(PERIOD_LABEL_KEYS[selectedPeriod]),
+    },
+    {
+      label: T("cost.revenue"),
+      value: hasRevenue && costData.currentRevenue > 0 ? formatCurrency(costData.currentRevenue) : "–",
+      icon: ArrowUpFromLine,
+      subtitle: T(PERIOD_LABEL_KEYS[selectedPeriod]),
+      positive: costData.currentRevenue > 0,
     },
     {
       label: T("cost.prevPeriod"),
@@ -294,7 +310,7 @@ const CostOverview = ({ locationId }: CostOverviewProps) => {
   ];
 
   return (
-    <div className="grid gap-4 md:grid-cols-3">
+    <div className="grid gap-4 md:grid-cols-4">
       {kpis.map((kpi) => (
         <Card key={kpi.label}>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
