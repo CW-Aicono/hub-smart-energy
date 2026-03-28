@@ -35,6 +35,7 @@ export function RoomPolygonEditor({ floorId, floorPlanUrl }: RoomPolygonEditorPr
   const [saving, setSaving] = useState(false);
   const [imgLoaded, setImgLoaded] = useState(false);
   const [overlayStyle, setOverlayStyle] = useState<React.CSSProperties>({});
+  const containerRef = useRef<HTMLDivElement>(null);
 
   // Calculate the actual rendered image area within the object-contain container
   const updateOverlayStyle = useCallback(() => {
@@ -73,7 +74,16 @@ export function RoomPolygonEditor({ floorId, floorPlanUrl }: RoomPolygonEditorPr
   useEffect(() => {
     if (imgLoaded) updateOverlayStyle();
     window.addEventListener('resize', updateOverlayStyle);
-    return () => window.removeEventListener('resize', updateOverlayStyle);
+
+    const observer = new ResizeObserver(() => {
+      updateOverlayStyle();
+    });
+    if (containerRef.current) observer.observe(containerRef.current);
+
+    return () => {
+      window.removeEventListener('resize', updateOverlayStyle);
+      observer.disconnect();
+    };
   }, [imgLoaded, updateOverlayStyle]);
 
   const calcPos = useCallback((e: React.MouseEvent) => {
@@ -416,6 +426,7 @@ export function RoomPolygonEditor({ floorId, floorPlanUrl }: RoomPolygonEditorPr
 
       {/* Floor plan with polygon drawing */}
       <div
+        ref={containerRef}
         className="flex-1 relative border rounded-lg overflow-hidden bg-muted/20 min-h-0"
       >
         <FloorPlanImage
