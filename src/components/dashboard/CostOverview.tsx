@@ -265,8 +265,8 @@ const CostOverview = ({ locationId }: CostOverviewProps) => {
 
   if (loading) {
     return (
-      <div className="grid gap-4 md:grid-cols-3">
-        {[1, 2, 3].map((i) => (
+      <div className="grid gap-4 md:grid-cols-4">
+        {[1, 2, 3, 4].map((i) => (
           <Card key={i}><CardContent className="p-6"><Skeleton className="h-16" /></CardContent></Card>
         ))}
       </div>
@@ -276,12 +276,21 @@ const CostOverview = ({ locationId }: CostOverviewProps) => {
   const formatCurrency = (value: number) =>
     value.toLocaleString("de-DE", { style: "currency", currency: "EUR", minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+  const hasRevenue = revenueLookup.size > 0;
+
   const kpis = [
     {
       label: T("cost.costs"),
       value: costData.hasPrices && costData.currentCost > 0 ? formatCurrency(costData.currentCost) : "–",
       icon: Euro,
       subtitle: T(PERIOD_LABEL_KEYS[selectedPeriod]),
+    },
+    {
+      label: T("cost.revenue"),
+      value: hasRevenue && costData.currentRevenue > 0 ? formatCurrency(costData.currentRevenue) : "–",
+      icon: ArrowUpFromLine,
+      subtitle: T(PERIOD_LABEL_KEYS[selectedPeriod]),
+      positive: costData.currentRevenue > 0,
     },
     {
       label: T("cost.prevPeriod"),
@@ -301,7 +310,7 @@ const CostOverview = ({ locationId }: CostOverviewProps) => {
   ];
 
   return (
-    <div className="grid gap-4 md:grid-cols-3">
+    <div className="grid gap-4 md:grid-cols-4">
       {kpis.map((kpi) => (
         <Card key={kpi.label}>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
