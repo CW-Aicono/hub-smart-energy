@@ -426,6 +426,7 @@ export function RoomPolygonEditor({ floorId, floorPlanUrl }: RoomPolygonEditorPr
 
       {/* Floor plan with polygon drawing */}
       <div
+        ref={containerRef}
         className="flex-1 relative border rounded-lg overflow-hidden bg-muted/20 min-h-0"
       >
         <FloorPlanImage
