@@ -57,6 +57,7 @@ export function EnergyPriceManagement({ locationId }: EnergyPriceManagementProps
     is_dynamic: false,
     spot_markup_per_unit: "",
     meter_id: "" as string,
+    direction: "consumption" as "consumption" | "feed_in",
   });
 
   const openAddDialog = () => {
@@ -68,6 +69,7 @@ export function EnergyPriceManagement({ locationId }: EnergyPriceManagementProps
       is_dynamic: false,
       spot_markup_per_unit: "",
       meter_id: "",
+      direction: "consumption",
     });
     setDialogOpen(true);
   };
@@ -81,6 +83,7 @@ export function EnergyPriceManagement({ locationId }: EnergyPriceManagementProps
       is_dynamic: price.is_dynamic ?? false,
       spot_markup_per_unit: price.spot_markup_per_unit ? String(price.spot_markup_per_unit) : "",
       meter_id: price.meter_id ?? "",
+      direction: price.direction ?? "consumption",
     });
     setDialogOpen(true);
   };
@@ -108,6 +111,7 @@ export function EnergyPriceManagement({ locationId }: EnergyPriceManagementProps
         is_dynamic: isDynamic,
         spot_markup_per_unit: isDynamic ? markupValue : 0,
         meter_id: meterId,
+        direction: formData.direction,
       });
     } else {
       await addPrice({
@@ -120,6 +124,7 @@ export function EnergyPriceManagement({ locationId }: EnergyPriceManagementProps
         is_dynamic: isDynamic,
         spot_markup_per_unit: isDynamic ? markupValue : 0,
         meter_id: meterId,
+        direction: formData.direction,
       });
     }
     setDialogOpen(false);
