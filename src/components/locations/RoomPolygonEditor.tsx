@@ -74,7 +74,16 @@ export function RoomPolygonEditor({ floorId, floorPlanUrl }: RoomPolygonEditorPr
   useEffect(() => {
     if (imgLoaded) updateOverlayStyle();
     window.addEventListener('resize', updateOverlayStyle);
-    return () => window.removeEventListener('resize', updateOverlayStyle);
+
+    const observer = new ResizeObserver(() => {
+      updateOverlayStyle();
+    });
+    if (containerRef.current) observer.observe(containerRef.current);
+
+    return () => {
+      window.removeEventListener('resize', updateOverlayStyle);
+      observer.disconnect();
+    };
   }, [imgLoaded, updateOverlayStyle]);
 
   const calcPos = useCallback((e: React.MouseEvent) => {
