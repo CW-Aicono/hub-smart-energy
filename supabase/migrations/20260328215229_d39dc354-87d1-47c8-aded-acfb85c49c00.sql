@@ -1,0 +1,1 @@
+ALTER TABLE public.energy_prices ADD COLUMN IF NOT EXISTS direction text NOT NULL DEFAULT 'consumption';
