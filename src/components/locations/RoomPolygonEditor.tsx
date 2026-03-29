@@ -34,6 +34,7 @@ export function RoomPolygonEditor({ floorId, floorPlanUrl }: RoomPolygonEditorPr
   const [draggingPointIdx, setDraggingPointIdx] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [imgLoaded, setImgLoaded] = useState(false);
+  const [showDrawingHint, setShowDrawingHint] = useState(false);
   const [overlayStyle, setOverlayStyle] = useState<React.CSSProperties>({});
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -102,6 +103,8 @@ export function RoomPolygonEditor({ floorId, floorPlanUrl }: RoomPolygonEditorPr
     setDrawingName("");
     setSelectedRoom(null);
     setEditingRoom(null);
+    setShowDrawingHint(true);
+    setTimeout(() => setShowDrawingHint(false), 5000);
   };
 
   const cancelDrawing = () => {
@@ -512,7 +515,7 @@ export function RoomPolygonEditor({ floorId, floorPlanUrl }: RoomPolygonEditorPr
           )}
 
           {/* Drawing hint */}
-          {isDrawing && drawingPoints.length === 0 && (
+          {isDrawing && drawingPoints.length === 0 && showDrawingHint && (
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
               <div className="bg-card/90 backdrop-blur-sm border rounded-lg px-4 py-3 text-center">
                 <DoorOpen className="h-6 w-6 mx-auto mb-2 text-muted-foreground" />
