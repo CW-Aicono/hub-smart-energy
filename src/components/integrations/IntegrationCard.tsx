@@ -14,7 +14,7 @@ import { LocationIntegration } from "@/hooks/useIntegrations";
 import { SensorsDialog } from "./SensorsDialog";
 import { MiniserverStatus } from "./MiniserverStatus";
 import { EditIntegrationDialog } from "./EditIntegrationDialog";
-import { getGatewayDefinition } from "@/lib/gatewayRegistry";
+import { getGatewayDefinition, getEdgeFunctionName } from "@/lib/gatewayRegistry";
 import { LoxoneFirmwareSection } from "./LoxoneFirmwareSection";
 import { SchneiderSetupInfo } from "./SchneiderSetupInfo";
 import { supabase } from "@/integrations/supabase/client";
