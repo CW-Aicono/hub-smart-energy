@@ -26,21 +26,27 @@ serve(async (req) => {
     const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-    const authClient = createClient(supabaseUrl, supabaseAnonKey, {
-      global: { headers: { Authorization: authHeader } },
-    });
     const token = authHeader.replace("Bearer ", "");
-    const { data: { user }, error: userError } = await authClient.auth.getUser(token);
-    if (userError || !user) {
-      return new Response(JSON.stringify({ success: false, error: "Ungültiges Token" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-    }
-    const userId = user.id;
-
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    const isServiceInvocation = token === supabaseServiceKey;
 
-    const { data: profile } = await supabase.from("profiles").select("tenant_id").eq("user_id", userId).single();
-    if (!profile?.tenant_id) {
-      return new Response(JSON.stringify({ success: false, error: "Kein Mandant zugeordnet" }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    let tenantId: string | null = null;
+
+    if (!isServiceInvocation) {
+      const authClient = createClient(supabaseUrl, supabaseAnonKey, {
+        global: { headers: { Authorization: authHeader } },
+      });
+      const { data: { user }, error: userError } = await authClient.auth.getUser(token);
+      if (userError || !user) {
+        return new Response(JSON.stringify({ success: false, error: "Ungültiges Token" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+
+      const { data: profile } = await supabase.from("profiles").select("tenant_id").eq("user_id", user.id).single();
+      if (!profile?.tenant_id) {
+        return new Response(JSON.stringify({ success: false, error: "Kein Mandant zugeordnet" }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+
+      tenantId = profile.tenant_id;
     }
 
     const body = await req.json();
@@ -51,7 +57,7 @@ serve(async (req) => {
     if (liErr || !li) throw new Error("Standort-Integration nicht gefunden");
 
     // Verify tenant ownership
-    if ((li as any).location?.tenant_id !== profile.tenant_id) {
+    if (!isServiceInvocation && (li as any).location?.tenant_id !== tenantId) {
       return new Response(JSON.stringify({ success: false, error: "Zugriff verweigert" }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
