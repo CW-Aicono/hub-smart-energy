@@ -15,6 +15,7 @@ import { Activity, RefreshCw, Search, Gauge, Zap, Flame, Droplets, Thermometer }
 import { supabase } from "@/integrations/supabase/client";
 import { formatEnergy, formatGasDual } from "@/lib/formatEnergy";
 import { cn } from "@/lib/utils";
+import { getEdgeFunctionName } from "@/lib/gatewayRegistry";
 
 interface MeterLiveValue {
   meterId: string;
@@ -189,9 +190,25 @@ const LiveValues = () => {
       byIntegration.set(key, arr);
     });
 
+    // Fetch integration types for all relevant integration IDs
+    const integrationIds = Array.from(byIntegration.keys());
+    const { data: liRows } = await supabase
+      .from("location_integrations")
+      .select("id, integrations(type)")
+      .in("id", integrationIds);
+
+    const typeMap = new Map<string, string>();
+    if (liRows) {
+      for (const row of liRows) {
+        const intType = (row as any).integrations?.type;
+        if (intType) typeMap.set(row.id, intType);
+      }
+    }
+
     for (const [integrationId, intMeters] of byIntegration) {
       try {
-        const { data, error } = await supabase.functions.invoke("loxone-api", {
+        const edgeFunction = getEdgeFunctionName(typeMap.get(integrationId) || "");
+        const { data, error } = await supabase.functions.invoke(edgeFunction, {
           body: { locationIntegrationId: integrationId, action: "getSensors" },
         });
         if (error || !data?.success) continue;
