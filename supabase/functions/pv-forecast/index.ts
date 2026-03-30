@@ -215,7 +215,7 @@ serve(async (req) => {
     });
     const token = authHeader.replace("Bearer ", "");
     const { data: { user: claimsUser }, error: claimsError } = await authClient.auth.getUser(token);
-    if (claimsError || !claimsUser?.sub) {
+    if (claimsError || !claimsUser?.id) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
