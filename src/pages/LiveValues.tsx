@@ -503,7 +503,7 @@ const LiveValues = () => {
           ) : (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {filteredMeters.map((meter) => {
-                const { value, totalDay, totalMonth, totalYear, meterReading, meterReadingUnit, source, date } = getValue(meter);
+                const { value, unit: sensorUnit, totalDay, totalMonth, totalYear, meterReading, meterReadingUnit, source, date } = getValue(meter);
                 const config = ENERGY_TYPE_CONFIG[meter.energy_type] || ENERGY_TYPE_CONFIG.strom;
                 const Icon = config.icon;
                 const location = locations.find((l) => l.id === meter.location_id);
