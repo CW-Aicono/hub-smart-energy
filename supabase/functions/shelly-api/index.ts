@@ -72,17 +72,36 @@ serve(async (req) => {
 
     if (action === "getSensors") {
       await updateSyncStatus(supabase, locationIntegrationId, "syncing");
-      const res = await fetch(`${baseUrl}/device/all_status?auth_key=${config.auth_key}`);
-      if (!res.ok) {
+
+      // Fetch device list (contains user-assigned names) and status in parallel
+      const [listRes, statusRes] = await Promise.all([
+        fetch(`${baseUrl}/device/all?auth_key=${config.auth_key}`),
+        fetch(`${baseUrl}/device/all_status?auth_key=${config.auth_key}`),
+      ]);
+      if (!statusRes.ok) {
         await updateSyncStatus(supabase, locationIntegrationId, "error");
-        throw new Error(`Geräte konnten nicht geladen werden: HTTP ${res.status}`);
+        throw new Error(`Geräte konnten nicht geladen werden: HTTP ${statusRes.status}`);
       }
-      const data = await res.json();
-      const devices = data?.data?.devices_status || {};
+      const statusData = await statusRes.json();
+      const devices = statusData?.data?.devices_status || {};
+
+      // Build a map of deviceId → user-assigned name from /device/all
+      const deviceNameMap = new Map<string, string>();
+      if (listRes.ok) {
+        try {
+          const listData = await listRes.json();
+          const deviceList = listData?.data?.devices || [];
+          for (const d of deviceList) {
+            const id = d.id || d._id;
+            const name = d.name;
+            if (id && name) deviceNameMap.set(String(id), String(name));
+          }
+        } catch { /* ignore parse errors */ }
+      }
 
       const sensors: any[] = [];
       for (const [deviceId, deviceStatus] of Object.entries(devices as Record<string, any>)) {
-        const deviceName = deviceStatus?._dev_info?.name || deviceId;
+        const deviceName = deviceNameMap.get(deviceId) || deviceStatus?._dev_info?.name || deviceId;
         const model = deviceStatus?._dev_info?.model || "unknown";
 
         if (deviceStatus?.["em:0"]) {
