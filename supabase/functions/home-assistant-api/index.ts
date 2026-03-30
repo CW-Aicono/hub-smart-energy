@@ -142,13 +142,13 @@ serve(async (req) => {
       const authClient = createClient(supabaseUrl, supabaseAnonKey, {
         global: { headers: { Authorization: authHeader } },
       });
-      const { data: claimsData, error: claimsError } = await authClient.auth.getClaims(token);
-      if (claimsError || !claimsData?.claims) {
+      const { data: { user: claimsUser }, error: claimsError } = await authClient.auth.getUser(token);
+      if (claimsError || !claimsUser) {
         return new Response(JSON.stringify({ success: false, error: "Ungültiges Token" }), {
           status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-      const userId = claimsData.claims.sub;
+      const userId = claimsUser.id;
       supabase = createClient(supabaseUrl, supabaseServiceKey);
 
       const { data: profile } = await supabase.from("profiles").select("tenant_id").eq("user_id", userId).single();

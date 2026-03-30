@@ -85,11 +85,11 @@ Deno.serve(async (req) => {
       global: { headers: { Authorization: authHeader } },
     });
     const token = authHeader.replace("Bearer ", "");
-    const { data: claimsData, error: claimsError } = await authClient.auth.getClaims(token);
-    if (claimsError || !claimsData?.claims) {
+    const { data: { user: claimsUser }, error: claimsError } = await authClient.auth.getUser(token);
+    if (claimsError || !claimsUser) {
       return json({ success: false, error: "Invalid token" }, 401, corsHeaders);
     }
-    const userId = claimsData.claims.sub;
+    const userId = claimsUser.id;
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
