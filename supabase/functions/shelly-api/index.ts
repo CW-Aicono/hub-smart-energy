@@ -176,7 +176,6 @@ serve(async (req) => {
     }
 
     if (action === "executeCommand") {
-      const { controlUuid, commandValue } = await req.json().catch(() => ({ controlUuid: undefined, commandValue: undefined }));
       // controlUuid format: "<deviceId>_switch<ch>" or "<deviceId>_relay<ch>"
       if (!controlUuid) throw new Error("controlUuid ist erforderlich");
 
