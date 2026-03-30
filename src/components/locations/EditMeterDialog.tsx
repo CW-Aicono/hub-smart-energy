@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useTranslation } from "@/hooks/useTranslation";
+import { getEdgeFunctionName } from "@/lib/gatewayRegistry";
 import { Meter, MeterInsert } from "@/hooks/useMeters";
 import { useMeters } from "@/hooks/useMeters";
 import { useLocationIntegrations } from "@/hooks/useIntegrations";
@@ -182,17 +183,33 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
     const fetchSensors = async () => {
       setSensorsLoading(true);
       try {
-        const { data, error } = await supabase.functions.invoke("loxone-api", {
-          body: { action: "structure", config: li.config },
+        const integrationType = li.integration?.type || "";
+        const edgeFunction = getEdgeFunctionName(integrationType);
+        const { data, error } = await supabase.functions.invoke(edgeFunction, {
+          body: { locationIntegrationId: li.id, action: "getSensors" },
         });
-        if (error || !data?.controls) {
+        if (error || !data?.sensors) {
+          // Fallback: try structure action for Loxone-type integrations
+          if (integrationType === "loxone_miniserver") {
+            const { data: structData, error: structErr } = await supabase.functions.invoke(edgeFunction, {
+              body: { action: "structure", config: li.config },
+            });
+            if (!structErr && structData?.controls) {
+              const list: SensorOption[] = [];
+              const controls = structData.controls as Record<string, { name: string; uuidAction: string }>;
+              Object.values(controls).forEach((ctrl) => {
+                if (ctrl.name && ctrl.uuidAction) list.push({ uuid: ctrl.uuidAction, name: ctrl.name });
+              });
+              setSensors(list.sort((a, b) => a.name.localeCompare(b.name)));
+              return;
+            }
+          }
           setSensors([]);
         } else {
-          const list: SensorOption[] = [];
-          const controls = data.controls as Record<string, { name: string; uuidAction: string }>;
-          Object.values(controls).forEach((ctrl) => {
-            if (ctrl.name && ctrl.uuidAction) list.push({ uuid: ctrl.uuidAction, name: ctrl.name });
-          });
+          const list: SensorOption[] = data.sensors.map((s: any) => ({
+            uuid: s.id,
+            name: s.name,
+          }));
           setSensors(list.sort((a, b) => a.name.localeCompare(b.name)));
         }
       } catch {

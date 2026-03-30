@@ -646,9 +646,24 @@ function MeterTab({ tenantRecord, lang }: { tenantRecord: TenantRecord; lang: Te
         });
 
         const stands: Record<string, number> = {};
+        // Fetch integration types for dynamic edge function resolution
+        const integrationIds = Array.from(byIntegration.keys());
+        const { data: liRows } = await supabase
+          .from("location_integrations")
+          .select("id, integrations(type)")
+          .in("id", integrationIds);
+        const typeMap = new Map<string, string>();
+        liRows?.forEach((row: any) => {
+          if (row.integrations?.type) typeMap.set(row.id, row.integrations.type);
+        });
+
         for (const [integrationId, intMeters] of byIntegration) {
           try {
-            const { data } = await supabase.functions.invoke("loxone-api", {
+            const integrationType = typeMap.get(integrationId) || "";
+            const edgeFn = integrationType
+              ? (await import("@/lib/gatewayRegistry")).getEdgeFunctionName(integrationType)
+              : "loxone-api";
+            const { data } = await supabase.functions.invoke(edgeFn, {
               body: { locationIntegrationId: integrationId, action: "getSensors" },
             });
             if (data?.sensors) {

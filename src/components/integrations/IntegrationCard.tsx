@@ -14,7 +14,7 @@ import { LocationIntegration } from "@/hooks/useIntegrations";
 import { SensorsDialog } from "./SensorsDialog";
 import { MiniserverStatus } from "./MiniserverStatus";
 import { EditIntegrationDialog } from "./EditIntegrationDialog";
-import { getGatewayDefinition } from "@/lib/gatewayRegistry";
+import { getGatewayDefinition, getEdgeFunctionName } from "@/lib/gatewayRegistry";
 import { LoxoneFirmwareSection } from "./LoxoneFirmwareSection";
 import { SchneiderSetupInfo } from "./SchneiderSetupInfo";
 import { supabase } from "@/integrations/supabase/client";
@@ -73,7 +73,8 @@ export function IntegrationCard({ locationIntegration, onUpdate, onDelete }: Int
   const handleBackfill = async () => {
     setIsBackfilling(true);
     try {
-      const { data, error } = await supabase.functions.invoke("loxone-api", {
+      const edgeFunction = getEdgeFunctionName(locationIntegration.integration?.type || "");
+      const { data, error } = await supabase.functions.invoke(edgeFunction, {
         body: { locationIntegrationId: locationIntegration.id, action: "backfillStatistics", fromDate: backfillFrom, toDate: backfillTo },
       });
       if (error || !data?.success) {
