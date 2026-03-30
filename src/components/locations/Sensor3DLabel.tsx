@@ -45,7 +45,7 @@ export function Sensor3DLabel({
       >
         <div className="bg-card border shadow-lg rounded-lg px-3 py-2 min-w-[100px] text-center whitespace-nowrap">
           <p className="text-xs font-medium text-muted-foreground truncate max-w-[120px]">
-            {position.sensor_name}
+            {displayName}
           </p>
           <p className="text-lg font-mono font-bold text-primary">
             {value} {unit}
