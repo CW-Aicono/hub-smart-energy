@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useTranslation } from "@/hooks/useTranslation";
+import { getEdgeFunctionName } from "@/lib/gatewayRegistry";
 import { Meter, MeterInsert } from "@/hooks/useMeters";
 import { useMeters } from "@/hooks/useMeters";
 import { useLocationIntegrations } from "@/hooks/useIntegrations";

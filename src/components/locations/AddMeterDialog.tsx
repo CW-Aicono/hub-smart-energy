@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useTranslation } from "@/hooks/useTranslation";
+import { getEdgeFunctionName } from "@/lib/gatewayRegistry";
 import { useMeters } from "@/hooks/useMeters";
 import { useLocationIntegrations, LocationIntegration } from "@/hooks/useIntegrations";
 import { supabase } from "@/integrations/supabase/client";
