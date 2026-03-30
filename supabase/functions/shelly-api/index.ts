@@ -125,6 +125,48 @@ serve(async (req) => {
             status: "online", stateName: "tC", secondaryValue: "", secondaryStateName: "", secondaryUnit: "", totalDay: null,
           });
         }
+
+        // ── Gen 1: relays[] ──
+        const hasGen2Switch = sensors.some((s) => s.id.startsWith(`${deviceId}_switch`));
+        if (!hasGen2Switch && Array.isArray(deviceStatus.relays)) {
+          deviceStatus.relays.forEach((relay: any, i: number) => {
+            const power = Array.isArray(deviceStatus.meters) ? deviceStatus.meters[i]?.power : undefined;
+            sensors.push({
+              id: `${deviceId}_relay${i}`, name: `${deviceName} Kanal ${i}`, type: "switch",
+              controlType: model, room: "", category: "Schalter",
+              value: relay.ison ? "Ein" : "Aus", rawValue: relay.ison ? 1 : 0, unit: "",
+              status: "online", stateName: "ison",
+              secondaryValue: power != null ? power.toFixed(1) : "", secondaryStateName: "power", secondaryUnit: "W", totalDay: null,
+            });
+          });
+        }
+
+        // ── Gen 1: meters[] (standalone, only if no relay covered it) ──
+        if (Array.isArray(deviceStatus.meters) && !Array.isArray(deviceStatus.relays)) {
+          deviceStatus.meters.forEach((m: any, i: number) => {
+            sensors.push({
+              id: `${deviceId}_meter${i}`, name: `${deviceName} Leistung ${i}`, type: "power",
+              controlType: model, room: "", category: "Energie",
+              value: m.power != null ? m.power.toFixed(1) : "-", rawValue: m.power ?? null, unit: "W",
+              status: "online", stateName: "power",
+              secondaryValue: "", secondaryStateName: "", secondaryUnit: "", totalDay: null,
+            });
+          });
+        }
+
+        // ── Gen 1: tmp (temperature) ──
+        if (deviceStatus.tmp && !deviceStatus["temperature:0"]) {
+          const t = deviceStatus.tmp;
+          if (t.is_valid !== false) {
+            sensors.push({
+              id: `${deviceId}_tmp`, name: `${deviceName} Temperatur`, type: "temperature",
+              controlType: model, room: "", category: "Klima",
+              value: t.tC != null ? t.tC.toFixed(1) : "-", rawValue: t.tC ?? null, unit: "°C",
+              status: "online", stateName: "tC",
+              secondaryValue: "", secondaryStateName: "", secondaryUnit: "", totalDay: null,
+            });
+          }
+        }
       }
 
       sensors.sort((a, b) => a.name.localeCompare(b.name));
