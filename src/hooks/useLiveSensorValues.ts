@@ -1,6 +1,7 @@
-import { useMemo } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { useFloorSensorPositions, FloorSensorPosition } from "@/hooks/useFloorSensorPositions";
 import { useLoxoneSensorsMulti } from "@/hooks/useLoxoneSensors";
+import { supabase } from "@/integrations/supabase/client";
 
 export interface LiveSensorValue {
   id: string;
@@ -28,8 +29,28 @@ export function useLiveSensorValues(floorId: string | undefined): UseLiveSensorV
     return Array.from(ids);
   }, [positions]);
 
+  // Resolve integration types for each integration ID
+  const [integrationTypes, setIntegrationTypes] = useState<(string | undefined)[]>([]);
+  useEffect(() => {
+    if (integrationIds.length === 0) {
+      setIntegrationTypes([]);
+      return;
+    }
+    supabase
+      .from("location_integrations")
+      .select("id, integrations(type)")
+      .in("id", integrationIds)
+      .then(({ data }) => {
+        const typeMap = new Map<string, string>();
+        data?.forEach((row: any) => {
+          if (row.integrations?.type) typeMap.set(row.id, row.integrations.type);
+        });
+        setIntegrationTypes(integrationIds.map((id) => typeMap.get(id)));
+      });
+  }, [integrationIds]);
+
   // Use centralized cached sensor queries (stable hook call via useQueries)
-  const sensorQueries = useLoxoneSensorsMulti(integrationIds);
+  const sensorQueries = useLoxoneSensorsMulti(integrationIds, integrationTypes);
 
   const { sensorValues, sensorValuesMap } = useMemo(() => {
     const allValues: LiveSensorValue[] = [];
