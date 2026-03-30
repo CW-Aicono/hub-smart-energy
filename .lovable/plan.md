@@ -1,40 +1,33 @@
 
 
-## Plan: 12-15 Seiten PPTX-Präsentation — AME Hub × Smart Energy Hub
+## Plan: Sensoren & Aktoren aller Integrationen für Automation verfügbar machen
 
-### Ziel
-Eine professionelle PowerPoint-Präsentation für Vorstände, Geschäftsführer und Entscheider aus Bau, Politik und Projektierung. Fokus: Zusammenspiel von Hardware (AME Mobile Energy Hub) und Software (Smart Energy Hub Plattform).
+### Problem
+Aktuell sucht `LocationAutomation.tsx` nur nach Loxone- oder Home-Assistant-Integrationen (Zeilen 137–143). Shelly, ABB, Tuya und alle anderen Gateway-Typen werden ignoriert. Ohne eine dieser beiden Integrationen zeigt das System "Kein Loxone Miniserver verbunden" — obwohl z.B. Shelly-Geräte vorhanden sind.
 
-### Vorgehen
-- pptxgenjs-Script erstellen und ausführen
-- Alp-Mann Logo aus den PDFs einbetten
-- System-Architektur-Grafiken aus den PDFs einbetten
-- Farbpalette: Dunkelblau/Petrol (#1A3C5E) + Grün (#4CAF50) + Weiß — passend zu beiden Marken
-- Font: Georgia (Header) / Calibri (Body)
-- Alle Texte auf Deutsch
+### Änderungen
 
-### Folienstruktur (14 Folien)
+#### 1. `LocationAutomation.tsx` — Alle Gateway-Integrationen nutzen
+- Statt nur `loxone` / `home_assistant` zu suchen: **alle** aktiven Integrationen filtern, die im `GATEWAY_DEFINITIONS` registriert sind
+- `useLoxoneSensorsMulti` statt `useLoxoneSensors` verwenden, um Sensoren aller aktiven Integrationen parallel zu laden
+- Sensoren aller Integrationen zusammenführen (merge)
+- Im Aktoren-Dialog: Sensoren nach Integration gruppiert anzeigen (mit Badge für den Integrationsnamen)
+- "Automation hinzufügen"-Button aktivieren sobald **mindestens eine** Integration vorhanden ist
+- Beim Speichern: `location_integration_id` aus der ersten Aktion ableiten (oder die des gewählten Aktors)
 
-| # | Folie | Inhalt |
-|---|-------|--------|
-| 1 | **Titelfolie** | „Die Infrastruktur für ein CO₂-freies Europa — Mobil. Intelligent. Sofort einsatzbereit." Logos beider Projekte, Datum |
-| 2 | **Das Problem** | 3 Kernprobleme: Abregelung/Verschwendung, Netzüberlastung, Unwirtschaftlichkeit herk. Speicher. Icons + Kurztext |
-| 3 | **Die Hardware-Lösung: AME Hub** | Systemarchitektur-Grafik (aus PDF), Kerndaten: 5 MWh, 150 kW WP, R290, Wechselbrücke |
-| 4 | **4 USPs des AME Hub** | Visuelles Grid: Kosteneffizienz (100 €/kWh), Thermischer Turbo (>90% Wirkungsgrad), Mobilität (Plug & Play), Sicherheit (LFP + Schwarzstart) |
-| 5 | **Die Software-Lösung: Smart Energy Hub** | Dashboard-Screenshot/Beschreibung, KI-Arbitrage, Echtzeit-Monitoring, Multi-Standort, PV-Prognose, Ladeinfrastruktur |
-| 6 | **Das Zusammenspiel: Hardware × Software** | Flussdiagramm: AME Hub ↔ Smart Energy Hub. KI-Steuerung, Wetterdaten, Börsenpreise, Wärmelastprofile → optimierte Betriebsstrategie |
-| 7 | **Revenue Stacking: 4 Erlösströme** | Strom-Arbitrage, Wärme-Direktvermarktung, Reduzierte Netzentgelte, CO₂-Vermeidung. Große Zahlen mit Beschreibung |
-| 8 | **ROI & Wirtschaftlichkeit** | Vergleichstabelle: Standard-Speicher vs. AME Hub (CAPEX, Erlöse, Amortisation 11 vs. 4,5 Jahre). Förder-Stacking bis 45% |
-| 9 | **Marktvergleich: AME Hub vs. Tesla Megapack** | Feature-Vergleichstabelle (Sektorkopplung, Mobilität, Förderfähigkeit, Zielgruppe) |
-| 10 | **CO₂-Impact & Nachhaltigkeit** | CO₂-Balkendiagramm (45t → 12t, >70% Reduktion), R290 Kältemittel, LFP recycelbar, Grid-Balancing |
-| 11 | **Technische Spezifikationen** | Kompakte Spec-Tabelle: Speicher, Wärmepumpe, Bauform, Steuerung, Zertifizierungen |
-| 12 | **Anwendungsszenarien** | 3 Use-Cases: Quartiersentwicklung, Industriebetrieb, Kommunale Wärmeplanung — jeweils mit Icon und Kurzbeschreibung |
-| 13 | **Skalierung & Marktpotenzial** | GuV-Auszug 2026-2030 (Einheiten, Umsatz, Marktgebiete), Cluster-Architektur, Fabless Assembly |
-| 14 | **Call to Action / Kontakt** | Abschluss-Statement, Kontaktdaten, Logos |
+#### 2. Translations aktualisieren
+- `auto.actuatorsTitle`: "Verfügbare Aktoren – Loxone Miniserver" → "Verfügbare Sensoren & Aktoren"
+- `auto.actuatorsDesc`: generisch formulieren ("Sensoren und steuerbare Aktoren aller verbundenen Integrationen")
+- `auto.noMiniserver` → "Keine Integration mit diesem Standort verbunden."
+- `auto.connectHint` → 'Verbinden Sie ein Gateway unter „Integrationen".'
 
-### Technische Umsetzung
-- pptxgenjs-Script in `/tmp/create_presentation.js`
-- Logo und Systemarchitektur-Grafiken als base64 einbetten
-- Output: `/mnt/documents/AME_Hub_Smart_Energy_Hub_Praesentation.pptx`
-- QA: LibreOffice → PDF → pdftoppm → visuelle Inspektion aller Folien
+#### 3. Bestehende Funktionalität bleibt erhalten
+- Einzelne Loxone/HA-Standorte funktionieren weiterhin identisch
+- `AutomationRuleBuilder` erhält weiterhin das `sensors`-Array (jetzt aus allen Integrationen zusammengeführt)
+- Ausführung nutzt weiterhin die `location_integration_id` aus der gespeicherten Automation
+
+### Technische Details
+- `GATEWAY_DEFINITIONS` aus `gatewayRegistry.ts` wird importiert, um zu prüfen welche Integrationstypen Sensoren liefern können
+- `useLoxoneSensorsMulti` akzeptiert bereits `integrationIds[]` und `integrationTypes[]` — genau das was wir brauchen
+- Merge: `sensorQueries.flatMap(q => q.data || [])` mit Integration-Prefix für Gruppierung
 
