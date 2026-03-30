@@ -5,6 +5,8 @@ interface Sensor3DLabelProps {
   position: FloorSensorPosition;
   value?: string;
   unit?: string;
+  /** Live sensor name from the gateway API; preferred over stored position name */
+  liveName?: string;
   /** @deprecated use ROOM_SCALE/ROOM_OFFSET instead */
   scaleX?: number;
   /** @deprecated use ROOM_SCALE/ROOM_OFFSET instead */
