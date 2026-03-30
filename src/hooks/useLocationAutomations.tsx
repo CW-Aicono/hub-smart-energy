@@ -117,7 +117,16 @@ export function useLocationAutomations(locationId: string | undefined) {
   const executeAutomation = async (automation: LocationAutomationRecord) => {
     setExecuting(automation.id);
     try {
-      // Valid Loxone command primitives (including reset commands handled by edge function)
+      // Resolve the correct edge function for this integration
+      const { data: liData } = await supabase
+        .from("location_integrations")
+        .select("integration:integrations(type)")
+        .eq("id", automation.location_integration_id)
+        .maybeSingle();
+      const integrationType = (liData as any)?.integration?.type as string | undefined;
+      const edgeFunction = integrationType ? getEdgeFunctionName(integrationType) : "loxone-api";
+
+      // Valid command primitives
       const VALID_COMMANDS = new Set(["pulse", "On", "Off", "toggle", "on", "off", "resetDay", "resetMonth", "resetYear", "resetAll"]);
       const sanitizeCommand = (val?: string | null): string => {
         if (!val) return "pulse";
@@ -132,7 +141,7 @@ export function useLocationAutomations(locationId: string | undefined) {
 
       for (const action of actionsToRun) {
         const commandValue = sanitizeCommand(action.action_value || action.action_type);
-        const { data, error } = await supabase.functions.invoke("loxone-api", {
+        const { data, error } = await supabase.functions.invoke(edgeFunction, {
           body: {
             locationIntegrationId: automation.location_integration_id,
             action: "executeCommand",
