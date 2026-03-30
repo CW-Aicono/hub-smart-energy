@@ -251,7 +251,7 @@ export function FloorPlanDialog({ floor, locationId, open, onOpenChange }: Floor
     (sensor) => !positions.some((p) => p.sensor_uuid === sensor.id)
   );
 
-  // Get position info for placed sensors
+  // Get position info for placed sensors, preferring live name over stored name
   const placedSensorsWithInfo = positions.map((pos) => {
     const sensor = assignedSensors.find((s) => s.id === pos.sensor_uuid);
     // Find the meter linked to this sensor to determine correct unit
@@ -261,8 +261,23 @@ export function FloorPlanDialog({ floor, locationId, open, onOpenChange }: Floor
     const correctedSensorInfo = sensor && isFlowType
       ? { ...sensor, unit: "m³/h" }
       : sensor;
-    return { ...pos, sensorInfo: correctedSensorInfo };
+    // Prefer live sensor name over stored DB name (which may contain stale device IDs)
+    const displayName = sensor?.name || pos.sensor_name;
+    return { ...pos, sensor_name: displayName, sensorInfo: correctedSensorInfo };
   });
+
+  // Auto-sync stale sensor names in DB when live names differ
+  useEffect(() => {
+    if (!positions.length || !assignedSensors.length) return;
+    positions.forEach((pos) => {
+      const liveSensor = assignedSensors.find((s) => s.id === pos.sensor_uuid);
+      if (liveSensor && liveSensor.name && liveSensor.name !== pos.sensor_name) {
+        updatePosition(pos.id, { sensor_name: liveSensor.name } as any);
+      }
+    });
+    // Only run when sensors finish loading
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [assignedSensors.length]);
 
   const calculatePosition = (e: React.DragEvent | React.MouseEvent) => {
     // Use the edit overlay ref which matches the actual image area
