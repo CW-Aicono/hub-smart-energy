@@ -43,7 +43,8 @@ serve(async (req) => {
       return new Response(JSON.stringify({ success: false, error: "Kein Mandant zugeordnet" }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    const { locationIntegrationId, action } = await req.json();
+    const body = await req.json();
+    const { locationIntegrationId, action, controlUuid, commandValue } = body;
     if (!locationIntegrationId) throw new Error("Location Integration ID ist erforderlich");
 
     const { data: li, error: liErr } = await supabase.from("location_integrations").select("*, integration:integrations(*), location:locations!inner(tenant_id)").eq("id", locationIntegrationId).maybeSingle();
@@ -172,6 +173,71 @@ serve(async (req) => {
       sensors.sort((a, b) => a.name.localeCompare(b.name));
       await updateSyncStatus(supabase, locationIntegrationId, "success");
       return new Response(JSON.stringify({ success: true, sensors }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    if (action === "executeCommand") {
+      // controlUuid format: "<deviceId>_switch<ch>" or "<deviceId>_relay<ch>"
+      if (!controlUuid) throw new Error("controlUuid ist erforderlich");
+
+      // Parse deviceId and channel from controlUuid
+      const switchMatch = controlUuid.match(/^(.+)_switch(\d+)$/);
+      const relayMatch = controlUuid.match(/^(.+)_relay(\d+)$/);
+      const match = switchMatch || relayMatch;
+      if (!match) throw new Error(`Kein schaltbarer Aktor: ${controlUuid}`);
+
+      const deviceId = match[1];
+      const channel = parseInt(match[2], 10);
+      const isGen1 = !!relayMatch;
+
+      // Determine turn on/off
+      let turnOn: boolean;
+      const cmd = (commandValue || "toggle").toLowerCase();
+      if (cmd === "on" || cmd === "1") turnOn = true;
+      else if (cmd === "off" || cmd === "0") turnOn = false;
+      else if (cmd === "toggle" || cmd === "pulse") {
+        // Need current state to toggle — fetch status first
+        const statusRes = await fetch(`${baseUrl}/device/status?auth_key=${config.auth_key}&id=${deviceId}`);
+        if (!statusRes.ok) throw new Error(`Gerätestatus nicht abrufbar: HTTP ${statusRes.status}`);
+        const statusData = await statusRes.json();
+        const devStatus = statusData?.data?.device_status;
+        if (isGen1) {
+          turnOn = !(devStatus?.relays?.[channel]?.ison ?? false);
+        } else {
+          turnOn = !(devStatus?.[`switch:${channel}`]?.output ?? false);
+        }
+      } else {
+        throw new Error(`Unbekannter Befehl: ${commandValue}`);
+      }
+
+      let controlRes: Response;
+      if (isGen1) {
+        // Gen 1: POST /device/relay/control
+        controlRes = await fetch(`${baseUrl}/device/relay/control?auth_key=${config.auth_key}&id=${deviceId}&channel=${channel}&turn=${turnOn ? "on" : "off"}`);
+      } else {
+        // Gen 2+: POST /device/rpc with Switch.Set
+        controlRes = await fetch(`${baseUrl}/device/rpc`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            auth_key: config.auth_key,
+            id: deviceId,
+            method: "Switch.Set",
+            params: { id: channel, on: turnOn },
+          }),
+        });
+      }
+
+      if (!controlRes.ok) {
+        const errText = await controlRes.text();
+        throw new Error(`Schaltbefehl fehlgeschlagen: HTTP ${controlRes.status} – ${errText}`);
+      }
+
+      const result = await controlRes.json();
+      if (!result?.isok && result?.errors) {
+        throw new Error(`Shelly-Fehler: ${JSON.stringify(result.errors)}`);
+      }
+
+      return new Response(JSON.stringify({ success: true, turned: turnOn ? "on" : "off" }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
     throw new Error(`Unbekannte Aktion: ${action}`);
