@@ -157,6 +157,7 @@ const LiveValues = () => {
           const periods = periodMap.get(row.meter_id) ?? { totalDay: null, totalMonth: null, totalYear: null };
           next.set(row.meter_id, {
             value: row.power_value,
+            unit: "",
             totalDay: periods.totalDay,
             totalWeek: null,
             totalMonth: periods.totalMonth,
