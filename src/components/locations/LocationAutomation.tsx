@@ -52,6 +52,7 @@ import { useLocationIntegrations } from "@/hooks/useIntegrations";
 import { useLoxoneSensorsMulti, LoxoneSensor } from "@/hooks/useLoxoneSensors";
 import { GATEWAY_DEFINITIONS } from "@/lib/gatewayRegistry";
 import { useLocationAutomations, LocationAutomationRecord } from "@/hooks/useLocationAutomations";
+import { useMeters } from "@/hooks/useMeters";
 import { AutomationRuleBuilder, AutomationRuleData } from "@/components/locations/AutomationRuleBuilder";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
