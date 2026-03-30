@@ -15,6 +15,7 @@ import { Activity, RefreshCw, Search, Gauge, Zap, Flame, Droplets, Thermometer }
 import { supabase } from "@/integrations/supabase/client";
 import { formatEnergy, formatGasDual } from "@/lib/formatEnergy";
 import { cn } from "@/lib/utils";
+import { getEdgeFunctionName } from "@/lib/gatewayRegistry";
 
 interface MeterLiveValue {
   meterId: string;
