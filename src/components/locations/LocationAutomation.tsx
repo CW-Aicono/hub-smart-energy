@@ -52,6 +52,7 @@ import { useLocationIntegrations } from "@/hooks/useIntegrations";
 import { useLoxoneSensorsMulti, LoxoneSensor } from "@/hooks/useLoxoneSensors";
 import { GATEWAY_DEFINITIONS } from "@/lib/gatewayRegistry";
 import { useLocationAutomations, LocationAutomationRecord } from "@/hooks/useLocationAutomations";
+import { useMeters } from "@/hooks/useMeters";
 import { AutomationRuleBuilder, AutomationRuleData } from "@/components/locations/AutomationRuleBuilder";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
@@ -135,6 +136,16 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
   const [searchTerm, setSearchTerm] = useState("");
 
   const { locationIntegrations, loading: intLoading } = useLocationIntegrations(locationId);
+  const { meters } = useMeters(locationId);
+
+  // Build sensor_uuid -> user-defined meter name map
+  const sensorNameMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    meters.forEach((m) => {
+      if (m.sensor_uuid && m.name) map[m.sensor_uuid] = m.name;
+    });
+    return map;
+  }, [meters]);
 
   // Find all active gateway integrations (not just Loxone/HA)
   const gatewayIntegrations = useMemo(() =>
@@ -158,16 +169,21 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
     return map;
   }, [gatewayIntegrations]);
 
-  // Merge sensors from all integrations, tagged with integrationId
+  // Merge sensors from all integrations, override name with user-defined meter name
   const allSensorsWithSource = useMemo(() => {
     const result: (LoxoneSensor & { _integrationId: string; _integrationLabel: string })[] = [];
     sensorQueries.forEach((q, idx) => {
       const intId = integrationIds[idx];
       const label = integrationLabelMap[intId] || "Unknown";
-      (q.data || []).forEach((s) => result.push({ ...s, _integrationId: intId, _integrationLabel: label }));
+      (q.data || []).forEach((s) => result.push({
+        ...s,
+        name: sensorNameMap[s.id] || s.name,
+        _integrationId: intId,
+        _integrationLabel: label,
+      }));
     });
     return result;
-  }, [sensorQueries, integrationIds, integrationLabelMap]);
+  }, [sensorQueries, integrationIds, integrationLabelMap, sensorNameMap]);
 
   const hasAnyIntegration = gatewayIntegrations.length > 0;
   // For backward compat: pick the first gateway integration as default for new automations
