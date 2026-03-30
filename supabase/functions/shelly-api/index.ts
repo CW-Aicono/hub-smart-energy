@@ -143,7 +143,7 @@ serve(async (req) => {
         }
 
         // ── Gen 1: meters[] (standalone, only if no relay covered it) ──
-        if (Array.isArray(deviceStatus.meters) && !Array.isArray(deviceStatus.relays)) {
+        if (Array.isArray(deviceStatus.meters)) {
           deviceStatus.meters.forEach((m: any, i: number) => {
             sensors.push({
               id: `${deviceId}_meter${i}`, name: `${deviceName} Leistung ${i}`, type: "power",
