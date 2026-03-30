@@ -196,7 +196,11 @@ serve(async (req) => {
       else if (cmd === "off" || cmd === "0") turnOn = false;
       else if (cmd === "toggle" || cmd === "pulse") {
         // Need current state to toggle — fetch status first
-        const statusRes = await fetch(`${baseUrl}/device/status?auth_key=${config.auth_key}&id=${deviceId}`);
+        const statusRes = await fetch(`${baseUrl}/device/status`, {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: new URLSearchParams({ auth_key: config.auth_key, id: deviceId }),
+        });
         if (!statusRes.ok) throw new Error(`Gerätestatus nicht abrufbar: HTTP ${statusRes.status}`);
         const statusData = await statusRes.json();
         const devStatus = statusData?.data?.device_status;
@@ -212,7 +216,16 @@ serve(async (req) => {
       let controlRes: Response;
       if (isGen1) {
         // Gen 1: POST /device/relay/control
-        controlRes = await fetch(`${baseUrl}/device/relay/control?auth_key=${config.auth_key}&id=${deviceId}&channel=${channel}&turn=${turnOn ? "on" : "off"}`);
+        controlRes = await fetch(`${baseUrl}/device/relay/control`, {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: new URLSearchParams({
+            auth_key: config.auth_key,
+            id: deviceId,
+            channel: String(channel),
+            turn: turnOn ? "on" : "off",
+          }),
+        });
       } else {
         // Gen 2+: POST /device/rpc with Switch.Set
         controlRes = await fetch(`${baseUrl}/device/rpc`, {
@@ -227,14 +240,12 @@ serve(async (req) => {
         });
       }
 
-      if (!controlRes.ok) {
-        const errText = await controlRes.text();
-        throw new Error(`Schaltbefehl fehlgeschlagen: HTTP ${controlRes.status} – ${errText}`);
-      }
-
       const result = await controlRes.json();
       if (!result?.isok && result?.errors) {
         throw new Error(`Shelly-Fehler: ${JSON.stringify(result.errors)}`);
+      }
+      if (!controlRes.ok && !result?.isok) {
+        throw new Error(`Schaltbefehl fehlgeschlagen: HTTP ${controlRes.status}`);
       }
 
       return new Response(JSON.stringify({ success: true, turned: turnOn ? "on" : "off" }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
