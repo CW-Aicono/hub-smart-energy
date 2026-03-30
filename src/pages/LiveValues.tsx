@@ -539,6 +539,9 @@ const LiveValues = () => {
                               ) : (
                                 <>
                               {(() => {
+                                    if (source === "live" && sensorUnit) {
+                                      return `${value.toLocaleString(dateLocale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${sensorUnit}`;
+                                    }
                                     if (source === "live") {
                                       const srcPower = (meter as any).source_unit_power || "kW";
                                       if (srcPower === "W") {
