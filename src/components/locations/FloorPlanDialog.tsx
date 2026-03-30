@@ -7,6 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Loader2, Trash2, GripVertical, AlertCircle, Image, MapPin, Maximize2, Minimize2, Box, Gauge, DoorOpen, ZoomIn, ZoomOut, RotateCcw } from "lucide-react";
 import { FloorPlanImage, isPdfUrl } from "./FloorPlanRenderer";
 import { ENERGY_SENSOR_CLASSES } from "@/lib/energyTypeColors";
+import { getEdgeFunctionName } from "@/lib/gatewayRegistry";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Floor } from "@/hooks/useFloors";
 import { useFloorSensorPositions, FloorSensorPosition, FloorSensorPositionInsert, LabelSize } from "@/hooks/useFloorSensorPositions";
@@ -198,7 +199,8 @@ export function FloorPlanDialog({ floor, locationId, open, onOpenChange }: Floor
         if (!li.is_enabled) continue;
         
         try {
-          const { data, error: fnError } = await supabase.functions.invoke("loxone-api", {
+          const edgeFunction = getEdgeFunctionName(li.integration?.type || "");
+          const { data, error: fnError } = await supabase.functions.invoke(edgeFunction, {
             body: {
               locationIntegrationId: li.id,
               action: "getSensors",
