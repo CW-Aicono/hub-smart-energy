@@ -215,7 +215,16 @@ export function useMLAutomations() {
         : [{ actuator_uuid: automation.actuator_uuid, action_type: automation.action_value || automation.action_type || "pulse", action_value: automation.action_value }];
 
       for (const action of actionsToRun) {
-        const { data, error } = await supabase.functions.invoke("loxone-api", {
+        // Resolve integration type for dynamic edge function
+        const { data: liData } = await supabase
+          .from("location_integrations")
+          .select("*, integration:integrations(type)")
+          .eq("id", automation.location_integration_id)
+          .maybeSingle();
+        const integrationType = (liData as any)?.integration?.type as string | undefined;
+        const edgeFunction = getEdgeFunctionName(integrationType || "");
+
+        const { data, error } = await supabase.functions.invoke(edgeFunction, {
           body: {
             locationIntegrationId: automation.location_integration_id,
             action: "executeCommand",

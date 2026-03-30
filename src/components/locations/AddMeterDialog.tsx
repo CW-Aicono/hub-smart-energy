@@ -81,28 +81,46 @@ export const AddMeterDialog = ({ locationId, open, onOpenChange }: AddMeterDialo
     const fetchSensors = async () => {
       setSensorsLoading(true);
       try {
-        const { data, error } = await supabase.functions.invoke("loxone-api", {
+        const integrationType = li.integration?.type || "";
+        const edgeFunction = getEdgeFunctionName(integrationType);
+        const { data, error } = await supabase.functions.invoke(edgeFunction, {
           body: {
-            action: "structure",
-            config: li.config,
+            locationIntegrationId: li.id,
+            action: "getSensors",
           },
         });
 
-        if (error || !data?.controls) {
+        if (error || !data?.sensors) {
+          // Fallback: try structure action for Loxone-type integrations
+          if (integrationType === "loxone_miniserver") {
+            const { data: structData, error: structErr } = await supabase.functions.invoke(edgeFunction, {
+              body: { action: "structure", config: li.config },
+            });
+            if (!structErr && structData?.controls) {
+              const sensorList: SensorOption[] = [];
+              const controls = structData.controls as Record<string, { name: string; uuidAction: string }>;
+              Object.values(controls).forEach((ctrl) => {
+                if (ctrl.name && ctrl.uuidAction) {
+                  sensorList.push({
+                    uuid: ctrl.uuidAction,
+                    name: ctrl.name,
+                    integrationName: li.integration?.name || "Gateway",
+                    locationIntegrationId: li.id,
+                  });
+                }
+              });
+              setSensors(sensorList.sort((a, b) => a.name.localeCompare(b.name)));
+              return;
+            }
+          }
           setSensors([]);
         } else {
-          const sensorList: SensorOption[] = [];
-          const controls = data.controls as Record<string, { name: string; uuidAction: string }>;
-          Object.values(controls).forEach((ctrl) => {
-            if (ctrl.name && ctrl.uuidAction) {
-              sensorList.push({
-                uuid: ctrl.uuidAction,
-                name: ctrl.name,
-                integrationName: li.integration?.name || "Gateway",
-                locationIntegrationId: li.id,
-              });
-            }
-          });
+          const sensorList: SensorOption[] = data.sensors.map((s: any) => ({
+            uuid: s.id,
+            name: s.name,
+            integrationName: li.integration?.name || "Gateway",
+            locationIntegrationId: li.id,
+          }));
           setSensors(sensorList.sort((a, b) => a.name.localeCompare(b.name)));
         }
       } catch {

@@ -73,7 +73,8 @@ export function IntegrationCard({ locationIntegration, onUpdate, onDelete }: Int
   const handleBackfill = async () => {
     setIsBackfilling(true);
     try {
-      const { data, error } = await supabase.functions.invoke("loxone-api", {
+      const edgeFunction = getEdgeFunctionName(locationIntegration.integration?.type || "");
+      const { data, error } = await supabase.functions.invoke(edgeFunction, {
         body: { locationIntegrationId: locationIntegration.id, action: "backfillStatistics", fromDate: backfillFrom, toDate: backfillTo },
       });
       if (error || !data?.success) {
