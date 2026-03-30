@@ -381,18 +381,18 @@ const LiveValues = () => {
   const getValue = (meter: typeof meters[0]): { value: number | null; unit: string; totalDay: number | null; totalMonth: number | null; totalYear: number | null; meterReading: number | null; meterReadingUnit: string; source: "live" | "manual" | "virtual" | "none"; date?: string } => {
     if (meter.capture_type === "virtual" && virtualValues.has(meter.id)) {
       const vv = virtualValues.get(meter.id)!;
-      return { value: vv.value, totalDay: vv.totalDay, totalMonth: null, totalYear: null, meterReading: null, meterReadingUnit: "", source: "virtual" };
+      return { value: vv.value, unit: "", totalDay: vv.totalDay, totalMonth: null, totalYear: null, meterReading: null, meterReadingUnit: "", source: "virtual" };
     }
     if (meter.capture_type === "automatic" && liveValues.has(meter.id)) {
       const live = liveValues.get(meter.id)!;
-      return { value: live.value, totalDay: live.totalDay, totalMonth: live.totalMonth, totalYear: live.totalYear, meterReading: live.meterReading, meterReadingUnit: live.meterReadingUnit, source: "live" };
+      return { value: live.value, unit: live.unit, totalDay: live.totalDay, totalMonth: live.totalMonth, totalYear: live.totalYear, meterReading: live.meterReading, meterReadingUnit: live.meterReadingUnit, source: "live" };
     }
     const manual = manualValues.get(meter.id);
     if (manual) {
       const dailyTotal = manualDailyTotals.get(meter.id) ?? null;
-      return { value: manual.value, totalDay: dailyTotal, totalMonth: null, totalYear: null, meterReading: null, meterReadingUnit: "", source: "manual", date: manual.date };
+      return { value: manual.value, unit: meter.unit, totalDay: dailyTotal, totalMonth: null, totalYear: null, meterReading: null, meterReadingUnit: "", source: "manual", date: manual.date };
     }
-    return { value: null, totalDay: null, totalMonth: null, totalYear: null, meterReading: null, meterReadingUnit: "", source: "none" };
+    return { value: null, unit: "", totalDay: null, totalMonth: null, totalYear: null, meterReading: null, meterReadingUnit: "", source: "none" };
   };
 
   const dateLocale = language === "de" ? "de-DE" : language === "nl" ? "nl-NL" : language === "es" ? "es-ES" : "en-US";
