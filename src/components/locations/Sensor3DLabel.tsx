@@ -25,10 +25,12 @@ export function Sensor3DLabel({
   position, 
   value = "—", 
   unit = "",
+  liveName,
 }: Sensor3DLabelProps) {
   const x = position.position_x * ROOM_SCALE - ROOM_OFFSET;
   const y = (position as any).position_z ?? 1.5;
   const z = position.position_y * ROOM_SCALE - ROOM_OFFSET;
+  const displayName = liveName || position.sensor_name;
 
   return (
     <group position={[x, y, z]}>
