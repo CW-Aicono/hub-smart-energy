@@ -529,6 +529,7 @@ function Scene({
                   position={pos}
                   value={sensor?.value}
                   unit={sensor?.unit}
+                  liveName={sensor?.name}
                 />
               );
             })}
