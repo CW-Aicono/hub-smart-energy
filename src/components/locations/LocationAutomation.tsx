@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
@@ -49,7 +49,8 @@ import { HelpTooltip } from "@/components/ui/help-tooltip";
 import { AiDisclaimer } from "@/components/ui/ai-disclaimer";
 import { useTranslation } from "@/hooks/useTranslation";
 import { useLocationIntegrations } from "@/hooks/useIntegrations";
-import { useLoxoneSensors, LoxoneSensor } from "@/hooks/useLoxoneSensors";
+import { useLoxoneSensorsMulti, LoxoneSensor } from "@/hooks/useLoxoneSensors";
+import { GATEWAY_DEFINITIONS } from "@/lib/gatewayRegistry";
 import { useLocationAutomations, LocationAutomationRecord } from "@/hooks/useLocationAutomations";
 import { AutomationRuleBuilder, AutomationRuleData } from "@/components/locations/AutomationRuleBuilder";
 import { toast } from "sonner";
@@ -134,21 +135,51 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
   const [searchTerm, setSearchTerm] = useState("");
 
   const { locationIntegrations, loading: intLoading } = useLocationIntegrations(locationId);
-  const loxoneIntegration = locationIntegrations.find(
-    (li) => li.integration?.type?.startsWith("loxone") && li.is_enabled
-  );
-  const haIntegration = locationIntegrations.find(
-    (li) => li.integration?.type === "home_assistant" && li.is_enabled
-  );
-  const activeIntegration = loxoneIntegration || haIntegration;
-  const { data: sensors, isLoading: sensorsLoading } = useLoxoneSensors(activeIntegration?.id);
+
+  // Find all active gateway integrations (not just Loxone/HA)
+  const gatewayIntegrations = useMemo(() =>
+    locationIntegrations.filter(
+      (li) => li.is_enabled && li.integration?.type && GATEWAY_DEFINITIONS[li.integration.type]
+    ), [locationIntegrations]);
+
+  const integrationIds = useMemo(() => gatewayIntegrations.map((li) => li.id), [gatewayIntegrations]);
+  const integrationTypes = useMemo(() => gatewayIntegrations.map((li) => li.integration?.type), [gatewayIntegrations]);
+
+  const sensorQueries = useLoxoneSensorsMulti(integrationIds, integrationTypes);
+  const sensorsLoading = sensorQueries.some((q) => q.isLoading);
+
+  // Build a map of integrationId -> integration label for grouping
+  const integrationLabelMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    gatewayIntegrations.forEach((li) => {
+      const def = li.integration?.type ? GATEWAY_DEFINITIONS[li.integration.type] : undefined;
+      map[li.id] = def?.label || li.integration?.type || "Unknown";
+    });
+    return map;
+  }, [gatewayIntegrations]);
+
+  // Merge sensors from all integrations, tagged with integrationId
+  const allSensorsWithSource = useMemo(() => {
+    const result: (LoxoneSensor & { _integrationId: string; _integrationLabel: string })[] = [];
+    sensorQueries.forEach((q, idx) => {
+      const intId = integrationIds[idx];
+      const label = integrationLabelMap[intId] || "Unknown";
+      (q.data || []).forEach((s) => result.push({ ...s, _integrationId: intId, _integrationLabel: label }));
+    });
+    return result;
+  }, [sensorQueries, integrationIds, integrationLabelMap]);
+
+  const hasAnyIntegration = gatewayIntegrations.length > 0;
+  // For backward compat: pick the first gateway integration as default for new automations
+  const defaultIntegration = gatewayIntegrations[0] || null;
+
   const {
     automations, loading: autoLoading, executing,
     createAutomation, updateAutomation, deleteAutomation, executeAutomation,
   } = useLocationAutomations(locationId);
 
-  const actuators = (sensors || []).filter(isActuator);
-  const allSensors = sensors || [];
+  const actuators = allSensorsWithSource.filter(isActuator);
+  const allSensors = allSensorsWithSource as LoxoneSensor[];
 
   const filteredActuators = searchTerm
     ? actuators.filter((s) =>
