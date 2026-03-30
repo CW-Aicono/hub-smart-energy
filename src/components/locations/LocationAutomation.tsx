@@ -189,14 +189,16 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
       )
     : actuators;
 
-  const groupByRoom = (items: LoxoneSensor[]) => {
-    const grouped: Record<string, LoxoneSensor[]> = {};
+  const groupByIntegrationAndRoom = (items: typeof allSensorsWithSource) => {
+    const byIntegration: Record<string, Record<string, typeof allSensorsWithSource>> = {};
     items.forEach((s) => {
+      const intLabel = s._integrationLabel || "Unknown";
       const room = s.room || "Unbekannt";
-      if (!grouped[room]) grouped[room] = [];
-      grouped[room].push(s);
+      if (!byIntegration[intLabel]) byIntegration[intLabel] = {};
+      if (!byIntegration[intLabel][room]) byIntegration[intLabel][room] = [];
+      byIntegration[intLabel][room].push(s);
     });
-    return Object.entries(grouped).sort(([a], [b]) => a.localeCompare(b));
+    return Object.entries(byIntegration).sort(([a], [b]) => a.localeCompare(b));
   };
 
   const openAddRule = () => {
@@ -491,36 +493,43 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
                 {actuators.length} {T("auto.actuators")} ({T("auto.controllable")})
               </Badge>
               {filteredActuators.length > 0 ? (
-                <div className="space-y-2">
-                  {groupByRoom(filteredActuators).map(([room, items]) => (
-                    <div key={room} className="space-y-1">
-                      <p className="text-xs font-medium text-muted-foreground px-1">{room}</p>
-                      {items.map((sensor) => {
-                        const SIcon = getSensorIcon(sensor.type);
-                        return (
-                          <div
-                            key={sensor.id}
-                            className="flex items-center gap-3 p-3 rounded-lg border bg-primary/5 border-primary/20"
-                          >
-                            <div className="rounded-lg p-2 bg-primary/10 text-primary">
-                              <SIcon className="h-4 w-4" />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2">
-                                <p className="font-medium text-sm truncate">{sensor.name}</p>
-                                <Badge variant="outline" className="text-[10px] shrink-0">{sensor.controlType}</Badge>
+                <div className="space-y-4">
+                  {groupByIntegrationAndRoom(filteredActuators).map(([intLabel, rooms]) => (
+                    <div key={intLabel} className="space-y-2">
+                      {gatewayIntegrations.length > 1 && (
+                        <Badge variant="default" className="text-xs">{intLabel}</Badge>
+                      )}
+                      {Object.entries(rooms).sort(([a], [b]) => a.localeCompare(b)).map(([room, items]) => (
+                        <div key={room} className="space-y-1">
+                          <p className="text-xs font-medium text-muted-foreground px-1">{room}</p>
+                          {items.map((sensor) => {
+                            const SIcon = getSensorIcon(sensor.type);
+                            return (
+                              <div
+                                key={`${sensor._integrationId}-${sensor.id}`}
+                                className="flex items-center gap-3 p-3 rounded-lg border bg-primary/5 border-primary/20"
+                              >
+                                <div className="rounded-lg p-2 bg-primary/10 text-primary">
+                                  <SIcon className="h-4 w-4" />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2">
+                                    <p className="font-medium text-sm truncate">{sensor.name}</p>
+                                    <Badge variant="outline" className="text-[10px] shrink-0">{sensor.controlType}</Badge>
+                                  </div>
+                                  <p className="text-xs text-muted-foreground truncate">{sensor.category}</p>
+                                </div>
+                                <div className="text-right shrink-0">
+                                  <p className="text-sm font-mono font-medium">
+                                    {sensor.value}{sensor.unit ? ` ${sensor.unit}` : ""}
+                                  </p>
+                                  <p className="text-[10px] text-muted-foreground">{sensor.status}</p>
+                                </div>
                               </div>
-                              <p className="text-xs text-muted-foreground truncate">{sensor.category}</p>
-                            </div>
-                            <div className="text-right shrink-0">
-                              <p className="text-sm font-mono font-medium">
-                                {sensor.value}{sensor.unit ? ` ${sensor.unit}` : ""}
-                              </p>
-                              <p className="text-[10px] text-muted-foreground">{sensor.status}</p>
-                            </div>
-                          </div>
-                        );
-                      })}
+                            );
+                          })}
+                        </div>
+                      ))}
                     </div>
                   ))}
                 </div>
