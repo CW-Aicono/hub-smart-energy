@@ -43,7 +43,8 @@ serve(async (req) => {
       return new Response(JSON.stringify({ success: false, error: "Kein Mandant zugeordnet" }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    const { locationIntegrationId, action } = await req.json();
+    const body = await req.json();
+    const { locationIntegrationId, action, controlUuid, commandValue } = body;
     if (!locationIntegrationId) throw new Error("Location Integration ID ist erforderlich");
 
     const { data: li, error: liErr } = await supabase.from("location_integrations").select("*, integration:integrations(*), location:locations!inner(tenant_id)").eq("id", locationIntegrationId).maybeSingle();
