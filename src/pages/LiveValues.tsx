@@ -237,6 +237,7 @@ const LiveValues = () => {
                 const next = new Map(prev);
                 next.set(meter.id, {
                   value: numVal,
+                  unit: sensor.unit || "",
                   totalDay: totalDay !== null && !isNaN(totalDay) ? totalDay : null,
                   totalWeek: totalWeek !== null && !isNaN(totalWeek as number) ? totalWeek : null,
                   totalMonth: totalMonth !== null && !isNaN(totalMonth as number) ? totalMonth : null,
