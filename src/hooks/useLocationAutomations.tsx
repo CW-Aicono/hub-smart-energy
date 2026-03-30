@@ -4,7 +4,6 @@ import { useTenant } from "./useTenant";
 import { getEdgeFunctionName } from "@/lib/gatewayRegistry";
 import type { AutomationCondition, AutomationAction } from "@/components/locations/AutomationRuleBuilder";
 import type { Database, Json } from "@/integrations/supabase/types";
-import type { Database, Json } from "@/integrations/supabase/types";
 
 type AutomationInsertDB = Database["public"]["Tables"]["location_automations"]["Insert"];
 type AutomationUpdateDB = Database["public"]["Tables"]["location_automations"]["Update"];
