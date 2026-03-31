@@ -7,6 +7,7 @@ import { HelpTooltip } from "@/components/ui/help-tooltip";
 import { useTranslation } from "@/hooks/useTranslation";
 import { useMeters } from "@/hooks/useMeters";
 import { useLocationEnergyTypesSet } from "@/hooks/useLocationEnergySources";
+import { useGatewayLivePower } from "@/hooks/useGatewayLivePower";
 import { useRealtimePower } from "@/hooks/useRealtimePower";
 import { ENERGY_TYPE_LABELS, ENERGY_HEX_COLORS } from "@/lib/energyTypeColors";
 import { supabase } from "@/integrations/supabase/client";
@@ -17,8 +18,45 @@ interface EnergyGaugeWidgetProps {
   locationId: string | null;
 }
 
-function getPowerUnit(energyType: string): string {
-  return energyType === "wasser" || energyType === "gas" ? "m³/h" : "kW";
+type GaugeUnit = "W" | "kW" | "MW" | "m³/h";
+
+const POWER_UNIT_FACTORS: Record<Exclude<GaugeUnit, "m³/h">, number> = {
+  W: 1,
+  kW: 1000,
+  MW: 1_000_000,
+};
+
+function normalizeGaugeUnit(unit?: string | null): GaugeUnit | null {
+  if (!unit) return null;
+  if (unit === "m³") return "m³/h";
+  if (unit === "W" || unit === "kW" || unit === "MW" || unit === "m³/h") return unit;
+  return null;
+}
+
+function getMeterGaugeUnit(meter: any, liveUnit?: string): GaugeUnit {
+  return (
+    normalizeGaugeUnit(liveUnit) ??
+    normalizeGaugeUnit(meter.source_unit_power) ??
+    normalizeGaugeUnit(meter.unit) ??
+    (meter.energy_type === "wasser" || meter.energy_type === "gas" ? "m³/h" : "kW")
+  );
+}
+
+function toGaugeBaseValue(value: number, unit: GaugeUnit): number {
+  if (unit === "m³/h") return value;
+  return value * POWER_UNIT_FACTORS[unit];
+}
+
+function fromGaugeBaseValue(value: number, unit: GaugeUnit): number {
+  if (unit === "m³/h") return value;
+  return value / POWER_UNIT_FACTORS[unit];
+}
+
+function getAutoGaugeUnit(baseValue: number, energyType: string): GaugeUnit {
+  if (energyType === "wasser" || energyType === "gas") return "m³/h";
+  if (baseValue >= 1_000_000) return "MW";
+  if (baseValue >= 1000) return "kW";
+  return "W";
 }
 
 function autoScale(value: number, peak: number): number {
@@ -68,6 +106,7 @@ const EnergyGaugeWidget = ({ locationId }: EnergyGaugeWidgetProps) => {
 
   // Subscribe to Realtime for instant updates
   const { latestByMeter, peakByMeter, resetPeaks } = useRealtimePower(meterIds);
+  const { livePowerByMeter, isLoading: liveGatewayLoading } = useGatewayLivePower(activeMeters);
 
   // Load initial current values from the latest power readings
   const [initialCurrent, setInitialCurrent] = useState<Record<string, number>>({});
@@ -131,45 +170,51 @@ const EnergyGaugeWidget = ({ locationId }: EnergyGaugeWidgetProps) => {
 
   // Build gauge data from Realtime values (with initial seed as fallback)
   const gaugeData = useMemo((): GaugeData[] => {
-    const currentByType: Record<string, number> = {};
-    const peaksByType: Record<string, number> = {};
+    const currentByTypeBase: Record<string, number> = {};
+    const peaksByTypeBase: Record<string, number> = {};
 
     for (const meter of activeMeters) {
       const et = meter.energy_type;
+      const liveGatewayValue = livePowerByMeter[meter.id];
+      const gaugeUnit = getMeterGaugeUnit(meter, liveGatewayValue?.unit);
+
       // Realtime value takes priority, then initial seed
-      const current = latestByMeter[meter.id] ?? initialCurrent[meter.id];
+      const current = latestByMeter[meter.id] ?? initialCurrent[meter.id] ?? liveGatewayValue?.value;
       if (current != null) {
-        currentByType[et] = (currentByType[et] ?? 0) + current;
+        currentByTypeBase[et] = (currentByTypeBase[et] ?? 0) + toGaugeBaseValue(current, gaugeUnit);
       }
+
       // Peak: max of Realtime peak and initial peak
       const rtPeak = peakByMeter[meter.id] ?? 0;
       const initPeak = initialPeaks[meter.id] ?? 0;
       const peak = Math.max(rtPeak, initPeak);
       if (peak > 0) {
-        peaksByType[et] = Math.max(peaksByType[et] ?? 0, (peaksByType[et] ?? 0) > 0 ? peaksByType[et] : 0);
-        // Accumulate peaks per type properly
-        peaksByType[et] = Math.max(peaksByType[et] ?? 0, peak);
+        peaksByTypeBase[et] = Math.max(peaksByTypeBase[et] ?? 0, toGaugeBaseValue(peak, gaugeUnit));
       }
     }
 
     const energyTypes = ["strom", "gas", "waerme", "wasser"].filter(
-      (et) => allowedTypes.has(et) && (currentByType[et] != null || peaksByType[et] != null)
+      (et) => allowedTypes.has(et) && (currentByTypeBase[et] != null || peaksByTypeBase[et] != null)
     );
 
     return energyTypes.map((et) => {
-      const current = currentByType[et] ?? 0;
-      const peak = peaksByType[et] ?? 0;
+      const currentBase = currentByTypeBase[et] ?? 0;
+      const peakBase = peaksByTypeBase[et] ?? 0;
+      const unit = getAutoGaugeUnit(Math.max(currentBase, peakBase), et);
+      const current = fromGaugeBaseValue(currentBase, unit);
+      const peak = fromGaugeBaseValue(peakBase, unit);
+
       return {
         energyType: et,
         label: t(`energy.${et}` as any) || ENERGY_TYPE_LABELS[et] || et,
         currentValue: Math.round(current * 10) / 10,
         peakValue: Math.round(peak * 10) / 10,
         maxScale: autoScale(current, peak),
-        unit: getPowerUnit(et),
+        unit,
         color: ENERGY_HEX_COLORS[et] || "#888",
       };
     });
-  }, [activeMeters, latestByMeter, initialCurrent, peakByMeter, initialPeaks, allowedTypes, t]);
+  }, [activeMeters, latestByMeter, initialCurrent, peakByMeter, initialPeaks, allowedTypes, t, livePowerByMeter]);
 
   const ecoScore = useMemo(() => computeEcoScore(gaugeData), [gaugeData]);
 
@@ -184,7 +229,7 @@ const EnergyGaugeWidget = ({ locationId }: EnergyGaugeWidgetProps) => {
     hidePeak: true,
   };
 
-  const isLoading = !initialCurrentLoaded && meterIds.length > 0;
+  const isLoading = meterIds.length > 0 && (!initialCurrentLoaded || liveGatewayLoading);
 
   if (isLoading) {
     return (

@@ -1,11 +1,11 @@
-import { useMemo, useState, useEffect, useCallback } from "react";
+import { useMemo, useCallback } from "react";
 import { Meter } from "@/hooks/useMeters";
 import { MeterReading } from "@/hooks/useMeterReadings";
+import { useGatewayLivePower } from "@/hooks/useGatewayLivePower";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { AlertTriangle, CheckCircle2, Minus, Zap, Flame, Droplets, Thermometer } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
 import { formatEnergy } from "@/lib/formatEnergy";
 
 interface MeterAggregationWidgetProps {
@@ -45,65 +45,17 @@ function getLatestReading(meterId: string, readings: MeterReading[]): number | n
 
 export const MeterAggregationWidget = ({ meters, readings }: MeterAggregationWidgetProps) => {
   const activeMeters = meters.filter((m) => !m.is_archived);
-  const [liveValues, setLiveValues] = useState<Map<string, number>>(new Map());
-
-  // Fetch live sensor values for automatic meters
-  const fetchLiveValues = useCallback(async () => {
-    const automaticMeters = activeMeters.filter(
-      (m) => m.capture_type === "automatic" && m.sensor_uuid && m.location_integration_id
-    );
-    if (automaticMeters.length === 0) return;
-
-    // Group by integration
-    const byIntegration = new Map<string, Meter[]>();
-    automaticMeters.forEach((m) => {
-      const key = m.location_integration_id!;
-      const existing = byIntegration.get(key) || [];
-      existing.push(m);
-      byIntegration.set(key, existing);
-    });
-
-    const newValues = new Map<string, number>();
-
-    for (const [integrationId, intMeters] of byIntegration) {
-      try {
-        const { data, error } = await supabase.functions.invoke("loxone-api", {
-          body: { locationIntegrationId: integrationId, action: "getSensors" },
-        });
-        if (error || !data?.success) continue;
-
-        for (const meter of intMeters) {
-          const sensor = data.sensors?.find((s: any) => s.id === meter.sensor_uuid);
-          if (sensor && sensor.value !== undefined) {
-            const numVal = typeof sensor.value === "string" ? parseFloat(sensor.value) : sensor.value;
-            if (!isNaN(numVal)) {
-              newValues.set(meter.id, numVal);
-            }
-          }
-        }
-      } catch (err) {
-        console.warn(`Failed to fetch sensors for integration ${integrationId}:`, err);
-      }
-    }
-
-    setLiveValues(newValues);
-  }, [activeMeters]);
-
-  useEffect(() => {
-    fetchLiveValues();
-    const interval = setInterval(fetchLiveValues, 300000); // 5 min
-    return () => clearInterval(interval);
-  }, [fetchLiveValues]);
+  const { livePowerByMeter } = useGatewayLivePower(activeMeters);
 
   // Get value: prefer live for automatic meters, fall back to meter_readings
   const getMeterValue = useCallback(
     (meter: Meter): number | null => {
-      if (meter.capture_type === "automatic" && liveValues.has(meter.id)) {
-        return liveValues.get(meter.id)!;
+      if (meter.capture_type === "automatic" && livePowerByMeter[meter.id]) {
+        return livePowerByMeter[meter.id].value;
       }
       return getLatestReading(meter.id, readings);
     },
-    [liveValues, readings]
+    [livePowerByMeter, readings]
   );
 
   const aggregations = useMemo<AggregationRow[]>(() => {
