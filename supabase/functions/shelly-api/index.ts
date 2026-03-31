@@ -150,11 +150,13 @@ serve(async (req) => {
             stateName: "total_act", secondaryValue: "", secondaryStateName: "", secondaryUnit: "", totalDay: null,
           });
         }
+        const totalChannels = deviceChannelCount.get(deviceId) || 0;
         for (let ch = 0; ch < 4; ch++) {
           const sw = deviceStatus?.[`switch:${ch}`];
           if (sw) {
+            const chLabel = totalChannels > 1 ? `${deviceName} Kanal ${ch}` : deviceName;
             sensors.push({
-              id: `${deviceId}_switch${ch}`, name: `${deviceName} Kanal ${ch}`, type: "switch",
+              id: `${deviceId}_switch${ch}`, name: chLabel, type: "switch",
               controlType: model, room: "", category: "Schalter",
               value: sw.output ? "Ein" : "Aus", rawValue: sw.output ? 1 : 0, unit: "",
               status: "online", stateName: "output",
