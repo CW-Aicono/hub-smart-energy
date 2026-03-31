@@ -3,7 +3,16 @@ import { useFloorSensorPositions, FloorSensorPosition } from "@/hooks/useFloorSe
 import { useLoxoneSensorsMulti } from "@/hooks/useLoxoneSensors";
 import { supabase } from "@/integrations/supabase/client";
 
-export interface LiveSensorValue {
+/** Detect if a string looks like a raw Shelly MAC/device ID (e.g. "3ce90e6f3b04") */
+function looksLikeTechnicalId(name: string): boolean {
+  if (!name) return false;
+  // Pure hex string (MAC without colons) - 6-12 hex chars
+  if (/^[0-9a-f]{6,12}$/i.test(name.trim())) return true;
+  // Starts with hex ID followed by space (e.g. "3ce90e6f3b04 Leistung")
+  if (/^[0-9a-f]{6,12}\s/i.test(name.trim())) return true;
+  return false;
+}
+
   id: string;
   name: string;
   value: string;
