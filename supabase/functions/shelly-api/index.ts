@@ -7,8 +7,73 @@ interface ShellyConfig {
   auth_key: string;
 }
 
+/** Strip colons, dashes, whitespace and lowercase for stable ID comparison */
+function normalizeShellyId(id: string): string {
+  return String(id).toLowerCase().replace(/[:\-\s]/g, "").trim();
+}
+
 async function updateSyncStatus(supabase: ReturnType<typeof createClient>, id: string, status: string) {
   await supabase.from("location_integrations").update({ sync_status: status, last_sync_at: new Date().toISOString() }).eq("id", id);
+}
+
+/**
+ * Fetch device names via Shelly Cloud v2 API.
+ * POST /v2/devices/api/get with select: ["settings"]
+ * Returns a map of normalized deviceId → user-assigned name.
+ */
+async function fetchDeviceNamesV2(baseUrl: string, authKey: string, deviceIds: string[]): Promise<Map<string, string>> {
+  const nameMap = new Map<string, string>();
+  // v2 API allows max 10 IDs per request
+  const chunks: string[][] = [];
+  for (let i = 0; i < deviceIds.length; i += 10) {
+    chunks.push(deviceIds.slice(i, i + 10));
+  }
+  for (const chunk of chunks) {
+    try {
+      const res = await fetch(`${baseUrl}/v2/devices/api/get?auth_key=${authKey}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: chunk, select: ["settings"] }),
+      });
+      if (!res.ok) {
+        console.warn(`[shelly] v2 /devices/api/get returned HTTP ${res.status}`);
+        continue;
+      }
+      const data = await res.json();
+      // Response is { data: { devices: [ { id, settings: { name: "..." } } ] } } or similar
+      const devices = data?.data?.devices || data?.data || [];
+      if (Array.isArray(devices)) {
+        for (const dev of devices) {
+          const id = dev.id || dev._id;
+          const name = dev.settings?.name || dev.name;
+          if (id && name) {
+            nameMap.set(normalizeShellyId(id), String(name));
+          }
+        }
+      }
+    } catch (e) {
+      console.warn("[shelly] v2 API name fetch failed:", e);
+    }
+    // Respect rate limit: 1 req/s
+    if (chunks.length > 1) await new Promise(r => setTimeout(r, 1100));
+  }
+  return nameMap;
+}
+
+/**
+ * Extract device name from status object using multiple fallback sources.
+ * Priority: sys.device.name (Gen2) > _dev_info.name > cloud.name > null
+ */
+function extractNameFromStatus(deviceStatus: any): string | null {
+  // Gen2: sys.device.name is where the user-set name lives
+  if (deviceStatus?.sys?.device?.name) return String(deviceStatus.sys.device.name);
+  // Shelly Cloud adds _dev_info with name
+  if (deviceStatus?._dev_info?.name) return String(deviceStatus._dev_info.name);
+  // Some firmware versions store it in cloud
+  if (deviceStatus?.cloud?.name) return String(deviceStatus.cloud.name);
+  // Gen1: getinfo sometimes has name
+  if (deviceStatus?.getinfo?.name) return String(deviceStatus.getinfo.name);
+  return null;
 }
 
 serve(async (req) => {
@@ -79,35 +144,46 @@ serve(async (req) => {
     if (action === "getSensors") {
       await updateSyncStatus(supabase, locationIntegrationId, "syncing");
 
-      // Fetch device list (contains user-assigned names) and status in parallel
-      const [listRes, statusRes] = await Promise.all([
-        fetch(`${baseUrl}/device/all?auth_key=${config.auth_key}`),
-        fetch(`${baseUrl}/device/all_status?auth_key=${config.auth_key}`),
-      ]);
+      // Step 1: Fetch all device statuses
+      const statusRes = await fetch(`${baseUrl}/device/all_status?auth_key=${config.auth_key}`);
       if (!statusRes.ok) {
         await updateSyncStatus(supabase, locationIntegrationId, "error");
         throw new Error(`Geräte konnten nicht geladen werden: HTTP ${statusRes.status}`);
       }
       const statusData = await statusRes.json();
       const devices = statusData?.data?.devices_status || {};
+      const deviceIds = Object.keys(devices);
 
-      // Build a map of deviceId → user-assigned name from /device/all
-      const deviceNameMap = new Map<string, string>();
-      if (listRes.ok) {
-        try {
-          const listData = await listRes.json();
-          const deviceList = listData?.data?.devices || [];
-          for (const d of deviceList) {
-            const id = d.id || d._id;
-            const name = d.name;
-            if (id && name) deviceNameMap.set(String(id).toLowerCase().trim(), String(name));
-          }
-          console.log(`[shelly] deviceNameMap keys: ${[...deviceNameMap.keys()].join(", ")}`);
-        } catch (e) {
-          console.warn("[shelly] Failed to parse /device/all response:", e);
+      // Step 2: Build name map from multiple sources
+      // 2a: Extract names from status data itself (Gen2 sys.device.name, _dev_info.name)
+      const statusNameMap = new Map<string, string>();
+      for (const [deviceId, deviceStatus] of Object.entries(devices as Record<string, any>)) {
+        const name = extractNameFromStatus(deviceStatus);
+        if (name) {
+          statusNameMap.set(normalizeShellyId(deviceId), name);
         }
-      } else {
-        console.warn(`[shelly] /device/all returned HTTP ${listRes.status} – falling back to _dev_info.name`);
+      }
+      console.log(`[shelly] Names from status: ${statusNameMap.size}/${deviceIds.length} devices`);
+
+      // 2b: For devices still without names, try v2 API (sequential, respects rate limit)
+      const missingNameIds = deviceIds.filter(id => !statusNameMap.has(normalizeShellyId(id)));
+      let v2NameMap = new Map<string, string>();
+      if (missingNameIds.length > 0) {
+        console.log(`[shelly] ${missingNameIds.length} devices without name from status, trying v2 API...`);
+        v2NameMap = await fetchDeviceNamesV2(baseUrl, config.auth_key, missingNameIds);
+        console.log(`[shelly] v2 API resolved ${v2NameMap.size}/${missingNameIds.length} names`);
+      }
+
+      // Merged name resolver: status name > v2 name > deviceId
+      function resolveDeviceName(deviceId: string, deviceStatus: any): string {
+        const normalizedId = normalizeShellyId(deviceId);
+        const statusName = statusNameMap.get(normalizedId);
+        if (statusName) return statusName;
+        const v2Name = v2NameMap.get(normalizedId);
+        if (v2Name) return v2Name;
+        // Last resort: log and use deviceId
+        console.log(`[shelly] No name found for device "${deviceId}" (normalized: "${normalizedId}"), status keys: ${Object.keys(deviceStatus || {}).join(",")}`);
+        return deviceId;
       }
 
       // Count channels per device to decide whether to append "Kanal X"
@@ -123,12 +199,8 @@ serve(async (req) => {
 
       const sensors: any[] = [];
       for (const [deviceId, deviceStatus] of Object.entries(devices as Record<string, any>)) {
-        const normalizedId = deviceId.toLowerCase().trim();
-        const deviceName = deviceNameMap.get(normalizedId) || deviceStatus?._dev_info?.name || deviceId;
-        if (!deviceNameMap.has(normalizedId)) {
-          console.log(`[shelly] No name found for device "${deviceId}" (normalized: "${normalizedId}"), status keys: ${Object.keys(deviceStatus || {}).join(",")}`);
-        }
-        const model = deviceStatus?._dev_info?.model || "unknown";
+        const deviceName = resolveDeviceName(deviceId, deviceStatus);
+        const model = deviceStatus?._dev_info?.model || deviceStatus?.sys?.device?.model || "unknown";
 
         if (deviceStatus?.["em:0"]) {
           const em = deviceStatus["em:0"];
@@ -191,11 +263,13 @@ serve(async (req) => {
           });
         }
 
-        // ── Gen 1: meters[] (standalone, only if no relay covered it) ──
+        // ── Gen 1: meters[] (standalone power sensors) ──
         if (Array.isArray(deviceStatus.meters)) {
+          const meterCount = deviceStatus.meters.length;
           deviceStatus.meters.forEach((m: any, i: number) => {
+            const meterLabel = meterCount > 1 ? `${deviceName} Leistung ${i}` : `${deviceName} Leistung`;
             sensors.push({
-              id: `${deviceId}_meter${i}`, name: `${deviceName} Leistung ${i}`, type: "power",
+              id: `${deviceId}_meter${i}`, name: meterLabel, type: "power",
               controlType: model, room: "", category: "Energie",
               value: m.power != null ? m.power.toFixed(1) : "-", rawValue: m.power ?? null, unit: "W",
               status: "online", stateName: "power",

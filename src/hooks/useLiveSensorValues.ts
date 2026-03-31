@@ -3,6 +3,16 @@ import { useFloorSensorPositions, FloorSensorPosition } from "@/hooks/useFloorSe
 import { useLoxoneSensorsMulti } from "@/hooks/useLoxoneSensors";
 import { supabase } from "@/integrations/supabase/client";
 
+/** Detect if a string looks like a raw Shelly MAC/device ID (e.g. "3ce90e6f3b04") */
+function looksLikeTechnicalId(name: string): boolean {
+  if (!name) return false;
+  // Pure hex string (MAC without colons) - 6-12 hex chars
+  if (/^[0-9a-f]{6,12}$/i.test(name.trim())) return true;
+  // Starts with hex ID followed by space (e.g. "3ce90e6f3b04 Leistung")
+  if (/^[0-9a-f]{6,12}\s/i.test(name.trim())) return true;
+  return false;
+}
+
 export interface LiveSensorValue {
   id: string;
   name: string;
@@ -70,9 +80,13 @@ export function useLiveSensorValues(floorId: string | undefined): UseLiveSensorV
 
       const sensor = sensors.find((s: any) => s.id === pos.sensor_uuid);
       if (sensor) {
+        // Prefer live sensor name over stored DB name (which may be a stale device ID)
+        const liveName = sensor.name && !looksLikeTechnicalId(sensor.name) ? sensor.name : null;
+        const storedName = pos.sensor_name && !looksLikeTechnicalId(pos.sensor_name) ? pos.sensor_name : null;
+        const displayName = liveName || storedName || sensor.name || pos.sensor_name;
         const val: LiveSensorValue = {
           id: sensor.id,
-          name: pos.sensor_name,
+          name: displayName,
           value: sensor.value,
           unit: sensor.unit,
         };
