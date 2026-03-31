@@ -188,6 +188,7 @@ serve(async (req) => {
               status: "online", stateName: "ison",
               secondaryValue: power != null ? power.toFixed(1) : "", secondaryStateName: "power", secondaryUnit: "W", totalDay: null,
             });
+          });
         }
 
         // ── Gen 1: meters[] (standalone, only if no relay covered it) ──
