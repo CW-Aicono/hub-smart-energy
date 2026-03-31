@@ -70,9 +70,13 @@ export function useLiveSensorValues(floorId: string | undefined): UseLiveSensorV
 
       const sensor = sensors.find((s: any) => s.id === pos.sensor_uuid);
       if (sensor) {
+        // Prefer live sensor name over stored DB name (which may be a stale device ID)
+        const liveName = sensor.name && !looksLikeTechnicalId(sensor.name) ? sensor.name : null;
+        const storedName = pos.sensor_name && !looksLikeTechnicalId(pos.sensor_name) ? pos.sensor_name : null;
+        const displayName = liveName || storedName || sensor.name || pos.sensor_name;
         const val: LiveSensorValue = {
           id: sensor.id,
-          name: pos.sensor_name,
+          name: displayName,
           value: sensor.value,
           unit: sensor.unit,
         };
