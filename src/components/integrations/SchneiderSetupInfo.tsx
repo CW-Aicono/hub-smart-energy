@@ -95,13 +95,19 @@ export function SchneiderSetupInfo({ config, setupInstructions }: SchneiderSetup
         ))}
       </div>
 
-      {/* TLS warning */}
-      <div className="flex items-start gap-2 mt-2 p-2 rounded bg-orange-500/10 border border-orange-500/20 text-xs text-orange-700 dark:text-orange-400">
-        <ShieldAlert className="h-3.5 w-3.5 mt-0.5 shrink-0" />
-        <span>
-          <strong>TLS-Zertifikat:</strong> Deaktivieren Sie im Panel Server die <strong>TLS-Zertifikatsvalidierung</strong> (Option „Serverzertifikat nicht prüfen" / „Trust all certificates").
-          Ältere Firmware-Versionen unterstützen den Signaturalgorithmus des Cloud-Zertifikats nicht (SHA384withECDSA).
-        </span>
+      {/* TLS info */}
+      <div className="flex items-start gap-2 mt-2 p-2 rounded bg-primary/5 border border-primary/20 text-xs text-foreground">
+        <ShieldAlert className="h-3.5 w-3.5 mt-0.5 shrink-0 text-primary" />
+        <div className="space-y-1">
+          <p>
+            <strong>TLS-Zertifikat (Firmware ≥ v3.x):</strong> Die Zertifikatsvalidierung kann <strong>aktiviert bleiben</strong>.
+            Der Panel Server vertraut ab Firmware v3.x den Root-CAs von Amazon und Let's Encrypt, die vom Cloud-Endpunkt verwendet werden.
+          </p>
+          <p className="text-orange-700 dark:text-orange-400">
+            <strong>Ältere Firmware (&lt; v3.x):</strong> Deaktivieren Sie die <strong>TLS-Zertifikatsvalidierung</strong> (Option „Serverzertifikat nicht prüfen" / „Trust all certificates"),
+            da ältere Java-Runtimes den Signaturalgorithmus SHA384withECDSA nicht unterstützen.
+          </p>
+        </div>
       </div>
 
       {/* Wrong domain warning */}
