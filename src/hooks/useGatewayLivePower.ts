@@ -110,6 +110,9 @@ export function useGatewayLivePower(meters: Meter[]) {
 
           try {
             const edgeFunction = getEdgeFunctionName(integrationTypes.get(integrationId) ?? "");
+            // Push-based gateways (gateway-ingest) don't support getSensors – skip them
+            if (edgeFunction === "gateway-ingest") return;
+
             const { data } = await supabase.functions.invoke(edgeFunction, {
               body: { locationIntegrationId: integrationId, action: "getSensors" },
             });
