@@ -175,7 +175,7 @@ interface PeriodTotals {
   totalYear: number | null;
 }
 
-export function useEnergyData(locationId?: string | null) {
+export function useEnergyData(locationId?: string | null) { 
   const { user } = useAuth();
   const { meters } = useMeters();
   const { tenant } = useTenant();
