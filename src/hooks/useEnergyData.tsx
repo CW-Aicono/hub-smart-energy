@@ -5,6 +5,7 @@ import { useAuth } from "./useAuth";
 import { useMeters } from "./useMeters";
 import { useLoxoneSensorsMulti } from "./useLoxoneSensors";
 import { useTenant } from "./useTenant";
+import { useGatewayLivePower } from "./useGatewayLivePower";
 import type { GatewaySensor } from "./useLoxoneSensors";
 
 export interface MonthlyEnergyData {
@@ -217,8 +218,32 @@ export function useEnergyData(locationId?: string | null) {
     return Array.from(ids);
   }, [meters]);
 
-  // Use centralized cached sensor queries (stable hook call)
-  const sensorQueries = useLoxoneSensorsMulti(integrationIds);
+  // Resolve integration types dynamically so non-Loxone gateways call the right edge function
+  const { data: resolvedIntegrationTypes } = useQuery({
+    queryKey: ["energy-data-integration-types", integrationIds.join(",")],
+    queryFn: async () => {
+      if (integrationIds.length === 0) return [] as (string | undefined)[];
+      const { data } = await supabase
+        .from("location_integrations")
+        .select("id, integration:integrations(type)")
+        .in("id", integrationIds);
+      const typeMap = new Map<string, string>();
+      data?.forEach((row: any) => {
+        if (row.integration?.type) typeMap.set(row.id, row.integration.type);
+      });
+      return integrationIds.map((id) => typeMap.get(id));
+    },
+    enabled: integrationIds.length > 0,
+    staleTime: 300_000,
+  });
+
+  const integrationTypes = resolvedIntegrationTypes ?? integrationIds.map(() => undefined);
+
+  // Use centralized cached sensor queries with dynamic type resolution
+  const sensorQueries = useLoxoneSensorsMulti(integrationIds, integrationTypes);
+
+  // Gateway live power fallback for sensors without period totals (e.g. Shelly)
+  const { livePowerByMeter } = useGatewayLivePower(meters);
 
   // Build live readings and period totals from cached sensor data
   const { liveReadings, livePeriodTotals } = useMemo(() => {
@@ -261,10 +286,36 @@ export function useEnergyData(locationId?: string | null) {
           });
         }
       }
+
+      // Fallback: if sensor had no period totals, use live gateway power as instantaneous value
+      if (!periodTotals[meter.id]?.totalDay && !periodTotals[meter.id]?.totalMonth) {
+        const gatewayLive = livePowerByMeter[meter.id];
+        if (gatewayLive) {
+          // Convert W to kW for energy-type consistency
+          const valueKw = gatewayLive.unit === "W" ? gatewayLive.value / 1000 : gatewayLive.value;
+          // Use live power as a pseudo period total (instantaneous → shown in Sankey as current flow)
+          if (!periodTotals[meter.id]) {
+            periodTotals[meter.id] = { totalDay: null, totalWeek: null, totalMonth: null, totalYear: null };
+          }
+          // Surface as totalDay so Sankey/pie display something
+          periodTotals[meter.id].totalDay = valueKw;
+          periodTotals[meter.id].totalMonth = valueKw;
+
+          // Also add as live reading if not already present
+          const alreadyHasReading = newLiveReadings.some((r) => r.meter_id === meter.id);
+          if (!alreadyHasReading) {
+            newLiveReadings.push({
+              meter_id: meter.id,
+              value: gatewayLive.value,
+              reading_date: now,
+            });
+          }
+        }
+      }
     }
 
     return { liveReadings: newLiveReadings, livePeriodTotals: periodTotals };
-  }, [meters, integrationIds, sensorQueries]);
+  }, [meters, integrationIds, sensorQueries, livePowerByMeter]);
 
   const liveLoading = sensorQueries.some((q) => q.isLoading);
 

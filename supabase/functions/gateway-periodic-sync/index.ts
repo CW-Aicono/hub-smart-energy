@@ -3,7 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders } from "../_shared/cors.ts";
 
 const GATEWAY_EDGE_FUNCTIONS: Record<string, string> = {
-  shelly_cloud: "shelly-api",
+  shelly_cloud: "shelly-periodic-sync",
   abb_free_at_home: "abb-api",
   siemens_building_x: "siemens-api",
   tuya_cloud: "tuya-api",
