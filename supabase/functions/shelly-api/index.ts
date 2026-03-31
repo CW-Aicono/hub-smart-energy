@@ -177,16 +177,17 @@ serve(async (req) => {
         // ── Gen 1: relays[] ──
         const hasGen2Switch = sensors.some((s) => s.id.startsWith(`${deviceId}_switch`));
         if (!hasGen2Switch && Array.isArray(deviceStatus.relays)) {
+          const relayCount = deviceStatus.relays.length;
           deviceStatus.relays.forEach((relay: any, i: number) => {
             const power = Array.isArray(deviceStatus.meters) ? deviceStatus.meters[i]?.power : undefined;
+            const relayLabel = relayCount > 1 ? `${deviceName} Kanal ${i}` : deviceName;
             sensors.push({
-              id: `${deviceId}_relay${i}`, name: `${deviceName} Kanal ${i}`, type: "switch",
+              id: `${deviceId}_relay${i}`, name: relayLabel, type: "switch",
               controlType: model, room: "", category: "Schalter",
               value: relay.ison ? "Ein" : "Aus", rawValue: relay.ison ? 1 : 0, unit: "",
               status: "online", stateName: "ison",
               secondaryValue: power != null ? power.toFixed(1) : "", secondaryStateName: "power", secondaryUnit: "W", totalDay: null,
             });
-          });
         }
 
         // ── Gen 1: meters[] (standalone, only if no relay covered it) ──
