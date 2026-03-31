@@ -5,6 +5,7 @@ import { useAuth } from "./useAuth";
 import { useMeters } from "./useMeters";
 import { useLoxoneSensorsMulti } from "./useLoxoneSensors";
 import { useTenant } from "./useTenant";
+import { useGatewayLivePower } from "./useGatewayLivePower";
 import type { GatewaySensor } from "./useLoxoneSensors";
 
 export interface MonthlyEnergyData {
