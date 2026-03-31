@@ -100,14 +100,34 @@ serve(async (req) => {
           for (const d of deviceList) {
             const id = d.id || d._id;
             const name = d.name;
-            if (id && name) deviceNameMap.set(String(id), String(name));
+            if (id && name) deviceNameMap.set(String(id).toLowerCase().trim(), String(name));
           }
-        } catch { /* ignore parse errors */ }
+          console.log(`[shelly] deviceNameMap keys: ${[...deviceNameMap.keys()].join(", ")}`);
+        } catch (e) {
+          console.warn("[shelly] Failed to parse /device/all response:", e);
+        }
+      } else {
+        console.warn(`[shelly] /device/all returned HTTP ${listRes.status} – falling back to _dev_info.name`);
+      }
+
+      // Count channels per device to decide whether to append "Kanal X"
+      const deviceChannelCount = new Map<string, number>();
+      for (const [deviceId, deviceStatus] of Object.entries(devices as Record<string, any>)) {
+        let count = 0;
+        for (let ch = 0; ch < 4; ch++) {
+          if (deviceStatus?.[`switch:${ch}`]) count++;
+        }
+        if (count === 0 && Array.isArray(deviceStatus.relays)) count = deviceStatus.relays.length;
+        deviceChannelCount.set(deviceId, count);
       }
 
       const sensors: any[] = [];
       for (const [deviceId, deviceStatus] of Object.entries(devices as Record<string, any>)) {
-        const deviceName = deviceNameMap.get(deviceId) || deviceStatus?._dev_info?.name || deviceId;
+        const normalizedId = deviceId.toLowerCase().trim();
+        const deviceName = deviceNameMap.get(normalizedId) || deviceStatus?._dev_info?.name || deviceId;
+        if (!deviceNameMap.has(normalizedId)) {
+          console.log(`[shelly] No name found for device "${deviceId}" (normalized: "${normalizedId}"), status keys: ${Object.keys(deviceStatus || {}).join(",")}`);
+        }
         const model = deviceStatus?._dev_info?.model || "unknown";
 
         if (deviceStatus?.["em:0"]) {
