@@ -1,0 +1,69 @@
+# Home Assistant Add-on: EMS Gateway Hub
+# ========================================
+# Lokaler Gateway-Hub für Energiemanagementsysteme.
+# Sammelt Daten von HA-Entitäten und pusht sie an die Cloud.
+
+name: "EMS Gateway Hub"
+description: "Lokaler Gateway-Hub für das Energiemanagementsystem. Sammelt Sensordaten von Home Assistant und synchronisiert sie mit der Cloud."
+version: "1.0.0"
+slug: "ems-gateway-hub"
+url: "https://hub-smart-energy.lovable.app"
+arch:
+  - aarch64
+  - amd64
+  - armv7
+startup: "application"
+boot: "auto"
+ingress: false
+panel_icon: "mdi:flash"
+
+# Lokaler Health-Endpoint
+ports:
+  "8099/tcp": 8099
+ports_description:
+  "8099/tcp": "Health & Status API"
+
+# Konfigurationsoptionen
+options:
+  supabase_url: ""
+  gateway_api_key: ""
+  tenant_id: ""
+  device_name: "ha-addon"
+  poll_interval_seconds: 30
+  flush_interval_seconds: 5
+  heartbeat_interval_seconds: 60
+  entity_filter: "sensor.*_energy,sensor.*_power,sensor.*_consumption"
+  offline_buffer_max_mb: 100
+  auto_backup_hours: 24
+
+schema:
+  supabase_url:
+    name: "Cloud URL"
+    required: true
+  gateway_api_key:
+    name: "Gateway API Key"
+    required: true
+  tenant_id:
+    name: "Tenant ID"
+    required: true
+  device_name:
+    name: "Device Name"
+    required: true
+  poll_interval_seconds:
+    name: "Poll Interval (Seconds)"
+    required: true
+  flush_interval_seconds:
+    name: "Flush Interval (Seconds)"
+    required: true
+  heartbeat_interval_seconds:
+    name: "Heartbeat Interval (Seconds)"
+    required: true
+  entity_filter:
+    name: "Entity Filter (comma-separated patterns)"
+    required: false
+  offline_buffer_max_mb:
+    name: "Offline Buffer Max (MB)"
+    required: true
+  auto_backup_hours:
+    name: "Auto Backup Interval (Hours, 0 = disabled)"
+    required: false

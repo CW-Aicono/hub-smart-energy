@@ -725,6 +725,209 @@ async function handleSchneiderPush(req: Request): Promise<Response> {
   });
 }
 
+/* ── Heartbeat handler ────────────────────────────────────────────────────────── */
+
+async function handleHeartbeat(req: Request): Promise<Response> {
+  const authErr = validateApiKey(req);
+  if (authErr) return authErr;
+
+  let body: {
+    device_name?: string;
+    device_type?: string;
+    tenant_id?: string;
+    location_integration_id?: string;
+    local_ip?: string;
+    ha_version?: string;
+    addon_version?: string;
+    offline_buffer_count?: number;
+    config?: Record<string, unknown>;
+  };
+  try {
+    body = await req.json();
+  } catch {
+    return json({ error: "Invalid JSON body" }, 400);
+  }
+
+  if (!body.tenant_id || !body.device_name) {
+    return json({ error: "tenant_id and device_name are required" }, 400);
+  }
+
+  const supabase = getSupabase();
+
+  // Upsert by tenant_id + device_name
+  const { data: existing } = await supabase
+    .from("gateway_devices")
+    .select("id")
+    .eq("tenant_id", body.tenant_id)
+    .eq("device_name", body.device_name)
+    .maybeSingle();
+
+  const deviceData = {
+    tenant_id: body.tenant_id,
+    device_name: body.device_name,
+    device_type: body.device_type || "ha-addon",
+    local_ip: body.local_ip || null,
+    ha_version: body.ha_version || null,
+    addon_version: body.addon_version || null,
+    offline_buffer_count: body.offline_buffer_count ?? 0,
+    status: "online",
+    last_heartbeat_at: new Date().toISOString(),
+    location_integration_id: body.location_integration_id || null,
+    config: body.config || {},
+  };
+
+  let result;
+  if (existing?.id) {
+    const { error } = await supabase
+      .from("gateway_devices")
+      .update(deviceData)
+      .eq("id", existing.id);
+    if (error) {
+      console.error("[gateway-ingest] heartbeat update error:", error.message);
+      return json({ error: "Database error" }, 500);
+    }
+    result = { id: existing.id, action: "updated" };
+  } else {
+    const { data: inserted, error } = await supabase
+      .from("gateway_devices")
+      .insert(deviceData)
+      .select("id")
+      .single();
+    if (error) {
+      console.error("[gateway-ingest] heartbeat insert error:", error.message);
+      return json({ error: "Database error" }, 500);
+    }
+    result = { id: inserted.id, action: "created" };
+  }
+
+  // Return current latest_available_version for update check
+  const { data: device } = await supabase
+    .from("gateway_devices")
+    .select("latest_available_version")
+    .eq("id", result.id)
+    .single();
+
+  return json({
+    success: true,
+    ...result,
+    latest_available_version: device?.latest_available_version || null,
+  });
+}
+
+/* ── Gateway backup handler ──────────────────────────────────────────────────── */
+
+async function handleGatewayBackup(req: Request): Promise<Response> {
+  const authErr = validateApiKey(req);
+  if (authErr) return authErr;
+
+  let body: {
+    tenant_id?: string;
+    device_name?: string;
+    backup_data?: Record<string, unknown>;
+  };
+  try {
+    body = await req.json();
+  } catch {
+    return json({ error: "Invalid JSON body" }, 400);
+  }
+
+  if (!body.tenant_id || !body.device_name || !body.backup_data) {
+    return json({ error: "tenant_id, device_name, and backup_data are required" }, 400);
+  }
+
+  const supabase = getSupabase();
+  const jsonStr = JSON.stringify(body.backup_data);
+  const sizeBytes = new TextEncoder().encode(jsonStr).length;
+
+  const { error } = await supabase.from("backup_snapshots").insert({
+    tenant_id: body.tenant_id,
+    backup_type: "gateway",
+    status: "completed",
+    tables_count: 0,
+    rows_count: 0,
+    size_bytes: sizeBytes,
+    data: {
+      version: "1.0",
+      type: "gateway-backup",
+      device_name: body.device_name,
+      created_at: new Date().toISOString(),
+      ...body.backup_data,
+    },
+    expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+  });
+
+  if (error) {
+    console.error("[gateway-ingest] gateway-backup error:", error.message);
+    return json({ error: "Database error" }, 500);
+  }
+
+  return json({ success: true, size_bytes: sizeBytes });
+}
+
+/* ── Addon version handler ───────────────────────────────────────────────────── */
+
+async function handleAddonVersion(): Promise<Response> {
+  // Returns the latest recommended add-on version (could be a secret or config)
+  const latestVersion = Deno.env.get("HA_ADDON_LATEST_VERSION") || "1.0.0";
+  return json({ success: true, latest_version: latestVersion });
+}
+
+/* ── Gateway command relay ───────────────────────────────────────────────────── */
+
+async function handleGatewayCommand(req: Request): Promise<Response> {
+  const authErr = validateApiKey(req);
+  if (authErr) return authErr;
+
+  let body: { device_id?: string; command?: string; params?: Record<string, unknown> };
+  try {
+    body = await req.json();
+  } catch {
+    return json({ error: "Invalid JSON body" }, 400);
+  }
+
+  if (!body.device_id || !body.command) {
+    return json({ error: "device_id and command are required" }, 400);
+  }
+
+  const allowedCommands = ["backup", "update", "restart"];
+  if (!allowedCommands.includes(body.command)) {
+    return json({ error: `Unknown command. Allowed: ${allowedCommands.join(", ")}` }, 400);
+  }
+
+  const supabase = getSupabase();
+
+  // Store command in device config for the add-on to pick up on next heartbeat
+  const { data: device, error: fetchErr } = await supabase
+    .from("gateway_devices")
+    .select("id, config")
+    .eq("id", body.device_id)
+    .single();
+
+  if (fetchErr || !device) {
+    return json({ error: "Device not found" }, 404);
+  }
+
+  const currentConfig = (device.config || {}) as Record<string, unknown>;
+  const { error } = await supabase
+    .from("gateway_devices")
+    .update({
+      config: {
+        ...currentConfig,
+        pending_command: body.command,
+        pending_command_params: body.params || {},
+        pending_command_at: new Date().toISOString(),
+      },
+    })
+    .eq("id", device.id);
+
+  if (error) {
+    console.error("[gateway-ingest] gateway-command error:", error.message);
+    return json({ error: "Database error" }, 500);
+  }
+
+  return json({ success: true, command: body.command, device_id: device.id });
+}
+
 /* ── Main router ─────────────────────────────────────────────────────────────── */
 
 Deno.serve(async (req) => {
@@ -745,15 +948,18 @@ Deno.serve(async (req) => {
     if (action === "get-daily-totals") return handleGetDailyTotals(url);
     if (action === "get-readings") return handleGetReadings(url);
     if (action === "get-locations-summary") return handleGetLocationsSummary(url);
+    if (action === "addon-version") return handleAddonVersion();
   }
 
   // POST routes
   if (req.method === "POST") {
     if (action === "compact-day") return handleCompactDay(req);
     if (action === "schneider-push") return handleSchneiderPush(req);
+    if (action === "heartbeat") return handleHeartbeat(req);
+    if (action === "gateway-backup") return handleGatewayBackup(req);
+    if (action === "gateway-command") return handleGatewayCommand(req);
 
     // Fallback: if tenant_id is present and Basic Auth is used, route to Schneider handler
-    // even if action is missing (some devices may not send the query parameter)
     const hasTenantId = url.searchParams.has("tenant_id");
     const hasBasicAuth = /^basic\s/i.test(req.headers.get("Authorization") || "");
     if (hasTenantId && hasBasicAuth) {
