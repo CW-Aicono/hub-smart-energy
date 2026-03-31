@@ -13,6 +13,7 @@ function looksLikeTechnicalId(name: string): boolean {
   return false;
 }
 
+export interface LiveSensorValue {
   id: string;
   name: string;
   value: string;
