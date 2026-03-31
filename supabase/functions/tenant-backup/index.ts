@@ -30,7 +30,7 @@ const BACKUP_TABLES: Record<string, string[]> = {
   other: [
     "report_schedules", "brighthub_settings", "tenant_modules",
     "energy_storages", "arbitrage_strategies", "arbitrage_trades",
-    "floor_sensor_positions",
+    "floor_sensor_positions", "gateway_devices",
   ],
 };
 
