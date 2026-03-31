@@ -100,14 +100,34 @@ serve(async (req) => {
           for (const d of deviceList) {
             const id = d.id || d._id;
             const name = d.name;
-            if (id && name) deviceNameMap.set(String(id), String(name));
+            if (id && name) deviceNameMap.set(String(id).toLowerCase().trim(), String(name));
           }
-        } catch { /* ignore parse errors */ }
+          console.log(`[shelly] deviceNameMap keys: ${[...deviceNameMap.keys()].join(", ")}`);
+        } catch (e) {
+          console.warn("[shelly] Failed to parse /device/all response:", e);
+        }
+      } else {
+        console.warn(`[shelly] /device/all returned HTTP ${listRes.status} – falling back to _dev_info.name`);
+      }
+
+      // Count channels per device to decide whether to append "Kanal X"
+      const deviceChannelCount = new Map<string, number>();
+      for (const [deviceId, deviceStatus] of Object.entries(devices as Record<string, any>)) {
+        let count = 0;
+        for (let ch = 0; ch < 4; ch++) {
+          if (deviceStatus?.[`switch:${ch}`]) count++;
+        }
+        if (count === 0 && Array.isArray(deviceStatus.relays)) count = deviceStatus.relays.length;
+        deviceChannelCount.set(deviceId, count);
       }
 
       const sensors: any[] = [];
       for (const [deviceId, deviceStatus] of Object.entries(devices as Record<string, any>)) {
-        const deviceName = deviceNameMap.get(deviceId) || deviceStatus?._dev_info?.name || deviceId;
+        const normalizedId = deviceId.toLowerCase().trim();
+        const deviceName = deviceNameMap.get(normalizedId) || deviceStatus?._dev_info?.name || deviceId;
+        if (!deviceNameMap.has(normalizedId)) {
+          console.log(`[shelly] No name found for device "${deviceId}" (normalized: "${normalizedId}"), status keys: ${Object.keys(deviceStatus || {}).join(",")}`);
+        }
         const model = deviceStatus?._dev_info?.model || "unknown";
 
         if (deviceStatus?.["em:0"]) {
@@ -130,11 +150,13 @@ serve(async (req) => {
             stateName: "total_act", secondaryValue: "", secondaryStateName: "", secondaryUnit: "", totalDay: null,
           });
         }
+        const totalChannels = deviceChannelCount.get(deviceId) || 0;
         for (let ch = 0; ch < 4; ch++) {
           const sw = deviceStatus?.[`switch:${ch}`];
           if (sw) {
+            const chLabel = totalChannels > 1 ? `${deviceName} Kanal ${ch}` : deviceName;
             sensors.push({
-              id: `${deviceId}_switch${ch}`, name: `${deviceName} Kanal ${ch}`, type: "switch",
+              id: `${deviceId}_switch${ch}`, name: chLabel, type: "switch",
               controlType: model, room: "", category: "Schalter",
               value: sw.output ? "Ein" : "Aus", rawValue: sw.output ? 1 : 0, unit: "",
               status: "online", stateName: "output",
@@ -155,16 +177,17 @@ serve(async (req) => {
         // ── Gen 1: relays[] ──
         const hasGen2Switch = sensors.some((s) => s.id.startsWith(`${deviceId}_switch`));
         if (!hasGen2Switch && Array.isArray(deviceStatus.relays)) {
+          const relayCount = deviceStatus.relays.length;
           deviceStatus.relays.forEach((relay: any, i: number) => {
             const power = Array.isArray(deviceStatus.meters) ? deviceStatus.meters[i]?.power : undefined;
+            const relayLabel = relayCount > 1 ? `${deviceName} Kanal ${i}` : deviceName;
             sensors.push({
-              id: `${deviceId}_relay${i}`, name: `${deviceName} Kanal ${i}`, type: "switch",
+              id: `${deviceId}_relay${i}`, name: relayLabel, type: "switch",
               controlType: model, room: "", category: "Schalter",
               value: relay.ison ? "Ein" : "Aus", rawValue: relay.ison ? 1 : 0, unit: "",
               status: "online", stateName: "ison",
               secondaryValue: power != null ? power.toFixed(1) : "", secondaryStateName: "power", secondaryUnit: "W", totalDay: null,
             });
-          });
         }
 
         // ── Gen 1: meters[] (standalone, only if no relay covered it) ──
