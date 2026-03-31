@@ -2008,6 +2008,75 @@ export type Database = {
         }
         Relationships: []
       }
+      gateway_devices: {
+        Row: {
+          addon_version: string | null
+          config: Json
+          created_at: string
+          device_name: string
+          device_type: string
+          ha_version: string | null
+          id: string
+          last_heartbeat_at: string | null
+          latest_available_version: string | null
+          local_ip: string | null
+          location_integration_id: string | null
+          offline_buffer_count: number
+          status: string
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          addon_version?: string | null
+          config?: Json
+          created_at?: string
+          device_name: string
+          device_type?: string
+          ha_version?: string | null
+          id?: string
+          last_heartbeat_at?: string | null
+          latest_available_version?: string | null
+          local_ip?: string | null
+          location_integration_id?: string | null
+          offline_buffer_count?: number
+          status?: string
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          addon_version?: string | null
+          config?: Json
+          created_at?: string
+          device_name?: string
+          device_type?: string
+          ha_version?: string | null
+          id?: string
+          last_heartbeat_at?: string | null
+          latest_available_version?: string | null
+          local_ip?: string | null
+          location_integration_id?: string | null
+          offline_buffer_count?: number
+          status?: string
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gateway_devices_location_integration_id_fkey"
+            columns: ["location_integration_id"]
+            isOneToOne: false
+            referencedRelation: "location_integrations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gateway_devices_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       infrastructure_metrics: {
         Row: {
           id: string
