@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useTranslation } from "@/hooks/useTranslation";
+import { useTenant } from "@/hooks/useTenant";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -11,6 +12,7 @@ import { HelpTooltip } from "@/components/ui/help-tooltip";
 import { toast } from "sonner";
 
 export function ApiSettings() {
+  const { tenant } = useTenant();
   const { t } = useTranslation();
   const [loading, setLoading] = useState(false);
   const [apiKey, setApiKey] = useState<string | null>(null);
@@ -158,6 +160,27 @@ export function ApiSettings() {
               )}
             </div>
             <p className="text-xs text-muted-foreground">{t("api.apiKeyHint")}</p>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Tenant-ID</Label>
+            <div className="flex gap-2">
+              <Input
+                readOnly
+                value={tenant?.id || "..."}
+                className="font-mono text-sm bg-muted"
+              />
+              {tenant?.id && (
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => copyToClipboard(tenant.id, "tenantId")}
+                >
+                  {copiedField === "tenantId" ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                </Button>
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground">Wird z.B. für die Schneider Panel Server HTTPS-Publikation als Query-Parameter benötigt</p>
           </div>
         </CardContent>
       </Card>
