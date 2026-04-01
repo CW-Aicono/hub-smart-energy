@@ -28,9 +28,7 @@ COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/dist/index.js ./index.js
 
 # SQLite DB directory for offline buffer (persisted via HA add-on data mount)
-RUN mkdir -p /data/db && chown worker:nodejs /data/db
-
-USER worker
+RUN mkdir -p /data/db
 
 HEALTHCHECK --interval=60s --timeout=10s --start-period=30s --retries=3 \
   CMD node -e "fetch('http://localhost:8099/api/status').then(r => r.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))" || exit 1
