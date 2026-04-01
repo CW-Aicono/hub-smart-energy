@@ -161,6 +161,27 @@ export function ApiSettings() {
             </div>
             <p className="text-xs text-muted-foreground">{t("api.apiKeyHint")}</p>
           </div>
+
+          <div className="space-y-2">
+            <Label>Tenant-ID</Label>
+            <div className="flex gap-2">
+              <Input
+                readOnly
+                value={tenant?.id || "..."}
+                className="font-mono text-sm bg-muted"
+              />
+              {tenant?.id && (
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => copyToClipboard(tenant.id, "tenantId")}
+                >
+                  {copiedField === "tenantId" ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                </Button>
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground">Wird z.B. für die Schneider Panel Server HTTPS-Publikation als Query-Parameter benötigt</p>
+          </div>
         </CardContent>
       </Card>
 
