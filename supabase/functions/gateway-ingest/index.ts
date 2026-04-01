@@ -995,6 +995,16 @@ Deno.serve(async (req) => {
     if (action === "gateway-backup") return handleGatewayBackup(req);
     if (action === "gateway-command") return handleGatewayCommand(req);
 
+    // Check if the body contains a getSensors action (called by frontend for all integration types).
+    // Push-based gateways don't support sensor discovery — return empty list gracefully.
+    try {
+      const clonedReq = req.clone();
+      const body = await clonedReq.json();
+      if (body?.action === "getSensors") {
+        return json({ success: true, sensors: [], push_gateway: true });
+      }
+    } catch { /* not JSON or no body – continue to normal routing */ }
+
     // Fallback: if tenant_id is present and Basic Auth is used, route to Schneider handler
     const hasTenantId = url.searchParams.has("tenant_id");
     const hasBasicAuth = /^basic\s/i.test(req.headers.get("Authorization") || "");
