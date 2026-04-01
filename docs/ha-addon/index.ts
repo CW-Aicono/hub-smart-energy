@@ -243,7 +243,7 @@ async function flushBuffer(): Promise<void> {
     if (res.ok) {
       const lastId = rows[rows.length - 1].id;
       deleteBatch.run(lastId);
-      const result = await res.json();
+      const result = await res.json() as { inserted?: number };
       console.log(`[flush] Sent ${readings.length} readings, inserted: ${result.inserted}`);
     } else {
       console.warn(`[flush] Cloud returned ${res.status} – keeping readings in buffer`);
