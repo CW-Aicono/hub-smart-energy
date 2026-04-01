@@ -40,12 +40,12 @@ options:
 
 schema:
   supabase_url: url
-  gateway_api_key: "str(1,)"
-  tenant_id: "str(1,)"
-  device_name: "str(1,)"
-  poll_interval_seconds: "int(1,)"
-  flush_interval_seconds: "int(1,)"
-  heartbeat_interval_seconds: "int(1,)"
+  gateway_api_key: str
+  tenant_id: str
+  device_name: str
+  poll_interval_seconds: int
+  flush_interval_seconds: int
+  heartbeat_interval_seconds: int
   entity_filter: "str?"
-  offline_buffer_max_mb: "int(1,)"
-  auto_backup_hours: "int(0,)"
+  offline_buffer_max_mb: int
+  auto_backup_hours: int

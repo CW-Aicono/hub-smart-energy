@@ -136,66 +136,192 @@ Nach dem Onboarding:
 
 ## 5. EMS Gateway Hub Add-on installieren
 
-### 5.1 Repository hinzufügen
+> ⚠️ **Wichtig:** Bevor das Add-on im Store erscheint, müssen die Dateien im GitHub-Repository korrekt sein. Falls du das Repository gerade erst erstellt hast oder das Add-on nicht im Store auftaucht, folge zuerst **Schritt 5.0**.
 
-1. Öffne den **Add-on Store** in Home Assistant
+### 5.0 GitHub-Dateien prüfen und korrigieren
+
+Das Add-on wird direkt aus deinem GitHub-Repository gebaut. Wenn die Dateien dort fehlerhaft sind, kann Home Assistant das Add-on **nicht erkennen** – es taucht dann einfach nicht im Store auf.
+
+Du musst **zwei Dateien** auf GitHub ersetzen. So geht das – Datei für Datei:
+
+---
+
+#### Datei 1: `config.yaml` ersetzen
+
+1. Öffne diese URL in deinem Browser:  
+   👉 **https://github.com/CW-Aicono/ha-addons/blob/main/ems-gateway-hub/config.yaml**
+
+2. Klicke oben rechts auf das **Stift-Symbol** (✏️ „Edit this file")
+
+3. Markiere den **gesamten Inhalt** im Editor (Windows: `Strg+A`, Mac: `Cmd+A`)
+
+4. **Lösche alles** (Entf-Taste oder Backspace)
+
+5. **Kopiere den folgenden Block** und füge ihn ein (Windows: `Strg+V`, Mac: `Cmd+V`):
+
+```yaml
+name: "EMS Gateway Hub"
+description: "Lokaler Gateway-Hub für das Energiemanagementsystem. Sammelt Sensordaten von Home Assistant und synchronisiert sie mit der Cloud."
+version: "1.0.0"
+slug: "ems-gateway-hub"
+url: "https://hub-smart-energy.lovable.app"
+arch:
+  - aarch64
+  - amd64
+  - armv7
+startup: "application"
+boot: "auto"
+ingress: false
+panel_icon: "mdi:flash"
+hassio_api: true
+homeassistant_api: true
+
+ports:
+  "8099/tcp": 8099
+ports_description:
+  "8099/tcp": "Health & Status API"
+
+options:
+  supabase_url: ""
+  gateway_api_key: ""
+  tenant_id: ""
+  device_name: "ha-addon"
+  poll_interval_seconds: 30
+  flush_interval_seconds: 5
+  heartbeat_interval_seconds: 60
+  entity_filter: "sensor.*_energy,sensor.*_power,sensor.*_consumption"
+  offline_buffer_max_mb: 100
+  auto_backup_hours: 24
+
+schema:
+  supabase_url: url
+  gateway_api_key: str
+  tenant_id: str
+  device_name: str
+  poll_interval_seconds: int
+  flush_interval_seconds: int
+  heartbeat_interval_seconds: int
+  entity_filter: "str?"
+  offline_buffer_max_mb: int
+  auto_backup_hours: int
+```
+
+6. Klicke oben rechts auf den grünen Button **„Commit changes…"**
+
+7. Im Pop-up: Lass alles so wie es ist und klicke auf **„Commit changes"**
+
+✅ **Fertig!** Die `config.yaml` ist jetzt korrekt.
+
+---
+
+#### Datei 2: `Dockerfile` ersetzen
+
+1. Öffne diese URL in deinem Browser:  
+   👉 **https://github.com/CW-Aicono/ha-addons/blob/main/ems-gateway-hub/Dockerfile**
+
+2. Klicke oben rechts auf das **Stift-Symbol** (✏️ „Edit this file")
+
+3. Markiere den **gesamten Inhalt** und **lösche alles**
+
+4. **Kopiere den folgenden Block** und füge ihn ein:
+
+```dockerfile
+FROM node:20-alpine AS builder
+
+WORKDIR /app
+
+RUN apk add --no-cache python3 make g++
+
+COPY package.json tsconfig.json ./
+RUN npm install
+
+COPY index.ts ./
+RUN npm run build && npm prune --omit=dev
+
+FROM node:20-alpine AS runner
+
+RUN addgroup -g 1001 -S nodejs && adduser -S worker -u 1001
+
+WORKDIR /app
+
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/dist/index.js ./index.js
+
+RUN mkdir -p /data/db && chown worker:nodejs /data/db
+
+USER worker
+
+HEALTHCHECK --interval=60s --timeout=10s --start-period=30s --retries=3 \
+  CMD node -e "fetch('http://localhost:8099/api/status').then(r => r.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))" || exit 1
+
+ENV NODE_ENV=production
+
+CMD ["node", "index.js"]
+```
+
+5. Klicke auf **„Commit changes…"** → **„Commit changes"**
+
+✅ **Fertig!** Das Dockerfile ist jetzt korrekt.
+
+---
+
+### 5.1 Prüfe, ob beide Dateien korrekt sind
+
+Öffne nacheinander diese zwei Links und prüfe:
+
+| Datei | Link | Erste Zeile muss sein |
+|---|---|---|
+| config.yaml | [config.yaml öffnen](https://github.com/CW-Aicono/ha-addons/blob/main/ems-gateway-hub/config.yaml) | `name: "EMS Gateway Hub"` |
+| Dockerfile | [Dockerfile öffnen](https://github.com/CW-Aicono/ha-addons/blob/main/ems-gateway-hub/Dockerfile) | `FROM node:20-alpine AS builder` |
+
+> ❌ Falls die erste Zeile **nicht** stimmt, hast du beim Ersetzen etwas übersehen. Wiederhole den Vorgang für die betroffene Datei.
+
+---
+
+### 5.2 Repository in Home Assistant hinzufügen (falls noch nicht geschehen)
+
+> Wenn du das Repository bereits hinzugefügt hast, springe direkt zu **Schritt 5.3**.
+
+1. Öffne den Add-on Store in Home Assistant:  
+   👉 **http://homeassistant.local:8123/hassio/store**
+
 2. Klicke oben rechts auf die **drei Punkte (⋮)** → **„Repositories"**
-3. Füge folgende Repository-URL hinzu:
+
+3. Füge diese URL ein:
 
 ```
 https://github.com/CW-Aicono/ha-addons
 ```
 
-4. Klicke auf **„Hinzufügen"** und danach auf **„Schließen"**
+4. Klicke auf **„Hinzufügen"** → **„Schließen"**
 
-### 5.2 Woran du erkennst, dass dieser Schritt korrekt war
+---
 
-Wenn im Fenster **„Add-on Repositories verwalten"** ein Eintrag mit
+### 5.3 Add-on Store neu laden
 
-- **EMS Gateway Hub Add-ons**
-- **Christian Wattenberg**
-- **https://github.com/CW-Aicono/ha-addons**
+> ⚠️ **Das ist der wichtigste Schritt!** Nach jeder Änderung auf GitHub muss Home Assistant die Repository-Daten neu laden.
 
-sichtbar ist, dann ist dieser Schritt **korrekt abgeschlossen**.
+1. Öffne den Add-on Store:  
+   👉 **http://homeassistant.local:8123/hassio/store**
 
-> ✅ Genau das ist auf deinem Screenshot zu sehen.
+2. Klicke oben rechts auf die **drei Punkte (⋮)**
 
-### 5.3 Warum die Installation trotzdem fehlschlägt
+3. Klicke auf **„Check for updates"** (oder „Nach Updates suchen")
 
-Wenn sich das Add-on **danach trotzdem nicht installieren lässt**, liegt der Fehler **nicht mehr in Home Assistant**, sondern im **GitHub-Repository des Add-ons**.
+4. **Warte 10–15 Sekunden**, dann lade die Seite im Browser neu (F5 oder `Strg+R`)
 
-Die technische Prüfung zeigt aktuell diese typischen Blocker:
+5. Scrolle nach unten – unter der Überschrift deines Repositories sollte jetzt **„EMS Gateway Hub"** erscheinen
 
-1. **`ems-gateway-hub/Dockerfile` muss eine echte Docker-Datei sein**  
-   Sie muss mit etwas wie `FROM node:...` beginnen. Wenn dort stattdessen JSON mit `{` beginnt, wurde versehentlich der Inhalt von `package.json` in die falsche Datei kopiert.
+> 💡 Falls das Add-on immer noch nicht erscheint:
+> - Warte 1–2 Minuten und wiederhole Schritt 3–4
+> - Prüfe nochmal die Dateien auf GitHub (Schritt 5.1)
+> - Entferne das Repository und füge es erneut hinzu (Schritt 5.2)
 
-2. **`ems-gateway-hub/config.yaml` braucht eine gültige Home-Assistant-Syntax**  
-   Unter `schema:` dürfen keine Blöcke mit `name:` und `required:` stehen. Home Assistant erwartet dort Typen wie `url`, `str`, `int` oder `bool`.
-
-3. **Das Add-on braucht API-Rechte für Home Assistant**  
-   Weil das Add-on mit der lokalen Home-Assistant-API spricht, müssen in `config.yaml` die Optionen `hassio_api: true` und `homeassistant_api: true` gesetzt sein.
-
-### 5.4 Bevor du erneut auf „Installieren" klickst
-
-Prüfe in deinem GitHub-Repo diese drei Dateien:
-
-- `ems-gateway-hub/Dockerfile`
-- `ems-gateway-hub/config.yaml`
-- `ems-gateway-hub/package.json`
-
-**Schnelltest für Laien:**
-
-- `Dockerfile` beginnt mit `FROM ...`
-- `package.json` beginnt mit `{`
-- `config.yaml` enthält unter `schema:` Werte wie `url`, `str`, `int`
-
-Erst **wenn diese drei Dateien korrekt sind**, solltest du das Add-on erneut installieren.
-
-### 5.5 Add-on installieren
+### 5.4 Add-on installieren
 
 1. Klicke auf **„EMS Gateway Hub"**
 2. Klicke auf **„Installieren"**
-3. Warte, bis die Installation abgeschlossen ist
+3. Warte, bis die Installation abgeschlossen ist (kann 2–5 Minuten dauern, da das Image gebaut wird)
 
 > 💡 **Nicht sofort starten!** Zuerst muss das Add-on konfiguriert werden (siehe nächster Schritt).
 
