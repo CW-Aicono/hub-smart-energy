@@ -874,8 +874,44 @@ async function handleAddonVersion(): Promise<Response> {
 
 /* ── Gateway command relay ───────────────────────────────────────────────────── */
 
+/**
+ * Validates either GATEWAY_API_KEY or an authenticated admin user JWT.
+ * Returns null on success or a Response on failure.
+ */
+async function validateApiKeyOrAdmin(req: Request): Promise<Response | null> {
+  // Try API key first
+  const apiKeyResult = validateApiKey(req);
+  if (!apiKeyResult) return null; // API key is valid
+
+  // Fall back to JWT auth for admin users
+  const authHeader = req.headers.get("Authorization") || "";
+  if (!authHeader.startsWith("Bearer ")) return apiKeyResult;
+
+  const supabase = createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_ANON_KEY")!,
+    { auth: { persistSession: false }, global: { headers: { Authorization: authHeader } } },
+  );
+
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
+  if (authError || !user) return json({ error: "Unauthorized" }, 401);
+
+  // Check admin role
+  const serviceClient = getSupabase();
+  const { data: roleData } = await serviceClient
+    .from("user_roles")
+    .select("role")
+    .eq("user_id", user.id)
+    .in("role", ["admin", "super_admin"])
+    .maybeSingle();
+
+  if (!roleData) return json({ error: "Forbidden – admin role required" }, 403);
+
+  return null; // Authenticated admin
+}
+
 async function handleGatewayCommand(req: Request): Promise<Response> {
-  const authErr = validateApiKey(req);
+  const authErr = await validateApiKeyOrAdmin(req);
   if (authErr) return authErr;
 
   let body: { device_id?: string; command?: string; params?: Record<string, unknown> };
