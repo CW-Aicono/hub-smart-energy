@@ -56,6 +56,14 @@ const INGEST_URL = `${config.supabase_url}/functions/v1/gateway-ingest`;
 /* ── SQLite Offline Buffer ───────────────────────────────────────────────────── */
 
 const DB_PATH = "/data/db/buffer.sqlite3";
+
+// Ensure the directory exists before opening the database
+const dbDir = path.dirname(DB_PATH);
+if (!fs.existsSync(dbDir)) {
+  fs.mkdirSync(dbDir, { recursive: true });
+  console.log(`[db] Created directory ${dbDir}`);
+}
+
 const db = new Database(DB_PATH);
 
 db.pragma("journal_mode = WAL");
