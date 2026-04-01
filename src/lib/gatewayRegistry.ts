@@ -175,13 +175,14 @@ export const GATEWAY_DEFINITIONS: Record<string, GatewayDefinition> = {
     type: "schneider_cloud",
     label: "Schneider EcoStruxure Cloud",
     icon: "cloud",
-    description: "Schneider Electric EcoStruxure Energy Hub Cloud API",
+    description: "Schneider Electric EcoStruxure Energy Hub – GraphQL Cloud API",
     edgeFunctionName: "schneider-api",
     configFields: [
-      { name: "api_url", label: "API URL", placeholder: "https://api.exchange.se.com", type: "url", description: "EcoStruxure Energy Hub API-Endpunkt", required: true },
-      { name: "client_id", label: "Client ID", placeholder: "client-id", type: "text", description: "OAuth2 Client ID aus dem Schneider Exchange Portal", required: true },
+      { name: "api_url", label: "GraphQL API URL", placeholder: "https://api.exchange.se.com", type: "url", description: "EcoStruxure Energy Hub GraphQL API-Basis-URL (Standard: https://api.exchange.se.com)", required: false },
+      { name: "token_url", label: "Token URL", placeholder: "https://api.se.com/token", type: "url", description: "OAuth2 Token-Endpunkt (Standard: https://api.se.com/token)", required: false },
+      { name: "client_id", label: "Client ID", placeholder: "client-id", type: "text", description: "OAuth2 Client ID aus dem Schneider Exchange Developer Portal (Integrations → Create new access client)", required: true },
       { name: "client_secret", label: "Client Secret", placeholder: "••••••••", type: "password", description: "OAuth2 Client Secret", required: true },
-      { name: "site_id", label: "Site ID", placeholder: "site-uuid", type: "text", description: "Site/Building ID aus dem EcoStruxure Portal", required: true },
+      { name: "site_id", label: "Site ID", placeholder: "site-uuid", type: "text", description: "Site/Building ID aus dem EcoStruxure Energy Hub Portal", required: true },
     ],
   },
 };
