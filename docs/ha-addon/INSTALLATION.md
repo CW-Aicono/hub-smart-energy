@@ -143,10 +143,8 @@ Nach dem Onboarding:
 3. Füge folgende Repository-URL hinzu:
 
 ```
-https://github.com/DEIN-ORG/ha-addons
+https://github.com/CW-Aicono/ha-addons
 ```
-
-> ⚠️ Die genaue URL wird bereitgestellt, sobald das Add-on-Repository veröffentlicht ist. Kontaktiere den Administrator für den aktuellen Link.
 
 4. Klicke auf **„Hinzufügen"** und dann auf **„Schließen"**
 5. Die Seite wird aktualisiert – du siehst jetzt den neuen Abschnitt mit dem **EMS Gateway Hub**
