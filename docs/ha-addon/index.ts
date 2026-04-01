@@ -295,7 +295,7 @@ async function sendHeartbeat(): Promise<void> {
     });
 
     if (res.ok) {
-      const data = await res.json();
+      const data = await res.json() as { latest_available_version?: string };
       // Check for pending commands from the cloud
       if (data.latest_available_version && data.latest_available_version !== "1.0.0") {
         console.log(`[heartbeat] Update available: ${data.latest_available_version}`);
