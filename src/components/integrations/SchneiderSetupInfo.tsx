@@ -100,12 +100,11 @@ export function SchneiderSetupInfo({ config, setupInstructions }: SchneiderSetup
         <ShieldAlert className="h-3.5 w-3.5 mt-0.5 shrink-0 text-primary" />
         <div className="space-y-1">
           <p>
-            <strong>TLS-Zertifikat (Firmware ≥ v3.x):</strong> Die Zertifikatsvalidierung kann <strong>aktiviert bleiben</strong>.
-            Der Panel Server vertraut ab Firmware v3.x den Root-CAs von Amazon und Let's Encrypt, die vom Cloud-Endpunkt verwendet werden.
+            <strong>TLS-Zertifikat:</strong> Die Zertifikatsvalidierung kann <strong>aktiviert bleiben</strong>.
+            Der Cloud-Endpunkt verwendet ein <strong>SHA256withRSA</strong>-Zertifikat (Amazon Trust Services), das vom Panel Server ab Firmware v2.x vollständig unterstützt wird.
           </p>
           <p className="text-orange-700 dark:text-orange-400">
-            <strong>Ältere Firmware (&lt; v3.x):</strong> Deaktivieren Sie die <strong>TLS-Zertifikatsvalidierung</strong> (Option „Serverzertifikat nicht prüfen" / „Trust all certificates"),
-            da ältere Java-Runtimes den Signaturalgorithmus SHA384withECDSA nicht unterstützen.
+            <strong>Sehr alte Firmware (&lt; v2.0):</strong> Falls die Verbindung fehlschlägt, deaktivieren Sie die <strong>TLS-Zertifikatsvalidierung</strong> (Option „Serverzertifikat nicht prüfen" / „Trust all certificates").
           </p>
         </div>
       </div>
