@@ -60,10 +60,22 @@ export function useGatewayDevices(locationIntegrationId?: string) {
 
   const sendCommand = useMutation({
     mutationFn: async ({ deviceId, command }: { deviceId: string; command: string }) => {
-      const { data, error } = await supabase.functions.invoke("gateway-ingest", {
-        body: { device_id: deviceId, command },
+      const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
+      const url = `https://${projectId}.supabase.co/functions/v1/gateway-ingest?action=gateway-command`;
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session?.access_token ?? ""}`,
+        },
+        body: JSON.stringify({ device_id: deviceId, command }),
       });
-      if (error) throw error;
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: "Unknown error" }));
+        throw new Error(err.error || `HTTP ${res.status}`);
+      }
+      const data = await res.json();
       return data;
     },
     onSuccess: () => {
