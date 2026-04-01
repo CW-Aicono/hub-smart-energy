@@ -138,7 +138,7 @@ async function fetchMeterMappings(): Promise<void> {
       console.error(`[mapping] Failed to fetch meters: ${res.status}`);
       return;
     }
-    const data = await res.json();
+    const data = await res.json() as { success?: boolean; meters?: any[] };
     if (data.success && Array.isArray(data.meters)) {
       meterMappings = data.meters
         .filter((m: any) => m.sensor_uuid && m.capture_type === "automatic")
