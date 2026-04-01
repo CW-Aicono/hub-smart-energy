@@ -174,7 +174,7 @@ async function pollHAStates(): Promise<void> {
       return;
     }
 
-    const states: HAState[] = await res.json();
+    const states: HAState[] = await res.json() as HAState[];
     let buffered = 0;
 
     for (const state of states) {
