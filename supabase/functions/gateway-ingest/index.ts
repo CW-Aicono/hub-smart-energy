@@ -656,9 +656,32 @@ async function handleSchneiderPush(req: Request): Promise<Response> {
 
   let payload: SchneiderPayload;
   try {
-    payload = await req.json();
-  } catch {
-    return json({ error: "Invalid JSON body" }, 400);
+    const contentType = req.headers.get("content-type") || "";
+
+    if (contentType.includes("multipart/form-data")) {
+      // Panel Server sends JSON inside 'datafile1' form field
+      const formData = await req.formData();
+      const datafile = formData.get("datafile1");
+      if (!datafile) {
+        return json({ error: "Missing 'datafile1' field in multipart form data" }, 400);
+      }
+      const raw = typeof datafile === "string" ? datafile : await (datafile as File).text();
+      payload = JSON.parse(raw);
+    } else if (contentType.includes("application/x-www-form-urlencoded")) {
+      // Some firmware versions may send URL-encoded with datafile1 field
+      const formData = await req.formData();
+      const datafile = formData.get("datafile1");
+      if (!datafile) {
+        return json({ error: "Missing 'datafile1' field in form data" }, 400);
+      }
+      payload = JSON.parse(String(datafile));
+    } else {
+      // Direct JSON body (API key auth, testing, newer firmware)
+      payload = await req.json();
+    }
+  } catch (e) {
+    console.error("[schneider-push] Payload parse error:", e);
+    return json({ error: "Invalid payload – expected JSON or multipart form with 'datafile1' field" }, 400);
   }
 
   const measurements = payload?.measurements;
