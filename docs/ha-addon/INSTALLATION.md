@@ -136,9 +136,26 @@ Nach dem Onboarding:
 
 ## 5. EMS Gateway Hub Add-on installieren
 
-### 5.1 Add-on Repository hinzufügen
+### 5.1 Add-on Store öffnen
 
-1. Gehe zu **Einstellungen** → **Add-ons** → **Add-on Store** (Button unten rechts)
+In neueren Home Assistant Versionen findest du die Add-ons **nicht** direkt unter „Einstellungen". So kommst du zum Add-on Store:
+
+**Variante A – Über die Seitenleiste (empfohlen):**
+
+1. Klicke in der **linken Seitenleiste** auf **„Einstellungen"**
+2. Klicke auf **„Add-ons"** (falls sichtbar) – oder gehe zu **„System"** → **„Add-ons"**
+3. Klicke unten rechts auf **„Add-on Store"**
+
+**Variante B – Direkt per URL:**
+
+1. Gib in deinem Browser folgende Adresse ein:
+   ```
+   http://homeassistant.local:8123/hassio/store
+   ```
+
+### 5.2 Repository hinzufügen
+
+1. Im Add-on Store klickst du oben rechts auf die **drei Punkte (⋮)** → **„Repositories"**
 2. Klicke oben rechts auf die **drei Punkte (⋮)** → **„Repositories"**
 3. Füge folgende Repository-URL hinzu:
 
