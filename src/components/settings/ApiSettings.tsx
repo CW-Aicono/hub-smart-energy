@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useTranslation } from "@/hooks/useTranslation";
+import { useTenant } from "@/hooks/useTenant";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -11,6 +12,7 @@ import { HelpTooltip } from "@/components/ui/help-tooltip";
 import { toast } from "sonner";
 
 export function ApiSettings() {
+  const { tenant } = useTenant();
   const { t } = useTranslation();
   const [loading, setLoading] = useState(false);
   const [apiKey, setApiKey] = useState<string | null>(null);
