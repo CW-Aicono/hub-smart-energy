@@ -264,7 +264,7 @@ async function fetchHAVersion(): Promise<void> {
       headers: { Authorization: `Bearer ${SUPERVISOR_TOKEN}` },
     });
     if (res.ok) {
-      const data = await res.json();
+      const data = await res.json() as { version?: string };
       haVersion = data.version || "unknown";
     }
   } catch { /* ignore */ }
