@@ -26,16 +26,14 @@ interface AddonConfig {
 }
 
 function loadConfig(): AddonConfig {
-  // HA Add-ons receive options via /data/options.json
   const optionsPath = "/data/options.json";
   try {
-    if (fs.existsSync(optionsPath)) {
-      return JSON.parse(fs.readFileSync(optionsPath, "utf-8")) as AddonConfig;
-    }
-  } catch (error) {
-    console.warn("[config] Failed to read /data/options.json, falling back to environment variables:", error);
+    const raw = fs.readFileSync(optionsPath, "utf-8");
+    console.log("[config] Loaded /data/options.json");
+    return JSON.parse(raw) as AddonConfig;
+  } catch (error: any) {
+    console.warn(`[config] Cannot read ${optionsPath} (${error?.code || error?.message}), using env vars`);
   }
-  // Fallback: environment variables (for standalone Docker testing)
   return {
     supabase_url: process.env.SUPABASE_URL || "",
     gateway_api_key: process.env.GATEWAY_API_KEY || "",
