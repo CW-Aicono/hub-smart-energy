@@ -138,20 +138,28 @@ Nach dem Onboarding:
 
 ### 5.1 Add-on Store öffnen
 
-In neueren Home Assistant Versionen findest du die Add-ons **nicht** direkt unter „Einstellungen". So kommst du zum Add-on Store:
+Der Menüpunkt **„Add-ons"** befindet sich direkt auf der **Einstellungen-Hauptseite** – also auf der Seite, die du siehst, wenn du in der linken Seitenleiste auf **„Einstellungen"** klickst. Er ist **nicht** unter „System" versteckt.
 
-**Variante A – Über die Seitenleiste (empfohlen):**
+**So findest du ihn:**
 
 1. Klicke in der **linken Seitenleiste** auf **„Einstellungen"**
-2. Klicke auf **„Add-ons"** (falls sichtbar) – oder gehe zu **„System"** → **„Add-ons"**
-3. Klicke unten rechts auf **„Add-on Store"**
+2. Scrolle auf der Hauptseite nach unten – dort sollte **„Add-ons"** als eigener Eintrag erscheinen (zwischen den anderen Menüpunkten wie „Geräte & Dienste", „Automationen" usw.)
+3. Klicke auf **„Add-ons"**
+4. Klicke unten rechts auf den Button **„Add-on Store"**
 
-**Variante B – Direkt per URL:**
-
-1. Gib in deinem Browser folgende Adresse ein:
-   ```
-   http://homeassistant.local:8123/hassio/store
-   ```
+> ⚠️ **„Add-ons" wird nicht angezeigt?**
+>
+> Das kann passieren, wenn der **Supervisor** noch nicht vollständig geladen ist (besonders auf einem Raspberry Pi 3 kann das beim ersten Start bis zu 30 Minuten dauern).
+>
+> **Lösung:**
+> 1. Warte 10–30 Minuten nach dem ersten Start und lade die Seite neu (F5)
+> 2. Falls es danach immer noch fehlt, starte Home Assistant neu: **Einstellungen** → **System** → **Oben rechts: Dreipunkt-Menü (⋮)** → **„Home Assistant neu starten"**
+> 3. Warte erneut 5–10 Minuten und lade die Seite neu
+> 4. Alternativ kannst du die Add-on-Seite direkt im Browser aufrufen:
+>    ```
+>    http://homeassistant.local:8123/hassio/store
+>    ```
+>    Wenn diese Seite **leer** ist oder einen Fehler zeigt, ist der Supervisor noch nicht bereit – bitte weiter warten.
 
 ### 5.2 Repository hinzufügen
 
