@@ -61,7 +61,16 @@ Deno.serve(async (req) => {
       );
     }
 
-    if (!profile || profile.tenant_id !== tenantId) {
+    // Allow access if user's tenant matches, or if user is super_admin
+    const { data: userRole } = await supabase
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", userId)
+      .single();
+
+    const isSuperAdmin = userRole?.role === "super_admin";
+
+    if (!profile || (!isSuperAdmin && profile.tenant_id !== tenantId)) {
       return new Response(
         JSON.stringify({ error: "Forbidden" }),
         { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
