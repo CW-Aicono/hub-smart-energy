@@ -156,17 +156,16 @@ In neueren Home Assistant Versionen findest du die Add-ons **nicht** direkt unte
 ### 5.2 Repository hinzufügen
 
 1. Im Add-on Store klickst du oben rechts auf die **drei Punkte (⋮)** → **„Repositories"**
-2. Klicke oben rechts auf die **drei Punkte (⋮)** → **„Repositories"**
-3. Füge folgende Repository-URL hinzu:
+2. Füge folgende Repository-URL hinzu:
 
 ```
 https://github.com/CW-Aicono/ha-addons
 ```
 
-4. Klicke auf **„Hinzufügen"** und dann auf **„Schließen"**
-5. Die Seite wird aktualisiert – du siehst jetzt den neuen Abschnitt mit dem **EMS Gateway Hub**
+3. Klicke auf **„Hinzufügen"** und dann auf **„Schließen"**
+4. Die Seite wird aktualisiert – du siehst jetzt den neuen Abschnitt mit dem **EMS Gateway Hub**
 
-### 5.2 Add-on installieren
+### 5.3 Add-on installieren
 
 1. Klicke auf **„EMS Gateway Hub"**
 2. Klicke auf **„Installieren"**
