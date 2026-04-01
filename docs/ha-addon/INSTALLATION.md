@@ -136,48 +136,66 @@ Nach dem Onboarding:
 
 ## 5. EMS Gateway Hub Add-on installieren
 
-### 5.1 Add-on Store öffnen
+### 5.1 Repository hinzufügen
 
-Der Menüpunkt **„Add-ons"** befindet sich direkt auf der **Einstellungen-Hauptseite** – also auf der Seite, die du siehst, wenn du in der linken Seitenleiste auf **„Einstellungen"** klickst. Er ist **nicht** unter „System" versteckt.
-
-**So findest du ihn:**
-
-1. Klicke in der **linken Seitenleiste** auf **„Einstellungen"**
-2. Scrolle auf der Hauptseite nach unten – dort sollte **„Add-ons"** als eigener Eintrag erscheinen (zwischen den anderen Menüpunkten wie „Geräte & Dienste", „Automationen" usw.)
-3. Klicke auf **„Add-ons"**
-4. Klicke unten rechts auf den Button **„Add-on Store"**
-
-> ⚠️ **„Add-ons" wird nicht angezeigt?**
->
-> Das kann passieren, wenn der **Supervisor** noch nicht vollständig geladen ist (besonders auf einem Raspberry Pi 3 kann das beim ersten Start bis zu 30 Minuten dauern).
->
-> **Lösung:**
-> 1. Warte 10–30 Minuten nach dem ersten Start und lade die Seite neu (F5)
-> 2. Falls es danach immer noch fehlt, starte Home Assistant neu: **Einstellungen** → **System** → **Oben rechts: Dreipunkt-Menü (⋮)** → **„Home Assistant neu starten"**
-> 3. Warte erneut 5–10 Minuten und lade die Seite neu
-> 4. Alternativ kannst du die Add-on-Seite direkt im Browser aufrufen:
->    ```
->    http://homeassistant.local:8123/hassio/store
->    ```
->    Wenn diese Seite **leer** ist oder einen Fehler zeigt, ist der Supervisor noch nicht bereit – bitte weiter warten.
-
-### 5.2 Repository hinzufügen
-
-1. Im Add-on Store klickst du oben rechts auf die **drei Punkte (⋮)** → **„Repositories"**
-2. Füge folgende Repository-URL hinzu:
+1. Öffne den **Add-on Store** in Home Assistant
+2. Klicke oben rechts auf die **drei Punkte (⋮)** → **„Repositories"**
+3. Füge folgende Repository-URL hinzu:
 
 ```
 https://github.com/CW-Aicono/ha-addons
 ```
 
-3. Klicke auf **„Hinzufügen"** und dann auf **„Schließen"**
-4. Die Seite wird aktualisiert – du siehst jetzt den neuen Abschnitt mit dem **EMS Gateway Hub**
+4. Klicke auf **„Hinzufügen"** und danach auf **„Schließen"**
 
-### 5.3 Add-on installieren
+### 5.2 Woran du erkennst, dass dieser Schritt korrekt war
+
+Wenn im Fenster **„Add-on Repositories verwalten"** ein Eintrag mit
+
+- **EMS Gateway Hub Add-ons**
+- **Christian Wattenberg**
+- **https://github.com/CW-Aicono/ha-addons**
+
+sichtbar ist, dann ist dieser Schritt **korrekt abgeschlossen**.
+
+> ✅ Genau das ist auf deinem Screenshot zu sehen.
+
+### 5.3 Warum die Installation trotzdem fehlschlägt
+
+Wenn sich das Add-on **danach trotzdem nicht installieren lässt**, liegt der Fehler **nicht mehr in Home Assistant**, sondern im **GitHub-Repository des Add-ons**.
+
+Die technische Prüfung zeigt aktuell diese typischen Blocker:
+
+1. **`ems-gateway-hub/Dockerfile` muss eine echte Docker-Datei sein**  
+   Sie muss mit etwas wie `FROM node:...` beginnen. Wenn dort stattdessen JSON mit `{` beginnt, wurde versehentlich der Inhalt von `package.json` in die falsche Datei kopiert.
+
+2. **`ems-gateway-hub/config.yaml` braucht eine gültige Home-Assistant-Syntax**  
+   Unter `schema:` dürfen keine Blöcke mit `name:` und `required:` stehen. Home Assistant erwartet dort Typen wie `url`, `str`, `int` oder `bool`.
+
+3. **Das Add-on braucht API-Rechte für Home Assistant**  
+   Weil das Add-on mit der lokalen Home-Assistant-API spricht, müssen in `config.yaml` die Optionen `hassio_api: true` und `homeassistant_api: true` gesetzt sein.
+
+### 5.4 Bevor du erneut auf „Installieren" klickst
+
+Prüfe in deinem GitHub-Repo diese drei Dateien:
+
+- `ems-gateway-hub/Dockerfile`
+- `ems-gateway-hub/config.yaml`
+- `ems-gateway-hub/package.json`
+
+**Schnelltest für Laien:**
+
+- `Dockerfile` beginnt mit `FROM ...`
+- `package.json` beginnt mit `{`
+- `config.yaml` enthält unter `schema:` Werte wie `url`, `str`, `int`
+
+Erst **wenn diese drei Dateien korrekt sind**, solltest du das Add-on erneut installieren.
+
+### 5.5 Add-on installieren
 
 1. Klicke auf **„EMS Gateway Hub"**
 2. Klicke auf **„Installieren"**
-3. Warte, bis die Installation abgeschlossen ist (ca. 2–5 Minuten)
+3. Warte, bis die Installation abgeschlossen ist
 
 > 💡 **Nicht sofort starten!** Zuerst muss das Add-on konfiguriert werden (siehe nächster Schritt).
 
@@ -187,20 +205,37 @@ https://github.com/CW-Aicono/ha-addons
 
 ### 6.1 Konfigurationswerte eintragen
 
-1. Klicke im Add-on auf den Tab **„Konfiguration"**
-2. Trage folgende Werte ein:
+Wenn Home Assistant dir **ein Formular** zeigt, trägst du diese Werte Feld für Feld ein.
 
-| Feld | Beschreibung | Beispiel |
+Wenn Home Assistant dir **nur einen YAML-Editor** zeigt, kopiere diesen Block hinein und ersetze die Beispielwerte:
+
+```yaml
+supabase_url: "https://xnveugycurplszevdxtw.supabase.co"
+gateway_api_key: "gw_abc123..."
+tenant_id: "550e8400-e29b-41d4-a716-446655440000"
+device_name: "rpi-buero-eg"
+poll_interval_seconds: 30
+flush_interval_seconds: 5
+heartbeat_interval_seconds: 60
+entity_filter: "sensor.*_energy,sensor.*_power"
+offline_buffer_max_mb: 100
+auto_backup_hours: 24
+```
+
+Bedeutung der Werte:
+
+| Schlüssel | Beschreibung | Beispiel |
 |---|---|---|
-| **Cloud URL** | Die URL deines Cloud-Backends | `https://xnveugycurplszevdxtw.supabase.co` |
-| **Gateway API Key** | Dein Gateway-API-Schlüssel (aus der App) | `gw_abc123...` |
-| **Tenant ID** | Deine Mandanten-ID (aus der App) | `550e8400-e29b-41d4-a716-446655440000` |
-| **Device Name** | Ein eindeutiger Name für diesen Gateway | `rpi-buero-eg` |
-| **Poll Interval** | Wie oft Sensoren abgefragt werden (Sekunden) | `30` |
-| **Flush Interval** | Wie oft Daten an die Cloud gesendet werden (Sekunden) | `5` |
-| **Heartbeat Interval** | Wie oft der Status gemeldet wird (Sekunden) | `60` |
-| **Entity Filter** | Welche HA-Entitäten erfasst werden sollen | `sensor.*_energy,sensor.*_power` |
-| **Offline Buffer Max** | Maximale Größe des Offline-Puffers (MB) | `100` |
+| **supabase_url** | Die URL deines Cloud-Backends | `https://xnveugycurplszevdxtw.supabase.co` |
+| **gateway_api_key** | Dein Gateway-API-Schlüssel (aus der App) | `gw_abc123...` |
+| **tenant_id** | Deine Mandanten-ID (aus der App) | `550e8400-e29b-41d4-a716-446655440000` |
+| **device_name** | Ein eindeutiger Name für diesen Gateway | `rpi-buero-eg` |
+| **poll_interval_seconds** | Wie oft Sensoren abgefragt werden (Sekunden) | `30` |
+| **flush_interval_seconds** | Wie oft Daten an die Cloud gesendet werden (Sekunden) | `5` |
+| **heartbeat_interval_seconds** | Wie oft der Status gemeldet wird (Sekunden) | `60` |
+| **entity_filter** | Welche HA-Entitäten erfasst werden sollen | `sensor.*_energy,sensor.*_power` |
+| **offline_buffer_max_mb** | Maximale Größe des Offline-Puffers (MB) | `100` |
+| **auto_backup_hours** | Intervall für automatische Konfig-Backups in Stunden | `24` |
 
 ### 6.2 API Key und Tenant ID finden
 

@@ -16,6 +16,8 @@ startup: "application"
 boot: "auto"
 ingress: false
 panel_icon: "mdi:flash"
+hassio_api: true
+homeassistant_api: true
 
 # Lokaler Health-Endpoint
 ports:
@@ -25,9 +27,9 @@ ports_description:
 
 # Konfigurationsoptionen
 options:
-  supabase_url: ""
-  gateway_api_key: ""
-  tenant_id: ""
+  supabase_url: null
+  gateway_api_key: null
+  tenant_id: null
   device_name: "ha-addon"
   poll_interval_seconds: 30
   flush_interval_seconds: 5
@@ -37,33 +39,13 @@ options:
   auto_backup_hours: 24
 
 schema:
-  supabase_url:
-    name: "Cloud URL"
-    required: true
-  gateway_api_key:
-    name: "Gateway API Key"
-    required: true
-  tenant_id:
-    name: "Tenant ID"
-    required: true
-  device_name:
-    name: "Device Name"
-    required: true
-  poll_interval_seconds:
-    name: "Poll Interval (Seconds)"
-    required: true
-  flush_interval_seconds:
-    name: "Flush Interval (Seconds)"
-    required: true
-  heartbeat_interval_seconds:
-    name: "Heartbeat Interval (Seconds)"
-    required: true
-  entity_filter:
-    name: "Entity Filter (comma-separated patterns)"
-    required: false
-  offline_buffer_max_mb:
-    name: "Offline Buffer Max (MB)"
-    required: true
-  auto_backup_hours:
-    name: "Auto Backup Interval (Hours, 0 = disabled)"
-    required: false
+  supabase_url: url
+  gateway_api_key: "str(1,)"
+  tenant_id: "str(1,)"
+  device_name: "str(1,)"
+  poll_interval_seconds: "int(1,)"
+  flush_interval_seconds: "int(1,)"
+  heartbeat_interval_seconds: "int(1,)"
+  entity_filter: "str?"
+  offline_buffer_max_mb: "int(1,)"
+  auto_backup_hours: "int(0,)"

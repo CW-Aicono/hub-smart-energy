@@ -9,11 +9,13 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
+RUN apk add --no-cache python3 make g++
+
 COPY package.json tsconfig.json ./
 RUN npm install
 
 COPY index.ts ./
-RUN npm run build
+RUN npm run build && npm prune --omit=dev
 
 # ── Stage 2: Production image ────────────────────────────────────────────────
 FROM node:20-alpine AS runner
