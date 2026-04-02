@@ -86,6 +86,7 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
   // Reset form when meter changes
   useEffect(() => {
     setName(meter.name);
+    setDeviceType((meter as any).device_type || "meter");
     setMeterNumber(meter.meter_number || "");
     setEnergyType(meter.energy_type);
     setUnit(meter.unit);
