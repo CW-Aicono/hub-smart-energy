@@ -428,7 +428,7 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
             ) : gatewayIntegrations.length === 0 && sensorTypeMeters.length === 0 ? (
               <p className="text-sm text-muted-foreground py-4">Keine Sensoren vorhanden.</p>
             ) : sensorDevices.length > 0 ? (
-              <DeviceTable devices={sensorDevices} type="sensor" meters={meters} onEditMeter={(m) => setEditingMeter(m)} />
+              <DeviceTable devices={sensorDevices} type="sensor" meters={meters} onEditMeter={(m) => setEditingMeter(m)} onCreateAndEdit={handleCreateAndEdit} />
             ) : null}
           </TabsContent>
 
