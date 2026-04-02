@@ -47,6 +47,7 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
   const T = (key: string) => t(key as any);
   const { meters: allMeters } = useMeters(meter.location_id);
   const [name, setName] = useState(meter.name);
+  const [deviceType, setDeviceType] = useState((meter as any).device_type || "meter");
   const [meterNumber, setMeterNumber] = useState(meter.meter_number || "");
   const [energyType, setEnergyType] = useState(meter.energy_type);
   const [unit, setUnit] = useState(meter.unit);
@@ -85,6 +86,7 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
   // Reset form when meter changes
   useEffect(() => {
     setName(meter.name);
+    setDeviceType((meter as any).device_type || "meter");
     setMeterNumber(meter.meter_number || "");
     setEnergyType(meter.energy_type);
     setUnit(meter.unit);
@@ -244,9 +246,10 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
     setSaving(true);
     await onSave(meter.id, {
       name: name.trim(),
+      device_type: deviceType,
       meter_number: meterNumber || undefined,
-      energy_type: energyType,
-      unit,
+      energy_type: deviceType === "meter" ? energyType : "none",
+      unit: deviceType === "meter" ? unit : "",
       medium: medium || undefined,
       notes: notes || undefined,
       capture_type: captureType,
@@ -260,7 +263,7 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
       installation_date: installationDate || undefined,
       meter_operator: meterOperator || undefined,
       photo_url: photoUrl || undefined,
-      ...(energyType === "gas" ? {
+      ...(deviceType === "meter" && energyType === "gas" ? {
         gas_type: gasType,
         zustandszahl: zustandszahl ? parseFloat(zustandszahl.replace(",", ".")) : null,
         brennwert: brennwertVal ? parseFloat(brennwertVal.replace(",", ".")) : null,
@@ -297,6 +300,19 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
           <DialogTitle>Gerät bearbeiten – {meter.name}</DialogTitle>
         </DialogHeader>
         <div className="space-y-4 overflow-y-auto flex-1 pr-2">
+          {/* Device type selector */}
+          <div>
+            <Label className="mb-2 block">Gerätetyp *</Label>
+            <Select value={deviceType} onValueChange={setDeviceType}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="meter">Zähler</SelectItem>
+                <SelectItem value="sensor">Sensor</SelectItem>
+                <SelectItem value="actuator">Aktor</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
           <div>
             <Label className="mb-2 block">Erfassungsart *</Label>
             <RadioGroup
@@ -393,44 +409,48 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
             <Label>Name *</Label>
             <Input value={name} onChange={(e) => setName(e.target.value)} />
           </div>
-          <div>
-            <Label>Zählernummer</Label>
-            <Input value={meterNumber} onChange={(e) => setMeterNumber(e.target.value)} />
-          </div>
-          <div className="grid grid-cols-2 gap-4">
+          {deviceType === "meter" && (
             <div>
-              <Label>Energieart</Label>
-              <Select value={energyType} onValueChange={setEnergyType}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="strom">{T("energy.strom")}</SelectItem>
-                  <SelectItem value="gas">{T("energy.gas")}</SelectItem>
-                  <SelectItem value="waerme">{T("energy.waerme")}</SelectItem>
-                  <SelectItem value="wasser">{T("energy.wasser")}</SelectItem>
-                </SelectContent>
-              </Select>
+              <Label>Zählernummer</Label>
+              <Input value={meterNumber} onChange={(e) => setMeterNumber(e.target.value)} />
             </div>
-            <div>
-              <Label>Einheit</Label>
-              {energyType === "gas" ? (
-                <Select value={unit} onValueChange={setUnit}>
+          )}
+          {deviceType === "meter" && (
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>Energieart</Label>
+                <Select value={energyType} onValueChange={setEnergyType}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="m³">m³</SelectItem>
-                    <SelectItem value="kWh">kWh</SelectItem>
+                    <SelectItem value="strom">{T("energy.strom")}</SelectItem>
+                    <SelectItem value="gas">{T("energy.gas")}</SelectItem>
+                    <SelectItem value="waerme">{T("energy.waerme")}</SelectItem>
+                    <SelectItem value="wasser">{T("energy.wasser")}</SelectItem>
                   </SelectContent>
                 </Select>
-              ) : (
-                <Input value={unit} onChange={(e) => setUnit(e.target.value)} />
-              )}
+              </div>
+              <div>
+                <Label>Einheit</Label>
+                {energyType === "gas" ? (
+                  <Select value={unit} onValueChange={setUnit}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="m³">m³</SelectItem>
+                      <SelectItem value="kWh">kWh</SelectItem>
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <Input value={unit} onChange={(e) => setUnit(e.target.value)} />
+                )}
+              </div>
             </div>
-          </div>
+          )}
           <div>
             <Label>Medium</Label>
             <Input value={medium} onChange={(e) => setMedium(e.target.value)} />
           </div>
           {/* Gas-specific fields */}
-          {energyType === "gas" && unit === "m³" && (
+          {deviceType === "meter" && energyType === "gas" && unit === "m³" && (
             <div className="space-y-3 rounded-md border p-3 bg-muted/30">
               <p className="text-sm font-medium text-muted-foreground">Gas-Parameter</p>
               <div className="grid grid-cols-2 gap-4">
@@ -493,38 +513,40 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
               )}
             </div>
           )}
-          {/* Hierarchy */}
-          <div className="space-y-3 rounded-md border p-3 bg-muted/30">
-            <div className="flex items-center justify-between">
-              <Label>Hauptzähler (Netzübergabepunkt)</Label>
-              <Switch checked={isMainMeter} onCheckedChange={setIsMainMeter} />
+          {/* Hierarchy - only for meters */}
+          {deviceType === "meter" && (
+            <div className="space-y-3 rounded-md border p-3 bg-muted/30">
+              <div className="flex items-center justify-between">
+                <Label>Hauptzähler (Netzübergabepunkt)</Label>
+                <Switch checked={isMainMeter} onCheckedChange={setIsMainMeter} />
+              </div>
+              <div>
+                <Label>Zählerfunktion</Label>
+                <Select value={meterFunction} onValueChange={setMeterFunction}>
+                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="consumption">Verbrauch</SelectItem>
+                    <SelectItem value="generation">Erzeugung (z.B. PV)</SelectItem>
+                    <SelectItem value="technical">Technisch (z.B. Wärmepumpe)</SelectItem>
+                    <SelectItem value="bidirectional">Bidirektional (Bezug & Einspeisung)</SelectItem>
+                    <SelectItem value="submeter">Unterzähler</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Übergeordneter Zähler</Label>
+                <Select value={parentMeterId} onValueChange={setParentMeterId}>
+                  <SelectTrigger className="mt-1"><SelectValue placeholder="Kein (Hauptzähler)" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Kein übergeordneter Zähler</SelectItem>
+                    {availableParents.map((m) => (
+                      <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
-            <div>
-              <Label>Zählerfunktion</Label>
-              <Select value={meterFunction} onValueChange={setMeterFunction}>
-                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="consumption">Verbrauch</SelectItem>
-                  <SelectItem value="generation">Erzeugung (z.B. PV)</SelectItem>
-                  <SelectItem value="technical">Technisch (z.B. Wärmepumpe)</SelectItem>
-                  <SelectItem value="bidirectional">Bidirektional (Bezug & Einspeisung)</SelectItem>
-                  <SelectItem value="submeter">Unterzähler</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>Übergeordneter Zähler</Label>
-              <Select value={parentMeterId} onValueChange={setParentMeterId}>
-                <SelectTrigger className="mt-1"><SelectValue placeholder="Kein (Hauptzähler)" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Kein übergeordneter Zähler</SelectItem>
-                  {availableParents.map((m) => (
-                    <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
+          )}
           {/* Photo, Installation Date, Operator */}
           <div className="space-y-3 rounded-md border p-3 bg-muted/30">
             <p className="text-sm font-medium text-muted-foreground">Zusatzinformationen</p>

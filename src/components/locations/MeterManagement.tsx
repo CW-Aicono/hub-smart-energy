@@ -229,7 +229,13 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
 
   const activeMeters = meters.filter((m) => !m.is_archived);
   const archivedMeters = meters.filter((m) => m.is_archived);
-  const displayedMeters = showArchived ? archivedMeters : activeMeters;
+
+  // Split meters by device_type for tab filtering
+  const meterTypeMeters = activeMeters.filter((m) => (m as any).device_type === "meter" || !(m as any).device_type);
+  const sensorTypeMeters = activeMeters.filter((m) => (m as any).device_type === "sensor");
+  const actuatorTypeMeters = activeMeters.filter((m) => (m as any).device_type === "actuator");
+
+  const displayedMeters = showArchived ? archivedMeters : meterTypeMeters;
 
   return (
     <Collapsible open={isOpen} onOpenChange={setIsOpen}>
@@ -253,9 +259,9 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
       <CardContent>
         <Tabs defaultValue="meters">
           <TabsList>
-            <TabsTrigger value="meters">{t("mm.tabs.meters" as any)} ({activeMeters.length})</TabsTrigger>
-            <TabsTrigger value="sensors">Sensoren ({sensorDevices.length})</TabsTrigger>
-            <TabsTrigger value="actuators">Aktoren ({actuatorDevices.length})</TabsTrigger>
+            <TabsTrigger value="meters">{t("mm.tabs.meters" as any)} ({meterTypeMeters.length})</TabsTrigger>
+            <TabsTrigger value="sensors">Sensoren ({sensorDevices.length + sensorTypeMeters.length})</TabsTrigger>
+            <TabsTrigger value="actuators">Aktoren ({actuatorDevices.length + actuatorTypeMeters.length})</TabsTrigger>
             <TabsTrigger value="tree" className="gap-1">
               <Network className="h-3.5 w-3.5" />
               {t("mm.tabs.tree" as any)}
@@ -349,36 +355,104 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
 
           {/* Sensoren Tab */}
           <TabsContent value="sensors" className="space-y-4">
+            {sensorTypeMeters.length > 0 && (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>{t("common.name" as any)}</TableHead>
+                    <TableHead>{t("mm.captureType" as any)}</TableHead>
+                    <TableHead>Notizen</TableHead>
+                    {isAdmin && <TableHead className="w-32" />}
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {sensorTypeMeters.map((m) => (
+                    <TableRow key={m.id}>
+                      <TableCell>
+                        <button className="font-medium text-left hover:underline text-primary cursor-pointer" onClick={() => setEditingMeter(m)}>
+                          {m.name}
+                        </button>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={m.capture_type === "automatic" ? "default" : "secondary"}>
+                          {m.capture_type === "automatic" ? t("mm.captureAutomatic" as any) : t("mm.captureManual" as any)}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">{m.notes || "–"}</TableCell>
+                      {isAdmin && (
+                        <TableCell className="flex gap-1">
+                          <Button variant="ghost" size="icon" onClick={() => setEditingMeter(m)} title="Bearbeiten">
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
+                      )}
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
             {sensorsLoading || intLoading ? (
               <div className="space-y-2">
                 <Skeleton className="h-10 w-full" />
                 <Skeleton className="h-10 w-full" />
                 <Skeleton className="h-10 w-full" />
               </div>
-            ) : gatewayIntegrations.length === 0 ? (
-              <p className="text-sm text-muted-foreground py-4">
-                Keine Gateway-Integration verbunden. Sensoren werden über verbundene Integrationen automatisch erkannt.
-              </p>
-            ) : (
+            ) : gatewayIntegrations.length === 0 && sensorTypeMeters.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-4">Keine Sensoren vorhanden.</p>
+            ) : sensorDevices.length > 0 ? (
               <DeviceTable devices={sensorDevices} type="sensor" meters={meters} onEditMeter={(m) => setEditingMeter(m)} />
-            )}
+            ) : null}
           </TabsContent>
 
           {/* Aktoren Tab */}
           <TabsContent value="actuators" className="space-y-4">
+            {actuatorTypeMeters.length > 0 && (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>{t("common.name" as any)}</TableHead>
+                    <TableHead>{t("mm.captureType" as any)}</TableHead>
+                    <TableHead>Notizen</TableHead>
+                    {isAdmin && <TableHead className="w-32" />}
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {actuatorTypeMeters.map((m) => (
+                    <TableRow key={m.id}>
+                      <TableCell>
+                        <button className="font-medium text-left hover:underline text-primary cursor-pointer" onClick={() => setEditingMeter(m)}>
+                          {m.name}
+                        </button>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={m.capture_type === "automatic" ? "default" : "secondary"}>
+                          {m.capture_type === "automatic" ? t("mm.captureAutomatic" as any) : t("mm.captureManual" as any)}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">{m.notes || "–"}</TableCell>
+                      {isAdmin && (
+                        <TableCell className="flex gap-1">
+                          <Button variant="ghost" size="icon" onClick={() => setEditingMeter(m)} title="Bearbeiten">
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
+                      )}
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
             {sensorsLoading || intLoading ? (
               <div className="space-y-2">
                 <Skeleton className="h-10 w-full" />
                 <Skeleton className="h-10 w-full" />
                 <Skeleton className="h-10 w-full" />
               </div>
-            ) : gatewayIntegrations.length === 0 ? (
-              <p className="text-sm text-muted-foreground py-4">
-                Keine Gateway-Integration verbunden. Aktoren werden über verbundene Integrationen automatisch erkannt.
-              </p>
-            ) : (
+            ) : gatewayIntegrations.length === 0 && actuatorTypeMeters.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-4">Keine Aktoren vorhanden.</p>
+            ) : actuatorDevices.length > 0 ? (
               <DeviceTable devices={actuatorDevices} type="actuator" meters={meters} onEditMeter={(m) => setEditingMeter(m)} />
-            )}
+            ) : null}
           </TabsContent>
 
           <TabsContent value="tree" className="space-y-4">
