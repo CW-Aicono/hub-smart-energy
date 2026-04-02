@@ -72,6 +72,8 @@ export interface AutomationAction {
   control_type: string;
   action_type: string;
   action_value?: string;
+  /** Pulse duration in milliseconds (only for pulse actions) */
+  pulse_duration?: number;
   /** MLA: which gateway this action's actuator belongs to */
   gateway_id?: string;
 }
@@ -586,6 +588,20 @@ function ActionCard({
               );
             })()}
           </div>
+          {action.action_type === "pulse" && (
+            <div className="space-y-1">
+              <Label className="text-xs">Pulsdauer (ms)</Label>
+              <Input
+                type="number"
+                min={50}
+                max={10000}
+                step={50}
+                className="h-9 text-xs"
+                value={action.pulse_duration ?? 500}
+                onChange={(e) => onUpdate({ ...action, pulse_duration: parseInt(e.target.value) || 500 })}
+              />
+            </div>
+          )}
         </div>
       </CardContent>
     </Card>
