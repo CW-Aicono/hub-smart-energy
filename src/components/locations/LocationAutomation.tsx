@@ -312,6 +312,17 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
   const actuators = allSensorsWithSource.filter(isActuator);
   const allSensors = allSensorsWithSource as LoxoneSensor[];
 
+  // Build actuator state map for live status display
+  const actuatorStates = useMemo(() => {
+    const map = new Map<string, { value: string; status: string }>();
+    allSensorsWithSource.forEach((s) => {
+      if (s.value !== undefined && s.value !== null) {
+        map.set(s.id, { value: String(s.value), status: s.status });
+      }
+    });
+    return map;
+  }, [allSensorsWithSource]);
+
   const filteredActuators = searchTerm
     ? actuators.filter((s) =>
         s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
