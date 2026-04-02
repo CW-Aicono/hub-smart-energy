@@ -370,7 +370,7 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
                 Keine Gateway-Integration verbunden. Aktoren werden über verbundene Integrationen automatisch erkannt.
               </p>
             ) : (
-              <DeviceTable devices={actuatorDevices} type="actuator" />
+              <DeviceTable devices={actuatorDevices} type="actuator" meters={meters} onEditMeter={(m) => setEditingMeter(m)} />
             )}
           </TabsContent>
 
