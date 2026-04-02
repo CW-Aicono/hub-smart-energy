@@ -299,7 +299,14 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
                 <TableBody>
                   {displayedMeters.map((m) => (
                     <TableRow key={m.id} className={m.is_archived ? "opacity-60" : ""}>
-                      <TableCell className="font-medium">{m.name}</TableCell>
+                       <TableCell>
+                         <button
+                           className="font-medium text-left hover:underline text-primary cursor-pointer"
+                           onClick={() => setEditingMeter(m)}
+                         >
+                           {m.name}
+                         </button>
+                       </TableCell>
                       <TableCell>{m.meter_number || "–"}</TableCell>
                       <TableCell>
                         <Badge variant={m.capture_type === "automatic" ? "default" : m.capture_type === "virtual" ? "outline" : "secondary"}>
