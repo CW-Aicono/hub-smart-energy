@@ -794,6 +794,7 @@ async function handleHeartbeat(req: Request): Promise<Response> {
     ha_version: body.ha_version || null,
     addon_version: body.addon_version || null,
     offline_buffer_count: body.offline_buffer_count ?? 0,
+    local_time: body.local_time || null,
     status: "online",
     last_heartbeat_at: new Date().toISOString(),
     location_integration_id: body.location_integration_id || null,

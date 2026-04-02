@@ -15,6 +15,7 @@ export interface GatewayDevice {
   addon_version: string | null;
   latest_available_version: string | null;
   last_heartbeat_at: string | null;
+  local_time: string | null;
   status: string;
   config: Record<string, unknown>;
   offline_buffer_count: number;
