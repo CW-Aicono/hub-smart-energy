@@ -5233,8 +5233,8 @@ export const translations = {
   "cpd.groupAccessNote": { de: "Die Zugangssteuerung wird über die Gruppeneinstellungen gesteuert. Individuelle Einstellungen sind deaktiviert.", en: "Access control is managed through group settings. Individual settings are disabled.", es: "El control de acceso se gestiona a través de la configuración del grupo. Las configuraciones individuales están deshabilitadas.", nl: "Toegangscontrole wordt beheerd via groepsinstellingen. Individuele instellingen zijn uitgeschakeld." },
 
   // ── Location Detail Sections ──────────────────────────────────────────────
-  "locSec.metersTitle": { de: "Messstellen und Sensoren", en: "Meters and Sensors", es: "Contadores y sensores", nl: "Meters en sensoren" },
-  "locSec.metersDesc": { de: "Verwalten Sie Zähler und Alarmregeln für diesen Standort", en: "Manage meters and alert rules for this location", es: "Gestione contadores y reglas de alerta para esta ubicación", nl: "Beheer meters en alarmregels voor deze locatie" },
+  "locSec.metersTitle": { de: "Messstellen, Aktoren und Sensoren", en: "Meters, Actuators and Sensors", es: "Contadores, actuadores y sensores", nl: "Meters, actuatoren en sensoren" },
+  "locSec.metersDesc": { de: "Verwalten Sie Zähler, Sensoren, Aktoren und Alarmregeln für diesen Standort", en: "Manage meters, sensors, actuators and alert rules for this location", es: "Gestione contadores, sensores, actuadores y reglas de alerta para esta ubicación", nl: "Beheer meters, sensoren, actuatoren en alarmregels voor deze locatie" },
   "locSec.energyPricesTitle": { de: "Energiepreise", en: "Energy Prices", es: "Precios de energía", nl: "Energieprijzen" },
   "locSec.energyPricesDesc": { de: "Preise pro Energieträger für die Kostenberechnung", en: "Prices per energy type for cost calculation", es: "Precios por tipo de energía para el cálculo de costes", nl: "Prijzen per energiedrager voor kostenberekening" },
   "locSec.pvForecastTitle": { de: "PV-Prognose", en: "PV Forecast", es: "Pronóstico FV", nl: "PV-prognose" },

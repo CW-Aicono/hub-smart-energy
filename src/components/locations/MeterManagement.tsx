@@ -1,16 +1,24 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useMeters, Meter } from "@/hooks/useMeters";
 import { useMeterReadings } from "@/hooks/useMeterReadings";
 import { useAlertRules, AlertRule } from "@/hooks/useAlertRules";
 import { useUserRole } from "@/hooks/useUserRole";
+import { useLocationIntegrations } from "@/hooks/useIntegrations";
+import { useLoxoneSensorsMulti, type LoxoneSensor } from "@/hooks/useLoxoneSensors";
+import { GATEWAY_DEFINITIONS } from "@/lib/gatewayRegistry";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Gauge, Plus, Pencil, Trash2, Archive, ArchiveRestore, Eye, EyeOff, Network, ChevronDown, ChevronRight } from "lucide-react";
+import {
+  Gauge, Plus, Pencil, Trash2, Archive, ArchiveRestore, Eye, EyeOff, Network,
+  ChevronDown, ChevronRight, Thermometer, ToggleLeft, Lightbulb, DoorOpen,
+  Activity, Server, Zap,
+} from "lucide-react";
 import { HelpTooltip } from "@/components/ui/help-tooltip";
 import { useTranslation } from "@/hooks/useTranslation";
 import { AddMeterDialog } from "./AddMeterDialog";
@@ -32,6 +40,96 @@ const TIME_UNIT_KEYS: Record<string, string> = {
   month: "mm.timeMonth",
 };
 
+function isActuator(sensor: LoxoneSensor): boolean {
+  const actuatorTypes = ["switch", "light", "blind", "button", "digital"];
+  const actuatorControlTypes = [
+    "Switch", "Dimmer", "Jalousie", "LightController", "LightControllerV2",
+    "Pushbutton", "IRoomController", "IRoomControllerV2", "Gate", "Ventilation",
+    "Daytimer", "Alarm", "CentralAlarm", "Intercom", "AalSmartAlarm",
+    "Sauna", "Pool", "Hourcounter",
+  ];
+  return actuatorTypes.includes(sensor.type) || actuatorControlTypes.includes(sensor.controlType);
+}
+
+function isSensorOnly(sensor: LoxoneSensor): boolean {
+  return !isActuator(sensor);
+}
+
+function getSensorIcon(type: string) {
+  const cls = "h-4 w-4";
+  switch (type) {
+    case "temperature": return <Thermometer className={cls} />;
+    case "switch":
+    case "digital":
+    case "button": return <ToggleLeft className={cls} />;
+    case "light": return <Lightbulb className={cls} />;
+    case "blind": return <DoorOpen className={cls} />;
+    case "power": return <Gauge className={cls} />;
+    case "motion": return <Activity className={cls} />;
+    default: return <Server className={cls} />;
+  }
+}
+
+function getUnitIcon(unit: string) {
+  const cls = "h-4 w-4";
+  const u = (unit || "").toLowerCase();
+  if (u === "°c" || u === "°f" || u === "k") return <Thermometer className={cls} />;
+  if (u === "kwh" || u === "kw" || u === "w" || u === "wh") return <Zap className={cls} />;
+  if (u === "v" || u === "a") return <Activity className={cls} />;
+  return <Gauge className={cls} />;
+}
+
+function DeviceTable({ devices, type }: { devices: (LoxoneSensor & { _integrationLabel: string })[]; type: "sensor" | "actuator" }) {
+  if (devices.length === 0) {
+    return (
+      <p className="text-sm text-muted-foreground py-4">
+        {type === "sensor" ? "Keine Sensoren gefunden." : "Keine Aktoren gefunden."}
+      </p>
+    );
+  }
+
+  return (
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead className="w-[40px]">Typ</TableHead>
+          <TableHead>Name</TableHead>
+          <TableHead>Raum</TableHead>
+          <TableHead>Gateway</TableHead>
+          <TableHead>Steuerungstyp</TableHead>
+          <TableHead className="text-right">Wert</TableHead>
+          <TableHead>Status</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {devices.map((d) => (
+          <TableRow key={`${d._integrationLabel}-${d.id}`}>
+            <TableCell>
+              <div className="p-1.5 rounded bg-muted w-fit">
+                {d.unit ? getUnitIcon(d.unit) : getSensorIcon(d.type)}
+              </div>
+            </TableCell>
+            <TableCell className="font-medium">{d.name}</TableCell>
+            <TableCell className="text-muted-foreground">{d.room || "–"}</TableCell>
+            <TableCell>
+              <Badge variant="outline" className="text-[10px]">{d._integrationLabel}</Badge>
+            </TableCell>
+            <TableCell className="text-muted-foreground text-xs">{d.controlType}</TableCell>
+            <TableCell className="text-right font-mono text-sm">
+              {d.value}{d.unit ? ` ${d.unit}` : ""}
+            </TableCell>
+            <TableCell>
+              <Badge variant={d.status === "online" ? "default" : "secondary"} className="text-[10px]">
+                {d.status === "online" ? "Online" : "Offline"}
+              </Badge>
+            </TableCell>
+          </TableRow>
+        ))}
+      </TableBody>
+    </Table>
+  );
+}
+
 export const MeterManagement = ({ locationId }: MeterManagementProps) => {
   const { meters, loading: metersLoading, deleteMeter, updateMeter, archiveMeter, updateMeterParent } = useMeters(locationId);
   const { t } = useTranslation();
@@ -44,6 +142,55 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
   const [editingRule, setEditingRule] = useState<AlertRule | null>(null);
   const [showArchived, setShowArchived] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
+
+  // Gateway integrations for sensor/actuator tabs
+  const { locationIntegrations, loading: intLoading } = useLocationIntegrations(locationId);
+
+  const gatewayIntegrations = useMemo(() =>
+    locationIntegrations.filter(
+      (li) => li.is_enabled && li.integration?.type && GATEWAY_DEFINITIONS[li.integration.type]
+    ), [locationIntegrations]);
+
+  const integrationIds = useMemo(() => gatewayIntegrations.map((li) => li.id), [gatewayIntegrations]);
+  const integrationTypes = useMemo(() => gatewayIntegrations.map((li) => li.integration?.type), [gatewayIntegrations]);
+
+  const sensorQueries = useLoxoneSensorsMulti(integrationIds, integrationTypes);
+  const sensorsLoading = sensorQueries.some((q) => q.isLoading);
+
+  const integrationLabelMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    gatewayIntegrations.forEach((li) => {
+      const def = li.integration?.type ? GATEWAY_DEFINITIONS[li.integration.type] : undefined;
+      map[li.id] = def?.label || li.integration?.type || "Unknown";
+    });
+    return map;
+  }, [gatewayIntegrations]);
+
+  // Build sensor name map from meters for overrides
+  const sensorNameMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    meters.forEach((m) => {
+      if (m.sensor_uuid && m.name) map[m.sensor_uuid] = m.name;
+    });
+    return map;
+  }, [meters]);
+
+  const allDevicesWithSource = useMemo(() => {
+    const result: (LoxoneSensor & { _integrationLabel: string })[] = [];
+    sensorQueries.forEach((q, idx) => {
+      const intId = integrationIds[idx];
+      const label = integrationLabelMap[intId] || "Unknown";
+      (q.data || []).forEach((s) => result.push({
+        ...s,
+        name: sensorNameMap[s.id] || s.name,
+        _integrationLabel: label,
+      }));
+    });
+    return result;
+  }, [sensorQueries, integrationIds, integrationLabelMap, sensorNameMap]);
+
+  const sensorDevices = useMemo(() => allDevicesWithSource.filter(isSensorOnly), [allDevicesWithSource]);
+  const actuatorDevices = useMemo(() => allDevicesWithSource.filter(isActuator), [allDevicesWithSource]);
 
   const activeMeters = meters.filter((m) => !m.is_archived);
   const archivedMeters = meters.filter((m) => m.is_archived);
@@ -72,6 +219,8 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
         <Tabs defaultValue="meters">
           <TabsList>
             <TabsTrigger value="meters">{t("mm.tabs.meters" as any)} ({activeMeters.length})</TabsTrigger>
+            <TabsTrigger value="sensors">Sensoren ({sensorDevices.length})</TabsTrigger>
+            <TabsTrigger value="actuators">Aktoren ({actuatorDevices.length})</TabsTrigger>
             <TabsTrigger value="tree" className="gap-1">
               <Network className="h-3.5 w-3.5" />
               {t("mm.tabs.tree" as any)}
@@ -153,6 +302,40 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
                   ))}
                 </TableBody>
               </Table>
+            )}
+          </TabsContent>
+
+          {/* Sensoren Tab */}
+          <TabsContent value="sensors" className="space-y-4">
+            {sensorsLoading || intLoading ? (
+              <div className="space-y-2">
+                <Skeleton className="h-10 w-full" />
+                <Skeleton className="h-10 w-full" />
+                <Skeleton className="h-10 w-full" />
+              </div>
+            ) : gatewayIntegrations.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-4">
+                Keine Gateway-Integration verbunden. Sensoren werden über verbundene Integrationen automatisch erkannt.
+              </p>
+            ) : (
+              <DeviceTable devices={sensorDevices} type="sensor" />
+            )}
+          </TabsContent>
+
+          {/* Aktoren Tab */}
+          <TabsContent value="actuators" className="space-y-4">
+            {sensorsLoading || intLoading ? (
+              <div className="space-y-2">
+                <Skeleton className="h-10 w-full" />
+                <Skeleton className="h-10 w-full" />
+                <Skeleton className="h-10 w-full" />
+              </div>
+            ) : gatewayIntegrations.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-4">
+                Keine Gateway-Integration verbunden. Aktoren werden über verbundene Integrationen automatisch erkannt.
+              </p>
+            ) : (
+              <DeviceTable devices={actuatorDevices} type="actuator" />
             )}
           </TabsContent>
 
