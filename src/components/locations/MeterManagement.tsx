@@ -40,7 +40,14 @@ const TIME_UNIT_KEYS: Record<string, string> = {
   month: "mm.timeMonth",
 };
 
+const METER_CONTROL_TYPES = ["Meter", "EnergyManager", "EnergyManager2", "Fronius", "EnergyMonitor"];
+
+function isMeterDevice(sensor: LoxoneSensor): boolean {
+  return METER_CONTROL_TYPES.includes(sensor.controlType);
+}
+
 function isActuator(sensor: LoxoneSensor): boolean {
+  if (isMeterDevice(sensor)) return false;
   const actuatorTypes = ["switch", "light", "blind", "button", "digital"];
   const actuatorControlTypes = [
     "Switch", "Dimmer", "Jalousie", "LightController", "LightControllerV2",
@@ -52,7 +59,7 @@ function isActuator(sensor: LoxoneSensor): boolean {
 }
 
 function isSensorOnly(sensor: LoxoneSensor): boolean {
-  return !isActuator(sensor);
+  return !isMeterDevice(sensor) && !isActuator(sensor);
 }
 
 function getSensorIcon(type: string) {
@@ -79,7 +86,17 @@ function getUnitIcon(unit: string) {
   return <Gauge className={cls} />;
 }
 
-function DeviceTable({ devices, type }: { devices: (LoxoneSensor & { _integrationLabel: string })[]; type: "sensor" | "actuator" }) {
+function DeviceTable({
+  devices,
+  type,
+  meters,
+  onEditMeter,
+}: {
+  devices: (LoxoneSensor & { _integrationLabel: string })[];
+  type: "sensor" | "actuator";
+  meters: Meter[];
+  onEditMeter: (meter: Meter) => void;
+}) {
   if (devices.length === 0) {
     return (
       <p className="text-sm text-muted-foreground py-4">
@@ -87,6 +104,10 @@ function DeviceTable({ devices, type }: { devices: (LoxoneSensor & { _integratio
       </p>
     );
   }
+
+  // Build a map from sensor_uuid to meter for quick lookup
+  const sensorUuidToMeter = new Map<string, Meter>();
+  meters.forEach((m) => { if (m.sensor_uuid) sensorUuidToMeter.set(m.sensor_uuid, m); });
 
   return (
     <Table>
@@ -102,29 +123,43 @@ function DeviceTable({ devices, type }: { devices: (LoxoneSensor & { _integratio
         </TableRow>
       </TableHeader>
       <TableBody>
-        {devices.map((d) => (
-          <TableRow key={`${d._integrationLabel}-${d.id}`}>
-            <TableCell>
-              <div className="p-1.5 rounded bg-muted w-fit">
-                {d.unit ? getUnitIcon(d.unit) : getSensorIcon(d.type)}
-              </div>
-            </TableCell>
-            <TableCell className="font-medium">{d.name}</TableCell>
-            <TableCell className="text-muted-foreground">{d.room || "–"}</TableCell>
-            <TableCell>
-              <Badge variant="outline" className="text-[10px]">{d._integrationLabel}</Badge>
-            </TableCell>
-            <TableCell className="text-muted-foreground text-xs">{d.controlType}</TableCell>
-            <TableCell className="text-right font-mono text-sm">
-              {d.value}{d.unit ? ` ${d.unit}` : ""}
-            </TableCell>
-            <TableCell>
-              <Badge variant={d.status === "online" ? "default" : "secondary"} className="text-[10px]">
-                {d.status === "online" ? "Online" : "Offline"}
-              </Badge>
-            </TableCell>
-          </TableRow>
-        ))}
+        {devices.map((d) => {
+          const linkedMeter = sensorUuidToMeter.get(d.id);
+          return (
+            <TableRow key={`${d._integrationLabel}-${d.id}`}>
+              <TableCell>
+                <div className="p-1.5 rounded bg-muted w-fit">
+                  {d.unit ? getUnitIcon(d.unit) : getSensorIcon(d.type)}
+                </div>
+              </TableCell>
+              <TableCell>
+                {linkedMeter ? (
+                  <button
+                    className="font-medium text-left hover:underline text-primary cursor-pointer"
+                    onClick={() => onEditMeter(linkedMeter)}
+                  >
+                    {d.name}
+                  </button>
+                ) : (
+                  <span className="font-medium">{d.name}</span>
+                )}
+              </TableCell>
+              <TableCell className="text-muted-foreground">{d.room || "–"}</TableCell>
+              <TableCell>
+                <Badge variant="outline" className="text-[10px]">{d._integrationLabel}</Badge>
+              </TableCell>
+              <TableCell className="text-muted-foreground text-xs">{d.controlType}</TableCell>
+              <TableCell className="text-right font-mono text-sm">
+                {d.value}{d.unit ? ` ${d.unit}` : ""}
+              </TableCell>
+              <TableCell>
+                <Badge variant={d.status === "online" ? "default" : "secondary"} className="text-[10px]">
+                  {d.status === "online" ? "Online" : "Offline"}
+                </Badge>
+              </TableCell>
+            </TableRow>
+          );
+        })}
       </TableBody>
     </Table>
   );
@@ -264,7 +299,14 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
                 <TableBody>
                   {displayedMeters.map((m) => (
                     <TableRow key={m.id} className={m.is_archived ? "opacity-60" : ""}>
-                      <TableCell className="font-medium">{m.name}</TableCell>
+                       <TableCell>
+                         <button
+                           className="font-medium text-left hover:underline text-primary cursor-pointer"
+                           onClick={() => setEditingMeter(m)}
+                         >
+                           {m.name}
+                         </button>
+                       </TableCell>
                       <TableCell>{m.meter_number || "–"}</TableCell>
                       <TableCell>
                         <Badge variant={m.capture_type === "automatic" ? "default" : m.capture_type === "virtual" ? "outline" : "secondary"}>
@@ -318,7 +360,7 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
                 Keine Gateway-Integration verbunden. Sensoren werden über verbundene Integrationen automatisch erkannt.
               </p>
             ) : (
-              <DeviceTable devices={sensorDevices} type="sensor" />
+              <DeviceTable devices={sensorDevices} type="sensor" meters={meters} onEditMeter={(m) => setEditingMeter(m)} />
             )}
           </TabsContent>
 
@@ -335,7 +377,7 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
                 Keine Gateway-Integration verbunden. Aktoren werden über verbundene Integrationen automatisch erkannt.
               </p>
             ) : (
-              <DeviceTable devices={actuatorDevices} type="actuator" />
+              <DeviceTable devices={actuatorDevices} type="actuator" meters={meters} onEditMeter={(m) => setEditingMeter(m)} />
             )}
           </TabsContent>
 
