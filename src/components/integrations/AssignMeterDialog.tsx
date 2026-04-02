@@ -193,12 +193,12 @@ export function AssignMeterDialog({
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>
-            {sensorList.length === 1 ? "Zähler zuordnen" : `${sensorList.length} Zähler zuordnen`}
+            {sensorList.length === 1 ? "Gerät zuordnen" : `${sensorList.length} Geräte zuordnen`}
           </DialogTitle>
           <DialogDescription>
             {sensorList.length === 1
-              ? `Ordnen Sie den Zähler „${sensorList[0].name}" einer Messstelle zu.`
-              : `Ordnen Sie ${sensorList.length} ausgewählte Zähler dem Standort zu.`}
+              ? `Ordnen Sie „${sensorList[0].name}" einem Gerätetyp und Standort zu.`
+              : `Ordnen Sie ${sensorList.length} ausgewählte Geräte dem Standort zu.`}
           </DialogDescription>
         </DialogHeader>
 
