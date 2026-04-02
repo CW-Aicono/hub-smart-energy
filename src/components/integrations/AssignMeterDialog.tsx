@@ -68,6 +68,7 @@ export function AssignMeterDialog({
   const T = (key: string) => t(key as any);
   const { addMeter } = useMeters();
 
+  const [deviceType, setDeviceType] = useState<"meter" | "sensor" | "actuator">("meter");
   const [energyType, setEnergyType] = useState("strom");
   const [selectedLocationId, setSelectedLocationId] = useState(currentLocationId);
   const [selectedFloorId, setSelectedFloorId] = useState<string>("");
