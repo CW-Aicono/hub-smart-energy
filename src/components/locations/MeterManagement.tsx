@@ -169,7 +169,7 @@ function DeviceTable({
 }
 
 export const MeterManagement = ({ locationId }: MeterManagementProps) => {
-  const { meters, loading: metersLoading, deleteMeter, updateMeter, archiveMeter, updateMeterParent } = useMeters(locationId);
+  const { meters, loading: metersLoading, addMeter, deleteMeter, updateMeter, archiveMeter, updateMeterParent, refetch } = useMeters(locationId);
   const { t } = useTranslation();
   const { alertRules, loading: rulesLoading, deleteAlertRule, toggleAlertRule, updateAlertRule } = useAlertRules(locationId);
   const { readings } = useMeterReadings();
