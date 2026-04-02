@@ -300,6 +300,19 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
           <DialogTitle>Gerät bearbeiten – {meter.name}</DialogTitle>
         </DialogHeader>
         <div className="space-y-4 overflow-y-auto flex-1 pr-2">
+          {/* Device type selector */}
+          <div>
+            <Label className="mb-2 block">Gerätetyp *</Label>
+            <Select value={deviceType} onValueChange={setDeviceType}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="meter">Zähler</SelectItem>
+                <SelectItem value="sensor">Sensor</SelectItem>
+                <SelectItem value="actuator">Aktor</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
           <div>
             <Label className="mb-2 block">Erfassungsart *</Label>
             <RadioGroup
