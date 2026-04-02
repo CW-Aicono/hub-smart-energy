@@ -91,11 +91,13 @@ function DeviceTable({
   type,
   meters,
   onEditMeter,
+  onCreateAndEdit,
 }: {
-  devices: (LoxoneSensor & { _integrationLabel: string })[];
+  devices: (LoxoneSensor & { _integrationLabel: string; _integrationId: string })[];
   type: "sensor" | "actuator";
   meters: Meter[];
   onEditMeter: (meter: Meter) => void;
+  onCreateAndEdit: (device: LoxoneSensor & { _integrationId: string }, deviceType: string) => void;
 }) {
   if (devices.length === 0) {
     return (
@@ -105,7 +107,6 @@ function DeviceTable({
     );
   }
 
-  // Build a map from sensor_uuid to meter for quick lookup
   const sensorUuidToMeter = new Map<string, Meter>();
   meters.forEach((m) => { if (m.sensor_uuid) sensorUuidToMeter.set(m.sensor_uuid, m); });
 
@@ -133,16 +134,18 @@ function DeviceTable({
                 </div>
               </TableCell>
               <TableCell>
-                {linkedMeter ? (
-                  <button
-                    className="font-medium text-left hover:underline text-primary cursor-pointer"
-                    onClick={() => onEditMeter(linkedMeter)}
-                  >
-                    {d.name}
-                  </button>
-                ) : (
-                  <span className="font-medium">{d.name}</span>
-                )}
+                <button
+                  className="font-medium text-left hover:underline text-primary cursor-pointer"
+                  onClick={() => {
+                    if (linkedMeter) {
+                      onEditMeter(linkedMeter);
+                    } else {
+                      onCreateAndEdit(d, type === "actuator" ? "actuator" : "sensor");
+                    }
+                  }}
+                >
+                  {d.name}
+                </button>
               </TableCell>
               <TableCell className="text-muted-foreground">{d.room || "–"}</TableCell>
               <TableCell>
