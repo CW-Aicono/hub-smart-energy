@@ -120,17 +120,24 @@ Deno.serve(async (req) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const authClient = createClient(supabaseUrl, supabaseAnonKey, { global: { headers: { Authorization: authHeader } } });
     const jwtToken = authHeader.replace("Bearer ", "");
-    const { data: { user: claimsUser }, error: claimsError } = await authClient.auth.getUser(jwtToken);
-    if (claimsError || !claimsUser) {
-      return new Response(JSON.stringify({ success: false, error: "Ungültiges Token" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-    }
-    const userId = claimsUser.id;
+    const isServiceRole = jwtToken === supabaseServiceKey;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
-    const { data: profile } = await supabase.from("profiles").select("tenant_id").eq("user_id", userId).single();
-    if (!profile?.tenant_id) {
-      return new Response(JSON.stringify({ success: false, error: "Kein Mandant zugeordnet" }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+
+    let userTenantId: string | null = null;
+    if (isServiceRole) {
+      console.log("Service-role call detected – skipping user JWT validation");
+    } else {
+      const authClient = createClient(supabaseUrl, supabaseAnonKey, { global: { headers: { Authorization: authHeader } } });
+      const { data: { user: claimsUser }, error: claimsError } = await authClient.auth.getUser(jwtToken);
+      if (claimsError || !claimsUser) {
+        return new Response(JSON.stringify({ success: false, error: "Ungültiges Token" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+      const { data: profile } = await supabase.from("profiles").select("tenant_id").eq("user_id", claimsUser.id).single();
+      if (!profile?.tenant_id) {
+        return new Response(JSON.stringify({ success: false, error: "Kein Mandant zugeordnet" }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+      userTenantId = profile.tenant_id;
     }
 
     const { locationIntegrationId, action } = await req.json();
@@ -150,7 +157,7 @@ Deno.serve(async (req) => {
     }
 
     // Verify tenant ownership
-    if ((li as any).location?.tenant_id !== profile.tenant_id) {
+    if (!isServiceRole && (li as any).location?.tenant_id !== userTenantId) {
       return new Response(JSON.stringify({ success: false, error: "Zugriff verweigert" }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 

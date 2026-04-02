@@ -5439,6 +5439,7 @@ export const translations = {
   "auto.deleted": { de: "Automation gelöscht", en: "Automation deleted", es: "Automatización eliminada", nl: "Automatisering verwijderd" },
   "auto.automationDesc": { de: "Automatisierte Steuerungsszenarien für diesen Standort", en: "Automated control scenarios for this location", es: "Escenarios de control automatizado para esta ubicación", nl: "Geautomatiseerde besturingsscenario's voor deze locatie" },
   "auto.noIntegration": { de: "Keine Integration", en: "No integration", es: "Sin integración", nl: "Geen integratie" },
+  "auto.scheduledError": { de: "Zeitsteuerung fehlgeschlagen", en: "Scheduled execution failed", es: "Ejecución programada fallida", nl: "Geplande uitvoering mislukt" },
 
   // ── Automation Rule Builder ───────────────────────────────────────────────
   "arb.editTitle": { de: "Automation bearbeiten", en: "Edit Automation", es: "Editar automatización", nl: "Automatisering bewerken" },
