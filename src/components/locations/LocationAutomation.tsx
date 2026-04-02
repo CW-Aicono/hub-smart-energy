@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import React, { useState, useMemo } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
@@ -45,6 +45,11 @@ import {
   CalendarDays,
   GitBranch,
   Copy,
+  ArrowRight,
+  Zap,
+  Power,
+  Timer,
+  AlarmClock,
 } from "lucide-react";
 import { HelpTooltip } from "@/components/ui/help-tooltip";
 import { AiDisclaimer } from "@/components/ui/ai-disclaimer";
@@ -95,33 +100,129 @@ interface LocationAutomationProps {
   locationId: string;
 }
 
-/** Summary badges for conditions */
-function ConditionSummary({ auto, t }: { auto: LocationAutomationRecord; t: (key: any) => string }) {
-  if (!auto.conditions || auto.conditions.length === 0) return null;
-  const icons: { icon: typeof Clock; label: string }[] = [];
-  const types = new Set(auto.conditions.map((c) => c.type));
-  if (types.has("sensor_value")) icons.push({ icon: Thermometer, label: t("auto.sensorValue" as any) });
-  if (types.has("time")) icons.push({ icon: Clock, label: t("auto.time" as any) });
-  if (types.has("weekday")) icons.push({ icon: CalendarDays, label: t("auto.weekdays" as any) });
-  if (types.has("status")) icons.push({ icon: ToggleLeft, label: t("auto.status" as any) });
+const WEEKDAY_SHORT = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
+
+function formatPulseDuration(ms?: number): string {
+  const val = ms ?? 500;
+  if (val >= 1000 && val % 1000 === 0) return `${val / 1000} s`;
+  return `${val} ms`;
+}
+
+function getActionLabel(actionType: string, pulseDuration?: number): string {
+  switch (actionType) {
+    case "pulse": return `Pulse (${formatPulseDuration(pulseDuration)})`;
+    case "On": return "Einschalten";
+    case "Off": return "Ausschalten";
+    case "toggle": return "Umschalten";
+    case "resetDay": return "Reset Tag";
+    case "resetMonth": return "Reset Monat";
+    case "resetYear": return "Reset Jahr";
+    case "resetAll": return "Reset Alle";
+    default: return actionType;
+  }
+}
+
+/** Compact visual flow: Conditions → Action */
+function AutomationFlowDiagram({ auto, actuatorStates }: {
+  auto: LocationAutomationRecord;
+  actuatorStates: Map<string, { value: string; status: string }>;
+}) {
+  const conditions = auto.conditions || [];
+  const actions = auto.actions || [];
+  const logicOp = auto.logic_operator || "AND";
+
+  const conditionChips: { icon: React.ElementType; label: string }[] = [];
+  conditions.forEach((c) => {
+    switch (c.type) {
+      case "sensor_value":
+        conditionChips.push({
+          icon: Thermometer,
+          label: `${c.sensor_name || "Sensor"} ${c.operator || ">"} ${c.value ?? ""}${c.unit ? ` ${c.unit}` : ""}`,
+        });
+        break;
+      case "time":
+        conditionChips.push({ icon: Clock, label: `${c.time_from || "?"} – ${c.time_to || "?"}` });
+        break;
+      case "time_point":
+        conditionChips.push({ icon: AlarmClock, label: `⏱ ${c.time_point || "?"}` });
+        break;
+      case "time_switch":
+        conditionChips.push({ icon: Timer, label: `${(c.time_points || []).length}× Zeitpunkte` });
+        break;
+      case "weekday":
+        conditionChips.push({
+          icon: CalendarDays,
+          label: (c.weekdays || []).map((d) => WEEKDAY_SHORT[d] || d).join(", "),
+        });
+        break;
+      case "status":
+        conditionChips.push({
+          icon: ToggleLeft,
+          label: `${c.actuator_name || "Aktor"} = ${c.expected_status || "?"}`,
+        });
+        break;
+    }
+  });
+
+  const actionChips = actions.length > 0 ? actions : [{
+    actuator_uuid: auto.actuator_uuid,
+    actuator_name: auto.actuator_name,
+    action_type: auto.action_type === "pulse" ? "pulse" : (auto.action_value || "On"),
+    pulse_duration: undefined as number | undefined,
+  }];
 
   return (
-    <div className="flex items-center gap-1 flex-wrap">
-      {icons.map(({ icon: I, label }) => (
-        <Badge key={label} variant="outline" className="text-[10px] gap-1 py-0">
-          <I className="h-2.5 w-2.5" />
-          {label}
-        </Badge>
-      ))}
-      {auto.conditions.length > 1 && (() => {
-        const hasOr = auto.conditions.some((c) => c.connector === "OR");
-        const hasAnd = auto.conditions.some((c) => c.connector === "AND" || !c.connector);
-        return (
-          <Badge variant="outline" className="text-[10px] font-mono py-0">
-            {hasAnd && hasOr ? t("arb.andOr" as any) : hasOr ? t("arb.or" as any) : t("arb.and" as any)}
-          </Badge>
-        );
-      })()}
+    <div className="flex items-start gap-1.5 mt-2 text-[11px] flex-wrap">
+      {conditionChips.length > 0 && (
+        <>
+          <div className="flex flex-col gap-1">
+            {conditionChips.map((chip, i) => {
+              const I = chip.icon;
+              return (
+                <div key={i} className="flex items-center gap-1">
+                  {i > 0 && (
+                    <span className="text-[9px] font-mono text-muted-foreground mr-0.5">
+                      {logicOp}
+                    </span>
+                  )}
+                  <span className="inline-flex items-center gap-1 rounded-md border bg-muted/50 px-1.5 py-0.5">
+                    <I className="h-3 w-3 text-muted-foreground shrink-0" />
+                    <span className="truncate max-w-[140px]">{chip.label}</span>
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+          <ArrowRight className="h-3.5 w-3.5 text-muted-foreground mt-1 shrink-0" />
+        </>
+      )}
+      <div className="flex flex-col gap-1">
+        {actionChips.map((action, i) => {
+          const state = actuatorStates.get(action.actuator_uuid);
+          return (
+            <span
+              key={i}
+              className="inline-flex items-center gap-1.5 rounded-md border border-primary/30 bg-primary/5 px-1.5 py-0.5"
+            >
+              <Zap className="h-3 w-3 text-primary shrink-0" />
+              <span className="truncate max-w-[120px] font-medium">{action.actuator_name}</span>
+              <Badge variant="outline" className="text-[9px] py-0 px-1 h-4">
+                {getActionLabel(action.action_type, (action as any).pulse_duration)}
+              </Badge>
+              {state && (
+                <span className={`inline-flex items-center gap-0.5 text-[9px] font-medium ${
+                  state.value === "1" || state.value?.toLowerCase() === "on"
+                    ? "text-green-600"
+                    : "text-muted-foreground"
+                }`}>
+                  <Power className="h-2.5 w-2.5" />
+                  {state.value === "1" || state.value?.toLowerCase() === "on" ? "On" : "Off"}
+                </span>
+              )}
+            </span>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -210,6 +311,17 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
 
   const actuators = allSensorsWithSource.filter(isActuator);
   const allSensors = allSensorsWithSource as LoxoneSensor[];
+
+  // Build actuator state map for live status display
+  const actuatorStates = useMemo(() => {
+    const map = new Map<string, { value: string; status: string }>();
+    allSensorsWithSource.forEach((s) => {
+      if (s.value !== undefined && s.value !== null) {
+        map.set(s.id, { value: String(s.value), status: s.status });
+      }
+    });
+    return map;
+  }, [allSensorsWithSource]);
 
   const filteredActuators = searchTerm
     ? actuators.filter((s) =>
@@ -387,12 +499,8 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
                         {auto.description && (
                           <p className="text-xs text-muted-foreground mt-0.5">{auto.description}</p>
                         )}
-                        <ConditionSummary auto={auto} t={t} />
+                        <AutomationFlowDiagram auto={auto} actuatorStates={actuatorStates} />
                         <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground flex-wrap">
-                          <span className="flex items-center gap-1">
-                            <Server className="h-3 w-3" />
-                            {primaryName}
-                          </span>
                           {auto.last_executed_at && (
                             <span className="flex items-center gap-1">
                               <Clock className="h-3 w-3" />
