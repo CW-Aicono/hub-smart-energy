@@ -353,7 +353,7 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
                 Keine Gateway-Integration verbunden. Sensoren werden über verbundene Integrationen automatisch erkannt.
               </p>
             ) : (
-              <DeviceTable devices={sensorDevices} type="sensor" />
+              <DeviceTable devices={sensorDevices} type="sensor" meters={meters} onEditMeter={(m) => setEditingMeter(m)} />
             )}
           </TabsContent>
 
