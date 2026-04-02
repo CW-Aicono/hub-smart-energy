@@ -259,9 +259,9 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
       <CardContent>
         <Tabs defaultValue="meters">
           <TabsList>
-            <TabsTrigger value="meters">{t("mm.tabs.meters" as any)} ({activeMeters.length})</TabsTrigger>
-            <TabsTrigger value="sensors">Sensoren ({sensorDevices.length})</TabsTrigger>
-            <TabsTrigger value="actuators">Aktoren ({actuatorDevices.length})</TabsTrigger>
+            <TabsTrigger value="meters">{t("mm.tabs.meters" as any)} ({meterTypeMeters.length})</TabsTrigger>
+            <TabsTrigger value="sensors">Sensoren ({sensorDevices.length + sensorTypeMeters.length})</TabsTrigger>
+            <TabsTrigger value="actuators">Aktoren ({actuatorDevices.length + actuatorTypeMeters.length})</TabsTrigger>
             <TabsTrigger value="tree" className="gap-1">
               <Network className="h-3.5 w-3.5" />
               {t("mm.tabs.tree" as any)}
