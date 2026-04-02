@@ -145,7 +145,9 @@ const METER_ACTION_TYPES = [
 
 const CONDITION_TYPES = [
   { value: "sensor_value", label: "Sensorwert", icon: Thermometer, desc: "Wenn ein Messwert einen Schwellenwert über-/unterschreitet" },
-  { value: "time", label: "Uhrzeit", icon: Clock, desc: "Innerhalb eines Zeitfensters aktiv" },
+  { value: "time", label: "Zeitfenster", icon: Clock, desc: "Innerhalb eines Zeitfensters aktiv (von–bis)" },
+  { value: "time_point", label: "Zeitpunkt", icon: AlarmClock, desc: "Zu einem bestimmten Zeitpunkt auslösen" },
+  { value: "time_switch", label: "Zeitschaltuhr", icon: Timer, desc: "Zu mehreren Zeitpunkten auslösen" },
   { value: "weekday", label: "Wochentage", icon: CalendarDays, desc: "Nur an bestimmten Wochentagen aktiv" },
   { value: "status", label: "Aktor-Status", icon: ToggleLeft, desc: "Wenn ein anderer Aktor einen bestimmten Zustand hat" },
 ];
