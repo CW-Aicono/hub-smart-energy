@@ -242,8 +242,19 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
 
   const displayedMeters = showArchived ? archivedMeters : meterTypeMeters;
 
+  // When a new meter is created for a gateway device, watch for it to appear and open edit
+  useEffect(() => {
+    if (!pendingSensorUuid) return;
+    const found = meters.find((m) => m.sensor_uuid === pendingSensorUuid);
+    if (found) {
+      setEditingMeter(found);
+      setPendingSensorUuid(null);
+    }
+  }, [meters, pendingSensorUuid]);
+
   // Auto-create a meter record for a gateway device and open the edit dialog
   const handleCreateAndEdit = async (device: LoxoneSensor & { _integrationId: string }, deviceType: string) => {
+    setPendingSensorUuid(device.id);
     await addMeter(
       {
         name: device.name,
@@ -257,13 +268,6 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
       },
       null, false, "consumption"
     );
-    // After creation, refetch and find the new meter to open edit
-    await refetch();
-    // Small delay to allow query invalidation, then find new meter
-    setTimeout(() => {
-      const newMeter = meters.find((m) => m.sensor_uuid === device.id);
-      if (newMeter) setEditingMeter(newMeter);
-    }, 500);
   };
 
   return (
