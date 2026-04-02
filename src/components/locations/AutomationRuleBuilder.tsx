@@ -251,9 +251,12 @@ function ConditionCard({
 
   // In MLA mode, filter sensors by selected gateway
   const effectiveSensors = useMemo(() => {
-    if (!isMLA || !condition.gateway_id) return isMLA ? [] : sensors;
+    if (!isMLA || !condition.gateway_id) {
+      const base = isMLA ? [] : sensors;
+      return base.filter(isSensorOrMeter);
+    }
     const gw = gatewayOptions!.find((g) => g.id === condition.gateway_id);
-    return gw?.sensors || [];
+    return (gw?.sensors || []).filter(isSensorOrMeter);
   }, [isMLA, condition.gateway_id, gatewayOptions, sensors]);
 
   const handleGatewayChange = (gwId: string) => {
