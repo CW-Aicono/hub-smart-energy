@@ -450,7 +450,7 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
             <Input value={medium} onChange={(e) => setMedium(e.target.value)} />
           </div>
           {/* Gas-specific fields */}
-          {energyType === "gas" && unit === "m³" && (
+          {deviceType === "meter" && energyType === "gas" && unit === "m³" && (
             <div className="space-y-3 rounded-md border p-3 bg-muted/30">
               <p className="text-sm font-medium text-muted-foreground">Gas-Parameter</p>
               <div className="grid grid-cols-2 gap-4">
