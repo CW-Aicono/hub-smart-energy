@@ -199,6 +199,7 @@ export function useLocationAutomations(locationId: string | undefined) {
 
   return {
     automations,
+    lastErrors,
     loading,
     executing,
     refetch: fetchAutomations,
