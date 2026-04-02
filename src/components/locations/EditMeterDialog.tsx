@@ -409,38 +409,42 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
             <Label>Name *</Label>
             <Input value={name} onChange={(e) => setName(e.target.value)} />
           </div>
-          <div>
-            <Label>Zählernummer</Label>
-            <Input value={meterNumber} onChange={(e) => setMeterNumber(e.target.value)} />
-          </div>
-          <div className="grid grid-cols-2 gap-4">
+          {deviceType === "meter" && (
             <div>
-              <Label>Energieart</Label>
-              <Select value={energyType} onValueChange={setEnergyType}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="strom">{T("energy.strom")}</SelectItem>
-                  <SelectItem value="gas">{T("energy.gas")}</SelectItem>
-                  <SelectItem value="waerme">{T("energy.waerme")}</SelectItem>
-                  <SelectItem value="wasser">{T("energy.wasser")}</SelectItem>
-                </SelectContent>
-              </Select>
+              <Label>Zählernummer</Label>
+              <Input value={meterNumber} onChange={(e) => setMeterNumber(e.target.value)} />
             </div>
-            <div>
-              <Label>Einheit</Label>
-              {energyType === "gas" ? (
-                <Select value={unit} onValueChange={setUnit}>
+          )}
+          {deviceType === "meter" && (
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>Energieart</Label>
+                <Select value={energyType} onValueChange={setEnergyType}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="m³">m³</SelectItem>
-                    <SelectItem value="kWh">kWh</SelectItem>
+                    <SelectItem value="strom">{T("energy.strom")}</SelectItem>
+                    <SelectItem value="gas">{T("energy.gas")}</SelectItem>
+                    <SelectItem value="waerme">{T("energy.waerme")}</SelectItem>
+                    <SelectItem value="wasser">{T("energy.wasser")}</SelectItem>
                   </SelectContent>
                 </Select>
-              ) : (
-                <Input value={unit} onChange={(e) => setUnit(e.target.value)} />
-              )}
+              </div>
+              <div>
+                <Label>Einheit</Label>
+                {energyType === "gas" ? (
+                  <Select value={unit} onValueChange={setUnit}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="m³">m³</SelectItem>
+                      <SelectItem value="kWh">kWh</SelectItem>
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <Input value={unit} onChange={(e) => setUnit(e.target.value)} />
+                )}
+              </div>
             </div>
-          </div>
+          )}
           <div>
             <Label>Medium</Label>
             <Input value={medium} onChange={(e) => setMedium(e.target.value)} />
