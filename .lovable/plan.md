@@ -1,71 +1,49 @@
 
 
-## Problem: Warum das Add-on nicht im Store erscheint
+## Analyse: Uhrzeitgesteuerte Automationen funktionieren nicht
 
-Ich habe die echten Dateien auf GitHub abgerufen und mit den lokalen Dateien hier verglichen. **Die Dateien auf GitHub sind veraltet/fehlerhaft** -- sie entsprechen nicht den korrigierten Versionen in diesem Projekt.
+### Problem
 
-### Fehler 1: `config.yaml` hat ungueltige Schema-Syntax
+Es gibt **keinen Backend-Scheduler**, der Automationen automatisch ausführt. Die Automationen können zwar Bedingungen vom Typ `time` (mit `time_from`/`time_to`) speichern, aber:
 
-**Auf GitHub steht (FALSCH):**
-```yaml
-schema:
-  supabase_url:
-    name: "Cloud URL"
-    required: true
-```
+1. **Keine automatische Auswertung**: Es existiert keine Edge Function und kein Cron-Job, der periodisch prüft, ob die Zeitbedingungen einer Automation erfüllt sind und die Aktionen dann auslöst.
+2. **Nur manuelle Ausführung**: `executeAutomation` im Frontend führt Aktionen direkt aus – ohne die gespeicherten Bedingungen (Zeit, Wochentag, Sensorwert) überhaupt zu prüfen.
+3. **Zeitzonen-Frage**: Da kein Scheduler existiert, ist die Zeitzone derzeit irrelevant – es passiert schlicht nichts zeitgesteuert.
 
-**Richtig waere:**
-```yaml
-schema:
-  supabase_url: url
-  gateway_api_key: str
-  tenant_id: str
-```
+### Plan: Automation-Scheduler implementieren
 
-Home Assistant erwartet hinter jedem Schluessel einen **einfachen Typ** (`url`, `str`, `int`, `bool`), keine verschachtelten Bloecke mit `name:` und `required:`. Dieses falsche Format verhindert, dass HA das Add-on ueberhaupt parsen kann -- deshalb taucht es nicht im Store auf.
+#### 1. Neue Edge Function `automation-scheduler` erstellen
 
-### Fehler 2: `config.yaml` fehlen API-Berechtigungen
+- Wird per Cron (alle 1–5 Minuten) aufgerufen
+- Lädt alle aktiven Automationen mit `is_active = true`
+- Prüft für jede Automation alle Bedingungen:
+  - **`time`**: Vergleicht `time_from`/`time_to` mit der **aktuellen Uhrzeit in der Zeitzone der Liegenschaft** (aus `locations.timezone` oder Fallback `Europe/Berlin`)
+  - **`weekday`**: Prüft aktuellen Wochentag
+  - **`sensor_value`**: Holt aktuellen Sensorwert vom Gateway
+  - **`status`**: Prüft Aktorstatus
+- Verknüpft Bedingungen per `logic_operator` (AND/OR)
+- Führt bei erfüllten Bedingungen die Aktionen aus (via bestehende Gateway-Edge-Functions)
+- Setzt `last_executed_at` und verhindert Doppelausführung (Debounce: nicht erneut innerhalb von z.B. 5 Minuten)
 
-Auf GitHub fehlen die Zeilen `hassio_api: true` und `homeassistant_api: true`. Ohne diese kann das Add-on nicht mit Home Assistant kommunizieren.
+#### 2. Zeitzone korrekt auflösen
 
-### Fehler 3: `Dockerfile` fehlt Build-Toolchain
+- Neue Spalte `timezone` in der `locations`-Tabelle (falls nicht vorhanden), Default `Europe/Berlin`
+- Der Scheduler rechnet alle Zeitvergleiche in die lokale Zeitzone der Liegenschaft um
+- Damit gibt es keine 60-Minuten-Differenz mehr zwischen Server-UTC und lokaler Zeit
 
-Auf GitHub fehlt die Zeile `RUN apk add --no-cache python3 make g++`. Ohne diese Pakete kann `better-sqlite3` auf ARM-Architekturen (Raspberry Pi) nicht kompiliert werden -- die Installation wuerde spaeter beim Build fehlschlagen.
+#### 3. Cron-Job einrichten
 
----
+- `pg_cron` oder externer Cron ruft `automation-scheduler` alle 2 Minuten auf
+- Alternativ: Der bestehende `loxone-periodic-sync` wird erweitert, um nach dem Sync auch die Automationen zu evaluieren
 
-## Plan
+#### 4. `executeAutomation` im Frontend anpassen
 
-### Schritt 1: Alle drei fehlerhaften Dateien auf GitHub ersetzen
+- Manuelle Ausführung überspringt weiterhin die Bedingungsprüfung (bewusstes manuelles Triggern)
+- Aber ein visueller Hinweis zeigt, ob die Automation aktuell "aktiv" ist (Bedingungen erfüllt) oder "wartend"
 
-Die INSTALLATION.md wird um einen neuen Abschnitt **"5.0 GitHub-Dateien aktualisieren"** erweitert, der Schritt fuer Schritt erklaert, wie man auf GitHub eine bestehende Datei ersetzt:
+### Technische Details
 
-1. Datei auf GitHub oeffnen
-2. Stift-Symbol klicken (Edit)
-3. Gesamten Inhalt markieren und loeschen
-4. Neuen (korrekten) Inhalt reinkopieren
-5. "Commit changes" klicken
-
-Dies wird fuer alle drei Dateien einzeln beschrieben:
-- `ems-gateway-hub/config.yaml` (kompletter korrekter Inhalt wird abgedruckt)
-- `ems-gateway-hub/Dockerfile` (kompletter korrekter Inhalt wird abgedruckt)
-
-### Schritt 2: config.yaml im Lovable-Projekt anpassen
-
-Die lokale `docs/ha-addon/config.yaml` hat bereits die korrekte Schema-Syntax (`url`, `str`, `int`), aber verwendet `str(1,)` und `int(1,)` -- auch diese erweiterte Syntax ist **nicht gueltig** in Home Assistant. Die Datei wird auf die einfachen Typen `str`, `int`, `url` umgestellt.
-
-### Schritt 3: INSTALLATION.md komplett ueberarbeiten (Abschnitt 5)
-
-Abschnitt 5 wird neu geschrieben mit:
-- Klarer Nummerierung ohne Unterpunkte
-- Direktem Link zum Add-on Store (`http://homeassistant.local:8123/hassio/store`)
-- Erklaerung was nach dem Hinzufuegen des Repos passieren muss (Seite neu laden / kurz warten)
-- Hinweis: Nach Repository-Aenderungen auf GitHub muss in HA der Store **neu geladen** werden (drei Punkte → "Check for updates" oder Seite neu laden)
-
-### Betroffene Dateien
-
-| Datei | Aenderung |
-|---|---|
-| `docs/ha-addon/config.yaml` | Schema-Typen von `str(1,)` auf `str` aendern |
-| `docs/ha-addon/INSTALLATION.md` | Abschnitt 5 komplett neu schreiben mit GitHub-Update-Anleitung und Store-Reload-Hinweis |
+- **Zeitzone**: `Intl.DateTimeFormat` in Deno mit `timeZone`-Option für korrekte lokale Zeit
+- **Debounce**: Prüfung `last_executed_at` + Mindestabstand, um bei minütlichem Cron nicht mehrfach auszulösen
+- **Logging**: Jede Auswertung und Ausführung wird geloggt für Nachvollziehbarkeit
 
