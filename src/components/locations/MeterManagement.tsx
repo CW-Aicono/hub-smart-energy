@@ -241,6 +241,30 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
 
   const displayedMeters = showArchived ? archivedMeters : meterTypeMeters;
 
+  // Auto-create a meter record for a gateway device and open the edit dialog
+  const handleCreateAndEdit = async (device: LoxoneSensor & { _integrationId: string }, deviceType: string) => {
+    await addMeter(
+      {
+        name: device.name,
+        location_id: locationId,
+        energy_type: isMeterDevice(device) ? "strom" : "none",
+        unit: device.unit || "",
+        capture_type: "automatic",
+        location_integration_id: device._integrationId,
+        sensor_uuid: device.id,
+        device_type: deviceType,
+      },
+      null, false, "consumption"
+    );
+    // After creation, refetch and find the new meter to open edit
+    await refetch();
+    // Small delay to allow query invalidation, then find new meter
+    setTimeout(() => {
+      const newMeter = meters.find((m) => m.sensor_uuid === device.id);
+      if (newMeter) setEditingMeter(newMeter);
+    }, 500);
+  };
+
   return (
     <Collapsible open={isOpen} onOpenChange={setIsOpen}>
     <Card>
