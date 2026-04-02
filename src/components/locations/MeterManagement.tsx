@@ -214,7 +214,7 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
   }, [meters]);
 
   const allDevicesWithSource = useMemo(() => {
-    const result: (LoxoneSensor & { _integrationLabel: string })[] = [];
+    const result: (LoxoneSensor & { _integrationLabel: string; _integrationId: string })[] = [];
     sensorQueries.forEach((q, idx) => {
       const intId = integrationIds[idx];
       const label = integrationLabelMap[intId] || "Unknown";
@@ -222,6 +222,7 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
         ...s,
         name: sensorNameMap[s.id] || s.name,
         _integrationLabel: label,
+        _integrationId: intId,
       }));
     });
     return result;
