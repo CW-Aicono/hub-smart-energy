@@ -190,7 +190,7 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
   const defaultIntegration = gatewayIntegrations[0] || null;
 
   const {
-    automations, loading: autoLoading, executing,
+    automations, lastErrors, loading: autoLoading, executing,
     createAutomation, updateAutomation, deleteAutomation, executeAutomation,
   } = useLocationAutomations(locationId);
 
