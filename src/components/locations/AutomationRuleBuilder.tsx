@@ -602,6 +602,8 @@ export function AutomationRuleBuilder({
     if (type === "sensor_value") { base.operator = ">"; }
     if (type === "weekday") { base.weekdays = [1, 2, 3, 4, 5]; }
     if (type === "time") { base.time_from = "08:00"; base.time_to = "18:00"; }
+    if (type === "time_point") { base.time_point = "08:00"; }
+    if (type === "time_switch") { base.time_points = ["08:00", "18:00"]; }
     if (type === "status") { base.expected_status = "on"; }
     setConditions((prev) => [...prev, base]);
     setAddConditionOpen(false);
