@@ -233,6 +233,7 @@ export function useLocationAutomations(locationId: string | undefined) {
     createAutomation,
     updateAutomation,
     deleteAutomation,
+    duplicateAutomation,
     executeAutomation,
   };
 }
