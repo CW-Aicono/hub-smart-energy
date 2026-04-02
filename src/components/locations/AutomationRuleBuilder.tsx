@@ -44,7 +44,7 @@ import { toast } from "sonner";
 
 export interface AutomationCondition {
   id: string;
-  type: "sensor_value" | "time" | "weekday" | "status";
+  type: "sensor_value" | "time" | "weekday" | "status" | "time_point" | "time_switch";
   connector?: "AND" | "OR";
   sensor_uuid?: string;
   sensor_name?: string;
@@ -57,6 +57,10 @@ export interface AutomationCondition {
   actuator_uuid?: string;
   actuator_name?: string;
   expected_status?: string;
+  /** Single time point (HH:mm) for time_point condition */
+  time_point?: string;
+  /** Multiple time points (HH:mm[]) for time_switch condition */
+  time_points?: string[];
   /** MLA: which gateway this condition's sensor belongs to */
   gateway_id?: string;
 }
