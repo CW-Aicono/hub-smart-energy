@@ -513,38 +513,40 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
               )}
             </div>
           )}
-          {/* Hierarchy */}
-          <div className="space-y-3 rounded-md border p-3 bg-muted/30">
-            <div className="flex items-center justify-between">
-              <Label>Hauptzähler (Netzübergabepunkt)</Label>
-              <Switch checked={isMainMeter} onCheckedChange={setIsMainMeter} />
+          {/* Hierarchy - only for meters */}
+          {deviceType === "meter" && (
+            <div className="space-y-3 rounded-md border p-3 bg-muted/30">
+              <div className="flex items-center justify-between">
+                <Label>Hauptzähler (Netzübergabepunkt)</Label>
+                <Switch checked={isMainMeter} onCheckedChange={setIsMainMeter} />
+              </div>
+              <div>
+                <Label>Zählerfunktion</Label>
+                <Select value={meterFunction} onValueChange={setMeterFunction}>
+                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="consumption">Verbrauch</SelectItem>
+                    <SelectItem value="generation">Erzeugung (z.B. PV)</SelectItem>
+                    <SelectItem value="technical">Technisch (z.B. Wärmepumpe)</SelectItem>
+                    <SelectItem value="bidirectional">Bidirektional (Bezug & Einspeisung)</SelectItem>
+                    <SelectItem value="submeter">Unterzähler</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Übergeordneter Zähler</Label>
+                <Select value={parentMeterId} onValueChange={setParentMeterId}>
+                  <SelectTrigger className="mt-1"><SelectValue placeholder="Kein (Hauptzähler)" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Kein übergeordneter Zähler</SelectItem>
+                    {availableParents.map((m) => (
+                      <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
-            <div>
-              <Label>Zählerfunktion</Label>
-              <Select value={meterFunction} onValueChange={setMeterFunction}>
-                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="consumption">Verbrauch</SelectItem>
-                  <SelectItem value="generation">Erzeugung (z.B. PV)</SelectItem>
-                  <SelectItem value="technical">Technisch (z.B. Wärmepumpe)</SelectItem>
-                  <SelectItem value="bidirectional">Bidirektional (Bezug & Einspeisung)</SelectItem>
-                  <SelectItem value="submeter">Unterzähler</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>Übergeordneter Zähler</Label>
-              <Select value={parentMeterId} onValueChange={setParentMeterId}>
-                <SelectTrigger className="mt-1"><SelectValue placeholder="Kein (Hauptzähler)" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Kein übergeordneter Zähler</SelectItem>
-                  {availableParents.map((m) => (
-                    <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
+          )}
           {/* Photo, Installation Date, Operator */}
           <div className="space-y-3 rounded-md border p-3 bg-muted/30">
             <p className="text-sm font-medium text-muted-foreground">Zusatzinformationen</p>
