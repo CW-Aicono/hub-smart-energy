@@ -348,6 +348,63 @@ function ConditionCard({
           </div>
         )}
 
+        {condition.type === "time_point" && (
+          <div className="space-y-1">
+            <Label className="text-xs">Zeitpunkt</Label>
+            <Input
+              type="time"
+              className="h-9 text-xs"
+              value={condition.time_point || ""}
+              onChange={(e) => onUpdate({ ...condition, time_point: e.target.value })}
+            />
+            <p className="text-[10px] text-muted-foreground">Die Automation wird zu diesem Zeitpunkt ausgelöst.</p>
+          </div>
+        )}
+
+        {condition.type === "time_switch" && (
+          <div className="space-y-2">
+            <Label className="text-xs">Zeitpunkte</Label>
+            {(condition.time_points || []).map((tp, idx) => (
+              <div key={idx} className="flex items-center gap-2">
+                <Input
+                  type="time"
+                  className="h-9 text-xs flex-1"
+                  value={tp}
+                  onChange={(e) => {
+                    const updated = [...(condition.time_points || [])];
+                    updated[idx] = e.target.value;
+                    onUpdate({ ...condition, time_points: updated });
+                  }}
+                />
+                {(condition.time_points || []).length > 2 && (
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="h-7 w-7 text-muted-foreground hover:text-destructive shrink-0"
+                    onClick={() => {
+                      const updated = (condition.time_points || []).filter((_, i) => i !== idx);
+                      onUpdate({ ...condition, time_points: updated });
+                    }}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                )}
+              </div>
+            ))}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="text-xs gap-1 w-full"
+              onClick={() => onUpdate({ ...condition, time_points: [...(condition.time_points || []), "12:00"] })}
+            >
+              <Plus className="h-3 w-3" />
+              Zeitpunkt hinzufügen
+            </Button>
+            <p className="text-[10px] text-muted-foreground">Die Automation wird zu jedem dieser Zeitpunkte ausgelöst.</p>
+          </div>
+        )}
+
         {condition.type === "weekday" && (
           <div className="space-y-1">
             <Label className="text-xs">Aktive Tage</Label>

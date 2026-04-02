@@ -64,12 +64,14 @@ function isTimeInRange(currentTime: string, timeFrom: string, timeTo: string): b
 
 interface AutomationCondition {
   id: string;
-  type: "sensor_value" | "time" | "weekday" | "status";
+  type: "sensor_value" | "time" | "weekday" | "status" | "time_point" | "time_switch";
   sensor_uuid?: string;
   operator?: string;
   value?: number;
   time_from?: string;
   time_to?: string;
+  time_point?: string;
+  time_points?: string[];
   weekdays?: number[];
   actuator_uuid?: string;
   expected_status?: string;
