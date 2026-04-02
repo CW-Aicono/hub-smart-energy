@@ -229,7 +229,13 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
 
   const activeMeters = meters.filter((m) => !m.is_archived);
   const archivedMeters = meters.filter((m) => m.is_archived);
-  const displayedMeters = showArchived ? archivedMeters : activeMeters;
+
+  // Split meters by device_type for tab filtering
+  const meterTypeMeters = activeMeters.filter((m) => (m as any).device_type === "meter" || !(m as any).device_type);
+  const sensorTypeMeters = activeMeters.filter((m) => (m as any).device_type === "sensor");
+  const actuatorTypeMeters = activeMeters.filter((m) => (m as any).device_type === "actuator");
+
+  const displayedMeters = showArchived ? archivedMeters : meterTypeMeters;
 
   return (
     <Collapsible open={isOpen} onOpenChange={setIsOpen}>
