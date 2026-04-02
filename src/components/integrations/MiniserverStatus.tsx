@@ -14,6 +14,7 @@ interface SystemStatus {
   cpu: string | null;
   temperature: string | null;
   memory: string | null;
+  localTime: string | null;
 }
 
 export function MiniserverStatus({ locationIntegrationId, integrationType, lastSyncAt }: MiniserverStatusProps) {
