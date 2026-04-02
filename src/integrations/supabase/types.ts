@@ -2607,6 +2607,7 @@ export type Database = {
           renovation_year: number | null
           show_on_map: boolean
           tenant_id: string
+          timezone: string
           type: Database["public"]["Enums"]["location_type"]
           updated_at: string
           usage_type: Database["public"]["Enums"]["location_usage_type"] | null
@@ -2637,6 +2638,7 @@ export type Database = {
           renovation_year?: number | null
           show_on_map?: boolean
           tenant_id: string
+          timezone?: string
           type?: Database["public"]["Enums"]["location_type"]
           updated_at?: string
           usage_type?: Database["public"]["Enums"]["location_usage_type"] | null
@@ -2667,6 +2669,7 @@ export type Database = {
           renovation_year?: number | null
           show_on_map?: boolean
           tenant_id?: string
+          timezone?: string
           type?: Database["public"]["Enums"]["location_type"]
           updated_at?: string
           usage_type?: Database["public"]["Enums"]["location_usage_type"] | null

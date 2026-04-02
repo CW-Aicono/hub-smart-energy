@@ -116,3 +116,6 @@ verify_jwt = false
 
 [functions.sentron-poc3000-api]
 verify_jwt = false
+
+[functions.automation-scheduler]
+verify_jwt = false
