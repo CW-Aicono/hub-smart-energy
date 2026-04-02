@@ -763,6 +763,7 @@ async function handleHeartbeat(req: Request): Promise<Response> {
     ha_version?: string;
     addon_version?: string;
     offline_buffer_count?: number;
+    local_time?: string;
     config?: Record<string, unknown>;
   };
   try {
