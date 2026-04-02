@@ -246,9 +246,10 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
     setSaving(true);
     await onSave(meter.id, {
       name: name.trim(),
+      device_type: deviceType,
       meter_number: meterNumber || undefined,
-      energy_type: energyType,
-      unit,
+      energy_type: deviceType === "meter" ? energyType : "none",
+      unit: deviceType === "meter" ? unit : "",
       medium: medium || undefined,
       notes: notes || undefined,
       capture_type: captureType,
@@ -262,7 +263,7 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
       installation_date: installationDate || undefined,
       meter_operator: meterOperator || undefined,
       photo_url: photoUrl || undefined,
-      ...(energyType === "gas" ? {
+      ...(deviceType === "meter" && energyType === "gas" ? {
         gas_type: gasType,
         zustandszahl: zustandszahl ? parseFloat(zustandszahl.replace(",", ".")) : null,
         brennwert: brennwertVal ? parseFloat(brennwertVal.replace(",", ".")) : null,
