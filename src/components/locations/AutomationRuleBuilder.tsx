@@ -34,6 +34,8 @@ import {
   GitBranch,
   ArrowRight,
   Building2,
+  Timer,
+  AlarmClock,
 } from "lucide-react";
 import { LoxoneSensor } from "@/hooks/useLoxoneSensors";
 import { toast } from "sonner";
@@ -42,7 +44,7 @@ import { toast } from "sonner";
 
 export interface AutomationCondition {
   id: string;
-  type: "sensor_value" | "time" | "weekday" | "status";
+  type: "sensor_value" | "time" | "weekday" | "status" | "time_point" | "time_switch";
   connector?: "AND" | "OR";
   sensor_uuid?: string;
   sensor_name?: string;
@@ -55,6 +57,10 @@ export interface AutomationCondition {
   actuator_uuid?: string;
   actuator_name?: string;
   expected_status?: string;
+  /** Single time point (HH:mm) for time_point condition */
+  time_point?: string;
+  /** Multiple time points (HH:mm[]) for time_switch condition */
+  time_points?: string[];
   /** MLA: which gateway this condition's sensor belongs to */
   gateway_id?: string;
 }
@@ -139,7 +145,9 @@ const METER_ACTION_TYPES = [
 
 const CONDITION_TYPES = [
   { value: "sensor_value", label: "Sensorwert", icon: Thermometer, desc: "Wenn ein Messwert einen Schwellenwert über-/unterschreitet" },
-  { value: "time", label: "Uhrzeit", icon: Clock, desc: "Innerhalb eines Zeitfensters aktiv" },
+  { value: "time", label: "Zeitfenster", icon: Clock, desc: "Innerhalb eines Zeitfensters aktiv (von–bis)" },
+  { value: "time_point", label: "Zeitpunkt", icon: AlarmClock, desc: "Zu einem bestimmten Zeitpunkt auslösen" },
+  { value: "time_switch", label: "Zeitschaltuhr", icon: Timer, desc: "Zu mehreren Zeitpunkten auslösen" },
   { value: "weekday", label: "Wochentage", icon: CalendarDays, desc: "Nur an bestimmten Wochentagen aktiv" },
   { value: "status", label: "Aktor-Status", icon: ToggleLeft, desc: "Wenn ein anderer Aktor einen bestimmten Zustand hat" },
 ];
@@ -337,6 +345,63 @@ function ConditionCard({
                 onChange={(e) => onUpdate({ ...condition, time_to: e.target.value })}
               />
             </div>
+          </div>
+        )}
+
+        {condition.type === "time_point" && (
+          <div className="space-y-1">
+            <Label className="text-xs">Zeitpunkt</Label>
+            <Input
+              type="time"
+              className="h-9 text-xs"
+              value={condition.time_point || ""}
+              onChange={(e) => onUpdate({ ...condition, time_point: e.target.value })}
+            />
+            <p className="text-[10px] text-muted-foreground">Die Automation wird zu diesem Zeitpunkt ausgelöst.</p>
+          </div>
+        )}
+
+        {condition.type === "time_switch" && (
+          <div className="space-y-2">
+            <Label className="text-xs">Zeitpunkte</Label>
+            {(condition.time_points || []).map((tp, idx) => (
+              <div key={idx} className="flex items-center gap-2">
+                <Input
+                  type="time"
+                  className="h-9 text-xs flex-1"
+                  value={tp}
+                  onChange={(e) => {
+                    const updated = [...(condition.time_points || [])];
+                    updated[idx] = e.target.value;
+                    onUpdate({ ...condition, time_points: updated });
+                  }}
+                />
+                {(condition.time_points || []).length > 2 && (
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="h-7 w-7 text-muted-foreground hover:text-destructive shrink-0"
+                    onClick={() => {
+                      const updated = (condition.time_points || []).filter((_, i) => i !== idx);
+                      onUpdate({ ...condition, time_points: updated });
+                    }}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                )}
+              </div>
+            ))}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="text-xs gap-1 w-full"
+              onClick={() => onUpdate({ ...condition, time_points: [...(condition.time_points || []), "12:00"] })}
+            >
+              <Plus className="h-3 w-3" />
+              Zeitpunkt hinzufügen
+            </Button>
+            <p className="text-[10px] text-muted-foreground">Die Automation wird zu jedem dieser Zeitpunkte ausgelöst.</p>
           </div>
         )}
 
@@ -594,6 +659,8 @@ export function AutomationRuleBuilder({
     if (type === "sensor_value") { base.operator = ">"; }
     if (type === "weekday") { base.weekdays = [1, 2, 3, 4, 5]; }
     if (type === "time") { base.time_from = "08:00"; base.time_to = "18:00"; }
+    if (type === "time_point") { base.time_point = "08:00"; }
+    if (type === "time_switch") { base.time_points = ["08:00", "18:00"]; }
     if (type === "status") { base.expected_status = "on"; }
     setConditions((prev) => [...prev, base]);
     setAddConditionOpen(false);
