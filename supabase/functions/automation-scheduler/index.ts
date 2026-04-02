@@ -212,6 +212,32 @@ serve(async (req) => {
             }
             break;
           }
+          case "time_point": {
+            // Match if current time is within ±2 minutes of the target time point
+            if (condition.time_point) {
+              const [tH, tM] = condition.time_point.split(":").map(Number);
+              const targetMin = tH * 60 + tM;
+              const [cH, cM] = timeParts.timeStr.split(":").map(Number);
+              const currentMin = cH * 60 + cM;
+              const diff = Math.abs(currentMin - targetMin);
+              result = diff <= 2 || diff >= (24 * 60 - 2); // handle midnight wrap
+            }
+            break;
+          }
+          case "time_switch": {
+            // Match if current time is within ±2 minutes of ANY of the time points
+            if (condition.time_points && condition.time_points.length > 0) {
+              const [cH, cM] = timeParts.timeStr.split(":").map(Number);
+              const currentMin = cH * 60 + cM;
+              result = condition.time_points.some((tp) => {
+                const [tH, tM] = tp.split(":").map(Number);
+                const targetMin = tH * 60 + tM;
+                const diff = Math.abs(currentMin - targetMin);
+                return diff <= 2 || diff >= (24 * 60 - 2);
+              });
+            }
+            break;
+          }
           case "weekday": {
             if (condition.weekdays && condition.weekdays.length > 0) {
               result = condition.weekdays.includes(timeParts.weekday);
