@@ -147,9 +147,10 @@ export function AssignMeterDialog({
         await addMeter({
           name: s.name.trim(),
           location_id: selectedLocationId,
-          energy_type: energyType,
-          unit: s.unit || "kWh",
-          capture_type: "automatic",
+          energy_type: deviceType === "meter" ? energyType : "none",
+          unit: s.unit || (deviceType === "meter" ? "kWh" : ""),
+          capture_type: deviceType === "meter" ? "automatic" : "automatic",
+          device_type: deviceType,
           location_integration_id: locationIntegrationId,
           sensor_uuid: s.id,
         });
