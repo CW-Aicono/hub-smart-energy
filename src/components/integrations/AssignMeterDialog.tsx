@@ -176,9 +176,10 @@ export function AssignMeterDialog({
       }
 
       const count = sensorList.length;
+      const typeLabel = deviceType === "meter" ? "Zähler" : deviceType === "sensor" ? "Sensor" : "Aktor";
       toast.success(count === 1
-        ? `Zähler "${sensorList[0].name}" erfolgreich zugeordnet`
-        : `${count} Zähler erfolgreich zugeordnet`
+        ? `${typeLabel} "${sensorList[0].name}" erfolgreich zugeordnet`
+        : `${count} ${typeLabel} erfolgreich zugeordnet`
       );
       onOpenChange(false);
     } catch (err) {
