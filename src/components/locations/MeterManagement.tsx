@@ -180,6 +180,7 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
   const [editingRule, setEditingRule] = useState<AlertRule | null>(null);
   const [showArchived, setShowArchived] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
+  const [pendingSensorUuid, setPendingSensorUuid] = useState<string | null>(null);
 
   // Gateway integrations for sensor/actuator tabs
   const { locationIntegrations, loading: intLoading } = useLocationIntegrations(locationId);
