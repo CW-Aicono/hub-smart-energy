@@ -499,12 +499,8 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
                         {auto.description && (
                           <p className="text-xs text-muted-foreground mt-0.5">{auto.description}</p>
                         )}
-                        <ConditionSummary auto={auto} t={t} />
+                        <AutomationFlowDiagram auto={auto} actuatorStates={actuatorStates} />
                         <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground flex-wrap">
-                          <span className="flex items-center gap-1">
-                            <Server className="h-3 w-3" />
-                            {primaryName}
-                          </span>
                           {auto.last_executed_at && (
                             <span className="flex items-center gap-1">
                               <Clock className="h-3 w-3" />
