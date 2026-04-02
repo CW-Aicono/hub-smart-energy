@@ -20,6 +20,7 @@ import { SchneiderSetupInfo } from "./SchneiderSetupInfo";
 import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useGatewayDevices } from "@/hooks/useGatewayDevices";
 
 interface IntegrationCardProps {
   locationIntegration: LocationIntegration;
@@ -40,10 +41,14 @@ export function IntegrationCard({ locationIntegration, onUpdate, onDelete }: Int
   const [backfillTo, setBackfillTo] = useState(() => new Date().toISOString().slice(0, 10));
   const { toast } = useToast();
   const { t } = useTranslation();
+  const { devices: gatewayDevices } = useGatewayDevices(locationIntegration.id);
 
   const integration = locationIntegration.integration;
   const config = locationIntegration.config as Record<string, unknown>;
   const gatewayDef = integration ? getGatewayDefinition(integration.type) : undefined;
+
+  // Get local time from linked gateway device
+  const gatewayLocalTime = gatewayDevices.length > 0 ? gatewayDevices[0].local_time : null;
 
   const handleToggleEnabled = async (enabled: boolean) => {
     setIsToggling(true);
@@ -132,6 +137,12 @@ export function IntegrationCard({ locationIntegration, onUpdate, onDelete }: Int
                   {getSyncStatusBadge()}
                 </div>
                 <p className="text-sm text-muted-foreground">{configSubtitle}</p>
+                {gatewayLocalTime && (
+                  <p className="text-xs text-muted-foreground flex items-center gap-1">
+                    <Clock className="h-3 w-3" />
+                    <span>Gateway-Zeit: {gatewayLocalTime}</span>
+                  </p>
+                )}
                 <MiniserverStatus
                   locationIntegrationId={locationIntegration.id}
                   integrationType={integration?.type}

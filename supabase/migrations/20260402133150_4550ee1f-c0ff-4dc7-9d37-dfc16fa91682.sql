@@ -1,0 +1,1 @@
+ALTER TABLE public.gateway_devices ADD COLUMN local_time text DEFAULT NULL;
