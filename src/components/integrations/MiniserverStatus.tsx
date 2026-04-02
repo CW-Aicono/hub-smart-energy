@@ -41,6 +41,11 @@ export function MiniserverStatus({ locationIntegrationId, integrationType, lastS
 
   // Show last sync even while loading or on error
   const items = [
+    systemStatus?.localTime != null && {
+      icon: Clock,
+      label: "Uhrzeit",
+      value: systemStatus.localTime,
+    },
     systemStatus?.cpu != null && {
       icon: Cpu,
       label: "CPU",
