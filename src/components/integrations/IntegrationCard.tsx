@@ -20,6 +20,7 @@ import { SchneiderSetupInfo } from "./SchneiderSetupInfo";
 import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useGatewayDevices } from "@/hooks/useGatewayDevices";
 
 interface IntegrationCardProps {
   locationIntegration: LocationIntegration;
