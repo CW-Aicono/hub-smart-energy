@@ -1007,10 +1007,11 @@ serve(async (req) => {
         }
       }
 
-      // Fetch CPU and heap in parallel; temperature is not directly available via HTTP API
-      const [cpuRaw, heapRaw] = await Promise.all([
+      // Fetch CPU, heap and date/time in parallel
+      const [cpuRaw, heapRaw, dateRaw] = await Promise.all([
         fetchLoxoneValue("/jdev/sys/cpu"),
         fetchLoxoneValue("/jdev/sys/heap"),
+        fetchLoxoneValue("/jdev/sys/date"),
       ]);
 
       // CPU value is a percentage number
@@ -1041,7 +1042,7 @@ serve(async (req) => {
       return new Response(
         JSON.stringify({
           success: true,
-          systemStatus: { cpu, temperature: temp, memory },
+          systemStatus: { cpu, temperature: temp, memory, localTime: dateRaw },
           lastSync: locationIntegration.last_sync_at,
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }

@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Cpu, Thermometer, HardDrive, RefreshCw, Loader2 } from "lucide-react";
+import { Cpu, Thermometer, HardDrive, RefreshCw, Loader2, Clock } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { de } from "date-fns/locale";
 
@@ -14,6 +14,7 @@ interface SystemStatus {
   cpu: string | null;
   temperature: string | null;
   memory: string | null;
+  localTime: string | null;
 }
 
 export function MiniserverStatus({ locationIntegrationId, integrationType, lastSyncAt }: MiniserverStatusProps) {
@@ -40,6 +41,11 @@ export function MiniserverStatus({ locationIntegrationId, integrationType, lastS
 
   // Show last sync even while loading or on error
   const items = [
+    systemStatus?.localTime != null && {
+      icon: Clock,
+      label: "Uhrzeit",
+      value: systemStatus.localTime,
+    },
     systemStatus?.cpu != null && {
       icon: Cpu,
       label: "CPU",
