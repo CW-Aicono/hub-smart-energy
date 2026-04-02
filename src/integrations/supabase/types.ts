@@ -2020,6 +2020,7 @@ export type Database = {
           last_heartbeat_at: string | null
           latest_available_version: string | null
           local_ip: string | null
+          local_time: string | null
           location_integration_id: string | null
           offline_buffer_count: number
           status: string
@@ -2037,6 +2038,7 @@ export type Database = {
           last_heartbeat_at?: string | null
           latest_available_version?: string | null
           local_ip?: string | null
+          local_time?: string | null
           location_integration_id?: string | null
           offline_buffer_count?: number
           status?: string
@@ -2054,6 +2056,7 @@ export type Database = {
           last_heartbeat_at?: string | null
           latest_available_version?: string | null
           local_ip?: string | null
+          local_time?: string | null
           location_integration_id?: string | null
           offline_buffer_count?: number
           status?: string
