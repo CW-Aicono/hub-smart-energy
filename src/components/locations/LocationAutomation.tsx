@@ -44,6 +44,7 @@ import {
   Thermometer,
   CalendarDays,
   GitBranch,
+  Copy,
 } from "lucide-react";
 import { HelpTooltip } from "@/components/ui/help-tooltip";
 import { AiDisclaimer } from "@/components/ui/ai-disclaimer";
