@@ -46,9 +46,18 @@ interface CreateAutomationInput {
   is_active?: boolean;
 }
 
+export interface AutomationLastError {
+  automation_id: string;
+  error_message: string | null;
+  executed_at: string;
+  status: string;
+  trigger_type: string;
+}
+
 export function useLocationAutomations(locationId: string | undefined) {
   const { tenant } = useTenant();
   const [automations, setAutomations] = useState<LocationAutomationRecord[]>([]);
+  const [lastErrors, setLastErrors] = useState<Record<string, AutomationLastError>>({});
   const [loading, setLoading] = useState(true);
   const [executing, setExecuting] = useState<string | null>(null);
 
@@ -61,12 +70,33 @@ export function useLocationAutomations(locationId: string | undefined) {
       .eq("location_id", locationId)
       .order("created_at", { ascending: true });
     if (!error && data) {
-      setAutomations(data.map((d) => ({
+      const mapped = data.map((d) => ({
         ...d,
         conditions: Array.isArray(d.conditions) ? d.conditions as unknown as AutomationCondition[] : [],
         actions: Array.isArray(d.actions) ? d.actions as unknown as AutomationAction[] : [],
         logic_operator: (d.logic_operator || "AND") as "AND" | "OR",
-      })) as LocationAutomationRecord[]);
+      })) as LocationAutomationRecord[];
+      setAutomations(mapped);
+
+      // Fetch last execution log entry per automation (most recent, regardless of status)
+      const autoIds = mapped.map((a) => a.id);
+      if (autoIds.length > 0) {
+        const { data: logs } = await supabase
+          .from("automation_execution_log")
+          .select("automation_id, error_message, executed_at, status, trigger_type")
+          .in("automation_id", autoIds)
+          .order("executed_at", { ascending: false });
+        if (logs) {
+          const errorMap: Record<string, AutomationLastError> = {};
+          for (const log of logs) {
+            // Keep only the most recent entry per automation
+            if (!errorMap[log.automation_id]) {
+              errorMap[log.automation_id] = log;
+            }
+          }
+          setLastErrors(errorMap);
+        }
+      }
     }
     setLoading(false);
   }, [locationId]);
