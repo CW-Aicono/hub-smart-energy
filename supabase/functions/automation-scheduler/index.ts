@@ -83,6 +83,56 @@ interface AutomationAction {
   gateway_id?: string;
 }
 
+/**
+ * Build the correct payload for each integration type.
+ * Home Assistant needs domain/service/entity_id instead of controlUuid/commandValue.
+ * Shelly needs deviceId + channel.
+ */
+function buildActionPayload(
+  integrationType: string,
+  locationIntegrationId: string,
+  action: AutomationAction,
+): Record<string, unknown> {
+  const commandValue = action.action_value || action.action_type || "pulse";
+
+  // ── Home Assistant ──
+  if (integrationType === "home_assistant") {
+    // entity_id is stored in actuator_uuid, e.g. "switch.garden_light" or "light.living_room"
+    const entityId = action.actuator_uuid;
+    const domain = entityId.split(".")[0]; // e.g. "switch", "light", "cover", "climate"
+
+    // Map action command to HA service
+    let service = "toggle";
+    const cmd = commandValue.toLowerCase();
+    if (cmd === "on") service = "turn_on";
+    else if (cmd === "off") service = "turn_off";
+    else if (cmd === "toggle") service = "toggle";
+    else if (cmd === "pulse") service = "toggle";
+    else if (domain === "cover") {
+      if (cmd === "open") service = "open_cover";
+      else if (cmd === "close") service = "close_cover";
+      else if (cmd === "stop") service = "stop_cover";
+      else service = "toggle";
+    }
+
+    return {
+      locationIntegrationId,
+      action: "executeCommand",
+      domain,
+      service,
+      entity_id: entityId,
+    };
+  }
+
+  // ── All other integrations (Loxone, Shelly, ABB, Siemens, Tuya, etc.) ──
+  return {
+    locationIntegrationId,
+    action: "executeCommand",
+    controlUuid: action.actuator_uuid,
+    commandValue,
+  };
+}
+
 serve(async (req) => {
   const corsHeaders = getCorsHeaders(req);
   if (req.method === "OPTIONS") {

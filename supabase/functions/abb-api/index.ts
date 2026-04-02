@@ -63,7 +63,7 @@ serve(async (req) => {
 
     const { data: li, error: liErr } = await supabase.from("location_integrations").select("*, integration:integrations(*), location:locations!inner(tenant_id)").eq("id", locationIntegrationId).maybeSingle();
     if (liErr || !li) throw new Error("Standort-Integration nicht gefunden");
-    if ((li as any).location?.tenant_id !== profile.tenant_id) {
+    if (!isServiceRole && (li as any).location?.tenant_id !== userTenantId) {
       return new Response(JSON.stringify({ success: false, error: "Zugriff verweigert" }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
