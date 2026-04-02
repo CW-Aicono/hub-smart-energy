@@ -282,18 +282,16 @@ serve(async (req) => {
           const intType = (liData as any)?.integration?.type || "";
           const edgeFn = getEdgeFunction(intType);
 
+          // Build integration-specific payload
+          const payload = buildActionPayload(intType, gatewayId, action);
+
           const resp = await fetch(`${supabaseUrl}/functions/v1/${edgeFn}`, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
               Authorization: `Bearer ${supabaseKey}`,
             },
-            body: JSON.stringify({
-              locationIntegrationId: gatewayId,
-              action: "executeCommand",
-              controlUuid: action.actuator_uuid,
-              commandValue: action.action_value || action.action_type || "pulse",
-            }),
+            body: JSON.stringify(payload),
           });
           const result = await resp.json();
           if (!result.success) {
