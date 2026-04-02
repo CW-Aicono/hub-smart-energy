@@ -34,6 +34,8 @@ import {
   GitBranch,
   ArrowRight,
   Building2,
+  Timer,
+  AlarmClock,
 } from "lucide-react";
 import { LoxoneSensor } from "@/hooks/useLoxoneSensors";
 import { toast } from "sonner";
