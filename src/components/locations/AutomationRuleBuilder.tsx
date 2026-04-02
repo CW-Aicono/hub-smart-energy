@@ -72,6 +72,8 @@ export interface AutomationAction {
   control_type: string;
   action_type: string;
   action_value?: string;
+  /** Pulse duration in milliseconds (only for pulse actions) */
+  pulse_duration?: number;
   /** MLA: which gateway this action's actuator belongs to */
   gateway_id?: string;
 }
