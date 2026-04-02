@@ -168,15 +168,27 @@ function getSensorIcon(type: string) {
   }
 }
 
+const METER_CONTROL_TYPES = ["Meter", "EnergyManager", "EnergyManager2", "Fronius", "EnergyMonitor", "EFM"];
+
+function isMeterDevice(sensor: LoxoneSensor): boolean {
+  return METER_CONTROL_TYPES.includes(sensor.controlType);
+}
+
 function isActuator(sensor: LoxoneSensor): boolean {
-  const actuatorTypes = ["switch", "light", "blind", "button", "digital", "power"];
+  if (isMeterDevice(sensor)) return false;
+  const actuatorTypes = ["switch", "light", "blind", "button", "digital"];
   const actuatorControlTypes = [
     "Switch", "Dimmer", "Jalousie", "LightController", "LightControllerV2",
     "Pushbutton", "IRoomController", "IRoomControllerV2", "Gate", "Ventilation",
     "Daytimer", "Alarm", "CentralAlarm", "Intercom", "AalSmartAlarm",
-    "Sauna", "Pool", "Hourcounter", "Meter", "EFM", "EnergyManager2",
+    "Sauna", "Pool", "Hourcounter",
   ];
   return actuatorTypes.includes(sensor.type) || actuatorControlTypes.includes(sensor.controlType);
+}
+
+/** Sensors & meters (non-actuators) for condition dropdowns */
+function isSensorOrMeter(sensor: LoxoneSensor): boolean {
+  return !isActuator(sensor);
 }
 
 // ── Gateway Selector (MLA two-step) ──
@@ -238,11 +250,15 @@ function ConditionCard({
   const isMLA = !!gatewayOptions && gatewayOptions.length > 0;
 
   // In MLA mode, filter sensors by selected gateway
+  // All devices for this gateway (unfiltered, used by status condition for actuator selection)
   const effectiveSensors = useMemo(() => {
     if (!isMLA || !condition.gateway_id) return isMLA ? [] : sensors;
     const gw = gatewayOptions!.find((g) => g.id === condition.gateway_id);
     return gw?.sensors || [];
   }, [isMLA, condition.gateway_id, gatewayOptions, sensors]);
+
+  // Only sensors & meters for sensor_value condition dropdowns
+  const sensorOnlyDevices = useMemo(() => effectiveSensors.filter(isSensorOrMeter), [effectiveSensors]);
 
   const handleGatewayChange = (gwId: string) => {
     // Reset sensor when gateway changes
@@ -279,7 +295,7 @@ function ConditionCard({
               <Select
                 value={condition.sensor_uuid || ""}
                 onValueChange={(val) => {
-                  const s = effectiveSensors.find((s) => s.id === val);
+                  const s = sensorOnlyDevices.find((s) => s.id === val);
                   onUpdate({ ...condition, sensor_uuid: val, sensor_name: s?.name || "", unit: s?.unit || "" });
                 }}
                 disabled={isMLA && !condition.gateway_id}
@@ -288,7 +304,7 @@ function ConditionCard({
                   <SelectValue placeholder={isMLA && !condition.gateway_id ? "Zuerst Gateway wählen..." : "Sensor wählen..."} />
                 </SelectTrigger>
                 <SelectContent>
-                  {effectiveSensors.map((s) => (
+                  {sensorOnlyDevices.map((s) => (
                     <SelectItem key={s.id} value={s.id} className="text-xs">
                       {s.name} ({s.room}) {s.unit && `– ${s.unit}`}
                     </SelectItem>
