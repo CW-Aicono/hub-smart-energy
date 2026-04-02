@@ -250,14 +250,15 @@ function ConditionCard({
   const isMLA = !!gatewayOptions && gatewayOptions.length > 0;
 
   // In MLA mode, filter sensors by selected gateway
+  // All devices for this gateway (unfiltered, used by status condition for actuator selection)
   const effectiveSensors = useMemo(() => {
-    if (!isMLA || !condition.gateway_id) {
-      const base = isMLA ? [] : sensors;
-      return base.filter(isSensorOrMeter);
-    }
+    if (!isMLA || !condition.gateway_id) return isMLA ? [] : sensors;
     const gw = gatewayOptions!.find((g) => g.id === condition.gateway_id);
-    return (gw?.sensors || []).filter(isSensorOrMeter);
+    return gw?.sensors || [];
   }, [isMLA, condition.gateway_id, gatewayOptions, sensors]);
+
+  // Only sensors & meters for sensor_value condition dropdowns
+  const sensorOnlyDevices = useMemo(() => effectiveSensors.filter(isSensorOrMeter), [effectiveSensors]);
 
   const handleGatewayChange = (gwId: string) => {
     // Reset sensor when gateway changes
