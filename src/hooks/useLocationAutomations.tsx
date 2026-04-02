@@ -144,6 +144,33 @@ export function useLocationAutomations(locationId: string | undefined) {
     return { error };
   };
 
+  const duplicateAutomation = async (automation: LocationAutomationRecord) => {
+    if (!tenant?.id) return { error: new Error("Kein Mandant") };
+    const dbInsert: AutomationInsertDB = {
+      tenant_id: tenant.id,
+      location_id: automation.location_id,
+      location_integration_id: automation.location_integration_id,
+      name: `${automation.name} (Kopie)`,
+      description: automation.description,
+      actuator_uuid: automation.actuator_uuid,
+      actuator_name: automation.actuator_name,
+      actuator_control_type: automation.actuator_control_type,
+      action_type: automation.action_type,
+      action_value: automation.action_value,
+      conditions: (automation.conditions ?? []) as unknown as Json,
+      actions: (automation.actions ?? []) as unknown as Json,
+      logic_operator: automation.logic_operator,
+      is_active: false,
+    };
+    const { data, error } = await supabase
+      .from("location_automations")
+      .insert(dbInsert)
+      .select()
+      .single();
+    if (!error) await fetchAutomations();
+    return { data: data as unknown as LocationAutomationRecord | null, error };
+  };
+
   const executeAutomation = async (automation: LocationAutomationRecord) => {
     setExecuting(automation.id);
     try {
@@ -206,6 +233,7 @@ export function useLocationAutomations(locationId: string | undefined) {
     createAutomation,
     updateAutomation,
     deleteAutomation,
+    duplicateAutomation,
     executeAutomation,
   };
 }

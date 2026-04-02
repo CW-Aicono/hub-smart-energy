@@ -44,6 +44,7 @@ import {
   Thermometer,
   CalendarDays,
   GitBranch,
+  Copy,
 } from "lucide-react";
 import { HelpTooltip } from "@/components/ui/help-tooltip";
 import { AiDisclaimer } from "@/components/ui/ai-disclaimer";
@@ -204,7 +205,7 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
 
   const {
     automations, lastErrors, loading: autoLoading, executing,
-    createAutomation, updateAutomation, deleteAutomation, executeAutomation,
+    createAutomation, updateAutomation, deleteAutomation, duplicateAutomation, executeAutomation,
   } = useLocationAutomations(locationId);
 
   const actuators = allSensorsWithSource.filter(isActuator);
@@ -434,6 +435,22 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
                           title={T("common.edit")}
                         >
                           <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-8 w-8"
+                          onClick={async () => {
+                            const { error } = await duplicateAutomation(auto);
+                            if (error) {
+                              toast.error("Kopieren fehlgeschlagen");
+                            } else {
+                              toast.success(`„${auto.name} (Kopie)" erstellt`);
+                            }
+                          }}
+                          title="Kopieren"
+                        >
+                          <Copy className="h-3.5 w-3.5" />
                         </Button>
                         <Button
                           size="icon"
