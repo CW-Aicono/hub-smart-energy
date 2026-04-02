@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useMeters, Meter } from "@/hooks/useMeters";
 import { useMeterReadings } from "@/hooks/useMeterReadings";
 import { useAlertRules, AlertRule } from "@/hooks/useAlertRules";
@@ -91,11 +91,13 @@ function DeviceTable({
   type,
   meters,
   onEditMeter,
+  onCreateAndEdit,
 }: {
-  devices: (LoxoneSensor & { _integrationLabel: string })[];
+  devices: (LoxoneSensor & { _integrationLabel: string; _integrationId: string })[];
   type: "sensor" | "actuator";
   meters: Meter[];
   onEditMeter: (meter: Meter) => void;
+  onCreateAndEdit: (device: LoxoneSensor & { _integrationId: string }, deviceType: string) => void;
 }) {
   if (devices.length === 0) {
     return (
@@ -105,7 +107,6 @@ function DeviceTable({
     );
   }
 
-  // Build a map from sensor_uuid to meter for quick lookup
   const sensorUuidToMeter = new Map<string, Meter>();
   meters.forEach((m) => { if (m.sensor_uuid) sensorUuidToMeter.set(m.sensor_uuid, m); });
 
@@ -133,16 +134,18 @@ function DeviceTable({
                 </div>
               </TableCell>
               <TableCell>
-                {linkedMeter ? (
-                  <button
-                    className="font-medium text-left hover:underline text-primary cursor-pointer"
-                    onClick={() => onEditMeter(linkedMeter)}
-                  >
-                    {d.name}
-                  </button>
-                ) : (
-                  <span className="font-medium">{d.name}</span>
-                )}
+                <button
+                  className="font-medium text-left hover:underline text-primary cursor-pointer"
+                  onClick={() => {
+                    if (linkedMeter) {
+                      onEditMeter(linkedMeter);
+                    } else {
+                      onCreateAndEdit(d, type === "actuator" ? "actuator" : "sensor");
+                    }
+                  }}
+                >
+                  {d.name}
+                </button>
               </TableCell>
               <TableCell className="text-muted-foreground">{d.room || "–"}</TableCell>
               <TableCell>
@@ -166,7 +169,7 @@ function DeviceTable({
 }
 
 export const MeterManagement = ({ locationId }: MeterManagementProps) => {
-  const { meters, loading: metersLoading, deleteMeter, updateMeter, archiveMeter, updateMeterParent } = useMeters(locationId);
+  const { meters, loading: metersLoading, addMeter, deleteMeter, updateMeter, archiveMeter, updateMeterParent, refetch } = useMeters(locationId);
   const { t } = useTranslation();
   const { alertRules, loading: rulesLoading, deleteAlertRule, toggleAlertRule, updateAlertRule } = useAlertRules(locationId);
   const { readings } = useMeterReadings();
@@ -177,6 +180,7 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
   const [editingRule, setEditingRule] = useState<AlertRule | null>(null);
   const [showArchived, setShowArchived] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
+  const [pendingSensorUuid, setPendingSensorUuid] = useState<string | null>(null);
 
   // Gateway integrations for sensor/actuator tabs
   const { locationIntegrations, loading: intLoading } = useLocationIntegrations(locationId);
@@ -211,7 +215,7 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
   }, [meters]);
 
   const allDevicesWithSource = useMemo(() => {
-    const result: (LoxoneSensor & { _integrationLabel: string })[] = [];
+    const result: (LoxoneSensor & { _integrationLabel: string; _integrationId: string })[] = [];
     sensorQueries.forEach((q, idx) => {
       const intId = integrationIds[idx];
       const label = integrationLabelMap[intId] || "Unknown";
@@ -219,6 +223,7 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
         ...s,
         name: sensorNameMap[s.id] || s.name,
         _integrationLabel: label,
+        _integrationId: intId,
       }));
     });
     return result;
@@ -236,6 +241,34 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
   const actuatorTypeMeters = activeMeters.filter((m) => (m as any).device_type === "actuator");
 
   const displayedMeters = showArchived ? archivedMeters : meterTypeMeters;
+
+  // When a new meter is created for a gateway device, watch for it to appear and open edit
+  useEffect(() => {
+    if (!pendingSensorUuid) return;
+    const found = meters.find((m) => m.sensor_uuid === pendingSensorUuid);
+    if (found) {
+      setEditingMeter(found);
+      setPendingSensorUuid(null);
+    }
+  }, [meters, pendingSensorUuid]);
+
+  // Auto-create a meter record for a gateway device and open the edit dialog
+  const handleCreateAndEdit = async (device: LoxoneSensor & { _integrationId: string }, deviceType: string) => {
+    setPendingSensorUuid(device.id);
+    await addMeter(
+      {
+        name: device.name,
+        location_id: locationId,
+        energy_type: isMeterDevice(device) ? "strom" : "none",
+        unit: device.unit || "",
+        capture_type: "automatic",
+        location_integration_id: device._integrationId,
+        sensor_uuid: device.id,
+        device_type: deviceType,
+      },
+      null, false, "consumption"
+    );
+  };
 
   return (
     <Collapsible open={isOpen} onOpenChange={setIsOpen}>
@@ -400,7 +433,7 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
             ) : gatewayIntegrations.length === 0 && sensorTypeMeters.length === 0 ? (
               <p className="text-sm text-muted-foreground py-4">Keine Sensoren vorhanden.</p>
             ) : sensorDevices.length > 0 ? (
-              <DeviceTable devices={sensorDevices} type="sensor" meters={meters} onEditMeter={(m) => setEditingMeter(m)} />
+              <DeviceTable devices={sensorDevices} type="sensor" meters={meters} onEditMeter={(m) => setEditingMeter(m)} onCreateAndEdit={handleCreateAndEdit} />
             ) : null}
           </TabsContent>
 
@@ -451,7 +484,7 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
             ) : gatewayIntegrations.length === 0 && actuatorTypeMeters.length === 0 ? (
               <p className="text-sm text-muted-foreground py-4">Keine Aktoren vorhanden.</p>
             ) : actuatorDevices.length > 0 ? (
-              <DeviceTable devices={actuatorDevices} type="actuator" meters={meters} onEditMeter={(m) => setEditingMeter(m)} />
+              <DeviceTable devices={actuatorDevices} type="actuator" meters={meters} onEditMeter={(m) => setEditingMeter(m)} onCreateAndEdit={handleCreateAndEdit} />
             ) : null}
           </TabsContent>
 
