@@ -205,7 +205,7 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
 
   const {
     automations, lastErrors, loading: autoLoading, executing,
-    createAutomation, updateAutomation, deleteAutomation, executeAutomation,
+    createAutomation, updateAutomation, deleteAutomation, duplicateAutomation, executeAutomation,
   } = useLocationAutomations(locationId);
 
   const actuators = allSensorsWithSource.filter(isActuator);
