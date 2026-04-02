@@ -169,21 +169,34 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
     return map;
   }, [gatewayIntegrations]);
 
+  // Set of sensor_uuids that have been explicitly integrated (assigned as meters)
+  const integratedSensorUuids = useMemo(() => {
+    const ids = new Set<string>();
+    meters.forEach((m) => {
+      if (m.sensor_uuid) ids.add(m.sensor_uuid);
+    });
+    return ids;
+  }, [meters]);
+
   // Merge sensors from all integrations, override name with user-defined meter name
+  // FILTER: only include devices that have been integrated (have a matching sensor_uuid in meters)
   const allSensorsWithSource = useMemo(() => {
     const result: (LoxoneSensor & { _integrationId: string; _integrationLabel: string })[] = [];
     sensorQueries.forEach((q, idx) => {
       const intId = integrationIds[idx];
       const label = integrationLabelMap[intId] || "Unknown";
-      (q.data || []).forEach((s) => result.push({
-        ...s,
-        name: sensorNameMap[s.id] || s.name,
-        _integrationId: intId,
-        _integrationLabel: label,
-      }));
+      (q.data || []).forEach((s) => {
+        if (!integratedSensorUuids.has(s.id)) return; // Skip non-integrated devices
+        result.push({
+          ...s,
+          name: sensorNameMap[s.id] || s.name,
+          _integrationId: intId,
+          _integrationLabel: label,
+        });
+      });
     });
     return result;
-  }, [sensorQueries, integrationIds, integrationLabelMap, sensorNameMap]);
+  }, [sensorQueries, integrationIds, integrationLabelMap, sensorNameMap, integratedSensorUuids]);
 
   const hasAnyIntegration = gatewayIntegrations.length > 0;
   // For backward compat: pick the first gateway integration as default for new automations
