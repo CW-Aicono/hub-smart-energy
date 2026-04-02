@@ -1042,7 +1042,7 @@ serve(async (req) => {
       return new Response(
         JSON.stringify({
           success: true,
-          systemStatus: { cpu, temperature: temp, memory },
+          systemStatus: { cpu, temperature: temp, memory, localTime: dateRaw },
           lastSync: locationIntegration.last_sync_at,
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
