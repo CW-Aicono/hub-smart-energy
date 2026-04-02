@@ -168,15 +168,27 @@ function getSensorIcon(type: string) {
   }
 }
 
+const METER_CONTROL_TYPES = ["Meter", "EnergyManager", "EnergyManager2", "Fronius", "EnergyMonitor", "EFM"];
+
+function isMeterDevice(sensor: LoxoneSensor): boolean {
+  return METER_CONTROL_TYPES.includes(sensor.controlType);
+}
+
 function isActuator(sensor: LoxoneSensor): boolean {
-  const actuatorTypes = ["switch", "light", "blind", "button", "digital", "power"];
+  if (isMeterDevice(sensor)) return false;
+  const actuatorTypes = ["switch", "light", "blind", "button", "digital"];
   const actuatorControlTypes = [
     "Switch", "Dimmer", "Jalousie", "LightController", "LightControllerV2",
     "Pushbutton", "IRoomController", "IRoomControllerV2", "Gate", "Ventilation",
     "Daytimer", "Alarm", "CentralAlarm", "Intercom", "AalSmartAlarm",
-    "Sauna", "Pool", "Hourcounter", "Meter", "EFM", "EnergyManager2",
+    "Sauna", "Pool", "Hourcounter",
   ];
   return actuatorTypes.includes(sensor.type) || actuatorControlTypes.includes(sensor.controlType);
+}
+
+/** Sensors & meters (non-actuators) for condition dropdowns */
+function isSensorOrMeter(sensor: LoxoneSensor): boolean {
+  return !isActuator(sensor);
 }
 
 // ── Gateway Selector (MLA two-step) ──
