@@ -1007,11 +1007,12 @@ serve(async (req) => {
         }
       }
 
-      // Fetch CPU, heap and date/time in parallel
-      const [cpuRaw, heapRaw, dateRaw] = await Promise.all([
+      // Fetch CPU, heap, date AND time in parallel
+      const [cpuRaw, heapRaw, dateRaw, timeRaw] = await Promise.all([
         fetchLoxoneValue("/jdev/sys/cpu"),
         fetchLoxoneValue("/jdev/sys/heap"),
         fetchLoxoneValue("/jdev/sys/date"),
+        fetchLoxoneValue("/jdev/sys/time"),
       ]);
 
       // CPU value is a percentage number
@@ -1042,7 +1043,7 @@ serve(async (req) => {
       return new Response(
         JSON.stringify({
           success: true,
-          systemStatus: { cpu, temperature: temp, memory, localTime: dateRaw },
+          systemStatus: { cpu, temperature: temp, memory, localTime: [dateRaw, timeRaw].filter(Boolean).join(" ") || null },
           lastSync: locationIntegration.last_sync_at,
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
