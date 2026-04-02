@@ -137,6 +137,12 @@ export function IntegrationCard({ locationIntegration, onUpdate, onDelete }: Int
                   {getSyncStatusBadge()}
                 </div>
                 <p className="text-sm text-muted-foreground">{configSubtitle}</p>
+                {gatewayLocalTime && (
+                  <p className="text-xs text-muted-foreground flex items-center gap-1">
+                    <Clock className="h-3 w-3" />
+                    <span>Gateway-Zeit: {gatewayLocalTime}</span>
+                  </p>
+                )}
                 <MiniserverStatus
                   locationIntegrationId={locationIntegration.id}
                   integrationType={integration?.type}
