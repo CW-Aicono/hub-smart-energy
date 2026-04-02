@@ -295,7 +295,7 @@ function ConditionCard({
               <Select
                 value={condition.sensor_uuid || ""}
                 onValueChange={(val) => {
-                  const s = effectiveSensors.find((s) => s.id === val);
+                  const s = sensorOnlyDevices.find((s) => s.id === val);
                   onUpdate({ ...condition, sensor_uuid: val, sensor_name: s?.name || "", unit: s?.unit || "" });
                 }}
                 disabled={isMLA && !condition.gateway_id}
@@ -304,7 +304,7 @@ function ConditionCard({
                   <SelectValue placeholder={isMLA && !condition.gateway_id ? "Zuerst Gateway wählen..." : "Sensor wählen..."} />
                 </SelectTrigger>
                 <SelectContent>
-                  {effectiveSensors.map((s) => (
+                  {sensorOnlyDevices.map((s) => (
                     <SelectItem key={s.id} value={s.id} className="text-xs">
                       {s.name} ({s.room}) {s.unit && `– ${s.unit}`}
                     </SelectItem>
