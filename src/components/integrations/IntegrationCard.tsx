@@ -47,8 +47,9 @@ export function IntegrationCard({ locationIntegration, onUpdate, onDelete }: Int
   const config = locationIntegration.config as Record<string, unknown>;
   const gatewayDef = integration ? getGatewayDefinition(integration.type) : undefined;
 
-  // Get local time from linked gateway device
-  const gatewayLocalTime = gatewayDevices.length > 0 ? gatewayDevices[0].local_time : null;
+  // Get local time from linked gateway device (for non-Loxone integrations)
+  const isLoxone = integration?.type === "loxone" || integration?.type === "loxone_miniserver";
+  const gatewayLocalTime = !isLoxone && gatewayDevices.length > 0 ? gatewayDevices[0].local_time : null;
 
   const handleToggleEnabled = async (enabled: boolean) => {
     setIsToggling(true);
