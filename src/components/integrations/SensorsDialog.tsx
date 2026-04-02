@@ -167,10 +167,10 @@ export function SensorsDialog({ locationIntegration, open, onOpenChange, locatio
             <div className="flex items-center justify-between">
               <div>
                 <DialogTitle>
-                  Gefundene Zähler – {integrationName}
+                  Gefundene Geräte – {integrationName}
                 </DialogTitle>
                 <DialogDescription>
-                  Wählen Sie die Zähler aus, die Sie diesem Standort zuordnen möchten.
+                  Wählen Sie die Geräte aus, die Sie diesem Standort zuordnen möchten.
                 </DialogDescription>
               </div>
               <div className="flex gap-2">
