@@ -47,6 +47,7 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
   const T = (key: string) => t(key as any);
   const { meters: allMeters } = useMeters(meter.location_id);
   const [name, setName] = useState(meter.name);
+  const [deviceType, setDeviceType] = useState((meter as any).device_type || "meter");
   const [meterNumber, setMeterNumber] = useState(meter.meter_number || "");
   const [energyType, setEnergyType] = useState(meter.energy_type);
   const [unit, setUnit] = useState(meter.unit);
