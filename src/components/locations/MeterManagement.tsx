@@ -40,7 +40,14 @@ const TIME_UNIT_KEYS: Record<string, string> = {
   month: "mm.timeMonth",
 };
 
+const METER_CONTROL_TYPES = ["Meter", "EnergyManager", "EnergyManager2", "Fronius", "EnergyMonitor"];
+
+function isMeterDevice(sensor: LoxoneSensor): boolean {
+  return METER_CONTROL_TYPES.includes(sensor.controlType);
+}
+
 function isActuator(sensor: LoxoneSensor): boolean {
+  if (isMeterDevice(sensor)) return false;
   const actuatorTypes = ["switch", "light", "blind", "button", "digital"];
   const actuatorControlTypes = [
     "Switch", "Dimmer", "Jalousie", "LightController", "LightControllerV2",
@@ -52,7 +59,7 @@ function isActuator(sensor: LoxoneSensor): boolean {
 }
 
 function isSensorOnly(sensor: LoxoneSensor): boolean {
-  return !isActuator(sensor);
+  return !isMeterDevice(sensor) && !isActuator(sensor);
 }
 
 function getSensorIcon(type: string) {
