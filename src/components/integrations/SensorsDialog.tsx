@@ -255,8 +255,8 @@ export function SensorsDialog({ locationIntegration, open, onOpenChange, locatio
                           )}
                         </TableCell>
                         <TableCell>
-                          <div className="p-1.5 rounded bg-muted w-fit" title={sensor.controlType}>
-                            <Power className="h-4 w-4" />
+                          <div className="p-1.5 rounded bg-muted w-fit" title={sensor.controlType || sensor.unit}>
+                            {getSensorIcon(sensor)}
                           </div>
                         </TableCell>
                         <TableCell className="font-medium">
