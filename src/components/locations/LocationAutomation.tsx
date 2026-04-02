@@ -374,7 +374,7 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
                           <p className="text-xs text-muted-foreground mt-0.5">{auto.description}</p>
                         )}
                         <ConditionSummary auto={auto} t={t} />
-                        <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
+                        <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground flex-wrap">
                           <span className="flex items-center gap-1">
                             <Server className="h-3 w-3" />
                             {primaryName}
@@ -385,7 +385,18 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
                               {formatDistanceToNow(new Date(auto.last_executed_at), { addSuffix: true, locale: de })}
                             </span>
                           )}
+                          {lastErrors[auto.id]?.status === "error" && lastErrors[auto.id]?.trigger_type === "scheduled" && (
+                            <span className="flex items-center gap-1 text-destructive" title={lastErrors[auto.id]?.error_message || ""}>
+                              <AlertTriangle className="h-3 w-3" />
+                              {T("auto.scheduledError")}
+                            </span>
+                          )}
                         </div>
+                        {lastErrors[auto.id]?.status === "error" && lastErrors[auto.id]?.trigger_type === "scheduled" && lastErrors[auto.id]?.error_message && (
+                          <p className="text-[11px] text-destructive/80 mt-1 truncate max-w-xs" title={lastErrors[auto.id]!.error_message!}>
+                            {lastErrors[auto.id]!.error_message}
+                          </p>
+                        )}
                       </div>
                       <div className="flex items-center gap-1 shrink-0">
                         <Button
