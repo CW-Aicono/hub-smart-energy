@@ -41,10 +41,14 @@ export function IntegrationCard({ locationIntegration, onUpdate, onDelete }: Int
   const [backfillTo, setBackfillTo] = useState(() => new Date().toISOString().slice(0, 10));
   const { toast } = useToast();
   const { t } = useTranslation();
+  const { devices: gatewayDevices } = useGatewayDevices(locationIntegration.id);
 
   const integration = locationIntegration.integration;
   const config = locationIntegration.config as Record<string, unknown>;
   const gatewayDef = integration ? getGatewayDefinition(integration.type) : undefined;
+
+  // Get local time from linked gateway device
+  const gatewayLocalTime = gatewayDevices.length > 0 ? gatewayDevices[0].local_time : null;
 
   const handleToggleEnabled = async (enabled: boolean) => {
     setIsToggling(true);
