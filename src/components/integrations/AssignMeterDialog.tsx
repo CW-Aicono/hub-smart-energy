@@ -68,6 +68,7 @@ export function AssignMeterDialog({
   const T = (key: string) => t(key as any);
   const { addMeter } = useMeters();
 
+  const [deviceType, setDeviceType] = useState<"meter" | "sensor" | "actuator">("meter");
   const [energyType, setEnergyType] = useState("strom");
   const [selectedLocationId, setSelectedLocationId] = useState(currentLocationId);
   const [selectedFloorId, setSelectedFloorId] = useState<string>("");
@@ -146,9 +147,10 @@ export function AssignMeterDialog({
         await addMeter({
           name: s.name.trim(),
           location_id: selectedLocationId,
-          energy_type: energyType,
-          unit: s.unit || "kWh",
-          capture_type: "automatic",
+          energy_type: deviceType === "meter" ? energyType : "none",
+          unit: s.unit || (deviceType === "meter" ? "kWh" : ""),
+          capture_type: deviceType === "meter" ? "automatic" : "automatic",
+          device_type: deviceType,
           location_integration_id: locationIntegrationId,
           sensor_uuid: s.id,
         });
@@ -174,9 +176,10 @@ export function AssignMeterDialog({
       }
 
       const count = sensorList.length;
+      const typeLabel = deviceType === "meter" ? "Zähler" : deviceType === "sensor" ? "Sensor" : "Aktor";
       toast.success(count === 1
-        ? `Zähler "${sensorList[0].name}" erfolgreich zugeordnet`
-        : `${count} Zähler erfolgreich zugeordnet`
+        ? `${typeLabel} "${sensorList[0].name}" erfolgreich zugeordnet`
+        : `${count} ${typeLabel} erfolgreich zugeordnet`
       );
       onOpenChange(false);
     } catch (err) {
@@ -192,12 +195,12 @@ export function AssignMeterDialog({
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>
-            {sensorList.length === 1 ? "Zähler zuordnen" : `${sensorList.length} Zähler zuordnen`}
+            {sensorList.length === 1 ? "Gerät zuordnen" : `${sensorList.length} Geräte zuordnen`}
           </DialogTitle>
           <DialogDescription>
             {sensorList.length === 1
-              ? `Ordnen Sie den Zähler „${sensorList[0].name}" einer Messstelle zu.`
-              : `Ordnen Sie ${sensorList.length} ausgewählte Zähler dem Standort zu.`}
+              ? `Ordnen Sie „${sensorList[0].name}" einem Gerätetyp und Standort zu.`
+              : `Ordnen Sie ${sensorList.length} ausgewählte Geräte dem Standort zu.`}
           </DialogDescription>
         </DialogHeader>
 
@@ -205,7 +208,7 @@ export function AssignMeterDialog({
           {/* Sensor list preview for bulk */}
           {sensorList.length > 1 && (
             <div className="rounded-md border p-3 bg-muted/30 max-h-32 overflow-auto">
-              <p className="text-xs font-medium text-muted-foreground mb-1">Ausgewählte Zähler:</p>
+              <p className="text-xs font-medium text-muted-foreground mb-1">Ausgewählte Geräte:</p>
               <ul className="text-sm space-y-0.5">
                 {sensorList.map((s) => (
                   <li key={s.id}>{s.name}</li>
@@ -214,21 +217,38 @@ export function AssignMeterDialog({
             </div>
           )}
 
-          {/* Energy type */}
+          {/* Device type */}
           <div>
-            <Label>Energieart</Label>
-            <Select value={energyType} onValueChange={setEnergyType}>
+            <Label>Gerätetyp</Label>
+            <Select value={deviceType} onValueChange={(v) => setDeviceType(v as "meter" | "sensor" | "actuator")}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="strom">{T("energy.strom")}</SelectItem>
-                <SelectItem value="gas">{T("energy.gas")}</SelectItem>
-                <SelectItem value="waerme">{T("energy.waerme")}</SelectItem>
-                <SelectItem value="wasser">{T("energy.wasser")}</SelectItem>
+                <SelectItem value="meter">Zähler</SelectItem>
+                <SelectItem value="sensor">Sensor</SelectItem>
+                <SelectItem value="actuator">Aktor</SelectItem>
               </SelectContent>
             </Select>
           </div>
+
+          {/* Energy type - only for meters */}
+          {deviceType === "meter" && (
+            <div>
+              <Label>Energieart</Label>
+              <Select value={energyType} onValueChange={setEnergyType}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="strom">{T("energy.strom")}</SelectItem>
+                  <SelectItem value="gas">{T("energy.gas")}</SelectItem>
+                  <SelectItem value="waerme">{T("energy.waerme")}</SelectItem>
+                  <SelectItem value="wasser">{T("energy.wasser")}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
           {/* Hierarchical assignment */}
           <div className="space-y-3 rounded-md border p-3 bg-muted/30">

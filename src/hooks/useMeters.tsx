@@ -27,6 +27,7 @@ export interface MeterInsert {
   sensor_uuid?: string;
   meter_operator?: string;
   photo_url?: string;
+  device_type?: string;
 }
 
 export function useMeters(locationId?: string) {

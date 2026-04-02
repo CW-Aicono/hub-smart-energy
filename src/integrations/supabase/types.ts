@@ -2938,6 +2938,7 @@ export type Database = {
           brennwert: number | null
           capture_type: string
           created_at: string
+          device_type: string
           energy_type: string
           floor_id: string | null
           gas_type: string | null
@@ -2971,6 +2972,7 @@ export type Database = {
           brennwert?: number | null
           capture_type?: string
           created_at?: string
+          device_type?: string
           energy_type?: string
           floor_id?: string | null
           gas_type?: string | null
@@ -3004,6 +3006,7 @@ export type Database = {
           brennwert?: number | null
           capture_type?: string
           created_at?: string
+          device_type?: string
           energy_type?: string
           floor_id?: string | null
           gas_type?: string | null
