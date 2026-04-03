@@ -86,9 +86,13 @@ export function LocationIntegrationsList({ locationId }: LocationIntegrationsLis
         </CardContent>
       </Card>
 
+      {/* Show gateway devices linked to specific HA integrations */}
       {haIntegrationIds.map((id) => (
         <GatewayDeviceManager key={id} locationIntegrationId={id} />
       ))}
+
+      {/* Also show unlinked gateway devices when HA integrations exist */}
+      {hasHaIntegration && <GatewayDeviceManager key="unlinked" />}
     </div>
   );
 }
