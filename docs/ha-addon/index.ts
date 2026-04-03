@@ -1150,14 +1150,17 @@ function startServer(): void {
     }
 
     // Ingress: HA adds /api/hassio_ingress/<token>/ prefix
-    if (pathname.includes("/ingress/")) {
-      const ingressPath = pathname.split("/").slice(-1)[0] || "index.html";
-      if (ingressPath.startsWith("api/")) {
-        res.writeHead(302, { Location: `/${ingressPath}` });
-        res.end();
-        return;
-      }
-      serveStaticFile(ingressPath === "" ? "index.html" : ingressPath, res);
+    // Extract the sub-path after the ingress token
+    const ingressMatch = pathname.match(/\/api\/hassio_ingress\/[^/]+(\/.*)?$/);
+    if (ingressMatch) {
+      const subPath = (ingressMatch[1] || "/").replace(/^\/+/, "/");
+
+      // Re-dispatch: feed the sub-path back into the same handler
+      const fakeUrl = new URL(subPath + url.search, `http://localhost:8099`);
+      const fakeReq = Object.create(req, {
+        url: { value: fakeUrl.pathname + fakeUrl.search },
+      });
+      server.emit("request", fakeReq, res);
       return;
     }
 
