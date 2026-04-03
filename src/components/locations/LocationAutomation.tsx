@@ -509,18 +509,37 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
                               {formatDistanceToNow(new Date(auto.last_executed_at), { addSuffix: true, locale: de })}
                             </span>
                           )}
-                          {lastErrors[auto.id]?.status === "error" && lastErrors[auto.id]?.trigger_type === "scheduled" && (
-                            <span className="flex items-center gap-1 text-destructive" title={lastErrors[auto.id]?.error_message || ""}>
-                              <AlertTriangle className="h-3 w-3" />
-                              {T("auto.scheduledError")}
-                            </span>
-                          )}
+                          {(() => {
+                            const err = lastErrors[auto.id];
+                            const isScheduledError = err?.status === "error" && err?.trigger_type === "scheduled";
+                            // Hide error if a successful manual execution happened after the error
+                            const errorTime = isScheduledError ? new Date(err.executed_at).getTime() : 0;
+                            const lastExecTime = auto.last_executed_at ? new Date(auto.last_executed_at).getTime() : 0;
+                            const showError = isScheduledError && errorTime > lastExecTime;
+                            if (!showError) return null;
+                            return (
+                              <>
+                                <span className="flex items-center gap-1 text-destructive" title={err?.error_message || ""}>
+                                  <AlertTriangle className="h-3 w-3" />
+                                  {T("auto.scheduledError")}
+                                </span>
+                              </>
+                            );
+                          })()}
                         </div>
-                        {lastErrors[auto.id]?.status === "error" && lastErrors[auto.id]?.trigger_type === "scheduled" && lastErrors[auto.id]?.error_message && (
-                          <p className="text-[11px] text-destructive/80 mt-1 truncate max-w-xs" title={lastErrors[auto.id]!.error_message!}>
-                            {lastErrors[auto.id]!.error_message}
-                          </p>
-                        )}
+                        {(() => {
+                          const err = lastErrors[auto.id];
+                          const isScheduledError = err?.status === "error" && err?.trigger_type === "scheduled";
+                          const errorTime = isScheduledError ? new Date(err.executed_at).getTime() : 0;
+                          const lastExecTime = auto.last_executed_at ? new Date(auto.last_executed_at).getTime() : 0;
+                          const showError = isScheduledError && errorTime > lastExecTime && err?.error_message;
+                          if (!showError) return null;
+                          return (
+                            <p className="text-[11px] text-destructive/80 mt-1 truncate max-w-xs" title={err!.error_message!}>
+                              {err!.error_message}
+                            </p>
+                          );
+                        })()}
                       </div>
                       <div className="flex items-center gap-1 shrink-0">
                         <Button
