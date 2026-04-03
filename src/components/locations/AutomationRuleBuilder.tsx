@@ -106,6 +106,8 @@ interface AutomationRuleBuilderProps {
   isEdit?: boolean;
   /** MLA mode: provide gateway options for two-step selection */
   gatewayOptions?: GatewayOption[];
+  /** Authoritative device_type map from meters table (sensor_uuid -> "meter"|"sensor"|"actuator") */
+  deviceTypeMap?: Map<string, string>;
 }
 
 // ── Helpers ──
