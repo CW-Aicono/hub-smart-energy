@@ -716,7 +716,7 @@ async function executeHAService(entityId: string, cmdValue: string): Promise<voi
 let lastAutomationSync = "";
 
 async function syncAutomationsFromCloud(): Promise<void> {
-  if (!isCloudReachable) return;
+  // Always attempt sync – use result to update connectivity status
 
   try {
     const params = new URLSearchParams({
