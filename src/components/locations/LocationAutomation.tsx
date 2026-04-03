@@ -318,7 +318,8 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
     createAutomation, updateAutomation, deleteAutomation, duplicateAutomation, executeAutomation,
   } = useLocationAutomations(locationId);
 
-  const actuators = allSensorsWithSource.filter(isActuator);
+  // Use device_type from meters table for classification (authoritative, matches the 3 tabs)
+  const actuators = allSensorsWithSource.filter((s) => deviceTypeMap.get(s.id) === "actuator");
   const allSensors = allSensorsWithSource as LoxoneSensor[];
 
   // Build actuator state map for live status display
