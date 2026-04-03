@@ -299,6 +299,10 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
 
   // Use explicit device_type when available and fall back to the same gateway heuristics as the tabs.
   const actuators = allSensorsWithSource.filter((s) => getResolvedDeviceType(s, deviceTypeMap) === "actuator");
+  const sensorDevices = allSensorsWithSource.filter((s) => {
+    const t = getResolvedDeviceType(s, deviceTypeMap);
+    return t === "sensor" || t === "meter";
+  });
   const allSensors = allSensorsWithSource as LoxoneSensor[];
 
   // Build actuator state map for live status display
@@ -584,11 +588,16 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
                   onClick={() => setConfigOpen(true)}
                 >
                   <Settings2 className="h-4 w-4" />
-                  {T("auto.availableActuators")}
+                  {T("auto.availableActuatorsAndSensors")}
                   {!intLoading && hasAnyIntegration && (
-                    <Badge variant="secondary" className="ml-1 text-[10px]">
-                      {actuators.length} {T("auto.actuators")}
-                    </Badge>
+                    <>
+                      <Badge variant="secondary" className="ml-1 text-[10px]">
+                        {actuators.length} {T("auto.actuators")}
+                      </Badge>
+                      <Badge variant="secondary" className="text-[10px]">
+                        {sensorDevices.length} {T("auto.sensors")}
+                      </Badge>
+                    </>
                   )}
                 </Button>
                 <Button
