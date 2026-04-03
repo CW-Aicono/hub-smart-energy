@@ -953,7 +953,7 @@ function getLocalIP(): string {
 /* ── Auto Backup ─────────────────────────────────────────────────────────────── */
 
 async function sendBackup(): Promise<void> {
-  if (!isCloudReachable) return;
+  // Always attempt backup
   try {
     const res = await fetch(`${INGEST_URL}?action=gateway-backup`, {
       method: "POST",
