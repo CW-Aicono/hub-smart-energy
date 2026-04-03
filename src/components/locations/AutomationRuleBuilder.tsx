@@ -483,7 +483,10 @@ function ConditionCard({
                   <SelectValue placeholder={isMLA && !condition.gateway_id ? "Zuerst Gateway wählen..." : "Aktor wählen..."} />
                 </SelectTrigger>
                 <SelectContent>
-                  {effectiveSensors.filter(isActuator).map((s) => (
+                  {(deviceTypeMap && deviceTypeMap.size > 0
+                    ? effectiveSensors.filter((s) => deviceTypeMap.get(s.id) === "actuator")
+                    : effectiveSensors.filter(isActuator)
+                  ).map((s) => (
                     <SelectItem key={s.id} value={s.id} className="text-xs">
                       {s.name} ({s.room})
                     </SelectItem>
