@@ -284,6 +284,9 @@ export function useMLAutomations() {
         .eq("id", automation.id);
 
       await fetchAutomations();
+      setTimeout(() => {
+        queryClient.invalidateQueries({ queryKey: ["gateway-sensors"] });
+      }, 1500);
       return { success: true };
     } catch (err) {
       const durationMs = Date.now() - startTime;
