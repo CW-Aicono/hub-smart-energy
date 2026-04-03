@@ -261,8 +261,13 @@ function ConditionCard({
     return gw?.sensors || [];
   }, [isMLA, condition.gateway_id, gatewayOptions, sensors]);
 
-  // Only sensors & meters for sensor_value condition dropdowns
-  const sensorOnlyDevices = useMemo(() => effectiveSensors.filter(isSensorOrMeter), [effectiveSensors]);
+  // Only sensors & meters for sensor_value condition dropdowns (use deviceTypeMap if available)
+  const sensorOnlyDevices = useMemo(() => {
+    if (deviceTypeMap && deviceTypeMap.size > 0) {
+      return effectiveSensors.filter((s) => deviceTypeMap.get(s.id) !== "actuator");
+    }
+    return effectiveSensors.filter(isSensorOrMeter);
+  }, [effectiveSensors, deviceTypeMap]);
 
   const handleGatewayChange = (gwId: string) => {
     // Reset sensor when gateway changes
