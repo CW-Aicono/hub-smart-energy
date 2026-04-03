@@ -299,6 +299,10 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
 
   // Use explicit device_type when available and fall back to the same gateway heuristics as the tabs.
   const actuators = allSensorsWithSource.filter((s) => getResolvedDeviceType(s, deviceTypeMap) === "actuator");
+  const sensorDevices = allSensorsWithSource.filter((s) => {
+    const t = getResolvedDeviceType(s, deviceTypeMap);
+    return t === "sensor" || t === "meter";
+  });
   const allSensors = allSensorsWithSource as LoxoneSensor[];
 
   // Build actuator state map for live status display
