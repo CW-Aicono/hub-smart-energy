@@ -232,13 +232,21 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
   const sensorDevices = useMemo(() => allDevicesWithSource.filter(isSensorOnly), [allDevicesWithSource]);
   const actuatorDevices = useMemo(() => allDevicesWithSource.filter(isActuator), [allDevicesWithSource]);
 
+  // Set of sensor_uuids present in gateway device lists – used to deduplicate
+  const gatewayDeviceIds = useMemo(() => {
+    const set = new Set<string>();
+    allDevicesWithSource.forEach((d) => set.add(d.id));
+    return set;
+  }, [allDevicesWithSource]);
+
   const activeMeters = meters.filter((m) => !m.is_archived);
   const archivedMeters = meters.filter((m) => m.is_archived);
 
   // Split meters by device_type for tab filtering
   const meterTypeMeters = activeMeters.filter((m) => (m as any).device_type === "meter" || !(m as any).device_type);
-  const sensorTypeMeters = activeMeters.filter((m) => (m as any).device_type === "sensor");
-  const actuatorTypeMeters = activeMeters.filter((m) => (m as any).device_type === "actuator");
+  // Exclude meters whose sensor_uuid is already shown in the gateway DeviceTable
+  const sensorTypeMeters = activeMeters.filter((m) => (m as any).device_type === "sensor" && !(m.sensor_uuid && gatewayDeviceIds.has(m.sensor_uuid)));
+  const actuatorTypeMeters = activeMeters.filter((m) => (m as any).device_type === "actuator" && !(m.sensor_uuid && gatewayDeviceIds.has(m.sensor_uuid)));
 
   const displayedMeters = showArchived ? archivedMeters : meterTypeMeters;
 
