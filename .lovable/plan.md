@@ -1,59 +1,60 @@
 
-# Plan: HA als vollintegriertes lokales Gateway – Implementiert
 
-## Status: ✅ Modul 1–5 implementiert
+# Plan: AICONO EMS White-Label + Offline-Fähigkeit
 
-### Umgesetzte Module
+## Zwei Ergebnisse
 
-#### Modul 1: Shared Automation Core Package ✅
-- `packages/automation-core/types.ts` – Shared Interfaces (AutomationCondition, AutomationAction, AutomationRule, SensorProvider, ActionExecutor)
-- `packages/automation-core/evaluator.ts` – 1:1-Portierung der Condition-Logik aus automation-scheduler (getLocalTimeParts, isTimeInRange, isNearTimePoint, evaluateCondition, evaluateAutomation)
-- `packages/automation-core/executor.ts` – Integration-spezifische Payload-Builder (buildActionPayload, buildHALocalPayload, GATEWAY_EDGE_FUNCTIONS)
-- `packages/automation-core/index.ts` – Re-exports
+1. **Code-Änderungen** an 6 Dateien (Add-on + Edge Function)
+2. **Word-Dokument** (`AICONO_EMS_Anleitung.docx`) mit Schritt-für-Schritt-Anleitung zum Download
 
-#### Modul 2: Lokale Automation Engine ✅
-- SQLite-Tabellen: `automations_local`, `automation_exec_log`
-- Evaluator-Loop alle 30s mit Debounce (5 Minuten)
-- Action-Executor ruft direkt HA REST API (`/api/services/{domain}/{service}`)
-- Sensor-Werte aus HA WebSocket Cache (latestHAStates)
+---
 
-#### Modul 3: Bidirektionaler Cloud-Sync ✅
-- `gateway-ingest` erweitert um `?action=sync-automations` (GET) und `?action=push-execution-logs` (POST)
-- Sync-Down: Hub holt aktive Automationen inkl. Location-Timezone
-- Sync-Up: Lokale Execution-Logs werden an Cloud gepusht
-- `execution_source`-Feld in `automation_execution_log` (cloud/local)
-- `api_key_hash`-Feld in `gateway_devices` (vorbereitet für Per-Device Keys)
+## Teil A: Code-Änderungen
 
-#### Modul 4: Lokales Web-UI ✅
-- Preact 10 via ESM-Import (kein Build-Schritt)
-- AICONO Dark-Mode Design (Teal/Blau, Montserrat/Inter)
-- HA Ingress konfiguriert (`ingress: true`, `ingress_port: 8099`)
-- 5 Seiten: Dashboard, Sensoren, Automationen, Logs, Einstellungen
-- API-Endpunkte: `/api/sensors`, `/api/automations`, `/api/logs`, `/api/status`, `/api/config`
+### A1. White-Label Rebranding
 
-#### Modul 5: Offline-Resilienz ✅
-- Priority-Buffer: Readings über Schwellwert erhalten `priority=1`
-- FIFO-Eviction schützt Priority-Readings
-- Connectivity-Watchdog prüft Cloud-Erreichbarkeit
-- Automationen laufen offline unabhängig weiter
-- HA WebSocket Client für Live-Sensorwerte
-
-### Entscheidungen (Claude-Review)
-| Frage | Entscheidung |
+| Datei | Änderungen |
 |---|---|
-| Evaluator-Portierung | 1:1, in `packages/automation-core/` extrahiert |
-| WebSocket vs. REST | Beides: REST für Poller, WebSocket für UI + Sensor-Trigger |
-| UI-Framework | Preact via ESM |
-| Auth für lokales UI | HA Ingress |
+| `docs/ha-addon/config.yaml` | name → "AICONO EMS Gateway", panel_title → "AICONO EMS", description ohne HA-Referenzen, `supabase_url` → `cloud_url` (mit Fallback) |
+| `docs/ha-addon/ui/index.html` | Title → "AICONO EMS", Header-Logo als AICONO SVG, "Home Assistant"-Karte → "System", Footer mit Copyright, neue "Steuerung"-Seite |
+| `docs/ha-addon/index.ts` | Startup-Banner → "AICONO EMS Gateway", device_type → "aicono-ems", `cloud_url` als primäres Config-Feld (Fallback auf `supabase_url`) |
+| `docs/ha-addon/package.json` | name → "aicono-ems-gateway" |
+| `docs/ha-addon/Dockerfile` | Kommentare aktualisieren |
 
-### Abgeschlossene Nacharbeiten ✅
-- Cloud-Scheduler (`automation-scheduler/index.ts`) auf `automation-core`-Logik refactored (inlined für Deno-Kompatibilität, identische Funktionen)
-- `execution_source: 'cloud'` wird bei Cloud-Ausführungen mitgeschrieben
-- Per-Device API-Key Validierung in `gateway-ingest` aktiviert (SHA-256 Hash gegen `gateway_devices.api_key_hash`, Tenant-Crossover-Schutz)
-- `getDeviceFromApiKey()` Helper für Tenant-Context-Extraktion
-- `push-execution-logs` schreibt `execution_source` korrekt
-- INSTALLATION.md auf v2.0 aktualisiert (neue Abschnitte: Dashboard, Automationen, Per-Device Keys)
+### A2. Offline-Fähigkeit erweitern
 
-### Nächste Schritte
-- UI für Per-Device Key Generierung in der App erstellen
-- Edge Runtime Kompatibilität des Shared Packages testen (Deno vs Node)
+| Datei | Änderungen |
+|---|---|
+| `docs/ha-addon/index.ts` | **Meter-Mappings-Cache** (neue SQLite-Tabelle `meter_mappings_cache`): beim Fetch persistieren, beim Start aus SQLite laden. **HA-States-Cache** (Tabelle `ha_states_cache`): periodisch persistieren, beim Start laden → sofort UI-fähig nach Reboot ohne Internet. |
+| `docs/ha-addon/index.ts` | **`/api/execute` Endpoint**: Neuer POST-Endpoint zum lokalen Schalten von Aktoren (entity_id + service → HA REST API direkt). Funktioniert komplett offline. |
+| `docs/ha-addon/ui/index.html` | **"Steuerung"-Seite**: Neue 6. Seite mit schaltbaren Kacheln (On/Off/Toggle) für switch.*, light.*, cover.* Entities. Ruft `/api/execute` auf. |
+| `supabase/functions/gateway-ingest/index.ts` | `.eq("is_active", true)` entfernen → alle Automationen synchronisieren (aktive + inaktive). Lokale Engine prüft `is_active` selbst. |
+
+### A3. Zusammenfassung der SQLite-Erweiterungen
+
+```text
+meter_mappings_cache     → Meter-Zuordnungen persistent (Offline-Polling nach Reboot)
+ha_states_cache          → Letzte Sensorwerte persistent (Offline-UI nach Reboot)
+/api/execute             → Lokales Schalten ohne Cloud
+Steuerung-Seite          → UI für manuelles Schalten im lokalen Dashboard
+sync-automations         → Auch inaktive Regeln synchronisieren
+```
+
+---
+
+## Teil B: Word-Dokument (Anleitung)
+
+Generierung einer DOCX-Datei mit `docx` (Node.js) unter `/mnt/documents/AICONO_EMS_Anleitung.docx`.
+
+### Inhalt der Anleitung
+
+1. **Was ist AICONO EMS?** – Kurze Erklärung (1 Absatz)
+2. **Voraussetzungen** – Was brauchst du? (Hardware-Liste)
+3. **Schritt 1: GitHub-Repository aktualisieren** – Dateien vom Lovable-Projekt nach GitHub kopieren (mit Screenshots-Beschreibung)
+4. **Schritt 2: Add-on in HA aktualisieren** – Store → Nach Updates suchen → Neu aufbauen
+5. **Schritt 3: Ergebnis prüfen** – Sidebar zeigt jetzt "AICONO EMS", Dashboard mit neuem Logo
+6. **Schritt 4: Offline testen** – Internet trennen, Steuerung-Seite öffnen, Gerät schalten
+7. **Fehlerbehebung** – Häufige Probleme + Lösungen
+
+Jeder Schritt wird mit nummerierten Unterpunkten, fett markierten UI-Elementen und Hinweisboxen für absolute Anfänger aufbereitet.
+
