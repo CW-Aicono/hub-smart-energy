@@ -280,6 +280,15 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
     return ids;
   }, [meters]);
 
+  // Map sensor_uuid -> device_type from meters table (authoritative classification)
+  const deviceTypeMap = useMemo(() => {
+    const map = new Map<string, string>();
+    meters.forEach((m) => {
+      if (m.sensor_uuid) map.set(m.sensor_uuid, (m as any).device_type || "meter");
+    });
+    return map;
+  }, [meters]);
+
   // Merge sensors from all integrations, override name with user-defined meter name
   // FILTER: only include devices that have been integrated (have a matching sensor_uuid in meters)
   const allSensorsWithSource = useMemo(() => {
@@ -309,7 +318,8 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
     createAutomation, updateAutomation, deleteAutomation, duplicateAutomation, executeAutomation,
   } = useLocationAutomations(locationId);
 
-  const actuators = allSensorsWithSource.filter(isActuator);
+  // Use device_type from meters table for classification (authoritative, matches the 3 tabs)
+  const actuators = allSensorsWithSource.filter((s) => deviceTypeMap.get(s.id) === "actuator");
   const allSensors = allSensorsWithSource as LoxoneSensor[];
 
   // Build actuator state map for live status display
@@ -717,6 +727,7 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
         }}
         sensors={allSensors}
         sensorsLoading={sensorsLoading}
+        deviceTypeMap={deviceTypeMap}
         initialData={editAutomation ? {
           name: editAutomation.name,
           description: editAutomation.description || "",

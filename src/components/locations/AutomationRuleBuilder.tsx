@@ -106,6 +106,8 @@ interface AutomationRuleBuilderProps {
   isEdit?: boolean;
   /** MLA mode: provide gateway options for two-step selection */
   gatewayOptions?: GatewayOption[];
+  /** Authoritative device_type map from meters table (sensor_uuid -> "meter"|"sensor"|"actuator") */
+  deviceTypeMap?: Map<string, string>;
 }
 
 // ── Helpers ──
@@ -237,12 +239,14 @@ function ConditionCard({
   onUpdate,
   onRemove,
   gatewayOptions,
+  deviceTypeMap,
 }: {
   condition: AutomationCondition;
   sensors: LoxoneSensor[];
   onUpdate: (c: AutomationCondition) => void;
   onRemove: () => void;
   gatewayOptions?: GatewayOption[];
+  deviceTypeMap?: Map<string, string>;
 }) {
   const condType = CONDITION_TYPES.find((t) => t.value === condition.type);
   const CondIcon = condType?.icon || Zap;
@@ -257,8 +261,13 @@ function ConditionCard({
     return gw?.sensors || [];
   }, [isMLA, condition.gateway_id, gatewayOptions, sensors]);
 
-  // Only sensors & meters for sensor_value condition dropdowns
-  const sensorOnlyDevices = useMemo(() => effectiveSensors.filter(isSensorOrMeter), [effectiveSensors]);
+  // Only sensors & meters for sensor_value condition dropdowns (use deviceTypeMap if available)
+  const sensorOnlyDevices = useMemo(() => {
+    if (deviceTypeMap && deviceTypeMap.size > 0) {
+      return effectiveSensors.filter((s) => deviceTypeMap.get(s.id) !== "actuator");
+    }
+    return effectiveSensors.filter(isSensorOrMeter);
+  }, [effectiveSensors, deviceTypeMap]);
 
   const handleGatewayChange = (gwId: string) => {
     // Reset sensor when gateway changes
@@ -474,7 +483,10 @@ function ConditionCard({
                   <SelectValue placeholder={isMLA && !condition.gateway_id ? "Zuerst Gateway wählen..." : "Aktor wählen..."} />
                 </SelectTrigger>
                 <SelectContent>
-                  {effectiveSensors.filter(isActuator).map((s) => (
+                  {(deviceTypeMap && deviceTypeMap.size > 0
+                    ? effectiveSensors.filter((s) => deviceTypeMap.get(s.id) === "actuator")
+                    : effectiveSensors.filter(isActuator)
+                  ).map((s) => (
                     <SelectItem key={s.id} value={s.id} className="text-xs">
                       {s.name} ({s.room})
                     </SelectItem>
@@ -510,12 +522,14 @@ function ActionCard({
   onUpdate,
   onRemove,
   gatewayOptions,
+  deviceTypeMap,
 }: {
   action: AutomationAction;
   sensors: LoxoneSensor[];
   onUpdate: (a: AutomationAction) => void;
   onRemove: () => void;
   gatewayOptions?: GatewayOption[];
+  deviceTypeMap?: Map<string, string>;
 }) {
   const isMLA = !!gatewayOptions && gatewayOptions.length > 0;
 
@@ -526,7 +540,9 @@ function ActionCard({
     return gw?.sensors || [];
   }, [isMLA, action.gateway_id, gatewayOptions, sensors]);
 
-  const actuators = effectiveSensors.filter(isActuator);
+  const actuators = deviceTypeMap && deviceTypeMap.size > 0
+    ? effectiveSensors.filter((s) => deviceTypeMap.get(s.id) === "actuator")
+    : effectiveSensors.filter(isActuator);
   const selected = actuators.find((s) => s.id === action.actuator_uuid);
   const SIcon = selected ? getSensorIcon(selected.type) : Server;
 
@@ -635,6 +651,7 @@ export function AutomationRuleBuilder({
   onSave,
   isEdit,
   gatewayOptions,
+  deviceTypeMap,
 }: AutomationRuleBuilderProps) {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -835,6 +852,7 @@ export function AutomationRuleBuilder({
                     onUpdate={(c) => updateCondition(cond.id, c)}
                     onRemove={() => removeCondition(cond.id)}
                     gatewayOptions={gatewayOptions}
+                    deviceTypeMap={deviceTypeMap}
                   />
                 </div>
               ))}
@@ -908,6 +926,7 @@ export function AutomationRuleBuilder({
                   onUpdate={(a) => updateAction(action.id, a)}
                   onRemove={() => removeAction(action.id)}
                   gatewayOptions={gatewayOptions}
+                  deviceTypeMap={deviceTypeMap}
                 />
               ))}
 
