@@ -71,18 +71,37 @@ const ADDON_VERSION = "2.1.0";
 
 let isCloudReachable = true;
 let lastCloudCheck = 0;
+let cloudFailCount = 0;
+
+function markCloudReachable(): void {
+  isCloudReachable = true;
+  cloudFailCount = 0;
+  lastCloudCheck = Date.now();
+}
+
+function markCloudUnreachable(): void {
+  cloudFailCount++;
+  // Only mark offline after 3 consecutive failures to avoid flapping
+  if (cloudFailCount >= 3) {
+    isCloudReachable = false;
+  }
+  lastCloudCheck = Date.now();
+}
 
 async function checkCloudConnectivity(): Promise<boolean> {
   try {
     const res = await fetch(`${config.cloud_url}/functions/v1/gateway-ingest?action=addon-version`, {
       headers: { Authorization: `Bearer ${config.gateway_api_key}` },
-      signal: AbortSignal.timeout(10000),
+      signal: AbortSignal.timeout(15000),
     });
-    isCloudReachable = res.ok;
+    if (res.ok) {
+      markCloudReachable();
+    } else {
+      markCloudUnreachable();
+    }
   } catch {
-    isCloudReachable = false;
+    markCloudUnreachable();
   }
-  lastCloudCheck = Date.now();
   return isCloudReachable;
 }
 
