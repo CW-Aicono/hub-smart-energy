@@ -732,7 +732,6 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
                   </div>
                 );
               })()}
-              )}
             </div>
           )}
         </DialogContent>
