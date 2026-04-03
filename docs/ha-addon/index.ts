@@ -1,9 +1,10 @@
 /**
- * EMS Gateway Hub – Home Assistant Add-on v2.0
+ * AICONO EMS Gateway v2.1
  * ==============================================
  * Lokaler Gateway-Hub: Pollt HA REST API, puffert offline via SQLite,
  * pusht Readings batched an gateway-ingest.
- * NEU: Lokale Automationsausführung, WebSocket-Client, Preact-UI, Priority-Buffer.
+ * Features: Lokale Automationsausführung, WebSocket-Client, Preact-UI,
+ * Priority-Buffer, Offline-Caches, Lokale Aktor-Steuerung.
  */
 
 import http from "http";
@@ -20,7 +21,7 @@ try {
 /* ── Configuration ───────────────────────────────────────────────────────────── */
 
 interface AddonConfig {
-  supabase_url: string;
+  cloud_url: string;
   gateway_api_key: string;
   tenant_id: string;
   device_name: string;
@@ -39,15 +40,17 @@ function loadConfig(): AddonConfig {
     const raw = fs.readFileSync(optionsPath, "utf-8");
     console.log("[config] Loaded /data/options.json");
     const parsed = JSON.parse(raw);
-    return { automation_eval_seconds: 30, ...parsed };
+    // Fallback: support old 'supabase_url' field
+    const cloudUrl = parsed.cloud_url || parsed.supabase_url || "";
+    return { automation_eval_seconds: 30, ...parsed, cloud_url: cloudUrl };
   } catch (error: any) {
     console.warn(`[config] Cannot read ${optionsPath} (${error?.code || error?.message}), using env vars`);
   }
   return {
-    supabase_url: process.env.SUPABASE_URL || "",
+    cloud_url: process.env.CLOUD_URL || process.env.SUPABASE_URL || "",
     gateway_api_key: process.env.GATEWAY_API_KEY || "",
     tenant_id: process.env.TENANT_ID || "",
-    device_name: process.env.DEVICE_NAME || "ha-addon",
+    device_name: process.env.DEVICE_NAME || "aicono-ems",
     poll_interval_seconds: Number(process.env.POLL_INTERVAL_SECONDS) || 30,
     flush_interval_seconds: Number(process.env.FLUSH_INTERVAL_SECONDS) || 5,
     heartbeat_interval_seconds: Number(process.env.HEARTBEAT_INTERVAL_SECONDS) || 60,
@@ -61,8 +64,8 @@ function loadConfig(): AddonConfig {
 const config = loadConfig();
 const SUPERVISOR_TOKEN = process.env.SUPERVISOR_TOKEN || "";
 const HA_API_BASE = "http://supervisor/core/api";
-const INGEST_URL = `${config.supabase_url}/functions/v1/gateway-ingest`;
-const ADDON_VERSION = "2.0.0";
+const INGEST_URL = `${config.cloud_url}/functions/v1/gateway-ingest`;
+const ADDON_VERSION = "2.1.0";
 
 /* ── Connectivity State ──────────────────────────────────────────────────────── */
 
@@ -71,7 +74,7 @@ let lastCloudCheck = 0;
 
 async function checkCloudConnectivity(): Promise<boolean> {
   try {
-    const res = await fetch(`${config.supabase_url}/functions/v1/gateway-ingest?action=addon-version`, {
+    const res = await fetch(`${config.cloud_url}/functions/v1/gateway-ingest?action=addon-version`, {
       headers: { Authorization: `Bearer ${config.gateway_api_key}` },
       signal: AbortSignal.timeout(10000),
     });
@@ -139,6 +142,28 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_exec_log_synced ON automation_exec_log(synced);
 `);
 
+// ── NEW: Meter Mappings Cache (Offline-Persistent) ──
+db.exec(`
+  CREATE TABLE IF NOT EXISTS meter_mappings_cache (
+    id TEXT PRIMARY KEY,
+    sensor_uuid TEXT NOT NULL,
+    energy_type TEXT NOT NULL,
+    tenant_id TEXT NOT NULL,
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+`);
+
+// ── NEW: HA States Cache (Offline-Persistent) ──
+db.exec(`
+  CREATE TABLE IF NOT EXISTS ha_states_cache (
+    entity_id TEXT PRIMARY KEY,
+    state TEXT NOT NULL,
+    attributes TEXT,
+    last_updated TEXT,
+    cached_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+`);
+
 /* ── Readings Buffer Statements ──────────────────────────────────────────────── */
 
 const insertReading = db.prepare(
@@ -179,7 +204,6 @@ function enforceBufferLimit(): void {
     if (stats.size > maxBytes) {
       const total = getBufferCount();
       const toDelete = Math.max(1, Math.floor(total * 0.1));
-      // Delete oldest NON-priority readings first
       const oldest = db.prepare(
         `SELECT id FROM readings_buffer WHERE priority = 0 ORDER BY id LIMIT ?`
       ).all(toDelete) as { id: number }[];
@@ -187,7 +211,6 @@ function enforceBufferLimit(): void {
         deleteBatch.run(oldest[oldest.length - 1].id);
         console.log(`[buffer] Evicted ${oldest.length} non-priority readings (FIFO)`);
       } else {
-        // All readings are priority – fall back to pure FIFO
         const anyOldest = db.prepare(
           `SELECT id FROM readings_buffer ORDER BY id LIMIT ?`
         ).all(toDelete) as { id: number }[];
@@ -225,8 +248,35 @@ function matchesEntityFilter(entityId: string): boolean {
   return entityFilterPatterns.some((re) => re.test(entityId));
 }
 
+// ── NEW: Persist meter mappings to SQLite cache ──
+function saveMeterMappingsToCache(mappings: MeterMapping[]): void {
+  const upsert = db.prepare(
+    `INSERT OR REPLACE INTO meter_mappings_cache (id, sensor_uuid, energy_type, tenant_id) VALUES (?, ?, ?, ?)`
+  );
+  const tx = db.transaction((items: MeterMapping[]) => {
+    db.exec(`DELETE FROM meter_mappings_cache`);
+    for (const m of items) {
+      upsert.run(m.id, m.sensor_uuid, m.energy_type, m.tenant_id);
+    }
+  });
+  tx(mappings);
+}
+
+function loadMeterMappingsFromCache(): MeterMapping[] {
+  return db.prepare(`SELECT id, sensor_uuid, energy_type, tenant_id FROM meter_mappings_cache`).all() as MeterMapping[];
+}
+
 async function fetchMeterMappings(): Promise<void> {
-  if (!isCloudReachable) return;
+  if (!isCloudReachable) {
+    // Offline: load from cache if empty
+    if (meterMappings.length === 0) {
+      meterMappings = loadMeterMappingsFromCache();
+      if (meterMappings.length > 0) {
+        console.log(`[mapping] Loaded ${meterMappings.length} meter mappings from offline cache`);
+      }
+    }
+    return;
+  }
   try {
     const res = await fetch(`${INGEST_URL}?action=list-meters`, {
       headers: { Authorization: `Bearer ${config.gateway_api_key}` },
@@ -246,6 +296,8 @@ async function fetchMeterMappings(): Promise<void> {
           tenant_id: m.tenant_id,
         }));
       console.log(`[mapping] Loaded ${meterMappings.length} meter mappings`);
+      // Persist to cache for offline use
+      saveMeterMappingsToCache(meterMappings);
     }
   } catch (err) {
     console.error("[mapping] Error fetching meters:", err);
@@ -263,6 +315,37 @@ interface HAState {
 
 // Cache of latest HA states for the UI and automation engine
 let latestHAStates: HAState[] = [];
+
+// ── NEW: Persist HA states to SQLite cache ──
+function saveHAStatesToCache(): void {
+  const upsert = db.prepare(
+    `INSERT OR REPLACE INTO ha_states_cache (entity_id, state, attributes, last_updated) VALUES (?, ?, ?, ?)`
+  );
+  const tx = db.transaction((states: HAState[]) => {
+    for (const s of states) {
+      upsert.run(s.entity_id, s.state, JSON.stringify(s.attributes), s.last_updated);
+    }
+  });
+  // Only cache sensor/switch/light/cover states (max 500)
+  const relevant = latestHAStates
+    .filter(s => s.entity_id.startsWith("sensor.") || s.entity_id.startsWith("switch.") || s.entity_id.startsWith("light.") || s.entity_id.startsWith("cover.") || s.entity_id.startsWith("climate."))
+    .slice(0, 500);
+  tx(relevant);
+}
+
+function loadHAStatesFromCache(): HAState[] {
+  const rows = db.prepare(`SELECT entity_id, state, attributes, last_updated FROM ha_states_cache`).all() as Array<{
+    entity_id: string; state: string; attributes: string; last_updated: string;
+  }>;
+  return rows.map(r => ({
+    entity_id: r.entity_id,
+    state: r.state,
+    attributes: r.attributes ? JSON.parse(r.attributes) : {},
+    last_updated: r.last_updated,
+  }));
+}
+
+let statesCacheCounter = 0;
 
 async function pollHAStates(): Promise<void> {
   try {
@@ -303,6 +386,13 @@ async function pollHAStates(): Promise<void> {
       console.log(`[ha-poll] Buffered ${buffered} readings`);
     }
     enforceBufferLimit();
+
+    // Persist states to cache every 5th poll
+    statesCacheCounter++;
+    if (statesCacheCounter >= 5) {
+      saveHAStatesToCache();
+      statesCacheCounter = 0;
+    }
   } catch (err) {
     console.error("[ha-poll] Error:", err);
   }
@@ -339,12 +429,10 @@ function connectHAWebSocket(): void {
         } else if (msg.type === "auth_ok") {
           console.log("[ha-ws] Authenticated");
           haWsConnected = true;
-          // Subscribe to state changes
           haWs?.send(JSON.stringify({ id: haWsMsgId++, type: "subscribe_events", event_type: "state_changed" }));
         } else if (msg.type === "event" && msg.event?.event_type === "state_changed") {
           const newState = msg.event.data?.new_state;
           if (newState) {
-            // Update cache
             const idx = latestHAStates.findIndex((s) => s.entity_id === newState.entity_id);
             if (idx >= 0) {
               latestHAStates[idx] = newState;
@@ -375,7 +463,7 @@ function connectHAWebSocket(): void {
 
 interface LocalAutomation {
   id: string;
-  data: string; // JSON-serialized AutomationRule
+  data: string;
   updated_at: string;
   last_executed_at: string | null;
 }
@@ -412,7 +500,6 @@ function insertExecLog(entry: {
     );
 }
 
-// Import evaluator functions inline (same logic as packages/automation-core)
 function getLocalTimeParts(timezone: string): { hours: number; minutes: number; weekday: number; timeStr: string } {
   const now = new Date();
   const formatter = new Intl.DateTimeFormat("de-DE", {
@@ -476,7 +563,6 @@ async function evaluateAndExecuteAutomations(): Promise<void> {
     const conditions = Array.isArray(rule.conditions) ? rule.conditions : [];
     if (conditions.length === 0) continue;
 
-    // Debounce check
     const lastExec = auto.last_executed_at ? new Date(auto.last_executed_at).getTime() : 0;
     if (Date.now() - lastExec < DEBOUNCE_MS) continue;
 
@@ -534,7 +620,6 @@ async function evaluateAndExecuteAutomations(): Promise<void> {
     const allMet = logicOperator === "AND" ? results.every(Boolean) : results.some(Boolean);
     if (!allMet) continue;
 
-    // Execute actions via HA REST API
     console.log(`[auto-engine] "${rule.name}" conditions met at ${timeParts.timeStr}`);
     const startTime = Date.now();
 
@@ -544,32 +629,7 @@ async function evaluateAndExecuteAutomations(): Promise<void> {
         : [{ actuator_uuid: rule.actuator_uuid, action_type: rule.action_value || "pulse", action_value: rule.action_value }];
 
       for (const action of actions) {
-        const entityId = action.actuator_uuid;
-        const domain = entityId.split(".")[0];
-        const cmdValue = (action.action_value || action.action_type || "pulse").toLowerCase();
-
-        let service = "toggle";
-        if (cmdValue === "on") service = "turn_on";
-        else if (cmdValue === "off") service = "turn_off";
-        else if (cmdValue === "toggle" || cmdValue === "pulse") service = "toggle";
-        else if (domain === "cover") {
-          if (cmdValue === "open") service = "open_cover";
-          else if (cmdValue === "close") service = "close_cover";
-          else if (cmdValue === "stop") service = "stop_cover";
-        }
-
-        const res = await fetch(`${HA_API_BASE}/services/${domain}/${service}`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${SUPERVISOR_TOKEN}`,
-          },
-          body: JSON.stringify({ entity_id: entityId }),
-        });
-
-        if (!res.ok) {
-          throw new Error(`HA service call failed: ${res.status} ${await res.text()}`);
-        }
+        await executeHAService(action.actuator_uuid, action.action_value || action.action_type || "pulse");
       }
 
       const durationMs = Date.now() - startTime;
@@ -599,6 +659,36 @@ async function evaluateAndExecuteAutomations(): Promise<void> {
 
   if (executed > 0 || errors > 0) {
     console.log(`[auto-engine] Round done: executed=${executed}, errors=${errors}`);
+  }
+}
+
+/* ── NEW: Local Actuator Execution via HA REST API ───────────────────────────── */
+
+async function executeHAService(entityId: string, cmdValue: string): Promise<void> {
+  const domain = entityId.split(".")[0];
+  const cmd = (cmdValue || "toggle").toLowerCase();
+
+  let service = "toggle";
+  if (cmd === "on") service = "turn_on";
+  else if (cmd === "off") service = "turn_off";
+  else if (cmd === "toggle" || cmd === "pulse") service = "toggle";
+  else if (domain === "cover") {
+    if (cmd === "open") service = "open_cover";
+    else if (cmd === "close") service = "close_cover";
+    else if (cmd === "stop") service = "stop_cover";
+  }
+
+  const res = await fetch(`${HA_API_BASE}/services/${domain}/${service}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${SUPERVISOR_TOKEN}`,
+    },
+    body: JSON.stringify({ entity_id: entityId }),
+  });
+
+  if (!res.ok) {
+    throw new Error(`HA service call failed: ${res.status} ${await res.text()}`);
   }
 }
 
@@ -637,7 +727,6 @@ async function syncAutomationsFromCloud(): Promise<void> {
 
     const syncTransaction = db.transaction((automations: any[]) => {
       for (const auto of automations) {
-        // Store timezone from location in the rule data
         const ruleData = {
           ...auto,
           timezone: auto.location_timezone || auto.timezone || "Europe/Berlin",
@@ -792,7 +881,7 @@ async function sendHeartbeat(): Promise<void> {
       },
       body: JSON.stringify({
         device_name: config.device_name,
-        device_type: "ha-addon",
+        device_type: "aicono-ems",
         tenant_id: config.tenant_id,
         local_ip: getLocalIP(),
         ha_version: haVersion,
@@ -883,7 +972,6 @@ function serveStaticFile(filePath: string, res: http.ServerResponse): void {
   const fullPath = path.join(UI_DIR, filePath);
   const safePath = path.resolve(fullPath);
 
-  // Prevent directory traversal
   if (!safePath.startsWith(path.resolve(UI_DIR))) {
     res.writeHead(403);
     res.end("Forbidden");
@@ -903,7 +991,7 @@ function serveStaticFile(filePath: string, res: http.ServerResponse): void {
 }
 
 function startServer(): void {
-  const server = http.createServer((req, res) => {
+  const server = http.createServer(async (req, res) => {
     const url = new URL(req.url || "/", `http://localhost:8099`);
     const pathname = url.pathname;
 
@@ -951,7 +1039,6 @@ function startServer(): void {
     }
 
     if (pathname === "/api/sensors") {
-      // Return filtered HA states
       const filtered = latestHAStates
         .filter((s) => matchesEntityFilter(s.entity_id) || s.entity_id.startsWith("sensor."))
         .map((s) => ({
@@ -965,6 +1052,47 @@ function startServer(): void {
 
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ success: true, sensors: filtered, total: latestHAStates.length }));
+      return;
+    }
+
+    // ── NEW: Controllable entities (switches, lights, covers) ──
+    if (pathname === "/api/actuators") {
+      const actuators = latestHAStates
+        .filter((s) => s.entity_id.startsWith("switch.") || s.entity_id.startsWith("light.") || s.entity_id.startsWith("cover.") || s.entity_id.startsWith("climate."))
+        .map((s) => ({
+          entity_id: s.entity_id,
+          state: s.state,
+          domain: s.entity_id.split(".")[0],
+          friendly_name: s.attributes?.friendly_name || s.entity_id,
+          last_updated: s.last_updated,
+        }))
+        .slice(0, 100);
+
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ success: true, actuators }));
+      return;
+    }
+
+    // ── NEW: Execute HA service (local actuator control) ──
+    if (pathname === "/api/execute" && req.method === "POST") {
+      let body = "";
+      req.on("data", (chunk) => { body += chunk; });
+      req.on("end", async () => {
+        try {
+          const { entity_id, service } = JSON.parse(body);
+          if (!entity_id || !service) {
+            res.writeHead(400, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ error: "entity_id and service required" }));
+            return;
+          }
+          await executeHAService(entity_id, service);
+          res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ success: true, entity_id, service }));
+        } catch (err: any) {
+          res.writeHead(500, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: err?.message || "Execution failed" }));
+        }
+      });
       return;
     }
 
@@ -1023,11 +1151,8 @@ function startServer(): void {
 
     // Ingress: HA adds /api/hassio_ingress/<token>/ prefix
     if (pathname.includes("/ingress/")) {
-      // Strip everything before the last known path segment
       const ingressPath = pathname.split("/").slice(-1)[0] || "index.html";
       if (ingressPath.startsWith("api/")) {
-        // Re-route API calls through ingress
-        // This is handled above, so just redirect
         res.writeHead(302, { Location: `/${ingressPath}` });
         res.end();
         return;
@@ -1041,7 +1166,7 @@ function startServer(): void {
   });
 
   server.listen(8099, () => {
-    console.log("[server] Status API + UI listening on port 8099");
+    console.log("[server] AICONO EMS Gateway API + UI listening on port 8099");
   });
 }
 
@@ -1049,7 +1174,7 @@ function startServer(): void {
 
 async function main(): Promise<void> {
   console.log("═══════════════════════════════════════════════════════");
-  console.log(`  EMS Gateway Hub v${ADDON_VERSION} – Home Assistant Add-on`);
+  console.log(`  AICONO EMS Gateway v${ADDON_VERSION}`);
   console.log("═══════════════════════════════════════════════════════");
   console.log(`  Device:     ${config.device_name}`);
   console.log(`  Tenant:     ${config.tenant_id}`);
@@ -1060,6 +1185,19 @@ async function main(): Promise<void> {
   console.log("═══════════════════════════════════════════════════════");
 
   compileEntityFilter();
+
+  // Load offline caches before starting server
+  const cachedMappings = loadMeterMappingsFromCache();
+  if (cachedMappings.length > 0) {
+    meterMappings = cachedMappings;
+    console.log(`[offline] Loaded ${cachedMappings.length} meter mappings from cache`);
+  }
+  const cachedStates = loadHAStatesFromCache();
+  if (cachedStates.length > 0) {
+    latestHAStates = cachedStates;
+    console.log(`[offline] Loaded ${cachedStates.length} HA states from cache`);
+  }
+
   startServer();
 
   // Initial setup
@@ -1102,7 +1240,7 @@ async function main(): Promise<void> {
     setInterval(() => sendBackup(), config.auto_backup_hours * 60 * 60 * 1000);
   }
 
-  console.log("[main] All loops started. Waiting for data...");
+  console.log("[main] All loops started. AICONO EMS Gateway is running.");
 }
 
 main().catch((err) => {

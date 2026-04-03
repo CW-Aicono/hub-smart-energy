@@ -1,13 +1,12 @@
-# Home Assistant Add-on: EMS Gateway Hub
+# AICONO EMS Gateway
 # ========================================
 # Lokaler Gateway-Hub für Energiemanagementsysteme.
-# Sammelt Sensordaten von Home Assistant und synchronisiert sie mit der Cloud.
-# Führt Automationen lokal aus – auch ohne Internetverbindung.
+# Sammelt Sensordaten, führt Automationen lokal aus und synchronisiert mit der Cloud.
 
-name: "EMS Gateway Hub"
-description: "Lokaler Gateway-Hub für das Energiemanagementsystem. Sammelt Sensordaten, führt Automationen lokal aus und synchronisiert mit der Cloud."
-version: "2.0.0"
-slug: "ems-gateway-hub"
+name: "AICONO EMS Gateway"
+description: "Lokaler Gateway-Hub für das AICONO Energiemanagementsystem. Sammelt Sensordaten, führt Automationen lokal aus und synchronisiert mit der Cloud."
+version: "2.1.0"
+slug: "aicono-ems-gateway"
 url: "https://hub-smart-energy.lovable.app"
 arch:
   - aarch64
@@ -17,8 +16,8 @@ startup: "application"
 boot: "auto"
 ingress: true
 ingress_port: 8099
-panel_icon: "mdi:flash"
-panel_title: "EMS Gateway"
+panel_icon: "mdi:lightning-bolt-circle"
+panel_title: "AICONO EMS"
 hassio_api: true
 homeassistant_api: true
 
@@ -30,10 +29,10 @@ ports_description:
 
 # Konfigurationsoptionen
 options:
-  supabase_url: null
+  cloud_url: null
   gateway_api_key: null
   tenant_id: null
-  device_name: "ha-addon"
+  device_name: "aicono-ems"
   poll_interval_seconds: 30
   flush_interval_seconds: 5
   heartbeat_interval_seconds: 60
@@ -43,7 +42,7 @@ options:
   auto_backup_hours: 24
 
 schema:
-  supabase_url: url
+  cloud_url: url
   gateway_api_key: str
   tenant_id: str
   device_name: str

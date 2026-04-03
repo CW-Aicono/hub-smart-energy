@@ -1,4 +1,4 @@
-# EMS Gateway Hub – Home Assistant Add-on
+# AICONO EMS Gateway
 # =========================================
 # Multi-stage build for minimal production image
 
@@ -18,7 +18,7 @@ RUN npm run build && npm prune --omit=dev
 # ── Stage 2: Production image ────────────────────────────────────────────────
 FROM node:20-alpine AS runner
 
-# IMPORTANT: HA add-ons MUST run as root to access /data/options.json
+# IMPORTANT: Must run as root to access /data/options.json
 # Do NOT add USER or adduser directives here
 
 WORKDIR /app

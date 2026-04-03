@@ -1,7 +1,7 @@
 {
-  "name": "ems-gateway-hub",
-  "version": "2.0.0",
-  "description": "EMS Gateway Hub – Home Assistant Add-on with local automation engine",
+  "name": "aicono-ems-gateway",
+  "version": "2.1.0",
+  "description": "AICONO EMS Gateway – Lokaler Gateway-Hub mit Automations-Engine",
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc",
