@@ -637,6 +637,7 @@ export function AutomationRuleBuilder({
   onSave,
   isEdit,
   gatewayOptions,
+  deviceTypeMap,
 }: AutomationRuleBuilderProps) {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
