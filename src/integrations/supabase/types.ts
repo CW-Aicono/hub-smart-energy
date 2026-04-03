@@ -216,6 +216,7 @@ export type Database = {
           duration_ms: number | null
           error_message: string | null
           executed_at: string
+          execution_source: string
           id: string
           status: string
           tenant_id: string
@@ -228,6 +229,7 @@ export type Database = {
           duration_ms?: number | null
           error_message?: string | null
           executed_at?: string
+          execution_source?: string
           id?: string
           status?: string
           tenant_id: string
@@ -240,6 +242,7 @@ export type Database = {
           duration_ms?: number | null
           error_message?: string | null
           executed_at?: string
+          execution_source?: string
           id?: string
           status?: string
           tenant_id?: string
@@ -2011,6 +2014,7 @@ export type Database = {
       gateway_devices: {
         Row: {
           addon_version: string | null
+          api_key_hash: string | null
           config: Json
           created_at: string
           device_name: string
@@ -2029,6 +2033,7 @@ export type Database = {
         }
         Insert: {
           addon_version?: string | null
+          api_key_hash?: string | null
           config?: Json
           created_at?: string
           device_name: string
@@ -2047,6 +2052,7 @@ export type Database = {
         }
         Update: {
           addon_version?: string | null
+          api_key_hash?: string | null
           config?: Json
           created_at?: string
           device_name?: string
