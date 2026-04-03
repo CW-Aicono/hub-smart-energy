@@ -582,25 +582,30 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
 
               {/* Action buttons */}
               <div className="flex gap-2 mt-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="flex-1 gap-2"
-                  onClick={() => setConfigOpen(true)}
-                >
-                  <Settings2 className="h-4 w-4" />
-                  {T("auto.availableActuatorsAndSensors")}
+                <div className="flex-1 flex items-center gap-2">
+                  <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                    <Settings2 className="h-4 w-4" />
+                    {T("auto.availableActuatorsAndSensors")}
+                  </span>
                   {!intLoading && hasAnyIntegration && (
                     <>
-                      <Badge variant="secondary" className="ml-1 text-[10px]">
+                      <Badge
+                        variant="secondary"
+                        className="ml-1 text-[10px] cursor-pointer hover:bg-secondary/80"
+                        onClick={() => { setConfigTab("actuators"); setConfigOpen(true); }}
+                      >
                         {actuators.length} {T("auto.actuators")}
                       </Badge>
-                      <Badge variant="secondary" className="text-[10px]">
+                      <Badge
+                        variant="secondary"
+                        className="text-[10px] cursor-pointer hover:bg-secondary/80"
+                        onClick={() => { setConfigTab("sensors"); setConfigOpen(true); }}
+                      >
                         {sensorDevices.length} {T("auto.sensors")}
                       </Badge>
                     </>
                   )}
-                </Button>
+                </div>
                 <Button
                   variant="outline"
                   size="sm"
