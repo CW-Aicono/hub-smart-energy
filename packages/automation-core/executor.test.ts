@@ -4,8 +4,8 @@ import {
   buildActionPayload,
   buildHALocalPayload,
   GATEWAY_EDGE_FUNCTIONS,
-} from "../executor";
-import type { AutomationAction } from "../types";
+} from "./executor";
+import type { AutomationAction } from "./types";
 
 // ---------- getEdgeFunction ----------
 describe("getEdgeFunction", () => {

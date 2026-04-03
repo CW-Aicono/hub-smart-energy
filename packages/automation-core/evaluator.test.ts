@@ -13,7 +13,7 @@ import type {
   AutomationRule,
   TimeParts,
   SensorProvider,
-} from "../types";
+} from "./types";
 
 // ---------- isTimeInRange ----------
 describe("isTimeInRange", () => {
