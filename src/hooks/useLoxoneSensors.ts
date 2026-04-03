@@ -50,8 +50,8 @@ export function useLoxoneSensorsMulti(integrationIds: string[], integrationTypes
     queries: integrationIds.map((id, idx) => ({
       queryKey: ["gateway-sensors", id],
       queryFn: () => fetchSensors(id, integrationTypes?.[idx]),
-      staleTime: 60_000,
-      refetchInterval: 300_000,
+      staleTime: 30_000,
+      refetchInterval: 60_000,
       enabled: !!id,
     })),
   });
