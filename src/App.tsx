@@ -16,6 +16,7 @@ import RecoveryGuard from "@/components/RecoveryGuard";
 import UpdateBanner from "./components/UpdateBanner";
 import SupportSessionBanner from "./components/SupportSessionBanner";
 import CookieConsent from "./components/CookieConsent";
+import LocationDetail from "./pages/LocationDetail";
 // leaflet CSS is loaded lazily in map components
 
 // Lazy-loaded pages
@@ -26,7 +27,6 @@ const Settings = lazy(() => import("./pages/Settings"));
 const Branding = lazy(() => import("./pages/Branding"));
 const Roles = lazy(() => import("./pages/Roles"));
 const Locations = lazy(() => import("./pages/Locations"));
-const LocationDetail = lazy(() => import("./pages/LocationDetail"));
 const EnergyData = lazy(() => import("./pages/EnergyData"));
 const MetersOverview = lazy(() => import("./pages/MetersOverview"));
 const Integrations = lazy(() => import("./pages/Integrations"));
