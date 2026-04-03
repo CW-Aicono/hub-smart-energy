@@ -57,6 +57,7 @@ import { useTranslation } from "@/hooks/useTranslation";
 import { useLocationIntegrations } from "@/hooks/useIntegrations";
 import { useLoxoneSensorsMulti, LoxoneSensor } from "@/hooks/useLoxoneSensors";
 import { GATEWAY_DEFINITIONS } from "@/lib/gatewayRegistry";
+import { getResolvedDeviceType } from "@/lib/deviceClassification";
 import { useLocationAutomations, LocationAutomationRecord } from "@/hooks/useLocationAutomations";
 import { useMeters } from "@/hooks/useMeters";
 import { AutomationRuleBuilder, AutomationRuleData } from "@/components/locations/AutomationRuleBuilder";
@@ -76,17 +77,6 @@ function getSensorIcon(type: string) {
     case "motion": return Activity;
     default: return Server;
   }
-}
-
-function isActuator(sensor: LoxoneSensor): boolean {
-  const actuatorTypes = ["switch", "light", "blind", "button", "digital"];
-  const actuatorControlTypes = [
-    "Switch", "Dimmer", "Jalousie", "LightController", "LightControllerV2",
-    "Pushbutton", "IRoomController", "IRoomControllerV2", "Gate", "Ventilation",
-    "Daytimer", "Alarm", "CentralAlarm", "Intercom", "AalSmartAlarm",
-    "Sauna", "Pool", "Hourcounter",
-  ];
-  return actuatorTypes.includes(sensor.type) || actuatorControlTypes.includes(sensor.controlType);
 }
 
 const ACTION_TYPES = [
@@ -271,15 +261,6 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
     return map;
   }, [gatewayIntegrations]);
 
-  // Set of sensor_uuids that have been explicitly integrated (assigned as meters)
-  const integratedSensorUuids = useMemo(() => {
-    const ids = new Set<string>();
-    meters.forEach((m) => {
-      if (m.sensor_uuid) ids.add(m.sensor_uuid);
-    });
-    return ids;
-  }, [meters]);
-
   // Map sensor_uuid -> device_type from meters table (authoritative classification)
   const deviceTypeMap = useMemo(() => {
     const map = new Map<string, string>();
@@ -289,15 +270,13 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
     return map;
   }, [meters]);
 
-  // Merge sensors from all integrations, override name with user-defined meter name
-  // FILTER: only include devices that have been integrated (have a matching sensor_uuid in meters)
+  // Merge all gateway devices from all integrations and prefer user-defined names from the tabs.
   const allSensorsWithSource = useMemo(() => {
     const result: (LoxoneSensor & { _integrationId: string; _integrationLabel: string })[] = [];
     sensorQueries.forEach((q, idx) => {
       const intId = integrationIds[idx];
       const label = integrationLabelMap[intId] || "Unknown";
       (q.data || []).forEach((s) => {
-        if (!integratedSensorUuids.has(s.id)) return; // Skip non-integrated devices
         result.push({
           ...s,
           name: sensorNameMap[s.id] || s.name,
@@ -307,7 +286,7 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
       });
     });
     return result;
-  }, [sensorQueries, integrationIds, integrationLabelMap, sensorNameMap, integratedSensorUuids]);
+  }, [sensorQueries, integrationIds, integrationLabelMap, sensorNameMap]);
 
   const hasAnyIntegration = gatewayIntegrations.length > 0;
   // For backward compat: pick the first gateway integration as default for new automations
@@ -318,8 +297,8 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
     createAutomation, updateAutomation, deleteAutomation, duplicateAutomation, executeAutomation,
   } = useLocationAutomations(locationId);
 
-  // Use device_type from meters table for classification (authoritative, matches the 3 tabs)
-  const actuators = allSensorsWithSource.filter((s) => deviceTypeMap.get(s.id) === "actuator");
+  // Use explicit device_type when available and fall back to the same gateway heuristics as the tabs.
+  const actuators = allSensorsWithSource.filter((s) => getResolvedDeviceType(s, deviceTypeMap) === "actuator");
   const allSensors = allSensorsWithSource as LoxoneSensor[];
 
   // Build actuator state map for live status display

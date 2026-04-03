@@ -38,6 +38,7 @@ import {
   AlarmClock,
 } from "lucide-react";
 import { LoxoneSensor } from "@/hooks/useLoxoneSensors";
+import { getResolvedDeviceType } from "@/lib/deviceClassification";
 import { toast } from "sonner";
 
 // ── Types ──
@@ -170,29 +171,6 @@ function getSensorIcon(type: string) {
   }
 }
 
-const METER_CONTROL_TYPES = ["Meter", "EnergyManager", "EnergyManager2", "Fronius", "EnergyMonitor", "EFM"];
-
-function isMeterDevice(sensor: LoxoneSensor): boolean {
-  return METER_CONTROL_TYPES.includes(sensor.controlType);
-}
-
-function isActuator(sensor: LoxoneSensor): boolean {
-  if (isMeterDevice(sensor)) return false;
-  const actuatorTypes = ["switch", "light", "blind", "button", "digital"];
-  const actuatorControlTypes = [
-    "Switch", "Dimmer", "Jalousie", "LightController", "LightControllerV2",
-    "Pushbutton", "IRoomController", "IRoomControllerV2", "Gate", "Ventilation",
-    "Daytimer", "Alarm", "CentralAlarm", "Intercom", "AalSmartAlarm",
-    "Sauna", "Pool", "Hourcounter",
-  ];
-  return actuatorTypes.includes(sensor.type) || actuatorControlTypes.includes(sensor.controlType);
-}
-
-/** Sensors & meters (non-actuators) for condition dropdowns */
-function isSensorOrMeter(sensor: LoxoneSensor): boolean {
-  return !isActuator(sensor);
-}
-
 // ── Gateway Selector (MLA two-step) ──
 
 function GatewaySelector({
@@ -263,10 +241,7 @@ function ConditionCard({
 
   // Only sensors & meters for sensor_value condition dropdowns (use deviceTypeMap if available)
   const sensorOnlyDevices = useMemo(() => {
-    if (deviceTypeMap && deviceTypeMap.size > 0) {
-      return effectiveSensors.filter((s) => deviceTypeMap.get(s.id) !== "actuator");
-    }
-    return effectiveSensors.filter(isSensorOrMeter);
+    return effectiveSensors.filter((s) => getResolvedDeviceType(s, deviceTypeMap) !== "actuator");
   }, [effectiveSensors, deviceTypeMap]);
 
   const handleGatewayChange = (gwId: string) => {
@@ -483,10 +458,7 @@ function ConditionCard({
                   <SelectValue placeholder={isMLA && !condition.gateway_id ? "Zuerst Gateway wählen..." : "Aktor wählen..."} />
                 </SelectTrigger>
                 <SelectContent>
-                  {(deviceTypeMap && deviceTypeMap.size > 0
-                    ? effectiveSensors.filter((s) => deviceTypeMap.get(s.id) === "actuator")
-                    : effectiveSensors.filter(isActuator)
-                  ).map((s) => (
+                  {effectiveSensors.filter((s) => getResolvedDeviceType(s, deviceTypeMap) === "actuator").map((s) => (
                     <SelectItem key={s.id} value={s.id} className="text-xs">
                       {s.name} ({s.room})
                     </SelectItem>
@@ -540,9 +512,7 @@ function ActionCard({
     return gw?.sensors || [];
   }, [isMLA, action.gateway_id, gatewayOptions, sensors]);
 
-  const actuators = deviceTypeMap && deviceTypeMap.size > 0
-    ? effectiveSensors.filter((s) => deviceTypeMap.get(s.id) === "actuator")
-    : effectiveSensors.filter(isActuator);
+  const actuators = effectiveSensors.filter((s) => getResolvedDeviceType(s, deviceTypeMap) === "actuator");
   const selected = actuators.find((s) => s.id === action.actuator_uuid);
   const SIcon = selected ? getSensorIcon(selected.type) : Server;
 
