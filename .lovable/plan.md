@@ -1,83 +1,194 @@
 
-Ziel: Ich habe die zeitgesteuerten Automationen tief geprüft. Ergebnis: Sie sollten grundsätzlich bereits laufen, und der Scheduler läuft auch tatsächlich. Das Hauptproblem ist aktuell nicht die Uhrzeit-/Zeitzonenlogik, sondern die konkrete Ausführung je Integration.
 
-1. Ist-Zustand
-- Es gibt eine Backend-Funktion `automation-scheduler`, die aktive Automationen periodisch auswertet.
-- Die Zeitprüfung erfolgt nicht nach Server-UTC, sondern nach der in der Liegenschaft hinterlegten Zeitzone (`locations.timezone`, Fallback `Europe/Berlin`).
-- Die Scheduler-Logs zeigen reale Ausführungen alle 2 Minuten, z. B. `conditions met in tz=Europe/Berlin at 16:46`.
-- Damit ist die Frage zur Uhrzeit klar: Die Zeitlogik richtet sich lokal nach der Liegenschaft, nicht nach der Serverzeit.
+# Plan: HA als vollintegriertes lokales Gateway – Konsolidiert mit Claude-Review
 
-2. Was bereits funktioniert
-- Zeitbedingungen werden ausgewertet.
-- Der Scheduler läuft produktiv.
-- Manuelle Ausführung per Play-Button funktioniert weiterhin separat direkt aus dem Frontend.
-- Für einzelne Integrationen funktioniert auch die geplante Ausführung bereits, z. B. Shelly wurde mehrfach erfolgreich als `scheduled` geloggt.
+## Zusammenfassung
 
-3. Warum es in Tests trotzdem “nicht funktioniert”
-Es gibt mehrere unterschiedliche Fehlerursachen:
+Der Raspberry Pi mit Home Assistant wird zum autonomen lokalen Gateway. Er sammelt Daten, führt Automationen lokal aus und synchronisiert bei Verbindung mit der Cloud. Claudes Review liefert vier klare Entscheidungen und vier zusätzliche Verbesserungen, die in den Plan einfließen.
 
-- Home Assistant:
-  - Der Scheduler ruft pauschal `executeCommand` mit `controlUuid` + `commandValue` auf.
-  - Die Home-Assistant-Funktion erwartet aber `domain`, `service`, `entity_id`, `service_data`.
-  - Folge in Logs: `domain und service sind erforderlich`.
-  - Bedeutet: zeitgesteuert schlägt fehl, obwohl die Zeitbedingung korrekt erkannt wurde.
+---
 
-- Loxone:
-  - Scheduler trifft die Zeitfenster korrekt, aber einzelne Befehle schlagen mit `HTTP 404` fehl.
-  - Das deutet auf eine fehlerhafte Command-/UUID-Zuordnung für bestimmte Aktoren hin, nicht auf ein Zeitproblem.
+## Entscheidungen aus dem Claude-Review
 
-- Shelly:
-  - Zeitgesteuerte Ausführung funktioniert grundsätzlich.
-  - Es gibt aber zwischendurch `HTTP 429` beim Statusabruf, also Rate-Limit-Probleme.
-  - Das kann dazu führen, dass einzelne Scheduler-Läufe fehlschlagen.
+| Frage | Entscheidung |
+|---|---|
+| Evaluator-Portierung | **1:1 portieren**, Condition-Logik in gemeinsames Package `packages/automation-core/` extrahieren |
+| WebSocket vs. REST | **Beides**: REST bleibt für Poller, WebSocket (`ws`) für lokales UI (Live-Sensoren) und Sensor-Trigger |
+| UI-Framework | **Preact** via ESM-Import (`https://esm.sh/preact@10/compat`), kein Build-Schritt |
+| Auth für lokales UI | **HA Ingress** (kein eigenes Auth, HA übernimmt Session-Management) |
 
-- Weitere Integrationen:
-  - Der Scheduler ruft Gateway-Funktionen mit Service-Role-Authorization auf.
-  - Nur Loxone, Shelly und Home Assistant akzeptieren diesen serverseitigen Aufruf bereits.
-  - ABB, Siemens, Tuya, Homematic, Omada prüfen aktuell nur Benutzer-JWT und würden geplante Ausführungen daher serverseitig blockieren.
-  - Für diese Integrationen sind zeitgesteuerte Automationen Stand jetzt also voraussichtlich noch nicht zuverlässig nutzbar.
+## Zusätzliche Punkte aus dem Claude-Review
 
-4. Wichtige Erkenntnis
-Die Aussage „zeitgesteuerte Automationen funktionieren nicht“ ist nur teilweise richtig:
-- Die Zeitsteuerung selbst funktioniert.
-- Der Scheduler funktioniert.
-- Das eigentliche Problem ist die uneinheitliche Ausführungslogik der Integrationen und die fehlende Normalisierung der Action-Payloads.
+1. **Per-Device API-Key**: Jeder Pi bekommt einen eigenen Key, gebunden an `gateway_devices.id`. Validierung im `gateway-ingest` immer gegen `tenant_id` + `device_id`.
+2. **Sync-Versionierung**: `updated_at` auf `location_automations` als Sync-Marker, damit ein Offline-Pi keine neuere Cloud-Version überschreibt.
+3. **Priority-Buffer statt reinem FIFO**: Readings mit Werten über Schwellenwert bekommen ein `priority`-Flag und werden bei Eviction geschützt.
+4. **Edge Runtime Testing**: Shared Package frühzeitig gegen Supabase self-hosted Deno-Runtime testen.
 
-5. Konkreter Umsetzungsplan
-- Scheduler robuster machen:
-  - Integrationsspezifische Action-Payloads statt pauschal `executeCommand`.
-  - Für Home Assistant Mapping auf `domain/service/entity_id/service_data`.
-  - Für Loxone saubere Command-Validierung und ggf. UUID-/Subcontrol-Mapping für problematische Aktoren.
-- Alle Gateway-Funktionen vereinheitlichen:
-  - Service-Role-Aufrufe für geplante Backend-Ausführung überall sauber zulassen.
-  - Tenant-/Integrationsprüfung trotzdem serverseitig beibehalten.
-- Fehlertransparenz verbessern:
-  - Scheduled Errors im UI klarer anzeigen, damit man nicht nur `last_executed_at`, sondern auch die letzte Fehlursache sieht.
-- Rate-Limit-Schutz ergänzen:
-  - Insbesondere bei Shelly weniger aggressive Statusabfragen bzw. Retry/Backoff im Scheduler.
-- Optional:
-  - Cron-Setup im Projekt sichtbar dokumentieren bzw. absichern, da die Laufzeitlogs den Scheduler zeigen, aber im Code kein klarer SQL-Invocation-Job mit URL/Token sichtbar ist.
+---
 
-6. Rückmeldung für dich in Klartext
-Stand heute:
-- Loxone und andere Integrationen sollten zeitgesteuert prinzipiell bereits laufen.
-- Die Zeitbasis ist korrekt lokal je Liegenschaft.
-- In der Praxis funktionieren sie aber noch nicht durchgängig zuverlässig.
-- Shelly läuft teilweise schon.
-- Home Assistant läuft zeitgesteuert aktuell nicht korrekt.
-- Mehrere andere Integrationen sind für Scheduler-Aufrufe aktuell noch nicht vollständig vorbereitet.
-- Bei Loxone sind Zeittrigger aktiv, aber einzelne Commands schlagen noch fehl.
+## Architektur
 
-7. Technische Belege aus der Prüfung
-- `automation-scheduler` loggt echte Zeitprüfungen in `Europe/Berlin`.
-- In `automation_execution_log` gibt es `scheduled`-Einträge:
-  - Shelly: mehrfach `success`
-  - Home Assistant: mehrfach `domain und service sind erforderlich`
-  - Loxone: mehrfach `Befehl fehlgeschlagen: HTTP 404`
-- Mehrere Gateway-Funktionen unterstützen aktuell noch keinen Service-Role-Pfad für serverseitige Scheduler-Ausführung.
+```text
+┌───────────────────────────────────────────────────────┐
+│  Raspberry Pi (Home Assistant OS)                     │
+│                                                       │
+│  ┌───────────────────────────────────────────────┐    │
+│  │  EMS Gateway Hub Add-on (Node.js)             │    │
+│  │                                               │    │
+│  │  ┌──────────┐  ┌────────────────────────┐     │    │
+│  │  │ Poller   │  │ Automation Engine      │     │    │
+│  │  │ REST API │  │ (automation-core pkg)  │     │    │
+│  │  │ → SQLite │  │ + HA Service Executor  │     │    │
+│  │  └──────────┘  └────────────────────────┘     │    │
+│  │                                               │    │
+│  │  ┌──────────┐  ┌────────────────────────┐     │    │
+│  │  │ Cloud    │  │ Web-UI (Preact/Ingress)│     │    │
+│  │  │ Sync     │  │ + WebSocket zu HA      │     │    │
+│  │  └──────────┘  └────────────────────────┘     │    │
+│  └───────────────────────────────────────────────┘    │
+│                                                       │
+│  Home Assistant Core (Supervisor API + WebSocket)     │
+└───────────────────────────────────────────────────────┘
+         │ Internet (optional)
+         ▼
+┌───────────────────────┐
+│  Smart Energy Hub     │
+│  Cloud (Supabase)     │
+└───────────────────────┘
+```
 
-8. Empfohlene nächste Umsetzung
-Ich würde als Nächstes genau diese drei Punkte umsetzen:
-- Scheduler-Actions je Integration korrekt mappen
-- Service-Role-Unterstützung für alle relevanten Gateway-Funktionen vereinheitlichen
-- Fehleranzeige in der Automation-Kachel ergänzen, damit geplante Fehlschläge sofort sichtbar sind
+---
+
+## Umsetzung in 5 Modulen
+
+### Modul 1: Shared Automation Core Package
+
+**Neu: `packages/automation-core/`**
+
+- `evaluator.ts` – Portiert 1:1 aus `automation-scheduler/index.ts` (Zeilen 32-333):
+  - `getLocalTimeParts()`, `isTimeInRange()`, Condition-Evaluation (time, time_point, time_switch, weekday, sensor_value, status)
+  - Logik-Operator (AND/OR), Debounce-Prüfung
+- `types.ts` – `AutomationCondition`, `AutomationAction`, Interfaces
+- `executor.ts` – Interface `ActionExecutor` mit zwei Implementierungen:
+  - Cloud: Ruft Edge Functions via HTTP (bestehend)
+  - Lokal: Ruft HA REST API direkt (`/api/services/{domain}/{service}`)
+
+Cloud-Scheduler (`automation-scheduler/index.ts`) wird refactored, um `automation-core` zu importieren.
+
+### Modul 2: Lokale Automation Engine im Add-on
+
+**Erweitert: `docs/ha-addon/index.ts`**
+
+- SQLite-Tabelle `automations_local` (id, data JSON, updated_at, last_executed_at)
+- SQLite-Tabelle `automation_exec_log` (id, automation_id, status, error, timestamp)
+- Evaluator-Loop (alle 30s): Liest lokale Automationen, wertet Conditions aus, führt Actions via HA REST API aus
+- Sensor-Schwellwert-Trigger: Optionaler WebSocket-Client (`ws`) für `subscribe_trigger` bei sensor_value-Conditions
+- Debounce: 5 Minuten (identisch zum Cloud-Scheduler)
+
+### Modul 3: Bidirektionaler Cloud-Sync
+
+**Erweitert: `gateway-ingest/index.ts`** – Neuer Endpoint `?action=sync-automations`
+
+- **Sync-Down** (Cloud → Hub):
+  - Hub sendet `GET ?action=sync-automations&location_id=X&since=<updated_at>`
+  - Gibt nur geänderte/neue Automationen zurück
+  - Cloud ist Master (Versionierung via `updated_at`)
+- **Sync-Up** (Hub → Cloud):
+  - Lokale Execution-Logs werden beim Flush an `gateway-ingest` gepusht
+  - Neuer Endpoint `POST ?action=push-execution-logs`
+- **Per-Device API-Key** (Claudes Punkt):
+  - `gateway_devices`-Tabelle erhält `api_key_hash`-Spalte
+  - Validierung: Key + tenant_id + device_id Triple-Check
+- **Offline-Indikator**: Neues Feld `execution_source: 'cloud' | 'local'` in `automation_execution_log`
+
+### Modul 4: Lokales Web-UI (Preact + HA Ingress)
+
+**Neu: `docs/ha-addon/ui/`**
+
+- Statisches HTML/CSS/JS, ausgeliefert vom bestehenden HTTP-Server (Port 8099)
+- **Preact** via ESM-Import (kein Build-Schritt)
+- **HA Ingress**: `config.yaml` erhält `ingress: true` + `ingress_port: 8099`, UI erscheint in HA-Sidebar
+- **AICONO-Design**: Dark Mode, Teal/Blau, Montserrat/Inter
+- **WebSocket** zu HA für Live-Sensorwerte im Dashboard
+- Seiten:
+  1. **Dashboard**: Gateway-Status, HA-Version, Buffer, Online/Offline, Uptime
+  2. **Sensoren**: Live-Werte via WebSocket
+  3. **Automationen**: Aktive Regeln, Status, letzte Ausführung
+  4. **Logs**: Execution-Log + System-Log
+  5. **Einstellungen**: Anzeige der aktuellen Config
+
+API-Endpunkte (Erweiterung HTTP-Server):
+- `GET /api/sensors` – Live via HA WebSocket Cache
+- `GET /api/automations` – Lokale Automationen + Status
+- `GET /api/logs` – Execution-Log
+- `GET /ui/*` – Statische Dateien
+
+### Modul 5: Offline-Resilienz
+
+- **Priority-Buffer** (Claudes Punkt): Readings über Schwellenwert erhalten `priority=1`, werden bei FIFO-Eviction geschützt
+- **Connectivity-Watchdog**: Prüft Cloud-Erreichbarkeit alle 60s, setzt Sync aus bei Ausfall
+- **Lokale Automationen laufen unabhängig** von Cloud-Verfügbarkeit
+- **SQLite WAL-Mode** (bereits aktiv) für Crash-Sicherheit
+
+---
+
+## Technischer Kontext
+
+### Tech Stack
+| Schicht | Technologie |
+|---|---|
+| Frontend (Cloud) | React 18, Vite 5, TypeScript, Tailwind, shadcn/ui, TanStack Query |
+| Backend/DB | Supabase (PostgreSQL, GoTrue, Edge Functions/Deno) |
+| Gateway Add-on | Node.js 20, better-sqlite3, ws, Alpine Docker |
+| Lokales UI | Preact 10 (ESM), statisches HTML/CSS |
+| Shared Logic | TypeScript Package (`automation-core`) |
+
+### API-Architektur Hub ↔ Cloud
+- **Hub → Cloud**: Outbound REST an `gateway-ingest`, Auth via `GATEWAY_API_KEY` (künftig per-device)
+- **Cloud → Hub**: Indirekt via Heartbeat-Polling (`pending_command` in `gateway_devices`)
+- **Lokal**: Health-Server Port 8099, HA Ingress für UI, HA REST/WebSocket für Gerätesteuerung
+
+### Datenmodell
+```text
+tenants → locations → location_integrations → gateway_devices
+                    → location_automations → automation_execution_log
+                    → meters → meter_power_readings / _5min
+```
+- RLS-Isolation via `tenant_id = get_user_tenant_id()`
+- `location_integrations.config` enthält verschlüsselte Credentials (AES-256-GCM)
+- Automationen referenzieren `location_id` + dessen `timezone`
+
+### Deployment (Hetzner)
+- Docker Compose auf Ubuntu CX31 (4 vCPU, 16 GB)
+- Nginx (SPA), self-hosted Supabase, Gateway Worker
+- SSL via Traefik/Caddy
+- HA Add-on auf Pi kommuniziert via HTTPS mit Hetzner
+
+---
+
+## Reihenfolge
+
+| Schritt | Modul | Abhängigkeit |
+|---|---|---|
+| 1 | Shared Package (automation-core) | Keine |
+| 2 | Lokale Automation Engine | Modul 1 |
+| 3 | Cloud-Sync Endpoints | Modul 2 |
+| 4 | Per-Device API-Key + Priority-Buffer | Modul 3 |
+| 5 | Lokales Web-UI (Dashboard + Sensoren) | Bestehende APIs |
+| 6 | Web-UI (Automationen + Logs) | Modul 2+3 |
+| 7 | Offline-Watchdog | Modul 2+3 |
+
+## Betroffene Dateien
+
+| Datei | Änderung |
+|---|---|
+| `packages/automation-core/*` | NEU – Shared Evaluator/Types/Executor |
+| `docs/ha-addon/index.ts` | Automation Engine, WebSocket, erweiterte APIs, Priority-Buffer |
+| `docs/ha-addon/ui/*` | NEU – Preact UI (Dashboard, Sensoren, Automationen, Logs) |
+| `docs/ha-addon/config.yaml` | `ingress: true`, neue Config-Optionen |
+| `docs/ha-addon/Dockerfile` | UI-Dateien kopieren, `ws`-Dependency |
+| `docs/ha-addon/package.json` | `ws`, `automation-core` Dependency |
+| `supabase/functions/automation-scheduler/index.ts` | Refactor auf automation-core Import |
+| `supabase/functions/gateway-ingest/index.ts` | `sync-automations` + `push-execution-logs` Endpoints |
+| `.lovable/plan.md` | Aktualisiert mit konsolidiertem Plan |
+
