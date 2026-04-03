@@ -540,7 +540,9 @@ function ActionCard({
     return gw?.sensors || [];
   }, [isMLA, action.gateway_id, gatewayOptions, sensors]);
 
-  const actuators = effectiveSensors.filter(isActuator);
+  const actuators = deviceTypeMap && deviceTypeMap.size > 0
+    ? effectiveSensors.filter((s) => deviceTypeMap.get(s.id) === "actuator")
+    : effectiveSensors.filter(isActuator);
   const selected = actuators.find((s) => s.id === action.actuator_uuid);
   const SIcon = selected ? getSensorIcon(selected.type) : Server;
 
