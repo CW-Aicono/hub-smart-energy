@@ -1,6 +1,6 @@
-# Installationsanleitung: Raspberry Pi + Home Assistant + EMS Gateway Hub
+# Installationsanleitung: EMS Gateway Hub v2.0
 
-Diese Anleitung beschreibt die komplette Einrichtung eines Raspberry Pi als lokalen Gateway-Hub – von der Hardware bis zum laufenden EMS Add-on.
+Diese Anleitung beschreibt die komplette Einrichtung des EMS Gateway Hub Add-ons für Home Assistant – von der Hardware bis zum laufenden System mit lokalen Automationen.
 
 ---
 
@@ -14,7 +14,10 @@ Diese Anleitung beschreibt die komplette Einrichtung eines Raspberry Pi als loka
 6. [Add-on konfigurieren](#6-add-on-konfigurieren)
 7. [Lokale Geräte in Home Assistant einbinden](#7-lokale-geräte-in-home-assistant-einbinden)
 8. [Verbindung zur Cloud prüfen](#8-verbindung-zur-cloud-prüfen)
-9. [Fehlerbehebung](#9-fehlerbehebung)
+9. [Lokales Dashboard (v2.0)](#9-lokales-dashboard-v20)
+10. [Lokale Automationen (v2.0)](#10-lokale-automationen-v20)
+11. [Per-Device API-Keys (v2.0)](#11-per-device-api-keys-v20)
+12. [Fehlerbehebung](#12-fehlerbehebung)
 
 ---
 
@@ -43,16 +46,12 @@ Diese Anleitung beschreibt die komplette Einrichtung eines Raspberry Pi als loka
 
 ## 2. Home Assistant OS auf SD-Karte flashen
 
-### 2.1 Balena Etcher herunterladen
-
-Lade den **Raspberry Pi Imager** (empfohlen) oder **Balena Etcher** herunter:
+### 2.1 Imager herunterladen
 
 - **Raspberry Pi Imager** (empfohlen): [https://www.raspberrypi.com/software/](https://www.raspberrypi.com/software/)
 - **Balena Etcher** (Alternative): [https://etcher.balena.io/](https://etcher.balena.io/)
 
-### 2.2 Home Assistant OS Image herunterladen
-
-Lade das passende Image für deinen Raspberry Pi herunter:
+### 2.2 Home Assistant OS Image
 
 | Raspberry Pi Modell | Image |
 |---|---|
@@ -64,272 +63,68 @@ Lade das passende Image für deinen Raspberry Pi herunter:
 
 ### 2.3 Image auf SD-Karte schreiben
 
-**Mit Raspberry Pi Imager (empfohlen):**
+**Mit Raspberry Pi Imager:**
 
 1. Starte den Raspberry Pi Imager
-2. Klicke auf **„Betriebssystem wählen"** → **„Other specific-purpose OS"** → **„Home assistants and home automation"** → **„Home Assistant"** → Wähle dein Pi-Modell
-3. Klicke auf **„SD-Karte wählen"** → Wähle deine microSD-Karte
-4. Klicke auf **„Schreiben"**
-5. Warte, bis der Vorgang abgeschlossen ist (ca. 5–10 Minuten)
+2. **„Betriebssystem wählen"** → **„Other specific-purpose OS"** → **„Home assistants and home automation"** → **„Home Assistant"** → Pi-Modell wählen
+3. **„SD-Karte wählen"** → microSD auswählen
+4. **„Schreiben"** klicken und warten (ca. 5–10 Minuten)
 
-**Mit Balena Etcher:**
-
-1. Starte Balena Etcher
-2. Klicke auf **„Flash from file"** und wähle die heruntergeladene `.img.xz`-Datei
-3. Klicke auf **„Select target"** und wähle deine microSD-Karte
-4. Klicke auf **„Flash!"**
-5. Warte, bis der Vorgang abgeschlossen ist
-
-> ⚠️ **Achtung:** Alle Daten auf der SD-Karte werden gelöscht!
+> ⚠️ Alle Daten auf der SD-Karte werden gelöscht!
 
 ---
 
 ## 3. Erster Start & Netzwerkzugang
 
-### 3.1 Raspberry Pi starten
+1. Geflashte microSD-Karte in den Raspberry Pi stecken
+2. Pi per **Ethernet-Kabel** mit dem Router verbinden
+3. **Netzteil** anschließen – der Pi startet automatisch
+4. **5–10 Minuten warten** (Home Assistant wird installiert)
 
-1. Stecke die geflashte microSD-Karte in den Raspberry Pi
-2. Verbinde den Pi per **Ethernet-Kabel** mit deinem Router
-3. Schließe das **Netzteil** an – der Pi startet automatisch
-4. **Warte ca. 5–10 Minuten** – beim ersten Start wird Home Assistant installiert
-
-> 💡 Die grüne LED am Pi blinkt während des Startvorgangs. Wenn sie nur noch gelegentlich blinkt, ist der Start abgeschlossen.
-
-### 3.2 Home Assistant im Browser öffnen
-
-Öffne einen Browser auf deinem Computer (im selben Netzwerk) und navigiere zu:
+Dann im Browser öffnen:
 
 ```
 http://homeassistant.local:8123
 ```
 
-> Falls das nicht funktioniert, versuche die IP-Adresse des Pi direkt. Du findest sie in der Weboberfläche deines Routers (z. B. Fritz!Box unter „Heimnetz" → „Netzwerk").
->
-> Beispiel: `http://192.168.1.42:8123`
-
-### 3.3 Warten auf „Preparing Home Assistant"
-
-Beim allerersten Aufruf siehst du den Bildschirm **„Preparing Home Assistant"**. Dieser Vorgang kann **bis zu 20 Minuten** dauern. Bitte nicht den Pi vom Strom trennen!
+> Falls nicht erreichbar: IP-Adresse im Router nachschauen (z. B. Fritz!Box unter „Heimnetz" → „Netzwerk").
 
 ---
 
 ## 4. Home Assistant Grundkonfiguration
 
-### 4.1 Onboarding
-
-Sobald Home Assistant bereit ist, wirst du durch das Onboarding geführt:
-
-1. **Benutzerkonto erstellen:** Wähle einen Benutzernamen und ein sicheres Passwort
-2. **Standort festlegen:** Gib deinen Standort ein (für Zeitzone und Wetter)
-3. **Geräte:** Home Assistant erkennt automatisch Geräte im Netzwerk – du kannst diesen Schritt zunächst überspringen
-4. **Fertig:** Klicke auf „Fertig"
-
-### 4.2 Updates installieren
-
-Nach dem Onboarding:
-
-1. Gehe zu **Einstellungen** → **System** → **Updates**
-2. Installiere alle verfügbaren Updates
-3. Starte Home Assistant neu, falls gefordert
+1. **Benutzerkonto erstellen** (sicheres Passwort wählen)
+2. **Standort festlegen** (für Zeitzone)
+3. **Updates installieren**: Einstellungen → System → Updates
 
 ---
 
 ## 5. EMS Gateway Hub Add-on installieren
 
-> ⚠️ **Wichtig:** Bevor das Add-on im Store erscheint, müssen die Dateien im GitHub-Repository korrekt sein. Falls du das Repository gerade erst erstellt hast oder das Add-on nicht im Store auftaucht, folge zuerst **Schritt 5.0**.
+### 5.1 Repository hinzufügen
 
-### 5.0 GitHub-Dateien prüfen und korrigieren
-
-Das Add-on wird direkt aus deinem GitHub-Repository gebaut. Wenn die Dateien dort fehlerhaft sind, kann Home Assistant das Add-on **nicht erkennen** – es taucht dann einfach nicht im Store auf.
-
-Du musst **zwei Dateien** auf GitHub ersetzen. So geht das – Datei für Datei:
-
----
-
-#### Datei 1: `config.yaml` ersetzen
-
-1. Öffne diese URL in deinem Browser:  
-   👉 **https://github.com/CW-Aicono/ha-addons/blob/main/ems-gateway-hub/config.yaml**
-
-2. Klicke oben rechts auf das **Stift-Symbol** (✏️ „Edit this file")
-
-3. Markiere den **gesamten Inhalt** im Editor (Windows: `Strg+A`, Mac: `Cmd+A`)
-
-4. **Lösche alles** (Entf-Taste oder Backspace)
-
-5. **Kopiere den folgenden Block** und füge ihn ein (Windows: `Strg+V`, Mac: `Cmd+V`):
-
-```yaml
-name: "EMS Gateway Hub"
-description: "Lokaler Gateway-Hub für das Energiemanagementsystem. Sammelt Sensordaten von Home Assistant und synchronisiert sie mit der Cloud."
-version: "1.0.0"
-slug: "ems-gateway-hub"
-url: "https://hub-smart-energy.lovable.app"
-arch:
-  - aarch64
-  - amd64
-  - armv7
-startup: "application"
-boot: "auto"
-ingress: false
-panel_icon: "mdi:flash"
-hassio_api: true
-homeassistant_api: true
-
-ports:
-  "8099/tcp": 8099
-ports_description:
-  "8099/tcp": "Health & Status API"
-
-options:
-  supabase_url: ""
-  gateway_api_key: ""
-  tenant_id: ""
-  device_name: "ha-addon"
-  poll_interval_seconds: 30
-  flush_interval_seconds: 5
-  heartbeat_interval_seconds: 60
-  entity_filter: "sensor.*_energy,sensor.*_power,sensor.*_consumption"
-  offline_buffer_max_mb: 100
-  auto_backup_hours: 24
-
-schema:
-  supabase_url: url
-  gateway_api_key: str
-  tenant_id: str
-  device_name: str
-  poll_interval_seconds: int
-  flush_interval_seconds: int
-  heartbeat_interval_seconds: int
-  entity_filter: "str?"
-  offline_buffer_max_mb: int
-  auto_backup_hours: int
-```
-
-6. Klicke oben rechts auf den grünen Button **„Commit changes…"**
-
-7. Im Pop-up: Lass alles so wie es ist und klicke auf **„Commit changes"**
-
-✅ **Fertig!** Die `config.yaml` ist jetzt korrekt.
-
----
-
-#### Datei 2: `Dockerfile` ersetzen
-
-1. Öffne diese URL in deinem Browser:  
-   👉 **https://github.com/CW-Aicono/ha-addons/blob/main/ems-gateway-hub/Dockerfile**
-
-2. Klicke oben rechts auf das **Stift-Symbol** (✏️ „Edit this file")
-
-3. Markiere den **gesamten Inhalt** und **lösche alles**
-
-4. **Kopiere den folgenden Block** und füge ihn ein:
-
-```dockerfile
-FROM node:20-alpine AS builder
-
-WORKDIR /app
-
-RUN apk add --no-cache python3 make g++
-
-COPY package.json tsconfig.json ./
-RUN npm install
-
-COPY index.ts ./
-RUN npm run build && npm prune --omit=dev
-
-FROM node:20-alpine AS runner
-
-WORKDIR /app
-
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/dist/index.js ./index.js
-
-RUN mkdir -p /data/db
-
-HEALTHCHECK --interval=60s --timeout=10s --start-period=30s --retries=3 \
-  CMD node -e "fetch('http://localhost:8099/api/status').then(r => r.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))" || exit 1
-
-ENV NODE_ENV=production
-
-CMD ["node", "index.js"]
-```
-
-5. Klicke auf **„Commit changes…"** → **„Commit changes"**
-
-✅ **Fertig!** Das Dockerfile ist jetzt korrekt.
-
----
-
-### 5.1 Prüfe, ob beide Dateien korrekt sind
-
-Öffne nacheinander diese zwei Links und prüfe:
-
-| Datei | Link | Erste Zeile muss sein |
-|---|---|---|
-| config.yaml | [config.yaml öffnen](https://github.com/CW-Aicono/ha-addons/blob/main/ems-gateway-hub/config.yaml) | `name: "EMS Gateway Hub"` |
-| Dockerfile | [Dockerfile öffnen](https://github.com/CW-Aicono/ha-addons/blob/main/ems-gateway-hub/Dockerfile) | `FROM node:20-alpine AS builder` |
-
-> ❌ Falls die erste Zeile **nicht** stimmt, hast du beim Ersetzen etwas übersehen. Wiederhole den Vorgang für die betroffene Datei.
-
----
-
-### 5.2 Repository in Home Assistant hinzufügen (falls noch nicht geschehen)
-
-> Wenn du das Repository bereits hinzugefügt hast, springe direkt zu **Schritt 5.3**.
-
-1. Öffne den Add-on Store in Home Assistant:  
-   👉 **http://homeassistant.local:8123/hassio/store**
-
-2. Klicke oben rechts auf die **drei Punkte (⋮)** → **„Repositories"**
-
-3. Füge diese URL ein:
+1. Öffne: **http://homeassistant.local:8123/hassio/store**
+2. Klicke auf **⋮** → **„Repositories"**
+3. URL einfügen:
 
 ```
 https://github.com/CW-Aicono/ha-addons
 ```
 
-4. Klicke auf **„Hinzufügen"** → **„Schließen"**
+4. **„Hinzufügen"** → **„Schließen"**
 
----
+### 5.2 Add-on installieren
 
-### 5.3 Add-on Store neu laden
+1. Im Add-on Store nach **„EMS Gateway Hub"** suchen
+2. Auf **„Installieren"** klicken (dauert 2–5 Minuten)
 
-> ⚠️ **Das ist der wichtigste Schritt!** Nach jeder Änderung auf GitHub muss Home Assistant die Repository-Daten neu laden.
-
-1. Öffne den Add-on Store:  
-   👉 **http://homeassistant.local:8123/hassio/store**
-
-2. Klicke oben rechts auf die **drei Punkte (⋮)**
-
-3. Klicke auf **„Check for updates"** (oder „Nach Updates suchen")
-
-4. **Warte 10–15 Sekunden**, dann lade die Seite im Browser neu (F5 oder `Strg+R`)
-
-5. Scrolle nach unten – unter der Überschrift deines Repositories sollte jetzt **„EMS Gateway Hub"** erscheinen
-
-> 💡 Falls das Add-on immer noch nicht erscheint:
-> - Warte 1–2 Minuten und wiederhole Schritt 3–4
-> - Prüfe nochmal die Dateien auf GitHub (Schritt 5.1)
-> - Entferne das Repository und füge es erneut hinzu (Schritt 5.2)
-
-### 5.4 Add-on installieren
-
-1. Klicke auf **„EMS Gateway Hub"**
-2. Klicke auf **„Installieren"**
-3. Warte, bis die Installation abgeschlossen ist (kann 2–5 Minuten dauern, da das Image gebaut wird)
-
-> 💡 **Nicht sofort starten!** Zuerst muss das Add-on konfiguriert werden (siehe nächster Schritt).
+> 💡 **Nicht sofort starten!** Zuerst konfigurieren (Schritt 6).
 
 ---
 
 ## 6. Add-on konfigurieren
 
-### 6.1 Konfigurationswerte eintragen
-
-Wenn Home Assistant dir **ein Formular** zeigt, trägst du diese Werte Feld für Feld ein.
-
-Wenn Home Assistant dir **nur einen YAML-Editor** zeigt, kopiere diesen Block hinein und ersetze die Beispielwerte:
+### 6.1 Konfigurationswerte
 
 ```yaml
 supabase_url: "https://xnveugycurplszevdxtw.supabase.co"
@@ -344,203 +139,224 @@ offline_buffer_max_mb: 100
 auto_backup_hours: 24
 ```
 
-Bedeutung der Werte:
-
-| Schlüssel | Beschreibung | Beispiel |
-|---|---|---|
-| **supabase_url** | Die URL deines Cloud-Backends | `https://xnveugycurplszevdxtw.supabase.co` |
-| **gateway_api_key** | Dein Gateway-API-Schlüssel (aus der App) | `gw_abc123...` |
-| **tenant_id** | Deine Mandanten-ID (aus der App) | `550e8400-e29b-41d4-a716-446655440000` |
-| **device_name** | Ein eindeutiger Name für diesen Gateway | `rpi-buero-eg` |
-| **poll_interval_seconds** | Wie oft Sensoren abgefragt werden (Sekunden) | `30` |
-| **flush_interval_seconds** | Wie oft Daten an die Cloud gesendet werden (Sekunden) | `5` |
-| **heartbeat_interval_seconds** | Wie oft der Status gemeldet wird (Sekunden) | `60` |
-| **entity_filter** | Welche HA-Entitäten erfasst werden sollen | `sensor.*_energy,sensor.*_power` |
-| **offline_buffer_max_mb** | Maximale Größe des Offline-Puffers (MB) | `100` |
-| **auto_backup_hours** | Intervall für automatische Konfig-Backups in Stunden | `24` |
+| Schlüssel | Beschreibung |
+|---|---|
+| **supabase_url** | Cloud-Backend-URL |
+| **gateway_api_key** | Gateway-API-Schlüssel (aus der App, oder per-device Key – siehe Abschnitt 11) |
+| **tenant_id** | Mandanten-ID (aus der App) |
+| **device_name** | Eindeutiger Name für diesen Gateway |
+| **poll_interval_seconds** | Sensor-Abfrageintervall |
+| **flush_interval_seconds** | Cloud-Sendeintervall |
+| **heartbeat_interval_seconds** | Status-Meldeintervall |
+| **entity_filter** | Glob-Pattern für HA-Entitäten |
+| **offline_buffer_max_mb** | Max. Offline-Puffergröße |
+| **auto_backup_hours** | Backup-Intervall |
 
 ### 6.2 API Key und Tenant ID finden
 
-Die Werte findest du in der EMS-App:
-
-1. Melde dich in der App an: [https://hub-smart-energy.lovable.app](https://hub-smart-energy.lovable.app)
-2. Gehe zu **Einstellungen** → **Integrationen** → **Gateway-Geräte**
-3. Dort findest du den **Gateway API Key** und deine **Tenant ID**
+1. Anmelden unter: [https://hub-smart-energy.lovable.app](https://hub-smart-energy.lovable.app)
+2. **Einstellungen** → **Integrationen** → **Gateway-Geräte**
+3. Dort findest du **Gateway API Key** und **Tenant ID**
 
 ### 6.3 Add-on starten
 
-1. Gehe zurück zum Tab **„Info"** des Add-ons
-2. Klicke auf **„Starten"**
-3. Wechsle zum Tab **„Protokoll"** und prüfe, ob das Add-on fehlerfrei startet
-
-Erwartete Log-Ausgabe:
+1. Tab **„Info"** → **„Starten"**
+2. Tab **„Protokoll"** prüfen:
 
 ```
-[INFO] EMS Gateway Hub v1.0.0 starting...
+[INFO] EMS Gateway Hub v2.0.0 starting...
 [INFO]   Cloud URL:    https://xnveugycurplszevdxtw.supabase.co
 [INFO]   Device:       rpi-buero-eg
 [INFO]   Poll:         every 30s
 [INFO]   Flush:        every 5s
 [INFO]   Heartbeat:    every 60s
 [INFO] Health server listening on :8099
-[INFO] Initial meter sync: found 5 meters
+[INFO] WebSocket connected to HA
+[INFO] Automation engine started – 3 rules loaded
 [INFO] Polling started – 12 entities matched filter
 ```
 
 ### 6.4 Autostart aktivieren
 
-1. Im Tab **„Info"** des Add-ons
-2. Aktiviere **„Beim Hochfahren starten"** (Start on boot)
-3. Aktiviere **„Watchdog"** – startet das Add-on automatisch neu, falls es abstürzt
+- **„Beim Hochfahren starten"** aktivieren
+- **„Watchdog"** aktivieren (automatischer Neustart bei Absturz)
 
 ---
 
 ## 7. Lokale Geräte in Home Assistant einbinden
 
-### 7.1 Shelly-Geräte
+### Shelly-Geräte
 
-Shelly-Geräte werden im lokalen Netzwerk automatisch erkannt.
+Werden automatisch erkannt: **Einstellungen** → **Geräte & Dienste** → **„Konfigurieren"**
 
-1. Gehe zu **Einstellungen** → **Geräte & Dienste**
-2. Home Assistant zeigt entdeckte Shelly-Geräte an → Klicke auf **„Konfigurieren"**
-3. Die Shelly-Sensoren (Leistung, Energie, Temperatur) erscheinen als `sensor.shelly_*`
+> [Shelly-Integration Docs](https://www.home-assistant.io/integrations/shelly/)
 
-> **Quelle:** [https://www.home-assistant.io/integrations/shelly/](https://www.home-assistant.io/integrations/shelly/)
+### Modbus TCP (Schneider Electric)
 
-### 7.2 Schneider Electric (Modbus TCP)
+1. **Einstellungen** → **Geräte & Dienste** → **„+ Integration"**
+2. **„Modbus"** suchen → TCP konfigurieren (Host: IP, Port: 502)
 
-Für Schneider Electric Geräte mit Modbus TCP:
+> [Modbus-Integration Docs](https://www.home-assistant.io/integrations/modbus/)
 
-1. Gehe zu **Einstellungen** → **Geräte & Dienste** → **„+ Integration hinzufügen"**
-2. Suche nach **„Modbus"**
-3. Konfiguriere die Verbindung:
-   - **Typ:** TCP
-   - **Host:** IP-Adresse des Schneider-Geräts (z. B. `192.168.1.100`)
-   - **Port:** `502`
-4. Konfiguriere die Modbus-Register gemäß der Schneider-Dokumentation
+### Weitere Integrationen
 
-> **Quelle:** [https://www.home-assistant.io/integrations/modbus/](https://www.home-assistant.io/integrations/modbus/)
+Home Assistant unterstützt 2.700+ Integrationen:
 
-### 7.3 Homematic IP
-
-1. Gehe zu **Einstellungen** → **Geräte & Dienste** → **„+ Integration hinzufügen"**
-2. Suche nach **„HomeMatic"** (oder **„HomematicIP Local"**)
-3. Gib die IP-Adresse deiner CCU / RaspberryMatic an
-4. Folge den Anweisungen zur Kopplung
-
-> **Quelle:** [https://www.home-assistant.io/integrations/homematicip_local/](https://www.home-assistant.io/integrations/homematicip_local/)
-
-### 7.4 Weitere Integrationen
-
-Home Assistant unterstützt über **2.700 Integrationen**. Beliebte Energiequellen:
-
-| Gerät / System | HA-Integration | Dokumentation |
+| Gerät / System | Integration | Link |
 |---|---|---|
-| SMA Wechselrichter | `sma` | [Link](https://www.home-assistant.io/integrations/sma/) |
-| Fronius Wechselrichter | `fronius` | [Link](https://www.home-assistant.io/integrations/fronius/) |
-| Kostal Wechselrichter | `kostal_plenticore` | [Link](https://www.home-assistant.io/integrations/kostal_plenticore/) |
-| Huawei Solar | `huawei_solar` (HACS) | [Link](https://github.com/wlcrs/huawei_solar) |
-| Tasmota | `tasmota` | [Link](https://www.home-assistant.io/integrations/tasmota/) |
-| Tuya / Smart Life | `tuya` | [Link](https://www.home-assistant.io/integrations/tuya/) |
-| MQTT (generisch) | `mqtt` | [Link](https://www.home-assistant.io/integrations/mqtt/) |
-
-> **Vollständige Liste:** [https://www.home-assistant.io/integrations/](https://www.home-assistant.io/integrations/)
+| SMA Wechselrichter | `sma` | [Docs](https://www.home-assistant.io/integrations/sma/) |
+| Fronius Wechselrichter | `fronius` | [Docs](https://www.home-assistant.io/integrations/fronius/) |
+| Kostal Wechselrichter | `kostal_plenticore` | [Docs](https://www.home-assistant.io/integrations/kostal_plenticore/) |
+| Tasmota | `tasmota` | [Docs](https://www.home-assistant.io/integrations/tasmota/) |
+| MQTT (generisch) | `mqtt` | [Docs](https://www.home-assistant.io/integrations/mqtt/) |
 
 ---
 
 ## 8. Verbindung zur Cloud prüfen
 
-### 8.1 In der App
+### In der App
 
-1. Öffne die EMS-App: [https://hub-smart-energy.lovable.app](https://hub-smart-energy.lovable.app)
-2. Gehe zu **Einstellungen** → **Integrationen** → **Gateway-Geräte**
-3. Dein Gateway sollte als **„Online"** angezeigt werden
-4. Prüfe:
-   - ✅ Letzter Heartbeat (sollte < 2 Minuten alt sein)
-   - ✅ Add-on-Version
-   - ✅ Offline-Puffer leer (0 Einträge)
+1. Öffne [https://hub-smart-energy.lovable.app](https://hub-smart-energy.lovable.app)
+2. **Einstellungen** → **Integrationen** → **Gateway-Geräte**
+3. Gateway sollte **„Online"** sein
+4. Prüfe: Letzter Heartbeat < 2 Min., Offline-Puffer leer
 
-### 8.2 Am Raspberry Pi
-
-Prüfe die Logs des Add-ons im Home Assistant:
-
-1. Gehe zu **Einstellungen** → **Add-ons** → **EMS Gateway Hub** → **Protokoll**
-2. Suche nach:
-   - `[INFO] Heartbeat sent` – Verbindung zur Cloud funktioniert
-   - `[INFO] Flushed X readings` – Daten werden gesendet
-   - `[WARN] Offline` – Keine Internetverbindung (Daten werden gepuffert)
-
-### 8.3 Health-Endpoint
-
-Das Add-on stellt einen lokalen Status-Endpunkt bereit:
+### Health-Endpoint
 
 ```bash
 curl http://homeassistant.local:8099/api/status
 ```
-
-Antwort:
 
 ```json
 {
   "status": "online",
   "uptime_seconds": 3600,
   "buffer_count": 0,
-  "last_flush_at": "2026-03-31T10:00:00Z",
-  "version": "1.0.0"
+  "last_flush_at": "2026-04-03T10:00:00Z",
+  "version": "2.0.0",
+  "automations_loaded": 3,
+  "ws_connected": true
 }
 ```
 
 ---
 
-## 9. Fehlerbehebung
+## 9. Lokales Dashboard (v2.0)
+
+Ab Version 2.0 verfügt das Add-on über ein eingebautes Web-Dashboard, das direkt in der Home-Assistant-Sidebar erscheint (via HA Ingress).
+
+### Seiten
+
+| Seite | Beschreibung |
+|---|---|
+| **Dashboard** | Gateway-Status, HA-Version, Buffer, Online/Offline, Uptime |
+| **Sensoren** | Live-Sensorwerte via WebSocket (Echtzeit-Updates) |
+| **Automationen** | Aktive Regeln, Status, letzte Ausführung |
+| **Logs** | Execution-Log + System-Log |
+| **Einstellungen** | Aktuelle Konfiguration anzeigen |
+
+### Zugriff
+
+Das Dashboard ist über HA Ingress erreichbar – kein separater Login nötig. Home Assistant übernimmt die Authentifizierung.
+
+Alternativ direkt über:
+
+```
+http://homeassistant.local:8099/ui/
+```
+
+---
+
+## 10. Lokale Automationen (v2.0)
+
+### Funktionsweise
+
+Das Add-on führt Automationen **lokal auf dem Raspberry Pi** aus – unabhängig von der Cloud-Verbindung. Die Automation Engine:
+
+1. **Synchronisiert** aktive Regeln von der Cloud (bei Verbindung)
+2. **Evaluiert** Bedingungen alle 30 Sekunden lokal
+3. **Führt Aktionen** direkt über die HA REST API aus
+4. **Pusht Execution-Logs** bei nächster Cloud-Verbindung zurück
+
+### Vorteile
+
+- ✅ **Offline-fähig** – Automationen laufen auch ohne Internet
+- ✅ **Niedrige Latenz** – Direkte HA-API-Aufrufe statt Cloud-Umweg
+- ✅ **Identische Logik** – Selbe Condition-Engine wie Cloud-Scheduler
+- ✅ **Bidirektionaler Sync** – Logs werden in der Cloud sichtbar
+
+### Unterstützte Bedingungen
+
+| Typ | Beschreibung |
+|---|---|
+| Zeitfenster | z. B. 08:00–18:00 (inkl. Overnight) |
+| Zeitpunkt | Einzelner Trigger ±2 Min. Toleranz |
+| Zeitschaltuhr | Mehrere Zeitpunkte pro Tag |
+| Wochentag | Mo–So Auswahl |
+| Sensorwert | >, <, =, >=, <= gegen Schwellwert |
+| Status | Aktor-Status prüfen (ein/aus) |
+
+### Priority-Buffer
+
+Sensor-Readings mit Werten über dem Schwellwert werden als **prioritär** markiert und bei Speicherknappheit nicht gelöscht (FIFO-Eviction schützt sie).
+
+---
+
+## 11. Per-Device API-Keys (v2.0)
+
+### Warum Per-Device Keys?
+
+Im Multi-Tenant-Betrieb sollte jeder Raspberry Pi einen **eigenen API-Key** haben, der an die `gateway_devices.id` gebunden ist. Das verhindert Tenant-Crossover und ermöglicht granulare Zugriffskontrolle.
+
+### Funktionsweise
+
+1. Jeder Device-Key wird als **SHA-256 Hash** in `gateway_devices.api_key_hash` gespeichert
+2. Bei jedem API-Aufruf wird der Key gegen den Hash validiert
+3. Der `tenant_id` im Request wird gegen den Key-Tenant geprüft (Triple-Check)
+4. Der globale `GATEWAY_API_KEY` funktioniert weiterhin als Fallback
+
+### Einrichtung
+
+1. In der EMS-App unter **Gateway-Geräte** einen neuen Device-Key generieren
+2. Den Key in der Add-on-Konfiguration als `gateway_api_key` eintragen
+3. Das Add-on neu starten
+
+> 💡 Der globale Key funktioniert weiterhin für alle Geräte. Per-Device Keys sind optional, aber für Produktionsumgebungen empfohlen.
+
+---
+
+## 12. Fehlerbehebung
 
 ### Add-on startet nicht
 
-**Symptom:** Das Add-on zeigt Status „Gestoppt" und startet nicht.
-
-**Lösung:**
-1. Prüfe die Logs: **Add-ons** → **EMS Gateway Hub** → **Protokoll**
+1. Logs prüfen: **Add-ons** → **EMS Gateway Hub** → **Protokoll**
 2. Häufige Ursachen:
-   - `Cloud URL` oder `Gateway API Key` nicht eingetragen → Konfiguration prüfen
-   - Ungültige `Tenant ID` → Korrekte ID aus der App kopieren
+   - Cloud URL oder Gateway API Key nicht eingetragen
+   - Ungültige Tenant ID
 
 ### Keine Sensordaten
 
-**Symptom:** Das Add-on läuft, aber es werden keine Daten gesendet.
+1. **Entity Filter** prüfen
+2. **Entwicklerwerkzeuge** → **Zustände** → nach `sensor.*_energy` suchen
+3. Falls keine vorhanden: Integrationen prüfen (Schritt 7)
 
-**Lösung:**
-1. Prüfe den **Entity Filter** in der Add-on-Konfiguration
-2. Gehe in Home Assistant zu **Entwicklerwerkzeuge** → **Zustände**
-3. Suche nach Entitäten, die zu deinem Filter passen (z. B. `sensor.*_energy`)
-4. Falls keine vorhanden: Integrationen prüfen (Schritt 7)
+### Automationen werden nicht ausgeführt
+
+1. Prüfe im **Automationen-Tab** des lokalen Dashboards ob Regeln geladen sind
+2. Prüfe die **Logs** auf Fehlermeldungen
+3. Stelle sicher, dass die Automationen in der Cloud als **aktiv** markiert sind
+4. Debounce: Nach einer Ausführung wird 5 Minuten gewartet
 
 ### Offline-Puffer wächst
 
-**Symptom:** Der Offline-Puffer zeigt viele Einträge, die nicht gesendet werden.
+1. Internetverbindung prüfen: `ping google.com`
+2. Cloud-URL Erreichbarkeit prüfen
+3. API Key Gültigkeit in der App prüfen
 
-**Lösung:**
-1. Prüfe die Internetverbindung des Pi: `ping google.com` (via SSH oder Terminal-Add-on)
-2. Prüfe, ob die Cloud-URL erreichbar ist
-3. Prüfe, ob der API Key gültig ist (in der App unter Gateway-Geräte)
+### SSH-Zugang
 
-### SSH-Zugang zum Raspberry Pi
-
-Falls du erweiterte Diagnose benötigst:
-
-1. Installiere das **Terminal & SSH** Add-on in Home Assistant:
-   - **Einstellungen** → **Add-ons** → **Add-on Store** → Suche nach „Terminal & SSH"
-   - Installieren, Passwort setzen, starten
-2. Verbinde dich per SSH:
-   ```bash
-   ssh root@homeassistant.local -p 22222
-   ```
-
-### Raspberry Pi ist nicht erreichbar
-
-1. Prüfe, ob der Pi an ist (LEDs leuchten)
-2. Prüfe das Ethernet-Kabel
-3. Versuche die IP-Adresse statt `homeassistant.local` (im Router nachsehen)
-4. Warte 5–10 Minuten nach dem Einschalten – der erste Start dauert lange
+1. **Terminal & SSH** Add-on installieren (aus dem Add-on Store)
+2. Verbinden: `ssh root@homeassistant.local -p 22222`
 
 ---
 
@@ -548,12 +364,8 @@ Falls du erweiterte Diagnose benötigst:
 
 | Thema | Link |
 |---|---|
-| Home Assistant Installation | [https://www.home-assistant.io/installation/raspberrypi](https://www.home-assistant.io/installation/raspberrypi) |
-| Home Assistant Onboarding | [https://www.home-assistant.io/getting-started/onboarding/](https://www.home-assistant.io/getting-started/onboarding/) |
-| Home Assistant Add-ons | [https://www.home-assistant.io/addons/](https://www.home-assistant.io/addons/) |
-| Raspberry Pi Imager | [https://www.raspberrypi.com/software/](https://www.raspberrypi.com/software/) |
-| Balena Etcher | [https://etcher.balena.io/](https://etcher.balena.io/) |
-| Home Assistant Community | [https://community.home-assistant.io/](https://community.home-assistant.io/) |
-| Shelly Integration | [https://www.home-assistant.io/integrations/shelly/](https://www.home-assistant.io/integrations/shelly/) |
-| Modbus Integration | [https://www.home-assistant.io/integrations/modbus/](https://www.home-assistant.io/integrations/modbus/) |
-| HomematicIP Integration | [https://www.home-assistant.io/integrations/homematicip_local/](https://www.home-assistant.io/integrations/homematicip_local/) |
+| Home Assistant Installation | [home-assistant.io/installation/raspberrypi](https://www.home-assistant.io/installation/raspberrypi) |
+| Home Assistant Add-ons | [home-assistant.io/addons](https://www.home-assistant.io/addons/) |
+| Raspberry Pi Imager | [raspberrypi.com/software](https://www.raspberrypi.com/software/) |
+| Shelly Integration | [home-assistant.io/integrations/shelly](https://www.home-assistant.io/integrations/shelly/) |
+| Modbus Integration | [home-assistant.io/integrations/modbus](https://www.home-assistant.io/integrations/modbus/) |

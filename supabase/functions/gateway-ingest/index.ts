@@ -28,7 +28,23 @@ const json = (body: unknown, status = 200) =>
 
 /* ── Auth helper ─────────────────────────────────────────────────────────────── */
 
-function validateApiKey(req: Request): Response | null {
+/**
+ * Hash an API key using SHA-256 for storage/comparison.
+ */
+async function hashApiKey(key: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(key);
+  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+/**
+ * Validates the API key from the request.
+ * Supports both the global GATEWAY_API_KEY and per-device keys.
+ * Per-device keys are validated against gateway_devices.api_key_hash (SHA-256).
+ */
+async function validateApiKey(req: Request): Promise<Response | null> {
   const gatewayApiKey = Deno.env.get("GATEWAY_API_KEY");
   if (!gatewayApiKey) {
     console.error("[gateway-ingest] GATEWAY_API_KEY secret not configured");
@@ -36,10 +52,50 @@ function validateApiKey(req: Request): Response | null {
   }
   const authHeader = req.headers.get("Authorization") || "";
   const providedKey = authHeader.replace(/^Bearer\s+/i, "").trim();
-  if (!providedKey || providedKey !== gatewayApiKey) {
+  if (!providedKey) {
     return json({ error: "Unauthorized" }, 401);
   }
-  return null; // OK
+
+  // Accept global GATEWAY_API_KEY
+  if (providedKey === gatewayApiKey) {
+    return null;
+  }
+
+  // Per-device API key: hash and check against gateway_devices.api_key_hash
+  const keyHash = await hashApiKey(providedKey);
+  const supabase = getSupabase();
+  const { data: device } = await supabase
+    .from("gateway_devices")
+    .select("id, tenant_id")
+    .eq("api_key_hash", keyHash)
+    .maybeSingle();
+
+  if (device) {
+    return null; // Per-device key valid
+  }
+
+  return json({ error: "Unauthorized" }, 401);
+}
+
+/**
+ * Extracts device context from a per-device API key.
+ * Returns { device_id, tenant_id } if the key matches a device, null otherwise.
+ */
+async function getDeviceFromApiKey(req: Request): Promise<{ device_id: string; tenant_id: string } | null> {
+  const gatewayApiKey = Deno.env.get("GATEWAY_API_KEY");
+  const authHeader = req.headers.get("Authorization") || "";
+  const providedKey = authHeader.replace(/^Bearer\s+/i, "").trim();
+  if (!providedKey || providedKey === gatewayApiKey) return null;
+
+  const keyHash = await hashApiKey(providedKey);
+  const supabase = getSupabase();
+  const { data: device } = await supabase
+    .from("gateway_devices")
+    .select("id, tenant_id")
+    .eq("api_key_hash", keyHash)
+    .maybeSingle();
+
+  return device ? { device_id: device.id, tenant_id: device.tenant_id } : null;
 }
 
 function getSupabase() {
@@ -354,7 +410,7 @@ async function handleGetLocationsSummary(url: URL): Promise<Response> {
 /* ── POST Route handlers ─────────────────────────────────────────────────────── */
 
 async function handleCompactDay(req: Request): Promise<Response> {
-  const authErr = validateApiKey(req);
+  const authErr = await validateApiKey(req);
   if (authErr) return authErr;
 
   const supabase = getSupabase();
@@ -454,7 +510,7 @@ async function handleCompactDay(req: Request): Promise<Response> {
 }
 
 async function handlePostReadings(req: Request): Promise<Response> {
-  const authErr = validateApiKey(req);
+  const authErr = await validateApiKey(req);
   if (authErr) return authErr;
 
   let body: { readings?: PowerReading[] };
@@ -629,7 +685,7 @@ async function validateBasicAuth(
   }
 
   // Fall back to API key auth
-  const apiKeyErr = validateApiKey(req);
+  const apiKeyErr = await validateApiKey(req);
   if (apiKeyErr) return apiKeyErr;
 
   // If using API key, load config from any matching integration for this tenant
@@ -751,7 +807,7 @@ async function handleSchneiderPush(req: Request): Promise<Response> {
 /* ── Heartbeat handler ────────────────────────────────────────────────────────── */
 
 async function handleHeartbeat(req: Request): Promise<Response> {
-  const authErr = validateApiKey(req);
+  const authErr = await validateApiKey(req);
   if (authErr) return authErr;
 
   let body: {
@@ -774,6 +830,13 @@ async function handleHeartbeat(req: Request): Promise<Response> {
 
   if (!body.tenant_id || !body.device_name) {
     return json({ error: "tenant_id and device_name are required" }, 400);
+  }
+
+  // Per-device key tenant_id cross-check
+  const deviceCtx = await getDeviceFromApiKey(req);
+  if (deviceCtx && deviceCtx.tenant_id !== body.tenant_id) {
+    console.warn(`[gateway-ingest] Per-device key tenant mismatch: key=${deviceCtx.tenant_id}, body=${body.tenant_id}`);
+    return json({ error: "Tenant mismatch – API key does not belong to this tenant" }, 403);
   }
 
   const supabase = getSupabase();
@@ -842,7 +905,7 @@ async function handleHeartbeat(req: Request): Promise<Response> {
 /* ── Gateway backup handler ──────────────────────────────────────────────────── */
 
 async function handleGatewayBackup(req: Request): Promise<Response> {
-  const authErr = validateApiKey(req);
+  const authErr = await validateApiKey(req);
   if (authErr) return authErr;
 
   let body: {
@@ -905,7 +968,7 @@ async function handleAddonVersion(): Promise<Response> {
  */
 async function validateApiKeyOrAdmin(req: Request): Promise<Response | null> {
   // Try API key first
-  const apiKeyResult = validateApiKey(req);
+  const apiKeyResult = await validateApiKey(req);
   if (!apiKeyResult) return null; // API key is valid
 
   // Fall back to JWT auth for admin users
@@ -1040,7 +1103,7 @@ async function handleSyncAutomations(url: URL): Promise<Response> {
 /* ── Push Execution Logs handler (Hub → Cloud) ────────────────────────────────── */
 
 async function handlePushExecutionLogs(req: Request): Promise<Response> {
-  const authErr = validateApiKey(req);
+  const authErr = await validateApiKey(req);
   if (authErr) return authErr;
 
   let body: {
@@ -1077,6 +1140,7 @@ async function handlePushExecutionLogs(req: Request): Promise<Response> {
     error_message: log.error_message || null,
     actions_executed: log.actions_executed || null,
     duration_ms: log.duration_ms || null,
+    execution_source: log.execution_source || "local",
     executed_at: log.executed_at || new Date().toISOString(),
   }));
 
@@ -1102,7 +1166,7 @@ Deno.serve(async (req) => {
 
   // GET routes
   if (req.method === "GET") {
-    const authErr = validateApiKey(req);
+    const authErr = await validateApiKey(req);
     if (authErr) return authErr;
     if (action === "list-locations") return handleListLocations();
     if (action === "list-meters") return handleListMeters(url);
