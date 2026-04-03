@@ -325,6 +325,14 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
       )
     : actuators;
 
+  const filteredSensors = searchTerm
+    ? sensorDevices.filter((s) =>
+        s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        s.room.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        s.controlType.toLowerCase().includes(searchTerm.toLowerCase())
+      )
+    : sensorDevices;
+
   const groupByIntegrationAndRoom = (items: typeof allSensorsWithSource) => {
     const byIntegration: Record<string, Record<string, typeof allSensorsWithSource>> = {};
     items.forEach((s) => {
