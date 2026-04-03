@@ -52,6 +52,7 @@ export function IntegrationCard({ locationIntegration, onUpdate, onDelete }: Int
 
   // Get local time from linked gateway device (for non-Loxone integrations)
   const isLoxone = integration?.type === "loxone" || integration?.type === "loxone_miniserver";
+  const isHaType = integration?.type === "home_assistant" || integration?.type === "ha-addon";
   const gatewayLocalTime = !isLoxone && gatewayDevices.length > 0 ? gatewayDevices[0].local_time : null;
 
   const handleToggleEnabled = async (enabled: boolean) => {
