@@ -484,6 +484,7 @@
         }
 
         if (ingressBase) push(ingressBase + '/' + clean);
+        if (pathname && pathname !== '/') push(pathname.replace(/\/$/, '') + '/' + clean);
         push('/' + clean);
         push('./' + clean);
         push('../' + clean);
