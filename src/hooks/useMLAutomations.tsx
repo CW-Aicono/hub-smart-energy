@@ -84,6 +84,7 @@ interface MLFilters {
 
 export function useMLAutomations() {
   const { tenant } = useTenant();
+  const queryClient = useQueryClient();
   const [automations, setAutomations] = useState<MLAutomationRecord[]>([]);
   const [executionLog, setExecutionLog] = useState<ExecutionLogEntry[]>([]);
   const [scenes, setScenes] = useState<AutomationScene[]>([]);
