@@ -727,6 +727,7 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
         }}
         sensors={allSensors}
         sensorsLoading={sensorsLoading}
+        deviceTypeMap={deviceTypeMap}
         initialData={editAutomation ? {
           name: editAutomation.name,
           description: editAutomation.description || "",
