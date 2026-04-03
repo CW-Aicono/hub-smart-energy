@@ -12,6 +12,8 @@ import { useTranslation } from "@/hooks/useTranslation";
 import { Server, Trash2, Pencil, CheckCircle2, XCircle, Clock, Loader2, Gauge, RefreshCw } from "lucide-react";
 import { LocationIntegration } from "@/hooks/useIntegrations";
 import { SensorsDialog } from "./SensorsDialog";
+import { DeviceCard } from "./gateway/DeviceCard";
+import { useUserRole } from "@/hooks/useUserRole";
 import { MiniserverStatus } from "./MiniserverStatus";
 import { EditIntegrationDialog } from "./EditIntegrationDialog";
 import { getGatewayDefinition, getEdgeFunctionName } from "@/lib/gatewayRegistry";
@@ -41,7 +43,8 @@ export function IntegrationCard({ locationIntegration, onUpdate, onDelete }: Int
   const [backfillTo, setBackfillTo] = useState(() => new Date().toISOString().slice(0, 10));
   const { toast } = useToast();
   const { t } = useTranslation();
-  const { devices: gatewayDevices } = useGatewayDevices(locationIntegration.id);
+  const { devices: gatewayDevices, sendCommand, refetch: refetchDevices } = useGatewayDevices(locationIntegration.id);
+  const { isAdmin } = useUserRole();
 
   const integration = locationIntegration.integration;
   const config = locationIntegration.config as Record<string, unknown>;
@@ -49,6 +52,7 @@ export function IntegrationCard({ locationIntegration, onUpdate, onDelete }: Int
 
   // Get local time from linked gateway device (for non-Loxone integrations)
   const isLoxone = integration?.type === "loxone" || integration?.type === "loxone_miniserver";
+  const isHaType = integration?.type === "home_assistant" || integration?.type === "ha-addon";
   const gatewayLocalTime = !isLoxone && gatewayDevices.length > 0 ? gatewayDevices[0].local_time : null;
 
   const handleToggleEnabled = async (enabled: boolean) => {
@@ -218,6 +222,20 @@ export function IntegrationCard({ locationIntegration, onUpdate, onDelete }: Int
               </AlertDialog>
             </div>
           </div>
+          {/* Inline gateway devices for HA integrations */}
+          {isHaType && gatewayDevices.length > 0 && (
+            <div className="mt-3 pt-3 border-t border-border/50 space-y-3">
+              {gatewayDevices.map((device) => (
+                <DeviceCard
+                  key={device.id}
+                  device={device}
+                  onCommand={(deviceId, command) => sendCommand({ deviceId, command })}
+                  isAdmin={isAdmin}
+                  onKeyGenerated={() => refetchDevices()}
+                />
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
       <SensorsDialog locationIntegration={locationIntegration} open={sensorsOpen} onOpenChange={setSensorsOpen} locationId={locationIntegration.location_id} />
