@@ -772,6 +772,7 @@ async function syncAutomationsFromCloud(): Promise<void> {
       }
     }
   } catch (err) {
+    markCloudUnreachable();
     console.error("[sync] Error syncing automations:", err);
   }
 }
