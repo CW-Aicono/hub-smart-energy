@@ -989,6 +989,106 @@ async function handleGatewayCommand(req: Request): Promise<Response> {
   return json({ success: true, command: body.command, device_id: device.id });
 }
 
+/* ── Sync Automations handler (Cloud → Hub) ──────────────────────────────────── */
+
+async function handleSyncAutomations(url: URL): Promise<Response> {
+  const tenantId = url.searchParams.get("tenant_id");
+  if (!tenantId) {
+    return json({ error: "tenant_id parameter required" }, 400);
+  }
+
+  const since = url.searchParams.get("since");
+  const supabase = getSupabase();
+
+  let query = supabase
+    .from("location_automations")
+    .select("*, locations!location_automations_location_id_fkey(timezone)")
+    .eq("tenant_id", tenantId)
+    .eq("is_active", true);
+
+  if (since) {
+    query = query.gt("updated_at", since);
+  }
+
+  const { data, error } = await query;
+  if (error) {
+    console.error("[gateway-ingest] sync-automations error:", error.message);
+    return json({ error: "Internal error" }, 500);
+  }
+
+  const automations = (data || []).map((auto: any) => ({
+    id: auto.id,
+    name: auto.name,
+    tenant_id: auto.tenant_id,
+    location_id: auto.location_id,
+    location_integration_id: auto.location_integration_id,
+    conditions: auto.conditions,
+    actions: auto.actions,
+    logic_operator: auto.logic_operator || "AND",
+    is_active: auto.is_active,
+    actuator_uuid: auto.actuator_uuid,
+    action_value: auto.action_value,
+    action_type: auto.action_type,
+    last_executed_at: auto.last_executed_at,
+    updated_at: auto.updated_at,
+    location_timezone: auto.locations?.timezone || "Europe/Berlin",
+  }));
+
+  return json({ success: true, automations, count: automations.length });
+}
+
+/* ── Push Execution Logs handler (Hub → Cloud) ────────────────────────────────── */
+
+async function handlePushExecutionLogs(req: Request): Promise<Response> {
+  const authErr = validateApiKey(req);
+  if (authErr) return authErr;
+
+  let body: {
+    logs?: Array<{
+      automation_id: string;
+      tenant_id: string;
+      status: string;
+      error_message?: string;
+      actions_executed?: unknown;
+      duration_ms?: number;
+      trigger_type?: string;
+      execution_source?: string;
+      executed_at?: string;
+    }>;
+  };
+
+  try {
+    body = await req.json();
+  } catch {
+    return json({ error: "Invalid JSON body" }, 400);
+  }
+
+  if (!Array.isArray(body?.logs) || body.logs.length === 0) {
+    return json({ error: "logs array is required" }, 400);
+  }
+
+  const supabase = getSupabase();
+
+  const rows = body.logs.map((log) => ({
+    automation_id: log.automation_id,
+    tenant_id: log.tenant_id,
+    trigger_type: log.trigger_type || "scheduled",
+    status: log.status,
+    error_message: log.error_message || null,
+    actions_executed: log.actions_executed || null,
+    duration_ms: log.duration_ms || null,
+    executed_at: log.executed_at || new Date().toISOString(),
+  }));
+
+  const { error } = await supabase.from("automation_execution_log").insert(rows);
+  if (error) {
+    console.error("[gateway-ingest] push-execution-logs error:", error.message);
+    return json({ error: "Database error" }, 500);
+  }
+
+  return json({ success: true, inserted: rows.length });
+}
+
 /* ── Main router ─────────────────────────────────────────────────────────────── */
 
 Deno.serve(async (req) => {
@@ -1010,6 +1110,7 @@ Deno.serve(async (req) => {
     if (action === "get-readings") return handleGetReadings(url);
     if (action === "get-locations-summary") return handleGetLocationsSummary(url);
     if (action === "addon-version") return handleAddonVersion();
+    if (action === "sync-automations") return handleSyncAutomations(url);
   }
 
   // POST routes
@@ -1019,6 +1120,8 @@ Deno.serve(async (req) => {
     if (action === "heartbeat") return handleHeartbeat(req);
     if (action === "gateway-backup") return handleGatewayBackup(req);
     if (action === "gateway-command") return handleGatewayCommand(req);
+    if (action === "push-execution-logs") return handlePushExecutionLogs(req);
+    if (action === "sync-automations") return handleSyncAutomations(url);
 
     // Check if the body contains a getSensors action (called by frontend for all integration types).
     // Push-based gateways don't support sensor discovery — return empty list gracefully.
