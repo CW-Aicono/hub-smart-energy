@@ -1,11 +1,12 @@
 # Home Assistant Add-on: EMS Gateway Hub
 # ========================================
 # Lokaler Gateway-Hub für Energiemanagementsysteme.
-# Sammelt Daten von HA-Entitäten und pusht sie an die Cloud.
+# Sammelt Sensordaten von Home Assistant und synchronisiert sie mit der Cloud.
+# Führt Automationen lokal aus – auch ohne Internetverbindung.
 
 name: "EMS Gateway Hub"
-description: "Lokaler Gateway-Hub für das Energiemanagementsystem. Sammelt Sensordaten von Home Assistant und synchronisiert sie mit der Cloud."
-version: "1.0.0"
+description: "Lokaler Gateway-Hub für das Energiemanagementsystem. Sammelt Sensordaten, führt Automationen lokal aus und synchronisiert mit der Cloud."
+version: "2.0.0"
 slug: "ems-gateway-hub"
 url: "https://hub-smart-energy.lovable.app"
 arch:
@@ -14,16 +15,18 @@ arch:
   - armv7
 startup: "application"
 boot: "auto"
-ingress: false
+ingress: true
+ingress_port: 8099
 panel_icon: "mdi:flash"
+panel_title: "EMS Gateway"
 hassio_api: true
 homeassistant_api: true
 
-# Lokaler Health-Endpoint
+# Lokaler Health + UI Endpoint
 ports:
   "8099/tcp": 8099
 ports_description:
-  "8099/tcp": "Health & Status API"
+  "8099/tcp": "Health, Status API & Web-UI"
 
 # Konfigurationsoptionen
 options:
@@ -34,6 +37,7 @@ options:
   poll_interval_seconds: 30
   flush_interval_seconds: 5
   heartbeat_interval_seconds: 60
+  automation_eval_seconds: 30
   entity_filter: "sensor.*_energy,sensor.*_power,sensor.*_consumption"
   offline_buffer_max_mb: 100
   auto_backup_hours: 24
@@ -46,6 +50,7 @@ schema:
   poll_interval_seconds: int
   flush_interval_seconds: int
   heartbeat_interval_seconds: int
+  automation_eval_seconds: int
   entity_filter: "str?"
   offline_buffer_max_mb: int
   auto_backup_hours: int
