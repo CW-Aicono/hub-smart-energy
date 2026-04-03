@@ -229,8 +229,29 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
     return result;
   }, [sensorQueries, integrationIds, integrationLabelMap, sensorNameMap]);
 
-  const sensorDevices = useMemo(() => allDevicesWithSource.filter(isSensorOnly), [allDevicesWithSource]);
-  const actuatorDevices = useMemo(() => allDevicesWithSource.filter(isActuator), [allDevicesWithSource]);
+  // Build map: sensor_uuid → device_type from DB (authoritative override)
+  const dbDeviceTypeMap = useMemo(() => {
+    const map = new Map<string, string>();
+    meters.forEach((m) => {
+      if (m.sensor_uuid && (m as any).device_type) {
+        map.set(m.sensor_uuid, (m as any).device_type);
+      }
+    });
+    return map;
+  }, [meters]);
+
+  // Resolve effective device type: DB override first, then heuristic fallback
+  const getEffectiveType = (d: LoxoneSensor): "meter" | "sensor" | "actuator" => {
+    const dbType = dbDeviceTypeMap.get(d.id);
+    if (dbType === "meter" || dbType === "sensor" || dbType === "actuator") return dbType;
+    if (isMeterDevice(d)) return "meter";
+    if (isActuator(d)) return "actuator";
+    return "sensor";
+  };
+
+  const sensorDevices = useMemo(() => allDevicesWithSource.filter((d) => getEffectiveType(d) === "sensor"), [allDevicesWithSource, dbDeviceTypeMap]);
+  const actuatorDevices = useMemo(() => allDevicesWithSource.filter((d) => getEffectiveType(d) === "actuator"), [allDevicesWithSource, dbDeviceTypeMap]);
+  const meterDevices = useMemo(() => allDevicesWithSource.filter((d) => getEffectiveType(d) === "meter"), [allDevicesWithSource, dbDeviceTypeMap]);
 
   // Set of sensor_uuids present in gateway device lists – used to deduplicate
   const gatewayDeviceIds = useMemo(() => {
