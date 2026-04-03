@@ -239,12 +239,14 @@ function ConditionCard({
   onUpdate,
   onRemove,
   gatewayOptions,
+  deviceTypeMap,
 }: {
   condition: AutomationCondition;
   sensors: LoxoneSensor[];
   onUpdate: (c: AutomationCondition) => void;
   onRemove: () => void;
   gatewayOptions?: GatewayOption[];
+  deviceTypeMap?: Map<string, string>;
 }) {
   const condType = CONDITION_TYPES.find((t) => t.value === condition.type);
   const CondIcon = condType?.icon || Zap;
