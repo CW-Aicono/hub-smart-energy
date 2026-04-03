@@ -43,7 +43,8 @@ export function IntegrationCard({ locationIntegration, onUpdate, onDelete }: Int
   const [backfillTo, setBackfillTo] = useState(() => new Date().toISOString().slice(0, 10));
   const { toast } = useToast();
   const { t } = useTranslation();
-  const { devices: gatewayDevices } = useGatewayDevices(locationIntegration.id);
+  const { devices: gatewayDevices, sendCommand, refetch: refetchDevices } = useGatewayDevices(locationIntegration.id);
+  const { isAdmin } = useUserRole();
 
   const integration = locationIntegration.integration;
   const config = locationIntegration.config as Record<string, unknown>;
