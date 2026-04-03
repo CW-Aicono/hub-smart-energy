@@ -222,6 +222,7 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
   const { t } = useTranslation();
   const T = (key: string) => t(key as any);
   const [configOpen, setConfigOpen] = useState(false);
+  const [configTab, setConfigTab] = useState<"actuators" | "sensors">("actuators");
   const [ruleBuilderOpen, setRuleBuilderOpen] = useState(false);
   const [editAutomation, setEditAutomation] = useState<LocationAutomationRecord | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<LocationAutomationRecord | null>(null);
