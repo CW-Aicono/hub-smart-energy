@@ -200,14 +200,18 @@ function AutomationFlowDiagram({ auto, actuatorStates }: {
                 {getActionLabel(action.action_type, (action as any).pulse_duration)}
               </Badge>
               {state && (
-                <span className={`inline-flex items-center gap-0.5 text-[9px] font-medium ${
-                  state.value === "1" || state.value?.toLowerCase() === "on"
-                    ? "text-green-600"
-                    : "text-muted-foreground"
-                }`}>
-                  <Power className="h-2.5 w-2.5" />
-                  {state.value === "1" || state.value?.toLowerCase() === "on" ? "On" : "Off"}
-                </span>
+                (() => {
+                  const v = String(state.value).toLowerCase();
+                  const isOn = v === "1" || v === "on" || v === "true" || v === "ein";
+                  return (
+                    <span className={`inline-flex items-center gap-0.5 text-[9px] font-medium ${
+                      isOn ? "text-green-600" : "text-muted-foreground"
+                    }`}>
+                      <Power className="h-2.5 w-2.5" />
+                      {isOn ? "On" : "Off"}
+                    </span>
+                  );
+                })()
               )}
             </span>
           );
