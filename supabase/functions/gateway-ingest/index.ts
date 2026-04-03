@@ -28,7 +28,23 @@ const json = (body: unknown, status = 200) =>
 
 /* ── Auth helper ─────────────────────────────────────────────────────────────── */
 
-function validateApiKey(req: Request): Response | null {
+/**
+ * Hash an API key using SHA-256 for storage/comparison.
+ */
+async function hashApiKey(key: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(key);
+  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+/**
+ * Validates the API key from the request.
+ * Supports both the global GATEWAY_API_KEY and per-device keys.
+ * Per-device keys are validated against gateway_devices.api_key_hash (SHA-256).
+ */
+async function validateApiKey(req: Request): Promise<Response | null> {
   const gatewayApiKey = Deno.env.get("GATEWAY_API_KEY");
   if (!gatewayApiKey) {
     console.error("[gateway-ingest] GATEWAY_API_KEY secret not configured");
@@ -36,10 +52,50 @@ function validateApiKey(req: Request): Response | null {
   }
   const authHeader = req.headers.get("Authorization") || "";
   const providedKey = authHeader.replace(/^Bearer\s+/i, "").trim();
-  if (!providedKey || providedKey !== gatewayApiKey) {
+  if (!providedKey) {
     return json({ error: "Unauthorized" }, 401);
   }
-  return null; // OK
+
+  // Accept global GATEWAY_API_KEY
+  if (providedKey === gatewayApiKey) {
+    return null;
+  }
+
+  // Per-device API key: hash and check against gateway_devices.api_key_hash
+  const keyHash = await hashApiKey(providedKey);
+  const supabase = getSupabase();
+  const { data: device } = await supabase
+    .from("gateway_devices")
+    .select("id, tenant_id")
+    .eq("api_key_hash", keyHash)
+    .maybeSingle();
+
+  if (device) {
+    return null; // Per-device key valid
+  }
+
+  return json({ error: "Unauthorized" }, 401);
+}
+
+/**
+ * Extracts device context from a per-device API key.
+ * Returns { device_id, tenant_id } if the key matches a device, null otherwise.
+ */
+async function getDeviceFromApiKey(req: Request): Promise<{ device_id: string; tenant_id: string } | null> {
+  const gatewayApiKey = Deno.env.get("GATEWAY_API_KEY");
+  const authHeader = req.headers.get("Authorization") || "";
+  const providedKey = authHeader.replace(/^Bearer\s+/i, "").trim();
+  if (!providedKey || providedKey === gatewayApiKey) return null;
+
+  const keyHash = await hashApiKey(providedKey);
+  const supabase = getSupabase();
+  const { data: device } = await supabase
+    .from("gateway_devices")
+    .select("id, tenant_id")
+    .eq("api_key_hash", keyHash)
+    .maybeSingle();
+
+  return device ? { device_id: device.id, tenant_id: device.tenant_id } : null;
 }
 
 function getSupabase() {
