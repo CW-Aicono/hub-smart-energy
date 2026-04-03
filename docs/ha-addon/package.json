@@ -1,7 +1,7 @@
 {
   "name": "ems-gateway-hub",
-  "version": "1.0.0",
-  "description": "Home Assistant Add-on: Lokaler Gateway-Hub für das EMS",
+  "version": "2.0.0",
+  "description": "EMS Gateway Hub – Home Assistant Add-on with local automation engine",
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc",
@@ -9,11 +9,13 @@
     "dev": "ts-node index.ts"
   },
   "dependencies": {
-    "better-sqlite3": "^11.0.0"
+    "better-sqlite3": "^11.0.0",
+    "ws": "^8.16.0"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.8",
     "@types/node": "^20.0.0",
+    "@types/ws": "^8.5.10",
     "ts-node": "^10.9.2",
     "typescript": "^5.4.5"
   }
