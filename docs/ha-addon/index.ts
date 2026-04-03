@@ -400,7 +400,7 @@ async function pollHAStates(): Promise<void> {
 
 /* ── HA WebSocket Client ─────────────────────────────────────────────────────── */
 
-let haWs: InstanceType<typeof import("ws").default> | null = null;
+let haWs: import("ws") | null = null;
 let haWsMsgId = 1;
 let haWsConnected = false;
 
