@@ -221,6 +221,20 @@ export function IntegrationCard({ locationIntegration, onUpdate, onDelete }: Int
               </AlertDialog>
             </div>
           </div>
+          {/* Inline gateway devices for HA integrations */}
+          {isHaType && gatewayDevices.length > 0 && (
+            <div className="mt-3 pt-3 border-t border-border/50 space-y-3">
+              {gatewayDevices.map((device) => (
+                <DeviceCard
+                  key={device.id}
+                  device={device}
+                  onCommand={(deviceId, command) => sendCommand({ deviceId, command })}
+                  isAdmin={isAdmin}
+                  onKeyGenerated={() => refetchDevices()}
+                />
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
       <SensorsDialog locationIntegration={locationIntegration} open={sensorsOpen} onOpenChange={setSensorsOpen} locationId={locationIntegration.location_id} />
