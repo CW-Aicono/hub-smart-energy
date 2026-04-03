@@ -630,7 +630,7 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
         </Card>
       </Collapsible>
 
-      {/* ── Verfügbare Aktoren Dialog ── */}
+      {/* ── Verfügbare Aktoren & Sensoren Dialog ── */}
       <Dialog open={configOpen} onOpenChange={setConfigOpen}>
         <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
@@ -659,61 +659,79 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
             </div>
           ) : (
             <div className="space-y-4 mt-2">
+              <div className="flex gap-2">
+                <Badge
+                  variant={configTab === "actuators" ? "default" : "secondary"}
+                  className="gap-1 cursor-pointer"
+                  onClick={() => setConfigTab("actuators")}
+                >
+                  <ToggleLeft className="h-3 w-3" />
+                  {actuators.length} {T("auto.actuators")}
+                </Badge>
+                <Badge
+                  variant={configTab === "sensors" ? "default" : "secondary"}
+                  className="gap-1 cursor-pointer"
+                  onClick={() => setConfigTab("sensors")}
+                >
+                  {sensorDevices.length} {T("auto.sensors")}
+                </Badge>
+              </div>
               <Input
                 placeholder={T("auto.searchPlaceholder")}
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="h-9"
               />
-              <Badge variant="secondary" className="gap-1">
-                <ToggleLeft className="h-3 w-3" />
-                {actuators.length} {T("auto.actuators")} ({T("auto.controllable")})
-              </Badge>
-              {filteredActuators.length > 0 ? (
-                <div className="space-y-4">
-                  {groupByIntegrationAndRoom(filteredActuators).map(([intLabel, rooms]) => (
-                    <div key={intLabel} className="space-y-2">
-                      {gatewayIntegrations.length > 1 && (
-                        <Badge variant="default" className="text-xs">{intLabel}</Badge>
-                      )}
-                      {Object.entries(rooms).sort(([a], [b]) => a.localeCompare(b)).map(([room, items]) => (
-                        <div key={room} className="space-y-1">
-                          <p className="text-xs font-medium text-muted-foreground px-1">{room}</p>
-                          {items.map((sensor) => {
-                            const SIcon = getSensorIcon(sensor.type);
-                            return (
-                              <div
-                                key={`${sensor._integrationId}-${sensor.id}`}
-                                className="flex items-center gap-3 p-3 rounded-lg border bg-primary/5 border-primary/20"
-                              >
-                                <div className="rounded-lg p-2 bg-primary/10 text-primary">
-                                  <SIcon className="h-4 w-4" />
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                  <div className="flex items-center gap-2">
-                                    <p className="font-medium text-sm truncate">{sensor.name}</p>
-                                    <Badge variant="outline" className="text-[10px] shrink-0">{sensor.controlType}</Badge>
+              {(() => {
+                const items = configTab === "actuators" ? filteredActuators : filteredSensors;
+                const emptyMsg = searchTerm ? T("auto.noResults") : (configTab === "actuators" ? T("auto.noActuators") : T("auto.noSensorsFound"));
+                return items.length > 0 ? (
+                  <div className="space-y-4">
+                    {groupByIntegrationAndRoom(items).map(([intLabel, rooms]) => (
+                      <div key={intLabel} className="space-y-2">
+                        {gatewayIntegrations.length > 1 && (
+                          <Badge variant="default" className="text-xs">{intLabel}</Badge>
+                        )}
+                        {Object.entries(rooms).sort(([a], [b]) => a.localeCompare(b)).map(([room, roomItems]) => (
+                          <div key={room} className="space-y-1">
+                            <p className="text-xs font-medium text-muted-foreground px-1">{room}</p>
+                            {roomItems.map((sensor) => {
+                              const SIcon = getSensorIcon(sensor.type);
+                              return (
+                                <div
+                                  key={`${sensor._integrationId}-${sensor.id}`}
+                                  className={`flex items-center gap-3 p-3 rounded-lg border ${configTab === "actuators" ? "bg-primary/5 border-primary/20" : "bg-muted/30 border-border"}`}
+                                >
+                                  <div className={`rounded-lg p-2 ${configTab === "actuators" ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"}`}>
+                                    <SIcon className="h-4 w-4" />
                                   </div>
-                                  <p className="text-xs text-muted-foreground truncate">{sensor.category}</p>
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2">
+                                      <p className="font-medium text-sm truncate">{sensor.name}</p>
+                                      <Badge variant="outline" className="text-[10px] shrink-0">{sensor.controlType}</Badge>
+                                    </div>
+                                    <p className="text-xs text-muted-foreground truncate">{sensor.category}</p>
+                                  </div>
+                                  <div className="text-right shrink-0">
+                                    <p className="text-sm font-mono font-medium">
+                                      {sensor.value}{sensor.unit ? ` ${sensor.unit}` : ""}
+                                    </p>
+                                    <p className="text-[10px] text-muted-foreground">{sensor.status}</p>
+                                  </div>
                                 </div>
-                                <div className="text-right shrink-0">
-                                  <p className="text-sm font-mono font-medium">
-                                    {sensor.value}{sensor.unit ? ` ${sensor.unit}` : ""}
-                                  </p>
-                                  <p className="text-[10px] text-muted-foreground">{sensor.status}</p>
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      ))}
-                    </div>
-                  ))}
-                </div>
-              ) : (
-              <div className="text-center py-6 text-sm text-muted-foreground">
-                  {searchTerm ? T("auto.noResults") : T("auto.noActuators")}
-                </div>
+                              );
+                            })}
+                          </div>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-6 text-sm text-muted-foreground">
+                    {emptyMsg}
+                  </div>
+                );
+              })()}
               )}
             </div>
           )}
