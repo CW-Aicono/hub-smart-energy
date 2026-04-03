@@ -71,18 +71,37 @@ const ADDON_VERSION = "2.1.0";
 
 let isCloudReachable = true;
 let lastCloudCheck = 0;
+let cloudFailCount = 0;
+
+function markCloudReachable(): void {
+  isCloudReachable = true;
+  cloudFailCount = 0;
+  lastCloudCheck = Date.now();
+}
+
+function markCloudUnreachable(): void {
+  cloudFailCount++;
+  // Only mark offline after 3 consecutive failures to avoid flapping
+  if (cloudFailCount >= 3) {
+    isCloudReachable = false;
+  }
+  lastCloudCheck = Date.now();
+}
 
 async function checkCloudConnectivity(): Promise<boolean> {
   try {
     const res = await fetch(`${config.cloud_url}/functions/v1/gateway-ingest?action=addon-version`, {
       headers: { Authorization: `Bearer ${config.gateway_api_key}` },
-      signal: AbortSignal.timeout(10000),
+      signal: AbortSignal.timeout(15000),
     });
-    isCloudReachable = res.ok;
+    if (res.ok) {
+      markCloudReachable();
+    } else {
+      markCloudUnreachable();
+    }
   } catch {
-    isCloudReachable = false;
+    markCloudUnreachable();
   }
-  lastCloudCheck = Date.now();
   return isCloudReachable;
 }
 
@@ -697,7 +716,7 @@ async function executeHAService(entityId: string, cmdValue: string): Promise<voi
 let lastAutomationSync = "";
 
 async function syncAutomationsFromCloud(): Promise<void> {
-  if (!isCloudReachable) return;
+  // Always attempt sync – use result to update connectivity status
 
   try {
     const params = new URLSearchParams({
@@ -710,12 +729,15 @@ async function syncAutomationsFromCloud(): Promise<void> {
 
     const res = await fetch(`${INGEST_URL}?${params.toString()}`, {
       headers: { Authorization: `Bearer ${config.gateway_api_key}` },
+      signal: AbortSignal.timeout(15000),
     });
 
     if (!res.ok) {
+      markCloudUnreachable();
       console.error(`[sync] sync-automations returned ${res.status}`);
       return;
     }
+    markCloudReachable();
 
     const data = await res.json() as { success: boolean; automations?: any[] };
     if (!data.success || !Array.isArray(data.automations)) return;
@@ -750,12 +772,13 @@ async function syncAutomationsFromCloud(): Promise<void> {
       }
     }
   } catch (err) {
+    markCloudUnreachable();
     console.error("[sync] Error syncing automations:", err);
   }
 }
 
 async function pushExecutionLogs(): Promise<void> {
-  if (!isCloudReachable) return;
+  // Always attempt – connectivity is tracked by heartbeat/sync results
 
   const unsyncedLogs = db.prepare(
     `SELECT * FROM automation_exec_log WHERE synced = 0 ORDER BY id LIMIT 100`
@@ -810,7 +833,7 @@ async function pushExecutionLogs(): Promise<void> {
 const FLUSH_BATCH_SIZE = 200;
 
 async function flushBuffer(): Promise<void> {
-  if (!isCloudReachable) return;
+  // Always attempt flush – cloud status is determined by heartbeat/sync
 
   const rows = fetchBatch.all(FLUSH_BATCH_SIZE) as Array<{
     id: number;
@@ -871,7 +894,7 @@ async function fetchHAVersion(): Promise<void> {
 }
 
 async function sendHeartbeat(): Promise<void> {
-  if (!isCloudReachable) return;
+  // Always attempt heartbeat – use result to update connectivity status
   try {
     const res = await fetch(`${INGEST_URL}?action=heartbeat`, {
       method: "POST",
@@ -899,12 +922,17 @@ async function sendHeartbeat(): Promise<void> {
     });
 
     if (res.ok) {
+      markCloudReachable();
       const data = await res.json() as { latest_available_version?: string };
       if (data.latest_available_version && data.latest_available_version !== ADDON_VERSION) {
         console.log(`[heartbeat] Update available: ${data.latest_available_version}`);
       }
+    } else {
+      markCloudUnreachable();
+      console.warn(`[heartbeat] Cloud returned ${res.status}`);
     }
   } catch (err) {
+    markCloudUnreachable();
     console.warn("[heartbeat] Failed:", err);
   }
 }
@@ -925,7 +953,7 @@ function getLocalIP(): string {
 /* ── Auto Backup ─────────────────────────────────────────────────────────────── */
 
 async function sendBackup(): Promise<void> {
-  if (!isCloudReachable) return;
+  // Always attempt backup
   try {
     const res = await fetch(`${INGEST_URL}?action=gateway-backup`, {
       method: "POST",
