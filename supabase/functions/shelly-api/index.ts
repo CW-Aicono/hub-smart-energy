@@ -350,24 +350,28 @@ serve(async (req) => {
           }),
         });
       } else {
-        // Gen 2+: Use Cloud v2 API endpoint for switch control
-        controlRes = await fetch(`${baseUrl}/v2/devices/api/set/switch?auth_key=${encodeURIComponent(config.auth_key)}`, {
+        // Gen 2+: POST /device/relay/control works for both Gen1 and Gen2 via Cloud API
+        controlRes = await fetch(`${baseUrl}/device/relay/control`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: new URLSearchParams({
+            auth_key: config.auth_key,
             id: deviceId,
-            channel,
-            on: turnOn,
+            channel: String(channel),
+            turn: turnOn ? "on" : "off",
           }),
         });
       }
 
-      const result = await controlRes.json();
+      const responseText = await controlRes.text();
+      let result: any = {};
+      try { result = JSON.parse(responseText); } catch { /* empty or non-JSON response */ }
+
       if (!result?.isok && result?.errors) {
         throw new Error(`Shelly-Fehler: ${JSON.stringify(result.errors)}`);
       }
       if (!controlRes.ok && !result?.isok) {
-        throw new Error(`Schaltbefehl fehlgeschlagen: HTTP ${controlRes.status}`);
+        throw new Error(`Schaltbefehl fehlgeschlagen: HTTP ${controlRes.status} – ${responseText}`);
       }
 
       return new Response(JSON.stringify({ success: true, turned: turnOn ? "on" : "off" }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
