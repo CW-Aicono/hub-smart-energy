@@ -1,0 +1,1 @@
+UPDATE gateway_devices SET location_integration_id = 'eab70488-2b8d-4217-980a-4907b1680f33' WHERE id = '77c4eb15-0e1c-405f-9324-e5a6699bc2ca' AND location_integration_id IS NULL;

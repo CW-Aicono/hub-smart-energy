@@ -17,7 +17,13 @@ export function LocationIntegrationsList({ locationId }: LocationIntegrationsLis
   const { isAdmin } = useUserRole();
   const { t } = useTranslation();
 
-  // Find HA integration IDs for gateway device display
+  // Check if any HA integration exists for this location
+  const hasHaIntegration = locationIntegrations.some((li) => {
+    const intType = (li.integration as any)?.type;
+    return intType === "home_assistant" || intType === "ha-addon";
+  });
+
+  // Collect HA integration IDs for gateway device display
   const haIntegrationIds = locationIntegrations
     .filter((li) => {
       const intType = (li.integration as any)?.type;
@@ -80,9 +86,8 @@ export function LocationIntegrationsList({ locationId }: LocationIntegrationsLis
         </CardContent>
       </Card>
 
-      {haIntegrationIds.map((id) => (
-        <GatewayDeviceManager key={id} locationIntegrationId={id} />
-      ))}
+      {/* Show all gateway devices for this tenant when HA integrations exist */}
+      {hasHaIntegration && <GatewayDeviceManager />}
     </div>
   );
 }

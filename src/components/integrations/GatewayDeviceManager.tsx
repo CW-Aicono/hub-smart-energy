@@ -10,7 +10,7 @@ interface GatewayDeviceManagerProps {
   locationIntegrationId?: string;
 }
 
-export function GatewayDeviceManager({ locationIntegrationId }: GatewayDeviceManagerProps) {
+export function GatewayDeviceManager({ locationIntegrationId }: GatewayDeviceManagerProps = {}) {
   const { devices, isLoading, sendCommand, refetch } = useGatewayDevices(locationIntegrationId);
   const { isAdmin } = useUserRole();
   const { t } = useTranslation();
