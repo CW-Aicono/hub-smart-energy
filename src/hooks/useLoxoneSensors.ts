@@ -40,8 +40,8 @@ export function useLoxoneSensors(integrationId: string | undefined, integrationT
     queryKey: ["gateway-sensors", integrationId],
     queryFn: () => fetchSensors(integrationId!, integrationType),
     enabled: !!integrationId,
-    staleTime: 60_000,
-    refetchInterval: 300_000,
+    staleTime: 30_000,
+    refetchInterval: 60_000,
   });
 }
 
