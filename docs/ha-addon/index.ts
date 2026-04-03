@@ -13,9 +13,9 @@ import path from "path";
 import Database from "better-sqlite3";
 
 // Conditional WebSocket import (ws package)
-let WebSocketClient: typeof import("ws").default | undefined;
+let WebSocketClient: (new (url: string) => import("ws")) | undefined;
 try {
-  WebSocketClient = require("ws");
+  WebSocketClient = require("ws") as any;
 } catch { /* ws not available, WebSocket features disabled */ }
 
 /* ── Configuration ───────────────────────────────────────────────────────────── */
