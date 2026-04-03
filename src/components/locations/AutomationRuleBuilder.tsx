@@ -926,6 +926,7 @@ export function AutomationRuleBuilder({
                   onUpdate={(a) => updateAction(action.id, a)}
                   onRemove={() => removeAction(action.id)}
                   gatewayOptions={gatewayOptions}
+                  deviceTypeMap={deviceTypeMap}
                 />
               ))}
 
