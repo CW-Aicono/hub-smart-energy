@@ -198,14 +198,40 @@ export function useLocationAutomations(locationId: string | undefined) {
 
       for (const action of actionsToRun) {
         const commandValue = sanitizeCommand(action.action_value || action.action_type);
-        const { data, error } = await supabase.functions.invoke(edgeFunction, {
-          body: {
+
+        let body: Record<string, unknown>;
+        if (integrationType === "home_assistant" || integrationType === "ha-addon") {
+          const entityId = action.actuator_uuid;
+          const domain = entityId.split(".")[0];
+          const cmd = commandValue.toLowerCase();
+          let service = "toggle";
+          if (cmd === "on") service = "turn_on";
+          else if (cmd === "off") service = "turn_off";
+          else if (cmd === "toggle") service = "toggle";
+          else if (cmd === "pulse") service = "toggle";
+          else if (domain === "cover") {
+            if (cmd === "open") service = "open_cover";
+            else if (cmd === "close") service = "close_cover";
+            else if (cmd === "stop") service = "stop_cover";
+            else service = "toggle";
+          }
+          body = {
+            locationIntegrationId: automation.location_integration_id,
+            action: "executeCommand",
+            domain,
+            service,
+            entity_id: entityId,
+          };
+        } else {
+          body = {
             locationIntegrationId: automation.location_integration_id,
             action: "executeCommand",
             controlUuid: action.actuator_uuid,
             commandValue,
-          },
-        });
+          };
+        }
+
+        const { data, error } = await supabase.functions.invoke(edgeFunction, { body });
         if (error || !data?.success) {
           throw new Error(data?.error || "Ausführung fehlgeschlagen");
         }
