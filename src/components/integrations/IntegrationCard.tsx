@@ -43,16 +43,17 @@ export function IntegrationCard({ locationIntegration, onUpdate, onDelete }: Int
   const [backfillTo, setBackfillTo] = useState(() => new Date().toISOString().slice(0, 10));
   const { toast } = useToast();
   const { t } = useTranslation();
-  const { devices: gatewayDevices, sendCommand, refetch: refetchDevices } = useGatewayDevices(locationIntegration.id);
   const { isAdmin } = useUserRole();
 
   const integration = locationIntegration.integration;
   const config = locationIntegration.config as Record<string, unknown>;
   const gatewayDef = integration ? getGatewayDefinition(integration.type) : undefined;
 
-  // Get local time from linked gateway device (for non-Loxone integrations)
   const isLoxone = integration?.type === "loxone" || integration?.type === "loxone_miniserver";
   const isHaType = integration?.type === "home_assistant" || integration?.type === "ha-addon";
+
+  // For HA integrations, fetch all tenant devices (including unlinked ones)
+  const { devices: gatewayDevices, sendCommand, refetch: refetchDevices } = useGatewayDevices(isHaType ? undefined : locationIntegration.id);
   const gatewayLocalTime = !isLoxone && gatewayDevices.length > 0 ? gatewayDevices[0].local_time : null;
 
   const handleToggleEnabled = async (enabled: boolean) => {
