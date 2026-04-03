@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "./useTenant";
 import { getEdgeFunctionName } from "@/lib/gatewayRegistry";
@@ -83,6 +84,7 @@ interface MLFilters {
 
 export function useMLAutomations() {
   const { tenant } = useTenant();
+  const queryClient = useQueryClient();
   const [automations, setAutomations] = useState<MLAutomationRecord[]>([]);
   const [executionLog, setExecutionLog] = useState<ExecutionLogEntry[]>([]);
   const [scenes, setScenes] = useState<AutomationScene[]>([]);
@@ -282,6 +284,9 @@ export function useMLAutomations() {
         .eq("id", automation.id);
 
       await fetchAutomations();
+      setTimeout(() => {
+        queryClient.invalidateQueries({ queryKey: ["gateway-sensors"] });
+      }, 1500);
       return { success: true };
     } catch (err) {
       const durationMs = Date.now() - startTime;

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "./useTenant";
 import { getEdgeFunctionName } from "@/lib/gatewayRegistry";
@@ -56,6 +57,7 @@ export interface AutomationLastError {
 
 export function useLocationAutomations(locationId: string | undefined) {
   const { tenant } = useTenant();
+  const queryClient = useQueryClient();
   const [automations, setAutomations] = useState<LocationAutomationRecord[]>([]);
   const [lastErrors, setLastErrors] = useState<Record<string, AutomationLastError>>({});
   const [loading, setLoading] = useState(true);
@@ -242,6 +244,10 @@ export function useLocationAutomations(locationId: string | undefined) {
         .update({ last_executed_at: new Date().toISOString() })
         .eq("id", automation.id);
       await fetchAutomations();
+      // Refresh live sensor states after command execution (with small delay for HA to update)
+      setTimeout(() => {
+        queryClient.invalidateQueries({ queryKey: ["gateway-sensors"] });
+      }, 1500);
       return { success: true };
     } catch (err) {
       return { success: false, error: err instanceof Error ? err.message : "Fehler" };
