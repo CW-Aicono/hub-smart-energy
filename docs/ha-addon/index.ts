@@ -729,12 +729,15 @@ async function syncAutomationsFromCloud(): Promise<void> {
 
     const res = await fetch(`${INGEST_URL}?${params.toString()}`, {
       headers: { Authorization: `Bearer ${config.gateway_api_key}` },
+      signal: AbortSignal.timeout(15000),
     });
 
     if (!res.ok) {
+      markCloudUnreachable();
       console.error(`[sync] sync-automations returned ${res.status}`);
       return;
     }
+    markCloudReachable();
 
     const data = await res.json() as { success: boolean; automations?: any[] };
     if (!data.success || !Array.isArray(data.automations)) return;
