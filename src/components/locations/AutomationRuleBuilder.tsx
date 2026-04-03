@@ -852,6 +852,7 @@ export function AutomationRuleBuilder({
                     onUpdate={(c) => updateCondition(cond.id, c)}
                     onRemove={() => removeCondition(cond.id)}
                     gatewayOptions={gatewayOptions}
+                    deviceTypeMap={deviceTypeMap}
                   />
                 </div>
               ))}
