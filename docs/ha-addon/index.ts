@@ -918,12 +918,17 @@ async function sendHeartbeat(): Promise<void> {
     });
 
     if (res.ok) {
+      markCloudReachable();
       const data = await res.json() as { latest_available_version?: string };
       if (data.latest_available_version && data.latest_available_version !== ADDON_VERSION) {
         console.log(`[heartbeat] Update available: ${data.latest_available_version}`);
       }
+    } else {
+      markCloudUnreachable();
+      console.warn(`[heartbeat] Cloud returned ${res.status}`);
     }
   } catch (err) {
+    markCloudUnreachable();
     console.warn("[heartbeat] Failed:", err);
   }
 }
