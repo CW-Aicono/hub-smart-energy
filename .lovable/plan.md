@@ -46,8 +46,14 @@
 | UI-Framework | Preact via ESM |
 | Auth für lokales UI | HA Ingress |
 
+### Abgeschlossene Nacharbeiten ✅
+- Cloud-Scheduler (`automation-scheduler/index.ts`) auf `automation-core`-Logik refactored (inlined für Deno-Kompatibilität, identische Funktionen)
+- `execution_source: 'cloud'` wird bei Cloud-Ausführungen mitgeschrieben
+- Per-Device API-Key Validierung in `gateway-ingest` aktiviert (SHA-256 Hash gegen `gateway_devices.api_key_hash`, Tenant-Crossover-Schutz)
+- `getDeviceFromApiKey()` Helper für Tenant-Context-Extraktion
+- `push-execution-logs` schreibt `execution_source` korrekt
+- INSTALLATION.md auf v2.0 aktualisiert (neue Abschnitte: Dashboard, Automationen, Per-Device Keys)
+
 ### Nächste Schritte
-- Cloud-Scheduler (`automation-scheduler/index.ts`) auf `automation-core` imports refactoren
-- Per-Device API-Key Validierung in `gateway-ingest` aktivieren
+- UI für Per-Device Key Generierung in der App erstellen
 - Edge Runtime Kompatibilität des Shared Packages testen (Deno vs Node)
-- INSTALLATION.md aktualisieren für v2.0
