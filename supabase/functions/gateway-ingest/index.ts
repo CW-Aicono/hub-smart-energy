@@ -410,7 +410,7 @@ async function handleGetLocationsSummary(url: URL): Promise<Response> {
 /* ── POST Route handlers ─────────────────────────────────────────────────────── */
 
 async function handleCompactDay(req: Request): Promise<Response> {
-  const authErr = validateApiKey(req);
+  const authErr = await validateApiKey(req);
   if (authErr) return authErr;
 
   const supabase = getSupabase();
@@ -510,7 +510,7 @@ async function handleCompactDay(req: Request): Promise<Response> {
 }
 
 async function handlePostReadings(req: Request): Promise<Response> {
-  const authErr = validateApiKey(req);
+  const authErr = await validateApiKey(req);
   if (authErr) return authErr;
 
   let body: { readings?: PowerReading[] };
@@ -685,7 +685,7 @@ async function validateBasicAuth(
   }
 
   // Fall back to API key auth
-  const apiKeyErr = validateApiKey(req);
+  const apiKeyErr = await validateApiKey(req);
   if (apiKeyErr) return apiKeyErr;
 
   // If using API key, load config from any matching integration for this tenant
@@ -807,7 +807,7 @@ async function handleSchneiderPush(req: Request): Promise<Response> {
 /* ── Heartbeat handler ────────────────────────────────────────────────────────── */
 
 async function handleHeartbeat(req: Request): Promise<Response> {
-  const authErr = validateApiKey(req);
+  const authErr = await validateApiKey(req);
   if (authErr) return authErr;
 
   let body: {
@@ -898,7 +898,7 @@ async function handleHeartbeat(req: Request): Promise<Response> {
 /* ── Gateway backup handler ──────────────────────────────────────────────────── */
 
 async function handleGatewayBackup(req: Request): Promise<Response> {
-  const authErr = validateApiKey(req);
+  const authErr = await validateApiKey(req);
   if (authErr) return authErr;
 
   let body: {
@@ -961,7 +961,7 @@ async function handleAddonVersion(): Promise<Response> {
  */
 async function validateApiKeyOrAdmin(req: Request): Promise<Response | null> {
   // Try API key first
-  const apiKeyResult = validateApiKey(req);
+  const apiKeyResult = await validateApiKey(req);
   if (!apiKeyResult) return null; // API key is valid
 
   // Fall back to JWT auth for admin users
@@ -1096,7 +1096,7 @@ async function handleSyncAutomations(url: URL): Promise<Response> {
 /* ── Push Execution Logs handler (Hub → Cloud) ────────────────────────────────── */
 
 async function handlePushExecutionLogs(req: Request): Promise<Response> {
-  const authErr = validateApiKey(req);
+  const authErr = await validateApiKey(req);
   if (authErr) return authErr;
 
   let body: {
@@ -1158,7 +1158,7 @@ Deno.serve(async (req) => {
 
   // GET routes
   if (req.method === "GET") {
-    const authErr = validateApiKey(req);
+    const authErr = await validateApiKey(req);
     if (authErr) return authErr;
     if (action === "list-locations") return handleListLocations();
     if (action === "list-meters") return handleListMeters(url);
