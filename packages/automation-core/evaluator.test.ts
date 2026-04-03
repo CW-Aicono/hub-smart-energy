@@ -7,7 +7,7 @@ import {
   evaluateAutomation,
   resolveActions,
   DEBOUNCE_MINUTES,
-} from "../evaluator";
+} from "./evaluator";
 import type {
   AutomationCondition,
   AutomationRule,
