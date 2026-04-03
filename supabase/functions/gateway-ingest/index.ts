@@ -1140,6 +1140,7 @@ async function handlePushExecutionLogs(req: Request): Promise<Response> {
     error_message: log.error_message || null,
     actions_executed: log.actions_executed || null,
     duration_ms: log.duration_ms || null,
+    execution_source: log.execution_source || "local",
     executed_at: log.executed_at || new Date().toISOString(),
   }));
 
