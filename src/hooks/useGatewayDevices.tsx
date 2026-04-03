@@ -24,6 +24,12 @@ export interface GatewayDevice {
   updated_at: string;
 }
 
+export interface GatewayDeviceWithMetrics extends GatewayDevice {
+  automationCount: number;
+  activeAutomationCount: number;
+  lastExecutionAt: string | null;
+}
+
 export function useGatewayDevices(locationIntegrationId?: string) {
   const { tenant } = useTenant();
   const { t } = useTranslation();
@@ -34,7 +40,8 @@ export function useGatewayDevices(locationIntegrationId?: string) {
     enabled: !!tenant?.id,
     staleTime: 30_000,
     refetchInterval: 60_000,
-    queryFn: async (): Promise<GatewayDevice[]> => {
+    queryFn: async (): Promise<GatewayDeviceWithMetrics[]> => {
+      // Fetch devices
       let q = supabase
         .from("gateway_devices")
         .select("*")
@@ -48,14 +55,53 @@ export function useGatewayDevices(locationIntegrationId?: string) {
       const { data, error } = await q;
       if (error) throw error;
 
-      // Mark devices as offline if heartbeat is stale (>3 minutes)
-      return (data || []).map((d: any) => {
+      const devices = (data || []).map((d: any) => {
         const lastHeartbeat = d.last_heartbeat_at ? new Date(d.last_heartbeat_at).getTime() : 0;
         const isStale = Date.now() - lastHeartbeat > 3 * 60 * 1000;
         return {
           ...d,
           status: isStale && d.status === "online" ? "offline" : d.status,
         } as GatewayDevice;
+      });
+
+      if (devices.length === 0) return [];
+
+      // Fetch automation counts per location_integration_id
+      const integrationIds = devices
+        .map((d) => d.location_integration_id)
+        .filter((id): id is string => !!id);
+
+      let automationMap: Record<string, { total: number; active: number; lastExec: string | null }> = {};
+
+      if (integrationIds.length > 0) {
+        const { data: automations } = await supabase
+          .from("location_automations")
+          .select("location_integration_id, is_active, last_executed_at")
+          .in("location_integration_id", integrationIds);
+
+        if (automations) {
+          for (const a of automations) {
+            const key = a.location_integration_id;
+            if (!automationMap[key]) {
+              automationMap[key] = { total: 0, active: 0, lastExec: null };
+            }
+            automationMap[key].total++;
+            if (a.is_active) automationMap[key].active++;
+            if (a.last_executed_at && (!automationMap[key].lastExec || a.last_executed_at > automationMap[key].lastExec!)) {
+              automationMap[key].lastExec = a.last_executed_at;
+            }
+          }
+        }
+      }
+
+      return devices.map((d): GatewayDeviceWithMetrics => {
+        const stats = d.location_integration_id ? automationMap[d.location_integration_id] : undefined;
+        return {
+          ...d,
+          automationCount: stats?.total ?? 0,
+          activeAutomationCount: stats?.active ?? 0,
+          lastExecutionAt: stats?.lastExec ?? null,
+        };
       });
     },
   });
@@ -77,8 +123,7 @@ export function useGatewayDevices(locationIntegrationId?: string) {
         const err = await res.json().catch(() => ({ error: "Unknown error" }));
         throw new Error(err.error || `HTTP ${res.status}`);
       }
-      const data = await res.json();
-      return data;
+      return await res.json();
     },
     onSuccess: () => {
       toast.success(t("gatewayDevices.commandSent" as any));
