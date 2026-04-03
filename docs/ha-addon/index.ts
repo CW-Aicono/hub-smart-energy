@@ -833,7 +833,7 @@ async function pushExecutionLogs(): Promise<void> {
 const FLUSH_BATCH_SIZE = 200;
 
 async function flushBuffer(): Promise<void> {
-  if (!isCloudReachable) return;
+  // Always attempt flush – cloud status is determined by heartbeat/sync
 
   const rows = fetchBatch.all(FLUSH_BATCH_SIZE) as Array<{
     id: number;
