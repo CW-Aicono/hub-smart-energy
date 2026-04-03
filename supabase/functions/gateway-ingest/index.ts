@@ -832,6 +832,13 @@ async function handleHeartbeat(req: Request): Promise<Response> {
     return json({ error: "tenant_id and device_name are required" }, 400);
   }
 
+  // Per-device key tenant_id cross-check
+  const deviceCtx = await getDeviceFromApiKey(req);
+  if (deviceCtx && deviceCtx.tenant_id !== body.tenant_id) {
+    console.warn(`[gateway-ingest] Per-device key tenant mismatch: key=${deviceCtx.tenant_id}, body=${body.tenant_id}`);
+    return json({ error: "Tenant mismatch – API key does not belong to this tenant" }, 403);
+  }
+
   const supabase = getSupabase();
 
   // Upsert by tenant_id + device_name
