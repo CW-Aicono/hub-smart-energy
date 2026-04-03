@@ -1063,11 +1063,11 @@ async function handleSyncAutomations(url: URL): Promise<Response> {
   const since = url.searchParams.get("since");
   const supabase = getSupabase();
 
+  // Sync ALL automations (active + inactive) so the local engine can manage state
   let query = supabase
     .from("location_automations")
     .select("*, locations!location_automations_location_id_fkey(timezone)")
-    .eq("tenant_id", tenantId)
-    .eq("is_active", true);
+    .eq("tenant_id", tenantId);
 
   if (since) {
     query = query.gt("updated_at", since);

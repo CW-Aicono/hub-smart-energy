@@ -3,7 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>EMS Gateway Hub</title>
+  <title>AICONO EMS</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%230a0f1a'/><path d='M16 6l8 14H8z' fill='%2314b8a6'/><circle cx='16' cy='24' r='3' fill='%2314b8a6'/></svg>">
   <style>
     :root {
       --bg-primary: #0a0f1a;
@@ -43,7 +44,9 @@
       font-size: 1.25rem; font-weight: 700;
       display: flex; align-items: center; gap: 10px;
     }
-    .header-title .icon { color: var(--accent-teal); font-size: 1.5rem; }
+    .logo-icon {
+      width: 28px; height: 28px;
+    }
     .version-badge {
       font-size: 0.7rem; background: var(--accent-teal-dim); color: var(--accent-teal);
       padding: 2px 8px; border-radius: 12px; font-weight: 600;
@@ -110,6 +113,35 @@
     .config-key { color: var(--text-secondary); font-size: 0.85rem; }
     .config-val { color: var(--text-primary); font-weight: 600; font-size: 0.85rem; font-family: monospace; }
 
+    /* Control tiles */
+    .control-tile {
+      background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 16px; display: flex;
+      align-items: center; justify-content: space-between; transition: border-color 0.2s;
+    }
+    .control-tile:hover { border-color: rgba(20, 184, 166, 0.3); }
+    .control-info { flex: 1; min-width: 0; }
+    .control-name { font-weight: 600; font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .control-entity { font-size: 0.7rem; color: var(--text-muted); font-family: monospace; }
+    .control-state { font-size: 0.8rem; margin-top: 2px; }
+    .control-state.on { color: var(--accent-green); }
+    .control-state.off { color: var(--text-muted); }
+    .control-btns { display: flex; gap: 6px; margin-left: 12px; }
+    .ctrl-btn {
+      background: var(--bg-card-hover); border: 1px solid var(--border); color: var(--text-secondary);
+      padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 0.8rem;
+      font-family: var(--font-body); transition: all 0.2s;
+    }
+    .ctrl-btn:hover { background: var(--accent-teal-dim); color: var(--accent-teal); border-color: var(--accent-teal); }
+    .ctrl-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .ctrl-btn.active-on { background: rgba(34,197,94,0.15); color: var(--accent-green); border-color: var(--accent-green); }
+
+    /* Footer */
+    .footer {
+      text-align: center; padding: 24px 0; margin-top: 32px;
+      border-top: 1px solid var(--border); color: var(--text-muted); font-size: 0.75rem;
+    }
+
     @media (max-width: 640px) {
       .grid { grid-template-columns: 1fr; }
       .header { flex-direction: column; gap: 8px; align-items: flex-start; }
@@ -127,18 +159,20 @@
 
     const html = htm.bind(h);
 
+    // AICONO Logo SVG
+    const LOGO_SVG = `<svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg"><rect width="32" height="32" rx="6" fill="#0a0f1a" stroke="#14b8a6" stroke-width="1"/><path d="M16 6l8 14H8z" fill="#14b8a6"/><circle cx="16" cy="24" r="3" fill="#14b8a6"/></svg>`;
+
     // Resolve API base (handle HA ingress prefix)
     const API_BASE = (() => {
       const path = window.location.pathname;
-      // HA ingress URLs look like /api/hassio_ingress/<token>/
       const ingressMatch = path.match(/^(\/api\/hassio_ingress\/[^/]+)/);
       if (ingressMatch) return ingressMatch[1];
       return '';
     })();
 
-    async function api(endpoint) {
+    async function api(endpoint, opts) {
       try {
-        const res = await fetch(API_BASE + endpoint);
+        const res = await fetch(API_BASE + endpoint, opts);
         return await res.json();
       } catch (e) {
         console.error('API error:', endpoint, e);
@@ -161,48 +195,48 @@
 
     // ── Dashboard Page ──
     function Dashboard({ status }) {
-      if (!status) return html\`<div class="empty-state"><div class="icon">⏳</div><p>Lade Status...</p></div>\`;
+      if (!status) return html`<div class="empty-state"><div class="icon">⏳</div><p>Lade Status...</p></div>`;
 
-      return html\`
+      return html`
         <div class="grid">
           <div class="card">
             <div class="card-label">Status</div>
             <div class="card-value" style="display:flex;align-items:center;gap:8px">
-              <span class="status-dot \${status.status === 'running' ? 'online' : 'offline'}"></span>
-              \${status.status === 'running' ? 'Online' : 'Offline'}
+              <span class="status-dot ${status.status === 'running' ? 'online' : 'offline'}"></span>
+              ${status.status === 'running' ? 'Online' : 'Offline'}
             </div>
-            <div class="card-sub">Uptime: \${formatUptime(status.uptime_seconds || 0)}</div>
+            <div class="card-sub">Uptime: ${formatUptime(status.uptime_seconds || 0)}</div>
           </div>
           <div class="card">
             <div class="card-label">Cloud-Verbindung</div>
             <div class="card-value" style="display:flex;align-items:center;gap:8px">
-              <span class="status-dot \${status.cloud_reachable ? 'online' : 'offline'}"></span>
-              \${status.cloud_reachable ? 'Verbunden' : 'Offline'}
+              <span class="status-dot ${status.cloud_reachable ? 'online' : 'offline'}"></span>
+              ${status.cloud_reachable ? 'Verbunden' : 'Offline'}
             </div>
-            <div class="card-sub">WebSocket: \${status.ha_ws_connected ? '✓' : '✗'}</div>
+            <div class="card-sub">WebSocket: ${status.ha_ws_connected ? '✓' : '✗'}</div>
           </div>
           <div class="card">
             <div class="card-label">Messwert-Puffer</div>
-            <div class="card-value">\${status.buffer_count || 0}</div>
+            <div class="card-value">${status.buffer_count || 0}</div>
             <div class="card-sub">Readings im lokalen Speicher</div>
           </div>
           <div class="card">
             <div class="card-label">Zähler-Mappings</div>
-            <div class="card-value">\${status.meter_mappings || 0}</div>
+            <div class="card-value">${status.meter_mappings || 0}</div>
             <div class="card-sub">Aktive Zuordnungen</div>
           </div>
           <div class="card">
             <div class="card-label">Automationen</div>
-            <div class="card-value">\${status.automation_count || 0}</div>
+            <div class="card-value">${status.automation_count || 0}</div>
             <div class="card-sub">Lokal gespeicherte Regeln</div>
           </div>
           <div class="card">
-            <div class="card-label">Home Assistant</div>
-            <div class="card-value" style="font-size:1.1rem">\${status.ha_version || 'N/A'}</div>
-            <div class="card-sub">Add-on v\${status.addon_version || '?'}</div>
+            <div class="card-label">System</div>
+            <div class="card-value" style="font-size:1.1rem">${status.ha_version || 'N/A'}</div>
+            <div class="card-sub">Gateway v${status.addon_version || '?'}</div>
           </div>
         </div>
-      \`;
+      `;
     }
 
     // ── Sensors Page ──
@@ -218,27 +252,85 @@
 
       useEffect(() => { refresh(); const iv = setInterval(refresh, 10000); return () => clearInterval(iv); }, []);
 
-      if (loading) return html\`<div class="empty-state"><div class="icon">⏳</div><p>Lade Sensoren...</p></div>\`;
-      if (sensors.length === 0) return html\`<div class="empty-state"><div class="icon">📡</div><p>Keine Sensoren gefunden</p></div>\`;
+      if (loading) return html`<div class="empty-state"><div class="icon">⏳</div><p>Lade Sensoren...</p></div>`;
+      if (sensors.length === 0) return html`<div class="empty-state"><div class="icon">📡</div><p>Keine Sensoren gefunden</p></div>`;
 
-      return html\`
+      return html`
         <div class="table-wrap">
           <table>
             <thead><tr><th>Name</th><th>Entity</th><th>Wert</th><th>Einheit</th><th>Aktualisiert</th></tr></thead>
             <tbody>
-              \${sensors.map(s => html\`
+              ${sensors.map(s => html`
                 <tr>
-                  <td style="color:var(--text-primary);font-weight:500">\${s.friendly_name}</td>
-                  <td><code style="font-size:0.75rem;color:var(--text-muted)">\${s.entity_id}</code></td>
-                  <td style="color:var(--accent-teal);font-weight:600">\${s.state}</td>
-                  <td>\${s.unit || '–'}</td>
-                  <td>\${formatTime(s.last_updated)}</td>
+                  <td style="color:var(--text-primary);font-weight:500">${s.friendly_name}</td>
+                  <td><code style="font-size:0.75rem;color:var(--text-muted)">${s.entity_id}</code></td>
+                  <td style="color:var(--accent-teal);font-weight:600">${s.state}</td>
+                  <td>${s.unit || '–'}</td>
+                  <td>${formatTime(s.last_updated)}</td>
                 </tr>
-              \`)}
+              `)}
             </tbody>
           </table>
         </div>
-      \`;
+      `;
+    }
+
+    // ── Control Page (NEW) ──
+    function Control() {
+      const [actuators, setActuators] = useState([]);
+      const [loading, setLoading] = useState(true);
+      const [executing, setExecuting] = useState({});
+
+      const refresh = useCallback(async () => {
+        const data = await api('/api/actuators');
+        if (data?.actuators) setActuators(data.actuators);
+        setLoading(false);
+      }, []);
+
+      useEffect(() => { refresh(); const iv = setInterval(refresh, 5000); return () => clearInterval(iv); }, []);
+
+      const execute = useCallback(async (entityId, service) => {
+        setExecuting(prev => ({ ...prev, [entityId]: true }));
+        await api('/api/execute', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ entity_id: entityId, service }),
+        });
+        // Wait briefly for state to update
+        setTimeout(async () => {
+          await refresh();
+          setExecuting(prev => ({ ...prev, [entityId]: false }));
+        }, 1000);
+      }, [refresh]);
+
+      if (loading) return html`<div class="empty-state"><div class="icon">⏳</div><p>Lade Geräte...</p></div>`;
+      if (actuators.length === 0) return html`<div class="empty-state"><div class="icon">🔌</div><p>Keine steuerbaren Geräte gefunden</p><p style="margin-top:8px;font-size:0.85rem">Schalter, Lichter und Abdeckungen werden hier angezeigt.</p></div>`;
+
+      const domainIcons = { switch: '🔌', light: '💡', cover: '🪟', climate: '🌡️' };
+
+      return html`
+        <div class="grid">
+          ${actuators.map(a => html`
+            <div class="control-tile" key=${a.entity_id}>
+              <div class="control-info">
+                <div class="control-name">${domainIcons[a.domain] || '⚡'} ${a.friendly_name}</div>
+                <div class="control-entity">${a.entity_id}</div>
+                <div class="control-state ${a.state === 'on' ? 'on' : 'off'}">${a.state}</div>
+              </div>
+              <div class="control-btns">
+                ${a.domain === 'cover' ? html`
+                  <button class="ctrl-btn" disabled=${executing[a.entity_id]} onClick=${() => execute(a.entity_id, 'open')}>▲</button>
+                  <button class="ctrl-btn" disabled=${executing[a.entity_id]} onClick=${() => execute(a.entity_id, 'stop')}>■</button>
+                  <button class="ctrl-btn" disabled=${executing[a.entity_id]} onClick=${() => execute(a.entity_id, 'close')}>▼</button>
+                ` : html`
+                  <button class="ctrl-btn ${a.state === 'on' ? 'active-on' : ''}" disabled=${executing[a.entity_id]} onClick=${() => execute(a.entity_id, 'on')}>Ein</button>
+                  <button class="ctrl-btn" disabled=${executing[a.entity_id]} onClick=${() => execute(a.entity_id, 'off')}>Aus</button>
+                `}
+              </div>
+            </div>
+          `)}
+        </div>
+      `;
     }
 
     // ── Automations Page ──
@@ -253,27 +345,27 @@
         });
       }, []);
 
-      if (loading) return html\`<div class="empty-state"><div class="icon">⏳</div><p>Lade Automationen...</p></div>\`;
-      if (automations.length === 0) return html\`<div class="empty-state"><div class="icon">🤖</div><p>Keine lokalen Automationen</p><p style="margin-top:8px;font-size:0.85rem">Automationen werden beim nächsten Cloud-Sync geladen.</p></div>\`;
+      if (loading) return html`<div class="empty-state"><div class="icon">⏳</div><p>Lade Automationen...</p></div>`;
+      if (automations.length === 0) return html`<div class="empty-state"><div class="icon">🤖</div><p>Keine lokalen Automationen</p><p style="margin-top:8px;font-size:0.85rem">Automationen werden beim nächsten Cloud-Sync geladen.</p></div>`;
 
-      return html\`
+      return html`
         <div class="table-wrap">
           <table>
             <thead><tr><th>Name</th><th>Status</th><th>Bedingungen</th><th>Aktionen</th><th>Letzte Ausführung</th></tr></thead>
             <tbody>
-              \${automations.map(a => html\`
+              ${automations.map(a => html`
                 <tr>
-                  <td style="color:var(--text-primary);font-weight:500">\${a.name}</td>
-                  <td><span class="badge \${a.is_active ? 'badge-active' : 'badge-inactive'}">\${a.is_active ? 'Aktiv' : 'Inaktiv'}</span></td>
-                  <td>\${a.conditions_count}</td>
-                  <td>\${a.actions_count}</td>
-                  <td>\${formatTime(a.last_executed_at)}</td>
+                  <td style="color:var(--text-primary);font-weight:500">${a.name}</td>
+                  <td><span class="badge ${a.is_active ? 'badge-active' : 'badge-inactive'}">${a.is_active ? 'Aktiv' : 'Inaktiv'}</span></td>
+                  <td>${a.conditions_count}</td>
+                  <td>${a.actions_count}</td>
+                  <td>${formatTime(a.last_executed_at)}</td>
                 </tr>
-              \`)}
+              `)}
             </tbody>
           </table>
         </div>
-      \`;
+      `;
     }
 
     // ── Logs Page ──
@@ -288,27 +380,27 @@
         });
       }, []);
 
-      if (loading) return html\`<div class="empty-state"><div class="icon">⏳</div><p>Lade Logs...</p></div>\`;
-      if (logs.length === 0) return html\`<div class="empty-state"><div class="icon">📋</div><p>Noch keine Ausführungslogs vorhanden</p></div>\`;
+      if (loading) return html`<div class="empty-state"><div class="icon">⏳</div><p>Lade Logs...</p></div>`;
+      if (logs.length === 0) return html`<div class="empty-state"><div class="icon">📋</div><p>Noch keine Ausführungslogs vorhanden</p></div>`;
 
-      return html\`
+      return html`
         <div class="table-wrap">
           <table>
             <thead><tr><th>Zeitpunkt</th><th>Status</th><th>Dauer</th><th>Typ</th><th>Fehler</th></tr></thead>
             <tbody>
-              \${logs.map(l => html\`
+              ${logs.map(l => html`
                 <tr>
-                  <td>\${formatTime(l.created_at)}</td>
-                  <td><span class="badge \${l.status === 'success' ? 'badge-success' : 'badge-error'}">\${l.status}</span></td>
-                  <td>\${l.duration_ms ? l.duration_ms + 'ms' : '–'}</td>
-                  <td>\${l.trigger_type || '–'}</td>
-                  <td style="color:var(--accent-red);font-size:0.8rem;max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">\${l.error_message || '–'}</td>
+                  <td>${formatTime(l.created_at)}</td>
+                  <td><span class="badge ${l.status === 'success' ? 'badge-success' : 'badge-error'}">${l.status}</span></td>
+                  <td>${l.duration_ms ? l.duration_ms + 'ms' : '–'}</td>
+                  <td>${l.trigger_type || '–'}</td>
+                  <td style="color:var(--accent-red);font-size:0.8rem;max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${l.error_message || '–'}</td>
                 </tr>
-              \`)}
+              `)}
             </tbody>
           </table>
         </div>
-      \`;
+      `;
     }
 
     // ── Settings Page ──
@@ -319,22 +411,22 @@
         api('/api/config').then(data => { if (data) setCfg(data); });
       }, []);
 
-      if (!cfg) return html\`<div class="empty-state"><div class="icon">⏳</div><p>Lade Konfiguration...</p></div>\`;
+      if (!cfg) return html`<div class="empty-state"><div class="icon">⏳</div><p>Lade Konfiguration...</p></div>`;
 
       const entries = Object.entries(cfg).filter(([k]) => k !== 'gateway_api_key');
 
-      return html\`
+      return html`
         <div class="card" style="max-width:600px">
           <ul class="config-list">
-            \${entries.map(([k, v]) => html\`
+            ${entries.map(([k, v]) => html`
               <li>
-                <span class="config-key">\${k}</span>
-                <span class="config-val">\${typeof v === 'object' ? JSON.stringify(v) : String(v)}</span>
+                <span class="config-key">${k}</span>
+                <span class="config-val">${typeof v === 'object' ? JSON.stringify(v) : String(v)}</span>
               </li>
-            \`)}
+            `)}
           </ul>
         </div>
-      \`;
+      `;
     }
 
     // ── App ──
@@ -352,36 +444,39 @@
         return () => clearInterval(iv);
       }, []);
 
-      const pages = { dashboard: 'Dashboard', sensors: 'Sensoren', automations: 'Automationen', logs: 'Logs', settings: 'Einstellungen' };
+      const pages = { dashboard: 'Dashboard', sensors: 'Sensoren', control: 'Steuerung', automations: 'Automationen', logs: 'Logs', settings: 'Einstellungen' };
 
-      return html\`
+      return html`
         <div class="header">
           <div class="header-title">
-            <span class="icon">⚡</span>
-            EMS Gateway Hub
-            <span class="version-badge">v\${status?.addon_version || '...'}</span>
+            <span class="logo-icon" dangerouslySetInnerHTML=${{ __html: LOGO_SVG }}></span>
+            AICONO EMS
+            <span class="version-badge">v${status?.addon_version || '...'}</span>
           </div>
           <div style="display:flex;align-items:center;gap:8px;font-size:0.85rem;color:var(--text-secondary)">
-            <span class="status-dot \${status?.status === 'running' ? 'online' : 'offline'}"></span>
-            \${status?.status === 'running' ? 'Läuft' : 'Wird geladen...'}
+            <span class="status-dot ${status?.status === 'running' ? 'online' : 'offline'}"></span>
+            ${status?.status === 'running' ? 'Läuft' : 'Wird geladen...'}
           </div>
         </div>
 
         <div class="nav">
-          \${Object.entries(pages).map(([key, label]) => html\`
-            <button class="nav-btn \${page === key ? 'active' : ''}" onClick=\${() => setPage(key)}>\${label}</button>
-          \`)}
+          ${Object.entries(pages).map(([key, label]) => html`
+            <button class="nav-btn ${page === key ? 'active' : ''}" onClick=${() => setPage(key)}>${label}</button>
+          `)}
         </div>
 
-        \${page === 'dashboard' && html\`<\${Dashboard} status=\${status} />\`}
-        \${page === 'sensors' && html\`<\${Sensors} />\`}
-        \${page === 'automations' && html\`<\${Automations} />\`}
-        \${page === 'logs' && html\`<\${Logs} />\`}
-        \${page === 'settings' && html\`<\${Settings} />\`}
-      \`;
+        ${page === 'dashboard' && html`<${Dashboard} status=${status} />`}
+        ${page === 'sensors' && html`<${Sensors} />`}
+        ${page === 'control' && html`<${Control} />`}
+        ${page === 'automations' && html`<${Automations} />`}
+        ${page === 'logs' && html`<${Logs} />`}
+        ${page === 'settings' && html`<${Settings} />`}
+
+        <div class="footer">© ${new Date().getFullYear()} AICONO GmbH – Energiemanagement</div>
+      `;
     }
 
-    render(html\`<\${App} />\`, document.getElementById('app'));
+    render(html`<${App} />`, document.getElementById('app'));
   </script>
 </body>
 </html>
