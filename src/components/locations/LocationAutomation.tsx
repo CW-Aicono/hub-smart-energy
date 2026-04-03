@@ -302,7 +302,7 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
   const actuators = allSensorsWithSource.filter((s) => getResolvedDeviceType(s, deviceTypeMap) === "actuator");
   const sensorDevices = allSensorsWithSource.filter((s) => {
     const t = getResolvedDeviceType(s, deviceTypeMap);
-    return t === "sensor" || t === "meter";
+    return t === "sensor";
   });
   const allSensors = allSensorsWithSource as LoxoneSensor[];
 
