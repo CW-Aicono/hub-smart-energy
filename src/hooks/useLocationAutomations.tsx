@@ -57,6 +57,7 @@ export interface AutomationLastError {
 
 export function useLocationAutomations(locationId: string | undefined) {
   const { tenant } = useTenant();
+  const queryClient = useQueryClient();
   const [automations, setAutomations] = useState<LocationAutomationRecord[]>([]);
   const [lastErrors, setLastErrors] = useState<Record<string, AutomationLastError>>({});
   const [loading, setLoading] = useState(true);
