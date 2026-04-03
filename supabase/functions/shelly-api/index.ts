@@ -350,15 +350,14 @@ serve(async (req) => {
           }),
         });
       } else {
-        // Gen 2+: POST /device/rpc with Switch.Set
-        controlRes = await fetch(`${baseUrl}/device/rpc`, {
+        // Gen 2+: Use Cloud v2 API endpoint for switch control
+        controlRes = await fetch(`${baseUrl}/v2/devices/api/set/switch?auth_key=${encodeURIComponent(config.auth_key)}`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            auth_key: config.auth_key,
             id: deviceId,
-            method: "Switch.Set",
-            params: { id: channel, on: turnOn },
+            channel,
+            on: turnOn,
           }),
         });
       }
