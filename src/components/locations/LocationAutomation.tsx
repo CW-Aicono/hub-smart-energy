@@ -280,6 +280,15 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
     return ids;
   }, [meters]);
 
+  // Map sensor_uuid -> device_type from meters table (authoritative classification)
+  const deviceTypeMap = useMemo(() => {
+    const map = new Map<string, string>();
+    meters.forEach((m) => {
+      if (m.sensor_uuid) map.set(m.sensor_uuid, (m as any).device_type || "meter");
+    });
+    return map;
+  }, [meters]);
+
   // Merge sensors from all integrations, override name with user-defined meter name
   // FILTER: only include devices that have been integrated (have a matching sensor_uuid in meters)
   const allSensorsWithSource = useMemo(() => {
