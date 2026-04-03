@@ -12,6 +12,8 @@ import { useTranslation } from "@/hooks/useTranslation";
 import { Server, Trash2, Pencil, CheckCircle2, XCircle, Clock, Loader2, Gauge, RefreshCw } from "lucide-react";
 import { LocationIntegration } from "@/hooks/useIntegrations";
 import { SensorsDialog } from "./SensorsDialog";
+import { DeviceCard } from "./gateway/DeviceCard";
+import { useUserRole } from "@/hooks/useUserRole";
 import { MiniserverStatus } from "./MiniserverStatus";
 import { EditIntegrationDialog } from "./EditIntegrationDialog";
 import { getGatewayDefinition, getEdgeFunctionName } from "@/lib/gatewayRegistry";
