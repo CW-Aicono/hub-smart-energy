@@ -232,6 +232,13 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
   const sensorDevices = useMemo(() => allDevicesWithSource.filter(isSensorOnly), [allDevicesWithSource]);
   const actuatorDevices = useMemo(() => allDevicesWithSource.filter(isActuator), [allDevicesWithSource]);
 
+  // Set of sensor_uuids present in gateway device lists – used to deduplicate
+  const gatewayDeviceIds = useMemo(() => {
+    const set = new Set<string>();
+    allDevicesWithSource.forEach((d) => set.add(d.id));
+    return set;
+  }, [allDevicesWithSource]);
+
   const activeMeters = meters.filter((m) => !m.is_archived);
   const archivedMeters = meters.filter((m) => m.is_archived);
 
