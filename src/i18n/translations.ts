@@ -5430,6 +5430,7 @@ export const translations = {
   "auto.searchPlaceholder": { de: "Suche nach Name, Raum oder Typ...", en: "Search by name, room or type...", es: "Buscar por nombre, sala o tipo...", nl: "Zoek op naam, ruimte of type..." },
   "auto.noResults": { de: "Keine Ergebnisse für diese Suche.", en: "No results for this search.", es: "Sin resultados para esta búsqueda.", nl: "Geen resultaten voor deze zoekopdracht." },
   "auto.noActuators": { de: "Keine steuerbaren Aktoren gefunden.", en: "No controllable actuators found.", es: "No se encontraron actuadores controlables.", nl: "Geen bestuurbare actuatoren gevonden." },
+  "auto.noSensorsFound": { de: "Keine Sensoren gefunden.", en: "No sensors found.", es: "No se encontraron sensores.", nl: "Geen sensoren gevonden." },
   "auto.executeNow": { de: "Jetzt ausführen", en: "Execute Now", es: "Ejecutar ahora", nl: "Nu uitvoeren" },
   "auto.executed": { de: '{name} ausgeführt', en: '"{name}" executed', es: '"{name}" ejecutado', nl: '"{name}" uitgevoerd' },
   "auto.executeFailed": { de: "Ausführung fehlgeschlagen", en: "Execution failed", es: "Ejecución fallida", nl: "Uitvoering mislukt" },
