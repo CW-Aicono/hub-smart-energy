@@ -522,12 +522,14 @@ function ActionCard({
   onUpdate,
   onRemove,
   gatewayOptions,
+  deviceTypeMap,
 }: {
   action: AutomationAction;
   sensors: LoxoneSensor[];
   onUpdate: (a: AutomationAction) => void;
   onRemove: () => void;
   gatewayOptions?: GatewayOption[];
+  deviceTypeMap?: Map<string, string>;
 }) {
   const isMLA = !!gatewayOptions && gatewayOptions.length > 0;
 
