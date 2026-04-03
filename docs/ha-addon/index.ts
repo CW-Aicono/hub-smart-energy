@@ -778,7 +778,7 @@ async function syncAutomationsFromCloud(): Promise<void> {
 }
 
 async function pushExecutionLogs(): Promise<void> {
-  if (!isCloudReachable) return;
+  // Always attempt – connectivity is tracked by heartbeat/sync results
 
   const unsyncedLogs = db.prepare(
     `SELECT * FROM automation_exec_log WHERE synced = 0 ORDER BY id LIMIT 100`
