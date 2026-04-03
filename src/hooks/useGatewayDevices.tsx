@@ -19,6 +19,7 @@ export interface GatewayDevice {
   status: string;
   config: Record<string, unknown>;
   offline_buffer_count: number;
+  api_key_hash: string | null;
   created_at: string;
   updated_at: string;
 }
