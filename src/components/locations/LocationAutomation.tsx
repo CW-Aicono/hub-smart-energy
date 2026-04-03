@@ -588,11 +588,16 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
                   onClick={() => setConfigOpen(true)}
                 >
                   <Settings2 className="h-4 w-4" />
-                  {T("auto.availableActuators")}
+                  {T("auto.availableActuatorsAndSensors")}
                   {!intLoading && hasAnyIntegration && (
-                    <Badge variant="secondary" className="ml-1 text-[10px]">
-                      {actuators.length} {T("auto.actuators")}
-                    </Badge>
+                    <>
+                      <Badge variant="secondary" className="ml-1 text-[10px]">
+                        {actuators.length} {T("auto.actuators")}
+                      </Badge>
+                      <Badge variant="secondary" className="text-[10px]">
+                        {sensorDevices.length} {T("auto.sensors")}
+                      </Badge>
+                    </>
                   )}
                 </Button>
                 <Button
