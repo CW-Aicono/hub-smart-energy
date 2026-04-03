@@ -890,7 +890,7 @@ async function fetchHAVersion(): Promise<void> {
 }
 
 async function sendHeartbeat(): Promise<void> {
-  if (!isCloudReachable) return;
+  // Always attempt heartbeat – use result to update connectivity status
   try {
     const res = await fetch(`${INGEST_URL}?action=heartbeat`, {
       method: "POST",
