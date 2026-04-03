@@ -43,7 +43,9 @@ export function IntegrationCard({ locationIntegration, onUpdate, onDelete }: Int
   const [backfillTo, setBackfillTo] = useState(() => new Date().toISOString().slice(0, 10));
   const { toast } = useToast();
   const { t } = useTranslation();
-  const { devices: gatewayDevices, sendCommand, refetch: refetchDevices } = useGatewayDevices(locationIntegration.id);
+  const isHaType = integration?.type === "home_assistant" || integration?.type === "ha-addon";
+  // For HA integrations, also fetch unlinked devices (no locationIntegrationId filter)
+  const { devices: gatewayDevices, sendCommand, refetch: refetchDevices } = useGatewayDevices(isHaType ? undefined : locationIntegration.id);
   const { isAdmin } = useUserRole();
 
   const integration = locationIntegration.integration;
