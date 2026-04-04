@@ -66,18 +66,77 @@ export function useGatewayDevices(locationIntegrationId?: string) {
 
       if (devices.length === 0) return [];
 
-      // Fetch automation counts per location_integration_id
+      // Fetch automation counts – devices may lack location_integration_id,
+      // so we also resolve via location_integrations → location_id to find
+      // sibling integrations that hold the automations.
       const integrationIds = devices
         .map((d) => d.location_integration_id)
         .filter((id): id is string => !!id);
 
+      // Build a map: device.id → list of relevant location_integration_ids
+      // For devices WITH a location_integration_id, also find the location_id
+      // so we can include automations from sibling integrations.
+      let deviceToIntegrationIds: Record<string, string[]> = {};
+      let allRelevantIntegrationIds = new Set<string>(integrationIds);
+
+      // Find location_ids for all devices (via their integration or directly)
+      if (integrationIds.length > 0) {
+        const { data: liRows } = await supabase
+          .from("location_integrations")
+          .select("id, location_id")
+          .in("id", integrationIds);
+
+        if (liRows) {
+          const locationIds = [...new Set(liRows.map((r) => r.location_id))];
+          // Find ALL integration IDs for these locations
+          if (locationIds.length > 0) {
+            const { data: siblingLis } = await supabase
+              .from("location_integrations")
+              .select("id, location_id")
+              .in("location_id", locationIds);
+            if (siblingLis) {
+              for (const sli of siblingLis) {
+                allRelevantIntegrationIds.add(sli.id);
+              }
+              // Map each device to all integrations of its location
+              for (const d of devices) {
+                const devLi = liRows.find((r) => r.id === d.location_integration_id);
+                if (devLi) {
+                  deviceToIntegrationIds[d.id] = siblingLis
+                    .filter((s) => s.location_id === devLi.location_id)
+                    .map((s) => s.id);
+                }
+              }
+            }
+          }
+        }
+      }
+
+      // For devices WITHOUT location_integration_id, try to find integrations
+      // via tenant-level location lookup (fallback for unlinked gateway devices)
+      const unlinkedDevices = devices.filter((d) => !d.location_integration_id);
+      if (unlinkedDevices.length > 0) {
+        const { data: allLis } = await supabase
+          .from("location_integrations")
+          .select("id, location_id")
+          .eq("is_enabled", true);
+        if (allLis) {
+          for (const d of unlinkedDevices) {
+            // Include all integrations for this tenant
+            deviceToIntegrationIds[d.id] = allLis.map((li) => li.id);
+            for (const li of allLis) allRelevantIntegrationIds.add(li.id);
+          }
+        }
+      }
+
       let automationMap: Record<string, { total: number; active: number; lastExec: string | null }> = {};
 
-      if (integrationIds.length > 0) {
+      const relevantIds = [...allRelevantIntegrationIds];
+      if (relevantIds.length > 0) {
         const { data: automations } = await supabase
           .from("location_automations")
           .select("location_integration_id, is_active, last_executed_at")
-          .in("location_integration_id", integrationIds);
+          .in("location_integration_id", relevantIds);
 
         if (automations) {
           for (const a of automations) {
@@ -95,12 +154,23 @@ export function useGatewayDevices(locationIntegrationId?: string) {
       }
 
       return devices.map((d): GatewayDeviceWithMetrics => {
-        const stats = d.location_integration_id ? automationMap[d.location_integration_id] : undefined;
+        // Aggregate stats across all relevant integration IDs for this device
+        const relevantLiIds = deviceToIntegrationIds[d.id]
+          ?? (d.location_integration_id ? [d.location_integration_id] : []);
+        let total = 0, active = 0, lastExec: string | null = null;
+        for (const liId of relevantLiIds) {
+          const s = automationMap[liId];
+          if (s) {
+            total += s.total;
+            active += s.active;
+            if (s.lastExec && (!lastExec || s.lastExec > lastExec)) lastExec = s.lastExec;
+          }
+        }
         return {
           ...d,
-          automationCount: stats?.total ?? 0,
-          activeAutomationCount: stats?.active ?? 0,
-          lastExecutionAt: stats?.lastExec ?? null,
+          automationCount: total,
+          activeAutomationCount: active,
+          lastExecutionAt: lastExec,
         };
       });
     },
