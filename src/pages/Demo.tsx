@@ -13,7 +13,7 @@ const EnergyChart = lazy(() => import("@/components/dashboard/EnergyChart"));
 const CostOverview = lazy(() => import("@/components/dashboard/CostOverview"));
 const SustainabilityKPIs = lazy(() => import("@/components/dashboard/SustainabilityKPIs"));
 const AlertsList = lazy(() => import("@/components/dashboard/AlertsList"));
-const LocationMapWidget = lazy(() => import("@/components/dashboard/LocationMapWidget"));
+import LocationMapWidget from "@/components/dashboard/LocationMapWidget";
 const FloorPlanWidget = lazy(() => import("@/components/dashboard/FloorPlanWidget"));
 const FloorPlanDashboardWidget = lazy(() => import("@/components/dashboard/FloorPlanDashboardWidget"));
 const WeatherWidget = lazy(() => import("@/components/dashboard/WeatherWidget"));
