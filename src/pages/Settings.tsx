@@ -8,8 +8,9 @@ import { BackupSettings } from "@/components/settings/BackupSettings";
 import { WeekStartSetting } from "@/components/settings/WeekStartSetting";
 import { ManualMetersSetting } from "@/components/settings/ManualMetersSetting";
 import { TenantInfoSettings } from "@/components/settings/TenantInfoSettings";
+import { WidgetDesigner } from "@/components/settings/WidgetDesigner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Palette, HardDrive, Building2 } from "lucide-react";
+import { Palette, HardDrive, Building2, LayoutGrid } from "lucide-react";
 
 const Settings = () => {
   const { user, loading: authLoading } = useAuth();
@@ -52,6 +53,10 @@ const Settings = () => {
                 <HardDrive className="h-4 w-4" />
                 {t("backup.title")}
               </TabsTrigger>
+              <TabsTrigger value="widget-designer" className="gap-2">
+                <LayoutGrid className="h-4 w-4" />
+                Widget-Designer
+              </TabsTrigger>
             </TabsList>
             <TabsContent value="tenant-info">
               <TenantInfoSettings />
@@ -63,6 +68,9 @@ const Settings = () => {
             </TabsContent>
             <TabsContent value="backup">
               <BackupSettings />
+            </TabsContent>
+            <TabsContent value="widget-designer">
+              <WidgetDesigner />
             </TabsContent>
           </Tabs>
         </div>

@@ -2,9 +2,11 @@ import { useState, useMemo, lazy, Suspense } from "react";
 import { useDashboardWidgets, WidgetSize } from "@/hooks/useDashboardWidgets";
 import { useTranslation } from "@/hooks/useTranslation";
 import { useModuleGuard } from "@/hooks/useModuleGuard";
+import { useCustomWidgetDefinitions } from "@/hooks/useCustomWidgetDefinitions";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { ZoomIn } from "lucide-react";
 import { useDashboardFilter } from "@/hooks/useDashboardFilter";
+import CustomWidgetComponent from "@/components/dashboard/CustomWidget";
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
 import DashboardCustomizer from "@/components/dashboard/DashboardCustomizer";
 import { LocationFilter } from "@/components/dashboard/LocationFilter";
@@ -90,10 +92,18 @@ const getLocationWidget = (_locationId: string | null): string => {
 
 const DashboardContent = () => {
   const { widgets, visibleWidgets, loading: widgetsLoading, toggleWidgetVisibility, reorderWidgets, updateWidgetSize } = useDashboardWidgets();
+  const { definitions: customWidgetDefs } = useCustomWidgetDefinitions();
   const [expandedWidget, setExpandedWidget] = useState<string | null>(null);
   const { t } = useTranslation();
   const { selectedLocationId, setSelectedLocationId, isPending } = useDashboardFilter();
   const { isModuleEnabled } = useModuleGuard();
+
+  // Build a lookup for custom widget definitions
+  const customWidgetMap = useMemo(() => {
+    const map: Record<string, typeof customWidgetDefs[0]> = {};
+    customWidgetDefs.forEach((d) => { map[`custom_${d.id}`] = d; });
+    return map;
+  }, [customWidgetDefs]);
 
   // Prefetch shared data at dashboard level
   useDashboardPrefetch(selectedLocationId);
@@ -134,6 +144,9 @@ const DashboardContent = () => {
                 onToggleVisibility={toggleWidgetVisibility}
                 onReorder={reorderWidgets}
                 onResizeWidget={updateWidgetSize}
+                customWidgetNames={Object.fromEntries(
+                  customWidgetDefs.map((d) => [`custom_${d.id}`, d.name])
+                )}
                 onResetLayout={() => {
                   widgets.forEach(w => {
                     if (w.widget_size !== "full") {
@@ -158,6 +171,21 @@ const DashboardContent = () => {
                   ? getLocationWidget(selectedLocationId)
                   : widget.widget_type;
                 const Component = WIDGET_COMPONENTS[widgetType];
+                const customDef = customWidgetMap[widget.widget_type];
+
+                // Render custom widget
+                if (customDef) {
+                  return (
+                    <div key={widget.widget_type} className="w-full min-w-0 relative group" data-widget-size={widget.widget_size}>
+                      <LazyWidget>
+                        <WidgetErrorBoundary widgetName={customDef.name}>
+                          <CustomWidgetComponent definition={customDef} locationId={selectedLocationId} />
+                        </WidgetErrorBoundary>
+                      </LazyWidget>
+                    </div>
+                  );
+                }
+
                 return Component ? (
                   <div
                     key={widget.widget_type}

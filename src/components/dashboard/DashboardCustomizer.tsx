@@ -16,6 +16,7 @@ interface DashboardCustomizerProps {
   onReorder: (newOrder: string[]) => void;
   onResizeWidget: (widgetType: string, size: WidgetSize) => void;
   onResetLayout?: () => void;
+  customWidgetNames?: Record<string, string>;
 }
 
 const WIDGET_LABEL_KEYS: Record<string, string> = {
@@ -45,7 +46,7 @@ const SIZE_LABEL_KEYS: Record<WidgetSize, string> = {
   "1/3": "widget.sizeOneThird",
 };
 
-const DashboardCustomizer = ({ widgets, onToggleVisibility, onReorder, onResizeWidget, onResetLayout }: DashboardCustomizerProps) => {
+const DashboardCustomizer = ({ widgets, onToggleVisibility, onReorder, onResizeWidget, onResetLayout, customWidgetNames = {} }: DashboardCustomizerProps) => {
   const { t } = useTranslation();
   const [draggedItem, setDraggedItem] = useState<string | null>(null);
   const [dragOverItem, setDragOverItem] = useState<string | null>(null);
@@ -139,7 +140,7 @@ const DashboardCustomizer = ({ widgets, onToggleVisibility, onReorder, onResizeW
                     htmlFor={widget.widget_type}
                     className="text-sm cursor-grab truncate"
                   >
-                    {t((WIDGET_LABEL_KEYS[widget.widget_type] || widget.widget_type) as any)}
+                    {customWidgetNames[widget.widget_type] || t((WIDGET_LABEL_KEYS[widget.widget_type] || widget.widget_type) as any)}
                   </Label>
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
