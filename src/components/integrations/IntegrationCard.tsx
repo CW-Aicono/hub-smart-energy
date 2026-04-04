@@ -146,7 +146,7 @@ export function IntegrationCard({ locationIntegration, onUpdate, onDelete }: Int
                 {gatewayLocalTime && (
                   <p className="text-xs text-muted-foreground flex items-center gap-1">
                     <Clock className="h-3 w-3" />
-                    <span>Gateway-Zeit: {gatewayLocalTime}</span>
+                    <span>Gateway-Zeit: {new Date(gatewayLocalTime).toLocaleString("de-DE", { timeZone: "Europe/Berlin", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit" })}</span>
                   </p>
                 )}
                 <MiniserverStatus
