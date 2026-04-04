@@ -5,6 +5,7 @@ import { useTranslation } from "@/hooks/useTranslation";
 import type { GatewayDeviceWithMetrics } from "@/hooks/useGatewayDevices";
 import { StatusBadge } from "./StatusBadge";
 import { ApiKeyDialog } from "./ApiKeyDialog";
+import { PinConfigDialog } from "./PinConfigDialog";
 import { DeviceMetrics } from "./DeviceMetrics";
 import {
   Server,
@@ -13,6 +14,7 @@ import {
   ArrowUpCircle,
   Clock,
   Key,
+  Lock,
   ShieldCheck,
 } from "lucide-react";
 
