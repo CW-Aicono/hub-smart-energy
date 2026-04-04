@@ -105,13 +105,32 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
       // Group by day
       const dayMap: Record<string, Record<string, number>> = {};
       for (const row of data) {
-        const day = new Date(row.day).toLocaleDateString("de-DE", {
-          day: "2-digit",
-          month: "2-digit",
-          ...(selectedPeriod === "year" || selectedPeriod === "all" ? { year: "2-digit" } : {}),
-        });
-        if (!dayMap[day]) dayMap[day] = {};
-        dayMap[day][row.meter_id] = row.total_value;
+        const d = new Date(row.day);
+        let label: string;
+        switch (selectedPeriod) {
+          case "day":
+            label = d.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
+            break;
+          case "week":
+            label = d.toLocaleDateString("de-DE", { weekday: "short" });
+            break;
+          case "month":
+            label = d.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" });
+            break;
+          case "quarter":
+            label = d.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" });
+            break;
+          case "year":
+            label = d.toLocaleDateString("de-DE", { month: "short", year: "2-digit" });
+            break;
+          case "all":
+            label = d.toLocaleDateString("de-DE", { month: "2-digit", year: "2-digit" });
+            break;
+          default:
+            label = d.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" });
+        }
+        if (!dayMap[label]) dayMap[label] = {};
+        dayMap[label][row.meter_id] = (dayMap[label][row.meter_id] ?? 0) + row.total_value;
       }
 
       return Object.entries(dayMap).map(([day, meters]) => ({
