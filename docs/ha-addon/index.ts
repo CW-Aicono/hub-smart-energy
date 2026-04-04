@@ -1009,6 +1009,65 @@ async function getLocalIP(): Promise<string> {
   return "unknown";
 }
 
+/* ── Remote Command Execution ─────────────────────────────────────────────────── */
+
+async function executePendingCommand(command: string, params: Record<string, unknown>): Promise<void> {
+  console.log(`[command] Executing remote command: ${command}`);
+  try {
+    switch (command) {
+      case "backup":
+        await sendBackup();
+        console.log("[command] Backup completed successfully");
+        break;
+
+      case "restart":
+        console.log("[command] Restart requested – restarting add-on in 3 seconds...");
+        // Send a final heartbeat to confirm receipt, then restart via Supervisor API
+        setTimeout(async () => {
+          try {
+            const addonSlug = process.env.HOSTNAME || "local_aicono_ems_gateway";
+            const res = await fetch(`http://supervisor/addons/${addonSlug}/restart`, {
+              method: "POST",
+              headers: { Authorization: `Bearer ${SUPERVISOR_TOKEN}` },
+            });
+            if (!res.ok) {
+              console.error(`[command] Restart API returned ${res.status}`);
+              // Fallback: exit process (container orchestrator will restart)
+              process.exit(0);
+            }
+          } catch (err) {
+            console.error("[command] Restart via Supervisor failed, forcing exit:", err);
+            process.exit(0);
+          }
+        }, 3000);
+        break;
+
+      case "update":
+        console.log("[command] Update command received – triggering add-on update via Supervisor...");
+        try {
+          const addonSlug = process.env.HOSTNAME || "local_aicono_ems_gateway";
+          const res = await fetch(`http://supervisor/addons/${addonSlug}/update`, {
+            method: "POST",
+            headers: { Authorization: `Bearer ${SUPERVISOR_TOKEN}` },
+          });
+          if (res.ok) {
+            console.log("[command] Update triggered successfully");
+          } else {
+            console.error(`[command] Update API returned ${res.status}: ${await res.text()}`);
+          }
+        } catch (err) {
+          console.error("[command] Update via Supervisor failed:", err);
+        }
+        break;
+
+      default:
+        console.warn(`[command] Unknown command: ${command}`);
+    }
+  } catch (err) {
+    console.error(`[command] Error executing command '${command}':`, err);
+  }
+}
+
 /* ── Auto Backup ─────────────────────────────────────────────────────────────── */
 
 async function sendBackup(): Promise<void> {
