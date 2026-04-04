@@ -53,6 +53,10 @@ const Settings = () => {
                 <HardDrive className="h-4 w-4" />
                 {t("backup.title")}
               </TabsTrigger>
+              <TabsTrigger value="widget-designer" className="gap-2">
+                <LayoutGrid className="h-4 w-4" />
+                Widget-Designer
+              </TabsTrigger>
             </TabsList>
             <TabsContent value="tenant-info">
               <TenantInfoSettings />
