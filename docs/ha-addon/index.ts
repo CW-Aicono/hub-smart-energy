@@ -73,6 +73,52 @@ let isCloudReachable = true;
 let lastCloudCheck = 0;
 let cloudFailCount = 0;
 
+/* ── PIN Auth State ──────────────────────────────────────────────────────────── */
+
+import crypto from "crypto";
+
+let uiPinHash: string | null = null; // SHA-256 hash synced from cloud
+const activeSessions = new Map<string, number>(); // token → expiry timestamp
+const SESSION_TTL_MS = 60 * 60 * 1000; // 1 hour
+
+// Brute-force protection
+let pinFailCount = 0;
+let pinLockoutUntil = 0;
+const PIN_MAX_ATTEMPTS = 5;
+const PIN_LOCKOUT_MS = 60_000;
+
+function sha256Sync(value: string): string {
+  return crypto.createHash("sha256").update(value).digest("hex");
+}
+
+function generateSessionToken(): string {
+  return crypto.randomBytes(32).toString("hex");
+}
+
+function isSessionValid(req: http.IncomingMessage): boolean {
+  // No PIN configured → always valid
+  if (!uiPinHash) return true;
+
+  const cookieHeader = req.headers.cookie || "";
+  const match = cookieHeader.match(/(?:^|;\s*)ems_session=([^;]+)/);
+  if (!match) return false;
+
+  const token = match[1];
+  const expiry = activeSessions.get(token);
+  if (!expiry || Date.now() > expiry) {
+    if (expiry) activeSessions.delete(token);
+    return false;
+  }
+  return true;
+}
+
+function cleanupSessions(): void {
+  const now = Date.now();
+  for (const [token, expiry] of activeSessions) {
+    if (now > expiry) activeSessions.delete(token);
+  }
+}
+
 function markCloudReachable(): void {
   isCloudReachable = true;
   cloudFailCount = 0;
