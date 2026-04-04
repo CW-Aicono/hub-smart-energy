@@ -27,7 +27,9 @@ import { useToast } from "@/hooks/use-toast";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { Plus, Server, Trash2, Loader2, Plug, Pencil, Wifi, WifiOff } from "lucide-react";
+import { Plus, Server, Trash2, Loader2, Plug, Pencil, Wifi, WifiOff, Globe, Smartphone } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ApiSettings } from "@/components/settings/ApiSettings";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
