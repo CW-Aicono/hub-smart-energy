@@ -5849,6 +5849,15 @@ export const translations = {
   "invoices.draft": { de: "Entwurf", en: "Draft", es: "Borrador", nl: "Concept" },
   "invoices.confirmed": { de: "Bestätigt", en: "Confirmed", es: "Confirmado", nl: "Bevestigd" },
   "invoices.addCorrection": { de: "Korrekturrechnung hinzufügen", en: "Add correction invoice", es: "Añadir factura de corrección", nl: "Correctiefactuur toevoegen" },
+  "gatewayDevices.backup": { de: "Backup erstellen", en: "Create backup", es: "Crear copia de seguridad", nl: "Back-up maken" },
+  "gatewayDevices.restart": { de: "Gateway neu starten", en: "Restart gateway", es: "Reiniciar gateway", nl: "Gateway herstarten" },
+  "gatewayDevices.update": { de: "Update installieren", en: "Install update", es: "Instalar actualización", nl: "Update installeren" },
+  "gatewayDevices.apiKey": { de: "API-Key verwalten", en: "Manage API key", es: "Administrar clave API", nl: "API-sleutel beheren" },
+  "gatewayDevices.commandSent": { de: "Befehl gesendet", en: "Command sent", es: "Comando enviado", nl: "Opdracht verzonden" },
+  "gatewayDevices.commandFailed": { de: "Befehl fehlgeschlagen", en: "Command failed", es: "Comando fallido", nl: "Opdracht mislukt" },
+  "gatewayDevices.backupSent": { de: "Backup-Befehl gesendet. Die Sicherung wird im Hintergrund erstellt.", en: "Backup command sent. The backup is being created in the background.", es: "Comando de copia enviado. Se está creando en segundo plano.", nl: "Back-upopdracht verzonden. De back-up wordt op de achtergrond aangemaakt." },
+  "gatewayDevices.restartSent": { de: "Neustart-Befehl gesendet. Das Gateway wird in Kürze neu starten.", en: "Restart command sent. The gateway will restart shortly.", es: "Comando de reinicio enviado. El gateway se reiniciará en breve.", nl: "Herstartopdracht verzonden. De gateway herstart binnenkort." },
+  "gatewayDevices.updateSent": { de: "Update-Befehl gesendet. Das Update wird im Hintergrund installiert.", en: "Update command sent. The update is being installed in the background.", es: "Comando de actualización enviado. Se está instalando en segundo plano.", nl: "Update-opdracht verzonden. De update wordt op de achtergrond geïnstalleerd." },
 } as const;
 
 export type TranslationKey = keyof typeof translations;
