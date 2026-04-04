@@ -121,6 +121,12 @@ export function useCustomWidgetDefinitions() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
+      // Remove associated dashboard_widgets entries
+      await supabase
+        .from("dashboard_widgets")
+        .delete()
+        .eq("widget_type", `custom_${id}`);
+
       const { error } = await supabase
         .from("custom_widget_definitions")
         .delete()
