@@ -30,7 +30,7 @@ export interface GatewayDeviceWithMetrics extends GatewayDevice {
   lastExecutionAt: string | null;
 }
 
-export function useGatewayDevices(locationIntegrationId?: string) {
+export function useGatewayDevices(locationIntegrationId?: string, locationId?: string) {
   const { tenant } = useTenant();
   const { t } = useTranslation();
   const queryClient = useQueryClient();
