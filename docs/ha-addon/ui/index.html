@@ -582,8 +582,13 @@
         for (var i = 0; i < urls.length; i += 1) {
           var url = urls[i];
           try {
-            var response = await fetch(url, options || {});
+            var response = await fetch(url, Object.assign({ credentials: 'same-origin' }, options || {}));
             var contentType = response.headers.get('content-type') || '';
+            if (response.status === 401) {
+              // PIN required – show login
+              showLoginScreen();
+              throw new Error('PIN erforderlich');
+            }
             if (!response.ok) {
               lastError = new Error('HTTP ' + response.status + ' bei ' + url);
               continue;
