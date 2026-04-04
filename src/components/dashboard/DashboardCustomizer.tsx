@@ -16,6 +16,7 @@ interface DashboardCustomizerProps {
   onReorder: (newOrder: string[]) => void;
   onResizeWidget: (widgetType: string, size: WidgetSize) => void;
   onResetLayout?: () => void;
+  customWidgetNames?: Record<string, string>;
 }
 
 const WIDGET_LABEL_KEYS: Record<string, string> = {
