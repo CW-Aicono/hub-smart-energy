@@ -83,18 +83,18 @@ export function DeviceCard({ device, onCommand, isAdmin, onKeyGenerated }: Devic
 
           {isAdmin && (
             <div className="flex items-center gap-1">
-              <Button variant="ghost" size="icon" onClick={() => setKeyDialogOpen(true)} title="API-Key verwalten">
+              <Button variant="ghost" size="icon" onClick={() => setKeyDialogOpen(true)} title={t("gatewayDevices.apiKey")}>
                 <Key className="h-4 w-4" />
               </Button>
-              <Button variant="ghost" size="icon" onClick={() => onCommand(device.id, "backup")} title={t("gatewayDevices.backup" as any)}>
+              <Button variant="ghost" size="icon" onClick={() => onCommand(device.id, "backup")} title={t("gatewayDevices.backup")}>
                 <Download className="h-4 w-4" />
               </Button>
               {hasUpdate && (
-                <Button variant="ghost" size="icon" onClick={() => onCommand(device.id, "update")} title={t("gatewayDevices.update" as any)}>
+                <Button variant="ghost" size="icon" onClick={() => onCommand(device.id, "update")} title={t("gatewayDevices.update")}>
                   <ArrowUpCircle className="h-4 w-4" />
                 </Button>
               )}
-              <Button variant="ghost" size="icon" onClick={() => onCommand(device.id, "restart")} title={t("gatewayDevices.restart" as any)}>
+              <Button variant="ghost" size="icon" onClick={() => onCommand(device.id, "restart")} title={t("gatewayDevices.restart")}>
                 <RefreshCw className="h-4 w-4" />
               </Button>
             </div>
