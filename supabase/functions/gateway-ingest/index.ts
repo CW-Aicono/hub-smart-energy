@@ -905,6 +905,11 @@ async function handleHeartbeat(req: Request): Promise<Response> {
     latest_available_version: existing?.latest_available_version || null,
   };
 
+  // Deliver ui_pin_hash to the gateway for local PIN protection
+  if (existingConfig.ui_pin_hash) {
+    responseData.ui_pin_hash = existingConfig.ui_pin_hash;
+  }
+
   // Deliver pending command to the gateway
   if (pendingCommand) {
     responseData.pending_command = pendingCommand;

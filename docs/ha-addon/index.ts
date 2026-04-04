@@ -73,6 +73,52 @@ let isCloudReachable = true;
 let lastCloudCheck = 0;
 let cloudFailCount = 0;
 
+/* ── PIN Auth State ──────────────────────────────────────────────────────────── */
+
+import crypto from "crypto";
+
+let uiPinHash: string | null = null; // SHA-256 hash synced from cloud
+const activeSessions = new Map<string, number>(); // token → expiry timestamp
+const SESSION_TTL_MS = 60 * 60 * 1000; // 1 hour
+
+// Brute-force protection
+let pinFailCount = 0;
+let pinLockoutUntil = 0;
+const PIN_MAX_ATTEMPTS = 5;
+const PIN_LOCKOUT_MS = 60_000;
+
+function sha256Sync(value: string): string {
+  return crypto.createHash("sha256").update(value).digest("hex");
+}
+
+function generateSessionToken(): string {
+  return crypto.randomBytes(32).toString("hex");
+}
+
+function isSessionValid(req: http.IncomingMessage): boolean {
+  // No PIN configured → always valid
+  if (!uiPinHash) return true;
+
+  const cookieHeader = req.headers.cookie || "";
+  const match = cookieHeader.match(/(?:^|;\s*)ems_session=([^;]+)/);
+  if (!match) return false;
+
+  const token = match[1];
+  const expiry = activeSessions.get(token);
+  if (!expiry || Date.now() > expiry) {
+    if (expiry) activeSessions.delete(token);
+    return false;
+  }
+  return true;
+}
+
+function cleanupSessions(): void {
+  const now = Date.now();
+  for (const [token, expiry] of activeSessions) {
+    if (now > expiry) activeSessions.delete(token);
+  }
+}
+
 function markCloudReachable(): void {
   isCloudReachable = true;
   cloudFailCount = 0;
@@ -935,7 +981,13 @@ async function sendHeartbeat(): Promise<void> {
         latest_available_version?: string;
         pending_command?: string;
         pending_command_params?: Record<string, unknown>;
+        ui_pin_hash?: string | null;
       };
+      // Sync UI PIN hash from cloud
+      if (data.ui_pin_hash !== undefined) {
+        uiPinHash = data.ui_pin_hash || null;
+        console.log(`[heartbeat] UI PIN ${uiPinHash ? "synced" : "cleared"}`);
+      }
       if (data.latest_available_version && data.latest_available_version !== ADDON_VERSION) {
         console.log(`[heartbeat] Update available: ${data.latest_available_version}`);
       }
@@ -1150,6 +1202,77 @@ function startServer(): void {
       res.writeHead(204);
       res.end();
       return;
+    }
+
+    // ── PIN Auth endpoint (always accessible) ──
+    if (pathname === "/api/auth" && req.method === "POST") {
+      let body = "";
+      req.on("data", (chunk: string) => { body += chunk; });
+      req.on("end", () => {
+        try {
+          const { pin } = JSON.parse(body);
+
+          // Check lockout
+          if (Date.now() < pinLockoutUntil) {
+            const waitSec = Math.ceil((pinLockoutUntil - Date.now()) / 1000);
+            res.writeHead(429, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ error: "Zu viele Versuche", retry_after_seconds: waitSec }));
+            return;
+          }
+
+          if (!uiPinHash) {
+            // No PIN configured – auto-auth
+            const token = generateSessionToken();
+            activeSessions.set(token, Date.now() + SESSION_TTL_MS);
+            res.setHeader("Set-Cookie", `ems_session=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=3600`);
+            res.writeHead(200, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ success: true }));
+            return;
+          }
+
+          const inputHash = sha256Sync(String(pin || ""));
+          if (inputHash === uiPinHash) {
+            // Success
+            pinFailCount = 0;
+            const token = generateSessionToken();
+            activeSessions.set(token, Date.now() + SESSION_TTL_MS);
+            cleanupSessions();
+            res.setHeader("Set-Cookie", `ems_session=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=3600`);
+            res.writeHead(200, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ success: true }));
+          } else {
+            pinFailCount++;
+            if (pinFailCount >= PIN_MAX_ATTEMPTS) {
+              pinLockoutUntil = Date.now() + PIN_LOCKOUT_MS;
+              pinFailCount = 0;
+              console.warn("[auth] PIN lockout activated (60s)");
+            }
+            res.writeHead(401, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ error: "Falscher PIN", remaining_attempts: PIN_MAX_ATTEMPTS - pinFailCount }));
+          }
+        } catch {
+          res.writeHead(400, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "Invalid request" }));
+        }
+      });
+      return;
+    }
+
+    // ── Auth check: is PIN required? ──
+    if (pathname === "/api/auth-status") {
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ pin_required: !!uiPinHash, authenticated: isSessionValid(req) }));
+      return;
+    }
+
+    // ── Session check for all other /api/* and UI routes ──
+    if (uiPinHash && !isSessionValid(req)) {
+      // Allow version endpoint without auth (for health checks)
+      if (pathname !== "/api/version") {
+        res.writeHead(401, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "Unauthorized", pin_required: true }));
+        return;
+      }
     }
 
     // API endpoints

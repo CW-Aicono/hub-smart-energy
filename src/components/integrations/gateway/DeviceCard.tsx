@@ -5,6 +5,7 @@ import { useTranslation } from "@/hooks/useTranslation";
 import type { GatewayDeviceWithMetrics } from "@/hooks/useGatewayDevices";
 import { StatusBadge } from "./StatusBadge";
 import { ApiKeyDialog } from "./ApiKeyDialog";
+import { PinConfigDialog } from "./PinConfigDialog";
 import { DeviceMetrics } from "./DeviceMetrics";
 import {
   Server,
@@ -13,6 +14,7 @@ import {
   ArrowUpCircle,
   Clock,
   Key,
+  Lock,
   ShieldCheck,
 } from "lucide-react";
 
@@ -26,6 +28,7 @@ interface DeviceCardProps {
 export function DeviceCard({ device, onCommand, isAdmin, onKeyGenerated }: DeviceCardProps) {
   const { t } = useTranslation();
   const [keyDialogOpen, setKeyDialogOpen] = useState(false);
+  const [pinDialogOpen, setPinDialogOpen] = useState(false);
   const hasUpdate =
     device.latest_available_version &&
     device.addon_version &&
@@ -65,6 +68,12 @@ export function DeviceCard({ device, onCommand, isAdmin, onKeyGenerated }: Devic
                     Device-Key
                   </Badge>
                 )}
+                {(device.config as any)?.ui_pin_hash && (
+                  <Badge variant="outline" className="bg-primary/10 text-primary border-primary/30">
+                    <Lock className="h-3 w-3 mr-1" />
+                    PIN
+                  </Badge>
+                )}
               </div>
               <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
                 {device.addon_version && <span>Add-on v{device.addon_version}</span>}
@@ -83,6 +92,9 @@ export function DeviceCard({ device, onCommand, isAdmin, onKeyGenerated }: Devic
 
           {isAdmin && (
             <div className="flex items-center gap-1">
+              <Button variant="ghost" size="icon" onClick={() => setPinDialogOpen(true)} title="UI-PIN konfigurieren">
+                <Lock className="h-4 w-4" />
+              </Button>
               <Button variant="ghost" size="icon" onClick={() => setKeyDialogOpen(true)} title={t("gatewayDevices.apiKey")}>
                 <Key className="h-4 w-4" />
               </Button>
@@ -106,12 +118,20 @@ export function DeviceCard({ device, onCommand, isAdmin, onKeyGenerated }: Devic
       </div>
 
       {isAdmin && (
-        <ApiKeyDialog
-          device={device}
-          open={keyDialogOpen}
-          onOpenChange={setKeyDialogOpen}
-          onKeyGenerated={onKeyGenerated}
-        />
+        <>
+          <ApiKeyDialog
+            device={device}
+            open={keyDialogOpen}
+            onOpenChange={setKeyDialogOpen}
+            onKeyGenerated={onKeyGenerated}
+          />
+          <PinConfigDialog
+            device={device}
+            open={pinDialogOpen}
+            onOpenChange={setPinDialogOpen}
+            onUpdated={onKeyGenerated}
+          />
+        </>
       )}
     </>
   );
