@@ -92,10 +92,18 @@ const getLocationWidget = (_locationId: string | null): string => {
 
 const DashboardContent = () => {
   const { widgets, visibleWidgets, loading: widgetsLoading, toggleWidgetVisibility, reorderWidgets, updateWidgetSize } = useDashboardWidgets();
+  const { definitions: customWidgetDefs } = useCustomWidgetDefinitions();
   const [expandedWidget, setExpandedWidget] = useState<string | null>(null);
   const { t } = useTranslation();
   const { selectedLocationId, setSelectedLocationId, isPending } = useDashboardFilter();
   const { isModuleEnabled } = useModuleGuard();
+
+  // Build a lookup for custom widget definitions
+  const customWidgetMap = useMemo(() => {
+    const map: Record<string, typeof customWidgetDefs[0]> = {};
+    customWidgetDefs.forEach((d) => { map[`custom_${d.id}`] = d; });
+    return map;
+  }, [customWidgetDefs]);
 
   // Prefetch shared data at dashboard level
   useDashboardPrefetch(selectedLocationId);
