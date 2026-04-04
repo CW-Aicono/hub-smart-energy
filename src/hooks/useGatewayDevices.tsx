@@ -30,13 +30,13 @@ export interface GatewayDeviceWithMetrics extends GatewayDevice {
   lastExecutionAt: string | null;
 }
 
-export function useGatewayDevices(locationIntegrationId?: string) {
+export function useGatewayDevices(locationIntegrationId?: string, locationId?: string) {
   const { tenant } = useTenant();
   const { t } = useTranslation();
   const queryClient = useQueryClient();
 
   const query = useQuery({
-    queryKey: ["gateway-devices", tenant?.id, locationIntegrationId],
+    queryKey: ["gateway-devices", tenant?.id, locationIntegrationId, locationId],
     enabled: !!tenant?.id,
     staleTime: 30_000,
     refetchInterval: 60_000,
@@ -112,19 +112,19 @@ export function useGatewayDevices(locationIntegrationId?: string) {
         }
       }
 
-      // For devices WITHOUT location_integration_id, try to find integrations
-      // via tenant-level location lookup (fallback for unlinked gateway devices)
+      // For devices WITHOUT location_integration_id, resolve only integrations
+      // for the current location to avoid tenant-wide overcounting.
       const unlinkedDevices = devices.filter((d) => !d.location_integration_id);
-      if (unlinkedDevices.length > 0) {
-        const { data: allLis } = await supabase
+      if (unlinkedDevices.length > 0 && locationId) {
+        const { data: locationLis } = await supabase
           .from("location_integrations")
           .select("id, location_id")
+          .eq("location_id", locationId)
           .eq("is_enabled", true);
-        if (allLis) {
+        if (locationLis) {
           for (const d of unlinkedDevices) {
-            // Include all integrations for this tenant
-            deviceToIntegrationIds[d.id] = allLis.map((li) => li.id);
-            for (const li of allLis) allRelevantIntegrationIds.add(li.id);
+            deviceToIntegrationIds[d.id] = locationLis.map((li) => li.id);
+            for (const li of locationLis) allRelevantIntegrationIds.add(li.id);
           }
         }
       }

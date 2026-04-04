@@ -53,7 +53,7 @@ export function IntegrationCard({ locationIntegration, onUpdate, onDelete }: Int
   const isHaType = integration?.type === "home_assistant" || integration?.type === "ha-addon";
 
   // For HA integrations, fetch all tenant devices (including unlinked ones)
-  const { devices: gatewayDevices, sendCommand, refetch: refetchDevices } = useGatewayDevices(isHaType ? undefined : locationIntegration.id);
+  const { devices: gatewayDevices, sendCommand, refetch: refetchDevices } = useGatewayDevices(isHaType ? undefined : locationIntegration.id, locationIntegration.location_id);
   const gatewayLocalTime = !isLoxone && gatewayDevices.length > 0 ? gatewayDevices[0].local_time : null;
 
   const handleToggleEnabled = async (enabled: boolean) => {
