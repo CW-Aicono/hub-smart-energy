@@ -931,9 +931,18 @@ async function sendHeartbeat(): Promise<void> {
 
     if (res.ok) {
       markCloudReachable();
-      const data = await res.json() as { latest_available_version?: string };
+      const data = await res.json() as {
+        latest_available_version?: string;
+        pending_command?: string;
+        pending_command_params?: Record<string, unknown>;
+      };
       if (data.latest_available_version && data.latest_available_version !== ADDON_VERSION) {
         console.log(`[heartbeat] Update available: ${data.latest_available_version}`);
+      }
+      // Process pending commands from cloud
+      if (data.pending_command) {
+        console.log(`[heartbeat] Received pending command: ${data.pending_command}`);
+        await executePendingCommand(data.pending_command, data.pending_command_params || {});
       }
     } else {
       markCloudUnreachable();
