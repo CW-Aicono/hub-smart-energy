@@ -28,6 +28,7 @@ interface DeviceCardProps {
 export function DeviceCard({ device, onCommand, isAdmin, onKeyGenerated }: DeviceCardProps) {
   const { t } = useTranslation();
   const [keyDialogOpen, setKeyDialogOpen] = useState(false);
+  const [pinDialogOpen, setPinDialogOpen] = useState(false);
   const hasUpdate =
     device.latest_available_version &&
     device.addon_version &&
