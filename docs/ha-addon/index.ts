@@ -714,6 +714,7 @@ async function executeHAService(entityId: string, cmdValue: string): Promise<voi
 /* ── Cloud Sync: Automations ─────────────────────────────────────────────────── */
 
 let lastAutomationSync = "";
+let automationSyncCount = 0;
 
 async function syncAutomationsFromCloud(): Promise<void> {
   // Always attempt sync – use result to update connectivity status
