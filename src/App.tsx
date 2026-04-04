@@ -17,6 +17,7 @@ import UpdateBanner from "./components/UpdateBanner";
 import SupportSessionBanner from "./components/SupportSessionBanner";
 import CookieConsent from "./components/CookieConsent";
 import LocationDetail from "./pages/LocationDetail";
+import Locations from "./pages/Locations";
 // leaflet CSS is loaded lazily in map components
 
 // Lazy-loaded pages
