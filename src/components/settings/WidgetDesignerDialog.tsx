@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useCustomWidgetDefinitions, CustomWidgetDefinition, CustomWidgetConfig, ChartType, AggregationType } from "@/hooks/useCustomWidgetDefinitions";
+import { useCustomWidgetDefinitions, CustomWidgetDefinition, CustomWidgetConfig, ChartType, AggregationType, ChartTypePerPeriod, TimePeriod } from "@/hooks/useCustomWidgetDefinitions";
 import { useMeters } from "@/hooks/useMeters";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -18,6 +18,15 @@ const CHART_TYPES: { value: ChartType; label: string; icon: React.ReactNode }[] 
   { value: "gauge", label: "Gauge / Tacho", icon: <Gauge className="h-5 w-5" /> },
   { value: "kpi", label: "KPI-Kachel", icon: <Activity className="h-5 w-5" /> },
   { value: "table", label: "Tabelle", icon: <Table2 className="h-5 w-5" /> },
+];
+
+const TIME_PERIODS: { value: TimePeriod; label: string }[] = [
+  { value: "day", label: "Tag" },
+  { value: "week", label: "Woche" },
+  { value: "month", label: "Monat" },
+  { value: "quarter", label: "Quartal" },
+  { value: "year", label: "Jahr" },
+  { value: "all", label: "Gesamt" },
 ];
 
 const AGGREGATIONS: { value: AggregationType; label: string }[] = [
@@ -41,6 +50,7 @@ const defaultConfig: CustomWidgetConfig = {
   thresholds: [],
   y_range: { min: null, max: null },
   series_colors: {},
+  chart_type_per_period: {},
 };
 
 interface WidgetDesignerDialogProps {
@@ -59,6 +69,7 @@ export function WidgetDesignerDialog({ open, onOpenChange, editingWidget }: Widg
   const [isShared, setIsShared] = useState(true);
   const [config, setConfig] = useState<CustomWidgetConfig>(defaultConfig);
   const [activeTab, setActiveTab] = useState("basics");
+  const [previewPeriod, setPreviewPeriod] = useState<TimePeriod>("day");
 
   useEffect(() => {
     if (open) {
@@ -67,7 +78,7 @@ export function WidgetDesignerDialog({ open, onOpenChange, editingWidget }: Widg
         setChartType(editingWidget.chart_type);
         setColor(editingWidget.color);
         setIsShared(editingWidget.is_shared);
-        setConfig(editingWidget.config || defaultConfig);
+        setConfig({ ...defaultConfig, ...editingWidget.config });
       } else {
         setName("");
         setChartType("line");
@@ -76,6 +87,7 @@ export function WidgetDesignerDialog({ open, onOpenChange, editingWidget }: Widg
         setConfig(defaultConfig);
       }
       setActiveTab("basics");
+      setPreviewPeriod("day");
     }
   }, [open, editingWidget]);
 
@@ -135,6 +147,26 @@ export function WidgetDesignerDialog({ open, onOpenChange, editingWidget }: Widg
     }));
   };
 
+  const setPeriodChartType = (period: TimePeriod, ct: ChartType) => {
+    setConfig((prev) => ({
+      ...prev,
+      chart_type_per_period: { ...prev.chart_type_per_period, [period]: ct },
+    }));
+  };
+
+  const getPeriodChartType = (period: TimePeriod): ChartType => {
+    return config.chart_type_per_period?.[period] ?? chartType;
+  };
+
+  // Reset a period override to use the default
+  const resetPeriodChartType = (period: TimePeriod) => {
+    setConfig((prev) => {
+      const updated = { ...prev.chart_type_per_period };
+      delete updated[period];
+      return { ...prev, chart_type_per_period: updated };
+    });
+  };
+
   // Group meters by energy type
   const meterGroups = (meters || []).reduce<Record<string, typeof meters>>((acc, meter) => {
     const type = (meter as any).energy_type || "Sonstige";
@@ -144,6 +176,9 @@ export function WidgetDesignerDialog({ open, onOpenChange, editingWidget }: Widg
   }, {});
 
   const isValid = name.trim().length > 0 && config.meter_ids.length > 0;
+
+  // Resolve the chart type shown in preview based on selected preview period
+  const previewChartType = getPeriodChartType(previewPeriod);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -160,6 +195,7 @@ export function WidgetDesignerDialog({ open, onOpenChange, editingWidget }: Widg
             <TabsTrigger value="preview" className="flex-1">Vorschau</TabsTrigger>
           </TabsList>
 
+          {/* ── Basics ── */}
           <TabsContent value="basics" className="space-y-4 mt-4">
             <div className="space-y-2">
               <Label>Name</Label>
@@ -167,7 +203,8 @@ export function WidgetDesignerDialog({ open, onOpenChange, editingWidget }: Widg
             </div>
 
             <div className="space-y-2">
-              <Label>Diagrammtyp</Label>
+              <Label>Standard-Diagrammtyp</Label>
+              <p className="text-xs text-muted-foreground">Wird verwendet, wenn keine zeitraumspezifische Einstellung gesetzt ist.</p>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                 {CHART_TYPES.map((ct) => (
                   <button
@@ -216,6 +253,7 @@ export function WidgetDesignerDialog({ open, onOpenChange, editingWidget }: Widg
             </div>
           </TabsContent>
 
+          {/* ── Data sources ── */}
           <TabsContent value="data" className="space-y-4 mt-4">
             <div className="space-y-2">
               <Label>Zähler auswählen</Label>
@@ -225,10 +263,7 @@ export function WidgetDesignerDialog({ open, onOpenChange, editingWidget }: Widg
                     <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1">{type}</p>
                     <div className="space-y-1">
                       {(groupMeters || []).map((meter: any) => (
-                        <label
-                          key={meter.id}
-                          className="flex items-center gap-2 p-1.5 rounded hover:bg-muted cursor-pointer"
-                        >
+                        <label key={meter.id} className="flex items-center gap-2 p-1.5 rounded hover:bg-muted cursor-pointer">
                           <Checkbox
                             checked={config.meter_ids.includes(meter.id)}
                             onCheckedChange={() => toggleMeter(meter.id)}
@@ -248,9 +283,7 @@ export function WidgetDesignerDialog({ open, onOpenChange, editingWidget }: Widg
             <div className="space-y-2">
               <Label>Aggregation</Label>
               <Select value={config.aggregation} onValueChange={(v) => setConfig((p) => ({ ...p, aggregation: v as AggregationType }))}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
+                <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {AGGREGATIONS.map((a) => (
                     <SelectItem key={a.value} value={a.value}>{a.label}</SelectItem>
@@ -260,13 +293,12 @@ export function WidgetDesignerDialog({ open, onOpenChange, editingWidget }: Widg
             </div>
           </TabsContent>
 
+          {/* ── Display settings ── */}
           <TabsContent value="display" className="space-y-4 mt-4">
             <div className="space-y-2">
               <Label>Einheit</Label>
               <Select value={config.unit} onValueChange={(v) => setConfig((p) => ({ ...p, unit: v }))}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
+                <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {UNITS.map((u) => (
                     <SelectItem key={u} value={u}>{u}</SelectItem>
@@ -275,7 +307,48 @@ export function WidgetDesignerDialog({ open, onOpenChange, editingWidget }: Widg
               </Select>
             </div>
 
-            {config.meter_ids.length > 0 && (chartType === "line" || chartType === "bar") && (
+            {/* Per-period chart type configuration */}
+            <div className="space-y-2">
+              <Label>Diagrammtyp pro Zeitraum</Label>
+              <p className="text-xs text-muted-foreground">
+                Lege fest, welcher Diagrammtyp bei welchem Dashboard-Zeitfilter angezeigt wird. Ohne Einstellung wird der Standard-Typ verwendet.
+              </p>
+              <div className="border rounded-lg divide-y">
+                {TIME_PERIODS.map((tp) => {
+                  const currentType = config.chart_type_per_period?.[tp.value];
+                  const isOverridden = currentType !== undefined;
+                  return (
+                    <div key={tp.value} className="flex items-center gap-3 p-2.5">
+                      <span className="text-sm font-medium w-16 shrink-0">{tp.label}</span>
+                      <Select
+                        value={isOverridden ? currentType : "__default__"}
+                        onValueChange={(v) => {
+                          if (v === "__default__") {
+                            resetPeriodChartType(tp.value);
+                          } else {
+                            setPeriodChartType(tp.value, v as ChartType);
+                          }
+                        }}
+                      >
+                        <SelectTrigger className="flex-1 h-8 text-sm">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__default__">
+                            Standard ({CHART_TYPES.find((ct) => ct.value === chartType)?.label})
+                          </SelectItem>
+                          {CHART_TYPES.map((ct) => (
+                            <SelectItem key={ct.value} value={ct.value}>{ct.label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {config.meter_ids.length > 0 && (
               <div className="space-y-2">
                 <Label>Farben pro Datenreihe</Label>
                 <div className="space-y-2">
@@ -306,25 +379,9 @@ export function WidgetDesignerDialog({ open, onOpenChange, editingWidget }: Widg
               </div>
               {config.thresholds.map((threshold, idx) => (
                 <div key={idx} className="flex items-center gap-2">
-                  <Input
-                    type="number"
-                    value={threshold.value}
-                    onChange={(e) => updateThreshold(idx, "value", Number(e.target.value))}
-                    className="w-24"
-                    placeholder="Wert"
-                  />
-                  <Input
-                    value={threshold.label}
-                    onChange={(e) => updateThreshold(idx, "label", e.target.value)}
-                    className="flex-1"
-                    placeholder="Label"
-                  />
-                  <Input
-                    type="color"
-                    value={threshold.color}
-                    onChange={(e) => updateThreshold(idx, "color", e.target.value)}
-                    className="h-8 w-8 p-0 border-0 cursor-pointer shrink-0"
-                  />
+                  <Input type="number" value={threshold.value} onChange={(e) => updateThreshold(idx, "value", Number(e.target.value))} className="w-24" placeholder="Wert" />
+                  <Input value={threshold.label} onChange={(e) => updateThreshold(idx, "label", e.target.value)} className="flex-1" placeholder="Label" />
+                  <Input type="color" value={threshold.color} onChange={(e) => updateThreshold(idx, "color", e.target.value)} className="h-8 w-8 p-0 border-0 cursor-pointer shrink-0" />
                   <Button type="button" variant="ghost" size="icon" onClick={() => removeThreshold(idx)} className="h-8 w-8 shrink-0">
                     <X className="h-4 w-4" />
                   </Button>
@@ -354,10 +411,25 @@ export function WidgetDesignerDialog({ open, onOpenChange, editingWidget }: Widg
             </div>
           </TabsContent>
 
-          <TabsContent value="preview" className="mt-4">
+          {/* ── Preview ── */}
+          <TabsContent value="preview" className="mt-4 space-y-4">
+            <div className="flex items-center gap-2">
+              <Label className="shrink-0">Vorschau-Zeitraum:</Label>
+              <Select value={previewPeriod} onValueChange={(v) => setPreviewPeriod(v as TimePeriod)}>
+                <SelectTrigger className="w-40 h-8 text-sm"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {TIME_PERIODS.map((tp) => (
+                    <SelectItem key={tp.value} value={tp.value}>{tp.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <span className="text-xs text-muted-foreground ml-2">
+                Typ: {CHART_TYPES.find((ct) => ct.value === previewChartType)?.label}
+              </span>
+            </div>
             <WidgetPreview
               name={name}
-              chartType={chartType}
+              chartType={previewChartType}
               color={color}
               config={config}
             />

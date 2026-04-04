@@ -6,12 +6,16 @@ import { toast } from "sonner";
 
 export type ChartType = "line" | "bar" | "gauge" | "kpi" | "table";
 export type AggregationType = "sum" | "avg" | "max" | "min";
+export type TimePeriod = "day" | "week" | "month" | "quarter" | "year" | "all";
 
 export interface ThresholdConfig {
   value: number;
   label: string;
   color: string;
 }
+
+/** Chart type mapping per dashboard time period */
+export type ChartTypePerPeriod = Partial<Record<TimePeriod, ChartType>>;
 
 export interface CustomWidgetConfig {
   meter_ids: string[];
@@ -20,6 +24,8 @@ export interface CustomWidgetConfig {
   thresholds: ThresholdConfig[];
   y_range: { min: number | null; max: number | null };
   series_colors: Record<string, string>;
+  /** Per-period chart type overrides; falls back to definition.chart_type */
+  chart_type_per_period?: ChartTypePerPeriod;
 }
 
 export interface CustomWidgetDefinition {
@@ -29,6 +35,7 @@ export interface CustomWidgetDefinition {
   name: string;
   icon: string;
   color: string;
+  /** Default chart type (used as fallback when no per-period override) */
   chart_type: ChartType;
   config: CustomWidgetConfig;
   is_shared: boolean;
