@@ -27,7 +27,7 @@ const Admin = lazy(() => import("./pages/Admin"));
 const Settings = lazy(() => import("./pages/Settings"));
 const Branding = lazy(() => import("./pages/Branding"));
 const Roles = lazy(() => import("./pages/Roles"));
-const Locations = lazy(() => import("./pages/Locations"));
+
 const EnergyData = lazy(() => import("./pages/EnergyData"));
 const MetersOverview = lazy(() => import("./pages/MetersOverview"));
 const Integrations = lazy(() => import("./pages/Integrations"));
