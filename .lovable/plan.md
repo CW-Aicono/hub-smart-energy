@@ -1,60 +1,34 @@
 
 
-# Plan: AICONO EMS White-Label + Offline-Fähigkeit
+## Analyse
 
-## Zwei Ergebnisse
+**Ursache der 2-Stunden-Abweichung:**
+Das Gateway sendet seine lokale Zeit als `new Date().toISOString()` (in `docs/ha-addon/index.ts`, Zeile 921). Die JavaScript-Methode `.toISOString()` gibt **immer UTC** zurück – erkennbar am Suffix **"Z"** (= "Zulu" = UTC+0). Da Deutschland aktuell in MESZ (Mitteleuropäische Sommerzeit = UTC+2) ist, ergibt sich exakt die beobachtete 2-Stunden-Differenz.
 
-1. **Code-Änderungen** an 6 Dateien (Add-on + Edge Function)
-2. **Word-Dokument** (`AICONO_EMS_Anleitung.docx`) mit Schritt-für-Schritt-Anleitung zum Download
+**Was bedeutet "835Z"?**
+- `.835` = Millisekunden (835 ms)
+- `Z` = "Zulu Time" = UTC-Zeitzone (ISO 8601 Standard)
 
----
+## Fix-Plan
 
-## Teil A: Code-Änderungen
+### 1. Frontend: Gateway-Zeit korrekt formatieren (IntegrationCard.tsx)
 
-### A1. White-Label Rebranding
+Die rohe ISO-UTC-Zeichenkette wird aktuell direkt angezeigt. Stattdessen wird sie als `Date`-Objekt geparst und in der lokalen Zeitzone (Europe/Berlin) formatiert:
 
-| Datei | Änderungen |
-|---|---|
-| `docs/ha-addon/config.yaml` | name → "AICONO EMS Gateway", panel_title → "AICONO EMS", description ohne HA-Referenzen, `supabase_url` → `cloud_url` (mit Fallback) |
-| `docs/ha-addon/ui/index.html` | Title → "AICONO EMS", Header-Logo als AICONO SVG, "Home Assistant"-Karte → "System", Footer mit Copyright, neue "Steuerung"-Seite |
-| `docs/ha-addon/index.ts` | Startup-Banner → "AICONO EMS Gateway", device_type → "aicono-ems", `cloud_url` als primäres Config-Feld (Fallback auf `supabase_url`) |
-| `docs/ha-addon/package.json` | name → "aicono-ems-gateway" |
-| `docs/ha-addon/Dockerfile` | Kommentare aktualisieren |
-
-### A2. Offline-Fähigkeit erweitern
-
-| Datei | Änderungen |
-|---|---|
-| `docs/ha-addon/index.ts` | **Meter-Mappings-Cache** (neue SQLite-Tabelle `meter_mappings_cache`): beim Fetch persistieren, beim Start aus SQLite laden. **HA-States-Cache** (Tabelle `ha_states_cache`): periodisch persistieren, beim Start laden → sofort UI-fähig nach Reboot ohne Internet. |
-| `docs/ha-addon/index.ts` | **`/api/execute` Endpoint**: Neuer POST-Endpoint zum lokalen Schalten von Aktoren (entity_id + service → HA REST API direkt). Funktioniert komplett offline. |
-| `docs/ha-addon/ui/index.html` | **"Steuerung"-Seite**: Neue 6. Seite mit schaltbaren Kacheln (On/Off/Toggle) für switch.*, light.*, cover.* Entities. Ruft `/api/execute` auf. |
-| `supabase/functions/gateway-ingest/index.ts` | `.eq("is_active", true)` entfernen → alle Automationen synchronisieren (aktive + inaktive). Lokale Engine prüft `is_active` selbst. |
-
-### A3. Zusammenfassung der SQLite-Erweiterungen
-
-```text
-meter_mappings_cache     → Meter-Zuordnungen persistent (Offline-Polling nach Reboot)
-ha_states_cache          → Letzte Sensorwerte persistent (Offline-UI nach Reboot)
-/api/execute             → Lokales Schalten ohne Cloud
-Steuerung-Seite          → UI für manuelles Schalten im lokalen Dashboard
-sync-automations         → Auch inaktive Regeln synchronisieren
+```typescript
+// Statt: Gateway-Zeit: {gatewayLocalTime}
+// Neu:   Gateway-Zeit: 04.04.2026, 17:01:15
+const formattedTime = new Date(gatewayLocalTime).toLocaleString("de-DE", {
+  timeZone: "Europe/Berlin",
+  day: "2-digit", month: "2-digit", year: "numeric",
+  hour: "2-digit", minute: "2-digit", second: "2-digit",
+});
 ```
 
----
+### 2. Optional – Gateway-Seite (docs/ha-addon/index.ts)
 
-## Teil B: Word-Dokument (Anleitung)
+Alternativ oder zusätzlich könnte das Gateway bereits die lokale Zeit senden (z.B. mit `Intl.DateTimeFormat`). Da aber das Gateway auf einem Raspberry Pi die Systemzeitzone nicht zuverlässig konfiguriert haben muss, ist die **Frontend-Konvertierung der sicherere Ansatz** – das Gateway sendet weiterhin UTC (korrekt und eindeutig), und das Frontend zeigt es in der gewünschten Zeitzone an.
 
-Generierung einer DOCX-Datei mit `docx` (Node.js) unter `/mnt/documents/AICONO_EMS_Anleitung.docx`.
-
-### Inhalt der Anleitung
-
-1. **Was ist AICONO EMS?** – Kurze Erklärung (1 Absatz)
-2. **Voraussetzungen** – Was brauchst du? (Hardware-Liste)
-3. **Schritt 1: GitHub-Repository aktualisieren** – Dateien vom Lovable-Projekt nach GitHub kopieren (mit Screenshots-Beschreibung)
-4. **Schritt 2: Add-on in HA aktualisieren** – Store → Nach Updates suchen → Neu aufbauen
-5. **Schritt 3: Ergebnis prüfen** – Sidebar zeigt jetzt "AICONO EMS", Dashboard mit neuem Logo
-6. **Schritt 4: Offline testen** – Internet trennen, Steuerung-Seite öffnen, Gerät schalten
-7. **Fehlerbehebung** – Häufige Probleme + Lösungen
-
-Jeder Schritt wird mit nummerierten Unterpunkten, fett markierten UI-Elementen und Hinweisboxen für absolute Anfänger aufbereitet.
+### Betroffene Dateien
+- `src/components/integrations/IntegrationCard.tsx` – Formatierung der `gatewayLocalTime`-Anzeige von roh-ISO auf `de-DE`-Format in Zeitzone Europe/Berlin
 
