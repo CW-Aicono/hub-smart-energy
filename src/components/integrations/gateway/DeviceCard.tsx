@@ -68,6 +68,12 @@ export function DeviceCard({ device, onCommand, isAdmin, onKeyGenerated }: Devic
                     Device-Key
                   </Badge>
                 )}
+                {(device.config as any)?.ui_pin_hash && (
+                  <Badge variant="outline" className="bg-primary/10 text-primary border-primary/30">
+                    <Lock className="h-3 w-3 mr-1" />
+                    PIN
+                  </Badge>
+                )}
               </div>
               <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
                 {device.addon_version && <span>Add-on v{device.addon_version}</span>}
