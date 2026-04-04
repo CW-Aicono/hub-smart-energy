@@ -118,12 +118,20 @@ export function DeviceCard({ device, onCommand, isAdmin, onKeyGenerated }: Devic
       </div>
 
       {isAdmin && (
-        <ApiKeyDialog
-          device={device}
-          open={keyDialogOpen}
-          onOpenChange={setKeyDialogOpen}
-          onKeyGenerated={onKeyGenerated}
-        />
+        <>
+          <ApiKeyDialog
+            device={device}
+            open={keyDialogOpen}
+            onOpenChange={setKeyDialogOpen}
+            onKeyGenerated={onKeyGenerated}
+          />
+          <PinConfigDialog
+            device={device}
+            open={pinDialogOpen}
+            onOpenChange={setPinDialogOpen}
+            onUpdated={onKeyGenerated}
+          />
+        </>
       )}
     </>
   );
