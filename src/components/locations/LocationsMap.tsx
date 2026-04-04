@@ -1,17 +1,8 @@
-import { useEffect, useState, lazy, Suspense } from "react";
+import { useEffect, useState } from "react";
 import { Location } from "@/hooks/useLocations";
 import { MapPin } from "lucide-react";
 import { cn } from "@/lib/utils";
-
-interface LocationsMapProps {
-  locations: Location[];
-  onLocationClick?: (location: Location) => void;
-  className?: string;
-  errorLocationIds?: Set<string>;
-}
-
-// Lazy load the actual map implementation
-const LazyMapContent = lazy(() => import("./LocationsMapContent"));
+import LocationsMapContent from "./LocationsMapContent";
 
 export function LocationsMap({ locations, onLocationClick, className, errorLocationIds }: LocationsMapProps) {
   const [isClient, setIsClient] = useState(false);
