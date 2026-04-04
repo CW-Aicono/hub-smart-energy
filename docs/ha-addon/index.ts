@@ -914,7 +914,7 @@ async function sendHeartbeat(): Promise<void> {
         device_name: config.device_name,
         device_type: "aicono-ems",
         tenant_id: config.tenant_id,
-        local_ip: getLocalIP(),
+        local_ip: await getLocalIP(),
         ha_version: haVersion,
         addon_version: ADDON_VERSION,
         offline_buffer_count: getBufferCount(),
