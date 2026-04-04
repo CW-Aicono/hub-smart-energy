@@ -402,6 +402,81 @@
       .config-val { max-width: 100%; text-align: left; }
       .container { width: min(100% - 16px, 1200px); }
     }
+
+    /* Login screen */
+    .login-overlay {
+      position: fixed;
+      inset: 0;
+      background: var(--bg-primary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+    }
+    .login-box {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 32px;
+      width: min(360px, calc(100vw - 32px));
+      text-align: center;
+    }
+    .login-box h2 {
+      margin-bottom: 8px;
+      font-size: 1.2rem;
+      font-weight: 800;
+    }
+    .login-box p {
+      color: var(--text-secondary);
+      font-size: 0.88rem;
+      margin-bottom: 20px;
+    }
+    .pin-inputs {
+      display: flex;
+      gap: 8px;
+      justify-content: center;
+      margin-bottom: 16px;
+    }
+    .pin-inputs input {
+      width: 48px;
+      height: 56px;
+      text-align: center;
+      font-size: 1.4rem;
+      font-weight: 700;
+      background: var(--bg-primary);
+      border: 2px solid var(--border);
+      border-radius: 10px;
+      color: var(--text-primary);
+      outline: none;
+      transition: border-color 0.2s;
+      -moz-appearance: textfield;
+    }
+    .pin-inputs input::-webkit-inner-spin-button,
+    .pin-inputs input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+    .pin-inputs input:focus {
+      border-color: var(--accent-teal);
+      box-shadow: 0 0 0 3px rgba(20, 184, 166, 0.2);
+    }
+    .login-btn {
+      width: 100%;
+      padding: 12px;
+      background: var(--accent-teal);
+      color: #fff;
+      font-weight: 700;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      font-size: 0.95rem;
+      transition: opacity 0.2s;
+    }
+    .login-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .login-btn:hover:not(:disabled) { opacity: 0.9; }
+    .login-error {
+      color: var(--accent-red);
+      font-size: 0.85rem;
+      margin-top: 10px;
+    }
+    }
   </style>
 </head>
 <body>
