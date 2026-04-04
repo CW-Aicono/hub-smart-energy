@@ -92,6 +92,9 @@ export function DeviceCard({ device, onCommand, isAdmin, onKeyGenerated }: Devic
 
           {isAdmin && (
             <div className="flex items-center gap-1">
+              <Button variant="ghost" size="icon" onClick={() => setPinDialogOpen(true)} title="UI-PIN konfigurieren">
+                <Lock className="h-4 w-4" />
+              </Button>
               <Button variant="ghost" size="icon" onClick={() => setKeyDialogOpen(true)} title={t("gatewayDevices.apiKey")}>
                 <Key className="h-4 w-4" />
               </Button>
