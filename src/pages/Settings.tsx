@@ -8,8 +8,9 @@ import { BackupSettings } from "@/components/settings/BackupSettings";
 import { WeekStartSetting } from "@/components/settings/WeekStartSetting";
 import { ManualMetersSetting } from "@/components/settings/ManualMetersSetting";
 import { TenantInfoSettings } from "@/components/settings/TenantInfoSettings";
+import { WidgetDesigner } from "@/components/settings/WidgetDesigner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Palette, HardDrive, Building2 } from "lucide-react";
+import { Palette, HardDrive, Building2, LayoutGrid } from "lucide-react";
 
 const Settings = () => {
   const { user, loading: authLoading } = useAuth();
