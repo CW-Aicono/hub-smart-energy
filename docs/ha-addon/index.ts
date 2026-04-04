@@ -762,7 +762,9 @@ async function syncAutomationsFromCloud(): Promise<void> {
     console.log(`[sync] Synced ${data.automations.length} automations from cloud`);
 
     // Remove local automations that are no longer in the cloud
-    if (data.automations.length > 0) {
+    // Only prune on FULL sync (no 'since' filter) to avoid deleting valid
+    // automations that simply weren't included in an incremental response.
+    if (!lastAutomationSync && data.automations.length > 0) {
       const cloudIds = data.automations.map((a: any) => a.id);
       const localAutomations = getLocalAutomations();
       for (const local of localAutomations) {
