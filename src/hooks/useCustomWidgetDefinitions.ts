@@ -77,7 +77,19 @@ export function useCustomWidgetDefinitions() {
         .select()
         .single();
       if (error) throw error;
-      return data as unknown as CustomWidgetDefinition;
+      const created = data as unknown as CustomWidgetDefinition;
+
+      // Auto-insert dashboard_widgets entry for the creator
+      await supabase.from("dashboard_widgets").insert({
+        user_id: user.id,
+        widget_type: `custom_${created.id}`,
+        position: 99,
+        is_visible: true,
+        widget_size: "full",
+        config: {},
+      });
+
+      return created;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [QUERY_KEY] });
