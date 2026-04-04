@@ -46,7 +46,7 @@ const SIZE_LABEL_KEYS: Record<WidgetSize, string> = {
   "1/3": "widget.sizeOneThird",
 };
 
-const DashboardCustomizer = ({ widgets, onToggleVisibility, onReorder, onResizeWidget, onResetLayout }: DashboardCustomizerProps) => {
+const DashboardCustomizer = ({ widgets, onToggleVisibility, onReorder, onResizeWidget, onResetLayout, customWidgetNames = {} }: DashboardCustomizerProps) => {
   const { t } = useTranslation();
   const [draggedItem, setDraggedItem] = useState<string | null>(null);
   const [dragOverItem, setDragOverItem] = useState<string | null>(null);
