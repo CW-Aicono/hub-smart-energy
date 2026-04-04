@@ -8,10 +8,11 @@ import { DeviceCard } from "./gateway/DeviceCard";
 
 interface GatewayDeviceManagerProps {
   locationIntegrationId?: string;
+  locationId?: string;
 }
 
-export function GatewayDeviceManager({ locationIntegrationId }: GatewayDeviceManagerProps = {}) {
-  const { devices, isLoading, sendCommand, refetch } = useGatewayDevices(locationIntegrationId);
+export function GatewayDeviceManager({ locationIntegrationId, locationId }: GatewayDeviceManagerProps = {}) {
+  const { devices, isLoading, sendCommand, refetch } = useGatewayDevices(locationIntegrationId, locationId);
   const { isAdmin } = useUserRole();
   const { t } = useTranslation();
 

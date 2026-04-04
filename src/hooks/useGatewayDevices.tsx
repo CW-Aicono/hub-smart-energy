@@ -36,7 +36,7 @@ export function useGatewayDevices(locationIntegrationId?: string, locationId?: s
   const queryClient = useQueryClient();
 
   const query = useQuery({
-    queryKey: ["gateway-devices", tenant?.id, locationIntegrationId],
+    queryKey: ["gateway-devices", tenant?.id, locationIntegrationId, locationId],
     enabled: !!tenant?.id,
     staleTime: 30_000,
     refetchInterval: 60_000,
