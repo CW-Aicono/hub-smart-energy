@@ -1228,7 +1228,7 @@ Deno.serve(async (req) => {
     if (action === "gateway-backup") return handleGatewayBackup(req);
     if (action === "gateway-command") return handleGatewayCommand(req);
     if (action === "push-execution-logs") return handlePushExecutionLogs(req);
-    if (action === "sync-automations") return handleSyncAutomations(url);
+    if (action === "sync-automations") return handleSyncAutomations(url, req);
 
     // Check if the body contains a getSensors action (called by frontend for all integration types).
     // Push-based gateways don't support sensor discovery — return empty list gracefully.
