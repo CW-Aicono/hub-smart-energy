@@ -931,9 +931,161 @@
         }, 10000);
       }
 
-      render();
-      loadCurrentPage(true);
-      startAutoRefresh();
+      /* ── Login screen ─────────────────────────────────────────── */
+
+      var loginOverlay = null;
+
+      function showLoginScreen() {
+        if (loginOverlay) return;
+        if (refreshHandle) clearInterval(refreshHandle);
+
+        loginOverlay = document.createElement('div');
+        loginOverlay.className = 'login-overlay';
+        loginOverlay.innerHTML = '' +
+          '<div class="login-box">' +
+            '<svg width="40" height="40" viewBox="0 0 32 32" style="margin-bottom:12px"><rect width="32" height="32" rx="6" fill="#0a0f1a"/><path d="M16 6l8 14H8z" fill="#14b8a6"/><circle cx="16" cy="24" r="3" fill="#14b8a6"/></svg>' +
+            '<h2>AICONO EMS</h2>' +
+            '<p>Bitte gib den PIN ein, um fortzufahren.</p>' +
+            '<div class="pin-inputs" id="pinInputs"></div>' +
+            '<button class="login-btn" id="loginBtn" disabled>Entsperren</button>' +
+            '<div class="login-error" id="loginError"></div>' +
+          '</div>';
+        document.body.appendChild(loginOverlay);
+
+        // Create 6 input slots
+        var pinContainer = document.getElementById('pinInputs');
+        var pinValues = ['', '', '', '', '', ''];
+        for (var i = 0; i < 6; i++) {
+          (function(idx) {
+            var inp = document.createElement('input');
+            inp.type = 'tel';
+            inp.maxLength = 1;
+            inp.inputMode = 'numeric';
+            inp.pattern = '[0-9]';
+            inp.autocomplete = 'off';
+            inp.addEventListener('input', function() {
+              pinValues[idx] = this.value.replace(/[^0-9]/g, '').slice(0, 1);
+              this.value = pinValues[idx];
+              if (pinValues[idx] && idx < 5) {
+                pinContainer.children[idx + 1].focus();
+              }
+              var filled = pinValues.join('').length;
+              document.getElementById('loginBtn').disabled = filled < 4;
+            });
+            inp.addEventListener('keydown', function(e) {
+              if (e.key === 'Backspace' && !this.value && idx > 0) {
+                pinContainer.children[idx - 1].focus();
+              }
+              if (e.key === 'Enter') {
+                document.getElementById('loginBtn').click();
+              }
+            });
+            // Handle paste
+            inp.addEventListener('paste', function(e) {
+              e.preventDefault();
+              var pasted = (e.clipboardData || window.clipboardData).getData('text').replace(/[^0-9]/g, '');
+              for (var j = 0; j < Math.min(pasted.length, 6); j++) {
+                pinValues[j] = pasted[j];
+                if (pinContainer.children[j]) pinContainer.children[j].value = pasted[j];
+              }
+              var focusIdx = Math.min(pasted.length, 5);
+              pinContainer.children[focusIdx].focus();
+              document.getElementById('loginBtn').disabled = pinValues.join('').length < 4;
+            });
+            pinContainer.appendChild(inp);
+          })(i);
+        }
+        pinContainer.children[0].focus();
+
+        document.getElementById('loginBtn').addEventListener('click', async function() {
+          var pin = pinValues.join('');
+          if (pin.length < 4) return;
+          var btn = this;
+          var errEl = document.getElementById('loginError');
+          btn.disabled = true;
+          btn.textContent = 'Prüfe…';
+          errEl.textContent = '';
+
+          try {
+            var urls = buildApiCandidates('/api/auth');
+            var success = false;
+            for (var k = 0; k < urls.length; k++) {
+              try {
+                var resp = await fetch(urls[k], {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  credentials: 'same-origin',
+                  body: JSON.stringify({ pin: pin })
+                });
+                if (resp.ok) {
+                  success = true;
+                  break;
+                }
+                if (resp.status === 429) {
+                  var d = await resp.json();
+                  errEl.textContent = 'Gesperrt – bitte ' + (d.retry_after_seconds || 60) + 's warten';
+                  btn.disabled = false;
+                  btn.textContent = 'Entsperren';
+                  return;
+                }
+                if (resp.status === 401) {
+                  var d2 = await resp.json();
+                  errEl.textContent = 'Falscher PIN' + (d2.remaining_attempts ? ' (' + d2.remaining_attempts + ' Versuche übrig)' : '');
+                  // Clear inputs
+                  for (var m = 0; m < 6; m++) { pinValues[m] = ''; pinContainer.children[m].value = ''; }
+                  pinContainer.children[0].focus();
+                  btn.disabled = true;
+                  btn.textContent = 'Entsperren';
+                  return;
+                }
+              } catch(e) { /* try next candidate */ }
+            }
+
+            if (success) {
+              loginOverlay.remove();
+              loginOverlay = null;
+              loadCurrentPage(true);
+              startAutoRefresh();
+            } else {
+              errEl.textContent = 'Verbindung fehlgeschlagen';
+              btn.disabled = false;
+              btn.textContent = 'Entsperren';
+            }
+          } catch (e) {
+            errEl.textContent = e.message || 'Fehler';
+            btn.disabled = false;
+            btn.textContent = 'Entsperren';
+          }
+        });
+      }
+
+      /* ── Auth-aware startup ─────────────────────────────────── */
+
+      async function checkAuthAndStart() {
+        try {
+          var urls = buildApiCandidates('/api/auth-status');
+          for (var i = 0; i < urls.length; i++) {
+            try {
+              var resp = await fetch(urls[i], { credentials: 'same-origin' });
+              if (resp.ok) {
+                var data = await resp.json();
+                if (data.pin_required && !data.authenticated) {
+                  showLoginScreen();
+                  return;
+                }
+                break;
+              }
+            } catch(e) { /* try next */ }
+          }
+        } catch(e) { /* proceed without auth check */ }
+
+        // No PIN or already authenticated
+        render();
+        loadCurrentPage(true);
+        startAutoRefresh();
+      }
+
+      checkAuthAndStart();
     })();
   </script>
 </body>
