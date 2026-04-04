@@ -193,14 +193,21 @@ export function useGatewayDevices(locationIntegrationId?: string, locationId?: s
         const err = await res.json().catch(() => ({ error: "Unknown error" }));
         throw new Error(err.error || `HTTP ${res.status}`);
       }
-      return await res.json();
+      return { ...(await res.json()), _command: command };
     },
-    onSuccess: () => {
-      toast.success(t("gatewayDevices.commandSent" as any));
+    onSuccess: (data) => {
+      const cmd = data?._command as string | undefined;
+      const msgKey = cmd === "backup" ? "gatewayDevices.backupSent"
+        : cmd === "restart" ? "gatewayDevices.restartSent"
+        : cmd === "update" ? "gatewayDevices.updateSent"
+        : "gatewayDevices.commandSent";
+      toast.success(t(msgKey as any));
       queryClient.invalidateQueries({ queryKey: ["gateway-devices"] });
     },
-    onError: () => {
-      toast.error(t("gatewayDevices.commandFailed" as any));
+    onError: (error) => {
+      toast.error(t("gatewayDevices.commandFailed"), {
+        description: error instanceof Error ? error.message : undefined,
+      });
     },
   });
 
