@@ -1231,6 +1231,56 @@ export type Database = {
           },
         ]
       }
+      custom_widget_definitions: {
+        Row: {
+          chart_type: string
+          color: string | null
+          config: Json
+          created_at: string | null
+          created_by: string
+          icon: string | null
+          id: string
+          is_shared: boolean | null
+          name: string
+          tenant_id: string
+          updated_at: string | null
+        }
+        Insert: {
+          chart_type: string
+          color?: string | null
+          config?: Json
+          created_at?: string | null
+          created_by: string
+          icon?: string | null
+          id?: string
+          is_shared?: boolean | null
+          name: string
+          tenant_id: string
+          updated_at?: string | null
+        }
+        Update: {
+          chart_type?: string
+          color?: string | null
+          config?: Json
+          created_at?: string | null
+          created_by?: string
+          icon?: string | null
+          id?: string
+          is_shared?: boolean | null
+          name?: string
+          tenant_id?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "custom_widget_definitions_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       dashboard_widgets: {
         Row: {
           config: Json | null
