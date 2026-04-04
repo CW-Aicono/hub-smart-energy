@@ -52,10 +52,6 @@ const Settings = () => {
                 <HardDrive className="h-4 w-4" />
                 {t("backup.title")}
               </TabsTrigger>
-              <TabsTrigger value="api" className="gap-2">
-                <Globe className="h-4 w-4" />
-                {t("api.title")}
-              </TabsTrigger>
             </TabsList>
             <TabsContent value="tenant-info">
               <TenantInfoSettings />
