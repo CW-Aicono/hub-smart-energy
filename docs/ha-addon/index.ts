@@ -945,7 +945,49 @@ async function sendHeartbeat(): Promise<void> {
   }
 }
 
-function getLocalIP(): string {
+let cachedHostIP: string | null = null;
+
+async function getLocalIP(): Promise<string> {
+  // Try cached value first (refresh every heartbeat cycle anyway)
+  if (cachedHostIP) return cachedHostIP;
+
+  // Use HA Supervisor API to get actual host LAN IP
+  try {
+    const token = process.env.SUPERVISOR_TOKEN;
+    if (token) {
+      const res = await fetch("http://supervisor/network/info", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json() as any;
+        const ifaces = data?.data?.interfaces;
+        if (Array.isArray(ifaces)) {
+          for (const iface of ifaces) {
+            if (iface.enabled && iface.type === "ethernet") {
+              const ipv4 = iface.ipv4?.address?.[0];
+              if (ipv4) {
+                // Format is "192.168.1.100/24" – strip CIDR suffix
+                cachedHostIP = ipv4.split("/")[0];
+                return cachedHostIP;
+              }
+            }
+          }
+          // Fallback: try wifi or any enabled interface
+          for (const iface of ifaces) {
+            if (iface.enabled) {
+              const ipv4 = iface.ipv4?.address?.[0];
+              if (ipv4) {
+                cachedHostIP = ipv4.split("/")[0];
+                return cachedHostIP;
+              }
+            }
+          }
+        }
+      }
+    }
+  } catch { /* Supervisor API not available */ }
+
+  // Final fallback: container IP via os.networkInterfaces()
   try {
     const os = require("os");
     const interfaces = os.networkInterfaces();
