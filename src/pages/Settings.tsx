@@ -64,9 +64,6 @@ const Settings = () => {
             <TabsContent value="backup">
               <BackupSettings />
             </TabsContent>
-            <TabsContent value="api">
-              <ApiSettings />
-            </TabsContent>
           </Tabs>
         </div>
       </main>

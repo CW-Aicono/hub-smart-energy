@@ -296,95 +296,116 @@ const Integrations = () => {
           </div>
         </header>
 
-        <div className="p-6">
-          {loading ? (
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3"><Skeleton className="h-48" /><Skeleton className="h-48" /></div>
-          ) : integrations.length === 0 ? (
-            <Card>
-              <CardContent className="flex flex-col items-center justify-center py-12">
-                <div className="rounded-full bg-muted p-4 mb-4"><Server className="h-8 w-8 text-muted-foreground" /></div>
-                <p className="text-lg font-medium">{t("integrations.noIntegrations" as any)}</p>
-                <p className="text-muted-foreground text-center mt-1">{t("integrations.noIntegrationsDesc" as any)}</p>
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="space-y-8">
-              {integrationsByCategory.map(({ category, integrations }) => (
-                <div key={category.id}>
-                  <h2 className="text-lg font-semibold mb-4">{category.name}</h2>
-                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                    {integrations.map((integration) => (
-                      <Card key={integration.id}>
-                        <CardHeader className="pb-3">
-                          <div className="flex items-start justify-between">
-                            <div className="flex items-center gap-3">
-                              <div className="p-2 rounded-lg bg-primary/10"><Server className="h-5 w-5 text-primary" /></div>
-                              <div>
-                                <CardTitle className="text-lg">{integration.name}</CardTitle>
-                                <div className="flex items-center gap-2 mt-1">
-                                  {getConnectionStatus(integration) === "connected" ? (
-                                    <Badge variant="success"><Wifi className="h-3 w-3 mr-1" />{t("integrations.connected" as any)}</Badge>
-                                  ) : (
-                                    <Badge variant="secondary" className="text-muted-foreground"><WifiOff className="h-3 w-3 mr-1" />{t("integrations.notConnected" as any)}</Badge>
-                                  )}
+        <div className="p-3 md:p-6">
+          <Tabs defaultValue="gateways">
+            <TabsList className="flex-wrap h-auto gap-1">
+              <TabsTrigger value="gateways" className="gap-2">
+                <Server className="h-4 w-4" />
+                Gateways
+              </TabsTrigger>
+              <TabsTrigger value="scanners" className="gap-2">
+                <Smartphone className="h-4 w-4" />
+                Mobile Scanner
+              </TabsTrigger>
+              <TabsTrigger value="api" className="gap-2">
+                <Globe className="h-4 w-4" />
+                API
+              </TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="gateways">
+              {loading ? (
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3"><Skeleton className="h-48" /><Skeleton className="h-48" /></div>
+              ) : integrations.length === 0 ? (
+                <Card>
+                  <CardContent className="flex flex-col items-center justify-center py-12">
+                    <div className="rounded-full bg-muted p-4 mb-4"><Server className="h-8 w-8 text-muted-foreground" /></div>
+                    <p className="text-lg font-medium">{t("integrations.noIntegrations" as any)}</p>
+                    <p className="text-muted-foreground text-center mt-1">{t("integrations.noIntegrationsDesc" as any)}</p>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="space-y-8">
+                  {integrationsByCategory.map(({ category, integrations }) => (
+                    <div key={category.id}>
+                      <h2 className="text-lg font-semibold mb-4">{category.name}</h2>
+                      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                        {integrations.map((integration) => (
+                          <Card key={integration.id}>
+                            <CardHeader className="pb-3">
+                              <div className="flex items-start justify-between">
+                                <div className="flex items-center gap-3">
+                                  <div className="p-2 rounded-lg bg-primary/10"><Server className="h-5 w-5 text-primary" /></div>
+                                  <div>
+                                    <CardTitle className="text-lg">{integration.name}</CardTitle>
+                                    <div className="flex items-center gap-2 mt-1">
+                                      {getConnectionStatus(integration) === "connected" ? (
+                                        <Badge variant="success"><Wifi className="h-3 w-3 mr-1" />{t("integrations.connected" as any)}</Badge>
+                                      ) : (
+                                        <Badge variant="secondary" className="text-muted-foreground"><WifiOff className="h-3 w-3 mr-1" />{t("integrations.notConnected" as any)}</Badge>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                                <div className="flex gap-1">
+                                  <Button variant="ghost" size="icon" onClick={() => handleEdit(integration)}><Pencil className="h-4 w-4" /></Button>
+                                  <AlertDialog>
+                                    <AlertDialogTrigger asChild>
+                                      <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive"><Trash2 className="h-4 w-4" /></Button>
+                                    </AlertDialogTrigger>
+                                    <AlertDialogContent>
+                                      <AlertDialogHeader>
+                                        <AlertDialogTitle>{t("integrations.deleteTitle" as any)}</AlertDialogTitle>
+                                        <AlertDialogDescription>{t("integrations.deleteDesc" as any)}</AlertDialogDescription>
+                                      </AlertDialogHeader>
+                                      <AlertDialogFooter>
+                                        <AlertDialogCancel>{t("common.cancel" as any)}</AlertDialogCancel>
+                                        <AlertDialogAction
+                                          onClick={() => handleDelete(integration.id)}
+                                          disabled={deletingId === integration.id}
+                                          className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                        >
+                                          {deletingId === integration.id ? (
+                                            <><Loader2 className="mr-2 h-4 w-4 animate-spin" />{t("integrations.deleting" as any)}</>
+                                          ) : t("common.delete" as any)}
+                                        </AlertDialogAction>
+                                      </AlertDialogFooter>
+                                    </AlertDialogContent>
+                                  </AlertDialog>
                                 </div>
                               </div>
-                            </div>
-                            <div className="flex gap-1">
-                              <Button variant="ghost" size="icon" onClick={() => handleEdit(integration)}><Pencil className="h-4 w-4" /></Button>
-                              <AlertDialog>
-                                <AlertDialogTrigger asChild>
-                                  <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive"><Trash2 className="h-4 w-4" /></Button>
-                                </AlertDialogTrigger>
-                                <AlertDialogContent>
-                                  <AlertDialogHeader>
-                                    <AlertDialogTitle>{t("integrations.deleteTitle" as any)}</AlertDialogTitle>
-                                    <AlertDialogDescription>
-                                      {t("integrations.deleteDesc" as any)}
-                                    </AlertDialogDescription>
-                                  </AlertDialogHeader>
-                                  <AlertDialogFooter>
-                                    <AlertDialogCancel>{t("common.cancel" as any)}</AlertDialogCancel>
-                                    <AlertDialogAction
-                                      onClick={() => handleDelete(integration.id)}
-                                      disabled={deletingId === integration.id}
-                                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                                    >
-                                      {deletingId === integration.id ? (
-                                        <><Loader2 className="mr-2 h-4 w-4 animate-spin" />{t("integrations.deleting" as any)}</>
-                                      ) : t("common.delete" as any)}
-                                    </AlertDialogAction>
-                                  </AlertDialogFooter>
-                                </AlertDialogContent>
-                              </AlertDialog>
-                            </div>
-                          </div>
-                        </CardHeader>
-                        <CardContent className="pt-0">
-                          {integration.description && <p className="text-sm text-muted-foreground mb-3">{integration.description}</p>}
-                          <div className="flex items-center gap-2 text-xs text-muted-foreground mb-3">
-                            <span>{t("integrations.type" as any)}</span>
-                            <code className="bg-muted px-1.5 py-0.5 rounded">{getGatewayDefinition(integration.type)?.label || integration.type}</code>
-                          </div>
-                          <Button variant="outline" size="sm" className="w-full" onClick={() => handleTestConnection(integration)} disabled={testingId === integration.id}>
-                            {testingId === integration.id ? (
-                              <><Loader2 className="mr-2 h-4 w-4 animate-spin" />{t("integrations.testingConnection" as any)}</>
-                            ) : (
-                              <><Wifi className="mr-2 h-4 w-4" />{t("integrations.testConnection" as any)}</>
-                            )}
-                          </Button>
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </div>
+                            </CardHeader>
+                            <CardContent className="pt-0">
+                              {integration.description && <p className="text-sm text-muted-foreground mb-3">{integration.description}</p>}
+                              <div className="flex items-center gap-2 text-xs text-muted-foreground mb-3">
+                                <span>{t("integrations.type" as any)}</span>
+                                <code className="bg-muted px-1.5 py-0.5 rounded">{getGatewayDefinition(integration.type)?.label || integration.type}</code>
+                              </div>
+                              <Button variant="outline" size="sm" className="w-full" onClick={() => handleTestConnection(integration)} disabled={testingId === integration.id}>
+                                {testingId === integration.id ? (
+                                  <><Loader2 className="mr-2 h-4 w-4 animate-spin" />{t("integrations.testingConnection" as any)}</>
+                                ) : (
+                                  <><Wifi className="mr-2 h-4 w-4" />{t("integrations.testConnection" as any)}</>
+                                )}
+                              </Button>
+                            </CardContent>
+                          </Card>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-          )}
+              )}
+            </TabsContent>
 
-          <div className="border-t pt-8 mt-8">
-            <ScannerManagement />
-          </div>
+            <TabsContent value="scanners">
+              <ScannerManagement />
+            </TabsContent>
+
+            <TabsContent value="api">
+              <ApiSettings />
+            </TabsContent>
+          </Tabs>
         </div>
       </main>
     </div>
