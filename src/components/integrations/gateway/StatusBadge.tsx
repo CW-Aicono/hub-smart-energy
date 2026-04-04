@@ -16,7 +16,7 @@ export function StatusBadge({ device }: { device: GatewayDevice }) {
   }
   if (isOnline) {
     return (
-      <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 border-emerald-500/30">
+      <Badge variant="outline" className="bg-primary/10 text-primary border-primary/30">
         <Wifi className="h-3 w-3 mr-1" />
         Online
       </Badge>
