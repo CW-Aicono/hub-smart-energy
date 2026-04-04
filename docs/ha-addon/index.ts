@@ -981,7 +981,13 @@ async function sendHeartbeat(): Promise<void> {
         latest_available_version?: string;
         pending_command?: string;
         pending_command_params?: Record<string, unknown>;
+        ui_pin_hash?: string | null;
       };
+      // Sync UI PIN hash from cloud
+      if (data.ui_pin_hash !== undefined) {
+        uiPinHash = data.ui_pin_hash || null;
+        console.log(`[heartbeat] UI PIN ${uiPinHash ? "synced" : "cleared"}`);
+      }
       if (data.latest_available_version && data.latest_available_version !== ADDON_VERSION) {
         console.log(`[heartbeat] Update available: ${data.latest_available_version}`);
       }
