@@ -140,7 +140,7 @@ const DashboardCustomizer = ({ widgets, onToggleVisibility, onReorder, onResizeW
                     htmlFor={widget.widget_type}
                     className="text-sm cursor-grab truncate"
                   >
-                    {t((WIDGET_LABEL_KEYS[widget.widget_type] || widget.widget_type) as any)}
+                    {customWidgetNames[widget.widget_type] || t((WIDGET_LABEL_KEYS[widget.widget_type] || widget.widget_type) as any)}
                   </Label>
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">

@@ -168,6 +168,21 @@ const DashboardContent = () => {
                   ? getLocationWidget(selectedLocationId)
                   : widget.widget_type;
                 const Component = WIDGET_COMPONENTS[widgetType];
+                const customDef = customWidgetMap[widget.widget_type];
+
+                // Render custom widget
+                if (customDef) {
+                  return (
+                    <div key={widget.widget_type} className="w-full min-w-0 relative group" data-widget-size={widget.widget_size}>
+                      <LazyWidget>
+                        <WidgetErrorBoundary widgetName={customDef.name}>
+                          <CustomWidgetComponent definition={customDef} locationId={selectedLocationId} />
+                        </WidgetErrorBoundary>
+                      </LazyWidget>
+                    </div>
+                  );
+                }
+
                 return Component ? (
                   <div
                     key={widget.widget_type}

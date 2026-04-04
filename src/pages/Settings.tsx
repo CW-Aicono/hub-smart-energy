@@ -69,6 +69,9 @@ const Settings = () => {
             <TabsContent value="backup">
               <BackupSettings />
             </TabsContent>
+            <TabsContent value="widget-designer">
+              <WidgetDesigner />
+            </TabsContent>
           </Tabs>
         </div>
       </main>
