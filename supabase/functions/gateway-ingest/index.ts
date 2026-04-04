@@ -1067,7 +1067,7 @@ async function handleGatewayCommand(req: Request): Promise<Response> {
 
 /* ── Sync Automations handler (Cloud → Hub) ──────────────────────────────────── */
 
-async function handleSyncAutomations(url: URL): Promise<Response> {
+async function handleSyncAutomations(url: URL, req: Request): Promise<Response> {
   const tenantId = url.searchParams.get("tenant_id");
   if (!tenantId) {
     return json({ error: "tenant_id parameter required" }, 400);
@@ -1076,11 +1076,41 @@ async function handleSyncAutomations(url: URL): Promise<Response> {
   const since = url.searchParams.get("since");
   const supabase = getSupabase();
 
+  // Resolve device's location to filter automations by location
+  let locationId: string | null = null;
+  const deviceCtx = await getDeviceFromApiKey(req);
+  if (deviceCtx) {
+    const { data: device } = await supabase
+      .from("gateway_devices")
+      .select("location_integration_id")
+      .eq("id", deviceCtx.device_id)
+      .maybeSingle();
+
+    if (device?.location_integration_id) {
+      const { data: li } = await supabase
+        .from("location_integrations")
+        .select("location_id")
+        .eq("id", device.location_integration_id)
+        .maybeSingle();
+      locationId = li?.location_id || null;
+    }
+  }
+
+  // Also accept explicit location_id param (e.g. from global API key setups)
+  if (!locationId) {
+    locationId = url.searchParams.get("location_id");
+  }
+
   // Sync ALL automations (active + inactive) so the local engine can manage state
   let query = supabase
     .from("location_automations")
     .select("*, locations!location_automations_location_id_fkey(timezone)")
     .eq("tenant_id", tenantId);
+
+  // Filter by location if we could resolve one
+  if (locationId) {
+    query = query.eq("location_id", locationId);
+  }
 
   if (since) {
     query = query.gt("updated_at", since);
@@ -1110,7 +1140,7 @@ async function handleSyncAutomations(url: URL): Promise<Response> {
     location_timezone: auto.locations?.timezone || "Europe/Berlin",
   }));
 
-  return json({ success: true, automations, count: automations.length });
+  return json({ success: true, automations, count: automations.length, location_id: locationId });
 }
 
 /* ── Push Execution Logs handler (Hub → Cloud) ────────────────────────────────── */
