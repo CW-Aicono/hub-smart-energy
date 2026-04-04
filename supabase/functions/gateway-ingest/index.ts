@@ -844,10 +844,21 @@ async function handleHeartbeat(req: Request): Promise<Response> {
   // Upsert by tenant_id + device_name
   const { data: existing } = await supabase
     .from("gateway_devices")
-    .select("id")
+    .select("id, config, latest_available_version")
     .eq("tenant_id", body.tenant_id)
     .eq("device_name", body.device_name)
     .maybeSingle();
+
+  // Extract pending command BEFORE overwriting config
+  const existingConfig = (existing?.config || {}) as Record<string, unknown>;
+  const pendingCommand = existingConfig.pending_command as string | undefined;
+  const pendingCommandParams = existingConfig.pending_command_params as Record<string, unknown> | undefined;
+
+  // Merge addon config with server-side fields (preserve non-pending fields)
+  const mergedConfig = {
+    ...(body.config || {}),
+    // Clear pending command after delivering it
+  };
 
   const deviceData = {
     tenant_id: body.tenant_id,
@@ -861,7 +872,7 @@ async function handleHeartbeat(req: Request): Promise<Response> {
     status: "online",
     last_heartbeat_at: new Date().toISOString(),
     location_integration_id: body.location_integration_id || null,
-    config: body.config || {},
+    config: mergedConfig,
   };
 
   let result;
@@ -888,18 +899,20 @@ async function handleHeartbeat(req: Request): Promise<Response> {
     result = { id: inserted.id, action: "created" };
   }
 
-  // Return current latest_available_version for update check
-  const { data: device } = await supabase
-    .from("gateway_devices")
-    .select("latest_available_version")
-    .eq("id", result.id)
-    .single();
-
-  return json({
+  const responseData: Record<string, unknown> = {
     success: true,
     ...result,
-    latest_available_version: device?.latest_available_version || null,
-  });
+    latest_available_version: existing?.latest_available_version || null,
+  };
+
+  // Deliver pending command to the gateway
+  if (pendingCommand) {
+    responseData.pending_command = pendingCommand;
+    responseData.pending_command_params = pendingCommandParams || {};
+    console.log(`[gateway-ingest] Delivering pending command '${pendingCommand}' to device ${result.id}`);
+  }
+
+  return json(responseData);
 }
 
 /* ── Gateway backup handler ──────────────────────────────────────────────────── */
