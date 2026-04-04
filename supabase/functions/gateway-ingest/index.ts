@@ -1217,7 +1217,7 @@ Deno.serve(async (req) => {
     if (action === "get-readings") return handleGetReadings(url);
     if (action === "get-locations-summary") return handleGetLocationsSummary(url);
     if (action === "addon-version") return handleAddonVersion();
-    if (action === "sync-automations") return handleSyncAutomations(url);
+    if (action === "sync-automations") return handleSyncAutomations(url, req);
   }
 
   // POST routes
