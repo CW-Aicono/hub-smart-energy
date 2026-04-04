@@ -154,12 +154,23 @@ export function useGatewayDevices(locationIntegrationId?: string) {
       }
 
       return devices.map((d): GatewayDeviceWithMetrics => {
-        const stats = d.location_integration_id ? automationMap[d.location_integration_id] : undefined;
+        // Aggregate stats across all relevant integration IDs for this device
+        const relevantLiIds = deviceToIntegrationIds[d.id]
+          ?? (d.location_integration_id ? [d.location_integration_id] : []);
+        let total = 0, active = 0, lastExec: string | null = null;
+        for (const liId of relevantLiIds) {
+          const s = automationMap[liId];
+          if (s) {
+            total += s.total;
+            active += s.active;
+            if (s.lastExec && (!lastExec || s.lastExec > lastExec)) lastExec = s.lastExec;
+          }
+        }
         return {
           ...d,
-          automationCount: stats?.total ?? 0,
-          activeAutomationCount: stats?.active ?? 0,
-          lastExecutionAt: stats?.lastExec ?? null,
+          automationCount: total,
+          activeAutomationCount: active,
+          lastExecutionAt: lastExec,
         };
       });
     },
