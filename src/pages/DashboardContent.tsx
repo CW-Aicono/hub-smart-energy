@@ -144,6 +144,9 @@ const DashboardContent = () => {
                 onToggleVisibility={toggleWidgetVisibility}
                 onReorder={reorderWidgets}
                 onResizeWidget={updateWidgetSize}
+                customWidgetNames={Object.fromEntries(
+                  customWidgetDefs.map((d) => [`custom_${d.id}`, d.name])
+                )}
                 onResetLayout={() => {
                   widgets.forEach(w => {
                     if (w.widget_size !== "full") {
