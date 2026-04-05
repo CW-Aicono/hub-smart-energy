@@ -297,7 +297,24 @@ export function WidgetDesignerDialog({ open, onOpenChange, editingWidget }: Widg
             </div>
           </TabsContent>
 
-          {/* ── Display settings ── */}
+          {/* ── Topology (energyflow only) ── */}
+          <TabsContent value="topology" className="space-y-4 mt-4">
+            <EnergyFlowDesigner
+              nodes={config.energy_flow_nodes || []}
+              connections={config.energy_flow_connections || []}
+              meters={meters || []}
+              onChange={(nodes, connections) =>
+                setConfig((prev) => ({
+                  ...prev,
+                  energy_flow_nodes: nodes,
+                  energy_flow_connections: connections,
+                  // Sync meter_ids from nodes for data queries
+                  meter_ids: nodes.map((n) => n.meter_id).filter(Boolean),
+                }))
+              }
+            />
+          </TabsContent>
+
           <TabsContent value="display" className="space-y-4 mt-4">
             <div className="space-y-2">
               <Label>Einheit</Label>
