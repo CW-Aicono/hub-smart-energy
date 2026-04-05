@@ -139,6 +139,48 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
     obs.observe(el);
     return () => obs.disconnect();
   }, []);
+  const nodeRadius = Math.min(dims.w, dims.h) * 0.09;
+  const padding = nodeRadius + 16;
+
+  // Helper: compute node center position
+  const nodePos = useCallback(
+    (node: EnergyFlowNode) => ({
+      x: padding + (node.x / 100) * (dims.w - 2 * padding),
+      y: padding + (node.y / 100) * (dims.h - 2 * padding),
+    }),
+    [padding, dims],
+  );
+
+  // Compute clipped line endpoints (stop at circle border)
+  const getClippedLine = useCallback(
+    (fromNode: EnergyFlowNode, toNode: EnergyFlowNode) => {
+      const p1 = nodePos(fromNode);
+      const p2 = nodePos(toNode);
+      const dx = p2.x - p1.x;
+      const dy = p2.y - p1.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist === 0) return { x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y, dist: 0 };
+      const ux = dx / dist;
+      const uy = dy / dist;
+      return {
+        x1: p1.x + ux * nodeRadius,
+        y1: p1.y + uy * nodeRadius,
+        x2: p2.x - ux * nodeRadius,
+        y2: p2.y - uy * nodeRadius,
+        dist: dist - 2 * nodeRadius,
+      };
+    },
+    [nodePos, nodeRadius],
+  );
+
+  // Speed: map watts to animation duration (lower = faster)
+  const getAnimDuration = useCallback(
+    (watts: number | null): number => {
+      if (watts == null || watts <= 0) return 4;
+      return Math.max(0.3, 4 - Math.log10(Math.max(watts, 1)) * 1.1);
+    },
+    [],
+  );
 
   if (!nodes.length) {
     return (
@@ -148,9 +190,6 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
     );
   }
 
-  const nodeRadius = Math.min(dims.w, dims.h) * 0.09;
-  const padding = nodeRadius + 16;
-
   return (
     <div className="relative w-full h-72">
       <svg
@@ -159,48 +198,63 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
         className="w-full h-full"
         preserveAspectRatio="xMidYMid meet"
       >
-        {/* Connections */}
+        {/* Connections with animated flow dots */}
         {connections.map((conn, i) => {
           const fromNode = nodes.find((n) => n.id === conn.from);
           const toNode = nodes.find((n) => n.id === conn.to);
           if (!fromNode || !toNode) return null;
-          const x1 = padding + (fromNode.x / 100) * (dims.w - 2 * padding);
-          const y1 = padding + (fromNode.y / 100) * (dims.h - 2 * padding);
-          const x2 = padding + (toNode.x / 100) * (dims.w - 2 * padding);
-          const y2 = padding + (toNode.y / 100) * (dims.h - 2 * padding);
+
+          const { x1, y1, x2, y2, dist } = getClippedLine(fromNode, toNode);
+          if (dist <= 0) return null;
+
+          // Determine flow watts from the source node
+          const flowWatts = getLiveWatts(fromNode.meter_id);
+          const dur = getAnimDuration(flowWatts);
+          const hasFlow = flowWatts != null && flowWatts > 0;
+
           return (
-            <line
-              key={i}
-              x1={x1}
-              y1={y1}
-              x2={x2}
-              y2={y2}
-              stroke={fromNode.color}
-              strokeWidth={2.5}
-              strokeOpacity={0.5}
-            />
+            <g key={i}>
+              {/* Static line */}
+              <line
+                x1={x1} y1={y1} x2={x2} y2={y2}
+                stroke={fromNode.color}
+                strokeWidth={2}
+                strokeOpacity={0.3}
+              />
+              {/* Animated dots (3 dots staggered) */}
+              {hasFlow && [0, 0.33, 0.66].map((offset, di) => (
+                <circle
+                  key={di}
+                  r={3.5}
+                  fill={fromNode.color}
+                  opacity={0.9}
+                >
+                  <animateMotion
+                    dur={`${dur}s`}
+                    repeatCount="indefinite"
+                    begin={`${offset * dur}s`}
+                    path={`M${x1},${y1} L${x2},${y2}`}
+                  />
+                </circle>
+              ))}
+            </g>
           );
         })}
 
         {/* Nodes */}
         {nodes.map((node) => {
-          const cx = padding + (node.x / 100) * (dims.w - 2 * padding);
-          const cy = padding + (node.y / 100) * (dims.h - 2 * padding);
+          const { x: cx, y: cy } = nodePos(node);
           const liveW = getLiveWatts(node.meter_id);
           const periodSum = periodSums[node.meter_id];
 
           return (
             <g key={node.id}>
-              {/* Circle */}
               <circle
-                cx={cx}
-                cy={cy}
-                r={nodeRadius}
+                cx={cx} cy={cy} r={nodeRadius}
                 fill="transparent"
                 stroke={node.color}
                 strokeWidth={3}
               />
-              {/* Icon placeholder – rendered as foreignObject */}
               <foreignObject
                 x={cx - 12}
                 y={cy - (liveW != null ? 18 : 8)}
@@ -212,31 +266,25 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
                   {ROLE_ICONS[node.role]}
                 </div>
               </foreignObject>
-              {/* Live value */}
               {liveW != null && (
                 <text
-                  x={cx}
-                  y={cy + 12}
+                  x={cx} y={cy + 12}
                   textAnchor="middle"
                   className="fill-foreground text-[11px] font-semibold"
                 >
                   {formatPower(liveW)}
                 </text>
               )}
-              {/* Label below circle */}
               <text
-                x={cx}
-                y={cy + nodeRadius + 14}
+                x={cx} y={cy + nodeRadius + 14}
                 textAnchor="middle"
                 className="fill-muted-foreground text-[10px]"
               >
                 {node.label}
               </text>
-              {/* Period sum */}
               {periodSum != null && periodSum > 0 && (
                 <text
-                  x={cx}
-                  y={cy + nodeRadius + 26}
+                  x={cx} y={cy + nodeRadius + 26}
                   textAnchor="middle"
                   className="fill-muted-foreground text-[9px]"
                 >
