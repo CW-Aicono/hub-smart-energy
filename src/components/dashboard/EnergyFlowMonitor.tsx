@@ -140,15 +140,14 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
     return () => obs.disconnect();
   }, []);
   const nodeRadius = Math.min(dims.w, dims.h) * 0.09;
-  const padding = nodeRadius + 16;
 
-  // Helper: compute node center position
+  // Use simple percentage mapping (same as designer) to avoid distortion
   const nodePos = useCallback(
     (node: EnergyFlowNode) => ({
-      x: padding + (node.x / 100) * (dims.w - 2 * padding),
-      y: padding + (node.y / 100) * (dims.h - 2 * padding),
+      x: (node.x / 100) * dims.w,
+      y: (node.y / 100) * dims.h,
     }),
-    [padding, dims],
+    [dims],
   );
 
   // Compute clipped line endpoints (stop at circle border)

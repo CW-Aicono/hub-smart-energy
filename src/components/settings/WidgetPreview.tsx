@@ -60,8 +60,8 @@ export function WidgetPreview({ name, chartType, color, config }: WidgetPreviewP
     return PRESET_COLORS[idx % PRESET_COLORS.length];
   };
 
-  const flowNodes: EnergyFlowNode[] = (config as any).energyflow_nodes ?? [];
-  const flowConns: EnergyFlowConnection[] = (config as any).energyflow_connections ?? [];
+  const flowNodes: EnergyFlowNode[] = config.energy_flow_nodes ?? [];
+  const flowConns: EnergyFlowConnection[] = config.energy_flow_connections ?? [];
 
   return (
     <Card className="border-dashed">
