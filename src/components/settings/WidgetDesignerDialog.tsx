@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useCustomWidgetDefinitions, CustomWidgetDefinition, CustomWidgetConfig, ChartType, AggregationType, ChartTypePerPeriod, TimePeriod } from "@/hooks/useCustomWidgetDefinitions";
+import { useCustomWidgetDefinitions, CustomWidgetDefinition, CustomWidgetConfig, ChartType, AggregationType, ChartTypePerPeriod, TimePeriod, EnergyFlowNode, EnergyFlowConnection } from "@/hooks/useCustomWidgetDefinitions";
 import { useMeters } from "@/hooks/useMeters";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -10,7 +10,8 @@ import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { WidgetPreview } from "./WidgetPreview";
-import { BarChart3, LineChart, Gauge, Activity, Table2, Plus, X } from "lucide-react";
+import { EnergyFlowDesigner } from "./EnergyFlowDesigner";
+import { BarChart3, LineChart, Gauge, Activity, Table2, Plus, X, GitBranch } from "lucide-react";
 
 const CHART_TYPES: { value: ChartType; label: string; icon: React.ReactNode }[] = [
   { value: "line", label: "Liniendiagramm", icon: <LineChart className="h-5 w-5" /> },
@@ -18,6 +19,7 @@ const CHART_TYPES: { value: ChartType; label: string; icon: React.ReactNode }[] 
   { value: "gauge", label: "Gauge / Tacho", icon: <Gauge className="h-5 w-5" /> },
   { value: "kpi", label: "KPI-Kachel", icon: <Activity className="h-5 w-5" /> },
   { value: "table", label: "Tabelle", icon: <Table2 className="h-5 w-5" /> },
+  { value: "energyflow", label: "Energieflussmonitor", icon: <GitBranch className="h-5 w-5" /> },
 ];
 
 const TIME_PERIODS: { value: TimePeriod; label: string }[] = [
