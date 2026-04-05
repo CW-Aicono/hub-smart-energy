@@ -267,6 +267,15 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
                 </table>
               </div>
             )}
+
+            {activeChartType === "energyflow" && (
+              <Suspense fallback={<div className="h-72 flex items-center justify-center text-muted-foreground text-sm">Laden…</div>}>
+                <EnergyFlowMonitor
+                  nodes={config.energy_flow_nodes || []}
+                  connections={config.energy_flow_connections || []}
+                />
+              </Suspense>
+            )}
           </>
         )}
       </CardContent>
