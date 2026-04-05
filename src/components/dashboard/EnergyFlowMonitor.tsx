@@ -176,8 +176,8 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
   // Speed: map watts to animation duration (lower = faster)
   const getAnimDuration = useCallback(
     (watts: number | null): number => {
-      if (watts == null || watts <= 0) return 4;
-      return Math.max(0.3, 4 - Math.log10(Math.max(watts, 1)) * 1.1);
+      if (watts == null || watts <= 0) return 40;
+      return Math.max(3, 40 - Math.log10(Math.max(watts, 1)) * 11);
     },
     [],
   );

@@ -1,6 +1,7 @@
+import { lazy, Suspense } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ChartType, CustomWidgetConfig } from "@/hooks/useCustomWidgetDefinitions";
-import { BarChart3, LineChart, Gauge, Activity, Table2 } from "lucide-react";
+import { ChartType, CustomWidgetConfig, EnergyFlowNode, EnergyFlowConnection } from "@/hooks/useCustomWidgetDefinitions";
+import { BarChart3, LineChart, Gauge, Activity, Table2, GitBranch } from "lucide-react";
 import {
   ResponsiveContainer,
   LineChart as RLineChart,
@@ -14,12 +15,13 @@ import {
   ReferenceLine,
 } from "recharts";
 
+const EnergyFlowMonitor = lazy(() => import("@/components/dashboard/EnergyFlowMonitor"));
+
 const PRESET_COLORS = [
   "#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6",
   "#ec4899", "#06b6d4", "#84cc16", "#f97316", "#6366f1",
 ];
 
-// Generate demo data for preview
 function generateDemoData(meterCount: number) {
   const days = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
   return days.map((day) => {
@@ -48,6 +50,7 @@ export function WidgetPreview({ name, chartType, color, config }: WidgetPreviewP
     gauge: <Gauge className="h-4 w-4" />,
     kpi: <Activity className="h-4 w-4" />,
     table: <Table2 className="h-4 w-4" />,
+    energyflow: <GitBranch className="h-4 w-4" />,
   };
 
   const getSeriesColor = (idx: number) => {
@@ -55,6 +58,9 @@ export function WidgetPreview({ name, chartType, color, config }: WidgetPreviewP
     if (mid && config.series_colors[mid]) return config.series_colors[mid];
     return PRESET_COLORS[idx % PRESET_COLORS.length];
   };
+
+  const flowNodes: EnergyFlowNode[] = (config as any).energyflow_nodes ?? [];
+  const flowConns: EnergyFlowConnection[] = (config as any).energyflow_connections ?? [];
 
   return (
     <Card className="border-dashed">
@@ -66,6 +72,12 @@ export function WidgetPreview({ name, chartType, color, config }: WidgetPreviewP
         </CardTitle>
       </CardHeader>
       <CardContent>
+        {chartType === "energyflow" && (
+          <Suspense fallback={<div className="h-48 flex items-center justify-center text-muted-foreground text-sm">Laden…</div>}>
+            <EnergyFlowMonitor nodes={flowNodes} connections={flowConns} />
+          </Suspense>
+        )}
+
         {(chartType === "line" || chartType === "bar") && (
           <div className="h-48">
             <ResponsiveContainer width="100%" height="100%">
@@ -118,10 +130,7 @@ export function WidgetPreview({ name, chartType, color, config }: WidgetPreviewP
         {chartType === "gauge" && (
           <div className="flex items-center justify-center h-48">
             <div className="text-center">
-              <div
-                className="text-5xl font-bold tabular-nums"
-                style={{ color }}
-              >
+              <div className="text-5xl font-bold tabular-nums" style={{ color }}>
                 {Math.round(50 + Math.random() * 200)}
               </div>
               <div className="text-sm text-muted-foreground mt-1">{config.unit}</div>
