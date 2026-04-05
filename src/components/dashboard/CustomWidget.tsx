@@ -38,7 +38,8 @@ function getDateRange(period: TimePeriod): { from: Date; to: Date } {
   const from = new Date(now);
   switch (period) {
     case "day":
-      from.setDate(from.getDate() - 1);
+      // Data is daily granularity – show last 7 days for context
+      from.setDate(from.getDate() - 7);
       break;
     case "week":
       from.setDate(from.getDate() - 7);
@@ -57,6 +58,25 @@ function getDateRange(period: TimePeriod): { from: Date; to: Date } {
       break;
   }
   return { from, to: now };
+}
+
+/** Format a date label appropriate to the selected time period */
+function formatLabel(d: Date, period: TimePeriod): string {
+  switch (period) {
+    case "day":
+      return d.toLocaleDateString("de-DE", { weekday: "short", day: "2-digit", month: "2-digit" });
+    case "week":
+      return d.toLocaleDateString("de-DE", { weekday: "short" });
+    case "month":
+    case "quarter":
+      return d.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" });
+    case "year":
+      return d.toLocaleDateString("de-DE", { month: "short", year: "2-digit" });
+    case "all":
+      return d.toLocaleDateString("de-DE", { month: "2-digit", year: "2-digit" });
+    default:
+      return d.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" });
+  }
 }
 
 interface CustomWidgetProps {
