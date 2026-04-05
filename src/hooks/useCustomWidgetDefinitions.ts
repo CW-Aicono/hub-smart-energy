@@ -4,7 +4,24 @@ import { useTenant } from "./useTenant";
 import { useAuth } from "./useAuth";
 import { toast } from "sonner";
 
-export type ChartType = "line" | "bar" | "gauge" | "kpi" | "table";
+export type ChartType = "line" | "bar" | "gauge" | "kpi" | "table" | "energyflow";
+
+export type EnergyFlowNodeRole = "pv" | "grid" | "house" | "battery" | "wallbox" | "heatpump" | "consumer";
+
+export interface EnergyFlowNode {
+  id: string;
+  role: EnergyFlowNodeRole;
+  label: string;
+  meter_id: string;
+  color: string;
+  x: number; // 0-100 percentage
+  y: number; // 0-100 percentage
+}
+
+export interface EnergyFlowConnection {
+  from: string; // node id
+  to: string;   // node id
+}
 export type AggregationType = "sum" | "avg" | "max" | "min";
 export type TimePeriod = "day" | "week" | "month" | "quarter" | "year" | "all";
 
@@ -26,6 +43,9 @@ export interface CustomWidgetConfig {
   series_colors: Record<string, string>;
   /** Per-period chart type overrides; falls back to definition.chart_type */
   chart_type_per_period?: ChartTypePerPeriod;
+  /** Energy flow monitor topology */
+  energy_flow_nodes?: EnergyFlowNode[];
+  energy_flow_connections?: EnergyFlowConnection[];
 }
 
 export interface CustomWidgetDefinition {
