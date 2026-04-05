@@ -1,4 +1,5 @@
 import { lazy, Suspense } from "react";
+import { DashboardFilterProvider } from "@/hooks/useDashboardFilter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ChartType, CustomWidgetConfig, EnergyFlowNode, EnergyFlowConnection } from "@/hooks/useCustomWidgetDefinitions";
 import { BarChart3, LineChart, Gauge, Activity, Table2, GitBranch } from "lucide-react";
@@ -73,9 +74,11 @@ export function WidgetPreview({ name, chartType, color, config }: WidgetPreviewP
       </CardHeader>
       <CardContent>
         {chartType === "energyflow" && (
-          <Suspense fallback={<div className="h-48 flex items-center justify-center text-muted-foreground text-sm">Laden…</div>}>
-            <EnergyFlowMonitor nodes={flowNodes} connections={flowConns} />
-          </Suspense>
+          <DashboardFilterProvider>
+            <Suspense fallback={<div className="h-48 flex items-center justify-center text-muted-foreground text-sm">Laden…</div>}>
+              <EnergyFlowMonitor nodes={flowNodes} connections={flowConns} />
+            </Suspense>
+          </DashboardFilterProvider>
         )}
 
         {(chartType === "line" || chartType === "bar") && (
