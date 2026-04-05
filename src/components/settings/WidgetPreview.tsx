@@ -183,8 +183,6 @@ export function WidgetPreview({ name, chartType, color, config }: WidgetPreviewP
     </Card>
   );
 }
-  const meterCount = Math.max(config.meter_ids.length, 1);
-  const demoData = generateDemoData(meterCount);
 
   const ICON_MAP: Record<string, React.ReactNode> = {
     line: <LineChart className="h-4 w-4" />,
