@@ -126,29 +126,7 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
       const dayMap: Record<string, Record<string, number>> = {};
       for (const row of data) {
         const d = new Date(row.day);
-        let label: string;
-        switch (selectedPeriod) {
-          case "day":
-            label = d.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
-            break;
-          case "week":
-            label = d.toLocaleDateString("de-DE", { weekday: "short" });
-            break;
-          case "month":
-            label = d.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" });
-            break;
-          case "quarter":
-            label = d.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" });
-            break;
-          case "year":
-            label = d.toLocaleDateString("de-DE", { month: "short", year: "2-digit" });
-            break;
-          case "all":
-            label = d.toLocaleDateString("de-DE", { month: "2-digit", year: "2-digit" });
-            break;
-          default:
-            label = d.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" });
-        }
+        const label = formatLabel(d, selectedPeriod);
         if (!dayMap[label]) dayMap[label] = {};
         dayMap[label][row.meter_id] = (dayMap[label][row.meter_id] ?? 0) + row.total_value;
       }
