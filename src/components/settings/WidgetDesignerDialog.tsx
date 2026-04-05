@@ -177,7 +177,8 @@ export function WidgetDesignerDialog({ open, onOpenChange, editingWidget }: Widg
     return acc;
   }, {});
 
-  const isValid = name.trim().length > 0 && config.meter_ids.length > 0;
+  const isEnergyFlow = chartType === "energyflow";
+  const isValid = name.trim().length > 0 && (isEnergyFlow ? (config.energy_flow_nodes?.length ?? 0) > 0 : config.meter_ids.length > 0);
 
   // Resolve the chart type shown in preview based on selected preview period
   const previewChartType = getPeriodChartType(previewPeriod);
@@ -192,7 +193,8 @@ export function WidgetDesignerDialog({ open, onOpenChange, editingWidget }: Widg
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="w-full">
             <TabsTrigger value="basics" className="flex-1">Grundlagen</TabsTrigger>
-            <TabsTrigger value="data" className="flex-1">Datenquellen</TabsTrigger>
+            {!isEnergyFlow && <TabsTrigger value="data" className="flex-1">Datenquellen</TabsTrigger>}
+            {isEnergyFlow && <TabsTrigger value="topology" className="flex-1">Topologie</TabsTrigger>}
             <TabsTrigger value="display" className="flex-1">Darstellung</TabsTrigger>
             <TabsTrigger value="preview" className="flex-1">Vorschau</TabsTrigger>
           </TabsList>
