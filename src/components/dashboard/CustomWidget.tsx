@@ -20,18 +20,6 @@ import {
 } from "recharts";
 
 const EnergyFlowMonitor = lazy(() => import("./EnergyFlowMonitor"));
-  ResponsiveContainer,
-  LineChart as RLineChart,
-  BarChart as RBarChart,
-  Line,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ReferenceLine,
-  Legend,
-} from "recharts";
 
 const PRESET_COLORS = [
   "#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6",
