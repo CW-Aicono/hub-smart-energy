@@ -183,8 +183,6 @@ export function WidgetPreview({ name, chartType, color, config }: WidgetPreviewP
     </Card>
   );
 }
-
-  const ICON_MAP: Record<string, React.ReactNode> = {
     line: <LineChart className="h-4 w-4" />,
     bar: <BarChart3 className="h-4 w-4" />,
     gauge: <Gauge className="h-4 w-4" />,
