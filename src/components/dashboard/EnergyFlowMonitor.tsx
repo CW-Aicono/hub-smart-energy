@@ -190,39 +190,6 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
     );
   }
 
-  // Compute clipped line endpoints (stop at circle border)
-  const getClippedLine = useCallback(
-    (fromNode: EnergyFlowNode, toNode: EnergyFlowNode) => {
-      const p1 = nodePos(fromNode);
-      const p2 = nodePos(toNode);
-      const dx = p2.x - p1.x;
-      const dy = p2.y - p1.y;
-      const dist = Math.sqrt(dx * dx + dy * dy);
-      if (dist === 0) return { x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y, dist: 0 };
-      const ux = dx / dist;
-      const uy = dy / dist;
-      return {
-        x1: p1.x + ux * nodeRadius,
-        y1: p1.y + uy * nodeRadius,
-        x2: p2.x - ux * nodeRadius,
-        y2: p2.y - uy * nodeRadius,
-        dist: dist - 2 * nodeRadius,
-      };
-    },
-    [nodePos, nodeRadius],
-  );
-
-  // Speed: map watts to animation duration (lower = faster). Clamp between 0.3s and 4s.
-  const getAnimDuration = useCallback(
-    (watts: number | null): number => {
-      if (watts == null || watts <= 0) return 4;
-      // 100W → ~3.5s, 1kW → ~2.5s, 10kW → ~1s, 50kW+ → 0.3s
-      const speed = Math.max(0.3, 4 - Math.log10(Math.max(watts, 1)) * 1.1);
-      return speed;
-    },
-    [],
-  );
-
   return (
     <div className="relative w-full h-72">
       <svg
