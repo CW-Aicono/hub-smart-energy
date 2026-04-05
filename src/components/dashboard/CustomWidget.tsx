@@ -1,10 +1,10 @@
-import { useMemo } from "react";
+import { useMemo, lazy, Suspense } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CustomWidgetDefinition, ChartType } from "@/hooks/useCustomWidgetDefinitions";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useDashboardFilter, TimePeriod } from "@/hooks/useDashboardFilter";
-import { BarChart3, LineChart, Gauge, Activity, Table2 } from "lucide-react";
+import { BarChart3, LineChart, Gauge, Activity, Table2, GitBranch } from "lucide-react";
 import {
   ResponsiveContainer,
   LineChart as RLineChart,
@@ -19,6 +19,8 @@ import {
   Legend,
 } from "recharts";
 
+const EnergyFlowMonitor = lazy(() => import("./EnergyFlowMonitor"));
+
 const PRESET_COLORS = [
   "#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6",
   "#ec4899", "#06b6d4", "#84cc16", "#f97316", "#6366f1",
@@ -30,6 +32,7 @@ const ICON_MAP: Record<string, React.ReactNode> = {
   gauge: <Gauge className="h-4 w-4" />,
   kpi: <Activity className="h-4 w-4" />,
   table: <Table2 className="h-4 w-4" />,
+  energyflow: <GitBranch className="h-4 w-4" />,
 };
 
 /** Compute date range from the dashboard time period */
@@ -263,6 +266,15 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
                   </tbody>
                 </table>
               </div>
+            )}
+
+            {activeChartType === "energyflow" && (
+              <Suspense fallback={<div className="h-72 flex items-center justify-center text-muted-foreground text-sm">Laden…</div>}>
+                <EnergyFlowMonitor
+                  nodes={config.energy_flow_nodes || []}
+                  connections={config.energy_flow_connections || []}
+                />
+              </Suspense>
             )}
           </>
         )}
