@@ -1,11 +1,25 @@
-import { useMemo } from "react";
+import { useMemo, lazy, Suspense } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CustomWidgetDefinition, ChartType } from "@/hooks/useCustomWidgetDefinitions";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useDashboardFilter, TimePeriod } from "@/hooks/useDashboardFilter";
-import { BarChart3, LineChart, Gauge, Activity, Table2 } from "lucide-react";
+import { BarChart3, LineChart, Gauge, Activity, Table2, GitBranch } from "lucide-react";
 import {
+  ResponsiveContainer,
+  LineChart as RLineChart,
+  BarChart as RBarChart,
+  Line,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ReferenceLine,
+  Legend,
+} from "recharts";
+
+const EnergyFlowMonitor = lazy(() => import("./EnergyFlowMonitor"));
   ResponsiveContainer,
   LineChart as RLineChart,
   BarChart as RBarChart,
@@ -30,6 +44,7 @@ const ICON_MAP: Record<string, React.ReactNode> = {
   gauge: <Gauge className="h-4 w-4" />,
   kpi: <Activity className="h-4 w-4" />,
   table: <Table2 className="h-4 w-4" />,
+  energyflow: <GitBranch className="h-4 w-4" />,
 };
 
 /** Compute date range from the dashboard time period */
