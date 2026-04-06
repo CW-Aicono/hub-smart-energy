@@ -56,9 +56,11 @@ function getDateRange(period: TimePeriod): { from: Date; to: Date } {
 }
 
 function formatPower(watts: number): string {
-  if (watts >= 1_000_000) return `${(watts / 1_000_000).toFixed(1)} MW`;
-  if (watts >= 1000) return `${(watts / 1000).toFixed(1)} kW`;
-  return `${Math.round(watts)} W`;
+  const abs = Math.abs(watts);
+  const sign = watts < 0 ? "−" : "";
+  if (abs >= 1_000_000) return `${sign}${(abs / 1_000_000).toFixed(1)} MW`;
+  if (abs >= 1000) return `${sign}${(abs / 1000).toFixed(1)} kW`;
+  return `${sign}${Math.round(abs)} W`;
 }
 
 function formatEnergy(kwh: number): string {
@@ -175,8 +177,9 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
   // Speed: map watts to animation duration (lower = faster)
   const getAnimDuration = useCallback(
     (watts: number | null): number => {
-      if (watts == null || watts <= 0) return 40;
-      return Math.max(3, 40 - Math.log10(Math.max(watts, 1)) * 11);
+      const abs = watts != null ? Math.abs(watts) : 0;
+      if (abs <= 0) return 40;
+      return Math.max(3, 40 - Math.log10(Math.max(abs, 1)) * 11);
     },
     [],
   );
@@ -209,14 +212,21 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
           // Determine flow watts from the source node
           const flowWatts = getLiveWatts(fromNode.meter_id);
           const dur = getAnimDuration(flowWatts);
-          const hasFlow = flowWatts != null && flowWatts > 0;
+          const hasFlow = flowWatts != null && Math.abs(flowWatts) > 0;
+
+          // Reverse direction when value is negative (feed-in / export)
+          const isReversed = flowWatts != null && flowWatts < 0;
+          const animPath = isReversed
+            ? `M${x2},${y2} L${x1},${y1}`
+            : `M${x1},${y1} L${x2},${y2}`;
+          const lineColor = isReversed ? toNode.color : fromNode.color;
 
           return (
             <g key={i}>
               {/* Static line */}
               <line
                 x1={x1} y1={y1} x2={x2} y2={y2}
-                stroke={fromNode.color}
+                stroke={lineColor}
                 strokeWidth={2}
                 strokeOpacity={0.3}
               />
@@ -225,14 +235,14 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
                 <circle
                   key={di}
                   r={3.5}
-                  fill={fromNode.color}
+                  fill={lineColor}
                   opacity={0.9}
                 >
                   <animateMotion
                     dur={`${dur}s`}
                     repeatCount="indefinite"
                     begin={`${offset * dur}s`}
-                    path={`M${x1},${y1} L${x2},${y2}`}
+                    path={animPath}
                   />
                 </circle>
               ))}
@@ -269,7 +279,7 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
                 <text
                   x={cx} y={cy + 12}
                   textAnchor="middle"
-                  className="fill-foreground text-[11px] font-semibold"
+                  className={`text-[11px] font-semibold ${liveW < 0 ? "fill-accent" : "fill-foreground"}`}
                 >
                   {formatPower(liveW)}
                 </text>
@@ -281,13 +291,13 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
               >
                 {node.label}
               </text>
-              {periodSum != null && periodSum > 0 && (
+              {periodSum != null && periodSum !== 0 && (
                 <text
                   x={cx} y={cy + nodeRadius + 26}
                   textAnchor="middle"
                   className="fill-muted-foreground text-[9px]"
                 >
-                  {PERIOD_SUM_LABEL[selectedPeriod]}: {formatEnergy(periodSum)}
+                  {PERIOD_SUM_LABEL[selectedPeriod]}: {periodSum < 0 ? "−" : ""}{formatEnergy(Math.abs(periodSum))}
                 </text>
               )}
             </g>
