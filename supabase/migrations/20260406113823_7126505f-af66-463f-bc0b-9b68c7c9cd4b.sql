@@ -1,0 +1,1 @@
+ALTER TABLE public.meters ADD COLUMN IF NOT EXISTS is_bidirectional boolean NOT NULL DEFAULT false;

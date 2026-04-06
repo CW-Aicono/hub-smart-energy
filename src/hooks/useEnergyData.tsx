@@ -281,7 +281,7 @@ export function useEnergyData(locationId?: string | null) {
         if (power != null && !isNaN(power)) {
           newLiveReadings.push({
             meter_id: meter.id,
-            value: Math.abs(power),
+            value: power,
             reading_date: now,
           });
         }

@@ -731,21 +731,21 @@ serve(async (req) => {
             if (stateData?.value != null) {
               const powerVal = typeof stateData.value === "number" ? stateData.value : parseFloat(String(stateData.value));
               if (!isNaN(powerVal)) {
-                const absVal = Math.abs(powerVal);
+                const absForSpike = Math.abs(powerVal);
                 const recentVals = recentReadingsMap[meter.id] ?? [];
                 const median = computeMedian(recentVals);
-                const isSpike = recentVals.length >= 3 && median >= SPIKE_BASELINE_MIN && absVal > median * SPIKE_FACTOR;
+                const isSpike = recentVals.length >= 3 && median >= SPIKE_BASELINE_MIN && absForSpike > median * SPIKE_FACTOR;
 
                 if (isSpike) {
                   console.warn(
                     `Spike-Detection: Skipping power reading for meter ${meter.id} ` +
-                    `(value=${absVal.toFixed(2)}, median=${median.toFixed(2)}, factor=${(absVal / median).toFixed(2)}×)`
+                    `(value=${absForSpike.toFixed(2)}, median=${median.toFixed(2)}, factor=${(absForSpike / median).toFixed(2)}×)`
                   );
                 } else {
                   powerInserts.push({
                     tenant_id: meter.tenant_id,
                     meter_id: meter.id,
-                    power_value: absVal,
+                    power_value: powerVal,
                     energy_type: meter.energy_type,
                     recorded_at: now.toISOString(),
                   });
@@ -1258,7 +1258,7 @@ serve(async (req) => {
             if (valMatch) {
               const val = parseFloat(valMatch[1]);
               if (isFinite(val)) {
-                entries.push({ timestamp: date, value: Math.abs(val) });
+                entries.push({ timestamp: date, value: val });
               }
             }
           }

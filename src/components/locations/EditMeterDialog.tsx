@@ -61,6 +61,7 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
   const [saving, setSaving] = useState(false);
   const [parentMeterId, setParentMeterId] = useState(meter.parent_meter_id || "none");
   const [isMainMeter, setIsMainMeter] = useState(meter.is_main_meter);
+  const [isBidirectional, setIsBidirectional] = useState((meter as any).is_bidirectional ?? false);
   const [meterFunction, setMeterFunction] = useState(meter.meter_function || "consumption");
   const [selectedFloorId, setSelectedFloorId] = useState(meter.floor_id || "");
   const [selectedRoomId, setSelectedRoomId] = useState(meter.room_id || "");
@@ -97,6 +98,7 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
     setSelectedSensor(meter.sensor_uuid || "");
     setParentMeterId(meter.parent_meter_id || "none");
     setIsMainMeter(meter.is_main_meter);
+    setIsBidirectional((meter as any).is_bidirectional ?? false);
     setMeterFunction(meter.meter_function || "consumption");
     setSelectedFloorId(meter.floor_id || "");
     setSelectedRoomId(meter.room_id || "");
@@ -257,6 +259,7 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
       sensor_uuid: captureType === "automatic" && selectedSensor ? selectedSensor : undefined,
       parent_meter_id: parentMeterId && parentMeterId !== "none" ? parentMeterId : null,
       is_main_meter: isMainMeter,
+      is_bidirectional: isBidirectional,
       meter_function: meterFunction,
       floor_id: selectedFloorId || null,
       room_id: selectedRoomId || null,
@@ -519,6 +522,10 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
               <div className="flex items-center justify-between">
                 <Label>Hauptzähler (Netzübergabepunkt)</Label>
                 <Switch checked={isMainMeter} onCheckedChange={setIsMainMeter} />
+              </div>
+              <div className="flex items-center justify-between">
+                <Label>Bidirektionaler Zähler (Bezug & Einspeisung)</Label>
+                <Switch checked={isBidirectional} onCheckedChange={setIsBidirectional} />
               </div>
               <div>
                 <Label>Zählerfunktion</Label>
