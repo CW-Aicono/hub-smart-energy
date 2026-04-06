@@ -127,7 +127,7 @@ const EnergyGaugeWidget = ({ locationId }: EnergyGaugeWidgetProps) => {
       const current: Record<string, number> = {};
       for (const { data } of results) {
         if (data && data.length > 0) {
-          current[data[0].meter_id] = Math.abs(data[0].power_value);
+          current[data[0].meter_id] = data[0].power_value;
         }
       }
       setInitialCurrent(current);

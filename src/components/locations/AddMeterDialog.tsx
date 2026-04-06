@@ -47,6 +47,7 @@ export const AddMeterDialog = ({ locationId, open, onOpenChange }: AddMeterDialo
   const [selectedSensor, setSelectedSensor] = useState("");
   const [parentMeterId, setParentMeterId] = useState("");
   const [isMainMeter, setIsMainMeter] = useState(false);
+  const [isBidirectional, setIsBidirectional] = useState(false);
   const [meterFunction, setMeterFunction] = useState("consumption");
   const [virtualSources, setVirtualSources] = useState<VirtualMeterSource[]>([]);
   const [gasType, setGasType] = useState("H");
@@ -151,6 +152,7 @@ export const AddMeterDialog = ({ locationId, open, onOpenChange }: AddMeterDialo
         sensor_uuid: captureType === "automatic" && selectedSensor ? selectedSensor : undefined,
         ...(energyType === "gas" ? { gas_type: gasType, zustandszahl: parsedZustandszahl, brennwert: parsedBrennwert || undefined } : {}),
         ...(captureType === "automatic" ? { source_unit_power: sourceUnit, source_unit_energy: sourceUnit === "m³" ? "m³" : sourceUnit === "kW" ? "kWh" : "Wh" } : {}),
+        is_bidirectional: isBidirectional,
       } as any,
       parentMeterId && parentMeterId !== "none" ? parentMeterId : null,
       isMainMeter,
@@ -173,6 +175,7 @@ export const AddMeterDialog = ({ locationId, open, onOpenChange }: AddMeterDialo
     setSensors([]);
     setParentMeterId("");
     setIsMainMeter(false);
+    setIsBidirectional(false);
     setMeterFunction("consumption");
     setVirtualSources([]);
     setGasType("H");
@@ -370,6 +373,10 @@ export const AddMeterDialog = ({ locationId, open, onOpenChange }: AddMeterDialo
             <div className="flex items-center justify-between">
               <Label>Hauptzähler (Netzübergabepunkt)</Label>
               <Switch checked={isMainMeter} onCheckedChange={setIsMainMeter} />
+            </div>
+            <div className="flex items-center justify-between">
+              <Label>Bidirektionaler Zähler (Bezug & Einspeisung)</Label>
+              <Switch checked={isBidirectional} onCheckedChange={setIsBidirectional} />
             </div>
             <div>
               <Label>Zählerfunktion</Label>
