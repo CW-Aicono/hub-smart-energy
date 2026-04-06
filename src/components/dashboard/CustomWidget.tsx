@@ -145,15 +145,25 @@ interface CustomWidgetProps {
   onCollapse?: () => void;
 }
 
+const PERIOD_OPTIONS: { value: TimePeriod; label: string }[] = [
+  { value: "day", label: "Tag" },
+  { value: "week", label: "Woche" },
+  { value: "month", label: "Monat" },
+  { value: "quarter", label: "Quartal" },
+  { value: "year", label: "Jahr" },
+];
+
 export default function CustomWidget({ definition, locationId }: CustomWidgetProps) {
   const { config, name, color } = definition;
-  const { selectedPeriod } = useDashboardFilter();
+  const { selectedPeriod, setSelectedPeriod, selectedOffset: offset, setSelectedOffset: setOffset } = useDashboardFilter();
 
   // Resolve chart type for current period
   const activeChartType: ChartType =
     config.chart_type_per_period?.[selectedPeriod] ?? definition.chart_type;
 
-  const { from, to } = useMemo(() => getDateRange(selectedPeriod), [selectedPeriod]);
+  const { from, to } = useMemo(() => getDateRange(selectedPeriod, offset), [selectedPeriod, offset]);
+  const periodLabel = useMemo(() => getPeriodLabel(selectedPeriod, offset), [selectedPeriod, offset]);
+  const canGoForward = offset < 0;
 
   const { data: meterDetails = {} } = useQuery({
     queryKey: ["meter-details", config.meter_ids],
