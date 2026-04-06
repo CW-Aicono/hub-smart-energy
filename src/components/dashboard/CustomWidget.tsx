@@ -208,21 +208,36 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
           recorded_at: row.bucket,
         }));
 
-        const recentCutoff = new Date(Date.now() - 10 * 60 * 1000);
-        const { data: recentRaw, error: recentError } = await supabase
-          .from("meter_power_readings")
-          .select("meter_id, power_value, recorded_at")
-          .in("meter_id", config.meter_ids)
-          .gte("recorded_at", recentCutoff.toISOString())
-          .lte("recorded_at", to.toISOString())
-          .order("recorded_at", { ascending: true });
+        // Recent raw data: fetch last 15 minutes to cover gap between
+        // last compaction run and now (the RPC already handles on-the-fly
+        // aggregation, but may miss the very latest readings still being written)
+        const recentCutoff = new Date(Date.now() - 15 * 60 * 1000);
+        const recentPages: Array<{ meter_id: string; power_value: number; recorded_at: string }> = [];
+        let recentFrom = 0;
+        const recentPageSize = 1000;
+        let recentHasMore = true;
 
-        if (recentError) throw recentError;
+        while (recentHasMore) {
+          const { data: recentRaw, error: recentError } = await supabase
+            .from("meter_power_readings")
+            .select("meter_id, power_value, recorded_at")
+            .in("meter_id", config.meter_ids)
+            .gte("recorded_at", recentCutoff.toISOString())
+            .lte("recorded_at", to.toISOString())
+            .order("recorded_at", { ascending: true })
+            .range(recentFrom, recentFrom + recentPageSize - 1);
 
-        if (recentRaw?.length) {
+          if (recentError) throw recentError;
+          if (!recentRaw || recentRaw.length === 0) break;
+          recentPages.push(...recentRaw);
+          recentHasMore = recentRaw.length === recentPageSize;
+          recentFrom += recentPageSize;
+        }
+
+        if (recentPages.length) {
           mergedRows = mergedRows.filter((row) => new Date(row.recorded_at) < recentCutoff);
           mergedRows.push(
-            ...recentRaw.map((row) => ({
+            ...recentPages.map((row) => ({
               meter_id: row.meter_id,
               value: row.power_value,
               recorded_at: row.recorded_at,
@@ -281,12 +296,13 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
       config.meter_ids.some((meterId) => typeof row[meterId] === "number" && row[meterId] < 0),
     );
 
-    if (selectedPeriod === "day" && hasNegativeValues && (config.y_range?.min ?? 0) >= 0) {
+    // Always use "auto" for min when negative values exist, regardless of config
+    if (hasNegativeValues) {
       return ["auto", config.y_range?.max ?? "auto"];
     }
 
     return [config.y_range?.min ?? "auto", config.y_range?.max ?? "auto"];
-  }, [chartData, config.meter_ids, config.y_range?.max, config.y_range?.min, selectedPeriod]);
+  }, [chartData, config.meter_ids, config.y_range?.max, config.y_range?.min]);
 
   const getSeriesColor = (idx: number) => {
     const mid = config.meter_ids[idx];
