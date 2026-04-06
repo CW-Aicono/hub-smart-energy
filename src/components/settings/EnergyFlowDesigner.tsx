@@ -238,15 +238,16 @@ export function EnergyFlowDesigner({ nodes, connections, meters, onChange }: Pro
                 >
                   <Link2 className="h-3.5 w-3.5" />
                 </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 shrink-0"
-                  onClick={() => removeNode(node.id)}
-                >
-                  <X className="h-4 w-4" />
-                </Button>
+                <NodeDeletePopover
+                  node={node}
+                  nodes={nodes}
+                  connections={connections}
+                  onRemoveNode={() => removeNode(node.id)}
+                  onRemoveConnection={(idx) => {
+                    const updated = connections.filter((_, i) => i !== idx);
+                    onChange(nodes, updated);
+                  }}
+                />
               </div>
 
               <div className="grid grid-cols-2 gap-2">
