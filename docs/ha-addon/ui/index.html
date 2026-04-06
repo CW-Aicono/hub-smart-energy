@@ -19,6 +19,8 @@
       --accent-green: #22c55e;
       --accent-red: #ef4444;
       --accent-yellow: #eab308;
+      --accent-blue: #3b82f6;
+      --accent-purple: #a855f7;
       --shadow: 0 18px 42px rgba(0, 0, 0, 0.22);
       --radius: 12px;
     }
@@ -262,6 +264,8 @@
     .badge-warn { background: rgba(234, 179, 8, 0.14); color: var(--accent-yellow); }
     .badge-active { background: var(--accent-teal-dim); color: var(--accent-teal); }
     .badge-inactive { background: rgba(100, 116, 139, 0.15); color: var(--text-muted); }
+    .badge-blue { background: rgba(59, 130, 246, 0.15); color: var(--accent-blue); }
+    .badge-purple { background: rgba(168, 85, 247, 0.15); color: var(--accent-purple); }
 
     .empty-state, .error-state {
       padding: 52px 24px;
@@ -384,6 +388,184 @@
       text-align: center;
     }
 
+    /* ── Devices Page ── */
+    .device-tabs {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 16px;
+    }
+
+    .device-tab {
+      background: rgba(17, 24, 39, 0.88);
+      border: 1px solid var(--border);
+      color: var(--text-secondary);
+      padding: 8px 14px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 0.85rem;
+      transition: 0.18s ease;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .device-tab:hover {
+      background: var(--bg-card-hover);
+      color: var(--text-primary);
+    }
+
+    .device-tab.active {
+      background: var(--accent-teal-dim);
+      border-color: var(--accent-teal);
+      color: var(--accent-teal);
+      font-weight: 700;
+    }
+
+    .device-tab .count {
+      background: rgba(255,255,255,0.08);
+      padding: 2px 7px;
+      border-radius: 999px;
+      font-size: 0.72rem;
+      font-weight: 700;
+    }
+
+    .device-tab.active .count {
+      background: rgba(20, 184, 166, 0.25);
+    }
+
+    .search-box {
+      width: 100%;
+      max-width: 360px;
+      padding: 9px 14px;
+      background: rgba(17, 24, 39, 0.88);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      color: var(--text-primary);
+      font-size: 0.88rem;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    .search-box:focus {
+      border-color: var(--accent-teal);
+    }
+
+    .search-box::placeholder {
+      color: var(--text-muted);
+    }
+
+    /* ── Automation Flow ── */
+    .auto-card {
+      background: rgba(17, 24, 39, 0.92);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      margin-bottom: 14px;
+      box-shadow: var(--shadow);
+    }
+
+    .auto-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .auto-name {
+      font-weight: 800;
+      font-size: 1rem;
+      color: var(--text-primary);
+    }
+
+    .auto-meta {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .auto-flow {
+      display: flex;
+      align-items: stretch;
+      gap: 0;
+      overflow-x: auto;
+      padding: 4px 0;
+    }
+
+    .flow-block {
+      flex: 0 0 auto;
+      min-width: 160px;
+      max-width: 240px;
+      padding: 12px 14px;
+      border-radius: 10px;
+      font-size: 0.8rem;
+    }
+
+    .flow-conditions {
+      background: rgba(59, 130, 246, 0.1);
+      border: 1px solid rgba(59, 130, 246, 0.3);
+    }
+
+    .flow-operator {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 50px;
+      max-width: 50px;
+      color: var(--text-muted);
+      font-weight: 800;
+      font-size: 0.82rem;
+    }
+
+    .flow-arrow {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 40px;
+      max-width: 40px;
+      color: var(--text-muted);
+      font-size: 1.1rem;
+    }
+
+    .flow-actions {
+      background: rgba(20, 184, 166, 0.1);
+      border: 1px solid rgba(20, 184, 166, 0.3);
+    }
+
+    .flow-block-title {
+      font-weight: 700;
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 8px;
+    }
+
+    .flow-conditions .flow-block-title { color: var(--accent-blue); }
+    .flow-actions .flow-block-title { color: var(--accent-teal); }
+
+    .flow-item {
+      padding: 4px 0;
+      color: var(--text-secondary);
+      font-size: 0.78rem;
+      line-height: 1.4;
+    }
+
+    .flow-item + .flow-item {
+      border-top: 1px solid rgba(255,255,255,0.05);
+    }
+
+    .auto-footer {
+      margin-top: 12px;
+      padding-top: 10px;
+      border-top: 1px solid rgba(30, 45, 61, 0.5);
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+      color: var(--text-muted);
+      font-size: 0.78rem;
+    }
+
     @media (max-width: 720px) {
       .header, .toolbar, .control-tile {
         flex-direction: column;
@@ -401,6 +583,8 @@
 
       .config-val { max-width: 100%; text-align: left; }
       .container { width: min(100% - 16px, 1200px); }
+      .auto-flow { flex-direction: column; }
+      .flow-operator, .flow-arrow { min-width: unset; max-width: unset; min-height: 30px; }
     }
 
     /* Login screen */
@@ -476,7 +660,6 @@
       font-size: 0.85rem;
       margin-top: 10px;
     }
-    }
   </style>
 </head>
 <body>
@@ -500,17 +683,20 @@
         actuators: [],
         automations: [],
         logs: [],
+        devices: null,
+        deviceTab: 'meters',
+        deviceSearch: '',
         error: '',
         busyEntity: '',
         lastUpdated: null
       };
       var pageLabels = {
-        dashboard: 'Dashboard',
-        sensors: 'Sensoren',
-        control: 'Steuerung',
-        automations: 'Automationen',
-        logs: 'Logs',
-        config: 'Konfiguration'
+        dashboard: '📊 Dashboard',
+        devices: '🔧 Geräte',
+        control: '🔌 Steuerung',
+        automations: '🤖 Automationen',
+        logs: '🧾 Logs',
+        config: '⚙️ Konfiguration'
       };
       var refreshHandle = null;
 
@@ -585,7 +771,6 @@
             var response = await fetch(url, Object.assign({ credentials: 'same-origin' }, options || {}));
             var contentType = response.headers.get('content-type') || '';
             if (response.status === 401) {
-              // PIN required – show login
               showLoginScreen();
               throw new Error('PIN erforderlich');
             }
@@ -619,16 +804,24 @@
         }
       }
 
+      function formatTimeShort(value) {
+        if (!value) return '–';
+        try {
+          return new Date(value).toLocaleString('de-DE', {
+            day: '2-digit', month: '2-digit',
+            hour: '2-digit', minute: '2-digit'
+          });
+        } catch (error) {
+          return String(value);
+        }
+      }
+
       function formatUptime(seconds) {
         var total = Number(seconds || 0);
         var h = Math.floor(total / 3600);
         var m = Math.floor((total % 3600) / 60);
         if (h > 0) return h + 'h ' + m + 'm';
         return m + 'm';
-      }
-
-      function badgeClass(ok) {
-        return ok ? 'badge badge-success' : 'badge badge-error';
       }
 
       function renderDashboard() {
@@ -656,23 +849,110 @@
           '</div>';
       }
 
-      function renderSensors() {
-        if (!state.sensors.length) {
-          return '<div class="empty-state"><div class="icon">📡</div><p>Keine Sensoren gefunden</p></div>';
+      /* ── Devices Page ── */
+
+      var domainIcons = {
+        switch: '🔌', light: '💡', cover: '🪟', climate: '🌡️', fan: '🌀', lock: '🔒', valve: '🚰',
+        sensor: '📡', binary_sensor: '🔘'
+      };
+
+      function renderDevices() {
+        if (!state.devices) {
+          return '<div class="empty-state"><div class="icon">⏳</div><p>Lade Geräte…</p></div>';
         }
 
+        var d = state.devices;
+        var tabs = [
+          { key: 'meters', label: 'Zähler', icon: '⚡', items: d.meters || [] },
+          { key: 'sensors', label: 'Sensoren', icon: '📡', items: d.sensors || [] },
+          { key: 'actuators', label: 'Aktoren', icon: '🔌', items: d.actuators || [] }
+        ];
+
+        var tabsHtml = '<div class="device-tabs">' + tabs.map(function(t) {
+          return '<button class="device-tab ' + (state.deviceTab === t.key ? 'active' : '') + '" data-device-tab="' + t.key + '">' +
+            t.icon + ' ' + escapeHtml(t.label) +
+            ' <span class="count">' + t.items.length + '</span>' +
+          '</button>';
+        }).join('') + '</div>';
+
+        var searchHtml = '<div style="margin-bottom:14px">' +
+          '<input type="text" class="search-box" id="deviceSearch" placeholder="Gerät suchen…" value="' + escapeHtml(state.deviceSearch) + '">' +
+        '</div>';
+
+        var currentTab = tabs.find(function(t) { return t.key === state.deviceTab; }) || tabs[0];
+        var items = currentTab.items;
+
+        if (state.deviceSearch) {
+          var q = state.deviceSearch.toLowerCase();
+          items = items.filter(function(item) {
+            return (item.friendly_name || '').toLowerCase().indexOf(q) !== -1 ||
+                   (item.entity_id || '').toLowerCase().indexOf(q) !== -1;
+          });
+        }
+
+        var contentHtml;
+        if (items.length === 0) {
+          contentHtml = '<div class="empty-state"><div class="icon">' + currentTab.icon + '</div>' +
+            '<p>Keine ' + escapeHtml(currentTab.label) + ' gefunden</p>' +
+            (state.deviceSearch ? '<p class="muted">Suchfilter anpassen</p>' : '') +
+          '</div>';
+        } else if (state.deviceTab === 'actuators') {
+          contentHtml = renderDeviceActuators(items);
+        } else {
+          contentHtml = renderDeviceTable(items);
+        }
+
+        return tabsHtml + searchHtml + contentHtml;
+      }
+
+      function renderDeviceTable(items) {
         return renderTable([
-          'Name', 'Entity', 'Wert', 'Einheit', 'Aktualisiert'
-        ], state.sensors.map(function (item) {
+          'Name', 'Entity-ID', 'Wert', 'Einheit', 'Geräteklasse', 'Aktualisiert'
+        ], items.map(function(item) {
+          var icon = domainIcons[item.domain] || '📦';
           return [
-            '<strong style="color:var(--text-primary)">' + escapeHtml(item.friendly_name || item.entity_id) + '</strong>',
-            '<code>' + escapeHtml(item.entity_id) + '</code>',
+            '<strong style="color:var(--text-primary)">' + icon + ' ' + escapeHtml(item.friendly_name || item.entity_id) + '</strong>',
+            '<code style="font-size:0.76rem">' + escapeHtml(item.entity_id) + '</code>',
             '<span style="color:var(--accent-teal);font-weight:700">' + escapeHtml(item.state) + '</span>',
             escapeHtml(item.unit || '–'),
-            escapeHtml(formatTime(item.last_updated))
+            item.device_class ? '<span class="badge badge-blue">' + escapeHtml(item.device_class) + '</span>' : '<span class="muted">–</span>',
+            escapeHtml(formatTimeShort(item.last_updated))
           ];
         }));
       }
+
+      function renderDeviceActuators(items) {
+        return '<div class="control-grid">' + items.map(function(item) {
+          var isBusy = state.busyEntity === item.entity_id;
+          var isOn = item.state === 'on' || item.state === 'open' || item.state === 'heat';
+          var icon = domainIcons[item.domain] || '⚡';
+          var buttons;
+
+          if (item.domain === 'cover') {
+            buttons = '' +
+              '<button class="ctrl-btn" data-entity="' + escapeHtml(item.entity_id) + '" data-service="open" ' + (isBusy ? 'disabled' : '') + '>▲</button>' +
+              '<button class="ctrl-btn" data-entity="' + escapeHtml(item.entity_id) + '" data-service="stop" ' + (isBusy ? 'disabled' : '') + '>■</button>' +
+              '<button class="ctrl-btn" data-entity="' + escapeHtml(item.entity_id) + '" data-service="close" ' + (isBusy ? 'disabled' : '') + '>▼</button>';
+          } else {
+            buttons = '' +
+              '<button class="ctrl-btn ' + (isOn ? 'active-on' : '') + '" data-entity="' + escapeHtml(item.entity_id) + '" data-service="on" ' + (isBusy ? 'disabled' : '') + '>Ein</button>' +
+              '<button class="ctrl-btn" data-entity="' + escapeHtml(item.entity_id) + '" data-service="off" ' + (isBusy ? 'disabled' : '') + '>Aus</button>';
+          }
+
+          return '' +
+            '<div class="control-tile">' +
+              '<div class="control-info">' +
+                '<div class="control-name">' + escapeHtml(icon + ' ' + (item.friendly_name || item.entity_id)) + '</div>' +
+                '<div class="control-entity">' + escapeHtml(item.entity_id) + '</div>' +
+                (item.device_class ? '<div style="margin-top:4px"><span class="badge badge-blue" style="font-size:0.7rem">' + escapeHtml(item.device_class) + '</span></div>' : '') +
+                '<div class="control-state ' + (isOn ? 'on' : 'off') + '">' + escapeHtml(item.state || 'unbekannt') + '</div>' +
+              '</div>' +
+              '<div class="control-btns">' + buttons + '</div>' +
+            '</div>';
+        }).join('') + '</div>';
+      }
+
+      /* ── Control Page (legacy, now just redirects to devices actuators) ── */
 
       function renderControl() {
         if (!state.actuators.length) {
@@ -704,22 +984,116 @@
         }).join('') + '</div>';
       }
 
+      /* ── Automations Page (Enhanced) ── */
+
+      var conditionTypeLabels = {
+        sensor_value: 'Sensorwert',
+        time: 'Zeitfenster',
+        weekday: 'Wochentag',
+        status: 'Gerätestatus',
+        time_point: 'Zeitpunkt',
+        time_switch: 'Zeitschaltuhr'
+      };
+
+      var weekdayNames = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'];
+
+      function formatCondition(c) {
+        if (!c || !c.type) return 'Unbekannt';
+        switch (c.type) {
+          case 'sensor_value':
+            return (c.sensor_uuid || 'Sensor') + ' ' + (c.operator || '?') + ' ' + (c.value != null ? c.value : '?');
+          case 'time':
+            return (c.time_from || '?') + ' – ' + (c.time_to || '?');
+          case 'weekday':
+            if (c.weekdays && c.weekdays.length) {
+              return c.weekdays.map(function(d) { return weekdayNames[d] || d; }).join(', ');
+            }
+            return 'Wochentage';
+          case 'status':
+            return (c.actuator_uuid || 'Gerät') + ' = ' + (c.expected_status || '?');
+          case 'time_point':
+            return '⏰ ' + (c.time_point || '?');
+          case 'time_switch':
+            if (c.time_points && c.time_points.length) {
+              return '⏰ ' + c.time_points.join(', ');
+            }
+            return '⏰ Zeitschaltuhr';
+          default:
+            return c.type;
+        }
+      }
+
+      function formatAction(a) {
+        if (!a) return 'Unbekannt';
+        var name = a.actuator_uuid || 'Gerät';
+        var cmd = a.action_value || a.action_type || 'pulse';
+        return name + ' → ' + cmd;
+      }
+
       function renderAutomations() {
         if (!state.automations.length) {
-          return '<div class="empty-state"><div class="icon">🤖</div><p>Keine lokalen Automationen</p><p class="muted">Automationen werden nach dem nächsten Sync sichtbar.</p></div>';
+          return '<div class="empty-state"><div class="icon">🤖</div><p>Keine lokalen Automationen</p><p class="muted">Automationen werden nach dem nächsten Cloud-Sync sichtbar.</p></div>';
         }
 
-        return renderTable([
-          'Name', 'Status', 'Bedingungen', 'Aktionen', 'Letzte Ausführung'
-        ], state.automations.map(function (item) {
-          return [
-            '<strong style="color:var(--text-primary)">' + escapeHtml(item.name || 'Unbenannt') + '</strong>',
-            '<span class="badge ' + (item.is_active ? 'badge-active' : 'badge-inactive') + '">' + (item.is_active ? 'Aktiv' : 'Inaktiv') + '</span>',
-            escapeHtml(item.conditions_count || 0),
-            escapeHtml(item.actions_count || 0),
-            escapeHtml(formatTime(item.last_executed_at))
-          ];
-        }));
+        return state.automations.map(function(auto) {
+          var conditions = auto.conditions || [];
+          var actions = auto.actions || [];
+          var logicOp = auto.logic_operator || 'AND';
+
+          // Build legacy single-action if no actions array
+          if (actions.length === 0 && auto.actuator_uuid) {
+            actions = [{ actuator_uuid: auto.actuator_uuid, action_type: auto.action_type, action_value: auto.action_value }];
+          }
+
+          // Conditions block
+          var condHtml = '';
+          if (conditions.length > 0) {
+            condHtml = '<div class="flow-block flow-conditions">' +
+              '<div class="flow-block-title">WENN ' + (conditions.length > 1 ? '(' + logicOp + ')' : '') + '</div>' +
+              conditions.map(function(c) {
+                return '<div class="flow-item">' +
+                  '<span class="badge badge-blue" style="font-size:0.68rem;margin-right:4px">' + escapeHtml(conditionTypeLabels[c.type] || c.type) + '</span> ' +
+                  escapeHtml(formatCondition(c)) +
+                '</div>';
+              }).join('') +
+            '</div>';
+          } else {
+            condHtml = '<div class="flow-block flow-conditions">' +
+              '<div class="flow-block-title">WENN</div>' +
+              '<div class="flow-item muted">Keine Bedingungen</div>' +
+            '</div>';
+          }
+
+          // Actions block
+          var actHtml = '<div class="flow-block flow-actions">' +
+            '<div class="flow-block-title">DANN</div>' +
+            (actions.length > 0
+              ? actions.map(function(a) {
+                  return '<div class="flow-item">' + escapeHtml(formatAction(a)) + '</div>';
+                }).join('')
+              : '<div class="flow-item muted">Keine Aktionen</div>'
+            ) +
+          '</div>';
+
+          return '<div class="auto-card">' +
+            '<div class="auto-header">' +
+              '<div class="auto-name">' + escapeHtml(auto.name || 'Unbenannt') + '</div>' +
+              '<div class="auto-meta">' +
+                '<span class="badge ' + (auto.is_active ? 'badge-active' : 'badge-inactive') + '">' + (auto.is_active ? 'Aktiv' : 'Inaktiv') + '</span>' +
+              '</div>' +
+            '</div>' +
+            '<div class="auto-flow">' +
+              condHtml +
+              '<div class="flow-arrow">→</div>' +
+              actHtml +
+            '</div>' +
+            '<div class="auto-footer">' +
+              '<span>Bedingungen: ' + conditions.length + '</span>' +
+              '<span>Aktionen: ' + (actions.length) + '</span>' +
+              '<span>Letzte Ausführung: ' + escapeHtml(formatTimeShort(auto.last_executed_at)) + '</span>' +
+            '</div>' +
+          '</div>';
+        }).join('');
       }
 
       function renderLogs() {
@@ -777,7 +1151,7 @@
 
       function pageContent() {
         switch (state.page) {
-          case 'sensors': return renderSensors();
+          case 'devices': return renderDevices();
           case 'control': return renderControl();
           case 'automations': return renderAutomations();
           case 'logs': return renderLogs();
@@ -801,7 +1175,7 @@
                 '<svg class="logo-icon" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg"><rect width="32" height="32" rx="6" fill="#0a0f1a" stroke="#14b8a6"/><path d="M16 6l8 14H8z" fill="#14b8a6"/><circle cx="16" cy="24" r="3" fill="#14b8a6"/></svg>' +
                 '<span>AICONO EMS</span>' +
               '</div>' +
-              '<div class="header-subtitle">Lokales Home-Assistant-Gateway mit Live-Status, Sensorik und Steuerung.</div>' +
+              '<div class="header-subtitle">Lokales Gateway mit Geräte-Verwaltung, Automationen und Live-Steuerung.</div>' +
             '</div>' +
             '<div class="header-meta">' +
               '<div class="pill"><span class="status-dot ' + (online ? 'online' : 'offline') + '"></span>' + (online ? 'Gateway online' : 'Gateway offline') + '</div>' +
@@ -810,7 +1184,7 @@
             '</div>' +
           '</div>' +
           '<div class="nav">' + Object.keys(pageLabels).map(function (key) {
-            return '<button class="nav-btn ' + (state.page === key ? 'active' : '') + '" data-page="' + key + '">' + escapeHtml(pageLabels[key]) + '</button>';
+            return '<button class="nav-btn ' + (state.page === key ? 'active' : '') + '" data-page="' + key + '">' + pageLabels[key] + '</button>';
           }).join('') + '</div>' +
           '<div class="toolbar">' +
             '<div class="muted">Zuletzt aktualisiert: ' + escapeHtml(state.lastUpdated ? formatTime(state.lastUpdated) : '–') + '</div>' +
@@ -852,6 +1226,33 @@
             executeService(entityId, service);
           });
         }
+
+        // Device sub-tabs
+        var deviceTabBtns = app.querySelectorAll('[data-device-tab]');
+        for (var k = 0; k < deviceTabBtns.length; k += 1) {
+          deviceTabBtns[k].addEventListener('click', function (event) {
+            var tab = event.currentTarget.getAttribute('data-device-tab');
+            if (tab && tab !== state.deviceTab) {
+              state.deviceTab = tab;
+              render();
+            }
+          });
+        }
+
+        // Device search
+        var searchInput = document.getElementById('deviceSearch');
+        if (searchInput) {
+          searchInput.addEventListener('input', function () {
+            state.deviceSearch = this.value;
+            render();
+            // Restore focus and cursor position
+            var newInput = document.getElementById('deviceSearch');
+            if (newInput) {
+              newInput.focus();
+              newInput.setSelectionRange(state.deviceSearch.length, state.deviceSearch.length);
+            }
+          });
+        }
       }
 
       async function loadStatus() {
@@ -859,9 +1260,9 @@
         state.version = await fetchJson('/api/version');
       }
 
-      async function loadSensors() {
-        var payload = await fetchJson('/api/sensors');
-        state.sensors = payload && payload.sensors ? payload.sensors : [];
+      async function loadDevices() {
+        var payload = await fetchJson('/api/devices');
+        state.devices = payload && payload.devices ? payload.devices : { meters: [], sensors: [], actuators: [] };
       }
 
       async function loadActuators() {
@@ -892,7 +1293,12 @@
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ entity_id: entityId, service: service })
           });
-          await loadActuators();
+          // Reload device data or actuators after command
+          if (state.page === 'devices') {
+            await loadDevices();
+          } else {
+            await loadActuators();
+          }
           state.error = '';
         } catch (error) {
           state.error = error && error.message ? error.message : String(error);
@@ -909,7 +1315,7 @@
             await loadStatus();
           }
 
-          if (state.page === 'sensors') await loadSensors();
+          if (state.page === 'devices') await loadDevices();
           if (state.page === 'control') await loadActuators();
           if (state.page === 'automations') await loadAutomations();
           if (state.page === 'logs') await loadLogs();
@@ -952,7 +1358,6 @@
           '</div>';
         document.body.appendChild(loginOverlay);
 
-        // Create 6 input slots
         var pinContainer = document.getElementById('pinInputs');
         var pinValues = ['', '', '', '', '', ''];
         for (var i = 0; i < 6; i++) {
@@ -980,7 +1385,6 @@
                 document.getElementById('loginBtn').click();
               }
             });
-            // Handle paste
             inp.addEventListener('paste', function(e) {
               e.preventDefault();
               var pasted = (e.clipboardData || window.clipboardData).getData('text').replace(/[^0-9]/g, '');
@@ -1031,7 +1435,6 @@
                 if (resp.status === 401) {
                   var d2 = await resp.json();
                   errEl.textContent = 'Falscher PIN' + (d2.remaining_attempts ? ' (' + d2.remaining_attempts + ' Versuche übrig)' : '');
-                  // Clear inputs
                   for (var m = 0; m < 6; m++) { pinValues[m] = ''; pinContainer.children[m].value = ''; }
                   pinContainer.children[0].focus();
                   btn.disabled = true;
@@ -1079,7 +1482,6 @@
           }
         } catch(e) { /* proceed without auth check */ }
 
-        // No PIN or already authenticated
         render();
         loadCurrentPage(true);
         startAutoRefresh();
