@@ -276,16 +276,16 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
     refetchInterval: selectedPeriod === "day" ? 60 * 1000 : false,
   });
 
-  const yDomain = useMemo(() => {
+  const yDomain = useMemo<[number | "auto", number | "auto"]>(() => {
     const hasNegativeValues = chartData.some((row: any) =>
       config.meter_ids.some((meterId) => typeof row[meterId] === "number" && row[meterId] < 0),
     );
 
     if (selectedPeriod === "day" && hasNegativeValues && (config.y_range?.min ?? 0) >= 0) {
-      return ["auto", config.y_range?.max ?? "auto"] as const;
+      return ["auto", config.y_range?.max ?? "auto"];
     }
 
-    return [config.y_range?.min ?? "auto", config.y_range?.max ?? "auto"] as const;
+    return [config.y_range?.min ?? "auto", config.y_range?.max ?? "auto"];
   }, [chartData, config.meter_ids, config.y_range?.max, config.y_range?.min, selectedPeriod]);
 
   const getSeriesColor = (idx: number) => {
