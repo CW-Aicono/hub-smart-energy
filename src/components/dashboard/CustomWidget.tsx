@@ -119,13 +119,18 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
       if (!config.meter_ids.length) return [];
 
       if (selectedPeriod === "day") {
-        // Fetch 5-min power readings for today and aggregate to hourly
+        // Fetch 5-min power readings for today (local midnight to midnight)
+        const todayStart = new Date();
+        todayStart.setHours(0, 0, 0, 0);
+        const todayEnd = new Date(todayStart);
+        todayEnd.setDate(todayEnd.getDate() + 1);
+
         const { data } = await supabase
           .from("meter_power_readings_5min")
           .select("meter_id, bucket, power_avg")
           .in("meter_id", config.meter_ids)
-          .gte("bucket", from.toISOString())
-          .lt("bucket", to.toISOString())
+          .gte("bucket", todayStart.toISOString())
+          .lt("bucket", todayEnd.toISOString())
           .order("bucket", { ascending: true });
 
         if (!data) return [];
@@ -134,7 +139,8 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
         const hourMap: Record<string, Record<string, number[]>> = {};
         for (const row of data) {
           const d = new Date(row.bucket);
-          const hourLabel = `${d.getHours()}:00`;
+          const h = d.getHours();
+          const hourLabel = `${h.toString().padStart(2, "0")}:00`;
           if (!hourMap[hourLabel]) hourMap[hourLabel] = {};
           if (!hourMap[hourLabel][row.meter_id]) hourMap[hourLabel][row.meter_id] = [];
           hourMap[hourLabel][row.meter_id].push(row.power_avg);
@@ -143,12 +149,11 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
         // Build chart data with hourly averages (kW), fill all 24h
         const result: any[] = [];
         for (let h = 0; h < 24; h++) {
-          const label = `${h}:00`;
+          const label = `${h.toString().padStart(2, "0")}:00`;
           const entry: any = { name: label };
           const bucket = hourMap[label];
           for (const mid of config.meter_ids) {
             if (bucket?.[mid]?.length) {
-              // Average power in kW for the hour
               const avg = bucket[mid].reduce((a, b) => a + b, 0) / bucket[mid].length;
               entry[mid] = avg;
             } else {
@@ -230,8 +235,8 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
                   {activeChartType === "line" ? (
                     <RLineChart data={chartData}>
                       <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-                      <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-                      <YAxis tick={{ fontSize: 11 }} domain={[config.y_range?.min ?? "auto", config.y_range?.max ?? "auto"]} />
+                      <XAxis dataKey="name" tick={{ fontSize: 11 }} interval={selectedPeriod === "day" ? 1 : "preserveStartEnd"} />
+                      <YAxis tick={{ fontSize: 11 }} domain={[(config.y_range?.min ?? "auto"), (config.y_range?.max ?? "auto")]} allowDataOverflow={false} />
                       <Tooltip />
                       <Legend />
                       {config.meter_ids.map((mid, i) => (
@@ -244,8 +249,8 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
                   ) : (
                     <RBarChart data={chartData}>
                       <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-                      <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-                      <YAxis tick={{ fontSize: 11 }} domain={[config.y_range?.min ?? "auto", config.y_range?.max ?? "auto"]} />
+                      <XAxis dataKey="name" tick={{ fontSize: 11 }} interval={selectedPeriod === "day" ? 1 : "preserveStartEnd"} />
+                      <YAxis tick={{ fontSize: 11 }} domain={[(config.y_range?.min ?? "auto"), (config.y_range?.max ?? "auto")]} allowDataOverflow={false} />
                       <Tooltip />
                       <Legend />
                       {config.meter_ids.map((mid, i) => (
