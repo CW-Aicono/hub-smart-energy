@@ -1358,8 +1358,8 @@ function startServer(): void {
         if (actuatorDomains.has(domain)) {
           category = "actuator";
         } else if (domain === "sensor") {
-          const unit = s.attributes?.unit_of_measurement || "";
-          const dc = s.attributes?.device_class || "";
+          const unit = String(s.attributes?.unit_of_measurement || "");
+          const dc = String(s.attributes?.device_class || "");
           if (["energy", "power", "gas", "water"].includes(dc) || /kwh|kw|wh|m³/i.test(unit)) {
             category = "meter";
           }
@@ -1371,9 +1371,9 @@ function startServer(): void {
           entity_id: s.entity_id,
           state: s.state,
           domain,
-          friendly_name: s.attributes?.friendly_name || s.entity_id,
-          unit: s.attributes?.unit_of_measurement || "",
-          device_class: s.attributes?.device_class || "",
+          friendly_name: String(s.attributes?.friendly_name || s.entity_id),
+          unit: String(s.attributes?.unit_of_measurement || ""),
+          device_class: String(s.attributes?.device_class || ""),
           last_updated: s.last_updated,
           category,
         });
