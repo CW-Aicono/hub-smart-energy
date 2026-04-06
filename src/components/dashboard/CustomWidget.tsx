@@ -352,11 +352,34 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
   return (
     <Card>
       <CardHeader className="pb-2">
-        <CardTitle className="text-sm flex items-center gap-2">
-          <span style={{ color }}>{ICON_MAP[activeChartType]}</span>
-          {name}
-            <span className="text-xs text-muted-foreground ml-auto">{displayUnit}</span>
-        </CardTitle>
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-sm flex items-center gap-2">
+            <span style={{ color }}>{ICON_MAP[activeChartType]}</span>
+            {name}
+            <span className="text-xs text-muted-foreground">{displayUnit}</span>
+          </CardTitle>
+          <Select value={selectedPeriod} onValueChange={(v) => setSelectedPeriod(v as TimePeriod)}>
+            <SelectTrigger className="w-[100px] h-7 text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {PERIOD_OPTIONS.map((opt) => (
+                <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        {selectedPeriod !== "all" && (
+          <div className="flex items-center justify-end gap-1">
+            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setOffset((o) => o - 1)}>
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <span className="text-xs text-muted-foreground min-w-[140px] text-center">{periodLabel}</span>
+            <Button variant="ghost" size="icon" className="h-7 w-7" disabled={!canGoForward} onClick={() => setOffset((o) => o + 1)}>
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+        )}
       </CardHeader>
       <CardContent>
         {isLoading ? (
