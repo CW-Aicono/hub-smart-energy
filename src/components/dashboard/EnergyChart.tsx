@@ -125,12 +125,12 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
   const { locations } = useLocations();
   const { readings, livePeriodTotals, loading, hasData } = useEnergyData(locationId);
   const { meters } = useMeters();
-  const { selectedPeriod, setSelectedPeriod } = useDashboardFilter();
+  const { selectedPeriod, setSelectedPeriod, selectedOffset: offset, setSelectedOffset: setOffset } = useDashboardFilter();
   const { t, language } = useTranslation();
   const T = (key: string) => t(key as any);
   const dateLocale = localeMap[language] || de;
   const cwPrefix = T("chart.cwPrefix");
-  const [offset, setOffset] = useState(0);
+  const [hiddenKeys, setHiddenKeys] = useState<Set<string>>(new Set());
   const [hiddenKeys, setHiddenKeys] = useState<Set<string>>(new Set());
   const [powerReadings, setPowerReadings] = useState<Array<{ meter_id: string; power_value: number; recorded_at: string }>>([]);
   const [powerLoading, setPowerLoading] = useState(false);
