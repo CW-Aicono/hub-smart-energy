@@ -49,7 +49,7 @@ export function useRealtimePower(meterIds: string[]) {
 
           setPeakByMeter((prev) => ({
             ...prev,
-            [row.meter_id]: Math.max(prev[row.meter_id] ?? 0, value),
+            [row.meter_id]: Math.max(prev[row.meter_id] ?? 0, Math.abs(value)),
           }));
         }
       )
