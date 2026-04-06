@@ -625,9 +625,8 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
     return buckets;
   }, [readings, meterMap, period, rangeStart.toISOString(), rangeEnd.toISOString(), livePeriodTotals, offset, periodLabel, locationId, powerReadings, dailyTotals]);
 
-  // Reset offset when period changes
+  // Reset offset when period changes (handled by context now)
   const handlePeriodChange = (v: string) => {
-    setOffset(0);
     if (v === "day" || v === "week" || v === "month" || v === "quarter" || v === "year") {
       setSelectedPeriod(v as TimePeriod);
     }
