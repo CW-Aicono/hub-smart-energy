@@ -1084,6 +1084,8 @@ async function handleSyncAutomations(url: URL, req: Request): Promise<Response> 
   // Resolve device's location AND integration to filter automations
   let locationId: string | null = null;
   let locationIntegrationId: string | null = null;
+
+  // 1) Try per-device API key
   const deviceCtx = await getDeviceFromApiKey(req);
   if (deviceCtx) {
     const { data: device } = await supabase
@@ -1094,22 +1096,44 @@ async function handleSyncAutomations(url: URL, req: Request): Promise<Response> 
 
     if (device?.location_integration_id) {
       locationIntegrationId = device.location_integration_id;
-      const { data: li } = await supabase
-        .from("location_integrations")
-        .select("location_id")
-        .eq("id", device.location_integration_id)
-        .maybeSingle();
-      locationId = li?.location_id || null;
     }
   }
 
-  // Also accept explicit params (e.g. from global API key setups)
+  // 2) Fallback: resolve via device_name + tenant_id (global API key scenario)
+  if (!locationIntegrationId) {
+    const deviceName = url.searchParams.get("device_name");
+    if (deviceName && tenantId) {
+      const { data: device } = await supabase
+        .from("gateway_devices")
+        .select("location_integration_id")
+        .eq("tenant_id", tenantId)
+        .eq("device_name", deviceName)
+        .maybeSingle();
+      if (device?.location_integration_id) {
+        locationIntegrationId = device.location_integration_id;
+      }
+    }
+  }
+
+  // 3) Explicit params
   if (!locationIntegrationId) {
     locationIntegrationId = url.searchParams.get("location_integration_id");
   }
   if (!locationId) {
     locationId = url.searchParams.get("location_id");
   }
+
+  // Resolve locationId from integration if needed
+  if (locationIntegrationId && !locationId) {
+    const { data: li } = await supabase
+      .from("location_integrations")
+      .select("location_id")
+      .eq("id", locationIntegrationId)
+      .maybeSingle();
+    locationId = li?.location_id || null;
+  }
+
+  console.log(`[sync-automations] tenant=${tenantId} li=${locationIntegrationId} loc=${locationId}`);
 
   // Sync ALL automations (active + inactive) so the local engine can manage state
   let query = supabase
