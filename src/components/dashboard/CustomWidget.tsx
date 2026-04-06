@@ -20,6 +20,8 @@ import {
 } from "recharts";
 
 const EnergyFlowMonitor = lazy(() => import("./EnergyFlowMonitor"));
+const DAY_BUCKET_MINUTES = 5;
+const DAY_AXIS_INTERVAL = 11;
 
 const PRESET_COLORS = [
   "#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6",
@@ -34,6 +36,33 @@ const ICON_MAP: Record<string, React.ReactNode> = {
   table: <Table2 className="h-4 w-4" />,
   energyflow: <GitBranch className="h-4 w-4" />,
 };
+
+function formatTimeLabel(hours: number, minutes: number): string {
+  return `${hours}:${minutes.toString().padStart(2, "0")}`;
+}
+
+function buildDayTimeline(): string[] {
+  const labels: string[] = [];
+  for (let totalMinutes = 0; totalMinutes <= 24 * 60; totalMinutes += DAY_BUCKET_MINUTES) {
+    labels.push(formatTimeLabel(Math.floor(totalMinutes / 60), totalMinutes % 60));
+  }
+  return labels;
+}
+
+function getDayBucketLabel(date: Date): string {
+  const roundedMinutes = Math.floor(date.getMinutes() / DAY_BUCKET_MINUTES) * DAY_BUCKET_MINUTES;
+  return formatTimeLabel(date.getHours(), roundedMinutes);
+}
+
+function normalizePowerUnit(unit?: string | null, energyType?: string | null, fallback?: string | null): string {
+  if (unit === "Wh") return "W";
+  if (unit === "kWh") return "kW";
+  if (unit === "m³") return "m³/h";
+  if (unit) return unit;
+  if (energyType === "gas" || energyType === "wasser") return "m³/h";
+  if (fallback === "kWh") return "kW";
+  return fallback || "kW";
+}
 
 /** Compute date range from the dashboard time period */
 function getDateRange(period: TimePeriod): { from: Date; to: Date } {
@@ -113,71 +142,111 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
 
   const { from, to } = useMemo(() => getDateRange(selectedPeriod), [selectedPeriod]);
 
-  // Fetch meter names for legend
-  const { data: meterNames = {} } = useQuery({
-    queryKey: ["meter-names", config.meter_ids],
+  const { data: meterDetails = {} } = useQuery({
+    queryKey: ["meter-details", config.meter_ids],
     queryFn: async () => {
       if (!config.meter_ids.length) return {};
       const { data } = await supabase
         .from("meters")
-        .select("id, name")
+        .select("id, name, unit, source_unit_power, energy_type")
         .in("id", config.meter_ids);
-      return Object.fromEntries((data ?? []).map((m) => [m.id, m.name]));
+      return Object.fromEntries((data ?? []).map((m) => [m.id, m]));
     },
     enabled: config.meter_ids.length > 0,
   });
 
+  const displayUnit = useMemo(() => {
+    if (selectedPeriod !== "day") return config.unit;
+    const primaryMeter = config.meter_ids.map((meterId) => meterDetails[meterId]).find(Boolean) as
+      | { unit?: string | null; source_unit_power?: string | null; energy_type?: string | null }
+      | undefined;
+
+    return normalizePowerUnit(
+      primaryMeter?.source_unit_power ?? primaryMeter?.unit,
+      primaryMeter?.energy_type,
+      config.unit,
+    );
+  }, [config.meter_ids, config.unit, meterDetails, selectedPeriod]);
+
   // Fetch data: 5-min readings for "day", daily totals otherwise
   const { data: chartData = [], isLoading } = useQuery({
-    queryKey: ["custom-widget-data", definition.id, config.meter_ids, locationId, selectedPeriod],
+    queryKey: ["custom-widget-data", definition.id, config.meter_ids, locationId, selectedPeriod, from.toISOString(), to.toISOString()],
     queryFn: async () => {
       if (!config.meter_ids.length) return [];
 
       if (selectedPeriod === "day") {
-        // Fetch 5-min power readings for today (local midnight to midnight)
-        const todayStart = new Date();
-        todayStart.setHours(0, 0, 0, 0);
-        const todayEnd = new Date(todayStart);
-        todayEnd.setDate(todayEnd.getDate() + 1);
+        const timeline = buildDayTimeline();
+        const valuesByBucket = Object.fromEntries(
+          timeline.map((label) => [label, {} as Record<string, number[]>]),
+        );
 
-        const { data } = await supabase
-          .from("meter_power_readings_5min")
-          .select("meter_id, bucket, power_avg")
+        const aggregatedRows: Array<{ meter_id: string; power_avg: number; bucket: string }> = [];
+        const pageSize = 1000;
+        let pageFrom = 0;
+        let hasMore = true;
+
+        while (hasMore) {
+          const { data, error } = await supabase
+            .rpc("get_power_readings_5min", {
+              p_meter_ids: config.meter_ids,
+              p_start: from.toISOString(),
+              p_end: to.toISOString(),
+            })
+            .range(pageFrom, pageFrom + pageSize - 1);
+
+          if (error) throw error;
+          if (!data || data.length === 0) break;
+
+          aggregatedRows.push(...(data as Array<{ meter_id: string; power_avg: number; bucket: string }>));
+          hasMore = data.length === pageSize;
+          pageFrom += pageSize;
+        }
+
+        let mergedRows = aggregatedRows.map((row) => ({
+          meter_id: row.meter_id,
+          value: row.power_avg,
+          recorded_at: row.bucket,
+        }));
+
+        const recentCutoff = new Date(Date.now() - 10 * 60 * 1000);
+        const { data: recentRaw, error: recentError } = await supabase
+          .from("meter_power_readings")
+          .select("meter_id, power_value, recorded_at")
           .in("meter_id", config.meter_ids)
-          .gte("bucket", todayStart.toISOString())
-          .lt("bucket", todayEnd.toISOString())
-          .order("bucket", { ascending: true });
+          .gte("recorded_at", recentCutoff.toISOString())
+          .lte("recorded_at", to.toISOString())
+          .order("recorded_at", { ascending: true });
 
-        if (!data) return [];
+        if (recentError) throw recentError;
 
-        // Group into hourly buckets (0–23)
-        const hourMap: Record<number, Record<string, number[]>> = {};
-        for (const row of data) {
-          const d = new Date(row.bucket);
-          const h = d.getHours();
-          if (!hourMap[h]) hourMap[h] = {};
-          if (!hourMap[h][row.meter_id]) hourMap[h][row.meter_id] = [];
-          hourMap[h][row.meter_id].push(row.power_avg);
+        if (recentRaw?.length) {
+          mergedRows = mergedRows.filter((row) => new Date(row.recorded_at) < recentCutoff);
+          mergedRows.push(
+            ...recentRaw.map((row) => ({
+              meter_id: row.meter_id,
+              value: row.power_value,
+              recorded_at: row.recorded_at,
+            })),
+          );
         }
 
-        // Build chart data with hourly averages, 0:00–24:00 (25 ticks)
-        const result: any[] = [];
-        for (let h = 0; h <= 24; h++) {
-          const label = `${h}:00`;
-          const entry: any = { name: label };
-          // hour 24 has no data bucket – leave values null
-          const bucket = h < 24 ? hourMap[h] : undefined;
-          for (const mid of config.meter_ids) {
-            if (bucket?.[mid]?.length) {
-              const avg = bucket[mid].reduce((a, b) => a + b, 0) / bucket[mid].length;
-              entry[mid] = avg;
-            } else {
-              entry[mid] = null;
-            }
+        for (const row of mergedRows) {
+          const label = getDayBucketLabel(new Date(row.recorded_at));
+          if (!valuesByBucket[label]) continue;
+          if (!valuesByBucket[label][row.meter_id]) valuesByBucket[label][row.meter_id] = [];
+          valuesByBucket[label][row.meter_id].push(row.value);
+        }
+
+        return timeline.map((label) => {
+          const entry: Record<string, string | number | null> = { name: label };
+          for (const meterId of config.meter_ids) {
+            const bucketValues = valuesByBucket[label][meterId];
+            entry[meterId] = bucketValues?.length
+              ? bucketValues.reduce((sum, value) => sum + value, 0) / bucketValues.length
+              : null;
           }
-          result.push(entry);
-        }
-        return result;
+          return entry;
+        });
       }
 
       // Non-day periods: use daily totals
@@ -203,8 +272,21 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
       }));
     },
     enabled: config.meter_ids.length > 0,
-    staleTime: 5 * 60 * 1000,
+    staleTime: selectedPeriod === "day" ? 30 * 1000 : 5 * 60 * 1000,
+    refetchInterval: selectedPeriod === "day" ? 60 * 1000 : false,
   });
+
+  const yDomain = useMemo(() => {
+    const hasNegativeValues = chartData.some((row: any) =>
+      config.meter_ids.some((meterId) => typeof row[meterId] === "number" && row[meterId] < 0),
+    );
+
+    if (selectedPeriod === "day" && hasNegativeValues && (config.y_range?.min ?? 0) >= 0) {
+      return ["auto", config.y_range?.max ?? "auto"] as const;
+    }
+
+    return [config.y_range?.min ?? "auto", config.y_range?.max ?? "auto"] as const;
+  }, [chartData, config.meter_ids, config.y_range?.max, config.y_range?.min, selectedPeriod]);
 
   const getSeriesColor = (idx: number) => {
     const mid = config.meter_ids[idx];
@@ -234,7 +316,7 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
         <CardTitle className="text-sm flex items-center gap-2">
           <span style={{ color }}>{ICON_MAP[activeChartType]}</span>
           {name}
-          <span className="text-xs text-muted-foreground ml-auto">{config.unit}</span>
+            <span className="text-xs text-muted-foreground ml-auto">{displayUnit}</span>
         </CardTitle>
       </CardHeader>
       <CardContent>
@@ -250,12 +332,21 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
                   {activeChartType === "line" ? (
                     <RLineChart data={chartData}>
                       <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-                      <XAxis dataKey="name" tick={{ fontSize: 11 }} interval={selectedPeriod === "day" ? 1 : "preserveStartEnd"} />
-                      <YAxis tick={{ fontSize: 11 }} domain={[(config.y_range?.min ?? "auto"), (config.y_range?.max ?? "auto")]} allowDataOverflow={false} />
-                      <Tooltip content={selectedPeriod === "day" ? <DayTooltip unit={config.unit} /> : undefined} formatter={selectedPeriod !== "day" ? (v: number) => v?.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " " + config.unit : undefined} />
+                      <XAxis
+                        dataKey="name"
+                        tick={{ fontSize: 11 }}
+                        interval={selectedPeriod === "day" ? DAY_AXIS_INTERVAL : "preserveStartEnd"}
+                        tickFormatter={(value: string) =>
+                          selectedPeriod === "day"
+                            ? (value.endsWith(":00") && value !== "24:00" ? value : "")
+                            : value
+                        }
+                      />
+                      <YAxis tick={{ fontSize: 11 }} domain={yDomain} allowDataOverflow={false} />
+                      <Tooltip content={selectedPeriod === "day" ? <DayTooltip unit={displayUnit} /> : undefined} formatter={selectedPeriod !== "day" ? (v: number) => v?.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " " + displayUnit : undefined} />
                       <Legend />
                       {config.meter_ids.map((mid, i) => (
-                        <Line key={mid} type="monotone" dataKey={mid} name={meterNames[mid] || `Zähler ${i + 1}`} stroke={getSeriesColor(i)} strokeWidth={2} dot={false} connectNulls={false} />
+                        <Line key={mid} type="monotone" dataKey={mid} name={meterDetails[mid]?.name || `Zähler ${i + 1}`} stroke={getSeriesColor(i)} strokeWidth={2} dot={false} connectNulls={false} />
                       ))}
                       {(config.thresholds || []).map((t, i) => (
                         <ReferenceLine key={i} y={t.value} stroke={t.color} strokeDasharray="5 5" label={t.label} />
@@ -264,12 +355,21 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
                   ) : (
                     <RBarChart data={chartData}>
                       <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-                      <XAxis dataKey="name" tick={{ fontSize: 11 }} interval={selectedPeriod === "day" ? 1 : "preserveStartEnd"} />
-                      <YAxis tick={{ fontSize: 11 }} domain={[(config.y_range?.min ?? "auto"), (config.y_range?.max ?? "auto")]} allowDataOverflow={false} />
-                      <Tooltip content={selectedPeriod === "day" ? <DayTooltip unit={config.unit} /> : undefined} formatter={selectedPeriod !== "day" ? (v: number) => v?.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " " + config.unit : undefined} />
+                      <XAxis
+                        dataKey="name"
+                        tick={{ fontSize: 11 }}
+                        interval={selectedPeriod === "day" ? DAY_AXIS_INTERVAL : "preserveStartEnd"}
+                        tickFormatter={(value: string) =>
+                          selectedPeriod === "day"
+                            ? (value.endsWith(":00") && value !== "24:00" ? value : "")
+                            : value
+                        }
+                      />
+                      <YAxis tick={{ fontSize: 11 }} domain={yDomain} allowDataOverflow={false} />
+                      <Tooltip content={selectedPeriod === "day" ? <DayTooltip unit={displayUnit} /> : undefined} formatter={selectedPeriod !== "day" ? (v: number) => v?.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " " + displayUnit : undefined} />
                       <Legend />
                       {config.meter_ids.map((mid, i) => (
-                        <Bar key={mid} dataKey={mid} name={meterNames[mid] || `Zähler ${i + 1}`} fill={getSeriesColor(i)} radius={[2, 2, 0, 0]} />
+                        <Bar key={mid} dataKey={mid} name={meterDetails[mid]?.name || `Zähler ${i + 1}`} fill={getSeriesColor(i)} radius={[2, 2, 0, 0]} />
                       ))}
                       {(config.thresholds || []).map((t, i) => (
                         <ReferenceLine key={i} y={t.value} stroke={t.color} strokeDasharray="5 5" label={t.label} />
@@ -286,7 +386,7 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
                   <div className="text-5xl font-bold tabular-nums" style={{ color }}>
                     {Math.round(kpiValue).toLocaleString("de-DE")}
                   </div>
-                  <div className="text-sm text-muted-foreground mt-1">{config.unit}</div>
+                  <div className="text-sm text-muted-foreground mt-1">{displayUnit}</div>
                 </div>
               </div>
             )}
@@ -297,7 +397,7 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
                   <div className="text-4xl font-bold tabular-nums" style={{ color }}>
                     {Math.round(kpiValue).toLocaleString("de-DE")}
                   </div>
-                  <div className="text-sm text-muted-foreground mt-1">{config.unit}</div>
+                  <div className="text-sm text-muted-foreground mt-1">{displayUnit}</div>
                 </div>
               </div>
             )}
@@ -310,7 +410,7 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
                       <th className="text-left py-1.5 text-muted-foreground font-medium">Tag</th>
                       {config.meter_ids.map((mid, i) => (
                         <th key={mid} className="text-right py-1.5 text-muted-foreground font-medium">
-                          {meterNames[mid] || `Zähler ${i + 1}`}
+                          {meterDetails[mid]?.name || `Zähler ${i + 1}`}
                         </th>
                       ))}
                     </tr>
@@ -321,7 +421,7 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
                         <td className="py-1.5">{row.name}</td>
                         {config.meter_ids.map((mid) => (
                           <td key={mid} className="text-right py-1.5 tabular-nums">
-                            {(row[mid] as number)?.toLocaleString("de-DE", { maximumFractionDigits: 1 }) ?? "–"} {config.unit}
+                            {(row[mid] as number)?.toLocaleString("de-DE", { maximumFractionDigits: 1 }) ?? "–"} {displayUnit}
                           </td>
                         ))}
                       </tr>
