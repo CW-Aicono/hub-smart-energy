@@ -96,7 +96,7 @@ export function usePeriodSumsWithFallback(
 
       // 6. Merge fallback into period sums
       for (const [meterId, fallbackVal] of Object.entries(meterFallback)) {
-        if (fallbackVal > 0) {
+        if (fallbackVal !== 0) {
           periodSums[meterId] = (periodSums[meterId] ?? 0) + fallbackVal;
         }
       }

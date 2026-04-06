@@ -238,18 +238,25 @@ const CostOverview = ({ locationId }: CostOverviewProps) => {
         const todayVal = livePeriodTotals[m.id]?.totalDay ?? 0;
         currentRaw = dbVal + todayVal;
       }
-      if (currentRaw != null && currentRaw > 0) {
+      if (currentRaw != null && currentRaw !== 0) {
         const c = toConsumption(currentRaw);
-        currentCost += c * costPrice;
-        currentRevenue += c * revenuePrice;
-        currentConsumption += c;
+        if (c >= 0) {
+          currentCost += c * costPrice;
+          currentConsumption += c;
+        } else {
+          // Negative = feed-in: count as revenue
+          currentRevenue += Math.abs(c) * revenuePrice;
+        }
       }
 
       // Previous period (from DB)
       if (selectedPeriod !== "all") {
         const prevRaw = dbPrevSums?.[m.id] ?? 0;
-        if (prevRaw > 0) {
-          prevCost += toConsumption(prevRaw) * costPrice;
+        if (prevRaw !== 0) {
+          if (prevRaw > 0) {
+            prevCost += toConsumption(prevRaw) * costPrice;
+          }
+          // Negative previous values are feed-in revenue (not tracked for comparison yet)
         }
       }
     });

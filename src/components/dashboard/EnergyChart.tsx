@@ -335,7 +335,7 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
             }
             for (const [dayStr, meterMap] of dayMeterTotals) {
               for (const [meterId, totalValue] of meterMap) {
-                if (totalValue > 0) {
+                if (totalValue !== 0) {
                   results.push({ meter_id: meterId, day: dayStr, total_value: totalValue });
                 }
               }
