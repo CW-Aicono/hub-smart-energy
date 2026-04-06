@@ -72,7 +72,11 @@ export function PvForecastSection({ locationId }: PvForecastSectionProps) {
         forecastHours: forecast?.hourly ?? [],
       });
 
-      setActualReadings(result.readings);
+      // PV generation meters: always show absolute values (negative = feed-in)
+      const absReadings = Object.fromEntries(
+        Object.entries(result.readings).map(([k, v]) => [k, Math.abs(v)])
+      );
+      setActualReadings(absReadings);
       setActualReadingsEstimated(result.isEstimated);
     })();
   }, [allPvMeterIds.join(","), isOpen, locationId, forecast?.hourly]);

@@ -295,7 +295,11 @@ const PvForecastWidget = ({ locationId }: PvForecastWidgetProps) => {
       });
 
       if (!stale) {
-        setActualReadings(result.readings);
+        // PV generation meters: always show absolute values (negative = feed-in)
+        const absReadings = Object.fromEntries(
+          Object.entries(result.readings).map(([k, v]) => [k, Math.abs(v)])
+        );
+        setActualReadings(absReadings);
         setActualReadingsEstimated(result.isEstimated);
       }
     })();
@@ -320,7 +324,13 @@ const PvForecastWidget = ({ locationId }: PvForecastWidgetProps) => {
         rangeEnd,
       });
 
-      if (!stale) setMultiDayActuals(dayMap);
+      // PV generation: always absolute values
+      if (!stale) {
+        const absDayMap = Object.fromEntries(
+          Object.entries(dayMap).map(([k, v]) => [k, Math.abs(v)])
+        );
+        setMultiDayActuals(absDayMap);
+      }
     })();
     return () => { stale = true; };
   }, [locationId, settings?.pv_meter_id, isDay, tenantId, rangeStart, rangeEnd]);
