@@ -111,6 +111,9 @@ const PvForecastWidget = ({ locationId }: PvForecastWidgetProps) => {
   const { forecast, isLoading } = usePvForecast(locationId);
   const { settings } = usePvForecastSettings(locationId);
   const { selectedPeriod, setSelectedPeriod, selectedOffset: offset, setSelectedOffset: setOffset } = useDashboardFilter();
+  const [actualReadings, setActualReadings] = useState<Record<string, number>>({});
+  const [actualReadingsEstimated, setActualReadingsEstimated] = useState(false);
+  const [multiDayActuals, setMultiDayActuals] = useState<Record<string, number>>({});
 
   const { start: rangeStart, end: rangeEnd, label: periodLabel } = useMemo(
     () => getPeriodRange(selectedPeriod, offset, dateLocale, cwPrefix),
