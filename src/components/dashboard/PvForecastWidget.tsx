@@ -508,7 +508,6 @@ const PvForecastWidget = ({ locationId }: PvForecastWidgetProps) => {
               {typeof summary.ai_correction_factor === "number" && summary.ai_correction_factor !== 1 && (
                 <Badge variant="outline">KI-Faktor: {summary.ai_correction_factor.toFixed(2)}</Badge>
               )}
-              {dwdReference && <Badge variant="secondary">Bewölkung-Referenz</Badge>}
             </div>
 
             {weatherSource && (
@@ -516,19 +515,6 @@ const PvForecastWidget = ({ locationId }: PvForecastWidgetProps) => {
                 {weatherSource.profile} · {weatherSource.requested_coordinates.latitude.toFixed(4)}, {weatherSource.requested_coordinates.longitude.toFixed(4)} · {weatherSource.hourly_variables.join(", ")}
               </p>
             )}
-
-            {dwdReference?.hourly_cloud_cover_today?.length ? (
-              <div className="space-y-2">
-                <p className="text-xs text-muted-foreground">DWD-Bewölkung (nur Referenz)</p>
-                <div className="flex flex-wrap gap-1">
-                  {dwdReference.hourly_cloud_cover_today.map((entry) => (
-                    <span key={entry.timestamp} className="rounded-md border border-border bg-background px-2 py-1 text-[11px] text-foreground">
-                      {entry.timestamp.split("T")[1]?.slice(0, 5)} {entry.cloud_cover_pct}%
-                    </span>
-                  ))}
-                </div>
-              </div>
-            ) : null}
           </div>
         )}
 
