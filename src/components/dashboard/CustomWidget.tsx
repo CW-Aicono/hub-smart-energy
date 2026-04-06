@@ -4,7 +4,15 @@ import { CustomWidgetDefinition, ChartType } from "@/hooks/useCustomWidgetDefini
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useDashboardFilter, TimePeriod } from "@/hooks/useDashboardFilter";
-import { BarChart3, LineChart, Gauge, Activity, Table2, GitBranch } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { BarChart3, LineChart, Gauge, Activity, Table2, GitBranch, ChevronLeft, ChevronRight } from "lucide-react";
+import {
+  format, startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth,
+  startOfQuarter, endOfQuarter, startOfYear, endOfYear,
+  addDays, addWeeks, addMonths, addQuarters, addYears, getISOWeek,
+} from "date-fns";
+import { de } from "date-fns/locale";
 import {
   ResponsiveContainer,
   LineChart as RLineChart,
