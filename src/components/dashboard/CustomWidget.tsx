@@ -112,11 +112,55 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
     enabled: config.meter_ids.length > 0,
   });
 
-  // Fetch daily totals for selected meters within the active period
+  // Fetch data: 5-min readings for "day", daily totals otherwise
   const { data: chartData = [], isLoading } = useQuery({
     queryKey: ["custom-widget-data", definition.id, config.meter_ids, locationId, selectedPeriod],
     queryFn: async () => {
       if (!config.meter_ids.length) return [];
+
+      if (selectedPeriod === "day") {
+        // Fetch 5-min power readings for today and aggregate to hourly
+        const { data } = await supabase
+          .from("meter_power_readings_5min")
+          .select("meter_id, bucket, power_avg")
+          .in("meter_id", config.meter_ids)
+          .gte("bucket", from.toISOString())
+          .lt("bucket", to.toISOString())
+          .order("bucket", { ascending: true });
+
+        if (!data) return [];
+
+        // Group into hourly buckets
+        const hourMap: Record<string, Record<string, number[]>> = {};
+        for (const row of data) {
+          const d = new Date(row.bucket);
+          const hourLabel = `${d.getHours()}:00`;
+          if (!hourMap[hourLabel]) hourMap[hourLabel] = {};
+          if (!hourMap[hourLabel][row.meter_id]) hourMap[hourLabel][row.meter_id] = [];
+          hourMap[hourLabel][row.meter_id].push(row.power_avg);
+        }
+
+        // Build chart data with hourly averages (kW), fill all 24h
+        const result: any[] = [];
+        for (let h = 0; h < 24; h++) {
+          const label = `${h}:00`;
+          const entry: any = { name: label };
+          const bucket = hourMap[label];
+          for (const mid of config.meter_ids) {
+            if (bucket?.[mid]?.length) {
+              // Average power in kW for the hour
+              const avg = bucket[mid].reduce((a, b) => a + b, 0) / bucket[mid].length;
+              entry[mid] = avg;
+            } else {
+              entry[mid] = null;
+            }
+          }
+          result.push(entry);
+        }
+        return result;
+      }
+
+      // Non-day periods: use daily totals
       const { data } = await supabase.rpc("get_meter_daily_totals", {
         p_meter_ids: config.meter_ids,
         p_from_date: from.toISOString().split("T")[0],
