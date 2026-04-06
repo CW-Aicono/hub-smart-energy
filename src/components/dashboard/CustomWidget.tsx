@@ -72,31 +72,36 @@ function normalizePowerUnit(unit?: string | null, energyType?: string | null, fa
   return fallback || "kW";
 }
 
-/** Compute date range from the dashboard time period */
-function getDateRange(period: TimePeriod): { from: Date; to: Date } {
+/** Compute date range from the dashboard time period and offset */
+function getDateRange(period: TimePeriod, offset: number): { from: Date; to: Date } {
   const now = new Date();
-  const from = new Date(now);
+  let base: Date;
   switch (period) {
-    case "day":
-      from.setHours(0, 0, 0, 0);
-      break;
-    case "week":
-      from.setDate(from.getDate() - 7);
-      break;
-    case "month":
-      from.setMonth(from.getMonth() - 1);
-      break;
-    case "quarter":
-      from.setMonth(from.getMonth() - 3);
-      break;
-    case "year":
-      from.setFullYear(from.getFullYear() - 1);
-      break;
+    case "day": base = addDays(now, offset); return { from: startOfDay(base), to: endOfDay(base) };
+    case "week": base = addWeeks(now, offset); return { from: startOfWeek(base, { weekStartsOn: 1 }), to: endOfWeek(base, { weekStartsOn: 1 }) };
+    case "month": base = addMonths(now, offset); return { from: startOfMonth(base), to: endOfMonth(base) };
+    case "quarter": base = addQuarters(now, offset); return { from: startOfQuarter(base), to: endOfQuarter(base) };
+    case "year": base = addYears(now, offset); return { from: startOfYear(base), to: endOfYear(base) };
     case "all":
+    default: {
+      const from = new Date(now);
       from.setFullYear(from.getFullYear() - 5);
-      break;
+      return { from, to: now };
+    }
   }
-  return { from, to: now };
+}
+
+function getPeriodLabel(period: TimePeriod, offset: number): string {
+  const now = new Date();
+  let base: Date;
+  switch (period) {
+    case "day": base = addDays(now, offset); return format(base, "EEEE, d. MMM yyyy", { locale: de });
+    case "week": base = addWeeks(now, offset); return `KW ${getISOWeek(base)}, ${format(base, "yyyy")}`;
+    case "month": base = addMonths(now, offset); return format(base, "MMMM yyyy", { locale: de });
+    case "quarter": base = addQuarters(now, offset); return `Q${Math.floor(base.getMonth() / 3) + 1} ${format(base, "yyyy")}`;
+    case "year": base = addYears(now, offset); return format(base, "yyyy");
+    default: return "";
+  }
 }
 
 /** Format a date label appropriate to the selected time period */
