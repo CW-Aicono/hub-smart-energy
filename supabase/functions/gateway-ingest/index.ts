@@ -1081,8 +1081,9 @@ async function handleSyncAutomations(url: URL, req: Request): Promise<Response> 
   const since = url.searchParams.get("since");
   const supabase = getSupabase();
 
-  // Resolve device's location to filter automations by location
+  // Resolve device's location AND integration to filter automations
   let locationId: string | null = null;
+  let locationIntegrationId: string | null = null;
   const deviceCtx = await getDeviceFromApiKey(req);
   if (deviceCtx) {
     const { data: device } = await supabase
@@ -1092,6 +1093,7 @@ async function handleSyncAutomations(url: URL, req: Request): Promise<Response> 
       .maybeSingle();
 
     if (device?.location_integration_id) {
+      locationIntegrationId = device.location_integration_id;
       const { data: li } = await supabase
         .from("location_integrations")
         .select("location_id")
@@ -1101,7 +1103,10 @@ async function handleSyncAutomations(url: URL, req: Request): Promise<Response> 
     }
   }
 
-  // Also accept explicit location_id param (e.g. from global API key setups)
+  // Also accept explicit params (e.g. from global API key setups)
+  if (!locationIntegrationId) {
+    locationIntegrationId = url.searchParams.get("location_integration_id");
+  }
   if (!locationId) {
     locationId = url.searchParams.get("location_id");
   }
@@ -1112,8 +1117,11 @@ async function handleSyncAutomations(url: URL, req: Request): Promise<Response> 
     .select("*, locations!location_automations_location_id_fkey(timezone)")
     .eq("tenant_id", tenantId);
 
-  // Filter by location if we could resolve one
-  if (locationId) {
+  // Filter by location_integration_id (preferred – only automations this gateway can execute)
+  if (locationIntegrationId) {
+    query = query.eq("location_integration_id", locationIntegrationId);
+  } else if (locationId) {
+    // Fallback: filter by location if integration couldn't be resolved
     query = query.eq("location_id", locationId);
   }
 
