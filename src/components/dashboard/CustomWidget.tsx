@@ -296,12 +296,13 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
       config.meter_ids.some((meterId) => typeof row[meterId] === "number" && row[meterId] < 0),
     );
 
-    if (selectedPeriod === "day" && hasNegativeValues && (config.y_range?.min ?? 0) >= 0) {
+    // Always use "auto" for min when negative values exist, regardless of config
+    if (hasNegativeValues) {
       return ["auto", config.y_range?.max ?? "auto"];
     }
 
     return [config.y_range?.min ?? "auto", config.y_range?.max ?? "auto"];
-  }, [chartData, config.meter_ids, config.y_range?.max, config.y_range?.min, selectedPeriod]);
+  }, [chartData, config.meter_ids, config.y_range?.max, config.y_range?.min]);
 
   const getSeriesColor = (idx: number) => {
     const mid = config.meter_ids[idx];
