@@ -32,13 +32,14 @@ function extractLivePower(sensor: any): GatewayLivePowerValue | null {
   const primaryUnit = normalizeUnit(sensor.unit);
   const primaryValue = parseNumeric(sensor.rawValue ?? sensor.value);
   if (primaryUnit && LIVE_POWER_UNITS.has(primaryUnit) && primaryValue !== null) {
-    return { value: Math.abs(primaryValue), unit: primaryUnit };
+    // Preserve sign: negative = feed-in/export for bidirectional meters
+    return { value: primaryValue, unit: primaryUnit };
   }
 
   const secondaryUnit = normalizeUnit(sensor.secondaryUnit);
   const secondaryValue = parseNumeric(sensor.secondaryValue);
   if (secondaryUnit && LIVE_POWER_UNITS.has(secondaryUnit) && secondaryValue !== null) {
-    return { value: Math.abs(secondaryValue), unit: secondaryUnit };
+    return { value: secondaryValue, unit: secondaryUnit };
   }
 
   return null;
