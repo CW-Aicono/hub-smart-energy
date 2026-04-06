@@ -3,12 +3,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   EnergyFlowNode,
   EnergyFlowConnection,
   EnergyFlowNodeRole,
 } from "@/hooks/useCustomWidgetDefinitions";
-import { Plus, X, Link2 } from "lucide-react";
+import { Plus, X, Link2, Trash2, Unlink } from "lucide-react";
 
 const NODE_ROLES: { value: EnergyFlowNodeRole; label: string }[] = [
   { value: "pv", label: "PV / Solar" },
