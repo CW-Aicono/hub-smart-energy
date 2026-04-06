@@ -872,31 +872,23 @@ async function handleHeartbeat(req: Request): Promise<Response> {
     resolvedLiId = existingDevice?.location_integration_id || null;
   }
   if (!resolvedLiId) {
-    // Find the first home_assistant integration for this tenant
-    const { data: haIntegration } = await supabase
+    // Find the HA integration for this tenant by joining location_integrations → integrations + locations
+    const { data: lis } = await supabase
       .from("location_integrations")
-      .select("id, integration:integrations!inner(type)")
-      .eq("location_integrations.is_enabled", true)
-      .in("integrations.type", ["home_assistant"])
-      .limit(1)
-      .maybeSingle();
+      .select("id, is_enabled, integrations!inner(type), locations!inner(tenant_id)")
+      .eq("is_enabled", true)
+      .limit(10);
 
-    // Fallback: query by joining location → tenant
-    if (!haIntegration) {
-      const { data: lis } = await supabase
-        .from("location_integrations")
-        .select("id, integration:integrations!inner(type), location:locations!inner(tenant_id)")
-        .eq("locations.tenant_id", body.tenant_id)
-        .eq("integrations.type", "home_assistant")
-        .eq("is_enabled", true)
-        .limit(1);
-      if (lis && lis.length > 0) {
-        resolvedLiId = lis[0].id;
+    if (lis) {
+      const match = lis.find((li: any) => {
+        const intType = li.integrations?.type;
+        const tenId = li.locations?.tenant_id;
+        return intType === "home_assistant" && tenId === body.tenant_id;
+      });
+      if (match) {
+        resolvedLiId = match.id;
         console.log(`[heartbeat] Auto-resolved location_integration_id=${resolvedLiId} for device ${body.device_name}`);
       }
-    } else {
-      resolvedLiId = haIntegration.id;
-      console.log(`[heartbeat] Auto-resolved location_integration_id=${resolvedLiId} for device ${body.device_name}`);
     }
   }
 
