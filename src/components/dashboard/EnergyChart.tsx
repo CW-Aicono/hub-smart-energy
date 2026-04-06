@@ -125,12 +125,11 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
   const { locations } = useLocations();
   const { readings, livePeriodTotals, loading, hasData } = useEnergyData(locationId);
   const { meters } = useMeters();
-  const { selectedPeriod, setSelectedPeriod } = useDashboardFilter();
+  const { selectedPeriod, setSelectedPeriod, selectedOffset: offset, setSelectedOffset: setOffset } = useDashboardFilter();
   const { t, language } = useTranslation();
   const T = (key: string) => t(key as any);
   const dateLocale = localeMap[language] || de;
   const cwPrefix = T("chart.cwPrefix");
-  const [offset, setOffset] = useState(0);
   const [hiddenKeys, setHiddenKeys] = useState<Set<string>>(new Set());
   const [powerReadings, setPowerReadings] = useState<Array<{ meter_id: string; power_value: number; recorded_at: string }>>([]);
   const [powerLoading, setPowerLoading] = useState(false);
@@ -626,9 +625,8 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
     return buckets;
   }, [readings, meterMap, period, rangeStart.toISOString(), rangeEnd.toISOString(), livePeriodTotals, offset, periodLabel, locationId, powerReadings, dailyTotals]);
 
-  // Reset offset when period changes
+  // Reset offset when period changes (handled by context now)
   const handlePeriodChange = (v: string) => {
-    setOffset(0);
     if (v === "day" || v === "week" || v === "month" || v === "quarter" || v === "year") {
       setSelectedPeriod(v as TimePeriod);
     }

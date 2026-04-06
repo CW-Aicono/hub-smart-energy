@@ -4,7 +4,15 @@ import { CustomWidgetDefinition, ChartType } from "@/hooks/useCustomWidgetDefini
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useDashboardFilter, TimePeriod } from "@/hooks/useDashboardFilter";
-import { BarChart3, LineChart, Gauge, Activity, Table2, GitBranch } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { BarChart3, LineChart, Gauge, Activity, Table2, GitBranch, ChevronLeft, ChevronRight } from "lucide-react";
+import {
+  format, startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth,
+  startOfQuarter, endOfQuarter, startOfYear, endOfYear,
+  addDays, addWeeks, addMonths, addQuarters, addYears, getISOWeek,
+} from "date-fns";
+import { de } from "date-fns/locale";
 import {
   ResponsiveContainer,
   LineChart as RLineChart,
@@ -64,31 +72,36 @@ function normalizePowerUnit(unit?: string | null, energyType?: string | null, fa
   return fallback || "kW";
 }
 
-/** Compute date range from the dashboard time period */
-function getDateRange(period: TimePeriod): { from: Date; to: Date } {
+/** Compute date range from the dashboard time period and offset */
+function getDateRange(period: TimePeriod, offset: number): { from: Date; to: Date } {
   const now = new Date();
-  const from = new Date(now);
+  let base: Date;
   switch (period) {
-    case "day":
-      from.setHours(0, 0, 0, 0);
-      break;
-    case "week":
-      from.setDate(from.getDate() - 7);
-      break;
-    case "month":
-      from.setMonth(from.getMonth() - 1);
-      break;
-    case "quarter":
-      from.setMonth(from.getMonth() - 3);
-      break;
-    case "year":
-      from.setFullYear(from.getFullYear() - 1);
-      break;
+    case "day": base = addDays(now, offset); return { from: startOfDay(base), to: endOfDay(base) };
+    case "week": base = addWeeks(now, offset); return { from: startOfWeek(base, { weekStartsOn: 1 }), to: endOfWeek(base, { weekStartsOn: 1 }) };
+    case "month": base = addMonths(now, offset); return { from: startOfMonth(base), to: endOfMonth(base) };
+    case "quarter": base = addQuarters(now, offset); return { from: startOfQuarter(base), to: endOfQuarter(base) };
+    case "year": base = addYears(now, offset); return { from: startOfYear(base), to: endOfYear(base) };
     case "all":
+    default: {
+      const from = new Date(now);
       from.setFullYear(from.getFullYear() - 5);
-      break;
+      return { from, to: now };
+    }
   }
-  return { from, to: now };
+}
+
+function getPeriodLabel(period: TimePeriod, offset: number): string {
+  const now = new Date();
+  let base: Date;
+  switch (period) {
+    case "day": base = addDays(now, offset); return format(base, "EEEE, d. MMM yyyy", { locale: de });
+    case "week": base = addWeeks(now, offset); return `KW ${getISOWeek(base)}, ${format(base, "yyyy")}`;
+    case "month": base = addMonths(now, offset); return format(base, "MMMM yyyy", { locale: de });
+    case "quarter": base = addQuarters(now, offset); return `Q${Math.floor(base.getMonth() / 3) + 1} ${format(base, "yyyy")}`;
+    case "year": base = addYears(now, offset); return format(base, "yyyy");
+    default: return "";
+  }
 }
 
 /** Format a date label appropriate to the selected time period */
@@ -132,15 +145,25 @@ interface CustomWidgetProps {
   onCollapse?: () => void;
 }
 
+const PERIOD_OPTIONS: { value: TimePeriod; label: string }[] = [
+  { value: "day", label: "Tag" },
+  { value: "week", label: "Woche" },
+  { value: "month", label: "Monat" },
+  { value: "quarter", label: "Quartal" },
+  { value: "year", label: "Jahr" },
+];
+
 export default function CustomWidget({ definition, locationId }: CustomWidgetProps) {
   const { config, name, color } = definition;
-  const { selectedPeriod } = useDashboardFilter();
+  const { selectedPeriod, setSelectedPeriod, selectedOffset: offset, setSelectedOffset: setOffset } = useDashboardFilter();
 
   // Resolve chart type for current period
   const activeChartType: ChartType =
     config.chart_type_per_period?.[selectedPeriod] ?? definition.chart_type;
 
-  const { from, to } = useMemo(() => getDateRange(selectedPeriod), [selectedPeriod]);
+  const { from, to } = useMemo(() => getDateRange(selectedPeriod, offset), [selectedPeriod, offset]);
+  const periodLabel = useMemo(() => getPeriodLabel(selectedPeriod, offset), [selectedPeriod, offset]);
+  const canGoForward = offset < 0;
 
   const { data: meterDetails = {} } = useQuery({
     queryKey: ["meter-details", config.meter_ids],
@@ -329,11 +352,34 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
   return (
     <Card>
       <CardHeader className="pb-2">
-        <CardTitle className="text-sm flex items-center gap-2">
-          <span style={{ color }}>{ICON_MAP[activeChartType]}</span>
-          {name}
-            <span className="text-xs text-muted-foreground ml-auto">{displayUnit}</span>
-        </CardTitle>
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-sm flex items-center gap-2">
+            <span style={{ color }}>{ICON_MAP[activeChartType]}</span>
+            {name}
+            <span className="text-xs text-muted-foreground">{displayUnit}</span>
+          </CardTitle>
+          <Select value={selectedPeriod} onValueChange={(v) => setSelectedPeriod(v as TimePeriod)}>
+            <SelectTrigger className="w-[100px] h-7 text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {PERIOD_OPTIONS.map((opt) => (
+                <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        {selectedPeriod !== "all" && (
+          <div className="flex items-center justify-end gap-1">
+            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setOffset((o) => o - 1)}>
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <span className="text-xs text-muted-foreground min-w-[140px] text-center">{periodLabel}</span>
+            <Button variant="ghost" size="icon" className="h-7 w-7" disabled={!canGoForward} onClick={() => setOffset((o) => o + 1)}>
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+        )}
       </CardHeader>
       <CardContent>
         {isLoading ? (
