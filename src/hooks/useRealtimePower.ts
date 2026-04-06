@@ -40,7 +40,7 @@ export function useRealtimePower(meterIds: string[]) {
           const row = payload.new;
           if (!meterIdsRef.current.has(row.meter_id)) return;
 
-          const value = Math.abs(row.power_value);
+          const value = row.power_value;
 
           setLatestByMeter((prev) => ({
             ...prev,

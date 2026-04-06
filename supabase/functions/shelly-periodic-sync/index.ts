@@ -169,7 +169,7 @@ serve(async (req) => {
               meter_id: meter.id,
               tenant_id: meter.tenant_id,
               energy_type: meter.energy_type || "strom",
-              power_value: Math.abs(powerValue),
+              power_value: powerValue,
               recorded_at: now,
             });
           }
