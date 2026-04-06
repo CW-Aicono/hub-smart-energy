@@ -1133,6 +1133,8 @@ async function handleSyncAutomations(url: URL, req: Request): Promise<Response> 
     locationId = li?.location_id || null;
   }
 
+  console.log(`[sync-automations] tenant=${tenantId} li=${locationIntegrationId} loc=${locationId}`);
+
   // Sync ALL automations (active + inactive) so the local engine can manage state
   let query = supabase
     .from("location_automations")
