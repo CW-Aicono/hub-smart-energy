@@ -860,6 +860,44 @@ async function handleHeartbeat(req: Request): Promise<Response> {
     // Clear pending command after delivering it
   };
 
+  // Auto-resolve location_integration_id if not explicitly provided
+  let resolvedLiId: string | null = body.location_integration_id || null;
+  if (!resolvedLiId && existing?.id) {
+    // Check if the existing device already has one
+    const { data: existingDevice } = await supabase
+      .from("gateway_devices")
+      .select("location_integration_id")
+      .eq("id", existing.id)
+      .maybeSingle();
+    resolvedLiId = existingDevice?.location_integration_id || null;
+  }
+  if (!resolvedLiId) {
+    // Find the HA integration for this tenant:
+    // 1) Get all locations for this tenant
+    const { data: locations } = await supabase
+      .from("locations")
+      .select("id")
+      .eq("tenant_id", body.tenant_id);
+
+    if (locations && locations.length > 0) {
+      const locationIds = locations.map((l: any) => l.id);
+      // 2) Find enabled HA integrations for those locations
+      const { data: lis } = await supabase
+        .from("location_integrations")
+        .select("id, integration_id, integrations!inner(type)")
+        .in("location_id", locationIds)
+        .eq("is_enabled", true);
+
+      if (lis) {
+        const haLi = lis.find((li: any) => li.integrations?.type === "home_assistant");
+        if (haLi) {
+          resolvedLiId = haLi.id;
+          console.log(`[heartbeat] Auto-resolved location_integration_id=${resolvedLiId} for device ${body.device_name}`);
+        }
+      }
+    }
+  }
+
   const deviceData = {
     tenant_id: body.tenant_id,
     device_name: body.device_name,
@@ -871,7 +909,7 @@ async function handleHeartbeat(req: Request): Promise<Response> {
     local_time: body.local_time || null,
     status: "online",
     last_heartbeat_at: new Date().toISOString(),
-    location_integration_id: body.location_integration_id || null,
+    location_integration_id: resolvedLiId,
     config: mergedConfig,
   };
 
