@@ -23,7 +23,16 @@ const PRESET_COLORS = [
   "#ec4899", "#06b6d4", "#84cc16", "#f97316", "#6366f1",
 ];
 
-function generateDemoData(meterCount: number) {
+function generateDemoData(meterCount: number, period?: string) {
+  if (period === "day") {
+    return Array.from({ length: 24 }, (_, h) => {
+      const point: Record<string, string | number> = { name: `${h}:00` };
+      for (let i = 0; i < meterCount; i++) {
+        point[`meter_${i}`] = Math.round(50 + Math.random() * 200);
+      }
+      return point;
+    });
+  }
   const days = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
   return days.map((day) => {
     const point: Record<string, string | number> = { name: day };
@@ -39,11 +48,12 @@ interface WidgetPreviewProps {
   chartType: ChartType;
   color: string;
   config: CustomWidgetConfig;
+  previewPeriod?: string;
 }
 
-export function WidgetPreview({ name, chartType, color, config }: WidgetPreviewProps) {
+export function WidgetPreview({ name, chartType, color, config, previewPeriod }: WidgetPreviewProps) {
   const meterCount = Math.max(config.meter_ids.length, 1);
-  const demoData = generateDemoData(meterCount);
+  const demoData = generateDemoData(meterCount, previewPeriod);
 
   const ICON_MAP: Record<string, React.ReactNode> = {
     line: <LineChart className="h-4 w-4" />,

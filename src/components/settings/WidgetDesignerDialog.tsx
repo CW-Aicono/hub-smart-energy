@@ -453,6 +453,7 @@ export function WidgetDesignerDialog({ open, onOpenChange, editingWidget }: Widg
               chartType={previewChartType}
               color={color}
               config={config}
+              previewPeriod={previewPeriod}
             />
           </TabsContent>
         </Tabs>
