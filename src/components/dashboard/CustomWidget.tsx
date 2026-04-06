@@ -81,6 +81,21 @@ function formatLabel(d: Date, period: TimePeriod): string {
   }
 }
 
+/** Custom tooltip for the day view with German number formatting */
+function DayTooltip({ active, payload, label, unit }: any) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="rounded-md border bg-popover p-2 text-popover-foreground shadow-md text-sm">
+      <p className="font-medium mb-1">{label}</p>
+      {payload.map((entry: any) => (
+        <p key={entry.dataKey} style={{ color: entry.color }}>
+          {entry.name}: {entry.value != null ? entry.value.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "–"} {unit}
+        </p>
+      ))}
+    </div>
+  );
+}
+
 interface CustomWidgetProps {
   definition: CustomWidgetDefinition;
   locationId: string | null;
@@ -135,23 +150,23 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
 
         if (!data) return [];
 
-        // Group into hourly buckets
-        const hourMap: Record<string, Record<string, number[]>> = {};
+        // Group into hourly buckets (0–23)
+        const hourMap: Record<number, Record<string, number[]>> = {};
         for (const row of data) {
           const d = new Date(row.bucket);
           const h = d.getHours();
-          const hourLabel = `${h.toString().padStart(2, "0")}:00`;
-          if (!hourMap[hourLabel]) hourMap[hourLabel] = {};
-          if (!hourMap[hourLabel][row.meter_id]) hourMap[hourLabel][row.meter_id] = [];
-          hourMap[hourLabel][row.meter_id].push(row.power_avg);
+          if (!hourMap[h]) hourMap[h] = {};
+          if (!hourMap[h][row.meter_id]) hourMap[h][row.meter_id] = [];
+          hourMap[h][row.meter_id].push(row.power_avg);
         }
 
-        // Build chart data with hourly averages (kW), fill all 24h
+        // Build chart data with hourly averages, 0:00–24:00 (25 ticks)
         const result: any[] = [];
-        for (let h = 0; h < 24; h++) {
-          const label = `${h.toString().padStart(2, "0")}:00`;
+        for (let h = 0; h <= 24; h++) {
+          const label = `${h}:00`;
           const entry: any = { name: label };
-          const bucket = hourMap[label];
+          // hour 24 has no data bucket – leave values null
+          const bucket = h < 24 ? hourMap[h] : undefined;
           for (const mid of config.meter_ids) {
             if (bucket?.[mid]?.length) {
               const avg = bucket[mid].reduce((a, b) => a + b, 0) / bucket[mid].length;
@@ -237,10 +252,10 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
                       <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
                       <XAxis dataKey="name" tick={{ fontSize: 11 }} interval={selectedPeriod === "day" ? 1 : "preserveStartEnd"} />
                       <YAxis tick={{ fontSize: 11 }} domain={[(config.y_range?.min ?? "auto"), (config.y_range?.max ?? "auto")]} allowDataOverflow={false} />
-                      <Tooltip />
+                      <Tooltip content={selectedPeriod === "day" ? <DayTooltip unit={config.unit} /> : undefined} formatter={selectedPeriod !== "day" ? (v: number) => v?.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " " + config.unit : undefined} />
                       <Legend />
                       {config.meter_ids.map((mid, i) => (
-                        <Line key={mid} type="monotone" dataKey={mid} name={meterNames[mid] || `Zähler ${i + 1}`} stroke={getSeriesColor(i)} strokeWidth={2} dot={false} />
+                        <Line key={mid} type="monotone" dataKey={mid} name={meterNames[mid] || `Zähler ${i + 1}`} stroke={getSeriesColor(i)} strokeWidth={2} dot={false} connectNulls={false} />
                       ))}
                       {(config.thresholds || []).map((t, i) => (
                         <ReferenceLine key={i} y={t.value} stroke={t.color} strokeDasharray="5 5" label={t.label} />
@@ -251,7 +266,7 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
                       <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
                       <XAxis dataKey="name" tick={{ fontSize: 11 }} interval={selectedPeriod === "day" ? 1 : "preserveStartEnd"} />
                       <YAxis tick={{ fontSize: 11 }} domain={[(config.y_range?.min ?? "auto"), (config.y_range?.max ?? "auto")]} allowDataOverflow={false} />
-                      <Tooltip />
+                      <Tooltip content={selectedPeriod === "day" ? <DayTooltip unit={config.unit} /> : undefined} formatter={selectedPeriod !== "day" ? (v: number) => v?.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " " + config.unit : undefined} />
                       <Legend />
                       {config.meter_ids.map((mid, i) => (
                         <Bar key={mid} dataKey={mid} name={meterNames[mid] || `Zähler ${i + 1}`} fill={getSeriesColor(i)} radius={[2, 2, 0, 0]} />
