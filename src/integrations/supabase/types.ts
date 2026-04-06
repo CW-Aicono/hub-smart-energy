@@ -3001,6 +3001,7 @@ export type Database = {
           id: string
           installation_date: string | null
           is_archived: boolean
+          is_bidirectional: boolean
           is_main_meter: boolean
           location_id: string
           location_integration_id: string | null
@@ -3035,6 +3036,7 @@ export type Database = {
           id?: string
           installation_date?: string | null
           is_archived?: boolean
+          is_bidirectional?: boolean
           is_main_meter?: boolean
           location_id: string
           location_integration_id?: string | null
@@ -3069,6 +3071,7 @@ export type Database = {
           id?: string
           installation_date?: string | null
           is_archived?: boolean
+          is_bidirectional?: boolean
           is_main_meter?: boolean
           location_id?: string
           location_integration_id?: string | null
