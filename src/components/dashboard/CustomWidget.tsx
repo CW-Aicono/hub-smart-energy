@@ -41,8 +41,7 @@ function getDateRange(period: TimePeriod): { from: Date; to: Date } {
   const from = new Date(now);
   switch (period) {
     case "day":
-      // Data is daily granularity – show last 7 days for context
-      from.setDate(from.getDate() - 7);
+      from.setHours(0, 0, 0, 0);
       break;
     case "week":
       from.setDate(from.getDate() - 7);
@@ -67,7 +66,7 @@ function getDateRange(period: TimePeriod): { from: Date; to: Date } {
 function formatLabel(d: Date, period: TimePeriod): string {
   switch (period) {
     case "day":
-      return d.toLocaleDateString("de-DE", { weekday: "short", day: "2-digit", month: "2-digit" });
+      return `${d.getHours()}:00`;
     case "week":
       return d.toLocaleDateString("de-DE", { weekday: "short" });
     case "month":
