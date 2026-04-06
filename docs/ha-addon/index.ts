@@ -378,6 +378,10 @@ interface HAState {
   last_updated: string;
 }
 
+function asString(value: unknown, fallback = ""): string {
+  return typeof value === "string" ? value : fallback;
+}
+
 // Cache of latest HA states for the UI and automation engine
 let latestHAStates: HAState[] = [];
 
@@ -1028,8 +1032,8 @@ async function getLocalIP(): Promise<string> {
               const ipv4 = iface.ipv4?.address?.[0];
               if (ipv4) {
                 // Format is "192.168.1.100/24" – strip CIDR suffix
-                cachedHostIP = ipv4.split("/")[0];
-                return cachedHostIP;
+                cachedHostIP = ipv4.split("/")[0] ?? "localhost";
+                return cachedHostIP ?? "localhost";
               }
             }
           }
@@ -1038,8 +1042,8 @@ async function getLocalIP(): Promise<string> {
             if (iface.enabled) {
               const ipv4 = iface.ipv4?.address?.[0];
               if (ipv4) {
-                cachedHostIP = ipv4.split("/")[0];
-                return cachedHostIP;
+                cachedHostIP = ipv4.split("/")[0] ?? "localhost";
+                return cachedHostIP ?? "localhost";
               }
             }
           }
@@ -1358,8 +1362,8 @@ function startServer(): void {
         if (actuatorDomains.has(domain)) {
           category = "actuator";
         } else if (domain === "sensor") {
-          const unit = String(s.attributes?.unit_of_measurement || "");
-          const dc = String(s.attributes?.device_class || "");
+          const unit = asString(s.attributes?.unit_of_measurement);
+          const dc = asString(s.attributes?.device_class);
           if (["energy", "power", "gas", "water"].includes(dc) || /kwh|kw|wh|m³/i.test(unit)) {
             category = "meter";
           }
@@ -1371,9 +1375,9 @@ function startServer(): void {
           entity_id: s.entity_id,
           state: s.state,
           domain,
-          friendly_name: String(s.attributes?.friendly_name || s.entity_id),
-          unit: String(s.attributes?.unit_of_measurement || ""),
-          device_class: String(s.attributes?.device_class || ""),
+          friendly_name: asString(s.attributes?.friendly_name, s.entity_id),
+          unit: asString(s.attributes?.unit_of_measurement),
+          device_class: asString(s.attributes?.device_class),
           last_updated: s.last_updated,
           category,
         });
