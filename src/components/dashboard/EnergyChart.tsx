@@ -131,7 +131,6 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
   const dateLocale = localeMap[language] || de;
   const cwPrefix = T("chart.cwPrefix");
   const [hiddenKeys, setHiddenKeys] = useState<Set<string>>(new Set());
-  const [hiddenKeys, setHiddenKeys] = useState<Set<string>>(new Set());
   const [powerReadings, setPowerReadings] = useState<Array<{ meter_id: string; power_value: number; recorded_at: string }>>([]);
   const [powerLoading, setPowerLoading] = useState(false);
   const allowedTypes = useLocationEnergyTypesSet(locationId);
