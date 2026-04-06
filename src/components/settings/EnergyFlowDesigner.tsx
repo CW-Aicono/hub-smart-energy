@@ -3,12 +3,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   EnergyFlowNode,
   EnergyFlowConnection,
   EnergyFlowNodeRole,
 } from "@/hooks/useCustomWidgetDefinitions";
-import { Plus, X, Link2 } from "lucide-react";
+import { Plus, X, Link2, Trash2, Unlink } from "lucide-react";
 
 const NODE_ROLES: { value: EnergyFlowNodeRole; label: string }[] = [
   { value: "pv", label: "PV / Solar" },
@@ -35,6 +36,94 @@ interface Props {
   connections: EnergyFlowConnection[];
   meters: any[];
   onChange: (nodes: EnergyFlowNode[], connections: EnergyFlowConnection[]) => void;
+}
+
+function NodeDeletePopover({
+  node,
+  nodes,
+  connections,
+  onRemoveNode,
+  onRemoveConnection,
+}: {
+  node: EnergyFlowNode;
+  nodes: EnergyFlowNode[];
+  connections: EnergyFlowConnection[];
+  onRemoveNode: () => void;
+  onRemoveConnection: (connectionIndex: number) => void;
+}) {
+  const [open, setOpen] = useState(false);
+
+  // Find connections involving this node (with their original index)
+  const nodeConnections = connections
+    .map((c, i) => ({ ...c, idx: i }))
+    .filter((c) => c.from === node.id || c.to === node.id);
+
+  const getLabel = (id: string) => nodes.find((n) => n.id === id)?.label || "?";
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8 shrink-0"
+        >
+          <X className="h-4 w-4" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-56 p-2 space-y-1">
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="w-full justify-start text-xs"
+          onClick={() => setOpen(false)}
+        >
+          Abbrechen
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="w-full justify-start text-xs text-destructive hover:text-destructive gap-2"
+          onClick={() => {
+            onRemoveNode();
+            setOpen(false);
+          }}
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+          Knoten löschen
+        </Button>
+        {nodeConnections.length > 0 && (
+          <>
+            <div className="border-t my-1" />
+            <p className="text-[11px] text-muted-foreground px-2 py-0.5">Verbindungen:</p>
+            {nodeConnections.map((c) => {
+              const otherLabel = c.from === node.id ? getLabel(c.to) : getLabel(c.from);
+              return (
+                <Button
+                  key={c.idx}
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="w-full justify-start text-xs gap-2"
+                  onClick={() => {
+                    onRemoveConnection(c.idx);
+                    // Close if no more connections remain
+                    if (nodeConnections.length <= 1) setOpen(false);
+                  }}
+                >
+                  <Unlink className="h-3.5 w-3.5" />
+                  {node.label} → {otherLabel}
+                </Button>
+              );
+            })}
+          </>
+        )}
+      </PopoverContent>
+    </Popover>
+  );
 }
 
 export function EnergyFlowDesigner({ nodes, connections, meters, onChange }: Props) {
@@ -237,15 +326,16 @@ export function EnergyFlowDesigner({ nodes, connections, meters, onChange }: Pro
                 >
                   <Link2 className="h-3.5 w-3.5" />
                 </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 shrink-0"
-                  onClick={() => removeNode(node.id)}
-                >
-                  <X className="h-4 w-4" />
-                </Button>
+                <NodeDeletePopover
+                  node={node}
+                  nodes={nodes}
+                  connections={connections}
+                  onRemoveNode={() => removeNode(node.id)}
+                  onRemoveConnection={(idx) => {
+                    const updated = connections.filter((_, i) => i !== idx);
+                    onChange(nodes, updated);
+                  }}
+                />
               </div>
 
               <div className="grid grid-cols-2 gap-2">
