@@ -860,6 +860,46 @@ async function handleHeartbeat(req: Request): Promise<Response> {
     // Clear pending command after delivering it
   };
 
+  // Auto-resolve location_integration_id if not explicitly provided
+  let resolvedLiId: string | null = body.location_integration_id || null;
+  if (!resolvedLiId && existing?.id) {
+    // Check if the existing device already has one
+    const { data: existingDevice } = await supabase
+      .from("gateway_devices")
+      .select("location_integration_id")
+      .eq("id", existing.id)
+      .maybeSingle();
+    resolvedLiId = existingDevice?.location_integration_id || null;
+  }
+  if (!resolvedLiId) {
+    // Find the first home_assistant integration for this tenant
+    const { data: haIntegration } = await supabase
+      .from("location_integrations")
+      .select("id, integration:integrations!inner(type)")
+      .eq("location_integrations.is_enabled", true)
+      .in("integrations.type", ["home_assistant"])
+      .limit(1)
+      .maybeSingle();
+
+    // Fallback: query by joining location → tenant
+    if (!haIntegration) {
+      const { data: lis } = await supabase
+        .from("location_integrations")
+        .select("id, integration:integrations!inner(type), location:locations!inner(tenant_id)")
+        .eq("locations.tenant_id", body.tenant_id)
+        .eq("integrations.type", "home_assistant")
+        .eq("is_enabled", true)
+        .limit(1);
+      if (lis && lis.length > 0) {
+        resolvedLiId = lis[0].id;
+        console.log(`[heartbeat] Auto-resolved location_integration_id=${resolvedLiId} for device ${body.device_name}`);
+      }
+    } else {
+      resolvedLiId = haIntegration.id;
+      console.log(`[heartbeat] Auto-resolved location_integration_id=${resolvedLiId} for device ${body.device_name}`);
+    }
+  }
+
   const deviceData = {
     tenant_id: body.tenant_id,
     device_name: body.device_name,
@@ -871,7 +911,7 @@ async function handleHeartbeat(req: Request): Promise<Response> {
     local_time: body.local_time || null,
     status: "online",
     last_heartbeat_at: new Date().toISOString(),
-    location_integration_id: body.location_integration_id || null,
+    location_integration_id: resolvedLiId,
     config: mergedConfig,
   };
 
