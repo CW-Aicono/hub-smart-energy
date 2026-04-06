@@ -1033,7 +1033,7 @@ async function getLocalIP(): Promise<string> {
               if (ipv4) {
                 // Format is "192.168.1.100/24" – strip CIDR suffix
                 cachedHostIP = ipv4.split("/")[0] ?? "localhost";
-                return cachedHostIP;
+                return cachedHostIP ?? "localhost";
               }
             }
           }
@@ -1043,7 +1043,7 @@ async function getLocalIP(): Promise<string> {
               const ipv4 = iface.ipv4?.address?.[0];
               if (ipv4) {
                 cachedHostIP = ipv4.split("/")[0] ?? "localhost";
-                return cachedHostIP;
+                return cachedHostIP ?? "localhost";
               }
             }
           }
