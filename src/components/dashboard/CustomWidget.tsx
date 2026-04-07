@@ -453,6 +453,29 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
                   )}
                 </ResponsiveContainer>
               </div>
+              <div className="flex items-center justify-center gap-2 mt-3 flex-wrap">
+                {config.meter_ids.map((mid, i) => {
+                  const hidden = hiddenSeries.has(mid);
+                  return (
+                    <button
+                      key={mid}
+                      onClick={() => handleLegendClick({ dataKey: mid })}
+                      className={cn(
+                        "inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium transition-colors",
+                        hidden
+                          ? "border-muted text-muted-foreground opacity-50"
+                          : "border-input hover:bg-accent"
+                      )}
+                    >
+                      <span
+                        className="inline-block h-2.5 w-2.5 rounded-full shrink-0"
+                        style={{ backgroundColor: hidden ? "hsl(var(--muted-foreground))" : getSeriesColor(i) }}
+                      />
+                      {meterDetails[mid]?.name || `Zähler ${i + 1}`}
+                    </button>
+                  );
+                })}
+              </div>
             )}
 
             {activeChartType === "gauge" && (
