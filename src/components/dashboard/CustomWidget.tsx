@@ -408,7 +408,7 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
                       <Tooltip content={selectedPeriod === "day" ? <DayTooltip unit={displayUnit} /> : undefined} formatter={selectedPeriod !== "day" ? (v: number) => v?.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " " + displayUnit : undefined} />
                       <Legend />
                       {config.meter_ids.map((mid, i) => (
-                        <Line key={mid} type="monotone" dataKey={mid} name={meterDetails[mid]?.name || `Zähler ${i + 1}`} stroke={getSeriesColor(i)} strokeWidth={2} dot={false} connectNulls={false} />
+                        <Line key={mid} type="monotone" dataKey={mid} name={meterDetails[mid]?.name || `Zähler ${i + 1}`} stroke={getSeriesColor(i)} strokeWidth={2} dot={false} connectNulls={true} />
                       ))}
                       {(config.thresholds || []).map((t, i) => (
                         <ReferenceLine key={i} y={t.value} stroke={t.color} strokeDasharray="5 5" label={t.label} />
