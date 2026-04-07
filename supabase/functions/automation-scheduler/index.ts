@@ -300,6 +300,23 @@ Deno.serve(async (req) => {
   console.log("automation-scheduler: Starting evaluation...");
 
   try {
+    // 0. Load online gateway devices (heartbeat < 5 min) to skip locally-managed automations
+    const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+    const { data: onlineGateways } = await supabase
+      .from("gateway_devices")
+      .select("location_integration_id")
+      .eq("status", "online")
+      .gte("last_heartbeat_at", fiveMinAgo);
+
+    const localGatewayIntegrationIds = new Set<string>(
+      (onlineGateways || [])
+        .map((g: any) => g.location_integration_id)
+        .filter(Boolean)
+    );
+    if (localGatewayIntegrationIds.size > 0) {
+      console.log(`Found ${localGatewayIntegrationIds.size} online local gateways – their automations will be skipped.`);
+    }
+
     // 1. Load all active automations with location timezone
     const { data: automations, error } = await supabase
       .from("location_automations")
@@ -326,6 +343,7 @@ Deno.serve(async (req) => {
 
     let executedCount = 0;
     let skippedCount = 0;
+    let skippedLocalCount = 0;
     let errorCount = 0;
 
     for (const auto of automations) {
@@ -336,6 +354,12 @@ Deno.serve(async (req) => {
       const logicOperator: string = auto.logic_operator || "AND";
 
       if (conditions.length === 0) continue;
+
+      // Skip if a local gateway is online for this automation's integration
+      if (auto.location_integration_id && localGatewayIntegrationIds.has(auto.location_integration_id)) {
+        skippedLocalCount++;
+        continue;
+      }
 
       // Debounce check using shared logic
       if (!isDebounceExpired(auto.last_executed_at)) {
@@ -432,7 +456,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    console.log(`automation-scheduler: Done. Evaluated=${automations.length}, Executed=${executedCount}, Skipped=${skippedCount}, Errors=${errorCount}`);
+    console.log(`automation-scheduler: Done. Evaluated=${automations.length}, Executed=${executedCount}, Skipped=${skippedCount}, SkippedLocal=${skippedLocalCount}, Errors=${errorCount}`);
 
     return new Response(
       JSON.stringify({
@@ -440,6 +464,7 @@ Deno.serve(async (req) => {
         evaluated: automations.length,
         executed: executedCount,
         skipped: skippedCount,
+        skipped_local: skippedLocalCount,
         errors: errorCount,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
