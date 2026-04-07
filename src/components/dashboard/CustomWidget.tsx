@@ -1,4 +1,4 @@
-import { useMemo, lazy, Suspense } from "react";
+import { useMemo, useState, useCallback, lazy, Suspense } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CustomWidgetDefinition, ChartType } from "@/hooks/useCustomWidgetDefinitions";
 import { useQuery } from "@tanstack/react-query";
@@ -156,6 +156,37 @@ const PERIOD_OPTIONS: { value: TimePeriod; label: string }[] = [
 export default function CustomWidget({ definition, locationId }: CustomWidgetProps) {
   const { config, name, color } = definition;
   const { selectedPeriod, setSelectedPeriod, selectedOffset: offset, setSelectedOffset: setOffset } = useDashboardFilter();
+  const [hiddenSeries, setHiddenSeries] = useState<Set<string>>(new Set());
+
+  const handleLegendClick = useCallback((e: any) => {
+    const key = e.dataKey;
+    if (!key) return;
+    setHiddenSeries((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }, []);
+
+  const renderLegend = useCallback((props: any) => {
+    const { payload } = props;
+    return (
+      <div className="flex flex-wrap justify-center gap-x-4 gap-y-1 text-xs mt-1">
+        {payload?.map((entry: any) => (
+          <span
+            key={entry.dataKey}
+            className="flex items-center gap-1 cursor-pointer select-none"
+            style={{ opacity: hiddenSeries.has(entry.dataKey) ? 0.35 : 1 }}
+            onClick={() => handleLegendClick({ dataKey: entry.dataKey })}
+          >
+            <span className="inline-block w-3 h-[3px] rounded" style={{ backgroundColor: entry.color }} />
+            {entry.value}
+          </span>
+        ))}
+      </div>
+    );
+  }, [hiddenSeries, handleLegendClick]);
 
   // Resolve chart type for current period
   const activeChartType: ChartType =
@@ -406,9 +437,9 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
                       />
                       <YAxis tick={{ fontSize: 11 }} domain={yDomain} allowDataOverflow={false} />
                       <Tooltip content={selectedPeriod === "day" ? <DayTooltip unit={displayUnit} /> : undefined} formatter={selectedPeriod !== "day" ? (v: number) => v?.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " " + displayUnit : undefined} />
-                      <Legend />
+                      <Legend content={renderLegend} />
                       {config.meter_ids.map((mid, i) => (
-                        <Line key={mid} type="monotone" dataKey={mid} name={meterDetails[mid]?.name || `Zähler ${i + 1}`} stroke={getSeriesColor(i)} strokeWidth={2} dot={false} connectNulls={true} />
+                        <Line key={mid} type="monotone" dataKey={mid} name={meterDetails[mid]?.name || `Zähler ${i + 1}`} stroke={getSeriesColor(i)} strokeWidth={2} dot={false} connectNulls={true} hide={hiddenSeries.has(mid)} />
                       ))}
                       {(config.thresholds || []).map((t, i) => (
                         <ReferenceLine key={i} y={t.value} stroke={t.color} strokeDasharray="5 5" label={t.label} />
@@ -429,9 +460,9 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
                       />
                       <YAxis tick={{ fontSize: 11 }} domain={yDomain} allowDataOverflow={false} />
                       <Tooltip content={selectedPeriod === "day" ? <DayTooltip unit={displayUnit} /> : undefined} formatter={selectedPeriod !== "day" ? (v: number) => v?.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " " + displayUnit : undefined} />
-                      <Legend />
+                      <Legend content={renderLegend} />
                       {config.meter_ids.map((mid, i) => (
-                        <Bar key={mid} dataKey={mid} name={meterDetails[mid]?.name || `Zähler ${i + 1}`} fill={getSeriesColor(i)} radius={[2, 2, 0, 0]} />
+                        <Bar key={mid} dataKey={mid} name={meterDetails[mid]?.name || `Zähler ${i + 1}`} fill={getSeriesColor(i)} radius={[2, 2, 0, 0]} hide={hiddenSeries.has(mid)} />
                       ))}
                       {(config.thresholds || []).map((t, i) => (
                         <ReferenceLine key={i} y={t.value} stroke={t.color} strokeDasharray="5 5" label={t.label} />
