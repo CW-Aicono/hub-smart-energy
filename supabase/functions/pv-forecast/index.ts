@@ -278,7 +278,7 @@ serve(async (req) => {
         azimuth: 0,
       });
 
-      const [meteoRes, dwdRes] = await Promise.all([fetch(meteoUrl), fetch(dwdReferenceUrl)]);
+      const [meteoRes, dwdRes] = await Promise.all([fetchWithRetry(meteoUrl), fetchWithRetry(dwdReferenceUrl)]);
       if (!meteoRes.ok) throw new Error("Open-Meteo API error");
       const meteo = await meteoRes.json();
       let dwdReference: any = null;
@@ -329,10 +329,10 @@ serve(async (req) => {
         tilt: s.tilt_deg ?? 0,
         azimuth: azimuthOpenMeteo,
       });
-      return { url, settings: s, fetch: fetch(url) };
+      return { url, settings: s, fetch: fetchWithRetry(url) };
     });
 
-    const dwdFetch = fetch(dwdReferenceUrl);
+    const dwdFetch = fetchWithRetry(dwdReferenceUrl);
 
     const meteoResults = await Promise.all(meteoPromises.map((p) => p.fetch));
     const dwdRes = await dwdFetch;
