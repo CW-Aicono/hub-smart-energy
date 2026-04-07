@@ -169,6 +169,25 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
     });
   }, []);
 
+  const renderLegend = useCallback((props: any) => {
+    const { payload } = props;
+    return (
+      <div className="flex flex-wrap justify-center gap-x-4 gap-y-1 text-xs mt-1">
+        {payload?.map((entry: any) => (
+          <span
+            key={entry.dataKey}
+            className="flex items-center gap-1 cursor-pointer select-none"
+            style={{ opacity: hiddenSeries.has(entry.dataKey) ? 0.35 : 1 }}
+            onClick={() => handleLegendClick({ dataKey: entry.dataKey })}
+          >
+            <span className="inline-block w-3 h-[3px] rounded" style={{ backgroundColor: entry.color }} />
+            {entry.value}
+          </span>
+        ))}
+      </div>
+    );
+  }, [hiddenSeries, handleLegendClick]);
+
   // Resolve chart type for current period
   const activeChartType: ChartType =
     config.chart_type_per_period?.[selectedPeriod] ?? definition.chart_type;
