@@ -25,6 +25,18 @@ const round2 = (value: number) => Math.round(value * 100) / 100;
 const round1 = (value: number) => Math.round(value * 10) / 10;
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
+const fetchWithRetry = async (url: string, retries = 3, delayMs = 1000): Promise<Response> => {
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    const res = await fetch(url);
+    if (res.ok || attempt === retries) return res;
+    const status = res.status;
+    console.warn(`Fetch attempt ${attempt}/${retries} failed (${status}) for ${url.substring(0, 120)}...`);
+    if (status >= 400 && status < 500) return res; // Don't retry client errors
+    await new Promise((r) => setTimeout(r, delayMs * attempt));
+  }
+  return fetch(url); // unreachable but satisfies TS
+};
+
 const toLocalDateKey = (timestamp: string, timeZone = FORECAST_TIMEZONE) => new Date(timestamp)
   .toLocaleString("sv-SE", { timeZone: timeZone === "GMT" ? "UTC" : timeZone })
   .slice(0, 10);
@@ -266,7 +278,7 @@ serve(async (req) => {
         azimuth: 0,
       });
 
-      const [meteoRes, dwdRes] = await Promise.all([fetch(meteoUrl), fetch(dwdReferenceUrl)]);
+      const [meteoRes, dwdRes] = await Promise.all([fetchWithRetry(meteoUrl), fetchWithRetry(dwdReferenceUrl)]);
       if (!meteoRes.ok) throw new Error("Open-Meteo API error");
       const meteo = await meteoRes.json();
       let dwdReference: any = null;
@@ -317,10 +329,10 @@ serve(async (req) => {
         tilt: s.tilt_deg ?? 0,
         azimuth: azimuthOpenMeteo,
       });
-      return { url, settings: s, fetch: fetch(url) };
+      return { url, settings: s, fetch: fetchWithRetry(url) };
     });
 
-    const dwdFetch = fetch(dwdReferenceUrl);
+    const dwdFetch = fetchWithRetry(dwdReferenceUrl);
 
     const meteoResults = await Promise.all(meteoPromises.map((p) => p.fetch));
     const dwdRes = await dwdFetch;
@@ -343,7 +355,8 @@ serve(async (req) => {
       const s = settingsArray[i];
       const res = meteoResults[i];
       if (!res.ok) {
-        console.error(`Open-Meteo failed for array ${s.name}:`, res.status);
+        const errBody = await res.text().catch(() => "");
+        console.error(`Open-Meteo failed for array ${s.name}: ${res.status} - ${errBody.substring(0, 200)}`);
         continue;
       }
       const meteo = await res.json();
