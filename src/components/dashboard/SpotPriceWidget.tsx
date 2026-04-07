@@ -123,14 +123,27 @@ const SpotPriceWidget = ({ locationId }: SpotPriceWidgetProps) => {
               />
               <YAxis tick={{ fontSize: 12 }} label={{ value: "€/MWh", angle: -90, position: "insideLeft" }} />
               <Tooltip
-                labelFormatter={(_val: string, payload: any[]) => {
-                  if (payload?.[0]?.payload) {
-                    const p = payload[0].payload;
-                    return `${p.dateLabel} ${p.time}`;
-                  }
-                  return _val;
+                content={({ active, payload }) => {
+                  if (!active || !payload?.length) return null;
+                  const entry = payload[0]?.payload;
+                  if (!entry) return null;
+
+                  // Find the valid price entry; prefer future over past at transition
+                  const futureEntry = payload.find((p: any) => p.name === T("spot.price") && p.value != null);
+                  const pastEntry = payload.find((p: any) => p.name === T("spot.past") && p.value != null);
+                  const chosen = futureEntry || pastEntry;
+                  if (!chosen || chosen.value == null) return null;
+
+                  const isFuture = chosen === futureEntry;
+                  return (
+                    <div className="rounded-lg border border-border/50 bg-background px-2.5 py-1.5 shadow-xl text-xs">
+                      <p className="text-muted-foreground mb-1">{entry.dateLabel} {entry.time}</p>
+                      <p className="font-medium" style={{ color: isFuture ? "hsl(var(--primary))" : "hsl(var(--muted-foreground))" }}>
+                        {Number(chosen.value).toFixed(1)} €/MWh
+                      </p>
+                    </div>
+                  );
                 }}
-                formatter={(v: number) => [`${v.toFixed(1)} €/MWh`, T("spot.price")]}
               />
               <ReferenceLine y={0} stroke="hsl(var(--muted-foreground))" strokeDasharray="3 3" />
               {dayChangeIndices.map((idx) => (
