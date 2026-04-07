@@ -170,8 +170,6 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
     });
   }, []);
 
-  }, []);
-
   // Resolve chart type for current period
   const activeChartType: ChartType =
     config.chart_type_per_period?.[selectedPeriod] ?? definition.chart_type;
