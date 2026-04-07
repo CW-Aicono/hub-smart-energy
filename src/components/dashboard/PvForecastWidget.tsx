@@ -108,7 +108,7 @@ const PvForecastWidget = ({ locationId }: PvForecastWidgetProps) => {
   const dateLocale = dfLocaleMap[language] || de;
   const cwPrefix = T("chart.cwPrefix");
   const tenantId = tenant?.id ?? null;
-  const { forecast, isLoading } = usePvForecast(locationId);
+  const { forecast, isLoading, error } = usePvForecast(locationId);
   const { settings } = usePvForecastSettings(locationId);
   const { selectedPeriod, setSelectedPeriod, selectedOffset: offset, setSelectedOffset: setOffset } = useDashboardFilter();
   const [actualReadings, setActualReadings] = useState<Record<string, number>>({});
@@ -358,6 +358,21 @@ const PvForecastWidget = ({ locationId }: PvForecastWidgetProps) => {
       <Card>
         <CardHeader><CardTitle className="flex items-center gap-2"><Sun className="h-5 w-5 text-energy-strom" />{T("dashboard.pvForecast")}</CardTitle></CardHeader>
         <CardContent><Skeleton className="h-48 w-full" /></CardContent>
+      </Card>
+    );
+  }
+
+  if (error && !forecast) {
+    const isWeatherError = String(error).includes("weather") || String(error).includes("Open-Meteo") || String(error).includes("Connection reset");
+    return (
+      <Card>
+        <CardHeader><CardTitle className="flex items-center gap-2"><Sun className="h-5 w-5 text-energy-strom" />{T("dashboard.pvForecast")}</CardTitle></CardHeader>
+        <CardContent>
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <CloudOff className="h-4 w-4 text-destructive shrink-0" />
+            <p>{isWeatherError ? "Wetterdaten vorübergehend nicht verfügbar. Die Prognose wird automatisch aktualisiert, sobald der Dienst wieder erreichbar ist." : "Prognosedaten konnten nicht geladen werden. Bitte versuchen Sie es später erneut."}</p>
+          </div>
+        </CardContent>
       </Card>
     );
   }
