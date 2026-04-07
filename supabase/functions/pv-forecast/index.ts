@@ -380,7 +380,60 @@ serve(async (req) => {
       });
     }
 
-    if (arrayResults.length === 0) throw new Error("All weather requests failed");
+    if (arrayResults.length === 0) {
+      // Fallback: serve last cached forecast from DB
+      console.warn("All weather requests failed – serving cached forecast for location", location_id);
+      const todayKey = toLocalDateKey(new Date().toISOString());
+      const tomorrowKey = addDaysToDateKey(todayKey, 1);
+      const { data: cached } = await supabase
+        .from("pv_forecast_hourly")
+        .select("hour_timestamp, radiation_w_m2, cloud_cover_pct, estimated_kwh, ai_adjusted_kwh, poa_w_m2, dhi_w_m2, cell_temp_c, temperature_2m")
+        .eq("location_id", location_id)
+        .gte("forecast_date", todayKey)
+        .lte("forecast_date", tomorrowKey)
+        .order("hour_timestamp", { ascending: true });
+
+      if (!cached || cached.length === 0) {
+        throw new Error("Weather API unavailable and no cached forecast found");
+      }
+
+      const cachedHourly: HourlyEntry[] = cached.map((r: any) => ({
+        timestamp: r.hour_timestamp,
+        radiation_w_m2: r.radiation_w_m2 ?? 0,
+        cloud_cover_pct: r.cloud_cover_pct ?? 0,
+        estimated_kwh: r.estimated_kwh ?? 0,
+        ai_adjusted_kwh: r.ai_adjusted_kwh ?? null,
+        poa_w_m2: r.poa_w_m2 ?? null,
+        dni_w_m2: null,
+        dhi_w_m2: r.dhi_w_m2 ?? null,
+        cell_temp_c: r.cell_temp_c ?? null,
+        temperature_2m: r.temperature_2m ?? null,
+      }));
+
+      const todayTotal = cachedHourly.filter((e) => e.timestamp.startsWith(todayKey)).reduce((sum, e) => sum + getDisplayValue(e), 0);
+      const tomorrowTotal = cachedHourly.filter((e) => e.timestamp.startsWith(tomorrowKey)).reduce((sum, e) => sum + getDisplayValue(e), 0);
+      const peakEntry = cachedHourly.reduce((best, e) => (!best || getDisplayValue(e) > getDisplayValue(best) ? e : best), cachedHourly[0] ?? null);
+      const totalKwp = settingsArray.reduce((sum: number, s: any) => sum + (s.peak_power_kwp ?? 0), 0);
+
+      return new Response(JSON.stringify({
+        location: { name: location.name, city: location.city },
+        settings: { peak_power_kwp: totalKwp, tilt_deg: settingsArray[0]?.tilt_deg ?? 0, azimuth_deg: settingsArray[0]?.azimuth_deg ?? 180 },
+        hourly: cachedHourly,
+        summary: {
+          today_total_kwh: round1(todayTotal),
+          tomorrow_total_kwh: round1(tomorrowTotal),
+          peak_hour: peakEntry?.timestamp || null,
+          peak_kwh: peakEntry ? round2(getDisplayValue(peakEntry)) : 0,
+          ai_confidence: "",
+          ai_notes: "Wetterdienst vorübergehend nicht erreichbar – letzte verfügbare Prognose wird angezeigt.",
+          performance_ratio: settingsArray[0]?.performance_ratio ?? 0.8,
+          pr_auto_updated: false,
+          ai_correction_factor: 1,
+        },
+        weather_source: null,
+        validation: null,
+      }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
 
     // Sum hourly values across all arrays
     const combinedHourly = sumHourlyArrays(arrayResults.map((a) => a.hourly));
