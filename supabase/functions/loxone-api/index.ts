@@ -734,12 +734,20 @@ serve(async (req) => {
                 const absForSpike = Math.abs(powerVal);
                 const recentVals = recentReadingsMap[meter.id] ?? [];
                 const median = computeMedian(recentVals);
-                const isSpike = recentVals.length >= 3 && median >= SPIKE_BASELINE_MIN && absForSpike > median * SPIKE_FACTOR;
+
+                // Loxone Meter controls recalculate period counters (Rd/Rm/Ry) at :00 and :30,
+                // which can cause brief spikes on the "Pf" output. Use tighter thresholds near those boundaries.
+                const minute = now.getMinutes();
+                const isNearBoundary = minute <= 1 || (minute >= 29 && minute <= 31) || minute >= 59;
+                const effectiveSpikeFactor = isNearBoundary ? 1.8 : SPIKE_FACTOR;
+                const effectiveBaselineMin = isNearBoundary ? 1.0 : SPIKE_BASELINE_MIN;
+
+                const isSpike = recentVals.length >= 3 && median >= effectiveBaselineMin && absForSpike > median * effectiveSpikeFactor;
 
                 if (isSpike) {
                   console.warn(
                     `Spike-Detection: Skipping power reading for meter ${meter.id} ` +
-                    `(value=${absForSpike.toFixed(2)}, median=${median.toFixed(2)}, factor=${(absForSpike / median).toFixed(2)}×)`
+                    `(value=${absForSpike.toFixed(2)}, median=${median.toFixed(2)}, factor=${(absForSpike / median).toFixed(2)}×, boundary=${isNearBoundary})`
                   );
                 } else {
                   powerInserts.push({
