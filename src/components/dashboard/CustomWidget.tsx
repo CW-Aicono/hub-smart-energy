@@ -401,7 +401,7 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
           </div>
         ) : (
           <>
-            {(activeChartType === "line" || activeChartType === "bar") && (
+            {(activeChartType === "line" || activeChartType === "bar") && (<>
               <div className="h-64">
                 <ResponsiveContainer width="100%" height="100%">
                   {activeChartType === "line" ? (
