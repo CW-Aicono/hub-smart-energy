@@ -735,7 +735,28 @@ async function evaluateAndExecuteAutomations(): Promise<void> {
   }
 }
 
-/* ── NEW: Local Actuator Execution via HA REST API ───────────────────────────── */
+/* ── NEW: Retry wrapper for local actuator execution ─────────────────────────── */
+
+const RETRY_MAX_ATTEMPTS = 3;
+const RETRY_DELAY_MS = 30_000; // 30 seconds between retries
+
+async function executeWithRetry(entityId: string, cmdValue: string): Promise<void> {
+  for (let attempt = 1; attempt <= RETRY_MAX_ATTEMPTS; attempt++) {
+    try {
+      await executeHAService(entityId, cmdValue);
+      return; // success
+    } catch (err: any) {
+      if (attempt < RETRY_MAX_ATTEMPTS) {
+        console.warn(`[auto-engine] Command for ${entityId} failed (attempt ${attempt}/${RETRY_MAX_ATTEMPTS}): ${err?.message}. Retrying in ${RETRY_DELAY_MS / 1000}s...`);
+        await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS));
+      } else {
+        throw new Error(`Command for ${entityId} failed after ${RETRY_MAX_ATTEMPTS} attempts: ${err?.message}`);
+      }
+    }
+  }
+}
+
+/* ── Local Actuator Execution via HA REST API ────────────────────────────────── */
 
 async function executeHAService(entityId: string, cmdValue: string): Promise<void> {
   const domain = entityId.split(".")[0];
