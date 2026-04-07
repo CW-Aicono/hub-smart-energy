@@ -355,7 +355,8 @@ serve(async (req) => {
       const s = settingsArray[i];
       const res = meteoResults[i];
       if (!res.ok) {
-        console.error(`Open-Meteo failed for array ${s.name}:`, res.status);
+        const errBody = await res.text().catch(() => "");
+        console.error(`Open-Meteo failed for array ${s.name}: ${res.status} - ${errBody.substring(0, 200)}`);
         continue;
       }
       const meteo = await res.json();
