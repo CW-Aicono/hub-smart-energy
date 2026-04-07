@@ -747,7 +747,7 @@ serve(async (req) => {
                 if (isSpike) {
                   console.warn(
                     `Spike-Detection: Skipping power reading for meter ${meter.id} ` +
-                    `(value=${absForSpike.toFixed(2)}, median=${median.toFixed(2)}, factor=${(absForSpike / median).toFixed(2)}×)`
+                    `(value=${absForSpike.toFixed(2)}, median=${median.toFixed(2)}, factor=${(absForSpike / median).toFixed(2)}×, boundary=${isNearBoundary})`
                   );
                 } else {
                   powerInserts.push({
