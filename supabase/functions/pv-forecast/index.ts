@@ -25,16 +25,24 @@ const round2 = (value: number) => Math.round(value * 100) / 100;
 const round1 = (value: number) => Math.round(value * 10) / 10;
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
-const fetchWithRetry = async (url: string, retries = 3, delayMs = 1000): Promise<Response> => {
+const fetchWithRetry = async (url: string, retries = 3, delayMs = 1500): Promise<Response> => {
+  let lastError: Error | null = null;
   for (let attempt = 1; attempt <= retries; attempt++) {
-    const res = await fetch(url);
-    if (res.ok || attempt === retries) return res;
-    const status = res.status;
-    console.warn(`Fetch attempt ${attempt}/${retries} failed (${status}) for ${url.substring(0, 120)}...`);
-    if (status >= 400 && status < 500) return res; // Don't retry client errors
-    await new Promise((r) => setTimeout(r, delayMs * attempt));
+    try {
+      const res = await fetch(url);
+      if (res.ok) return res;
+      const status = res.status;
+      console.warn(`Fetch attempt ${attempt}/${retries} failed (HTTP ${status}) for ${url.substring(0, 120)}...`);
+      if (status >= 400 && status < 500) return res; // Don't retry client errors
+      if (attempt < retries) await new Promise((r) => setTimeout(r, delayMs * attempt));
+      else return res;
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error(String(err));
+      console.warn(`Fetch attempt ${attempt}/${retries} network error for ${url.substring(0, 120)}: ${lastError.message}`);
+      if (attempt < retries) await new Promise((r) => setTimeout(r, delayMs * attempt));
+    }
   }
-  return fetch(url); // unreachable but satisfies TS
+  throw lastError ?? new Error(`All ${retries} fetch attempts failed for ${url.substring(0, 80)}`);
 };
 
 const toLocalDateKey = (timestamp: string, timeZone = FORECAST_TIMEZONE) => new Date(timestamp)
