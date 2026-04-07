@@ -7,7 +7,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Sun, ChevronDown, ChevronRight, Sparkles, Plus } from "lucide-react";
+import { Sun, ChevronDown, ChevronRight, Sparkles, Plus, CloudOff } from "lucide-react";
 import { HelpTooltip } from "@/components/ui/help-tooltip";
 import { useTranslation } from "@/hooks/useTranslation";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from "recharts";
@@ -43,7 +43,7 @@ export function PvForecastSection({ locationId }: PvForecastSectionProps) {
   const T = (key: string) => t(key as any);
   const { isAdmin } = useUserRole();
   const { settingsList, isLoading: settingsLoading, upsertSettings, deleteSettings } = usePvForecastSettings(locationId);
-  const { forecast, isLoading: forecastLoading } = usePvForecast(isOpen ? locationId : null);
+  const { forecast, isLoading: forecastLoading, error: forecastError } = usePvForecast(isOpen ? locationId : null);
   const { meters } = useMeters(locationId);
   const [actualReadings, setActualReadings] = useState<Record<string, number>>({});
   const [actualReadingsEstimated, setActualReadingsEstimated] = useState(false);
@@ -281,6 +281,11 @@ export function PvForecastSection({ locationId }: PvForecastSectionProps) {
                     {forecast.summary.ai_notes}
                   </p>
                 )}
+              </div>
+            ) : forecastError ? (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground py-8 justify-center">
+                <CloudOff className="h-4 w-4 text-destructive shrink-0" />
+                <p>Wetterdaten vorübergehend nicht verfügbar. Die Prognose wird automatisch aktualisiert.</p>
               </div>
             ) : (
               <p className="text-muted-foreground text-center py-8">{T("pv.configureHint")}</p>
