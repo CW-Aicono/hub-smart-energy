@@ -476,7 +476,7 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
                   );
                 })}
               </div>
-            )}
+            </>)}
 
             {activeChartType === "gauge" && (
               <div className="flex items-center justify-center h-48">
