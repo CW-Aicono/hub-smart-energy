@@ -654,11 +654,11 @@ async function evaluateAndExecuteAutomations(): Promise<void> {
           }
           break;
         case "time_point":
-          if (cond.time_point) result = isNearTimePoint(timeParts.timeStr, cond.time_point);
+          if (cond.time_point) result = isExactTimePoint(timeParts.totalSeconds, cond.time_point);
           break;
         case "time_switch":
           if (cond.time_points?.length > 0) {
-            result = cond.time_points.some((tp: string) => isNearTimePoint(timeParts.timeStr, tp));
+            result = cond.time_points.some((tp: string) => isExactTimePoint(timeParts.totalSeconds, tp));
           }
           break;
         case "weekday":
@@ -702,7 +702,7 @@ async function evaluateAndExecuteAutomations(): Promise<void> {
         : [{ actuator_uuid: rule.actuator_uuid, action_type: rule.action_value || "pulse", action_value: rule.action_value }];
 
       for (const action of actions) {
-        await executeHAService(action.actuator_uuid, action.action_value || action.action_type || "pulse");
+        await executeWithRetry(action.actuator_uuid, action.action_value || action.action_type || "pulse");
       }
 
       const durationMs = Date.now() - startTime;
@@ -726,7 +726,7 @@ async function evaluateAndExecuteAutomations(): Promise<void> {
         duration_ms: durationMs,
       });
       errors++;
-      console.error(`[auto-engine] "${rule.name}" failed: ${err?.message}`);
+      console.error(`[auto-engine] "${rule.name}" failed after retries: ${err?.message}`);
     }
   }
 
