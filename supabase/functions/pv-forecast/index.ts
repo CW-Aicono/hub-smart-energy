@@ -33,7 +33,7 @@ const fetchWithRetry = async (url: string, retries = 3, delayMs = 1500): Promise
       if (res.ok) return res;
       const status = res.status;
       console.warn(`Fetch attempt ${attempt}/${retries} failed (HTTP ${status}) for ${url.substring(0, 120)}...`);
-      if (status >= 400 && status < 500) return res; // Don't retry client errors
+      if (status >= 400 && status < 500 && status !== 429) return res; // Don't retry client errors (except 429)
       if (attempt < retries) await new Promise((r) => setTimeout(r, delayMs * attempt));
       else return res;
     } catch (err) {
