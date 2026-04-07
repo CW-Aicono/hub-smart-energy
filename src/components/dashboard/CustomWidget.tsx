@@ -437,7 +437,7 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
                       />
                       <YAxis tick={{ fontSize: 11 }} domain={yDomain} allowDataOverflow={false} />
                       <Tooltip content={selectedPeriod === "day" ? <DayTooltip unit={displayUnit} /> : undefined} formatter={selectedPeriod !== "day" ? (v: number) => v?.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " " + displayUnit : undefined} />
-                      <Legend onClick={handleLegendClick} wrapperStyle={{ cursor: "pointer" }} />
+                      <Legend content={renderLegend} />
                       {config.meter_ids.map((mid, i) => (
                         <Line key={mid} type="monotone" dataKey={mid} name={meterDetails[mid]?.name || `Zähler ${i + 1}`} stroke={getSeriesColor(i)} strokeWidth={2} dot={false} connectNulls={true} hide={hiddenSeries.has(mid)} />
                       ))}
@@ -460,7 +460,7 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
                       />
                       <YAxis tick={{ fontSize: 11 }} domain={yDomain} allowDataOverflow={false} />
                       <Tooltip content={selectedPeriod === "day" ? <DayTooltip unit={displayUnit} /> : undefined} formatter={selectedPeriod !== "day" ? (v: number) => v?.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " " + displayUnit : undefined} />
-                      <Legend onClick={handleLegendClick} wrapperStyle={{ cursor: "pointer" }} />
+                      <Legend content={renderLegend} />
                       {config.meter_ids.map((mid, i) => (
                         <Bar key={mid} dataKey={mid} name={meterDetails[mid]?.name || `Zähler ${i + 1}`} fill={getSeriesColor(i)} radius={[2, 2, 0, 0]} hide={hiddenSeries.has(mid)} />
                       ))}
