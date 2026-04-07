@@ -25,6 +25,18 @@ const round2 = (value: number) => Math.round(value * 100) / 100;
 const round1 = (value: number) => Math.round(value * 10) / 10;
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
+const fetchWithRetry = async (url: string, retries = 3, delayMs = 1000): Promise<Response> => {
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    const res = await fetch(url);
+    if (res.ok || attempt === retries) return res;
+    const status = res.status;
+    console.warn(`Fetch attempt ${attempt}/${retries} failed (${status}) for ${url.substring(0, 120)}...`);
+    if (status >= 400 && status < 500) return res; // Don't retry client errors
+    await new Promise((r) => setTimeout(r, delayMs * attempt));
+  }
+  return fetch(url); // unreachable but satisfies TS
+};
+
 const toLocalDateKey = (timestamp: string, timeZone = FORECAST_TIMEZONE) => new Date(timestamp)
   .toLocaleString("sv-SE", { timeZone: timeZone === "GMT" ? "UTC" : timeZone })
   .slice(0, 10);
