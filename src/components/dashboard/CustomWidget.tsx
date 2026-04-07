@@ -1,5 +1,6 @@
 import { useMemo, useState, useCallback, lazy, Suspense } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
 import { CustomWidgetDefinition, ChartType } from "@/hooks/useCustomWidgetDefinitions";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -168,25 +169,6 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
       return next;
     });
   }, []);
-
-  const renderLegend = useCallback((props: any) => {
-    const { payload } = props;
-    return (
-      <div className="flex flex-wrap justify-center gap-x-4 gap-y-1 text-xs mt-1">
-        {payload?.map((entry: any) => (
-          <span
-            key={entry.dataKey}
-            className="flex items-center gap-1 cursor-pointer select-none"
-            style={{ opacity: hiddenSeries.has(entry.dataKey) ? 0.35 : 1 }}
-            onClick={() => handleLegendClick({ dataKey: entry.dataKey })}
-          >
-            <span className="inline-block w-3 h-[3px] rounded" style={{ backgroundColor: entry.color }} />
-            {entry.value}
-          </span>
-        ))}
-      </div>
-    );
-  }, [hiddenSeries, handleLegendClick]);
 
   // Resolve chart type for current period
   const activeChartType: ChartType =
@@ -419,7 +401,7 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
           </div>
         ) : (
           <>
-            {(activeChartType === "line" || activeChartType === "bar") && (
+            {(activeChartType === "line" || activeChartType === "bar") && (<>
               <div className="h-64">
                 <ResponsiveContainer width="100%" height="100%">
                   {activeChartType === "line" ? (
@@ -437,7 +419,7 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
                       />
                       <YAxis tick={{ fontSize: 11 }} domain={yDomain} allowDataOverflow={false} />
                       <Tooltip content={selectedPeriod === "day" ? <DayTooltip unit={displayUnit} /> : undefined} formatter={selectedPeriod !== "day" ? (v: number) => v?.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " " + displayUnit : undefined} />
-                      <Legend content={renderLegend} />
+                      <Legend content={() => null} />
                       {config.meter_ids.map((mid, i) => (
                         <Line key={mid} type="monotone" dataKey={mid} name={meterDetails[mid]?.name || `Zähler ${i + 1}`} stroke={getSeriesColor(i)} strokeWidth={2} dot={false} connectNulls={true} hide={hiddenSeries.has(mid)} />
                       ))}
@@ -460,7 +442,7 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
                       />
                       <YAxis tick={{ fontSize: 11 }} domain={yDomain} allowDataOverflow={false} />
                       <Tooltip content={selectedPeriod === "day" ? <DayTooltip unit={displayUnit} /> : undefined} formatter={selectedPeriod !== "day" ? (v: number) => v?.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " " + displayUnit : undefined} />
-                      <Legend content={renderLegend} />
+                      <Legend content={() => null} />
                       {config.meter_ids.map((mid, i) => (
                         <Bar key={mid} dataKey={mid} name={meterDetails[mid]?.name || `Zähler ${i + 1}`} fill={getSeriesColor(i)} radius={[2, 2, 0, 0]} hide={hiddenSeries.has(mid)} />
                       ))}
@@ -471,7 +453,30 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
                   )}
                 </ResponsiveContainer>
               </div>
-            )}
+              <div className="flex items-center justify-center gap-2 mt-3 flex-wrap">
+                {config.meter_ids.map((mid, i) => {
+                  const hidden = hiddenSeries.has(mid);
+                  return (
+                    <button
+                      key={mid}
+                      onClick={() => handleLegendClick({ dataKey: mid })}
+                      className={cn(
+                        "inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium transition-colors",
+                        hidden
+                          ? "border-muted text-muted-foreground opacity-50"
+                          : "border-input hover:bg-accent"
+                      )}
+                    >
+                      <span
+                        className="inline-block h-2.5 w-2.5 rounded-full shrink-0"
+                        style={{ backgroundColor: hidden ? "hsl(var(--muted-foreground))" : getSeriesColor(i) }}
+                      />
+                      {meterDetails[mid]?.name || `Zähler ${i + 1}`}
+                    </button>
+                  );
+                })}
+              </div>
+            </>)}
 
             {activeChartType === "gauge" && (
               <div className="flex items-center justify-center h-48">
