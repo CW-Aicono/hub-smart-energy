@@ -569,25 +569,28 @@ function insertExecLog(entry: {
     );
 }
 
-function getLocalTimeParts(timezone: string): { hours: number; minutes: number; weekday: number; timeStr: string } {
+function getLocalTimeParts(timezone: string): { hours: number; minutes: number; seconds: number; weekday: number; timeStr: string; totalSeconds: number } {
   const now = new Date();
   const formatter = new Intl.DateTimeFormat("de-DE", {
     timeZone: timezone,
     hour: "2-digit",
     minute: "2-digit",
+    second: "2-digit",
     hour12: false,
   });
   const parts = formatter.formatToParts(now);
   const hours = parseInt(parts.find((p) => p.type === "hour")?.value || "0", 10);
   const minutes = parseInt(parts.find((p) => p.type === "minute")?.value || "0", 10);
+  const seconds = parseInt(parts.find((p) => p.type === "second")?.value || "0", 10);
   const timeStr = `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
+  const totalSeconds = hours * 3600 + minutes * 60 + seconds;
 
   const dayFormatter = new Intl.DateTimeFormat("en-US", { timeZone: timezone, weekday: "short" });
   const dayStr = dayFormatter.format(now);
   const dayMap: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
   const weekday = dayMap[dayStr] ?? 0;
 
-  return { hours, minutes, weekday, timeStr };
+  return { hours, minutes, seconds, weekday, timeStr, totalSeconds };
 }
 
 function isTimeInRange(currentTime: string, timeFrom: string, timeTo: string): boolean {
@@ -597,13 +600,14 @@ function isTimeInRange(currentTime: string, timeFrom: string, timeTo: string): b
   return currentTime >= timeFrom || currentTime <= timeTo;
 }
 
-function isNearTimePoint(currentTimeStr: string, targetTime: string): boolean {
+/** Exact time point check with ±30 second tolerance (for local gateway) */
+function isExactTimePoint(totalSeconds: number, targetTime: string, toleranceSec = 30): boolean {
   const [tH, tM] = targetTime.split(":").map(Number);
-  const targetMin = tH * 60 + tM;
-  const [cH, cM] = currentTimeStr.split(":").map(Number);
-  const currentMin = cH * 60 + cM;
-  const diff = Math.abs(currentMin - targetMin);
-  return diff <= 2 || diff >= (24 * 60 - 2);
+  const targetSec = tH * 3600 + tM * 60;
+  let diff = Math.abs(totalSeconds - targetSec);
+  // Handle midnight wrap-around
+  if (diff > 12 * 3600) diff = 24 * 3600 - diff;
+  return diff <= toleranceSec;
 }
 
 function getHASensorValue(sensorUuid: string): { uuid: string; value: number | string } | null {
