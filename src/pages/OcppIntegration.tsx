@@ -200,6 +200,9 @@ const OcppIntegration = () => {
                   <code className="text-[11px] block bg-background border rounded px-2 py-1.5 break-all select-all">
                     ws://{"<GATEWAY_IP>"}:9000/{"<OCPP_ID>"}
                   </code>
+                  <p className="text-[10px] text-muted-foreground mt-1">
+                    Der Gateway Worker nutzt standardmäßig Port <strong>9000</strong> (ws://). Da die TLS-Terminierung im Gateway erfolgt, wird hier bewusst unverschlüsseltes ws:// auf Port 80/9000 verwendet.
+                  </p>
                 </div>
 
                 <div className="flex items-start gap-1.5 text-destructive">
