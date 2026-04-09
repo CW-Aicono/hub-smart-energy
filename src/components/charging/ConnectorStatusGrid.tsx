@@ -15,15 +15,18 @@ interface Props {
   selectedConnectorId?: number | null;
   onSelectConnector?: (connectorId: number) => void;
   selectable?: boolean;
+  /** When false, all connectors are shown as "Offline" regardless of DB status */
+  wsConnected?: boolean;
 }
 
-export function ConnectorStatusGrid({ connectors, selectedConnectorId, onSelectConnector, selectable = false }: Props) {
+export function ConnectorStatusGrid({ connectors, selectedConnectorId, onSelectConnector, selectable = false, wsConnected = true }: Props) {
   if (connectors.length === 0) return null;
 
   return (
     <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${Math.min(connectors.length, 4)}, 1fr)` }}>
       {connectors.map((c) => {
-        const cfg = connectorStatusConfig[c.status] || connectorStatusConfig.offline;
+        const effectiveStatus = !wsConnected ? "offline" : c.status;
+        const cfg = connectorStatusConfig[effectiveStatus] || connectorStatusConfig.offline;
         const Icon = cfg.icon;
         const isSelected = selectedConnectorId === c.connector_id;
 
