@@ -237,7 +237,7 @@ const ChargingUsersTab = () => {
                         <TableRow key={g.id}>
                           <TableCell className="font-medium">{g.name}</TableCell>
                           <TableCell>{g.description || "—"}</TableCell>
-                          <TableCell className="text-sm">{getTariffName(g.tariff_id) || <span className="text-muted-foreground">Standard</span>}</TableCell>
+                          <TableCell className="text-sm">{getTariffName(g.tariff_id) || <span className="text-muted-foreground">—</span>}</TableCell>
                           <TableCell>
                             {g.is_app_user ? (<Badge variant="default" className="gap-1"><Smartphone className="h-3 w-3" />{t("cu.appUser" as any)}</Badge>) : (<span className="text-muted-foreground">—</span>)}
                           </TableCell>
