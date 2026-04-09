@@ -1,104 +1,55 @@
 
 
-# Connector-Auswahl & Pro-Connector-Status
+# Fix: Fehlerhafte Verfügbarkeits-Berechnung in Statistik-Charts
 
 ## Problem
 
-Aktuell speichert `charge_points` nur **einen** Status pro Ladepunkt. Bei Stationen mit mehreren Anschlüssen (z. B. Compleo mit 2× Typ 2) geht die Information verloren, welcher Connector frei/belegt ist. Außerdem ist `connectorId: 1` in App und Admin-Seite hardcodiert.
+Beide Statistik-Charts (Übersicht und Einzelansicht) berechnen "Fehler"-Stunden falsch:
+
+1. **`ChargingOverviewStats.tsx` (Zeile 70-72)**: Zählt nur `"faulted"` als Fehler, ignoriert `"offline"`. 3 von 6 Ladepunkten sind offline, werden aber als "verfügbar" gezählt → 120h statt korrekt ~48h verfügbar + ~72h Fehler.
+
+2. **`ChargePointDetail.tsx` (Zeile 213)**: Gleicher Bug — prüft nur `cp.status === "faulted"`, nicht `"offline"`.
+
+3. **Nur heute**: Beide Charts berechnen Fehler-Stunden nur für den aktuellen Tag. Vergangene Tage zeigen immer 0 Fehler, da kein historischer Status gespeichert wird.
 
 ## Lösung
 
-### 1. Neue Tabelle `charge_point_connectors`
+### Schritt 1: Übersichts-Chart fixen (`ChargingOverviewStats.tsx`)
 
-Migration:
-
-```sql
-CREATE TABLE public.charge_point_connectors (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  charge_point_id uuid NOT NULL REFERENCES charge_points(id) ON DELETE CASCADE,
-  connector_id integer NOT NULL,  -- OCPP connectorId (1, 2, …)
-  status text NOT NULL DEFAULT 'available',
-  connector_type text NOT NULL DEFAULT 'Type2',
-  max_power_kw numeric NOT NULL DEFAULT 22,
-  last_status_at timestamptz,
-  UNIQUE (charge_point_id, connector_id)
-);
-
-ALTER TABLE public.charge_point_connectors ENABLE ROW LEVEL SECURITY;
-
--- RLS: Lesezugriff für authentifizierte Nutzer (wie charge_points)
-CREATE POLICY "Authenticated users can read connectors"
-  ON public.charge_point_connectors FOR SELECT TO authenticated
-  USING (true);
-
--- Admins können ändern
-CREATE POLICY "Admins can manage connectors"
-  ON public.charge_point_connectors FOR ALL TO authenticated
-  USING (public.has_role(auth.uid(), 'admin'));
-
--- Realtime aktivieren
-ALTER PUBLICATION supabase_realtime ADD TABLE public.charge_point_connectors;
-```
-
-### 2. Backend: StatusNotification pro Connector speichern
-
-**Datei: `supabase/functions/ocpp-central/index.ts`**
-
-In `handleStatusNotification`: Zusätzlich zum bestehenden `charge_points.status`-Update einen Upsert in `charge_point_connectors` machen:
+Zeile 70-72 ändern: `"offline"` und `"unavailable"` zusätzlich zu `"faulted"` als Fehlerstatus zählen.
 
 ```
-connectorId aus payload lesen (default 0)
-wenn connectorId > 0:
-  UPSERT in charge_point_connectors (charge_point_id, connector_id, status)
+// Vorher:
+const errorHours = isToday
+  ? chargePoints.filter((cp) => cp.status === "faulted").length * hoursInDay
+  : 0;
+
+// Nachher:
+const errorCpCount = chargePoints.filter(
+  (cp) => cp.status === "faulted" || cp.status === "offline"
+).length;
+const errorHours = errorCpCount * hoursInDay;
 ```
 
-Der Gesamt-Status des Ladepunkts (`charge_points.status`) wird weiterhin aktualisiert — als Aggregat: wenn mindestens ein Connector "available" ist, bleibt der Ladepunkt "available".
+Wichtig: `errorHours` wird jetzt auch für vergangene Tage berechnet — basierend auf dem **aktuellen** Status (beste Annäherung ohne historische Daten). Ein Kommentar weist darauf hin.
 
-### 3. Seed-Connector-Daten bei BootNotification
+### Schritt 2: Einzelansicht-Chart fixen (`ChargePointDetail.tsx`)
 
-In `handleBootNotification` oder bei der Auto-Registrierung: Connector-Rows basierend auf `connector_count` anlegen, falls noch nicht vorhanden.
+Zeile 213 ändern:
 
-### 4. Admin-Seite: Connector-Status-Anzeige
+```
+// Vorher:
+const errorHours = isToday && cp && cp.status === "faulted" ? hoursInDay : 0;
 
-**Datei: `src/pages/ChargePointDetail.tsx`**
+// Nachher:
+const errorHours = cp && (cp.status === "faulted" || cp.status === "offline") ? hoursInDay : 0;
+```
 
-- Connector-Daten per Query laden (`charge_point_connectors` WHERE `charge_point_id = id`)
-- Realtime-Subscription auf `charge_point_connectors`
-- Im Details-Tab: Visuelle Anzeige pro Connector (Connector 1: Verfügbar ●, Connector 2: Lädt ●)
-- Bei "Ladevorgang starten": Dropdown zur Connector-Auswahl statt hardcodiertem `connectorId: 1`
+### Schritt 3: Betriebszeit-KPI korrigieren (`ChargingOverviewStats.tsx`)
 
-### 5. Lade-App: Connector-Auswahl
+Die `uptimePercent`-Berechnung (Zeile 36-38) ist ebenfalls betroffen — sie zählt nur `"available"` und `"charging"` als "in Betrieb". Das ist korrekt, aber die Darstellung sollte konsistent sein.
 
-**Datei: `src/pages/ChargingApp.tsx`**
+## Einschränkung
 
-- Beim Klick auf "Laden starten" an einer Station mit `connector_count > 1`:
-  - Connector-Status laden
-  - Kurzes Auswahl-UI zeigen (z. B. zwei Buttons "Anschluss 1 ✓" / "Anschluss 2 ✓" mit Live-Status)
-  - Gewählte `connectorId` im `RemoteStartTransaction`-Body senden
-- Bei Stationen mit nur 1 Connector: Verhalten bleibt wie bisher (kein Extra-Dialog)
-
-### 6. Connector-Anzeige in Übersichtskarten
-
-**Datei: `src/components/charging/ChargePointDetailDialog.tsx`**
-
-- Pro Connector eine Statuszeile im Details-Tab
-- Farbkodiert: Grün (available), Blau (charging), Grau (unavailable), Rot (faulted)
-
-## Technische Details
-
-| Komponente | Änderung |
-|---|---|
-| DB-Migration | Neue Tabelle `charge_point_connectors` + RLS + Realtime |
-| `ocpp-central` | `handleStatusNotification` → Upsert Connector-Status |
-| `ocpp-central` | Auto-Seed Connectors bei Registrierung |
-| `ChargePointDetail.tsx` | Connector-Grid + Dropdown bei Remote-Start |
-| `ChargingApp.tsx` | Connector-Auswahl-UI bei multi-connector Stationen |
-| `ChargePointDetailDialog.tsx` | Connector-Status-Anzeige |
-| `useChargePoints.tsx` | Optional: Connector-Daten mit-laden |
-
-## Nicht betroffen
-
-- Bestehende Sessions (haben bereits `connector_id`)
-- OCPP-WS-Proxy (leitet `connectorId` bereits korrekt durch)
-- Tarif-/Abrechnungslogik
+Ohne historischen Status-Log bleibt die Fehlerberechnung für vergangene Tage eine Approximation (aktueller Status wird auf alle Tage projiziert). Eine exakte Lösung bräuchte eine `charge_point_status_log`-Tabelle — das ist ein separates Feature.
 
