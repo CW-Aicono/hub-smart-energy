@@ -31,6 +31,8 @@ import { de } from "date-fns/locale";
 import { fmtKwh, fmtKw, fmtNum } from "@/lib/formatCharging";
 import { supabase } from "@/integrations/supabase/client";
 import { useOcppMeterValue } from "@/hooks/useOcppMeterValue";
+import { useChargePointConnectors } from "@/hooks/useChargePointConnectors";
+import { ConnectorStatusGrid } from "@/components/charging/ConnectorStatusGrid";
 import OcppLogViewer from "@/components/charging/OcppLogViewer";
 import ChargePointQrCode from "@/components/charging/ChargePointQrCode";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
@@ -88,12 +90,14 @@ const ChargePointDetail = () => {
   const [powerLimit, setPowerLimit] = useState<PowerLimitSchedule | null>(null);
   const [savingPowerLimit, setSavingPowerLimit] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const [selectedConnectorId, setSelectedConnectorId] = useState<number>(1);
 
   useEffect(() => { window.scrollTo(0, 0); }, [id]);
 
   const cp = chargePoints.find((c) => c.id === id);
   const cpGroup = cp?.group_id ? groups.find((g) => g.id === cp.group_id) ?? null : null;
   const ocppMeter = useOcppMeterValue(cp?.ocpp_id);
+  const { connectors } = useChargePointConnectors(cp?.id);
 
   // Sync powerLimit state from cp when cp loads or changes
   const cpPowerLimit = (cp as any)?.power_limit_schedule as PowerLimitSchedule | null | undefined;
@@ -341,7 +345,7 @@ const ChargePointDetail = () => {
           result = await callOcppCommand("Reset", { chargePointId: cp.ocpp_id, type: "Soft" });
           break;
         case "Ladevorgang starten":
-          result = await callOcppCommand("RemoteStartTransaction", { chargePointId: cp.ocpp_id, idTag: "ADMIN", connectorId: 1 });
+          result = await callOcppCommand("RemoteStartTransaction", { chargePointId: cp.ocpp_id, idTag: "ADMIN", connectorId: selectedConnectorId });
           break;
         case "Ladevorgang stoppen": {
           const activeSession = sessions.find((s) => s.status === "active" && s.transaction_id);
@@ -353,7 +357,7 @@ const ChargePointDetail = () => {
           break;
         }
         case "Kabel entriegeln":
-          result = await callOcppCommand("UnlockConnector", { chargePointId: cp.ocpp_id, connectorId: 1 });
+          result = await callOcppCommand("UnlockConnector", { chargePointId: cp.ocpp_id, connectorId: selectedConnectorId });
           break;
         case "Auf inaktiv setzen":
           result = await callOcppCommand("ChangeAvailability", { chargePointId: cp.ocpp_id, connectorId: 0, type: "Inoperative" });
@@ -579,6 +583,31 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
 
                 {/* Right sidebar */}
                 <div className="space-y-6">
+                  {/* Connector Status */}
+                  {connectors.length > 0 && (
+                    <Card>
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-base flex items-center gap-2">
+                          <PlugZap className="h-4 w-4" />
+                          Anschlüsse
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <ConnectorStatusGrid
+                          connectors={connectors}
+                          selectedConnectorId={selectedConnectorId}
+                          onSelectConnector={setSelectedConnectorId}
+                          selectable={isAdmin}
+                        />
+                        {isAdmin && connectors.length > 1 && (
+                          <p className="text-[10px] text-muted-foreground mt-2">
+                            Anschluss {selectedConnectorId} ausgewählt für Fernbefehle
+                          </p>
+                        )}
+                      </CardContent>
+                    </Card>
+                  )}
+
                   {/* Remote actions */}
                   {isAdmin && (
                     <Card>

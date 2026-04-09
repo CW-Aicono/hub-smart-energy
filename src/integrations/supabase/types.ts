@@ -461,6 +461,50 @@ export type Database = {
           },
         ]
       }
+      charge_point_connectors: {
+        Row: {
+          charge_point_id: string
+          connector_id: number
+          connector_type: string
+          created_at: string
+          id: string
+          last_status_at: string | null
+          max_power_kw: number
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          charge_point_id: string
+          connector_id: number
+          connector_type?: string
+          created_at?: string
+          id?: string
+          last_status_at?: string | null
+          max_power_kw?: number
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          charge_point_id?: string
+          connector_id?: number
+          connector_type?: string
+          created_at?: string
+          id?: string
+          last_status_at?: string | null
+          max_power_kw?: number
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "charge_point_connectors_charge_point_id_fkey"
+            columns: ["charge_point_id"]
+            isOneToOne: false
+            referencedRelation: "charge_points"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       charge_point_group_allowed_user_groups: {
         Row: {
           created_at: string

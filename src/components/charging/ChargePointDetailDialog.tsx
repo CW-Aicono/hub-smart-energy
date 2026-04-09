@@ -1,5 +1,6 @@
 import { useState, useRef } from "react";
 import { ChargePoint } from "@/hooks/useChargePoints";
+import { useChargePointConnectors } from "@/hooks/useChargePointConnectors";
 import { ChargingSession } from "@/hooks/useChargingSessions";
 import { ChargerModel } from "@/hooks/useChargerModels";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -12,6 +13,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Zap, PlugZap, AlertTriangle, ZapOff, WifiOff, Wifi, Camera, Trash2, Edit, Save, X, Clock, MapPin, Search, Shield, Info as InfoIcon, Settings } from "lucide-react";
+import { ConnectorStatusGrid } from "@/components/charging/ConnectorStatusGrid";
 import { format } from "date-fns";
 import { fmtKwh, fmtKw } from "@/lib/formatCharging";
 import { supabase } from "@/integrations/supabase/client";
@@ -55,6 +57,7 @@ export default function ChargePointDetailDialog({
   const [uploading, setUploading] = useState(false);
   const [geocoding, setGeocoding] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const { connectors } = useChargePointConnectors(cp?.id ?? undefined);
 
   const startEdit = () => {
     if (!cp) return;
@@ -199,6 +202,14 @@ export default function ChargePointDetailDialog({
                 </div>
               )}
             </div>
+
+            {/* Connector Status */}
+            {connectors.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-sm font-medium text-muted-foreground">Anschluss-Status</p>
+                <ConnectorStatusGrid connectors={connectors} />
+              </div>
+            )}
 
             {/* Details */}
             {editing ? (

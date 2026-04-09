@@ -213,7 +213,7 @@ function ChargingAppAuth({ onAuth }: { onAuth: () => void }) {
 // ---- Map Tab ----
 const LazyMap = lazy(() => import("@/components/charging/ChargePointsMap"));
 
-function MapTab({ chargePoints, onStartCharge, initialCpId, onInitialCpHandled }: { chargePoints: AppChargePoint[]; onStartCharge: (cpId: string) => void; initialCpId?: string | null; onInitialCpHandled?: () => void }) {
+function MapTab({ chargePoints, onStartCharge, initialCpId, onInitialCpHandled }: { chargePoints: AppChargePoint[]; onStartCharge: (cpId: string, connectorId?: number) => void; initialCpId?: string | null; onInitialCpHandled?: () => void }) {
   const [userPos, setUserPos] = useState<[number, number] | null>(null);
   const [locating, setLocating] = useState(false);
   const [typeFilter, setTypeFilter] = useState<string>("all");
@@ -627,16 +627,61 @@ function MapTab({ chargePoints, onStartCharge, initialCpId, onInitialCpHandled }
 }
 
 // ---- Station Detail ----
-function StationDetail({ cp, onBack, onStartCharge }: { cp: AppChargePoint; onBack: () => void; onStartCharge: (cpId: string) => void }) {
+function StationDetail({ cp, onBack, onStartCharge }: { cp: AppChargePoint; onBack: () => void; onStartCharge: (cpId: string, connectorId?: number) => void }) {
   const statusLabel: Record<string, string> = {
     available: "Verfügbar", charging: "Belegt", faulted: "Gestört", unavailable: "Nicht verfügbar", offline: "Offline",
   };
   const canCharge = cp.status === "available";
+  const [selectedConnector, setSelectedConnector] = useState<number>(1);
+  const [connectors, setConnectors] = useState<Array<{ connector_id: number; status: string; connector_type: string; max_power_kw: number }>>([]);
+
+  useEffect(() => {
+    if (cp.connector_count <= 1) return;
+    supabase
+      .from("charge_point_connectors")
+      .select("connector_id, status, connector_type, max_power_kw")
+      .eq("charge_point_id", cp.id)
+      .order("connector_id")
+      .then(({ data }) => {
+        if (data && data.length > 0) setConnectors(data);
+      });
+  }, [cp.id, cp.connector_count]);
+
+  // Realtime for connector updates
+  useEffect(() => {
+    if (cp.connector_count <= 1) return;
+    const channel = supabase
+      .channel(`app-connectors-${cp.id}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "charge_point_connectors", filter: `charge_point_id=eq.${cp.id}` }, () => {
+        supabase
+          .from("charge_point_connectors")
+          .select("connector_id, status, connector_type, max_power_kw")
+          .eq("charge_point_id", cp.id)
+          .order("connector_id")
+          .then(({ data }) => { if (data) setConnectors(data); });
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [cp.id, cp.connector_count]);
 
   const openNavigation = () => {
     if (cp.latitude && cp.longitude) {
       window.open(`https://www.google.com/maps/dir/?api=1&destination=${cp.latitude},${cp.longitude}`, "_blank");
     }
+  };
+
+  const connectorStatusColor: Record<string, string> = {
+    available: "bg-emerald-500",
+    charging: "bg-blue-500",
+    unavailable: "bg-muted-foreground",
+    faulted: "bg-destructive",
+  };
+
+  const connectorStatusLabel: Record<string, string> = {
+    available: "Frei",
+    charging: "Lädt",
+    unavailable: "Belegt",
+    faulted: "Gestört",
   };
 
   return (
@@ -655,6 +700,40 @@ function StationDetail({ cp, onBack, onStartCharge }: { cp: AppChargePoint; onBa
           <Card><CardContent className="p-3 text-center"><p className="text-xs text-muted-foreground">Stecker</p><p className="text-sm font-medium mt-1">{cp.connector_type}</p></CardContent></Card>
           <Card><CardContent className="p-3 text-center"><p className="text-xs text-muted-foreground">Anschlüsse</p><p className="text-lg font-bold mt-1">{cp.connector_count}</p></CardContent></Card>
         </div>
+
+        {/* Connector selection for multi-connector stations */}
+        {connectors.length > 1 && (
+          <div className="space-y-2">
+            <p className="text-xs font-medium text-muted-foreground">Anschluss wählen</p>
+            <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${Math.min(connectors.length, 3)}, 1fr)` }}>
+              {connectors.map((c) => {
+                const isSelected = selectedConnector === c.connector_id;
+                const isAvailable = c.status === "available";
+                return (
+                  <button
+                    key={c.connector_id}
+                    type="button"
+                    onClick={() => isAvailable && setSelectedConnector(c.connector_id)}
+                    disabled={!isAvailable}
+                    className={`
+                      border rounded-lg p-3 text-center transition-all
+                      ${isAvailable ? "cursor-pointer" : "cursor-not-allowed opacity-60"}
+                      ${isSelected ? "border-primary ring-2 ring-primary/20 bg-primary/5" : "border-border"}
+                    `}
+                  >
+                    <div className="flex items-center justify-center gap-1.5 mb-1">
+                      <span className={`h-2.5 w-2.5 rounded-full ${connectorStatusColor[c.status] || "bg-muted-foreground"}`} />
+                      {isSelected && <Check className="h-3.5 w-3.5 text-primary" />}
+                    </div>
+                    <p className="text-xs font-medium">Anschluss {c.connector_id}</p>
+                    <p className="text-[10px] text-muted-foreground">{connectorStatusLabel[c.status] || c.status}</p>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {cp.vendor && (
           <Card><CardContent className="p-3"><p className="text-xs text-muted-foreground">Hersteller / Modell</p><p className="text-sm font-medium">{cp.vendor} {cp.model && `— ${cp.model}`}</p></CardContent></Card>
         )}
@@ -664,7 +743,7 @@ function StationDetail({ cp, onBack, onStartCharge }: { cp: AppChargePoint; onBa
               <Navigation className="h-4 w-4 mr-2" />Navigation
             </Button>
           )}
-          <Button className="flex-1 h-12" disabled={!canCharge} onClick={() => onStartCharge(cp.id)}>
+          <Button className="flex-1 h-12" disabled={!canCharge} onClick={() => onStartCharge(cp.id, connectors.length > 1 ? selectedConnector : undefined)}>
             <PlugZap className="h-4 w-4 mr-2" />{canCharge ? "Ladevorgang starten" : "Nicht verfügbar"}
           </Button>
         </div>
@@ -1523,7 +1602,7 @@ const ChargingApp = () => {
     }
   };
 
-  const handleStartCharge = async (cpId: string) => {
+  const handleStartCharge = async (cpId: string, connectorId?: number) => {
     const cp = chargePoints.find((c) => c.id === cpId);
     if (!cp) { toast.error("Ladepunkt nicht gefunden"); return; }
 
@@ -1553,7 +1632,7 @@ const ChargingApp = () => {
           body: JSON.stringify({
             chargePointId: cp.ocpp_id,
             idTag,
-            connectorId: 1,
+            ...(connectorId ? { connectorId } : {}),
           }),
         }
       );

@@ -55,6 +55,9 @@ async function handleBootNotification(
         last_heartbeat: new Date().toISOString(),
       })
       .eq("ocpp_id", chargePointId);
+
+    // Seed connector rows if missing
+    await seedConnectors(supabase, existing.id, chargePointId);
   } else {
     // Auto-registration: unknown OCPP-ID → check if it exists in ANY tenant first
     const { data: anyExisting } = await supabase
@@ -116,6 +119,47 @@ async function handleHeartbeat(
   return { currentTime: new Date().toISOString() };
 }
 
+/**
+ * Seed connector rows for a charge point if they don't exist yet.
+ */
+async function seedConnectors(
+  supabase: ReturnType<typeof createSupabase>,
+  cpUuid: string,
+  ocppId: string
+) {
+  const { data: existing } = await supabase
+    .from("charge_point_connectors")
+    .select("connector_id")
+    .eq("charge_point_id", cpUuid);
+
+  if (existing && existing.length > 0) return; // already seeded
+
+  // Read connector_count from the charge point
+  const { data: cpData } = await supabase
+    .from("charge_points")
+    .select("connector_count, connector_type, max_power_kw")
+    .eq("id", cpUuid)
+    .single();
+
+  const count = cpData?.connector_count || 1;
+  const connType = cpData?.connector_type || "Type2";
+  const maxPower = cpData?.max_power_kw || 22;
+
+  const rows = [];
+  for (let i = 1; i <= count; i++) {
+    rows.push({
+      charge_point_id: cpUuid,
+      connector_id: i,
+      status: "available",
+      connector_type: connType.split(",")[0] || "Type2",
+      max_power_kw: maxPower,
+    });
+  }
+
+  await supabase.from("charge_point_connectors").insert(rows);
+  console.log(`[ocpp-central] Seeded ${count} connector(s) for ${ocppId}`);
+}
+
 async function handleStatusNotification(
   supabase: ReturnType<typeof createSupabase>,
   chargePointId: string,
@@ -133,12 +177,67 @@ async function handleStatusNotification(
     Faulted: "faulted",
   };
 
+  const connectorId = (payload.connectorId as number) || 0;
   const mappedStatus = statusMap[payload.status as string] || "offline";
 
-  await supabase
+  // Update per-connector status if connectorId > 0
+  if (connectorId > 0) {
+    // Resolve CP UUID
+    const { data: cpRow } = await supabase
+      .from("charge_points")
+      .select("id")
+      .eq("ocpp_id", chargePointId)
+      .maybeSingle();
+
+    if (cpRow) {
+      await supabase
+        .from("charge_point_connectors")
+        .upsert(
+          {
+            charge_point_id: cpRow.id,
+            connector_id: connectorId,
+            status: mappedStatus,
+            last_status_at: new Date().toISOString(),
+          },
+          { onConflict: "charge_point_id,connector_id" }
+        );
+    }
+  }
+
+  // Update aggregate charge point status
+  // If any connector is available → available; if any charging → charging; else worst status
+  const { data: cpRow } = await supabase
     .from("charge_points")
-    .update({ status: mappedStatus })
-    .eq("ocpp_id", chargePointId);
+    .select("id")
+    .eq("ocpp_id", chargePointId)
+    .maybeSingle();
+
+  if (cpRow) {
+    const { data: allConnectors } = await supabase
+      .from("charge_point_connectors")
+      .select("status")
+      .eq("charge_point_id", cpRow.id);
+
+    let aggregateStatus = mappedStatus;
+    if (allConnectors && allConnectors.length > 0) {
+      const statuses = allConnectors.map((c: any) => c.status);
+      if (statuses.includes("available")) aggregateStatus = "available";
+      else if (statuses.includes("charging")) aggregateStatus = "charging";
+      else if (statuses.includes("faulted")) aggregateStatus = "faulted";
+      else aggregateStatus = statuses[0] || mappedStatus;
+    }
+
+    await supabase
+      .from("charge_points")
+      .update({ status: aggregateStatus })
+      .eq("ocpp_id", chargePointId);
+  } else {
+    // Fallback: no connector rows yet
+    await supabase
+      .from("charge_points")
+      .update({ status: mappedStatus })
+      .eq("ocpp_id", chargePointId);
+  }
 
   return {};
 }
