@@ -1602,7 +1602,7 @@ const ChargingApp = () => {
     }
   };
 
-  const handleStartCharge = async (cpId: string) => {
+  const handleStartCharge = async (cpId: string, connectorId?: number) => {
     const cp = chargePoints.find((c) => c.id === cpId);
     if (!cp) { toast.error("Ladepunkt nicht gefunden"); return; }
 
@@ -1632,7 +1632,7 @@ const ChargingApp = () => {
           body: JSON.stringify({
             chargePointId: cp.ocpp_id,
             idTag,
-            connectorId: 1,
+            ...(connectorId ? { connectorId } : {}),
           }),
         }
       );
