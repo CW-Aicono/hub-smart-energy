@@ -146,6 +146,26 @@ const OcppIntegration = () => {
                   </div>
                 </div>
 
+                {/* Port info */}
+                <div className="p-2 bg-background border rounded-md">
+                  <p className="text-[11px] font-medium mb-1">Port-Konfiguration</p>
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-[11px]">
+                    <div className="flex items-center gap-1.5">
+                      <code className="font-semibold text-primary">wss://</code>
+                      <span className="text-muted-foreground">→ Port</span>
+                      <code className="font-bold">443</code>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <code className="font-semibold text-destructive">ws://</code>
+                      <span className="text-muted-foreground">→ Port</span>
+                      <code className="font-bold">80</code>
+                    </div>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground mt-1">
+                    Für verschlüsselte Verbindungen (wss://) muss Port <strong>443</strong> verwendet werden. Port 80 gilt nur für unverschlüsseltes ws:// und sollte vermieden werden.
+                  </p>
+                </div>
+
                 <p className="text-[11px] text-muted-foreground">
                   {t("ocppIntegration.backendUrlHint" as any)}
                 </p>
@@ -180,6 +200,9 @@ const OcppIntegration = () => {
                   <code className="text-[11px] block bg-background border rounded px-2 py-1.5 break-all select-all">
                     ws://{"<GATEWAY_IP>"}:9000/{"<OCPP_ID>"}
                   </code>
+                  <p className="text-[10px] text-muted-foreground mt-1">
+                    Der Gateway Worker nutzt standardmäßig Port <strong>9000</strong> (ws://). Da die TLS-Terminierung im Gateway erfolgt, wird hier bewusst unverschlüsseltes ws:// auf Port 80/9000 verwendet.
+                  </p>
                 </div>
 
                 <div className="flex items-start gap-1.5 text-destructive">
