@@ -1,12 +1,13 @@
 import { useState } from "react";
 import { useChargingUsers, useChargingUserGroups, ChargingUser } from "@/hooks/useChargingUsers";
+import { useChargingTariffs } from "@/hooks/useChargingTariffs";
 import { useTenant } from "@/hooks/useTenant";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useTranslation } from "@/hooks/useTranslation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -19,8 +20,8 @@ import { Plus, MoreHorizontal, Edit, Trash2, Ban, Archive, Users, FolderOpen, Ch
 import { Switch } from "@/components/ui/switch";
 import { format } from "date-fns";
 
-const emptyUserForm = { name: "", email: "", rfid_tag: "", phone: "", group_id: "", notes: "" };
-const emptyGroupForm = { name: "", description: "", is_app_user: false };
+const emptyUserForm = { name: "", email: "", rfid_tag: "", phone: "", group_id: "", tariff_id: "", notes: "" };
+const emptyGroupForm = { name: "", description: "", is_app_user: false, tariff_id: "" };
 
 const ChargingUsersTab = () => {
   const { tenant } = useTenant();
@@ -28,13 +29,14 @@ const ChargingUsersTab = () => {
   const { t } = useTranslation();
   const { users, isLoading: usersLoading, addUser, updateUser, deleteUser } = useChargingUsers();
   const { groups, isLoading: groupsLoading, addGroup, updateGroup, deleteGroup } = useChargingUserGroups();
+  const { tariffs } = useChargingTariffs();
 
   const [userDialogOpen, setUserDialogOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<ChargingUser | null>(null);
   const [userForm, setUserForm] = useState(emptyUserForm);
 
   const [groupDialogOpen, setGroupDialogOpen] = useState(false);
-  const [editingGroup, setEditingGroup] = useState<{ id: string; name: string; description: string | null; is_app_user: boolean } | null>(null);
+  const [editingGroup, setEditingGroup] = useState<{ id: string; name: string; description: string | null; is_app_user: boolean; tariff_id: string | null } | null>(null);
   const [groupForm, setGroupForm] = useState(emptyGroupForm);
 
   const [deleteTarget, setDeleteTarget] = useState<{ type: "user" | "group"; id: string; name: string } | null>(null);
@@ -44,6 +46,16 @@ const ChargingUsersTab = () => {
   const filteredUsers = statusFilter === "all" ? users : users.filter((u) => u.status === statusFilter);
 
   const getGroupName = (gid: string | null) => groups.find((g) => g.id === gid)?.name || "—";
+  const getTariffName = (tid: string | null) => tariffs.find((t) => t.id === tid)?.name || null;
+
+  /** Resolve effective tariff: user > group > default active */
+  const getEffectiveTariff = (u: ChargingUser) => {
+    if (u.tariff_id) return getTariffName(u.tariff_id);
+    const group = groups.find((g) => g.id === u.group_id);
+    if (group?.tariff_id) return getTariffName(group.tariff_id);
+    const active = tariffs.find((t) => t.is_active);
+    return active ? `${active.name} (Standard)` : "—";
+  };
 
   const statusBadge = (status: string) => {
     switch (status) {
@@ -57,12 +69,20 @@ const ChargingUsersTab = () => {
   // --- User CRUD ---
   const openAddUser = () => { setUserForm(emptyUserForm); setEditingUser(null); setUserDialogOpen(true); };
   const openEditUser = (u: ChargingUser) => {
-    setUserForm({ name: u.name, email: u.email || "", rfid_tag: u.rfid_tag || "", phone: u.phone || "", group_id: u.group_id || "", notes: u.notes || "" });
+    setUserForm({ name: u.name, email: u.email || "", rfid_tag: u.rfid_tag || "", phone: u.phone || "", group_id: u.group_id || "", tariff_id: u.tariff_id || "", notes: u.notes || "" });
     setEditingUser(u); setUserDialogOpen(true);
   };
   const handleSaveUser = () => {
     if (!tenant?.id) return;
-    const payload = { name: userForm.name, email: userForm.email || undefined, rfid_tag: userForm.rfid_tag || undefined, phone: userForm.phone || undefined, group_id: userForm.group_id || null, notes: userForm.notes || undefined };
+    const payload = {
+      name: userForm.name,
+      email: userForm.email || undefined,
+      rfid_tag: userForm.rfid_tag || undefined,
+      phone: userForm.phone || undefined,
+      group_id: userForm.group_id || null,
+      tariff_id: userForm.tariff_id || null,
+      notes: userForm.notes || undefined,
+    };
     if (editingUser) { updateUser.mutate({ id: editingUser.id, ...payload }); } else { addUser.mutate({ tenant_id: tenant.id, ...payload }); }
     setUserDialogOpen(false);
   };
@@ -70,13 +90,19 @@ const ChargingUsersTab = () => {
 
   // --- Group CRUD ---
   const openAddGroup = () => { setGroupForm(emptyGroupForm); setEditingGroup(null); setGroupDialogOpen(true); };
-  const openEditGroup = (g: { id: string; name: string; description: string | null; is_app_user: boolean }) => {
-    setGroupForm({ name: g.name, description: g.description || "", is_app_user: g.is_app_user }); setEditingGroup(g); setGroupDialogOpen(true);
+  const openEditGroup = (g: { id: string; name: string; description: string | null; is_app_user: boolean; tariff_id: string | null }) => {
+    setGroupForm({ name: g.name, description: g.description || "", is_app_user: g.is_app_user, tariff_id: g.tariff_id || "" }); setEditingGroup(g); setGroupDialogOpen(true);
   };
   const handleSaveGroup = () => {
     if (!tenant?.id) return;
-    if (editingGroup) { updateGroup.mutate({ id: editingGroup.id, name: groupForm.name, description: groupForm.description || undefined, is_app_user: groupForm.is_app_user } as any); }
-    else { addGroup.mutate({ tenant_id: tenant.id, name: groupForm.name, description: groupForm.description || undefined, is_app_user: groupForm.is_app_user } as any); }
+    const payload = {
+      name: groupForm.name,
+      description: groupForm.description || undefined,
+      is_app_user: groupForm.is_app_user,
+      tariff_id: groupForm.tariff_id || null,
+    };
+    if (editingGroup) { updateGroup.mutate({ id: editingGroup.id, ...payload } as any); }
+    else { addGroup.mutate({ tenant_id: tenant.id, ...payload } as any); }
     setGroupDialogOpen(false);
   };
   const handleConfirmDelete = () => {
@@ -85,6 +111,19 @@ const ChargingUsersTab = () => {
     else deleteGroup.mutate(deleteTarget.id);
     setDeleteTarget(null);
   };
+
+  const tariffSelect = (value: string, onChange: (v: string) => void, label = "Tarif") => (
+    <div>
+      <Label>{label}</Label>
+      <Select value={value} onValueChange={(v) => onChange(v === "__none__" ? "" : v)}>
+        <SelectTrigger><SelectValue placeholder="Standard-Tarif" /></SelectTrigger>
+        <SelectContent>
+          <SelectItem value="__none__">Standard-Tarif</SelectItem>
+          {tariffs.map((t) => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
+        </SelectContent>
+      </Select>
+    </div>
+  );
 
   return (
     <div className="space-y-4">
@@ -126,6 +165,7 @@ const ChargingUsersTab = () => {
                       <TableHead>{t("common.email" as any)}</TableHead>
                       <TableHead>{t("cu.rfidTag" as any)}</TableHead>
                       <TableHead>{t("cu.userGroup" as any)}</TableHead>
+                      <TableHead>Tarif</TableHead>
                       <TableHead>{t("common.status" as any)}</TableHead>
                       <TableHead>{t("common.created" as any)}</TableHead>
                       {isAdmin && <TableHead className="w-16" />}
@@ -138,6 +178,7 @@ const ChargingUsersTab = () => {
                         <TableCell>{u.email || "—"}</TableCell>
                         <TableCell className="font-mono text-sm">{u.rfid_tag || "—"}</TableCell>
                         <TableCell>{getGroupName(u.group_id)}</TableCell>
+                        <TableCell className="text-sm">{getEffectiveTariff(u)}</TableCell>
                         <TableCell>{statusBadge(u.status)}</TableCell>
                         <TableCell>{format(new Date(u.created_at), "dd.MM.yyyy")}</TableCell>
                         {isAdmin && (
@@ -182,6 +223,7 @@ const ChargingUsersTab = () => {
                     <TableRow>
                       <TableHead>{t("common.name" as any)}</TableHead>
                       <TableHead>{t("common.description" as any)}</TableHead>
+                      <TableHead>Tarif</TableHead>
                       <TableHead>{t("cu.appUser" as any)}</TableHead>
                       <TableHead>{t("cu.members" as any)}</TableHead>
                       <TableHead>{t("common.created" as any)}</TableHead>
@@ -195,6 +237,7 @@ const ChargingUsersTab = () => {
                         <TableRow key={g.id}>
                           <TableCell className="font-medium">{g.name}</TableCell>
                           <TableCell>{g.description || "—"}</TableCell>
+                          <TableCell className="text-sm">{getTariffName(g.tariff_id) || <span className="text-muted-foreground">Standard</span>}</TableCell>
                           <TableCell>
                             {g.is_app_user ? (<Badge variant="default" className="gap-1"><Smartphone className="h-3 w-3" />{t("cu.appUser" as any)}</Badge>) : (<span className="text-muted-foreground">—</span>)}
                           </TableCell>
@@ -244,6 +287,9 @@ const ChargingUsersTab = () => {
                 </Select>
               </div>
             </div>
+            <div className="grid grid-cols-2 gap-4">
+              {tariffSelect(userForm.tariff_id, (v) => setUserForm({ ...userForm, tariff_id: v }), "Individueller Tarif")}
+            </div>
             <div><Label>{t("cu.notes" as any)}</Label><Textarea value={userForm.notes} onChange={(e) => setUserForm({ ...userForm, notes: e.target.value })} rows={2} /></div>
           </div>
           <DialogFooter>
@@ -262,6 +308,7 @@ const ChargingUsersTab = () => {
           <div className="space-y-4">
             <div><Label>{t("common.name" as any)} *</Label><Input value={groupForm.name} onChange={(e) => setGroupForm({ ...groupForm, name: e.target.value })} /></div>
             <div><Label>{t("common.description" as any)}</Label><Textarea value={groupForm.description} onChange={(e) => setGroupForm({ ...groupForm, description: e.target.value })} rows={2} /></div>
+            {tariffSelect(groupForm.tariff_id, (v) => setGroupForm({ ...groupForm, tariff_id: v }), "Gruppen-Tarif")}
             <div className="flex items-center justify-between">
               <Label>{t("cu.appUserGroup" as any)}</Label>
               <Switch checked={groupForm.is_app_user} onCheckedChange={(v) => setGroupForm({ ...groupForm, is_app_user: v })} />

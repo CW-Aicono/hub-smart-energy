@@ -11,6 +11,7 @@ export interface ChargingTariff {
   base_fee: number;
   idle_fee_per_minute: number;
   idle_fee_grace_minutes: number;
+  tax_rate_percent: number;
   currency: string;
   is_active: boolean;
   created_at: string;
