@@ -345,7 +345,7 @@ const ChargePointDetail = () => {
           result = await callOcppCommand("Reset", { chargePointId: cp.ocpp_id, type: "Soft" });
           break;
         case "Ladevorgang starten":
-          result = await callOcppCommand("RemoteStartTransaction", { chargePointId: cp.ocpp_id, idTag: "ADMIN", connectorId: 1 });
+          result = await callOcppCommand("RemoteStartTransaction", { chargePointId: cp.ocpp_id, idTag: "ADMIN", connectorId: selectedConnectorId });
           break;
         case "Ladevorgang stoppen": {
           const activeSession = sessions.find((s) => s.status === "active" && s.transaction_id);
@@ -357,7 +357,7 @@ const ChargePointDetail = () => {
           break;
         }
         case "Kabel entriegeln":
-          result = await callOcppCommand("UnlockConnector", { chargePointId: cp.ocpp_id, connectorId: 1 });
+          result = await callOcppCommand("UnlockConnector", { chargePointId: cp.ocpp_id, connectorId: selectedConnectorId });
           break;
         case "Auf inaktiv setzen":
           result = await callOcppCommand("ChangeAvailability", { chargePointId: cp.ocpp_id, connectorId: 0, type: "Inoperative" });
