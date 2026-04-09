@@ -1,40 +1,104 @@
 
 
-# Live-Energieanzeige während des Ladevorgangs
+# Connector-Auswahl & Pro-Connector-Status
 
-## Ist-Zustand
+## Problem
 
-Das Backend (`ocpp-central`) aktualisiert `energy_kwh` in der `charging_sessions`-Tabelle bereits bei jedem eingehenden `MeterValues`-Paket der Ladesäule. Die Berechnung `(aktueller Zählerstand − meter_start) / 1000` läuft korrekt.
+Aktuell speichert `charge_points` nur **einen** Status pro Ladepunkt. Bei Stationen mit mehreren Anschlüssen (z. B. Compleo mit 2× Typ 2) geht die Information verloren, welcher Connector frei/belegt ist. Außerdem ist `connectorId: 1` in App und Admin-Seite hardcodiert.
 
-**Problem**: Die Lade-App (`ChargingApp.tsx`) hat **keine Realtime-Subscription** auf die `charging_sessions`-Tabelle. Sessions werden einmalig beim Laden der Seite abgefragt und danach nicht mehr aktualisiert. Deshalb zeigt die App während des Ladens `0,00 kWh` an.
+## Lösung
 
-Die Backend-Detailseite (`ChargePointDetail.tsx`) nutzt dagegen `useChargingSessions(id)`, das bereits eine Realtime-Subscription enthält — dort funktioniert die Live-Anzeige.
+### 1. Neue Tabelle `charge_point_connectors`
 
-## Plan
+Migration:
 
-### 1. Realtime-Subscription in ChargingApp hinzufügen
-- In `ChargingApp.tsx` eine Supabase-Realtime-Subscription auf `charging_sessions` einrichten (analog zu `useChargingSessions.tsx`)
-- Bei jedem `UPDATE`-Event wird die lokale Session-Liste aktualisiert, sodass `energy_kwh`, Dauer und Kosten in Echtzeit steigen
+```sql
+CREATE TABLE public.charge_point_connectors (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  charge_point_id uuid NOT NULL REFERENCES charge_points(id) ON DELETE CASCADE,
+  connector_id integer NOT NULL,  -- OCPP connectorId (1, 2, …)
+  status text NOT NULL DEFAULT 'available',
+  connector_type text NOT NULL DEFAULT 'Type2',
+  max_power_kw numeric NOT NULL DEFAULT 22,
+  last_status_at timestamptz,
+  UNIQUE (charge_point_id, connector_id)
+);
 
-### 2. Aktive Session-Anzeige verbessern
-- In der aktiven Session-Karte einen visuellen Hinweis ergänzen, dass die kWh-Anzeige live aktualisiert wird (z. B. ein kleines Pulse-Icon neben dem Wert)
-- Die Dauer-Anzeige läuft bereits live (nutzt `new Date()` als Fallback), das bleibt so
+ALTER TABLE public.charge_point_connectors ENABLE ROW LEVEL SECURITY;
 
-### 3. ChargePointDetail-Seite prüfen
-- Die Detailseite hat bereits Realtime via `useChargingSessions` — dort ist keine Änderung nötig
-- Optional: Aktive Sessions in der Session-Tabelle visuell hervorheben (aktueller kWh-Stand + animiertes Icon)
+-- RLS: Lesezugriff für authentifizierte Nutzer (wie charge_points)
+CREATE POLICY "Authenticated users can read connectors"
+  ON public.charge_point_connectors FOR SELECT TO authenticated
+  USING (true);
+
+-- Admins können ändern
+CREATE POLICY "Admins can manage connectors"
+  ON public.charge_point_connectors FOR ALL TO authenticated
+  USING (public.has_role(auth.uid(), 'admin'));
+
+-- Realtime aktivieren
+ALTER PUBLICATION supabase_realtime ADD TABLE public.charge_point_connectors;
+```
+
+### 2. Backend: StatusNotification pro Connector speichern
+
+**Datei: `supabase/functions/ocpp-central/index.ts`**
+
+In `handleStatusNotification`: Zusätzlich zum bestehenden `charge_points.status`-Update einen Upsert in `charge_point_connectors` machen:
+
+```
+connectorId aus payload lesen (default 0)
+wenn connectorId > 0:
+  UPSERT in charge_point_connectors (charge_point_id, connector_id, status)
+```
+
+Der Gesamt-Status des Ladepunkts (`charge_points.status`) wird weiterhin aktualisiert — als Aggregat: wenn mindestens ein Connector "available" ist, bleibt der Ladepunkt "available".
+
+### 3. Seed-Connector-Daten bei BootNotification
+
+In `handleBootNotification` oder bei der Auto-Registrierung: Connector-Rows basierend auf `connector_count` anlegen, falls noch nicht vorhanden.
+
+### 4. Admin-Seite: Connector-Status-Anzeige
+
+**Datei: `src/pages/ChargePointDetail.tsx`**
+
+- Connector-Daten per Query laden (`charge_point_connectors` WHERE `charge_point_id = id`)
+- Realtime-Subscription auf `charge_point_connectors`
+- Im Details-Tab: Visuelle Anzeige pro Connector (Connector 1: Verfügbar ●, Connector 2: Lädt ●)
+- Bei "Ladevorgang starten": Dropdown zur Connector-Auswahl statt hardcodiertem `connectorId: 1`
+
+### 5. Lade-App: Connector-Auswahl
+
+**Datei: `src/pages/ChargingApp.tsx`**
+
+- Beim Klick auf "Laden starten" an einer Station mit `connector_count > 1`:
+  - Connector-Status laden
+  - Kurzes Auswahl-UI zeigen (z. B. zwei Buttons "Anschluss 1 ✓" / "Anschluss 2 ✓" mit Live-Status)
+  - Gewählte `connectorId` im `RemoteStartTransaction`-Body senden
+- Bei Stationen mit nur 1 Connector: Verhalten bleibt wie bisher (kein Extra-Dialog)
+
+### 6. Connector-Anzeige in Übersichtskarten
+
+**Datei: `src/components/charging/ChargePointDetailDialog.tsx`**
+
+- Pro Connector eine Statuszeile im Details-Tab
+- Farbkodiert: Grün (available), Blau (charging), Grau (unavailable), Rot (faulted)
 
 ## Technische Details
 
-**Datei: `src/pages/ChargingApp.tsx`**
-- `useEffect` mit `supabase.channel('app-sessions-realtime')` hinzufügen
-- Events: `UPDATE` auf `charging_sessions` filtern nach den Session-IDs des eingeloggten Nutzers
-- Bei Update: `setSessions(prev => prev.map(s => s.id === payload.new.id ? {...s, energy_kwh: payload.new.energy_kwh} : s))`
+| Komponente | Änderung |
+|---|---|
+| DB-Migration | Neue Tabelle `charge_point_connectors` + RLS + Realtime |
+| `ocpp-central` | `handleStatusNotification` → Upsert Connector-Status |
+| `ocpp-central` | Auto-Seed Connectors bei Registrierung |
+| `ChargePointDetail.tsx` | Connector-Grid + Dropdown bei Remote-Start |
+| `ChargingApp.tsx` | Connector-Auswahl-UI bei multi-connector Stationen |
+| `ChargePointDetailDialog.tsx` | Connector-Status-Anzeige |
+| `useChargePoints.tsx` | Optional: Connector-Daten mit-laden |
 
-**Keine DB-Änderungen nötig** — `charging_sessions` ist bereits für Realtime aktiviert (wird von `useChargingSessions` genutzt).
+## Nicht betroffen
 
-**Keine Backend-Änderungen nötig** — MeterValues-Verarbeitung funktioniert bereits korrekt.
-
-## Aufwand
-Gering (1 Datei, ca. 20 Zeilen Code).
+- Bestehende Sessions (haben bereits `connector_id`)
+- OCPP-WS-Proxy (leitet `connectorId` bereits korrekt durch)
+- Tarif-/Abrechnungslogik
 
