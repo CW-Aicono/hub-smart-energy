@@ -107,3 +107,4 @@ export function useChargingInvoices() {
   });
 
   return { invoices, isLoading, createInvoice, generateInvoices, sendInvoices, finalizeInvoice };
+}
