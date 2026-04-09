@@ -719,48 +719,131 @@ export type Database = {
         }
         Relationships: []
       }
+      charging_invoice_counter: {
+        Row: {
+          last_number: number
+          tenant_id: string
+          year: number
+        }
+        Insert: {
+          last_number?: number
+          tenant_id: string
+          year: number
+        }
+        Update: {
+          last_number?: number
+          tenant_id?: string
+          year?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "charging_invoice_counter_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      charging_invoice_sessions: {
+        Row: {
+          created_at: string
+          id: string
+          invoice_id: string
+          session_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          invoice_id: string
+          session_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          invoice_id?: string
+          session_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "charging_invoice_sessions_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "charging_invoices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "charging_invoice_sessions_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "charging_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       charging_invoices: {
         Row: {
           created_at: string
           currency: string
           id: string
           idle_fee_amount: number
+          invoice_date: string
           invoice_number: string | null
           issued_at: string | null
-          session_id: string
+          net_amount: number
+          period_end: string | null
+          period_start: string | null
+          session_id: string | null
           status: string
           tariff_id: string | null
+          tax_amount: number
+          tax_rate_percent: number
           tenant_id: string
           total_amount: number
           total_energy_kwh: number
+          user_id: string | null
         }
         Insert: {
           created_at?: string
           currency?: string
           id?: string
           idle_fee_amount?: number
+          invoice_date?: string
           invoice_number?: string | null
           issued_at?: string | null
-          session_id: string
+          net_amount?: number
+          period_end?: string | null
+          period_start?: string | null
+          session_id?: string | null
           status?: string
           tariff_id?: string | null
+          tax_amount?: number
+          tax_rate_percent?: number
           tenant_id: string
           total_amount?: number
           total_energy_kwh?: number
+          user_id?: string | null
         }
         Update: {
           created_at?: string
           currency?: string
           id?: string
           idle_fee_amount?: number
+          invoice_date?: string
           invoice_number?: string | null
           issued_at?: string | null
-          session_id?: string
+          net_amount?: number
+          period_end?: string | null
+          period_start?: string | null
+          session_id?: string | null
           status?: string
           tariff_id?: string | null
+          tax_amount?: number
+          tax_rate_percent?: number
           tenant_id?: string
           total_amount?: number
           total_energy_kwh?: number
+          user_id?: string | null
         }
         Relationships: [
           {
@@ -782,6 +865,20 @@ export type Database = {
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "charging_invoices_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "charging_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "charging_invoices_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "charging_users_public"
             referencedColumns: ["id"]
           },
         ]
@@ -863,6 +960,7 @@ export type Database = {
           is_active: boolean
           name: string
           price_per_kwh: number
+          tax_rate_percent: number
           tenant_id: string
           updated_at: string
         }
@@ -876,6 +974,7 @@ export type Database = {
           is_active?: boolean
           name: string
           price_per_kwh?: number
+          tax_rate_percent?: number
           tenant_id: string
           updated_at?: string
         }
@@ -889,6 +988,7 @@ export type Database = {
           is_active?: boolean
           name?: string
           price_per_kwh?: number
+          tax_rate_percent?: number
           tenant_id?: string
           updated_at?: string
         }
@@ -909,6 +1009,7 @@ export type Database = {
           id: string
           is_app_user: boolean
           name: string
+          tariff_id: string | null
           tenant_id: string
           updated_at: string
         }
@@ -918,6 +1019,7 @@ export type Database = {
           id?: string
           is_app_user?: boolean
           name: string
+          tariff_id?: string | null
           tenant_id: string
           updated_at?: string
         }
@@ -927,10 +1029,18 @@ export type Database = {
           id?: string
           is_app_user?: boolean
           name?: string
+          tariff_id?: string | null
           tenant_id?: string
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "charging_user_groups_tariff_id_fkey"
+            columns: ["tariff_id"]
+            isOneToOne: false
+            referencedRelation: "charging_tariffs"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "charging_user_groups_tenant_id_fkey"
             columns: ["tenant_id"]
@@ -953,6 +1063,7 @@ export type Database = {
           phone: string | null
           rfid_tag: string | null
           status: string
+          tariff_id: string | null
           tenant_id: string
           updated_at: string
         }
@@ -968,6 +1079,7 @@ export type Database = {
           phone?: string | null
           rfid_tag?: string | null
           status?: string
+          tariff_id?: string | null
           tenant_id: string
           updated_at?: string
         }
@@ -983,6 +1095,7 @@ export type Database = {
           phone?: string | null
           rfid_tag?: string | null
           status?: string
+          tariff_id?: string | null
           tenant_id?: string
           updated_at?: string
         }
@@ -992,6 +1105,13 @@ export type Database = {
             columns: ["group_id"]
             isOneToOne: false
             referencedRelation: "charging_user_groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "charging_users_tariff_id_fkey"
+            columns: ["tariff_id"]
+            isOneToOne: false
+            referencedRelation: "charging_tariffs"
             referencedColumns: ["id"]
           },
           {
@@ -5148,6 +5268,10 @@ export type Database = {
         Returns: boolean
       }
       is_own_profile: { Args: { profile_user_id: string }; Returns: boolean }
+      next_charging_invoice_number: {
+        Args: { p_tenant_id: string; p_year: number }
+        Returns: string
+      }
     }
     Enums: {
       app_role: "admin" | "user" | "super_admin"
