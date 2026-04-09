@@ -33,7 +33,8 @@ const ChargingBilling = () => {
   const { sessions, isLoading: sessionsLoading } = useChargingSessions();
   const resolveTag = useIdTagResolver();
   const { tariffs, isLoading: tariffsLoading, addTariff, updateTariff, deleteTariff } = useChargingTariffs();
-  const { invoices, generateInvoices, sendInvoices } = useChargingInvoices();
+  const { invoices, generateInvoices, sendInvoices, finalizeInvoice } = useChargingInvoices();
+  const [selectedInvoice, setSelectedInvoice] = useState<any | null>(null);
   const { chargePoints } = useChargePoints();
 
   const [tariffOpen, setTariffOpen] = useState(false);
