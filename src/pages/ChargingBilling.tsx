@@ -33,7 +33,7 @@ const ChargingBilling = () => {
   const { sessions, isLoading: sessionsLoading } = useChargingSessions();
   const resolveTag = useIdTagResolver();
   const { tariffs, isLoading: tariffsLoading, addTariff, updateTariff, deleteTariff } = useChargingTariffs();
-  const { invoices, generateInvoices, sendInvoices, finalizeInvoice } = useChargingInvoices();
+  const { invoices, generateInvoices, sendInvoices, finalizeInvoice, markAsPaid } = useChargingInvoices();
   const [selectedInvoice, setSelectedInvoice] = useState<any | null>(null);
   const { chargePoints } = useChargePoints();
 
@@ -468,6 +468,19 @@ const ChargingBilling = () => {
                       >
                         <FileText className="h-4 w-4 mr-2" />
                         {finalizeInvoice.isPending ? "Wird ausgestellt…" : "Fertigstellen"}
+                      </Button>
+                    )}
+                    {selectedInvoice?.status === "issued" && isAdmin && (
+                      <Button
+                        variant="default"
+                        onClick={() => {
+                          markAsPaid.mutate(selectedInvoice.id);
+                          setSelectedInvoice(null);
+                        }}
+                        disabled={markAsPaid.isPending}
+                      >
+                        <Euro className="h-4 w-4 mr-2" />
+                        {markAsPaid.isPending ? "Wird markiert…" : "Als bezahlt markieren"}
                       </Button>
                     )}
                   </DialogFooter>

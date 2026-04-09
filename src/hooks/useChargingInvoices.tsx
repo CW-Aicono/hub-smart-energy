@@ -106,5 +106,20 @@ export function useChargingInvoices() {
     onError: (e: Error) => toast({ title: "Fehler", description: e.message, variant: "destructive" }),
   });
 
-  return { invoices, isLoading, createInvoice, generateInvoices, sendInvoices, finalizeInvoice };
+  const markAsPaid = useMutation({
+    mutationFn: async (invoiceId: string) => {
+      const { error } = await supabase
+        .from("charging_invoices")
+        .update({ status: "paid" })
+        .eq("id", invoiceId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["charging-invoices"] });
+      toast({ title: "Rechnung als bezahlt markiert" });
+    },
+    onError: (e: Error) => toast({ title: "Fehler", description: e.message, variant: "destructive" }),
+  });
+
+  return { invoices, isLoading, createInvoice, generateInvoices, sendInvoices, finalizeInvoice, markAsPaid };
 }
