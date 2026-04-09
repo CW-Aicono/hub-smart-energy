@@ -1463,6 +1463,33 @@ const ChargingApp = () => {
     loadData();
   }, [user]);
 
+  // Realtime subscription for live energy updates during charging
+  useEffect(() => {
+    if (!user) return;
+    const channel = supabase
+      .channel("app-sessions-realtime")
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "charging_sessions" },
+        (payload) => {
+          const updated = payload.new as AppSession;
+          setSessions((prev) =>
+            prev.map((s) => (s.id === updated.id ? { ...s, ...updated } : s))
+          );
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "charging_sessions" },
+        (payload) => {
+          const inserted = payload.new as AppSession;
+          setSessions((prev) => [inserted, ...prev]);
+        }
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [user]);
+
   // Handle deep link
   useEffect(() => {
     const cpParam = searchParams.get("cp");
