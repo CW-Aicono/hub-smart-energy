@@ -1,41 +1,40 @@
 
 
-# Fix: 30-Minuten-Peaks in Loxone-Leistungsdaten
+# Live-Energieanzeige während des Ladevorgangs
 
-## Ursache
+## Ist-Zustand
 
-Die Loxone Meter-Controls aktualisieren intern ihre Periodenzähler (Rd, Rm, Ry) exakt alle 30 Minuten (:00 und :30). Während dieser Neuberechnung kann der "Pf" (actual power) Output kurzzeitig einen falschen Wert liefern — typischerweise einen Spike, der in der Loxone-App nicht sichtbar ist, weil diese die Daten anders glättet.
+Das Backend (`ocpp-central`) aktualisiert `energy_kwh` in der `charging_sessions`-Tabelle bereits bei jedem eingehenden `MeterValues`-Paket der Ladesäule. Die Berechnung `(aktueller Zählerstand − meter_start) / 1000` läuft korrekt.
 
-Die bestehende Spike-Detection (`SPIKE_FACTOR = 3.0`) greift nicht zuverlässig, weil:
-- Die Spikes je nach Zähler unter dem 3×-Schwellenwert liegen können
-- Das Baseline-Minimum von 5 kW bei kleinen Zählern (z.B. Eigenverbrauch nahe 0) überhaupt nicht greift
+**Problem**: Die Lade-App (`ChargingApp.tsx`) hat **keine Realtime-Subscription** auf die `charging_sessions`-Tabelle. Sessions werden einmalig beim Laden der Seite abgefragt und danach nicht mehr aktualisiert. Deshalb zeigt die App während des Ladens `0,00 kWh` an.
 
-## Lösung
+Die Backend-Detailseite (`ChargePointDetail.tsx`) nutzt dagegen `useChargingSessions(id)`, das bereits eine Realtime-Subscription enthält — dort funktioniert die Live-Anzeige.
 
-**Datei:** `supabase/functions/loxone-api/index.ts`
+## Plan
 
-Einen **zeitbasierten Plausibilitätsfilter** für die :00/:30-Grenzen hinzufügen:
+### 1. Realtime-Subscription in ChargingApp hinzufügen
+- In `ChargingApp.tsx` eine Supabase-Realtime-Subscription auf `charging_sessions` einrichten (analog zu `useChargingSessions.tsx`)
+- Bei jedem `UPDATE`-Event wird die lokale Session-Liste aktualisiert, sodass `energy_kwh`, Dauer und Kosten in Echtzeit steigen
 
-1. **Prüfung**: Wenn der aktuelle Zeitpunkt innerhalb von ±1 Minute einer 30-Minuten-Grenze liegt (Minuten 0, 1, 29, 30, 31, 59), wird ein **verschärfter Spike-Check** angewandt
-2. **Verschärfter Check**: An diesen Zeitpunkten wird `SPIKE_FACTOR` auf **1.8** reduziert (statt 3.0) und `SPIKE_BASELINE_MIN` auf **1 kW** (statt 5 kW)
-3. **Fallback**: Wenn weniger als 3 historische Werte vorliegen (kein Median möglich), wird der Wert trotzdem durchgelassen — der Filter greift nur bei ausreichend Baseline-Daten
+### 2. Aktive Session-Anzeige verbessern
+- In der aktiven Session-Karte einen visuellen Hinweis ergänzen, dass die kWh-Anzeige live aktualisiert wird (z. B. ein kleines Pulse-Icon neben dem Wert)
+- Die Dauer-Anzeige läuft bereits live (nutzt `new Date()` als Fallback), das bleibt so
 
-**Pseudocode:**
-```typescript
-const minute = now.getMinutes();
-const isNearBoundary = minute <= 1 || (minute >= 29 && minute <= 31) || minute >= 59;
+### 3. ChargePointDetail-Seite prüfen
+- Die Detailseite hat bereits Realtime via `useChargingSessions` — dort ist keine Änderung nötig
+- Optional: Aktive Sessions in der Session-Tabelle visuell hervorheben (aktueller kWh-Stand + animiertes Icon)
 
-const effectiveSpikeFactor = isNearBoundary ? 1.8 : SPIKE_FACTOR;
-const effectiveBaselineMin = isNearBoundary ? 1.0 : SPIKE_BASELINE_MIN;
+## Technische Details
 
-const isSpike = recentVals.length >= 3 
-  && median >= effectiveBaselineMin 
-  && absForSpike > median * effectiveSpikeFactor;
-```
+**Datei: `src/pages/ChargingApp.tsx`**
+- `useEffect` mit `supabase.channel('app-sessions-realtime')` hinzufügen
+- Events: `UPDATE` auf `charging_sessions` filtern nach den Session-IDs des eingeloggten Nutzers
+- Bei Update: `setSessions(prev => prev.map(s => s.id === payload.new.id ? {...s, energy_kwh: payload.new.energy_kwh} : s))`
 
-## Auswirkung
+**Keine DB-Änderungen nötig** — `charging_sessions` ist bereits für Realtime aktiviert (wird von `useChargingSessions` genutzt).
 
-- Eliminiert die 30-Minuten-Peaks ohne echte Leistungswerte zu unterdrücken
-- Der verschärfte Faktor 1.8× an den Grenzen ist konservativ genug, um echte Laständerungen (z.B. Wärmepumpe schaltet ein) nicht fälschlich zu filtern
-- Keine Änderung am Verhalten für Zeitpunkte abseits der 30-Minuten-Grenzen
+**Keine Backend-Änderungen nötig** — MeterValues-Verarbeitung funktioniert bereits korrekt.
+
+## Aufwand
+Gering (1 Datei, ca. 20 Zeilen Code).
 
