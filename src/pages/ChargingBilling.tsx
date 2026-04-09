@@ -372,7 +372,7 @@ const ChargingBilling = () => {
                       </TableHeader>
                       <TableBody>
                         {invoices.map((inv) => (
-                          <TableRow key={inv.id}>
+                          <TableRow key={inv.id} className="cursor-pointer hover:bg-muted/50" onClick={() => setSelectedInvoice(inv)}>
                             <TableCell className="font-mono">{inv.invoice_number || "—"}</TableCell>
                             <TableCell>{inv.invoice_date ? format(new Date(inv.invoice_date), "dd.MM.yyyy") : format(new Date(inv.created_at), "dd.MM.yyyy")}</TableCell>
                             <TableCell className="text-sm">
@@ -392,7 +392,87 @@ const ChargingBilling = () => {
                   )}
                 </CardContent>
               </Card>
-            </TabsContent>
+
+              {/* Invoice Preview Dialog */}
+              <Dialog open={!!selectedInvoice} onOpenChange={(open) => { if (!open) setSelectedInvoice(null); }}>
+                <DialogContent className="max-w-lg">
+                  <DialogHeader>
+                    <DialogTitle>Rechnungsvorschau</DialogTitle>
+                  </DialogHeader>
+                  {selectedInvoice && (
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-2 gap-4 text-sm">
+                        <div>
+                          <p className="text-muted-foreground text-xs uppercase tracking-wide mb-1">Rechnungsnummer</p>
+                          <p className="font-mono font-semibold">{selectedInvoice.invoice_number || "—"}</p>
+                        </div>
+                        <div>
+                          <p className="text-muted-foreground text-xs uppercase tracking-wide mb-1">Status</p>
+                          <Badge variant={selectedInvoice.status === "paid" ? "default" : selectedInvoice.status === "issued" ? "secondary" : "outline"}>
+                            {selectedInvoice.status === "paid" ? "Bezahlt" : selectedInvoice.status === "issued" ? "Ausgestellt" : "Entwurf"}
+                          </Badge>
+                        </div>
+                        <div>
+                          <p className="text-muted-foreground text-xs uppercase tracking-wide mb-1">Rechnungsdatum</p>
+                          <p>{selectedInvoice.invoice_date ? format(new Date(selectedInvoice.invoice_date), "dd.MM.yyyy") : "—"}</p>
+                        </div>
+                        <div>
+                          <p className="text-muted-foreground text-xs uppercase tracking-wide mb-1">Zeitraum</p>
+                          <p>{selectedInvoice.period_start && selectedInvoice.period_end
+                            ? `${format(new Date(selectedInvoice.period_start), "dd.MM.")} – ${format(new Date(selectedInvoice.period_end), "dd.MM.yyyy")}`
+                            : "—"}</p>
+                        </div>
+                      </div>
+
+                      <div className="border rounded-lg p-4 space-y-2">
+                        <div className="flex justify-between text-sm">
+                          <span>Energie</span>
+                          <span>{fmtKwh(selectedInvoice.total_energy_kwh)}</span>
+                        </div>
+                        {selectedInvoice.idle_fee_amount > 0 && (
+                          <div className="flex justify-between text-sm text-destructive">
+                            <span>Blockiergebühr</span>
+                            <span>{fmtCurrency(selectedInvoice.idle_fee_amount)}</span>
+                          </div>
+                        )}
+                        <div className="flex justify-between text-sm border-t pt-2">
+                          <span>Nettobetrag</span>
+                          <span>{fmtCurrency(selectedInvoice.net_amount || (selectedInvoice.total_amount - (selectedInvoice.tax_amount || 0)))}</span>
+                        </div>
+                        <div className="flex justify-between text-sm text-muted-foreground">
+                          <span>MwSt ({fmtNum(selectedInvoice.tax_rate_percent, 0)} %)</span>
+                          <span>{fmtCurrency(selectedInvoice.tax_amount || 0)}</span>
+                        </div>
+                        <div className="flex justify-between font-semibold text-base border-t pt-2">
+                          <span>Gesamtbetrag (brutto)</span>
+                          <span>{fmtCurrency(selectedInvoice.total_amount)}</span>
+                        </div>
+                      </div>
+
+                      {selectedInvoice.issued_at && (
+                        <p className="text-xs text-muted-foreground">
+                          Ausgestellt am {format(new Date(selectedInvoice.issued_at), "dd.MM.yyyy HH:mm")}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                  <DialogFooter>
+                    <Button variant="outline" onClick={() => setSelectedInvoice(null)}>Schließen</Button>
+                    {selectedInvoice?.status === "draft" && isAdmin && (
+                      <Button
+                        onClick={() => {
+                          finalizeInvoice.mutate(selectedInvoice.id);
+                          setSelectedInvoice(null);
+                        }}
+                        disabled={finalizeInvoice.isPending}
+                      >
+                        <FileText className="h-4 w-4 mr-2" />
+                        {finalizeInvoice.isPending ? "Wird ausgestellt…" : "Fertigstellen"}
+                      </Button>
+                    )}
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
 
             {/* Users Tab */}
             <TabsContent value="users">
