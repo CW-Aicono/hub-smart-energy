@@ -57,6 +57,7 @@ export default function ChargePointDetailDialog({
   const [uploading, setUploading] = useState(false);
   const [geocoding, setGeocoding] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const { connectors } = useChargePointConnectors(cp?.id ?? undefined);
 
   const startEdit = () => {
     if (!cp) return;
