@@ -351,12 +351,11 @@ serve(async (req) => {
                 total_amount: totalAmount,
                 idle_fee_amount: totalIdleFee,
                 currency,
-                status: "issued",
+                status: "draft",
                 invoice_number: invoiceNumber,
                 invoice_date: invoiceDate,
                 period_start: period.from,
                 period_end: period.to,
-                issued_at: new Date().toISOString(),
               }).select("id").single();
 
               if (invErr) {
