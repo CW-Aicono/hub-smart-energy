@@ -203,6 +203,14 @@ export default function ChargePointDetailDialog({
               )}
             </div>
 
+            {/* Connector Status */}
+            {connectors.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-sm font-medium text-muted-foreground">Anschluss-Status</p>
+                <ConnectorStatusGrid connectors={connectors} />
+              </div>
+            )}
+
             {/* Details */}
             {editing ? (
               <div className="space-y-4">
