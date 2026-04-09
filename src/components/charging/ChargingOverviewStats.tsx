@@ -67,9 +67,11 @@ export default function ChargingOverviewStats({ chargePoints, sessions }: Props)
         return sum + (effectiveEnd.getTime() - effectiveStart.getTime()) / 3600000;
       }, 0));
 
-      const errorHours = isToday
-        ? chargePoints.filter((cp) => cp.status === "faulted").length * hoursInDay
-        : 0;
+      // Approximate: project current status onto all days (no historic status log)
+      const errorCpCount = chargePoints.filter(
+        (cp) => cp.status === "faulted" || cp.status === "offline"
+      ).length;
+      const errorHours = errorCpCount * hoursInDay;
 
       days.push({
         day: dayLabel,

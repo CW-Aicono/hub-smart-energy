@@ -209,8 +209,8 @@ const ChargePointDetail = () => {
         return sum + (effectiveEnd.getTime() - effectiveStart.getTime()) / 3600000;
       }, 0));
 
-      // Only apply error hours for today's live status – historic status is unknown
-      const errorHours = isToday && cp && cp.status === "faulted" ? hoursInDay : 0;
+      // Approximate: project current status onto all days (no historic status log)
+      const errorHours = cp && (cp.status === "faulted" || cp.status === "offline") ? hoursInDay : 0;
 
       days.push({
         day: dayLabel,
