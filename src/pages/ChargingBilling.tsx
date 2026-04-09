@@ -473,6 +473,7 @@ const ChargingBilling = () => {
                   </DialogFooter>
                 </DialogContent>
               </Dialog>
+            </TabsContent>
 
             {/* Users Tab */}
             <TabsContent value="users">
