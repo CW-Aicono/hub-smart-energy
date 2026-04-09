@@ -91,5 +91,20 @@ export function useChargingInvoices() {
     onError: (e: Error) => toast({ title: "Fehler", description: e.message, variant: "destructive" }),
   });
 
-  return { invoices, isLoading, createInvoice, generateInvoices, sendInvoices };
+  const finalizeInvoice = useMutation({
+    mutationFn: async (invoiceId: string) => {
+      const { error } = await supabase
+        .from("charging_invoices")
+        .update({ status: "issued", issued_at: new Date().toISOString() })
+        .eq("id", invoiceId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["charging-invoices"] });
+      toast({ title: "Rechnung ausgestellt" });
+    },
+    onError: (e: Error) => toast({ title: "Fehler", description: e.message, variant: "destructive" }),
+  });
+
+  return { invoices, isLoading, createInvoice, generateInvoices, sendInvoices, finalizeInvoice };
 }
