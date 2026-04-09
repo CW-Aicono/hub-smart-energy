@@ -112,13 +112,13 @@ const ChargingUsersTab = () => {
     setDeleteTarget(null);
   };
 
-  const tariffSelect = (value: string, onChange: (v: string) => void, label = "Tarif") => (
+  const tariffSelect = (value: string, onChange: (v: string) => void, label = "Tarif", required = false) => (
     <div>
-      <Label>{label}</Label>
+      <Label>{label}{required ? " *" : ""}</Label>
       <Select value={value} onValueChange={(v) => onChange(v === "__none__" ? "" : v)}>
-        <SelectTrigger><SelectValue placeholder="Standard-Tarif" /></SelectTrigger>
+        <SelectTrigger><SelectValue placeholder={required ? "Tarif wählen…" : "Kein individueller Tarif"} /></SelectTrigger>
         <SelectContent>
-          <SelectItem value="__none__">Standard-Tarif</SelectItem>
+          {!required && <SelectItem value="__none__">Kein individueller Tarif</SelectItem>}
           {tariffs.map((t) => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
         </SelectContent>
       </Select>
@@ -277,11 +277,10 @@ const ChargingUsersTab = () => {
             <div className="grid grid-cols-2 gap-4">
               <div><Label>{t("cu.rfidTag" as any)}</Label><Input value={userForm.rfid_tag} onChange={(e) => setUserForm({ ...userForm, rfid_tag: e.target.value })} placeholder="z. B. AB12CD34" /></div>
               <div>
-                <Label>{t("cu.userGroup" as any)}</Label>
-                <Select value={userForm.group_id} onValueChange={(v) => setUserForm({ ...userForm, group_id: v === "__none__" ? "" : v })}>
-                  <SelectTrigger><SelectValue placeholder={t("cu.noGroup" as any)} /></SelectTrigger>
+                <Label>{t("cu.userGroup" as any)} *</Label>
+                <Select value={userForm.group_id} onValueChange={(v) => setUserForm({ ...userForm, group_id: v })}>
+                  <SelectTrigger><SelectValue placeholder="Gruppe wählen…" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="__none__">{t("cu.noGroup" as any)}</SelectItem>
                     {groups.map((g) => <SelectItem key={g.id} value={g.id}>{g.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
@@ -294,7 +293,7 @@ const ChargingUsersTab = () => {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setUserDialogOpen(false)}>{t("common.cancel")}</Button>
-            <Button onClick={handleSaveUser} disabled={!userForm.name}>{editingUser ? t("common.save") : t("common.create")}</Button>
+            <Button onClick={handleSaveUser} disabled={!userForm.name || !userForm.group_id}>{editingUser ? t("common.save") : t("common.create")}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -308,7 +307,7 @@ const ChargingUsersTab = () => {
           <div className="space-y-4">
             <div><Label>{t("common.name" as any)} *</Label><Input value={groupForm.name} onChange={(e) => setGroupForm({ ...groupForm, name: e.target.value })} /></div>
             <div><Label>{t("common.description" as any)}</Label><Textarea value={groupForm.description} onChange={(e) => setGroupForm({ ...groupForm, description: e.target.value })} rows={2} /></div>
-            {tariffSelect(groupForm.tariff_id, (v) => setGroupForm({ ...groupForm, tariff_id: v }), "Gruppen-Tarif")}
+            {tariffSelect(groupForm.tariff_id, (v) => setGroupForm({ ...groupForm, tariff_id: v }), "Gruppen-Tarif", true)}
             <div className="flex items-center justify-between">
               <Label>{t("cu.appUserGroup" as any)}</Label>
               <Switch checked={groupForm.is_app_user} onCheckedChange={(v) => setGroupForm({ ...groupForm, is_app_user: v })} />
@@ -316,7 +315,7 @@ const ChargingUsersTab = () => {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setGroupDialogOpen(false)}>{t("common.cancel")}</Button>
-            <Button onClick={handleSaveGroup} disabled={!groupForm.name}>{editingGroup ? t("common.save") : t("common.create")}</Button>
+            <Button onClick={handleSaveGroup} disabled={!groupForm.name || !groupForm.tariff_id}>{editingGroup ? t("common.save") : t("common.create")}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
