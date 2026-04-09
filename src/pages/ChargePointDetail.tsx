@@ -583,6 +583,31 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
 
                 {/* Right sidebar */}
                 <div className="space-y-6">
+                  {/* Connector Status */}
+                  {connectors.length > 0 && (
+                    <Card>
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-base flex items-center gap-2">
+                          <PlugZap className="h-4 w-4" />
+                          Anschlüsse
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <ConnectorStatusGrid
+                          connectors={connectors}
+                          selectedConnectorId={selectedConnectorId}
+                          onSelectConnector={setSelectedConnectorId}
+                          selectable={isAdmin}
+                        />
+                        {isAdmin && connectors.length > 1 && (
+                          <p className="text-[10px] text-muted-foreground mt-2">
+                            Anschluss {selectedConnectorId} ausgewählt für Fernbefehle
+                          </p>
+                        )}
+                      </CardContent>
+                    </Card>
+                  )}
+
                   {/* Remote actions */}
                   {isAdmin && (
                     <Card>
