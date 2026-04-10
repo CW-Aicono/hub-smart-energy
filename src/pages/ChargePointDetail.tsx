@@ -612,6 +612,7 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
                           onSelectConnector={setSelectedConnectorId}
                           selectable={isAdmin}
                           wsConnected={cp?.ws_connected ?? false}
+                          editable={isAdmin}
                         />
                         {isAdmin && connectors.length > 1 && (
                           <p className="text-[10px] text-muted-foreground mt-2">
