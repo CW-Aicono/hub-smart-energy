@@ -387,15 +387,15 @@ const Copilot = () => {
                     <LocationSelector />
                     <div className="space-y-2">
                       <Label>Verfügbare Dachfläche (m²)</Label>
-                      <Input type="number" placeholder="z.B. 500" value={roofArea} onChange={(e) => setRoofArea(e.target.value)} />
+                      <Input type="text" inputMode="numeric" pattern="[0-9]*" placeholder="z.B. 500" value={roofArea} onChange={(e) => setRoofArea(e.target.value.replace(/\D/g, ""))} />
                     </div>
                     <div className="space-y-2">
                       <Label>Netzanschlussleistung (kVA)</Label>
-                      <Input type="number" placeholder="z.B. 400" value={gridConnection} onChange={(e) => setGridConnection(e.target.value)} />
+                      <Input type="text" inputMode="numeric" pattern="[0-9]*" placeholder="z.B. 400" value={gridConnection} onChange={(e) => setGridConnection(e.target.value.replace(/\D/g, ""))} />
                     </div>
                     <div className="space-y-2">
                       <Label>Budget-Obergrenze (€)</Label>
-                      <Input type="number" placeholder="optional" value={budgetLimit} onChange={(e) => setBudgetLimit(e.target.value)} />
+                      <Input type="text" inputMode="numeric" pattern="[0-9]*" placeholder="optional" value={budgetLimit} onChange={(e) => setBudgetLimit(e.target.value.replace(/\D/g, ""))} />
                     </div>
                     <Button className="w-full" disabled={!selectedLocationId || isAnalyzing} onClick={handleAnalyze}>
                       {isAnalyzing ? (<><Loader2 className="mr-2 h-4 w-4 animate-spin" />Analyse läuft...</>) : (<><Sparkles className="mr-2 h-4 w-4" />Investitions-Analyse starten</>)}
