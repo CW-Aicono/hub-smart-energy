@@ -455,7 +455,19 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
                   </Badge>
                 )}
               </div>
-              <ChargePointQrCode ocppId={cp.ocpp_id} name={cp.name} address={cp.address} variant="button" />
+              <div className="flex items-center gap-1 flex-wrap">
+                <ChargePointQrCode ocppId={cp.ocpp_id} name={cp.name} address={cp.address} variant="button" />
+                {connectors.length > 1 && connectors.map((c) => (
+                  <ChargePointQrCode
+                    key={c.connector_id}
+                    ocppId={cp.ocpp_id}
+                    name={cp.name}
+                    address={cp.address}
+                    connectorId={c.connector_id}
+                    variant="button"
+                  />
+                ))}
+              </div>
             </div>
           </div>
 

@@ -1806,7 +1806,7 @@ const ChargingApp = () => {
           <div className="flex-1 flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
         ) : (
           <>
-            {tab === "map" && <div className="flex-1 flex flex-col" style={{ minHeight: 0 }}><MapTab chargePoints={chargePoints} onStartCharge={handleStartCharge} initialCpId={initialCpOcppId} onInitialCpHandled={() => setInitialCpOcppId(null)} /></div>}
+            {tab === "map" && <div className="flex-1 flex flex-col" style={{ minHeight: 0 }}><MapTab chargePoints={chargePoints} onStartCharge={handleStartCharge} initialCpId={initialCpOcppId} initialConnectorId={initialConnectorId} onInitialCpHandled={() => { setInitialCpOcppId(null); setInitialConnectorId(null); }} /></div>}
             {tab === "qr" && <QrScannerTab onScanned={handleQrScanned} />}
             {tab === "history" && <HistoryTab sessions={sessions} chargePoints={chargePoints} tariff={tariff} onStopCharge={handleStopCharge} />}
             {tab === "invoices" && <InvoicesTab invoices={invoices} sessions={sessions} chargePoints={chargePoints} tariff={tariff} tenantInfo={tenantInfo} userEmail={user.email} />}
