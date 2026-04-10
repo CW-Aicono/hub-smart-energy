@@ -470,6 +470,7 @@ export type Database = {
           id: string
           last_status_at: string | null
           max_power_kw: number
+          name: string | null
           status: string
           updated_at: string
         }
@@ -481,6 +482,7 @@ export type Database = {
           id?: string
           last_status_at?: string | null
           max_power_kw?: number
+          name?: string | null
           status?: string
           updated_at?: string
         }
@@ -492,6 +494,7 @@ export type Database = {
           id?: string
           last_status_at?: string | null
           max_power_kw?: number
+          name?: string | null
           status?: string
           updated_at?: string
         }
