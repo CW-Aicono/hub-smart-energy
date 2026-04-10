@@ -44,7 +44,7 @@ export default function ChargePointQrCode({ ocppId, name, address, connectorId, 
         <!DOCTYPE html>
         <html>
         <head>
-          <title>QR-Code: ${name}</title>
+          <title>QR-Code: ${displayName}</title>
           <style>
             body { font-family: system-ui, sans-serif; text-align: center; padding: 40px; }
             .qr-container { display: inline-block; border: 2px solid #e5e7eb; border-radius: 16px; padding: 32px; }
@@ -58,7 +58,7 @@ export default function ChargePointQrCode({ ocppId, name, address, connectorId, 
         </head>
         <body>
           <div class="qr-container">
-            <h1>${name}</h1>
+            <h1>${displayName}</h1>
             ${address ? `<p class="address">${address}</p>` : '<p class="address">&nbsp;</p>'}
             <img src="${dataUrl}" width="300" height="300" />
             <div class="ocpp-id">${ocppId}</div>
@@ -87,7 +87,7 @@ export default function ChargePointQrCode({ ocppId, name, address, connectorId, 
       </DialogTrigger>
       <DialogContent className="max-w-sm">
         <DialogHeader>
-          <DialogTitle className="text-center">QR-Code: {name}</DialogTitle>
+          <DialogTitle className="text-center">QR-Code: {displayName}</DialogTitle>
         </DialogHeader>
         <div className="flex flex-col items-center space-y-4">
           {address && <p className="text-sm text-muted-foreground">{address}</p>}
