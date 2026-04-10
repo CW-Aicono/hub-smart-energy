@@ -620,6 +620,45 @@ function MapTab({ chargePoints, onStartCharge, initialCpId, initialConnectorId, 
                 </div>
               </div>
 
+              {/* Connector selection for multi-connector stations */}
+              {drawerConnectors.length > 1 && selectedCp.isAppCompatible !== false && (
+                <div className="mb-4 space-y-2">
+                  <p className="text-xs font-medium text-muted-foreground">Anschluss wählen</p>
+                  <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${Math.min(drawerConnectors.length, 3)}, 1fr)` }}>
+                    {drawerConnectors.map((c) => {
+                      const isSelected = drawerConnectorId === c.connector_id;
+                      const isAvailable = c.status === "available";
+                      return (
+                        <button
+                          key={c.connector_id}
+                          type="button"
+                          onClick={() => isAvailable && setDrawerConnectorId(c.connector_id)}
+                          disabled={!isAvailable}
+                          className={`
+                            border rounded-lg p-2.5 text-center transition-all
+                            ${isAvailable ? "cursor-pointer" : "cursor-not-allowed opacity-60"}
+                            ${isSelected ? "border-primary ring-2 ring-primary/20 bg-primary/5" : "border-border"}
+                          `}
+                        >
+                          <div className="flex items-center justify-center gap-1.5 mb-0.5">
+                            <span className={`h-2 w-2 rounded-full ${
+                              c.status === "available" ? "bg-emerald-500" :
+                              c.status === "charging" ? "bg-blue-500" :
+                              c.status === "faulted" ? "bg-destructive" : "bg-muted-foreground"
+                            }`} />
+                            {isSelected && <Check className="h-3.5 w-3.5 text-primary" />}
+                          </div>
+                          <p className="text-xs font-medium">Anschluss {c.connector_id}</p>
+                          <p className="text-[10px] text-muted-foreground">
+                            {c.status === "available" ? "Frei" : c.status === "charging" ? "Lädt" : c.status === "faulted" ? "Gestört" : c.status}
+                          </p>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               {selectedCp.vendor && (
                 <p className="text-sm text-muted-foreground mb-4">
                   {selectedCp.vendor}{selectedCp.model ? ` — ${selectedCp.model}` : ""}
@@ -640,7 +679,7 @@ function MapTab({ chargePoints, onStartCharge, initialCpId, initialConnectorId, 
                   <Button
                     className="flex-1 h-12"
                     disabled={selectedCp.status !== "available"}
-                    onClick={() => { onStartCharge(selectedCp.id); setDrawerOpen(false); }}
+                    onClick={() => { onStartCharge(selectedCp.id, drawerConnectors.length > 1 ? (drawerConnectorId || 1) : undefined); setDrawerOpen(false); }}
                   >
                     <PlugZap className="h-4 w-4 mr-2" />
                     {selectedCp.status === "available" ? "Laden starten" : "Nicht verfügbar"}
