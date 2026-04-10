@@ -8,14 +8,17 @@ interface ChargePointQrCodeProps {
   ocppId: string;
   name: string;
   address?: string | null;
+  /** Optional connector ID – when set, the QR code deep-links to that specific connector */
+  connectorId?: number;
   /** Variant: "icon" renders as icon button, "button" as full button */
   variant?: "icon" | "button";
 }
 
-export default function ChargePointQrCode({ ocppId, name, address, variant = "icon" }: ChargePointQrCodeProps) {
+export default function ChargePointQrCode({ ocppId, name, address, connectorId, variant = "icon" }: ChargePointQrCodeProps) {
   const [open, setOpen] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const appUrl = `${window.location.origin}/ev?cp=${encodeURIComponent(ocppId)}`;
+  const appUrl = `${window.location.origin}/ev?cp=${encodeURIComponent(ocppId)}${connectorId ? `&conn=${connectorId}` : ""}`;
+  const displayName = connectorId ? `${name} – Anschluss ${connectorId}` : name;
 
   useEffect(() => {
     if (!open) return;
@@ -41,7 +44,7 @@ export default function ChargePointQrCode({ ocppId, name, address, variant = "ic
         <!DOCTYPE html>
         <html>
         <head>
-          <title>QR-Code: ${name}</title>
+          <title>QR-Code: ${displayName}</title>
           <style>
             body { font-family: system-ui, sans-serif; text-align: center; padding: 40px; }
             .qr-container { display: inline-block; border: 2px solid #e5e7eb; border-radius: 16px; padding: 32px; }
@@ -55,7 +58,7 @@ export default function ChargePointQrCode({ ocppId, name, address, variant = "ic
         </head>
         <body>
           <div class="qr-container">
-            <h1>${name}</h1>
+            <h1>${displayName}</h1>
             ${address ? `<p class="address">${address}</p>` : '<p class="address">&nbsp;</p>'}
             <img src="${dataUrl}" width="300" height="300" />
             <div class="ocpp-id">${ocppId}</div>
@@ -78,13 +81,13 @@ export default function ChargePointQrCode({ ocppId, name, address, variant = "ic
           </Button>
         ) : (
           <Button variant="outline" size="sm">
-            <QrCode className="h-4 w-4 mr-2" />QR-Code
+            <QrCode className="h-4 w-4 mr-2" />{connectorId ? `Anschluss ${connectorId}` : "QR-Code"}
           </Button>
         )}
       </DialogTrigger>
       <DialogContent className="max-w-sm">
         <DialogHeader>
-          <DialogTitle className="text-center">QR-Code: {name}</DialogTitle>
+          <DialogTitle className="text-center">QR-Code: {displayName}</DialogTitle>
         </DialogHeader>
         <div className="flex flex-col items-center space-y-4">
           {address && <p className="text-sm text-muted-foreground">{address}</p>}
