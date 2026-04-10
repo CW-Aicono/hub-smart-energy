@@ -224,6 +224,8 @@ function MapTab({ chargePoints, onStartCharge, initialCpId, initialConnectorId, 
   const [filterOpen, setFilterOpen] = useState(false);
   const [selectedCp, setSelectedCp] = useState<AppChargePoint | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [drawerConnectorId, setDrawerConnectorId] = useState<number | null>(null);
+  const [drawerConnectors, setDrawerConnectors] = useState<Array<{ connector_id: number; status: string; connector_type: string; max_power_kw: number }>>([]);
   const [locationGroup, setLocationGroup] = useState<AppChargePoint[] | null>(null);
   const [locationDrawerOpen, setLocationDrawerOpen] = useState(false);
   const [publicPoints, setPublicPoints] = useState<AppChargePoint[]>([]);
