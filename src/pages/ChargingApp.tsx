@@ -684,7 +684,6 @@ function MapTab({ chargePoints, onStartCharge, initialCpId, initialConnectorId, 
                     <PlugZap className="h-4 w-4 mr-2" />
                     {selectedCp.status !== "available" ? "Nicht verfügbar" : (drawerConnectors.length > 1 && !drawerConnectorId) ? "Anschluss wählen" : "Laden starten"}
                   </Button>
-                  </Button>
                 )}
               </div>
             </div>
