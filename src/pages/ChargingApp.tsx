@@ -1579,8 +1579,10 @@ const ChargingApp = () => {
   // Handle deep link
   useEffect(() => {
     const cpParam = searchParams.get("cp");
+    const connParam = searchParams.get("conn");
     if (cpParam && chargePoints.length > 0) {
       setInitialCpOcppId(cpParam);
+      setInitialConnectorId(connParam ? parseInt(connParam) || null : null);
       setTab("map");
     }
   }, [searchParams, chargePoints]);
@@ -1588,14 +1590,18 @@ const ChargingApp = () => {
   const handleQrScanned = (data: string) => {
     // Try to parse QR code - could be URL with cp param or just an OCPP ID
     let ocppId = data;
+    let connId: number | null = null;
     try {
       const url = new URL(data);
       ocppId = url.searchParams.get("cp") || data;
+      const connParam = url.searchParams.get("conn");
+      connId = connParam ? parseInt(connParam) || null : null;
     } catch { /* not a URL, use as-is */ }
 
     const found = chargePoints.find((cp) => cp.ocpp_id === ocppId || cp.id === ocppId);
     if (found) {
       setInitialCpOcppId(ocppId);
+      setInitialConnectorId(connId);
       setTab("map");
       toast.success(`Ladestation "${found.name}" erkannt`);
     } else {
