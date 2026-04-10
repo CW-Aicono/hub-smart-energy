@@ -866,7 +866,13 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
                           {knownVendors.length > 0 ? (
                             <Select value={form.vendor} onValueChange={(v) => setForm({ ...form, vendor: v, model: "" })}>
                               <SelectTrigger><SelectValue placeholder="Hersteller wählen" /></SelectTrigger>
-                              <SelectContent>{knownVendors.map((v) => <SelectItem key={v} value={v}>{v}</SelectItem>)}</SelectContent>
+                              <SelectContent>
+                                {/* Include current vendor if not in known list */}
+                                {form.vendor && !knownVendors.includes(form.vendor) && (
+                                  <SelectItem value={form.vendor}>{form.vendor}</SelectItem>
+                                )}
+                                {knownVendors.map((v) => <SelectItem key={v} value={v}>{v}</SelectItem>)}
+                              </SelectContent>
                             </Select>
                           ) : (
                             <Input value={form.vendor} onChange={(e) => setForm({ ...form, vendor: e.target.value })} />
