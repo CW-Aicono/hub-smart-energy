@@ -615,7 +615,7 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
                         />
                         {isAdmin && connectors.length > 1 && (
                           <p className="text-[10px] text-muted-foreground mt-2">
-                            Anschluss {selectedConnectorId} ausgewählt für Fernbefehle
+                            {(() => { const sc = connectors.find(c => c.connector_id === selectedConnectorId); return sc?.name || `Anschluss ${selectedConnectorId}`; })()} ausgewählt für Fernbefehle
                           </p>
                         )}
                       </CardContent>
