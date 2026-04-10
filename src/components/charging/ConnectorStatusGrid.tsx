@@ -93,7 +93,7 @@ export function ConnectorStatusGrid({ connectors, selectedConnectorId, onSelectC
               <div className="flex items-center justify-center gap-1">
                 <p className="text-xs font-medium">{connectorDisplayName(c)}</p>
                 {editable && (
-                  <button type="button" onClick={(e) => startEdit(c, e)} className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground">
+                  <button type="button" onClick={(e) => startEdit(c, e)} className="text-muted-foreground hover:text-foreground">
                     <Pencil className="h-3 w-3" />
                   </button>
                 )}
