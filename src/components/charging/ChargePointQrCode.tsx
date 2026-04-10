@@ -8,14 +8,17 @@ interface ChargePointQrCodeProps {
   ocppId: string;
   name: string;
   address?: string | null;
+  /** Optional connector ID – when set, the QR code deep-links to that specific connector */
+  connectorId?: number;
   /** Variant: "icon" renders as icon button, "button" as full button */
   variant?: "icon" | "button";
 }
 
-export default function ChargePointQrCode({ ocppId, name, address, variant = "icon" }: ChargePointQrCodeProps) {
+export default function ChargePointQrCode({ ocppId, name, address, connectorId, variant = "icon" }: ChargePointQrCodeProps) {
   const [open, setOpen] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const appUrl = `${window.location.origin}/ev?cp=${encodeURIComponent(ocppId)}`;
+  const appUrl = `${window.location.origin}/ev?cp=${encodeURIComponent(ocppId)}${connectorId ? `&conn=${connectorId}` : ""}`;
+  const displayName = connectorId ? `${name} – Anschluss ${connectorId}` : name;
 
   useEffect(() => {
     if (!open) return;

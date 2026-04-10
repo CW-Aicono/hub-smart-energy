@@ -627,12 +627,12 @@ function MapTab({ chargePoints, onStartCharge, initialCpId, onInitialCpHandled }
 }
 
 // ---- Station Detail ----
-function StationDetail({ cp, onBack, onStartCharge }: { cp: AppChargePoint; onBack: () => void; onStartCharge: (cpId: string, connectorId?: number) => void }) {
+function StationDetail({ cp, onBack, onStartCharge, initialConnector }: { cp: AppChargePoint; onBack: () => void; onStartCharge: (cpId: string, connectorId?: number) => void; initialConnector?: number | null }) {
   const statusLabel: Record<string, string> = {
     available: "Verfügbar", charging: "Belegt", faulted: "Gestört", unavailable: "Nicht verfügbar", offline: "Offline",
   };
   const canCharge = cp.status === "available";
-  const [selectedConnector, setSelectedConnector] = useState<number>(1);
+  const [selectedConnector, setSelectedConnector] = useState<number>(initialConnector || 1);
   const [connectors, setConnectors] = useState<Array<{ connector_id: number; status: string; connector_type: string; max_power_kw: number }>>([]);
 
   useEffect(() => {
@@ -1449,6 +1449,7 @@ const ChargingApp = () => {
   const [tariff, setTariff] = useState<AppTariff | null>(null);
   const [tenantInfo, setTenantInfo] = useState<AppTenantInfo | null>(null);
   const [initialCpOcppId, setInitialCpOcppId] = useState<string | null>(null);
+  const [initialConnectorId, setInitialConnectorId] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
 
   // Ensure charging_users entry exists for app user (no group assignment – done manually later)
