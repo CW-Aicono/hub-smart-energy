@@ -1,6 +1,6 @@
 import { Badge } from "@/components/ui/badge";
 import { Zap, PlugZap, AlertTriangle, ZapOff } from "lucide-react";
-import { ChargePointConnector } from "@/hooks/useChargePointConnectors";
+import { ChargePointConnector, connectorDisplayName } from "@/hooks/useChargePointConnectors";
 
 const connectorStatusConfig: Record<string, { label: string; color: string; icon: typeof Zap }> = {
   available: { label: "Verfügbar", color: "bg-emerald-500", icon: Zap },
@@ -46,7 +46,7 @@ export function ConnectorStatusGrid({ connectors, selectedConnectorId, onSelectC
               <span className={`h-2.5 w-2.5 rounded-full ${cfg.color}`} />
               <Icon className="h-4 w-4 text-muted-foreground" />
             </div>
-            <p className="text-xs font-medium">Anschluss {c.connector_id}</p>
+            <p className="text-xs font-medium">{connectorDisplayName(c)}</p>
             <p className="text-[10px] text-muted-foreground">{cfg.label}</p>
             <p className="text-[10px] text-muted-foreground">{c.connector_type} · {c.max_power_kw} kW</p>
           </button>

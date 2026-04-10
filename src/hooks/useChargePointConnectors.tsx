@@ -10,6 +10,12 @@ export interface ChargePointConnector {
   connector_type: string;
   max_power_kw: number;
   last_status_at: string | null;
+  name: string | null;
+}
+
+/** Returns the connector's custom name or a fallback like "Anschluss 1" */
+export function connectorDisplayName(c: ChargePointConnector): string {
+  return c.name || `Anschluss ${c.connector_id}`;
 }
 
 export function useChargePointConnectors(chargePointId?: string) {

@@ -10,15 +10,18 @@ interface ChargePointQrCodeProps {
   address?: string | null;
   /** Optional connector ID – when set, the QR code deep-links to that specific connector */
   connectorId?: number;
+  /** Custom connector name for display */
+  connectorName?: string;
   /** Variant: "icon" renders as icon button, "button" as full button */
   variant?: "icon" | "button";
 }
 
-export default function ChargePointQrCode({ ocppId, name, address, connectorId, variant = "icon" }: ChargePointQrCodeProps) {
+export default function ChargePointQrCode({ ocppId, name, address, connectorId, connectorName, variant = "icon" }: ChargePointQrCodeProps) {
   const [open, setOpen] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const appUrl = `${window.location.origin}/ev?cp=${encodeURIComponent(ocppId)}${connectorId ? `&conn=${connectorId}` : ""}`;
-  const displayName = connectorId ? `${name} – Anschluss ${connectorId}` : name;
+  const connLabel = connectorName || (connectorId ? `Anschluss ${connectorId}` : null);
+  const displayName = connLabel ? `${name} – ${connLabel}` : name;
 
   useEffect(() => {
     if (!open) return;
@@ -81,7 +84,7 @@ export default function ChargePointQrCode({ ocppId, name, address, connectorId, 
           </Button>
         ) : (
           <Button variant="outline" size="sm">
-            <QrCode className="h-4 w-4 mr-2" />{connectorId ? `Anschluss ${connectorId}` : "QR-Code"}
+            <QrCode className="h-4 w-4 mr-2" />{connLabel || "QR-Code"}
           </Button>
         )}
       </DialogTrigger>
