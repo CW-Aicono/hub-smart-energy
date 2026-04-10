@@ -328,6 +328,7 @@ function MapTab({ chargePoints, onStartCharge, initialCpId, initialConnectorId, 
       setLocationDrawerOpen(true);
     } else {
       setSelectedCp(cp);
+      setDrawerConnectorId(null);
       setDrawerOpen(true);
     }
   }, [allPoints]);
@@ -543,6 +544,7 @@ function MapTab({ chargePoints, onStartCharge, initialCpId, initialConnectorId, 
                         setLocationDrawerOpen(false);
                         setTimeout(() => {
                           setSelectedCp(cp);
+                          setDrawerConnectorId(null);
                           setDrawerOpen(true);
                         }, 200);
                       }}
