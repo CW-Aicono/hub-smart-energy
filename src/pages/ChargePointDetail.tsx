@@ -464,6 +464,7 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
                     name={cp.name}
                     address={cp.address}
                     connectorId={c.connector_id}
+                    connectorName={c.name || undefined}
                     variant="button"
                   />
                 ))}
