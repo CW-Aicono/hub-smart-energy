@@ -328,6 +328,7 @@ function MapTab({ chargePoints, onStartCharge, initialCpId, initialConnectorId, 
       setLocationDrawerOpen(true);
     } else {
       setSelectedCp(cp);
+      setDrawerConnectorId(null);
       setDrawerOpen(true);
     }
   }, [allPoints]);
@@ -543,6 +544,7 @@ function MapTab({ chargePoints, onStartCharge, initialCpId, initialConnectorId, 
                         setLocationDrawerOpen(false);
                         setTimeout(() => {
                           setSelectedCp(cp);
+                          setDrawerConnectorId(null);
                           setDrawerOpen(true);
                         }, 200);
                       }}
@@ -678,11 +680,11 @@ function MapTab({ chargePoints, onStartCharge, initialCpId, initialConnectorId, 
                 {selectedCp.isAppCompatible !== false && (
                   <Button
                     className="flex-1 h-12"
-                    disabled={selectedCp.status !== "available"}
+                    disabled={selectedCp.status !== "available" || (drawerConnectors.length > 1 && !drawerConnectorId)}
                     onClick={() => { onStartCharge(selectedCp.id, drawerConnectors.length > 1 ? (drawerConnectorId || 1) : undefined); setDrawerOpen(false); }}
                   >
                     <PlugZap className="h-4 w-4 mr-2" />
-                    {selectedCp.status === "available" ? "Laden starten" : "Nicht verfügbar"}
+                    {selectedCp.status !== "available" ? "Nicht verfügbar" : (drawerConnectors.length > 1 && !drawerConnectorId) ? "Anschluss wählen" : "Laden starten"}
                   </Button>
                 )}
               </div>
