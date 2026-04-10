@@ -338,11 +338,38 @@ function MapTab({ chargePoints, onStartCharge, initialCpId, initialConnectorId, 
       const found = chargePoints.find((cp) => cp.ocpp_id === initialCpId || cp.id === initialCpId);
       if (found) {
         setSelectedCp(found);
+        setDrawerConnectorId(initialConnectorId || null);
         setDrawerOpen(true);
       }
       onInitialCpHandled?.();
     }
-  }, [initialCpId, chargePoints, onInitialCpHandled]);
+  }, [initialCpId, initialConnectorId, chargePoints, onInitialCpHandled]);
+
+  // Load connectors when a station is selected in drawer
+  useEffect(() => {
+    if (!selectedCp || selectedCp.connector_count <= 1) {
+      setDrawerConnectors([]);
+      return;
+    }
+    supabase
+      .from("charge_point_connectors")
+      .select("connector_id, status, connector_type, max_power_kw")
+      .eq("charge_point_id", selectedCp.id)
+      .order("connector_id")
+      .then(({ data }) => {
+        if (data && data.length > 0) {
+          setDrawerConnectors(data);
+          // Auto-select initial connector if valid
+          if (drawerConnectorId && data.some(c => c.connector_id === drawerConnectorId)) {
+            // already set
+          } else {
+            setDrawerConnectorId(null);
+          }
+        } else {
+          setDrawerConnectors([]);
+        }
+      });
+  }, [selectedCp?.id, selectedCp?.connector_count]);
 
 
   const statusLabel: Record<string, string> = {
