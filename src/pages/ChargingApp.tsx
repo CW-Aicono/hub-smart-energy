@@ -225,7 +225,7 @@ function MapTab({ chargePoints, onStartCharge, initialCpId, initialConnectorId, 
   const [selectedCp, setSelectedCp] = useState<AppChargePoint | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerConnectorId, setDrawerConnectorId] = useState<number | null>(null);
-  const [drawerConnectors, setDrawerConnectors] = useState<Array<{ connector_id: number; status: string; connector_type: string; max_power_kw: number }>>([]);
+  const [drawerConnectors, setDrawerConnectors] = useState<Array<{ connector_id: number; status: string; connector_type: string; max_power_kw: number; name: string | null }>>([]);
   const [locationGroup, setLocationGroup] = useState<AppChargePoint[] | null>(null);
   const [locationDrawerOpen, setLocationDrawerOpen] = useState(false);
   const [publicPoints, setPublicPoints] = useState<AppChargePoint[]>([]);
@@ -354,7 +354,7 @@ function MapTab({ chargePoints, onStartCharge, initialCpId, initialConnectorId, 
     }
     supabase
       .from("charge_point_connectors")
-      .select("connector_id, status, connector_type, max_power_kw")
+      .select("connector_id, status, connector_type, max_power_kw, name")
       .eq("charge_point_id", selectedCp.id)
       .order("connector_id")
       .then(({ data }) => {
@@ -650,7 +650,7 @@ function MapTab({ chargePoints, onStartCharge, initialCpId, initialConnectorId, 
                             }`} />
                             {isSelected && <Check className="h-3.5 w-3.5 text-primary" />}
                           </div>
-                          <p className="text-xs font-medium">Anschluss {c.connector_id}</p>
+                          <p className="text-xs font-medium">{c.name || `Anschluss ${c.connector_id}`}</p>
                           <p className="text-[10px] text-muted-foreground">
                             {c.status === "available" ? "Frei" : c.status === "charging" ? "Lädt" : c.status === "faulted" ? "Gestört" : c.status}
                           </p>
@@ -703,13 +703,13 @@ function StationDetail({ cp, onBack, onStartCharge, initialConnector }: { cp: Ap
   };
   const canCharge = cp.status === "available";
   const [selectedConnector, setSelectedConnector] = useState<number>(initialConnector || 1);
-  const [connectors, setConnectors] = useState<Array<{ connector_id: number; status: string; connector_type: string; max_power_kw: number }>>([]);
+  const [connectors, setConnectors] = useState<Array<{ connector_id: number; status: string; connector_type: string; max_power_kw: number; name: string | null }>>([]);
 
   useEffect(() => {
     if (cp.connector_count <= 1) return;
     supabase
       .from("charge_point_connectors")
-      .select("connector_id, status, connector_type, max_power_kw")
+      .select("connector_id, status, connector_type, max_power_kw, name")
       .eq("charge_point_id", cp.id)
       .order("connector_id")
       .then(({ data }) => {
@@ -725,7 +725,7 @@ function StationDetail({ cp, onBack, onStartCharge, initialConnector }: { cp: Ap
       .on("postgres_changes", { event: "*", schema: "public", table: "charge_point_connectors", filter: `charge_point_id=eq.${cp.id}` }, () => {
         supabase
           .from("charge_point_connectors")
-          .select("connector_id, status, connector_type, max_power_kw")
+          .select("connector_id, status, connector_type, max_power_kw, name")
           .eq("charge_point_id", cp.id)
           .order("connector_id")
           .then(({ data }) => { if (data) setConnectors(data); });
@@ -795,7 +795,7 @@ function StationDetail({ cp, onBack, onStartCharge, initialConnector }: { cp: Ap
                       <span className={`h-2.5 w-2.5 rounded-full ${connectorStatusColor[c.status] || "bg-muted-foreground"}`} />
                       {isSelected && <Check className="h-3.5 w-3.5 text-primary" />}
                     </div>
-                    <p className="text-xs font-medium">Anschluss {c.connector_id}</p>
+                    <p className="text-xs font-medium">{c.name || `Anschluss ${c.connector_id}`}</p>
                     <p className="text-[10px] text-muted-foreground">{connectorStatusLabel[c.status] || c.status}</p>
                   </button>
                 );

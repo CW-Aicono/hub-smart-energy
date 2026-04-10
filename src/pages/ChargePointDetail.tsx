@@ -464,6 +464,7 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
                     name={cp.name}
                     address={cp.address}
                     connectorId={c.connector_id}
+                    connectorName={c.name || undefined}
                     variant="button"
                   />
                 ))}
@@ -611,10 +612,11 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
                           onSelectConnector={setSelectedConnectorId}
                           selectable={isAdmin}
                           wsConnected={cp?.ws_connected ?? false}
+                          editable={isAdmin}
                         />
                         {isAdmin && connectors.length > 1 && (
                           <p className="text-[10px] text-muted-foreground mt-2">
-                            Anschluss {selectedConnectorId} ausgewählt für Fernbefehle
+                            {(() => { const sc = connectors.find(c => c.connector_id === selectedConnectorId); return sc?.name || `Anschluss ${selectedConnectorId}`; })()} ausgewählt für Fernbefehle
                           </p>
                         )}
                       </CardContent>
