@@ -81,7 +81,7 @@ export default function ChargePointQrCode({ ocppId, name, address, connectorId, 
           </Button>
         ) : (
           <Button variant="outline" size="sm">
-            <QrCode className="h-4 w-4 mr-2" />QR-Code
+            <QrCode className="h-4 w-4 mr-2" />{connectorId ? `Anschluss ${connectorId}` : "QR-Code"}
           </Button>
         )}
       </DialogTrigger>
