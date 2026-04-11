@@ -308,18 +308,39 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
       });
       if (!data) return [];
 
-      // Group by day
+      // Check if any meter has negative values (bidirectional)
+      const hasNegative = new Set<string>();
+      for (const row of data) {
+        if (row.total_value < 0) hasNegative.add(row.meter_id);
+      }
+
+      // Group by period label
       const dayMap: Record<string, Record<string, number>> = {};
       for (const row of data) {
         const d = new Date(row.day);
         const label = formatLabel(d, selectedPeriod);
         if (!dayMap[label]) dayMap[label] = {};
-        dayMap[label][row.meter_id] = (dayMap[label][row.meter_id] ?? 0) + row.total_value;
+
+        if (hasNegative.has(row.meter_id)) {
+          // Split into bezug (positive) and einspeisung (negative → absolute)
+          const bezugKey = `${row.meter_id}_bezug`;
+          const einspeisungKey = `${row.meter_id}_einspeisung`;
+          if (row.total_value >= 0) {
+            dayMap[label][bezugKey] = (dayMap[label][bezugKey] ?? 0) + row.total_value;
+            dayMap[label][einspeisungKey] = dayMap[label][einspeisungKey] ?? 0;
+          } else {
+            dayMap[label][einspeisungKey] = (dayMap[label][einspeisungKey] ?? 0) + Math.abs(row.total_value);
+            dayMap[label][bezugKey] = dayMap[label][bezugKey] ?? 0;
+          }
+        } else {
+          dayMap[label][row.meter_id] = (dayMap[label][row.meter_id] ?? 0) + row.total_value;
+        }
       }
 
       return Object.entries(dayMap).map(([day, meters]) => ({
         name: day,
         ...meters,
+        __bidirectionalMeterIds: Array.from(hasNegative),
       }));
     },
     enabled: config.meter_ids.length > 0,
