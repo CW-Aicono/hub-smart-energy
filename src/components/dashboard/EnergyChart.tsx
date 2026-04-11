@@ -216,22 +216,8 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
           recorded_at: r.bucket,
         }));
 
-        if (isToday && !stale) {
-          const recentCutoff = new Date(Date.now() - 10 * 60 * 1000).toISOString();
-          const { data: recentRaw } = await supabase
-            .from("meter_power_readings")
-            .select("meter_id, power_value, recorded_at")
-            .in("meter_id", mainMeterIds)
-            .gte("recorded_at", recentCutoff)
-            .lte("recorded_at", rangeEnd.toISOString())
-            .order("recorded_at", { ascending: true });
-
-          if (!stale && recentRaw && recentRaw.length > 0) {
-            const cutoffDate = new Date(recentCutoff);
-            allData = allData.filter(r => new Date(r.recorded_at) < cutoffDate);
-            allData = [...allData, ...recentRaw];
-          }
-        }
+        // Raw data supplement removed: aggregated 5-min buckets only
+        // This eliminates Loxone boundary spikes at :00 and :30 marks
       } else {
         console.warn("get_power_readings_5min returned no data or error:", aggError);
       }
