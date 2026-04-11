@@ -232,7 +232,7 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
 
     // Auto-refetch every 5 minutes for today's view so new aggregated buckets appear
     let interval: ReturnType<typeof setInterval> | null = null;
-    if (isToday) {
+    if (isTodayView) {
       interval = setInterval(fetchPower, 5 * 60 * 1000);
     }
 
