@@ -637,6 +637,18 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
     return buckets;
   }, [readings, meterMap, period, rangeStart.toISOString(), rangeEnd.toISOString(), livePeriodTotals, offset, periodLabel, locationId, powerReadings, dailyTotals]);
 
+  // Detect which energy types have bidirectional (bezug+einspeisung) data
+  const bidirectionalTypes = useMemo(() => {
+    if (period === "day") return new Set<string>();
+    const types = new Set<string>();
+    for (const bucket of chartData) {
+      for (const key of ENERGY_KEYS) {
+        if ((bucket as any)[`${key}_einspeisung`] > 0) types.add(key);
+      }
+    }
+    return types;
+  }, [chartData, period]);
+
   // Reset offset when period changes (handled by context now)
   const handlePeriodChange = (v: string) => {
     if (v === "day" || v === "week" || v === "month" || v === "quarter" || v === "year") {
@@ -653,6 +665,8 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
         clone[key] = 0;
         if (`real_${key}` in clone) clone[`real_${key}`] = null;
         if (`__gap_${key}` in clone) clone[`__gap_${key}`] = null;
+        clone[`${key}_bezug`] = 0;
+        clone[`${key}_einspeisung`] = 0;
       }
       return clone;
     });
