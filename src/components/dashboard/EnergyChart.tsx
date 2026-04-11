@@ -385,18 +385,16 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
         const dayStr = typeof row.day === "string" ? row.day.split("T")[0] : format(new Date(row.day), "yyyy-MM-dd");
         if (!map.has(dayStr)) map.set(dayStr, { ...emptyBucket() });
         const bucket = map.get(dayStr)!;
-        const converted = convertGas(row.meter_id, row.total_value);
+        const netValue = row.bezug - row.einspeisung;
+        const converted = convertGas(row.meter_id, netValue);
         addToEnergyBucket(bucket, info.energy_type, converted);
 
-        // For non-day bar charts: split positive (Bezug) and negative (Einspeisung)
+        // For non-day bar charts: use pre-split bezug/einspeisung
         if (period !== "day") {
           const bezugKey = `${info.energy_type}_bezug`;
           const einspeisungKey = `${info.energy_type}_einspeisung`;
-          if (converted >= 0) {
-            bucket[bezugKey] = (bucket[bezugKey] ?? 0) + converted;
-          } else {
-            bucket[einspeisungKey] = (bucket[einspeisungKey] ?? 0) + Math.abs(converted);
-          }
+          bucket[bezugKey] = (bucket[bezugKey] ?? 0) + convertGas(row.meter_id, row.bezug);
+          bucket[einspeisungKey] = (bucket[einspeisungKey] ?? 0) + convertGas(row.meter_id, row.einspeisung);
         }
       }
       return map;
