@@ -778,20 +778,35 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
                   <XAxis dataKey="label" tick={tickStyle} tickLine={false} axisLine={false} />
                   <YAxis width={50} tick={tickStyle} tickLine={false} axisLine={false} domain={visibleKeys.length === 0 ? [0, 1] : ['auto', 'auto']} />
                   <Tooltip contentStyle={tooltipStyle} formatter={tooltipFormatter} />
-                  {visibleEnergyKeys.includes("strom") && <Bar dataKey="strom" name={T("energy.strom")} fill={ENERGY_CHART_COLORS.strom} radius={[3, 3, 0, 0]} hide={hiddenKeys.has("strom")} />}
-                  {visibleEnergyKeys.includes("gas") && <Bar dataKey="gas" name={T("energy.gas")} fill={ENERGY_CHART_COLORS.gas} radius={[3, 3, 0, 0]} hide={hiddenKeys.has("gas")} />}
-                  {visibleEnergyKeys.includes("waerme") && <Bar dataKey="waerme" name={T("energy.waerme")} fill={ENERGY_CHART_COLORS.waerme} radius={[3, 3, 0, 0]} hide={hiddenKeys.has("waerme")} />}
-                  {visibleEnergyKeys.includes("wasser") && <Bar dataKey="wasser" name={T("energy.wasser")} fill={ENERGY_CHART_COLORS.wasser} radius={[3, 3, 0, 0]} hide={hiddenKeys.has("wasser")} />}
+                  {visibleEnergyKeys.map((key) => {
+                    if (bidirectionalTypes.has(key)) {
+                      return (
+                        <React.Fragment key={key}>
+                          <Bar dataKey={`${key}_bezug`} name={`${T(`energy.${key}`)} Bezug`} fill={ENERGY_CHART_COLORS[key]} radius={[3, 3, 0, 0]} hide={hiddenKeys.has(key)} />
+                          <Bar dataKey={`${key}_einspeisung`} name={`${T(`energy.${key}`)} Einspeisung`} fill="#10b981" radius={[3, 3, 0, 0]} hide={hiddenKeys.has(key)} />
+                        </React.Fragment>
+                      );
+                    }
+                    return <Bar key={key} dataKey={key} name={T(`energy.${key}`)} fill={ENERGY_CHART_COLORS[key]} radius={[3, 3, 0, 0]} hide={hiddenKeys.has(key)} />;
+                  })}
                 </BarChart>
               )}
             </ResponsiveContainer>
             <div className="flex items-center justify-center gap-2 mt-3 flex-wrap">
-              {visibleEnergyKeys.map((key) => {
-                const hidden = hiddenKeys.has(key);
+              {visibleEnergyKeys.flatMap((key) => {
+                if (bidirectionalTypes.has(key)) {
+                  return [
+                    { dataKey: key, label: `${T(`energy.${key}`)} Bezug`, color: ENERGY_CHART_COLORS[key] },
+                    { dataKey: key, label: `${T(`energy.${key}`)} Einspeisung`, color: "#10b981" },
+                  ];
+                }
+                return [{ dataKey: key, label: T(`energy.${key}`), color: ENERGY_CHART_COLORS[key] }];
+              }).map((item, idx) => {
+                const hidden = hiddenKeys.has(item.dataKey);
                 return (
                   <button
-                    key={key}
-                    onClick={() => handleLegendClick({ dataKey: key })}
+                    key={`${item.dataKey}-${idx}`}
+                    onClick={() => handleLegendClick({ dataKey: item.dataKey })}
                     className={cn(
                       "inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium transition-colors",
                       hidden
@@ -801,9 +816,9 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
                   >
                     <span
                       className="inline-block h-2.5 w-2.5 rounded-full shrink-0"
-                      style={{ backgroundColor: hidden ? "hsl(var(--muted-foreground))" : ENERGY_CHART_COLORS[key] }}
+                      style={{ backgroundColor: hidden ? "hsl(var(--muted-foreground))" : item.color }}
                     />
-                    {T(`energy.${key}`)}
+                    {item.label}
                   </button>
                 );
               })}
