@@ -162,6 +162,7 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
   // Strategy: Use server-side get_power_readings_5min function which automatically
   // aggregates raw data into 5min buckets when pre-aggregated data isn't available.
   // For today, supplement with raw data for the last 10 minutes (not yet aggregated).
+  const isTodayView = period === "day" && offset === 0 && new Date().toDateString() === getRefDate("day", 0).toDateString();
   useEffect(() => {
     if (period !== "day") {
       setPowerReadings([]);
@@ -216,22 +217,8 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
           recorded_at: r.bucket,
         }));
 
-        if (isToday && !stale) {
-          const recentCutoff = new Date(Date.now() - 10 * 60 * 1000).toISOString();
-          const { data: recentRaw } = await supabase
-            .from("meter_power_readings")
-            .select("meter_id, power_value, recorded_at")
-            .in("meter_id", mainMeterIds)
-            .gte("recorded_at", recentCutoff)
-            .lte("recorded_at", rangeEnd.toISOString())
-            .order("recorded_at", { ascending: true });
-
-          if (!stale && recentRaw && recentRaw.length > 0) {
-            const cutoffDate = new Date(recentCutoff);
-            allData = allData.filter(r => new Date(r.recorded_at) < cutoffDate);
-            allData = [...allData, ...recentRaw];
-          }
-        }
+        // Raw data supplement removed: aggregated 5-min buckets only
+        // This eliminates Loxone boundary spikes at :00 and :30 marks
       } else {
         console.warn("get_power_readings_5min returned no data or error:", aggError);
       }
@@ -242,7 +229,17 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
       }
     };
     fetchPower();
-    return () => { stale = true; };
+
+    // Auto-refetch every 5 minutes for today's view so new aggregated buckets appear
+    let interval: ReturnType<typeof setInterval> | null = null;
+    if (isTodayView) {
+      interval = setInterval(fetchPower, 5 * 60 * 1000);
+    }
+
+    return () => {
+      stale = true;
+      if (interval) clearInterval(interval);
+    };
   }, [period, rangeStart.toISOString(), rangeEnd.toISOString(), meters, locationId, offset]);
 
   // Fetch daily totals from DB for non-day periods (week, month, quarter, year)
