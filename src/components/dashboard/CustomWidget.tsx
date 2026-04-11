@@ -361,11 +361,21 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
     return [config.y_range?.min ?? "auto", config.y_range?.max ?? "auto"];
   }, [chartData, config.meter_ids, config.y_range?.max, config.y_range?.min]);
 
+  // Detect which meters are bidirectional from chart data
+  const bidirectionalMeterIds = useMemo(() => {
+    if (!chartData.length) return new Set<string>();
+    const first = chartData[0] as any;
+    const ids: string[] = first?.__bidirectionalMeterIds ?? [];
+    return new Set(ids);
+  }, [chartData]);
+
   const getSeriesColor = (idx: number) => {
     const mid = config.meter_ids[idx];
     if (mid && config.series_colors?.[mid]) return config.series_colors[mid];
     return PRESET_COLORS[idx % PRESET_COLORS.length];
   };
+
+  const EINSPEISUNG_COLOR = "#10b981"; // green for feed-in
 
   // Compute single KPI value
   const kpiValue = useMemo(() => {
