@@ -533,23 +533,31 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
     );
     const manualFiltered = filtered.filter(r => !autoMeterIds.has(r.meter_id));
 
+    // Helper: copy bezug/einspeisung split fields from dbBucket into target
+    const addSplitFields = (target: any, dbBucket: any) => {
+      for (const key of ENERGY_KEYS) {
+        const bk = `${key}_bezug`;
+        const ek = `${key}_einspeisung`;
+        if (dbBucket[bk] != null) target[bk] = (target[bk] ?? 0) + dbBucket[bk];
+        if (dbBucket[ek] != null) target[ek] = (target[ek] ?? 0) + dbBucket[ek];
+      }
+    };
+
     if (period === "week") {
       const days = eachDayOfInterval({ start: rangeStart, end: rangeEnd });
       const todayStr = format(new Date(), "yyyy-MM-dd");
       const dbDailyMap = buildDailyBucketsFromDB();
       return days.map((d, i) => {
         const dateStr = format(d, "yyyy-MM-dd");
-        const bucket = { label: format(d, "EEEEEE", { locale: dateLocale }), ...emptyBucket() };
-        // Add DB daily totals for this day (automatic meters)
+        const bucket: any = { label: format(d, "EEEEEE", { locale: dateLocale }), ...emptyBucket() };
         const dbBucket = dbDailyMap.get(dateStr);
         if (dbBucket) {
           for (const key of ENERGY_KEYS) addToEnergyBucket(bucket, key, dbBucket[key]);
+          addSplitFields(bucket, dbBucket);
         }
-        // Add manual readings for this day (skip automatic meters – handled above)
         manualFiltered.forEach((r) => {
           if (format(new Date(r.reading_date), "yyyy-MM-dd") === dateStr) addToBucket(bucket, r);
         });
-        // For today: inject live totalDay if no DB/computed value exists yet
         if (dateStr === todayStr && !dbBucket) {
           addLiveTodayToBucket(bucket);
         }
@@ -563,17 +571,15 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
       const dbDailyMap = buildDailyBucketsFromDB();
       return days.map((d) => {
         const dateStr = format(d, "yyyy-MM-dd");
-        const bucket = { label: format(d, "d."), ...emptyBucket() };
-        // Add DB daily totals
+        const bucket: any = { label: format(d, "d."), ...emptyBucket() };
         const dbBucket = dbDailyMap.get(dateStr);
         if (dbBucket) {
           for (const key of ENERGY_KEYS) addToEnergyBucket(bucket, key, dbBucket[key]);
+          addSplitFields(bucket, dbBucket);
         }
-        // Add manual readings (skip automatic meters – handled via DB daily totals)
         manualFiltered.forEach((r) => {
           if (format(new Date(r.reading_date), "yyyy-MM-dd") === dateStr) addToBucket(bucket, r);
         });
-        // For today: inject live totalDay
         if (dateStr === todayStr && !dbBucket) {
           addLiveTodayToBucket(bucket);
         }
@@ -582,7 +588,7 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
     }
 
     if (period === "quarter") {
-      const weekMap = new Map<number, EnergyBucketWithLabel>();
+      const weekMap = new Map<number, any>();
       const days = eachDayOfInterval({ start: rangeStart, end: rangeEnd });
       const todayStr = format(new Date(), "yyyy-MM-dd");
       const dbDailyMap = buildDailyBucketsFromDB();
@@ -591,17 +597,15 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
         if (!weekMap.has(wk)) weekMap.set(wk, { label: `${cwPrefix}${wk}`, ...emptyBucket() });
         const dateStr = format(d, "yyyy-MM-dd");
         const bucket = weekMap.get(wk)!;
-        // Add DB daily totals
         const dbBucket = dbDailyMap.get(dateStr);
         if (dbBucket) {
           for (const key of ENERGY_KEYS) addToEnergyBucket(bucket, key, dbBucket[key]);
+          addSplitFields(bucket, dbBucket);
         }
-        // For today: inject live totalDay
         if (dateStr === todayStr && !dbBucket) {
           addLiveTodayToBucket(bucket);
         }
       });
-      // Add manual readings (skip automatic meters)
       manualFiltered.forEach((r) => {
         const wk = getISOWeek(new Date(r.reading_date));
         const bucket = weekMap.get(wk);
@@ -612,22 +616,20 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
 
     // year
     const monthLabels = Array.from({ length: 12 }, (_, i) => T(`month.short.${i}`));
-    const buckets = monthLabels.map((m) => ({ label: m, ...emptyBucket() }));
+    const buckets: any[] = monthLabels.map((m) => ({ label: m, ...emptyBucket() }));
     const todayStr = format(new Date(), "yyyy-MM-dd");
     const dbDailyMap = buildDailyBucketsFromDB();
-    // Distribute DB daily totals into month buckets
     for (const [dateStr, dbBucket] of dbDailyMap.entries()) {
       const monthIdx = new Date(dateStr).getMonth();
       for (const key of ENERGY_KEYS) addToEnergyBucket(buckets[monthIdx], key, dbBucket[key]);
+      addSplitFields(buckets[monthIdx], dbBucket);
     }
-    // Add today's live value if no DB record yet
     if (!dbDailyMap.has(todayStr)) {
       const todayBucket = emptyBucket();
       addLiveTodayToBucket(todayBucket);
       const monthIdx = new Date().getMonth();
       for (const key of ENERGY_KEYS) addToEnergyBucket(buckets[monthIdx], key, todayBucket[key]);
     }
-    // Add manual readings (skip automatic meters)
     manualFiltered.forEach((r) => {
       const month = new Date(r.reading_date).getMonth();
       addToBucket(buckets[month], r);
