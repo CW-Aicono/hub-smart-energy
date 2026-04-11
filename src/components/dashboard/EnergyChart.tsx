@@ -369,15 +369,28 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
     };
 
     // Helper: build a map of date -> energy bucket from DB daily totals
-    const buildDailyBucketsFromDB = (): Map<string, EnergyBucket> => {
-      const map = new Map<string, EnergyBucket>();
+    // Also tracks bezug/einspeisung split for bidirectional meters
+    const buildDailyBucketsFromDB = (): Map<string, EnergyBucket & Record<string, number>> => {
+      const map = new Map<string, EnergyBucket & Record<string, number>>();
       for (const row of dailyTotals) {
         const info = meterMap[row.meter_id];
         if (!info) continue;
         const dayStr = typeof row.day === "string" ? row.day.split("T")[0] : format(new Date(row.day), "yyyy-MM-dd");
-        if (!map.has(dayStr)) map.set(dayStr, emptyBucket());
+        if (!map.has(dayStr)) map.set(dayStr, { ...emptyBucket() });
         const bucket = map.get(dayStr)!;
-        addToEnergyBucket(bucket, info.energy_type, convertGas(row.meter_id, row.total_value));
+        const converted = convertGas(row.meter_id, row.total_value);
+        addToEnergyBucket(bucket, info.energy_type, converted);
+
+        // For non-day bar charts: split positive (Bezug) and negative (Einspeisung)
+        if (period !== "day") {
+          const bezugKey = `${info.energy_type}_bezug`;
+          const einspeisungKey = `${info.energy_type}_einspeisung`;
+          if (converted >= 0) {
+            bucket[bezugKey] = (bucket[bezugKey] ?? 0) + converted;
+          } else {
+            bucket[einspeisungKey] = (bucket[einspeisungKey] ?? 0) + Math.abs(converted);
+          }
+        }
       }
       return map;
     };
