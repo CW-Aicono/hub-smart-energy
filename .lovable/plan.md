@@ -1,28 +1,34 @@
 
 
-# Plan: Live-Daten-Peaks eliminieren durch verzögerte Aggregation
+# Unnötiges Neuladen beim Tab-Wechsel unterbinden
 
 ## Ursache
 
-Der EnergyChart (Tagesansicht) holt für "heute" die letzten 10 Minuten als **Rohdaten** direkt aus `meter_power_readings` (Zeilen 219–232 in `EnergyChart.tsx`). Diese Rohdaten enthalten die Loxone-Boundary-Spikes an den `:00`- und `:30`-Marken. Erst nach Aggregation zu 5-Minuten-Buckets werden die Spikes geglättet — aber die letzten 10 Minuten sind eben noch nicht aggregiert.
+Der `QueryClient` in `App.tsx` wird ohne Konfiguration erstellt (`new QueryClient()`). Die Standard-Einstellung von React Query ist `refetchOnWindowFocus: true` — das bedeutet, **jede aktive Query wird automatisch neu geladen**, sobald der Browser-Tab wieder fokussiert wird.
+
+Da die Anwendung dutzende aktive Queries hat (Meter, Locations, Energiedaten, Alerts, Preise, Tenant-Daten, etc.), werden beim Tab-Wechsel gleichzeitig viele API-Aufrufe ausgelöst. Das erzeugt unnötigen Traffic und führt zu sichtbaren Re-Renders, die wie ein komplettes Neuladen wirken.
 
 ## Lösung
 
-Statt die letzten 10 Minuten als Rohdaten anzuzeigen, wird der Chart nur noch aggregierte 5-Minuten-Daten anzeigen. Das bedeutet eine maximale Verzögerung von ~5–10 Minuten in der Chartdarstellung, was für die historische Ansicht akzeptabel ist. Live-Steuerungswerte (Gauges, Energiefluss) bleiben davon unberührt.
+In `src/App.tsx` den `QueryClient` mit `refetchOnWindowFocus: false` konfigurieren und stattdessen eine sinnvolle `staleTime` setzen, damit Daten nicht bei jedem Mount sofort als veraltet gelten:
 
-### Änderung 1: Raw-Data-Supplement entfernen (`EnergyChart.tsx`)
-
-Den Block in Zeilen 219–233 entfernen, der die letzten 10 Minuten Rohdaten aus `meter_power_readings` holt und an die aggregierten Daten anhängt. Der Chart zeigt dann nur noch `get_power_readings_5min`-Daten.
-
-### Änderung 2: Häufigeres Refetching für den heutigen Tag
-
-Damit der Chart trotzdem zeitnah aktualisiert wird, wird ein Refetch-Intervall von 5 Minuten für die Tagesansicht eingebaut (z. B. via `setInterval` im bestehenden `useEffect`), sodass neue 5-Minuten-Buckets zeitnah erscheinen.
+```typescript
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      refetchOnWindowFocus: false,
+      staleTime: 5 * 60 * 1000, // 5 Minuten
+    },
+  },
+});
+```
 
 ### Betroffene Datei
-- `src/components/dashboard/EnergyChart.tsx`
+- `src/App.tsx` (eine Zeile ändern)
 
 ### Ergebnis
-- Keine Peaks mehr in den Tages-Charts
-- Maximale Anzeige-Verzögerung: ~10 Minuten (nur im Chart)
-- Live-Gauges und Energiefluss-Monitor bleiben weiterhin in Echtzeit
+- Kein automatisches Neuladen aller Daten beim Tab-Wechsel
+- Daten werden erst nach 5 Minuten als veraltet betrachtet
+- Gezielte Refetches (z. B. nach Mutationen via `invalidateQueries`) funktionieren weiterhin normal
+- Deutlich weniger Traffic und schnelleres Gefühl beim Zurückwechseln
 
