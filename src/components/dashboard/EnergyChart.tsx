@@ -265,7 +265,7 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
       const fromDate = format(rangeStart, "yyyy-MM-dd");
       const toDate = format(rangeEnd, "yyyy-MM-dd");
 
-      const { data, error } = await supabase.rpc("get_meter_daily_totals", {
+      const { data, error } = await supabase.rpc("get_meter_daily_totals_split" as any, {
         p_meter_ids: mainMeterIds,
         p_from_date: fromDate,
         p_to_date: toDate,
@@ -273,7 +273,7 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
 
       if (stale) return;
 
-      let results = (data ?? []) as Array<{ meter_id: string; day: string; total_value: number }>;
+      let results = (data ?? []) as Array<{ meter_id: string; day: string; bezug: number; einspeisung: number }>;
 
       if (error) {
         console.error("Error fetching daily totals:", error);
