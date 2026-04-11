@@ -308,18 +308,39 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
       });
       if (!data) return [];
 
-      // Group by day
+      // Check if any meter has negative values (bidirectional)
+      const hasNegative = new Set<string>();
+      for (const row of data) {
+        if (row.total_value < 0) hasNegative.add(row.meter_id);
+      }
+
+      // Group by period label
       const dayMap: Record<string, Record<string, number>> = {};
       for (const row of data) {
         const d = new Date(row.day);
         const label = formatLabel(d, selectedPeriod);
         if (!dayMap[label]) dayMap[label] = {};
-        dayMap[label][row.meter_id] = (dayMap[label][row.meter_id] ?? 0) + row.total_value;
+
+        if (hasNegative.has(row.meter_id)) {
+          // Split into bezug (positive) and einspeisung (negative → absolute)
+          const bezugKey = `${row.meter_id}_bezug`;
+          const einspeisungKey = `${row.meter_id}_einspeisung`;
+          if (row.total_value >= 0) {
+            dayMap[label][bezugKey] = (dayMap[label][bezugKey] ?? 0) + row.total_value;
+            dayMap[label][einspeisungKey] = dayMap[label][einspeisungKey] ?? 0;
+          } else {
+            dayMap[label][einspeisungKey] = (dayMap[label][einspeisungKey] ?? 0) + Math.abs(row.total_value);
+            dayMap[label][bezugKey] = dayMap[label][bezugKey] ?? 0;
+          }
+        } else {
+          dayMap[label][row.meter_id] = (dayMap[label][row.meter_id] ?? 0) + row.total_value;
+        }
       }
 
       return Object.entries(dayMap).map(([day, meters]) => ({
         name: day,
         ...meters,
+        __bidirectionalMeterIds: Array.from(hasNegative),
       }));
     },
     enabled: config.meter_ids.length > 0,
@@ -340,11 +361,21 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
     return [config.y_range?.min ?? "auto", config.y_range?.max ?? "auto"];
   }, [chartData, config.meter_ids, config.y_range?.max, config.y_range?.min]);
 
+  // Detect which meters are bidirectional from chart data
+  const bidirectionalMeterIds = useMemo(() => {
+    if (!chartData.length) return new Set<string>();
+    const first = chartData[0] as any;
+    const ids: string[] = first?.__bidirectionalMeterIds ?? [];
+    return new Set(ids);
+  }, [chartData]);
+
   const getSeriesColor = (idx: number) => {
     const mid = config.meter_ids[idx];
     if (mid && config.series_colors?.[mid]) return config.series_colors[mid];
     return PRESET_COLORS[idx % PRESET_COLORS.length];
   };
+
+  const EINSPEISUNG_COLOR = "#10b981"; // green for feed-in
 
   // Compute single KPI value
   const kpiValue = useMemo(() => {
@@ -443,9 +474,18 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
                       <YAxis tick={{ fontSize: 11 }} domain={yDomain} allowDataOverflow={false} />
                       <Tooltip content={selectedPeriod === "day" ? <DayTooltip unit={displayUnit} /> : undefined} formatter={selectedPeriod !== "day" ? (v: number) => v?.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " " + displayUnit : undefined} />
                       <Legend content={() => null} />
-                      {config.meter_ids.map((mid, i) => (
-                        <Bar key={mid} dataKey={mid} name={meterDetails[mid]?.name || `Zähler ${i + 1}`} fill={getSeriesColor(i)} radius={[2, 2, 0, 0]} hide={hiddenSeries.has(mid)} />
-                      ))}
+                      {config.meter_ids.map((mid, i) => {
+                        if (bidirectionalMeterIds.has(mid)) {
+                          const meterName = meterDetails[mid]?.name || `Zähler ${i + 1}`;
+                          return [
+                            <Bar key={`${mid}_bezug`} dataKey={`${mid}_bezug`} name={`${meterName} Bezug`} fill={getSeriesColor(i)} radius={[2, 2, 0, 0]} hide={hiddenSeries.has(`${mid}_bezug`)} />,
+                            <Bar key={`${mid}_einspeisung`} dataKey={`${mid}_einspeisung`} name={`${meterName} Einspeisung`} fill={EINSPEISUNG_COLOR} radius={[2, 2, 0, 0]} hide={hiddenSeries.has(`${mid}_einspeisung`)} />,
+                          ];
+                        }
+                        return (
+                          <Bar key={mid} dataKey={mid} name={meterDetails[mid]?.name || `Zähler ${i + 1}`} fill={getSeriesColor(i)} radius={[2, 2, 0, 0]} hide={hiddenSeries.has(mid)} />
+                        );
+                      })}
                       {(config.thresholds || []).map((t, i) => (
                         <ReferenceLine key={i} y={t.value} stroke={t.color} strokeDasharray="5 5" label={t.label} />
                       ))}
@@ -454,12 +494,21 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
                 </ResponsiveContainer>
               </div>
               <div className="flex items-center justify-center gap-2 mt-3 flex-wrap">
-                {config.meter_ids.map((mid, i) => {
-                  const hidden = hiddenSeries.has(mid);
+                {config.meter_ids.flatMap((mid, i) => {
+                  if (bidirectionalMeterIds.has(mid) && selectedPeriod !== "day") {
+                    const meterName = meterDetails[mid]?.name || `Zähler ${i + 1}`;
+                    return [
+                      { key: `${mid}_bezug`, label: `${meterName} Bezug`, color: getSeriesColor(i) },
+                      { key: `${mid}_einspeisung`, label: `${meterName} Einspeisung`, color: EINSPEISUNG_COLOR },
+                    ];
+                  }
+                  return [{ key: mid, label: meterDetails[mid]?.name || `Zähler ${i + 1}`, color: getSeriesColor(i) }];
+                }).map((item) => {
+                  const hidden = hiddenSeries.has(item.key);
                   return (
                     <button
-                      key={mid}
-                      onClick={() => handleLegendClick({ dataKey: mid })}
+                      key={item.key}
+                      onClick={() => handleLegendClick({ dataKey: item.key })}
                       className={cn(
                         "inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium transition-colors",
                         hidden
@@ -469,9 +518,9 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
                     >
                       <span
                         className="inline-block h-2.5 w-2.5 rounded-full shrink-0"
-                        style={{ backgroundColor: hidden ? "hsl(var(--muted-foreground))" : getSeriesColor(i) }}
+                        style={{ backgroundColor: hidden ? "hsl(var(--muted-foreground))" : item.color }}
                       />
-                      {meterDetails[mid]?.name || `Zähler ${i + 1}`}
+                      {item.label}
                     </button>
                   );
                 })}

@@ -369,15 +369,28 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
     };
 
     // Helper: build a map of date -> energy bucket from DB daily totals
-    const buildDailyBucketsFromDB = (): Map<string, EnergyBucket> => {
-      const map = new Map<string, EnergyBucket>();
+    // Also tracks bezug/einspeisung split for bidirectional meters
+    const buildDailyBucketsFromDB = (): Map<string, EnergyBucket & Record<string, number>> => {
+      const map = new Map<string, EnergyBucket & Record<string, number>>();
       for (const row of dailyTotals) {
         const info = meterMap[row.meter_id];
         if (!info) continue;
         const dayStr = typeof row.day === "string" ? row.day.split("T")[0] : format(new Date(row.day), "yyyy-MM-dd");
-        if (!map.has(dayStr)) map.set(dayStr, emptyBucket());
+        if (!map.has(dayStr)) map.set(dayStr, { ...emptyBucket() });
         const bucket = map.get(dayStr)!;
-        addToEnergyBucket(bucket, info.energy_type, convertGas(row.meter_id, row.total_value));
+        const converted = convertGas(row.meter_id, row.total_value);
+        addToEnergyBucket(bucket, info.energy_type, converted);
+
+        // For non-day bar charts: split positive (Bezug) and negative (Einspeisung)
+        if (period !== "day") {
+          const bezugKey = `${info.energy_type}_bezug`;
+          const einspeisungKey = `${info.energy_type}_einspeisung`;
+          if (converted >= 0) {
+            bucket[bezugKey] = (bucket[bezugKey] ?? 0) + converted;
+          } else {
+            bucket[einspeisungKey] = (bucket[einspeisungKey] ?? 0) + Math.abs(converted);
+          }
+        }
       }
       return map;
     };
@@ -520,23 +533,31 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
     );
     const manualFiltered = filtered.filter(r => !autoMeterIds.has(r.meter_id));
 
+    // Helper: copy bezug/einspeisung split fields from dbBucket into target
+    const addSplitFields = (target: any, dbBucket: any) => {
+      for (const key of ENERGY_KEYS) {
+        const bk = `${key}_bezug`;
+        const ek = `${key}_einspeisung`;
+        if (dbBucket[bk] != null) target[bk] = (target[bk] ?? 0) + dbBucket[bk];
+        if (dbBucket[ek] != null) target[ek] = (target[ek] ?? 0) + dbBucket[ek];
+      }
+    };
+
     if (period === "week") {
       const days = eachDayOfInterval({ start: rangeStart, end: rangeEnd });
       const todayStr = format(new Date(), "yyyy-MM-dd");
       const dbDailyMap = buildDailyBucketsFromDB();
       return days.map((d, i) => {
         const dateStr = format(d, "yyyy-MM-dd");
-        const bucket = { label: format(d, "EEEEEE", { locale: dateLocale }), ...emptyBucket() };
-        // Add DB daily totals for this day (automatic meters)
+        const bucket: any = { label: format(d, "EEEEEE", { locale: dateLocale }), ...emptyBucket() };
         const dbBucket = dbDailyMap.get(dateStr);
         if (dbBucket) {
           for (const key of ENERGY_KEYS) addToEnergyBucket(bucket, key, dbBucket[key]);
+          addSplitFields(bucket, dbBucket);
         }
-        // Add manual readings for this day (skip automatic meters – handled above)
         manualFiltered.forEach((r) => {
           if (format(new Date(r.reading_date), "yyyy-MM-dd") === dateStr) addToBucket(bucket, r);
         });
-        // For today: inject live totalDay if no DB/computed value exists yet
         if (dateStr === todayStr && !dbBucket) {
           addLiveTodayToBucket(bucket);
         }
@@ -550,17 +571,15 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
       const dbDailyMap = buildDailyBucketsFromDB();
       return days.map((d) => {
         const dateStr = format(d, "yyyy-MM-dd");
-        const bucket = { label: format(d, "d."), ...emptyBucket() };
-        // Add DB daily totals
+        const bucket: any = { label: format(d, "d."), ...emptyBucket() };
         const dbBucket = dbDailyMap.get(dateStr);
         if (dbBucket) {
           for (const key of ENERGY_KEYS) addToEnergyBucket(bucket, key, dbBucket[key]);
+          addSplitFields(bucket, dbBucket);
         }
-        // Add manual readings (skip automatic meters – handled via DB daily totals)
         manualFiltered.forEach((r) => {
           if (format(new Date(r.reading_date), "yyyy-MM-dd") === dateStr) addToBucket(bucket, r);
         });
-        // For today: inject live totalDay
         if (dateStr === todayStr && !dbBucket) {
           addLiveTodayToBucket(bucket);
         }
@@ -569,7 +588,7 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
     }
 
     if (period === "quarter") {
-      const weekMap = new Map<number, EnergyBucketWithLabel>();
+      const weekMap = new Map<number, any>();
       const days = eachDayOfInterval({ start: rangeStart, end: rangeEnd });
       const todayStr = format(new Date(), "yyyy-MM-dd");
       const dbDailyMap = buildDailyBucketsFromDB();
@@ -578,17 +597,15 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
         if (!weekMap.has(wk)) weekMap.set(wk, { label: `${cwPrefix}${wk}`, ...emptyBucket() });
         const dateStr = format(d, "yyyy-MM-dd");
         const bucket = weekMap.get(wk)!;
-        // Add DB daily totals
         const dbBucket = dbDailyMap.get(dateStr);
         if (dbBucket) {
           for (const key of ENERGY_KEYS) addToEnergyBucket(bucket, key, dbBucket[key]);
+          addSplitFields(bucket, dbBucket);
         }
-        // For today: inject live totalDay
         if (dateStr === todayStr && !dbBucket) {
           addLiveTodayToBucket(bucket);
         }
       });
-      // Add manual readings (skip automatic meters)
       manualFiltered.forEach((r) => {
         const wk = getISOWeek(new Date(r.reading_date));
         const bucket = weekMap.get(wk);
@@ -599,28 +616,38 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
 
     // year
     const monthLabels = Array.from({ length: 12 }, (_, i) => T(`month.short.${i}`));
-    const buckets = monthLabels.map((m) => ({ label: m, ...emptyBucket() }));
+    const buckets: any[] = monthLabels.map((m) => ({ label: m, ...emptyBucket() }));
     const todayStr = format(new Date(), "yyyy-MM-dd");
     const dbDailyMap = buildDailyBucketsFromDB();
-    // Distribute DB daily totals into month buckets
     for (const [dateStr, dbBucket] of dbDailyMap.entries()) {
       const monthIdx = new Date(dateStr).getMonth();
       for (const key of ENERGY_KEYS) addToEnergyBucket(buckets[monthIdx], key, dbBucket[key]);
+      addSplitFields(buckets[monthIdx], dbBucket);
     }
-    // Add today's live value if no DB record yet
     if (!dbDailyMap.has(todayStr)) {
       const todayBucket = emptyBucket();
       addLiveTodayToBucket(todayBucket);
       const monthIdx = new Date().getMonth();
       for (const key of ENERGY_KEYS) addToEnergyBucket(buckets[monthIdx], key, todayBucket[key]);
     }
-    // Add manual readings (skip automatic meters)
     manualFiltered.forEach((r) => {
       const month = new Date(r.reading_date).getMonth();
       addToBucket(buckets[month], r);
     });
     return buckets;
   }, [readings, meterMap, period, rangeStart.toISOString(), rangeEnd.toISOString(), livePeriodTotals, offset, periodLabel, locationId, powerReadings, dailyTotals]);
+
+  // Detect which energy types have bidirectional (bezug+einspeisung) data
+  const bidirectionalTypes = useMemo(() => {
+    if (period === "day") return new Set<string>();
+    const types = new Set<string>();
+    for (const bucket of chartData) {
+      for (const key of ENERGY_KEYS) {
+        if ((bucket as any)[`${key}_einspeisung`] > 0) types.add(key);
+      }
+    }
+    return types;
+  }, [chartData, period]);
 
   // Reset offset when period changes (handled by context now)
   const handlePeriodChange = (v: string) => {
@@ -638,6 +665,8 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
         clone[key] = 0;
         if (`real_${key}` in clone) clone[`real_${key}`] = null;
         if (`__gap_${key}` in clone) clone[`__gap_${key}`] = null;
+        clone[`${key}_bezug`] = 0;
+        clone[`${key}_einspeisung`] = 0;
       }
       return clone;
     });
@@ -749,20 +778,35 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
                   <XAxis dataKey="label" tick={tickStyle} tickLine={false} axisLine={false} />
                   <YAxis width={50} tick={tickStyle} tickLine={false} axisLine={false} domain={visibleKeys.length === 0 ? [0, 1] : ['auto', 'auto']} />
                   <Tooltip contentStyle={tooltipStyle} formatter={tooltipFormatter} />
-                  {visibleEnergyKeys.includes("strom") && <Bar dataKey="strom" name={T("energy.strom")} fill={ENERGY_CHART_COLORS.strom} radius={[3, 3, 0, 0]} hide={hiddenKeys.has("strom")} />}
-                  {visibleEnergyKeys.includes("gas") && <Bar dataKey="gas" name={T("energy.gas")} fill={ENERGY_CHART_COLORS.gas} radius={[3, 3, 0, 0]} hide={hiddenKeys.has("gas")} />}
-                  {visibleEnergyKeys.includes("waerme") && <Bar dataKey="waerme" name={T("energy.waerme")} fill={ENERGY_CHART_COLORS.waerme} radius={[3, 3, 0, 0]} hide={hiddenKeys.has("waerme")} />}
-                  {visibleEnergyKeys.includes("wasser") && <Bar dataKey="wasser" name={T("energy.wasser")} fill={ENERGY_CHART_COLORS.wasser} radius={[3, 3, 0, 0]} hide={hiddenKeys.has("wasser")} />}
+                  {visibleEnergyKeys.map((key) => {
+                    if (bidirectionalTypes.has(key)) {
+                      return (
+                        <React.Fragment key={key}>
+                          <Bar dataKey={`${key}_bezug`} name={`${T(`energy.${key}`)} Bezug`} fill={ENERGY_CHART_COLORS[key]} radius={[3, 3, 0, 0]} hide={hiddenKeys.has(key)} />
+                          <Bar dataKey={`${key}_einspeisung`} name={`${T(`energy.${key}`)} Einspeisung`} fill="#10b981" radius={[3, 3, 0, 0]} hide={hiddenKeys.has(key)} />
+                        </React.Fragment>
+                      );
+                    }
+                    return <Bar key={key} dataKey={key} name={T(`energy.${key}`)} fill={ENERGY_CHART_COLORS[key]} radius={[3, 3, 0, 0]} hide={hiddenKeys.has(key)} />;
+                  })}
                 </BarChart>
               )}
             </ResponsiveContainer>
             <div className="flex items-center justify-center gap-2 mt-3 flex-wrap">
-              {visibleEnergyKeys.map((key) => {
-                const hidden = hiddenKeys.has(key);
+              {visibleEnergyKeys.flatMap((key) => {
+                if (bidirectionalTypes.has(key)) {
+                  return [
+                    { dataKey: key, label: `${T(`energy.${key}`)} Bezug`, color: ENERGY_CHART_COLORS[key] },
+                    { dataKey: key, label: `${T(`energy.${key}`)} Einspeisung`, color: "#10b981" },
+                  ];
+                }
+                return [{ dataKey: key, label: T(`energy.${key}`), color: ENERGY_CHART_COLORS[key] }];
+              }).map((item, idx) => {
+                const hidden = hiddenKeys.has(item.dataKey);
                 return (
                   <button
-                    key={key}
-                    onClick={() => handleLegendClick({ dataKey: key })}
+                    key={`${item.dataKey}-${idx}`}
+                    onClick={() => handleLegendClick({ dataKey: item.dataKey })}
                     className={cn(
                       "inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium transition-colors",
                       hidden
@@ -772,9 +816,9 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
                   >
                     <span
                       className="inline-block h-2.5 w-2.5 rounded-full shrink-0"
-                      style={{ backgroundColor: hidden ? "hsl(var(--muted-foreground))" : ENERGY_CHART_COLORS[key] }}
+                      style={{ backgroundColor: hidden ? "hsl(var(--muted-foreground))" : item.color }}
                     />
-                    {T(`energy.${key}`)}
+                    {item.label}
                   </button>
                 );
               })}
