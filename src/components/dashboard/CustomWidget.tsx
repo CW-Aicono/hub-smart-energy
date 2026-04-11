@@ -474,9 +474,18 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
                       <YAxis tick={{ fontSize: 11 }} domain={yDomain} allowDataOverflow={false} />
                       <Tooltip content={selectedPeriod === "day" ? <DayTooltip unit={displayUnit} /> : undefined} formatter={selectedPeriod !== "day" ? (v: number) => v?.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " " + displayUnit : undefined} />
                       <Legend content={() => null} />
-                      {config.meter_ids.map((mid, i) => (
-                        <Bar key={mid} dataKey={mid} name={meterDetails[mid]?.name || `Zähler ${i + 1}`} fill={getSeriesColor(i)} radius={[2, 2, 0, 0]} hide={hiddenSeries.has(mid)} />
-                      ))}
+                      {config.meter_ids.map((mid, i) => {
+                        if (bidirectionalMeterIds.has(mid)) {
+                          const meterName = meterDetails[mid]?.name || `Zähler ${i + 1}`;
+                          return [
+                            <Bar key={`${mid}_bezug`} dataKey={`${mid}_bezug`} name={`${meterName} Bezug`} fill={getSeriesColor(i)} radius={[2, 2, 0, 0]} hide={hiddenSeries.has(`${mid}_bezug`)} />,
+                            <Bar key={`${mid}_einspeisung`} dataKey={`${mid}_einspeisung`} name={`${meterName} Einspeisung`} fill={EINSPEISUNG_COLOR} radius={[2, 2, 0, 0]} hide={hiddenSeries.has(`${mid}_einspeisung`)} />,
+                          ];
+                        }
+                        return (
+                          <Bar key={mid} dataKey={mid} name={meterDetails[mid]?.name || `Zähler ${i + 1}`} fill={getSeriesColor(i)} radius={[2, 2, 0, 0]} hide={hiddenSeries.has(mid)} />
+                        );
+                      })}
                       {(config.thresholds || []).map((t, i) => (
                         <ReferenceLine key={i} y={t.value} stroke={t.color} strokeDasharray="5 5" label={t.label} />
                       ))}
@@ -485,12 +494,21 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
                 </ResponsiveContainer>
               </div>
               <div className="flex items-center justify-center gap-2 mt-3 flex-wrap">
-                {config.meter_ids.map((mid, i) => {
-                  const hidden = hiddenSeries.has(mid);
+                {config.meter_ids.flatMap((mid, i) => {
+                  if (bidirectionalMeterIds.has(mid) && selectedPeriod !== "day") {
+                    const meterName = meterDetails[mid]?.name || `Zähler ${i + 1}`;
+                    return [
+                      { key: `${mid}_bezug`, label: `${meterName} Bezug`, color: getSeriesColor(i) },
+                      { key: `${mid}_einspeisung`, label: `${meterName} Einspeisung`, color: EINSPEISUNG_COLOR },
+                    ];
+                  }
+                  return [{ key: mid, label: meterDetails[mid]?.name || `Zähler ${i + 1}`, color: getSeriesColor(i) }];
+                }).map((item) => {
+                  const hidden = hiddenSeries.has(item.key);
                   return (
                     <button
-                      key={mid}
-                      onClick={() => handleLegendClick({ dataKey: mid })}
+                      key={item.key}
+                      onClick={() => handleLegendClick({ dataKey: item.key })}
                       className={cn(
                         "inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium transition-colors",
                         hidden
@@ -500,9 +518,9 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
                     >
                       <span
                         className="inline-block h-2.5 w-2.5 rounded-full shrink-0"
-                        style={{ backgroundColor: hidden ? "hsl(var(--muted-foreground))" : getSeriesColor(i) }}
+                        style={{ backgroundColor: hidden ? "hsl(var(--muted-foreground))" : item.color }}
                       />
-                      {meterDetails[mid]?.name || `Zähler ${i + 1}`}
+                      {item.label}
                     </button>
                   );
                 })}
