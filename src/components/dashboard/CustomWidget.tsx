@@ -300,47 +300,43 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
         });
       }
 
-      // Non-day periods: use daily totals
-      const { data } = await supabase.rpc("get_meter_daily_totals", {
+      // Non-day periods: use split daily totals for proper bezug/einspeisung
+      const { data } = await supabase.rpc("get_meter_daily_totals_split" as any, {
         p_meter_ids: config.meter_ids,
         p_from_date: from.toISOString().split("T")[0],
         p_to_date: to.toISOString().split("T")[0],
       });
       if (!data) return [];
 
-      // Check if any meter has negative values (bidirectional)
-      const hasNegative = new Set<string>();
-      for (const row of data) {
-        if (row.total_value < 0) hasNegative.add(row.meter_id);
+      const rows = data as Array<{ meter_id: string; day: string; bezug: number; einspeisung: number }>;
+
+      // Check which meters have any einspeisung (bidirectional)
+      const hasBidi = new Set<string>();
+      for (const row of rows) {
+        if (row.einspeisung > 0) hasBidi.add(row.meter_id);
       }
 
       // Group by period label
       const dayMap: Record<string, Record<string, number>> = {};
-      for (const row of data) {
+      for (const row of rows) {
         const d = new Date(row.day);
         const label = formatLabel(d, selectedPeriod);
         if (!dayMap[label]) dayMap[label] = {};
 
-        if (hasNegative.has(row.meter_id)) {
-          // Split into bezug (positive) and einspeisung (negative → absolute)
+        if (hasBidi.has(row.meter_id)) {
           const bezugKey = `${row.meter_id}_bezug`;
           const einspeisungKey = `${row.meter_id}_einspeisung`;
-          if (row.total_value >= 0) {
-            dayMap[label][bezugKey] = (dayMap[label][bezugKey] ?? 0) + row.total_value;
-            dayMap[label][einspeisungKey] = dayMap[label][einspeisungKey] ?? 0;
-          } else {
-            dayMap[label][einspeisungKey] = (dayMap[label][einspeisungKey] ?? 0) + Math.abs(row.total_value);
-            dayMap[label][bezugKey] = dayMap[label][bezugKey] ?? 0;
-          }
+          dayMap[label][bezugKey] = (dayMap[label][bezugKey] ?? 0) + row.bezug;
+          dayMap[label][einspeisungKey] = (dayMap[label][einspeisungKey] ?? 0) + row.einspeisung;
         } else {
-          dayMap[label][row.meter_id] = (dayMap[label][row.meter_id] ?? 0) + row.total_value;
+          dayMap[label][row.meter_id] = (dayMap[label][row.meter_id] ?? 0) + row.bezug;
         }
       }
 
       return Object.entries(dayMap).map(([day, meters]) => ({
         name: day,
         ...meters,
-        __bidirectionalMeterIds: Array.from(hasNegative),
+        __bidirectionalMeterIds: Array.from(hasBidi),
       }));
     },
     enabled: config.meter_ids.length > 0,

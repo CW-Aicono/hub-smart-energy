@@ -137,7 +137,7 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
   const visibleEnergyKeys = useMemo(() => ENERGY_KEYS.filter(k => allowedTypes.has(k)), [allowedTypes]);
 
   // DB-based daily totals for non-day periods
-  const [dailyTotals, setDailyTotals] = useState<Array<{ meter_id: string; day: string; total_value: number }>>([]);
+  const [dailyTotals, setDailyTotals] = useState<Array<{ meter_id: string; day: string; bezug: number; einspeisung: number }>>([]);
   const [dailyTotalsLoading, setDailyTotalsLoading] = useState(false);
 
   // Map "all" to "year" for this chart
@@ -265,7 +265,7 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
       const fromDate = format(rangeStart, "yyyy-MM-dd");
       const toDate = format(rangeEnd, "yyyy-MM-dd");
 
-      const { data, error } = await supabase.rpc("get_meter_daily_totals", {
+      const { data, error } = await supabase.rpc("get_meter_daily_totals_split" as any, {
         p_meter_ids: mainMeterIds,
         p_from_date: fromDate,
         p_to_date: toDate,
@@ -273,7 +273,7 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
 
       if (stale) return;
 
-      let results = (data ?? []) as Array<{ meter_id: string; day: string; total_value: number }>;
+      let results = (data ?? []) as Array<{ meter_id: string; day: string; bezug: number; einspeisung: number }>;
 
       if (error) {
         console.error("Error fetching daily totals:", error);
@@ -321,18 +321,25 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
 
           if (!stale && allPowerData.length > 0) {
             const missingSet = new Set(missingDays);
-            const dayMeterTotals = new Map<string, Map<string, number>>();
+            const dayMeterSplit = new Map<string, Map<string, { bezug: number; einspeisung: number }>>();
             for (const row of allPowerData) {
               const dayStr = format(new Date(row.bucket), "yyyy-MM-dd");
               if (!missingSet.has(dayStr)) continue;
-              if (!dayMeterTotals.has(dayStr)) dayMeterTotals.set(dayStr, new Map());
-              const meterMap = dayMeterTotals.get(dayStr)!;
-              meterMap.set(row.meter_id, (meterMap.get(row.meter_id) ?? 0) + (row.power_avg * 5.0 / 60.0));
+              if (!dayMeterSplit.has(dayStr)) dayMeterSplit.set(dayStr, new Map());
+              const meterMap = dayMeterSplit.get(dayStr)!;
+              if (!meterMap.has(row.meter_id)) meterMap.set(row.meter_id, { bezug: 0, einspeisung: 0 });
+              const entry = meterMap.get(row.meter_id)!;
+              const kwh = row.power_avg * 5.0 / 60.0;
+              if (row.power_avg >= 0) {
+                entry.bezug += kwh;
+              } else {
+                entry.einspeisung += Math.abs(kwh);
+              }
             }
-            for (const [dayStr, meterMap] of dayMeterTotals) {
-              for (const [meterId, totalValue] of meterMap) {
-                if (totalValue !== 0) {
-                  results.push({ meter_id: meterId, day: dayStr, total_value: totalValue });
+            for (const [dayStr, meterMap] of dayMeterSplit) {
+              for (const [meterId, split] of meterMap) {
+                if (split.bezug !== 0 || split.einspeisung !== 0) {
+                  results.push({ meter_id: meterId, day: dayStr, bezug: split.bezug, einspeisung: split.einspeisung });
                 }
               }
             }
@@ -378,18 +385,16 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
         const dayStr = typeof row.day === "string" ? row.day.split("T")[0] : format(new Date(row.day), "yyyy-MM-dd");
         if (!map.has(dayStr)) map.set(dayStr, { ...emptyBucket() });
         const bucket = map.get(dayStr)!;
-        const converted = convertGas(row.meter_id, row.total_value);
+        const netValue = row.bezug - row.einspeisung;
+        const converted = convertGas(row.meter_id, netValue);
         addToEnergyBucket(bucket, info.energy_type, converted);
 
-        // For non-day bar charts: split positive (Bezug) and negative (Einspeisung)
+        // For non-day bar charts: use pre-split bezug/einspeisung
         if (period !== "day") {
           const bezugKey = `${info.energy_type}_bezug`;
           const einspeisungKey = `${info.energy_type}_einspeisung`;
-          if (converted >= 0) {
-            bucket[bezugKey] = (bucket[bezugKey] ?? 0) + converted;
-          } else {
-            bucket[einspeisungKey] = (bucket[einspeisungKey] ?? 0) + Math.abs(converted);
-          }
+          bucket[bezugKey] = (bucket[bezugKey] ?? 0) + convertGas(row.meter_id, row.bezug);
+          bucket[einspeisungKey] = (bucket[einspeisungKey] ?? 0) + convertGas(row.meter_id, row.einspeisung);
         }
       }
       return map;
