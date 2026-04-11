@@ -162,6 +162,7 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
   // Strategy: Use server-side get_power_readings_5min function which automatically
   // aggregates raw data into 5min buckets when pre-aggregated data isn't available.
   // For today, supplement with raw data for the last 10 minutes (not yet aggregated).
+  const isTodayView = period === "day" && offset === 0 && new Date().toDateString() === getRefDate("day", 0).toDateString();
   useEffect(() => {
     if (period !== "day") {
       setPowerReadings([]);
