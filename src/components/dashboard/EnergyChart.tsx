@@ -228,7 +228,17 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
       }
     };
     fetchPower();
-    return () => { stale = true; };
+
+    // Auto-refetch every 5 minutes for today's view so new aggregated buckets appear
+    let interval: ReturnType<typeof setInterval> | null = null;
+    if (isToday) {
+      interval = setInterval(fetchPower, 5 * 60 * 1000);
+    }
+
+    return () => {
+      stale = true;
+      if (interval) clearInterval(interval);
+    };
   }, [period, rangeStart.toISOString(), rangeEnd.toISOString(), meters, locationId, offset]);
 
   // Fetch daily totals from DB for non-day periods (week, month, quarter, year)
