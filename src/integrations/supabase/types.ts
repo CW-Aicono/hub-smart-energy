@@ -5167,6 +5167,15 @@ export type Database = {
           total_value: number
         }[]
       }
+      get_meter_daily_totals_split: {
+        Args: { p_from_date: string; p_meter_ids: string[]; p_to_date: string }
+        Returns: {
+          bezug: number
+          day: string
+          einspeisung: number
+          meter_id: string
+        }[]
+      }
       get_meter_period_sums: {
         Args: { p_from_date: string; p_meter_ids: string[]; p_to_date: string }
         Returns: {
