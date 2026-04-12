@@ -9,7 +9,9 @@ import { useChargingTariffs, ChargingTariff } from "@/hooks/useChargingTariffs";
 import { useChargingInvoices } from "@/hooks/useChargingInvoices";
 import { useChargePoints } from "@/hooks/useChargePoints";
 import { useTenant } from "@/hooks/useTenant";
+import { useChargingInvoiceSettings } from "@/hooks/useChargingInvoiceSettings";
 import ChargingUsersTab from "@/components/charging/ChargingUsersTab";
+import ChargingInvoiceSettingsDialog from "@/components/charging/ChargingInvoiceSettingsDialog";
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -21,9 +23,12 @@ import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Receipt, Euro, Zap, Clock, Trash2, Edit, Users, Globe, Calendar, TrendingUp, Percent, FileText, Send } from "lucide-react";
+import { Plus, Receipt, Euro, Zap, Clock, Trash2, Edit, Users, Globe, Calendar, TrendingUp, Percent, FileText, Send, Settings, Download } from "lucide-react";
 import { format } from "date-fns";
 import { fmtNum, fmtCurrency, fmtKwh } from "@/lib/formatCharging";
+import { generateChargingInvoicePdf, downloadBlob } from "@/lib/generateChargingInvoicePdf";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "@/hooks/use-toast";
 
 const ChargingBilling = () => {
   const { user, loading: authLoading } = useAuth();
@@ -36,6 +41,8 @@ const ChargingBilling = () => {
   const { invoices, generateInvoices, sendInvoices, finalizeInvoice, markAsPaid } = useChargingInvoices();
   const [selectedInvoice, setSelectedInvoice] = useState<any | null>(null);
   const { chargePoints } = useChargePoints();
+  const { settings: invoiceSettings } = useChargingInvoiceSettings();
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const [tariffOpen, setTariffOpen] = useState(false);
   const [editTariff, setEditTariff] = useState<ChargingTariff | null>(null);
@@ -324,6 +331,9 @@ const ChargingBilling = () => {
                   <CardTitle>{t("charging.invoices" as any)}</CardTitle>
                   {isAdmin && (
                     <div className="flex gap-2">
+                      <Button size="sm" variant="outline" onClick={() => setSettingsOpen(true)}>
+                        <Settings className="h-4 w-4 mr-2" />Rechnungsdesign
+                      </Button>
                       <Dialog open={generateOpen} onOpenChange={setGenerateOpen}>
                         <DialogTrigger asChild>
                           <Button size="sm"><FileText className="h-4 w-4 mr-2" />Rechnungen erstellen</Button>
@@ -458,6 +468,25 @@ const ChargingBilling = () => {
                   )}
                   <DialogFooter>
                     <Button variant="outline" onClick={() => setSelectedInvoice(null)}>Schließen</Button>
+                    {selectedInvoice && invoiceSettings && (
+                      <Button
+                        variant="outline"
+                        onClick={async () => {
+                          try {
+                            const blob = await generateChargingInvoicePdf({
+                              invoice: selectedInvoice,
+                              settings: invoiceSettings,
+                            });
+                            const filename = `Rechnung_${selectedInvoice.invoice_number || selectedInvoice.id}.pdf`;
+                            downloadBlob(blob, filename);
+                          } catch (e: any) {
+                            toast({ title: "PDF-Fehler", description: e.message, variant: "destructive" });
+                          }
+                        }}
+                      >
+                        <Download className="h-4 w-4 mr-2" />PDF
+                      </Button>
+                    )}
                     {selectedInvoice?.status === "draft" && isAdmin && (
                       <Button
                         onClick={() => {
@@ -504,6 +533,7 @@ const ChargingBilling = () => {
             </TabsContent>
           </Tabs>
         </div>
+        <ChargingInvoiceSettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
       </main>
     </div>
   );
