@@ -344,6 +344,9 @@ export const TaskDetailSheet = ({ task, open, onOpenChange }: TaskDetailSheetPro
               )}
             </div>
 
+            {/* Images */}
+            <TaskImageGallery taskId={task.id} />
+
             {/* Status + Priority row */}
             <div className="flex gap-4 flex-wrap">
               <div className="space-y-1.5">
