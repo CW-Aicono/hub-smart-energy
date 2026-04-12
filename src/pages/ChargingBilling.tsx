@@ -331,6 +331,9 @@ const ChargingBilling = () => {
                   <CardTitle>{t("charging.invoices" as any)}</CardTitle>
                   {isAdmin && (
                     <div className="flex gap-2">
+                      <Button size="sm" variant="outline" onClick={() => setSettingsOpen(true)}>
+                        <Settings className="h-4 w-4 mr-2" />Rechnungsdesign
+                      </Button>
                       <Dialog open={generateOpen} onOpenChange={setGenerateOpen}>
                         <DialogTrigger asChild>
                           <Button size="sm"><FileText className="h-4 w-4 mr-2" />Rechnungen erstellen</Button>
