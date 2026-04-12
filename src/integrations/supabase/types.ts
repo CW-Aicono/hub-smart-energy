@@ -784,6 +784,65 @@ export type Database = {
           },
         ]
       }
+      charging_invoice_settings: {
+        Row: {
+          bank_name: string | null
+          bic: string | null
+          company_address: string
+          company_email: string | null
+          company_name: string
+          company_phone: string | null
+          created_at: string
+          footer_text: string | null
+          iban: string | null
+          id: string
+          logo_url: string | null
+          tax_id: string | null
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          bank_name?: string | null
+          bic?: string | null
+          company_address?: string
+          company_email?: string | null
+          company_name?: string
+          company_phone?: string | null
+          created_at?: string
+          footer_text?: string | null
+          iban?: string | null
+          id?: string
+          logo_url?: string | null
+          tax_id?: string | null
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          bank_name?: string | null
+          bic?: string | null
+          company_address?: string
+          company_email?: string | null
+          company_name?: string
+          company_phone?: string | null
+          created_at?: string
+          footer_text?: string | null
+          iban?: string | null
+          id?: string
+          logo_url?: string | null
+          tax_id?: string | null
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "charging_invoice_settings_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: true
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       charging_invoices: {
         Row: {
           created_at: string
@@ -794,6 +853,7 @@ export type Database = {
           invoice_number: string | null
           issued_at: string | null
           net_amount: number
+          pdf_storage_path: string | null
           period_end: string | null
           period_start: string | null
           session_id: string | null
@@ -815,6 +875,7 @@ export type Database = {
           invoice_number?: string | null
           issued_at?: string | null
           net_amount?: number
+          pdf_storage_path?: string | null
           period_end?: string | null
           period_start?: string | null
           session_id?: string | null
@@ -836,6 +897,7 @@ export type Database = {
           invoice_number?: string | null
           issued_at?: string | null
           net_amount?: number
+          pdf_storage_path?: string | null
           period_end?: string | null
           period_start?: string | null
           session_id?: string | null
