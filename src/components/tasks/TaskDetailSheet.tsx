@@ -16,8 +16,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   User, ExternalLink, Zap, AlertTriangle, PlugZap,
   Clock, CheckCircle2, Circle, ArrowRight, XCircle, CalendarDays,
-  History, MessageSquare, ArrowLeftRight, Send, Pencil, Check, X,
+  History, MessageSquare, ArrowLeftRight, Send, Pencil, Check, X, ImageIcon,
 } from "lucide-react";
+import { TaskImageGallery } from "./TaskImageGallery";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { de, enUS, es, nl } from "date-fns/locale";
