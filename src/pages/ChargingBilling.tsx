@@ -9,7 +9,9 @@ import { useChargingTariffs, ChargingTariff } from "@/hooks/useChargingTariffs";
 import { useChargingInvoices } from "@/hooks/useChargingInvoices";
 import { useChargePoints } from "@/hooks/useChargePoints";
 import { useTenant } from "@/hooks/useTenant";
+import { useChargingInvoiceSettings } from "@/hooks/useChargingInvoiceSettings";
 import ChargingUsersTab from "@/components/charging/ChargingUsersTab";
+import ChargingInvoiceSettingsDialog from "@/components/charging/ChargingInvoiceSettingsDialog";
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -21,9 +23,12 @@ import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Receipt, Euro, Zap, Clock, Trash2, Edit, Users, Globe, Calendar, TrendingUp, Percent, FileText, Send } from "lucide-react";
+import { Plus, Receipt, Euro, Zap, Clock, Trash2, Edit, Users, Globe, Calendar, TrendingUp, Percent, FileText, Send, Settings, Download } from "lucide-react";
 import { format } from "date-fns";
 import { fmtNum, fmtCurrency, fmtKwh } from "@/lib/formatCharging";
+import { generateChargingInvoicePdf, downloadBlob } from "@/lib/generateChargingInvoicePdf";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "@/hooks/use-toast";
 
 const ChargingBilling = () => {
   const { user, loading: authLoading } = useAuth();
