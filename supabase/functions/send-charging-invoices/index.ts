@@ -422,12 +422,55 @@ serve(async (req) => {
                 primaryColor, accentColor, invoiceData?.invoice_date ?? invoiceDate,
               );
 
+              // Upload invoice HTML to storage and get signed download URL
+              let downloadUrl = "";
+              try {
+                const storagePath = `${tenantId}/${invoiceNumber.replace(/[^a-zA-Z0-9-]/g, "_")}.html`;
+                const htmlBlob = new Blob([htmlContent], { type: "text/html" });
+                await supabase.storage.from("charging-invoices").upload(storagePath, htmlBlob, {
+                  contentType: "text/html",
+                  upsert: true,
+                });
+
+                const { data: signedData } = await supabase.storage
+                  .from("charging-invoices")
+                  .createSignedUrl(storagePath, 60 * 60 * 24 * 30); // 30 days
+
+                if (signedData?.signedUrl) {
+                  downloadUrl = signedData.signedUrl;
+                }
+
+                // Update invoice record with storage path
+                const invoiceId = invoiceData?.id;
+                if (invoiceId) {
+                  await supabase.from("charging_invoices").update({ pdf_storage_path: storagePath }).eq("id", invoiceId);
+                }
+              } catch (storageErr: any) {
+                tenantResult.errors.push(`Storage upload for ${user.name} failed: ${storageErr.message}`);
+              }
+
+              // Build email with download link
+              const downloadSection = downloadUrl
+                ? `<div style="text-align:center;margin:24px 0">
+                    <a href="${downloadUrl}" target="_blank" style="display:inline-block;padding:12px 28px;background:linear-gradient(135deg,${primaryColor},${accentColor});color:#ffffff;text-decoration:none;border-radius:8px;font-size:14px;font-weight:600">
+                      📥 Rechnung herunterladen
+                    </a>
+                    <div style="font-size:11px;color:#94a3b8;margin-top:8px">Der Download-Link ist 30 Tage gültig.</div>
+                  </div>`
+                : "";
+
+              // Insert download section before footer
+              const emailHtml = htmlContent.replace(
+                '<!-- Footer -->',
+                `${downloadSection}\n  <!-- Footer -->`
+              );
+
               try {
                 await resend.emails.send({
                   from: `${tenantName || "Ladeinfrastruktur"} <noreply@mailtest.my-ips.de>`,
                   to: [user.email],
                   subject: `Laderechnung ${invoiceNumber} – ${period.label}`,
-                  html: htmlContent,
+                  html: emailHtml,
                 });
                 tenantResult.emails_sent++;
               } catch (emailErr: any) {
