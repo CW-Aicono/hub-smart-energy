@@ -6,8 +6,10 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useTasks, TaskPriority } from "@/hooks/useTasks";
+import { useTaskAttachments } from "@/hooks/useTaskAttachments";
 import { CalendarIcon, UserIcon, ExternalLinkIcon } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { TaskImageGallery } from "./TaskImageGallery";
 
 interface CreateTaskDialogProps {
   open: boolean;
@@ -16,6 +18,7 @@ interface CreateTaskDialogProps {
 
 export const CreateTaskDialog = ({ open, onOpenChange }: CreateTaskDialogProps) => {
   const { createTask, tenantUsers } = useTasks();
+  const { uploadAttachment } = useTaskAttachments(null);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [priority, setPriority] = useState<TaskPriority>("medium");
@@ -25,10 +28,12 @@ export const CreateTaskDialog = ({ open, onOpenChange }: CreateTaskDialogProps) 
   const [externalName, setExternalName] = useState("");
   const [externalEmail, setExternalEmail] = useState("");
   const [externalPhone, setExternalPhone] = useState("");
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
 
   const reset = () => {
     setTitle(""); setDescription(""); setPriority("medium"); setDueDate("");
     setSelectedUserId(""); setExternalName(""); setExternalEmail(""); setExternalPhone("");
+    setPendingFiles([]);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -44,7 +49,7 @@ export const CreateTaskDialog = ({ open, onOpenChange }: CreateTaskDialogProps) 
       assignedToName = user?.contact_person ?? user?.email ?? selectedUserId;
     }
 
-    await createTask.mutateAsync({
+    const task = await createTask.mutateAsync({
       title,
       description: description || undefined,
       priority,
@@ -56,13 +61,21 @@ export const CreateTaskDialog = ({ open, onOpenChange }: CreateTaskDialogProps) 
       external_contact_phone: assigneeTab === "external" ? externalPhone || undefined : undefined,
       source_type: "manual",
     });
+
+    // Upload queued images
+    if (task?.id && pendingFiles.length > 0) {
+      for (const file of pendingFiles) {
+        await uploadAttachment.mutateAsync({ taskId: task.id, file });
+      }
+    }
+
     reset();
     onOpenChange(false);
   };
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) reset(); onOpenChange(v); }}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Neue Aufgabe erstellen</DialogTitle>
         </DialogHeader>
@@ -93,6 +106,14 @@ export const CreateTaskDialog = ({ open, onOpenChange }: CreateTaskDialogProps) 
               <Input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
             </div>
           </div>
+
+          {/* Images */}
+          <TaskImageGallery
+            taskId={null}
+            pendingFiles={pendingFiles}
+            onPendingFilesChange={setPendingFiles}
+            compact
+          />
 
           <div className="space-y-1.5">
             <Label>Zuweisung</Label>

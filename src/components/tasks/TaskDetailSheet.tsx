@@ -16,8 +16,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   User, ExternalLink, Zap, AlertTriangle, PlugZap,
   Clock, CheckCircle2, Circle, ArrowRight, XCircle, CalendarDays,
-  History, MessageSquare, ArrowLeftRight, Send, Pencil, Check, X,
+  History, MessageSquare, ArrowLeftRight, Send, Pencil, Check, X, ImageIcon,
 } from "lucide-react";
+import { TaskImageGallery } from "./TaskImageGallery";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { de, enUS, es, nl } from "date-fns/locale";
@@ -342,6 +343,9 @@ export const TaskDetailSheet = ({ task, open, onOpenChange }: TaskDetailSheetPro
                 </div>
               )}
             </div>
+
+            {/* Images */}
+            <TaskImageGallery taskId={task.id} />
 
             {/* Status + Priority row */}
             <div className="flex gap-4 flex-wrap">
