@@ -212,12 +212,13 @@ const ChargePointDetail = () => {
       // Approximate: project current status onto all days (no historic status log)
       const errorHours = cp && (cp.status === "faulted" || cp.status === "offline") ? hoursInDay : 0;
 
+      const availableHours = Math.max(0, hoursInDay - chargingHours - errorHours);
       days.push({
         day: dayLabel,
         date: dateLabel,
-        available: Math.max(0, hoursInDay - chargingHours - errorHours),
-        charging: chargingHours,
-        error: errorHours,
+        available: hoursInDay > 0 ? (availableHours / hoursInDay) * 100 : 0,
+        charging: hoursInDay > 0 ? (chargingHours / hoursInDay) * 100 : 0,
+        error: hoursInDay > 0 ? (errorHours / hoursInDay) * 100 : 0,
       });
     }
     return days;
@@ -554,7 +555,7 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
                             <YAxis hide />
                             <Tooltip
                               formatter={(value: number, name: string) => [
-                                `${value.toFixed(1)} h`,
+                                `${value.toFixed(1)} %`,
                                 name === "available" ? t("cpd.available" as any) : name === "charging" ? t("cpd.occupied" as any) : t("cpd.error" as any),
                               ]}
                             />
