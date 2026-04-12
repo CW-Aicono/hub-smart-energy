@@ -533,6 +533,7 @@ const ChargingBilling = () => {
             </TabsContent>
           </Tabs>
         </div>
+        <ChargingInvoiceSettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
       </main>
     </div>
   );
