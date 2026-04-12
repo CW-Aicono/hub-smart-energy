@@ -468,6 +468,25 @@ const ChargingBilling = () => {
                   )}
                   <DialogFooter>
                     <Button variant="outline" onClick={() => setSelectedInvoice(null)}>Schließen</Button>
+                    {selectedInvoice && invoiceSettings && (
+                      <Button
+                        variant="outline"
+                        onClick={async () => {
+                          try {
+                            const blob = await generateChargingInvoicePdf({
+                              invoice: selectedInvoice,
+                              settings: invoiceSettings,
+                            });
+                            const filename = `Rechnung_${selectedInvoice.invoice_number || selectedInvoice.id}.pdf`;
+                            downloadBlob(blob, filename);
+                          } catch (e: any) {
+                            toast({ title: "PDF-Fehler", description: e.message, variant: "destructive" });
+                          }
+                        }}
+                      >
+                        <Download className="h-4 w-4 mr-2" />PDF
+                      </Button>
+                    )}
                     {selectedInvoice?.status === "draft" && isAdmin && (
                       <Button
                         onClick={() => {
