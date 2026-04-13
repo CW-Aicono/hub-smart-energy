@@ -6,7 +6,7 @@ import { toast } from "sonner";
 export interface SolarChargingConfig {
   id: string;
   tenant_id: string;
-  location_id: string;
+  group_id: string;
   reference_meter_id: string | null;
   min_charge_power_w: number;
   safety_buffer_w: number;
@@ -16,29 +16,29 @@ export interface SolarChargingConfig {
   updated_at: string;
 }
 
-export function useSolarChargingConfig(locationId?: string) {
+export function useSolarChargingConfig(groupId?: string) {
   const { tenantId } = useTenantQuery();
   const queryClient = useQueryClient();
-  const queryKey = ["solar-charging-config", tenantId, locationId];
+  const queryKey = ["solar-charging-config", tenantId, groupId];
 
   const { data: config, isLoading } = useQuery({
     queryKey,
     queryFn: async () => {
-      if (!tenantId || !locationId) return null;
+      if (!tenantId || !groupId) return null;
       const { data, error } = await supabase
         .from("solar_charging_config")
         .select("*")
         .eq("tenant_id", tenantId)
-        .eq("location_id", locationId)
+        .eq("group_id", groupId)
         .maybeSingle();
       if (error) throw error;
-      return data as SolarChargingConfig | null;
+      return data as unknown as SolarChargingConfig | null;
     },
-    enabled: !!tenantId && !!locationId,
+    enabled: !!tenantId && !!groupId,
   });
 
   const upsert = useMutation({
-    mutationFn: async (values: Partial<SolarChargingConfig> & { location_id: string }) => {
+    mutationFn: async (values: Partial<SolarChargingConfig> & { group_id: string }) => {
       if (!tenantId) throw new Error("No tenant");
       const payload = { ...values, tenant_id: tenantId };
       
@@ -67,23 +67,23 @@ export function useSolarChargingConfig(locationId?: string) {
   return { config, isLoading, upsert };
 }
 
-export function useSolarChargingLog(locationId?: string) {
+export function useSolarChargingLog(groupId?: string) {
   const { tenantId } = useTenantQuery();
 
   return useQuery({
-    queryKey: ["solar-charging-log", tenantId, locationId],
+    queryKey: ["solar-charging-log", tenantId, groupId],
     queryFn: async () => {
-      if (!tenantId || !locationId) return [];
+      if (!tenantId || !groupId) return [];
       const { data, error } = await supabase
         .from("solar_charging_log")
         .select("*")
         .eq("tenant_id", tenantId)
-        .eq("location_id", locationId)
+        .eq("group_id", groupId)
         .order("executed_at", { ascending: false })
         .limit(50);
       if (error) throw error;
       return data as any[];
     },
-    enabled: !!tenantId && !!locationId,
+    enabled: !!tenantId && !!groupId,
   });
 }
