@@ -467,6 +467,7 @@ export type Database = {
           connector_id: number
           connector_type: string
           created_at: string
+          display_order: number
           id: string
           last_status_at: string | null
           max_power_kw: number
@@ -479,6 +480,7 @@ export type Database = {
           connector_id: number
           connector_type?: string
           created_at?: string
+          display_order?: number
           id?: string
           last_status_at?: string | null
           max_power_kw?: number
@@ -491,6 +493,7 @@ export type Database = {
           connector_id?: number
           connector_type?: string
           created_at?: string
+          display_order?: number
           id?: string
           last_status_at?: string | null
           max_power_kw?: number
