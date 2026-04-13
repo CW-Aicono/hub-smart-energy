@@ -325,6 +325,14 @@ function ChargePointGroupDetail({ group, open, onOpenChange, chargePoints, isAdm
                 {energySaved ? <><Check className="h-3.5 w-3.5" />Gespeichert</> : "Weitere Einstellungen speichern"}
               </Button>
             )}
+
+            {/* PV Surplus Charging Config – inline */}
+            <GroupSolarChargingConfig
+              groupId={group.id}
+              isAdmin={isAdmin}
+              pvSurplusEnabled={energy.pv_surplus_charging}
+            />
+
             <p className="text-xs text-muted-foreground flex items-center gap-1">
               <Info className="h-3 w-3" /> Diese Einstellungen gelten für alle Ladepunkte der Gruppe.
             </p>
