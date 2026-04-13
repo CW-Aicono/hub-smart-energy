@@ -13,9 +13,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
-import { Plus, Trash2, PlugZap, Users, Gauge, Shield, Info, Pencil, X, Check } from "lucide-react";
+import { Plus, Trash2, PlugZap, Users, Gauge, Shield, Info, Pencil, X, Check, Sun } from "lucide-react";
 import { PowerLimitScheduler, PowerLimitSchedule, defaultPowerLimitSchedule } from "@/components/charging/PowerLimitScheduler";
 import { AccessControlSettings, AccessSettings } from "@/components/charging/AccessControlSettings";
+import GroupSolarChargingConfig from "@/components/charging/GroupSolarChargingConfig";
 
 export function ChargePointGroupsManager({ isAdmin }: { isAdmin: boolean }) {
   const { groups, isLoading, createGroup, updateGroup, deleteGroup, assignChargePointToGroup } = useChargePointGroups();
@@ -126,6 +127,11 @@ export function ChargePointGroupsManager({ isAdmin }: { isAdmin: boolean }) {
                     {group.energy_settings.dynamic_load_management && (
                       <Badge variant="outline" className="gap-1 text-xs text-primary border-primary/30">
                         <Gauge className="h-3 w-3" /> Lastmgmt.
+                      </Badge>
+                    )}
+                    {group.energy_settings.pv_surplus_charging && (
+                      <Badge variant="outline" className="gap-1 text-xs border-yellow-500/30 text-yellow-600">
+                        <Sun className="h-3 w-3" /> PV-Überschuss
                       </Badge>
                     )}
                     {group.access_settings.free_charging && (
