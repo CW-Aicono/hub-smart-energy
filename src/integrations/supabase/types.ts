@@ -4032,9 +4032,9 @@ export type Database = {
       solar_charging_config: {
         Row: {
           created_at: string
+          group_id: string | null
           id: string
           is_active: boolean
-          location_id: string
           min_charge_power_w: number
           priority_mode: string
           reference_meter_id: string | null
@@ -4044,9 +4044,9 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          group_id?: string | null
           id?: string
           is_active?: boolean
-          location_id: string
           min_charge_power_w?: number
           priority_mode?: string
           reference_meter_id?: string | null
@@ -4056,9 +4056,9 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          group_id?: string | null
           id?: string
           is_active?: boolean
-          location_id?: string
           min_charge_power_w?: number
           priority_mode?: string
           reference_meter_id?: string | null
@@ -4068,10 +4068,10 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "solar_charging_config_location_id_fkey"
-            columns: ["location_id"]
+            foreignKeyName: "solar_charging_config_group_id_fkey"
+            columns: ["group_id"]
             isOneToOne: false
-            referencedRelation: "locations"
+            referencedRelation: "charge_point_groups"
             referencedColumns: ["id"]
           },
           {
@@ -4097,8 +4097,8 @@ export type Database = {
           allocated_w: number | null
           error_message: string | null
           executed_at: string
+          group_id: string | null
           id: string
-          location_id: string
           status: string
           surplus_w: number | null
           tenant_id: string
@@ -4109,8 +4109,8 @@ export type Database = {
           allocated_w?: number | null
           error_message?: string | null
           executed_at?: string
+          group_id?: string | null
           id?: string
-          location_id: string
           status?: string
           surplus_w?: number | null
           tenant_id: string
@@ -4121,18 +4121,18 @@ export type Database = {
           allocated_w?: number | null
           error_message?: string | null
           executed_at?: string
+          group_id?: string | null
           id?: string
-          location_id?: string
           status?: string
           surplus_w?: number | null
           tenant_id?: string
         }
         Relationships: [
           {
-            foreignKeyName: "solar_charging_log_location_id_fkey"
-            columns: ["location_id"]
+            foreignKeyName: "solar_charging_log_group_id_fkey"
+            columns: ["group_id"]
             isOneToOne: false
-            referencedRelation: "locations"
+            referencedRelation: "charge_point_groups"
             referencedColumns: ["id"]
           },
           {
