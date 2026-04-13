@@ -9,7 +9,6 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
 
   try {
-    // Validate auth: service role or valid JWT
     const authHeader = req.headers.get("Authorization") || "";
     const token = authHeader.replace("Bearer ", "");
     if (token !== serviceRoleKey) {
@@ -24,7 +23,7 @@ Deno.serve(async (req) => {
 
     const admin = createClient(supabaseUrl, serviceRoleKey);
 
-    // Get all active solar charging configs
+    // Get all active solar charging configs (now group-based)
     const { data: configs, error: cfgErr } = await admin
       .from("solar_charging_config")
       .select("*")
@@ -53,25 +52,25 @@ Deno.serve(async (req) => {
         const latestReading = readings?.[0];
         if (!latestReading) {
           await logExecution(admin, config, 0, 0, 0, "no_data", "Keine aktuellen Messwerte");
-          results.push({ location_id: config.location_id, status: "no_data" });
+          results.push({ group_id: config.group_id, status: "no_data" });
           continue;
         }
 
         // Negative value = feed-in = surplus
-        const powerW = latestReading.power_value * 1000; // Assuming kW stored
+        const powerW = latestReading.power_value * 1000;
         const surplusW = powerW < 0 ? Math.abs(powerW) - config.safety_buffer_w : 0;
         const availableSurplus = Math.max(0, surplusW);
 
-        // Get active charging connectors in PV mode at this location
+        // Get charge points in this group
         const { data: chargePoints } = await admin
           .from("charge_points")
           .select("id")
-          .eq("location_id", config.location_id)
+          .eq("group_id", config.group_id)
           .eq("tenant_id", config.tenant_id);
 
         if (!chargePoints || chargePoints.length === 0) {
           await logExecution(admin, config, availableSurplus, 0, 0, "success", null);
-          results.push({ location_id: config.location_id, status: "no_chargepoints" });
+          results.push({ group_id: config.group_id, status: "no_chargepoints" });
           continue;
         }
 
@@ -90,7 +89,7 @@ Deno.serve(async (req) => {
 
         if (activeConnectors.length === 0) {
           await logExecution(admin, config, availableSurplus, 0, 0, "success", null);
-          results.push({ location_id: config.location_id, status: "no_active_pv_sessions" });
+          results.push({ group_id: config.group_id, status: "no_active_pv_sessions" });
           continue;
         }
 
@@ -111,7 +110,6 @@ Deno.serve(async (req) => {
             });
           }
         } else {
-          // first_come or manual: allocate sequentially
           let remaining = availableSurplus;
           for (const conn of activeConnectors) {
             const minW = conn.charging_mode === "pv_priority" ? config.min_charge_power_w : config.min_charge_power_w;
@@ -145,13 +143,12 @@ Deno.serve(async (req) => {
         }
 
         // TODO: Send OCPP SetChargingProfile commands via gateway
-        // For now, log the intended actions
 
         await logExecution(admin, config, availableSurplus, allocatedW, activeConnectors.length, "success", null, actions);
-        results.push({ location_id: config.location_id, surplus_w: availableSurplus, allocated_w: allocatedW, connectors: activeConnectors.length });
+        results.push({ group_id: config.group_id, surplus_w: availableSurplus, allocated_w: allocatedW, connectors: activeConnectors.length });
       } catch (err) {
         await logExecution(admin, config, 0, 0, 0, "error", (err as Error).message);
-        results.push({ location_id: config.location_id, status: "error", error: (err as Error).message });
+        results.push({ group_id: config.group_id, status: "error", error: (err as Error).message });
       }
     }
 
@@ -178,7 +175,7 @@ async function logExecution(
 ) {
   await admin.from("solar_charging_log").insert({
     tenant_id: config.tenant_id,
-    location_id: config.location_id,
+    group_id: config.group_id,
     surplus_w: surplusW,
     allocated_w: allocatedW,
     active_connectors: activeConnectors,
