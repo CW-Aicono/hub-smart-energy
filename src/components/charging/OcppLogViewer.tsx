@@ -20,7 +20,7 @@ const OcppLogViewer = ({ chargePointId, showCpColumn = false }: OcppLogViewerPro
   const { chargePoints } = useChargePoints();
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [filterText, setFilterText] = useState("");
-  const [directionFilter, setDirectionFilter] = useState<"all" | "incoming" | "outgoing">("all");
+  const [directionFilter, setDirectionFilter] = useState<"all" | "incoming" | "outgoing" | "error">("all");
   const [messageTypeFilter, setMessageTypeFilter] = useState<string>("all");
 
   // Collect unique message types for the dropdown
@@ -49,8 +49,19 @@ const OcppLogViewer = ({ chargePointId, showCpColumn = false }: OcppLogViewerPro
     }
   }
 
+  const isErrorEntry = (l: OcppLogEntry): boolean => {
+    if (l.message_type?.startsWith("CALLERROR")) return true;
+    const rawStr = JSON.stringify(l.raw_message);
+    if (rawStr.includes('"Faulted"')) return true;
+    const vecMatch = rawStr.match(/"vendorErrorCode"\s*:\s*"([^"]+)"/);
+    if (vecMatch && vecMatch[1] && vecMatch[1] !== "" && vecMatch[1] !== "0" && vecMatch[1] !== "0x00000000") return true;
+    return false;
+  };
+
   const filtered = logs.filter((l) => {
-    if (directionFilter !== "all" && l.direction !== directionFilter) return false;
+    if (directionFilter === "incoming" && l.direction !== "incoming") return false;
+    if (directionFilter === "outgoing" && l.direction !== "outgoing") return false;
+    if (directionFilter === "error" && !isErrorEntry(l)) return false;
     if (messageTypeFilter !== "all" && l.message_type !== messageTypeFilter) return false;
     if (filterText) {
       const search = filterText.toLowerCase();
@@ -120,17 +131,17 @@ const OcppLogViewer = ({ chargePointId, showCpColumn = false }: OcppLogViewerPro
               ))}
             </SelectContent>
           </Select>
-          <div className="flex border rounded-md overflow-hidden">
-            {(["all", "incoming", "outgoing"] as const).map((d) => (
-              <button
-                key={d}
-                className={`px-2 py-1 text-xs transition-colors ${directionFilter === d ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}
-                onClick={() => setDirectionFilter(d)}
-              >
-                {d === "all" ? "Alle" : d === "incoming" ? "↓ Ein" : "↑ Aus"}
-              </button>
-            ))}
-          </div>
+          <Select value={directionFilter} onValueChange={(v) => setDirectionFilter(v as typeof directionFilter)}>
+            <SelectTrigger className="h-8 w-36 text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Alle</SelectItem>
+              <SelectItem value="incoming">↓ Ein</SelectItem>
+              <SelectItem value="outgoing">↑ Aus</SelectItem>
+              <SelectItem value="error">⚠ Fehler</SelectItem>
+            </SelectContent>
+          </Select>
           <Input
             placeholder="Suche..."
             value={filterText}
