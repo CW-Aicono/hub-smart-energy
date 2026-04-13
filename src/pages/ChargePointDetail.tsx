@@ -97,7 +97,7 @@ const ChargePointDetail = () => {
   const cp = chargePoints.find((c) => c.id === id);
   const cpGroup = cp?.group_id ? groups.find((g) => g.id === cp.group_id) ?? null : null;
   const ocppMeter = useOcppMeterValue(cp?.ocpp_id);
-  const { connectors } = useChargePointConnectors(cp?.id);
+  const { connectors, reorderConnectors } = useChargePointConnectors(cp?.id);
 
   // Sync powerLimit state from cp when cp loads or changes
   const cpPowerLimit = (cp as any)?.power_limit_schedule as PowerLimitSchedule | null | undefined;
@@ -614,6 +614,7 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
                           selectable={isAdmin}
                           wsConnected={cp?.ws_connected ?? false}
                           editable={isAdmin}
+                          onReorder={isAdmin ? reorderConnectors : undefined}
                         />
                         {isAdmin && connectors.length > 1 && (
                           <p className="text-[10px] text-muted-foreground mt-2">
