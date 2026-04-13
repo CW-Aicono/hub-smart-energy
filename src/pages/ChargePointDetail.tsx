@@ -1024,12 +1024,14 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
                         </div>
                         <Switch disabled />
                       </div>
-                      <div className="flex items-center justify-between p-4 border rounded-lg opacity-60">
+                      <div className="flex items-center justify-between p-4 border rounded-lg border-primary/30 bg-primary/5">
                         <div>
                           <p className="font-medium">PV-Überschussladen</p>
                           <p className="text-sm text-muted-foreground">Laden priorisiert mit eigenem Solarstrom</p>
                         </div>
-                        <Switch disabled />
+                        <Button variant="outline" size="sm" className="gap-1.5" onClick={() => navigate("/charging/solar")}>
+                          <Zap className="h-3.5 w-3.5" /> Konfigurieren
+                        </Button>
                       </div>
                       <div className="flex items-center justify-between p-4 border rounded-lg opacity-60">
                         <div>

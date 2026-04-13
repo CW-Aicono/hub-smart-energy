@@ -464,6 +464,7 @@ export type Database = {
       charge_point_connectors: {
         Row: {
           charge_point_id: string
+          charging_mode: string
           connector_id: number
           connector_type: string
           created_at: string
@@ -477,6 +478,7 @@ export type Database = {
         }
         Insert: {
           charge_point_id: string
+          charging_mode?: string
           connector_id: number
           connector_type?: string
           created_at?: string
@@ -490,6 +492,7 @@ export type Database = {
         }
         Update: {
           charge_point_id?: string
+          charging_mode?: string
           connector_id?: number
           connector_type?: string
           created_at?: string
@@ -4022,6 +4025,121 @@ export type Database = {
             columns: ["permission_id"]
             isOneToOne: false
             referencedRelation: "permissions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      solar_charging_config: {
+        Row: {
+          created_at: string
+          id: string
+          is_active: boolean
+          location_id: string
+          min_charge_power_w: number
+          priority_mode: string
+          reference_meter_id: string | null
+          safety_buffer_w: number
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          location_id: string
+          min_charge_power_w?: number
+          priority_mode?: string
+          reference_meter_id?: string | null
+          safety_buffer_w?: number
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          location_id?: string
+          min_charge_power_w?: number
+          priority_mode?: string
+          reference_meter_id?: string | null
+          safety_buffer_w?: number
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "solar_charging_config_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "solar_charging_config_reference_meter_id_fkey"
+            columns: ["reference_meter_id"]
+            isOneToOne: false
+            referencedRelation: "meters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "solar_charging_config_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      solar_charging_log: {
+        Row: {
+          actions_taken: Json | null
+          active_connectors: number | null
+          allocated_w: number | null
+          error_message: string | null
+          executed_at: string
+          id: string
+          location_id: string
+          status: string
+          surplus_w: number | null
+          tenant_id: string
+        }
+        Insert: {
+          actions_taken?: Json | null
+          active_connectors?: number | null
+          allocated_w?: number | null
+          error_message?: string | null
+          executed_at?: string
+          id?: string
+          location_id: string
+          status?: string
+          surplus_w?: number | null
+          tenant_id: string
+        }
+        Update: {
+          actions_taken?: Json | null
+          active_connectors?: number | null
+          allocated_w?: number | null
+          error_message?: string | null
+          executed_at?: string
+          id?: string
+          location_id?: string
+          status?: string
+          surplus_w?: number | null
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "solar_charging_log_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "solar_charging_log_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
             referencedColumns: ["id"]
           },
         ]

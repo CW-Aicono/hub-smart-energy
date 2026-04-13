@@ -73,6 +73,7 @@ const SuperAdminMonitoring = lazy(() => import("./pages/SuperAdminMonitoring"));
 const EmbedPitchDashboard = lazy(() => import("./pages/EmbedPitchDashboard"));
 const EnergyReport = lazy(() => import("./pages/EnergyReport"));
 const LegalPageView = lazy(() => import("./pages/LegalPageView"));
+const SolarCharging = lazy(() => import("./pages/SolarCharging"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -119,6 +120,7 @@ const App = () => (
                       <Route path="/demo/charging/billing" element={<ChargingBilling />} />
                       <Route path="/demo/charging/app" element={<ChargingAppAdmin />} />
                       <Route path="/demo/charging/ocpp-integration" element={<OcppIntegration />} />
+                      <Route path="/demo/charging/solar" element={<SolarCharging />} />
                       <Route path="/demo/automation" element={<Automation />} />
                       <Route path="/demo/arbitrage" element={<ArbitrageTrading />} />
                       <Route path="/demo/copilot" element={<Copilot />} />
@@ -175,6 +177,7 @@ const App = () => (
                       <Route path="/charging/billing" element={<M><ChargingBilling /></M>} />
                       <Route path="/charging/app" element={<M><ChargingAppAdmin /></M>} />
                       <Route path="/charging/ocpp-integration" element={<M><OcppIntegration /></M>} />
+                      <Route path="/charging/solar" element={<M><SolarCharging /></M>} />
                       <Route path="/automation" element={<M><Automation /></M>} />
                       <Route path="/tasks" element={<M><Tasks /></M>} />
                       <Route path="/network" element={<M><NetworkInfrastructure /></M>} />

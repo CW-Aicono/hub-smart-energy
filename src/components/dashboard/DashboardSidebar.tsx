@@ -8,7 +8,7 @@ import { useModuleGuard } from "@/hooks/useModuleGuard";
 import { useDemoMode, useDemoPath } from "@/contexts/DemoMode";
 import { Button } from "@/components/ui/button";
 import { MobileHeader } from "@/components/dashboard/MobileSidebar";
-import { LayoutDashboard, LogOut, Shield, Settings, Users, ChevronDown, ChevronRight, MapPin, PanelLeftClose, PanelLeft, UserCircle, Key, HelpCircle, Plug, Palette, Database, Gauge, Download, Car, PlugZap, Receipt, Cpu, Activity, Mail, Smartphone, Network, ListChecks, TrendingUp, Home, BookOpen, FileText, Sparkles } from "lucide-react";
+import { LayoutDashboard, LogOut, Shield, Settings, Users, ChevronDown, ChevronRight, MapPin, PanelLeftClose, PanelLeft, UserCircle, Key, HelpCircle, Plug, Palette, Database, Gauge, Download, Car, PlugZap, Receipt, Cpu, Activity, Mail, Smartphone, Network, ListChecks, TrendingUp, Home, BookOpen, FileText, Sparkles, Sun } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TenantLogo } from "@/components/tenant/TenantLogo";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -149,6 +149,7 @@ const DashboardSidebar = () => {
         { to: "/charging/billing", icon: Receipt, labelKey: "nav.chargingBilling" as TranslationKey },
         { to: "/charging/app", icon: Smartphone, labelKey: "nav.chargingApp" as TranslationKey },
         { to: "/charging/ocpp-integration", icon: BookOpen, labelKey: "nav.ocppIntegration" as TranslationKey },
+        { to: "/charging/solar", icon: Sun, labelKey: "nav.solarCharging" as TranslationKey },
       ]
     },
     { to: "/automation", icon: Cpu, labelKey: "nav.multiLocationAutomation" as TranslationKey },
