@@ -20,7 +20,7 @@ const OcppLogViewer = ({ chargePointId, showCpColumn = false }: OcppLogViewerPro
   const { chargePoints } = useChargePoints();
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [filterText, setFilterText] = useState("");
-  const [directionFilter, setDirectionFilter] = useState<"all" | "incoming" | "outgoing">("all");
+  const [directionFilter, setDirectionFilter] = useState<"all" | "incoming" | "outgoing" | "error">("all");
   const [messageTypeFilter, setMessageTypeFilter] = useState<string>("all");
 
   // Collect unique message types for the dropdown
