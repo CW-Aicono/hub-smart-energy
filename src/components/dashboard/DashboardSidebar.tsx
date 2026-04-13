@@ -149,6 +149,7 @@ const DashboardSidebar = () => {
         { to: "/charging/billing", icon: Receipt, labelKey: "nav.chargingBilling" as TranslationKey },
         { to: "/charging/app", icon: Smartphone, labelKey: "nav.chargingApp" as TranslationKey },
         { to: "/charging/ocpp-integration", icon: BookOpen, labelKey: "nav.ocppIntegration" as TranslationKey },
+        { to: "/charging/solar", icon: Sun, labelKey: "nav.solarCharging" as TranslationKey },
       ]
     },
     { to: "/automation", icon: Cpu, labelKey: "nav.multiLocationAutomation" as TranslationKey },
