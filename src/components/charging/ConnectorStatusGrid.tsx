@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Zap, PlugZap, AlertTriangle, ZapOff, Pencil, Check, X } from "lucide-react";
+import { Zap, PlugZap, AlertTriangle, ZapOff, Pencil, Check, X, GripVertical } from "lucide-react";
 import { ChargePointConnector, connectorDisplayName } from "@/hooks/useChargePointConnectors";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
@@ -19,15 +19,17 @@ interface Props {
   selectedConnectorId?: number | null;
   onSelectConnector?: (connectorId: number) => void;
   selectable?: boolean;
-  /** When false, all connectors are shown as "Offline" regardless of DB status */
   wsConnected?: boolean;
-  /** Allow inline editing of connector names */
   editable?: boolean;
+  onReorder?: (reordered: ChargePointConnector[]) => void;
 }
 
-export function ConnectorStatusGrid({ connectors, selectedConnectorId, onSelectConnector, selectable = false, wsConnected = true, editable = false }: Props) {
+export function ConnectorStatusGrid({ connectors, selectedConnectorId, onSelectConnector, selectable = false, wsConnected = true, editable = false, onReorder }: Props) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
+  const dragItem = useRef<number | null>(null);
+  const dragOverItem = useRef<number | null>(null);
+  const [dragging, setDragging] = useState(false);
 
   if (connectors.length === 0) return null;
 
@@ -48,27 +50,62 @@ export function ConnectorStatusGrid({ connectors, selectedConnectorId, onSelectC
 
   const cancelEdit = () => setEditingId(null);
 
+  const handleDragStart = (index: number) => {
+    dragItem.current = index;
+    setDragging(true);
+  };
+
+  const handleDragEnter = (index: number) => {
+    dragOverItem.current = index;
+  };
+
+  const handleDragEnd = () => {
+    if (dragItem.current === null || dragOverItem.current === null || dragItem.current === dragOverItem.current) {
+      setDragging(false);
+      return;
+    }
+    const reordered = [...connectors];
+    const [removed] = reordered.splice(dragItem.current, 1);
+    reordered.splice(dragOverItem.current, 0, removed);
+    dragItem.current = null;
+    dragOverItem.current = null;
+    setDragging(false);
+    onReorder?.(reordered);
+  };
+
   return (
     <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${Math.min(connectors.length, 4)}, 1fr)` }}>
-      {connectors.map((c) => {
+      {connectors.map((c, index) => {
         const effectiveStatus = !wsConnected ? "offline" : c.status;
         const cfg = connectorStatusConfig[effectiveStatus] || connectorStatusConfig.offline;
         const Icon = cfg.icon;
         const isSelected = selectedConnectorId === c.connector_id;
         const isEditing = editingId === c.id;
+        const canDrag = editable && onReorder && connectors.length > 1;
 
         return (
           <button
             key={c.id}
             type="button"
             disabled={!selectable && !editable}
+            draggable={canDrag ? true : false}
+            onDragStart={() => canDrag && handleDragStart(index)}
+            onDragEnter={() => canDrag && handleDragEnter(index)}
+            onDragEnd={() => canDrag && handleDragEnd()}
+            onDragOver={(e) => canDrag && e.preventDefault()}
             onClick={() => selectable && onSelectConnector?.(c.connector_id)}
             className={`
               border rounded-lg p-3 text-center transition-all relative group
               ${selectable ? "cursor-pointer hover:border-primary/50" : editable ? "cursor-default" : "cursor-default"}
               ${isSelected ? "border-primary ring-2 ring-primary/20" : "border-border"}
+              ${canDrag ? "cursor-grab active:cursor-grabbing" : ""}
             `}
           >
+            {canDrag && (
+              <div className="absolute top-1 left-1 text-muted-foreground/40 group-hover:text-muted-foreground transition-colors">
+                <GripVertical className="h-3.5 w-3.5" />
+              </div>
+            )}
             <div className="flex items-center justify-center gap-1.5 mb-1">
               <span className={`h-2.5 w-2.5 rounded-full ${cfg.color}`} />
               <Icon className="h-4 w-4 text-muted-foreground" />

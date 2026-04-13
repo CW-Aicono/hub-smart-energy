@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { useEffect } from "react";
+import { useEffect, useCallback } from "react";
 
 export interface ChargePointConnector {
   id: string;
@@ -11,6 +11,7 @@ export interface ChargePointConnector {
   max_power_kw: number;
   last_status_at: string | null;
   name: string | null;
+  display_order: number;
 }
 
 /** Returns the connector's custom name or a fallback like "Anschluss 1" */
@@ -30,7 +31,7 @@ export function useChargePointConnectors(chargePointId?: string) {
         .from("charge_point_connectors")
         .select("*")
         .eq("charge_point_id", chargePointId)
-        .order("connector_id");
+        .order("display_order");
       if (error) throw error;
       return (data ?? []) as unknown as ChargePointConnector[];
     },
@@ -52,5 +53,16 @@ export function useChargePointConnectors(chargePointId?: string) {
     return () => { supabase.removeChannel(channel); };
   }, [chargePointId, queryClient]);
 
-  return { connectors, isLoading };
+  const reorderConnectors = useCallback(async (reordered: ChargePointConnector[]) => {
+    // Optimistic update
+    queryClient.setQueryData(queryKey, reordered);
+    // Persist new display_order
+    const updates = reordered.map((c, i) =>
+      supabase.from("charge_point_connectors").update({ display_order: i } as any).eq("id", c.id)
+    );
+    await Promise.all(updates);
+    queryClient.invalidateQueries({ queryKey });
+  }, [queryClient, queryKey]);
+
+  return { connectors, isLoading, reorderConnectors };
 }
