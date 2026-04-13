@@ -49,8 +49,19 @@ const OcppLogViewer = ({ chargePointId, showCpColumn = false }: OcppLogViewerPro
     }
   }
 
+  const isErrorEntry = (l: OcppLogEntry): boolean => {
+    if (l.message_type?.startsWith("CALLERROR")) return true;
+    const rawStr = JSON.stringify(l.raw_message);
+    if (rawStr.includes('"Faulted"')) return true;
+    const vecMatch = rawStr.match(/"vendorErrorCode"\s*:\s*"([^"]+)"/);
+    if (vecMatch && vecMatch[1] && vecMatch[1] !== "" && vecMatch[1] !== "0" && vecMatch[1] !== "0x00000000") return true;
+    return false;
+  };
+
   const filtered = logs.filter((l) => {
-    if (directionFilter !== "all" && l.direction !== directionFilter) return false;
+    if (directionFilter === "incoming" && l.direction !== "incoming") return false;
+    if (directionFilter === "outgoing" && l.direction !== "outgoing") return false;
+    if (directionFilter === "error" && !isErrorEntry(l)) return false;
     if (messageTypeFilter !== "all" && l.message_type !== messageTypeFilter) return false;
     if (filterText) {
       const search = filterText.toLowerCase();
