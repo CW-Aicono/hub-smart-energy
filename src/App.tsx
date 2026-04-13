@@ -120,6 +120,7 @@ const App = () => (
                       <Route path="/demo/charging/billing" element={<ChargingBilling />} />
                       <Route path="/demo/charging/app" element={<ChargingAppAdmin />} />
                       <Route path="/demo/charging/ocpp-integration" element={<OcppIntegration />} />
+                      <Route path="/demo/charging/solar" element={<SolarCharging />} />
                       <Route path="/demo/automation" element={<Automation />} />
                       <Route path="/demo/arbitrage" element={<ArbitrageTrading />} />
                       <Route path="/demo/copilot" element={<Copilot />} />
