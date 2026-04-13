@@ -5255,6 +5255,7 @@ export type Database = {
       }
       cleanup_expired_backups: { Args: never; Returns: number }
       cleanup_old_infra_metrics: { Args: never; Returns: number }
+      cleanup_old_ocpp_logs: { Args: never; Returns: number }
       collect_db_metrics: { Args: never; Returns: Json }
       compact_power_readings_day: {
         Args: { p_day?: string }
