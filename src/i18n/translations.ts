@@ -2711,6 +2711,12 @@ export const translations = {
     es: "Integración OCPP",
     nl: "OCPP Integratie",
   },
+  "nav.solarCharging": {
+    de: "PV-Überschussladen",
+    en: "Solar Surplus Charging",
+    es: "Carga con excedente solar",
+    nl: "PV-overschot laden",
+  },
   "ocppIntegration.title": {
     de: "OCPP Integration",
     en: "OCPP Integration",
