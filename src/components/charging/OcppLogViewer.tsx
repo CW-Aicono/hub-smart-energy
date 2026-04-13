@@ -131,17 +131,17 @@ const OcppLogViewer = ({ chargePointId, showCpColumn = false }: OcppLogViewerPro
               ))}
             </SelectContent>
           </Select>
-          <div className="flex border rounded-md overflow-hidden">
-            {(["all", "incoming", "outgoing"] as const).map((d) => (
-              <button
-                key={d}
-                className={`px-2 py-1 text-xs transition-colors ${directionFilter === d ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}
-                onClick={() => setDirectionFilter(d)}
-              >
-                {d === "all" ? "Alle" : d === "incoming" ? "↓ Ein" : "↑ Aus"}
-              </button>
-            ))}
-          </div>
+          <Select value={directionFilter} onValueChange={(v) => setDirectionFilter(v as typeof directionFilter)}>
+            <SelectTrigger className="h-8 w-36 text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Alle</SelectItem>
+              <SelectItem value="incoming">↓ Ein</SelectItem>
+              <SelectItem value="outgoing">↑ Aus</SelectItem>
+              <SelectItem value="error">⚠ Fehler</SelectItem>
+            </SelectContent>
+          </Select>
           <Input
             placeholder="Suche..."
             value={filterText}
