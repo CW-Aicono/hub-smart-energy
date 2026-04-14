@@ -139,13 +139,15 @@ services:
       db:
         # Disable this if you are using an external Postgres database
         condition: service_healthy
+      meta:
+        condition: service_healthy
     environment:
       GOTRUE_API_HOST: 0.0.0.0
       GOTRUE_API_PORT: 9999
       API_EXTERNAL_URL: ${API_EXTERNAL_URL}
 
       GOTRUE_DB_DRIVER: postgres
-      GOTRUE_DB_DATABASE_URL: postgres://supabase_auth_admin:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}
+      GOTRUE_DB_DATABASE_URL: postgres://supabase_auth_admin:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}?search_path=auth
 
       GOTRUE_SITE_URL: ${SITE_URL}
       GOTRUE_URI_ALLOW_LIST: ${ADDITIONAL_REDIRECT_URLS}
@@ -261,6 +263,8 @@ services:
       db:
         # Disable this if you are using an external Postgres database
         condition: service_healthy
+      meta:
+        condition: service_healthy
     environment:
       PGRST_DB_URI: postgres://authenticator:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}
       PGRST_DB_SCHEMAS: ${PGRST_DB_SCHEMAS}
@@ -330,6 +334,8 @@ services:
     depends_on:
       db:
         # Disable this if you are using an external Postgres database
+        condition: service_healthy
+      meta:
         condition: service_healthy
       rest:
         condition: service_started
@@ -510,14 +516,18 @@ services:
     image: supabase/postgres:15.8.1.085
     restart: unless-stopped
     volumes:
-      - ./volumes/db/roles.sql:/docker-entrypoint-initdb.d/00-roles.sql:Z
+      - ./volumes/db/00-roles.sql:/docker-entrypoint-initdb.d/00-roles.sql:Z
       - ./volumes/db/jwt.sql:/docker-entrypoint-initdb.d/01-jwt.sql:Z
-      - ./volumes/db/_supabase.sql:/docker-entrypoint-initdb.d/02-_supabase.sql:Z
+      - ./volumes/db/02-_supabase.sql:/docker-entrypoint-initdb.d/02-_supabase.sql:Z
       - ./volumes/db/realtime.sql:/docker-entrypoint-initdb.d/03-realtime.sql:Z
-      - ./volumes/db/webhooks.sql:/docker-entrypoint-initdb.d/04-webhooks.sql:Z
       - ./volumes/db/logs.sql:/docker-entrypoint-initdb.d/05-logs.sql:Z
       - ./volumes/db/pooler.sql:/docker-entrypoint-initdb.d/06-pooler.sql:Z
+      - ./volumes/db/07-create-missing-roles.sql:/docker-entrypoint-initdb.d/07-create-missing-roles.sql:Z
+      - ./volumes/db/webhooks.sql:/docker-entrypoint-initdb.d/999-webhooks.sql:Z
       - ../supabase/migrations:/docker-entrypoint-initdb.d/99-custom:ro,Z
+      - ./volumes/db/zz-custom.sql:/docker-entrypoint-initdb.d/09999-custom.sql:Z
+      - ./volumes/db/zz-custom.sql:/docker-entrypoint-initdb.d/09999-custom.sql:Z
+      - ./volumes/db/99-set-passwords.sql:/docker-entrypoint-initdb.d/99-set-passwords.sql:Z
       - ./volumes/db/data:/var/lib/postgresql/data:Z
       - db-config:/etc/postgresql-custom
     healthcheck:
