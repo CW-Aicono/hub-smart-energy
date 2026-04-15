@@ -174,41 +174,37 @@ const OcppIntegration = () => {
           </CardContent>
         </Card>
 
-        {/* ws:// Fallback Proxy Info */}
-        <Card className="border-destructive/20 bg-destructive/5">
+        {/* ws:// Cloud-Proxy für ältere Ladepunkte */}
+        <Card className="border-yellow-500/20 bg-yellow-500/5">
           <CardContent className="pt-4 pb-4">
             <div className="flex items-start gap-2">
-              <Shield className="h-4 w-4 text-destructive mt-0.5 shrink-0" />
+              <Shield className="h-4 w-4 text-yellow-600 dark:text-yellow-400 mt-0.5 shrink-0" />
               <div className="flex-1 min-w-0 space-y-2">
-                <p className="text-xs font-medium">{t("ocppIntegration.wsProxyTitle" as any)}</p>
+                <p className="text-xs font-medium">ws:// für ältere Ladepunkte (ohne TLS)</p>
                 <p className="text-[11px] text-muted-foreground">
-                  {t("ocppIntegration.wsProxyDesc" as any)}
+                  Ältere Wallboxen ohne TLS-Unterstützung können sich über ws:// (unverschlüsselt) verbinden.
+                  Der Cloud-Proxy leitet die Verbindung automatisch verschlüsselt (wss://) an das Backend weiter.
                 </p>
 
-                <div className="p-2 bg-background border rounded-md space-y-1.5">
-                  <p className="text-[11px] font-medium">{t("ocppIntegration.wsProxyConfig" as any)}</p>
-                  <code className="text-[11px] block bg-muted rounded px-2 py-1 break-all select-all">
-                    OCPP_PROXY_PORT=9000
-                  </code>
-                  <code className="text-[11px] block bg-muted rounded px-2 py-1 break-all select-all">
-                    OCPP_PROXY_TARGET=wss://ocpp.aicono.org
-                  </code>
-                </div>
-
                 <div>
-                  <p className="text-[11px] font-medium mb-0.5">{t("ocppIntegration.wsProxyUrl" as any)}</p>
-                  <code className="text-[11px] block bg-background border rounded px-2 py-1.5 break-all select-all">
-                    ws://{"<GATEWAY_IP>"}:9000/{"<OCPP_ID>"}
-                  </code>
-                  <p className="text-[10px] text-muted-foreground mt-1">
-                    Der Gateway Worker nutzt standardmäßig Port <strong>9000</strong> (ws://). Da die TLS-Terminierung im Gateway erfolgt, wird hier bewusst unverschlüsseltes ws:// auf Port 80/9000 verwendet.
-                  </p>
+                  <p className="text-[11px] font-medium mb-0.5">Verbindungs-URL für ältere Wallboxen:</p>
+                  <div className="flex items-center gap-1.5">
+                    <code className="text-xs bg-background border rounded px-2 py-1.5 break-all select-all flex-1 font-semibold">
+                      ws://ocpp.aicono.org/{"<OCPP_ID>"}
+                    </code>
+                    <Button variant="outline" size="icon" className="shrink-0 h-8 w-8" onClick={() => {
+                      navigator.clipboard.writeText("ws://ocpp.aicono.org/{OCPP_ID}");
+                      toast({ title: t("common.copied" as any) || "Kopiert!" });
+                    }}>
+                      <Copy className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
                 </div>
 
-                <div className="flex items-start gap-1.5 text-destructive">
+                <div className="flex items-start gap-1.5 text-yellow-700 dark:text-yellow-400">
                   <AlertTriangle className="h-3 w-3 mt-0.5 shrink-0" />
                   <p className="text-[11px]">
-                    {t("ocppIntegration.wsProxyWarning" as any)}
+                    Die Strecke Wallbox → Cloud ist unverschlüsselt (ws://). Die Strecke Cloud-Proxy → Backend ist verschlüsselt (wss://). Dieses Vorgehen entspricht dem Branchenstandard für ältere Ladepunkte.
                   </p>
                 </div>
               </div>
