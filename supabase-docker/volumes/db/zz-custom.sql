@@ -1,11 +1,12 @@
 -- Läuft NACH den Image-eigenen init-scripts/ (z > i alphabetisch).
 -- Setzt Passwörter und Grants, nachdem alle Rollen vom Image angelegt wurden.
+\getenv pgpass POSTGRES_PASSWORD
 
-ALTER USER authenticator            WITH PASSWORD '2e34aa0615e898ae1a13b07fcb93c298';
-ALTER USER supabase_admin           WITH PASSWORD '2e34aa0615e898ae1a13b07fcb93c298';
-ALTER USER supabase_auth_admin      WITH PASSWORD '2e34aa0615e898ae1a13b07fcb93c298';
-ALTER USER supabase_functions_admin WITH PASSWORD '2e34aa0615e898ae1a13b07fcb93c298';
-ALTER USER supabase_storage_admin   WITH PASSWORD '2e34aa0615e898ae1a13b07fcb93c298';
+ALTER USER authenticator            WITH LOGIN PASSWORD :'pgpass';
+ALTER USER supabase_admin           WITH PASSWORD :'pgpass';
+ALTER USER supabase_auth_admin      WITH PASSWORD :'pgpass';
+ALTER USER supabase_functions_admin WITH PASSWORD :'pgpass';
+ALTER USER supabase_storage_admin   WITH PASSWORD :'pgpass';
 
 -- DB-Level Grants für Service-Rollen (CONNECT + CREATE)
 GRANT CONNECT, CREATE ON DATABASE postgres TO supabase_auth_admin;

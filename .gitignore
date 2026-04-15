@@ -12,6 +12,17 @@ dist
 dist-ssr
 *.local
 
+# Environment files with secrets
+.env
+.env.local
+supabase-docker/.env
+supabase-docker/.env.old
+
+# Docker Volumes (Datenbank)
+supabase-docker/volumes/db/data/
+supabase-docker/volumes/storage/
+supabase-docker/volumes/logs/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
