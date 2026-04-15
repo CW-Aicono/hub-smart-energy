@@ -287,6 +287,32 @@ export default function ChargePointDetailDialog({
                     </div>
                   )}
                 </div>
+
+                {/* OCPP Connection URLs */}
+                <Separator />
+                <div className="space-y-2">
+                  <p className="text-sm font-medium text-muted-foreground flex items-center gap-1.5">
+                    <Wifi className="h-3.5 w-3.5" /> Verbindungs-URLs für Wallbox
+                  </p>
+                  <div className="space-y-1.5">
+                    <div className="flex items-start gap-2">
+                      <Badge variant="outline" className="text-[10px] mt-0.5 shrink-0">wss://</Badge>
+                      <code className="text-xs break-all text-muted-foreground font-mono bg-muted px-2 py-1 rounded">
+                        wss://xnveugycurplszevdxtw.supabase.co/functions/v1/ocpp-ws-proxy/{cp.ocpp_id}
+                      </code>
+                    </div>
+                    <div className="flex items-start gap-2">
+                      <Badge variant="outline" className="text-[10px] mt-0.5 shrink-0 border-amber-500/50 text-amber-600 dark:text-amber-400">ws://</Badge>
+                      <code className="text-xs break-all text-muted-foreground font-mono bg-muted px-2 py-1 rounded">
+                        ws://ocpp.aicono.org/{cp.ocpp_id}
+                      </code>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground/70">
+                      <span className="font-medium">wss://</span> für neue Wallboxen (TLS-verschlüsselt) · <span className="font-medium">ws://</span> für ältere Wallboxen ohne TLS-Support
+                    </p>
+                  </div>
+                </div>
+
                 {isAdmin && (
                   <div className="flex gap-2 justify-end">
                     <Button variant="outline" onClick={startEdit}><Edit className="h-4 w-4 mr-1" />Bearbeiten</Button>
