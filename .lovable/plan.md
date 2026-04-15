@@ -1,63 +1,30 @@
 
 
-# Cloud-basierter ws:// Proxy für ältere Wallboxen
+# OCPP Integration Seite: ws:// Bereich aktualisieren
 
 ## Problem
+Die rote "ws:// Fallback"-Card beschreibt noch den **lokalen Gateway Worker auf dem Raspberry Pi** (OCPP_PROXY_PORT=9000, ws://GATEWAY_IP:9000). Das ist veraltet – der Cloud-Proxy auf `ws://ocpp.aicono.org` macht den lokalen Proxy überflüssig.
 
-Supabase Edge Functions unterstützen ausschließlich **wss://** (TLS-verschlüsselt). Ältere Wallboxen können aber nur **ws://** (unverschlüsselt). Ein Raspberry Pi im Heimnetz des Nutzers ist eine unnötige Hürde.
+## Änderung
 
-## Lösung
+Die rote Card (Zeilen 178-225 in OcppIntegration.tsx) wird inhaltlich ersetzt:
 
-Ein leichtgewichtiger **ws:// → wss:// Reverse-Proxy** als Docker-Container auf einem Cloud-Server (z.B. Hetzner VPS), der unter einer eigenen Domain erreichbar ist:
+**Vorher:** "ws:// Fallback für ältere Ladepunkte" → Gateway Worker lokal, Port 9000, LAN/VPN-Warnung
 
-```text
-Alte Wallbox (ws://) ──► ws://ocpp.aicono.org:80/CP001
-                              │
-                    Cloud-Proxy (Docker/Node.js)
-                              │
-                         wss://xnveugycurplszevdxtw.supabase.co
-                              /functions/v1/ocpp-ws-proxy/CP001
-```
+**Nachher:** "ws:// für ältere Ladepunkte" → Cloud-Proxy, gleiche Domain, einfach Port 80 statt 443
 
-## Was zu tun ist
+### Neuer Inhalt der Card:
+- **Titel:** "ws:// für ältere Ladepunkte (ohne TLS)"
+- **Beschreibung:** Ältere Wallboxen ohne TLS-Unterstützung können sich über ws:// (unverschlüsselt) verbinden. Der Cloud-Proxy leitet die Verbindung automatisch verschlüsselt an das Backend weiter.
+- **URL anzeigen (kopierbar):** `ws://ocpp.aicono.org/<OCPP_ID>`
+- **Hinweis:** Die Verbindung zwischen Wallbox und Cloud ist unverschlüsselt. Die Strecke Cloud-Proxy → Backend ist verschlüsselt (wss://).
+- **Farbe:** Gelb/Amber statt Rot (es ist ein unterstützter Modus, keine Notlösung)
+- Gateway-Worker-spezifische Config (OCPP_PROXY_PORT, OCPP_PROXY_TARGET) entfernen
 
-### 1. Proxy-Server erstellen (neues Verzeichnis `docs/ocpp-cloud-proxy/`)
-- `index.ts`: Node.js/ws-Server, der auf Port 80 lauscht, eingehende ws:// Verbindungen annimmt und 1:1 an die bestehende `ocpp-ws-proxy` Edge Function weiterleitet (wss://)
-- Basic Auth wird transparent durchgereicht
-- OCPP-Subprotokoll (`ocpp1.6`) wird korrekt propagiert
-- Automatische Reconnect-Logik bei Upstream-Trennung
-- `Dockerfile`, `docker-compose.yml`, `package.json`
-
-### 2. Domain-Konfiguration
-- Subdomain `ocpp.aicono.org` auf den VPS zeigen (A-Record)
-- Port 80 für ws:// offen lassen (kein TLS nötig, da die Verschlüsselung auf der Upstream-Seite erfolgt)
-- Optional: Port 443 mit Let's Encrypt für Wallboxen, die wss:// können (Dual-Mode)
-
-### 3. Dashboard-Anpassung
-- Auf der Ladepunkt-Detailseite die korrekte Verbindungs-URL anzeigen:
-  - Neue Wallboxen: `wss://xnveugycurplszevdxtw.supabase.co/functions/v1/ocpp-ws-proxy/{OCPP_ID}`
-  - Alte Wallboxen: `ws://ocpp.aicono.org/{OCPP_ID}`
-- Im Onboarding-Guide für Ladepunkte beide Optionen erklären
-
-### 4. Einrichtungsanleitung
-- Word-Dokument für die VPS-Einrichtung (Docker installieren, Container starten, Domain konfigurieren)
-
-## Dateien
-
+### Dateien
 | Aktion | Datei |
 |--------|-------|
-| Neu | `docs/ocpp-cloud-proxy/index.ts` |
-| Neu | `docs/ocpp-cloud-proxy/Dockerfile` |
-| Neu | `docs/ocpp-cloud-proxy/docker-compose.yml` |
-| Neu | `docs/ocpp-cloud-proxy/package.json` |
-| Neu | `docs/ocpp-cloud-proxy/tsconfig.json` |
-| Editieren | Ladepunkt-Detail (Verbindungs-URL-Anzeige) |
-| Neu | Word-Anleitung in `/mnt/documents/` |
+| Editieren | `src/pages/OcppIntegration.tsx` – rote ws:// Card ersetzen |
 
-## Technische Details
-
-- Der Proxy ist ein reiner **Passthrough** – keine OCPP-Logik, kein State. Alle Intelligenz bleibt in der bestehenden `ocpp-ws-proxy` Edge Function.
-- Ressourcenbedarf: minimal (kleinster VPS reicht, ~2€/Monat bei Hetzner)
-- Der gleiche Container kann auch den bestehenden Gateway Worker ersetzen, falls gewünscht
-- Sicherheit: ws:// ist prinzipbedingt unverschlüsselt. Die Strecke Proxy → Backend ist aber immer wss://. Das Risiko liegt nur auf der Strecke Wallbox → Cloud-Proxy (Internet). Dies ist ein akzeptierter Kompromiss, den auch andere Anbieter (z.B. has.to.be, Reev) eingehen.
+Optional: Die Port-Konfigurationsbox in der oberen Card kann vereinfacht werden, da ws:// jetzt einfach über die gleiche Domain läuft.
 
