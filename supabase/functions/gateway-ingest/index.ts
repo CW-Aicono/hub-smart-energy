@@ -16,6 +16,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders } from "../_shared/cors.ts";
+import { recordWorkerHeartbeat } from "../_shared/workerStatus.ts";
 
 // Module-level default for helpers called outside handler context
 let corsHeaders: Record<string, string> = getCorsHeaders();
@@ -955,7 +956,42 @@ async function handleHeartbeat(req: Request): Promise<Response> {
     console.log(`[gateway-ingest] Delivering pending command '${pendingCommand}' to device ${result.id}`);
   }
 
+  // Also bump the global worker heartbeat so the WORKER_ACTIVE feature flag
+  // in loxone-api/shelly-api knows a writer is alive.
+  try { await recordWorkerHeartbeat(supabase); } catch (e) { console.warn("[heartbeat] worker-heartbeat upsert failed:", e); }
+
   return json(responseData);
+}
+
+/* ── Dedicated worker heartbeat (Hetzner gateway-worker) ─────────────────────── */
+/**
+ * Lightweight endpoint for the central Hetzner gateway worker that doesn't have
+ * a per-device gateway_devices row. Just bumps system_settings.worker_last_heartbeat
+ * so loxone-api can defer the write path to the worker.
+ *
+ * POST ?action=worker-heartbeat   Body: { worker_id?: string, version?: string }
+ */
+async function handleWorkerHeartbeat(req: Request): Promise<Response> {
+  const authErr = await validateApiKey(req);
+  if (authErr) return authErr;
+
+  let body: { worker_id?: string; version?: string } = {};
+  try { body = await req.json(); } catch { /* body optional */ }
+
+  const supabase = getSupabase();
+  await recordWorkerHeartbeat(supabase);
+
+  // Optional: also persist worker metadata for the admin widget
+  if (body.worker_id || body.version) {
+    await supabase
+      .from("system_settings")
+      .upsert(
+        { key: "worker_meta", value: JSON.stringify({ worker_id: body.worker_id, version: body.version, last_seen: new Date().toISOString() }) },
+        { onConflict: "key" },
+      );
+  }
+
+  return json({ success: true, recorded_at: new Date().toISOString() });
 }
 
 /* ── Gateway backup handler ──────────────────────────────────────────────────── */
@@ -1300,6 +1336,7 @@ Deno.serve(async (req) => {
     if (action === "compact-day") return handleCompactDay(req);
     if (action === "schneider-push") return handleSchneiderPush(req);
     if (action === "heartbeat") return handleHeartbeat(req);
+    if (action === "worker-heartbeat") return handleWorkerHeartbeat(req);
     if (action === "gateway-backup") return handleGatewayBackup(req);
     if (action === "gateway-command") return handleGatewayCommand(req);
     if (action === "push-execution-logs") return handlePushExecutionLogs(req);
