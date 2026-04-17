@@ -140,6 +140,16 @@ describe("gatewayRegistry", () => {
       expect(def.setupInstructions?.port).toBe("8883");
     });
 
+    it("shelly_mqtt is registered with shelly_gen2 default and uses gateway-ingest", () => {
+      const def = GATEWAY_DEFINITIONS.shelly_mqtt;
+      expect(def).toBeDefined();
+      expect(def.edgeFunctionName).toBe("gateway-ingest");
+      const names = def.configFields.map((f) => f.name);
+      for (const required of ["broker_url", "username", "password", "topic_prefix", "payload_format"]) {
+        expect(names).toContain(required);
+      }
+    });
+
     it("schneider_cloud requires api_url, client_id, client_secret, site_id", () => {
       const fields = GATEWAY_DEFINITIONS.schneider_cloud.configFields;
       const names = fields.map((f) => f.name);
