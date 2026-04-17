@@ -66,7 +66,7 @@ export default function GatewayWorkerStatusCard() {
   // Status colors: worker primary writer = green, flag off but heartbeat = yellow, no heartbeat = red
   let statusBadge: React.ReactNode;
   if (flagOn && fresh) {
-    statusBadge = <Badge className="bg-green-600 hover:bg-green-600"><CheckCircle2 className="h-3 w-3 mr-1" />Aktiv (primär)</Badge>;
+    statusBadge = <Badge className="bg-primary hover:bg-primary text-primary-foreground"><CheckCircle2 className="h-3 w-3 mr-1" />Aktiv (primär)</Badge>;
   } else if (fresh) {
     statusBadge = <Badge variant="secondary"><Activity className="h-3 w-3 mr-1" />Heartbeat OK – Flag aus</Badge>;
   } else if (data?.last_heartbeat) {
