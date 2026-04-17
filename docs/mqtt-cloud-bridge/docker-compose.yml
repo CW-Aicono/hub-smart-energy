@@ -1,0 +1,54 @@
+# AICONO MQTT Cloud Bridge + Mosquitto Broker
+# =============================================
+# Deployment auf VPS (z. B. Hetzner CX22) zusammen mit dem ocpp-cloud-proxy.
+#
+# Starten:  docker compose up -d
+# Logs:     docker compose logs -f
+# Stoppen:  docker compose down
+
+services:
+  mosquitto:
+    image: eclipse-mosquitto:2
+    container_name: aicono-mosquitto
+    restart: always
+    ports:
+      - "8883:8883"  # MQTT over TLS (Pflicht)
+      # Port 1883 (Klartext) bewusst NICHT exponiert
+    volumes:
+      - ./mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - ./mosquitto/data:/mosquitto/data
+      - ./mosquitto/log:/mosquitto/log
+      - ./mosquitto/passwd:/mosquitto/config/passwd:ro
+      - ./mosquitto/acl:/mosquitto/config/acl:ro
+      # TLS-Zertifikate (Let's Encrypt)
+      - /etc/letsencrypt/live/mqtt.aicono.org/fullchain.pem:/mosquitto/certs/fullchain.pem:ro
+      - /etc/letsencrypt/live/mqtt.aicono.org/privkey.pem:/mosquitto/certs/privkey.pem:ro
+
+  bridge:
+    build: .
+    container_name: aicono-mqtt-bridge
+    restart: always
+    depends_on:
+      - mosquitto
+    environment:
+      - MQTT_BROKER_URL=mqtts://mosquitto:8883
+      - MQTT_ADMIN_USER=bridge
+      - MQTT_ADMIN_PASSWORD=${MQTT_ADMIN_PASSWORD}
+      - GATEWAY_INGEST_URL=https://xnveugycurplszevdxtw.supabase.co/functions/v1/gateway-ingest
+      - MQTT_DISCOVERY_URL=https://xnveugycurplszevdxtw.supabase.co/functions/v1/mqtt-discovery
+      - GATEWAY_API_KEY=${GATEWAY_API_KEY}
+      - TOPIC_FILTER=aicono/#
+      - ENABLE_DISCOVERY=true
+      - HEALTH_PORT=8080
+      - LOG_LEVEL=info
+      # JSON map: { "<tenant-slug>": { "tenant_id": "...", "payload_format": "...", "device_mapping": {...} } }
+      - ROUTES_JSON=${ROUTES_JSON}
+    ports:
+      # Phase 2: bidirectional publish API. Bind to 127.0.0.1 only — expose
+      # externally via Caddy/nginx reverse proxy with TLS + auth if needed.
+      - "127.0.0.1:8080:8080"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"

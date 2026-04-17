@@ -125,6 +125,31 @@ describe("gatewayRegistry", () => {
       expect(GATEWAY_DEFINITIONS.sentron_powercenter_3000.edgeFunctionName).toBe("sentron-poc3000-api");
     });
 
+    it("mqtt_generic requires broker_url, username, password, topic_prefix, payload_format and uses gateway-ingest", () => {
+      const def = GATEWAY_DEFINITIONS.mqtt_generic;
+      expect(def).toBeDefined();
+      expect(def.edgeFunctionName).toBe("gateway-ingest");
+      const fields = def.configFields;
+      const names = fields.map((f) => f.name);
+      for (const required of ["broker_url", "username", "password", "topic_prefix", "payload_format"]) {
+        expect(names).toContain(required);
+        expect(fields.find((f) => f.name === required)!.required).toBe(true);
+      }
+      expect(names).toContain("device_mapping");
+      expect(fields.find((f) => f.name === "device_mapping")!.required).toBe(false);
+      expect(def.setupInstructions?.port).toBe("8883");
+    });
+
+    it("shelly_mqtt is registered with shelly_gen2 default and uses gateway-ingest", () => {
+      const def = GATEWAY_DEFINITIONS.shelly_mqtt;
+      expect(def).toBeDefined();
+      expect(def.edgeFunctionName).toBe("gateway-ingest");
+      const names = def.configFields.map((f) => f.name);
+      for (const required of ["broker_url", "username", "password", "topic_prefix", "payload_format"]) {
+        expect(names).toContain(required);
+      }
+    });
+
     it("schneider_cloud requires api_url, client_id, client_secret, site_id", () => {
       const fields = GATEWAY_DEFINITIONS.schneider_cloud.configFields;
       const names = fields.map((f) => f.name);
