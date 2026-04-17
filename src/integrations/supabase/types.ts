@@ -3467,6 +3467,50 @@ export type Database = {
         }
         Relationships: []
       }
+      mqtt_credentials: {
+        Row: {
+          created_at: string
+          id: string
+          is_active: boolean
+          last_rotated_at: string
+          password_hash: string
+          tenant_id: string
+          topic_prefix: string
+          updated_at: string
+          username: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          last_rotated_at?: string
+          password_hash: string
+          tenant_id: string
+          topic_prefix: string
+          updated_at?: string
+          username: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          last_rotated_at?: string
+          password_hash?: string
+          tenant_id?: string
+          topic_prefix?: string
+          updated_at?: string
+          username?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mqtt_credentials_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ocpp_integration_guides: {
         Row: {
           charger_model_id: string | null
