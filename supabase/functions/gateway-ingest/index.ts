@@ -16,6 +16,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders } from "../_shared/cors.ts";
+import { recordWorkerHeartbeat } from "../_shared/workerStatus.ts";
 
 // Module-level default for helpers called outside handler context
 let corsHeaders: Record<string, string> = getCorsHeaders();
@@ -1300,6 +1301,7 @@ Deno.serve(async (req) => {
     if (action === "compact-day") return handleCompactDay(req);
     if (action === "schneider-push") return handleSchneiderPush(req);
     if (action === "heartbeat") return handleHeartbeat(req);
+    if (action === "worker-heartbeat") return handleWorkerHeartbeat(req);
     if (action === "gateway-backup") return handleGatewayBackup(req);
     if (action === "gateway-command") return handleGatewayCommand(req);
     if (action === "push-execution-logs") return handlePushExecutionLogs(req);
