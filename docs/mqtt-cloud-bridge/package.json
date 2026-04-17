@@ -1,0 +1,21 @@
+{
+  "name": "aicono-mqtt-cloud-bridge",
+  "version": "1.0.0",
+  "description": "MQTT → gateway-ingest bridge for AICONO EMS",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsx watch index.ts"
+  },
+  "dependencies": {
+    "mqtt": "^5.10.1",
+    "node-fetch": "^3.3.2",
+    "pino": "^9.5.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3"
+  }
+}

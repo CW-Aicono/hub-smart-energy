@@ -171,6 +171,27 @@ export const GATEWAY_DEFINITIONS: Record<string, GatewayDefinition> = {
       { name: "poll_interval", label: "Abrufintervall (Sekunden)", placeholder: "60", type: "text", description: "Intervall in Sekunden für den Datenabruf (Standard: 60)", required: false },
     ],
   },
+  mqtt_generic: {
+    type: "mqtt_generic",
+    label: "MQTT-Gerät (generisch)",
+    icon: "radio-tower",
+    description: "Generische Anbindung beliebiger MQTT-fähiger Geräte (Tasmota, ESPHome, Zigbee2MQTT, KNX-MQTT, Wechselrichter, Wärmepumpen, ...) über den AICONO Cloud-Broker",
+    edgeFunctionName: "gateway-ingest",
+    configFields: [
+      { name: "broker_url", label: "Broker URL", placeholder: "mqtts://mqtt.aicono.org:8883", type: "url", description: "TLS-MQTT-Endpunkt des AICONO Cloud-Brokers (Klartext-Verbindungen werden abgelehnt)", required: true },
+      { name: "username", label: "Benutzername", placeholder: "tenant-mustermann", type: "text", description: "Mandantenspezifischer MQTT-Benutzer (wird im Wizard generiert)", required: true },
+      { name: "password", label: "Passwort", placeholder: "••••••••", type: "password", description: "MQTT-Passwort (wird einmalig im Klartext angezeigt, danach nur als Hash gespeichert)", required: true },
+      { name: "topic_prefix", label: "Topic-Präfix", placeholder: "aicono/tenant-mustermann/#", type: "text", description: "Alle Topics, die diese Bridge für den Mandanten abonniert (Wildcards #/+ erlaubt)", required: true },
+      { name: "payload_format", label: "Payload-Format", placeholder: "json", type: "text", description: "Eines von: json, tasmota, esphome, homie, raw_value", required: true },
+      { name: "device_mapping", label: "Device-Mapping (optional)", placeholder: "tasmota/wallbox1/SENSOR=meter-uuid,esphome/hp/power=meter-uuid", type: "text", description: "Zuordnung Topic-Pattern → Meter-UUID, kommagetrennt", required: false },
+    ],
+    setupInstructions: {
+      serverField: "broker_url",
+      port: "8883",
+      pathTemplate: "{topic_prefix}",
+      authMethod: "Username/Password über TLS (mqtts://)",
+    },
+  },
   schneider_cloud: {
     type: "schneider_cloud",
     label: "Schneider EcoStruxure Cloud",
