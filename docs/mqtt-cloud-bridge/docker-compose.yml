@@ -35,11 +35,18 @@ services:
       - MQTT_ADMIN_USER=bridge
       - MQTT_ADMIN_PASSWORD=${MQTT_ADMIN_PASSWORD}
       - GATEWAY_INGEST_URL=https://xnveugycurplszevdxtw.supabase.co/functions/v1/gateway-ingest
+      - MQTT_DISCOVERY_URL=https://xnveugycurplszevdxtw.supabase.co/functions/v1/mqtt-discovery
       - GATEWAY_API_KEY=${GATEWAY_API_KEY}
       - TOPIC_FILTER=aicono/#
+      - ENABLE_DISCOVERY=true
+      - HEALTH_PORT=8080
       - LOG_LEVEL=info
       # JSON map: { "<tenant-slug>": { "tenant_id": "...", "payload_format": "...", "device_mapping": {...} } }
       - ROUTES_JSON=${ROUTES_JSON}
+    ports:
+      # Phase 2: bidirectional publish API. Bind to 127.0.0.1 only — expose
+      # externally via Caddy/nginx reverse proxy with TLS + auth if needed.
+      - "127.0.0.1:8080:8080"
     logging:
       driver: "json-file"
       options:
