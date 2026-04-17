@@ -665,8 +665,8 @@ services:
         - VITE_SUPABASE_URL=${VITE_SUPABASE_URL:-http://localhost:8000}
         - VITE_SUPABASE_PUBLISHABLE_KEY=${ANON_KEY}
         - VITE_CSP_CONTENT=${VITE_CSP_CONTENT}
-    ports:
-      - "5173:80"
+    expose:
+      - "80"
     depends_on:
       kong:
         condition: service_healthy
