@@ -1,16 +1,23 @@
 /**
- * AICONO MQTT Cloud Bridge
- * ========================
- * Subscribes to all tenant topics on the AICONO Mosquitto broker, parses
- * payloads (json | tasmota | esphome | homie | raw_value) and forwards each
- * meter reading to the `gateway-ingest` Edge Function.
+ * AICONO MQTT Cloud Bridge (Phase 2)
+ * ===================================
+ * - Subscribes to all tenant topics on the AICONO Mosquitto broker
+ * - Parses payloads via ./parsers and forwards to `gateway-ingest`
+ * - Subscribes to HA-Discovery topics and forwards to `mqtt-discovery`
+ * - Exposes POST /publish so the `mqtt-publish` Edge Function can send commands
  *
- * Stateless design — config is loaded from environment + Supabase REST.
+ * Stateless — config from env + (later) Supabase REST.
  */
 
 import mqtt, { MqttClient } from "mqtt";
 import pino from "pino";
-import http from "node:http";
+import { parsePayload, type PayloadFormat, type Reading } from "./parsers.js";
+import {
+  parseDiscoveryTopic,
+  forwardDiscovery,
+  extractStateTopic,
+} from "./discovery.js";
+import { startPublishServer } from "./publish.js";
 
 const log = pino({ level: process.env.LOG_LEVEL ?? "info" });
 
@@ -19,10 +26,12 @@ const {
   MQTT_ADMIN_USER = "bridge",
   MQTT_ADMIN_PASSWORD = "",
   GATEWAY_INGEST_URL = "",
+  MQTT_DISCOVERY_URL = "",
   GATEWAY_API_KEY = "",
   HEALTH_PORT = "8080",
   RECONNECT_DELAY_MS = "5000",
   TOPIC_FILTER = "aicono/#",
+  ENABLE_DISCOVERY = "true",
 } = process.env;
 
 if (!GATEWAY_INGEST_URL || !GATEWAY_API_KEY) {
@@ -30,18 +39,15 @@ if (!GATEWAY_INGEST_URL || !GATEWAY_API_KEY) {
   process.exit(1);
 }
 
-// ── Tenant routing table ────────────────────────────────────────────────────
-// Topic prefix `aicono/<tenant-slug>/...` → { tenant_id, device_mapping }
+// ── Tenant routing ──────────────────────────────────────────────────────────
 interface TenantRoute {
   tenantId: string;
-  payloadFormat: "json" | "tasmota" | "esphome" | "homie" | "raw_value";
+  payloadFormat: PayloadFormat;
   deviceMapping: Map<string, string>; // topic-pattern → meter_id
 }
-const routes = new Map<string, TenantRoute>(); // key = tenant slug
+const routes = new Map<string, TenantRoute>();        // slug → route
+const tenantSlugById = new Map<string, string>();     // tenantId → slug (for /publish)
 
-// In production this should be hydrated from the `mqtt_credentials` table
-// joined with `location_integrations.config` for `mqtt_generic` integrations.
-// For brevity we read JSON from env: ROUTES_JSON='{"tenant-slug":{...}}'
 try {
   const raw = process.env.ROUTES_JSON ?? "{}";
   const parsed = JSON.parse(raw) as Record<
@@ -51,102 +57,17 @@ try {
   for (const [slug, cfg] of Object.entries(parsed)) {
     routes.set(slug, {
       tenantId: cfg.tenant_id,
-      payloadFormat: (cfg.payload_format as TenantRoute["payloadFormat"]) ?? "json",
+      payloadFormat: (cfg.payload_format as PayloadFormat) ?? "json",
       deviceMapping: new Map(Object.entries(cfg.device_mapping ?? {})),
     });
+    tenantSlugById.set(cfg.tenant_id, slug);
   }
   log.info({ tenants: routes.size }, "Loaded tenant routes");
 } catch (err) {
   log.error({ err }, "Failed to parse ROUTES_JSON");
 }
 
-// ── Payload parsers ─────────────────────────────────────────────────────────
-interface Reading {
-  meterId: string;
-  powerW?: number;
-  energyKwh?: number;
-  rawValue?: number;
-  unit?: string;
-  recordedAt: string;
-}
-
-function parsePayload(
-  topic: string,
-  payload: Buffer,
-  route: TenantRoute,
-): Reading[] {
-  const text = payload.toString("utf8");
-  const meterId = lookupMeterId(topic, route.deviceMapping);
-  if (!meterId) {
-    log.debug({ topic }, "No meter mapping — skipping");
-    return [];
-  }
-  const recordedAt = new Date().toISOString();
-
-  switch (route.payloadFormat) {
-    case "json": {
-      try {
-        const obj = JSON.parse(text);
-        return [{
-          meterId,
-          powerW: typeof obj.power === "number" ? obj.power : undefined,
-          energyKwh: typeof obj.energy === "number" ? obj.energy : undefined,
-          rawValue: typeof obj.value === "number" ? obj.value : undefined,
-          unit: typeof obj.unit === "string" ? obj.unit : undefined,
-          recordedAt,
-        }];
-      } catch {
-        return [];
-      }
-    }
-    case "tasmota": {
-      // Tasmota SENSOR topic: {"ENERGY":{"Power":123.4,"Total":12.345}}
-      try {
-        const obj = JSON.parse(text);
-        const e = obj.ENERGY ?? obj.energy;
-        if (!e) return [];
-        return [{
-          meterId,
-          powerW: typeof e.Power === "number" ? e.Power : undefined,
-          energyKwh: typeof e.Total === "number" ? e.Total : undefined,
-          recordedAt,
-        }];
-      } catch {
-        return [];
-      }
-    }
-    case "esphome": {
-      // ESPHome state topic: simple numeric string
-      const v = parseFloat(text);
-      return Number.isFinite(v) ? [{ meterId, rawValue: v, recordedAt }] : [];
-    }
-    case "homie": {
-      // Homie convention: $unit attribute would arrive on a sibling topic.
-      const v = parseFloat(text);
-      return Number.isFinite(v) ? [{ meterId, rawValue: v, recordedAt }] : [];
-    }
-    case "raw_value": {
-      const v = parseFloat(text);
-      return Number.isFinite(v) ? [{ meterId, rawValue: v, recordedAt }] : [];
-    }
-    default:
-      return [];
-  }
-}
-
-function lookupMeterId(topic: string, mapping: Map<string, string>): string | null {
-  // 1) exact match
-  if (mapping.has(topic)) return mapping.get(topic)!;
-  // 2) wildcard match (suffix `#`)
-  for (const [pattern, meterId] of mapping) {
-    if (pattern.endsWith("#") && topic.startsWith(pattern.slice(0, -1))) {
-      return meterId;
-    }
-  }
-  return null;
-}
-
-// ── Forwarding to gateway-ingest ────────────────────────────────────────────
+// ── Forward readings to gateway-ingest ──────────────────────────────────────
 async function forward(tenantId: string, readings: Reading[]): Promise<void> {
   if (readings.length === 0) return;
   const body = {
@@ -161,7 +82,6 @@ async function forward(tenantId: string, readings: Reading[]): Promise<void> {
       unit: r.unit,
     })),
   };
-
   try {
     const res = await fetch(GATEWAY_INGEST_URL, {
       method: "POST",
@@ -171,9 +91,7 @@ async function forward(tenantId: string, readings: Reading[]): Promise<void> {
       },
       body: JSON.stringify(body),
     });
-    if (!res.ok) {
-      log.warn({ status: res.status, tenantId }, "gateway-ingest rejected");
-    }
+    if (!res.ok) log.warn({ status: res.status, tenantId }, "gateway-ingest rejected");
   } catch (err) {
     log.error({ err, tenantId }, "Failed to POST to gateway-ingest");
   }
@@ -192,13 +110,26 @@ client.on("connect", () => {
   client.subscribe(TOPIC_FILTER, { qos: 1 }, (err) => {
     if (err) log.error({ err }, "Subscribe failed");
   });
+  if (ENABLE_DISCOVERY === "true" && MQTT_DISCOVERY_URL) {
+    const discoFilter = "aicono/+/homeassistant/#";
+    client.subscribe(discoFilter, { qos: 1 }, (err) => {
+      if (err) log.error({ err }, "Discovery subscribe failed");
+      else log.info({ filter: discoFilter }, "Subscribed to HA-Discovery topics");
+    });
+  }
 });
 
 client.on("error", (err) => log.error({ err }, "MQTT error"));
 client.on("reconnect", () => log.info("MQTT reconnecting"));
 
 client.on("message", (topic, payload) => {
-  // topic format: aicono/<tenant-slug>/...
+  // 1) HA-Discovery messages
+  if (topic.includes("/homeassistant/") && topic.endsWith("/config")) {
+    handleDiscovery(topic, payload);
+    return;
+  }
+
+  // 2) Regular tenant payload
   const parts = topic.split("/");
   if (parts[0] !== "aicono" || parts.length < 3) return;
   const slug = parts[1];
@@ -207,19 +138,74 @@ client.on("message", (topic, payload) => {
     log.debug({ slug }, "Unknown tenant slug");
     return;
   }
-  const readings = parsePayload(topic, payload, route);
+  const readings = parsePayload(topic, payload, route.payloadFormat, route.deviceMapping);
   if (readings.length > 0) void forward(route.tenantId, readings);
 });
 
-// ── Health endpoint ─────────────────────────────────────────────────────────
-http.createServer((req, res) => {
-  if (req.url === "/health") {
-    const ok = client.connected;
-    res.writeHead(ok ? 200 : 503, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ status: ok ? "ok" : "disconnected", tenants: routes.size }));
+function handleDiscovery(topic: string, payload: Buffer): void {
+  if (!MQTT_DISCOVERY_URL) return;
+  const parsed = parseDiscoveryTopic(topic);
+  if (!parsed) {
+    log.debug({ topic }, "Could not parse discovery topic");
     return;
   }
-  res.writeHead(404).end();
-}).listen(parseInt(HEALTH_PORT, 10), () => {
-  log.info({ port: HEALTH_PORT }, "Health endpoint listening");
+  const route = routes.get(parsed.tenantSlug);
+  if (!route) return;
+
+  const text = payload.toString("utf8").trim();
+  if (text.length === 0) {
+    void forwardDiscovery(
+      { edgeUrl: MQTT_DISCOVERY_URL, apiKey: GATEWAY_API_KEY },
+      {
+        tenant_id: route.tenantId,
+        component: parsed.component,
+        node_id: parsed.nodeId,
+        object_id: parsed.objectId,
+        removed: true,
+        raw_topic: topic,
+      },
+      log,
+    );
+    return;
+  }
+
+  let config: Record<string, unknown>;
+  try {
+    config = JSON.parse(text);
+  } catch {
+    log.warn({ topic }, "Discovery payload not JSON");
+    return;
+  }
+
+  // Auto-extend in-memory mapping so following state messages route correctly.
+  const stateTopic = extractStateTopic(config);
+  if (stateTopic && config.unique_id) {
+    const meterId = `discovery:${parsed.tenantSlug}:${config.unique_id}`;
+    route.deviceMapping.set(stateTopic, meterId);
+  }
+
+  void forwardDiscovery(
+    { edgeUrl: MQTT_DISCOVERY_URL, apiKey: GATEWAY_API_KEY },
+    {
+      tenant_id: route.tenantId,
+      component: parsed.component,
+      node_id: parsed.nodeId,
+      object_id: parsed.objectId,
+      config,
+      removed: false,
+      raw_topic: topic,
+    },
+    log,
+  );
+}
+
+// ── HTTP server: /health + /publish ─────────────────────────────────────────
+startPublishServer({
+  client,
+  apiKey: GATEWAY_API_KEY,
+  port: parseInt(HEALTH_PORT, 10),
+  log,
+  tenantSlugById,
+  healthCheck: () => client.connected,
+  routeCount: () => routes.size,
 });
