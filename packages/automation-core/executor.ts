@@ -10,7 +10,6 @@ import type { AutomationAction } from "./types.ts";
 export const GATEWAY_EDGE_FUNCTIONS: Record<string, string> = {
   loxone_miniserver: "loxone-api",
   shelly_cloud: "shelly-api",
-  shelly_mqtt: "mqtt-publish",
   abb_free_at_home: "abb-api",
   siemens_building_x: "siemens-api",
   tuya_cloud: "tuya-api",
@@ -20,7 +19,6 @@ export const GATEWAY_EDGE_FUNCTIONS: Record<string, string> = {
   schneider_panel_server: "gateway-ingest",
   schneider_cloud: "schneider-api",
   sentron_powercenter_3000: "sentron-poc3000-api",
-  mqtt_generic: "mqtt-publish",
 };
 
 export function getEdgeFunction(integrationType: string): string {
@@ -30,8 +28,6 @@ export function getEdgeFunction(integrationType: string): string {
 /**
  * Build the correct payload for each integration type.
  * Home Assistant needs domain/service/entity_id.
- * MQTT-based integrations send actuatorUuid + commandValue to mqtt-publish,
- * which resolves the topic via the mqtt_actuators table.
  */
 export function buildActionPayload(
   integrationType: string,
@@ -63,14 +59,6 @@ export function buildActionPayload(
       domain,
       service,
       entity_id: entityId,
-    };
-  }
-
-  if (integrationType === "mqtt_generic" || integrationType === "shelly_mqtt") {
-    return {
-      locationIntegrationId,
-      actuatorUuid: action.actuator_uuid,
-      commandValue,
     };
   }
 

@@ -55,7 +55,6 @@ const DEBOUNCE_MINUTES = 5;
 const GATEWAY_EDGE_FUNCTIONS: Record<string, string> = {
   loxone_miniserver: "loxone-api",
   shelly_cloud: "shelly-api",
-  shelly_mqtt: "mqtt-publish",
   abb_free_at_home: "abb-api",
   siemens_building_x: "siemens-api",
   tuya_cloud: "tuya-api",
@@ -65,7 +64,6 @@ const GATEWAY_EDGE_FUNCTIONS: Record<string, string> = {
   schneider_panel_server: "gateway-ingest",
   schneider_cloud: "schneider-api",
   sentron_powercenter_3000: "sentron-poc3000-api",
-  mqtt_generic: "mqtt-publish",
 };
 
 function getEdgeFunction(integrationType: string): string {
