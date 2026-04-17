@@ -67,7 +67,7 @@ Deno.serve(async (req) => {
     const { count: activeDevices } = await supabase
       .from("gateway_devices")
       .select("id", { count: "exact", head: true })
-      .gte("last_heartbeat", fiveMinAgo);
+      .gte("last_heartbeat_at", fiveMinAgo);
 
     return json(corsHeaders, {
       success: true,
