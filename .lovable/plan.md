@@ -1,44 +1,80 @@
 
 
-## Ursache
+## Ziel
 
-`supabase/functions/_shared/cors.ts` erlaubt nur 3 explizite Origins + alle `*.lovable.app` / `*.lovableproject.com` Subdomains. **`staging.aicono.org` steht nicht auf der Liste und passt auf keinen Wildcard.** Folge: Jeder Browser-Aufruf von dieser Domain bekommt `Access-Control-Allow-Origin: https://hub-smart-energy.lovable.app` zurück, der Browser **blockt** die Antwort, und supabase-js meldet den generischen Fehler „Failed to send a request to the Edge Function".
+Klare Trennung der Verantwortlichkeiten: **Worker schreibt Live-Daten, Edge Functions machen nur noch Discovery & Steuerung.** Migration in 3 sicheren Stufen ohne Datenverlust.
 
-Das erklärt exakt, warum **alle** Gateway-Typen (Loxone, Shelly Cloud, Home Assistant) identisch fehlschlagen — sie nutzen alle dasselbe `_shared/cors.ts`. Der Loxone-404 in den Logs („Steinfurter Ei") ist ein separates Problem aus einem serverseitigen Cron-Job (kein CORS) und nicht das, was der Nutzer im Screenshot sieht.
+## Stufe 1 — Worker auf Hetzner produktiv betreiben
 
-## Fix (1 Datei, ~4 Zeilen)
+**Infrastruktur (vom Nutzer auszuführen, separate Anleitung):**
+- Hetzner CX22 (2 vCPU, 4 GB RAM, ~5 €/Monat), Ubuntu 24.04
+- Docker + Docker Compose installiert
+- `docker-compose.yml` mit `restart: always`, `gateway-worker:latest` Image
+- Environment: `SUPABASE_URL`, `GATEWAY_API_KEY`, `POLL_INTERVAL_MS=30000`, `FLUSH_INTERVAL_MS=1000`
+- Optional: Healthcheck-Endpoint + externes Monitoring (Uptime-Kuma / Healthchecks.io) auf den letzten `gateway_logs.created_at`-Eintrag
 
-Anpassung in `supabase/functions/_shared/cors.ts`:
+**Im Code (in dieser App):**
+- Neues Super-Admin-Widget **„Gateway-Worker Status"** unter `/admin/infrastructure`:
+  - Zeigt letzten Heartbeat aus `gateway_logs` (Schwellwert: > 3 Min = rot)
+  - Zähler: aktive Loxone-WebSockets, Anzahl gepollter Shelly/HA-Geräte (aus Worker-Logs)
+  - Warnt visuell, wenn kein Worker aktiv ist → verhindert Überraschungen wie aktuell
+- Edge Function `gateway-worker-status` (neu, ~30 Zeilen): liest die letzten 5 Min aus `gateway_logs`, gibt aggregierte Metriken zurück
 
-1. `https://staging.aicono.org` zur Liste `ALLOWED_ORIGINS` hinzufügen.
-2. Wildcard-Match für `*.aicono.org` ergänzen (damit zukünftige Subdomains wie `app.aicono.org`, `ems-pro.aicono.org` usw. ohne Redeploy funktionieren).
-3. Optionale Härtung: zusätzlich `http://localhost:*` für lokale Entwicklung erlauben.
+## Stufe 2 — Feature-Flag `WORKER_ACTIVE` (sicheres Umschalten)
 
-Resultierende Prüfung (konzeptionell):
+**Datenbank:** Neue Tabelle `system_settings` (key/value, super-admin-only RLS):
 ```
-isAllowed =
-  ALLOWED_ORIGINS.includes(origin)
-  || origin.endsWith(".lovable.app")
-  || origin.endsWith(".lovableproject.com")
-  || origin.endsWith(".aicono.org")
-  || origin === "https://aicono.org"
-  || /^http:\/\/localhost(:\d+)?$/.test(origin)
+key = 'worker_active', value = 'true' | 'false' (default: 'false')
+key = 'worker_last_heartbeat', value = ISO-Timestamp (vom Worker geschrieben)
 ```
 
-Es müssen keine Edge Functions einzeln neu deployed werden — sie importieren `getCorsHeaders` pro Request dynamisch, jeder nächste Deploy einer Funktion lädt das geteilte Modul neu. Zur Sicherheit werden die meistgenutzten Funktionen (loxone-api, shelly-api, home-assistant-api, gateway-ingest) explizit neu deployed.
+**Edge Functions** (`loxone-api`, `shelly-api`, später ggf. `home-assistant-api`):
+- Vor jedem `meter_power_readings.insert(...)`-Block:
+  ```
+  const workerActive = await getSystemSetting('worker_active');
+  const heartbeatFresh = workerLastHeartbeat > now() - 5min;
+  if (workerActive && heartbeatFresh) {
+    // Schreibpfad überspringen → nur Sensoren zurückgeben
+  } else {
+    // Bisheriger Schreibpfad als Fallback
+  }
+  ```
+- **Sicherheits-Fallback:** Wenn der Worker länger als 5 Min keinen Heartbeat sendet, schreibt die Edge Function automatisch wieder → Datenkontinuität auch bei Worker-Ausfall.
 
-## Verifikation (nach dem Fix)
+**UI:** Toggle im Super-Admin („Worker als primäre Datenquelle aktiv"), zeigt Live-Heartbeat daneben.
 
-1. `https://staging.aicono.org` öffnen → Liegenschaft → Integration → „Sensoren anzeigen".
-2. DevTools → Netzwerk → Filter `loxone-api`. Antwort muss `access-control-allow-origin: https://staging.aicono.org` und HTTP 200 enthalten.
-3. Wiederholen für eine Shelly-Cloud- und eine Home-Assistant-Integration.
-4. Edge-Function-Logs sollten normale `getSensors`-Aufrufe ohne 401-/CORS-bedingte frühe Abbrüche zeigen.
+## Stufe 3 — Edge Functions auf Discovery & Steuerung reduzieren
 
-Falls eine einzelne Integration nach dem Fix weiterhin fehlschlägt, ist das ein gerätespezifisches Problem (z. B. der bestehende Loxone-404 für „Steinfurter Ei") und wird separat diagnostiziert.
+Nach 2–4 Wochen stabilem Worker-Betrieb (über Heartbeat-Monitoring nachgewiesen):
+- Schreibpfad in `loxone-api`/`shelly-api` **vollständig entfernen** (kein Flag mehr nötig)
+- Edge Functions behalten nur noch:
+  - `action: "test"` — Verbindungstest
+  - `action: "getSensors"` — Discovery (Sensorliste, ohne DB-Insert)
+  - `action: "executeCommand"` — Steuerbefehle
+- Polling-Intervalle in den Hooks (`useLoxoneSensorsMulti`) von 30 s auf 60–120 s erhöhen → reduziert Edge-Function-Kosten massiv
+- Live-Werte in der UI kommen dann aus `meter_power_readings` (Realtime-Subscription) statt aus Edge-Function-Polling
 
-## Was dieser Plan NICHT anfasst
+## Reihenfolge & Sicherheitsnetz
 
-- Gateway-spezifische Logik, Auth oder Credentials.
-- Den verbleibenden Loxone-404 für „Steinfurter Ei" (separate Aufgabe nach dem CORS-Fix).
-- Produktion (`ems-pro.aicono.org`) funktioniert bereits — steht schon in der Allow-Liste.
+```
+Stufe 1 (Worker live + Monitoring)
+   ↓ 1–2 Tage Beobachtung
+Stufe 2 (Feature-Flag aus → an, mit automatischem Fallback)
+   ↓ 2–4 Wochen Beobachtung über Heartbeat
+Stufe 3 (Schreibpfad in Edge Functions entfernen, Polling reduzieren)
+```
+
+Jede Stufe ist **rückwärtskompatibel** und einzeln revertierbar. Stufe 2 garantiert per Heartbeat-Check, dass nie eine Datenlücke entsteht.
+
+## Was dieser Plan NICHT macht
+
+- Keine Änderung am Worker-Code selbst (läuft bereits stabil in `docs/gateway-worker/`)
+- Keine Änderung am Discovery-/Steuer-Pfad (nur Schreibpfad wird gekapselt)
+- Keine Migration alter Daten — `meter_power_readings` bleibt unverändert
+
+## Geschätzter Aufwand (nur Code in dieser App)
+
+- Stufe 1: ~1 neue Edge Function + 1 Admin-Widget (~150 Zeilen)
+- Stufe 2: 1 Migration + 1 Helper + 2 Edge-Function-Patches (~80 Zeilen)
+- Stufe 3: Entfernen von ~50 Zeilen aus 2 Edge Functions + 2 Hook-Anpassungen
 
