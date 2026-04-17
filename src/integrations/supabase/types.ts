@@ -3230,6 +3230,9 @@ export type Database = {
           capture_type: string
           created_at: string
           device_type: string
+          discovery_confirmed: boolean
+          discovery_payload: Json | null
+          discovery_source: string | null
           energy_type: string
           floor_id: string | null
           gas_type: string | null
@@ -3265,6 +3268,9 @@ export type Database = {
           capture_type?: string
           created_at?: string
           device_type?: string
+          discovery_confirmed?: boolean
+          discovery_payload?: Json | null
+          discovery_source?: string | null
           energy_type?: string
           floor_id?: string | null
           gas_type?: string | null
@@ -3300,6 +3306,9 @@ export type Database = {
           capture_type?: string
           created_at?: string
           device_type?: string
+          discovery_confirmed?: boolean
+          discovery_payload?: Json | null
+          discovery_source?: string | null
           energy_type?: string
           floor_id?: string | null
           gas_type?: string | null
@@ -3466,6 +3475,81 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      mqtt_actuators: {
+        Row: {
+          actuator_uuid: string
+          command_topic: string
+          created_at: string
+          discovery_confirmed: boolean
+          discovery_payload: Json | null
+          discovery_source: string | null
+          id: string
+          location_integration_id: string
+          name: string
+          payload_off: string
+          payload_on: string
+          payload_template: string | null
+          qos: number
+          retain: boolean
+          state_topic: string | null
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          actuator_uuid: string
+          command_topic: string
+          created_at?: string
+          discovery_confirmed?: boolean
+          discovery_payload?: Json | null
+          discovery_source?: string | null
+          id?: string
+          location_integration_id: string
+          name: string
+          payload_off?: string
+          payload_on?: string
+          payload_template?: string | null
+          qos?: number
+          retain?: boolean
+          state_topic?: string | null
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          actuator_uuid?: string
+          command_topic?: string
+          created_at?: string
+          discovery_confirmed?: boolean
+          discovery_payload?: Json | null
+          discovery_source?: string | null
+          id?: string
+          location_integration_id?: string
+          name?: string
+          payload_off?: string
+          payload_on?: string
+          payload_template?: string | null
+          qos?: number
+          retain?: boolean
+          state_topic?: string | null
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mqtt_actuators_location_integration_id_fkey"
+            columns: ["location_integration_id"]
+            isOneToOne: false
+            referencedRelation: "location_integrations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mqtt_actuators_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       mqtt_credentials: {
         Row: {
