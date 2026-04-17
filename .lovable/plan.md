@@ -1,98 +1,44 @@
 
 
-# MQTT Gateway-Integration
+## Ursache
 
-## Ziel
-Generische Anbindung beliebiger Gateways/Geräte über **MQTT** als zusätzlichen Transport-Layer – ergänzend zu den bestehenden Cloud-API- und HTTP-Push-Integrationen (siehe `gatewayRegistry.ts`).
+`supabase/functions/_shared/cors.ts` erlaubt nur 3 explizite Origins + alle `*.lovable.app` / `*.lovableproject.com` Subdomains. **`staging.aicono.org` steht nicht auf der Liste und passt auf keinen Wildcard.** Folge: Jeder Browser-Aufruf von dieser Domain bekommt `Access-Control-Allow-Origin: https://hub-smart-energy.lovable.app` zurück, der Browser **blockt** die Antwort, und supabase-js meldet den generischen Fehler „Failed to send a request to the Edge Function".
 
-## Warum MQTT?
-- **Industriestandard** für IoT/Building Automation (Tasmota, ESPHome, Zigbee2MQTT, KNX-MQTT-Bridge, Wago, Beckhoff, viele Wechselrichter, Wärmepumpen via EMS-ESP)
-- **Push-basiert** (keine Polling-Last), niedrige Latenz, sehr ressourcenschonend
-- Öffnet das System für **hunderte zusätzliche Geräte** ohne dedizierte Edge Function pro Hersteller
+Das erklärt exakt, warum **alle** Gateway-Typen (Loxone, Shelly Cloud, Home Assistant) identisch fehlschlagen — sie nutzen alle dasselbe `_shared/cors.ts`. Der Loxone-404 in den Logs („Steinfurter Ei") ist ein separates Problem aus einem serverseitigen Cron-Job (kein CORS) und nicht das, was der Nutzer im Screenshot sieht.
 
-## Architektur
+## Fix (1 Datei, ~4 Zeilen)
 
-```text
-Gerät/Bridge ──MQTT──► MQTT-Broker (Cloud)
-                            │
-                            │ Subscribe
-                            ▼
-                    MQTT-Bridge-Service (VPS, Docker)
-                            │
-                            │ HTTPS POST
-                            ▼
-                gateway-ingest Edge Function
-                            │
-                            ▼
-                  Supabase (meter_power_readings, ...)
+Anpassung in `supabase/functions/_shared/cors.ts`:
+
+1. `https://staging.aicono.org` zur Liste `ALLOWED_ORIGINS` hinzufügen.
+2. Wildcard-Match für `*.aicono.org` ergänzen (damit zukünftige Subdomains wie `app.aicono.org`, `ems-pro.aicono.org` usw. ohne Redeploy funktionieren).
+3. Optionale Härtung: zusätzlich `http://localhost:*` für lokale Entwicklung erlauben.
+
+Resultierende Prüfung (konzeptionell):
+```
+isAllowed =
+  ALLOWED_ORIGINS.includes(origin)
+  || origin.endsWith(".lovable.app")
+  || origin.endsWith(".lovableproject.com")
+  || origin.endsWith(".aicono.org")
+  || origin === "https://aicono.org"
+  || /^http:\/\/localhost(:\d+)?$/.test(origin)
 ```
 
-Wie beim OCPP-Cloud-Proxy: Die Brücke läuft als **schlanker Docker-Container auf dem bestehenden Hetzner-VPS** (kein lokaler Pi nötig), abonniert die MQTT-Topics und leitet Nachrichten in die bereits existierende `gateway-ingest`-Pipeline. Keine neue Datenbank-Logik nötig.
+Es müssen keine Edge Functions einzeln neu deployed werden — sie importieren `getCorsHeaders` pro Request dynamisch, jeder nächste Deploy einer Funktion lädt das geteilte Modul neu. Zur Sicherheit werden die meistgenutzten Funktionen (loxone-api, shelly-api, home-assistant-api, gateway-ingest) explizit neu deployed.
 
-## Komponenten
+## Verifikation (nach dem Fix)
 
-### 1. Neuer Gateway-Typ `mqtt_generic` in `gatewayRegistry.ts`
-Konfigurationsfelder pro Mandant:
-- `broker_url` (z.B. `mqtts://mqtt.aicono.org:8883`)
-- `username` / `password` (pro Mandant individuell)
-- `topic_prefix` (z.B. `aicono/<tenant-slug>/#`)
-- `payload_format` (Auswahl: `json`, `tasmota`, `esphome`, `homie`, `raw_value`)
-- `device_mapping` (optional: `topic-pattern=meter-uuid`, kommagetrennt)
+1. `https://staging.aicono.org` öffnen → Liegenschaft → Integration → „Sensoren anzeigen".
+2. DevTools → Netzwerk → Filter `loxone-api`. Antwort muss `access-control-allow-origin: https://staging.aicono.org` und HTTP 200 enthalten.
+3. Wiederholen für eine Shelly-Cloud- und eine Home-Assistant-Integration.
+4. Edge-Function-Logs sollten normale `getSensors`-Aufrufe ohne 401-/CORS-bedingte frühe Abbrüche zeigen.
 
-→ Keine eigene Edge Function nötig, nutzt `gateway-ingest`.
+Falls eine einzelne Integration nach dem Fix weiterhin fehlschlägt, ist das ein gerätespezifisches Problem (z. B. der bestehende Loxone-404 für „Steinfurter Ei") und wird separat diagnostiziert.
 
-### 2. Cloud-MQTT-Broker (Mosquitto in Docker)
-- Läuft auf VPS, Port 8883 (TLS) + Let's Encrypt
-- Pro Mandant: eigener User + ACL auf `aicono/<tenant>/#`
-- Anonyme Verbindungen deaktiviert
+## Was dieser Plan NICHT anfasst
 
-### 3. MQTT-Bridge-Service (`docs/mqtt-cloud-bridge/`)
-Node.js/TypeScript-Service, der:
-- Alle Mandanten-Topics abonniert
-- Eingehende Payloads gemäß `payload_format` parst (JSON-Path, Tasmota-Schema, ESPHome-Schema, Homie-Convention)
-- Per `device_mapping` Topic → `meter_id` zuordnet
-- Pakete an `gateway-ingest` (POST mit `x-gateway-api-key`) weiterleitet
-- Inkl. Reconnect, Backpressure-Buffer, Health-Endpoint
-
-### 4. Dashboard-Anpassungen
-- Neuer Eintrag im Integrations-Wizard "MQTT-Gerät" mit den oben genannten Feldern
-- Anzeige der **persönlichen Mandanten-Zugangsdaten** (Broker-URL, User, Pass, Topic-Präfix) – analog zur OCPP-Detailseite
-- Beispiel-Payloads + Topic-Struktur für die 4 unterstützten Formate
-- Live-Topic-Inspector (optional, später): zeigt zuletzt empfangene Nachrichten zur Diagnose
-
-### 5. Dokumentation
-Word-Anleitung in `/mnt/documents/`:
-- VPS-Setup für Mosquitto-Broker (einmalig durch Admin)
-- Endkunden-Anleitung "Wie verbinde ich mein Tasmota-Gerät / ESPHome / KNX-Bridge mit AICONO"
-
-## Datei-Übersicht
-
-| Aktion | Datei |
-|--------|-------|
-| Editieren | `src/lib/gatewayRegistry.ts` (neuer Typ `mqtt_generic`) |
-| Editieren | `src/lib/__tests__/gatewayRegistry.test.ts` |
-| Editieren | Integrations-Wizard UI (Konfig-Felder + Anzeige der Verbindungsdaten) |
-| Neu | `docs/mqtt-cloud-bridge/index.ts` |
-| Neu | `docs/mqtt-cloud-bridge/Dockerfile` |
-| Neu | `docs/mqtt-cloud-bridge/docker-compose.yml` (inkl. Mosquitto-Service) |
-| Neu | `docs/mqtt-cloud-bridge/mosquitto.conf` |
-| Neu | `docs/mqtt-cloud-bridge/package.json`, `tsconfig.json` |
-| Neu | Edge Function `mqtt-credentials` (erzeugt/rotiert Mandanten-Credentials, schreibt Mosquitto-ACL) |
-| Neu | DB-Migration: Tabelle `mqtt_credentials` (tenant_id, username, password_hash, topic_prefix) |
-| Neu | Word-Anleitung `/mnt/documents/AICONO_MQTT_Integration.docx` |
-
-## Sicherheit
-- **TLS-Pflicht** (mqtts://, Port 8883), Klartext-Port 1883 deaktiviert
-- Pro Mandant eigener Broker-User mit ACL → keine Cross-Tenant-Topics lesbar
-- Bridge nutzt einen **Admin-User** mit Read-Only auf `aicono/#`
-- Passwörter werden in der DB nur als bcrypt-Hash gespeichert; Klartext einmalig im UI angezeigt
-
-## Optionale Erweiterungen (Phase 2)
-- **Bidirektional**: Schaltbefehle von AICONO → MQTT (für Tasmota-Aktoren, Wallbox-Steuerung, etc.) – nutzt bestehende Automations-Engine
-- **Auto-Discovery** via Home-Assistant-Discovery-Convention (`homeassistant/sensor/.../config`)
-- **Bridge-Migration**: Bestehende Cloud-API-Gateways (Shelly, Tuya), die intern MQTT nutzen, könnten optional über die Bridge laufen → eine Verbindung statt N Polling-Loops
-
-## Aufwandsschätzung
-- Phase 1 (generische Anbindung, JSON + Tasmota): überschaubar, ~2-3 Implementierungs-Loops
-- Mosquitto-VPS-Setup: einmalig, manuelle Anleitung wie bei OCPP-Proxy
+- Gateway-spezifische Logik, Auth oder Credentials.
+- Den verbleibenden Loxone-404 für „Steinfurter Ei" (separate Aufgabe nach dem CORS-Fix).
+- Produktion (`ems-pro.aicono.org`) funktioniert bereits — steht schon in der Allow-Liste.
 
