@@ -40,8 +40,9 @@ export function useLoxoneSensors(integrationId: string | undefined, integrationT
     queryKey: ["gateway-sensors", integrationId],
     queryFn: () => fetchSensors(integrationId!, integrationType),
     enabled: !!integrationId,
-    staleTime: 30_000,
-    refetchInterval: 60_000,
+    staleTime: 60_000,
+    // Background safety net – realtime invalidation handles instant updates.
+    refetchInterval: 5 * 60_000,
   });
 }
 
@@ -50,8 +51,8 @@ export function useLoxoneSensorsMulti(integrationIds: string[], integrationTypes
     queries: integrationIds.map((id, idx) => ({
       queryKey: ["gateway-sensors", id],
       queryFn: () => fetchSensors(id, integrationTypes?.[idx]),
-      staleTime: 30_000,
-      refetchInterval: 60_000,
+      staleTime: 60_000,
+      refetchInterval: 5 * 60_000,
       enabled: !!id,
     })),
   });
