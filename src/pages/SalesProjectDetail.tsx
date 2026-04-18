@@ -229,10 +229,18 @@ export default function SalesProjectDetail() {
                   <div key={d.id} className="rounded-lg border bg-card/50">
                     <div className="p-3 flex items-center justify-between gap-2">
                       <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
                           <Box className="h-4 w-4 text-primary shrink-0" />
                           <span className="font-medium truncate">{d.name}</span>
                           <Badge variant="outline" className="text-xs">{d.typ}</Badge>
+                          {d.foto_url && (
+                            <Badge variant="secondary" className="text-xs gap-1">
+                              <Camera className="h-3 w-3" /> Foto
+                            </Badge>
+                          )}
+                          {d.ki_analyse && (
+                            <Badge variant="secondary" className="text-xs">KI</Badge>
+                          )}
                         </div>
                         {d.standort && (
                           <p className="text-xs text-muted-foreground mt-1">{d.standort}</p>
@@ -272,42 +280,46 @@ export default function SalesProjectDetail() {
                         <p className="text-xs text-muted-foreground py-1">Noch keine Messpunkte.</p>
                       ) : (
                         dPoints.map((p) => (
-                          <div
-                            key={p.id}
-                            className="flex items-center justify-between gap-2 rounded-md bg-card px-2 py-1.5"
-                          >
-                            <button
-                              className="flex-1 min-w-0 text-left flex items-center gap-2"
-                              onClick={() => setPointSheet({ open: true, distributionId: d.id, editing: p })}
-                            >
-                              <Zap className="h-3.5 w-3.5 text-primary shrink-0" />
-                              <div className="min-w-0 flex-1">
-                                <div className="text-sm font-medium truncate">{p.bezeichnung}</div>
-                                <div className="text-xs text-muted-foreground">
-                                  {p.energieart} · {p.phasen}-phasig
-                                  {p.strombereich_a ? ` · ≤${p.strombereich_a}A` : ""}
-                                  {p.anwendungsfall ? ` · ${p.anwendungsfall}` : ""}
-                                  {p.bestand ? " · Bestand" : ""}
+                          <div key={p.id} className="rounded-md bg-card border space-y-0">
+                            <div className="flex items-center justify-between gap-2 px-2 py-1.5">
+                              <button
+                                className="flex-1 min-w-0 text-left flex items-center gap-2"
+                                onClick={() => setPointSheet({ open: true, distributionId: d.id, editing: p })}
+                              >
+                                <Zap className="h-3.5 w-3.5 text-primary shrink-0" />
+                                <div className="min-w-0 flex-1">
+                                  <div className="text-sm font-medium truncate">{p.bezeichnung}</div>
+                                  <div className="text-xs text-muted-foreground">
+                                    {p.energieart} · {p.phasen}-phasig
+                                    {p.strombereich_a ? ` · ≤${p.strombereich_a}A` : ""}
+                                    {p.anwendungsfall ? ` · ${p.anwendungsfall}` : ""}
+                                    {p.bestand ? " · Bestand" : ""}
+                                  </div>
                                 </div>
+                                <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                              </button>
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <Button size="icon" variant="ghost" className="h-7 w-7">
+                                    <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                                  </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>Messpunkt löschen?</AlertDialogTitle>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>Abbrechen</AlertDialogCancel>
+                                    <AlertDialogAction onClick={() => handleDeletePoint(p.id)}>Löschen</AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                            </div>
+                            {!p.bestand && (
+                              <div className="border-t px-2 py-2 bg-muted/30">
+                                <DeviceRecommendation measurementPointId={p.id} />
                               </div>
-                              <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                            </button>
-                            <AlertDialog>
-                              <AlertDialogTrigger asChild>
-                                <Button size="icon" variant="ghost" className="h-7 w-7">
-                                  <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                                </Button>
-                              </AlertDialogTrigger>
-                              <AlertDialogContent>
-                                <AlertDialogHeader>
-                                  <AlertDialogTitle>Messpunkt löschen?</AlertDialogTitle>
-                                </AlertDialogHeader>
-                                <AlertDialogFooter>
-                                  <AlertDialogCancel>Abbrechen</AlertDialogCancel>
-                                  <AlertDialogAction onClick={() => handleDeletePoint(p.id)}>Löschen</AlertDialogAction>
-                                </AlertDialogFooter>
-                              </AlertDialogContent>
-                            </AlertDialog>
+                            )}
                           </div>
                         ))
                       )}
