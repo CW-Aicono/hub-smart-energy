@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "./useTenant";
-import { useTenantQuery } from "./useTenantQuery";
+
 import { getEdgeFunctionName } from "@/lib/gatewayRegistry";
 import { getT } from "@/i18n/getT";
 import type { Database, Json } from "@/integrations/supabase/types";
@@ -67,7 +67,7 @@ interface UseIntegrationsReturn {
 
 export function useIntegrations(): UseIntegrationsReturn {
   const { tenant } = useTenant();
-  const { ready, insert: tenantInsert } = useTenantQuery();
+  
   const [integrations, setIntegrations] = useState<Integration[]>([]);
   const [categories, setCategories] = useState<IntegrationCategory[]>([]);
   const [loading, setLoading] = useState(true);
