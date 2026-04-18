@@ -46,7 +46,7 @@ export function useRealtimeDataInvalidation() {
   const queryClient = useQueryClient();
   const lastRunRef = useRef<number>(0);
   const pendingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
+  const [lastUpdate, setLastUpdate] = useState<Date | null>(() => new Date());
 
   useEffect(() => {
     const invalidate = () => {
