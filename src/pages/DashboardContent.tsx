@@ -94,7 +94,7 @@ const DashboardContent = () => {
   const { widgets, visibleWidgets, loading: widgetsLoading, toggleWidgetVisibility, reorderWidgets, updateWidgetSize } = useDashboardWidgets();
   const { definitions: customWidgetDefs } = useCustomWidgetDefinitions();
   const [expandedWidget, setExpandedWidget] = useState<string | null>(null);
-  const { t } = useTranslation();
+  const { t, language } = useTranslation();
   const { selectedLocationId, setSelectedLocationId, isPending } = useDashboardFilter();
   const { isModuleEnabled } = useModuleGuard();
 
@@ -106,7 +106,8 @@ const DashboardContent = () => {
   }, [customWidgetDefs]);
 
   // Prefetch shared data at dashboard level
-  useDashboardPrefetch(selectedLocationId);
+  const { lastUpdate } = useDashboardPrefetch(selectedLocationId);
+  const dateLocale = language === "de" ? "de-DE" : language === "nl" ? "nl-NL" : language === "es" ? "es-ES" : "en-US";
 
   const filteredVisibleWidgets = useMemo(() => {
     return visibleWidgets.filter((w) => {
@@ -134,6 +135,11 @@ const DashboardContent = () => {
             <p className="text-sm text-muted-foreground mt-1">{t("dashboard.subtitle")}</p>
           </div>
           <div className="flex items-center gap-3">
+            {lastUpdate && (
+              <span className="text-xs text-muted-foreground">
+                {t("common.refreshed" as any)}: {lastUpdate.toLocaleTimeString(dateLocale)}
+              </span>
+            )}
             <LocationFilter
               selectedLocationId={selectedLocationId}
               onLocationChange={setSelectedLocationId}

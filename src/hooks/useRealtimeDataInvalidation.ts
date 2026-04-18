@@ -13,7 +13,7 @@
  *    widget hook in case the WebSocket connection silently drops.
  *  - Real-time gauges keep using `useRealtimePower` directly (sub-second).
  */
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -46,12 +46,14 @@ export function useRealtimeDataInvalidation() {
   const queryClient = useQueryClient();
   const lastRunRef = useRef<number>(0);
   const pendingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
 
   useEffect(() => {
     const invalidate = () => {
       INVALIDATED_KEYS.forEach((key) => {
         queryClient.invalidateQueries({ queryKey: key });
       });
+      setLastUpdate(new Date());
     };
 
     const throttledInvalidate = () => {
@@ -98,4 +100,6 @@ export function useRealtimeDataInvalidation() {
       supabase.removeChannel(channel);
     };
   }, [queryClient]);
+
+  return { lastUpdate };
 }

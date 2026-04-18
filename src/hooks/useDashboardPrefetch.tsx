@@ -26,5 +26,7 @@ export function useDashboardPrefetch(locationId?: string | null) {
 
   // Subscribe ONCE to meter data inserts → invalidate widget caches in real-time
   // (replaces per-widget 60 s polling). Each widget keeps a 5 min fallback poll.
-  useRealtimeDataInvalidation();
+  const { lastUpdate } = useRealtimeDataInvalidation();
+
+  return { lastUpdate };
 }
