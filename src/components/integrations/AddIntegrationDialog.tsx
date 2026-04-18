@@ -11,28 +11,40 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Loader2, Server } from "lucide-react";
+import { Plus, Loader2, Server, Cloud, Copy, CheckCircle2 } from "lucide-react";
 import { useLocationIntegrations, useIntegrations } from "@/hooks/useIntegrations";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { getGatewayTypes, getGatewayDefinition } from "@/lib/gatewayRegistry";
+import { supabase } from "@/integrations/supabase/client";
 
 interface AddIntegrationDialogProps {
   locationId: string;
   onSuccess?: () => void;
 }
 
+interface TunnelResult {
+  tunnel_id: string;
+  public_url: string;
+  tunnel_token: string;
+}
+
 export function AddIntegrationDialog({ locationId, onSuccess }: AddIntegrationDialogProps) {
   const [open, setOpen] = useState(false);
   const [testing, setTesting] = useState(false);
+  const [tunnelLoading, setTunnelLoading] = useState(false);
+  const [tunnelResult, setTunnelResult] = useState<TunnelResult | null>(null);
+  const [tokenCopied, setTokenCopied] = useState(false);
   const { toast } = useToast();
   const { createIntegration } = useIntegrations();
   const { addIntegration, testConnection } = useLocationIntegrations(locationId);
 
   const [selectedType, setSelectedType] = useState("");
   const gatewayDef = selectedType ? getGatewayDefinition(selectedType) : undefined;
+  const isHomeAssistant = selectedType === "home_assistant";
 
   const formSchema = useMemo(() => {
     const shape: Record<string, z.ZodTypeAny> = {
@@ -42,13 +54,15 @@ export function AddIntegrationDialog({ locationId, onSuccess }: AddIntegrationDi
     };
     if (gatewayDef) {
       for (const field of gatewayDef.configFields) {
-        shape[field.name] = field.required
+        // For HA, api_url becomes optional when tunnel is auto-provisioned
+        const required = field.required && !(isHomeAssistant && field.name === "api_url");
+        shape[field.name] = required
           ? z.string().min(1, `${field.label} ist erforderlich`)
           : z.string().optional();
       }
     }
     return z.object(shape);
-  }, [gatewayDef]);
+  }, [gatewayDef, isHomeAssistant]);
 
   const form = useForm<Record<string, string>>({
     resolver: zodResolver(formSchema),
@@ -57,6 +71,7 @@ export function AddIntegrationDialog({ locationId, onSuccess }: AddIntegrationDi
 
   const handleTypeChange = (value: string) => {
     setSelectedType(value);
+    setTunnelResult(null);
     const current = form.getValues();
     const resetVals: Record<string, string> = {
       name: current.name || "",
@@ -93,6 +108,36 @@ export function AddIntegrationDialog({ locationId, onSuccess }: AddIntegrationDi
     }
   };
 
+  const handleProvisionTunnel = async (locationIntegrationId: string) => {
+    setTunnelLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("cf-tunnel-provision", {
+        body: { location_integration_id: locationIntegrationId },
+      });
+      if (error) throw error;
+      if (!data?.success) throw new Error(data?.error || "Tunnel-Erstellung fehlgeschlagen");
+      setTunnelResult({
+        tunnel_id: data.tunnel_id,
+        public_url: data.public_url,
+        tunnel_token: data.tunnel_token,
+      });
+      // Auto-fill api_url field
+      form.setValue("api_url", data.public_url);
+      toast({
+        title: "Tunnel erstellt",
+        description: "Bitte Token kopieren und im Add-on hinterlegen.",
+      });
+    } catch (e) {
+      toast({
+        title: "Tunnel-Fehler",
+        description: e instanceof Error ? e.message : String(e),
+        variant: "destructive",
+      });
+    } finally {
+      setTunnelLoading(false);
+    }
+  };
+
   const onSubmit = async (data: Record<string, string>) => {
     if (!gatewayDef) return;
 
@@ -113,21 +158,48 @@ export function AddIntegrationDialog({ locationId, onSuccess }: AddIntegrationDi
     }
 
     // 2. Link to location with config
-    const { error: linkErr } = await addIntegration(locationId, newIntegration.id, buildConfig(data));
+    const { data: linkData, error: linkErr } = await addIntegration(
+      locationId, newIntegration.id, buildConfig(data),
+    );
 
-    if (linkErr) {
+    if (linkErr || !linkData) {
       toast({ title: "Fehler", description: "Die Integration konnte nicht mit der Liegenschaft verknüpft werden.", variant: "destructive" });
-    } else {
-      toast({ title: "Integration hinzugefügt", description: "Die Integration wurde erfolgreich angelegt." });
-      form.reset({ name: "", type: "", description: "" });
-      setSelectedType("");
-      setOpen(false);
-      onSuccess?.();
+      return;
     }
+
+    toast({ title: "Integration hinzugefügt", description: "Die Integration wurde erfolgreich angelegt." });
+
+    // For HA without manual api_url → offer immediate tunnel provisioning
+    if (isHomeAssistant && !data.api_url) {
+      await handleProvisionTunnel(linkData.id);
+      // Keep dialog open so user can copy token
+      onSuccess?.();
+      return;
+    }
+
+    form.reset({ name: "", type: "", description: "" });
+    setSelectedType("");
+    setTunnelResult(null);
+    setOpen(false);
+    onSuccess?.();
+  };
+
+  const copyToken = async () => {
+    if (!tunnelResult) return;
+    await navigator.clipboard.writeText(tunnelResult.tunnel_token);
+    setTokenCopied(true);
+    setTimeout(() => setTokenCopied(false), 2000);
+  };
+
+  const closeDialog = () => {
+    form.reset({ name: "", type: "", description: "" });
+    setSelectedType("");
+    setTunnelResult(null);
+    setOpen(false);
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={(o) => (o ? setOpen(true) : closeDialog())}>
       <DialogTrigger asChild>
         <Button className="gap-2">
           <Plus className="h-4 w-4" />
@@ -145,6 +217,41 @@ export function AddIntegrationDialog({ locationId, onSuccess }: AddIntegrationDi
           </DialogDescription>
         </DialogHeader>
 
+        {tunnelResult ? (
+          <div className="space-y-4">
+            <Alert>
+              <CheckCircle2 className="h-4 w-4" />
+              <AlertTitle>Tunnel erfolgreich erstellt</AlertTitle>
+              <AlertDescription className="space-y-3">
+                <p>
+                  Öffentliche URL: <code className="text-xs bg-muted px-1 py-0.5 rounded">{tunnelResult.public_url}</code>
+                </p>
+                <div>
+                  <p className="text-sm font-medium mb-1">Tunnel-Token (einmalig sichtbar):</p>
+                  <div className="flex gap-2">
+                    <Input
+                      readOnly
+                      value={tunnelResult.tunnel_token}
+                      className="font-mono text-xs"
+                    />
+                    <Button type="button" size="icon" variant="outline" onClick={copyToken}>
+                      {tokenCopied ? <CheckCircle2 className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                    </Button>
+                  </div>
+                </div>
+                <ol className="text-sm list-decimal list-inside space-y-1">
+                  <li>Token kopieren (Button rechts).</li>
+                  <li>In Home Assistant → Add-ons → AICONO EMS Gateway → Konfiguration.</li>
+                  <li><code className="text-xs">cloudflare_enabled: true</code> setzen und Token in <code className="text-xs">cloudflare_tunnel_token</code> einfügen.</li>
+                  <li>Add-on neu starten.</li>
+                </ol>
+              </AlertDescription>
+            </Alert>
+            <div className="flex justify-end">
+              <Button onClick={closeDialog}>Fertig</Button>
+            </div>
+          </div>
+        ) : (
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
             <FormField
@@ -202,6 +309,18 @@ export function AddIntegrationDialog({ locationId, onSuccess }: AddIntegrationDi
               )}
             />
 
+            {isHomeAssistant && (
+              <Alert>
+                <Cloud className="h-4 w-4" />
+                <AlertTitle className="text-sm">AICONO Tunnel statt Nabu Casa</AlertTitle>
+                <AlertDescription className="text-xs">
+                  Lassen Sie das Feld "API URL" leer und nach dem Hinzufügen wird automatisch ein
+                  kostenfreier AICONO-Cloudflare-Tunnel eingerichtet. Alternativ tragen Sie eine
+                  bestehende Nabu-Casa- oder Reverse-Proxy-URL manuell ein.
+                </AlertDescription>
+              </Alert>
+            )}
+
             {gatewayDef && (
               <div className="space-y-4 pt-2 border-t">
                 {gatewayDef.configFields.map((fieldDef) => (
@@ -211,7 +330,12 @@ export function AddIntegrationDialog({ locationId, onSuccess }: AddIntegrationDi
                     name={fieldDef.name}
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>{fieldDef.label}</FormLabel>
+                        <FormLabel>
+                          {fieldDef.label}
+                          {isHomeAssistant && fieldDef.name === "api_url" && (
+                            <span className="ml-1 text-xs text-muted-foreground font-normal">(optional bei Tunnel-Nutzung)</span>
+                          )}
+                        </FormLabel>
                         <FormControl>
                           <Input
                             type={fieldDef.type === "password" ? "password" : "text"}
@@ -235,12 +359,15 @@ export function AddIntegrationDialog({ locationId, onSuccess }: AddIntegrationDi
               <Button type="button" variant="outline" onClick={handleTestConnection} disabled={testing || !gatewayDef}>
                 {testing ? (<><Loader2 className="mr-2 h-4 w-4 animate-spin" />Teste...</>) : "Verbindung testen"}
               </Button>
-              <Button type="submit" disabled={form.formState.isSubmitting || !gatewayDef}>
-                {form.formState.isSubmitting ? (<><Loader2 className="mr-2 h-4 w-4 animate-spin" />Speichern...</>) : "Hinzufügen"}
+              <Button type="submit" disabled={form.formState.isSubmitting || tunnelLoading || !gatewayDef}>
+                {form.formState.isSubmitting || tunnelLoading ? (
+                  <><Loader2 className="mr-2 h-4 w-4 animate-spin" />{tunnelLoading ? "Tunnel wird erstellt..." : "Speichern..."}</>
+                ) : (isHomeAssistant && !form.watch("api_url") ? "Hinzufügen + Tunnel einrichten" : "Hinzufügen")}
               </Button>
             </div>
           </form>
         </Form>
+        )}
       </DialogContent>
     </Dialog>
   );
