@@ -23,7 +23,29 @@ const Integrations = () => {
   const { t } = useTranslation();
   const { integrations, categories, loading, updateIntegration, refetch } = useIntegrations();
   const [testingId, setTestingId] = useState<string | null>(null);
+  const [locationsByIntegration, setLocationsByIntegration] = useState<Record<string, string[]>>({});
   const { toast } = useToast();
+
+  useEffect(() => {
+    if (!integrations.length) {
+      setLocationsByIntegration({});
+      return;
+    }
+    const ids = integrations.map(i => i.id);
+    (async () => {
+      const { data } = await supabase
+        .from("location_integrations")
+        .select("integration_id, location:locations(name)")
+        .in("integration_id", ids);
+      const map: Record<string, string[]> = {};
+      (data || []).forEach((row: { integration_id: string; location: { name: string } | null }) => {
+        if (!row.location?.name) return;
+        if (!map[row.integration_id]) map[row.integration_id] = [];
+        map[row.integration_id].push(row.location.name);
+      });
+      setLocationsByIntegration(map);
+    })();
+  }, [integrations]);
 
   const handleTestConnection = async (integration: Integration) => {
     setTestingId(integration.id);
