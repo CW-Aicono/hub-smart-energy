@@ -259,7 +259,7 @@ export function CabinetPhotoAnalyzer({ distributionId, fotoUrl, kiAnalyse, onUpd
                   {accepting === idx ? (
                     <Loader2 className="h-3.5 w-3.5 animate-spin" />
                   ) : (
-                    <Check className="h-3.5 w-3.5 text-green-600" />
+                    <Check className="h-3.5 w-3.5 text-primary" />
                   )}
                 </Button>
                 <Button

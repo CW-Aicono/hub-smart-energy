@@ -13,6 +13,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
+import { CabinetPhotoAnalyzer } from "./CabinetPhotoAnalyzer";
+import { Separator } from "@/components/ui/separator";
 
 interface Distribution {
   id: string;
@@ -20,6 +22,8 @@ interface Distribution {
   typ: string;
   standort: string | null;
   notizen: string | null;
+  foto_url?: string | null;
+  ki_analyse?: Record<string, unknown> | null;
 }
 
 interface Props {
@@ -145,6 +149,18 @@ export function DistributionSheet({ open, onOpenChange, projektId, editing, onSa
               Speichern
             </Button>
           </div>
+
+          {editing && (
+            <>
+              <Separator className="my-2" />
+              <CabinetPhotoAnalyzer
+                distributionId={editing.id}
+                fotoUrl={editing.foto_url ?? null}
+                kiAnalyse={(editing.ki_analyse as never) ?? null}
+                onUpdated={onSaved}
+              />
+            </>
+          )}
         </div>
       </SheetContent>
     </Sheet>
