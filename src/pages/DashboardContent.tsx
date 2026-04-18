@@ -135,6 +135,11 @@ const DashboardContent = () => {
             <p className="text-sm text-muted-foreground mt-1">{t("dashboard.subtitle")}</p>
           </div>
           <div className="flex items-center gap-3">
+            {lastUpdate && (
+              <span className="text-xs text-muted-foreground">
+                {t("common.refreshed" as any)}: {lastUpdate.toLocaleTimeString(dateLocale)}
+              </span>
+            )}
             <LocationFilter
               selectedLocationId={selectedLocationId}
               onLocationChange={setSelectedLocationId}
