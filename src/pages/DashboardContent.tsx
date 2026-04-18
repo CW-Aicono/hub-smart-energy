@@ -94,7 +94,7 @@ const DashboardContent = () => {
   const { widgets, visibleWidgets, loading: widgetsLoading, toggleWidgetVisibility, reorderWidgets, updateWidgetSize } = useDashboardWidgets();
   const { definitions: customWidgetDefs } = useCustomWidgetDefinitions();
   const [expandedWidget, setExpandedWidget] = useState<string | null>(null);
-  const { t } = useTranslation();
+  const { t, language } = useTranslation();
   const { selectedLocationId, setSelectedLocationId, isPending } = useDashboardFilter();
   const { isModuleEnabled } = useModuleGuard();
 
@@ -106,7 +106,8 @@ const DashboardContent = () => {
   }, [customWidgetDefs]);
 
   // Prefetch shared data at dashboard level
-  useDashboardPrefetch(selectedLocationId);
+  const { lastUpdate } = useDashboardPrefetch(selectedLocationId);
+  const dateLocale = language === "de" ? "de-DE" : language === "nl" ? "nl-NL" : language === "es" ? "es-ES" : "en-US";
 
   const filteredVisibleWidgets = useMemo(() => {
     return visibleWidgets.filter((w) => {
