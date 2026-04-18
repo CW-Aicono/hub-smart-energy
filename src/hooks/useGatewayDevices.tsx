@@ -38,8 +38,9 @@ export function useGatewayDevices(locationIntegrationId?: string, locationId?: s
   const query = useQuery({
     queryKey: ["gateway-devices", tenant?.id, locationIntegrationId, locationId],
     enabled: !!tenant?.id,
-    staleTime: 30_000,
-    refetchInterval: 60_000,
+    staleTime: 60_000,
+    // Real-time invalidation handles instant updates; 5-min poll is the fallback.
+    refetchInterval: 5 * 60_000,
     queryFn: async (): Promise<GatewayDeviceWithMetrics[]> => {
       // Fetch devices
       let q = supabase

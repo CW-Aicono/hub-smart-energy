@@ -86,8 +86,9 @@ export function useGatewayLivePower(meters: Meter[]) {
   const query = useQuery({
     queryKey: ["gateway-live-power", meterKey, integrationIds.join(",")],
     enabled: automaticMeters.length > 0,
-    staleTime: 30_000,
-    refetchInterval: 60_000,
+    staleTime: 60_000,
+    // Realtime invalidation pushes fresh data immediately; this 5-min poll is just a safety net.
+    refetchInterval: 5 * 60_000,
     queryFn: async (): Promise<Record<string, GatewayLivePowerValue>> => {
       const values: Record<string, GatewayLivePowerValue> = {};
 
