@@ -13,7 +13,7 @@
  *    widget hook in case the WebSocket connection silently drops.
  *  - Real-time gauges keep using `useRealtimePower` directly (sub-second).
  */
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
