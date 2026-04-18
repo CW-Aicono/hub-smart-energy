@@ -1,80 +1,100 @@
-
-
 ## Ziel
 
-Klare Trennung der Verantwortlichkeiten: **Worker schreibt Live-Daten, Edge Functions machen nur noch Discovery & Steuerung.** Migration in 3 sicheren Stufen ohne Datenverlust.
+**Zentraler Multi-Tenant-Worker auf Hetzner.** EIN Container bedient ALLE Mandanten und ALLE Gateways gleichzeitig — kein Setup-Aufwand mehr pro Liegenschaft, keine Hardware vor Ort nötig (Raspberry Pi nur noch optional für Test/Demo).
 
-## Stufe 1 — Worker auf Hetzner produktiv betreiben
-
-**Infrastruktur (vom Nutzer auszuführen, separate Anleitung):**
-- Hetzner CX22 (2 vCPU, 4 GB RAM, ~5 €/Monat), Ubuntu 24.04
-- Docker + Docker Compose installiert
-- `docker-compose.yml` mit `restart: always`, `gateway-worker:latest` Image
-- Environment: `SUPABASE_URL`, `GATEWAY_API_KEY`, `POLL_INTERVAL_MS=30000`, `FLUSH_INTERVAL_MS=1000`
-- Optional: Healthcheck-Endpoint + externes Monitoring (Uptime-Kuma / Healthchecks.io) auf den letzten `gateway_logs.created_at`-Eintrag
-
-**Im Code (in dieser App):**
-- Neues Super-Admin-Widget **„Gateway-Worker Status"** unter `/admin/infrastructure`:
-  - Zeigt letzten Heartbeat aus `gateway_logs` (Schwellwert: > 3 Min = rot)
-  - Zähler: aktive Loxone-WebSockets, Anzahl gepollter Shelly/HA-Geräte (aus Worker-Logs)
-  - Warnt visuell, wenn kein Worker aktiv ist → verhindert Überraschungen wie aktuell
-- Edge Function `gateway-worker-status` (neu, ~30 Zeilen): liest die letzten 5 Min aus `gateway_logs`, gibt aggregierte Metriken zurück
-
-## Stufe 2 — Feature-Flag `WORKER_ACTIVE` (sicheres Umschalten)
-
-**Datenbank:** Neue Tabelle `system_settings` (key/value, super-admin-only RLS):
-```
-key = 'worker_active', value = 'true' | 'false' (default: 'false')
-key = 'worker_last_heartbeat', value = ISO-Timestamp (vom Worker geschrieben)
-```
-
-**Edge Functions** (`loxone-api`, `shelly-api`, später ggf. `home-assistant-api`):
-- Vor jedem `meter_power_readings.insert(...)`-Block:
-  ```
-  const workerActive = await getSystemSetting('worker_active');
-  const heartbeatFresh = workerLastHeartbeat > now() - 5min;
-  if (workerActive && heartbeatFresh) {
-    // Schreibpfad überspringen → nur Sensoren zurückgeben
-  } else {
-    // Bisheriger Schreibpfad als Fallback
-  }
-  ```
-- **Sicherheits-Fallback:** Wenn der Worker länger als 5 Min keinen Heartbeat sendet, schreibt die Edge Function automatisch wieder → Datenkontinuität auch bei Worker-Ausfall.
-
-**UI:** Toggle im Super-Admin („Worker als primäre Datenquelle aktiv"), zeigt Live-Heartbeat daneben.
-
-## Stufe 3 — Edge Functions auf Discovery & Steuerung reduzieren
-
-Nach 2–4 Wochen stabilem Worker-Betrieb (über Heartbeat-Monitoring nachgewiesen):
-- Schreibpfad in `loxone-api`/`shelly-api` **vollständig entfernen** (kein Flag mehr nötig)
-- Edge Functions behalten nur noch:
-  - `action: "test"` — Verbindungstest
-  - `action: "getSensors"` — Discovery (Sensorliste, ohne DB-Insert)
-  - `action: "executeCommand"` — Steuerbefehle
-- Polling-Intervalle in den Hooks (`useLoxoneSensorsMulti`) von 30 s auf 60–120 s erhöhen → reduziert Edge-Function-Kosten massiv
-- Live-Werte in der UI kommen dann aus `meter_power_readings` (Realtime-Subscription) statt aus Edge-Function-Polling
-
-## Reihenfolge & Sicherheitsnetz
+## Architektur
 
 ```
-Stufe 1 (Worker live + Monitoring)
-   ↓ 1–2 Tage Beobachtung
-Stufe 2 (Feature-Flag aus → an, mit automatischem Fallback)
-   ↓ 2–4 Wochen Beobachtung über Heartbeat
-Stufe 3 (Schreibpfad in Edge Functions entfernen, Polling reduzieren)
+┌─────────────────────────────────────────┐
+│  Hetzner-Server (CX22, ~5 €/Monat)      │
+│                                         │
+│  ┌─────────────────────────────────┐    │
+│  │ gateway-worker-live (1 Container)│   │
+│  │  → SUPABASE_SERVICE_ROLE_KEY    │    │
+│  │  → Discovery-Loop alle 60s      │    │
+│  │  → bedient ALLE Tenants         │    │
+│  └─────────────────────────────────┘    │
+│                                         │
+│  ┌─────────────────────────────────┐    │
+│  │ gateway-worker-staging          │    │
+│  └─────────────────────────────────┘    │
+└─────────────────────────────────────────┘
+            ↓ liest
+┌─────────────────────────────────────────┐
+│  Cloud-DB                               │
+│   • location_integrations (alle Tenants)│
+│   • integrations (Gateway-Typen)        │
+│   • meters (Sensor-Mapping)             │
+│   • config_encrypted (Credentials)      │
+└─────────────────────────────────────────┘
+            ↓ pollt parallel
+   Loxone | Shelly | Tuya | ABB | Siemens
+   Homematic | Omada | Home Assistant
+            ↓ schreibt
+   meter_power_readings (mit korrekter tenant_id)
 ```
 
-Jede Stufe ist **rückwärtskompatibel** und einzeln revertierbar. Stufe 2 garantiert per Heartbeat-Check, dass nie eine Datenlücke entsteht.
+## Stufe 1 — Worker-Code umbauen (Multi-Tenant)
+
+**`docs/gateway-worker/index.ts` komplett neu strukturieren:**
+- Auth: `SUPABASE_SERVICE_ROLE_KEY` (RLS-Bypass) statt einzelner Gateway-Keys
+- Discovery-Loop alle 60s: lädt `location_integrations` + `integrations` + `meters` aller Tenants
+- Treiber-Registry pro Gateway-Typ — portiert aus den bestehenden Edge Functions:
+  - `loxone` (WebSocket), `shelly` (Cloud-Polling), `tuya`, `abb`, `siemens`,
+    `homematic`, `omada`, `home_assistant`
+- Credentials werden mit `BRIGHTHUB_ENCRYPTION_KEY` aus `config_encrypted` entschlüsselt
+- Schreibt direkt in `meter_power_readings` mit `tenant_id` aus Gateway-Datensatz
+- Heartbeat: alle 30s `system_settings.worker_last_heartbeat` setzen → bestehender Edge-Function-Fallback in `_shared/workerStatus.ts` greift unverändert
+- `.env` reduziert auf 4 Variablen: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `BRIGHTHUB_ENCRYPTION_KEY`, `WORKER_ENV`
+
+## Stufe 2 — Hetzner-Setup (genau 2 Container)
+
+- `gateway-worker-live` → Live-Cloud
+- `gateway-worker-staging` → Staging-Cloud
+- `docker-compose.yml` mit `restart: always`
+- Healthcheck via `system_settings.worker_last_heartbeat` (extern: Uptime-Kuma / Healthchecks.io)
+
+**Pro neuem Mandant / neuer Liegenschaft / neuem Gateway: NULL Server-Aktion.** Worker erkennt neue Geräte automatisch beim nächsten Discovery-Lauf.
+
+## Stufe 3 — Übergang & Edge-Function-Reduktion
+
+1. **Parallelbetrieb 1–2 Wochen**: Edge Functions schreiben weiter, Worker schreibt zusätzlich → Datenkonsistenz vergleichen
+2. **Umschalten** über bereits existierendes `worker_active`-Flag in `system_settings` (Heartbeat-basiertes Fallback bleibt)
+3. **Edge Functions reduzieren** auf:
+   - `action: "test"` — Verbindungstest aus UI
+   - `action: "getSensors"` — Discovery für UI-Wizards
+   - `action: "executeCommand"` — Steuerbefehle
+   - **Schreibpfad in `loxone-api`/`shelly-api` etc. komplett entfernen**
+4. UI nutzt `meter_power_readings` (Realtime-Subscription) statt Edge-Function-Polling → Edge-Function-Kosten sinken massiv
+
+## Sicherheit
+
+- `SUPABASE_SERVICE_ROLE_KEY` liegt **ausschließlich** in `.env` auf Hetzner — niemals im Frontend, niemals in Git
+- Hetzner-Server gehärtet: SSH-Key-only, UFW-Firewall, automatische Sicherheitsupdates (`unattended-upgrades`)
+- Tenant-Isolation bleibt: jeder DB-Insert nutzt `tenant_id` aus Gateway-Datensatz
+- Bei Server-Kompromittierung: Service-Role-Key in Cloud rotieren → alle Verbindungen sofort ungültig
+- Gateway-Credentials (Loxone-User/Pass, Shelly-Token …) bleiben verschlüsselt in `location_integrations.config_encrypted`
+
+## Vergleich
+
+| Aspekt | Heute (1:1) | Neu (zentral) |
+|---|---|---|
+| Container bei 200 Mandanten | 200 | 2 (Live + Staging) |
+| Aufwand neuer Mandant | ~30 Min Server-Setup | 0 — automatisch |
+| Aufwand neues Gateway | Container neu starten | 0 — automatisch |
+| Hardware vor Ort | Pi empfohlen | optional (nur Test/Demo) |
+| Anleitung für Endnutzer | komplex | entfällt |
+| Edge-Function-Aufrufe | hoch | minimal (nur UI) |
+
+## Geschätzter Aufwand
+
+- **Worker-Code-Umbau**: ca. 800–1200 Zeilen (Treiber-Portierung aus Edge Functions)
+- **Hetzner-Deployment**: 2 Container statt N
+- **Anleitung v7**: ca. 5 Seiten, Oma-tauglich, nur noch Cloud-Setup beschreiben (kein Pi-Pflicht-Pfad mehr)
+- **Edge-Function-Cleanup**: ~50 Zeilen pro Gateway-Edge-Function entfernen
 
 ## Was dieser Plan NICHT macht
 
-- Keine Änderung am Worker-Code selbst (läuft bereits stabil in `docs/gateway-worker/`)
-- Keine Änderung am Discovery-/Steuer-Pfad (nur Schreibpfad wird gekapselt)
-- Keine Migration alter Daten — `meter_power_readings` bleibt unverändert
-
-## Geschätzter Aufwand (nur Code in dieser App)
-
-- Stufe 1: ~1 neue Edge Function + 1 Admin-Widget (~150 Zeilen)
-- Stufe 2: 1 Migration + 1 Helper + 2 Edge-Function-Patches (~80 Zeilen)
-- Stufe 3: Entfernen von ~50 Zeilen aus 2 Edge Functions + 2 Hook-Anpassungen
-
+- Keine Migration alter Daten in `meter_power_readings`
+- Keine Änderung am UI-Discovery-Pfad (Wizards funktionieren weiter)
+- Pi-Worker bleibt funktionsfähig für Test-/Offline-Szenarien
