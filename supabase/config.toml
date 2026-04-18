@@ -119,3 +119,6 @@ verify_jwt = false
 
 [functions.automation-scheduler]
 verify_jwt = false
+
+[functions.cf-tunnel-provision]
+verify_jwt = false

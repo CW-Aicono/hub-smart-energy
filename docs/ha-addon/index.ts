@@ -32,6 +32,8 @@ interface AddonConfig {
   offline_buffer_max_mb: number;
   auto_backup_hours: number;
   automation_eval_seconds: number;
+  cloudflare_enabled?: boolean;
+  cloudflare_tunnel_token?: string;
 }
 
 function loadConfig(): AddonConfig {
@@ -65,7 +67,63 @@ const config = loadConfig();
 const SUPERVISOR_TOKEN = process.env.SUPERVISOR_TOKEN || "";
 const HA_API_BASE = "http://supervisor/core/api";
 const INGEST_URL = `${config.cloud_url}/functions/v1/gateway-ingest`;
-const ADDON_VERSION = "2.1.1";
+const ADDON_VERSION = "2.2.0";
+
+/* ── Cloudflare Tunnel Subprocess ────────────────────────────────────────────── */
+import { spawn, ChildProcess } from "child_process";
+
+let cfTunnelProc: ChildProcess | null = null;
+let cfTunnelConnected = false;
+let cfTunnelRestartCount = 0;
+let cfTunnelLastError: string | null = null;
+
+function startCloudflaredTunnel() {
+  if (!config.cloudflare_enabled || !config.cloudflare_tunnel_token) {
+    console.log("[cloudflared] disabled (set cloudflare_enabled=true and provide token)");
+    return;
+  }
+  if (cfTunnelProc) {
+    console.log("[cloudflared] already running");
+    return;
+  }
+  console.log("[cloudflared] starting tunnel...");
+  try {
+    cfTunnelProc = spawn(
+      "cloudflared",
+      ["tunnel", "--no-autoupdate", "run", "--token", config.cloudflare_tunnel_token],
+      { stdio: ["ignore", "pipe", "pipe"] },
+    );
+    cfTunnelProc.stdout?.on("data", (d: Buffer) => {
+      const line = d.toString().trim();
+      if (line) console.log(`[cloudflared] ${line}`);
+      if (/Registered tunnel connection|Connection .* registered/i.test(line)) {
+        cfTunnelConnected = true;
+        cfTunnelLastError = null;
+      }
+    });
+    cfTunnelProc.stderr?.on("data", (d: Buffer) => {
+      const line = d.toString().trim();
+      if (line) console.error(`[cloudflared] ${line}`);
+      if (/Registered tunnel connection|Connection .* registered/i.test(line)) {
+        cfTunnelConnected = true;
+        cfTunnelLastError = null;
+      } else if (/error|failed/i.test(line)) {
+        cfTunnelLastError = line.slice(0, 200);
+      }
+    });
+    cfTunnelProc.on("exit", (code) => {
+      console.warn(`[cloudflared] exited with code ${code}, restarting in 5s...`);
+      cfTunnelProc = null;
+      cfTunnelConnected = false;
+      cfTunnelRestartCount++;
+      setTimeout(startCloudflaredTunnel, 5000);
+    });
+  } catch (err) {
+    console.error("[cloudflared] failed to spawn:", err);
+    cfTunnelLastError = String(err);
+    cfTunnelProc = null;
+  }
+}
 
 /* ── Connectivity State ──────────────────────────────────────────────────────── */
 
@@ -1318,6 +1376,13 @@ function startServer(): void {
         uptime_seconds: Math.floor(process.uptime()),
         cloud_reachable: isCloudReachable,
         ha_ws_connected: haWsConnected,
+        tunnel: {
+          enabled: !!config.cloudflare_enabled,
+          configured: !!config.cloudflare_tunnel_token,
+          connected: cfTunnelConnected,
+          restart_count: cfTunnelRestartCount,
+          last_error: cfTunnelLastError,
+        },
       }));
       return;
     }
@@ -1556,6 +1621,9 @@ async function main(): Promise<void> {
   }
 
   startServer();
+
+  // Start Cloudflare Tunnel if enabled
+  startCloudflaredTunnel();
 
   // Initial setup
   await checkCloudConnectivity();
