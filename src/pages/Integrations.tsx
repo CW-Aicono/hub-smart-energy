@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Link, Navigate } from "react-router-dom";
 import { ScannerManagement } from "@/components/integrations/ScannerManagement";
@@ -23,7 +23,29 @@ const Integrations = () => {
   const { t } = useTranslation();
   const { integrations, categories, loading, updateIntegration, refetch } = useIntegrations();
   const [testingId, setTestingId] = useState<string | null>(null);
+  const [locationsByIntegration, setLocationsByIntegration] = useState<Record<string, string[]>>({});
   const { toast } = useToast();
+
+  useEffect(() => {
+    if (!integrations.length) {
+      setLocationsByIntegration({});
+      return;
+    }
+    const ids = integrations.map(i => i.id);
+    (async () => {
+      const { data } = await supabase
+        .from("location_integrations")
+        .select("integration_id, location:locations(name)")
+        .in("integration_id", ids);
+      const map: Record<string, string[]> = {};
+      (data || []).forEach((row: { integration_id: string; location: { name: string } | null }) => {
+        if (!row.location?.name) return;
+        if (!map[row.integration_id]) map[row.integration_id] = [];
+        map[row.integration_id].push(row.location.name);
+      });
+      setLocationsByIntegration(map);
+    })();
+  }, [integrations]);
 
   const handleTestConnection = async (integration: Integration) => {
     setTestingId(integration.id);
@@ -202,9 +224,17 @@ const Integrations = () => {
                             </CardHeader>
                             <CardContent className="pt-0">
                               {integration.description && <p className="text-sm text-muted-foreground mb-3">{integration.description}</p>}
-                              <div className="flex items-center gap-2 text-xs text-muted-foreground mb-3">
+                              <div className="flex items-center gap-2 text-xs text-muted-foreground mb-2">
                                 <span>{t("integrations.type" as any)}</span>
                                 <code className="bg-muted px-1.5 py-0.5 rounded">{getGatewayDefinition(integration.type)?.label || integration.type}</code>
+                              </div>
+                              <div className="flex items-start gap-2 text-xs text-muted-foreground mb-3">
+                                <span className="shrink-0">Liegenschaft:</span>
+                                {locationsByIntegration[integration.id]?.length ? (
+                                  <span className="font-medium text-foreground">{locationsByIntegration[integration.id].join(", ")}</span>
+                                ) : (
+                                  <span className="italic">—</span>
+                                )}
                               </div>
                               <Button variant="outline" size="sm" className="w-full" onClick={() => handleTestConnection(integration)} disabled={testingId === integration.id}>
                                 {testingId === integration.id ? (
