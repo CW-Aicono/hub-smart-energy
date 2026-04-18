@@ -224,9 +224,17 @@ const Integrations = () => {
                             </CardHeader>
                             <CardContent className="pt-0">
                               {integration.description && <p className="text-sm text-muted-foreground mb-3">{integration.description}</p>}
-                              <div className="flex items-center gap-2 text-xs text-muted-foreground mb-3">
+                              <div className="flex items-center gap-2 text-xs text-muted-foreground mb-2">
                                 <span>{t("integrations.type" as any)}</span>
                                 <code className="bg-muted px-1.5 py-0.5 rounded">{getGatewayDefinition(integration.type)?.label || integration.type}</code>
+                              </div>
+                              <div className="flex items-start gap-2 text-xs text-muted-foreground mb-3">
+                                <span className="shrink-0">Liegenschaft:</span>
+                                {locationsByIntegration[integration.id]?.length ? (
+                                  <span className="font-medium text-foreground">{locationsByIntegration[integration.id].join(", ")}</span>
+                                ) : (
+                                  <span className="italic">—</span>
+                                )}
                               </div>
                               <Button variant="outline" size="sm" className="w-full" onClick={() => handleTestConnection(integration)} disabled={testingId === integration.id}>
                                 {testingId === integration.id ? (
