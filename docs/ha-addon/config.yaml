@@ -4,8 +4,8 @@
 # Sammelt Sensordaten, führt Automationen lokal aus und synchronisiert mit der Cloud.
 
 name: "AICONO EMS Gateway"
-description: "Lokaler Gateway-Hub für das AICONO Energiemanagementsystem. Sammelt Sensordaten, führt Automationen lokal aus und synchronisiert mit der Cloud."
-version: "2.1.1"
+description: "Lokaler Gateway-Hub für das AICONO Energiemanagementsystem. Sammelt Sensordaten, führt Automationen lokal aus und synchronisiert mit der Cloud. Optional integrierter Cloudflare Tunnel als Nabu-Casa-Ersatz."
+version: "2.2.0"
 slug: "aicono-ems-gateway"
 url: "https://hub-smart-energy.lovable.app"
 arch:
@@ -40,6 +40,8 @@ options:
   entity_filter: "sensor.*_energy,sensor.*_power,sensor.*_consumption"
   offline_buffer_max_mb: 100
   auto_backup_hours: 24
+  cloudflare_enabled: false
+  cloudflare_tunnel_token: ""
 
 schema:
   cloud_url: url
@@ -53,3 +55,5 @@ schema:
   entity_filter: "str?"
   offline_buffer_max_mb: int
   auto_backup_hours: int
+  cloudflare_enabled: bool
+  cloudflare_tunnel_token: "str?"
