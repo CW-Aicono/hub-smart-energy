@@ -1552,6 +1552,98 @@ export type Database = {
         }
         Relationships: []
       }
+      device_catalog: {
+        Row: {
+          beschreibung: string | null
+          bild_url: string | null
+          created_at: string
+          datasheet_url: string | null
+          ek_preis: number
+          hersteller: string
+          id: string
+          installations_pauschale: number
+          is_active: boolean
+          kompatibilitaet: Json
+          modell: string
+          updated_at: string
+          vk_preis: number
+        }
+        Insert: {
+          beschreibung?: string | null
+          bild_url?: string | null
+          created_at?: string
+          datasheet_url?: string | null
+          ek_preis?: number
+          hersteller: string
+          id?: string
+          installations_pauschale?: number
+          is_active?: boolean
+          kompatibilitaet?: Json
+          modell: string
+          updated_at?: string
+          vk_preis?: number
+        }
+        Update: {
+          beschreibung?: string | null
+          bild_url?: string | null
+          created_at?: string
+          datasheet_url?: string | null
+          ek_preis?: number
+          hersteller?: string
+          id?: string
+          installations_pauschale?: number
+          is_active?: boolean
+          kompatibilitaet?: Json
+          modell?: string
+          updated_at?: string
+          vk_preis?: number
+        }
+        Relationships: []
+      }
+      device_selection_rules: {
+        Row: {
+          bedingung: Json
+          beschreibung: string | null
+          created_at: string
+          device_catalog_id: string
+          id: string
+          is_active: boolean
+          name: string
+          prio: number
+          updated_at: string
+        }
+        Insert: {
+          bedingung?: Json
+          beschreibung?: string | null
+          created_at?: string
+          device_catalog_id: string
+          id?: string
+          is_active?: boolean
+          name: string
+          prio?: number
+          updated_at?: string
+        }
+        Update: {
+          bedingung?: Json
+          beschreibung?: string | null
+          created_at?: string
+          device_catalog_id?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+          prio?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "device_selection_rules_device_catalog_id_fkey"
+            columns: ["device_catalog_id"]
+            isOneToOne: false
+            referencedRelation: "device_catalog"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       email_templates: {
         Row: {
           body_html: string
@@ -4157,6 +4249,326 @@ export type Database = {
           },
         ]
       }
+      sales_distributions: {
+        Row: {
+          created_at: string
+          foto_url: string | null
+          id: string
+          ki_analyse: Json | null
+          name: string
+          notizen: string | null
+          parent_id: string | null
+          project_id: string
+          standort: string | null
+          typ: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          foto_url?: string | null
+          id?: string
+          ki_analyse?: Json | null
+          name: string
+          notizen?: string | null
+          parent_id?: string | null
+          project_id: string
+          standort?: string | null
+          typ?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          foto_url?: string | null
+          id?: string
+          ki_analyse?: Json | null
+          name?: string
+          notizen?: string | null
+          parent_id?: string | null
+          project_id?: string
+          standort?: string | null
+          typ?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sales_distributions_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "sales_distributions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sales_distributions_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "sales_projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sales_measurement_points: {
+        Row: {
+          anwendungsfall: string | null
+          bestand: boolean
+          bestand_geraet: string | null
+          bezeichnung: string
+          created_at: string
+          distribution_id: string
+          energieart: string
+          foto_url: string | null
+          hinweise: string | null
+          id: string
+          montage: string | null
+          phasen: number
+          spannung_v: number | null
+          strombereich_a: number | null
+          updated_at: string
+        }
+        Insert: {
+          anwendungsfall?: string | null
+          bestand?: boolean
+          bestand_geraet?: string | null
+          bezeichnung: string
+          created_at?: string
+          distribution_id: string
+          energieart?: string
+          foto_url?: string | null
+          hinweise?: string | null
+          id?: string
+          montage?: string | null
+          phasen?: number
+          spannung_v?: number | null
+          strombereich_a?: number | null
+          updated_at?: string
+        }
+        Update: {
+          anwendungsfall?: string | null
+          bestand?: boolean
+          bestand_geraet?: string | null
+          bezeichnung?: string
+          created_at?: string
+          distribution_id?: string
+          energieart?: string
+          foto_url?: string | null
+          hinweise?: string | null
+          id?: string
+          montage?: string | null
+          phasen?: number
+          spannung_v?: number | null
+          strombereich_a?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sales_measurement_points_distribution_id_fkey"
+            columns: ["distribution_id"]
+            isOneToOne: false
+            referencedRelation: "sales_distributions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sales_projects: {
+        Row: {
+          accepted_at: string | null
+          adresse: string | null
+          converted_tenant_id: string | null
+          created_at: string
+          id: string
+          kontakt_email: string | null
+          kontakt_name: string | null
+          kontakt_telefon: string | null
+          kunde_name: string
+          kunde_typ: string
+          notizen: string | null
+          partner_id: string
+          public_token: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          accepted_at?: string | null
+          adresse?: string | null
+          converted_tenant_id?: string | null
+          created_at?: string
+          id?: string
+          kontakt_email?: string | null
+          kontakt_name?: string | null
+          kontakt_telefon?: string | null
+          kunde_name: string
+          kunde_typ?: string
+          notizen?: string | null
+          partner_id: string
+          public_token?: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          accepted_at?: string | null
+          adresse?: string | null
+          converted_tenant_id?: string | null
+          created_at?: string
+          id?: string
+          kontakt_email?: string | null
+          kontakt_name?: string | null
+          kontakt_telefon?: string | null
+          kunde_name?: string
+          kunde_typ?: string
+          notizen?: string | null
+          partner_id?: string
+          public_token?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sales_projects_converted_tenant_id_fkey"
+            columns: ["converted_tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sales_quote_modules: {
+        Row: {
+          created_at: string
+          id: string
+          module_code: string
+          preis_monatlich: number
+          quote_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          module_code: string
+          preis_monatlich?: number
+          quote_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          module_code?: string
+          preis_monatlich?: number
+          quote_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sales_quote_modules_quote_id_fkey"
+            columns: ["quote_id"]
+            isOneToOne: false
+            referencedRelation: "sales_quotes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sales_quotes: {
+        Row: {
+          created_at: string
+          geraete_summe: number
+          id: string
+          installation_summe: number
+          modul_summe_monatlich: number
+          pdf_storage_path: string | null
+          project_id: string
+          signature_data: Json | null
+          signed_at: string | null
+          total_einmalig: number
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          created_at?: string
+          geraete_summe?: number
+          id?: string
+          installation_summe?: number
+          modul_summe_monatlich?: number
+          pdf_storage_path?: string | null
+          project_id: string
+          signature_data?: Json | null
+          signed_at?: string | null
+          total_einmalig?: number
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          created_at?: string
+          geraete_summe?: number
+          id?: string
+          installation_summe?: number
+          modul_summe_monatlich?: number
+          pdf_storage_path?: string | null
+          project_id?: string
+          signature_data?: Json | null
+          signed_at?: string | null
+          total_einmalig?: number
+          updated_at?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sales_quotes_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "sales_projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sales_recommended_devices: {
+        Row: {
+          begruendung: string | null
+          created_at: string
+          device_catalog_id: string
+          id: string
+          ist_alternativ: boolean
+          measurement_point_id: string
+          menge: number
+          partner_override: boolean
+          source: string
+          updated_at: string
+        }
+        Insert: {
+          begruendung?: string | null
+          created_at?: string
+          device_catalog_id: string
+          id?: string
+          ist_alternativ?: boolean
+          measurement_point_id: string
+          menge?: number
+          partner_override?: boolean
+          source?: string
+          updated_at?: string
+        }
+        Update: {
+          begruendung?: string | null
+          created_at?: string
+          device_catalog_id?: string
+          id?: string
+          ist_alternativ?: boolean
+          measurement_point_id?: string
+          menge?: number
+          partner_override?: boolean
+          source?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sales_recommended_devices_device_catalog_id_fkey"
+            columns: ["device_catalog_id"]
+            isOneToOne: false
+            referencedRelation: "device_catalog"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sales_recommended_devices_measurement_point_id_fkey"
+            columns: ["measurement_point_id"]
+            isOneToOne: false
+            referencedRelation: "sales_measurement_points"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       solar_charging_config: {
         Row: {
           created_at: string
@@ -5673,7 +6085,7 @@ export type Database = {
       }
     }
     Enums: {
-      app_role: "admin" | "user" | "super_admin"
+      app_role: "admin" | "user" | "super_admin" | "sales_partner"
       energy_type: "strom" | "gas" | "waerme" | "wasser"
       location_type: "einzelgebaeude" | "gebaeudekomplex" | "sonstiges"
       location_usage_type:
@@ -5813,7 +6225,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["admin", "user", "super_admin"],
+      app_role: ["admin", "user", "super_admin", "sales_partner"],
       energy_type: ["strom", "gas", "waerme", "wasser"],
       location_type: ["einzelgebaeude", "gebaeudekomplex", "sonstiges"],
       location_usage_type: [
