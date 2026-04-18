@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "./useTenant";
-import { useTenantQuery } from "./useTenantQuery";
+
 import { getEdgeFunctionName } from "@/lib/gatewayRegistry";
 import { getT } from "@/i18n/getT";
 import type { Database, Json } from "@/integrations/supabase/types";
@@ -67,7 +67,7 @@ interface UseIntegrationsReturn {
 
 export function useIntegrations(): UseIntegrationsReturn {
   const { tenant } = useTenant();
-  const { ready, insert: tenantInsert } = useTenantQuery();
+  
   const [integrations, setIntegrations] = useState<Integration[]>([]);
   const [categories, setCategories] = useState<IntegrationCategory[]>([]);
   const [loading, setLoading] = useState(true);
@@ -120,9 +120,10 @@ export function useIntegrations(): UseIntegrationsReturn {
   }, [fetchIntegrations]);
 
   const createIntegration = async (integration: Omit<Integration, "id" | "tenant_id" | "created_at" | "updated_at">) => {
-    if (!ready) return { data: null, error: new Error("No tenant") };
+    if (!tenant) return { data: null, error: new Error("No tenant") };
 
-    const insertData: Omit<IntegrationInsertDB, "tenant_id"> = {
+    const insertData: IntegrationInsertDB = {
+      tenant_id: tenant.id,
       name: integration.name,
       type: integration.type,
       category: integration.category,
@@ -132,19 +133,17 @@ export function useIntegrations(): UseIntegrationsReturn {
       is_active: integration.is_active,
     };
 
-    const result = await tenantInsert("integrations", insertData);
     const { data, error: insertError } = await supabase
       .from("integrations")
+      .insert(insertData)
       .select()
-      .order("created_at", { ascending: false })
-      .limit(1)
       .single();
 
     if (!insertError) {
       await fetchIntegrations();
     }
 
-    return { data: (result as { error?: unknown }).error ? null : data as Integration | null, error: insertError as Error | null };
+    return { data: data as Integration | null, error: insertError as Error | null };
   };
 
   const updateIntegration = async (id: string, updates: Partial<Integration>) => {

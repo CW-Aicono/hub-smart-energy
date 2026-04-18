@@ -9,6 +9,7 @@ import {
   Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Loader2, Server } from "lucide-react";
@@ -16,7 +17,7 @@ import { useLocationIntegrations, useIntegrations } from "@/hooks/useIntegration
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { GATEWAY_DEFINITIONS, getGatewayDefinition } from "@/lib/gatewayRegistry";
+import { getGatewayTypes, getGatewayDefinition } from "@/lib/gatewayRegistry";
 
 interface AddIntegrationDialogProps {
   locationId: string;
@@ -27,19 +28,17 @@ export function AddIntegrationDialog({ locationId, onSuccess }: AddIntegrationDi
   const [open, setOpen] = useState(false);
   const [testing, setTesting] = useState(false);
   const { toast } = useToast();
-  const { integrations, loading: integrationsLoading } = useIntegrations();
-  const { addIntegration, testConnection, locationIntegrations } = useLocationIntegrations(locationId);
+  const { createIntegration } = useIntegrations();
+  const { addIntegration, testConnection } = useLocationIntegrations(locationId);
 
-  // Build a dynamic zod schema that always requires integration_id and then
-  // all required config fields for the currently selected gateway type
-  const [selectedIntegrationId, setSelectedIntegrationId] = useState("");
-
-  const selectedIntegration = integrations.find(i => i.id === selectedIntegrationId);
-  const gatewayDef = selectedIntegration ? getGatewayDefinition(selectedIntegration.type) : undefined;
+  const [selectedType, setSelectedType] = useState("");
+  const gatewayDef = selectedType ? getGatewayDefinition(selectedType) : undefined;
 
   const formSchema = useMemo(() => {
     const shape: Record<string, z.ZodTypeAny> = {
-      integration_id: z.string().min(1, "Bitte wählen Sie eine Integration"),
+      name: z.string().min(1, "Name ist erforderlich"),
+      type: z.string().min(1, "Bitte wählen Sie einen Gateway-Typ"),
+      description: z.string().optional(),
     };
     if (gatewayDef) {
       for (const field of gatewayDef.configFields) {
@@ -53,19 +52,18 @@ export function AddIntegrationDialog({ locationId, onSuccess }: AddIntegrationDi
 
   const form = useForm<Record<string, string>>({
     resolver: zodResolver(formSchema),
-    defaultValues: { integration_id: "" },
+    defaultValues: { name: "", type: "", description: "" },
   });
 
-  const availableIntegrations = integrations.filter(
-    (integration) => !locationIntegrations.some((li) => li.integration_id === integration.id)
-  );
-
-  const handleIntegrationChange = (value: string) => {
-    setSelectedIntegrationId(value);
-    // Reset all fields except integration_id
-    const resetVals: Record<string, string> = { integration_id: value };
-    const newIntegration = integrations.find(i => i.id === value);
-    const newDef = newIntegration ? getGatewayDefinition(newIntegration.type) : undefined;
+  const handleTypeChange = (value: string) => {
+    setSelectedType(value);
+    const current = form.getValues();
+    const resetVals: Record<string, string> = {
+      name: current.name || "",
+      type: value,
+      description: current.description || "",
+    };
+    const newDef = getGatewayDefinition(value);
     if (newDef) {
       for (const field of newDef.configFields) {
         resetVals[field.name] = "";
@@ -74,21 +72,20 @@ export function AddIntegrationDialog({ locationId, onSuccess }: AddIntegrationDi
     form.reset(resetVals);
   };
 
-  const handleTestConnection = async () => {
-    const values = form.getValues();
-    setTesting(true);
-
-    // Build config object from all config fields
+  const buildConfig = (values: Record<string, string>): Record<string, string> => {
     const config: Record<string, string> = {};
     if (gatewayDef) {
       for (const field of gatewayDef.configFields) {
         config[field.name] = values[field.name] || "";
       }
     }
+    return config;
+  };
 
-    const result = await testConnection(config);
+  const handleTestConnection = async () => {
+    setTesting(true);
+    const result = await testConnection(buildConfig(form.getValues()));
     setTesting(false);
-
     if (result.success) {
       toast({ title: "Verbindung erfolgreich", description: "Die Verbindung wurde hergestellt." });
     } else {
@@ -97,27 +94,37 @@ export function AddIntegrationDialog({ locationId, onSuccess }: AddIntegrationDi
   };
 
   const onSubmit = async (data: Record<string, string>) => {
-    const config: Record<string, string> = {};
-    if (gatewayDef) {
-      for (const field of gatewayDef.configFields) {
-        config[field.name] = data[field.name] || "";
-      }
+    if (!gatewayDef) return;
+
+    // 1. Create tenant-level integration
+    const { data: newIntegration, error: createErr } = await createIntegration({
+      name: data.name,
+      type: data.type,
+      category: "gateways",
+      description: data.description || null,
+      icon: gatewayDef.icon || "server",
+      config: { connection_status: "disconnected" },
+      is_active: true,
+    });
+
+    if (createErr || !newIntegration) {
+      toast({ title: "Fehler", description: "Die Integration konnte nicht erstellt werden.", variant: "destructive" });
+      return;
     }
 
-    const { error } = await addIntegration(locationId, data.integration_id, config);
+    // 2. Link to location with config
+    const { error: linkErr } = await addIntegration(locationId, newIntegration.id, buildConfig(data));
 
-    if (error) {
-      toast({ title: "Fehler", description: "Die Integration konnte nicht hinzugefügt werden.", variant: "destructive" });
+    if (linkErr) {
+      toast({ title: "Fehler", description: "Die Integration konnte nicht mit der Liegenschaft verknüpft werden.", variant: "destructive" });
     } else {
-      toast({ title: "Integration hinzugefügt", description: "Die Integration wurde erfolgreich hinzugefügt." });
-      form.reset({ integration_id: "" });
-      setSelectedIntegrationId("");
+      toast({ title: "Integration hinzugefügt", description: "Die Integration wurde erfolgreich angelegt." });
+      form.reset({ name: "", type: "", description: "" });
+      setSelectedType("");
       setOpen(false);
       onSuccess?.();
     }
   };
-
-  if (integrationsLoading || availableIntegrations.length === 0) return null;
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -127,14 +134,14 @@ export function AddIntegrationDialog({ locationId, onSuccess }: AddIntegrationDi
           Integration hinzufügen
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[500px]">
+      <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Server className="h-5 w-5" />
             Integration hinzufügen
           </DialogTitle>
           <DialogDescription>
-            Verbinden Sie diesen Standort mit einer Gebäudeautomation
+            Legen Sie eine neue Integration für diese Liegenschaft an
           </DialogDescription>
         </DialogHeader>
 
@@ -142,65 +149,85 @@ export function AddIntegrationDialog({ locationId, onSuccess }: AddIntegrationDi
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
             <FormField
               control={form.control}
-              name="integration_id"
+              name="name"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Integration</FormLabel>
-                  <Select
-                    onValueChange={(v) => { field.onChange(v); handleIntegrationChange(v); }}
-                    value={field.value}
-                  >
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Integration auswählen" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {availableIntegrations.map((integration) => {
-                        const def = getGatewayDefinition(integration.type);
-                        return (
-                          <SelectItem key={integration.id} value={integration.id}>
-                            {integration.name}{def ? ` (${def.label})` : ""}
-                          </SelectItem>
-                        );
-                      })}
-                    </SelectContent>
-                  </Select>
+                  <FormLabel>Name</FormLabel>
+                  <FormControl>
+                    <Input placeholder="z.B. Hauptgebäude Loxone" {...field} value={field.value || ""} />
+                  </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
             />
 
-            {/* Dynamic config fields based on gateway type */}
+            <FormField
+              control={form.control}
+              name="type"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Gateway-Typ</FormLabel>
+                  <Select
+                    onValueChange={(v) => { field.onChange(v); handleTypeChange(v); }}
+                    value={field.value}
+                  >
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Gateway-Typ auswählen" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {getGatewayTypes().map((gw) => (
+                        <SelectItem key={gw.type} value={gw.type}>{gw.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {gatewayDef && <FormDescription>{gatewayDef.description}</FormDescription>}
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="description"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Beschreibung (optional)</FormLabel>
+                  <FormControl>
+                    <Textarea placeholder="Kurze Beschreibung..." {...field} value={field.value || ""} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
             {gatewayDef && (
-              <div className="space-y-4">
-                {gatewayDef.configFields.map((fieldDef) => {
-                  // Group password / text fields into grid where sensible
-                  return (
-                    <FormField
-                      key={fieldDef.name}
-                      control={form.control}
-                      name={fieldDef.name}
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>{fieldDef.label}</FormLabel>
-                          <FormControl>
-                            <Input
-                              type={fieldDef.type === "password" ? "password" : "text"}
-                              placeholder={fieldDef.placeholder}
-                              {...field}
-                              value={field.value || ""}
-                            />
-                          </FormControl>
-                          {fieldDef.description && (
-                            <FormDescription>{fieldDef.description}</FormDescription>
-                          )}
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  );
-                })}
+              <div className="space-y-4 pt-2 border-t">
+                {gatewayDef.configFields.map((fieldDef) => (
+                  <FormField
+                    key={fieldDef.name}
+                    control={form.control}
+                    name={fieldDef.name}
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{fieldDef.label}</FormLabel>
+                        <FormControl>
+                          <Input
+                            type={fieldDef.type === "password" ? "password" : "text"}
+                            placeholder={fieldDef.placeholder}
+                            {...field}
+                            value={field.value || ""}
+                          />
+                        </FormControl>
+                        {fieldDef.description && (
+                          <FormDescription>{fieldDef.description}</FormDescription>
+                        )}
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                ))}
               </div>
             )}
 
@@ -208,7 +235,7 @@ export function AddIntegrationDialog({ locationId, onSuccess }: AddIntegrationDi
               <Button type="button" variant="outline" onClick={handleTestConnection} disabled={testing || !gatewayDef}>
                 {testing ? (<><Loader2 className="mr-2 h-4 w-4 animate-spin" />Teste...</>) : "Verbindung testen"}
               </Button>
-              <Button type="submit" disabled={form.formState.isSubmitting}>
+              <Button type="submit" disabled={form.formState.isSubmitting || !gatewayDef}>
                 {form.formState.isSubmitting ? (<><Loader2 className="mr-2 h-4 w-4 animate-spin" />Speichern...</>) : "Hinzufügen"}
               </Button>
             </div>
