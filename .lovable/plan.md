@@ -1,71 +1,79 @@
 
+
 ## Ziel
-Integration-Erstellung wird komplett in die Liegenschaft verschoben. Die globale Seite `/integrations` (Tab "Gateways") wird zur reinen Übersicht mit Status + "Verbindung testen".
+Ersatz von **Nabu Casa Remote UI** durch einen **Cloudflare Tunnel** im AICONO EMS Gateway Add-on. Damit erhält jede HA-Instanz eine eigene öffentliche `https://*.tunnel.aicono.org` URL, die als `api_url` in die Integration eingetragen wird – funktional 1:1-Ersatz, kostenfrei, ohne Hetzner-Server.
 
-## 1. Neuer Flow in der Liegenschaft (Kachel "Integrationen")
+## Architektur
 
-**Datei:** `src/components/integrations/AddIntegrationDialog.tsx` umbauen (oder durch `CreateIntegrationDialog.tsx` ersetzen)
+```text
+Endkunde HA (Pi)                Cloudflare                AICONO Cloud
+─────────────────              ─────────────              ─────────────
+[ HA Core   ]                                            [ home-assistant-api ]
+     ▲                                                          │
+     │ http://supervisor                                        │ HTTPS
+[ Add-on:        ]   ──── persistent QUIC ────►  [ tunnel ]     │
+[ ems-gateway +  ]   (outbound, kein Port offen)     │          │
+[ cloudflared    ]                                   ▼          ▼
+                                          https://abc.tunnel.aicono.org
+```
 
-- Schritt 1: Felder **Name**, **Gateway-Typ** (Dropdown aus `getGatewayTypes()`), **Beschreibung (optional)**
-- Schritt 2: Dynamische Config-Felder aus `gatewayDef.configFields` (wie heute)
-- Buttons: "Verbindung testen" + "Hinzufügen"
+- Add-on startet zusätzlich `cloudflared` als Subprozess
+- Tunnel-Token wird im Add-on hinterlegt (eine Konfig-Option)
+- Cloudflare routet `<unique-id>.tunnel.aicono.org` → lokalen HA-Port 8123
+- Die Edge Functions `home-assistant-api` und `ha-ws-proxy` bleiben **unverändert** (rufen die Tunnel-URL auf wie bisher die Nabu-URL)
 
-**Submit-Logik (eine Aktion, zwei Inserts):**
-1. `createIntegration({ name, type, category: gatewayDef.category, description, icon, config: { connection_status: "disconnected" }, is_active: true })` → liefert `integration_id`
-2. `addIntegration(locationId, integration_id, configFields)` → erstellt `location_integrations`-Eintrag
+## Voraussetzungen (einmalig)
 
-→ `useIntegrations.createIntegration` muss die neu erzeugte ID zuverlässig zurückgeben (heute wird die ID via "select last" geholt — auf RETURNING umstellen, siehe unten).
+1. Domain `tunnel.aicono.org` bei Cloudflare registriert/delegiert
+2. Cloudflare Account + Tunnel-Service aktiviert (kostenfrei bis 50 GB/Monat/Tunnel – ausreichend für HA)
+3. Wildcard-DNS `*.tunnel.aicono.org` → Cloudflare Tunnel
+4. Provisioning-Service in der AICONO Cloud, der pro Liegenschaft einen neuen Cloudflare Tunnel + Tunnel-Token erzeugt (via Cloudflare API)
 
-**Auswahl bestehender Integrationen entfernen:** Dropdown "Integration auswählen" entfällt. Jede Liegenschaft erzeugt ihre eigenen Integrationen. (Tenant-weite Wiederverwendung wird damit für Gateways aufgegeben — gewünscht laut Anforderung.)
+## Umsetzung
 
-## 2. Hook-Anpassung
+### 1. Cloudflare-Provisioning Edge Function (neu)
+**Datei:** `supabase/functions/cf-tunnel-provision/index.ts`
+- Input: `location_integration_id` 
+- Aktion: Cloudflare API `POST /accounts/{id}/cfd_tunnel` → erzeugt Tunnel + Token, dann DNS-Record `<tunnel-id>.tunnel.aicono.org` → `<tunnel-id>.cfargotunnel.com`
+- Speichert `tunnel_id`, `tunnel_token` (verschlüsselt), `public_url` in `location_integrations.config`
+- Benötigt Secret: `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_ZONE_ID`
 
-**Datei:** `src/hooks/useIntegrations.tsx`
-- `createIntegration`: aktuell wird via `useTenantQuery.insert` eingefügt und danach `select().order().limit(1).single()` geholt → unsicher bei parallelen Calls. Auf direktes `supabase.from("integrations").insert(...).select().single()` mit Tenant-ID umstellen, damit die echte neue ID zurückkommt.
+### 2. HA Add-on Erweiterung
+**Datei:** `docs/ha-addon/Dockerfile` + `docs/ha-addon/index.ts`
+- Cloudflared-Binary in Image installieren (`apk add cloudflared` bzw. ARM64-Binary für Pi)
+- Neue Konfig-Optionen in `config.yaml`:
+  - `cloudflare_tunnel_token` (str, optional)
+  - `cloudflare_enabled` (bool, default false)
+- Beim Start: wenn Token gesetzt → `cloudflared tunnel --token <X> run` als Child-Process, mit Auto-Restart bei Crash
+- Health-Check zeigt Tunnel-Status in der lokalen UI (`/api/status` erweitert um `tunnel: { connected, public_url }`)
 
-## 3. Globale Seite `/integrations` – Tab "Gateways" als reine Übersicht
+### 3. UI-Anpassung in der Liegenschaft
+**Datei:** `src/components/integrations/AddIntegrationDialog.tsx` + `src/lib/gatewayRegistry.ts`
+- Beim Anlegen der HA-Integration neuer Button **"Tunnel automatisch einrichten"** (statt manuelle `api_url`-Eingabe)
+- Klick → ruft `cf-tunnel-provision` Edge Function auf → setzt `api_url` automatisch auf die generierte Tunnel-URL und zeigt das `cloudflare_tunnel_token` zum Kopieren in die Add-on-Config an
+- Manuelle `api_url`-Eingabe bleibt als Fallback erhalten (für bestehende Nabu-Casa-Nutzer)
 
-**Datei:** `src/pages/Integrations.tsx`
-- Header-Button **"+ Integration erstellen"** entfernen
-- Dialog (Erstellen/Bearbeiten) komplett entfernen (`Dialog`, `Form`, alle State-Variablen `dialogOpen`, `editingIntegration`, `handleEdit`, `onSubmit`, `handleDelete`)
-- Karten je Integration zeigen nur noch:
-  - Name + Gateway-Typ-Label
-  - Status-Badge (Verbunden / Nicht verbunden)
-  - Anzahl verknüpfter Liegenschaften (klein, optional, via separater Query auf `location_integrations`)
-  - Button **"Verbindung testen"** (`handleTestConnection` bleibt)
-- Icons **Bearbeiten** (Pencil) und **Löschen** (Trash2) entfernen
-- Leerzustand-Text anpassen: Hinweis "Integrationen werden in der jeweiligen Liegenschaft angelegt" + Link zur Liegenschaftsübersicht
+### 4. Anleitung v8.3
+**Datei (neu):** `/mnt/documents/AICONO_EMS_Gateway_Installation_v8.3.docx`
+- Neues Kapitel **"4.3 Tunnel einrichten (statt Nabu Casa)"**:
+  1. In der Cloud → Liegenschaft → Integration HA anlegen
+  2. Button **"Tunnel automatisch einrichten"** klicken → `cloudflare_tunnel_token` kopieren
+  3. In HA → Add-on Konfiguration → Token einfügen → Add-on neu starten
+  4. Status "Verbunden" im Dashboard prüfen
+- Altes Nabu-Casa-Kapitel als optionaler Fallback markieren
+- QA: PDF-Konvertierung + Bildprüfung aller Seiten
 
-## 4. Übersetzungen
+## Sicherheit
+- Cloudflare Tunnel-Token wird AES-256-GCM verschlüsselt in `location_integrations.config` gespeichert (Pattern wie BrightHub, Reuse von `crypto.ts`)
+- Tunnel-URLs sind durch `home-assistant-api` HA-Token gesichert → unautorisierter Zugriff nicht möglich
+- Cloudflare Access (optional, später) für zusätzliche Schutzschicht
 
-**Dateien:** `src/i18n/locales/{de,en,es,nl}/integrations.ts` (oder vergleichbar — beim Implementieren prüfen)
-- Neuer Key `integrations.createdInLocationHint` (Leerzustand)
-- Bestehende Keys `integrations.create`, `integrations.editTitle`, `integrations.deleted` etc. bleiben für die Liegenschafts-Dialoge.
+## Out of Scope (für späteren Schritt)
+- Komplette Ablösung von `home-assistant-api`/`ha-ws-proxy` durch direkten WS-Push (laut Antwort gewünscht, aber separater großer Umbau – als Phase 2 sinnvoll, nachdem Tunnel-Lösung stabil läuft)
+- Multi-Tenant Cloudflare-Account-Trennung
 
-## 5. Tests anpassen
+## Benötigte Secrets (vor Implementierung)
+- `CLOUDFLARE_API_TOKEN` (mit Tunnel:Edit + DNS:Edit Permissions)
+- `CLOUDFLARE_ACCOUNT_ID`
+- `CLOUDFLARE_ZONE_ID` für `tunnel.aicono.org`
 
-- `src/pages/__tests__/Integrations.test.tsx`: Erwartung "renders title" bleibt; Button "Integration erstellen" darf nicht mehr existieren.
-- `src/components/integrations/__tests__/` (falls Tests für `AddIntegrationDialog` existieren): Flow mit Name/Typ-Eingabe statt Dropdown-Auswahl testen.
-
-## 6. Anleitung v8.2
-
-**Datei (neu):** `/mnt/documents/AICONO_EMS_Gateway_Installation_v8.2.docx`
-
-Generiert mit dem `docx`-Skill (Node + `docx`-Lib), Layout & Styles wie v8.1. Änderungen:
-- Titel/Footer auf **v8.2**
-- **Kapitel 4.2 "Neues Gateway anlegen"** komplett neu: 
-  1. In AICONO Cloud → **Liegenschaften** → gewünschte Liegenschaft öffnen
-  2. Kachel **Integrationen** → **+ Integration hinzufügen**
-  3. Name, Gateway-Typ "Home Assistant", optional Beschreibung
-  4. Pflichtfelder (API-URL, Gateway-API-Key, Tenant-ID, Device-Name) eintragen
-  5. **Verbindung testen** → **Hinzufügen**
-- Verweise auf "Einstellungen → Integrationen" entfernen / umformulieren in "Übersicht aller Gateways unter Einstellungen → Integrationen (nur Status & Test)"
-- QA: PDF + JPG-Konvertierung aller Seiten zur visuellen Prüfung (siehe docx-Skill)
-
-## Technische Hinweise
-- RLS auf `integrations` und `location_integrations` ist tenant-basiert — kein Migrationsbedarf.
-- `gatewayDef.category` muss in der `category`-Spalte landen (heute "gateways"); Standardwert prüfen, sonst Fallback `"gateways"`.
-- Keine DB-Schema-Änderungen, keine Edge-Function-Änderungen.
-
-## Out of Scope
-- Bestehende, "leere" Tenant-Integrationen (ohne Liegenschaftsbindung) bleiben erhalten und werden in der Übersicht weiter angezeigt; keine automatische Migration.
