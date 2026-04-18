@@ -7,9 +7,10 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
-import { Plus, Zap, Boxes, FileText, Trash2, MapPin, ChevronRight, Box } from "lucide-react";
+import { Plus, Zap, Boxes, FileText, Trash2, MapPin, ChevronRight, Box, Camera } from "lucide-react";
 import { DistributionSheet } from "@/components/sales/DistributionSheet";
 import { MeasurementPointSheet } from "@/components/sales/MeasurementPointSheet";
+import { DeviceRecommendation } from "@/components/sales/DeviceRecommendation";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -38,6 +39,8 @@ interface Distribution {
   typ: string;
   standort: string | null;
   notizen: string | null;
+  foto_url: string | null;
+  ki_analyse: Record<string, unknown> | null;
 }
 
 interface MeasurementPoint {
@@ -76,7 +79,7 @@ export default function SalesProjectDetail() {
     if (!id) return;
     const [prRes, distRes] = await Promise.all([
       supabase.from("sales_projects").select("id, kunde_name, kunde_typ, kontakt_name, adresse, status, notizen").eq("id", id).maybeSingle(),
-      supabase.from("sales_distributions").select("id, name, typ, standort, notizen").eq("project_id", id).order("created_at", { ascending: true }),
+      supabase.from("sales_distributions").select("id, name, typ, standort, notizen, foto_url, ki_analyse").eq("project_id", id).order("created_at", { ascending: true }),
     ]);
     setProject((prRes.data as unknown) as Project | null);
     const dist = (distRes.data ?? []) as unknown as Distribution[];
