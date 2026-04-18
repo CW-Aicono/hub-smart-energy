@@ -21,11 +21,13 @@
 └─────────────────────────────────────────┘
             ↓ liest
 ┌─────────────────────────────────────────┐
-│  Cloud-DB                               │
+│  Cloud-DB (Live: self-hosted Hetzner,   │
+│            Staging: Lovable Cloud)      │
 │   • location_integrations (alle Tenants)│
 │   • integrations (Gateway-Typen)        │
 │   • meters (Sensor-Mapping)             │
-│   • config_encrypted (Credentials)      │
+│   • location_integrations.config        │
+│     (Gateway-Credentials, JSONB)        │
 └─────────────────────────────────────────┘
             ↓ pollt parallel
    Loxone | Shelly | Tuya | ABB | Siemens
@@ -42,10 +44,19 @@
 - Treiber-Registry pro Gateway-Typ — portiert aus den bestehenden Edge Functions:
   - `loxone` (WebSocket), `shelly` (Cloud-Polling), `tuya`, `abb`, `siemens`,
     `homematic`, `omada`, `home_assistant`
-- Credentials werden mit `BRIGHTHUB_ENCRYPTION_KEY` aus `config_encrypted` entschlüsselt
+- Credentials werden direkt aus `location_integrations.config` (JSONB) gelesen — Service-Role-Key reicht für Zugriff, keine separate App-Layer-Verschlüsselung nötig (DB-Verschlüsselung at-rest übernimmt Supabase/Postgres selbst)
 - Schreibt direkt in `meter_power_readings` mit `tenant_id` aus Gateway-Datensatz
 - Heartbeat: alle 30s `system_settings.worker_last_heartbeat` setzen → bestehender Edge-Function-Fallback in `_shared/workerStatus.ts` greift unverändert
-- `.env` reduziert auf 4 Variablen: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `BRIGHTHUB_ENCRYPTION_KEY`, `WORKER_ENV`
+- `.env` reduziert auf **3 Variablen**: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `WORKER_ENV` (live|staging)
+- **Kein `BRIGHTHUB_ENCRYPTION_KEY`** — der dient ausschließlich der externen BrightHub-Integration (`brighthub_settings`) und hat nichts mit Gateway-Credentials zu tun
+
+## Quellen der Schlüssel pro Umgebung
+
+| Variable | Staging-Worker | Live-Worker |
+|---|---|---|
+| `SUPABASE_URL` | `https://xnveugycurplszevdxtw.supabase.co` (Lovable Cloud) | eigene Domain der self-hosted Supabase auf Hetzner (z. B. `https://supabase.aicono.org`) |
+| `SUPABASE_SERVICE_ROLE_KEY` | aus Lovable Cloud → Backend → API → `service_role` | aus self-hosted Supabase Studio → Settings → API → `service_role` (alternativ aus der Supabase-`.env` auf dem Hetzner-Server, Variable `SERVICE_ROLE_KEY`) |
+| `WORKER_ENV` | `staging` | `live` |
 
 ## Stufe 2 — Hetzner-Setup (genau 2 Container)
 
@@ -73,7 +84,7 @@
 - Hetzner-Server gehärtet: SSH-Key-only, UFW-Firewall, automatische Sicherheitsupdates (`unattended-upgrades`)
 - Tenant-Isolation bleibt: jeder DB-Insert nutzt `tenant_id` aus Gateway-Datensatz
 - Bei Server-Kompromittierung: Service-Role-Key in Cloud rotieren → alle Verbindungen sofort ungültig
-- Gateway-Credentials (Loxone-User/Pass, Shelly-Token …) bleiben verschlüsselt in `location_integrations.config_encrypted`
+- Gateway-Credentials liegen in `location_integrations.config` (JSONB); geschützt durch DB-Verschlüsselung at-rest und RLS — Worker greift via Service-Role legitim darauf zu
 
 ## Vergleich
 
