@@ -1,67 +1,71 @@
-## Finale Architektur-Entscheidung (Plan v8.1, April 2026)
 
-**Der zentrale Cloud-Gateway-Worker entfällt komplett.** Er bot keinen Mehrwert gegenüber dem bestehenden Edge-Function-Polling.
+## Ziel
+Integration-Erstellung wird komplett in die Liegenschaft verschoben. Die globale Seite `/integrations` (Tab "Gateways") wird zur reinen Übersicht mit Status + "Verbindung testen".
 
-## Zwei Betriebsmodi
+## 1. Neuer Flow in der Liegenschaft (Kachel "Integrationen")
 
-| Modus | Verwendung | Latenz | Steuerung |
-|---|---|---|---|
-| **A – AICONO-Hub vor Ort** (empfohlen) | Echtzeit-Steuerung, komplexe Automationen, lokale Resilienz | < 1 s | ✅ Cross-Protokoll (Loxone WS, Shelly, Modbus, KNX, Home Assistant) |
-| **B – Reines Cloud-Monitoring** (Fallback) | Kunden ohne Hub – Dashboard, Reports, Abrechnung | 5 min | ❌ nur lokale Geräte-Logik (z. B. Loxone-Programmierung auf Miniserver) |
+**Datei:** `src/components/integrations/AddIntegrationDialog.tsx` umbauen (oder durch `CreateIntegrationDialog.tsx` ersetzen)
 
-## Wie Modus B technisch funktioniert (heutiger Zustand, bleibt unverändert)
+- Schritt 1: Felder **Name**, **Gateway-Typ** (Dropdown aus `getGatewayTypes()`), **Beschreibung (optional)**
+- Schritt 2: Dynamische Config-Felder aus `gatewayDef.configFields` (wie heute)
+- Buttons: "Verbindung testen" + "Hinzufügen"
 
-- Edge Functions pollen alle 5 Minuten:
-  `loxone-api`, `shelly-api`, `tuya-api`, `abb-api`, `siemens-api`,
-  `homematic-api`, `omada-api`, `home-assistant-api`,
-  `schneider-api`, `sentron-poc3000-api`
-- Orchestriert via `gateway-periodic-sync` (pg_cron)
-- Schreiben in `meter_power_readings` mit korrekter `tenant_id`
-- UI-Live-Anzeige (`useGatewayLivePower`) pollt zusätzlich alle 60 s direkt für die Dashboard-Anzeige
+**Submit-Logik (eine Aktion, zwei Inserts):**
+1. `createIntegration({ name, type, category: gatewayDef.category, description, icon, config: { connection_status: "disconnected" }, is_active: true })` → liefert `integration_id`
+2. `addIntegration(locationId, integration_id, configFields)` → erstellt `location_integrations`-Eintrag
 
-## Wie Modus A technisch funktioniert
+→ `useIntegrations.createIntegration` muss die neu erzeugte ID zuverlässig zurückgeben (heute wird die ID via "select last" geholt — auf RETURNING umstellen, siehe unten).
 
-- AICONO EMS Gateway (Home Assistant Add-on, lokal auf Mini-PC/Pi)
-- Spricht den Loxone Miniserver per **lokalem WebSocket** (Sub-100 ms)
-- Baut **ausgehende WebSocket** zur Cloud auf (analog OCPP-Wallbox-Pattern)
-- Sendet Live-Daten an `gateway-ingest` Edge Function
-- Führt Automationen lokal aus (`automation-core`-Paket) → funktioniert auch bei Internet-Ausfall
-- Puffert Messwerte in lokaler SQLite, synchronisiert nach Reconnect
+**Auswahl bestehender Integrationen entfernen:** Dropdown "Integration auswählen" entfällt. Jede Liegenschaft erzeugt ihre eigenen Integrationen. (Tenant-weite Wiederverwendung wird damit für Gateways aufgegeben — gewünscht laut Anforderung.)
 
-## Was bleibt unverändert
+## 2. Hook-Anpassung
 
-- **Code**: keine Änderungen an Edge Functions, Hooks oder UI nötig
-- **`useGatewayLivePower`** + **`useLoxoneSensors`**: bleiben aktiv
-- **`useRealtimePower`**: greift weiterhin für Hub-Kunden via `meter_power_readings` Realtime-Subscription
-- **OCPP-Wallboxen**: unverändert, direkter WebSocket zur Cloud
+**Datei:** `src/hooks/useIntegrations.tsx`
+- `createIntegration`: aktuell wird via `useTenantQuery.insert` eingefügt und danach `select().order().limit(1).single()` geholt → unsicher bei parallelen Calls. Auf direktes `supabase.from("integrations").insert(...).select().single()` mit Tenant-ID umstellen, damit die echte neue ID zurückkommt.
 
-## Was wird verworfen
+## 3. Globale Seite `/integrations` – Tab "Gateways" als reine Übersicht
 
-- ❌ `docs/gateway-worker/` → archiviert als `docs/_DEPRECATED_gateway-worker/`
-- ❌ Hetzner-Worker-Container (`gateway-worker-live`, `gateway-worker-staging`)
-- ❌ `SUPABASE_SERVICE_ROLE_KEY` außerhalb der Cloud
-- ❌ `WORKER_ENV`-Variable
+**Datei:** `src/pages/Integrations.tsx`
+- Header-Button **"+ Integration erstellen"** entfernen
+- Dialog (Erstellen/Bearbeiten) komplett entfernen (`Dialog`, `Form`, alle State-Variablen `dialogOpen`, `editingIntegration`, `handleEdit`, `onSubmit`, `handleDelete`)
+- Karten je Integration zeigen nur noch:
+  - Name + Gateway-Typ-Label
+  - Status-Badge (Verbunden / Nicht verbunden)
+  - Anzahl verknüpfter Liegenschaften (klein, optional, via separater Query auf `location_integrations`)
+  - Button **"Verbindung testen"** (`handleTestConnection` bleibt)
+- Icons **Bearbeiten** (Pencil) und **Löschen** (Trash2) entfernen
+- Leerzustand-Text anpassen: Hinweis "Integrationen werden in der jeweiligen Liegenschaft angelegt" + Link zur Liegenschaftsübersicht
 
-## Anleitungen
+## 4. Übersetzungen
 
-- **Bestehend & aktuell**: AICONO-Hub-Installationsanleitung (für Modus A)
-- **Entfällt**: AICONO_Gateway_Worker_Installation.docx (alle Versionen v1–v8 obsolet)
-- Modus B braucht **keine Endkunden-Anleitung** – läuft serverseitig automatisch, sobald Gateway-Credentials in `location_integrations.config` hinterlegt sind (UI-Wizard)
+**Dateien:** `src/i18n/locales/{de,en,es,nl}/integrations.ts` (oder vergleichbar — beim Implementieren prüfen)
+- Neuer Key `integrations.createdInLocationHint` (Leerzustand)
+- Bestehende Keys `integrations.create`, `integrations.editTitle`, `integrations.deleted` etc. bleiben für die Liegenschafts-Dialoge.
 
-## Vergleich der Entscheidung
+## 5. Tests anpassen
 
-| Aspekt | Cloud-Worker (verworfen) | Edge-Function-Polling (Modus B) |
-|---|---|---|
-| Zusätzliche Infrastruktur | 2 Hetzner-Container | keine |
-| Service-Role-Key außerhalb Cloud | ja (Risiko) | nein |
-| Aufwand neuer Mandant | Container-Restart | 0 |
-| Latenz | 30 s | 5 min |
-| Edge-Function-Kosten | minimal | aktuell, akzeptabel |
-| Operative Komplexität | hoch | minimal |
+- `src/pages/__tests__/Integrations.test.tsx`: Erwartung "renders title" bleibt; Button "Integration erstellen" darf nicht mehr existieren.
+- `src/components/integrations/__tests__/` (falls Tests für `AddIntegrationDialog` existieren): Flow mit Name/Typ-Eingabe statt Dropdown-Auswahl testen.
 
-## Geschätzter Aufwand
+## 6. Anleitung v8.2
 
-- ✅ Worker-Ordner archivieren (erledigt)
-- ✅ Plan + Memory aktualisieren (erledigt)
-- ❌ keine Code-Änderungen
-- ❌ keine Migrations
+**Datei (neu):** `/mnt/documents/AICONO_EMS_Gateway_Installation_v8.2.docx`
+
+Generiert mit dem `docx`-Skill (Node + `docx`-Lib), Layout & Styles wie v8.1. Änderungen:
+- Titel/Footer auf **v8.2**
+- **Kapitel 4.2 "Neues Gateway anlegen"** komplett neu: 
+  1. In AICONO Cloud → **Liegenschaften** → gewünschte Liegenschaft öffnen
+  2. Kachel **Integrationen** → **+ Integration hinzufügen**
+  3. Name, Gateway-Typ "Home Assistant", optional Beschreibung
+  4. Pflichtfelder (API-URL, Gateway-API-Key, Tenant-ID, Device-Name) eintragen
+  5. **Verbindung testen** → **Hinzufügen**
+- Verweise auf "Einstellungen → Integrationen" entfernen / umformulieren in "Übersicht aller Gateways unter Einstellungen → Integrationen (nur Status & Test)"
+- QA: PDF + JPG-Konvertierung aller Seiten zur visuellen Prüfung (siehe docx-Skill)
+
+## Technische Hinweise
+- RLS auf `integrations` und `location_integrations` ist tenant-basiert — kein Migrationsbedarf.
+- `gatewayDef.category` muss in der `category`-Spalte landen (heute "gateways"); Standardwert prüfen, sonst Fallback `"gateways"`.
+- Keine DB-Schema-Änderungen, keine Edge-Function-Änderungen.
+
+## Out of Scope
+- Bestehende, "leere" Tenant-Integrationen (ohne Liegenschaftsbindung) bleiben erhalten und werden in der Übersicht weiter angezeigt; keine automatische Migration.
