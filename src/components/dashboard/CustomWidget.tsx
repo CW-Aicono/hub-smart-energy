@@ -340,8 +340,9 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
       }));
     },
     enabled: config.meter_ids.length > 0,
-    staleTime: selectedPeriod === "day" ? 30 * 1000 : 5 * 60 * 1000,
-    refetchInterval: selectedPeriod === "day" ? 60 * 1000 : false,
+    staleTime: selectedPeriod === "day" ? 60 * 1000 : 5 * 60 * 1000,
+    // Realtime invalidation triggers instant refresh on new data; this is the fallback.
+    refetchInterval: 5 * 60 * 1000,
   });
 
   const yDomain = useMemo<[number | "auto", number | "auto"]>(() => {
