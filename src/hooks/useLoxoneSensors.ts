@@ -28,10 +28,20 @@ export type LoxoneSensor = GatewaySensor;
 
 async function fetchSensors(integrationId: string, integrationType?: string): Promise<GatewaySensor[]> {
   const edgeFunction = integrationType ? getEdgeFunctionName(integrationType) : "loxone-api";
+  // Refresh JWT before invoking – avoids 401 "Ungültiges Token" after idle periods.
+  await supabase.auth.getSession();
   const { data, error } = await supabase.functions.invoke(edgeFunction, {
     body: { locationIntegrationId: integrationId, action: "getSensors" },
   });
-  if (error || !data?.success) throw new Error(data?.error || "Failed to fetch sensors");
+  if (error) {
+    // Silently ignore auth errors – Realtime + DB cache keep UI fresh.
+    if (error.message?.includes("401") || error.message?.includes("Token")) {
+      console.warn(`[useLoxoneSensors] Auth error (ignored): ${error.message}`);
+      return [];
+    }
+    throw new Error(error.message || "Failed to fetch sensors");
+  }
+  if (!data?.success) throw new Error(data?.error || "Failed to fetch sensors");
   return data.sensors as GatewaySensor[];
 }
 
