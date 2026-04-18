@@ -25,9 +25,9 @@ import {
 interface Project {
   id: string;
   kunde_name: string;
-  kunde_kontakt: string | null;
-  liegenschaft_name: string | null;
-  liegenschaft_adresse: string | null;
+  kunde_typ: string;
+  kontakt_name: string | null;
+  adresse: string | null;
   status: string;
   notizen: string | null;
 }
@@ -36,8 +36,8 @@ interface Distribution {
   id: string;
   name: string;
   typ: string;
-  parent_id: string | null;
-  hinweise: string | null;
+  standort: string | null;
+  notizen: string | null;
 }
 
 interface MeasurementPoint {
@@ -48,6 +48,10 @@ interface MeasurementPoint {
   phasen: number;
   strombereich_a: number | null;
   anwendungsfall: string | null;
+  hinweise: string | null;
+  montage: string | null;
+  bestand: boolean;
+  bestand_geraet: string | null;
 }
 
 const STATUS_LABELS: Record<string, string> = {
@@ -70,15 +74,25 @@ export default function SalesProjectDetail() {
 
   const load = useCallback(async () => {
     if (!id) return;
-    const [{ data: pr }, { data: dist }, { data: mp }] = await Promise.all([
-      supabase.from("sales_projects").select("*").eq("id", id).maybeSingle(),
-      supabase.from("sales_distributions").select("*").eq("projekt_id", id).order("created_at", { ascending: true }),
-      supabase.from("sales_measurement_points").select("*").order("created_at", { ascending: true }),
+    const [prRes, distRes] = await Promise.all([
+      supabase.from("sales_projects").select("id, kunde_name, kunde_typ, kontakt_name, adresse, status, notizen").eq("id", id).maybeSingle(),
+      supabase.from("sales_distributions").select("id, name, typ, standort, notizen").eq("project_id", id).order("created_at", { ascending: true }),
     ]);
-    setProject(pr as Project | null);
-    setDistributions((dist ?? []) as Distribution[]);
-    const distIds = (dist ?? []).map((d: any) => d.id);
-    setPoints(((mp ?? []) as MeasurementPoint[]).filter((p) => distIds.includes(p.distribution_id)));
+    setProject((prRes.data as unknown) as Project | null);
+    const dist = (distRes.data ?? []) as unknown as Distribution[];
+    setDistributions(dist);
+
+    const distIds = dist.map((d) => d.id);
+    if (distIds.length > 0) {
+      const { data: mp } = await supabase
+        .from("sales_measurement_points")
+        .select("id, distribution_id, bezeichnung, energieart, phasen, strombereich_a, anwendungsfall, hinweise, montage, bestand, bestand_geraet")
+        .in("distribution_id", distIds)
+        .order("created_at", { ascending: true });
+      setPoints((mp ?? []) as unknown as MeasurementPoint[]);
+    } else {
+      setPoints([]);
+    }
     setLoading(false);
   }, [id]);
 
@@ -164,23 +178,24 @@ export default function SalesProjectDetail() {
       }
     >
       <div className="space-y-4">
-        {/* Project meta */}
         <Card>
           <CardContent className="p-4 space-y-2">
             <div className="flex items-center justify-between gap-2">
               <h2 className="font-semibold">{project.kunde_name}</h2>
-              <Badge variant="secondary">{STATUS_LABELS[project.status] ?? project.status}</Badge>
+              <div className="flex gap-1">
+                <Badge variant="outline" className="text-xs">
+                  {project.kunde_typ === "industry" ? "Industrie" : "Standard"}
+                </Badge>
+                <Badge variant="secondary">{STATUS_LABELS[project.status] ?? project.status}</Badge>
+              </div>
             </div>
-            {project.kunde_kontakt && (
-              <p className="text-sm text-muted-foreground">{project.kunde_kontakt}</p>
+            {project.kontakt_name && (
+              <p className="text-sm text-muted-foreground">{project.kontakt_name}</p>
             )}
-            {project.liegenschaft_name && (
+            {project.adresse && (
               <div className="text-sm flex items-start gap-2 text-muted-foreground">
                 <MapPin className="h-4 w-4 mt-0.5 shrink-0" />
-                <div>
-                  <div>{project.liegenschaft_name}</div>
-                  {project.liegenschaft_adresse && <div className="text-xs">{project.liegenschaft_adresse}</div>}
-                </div>
+                <div className="whitespace-pre-line">{project.adresse}</div>
               </div>
             )}
             {project.notizen && (
@@ -189,7 +204,6 @@ export default function SalesProjectDetail() {
           </CardContent>
         </Card>
 
-        {/* Distributions + measurement points */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 py-3">
             <CardTitle className="text-base flex items-center gap-2">
@@ -217,8 +231,11 @@ export default function SalesProjectDetail() {
                           <span className="font-medium truncate">{d.name}</span>
                           <Badge variant="outline" className="text-xs">{d.typ}</Badge>
                         </div>
-                        {d.hinweise && (
-                          <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{d.hinweise}</p>
+                        {d.standort && (
+                          <p className="text-xs text-muted-foreground mt-1">{d.standort}</p>
+                        )}
+                        {d.notizen && (
+                          <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{d.notizen}</p>
                         )}
                       </div>
                       <div className="flex items-center gap-1">
@@ -261,12 +278,13 @@ export default function SalesProjectDetail() {
                               onClick={() => setPointSheet({ open: true, distributionId: d.id, editing: p })}
                             >
                               <Zap className="h-3.5 w-3.5 text-primary shrink-0" />
-                              <div className="min-w-0">
+                              <div className="min-w-0 flex-1">
                                 <div className="text-sm font-medium truncate">{p.bezeichnung}</div>
                                 <div className="text-xs text-muted-foreground">
                                   {p.energieart} · {p.phasen}-phasig
                                   {p.strombereich_a ? ` · ≤${p.strombereich_a}A` : ""}
                                   {p.anwendungsfall ? ` · ${p.anwendungsfall}` : ""}
+                                  {p.bestand ? " · Bestand" : ""}
                                 </div>
                               </div>
                               <ChevronRight className="h-4 w-4 text-muted-foreground" />

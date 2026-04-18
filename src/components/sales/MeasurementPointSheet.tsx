@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/hooks/useAuth";
 import {
   Sheet,
   SheetContent,
@@ -12,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 
@@ -24,6 +24,8 @@ interface MeasurementPoint {
   anwendungsfall: string | null;
   hinweise: string | null;
   montage: string | null;
+  bestand: boolean;
+  bestand_geraet: string | null;
 }
 
 interface Props {
@@ -36,16 +38,17 @@ interface Props {
 
 const DEFAULT_FORM = {
   bezeichnung: "",
-  energieart: "strom",
+  energieart: "electricity",
   phasen: 3,
   strombereich_a: 63,
   anwendungsfall: "Hauptzähler",
   montage: "Hutschiene",
   hinweise: "",
+  bestand: false,
+  bestand_geraet: "",
 };
 
 export function MeasurementPointSheet({ open, onOpenChange, distributionId, editing, onSaved }: Props) {
-  const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState(DEFAULT_FORM);
 
@@ -61,6 +64,8 @@ export function MeasurementPointSheet({ open, onOpenChange, distributionId, edit
               anwendungsfall: editing.anwendungsfall ?? "Hauptzähler",
               montage: editing.montage ?? "Hutschiene",
               hinweise: editing.hinweise ?? "",
+              bestand: editing.bestand,
+              bestand_geraet: editing.bestand_geraet ?? "",
             }
           : DEFAULT_FORM
       );
@@ -68,7 +73,7 @@ export function MeasurementPointSheet({ open, onOpenChange, distributionId, edit
   }, [open, editing]);
 
   const handleSave = async () => {
-    if (!form.bezeichnung.trim() || !user || !distributionId) {
+    if (!form.bezeichnung.trim() || !distributionId) {
       toast.error("Bezeichnung ist erforderlich");
       return;
     }
@@ -81,6 +86,8 @@ export function MeasurementPointSheet({ open, onOpenChange, distributionId, edit
       anwendungsfall: form.anwendungsfall,
       montage: form.montage,
       hinweise: form.hinweise.trim() || null,
+      bestand: form.bestand,
+      bestand_geraet: form.bestand ? form.bestand_geraet.trim() || null : null,
     };
     if (editing) {
       const { error } = await supabase
@@ -97,7 +104,6 @@ export function MeasurementPointSheet({ open, onOpenChange, distributionId, edit
       const { error } = await supabase.from("sales_measurement_points").insert({
         ...payload,
         distribution_id: distributionId,
-        partner_id: user.id,
       });
       setLoading(false);
       if (error) {
@@ -136,10 +142,10 @@ export function MeasurementPointSheet({ open, onOpenChange, distributionId, edit
                 value={form.energieart}
                 onChange={(e) => setForm({ ...form, energieart: e.target.value })}
               >
-                <option value="strom">Strom</option>
-                <option value="waerme">Wärme</option>
+                <option value="electricity">Strom</option>
+                <option value="heat">Wärme</option>
                 <option value="gas">Gas</option>
-                <option value="wasser">Wasser</option>
+                <option value="water">Wasser</option>
               </select>
             </div>
             <div>
@@ -175,8 +181,8 @@ export function MeasurementPointSheet({ open, onOpenChange, distributionId, edit
               >
                 <option value="Hutschiene">Hutschiene</option>
                 <option value="Wandlermessung">Wandlermessung</option>
+                <option value="Sammelschiene">Sammelschiene</option>
                 <option value="Steckdose">Steckdose</option>
-                <option value="Direktklemme">Direktklemme</option>
               </select>
             </div>
           </div>
@@ -198,6 +204,28 @@ export function MeasurementPointSheet({ open, onOpenChange, distributionId, edit
               <option value="Sonstiges">Sonstiges</option>
             </select>
           </div>
+          <div className="flex items-center justify-between rounded-md border p-3">
+            <div>
+              <Label htmlFor="mp_bestand" className="text-sm font-medium">Bestandsgerät vorhanden</Label>
+              <p className="text-xs text-muted-foreground">Bereits installierte Messung</p>
+            </div>
+            <Switch
+              id="mp_bestand"
+              checked={form.bestand}
+              onCheckedChange={(v) => setForm({ ...form, bestand: v })}
+            />
+          </div>
+          {form.bestand && (
+            <div>
+              <Label htmlFor="mp_bestand_geraet">Bestandsgerät (Hersteller / Modell)</Label>
+              <Input
+                id="mp_bestand_geraet"
+                value={form.bestand_geraet}
+                onChange={(e) => setForm({ ...form, bestand_geraet: e.target.value })}
+                placeholder="z. B. Janitza UMG 96"
+              />
+            </div>
+          )}
           <div>
             <Label htmlFor="mp_hinweise">Hinweise</Label>
             <Textarea

@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/hooks/useAuth";
 import {
   Sheet,
   SheetContent,
@@ -19,7 +18,8 @@ interface Distribution {
   id: string;
   name: string;
   typ: string;
-  hinweise: string | null;
+  standort: string | null;
+  notizen: string | null;
 }
 
 interface Props {
@@ -31,22 +31,22 @@ interface Props {
 }
 
 export function DistributionSheet({ open, onOpenChange, projektId, editing, onSaved }: Props) {
-  const { user } = useAuth();
   const [loading, setLoading] = useState(false);
-  const [form, setForm] = useState({ name: "", typ: "NSHV", hinweise: "" });
+  const [form, setForm] = useState({ name: "", typ: "NSHV", standort: "", notizen: "" });
 
   useEffect(() => {
     if (open) {
       setForm({
         name: editing?.name ?? "",
         typ: editing?.typ ?? "NSHV",
-        hinweise: editing?.hinweise ?? "",
+        standort: editing?.standort ?? "",
+        notizen: editing?.notizen ?? "",
       });
     }
   }, [open, editing]);
 
   const handleSave = async () => {
-    if (!form.name.trim() || !user) {
+    if (!form.name.trim()) {
       toast.error("Name ist erforderlich");
       return;
     }
@@ -57,7 +57,8 @@ export function DistributionSheet({ open, onOpenChange, projektId, editing, onSa
         .update({
           name: form.name.trim(),
           typ: form.typ,
-          hinweise: form.hinweise.trim() || null,
+          standort: form.standort.trim() || null,
+          notizen: form.notizen.trim() || null,
         })
         .eq("id", editing.id);
       setLoading(false);
@@ -68,11 +69,11 @@ export function DistributionSheet({ open, onOpenChange, projektId, editing, onSa
       toast.success("Verteilung aktualisiert");
     } else {
       const { error } = await supabase.from("sales_distributions").insert({
-        projekt_id: projektId,
-        partner_id: user.id,
+        project_id: projektId,
         name: form.name.trim(),
         typ: form.typ,
-        hinweise: form.hinweise.trim() || null,
+        standort: form.standort.trim() || null,
+        notizen: form.notizen.trim() || null,
       });
       setLoading(false);
       if (error) {
@@ -117,12 +118,21 @@ export function DistributionSheet({ open, onOpenChange, projektId, editing, onSa
             </select>
           </div>
           <div>
-            <Label htmlFor="dist_hinweise">Hinweise</Label>
+            <Label htmlFor="dist_standort">Standort</Label>
+            <Input
+              id="dist_standort"
+              value={form.standort}
+              onChange={(e) => setForm({ ...form, standort: e.target.value })}
+              placeholder="z. B. Keller, Raum 0.12"
+            />
+          </div>
+          <div>
+            <Label htmlFor="dist_notizen">Hinweise</Label>
             <Textarea
-              id="dist_hinweise"
-              value={form.hinweise}
-              onChange={(e) => setForm({ ...form, hinweise: e.target.value })}
-              placeholder="Standort, Zugänglichkeit, Auffälligkeiten..."
+              id="dist_notizen"
+              value={form.notizen}
+              onChange={(e) => setForm({ ...form, notizen: e.target.value })}
+              placeholder="Zugänglichkeit, Auffälligkeiten..."
               rows={3}
             />
           </div>

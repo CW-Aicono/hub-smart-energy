@@ -72,6 +72,9 @@ const SuperAdminSettings = lazy(() => import("./pages/SuperAdminSettings"));
 const SuperAdminMonitoring = lazy(() => import("./pages/SuperAdminMonitoring"));
 const SuperAdminSalesCatalog = lazy(() => import("./pages/SuperAdminSalesCatalog"));
 const SuperAdminSalesRules = lazy(() => import("./pages/SuperAdminSalesRules"));
+const SalesProjects = lazy(() => import("./pages/SalesProjects"));
+const SalesProjectNew = lazy(() => import("./pages/SalesProjectNew"));
+const SalesProjectDetail = lazy(() => import("./pages/SalesProjectDetail"));
 const EmbedPitchDashboard = lazy(() => import("./pages/EmbedPitchDashboard"));
 const EnergyReport = lazy(() => import("./pages/EnergyReport"));
 const LegalPageView = lazy(() => import("./pages/LegalPageView"));
@@ -176,6 +179,9 @@ const App = () => (
                       <Route path="/super-admin/map" element={<SA><SuperAdminMap /></SA>} />
                       <Route path="/super-admin/sales/catalog" element={<SA><SuperAdminSalesCatalog /></SA>} />
                       <Route path="/super-admin/sales/rules" element={<SA><SuperAdminSalesRules /></SA>} />
+                      <Route path="/sales" element={<SalesProjects />} />
+                      <Route path="/sales/new" element={<SalesProjectNew />} />
+                      <Route path="/sales/:id" element={<SalesProjectDetail />} />
                       <Route path="/charging/points" element={<M><ChargingPoints /></M>} />
                       <Route path="/charging/points/:id" element={<M><ChargePointDetail /></M>} />
                       <Route path="/charging/billing" element={<M><ChargingBilling /></M>} />

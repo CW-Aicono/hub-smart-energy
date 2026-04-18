@@ -12,9 +12,9 @@ import { de } from "date-fns/locale";
 interface SalesProject {
   id: string;
   kunde_name: string;
-  kunde_kontakt: string | null;
+  kontakt_name: string | null;
   status: string;
-  liegenschaft_name: string | null;
+  adresse: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -35,9 +35,9 @@ export default function SalesProjects() {
     (async () => {
       const { data, error } = await supabase
         .from("sales_projects")
-        .select("id, kunde_name, kunde_kontakt, status, liegenschaft_name, created_at, updated_at")
+        .select("id, kunde_name, kontakt_name, status, adresse, created_at, updated_at")
         .order("updated_at", { ascending: false });
-      if (!error && data) setProjects(data as SalesProject[]);
+      if (!error && data) setProjects(data as unknown as SalesProject[]);
       setLoading(false);
     })();
   }, []);
@@ -73,10 +73,10 @@ export default function SalesProjects() {
                         <h3 className="font-semibold truncate">{p.kunde_name}</h3>
                         <Badge variant={status.variant}>{status.label}</Badge>
                       </div>
-                      {p.liegenschaft_name && (
+                      {p.adresse && (
                         <div className="text-sm text-muted-foreground flex items-center gap-1 mt-1">
                           <MapPin className="h-3 w-3" />
-                          <span className="truncate">{p.liegenschaft_name}</span>
+                          <span className="truncate">{p.adresse}</span>
                         </div>
                       )}
                       <div className="text-xs text-muted-foreground mt-1">

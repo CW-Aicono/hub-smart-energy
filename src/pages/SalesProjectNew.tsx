@@ -17,12 +17,11 @@ export default function SalesProjectNew() {
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState({
     kunde_name: "",
-    kunde_kontakt: "",
-    kunde_email: "",
-    kunde_telefon: "",
-    liegenschaft_name: "",
-    liegenschaft_adresse: "",
-    nutzungsart: "gewerbe",
+    kunde_typ: "standard",
+    kontakt_name: "",
+    kontakt_email: "",
+    kontakt_telefon: "",
+    adresse: "",
     notizen: "",
   });
 
@@ -38,12 +37,11 @@ export default function SalesProjectNew() {
       .insert({
         partner_id: user.id,
         kunde_name: form.kunde_name.trim(),
-        kunde_kontakt: form.kunde_kontakt.trim() || null,
-        kunde_email: form.kunde_email.trim() || null,
-        kunde_telefon: form.kunde_telefon.trim() || null,
-        liegenschaft_name: form.liegenschaft_name.trim() || null,
-        liegenschaft_adresse: form.liegenschaft_adresse.trim() || null,
-        nutzungsart: form.nutzungsart,
+        kunde_typ: form.kunde_typ,
+        kontakt_name: form.kontakt_name.trim() || null,
+        kontakt_email: form.kontakt_email.trim() || null,
+        kontakt_telefon: form.kontakt_telefon.trim() || null,
+        adresse: form.adresse.trim() || null,
         notizen: form.notizen.trim() || null,
         status: "draft",
       })
@@ -77,30 +75,45 @@ export default function SalesProjectNew() {
               />
             </div>
             <div>
-              <Label htmlFor="kunde_kontakt">Ansprechpartner</Label>
+              <Label htmlFor="kunde_typ">Kundentyp</Label>
+              <select
+                id="kunde_typ"
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                value={form.kunde_typ}
+                onChange={(e) => setForm({ ...form, kunde_typ: e.target.value })}
+              >
+                <option value="standard">Standard (Gewerbe / Kommune)</option>
+                <option value="industry">Industrie</option>
+              </select>
+              <p className="text-xs text-muted-foreground mt-1">
+                Steuert die Modul-Preise im Angebot.
+              </p>
+            </div>
+            <div>
+              <Label htmlFor="kontakt_name">Ansprechpartner</Label>
               <Input
-                id="kunde_kontakt"
-                value={form.kunde_kontakt}
-                onChange={(e) => setForm({ ...form, kunde_kontakt: e.target.value })}
+                id="kontakt_name"
+                value={form.kontakt_name}
+                onChange={(e) => setForm({ ...form, kontakt_name: e.target.value })}
                 placeholder="z. B. Hr. Müller"
               />
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <Label htmlFor="kunde_email">E-Mail</Label>
+                <Label htmlFor="kontakt_email">E-Mail</Label>
                 <Input
-                  id="kunde_email"
+                  id="kontakt_email"
                   type="email"
-                  value={form.kunde_email}
-                  onChange={(e) => setForm({ ...form, kunde_email: e.target.value })}
+                  value={form.kontakt_email}
+                  onChange={(e) => setForm({ ...form, kontakt_email: e.target.value })}
                 />
               </div>
               <div>
-                <Label htmlFor="kunde_telefon">Telefon</Label>
+                <Label htmlFor="kontakt_telefon">Telefon</Label>
                 <Input
-                  id="kunde_telefon"
-                  value={form.kunde_telefon}
-                  onChange={(e) => setForm({ ...form, kunde_telefon: e.target.value })}
+                  id="kontakt_telefon"
+                  value={form.kontakt_telefon}
+                  onChange={(e) => setForm({ ...form, kontakt_telefon: e.target.value })}
                 />
               </div>
             </div>
@@ -113,38 +126,14 @@ export default function SalesProjectNew() {
           </CardHeader>
           <CardContent className="space-y-3">
             <div>
-              <Label htmlFor="liegenschaft_name">Bezeichnung</Label>
-              <Input
-                id="liegenschaft_name"
-                value={form.liegenschaft_name}
-                onChange={(e) => setForm({ ...form, liegenschaft_name: e.target.value })}
-                placeholder="z. B. Hauptwerk Berlin"
-              />
-            </div>
-            <div>
-              <Label htmlFor="liegenschaft_adresse">Adresse</Label>
+              <Label htmlFor="adresse">Adresse</Label>
               <Textarea
-                id="liegenschaft_adresse"
-                value={form.liegenschaft_adresse}
-                onChange={(e) => setForm({ ...form, liegenschaft_adresse: e.target.value })}
+                id="adresse"
+                value={form.adresse}
+                onChange={(e) => setForm({ ...form, adresse: e.target.value })}
                 placeholder="Straße, PLZ, Ort"
                 rows={2}
               />
-            </div>
-            <div>
-              <Label htmlFor="nutzungsart">Nutzungsart</Label>
-              <select
-                id="nutzungsart"
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                value={form.nutzungsart}
-                onChange={(e) => setForm({ ...form, nutzungsart: e.target.value })}
-              >
-                <option value="gewerbe">Gewerbe</option>
-                <option value="industrie">Industrie</option>
-                <option value="kommune">Kommune / Öffentlich</option>
-                <option value="wohnen">Wohnen / Mehrfamilienhaus</option>
-                <option value="landwirtschaft">Landwirtschaft</option>
-              </select>
             </div>
           </CardContent>
         </Card>
