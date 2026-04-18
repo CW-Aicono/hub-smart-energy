@@ -12,6 +12,7 @@ import { useEnergyData } from "./useEnergyData";
 import { useLocations } from "./useLocations";
 import { useAlertRules } from "./useAlertRules";
 import { useEnergyPrices } from "./useEnergyPrices";
+import { useRealtimeDataInvalidation } from "./useRealtimeDataInvalidation";
 
 export function useDashboardPrefetch(locationId?: string | null) {
   // These hooks use React Query internally – calling them here ensures
@@ -22,4 +23,8 @@ export function useDashboardPrefetch(locationId?: string | null) {
   useEnergyData(locationId);
   useAlertRules();
   useEnergyPrices();
+
+  // Subscribe ONCE to meter data inserts → invalidate widget caches in real-time
+  // (replaces per-widget 60 s polling). Each widget keeps a 5 min fallback poll.
+  useRealtimeDataInvalidation();
 }
