@@ -1,111 +1,67 @@
-## Ziel
+## Finale Architektur-Entscheidung (Plan v8.1, April 2026)
 
-**Zentraler Multi-Tenant-Worker auf Hetzner.** EIN Container bedient ALLE Mandanten und ALLE Gateways gleichzeitig — kein Setup-Aufwand mehr pro Liegenschaft, keine Hardware vor Ort nötig (Raspberry Pi nur noch optional für Test/Demo).
+**Der zentrale Cloud-Gateway-Worker entfällt komplett.** Er bot keinen Mehrwert gegenüber dem bestehenden Edge-Function-Polling.
 
-## Architektur
+## Zwei Betriebsmodi
 
-```
-┌─────────────────────────────────────────┐
-│  Hetzner-Server (CX22, ~5 €/Monat)      │
-│                                         │
-│  ┌─────────────────────────────────┐    │
-│  │ gateway-worker-live (1 Container)│   │
-│  │  → SUPABASE_SERVICE_ROLE_KEY    │    │
-│  │  → Discovery-Loop alle 60s      │    │
-│  │  → bedient ALLE Tenants         │    │
-│  └─────────────────────────────────┘    │
-│                                         │
-│  ┌─────────────────────────────────┐    │
-│  │ gateway-worker-staging          │    │
-│  └─────────────────────────────────┘    │
-└─────────────────────────────────────────┘
-            ↓ liest
-┌─────────────────────────────────────────┐
-│  Cloud-DB (Live: self-hosted Hetzner,   │
-│            Staging: Lovable Cloud)      │
-│   • location_integrations (alle Tenants)│
-│   • integrations (Gateway-Typen)        │
-│   • meters (Sensor-Mapping)             │
-│   • location_integrations.config        │
-│     (Gateway-Credentials, JSONB)        │
-└─────────────────────────────────────────┘
-            ↓ pollt parallel
-   Loxone | Shelly | Tuya | ABB | Siemens
-   Homematic | Omada | Home Assistant
-            ↓ schreibt
-   meter_power_readings (mit korrekter tenant_id)
-```
+| Modus | Verwendung | Latenz | Steuerung |
+|---|---|---|---|
+| **A – AICONO-Hub vor Ort** (empfohlen) | Echtzeit-Steuerung, komplexe Automationen, lokale Resilienz | < 1 s | ✅ Cross-Protokoll (Loxone WS, Shelly, Modbus, KNX, Home Assistant) |
+| **B – Reines Cloud-Monitoring** (Fallback) | Kunden ohne Hub – Dashboard, Reports, Abrechnung | 5 min | ❌ nur lokale Geräte-Logik (z. B. Loxone-Programmierung auf Miniserver) |
 
-## Stufe 1 — Worker-Code umbauen (Multi-Tenant)
+## Wie Modus B technisch funktioniert (heutiger Zustand, bleibt unverändert)
 
-**`docs/gateway-worker/index.ts` komplett neu strukturieren:**
-- Auth: `SUPABASE_SERVICE_ROLE_KEY` (RLS-Bypass) statt einzelner Gateway-Keys
-- Discovery-Loop alle 60s: lädt `location_integrations` + `integrations` + `meters` aller Tenants
-- Treiber-Registry pro Gateway-Typ — portiert aus den bestehenden Edge Functions:
-  - `loxone` (WebSocket), `shelly` (Cloud-Polling), `tuya`, `abb`, `siemens`,
-    `homematic`, `omada`, `home_assistant`
-- Credentials werden direkt aus `location_integrations.config` (JSONB) gelesen — Service-Role-Key reicht für Zugriff, keine separate App-Layer-Verschlüsselung nötig (DB-Verschlüsselung at-rest übernimmt Supabase/Postgres selbst)
-- Schreibt direkt in `meter_power_readings` mit `tenant_id` aus Gateway-Datensatz
-- Heartbeat: alle 30s `system_settings.worker_last_heartbeat` setzen → bestehender Edge-Function-Fallback in `_shared/workerStatus.ts` greift unverändert
-- `.env` reduziert auf **3 Variablen**: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `WORKER_ENV` (live|staging)
-- **Kein `BRIGHTHUB_ENCRYPTION_KEY`** — der dient ausschließlich der externen BrightHub-Integration (`brighthub_settings`) und hat nichts mit Gateway-Credentials zu tun
+- Edge Functions pollen alle 5 Minuten:
+  `loxone-api`, `shelly-api`, `tuya-api`, `abb-api`, `siemens-api`,
+  `homematic-api`, `omada-api`, `home-assistant-api`,
+  `schneider-api`, `sentron-poc3000-api`
+- Orchestriert via `gateway-periodic-sync` (pg_cron)
+- Schreiben in `meter_power_readings` mit korrekter `tenant_id`
+- UI-Live-Anzeige (`useGatewayLivePower`) pollt zusätzlich alle 60 s direkt für die Dashboard-Anzeige
 
-## Quellen der Schlüssel pro Umgebung
+## Wie Modus A technisch funktioniert
 
-| Variable | Staging-Worker | Live-Worker |
+- AICONO EMS Gateway (Home Assistant Add-on, lokal auf Mini-PC/Pi)
+- Spricht den Loxone Miniserver per **lokalem WebSocket** (Sub-100 ms)
+- Baut **ausgehende WebSocket** zur Cloud auf (analog OCPP-Wallbox-Pattern)
+- Sendet Live-Daten an `gateway-ingest` Edge Function
+- Führt Automationen lokal aus (`automation-core`-Paket) → funktioniert auch bei Internet-Ausfall
+- Puffert Messwerte in lokaler SQLite, synchronisiert nach Reconnect
+
+## Was bleibt unverändert
+
+- **Code**: keine Änderungen an Edge Functions, Hooks oder UI nötig
+- **`useGatewayLivePower`** + **`useLoxoneSensors`**: bleiben aktiv
+- **`useRealtimePower`**: greift weiterhin für Hub-Kunden via `meter_power_readings` Realtime-Subscription
+- **OCPP-Wallboxen**: unverändert, direkter WebSocket zur Cloud
+
+## Was wird verworfen
+
+- ❌ `docs/gateway-worker/` → archiviert als `docs/_DEPRECATED_gateway-worker/`
+- ❌ Hetzner-Worker-Container (`gateway-worker-live`, `gateway-worker-staging`)
+- ❌ `SUPABASE_SERVICE_ROLE_KEY` außerhalb der Cloud
+- ❌ `WORKER_ENV`-Variable
+
+## Anleitungen
+
+- **Bestehend & aktuell**: AICONO-Hub-Installationsanleitung (für Modus A)
+- **Entfällt**: AICONO_Gateway_Worker_Installation.docx (alle Versionen v1–v8 obsolet)
+- Modus B braucht **keine Endkunden-Anleitung** – läuft serverseitig automatisch, sobald Gateway-Credentials in `location_integrations.config` hinterlegt sind (UI-Wizard)
+
+## Vergleich der Entscheidung
+
+| Aspekt | Cloud-Worker (verworfen) | Edge-Function-Polling (Modus B) |
 |---|---|---|
-| `SUPABASE_URL` | `https://xnveugycurplszevdxtw.supabase.co` (Lovable Cloud) | eigene Domain der self-hosted Supabase auf Hetzner (z. B. `https://supabase.aicono.org`) |
-| `SUPABASE_SERVICE_ROLE_KEY` | aus Lovable Cloud → Backend → API → `service_role` | aus self-hosted Supabase Studio → Settings → API → `service_role` (alternativ aus der Supabase-`.env` auf dem Hetzner-Server, Variable `SERVICE_ROLE_KEY`) |
-| `WORKER_ENV` | `staging` | `live` |
-
-## Stufe 2 — Hetzner-Setup (genau 2 Container)
-
-- `gateway-worker-live` → Live-Cloud
-- `gateway-worker-staging` → Staging-Cloud
-- `docker-compose.yml` mit `restart: always`
-- Healthcheck via `system_settings.worker_last_heartbeat` (extern: Uptime-Kuma / Healthchecks.io)
-
-**Pro neuem Mandant / neuer Liegenschaft / neuem Gateway: NULL Server-Aktion.** Worker erkennt neue Geräte automatisch beim nächsten Discovery-Lauf.
-
-## Stufe 3 — Übergang & Edge-Function-Reduktion
-
-1. **Parallelbetrieb 1–2 Wochen**: Edge Functions schreiben weiter, Worker schreibt zusätzlich → Datenkonsistenz vergleichen
-2. **Umschalten** über bereits existierendes `worker_active`-Flag in `system_settings` (Heartbeat-basiertes Fallback bleibt)
-3. **Edge Functions reduzieren** auf:
-   - `action: "test"` — Verbindungstest aus UI
-   - `action: "getSensors"` — Discovery für UI-Wizards
-   - `action: "executeCommand"` — Steuerbefehle
-   - **Schreibpfad in `loxone-api`/`shelly-api` etc. komplett entfernen**
-4. UI nutzt `meter_power_readings` (Realtime-Subscription) statt Edge-Function-Polling → Edge-Function-Kosten sinken massiv
-
-## Sicherheit
-
-- `SUPABASE_SERVICE_ROLE_KEY` liegt **ausschließlich** in `.env` auf Hetzner — niemals im Frontend, niemals in Git
-- Hetzner-Server gehärtet: SSH-Key-only, UFW-Firewall, automatische Sicherheitsupdates (`unattended-upgrades`)
-- Tenant-Isolation bleibt: jeder DB-Insert nutzt `tenant_id` aus Gateway-Datensatz
-- Bei Server-Kompromittierung: Service-Role-Key in Cloud rotieren → alle Verbindungen sofort ungültig
-- Gateway-Credentials liegen in `location_integrations.config` (JSONB); geschützt durch DB-Verschlüsselung at-rest und RLS — Worker greift via Service-Role legitim darauf zu
-
-## Vergleich
-
-| Aspekt | Heute (1:1) | Neu (zentral) |
-|---|---|---|
-| Container bei 200 Mandanten | 200 | 2 (Live + Staging) |
-| Aufwand neuer Mandant | ~30 Min Server-Setup | 0 — automatisch |
-| Aufwand neues Gateway | Container neu starten | 0 — automatisch |
-| Hardware vor Ort | Pi empfohlen | optional (nur Test/Demo) |
-| Anleitung für Endnutzer | komplex | entfällt |
-| Edge-Function-Aufrufe | hoch | minimal (nur UI) |
+| Zusätzliche Infrastruktur | 2 Hetzner-Container | keine |
+| Service-Role-Key außerhalb Cloud | ja (Risiko) | nein |
+| Aufwand neuer Mandant | Container-Restart | 0 |
+| Latenz | 30 s | 5 min |
+| Edge-Function-Kosten | minimal | aktuell, akzeptabel |
+| Operative Komplexität | hoch | minimal |
 
 ## Geschätzter Aufwand
 
-- **Worker-Code-Umbau**: ca. 800–1200 Zeilen (Treiber-Portierung aus Edge Functions)
-- **Hetzner-Deployment**: 2 Container statt N
-- **Anleitung v7**: ca. 5 Seiten, Oma-tauglich, nur noch Cloud-Setup beschreiben (kein Pi-Pflicht-Pfad mehr)
-- **Edge-Function-Cleanup**: ~50 Zeilen pro Gateway-Edge-Function entfernen
-
-## Was dieser Plan NICHT macht
-
-- Keine Migration alter Daten in `meter_power_readings`
-- Keine Änderung am UI-Discovery-Pfad (Wizards funktionieren weiter)
-- Pi-Worker bleibt funktionsfähig für Test-/Offline-Szenarien
+- ✅ Worker-Ordner archivieren (erledigt)
+- ✅ Plan + Memory aktualisieren (erledigt)
+- ❌ keine Code-Änderungen
+- ❌ keine Migrations

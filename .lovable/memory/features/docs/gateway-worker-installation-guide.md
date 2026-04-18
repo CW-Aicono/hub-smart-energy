@@ -1,34 +1,35 @@
 ---
 name: gateway-worker-installation-guide
-description: Word-Anleitung AICONO_Gateway_Worker_Installation.docx muss laientauglich bleiben. Ab v8: Multi-Tenant-Architektur, 2 Container (live+staging) auf Hetzner. Live-Worker zeigt auf self-hosted Supabase (Hetzner), Staging-Worker auf Lovable Cloud — Service-Role-Keys kommen aus zwei verschiedenen Quellen. Kein BRIGHTHUB_ENCRYPTION_KEY (der ist ausschließlich für die externe BrightHub-Integration, nicht für den Worker). Gateway-Credentials liegen in location_integrations.config (JSONB), nicht separat verschlüsselt. .env hat genau 3 Pflichtvariablen: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, WORKER_ENV.
+description: VERWORFEN ab Plan v8.1 (April 2026). Der zentrale Cloud-Gateway-Worker auf Hetzner wurde komplett gestrichen. Stattdessen gilt: AICONO-Hub vor Ort (empfohlen, Echtzeit-Steuerung) ODER reines Cloud-Monitoring via bestehendes Edge-Function-Polling alle 5 Minuten (Fallback ohne Hub). Die Word-Anleitung AICONO_Gateway_Worker_Installation.docx ist in allen Versionen (v1–v8) obsolet und wird nicht weitergepflegt. Ordner docs/gateway-worker/ wurde nach docs/_DEPRECATED_gateway-worker/ verschoben.
 type: feature
 ---
 
-Anleitung **AICONO_Gateway_Worker_Installation.docx** muss laientauglich bleiben — Oma-tauglich, jeder Befehl mit Erklärung, Glossar am Ende.
+## Status: VERWORFEN (Plan v8.1, April 2026)
 
-**Architektur ab v8 (Multi-Tenant, getrennte Supabase-Instanzen):**
-- Genau 2 Container auf Hetzner: `gateway-worker-live` + `gateway-worker-staging`
-- **Live-Worker** → self-hosted Supabase auf Hetzner (eigene Domain)
-- **Staging-Worker** → Lovable-Cloud-Supabase (`xnveugycurplszevdxtw.supabase.co`)
-- Auth: `SUPABASE_SERVICE_ROLE_KEY` (RLS-Bypass) — aus zwei verschiedenen Quellen je Umgebung
-- Discovery-Loop alle 60s lädt `location_integrations` + `integrations` + `meters`
-- Treiber pro Gateway-Typ: loxone, shelly, tuya, abb, siemens, homematic, omada, home_assistant
-- Gateway-Credentials liegen in `location_integrations.config` (JSONB Klartext, geschützt durch DB-at-rest-Encryption + RLS) — **keine** separate App-Layer-Entschlüsselung nötig
-- Heartbeat in `system_settings.worker_last_heartbeat` alle 30s
-- Raspberry Pi: nur noch optional für Test/Demo/Offline-Resilienz
+Der zentrale Gateway-Worker existiert nicht mehr und wird auch nicht mehr installiert.
 
-**.env-Schema (v8) — nur 3 Pflichtvariablen:**
-- `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `WORKER_ENV` (live|staging)
-- **Kein `BRIGHTHUB_ENCRYPTION_KEY`** — der ist ausschließlich für die `brighthub_settings`-Tabelle (externer BrightHub-Datenaustausch via Edge Functions `brighthub-crypto`, `brighthub-sync`, `brighthub-periodic-sync`) und hat nichts mit dem Gateway-Worker zu tun
+## Finale Architektur
 
-**Schlüsselquellen:**
-| Variable | Staging | Live |
-|---|---|---|
-| SUPABASE_URL | Lovable Cloud Projekt-URL | eigene Hetzner-Supabase-Domain |
-| SUPABASE_SERVICE_ROLE_KEY | Lovable → Cloud → Backend → API | self-hosted Supabase Studio → Settings → API, oder `SERVICE_ROLE_KEY` aus Supabase-`.env` |
+| Modus | Beschreibung |
+|---|---|
+| **A – AICONO-Hub vor Ort** | Empfohlen für Steuerung, Echtzeit-Daten (<1 s), komplexe Automationen, Offline-Resilienz. WebSocket Hub ↔ Cloud (analog OCPP-Wallbox-Pattern). |
+| **B – Cloud-Monitoring ohne Hub** | Edge-Function-Polling (`loxone-api`, `shelly-api`, …) alle 5 min via `gateway-periodic-sync`. Reicht für Dashboard, Reports, Abrechnung. Keine Echtzeit-Steuerung. |
 
-**Versionshistorie der Anleitung:**
-- v1–v5: Einfacher 1:1-Worker (Pi oder Hetzner pro Tenant)
-- v6: Erweiterung um manuelles Key-Hinterlegen
-- v7: Multi-Tenant-Umstellung (fälschlich BRIGHTHUB_ENCRYPTION_KEY für Worker erwähnt)
-- v8: BRIGHTHUB_ENCRYPTION_KEY aus Worker-Setup entfernt; getrennte Supabase-Instanzen für Live (self-hosted) vs. Staging (Lovable Cloud) klar dokumentiert
+## Was nicht mehr existiert
+
+- ❌ Hetzner-Container `gateway-worker-live` / `gateway-worker-staging`
+- ❌ `SUPABASE_SERVICE_ROLE_KEY` außerhalb der Cloud
+- ❌ `.env`-Variablen `WORKER_ENV`, `POLL_INTERVAL_MS`, `FLUSH_INTERVAL_MS`
+- ❌ Worker-Heartbeat in `system_settings.worker_last_heartbeat` (kann optional bleiben für Hub-Status, ist aber kein Pflicht-Indikator mehr)
+
+## Aktive Anleitung
+
+Nur die **AICONO-Hub-Installationsanleitung** (HA-Add-on, lokales Setup) bleibt aktuell. Modus B braucht keine Endkunden-Anleitung – läuft serverseitig sobald Gateway-Credentials per UI-Wizard in `location_integrations.config` hinterlegt sind.
+
+## Historie der verworfenen Word-Anleitung
+
+- v1–v5: 1:1-Worker pro Tenant (Pi/Hetzner)
+- v6: manuelles Key-Hinterlegen
+- v7: Multi-Tenant-Umstellung
+- v8: getrennte Supabase-Instanzen Live/Staging
+- **v8.1: komplett verworfen – Architektur basiert nur noch auf Hub vor Ort + Edge-Function-Polling**
