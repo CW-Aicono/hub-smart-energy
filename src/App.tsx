@@ -78,6 +78,7 @@ const SalesProjectDetail = lazy(() => import("./pages/SalesProjectDetail"));
 const EmbedPitchDashboard = lazy(() => import("./pages/EmbedPitchDashboard"));
 const EnergyReport = lazy(() => import("./pages/EnergyReport"));
 const LegalPageView = lazy(() => import("./pages/LegalPageView"));
+const PublicSalesQuote = lazy(() => import("./pages/PublicSalesQuote"));
 
 
 const queryClient = new QueryClient({
@@ -181,6 +182,7 @@ const App = () => (
                       <Route path="/super-admin/sales/rules" element={<SA><SuperAdminSalesRules /></SA>} />
                       <Route path="/sales" element={<SalesProjects />} />
                       <Route path="/sales/new" element={<SalesProjectNew />} />
+                      <Route path="/sales/quote/:token" element={<PublicSalesQuote />} />
                       <Route path="/sales/:id" element={<SalesProjectDetail />} />
                       <Route path="/charging/points" element={<M><ChargingPoints /></M>} />
                       <Route path="/charging/points/:id" element={<M><ChargePointDetail /></M>} />
