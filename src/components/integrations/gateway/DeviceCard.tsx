@@ -6,6 +6,7 @@ import type { GatewayDeviceWithMetrics } from "@/hooks/useGatewayDevices";
 import { StatusBadge } from "./StatusBadge";
 import { ApiKeyDialog } from "./ApiKeyDialog";
 import { PinConfigDialog } from "./PinConfigDialog";
+import { HaConfigDialog } from "./HaConfigDialog";
 import { DeviceMetrics } from "./DeviceMetrics";
 import {
   Server,
@@ -16,6 +17,7 @@ import {
   Key,
   Lock,
   ShieldCheck,
+  ClipboardList,
 } from "lucide-react";
 
 interface DeviceCardProps {
