@@ -1659,12 +1659,29 @@ async function main(): Promise<void> {
   // Flush loop
   setInterval(() => flushBuffer(), config.flush_interval_seconds * 1000);
 
-  // Heartbeat loop
-  setInterval(async () => {
-    await checkCloudConnectivity();
-    await fetchHAVersion();
-    await sendHeartbeat();
-  }, config.heartbeat_interval_seconds * 1000);
+  // Heartbeat loop – self-healing recursive timer.
+  // After a power outage / reboot, the first heartbeat may fail (DNS, network
+  // not yet up). We retry quickly (10s) instead of waiting a full cycle, and
+  // we wrap in try/catch so an unhandled error never kills the loop.
+  const heartbeatTick = async () => {
+    let nextDelayMs = config.heartbeat_interval_seconds * 1000;
+    try {
+      await checkCloudConnectivity();
+      await fetchHAVersion();
+      await sendHeartbeat();
+      if (!isCloudReachable) {
+        // Retry quickly while cloud is unreachable so recovery after reboot
+        // is reflected on the dashboard within seconds, not a full minute.
+        nextDelayMs = 10_000;
+      }
+    } catch (err) {
+      console.error("[heartbeat-loop] Tick failed:", err);
+      nextDelayMs = 10_000;
+    } finally {
+      setTimeout(heartbeatTick, nextDelayMs);
+    }
+  };
+  setTimeout(heartbeatTick, config.heartbeat_interval_seconds * 1000);
 
   // Automation evaluation loop
   setInterval(() => evaluateAndExecuteAutomations(), config.automation_eval_seconds * 1000);
