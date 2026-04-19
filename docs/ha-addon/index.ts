@@ -900,14 +900,16 @@ async function syncAutomationsFromCloud(): Promise<void> {
     lastAutomationSync = new Date().toISOString();
     console.log(`[sync] Synced ${data.automations.length} automations from cloud (${isFullSync ? "full" : "incremental"})`);
 
-    // Remove local automations that are no longer in the cloud
-    // Only prune on FULL sync to avoid deleting valid automations
-    // that simply weren't included in an incremental response.
-    if (isFullSync && data.automations.length > 0) {
-      const cloudIds = data.automations.map((a: any) => a.id);
+    // Remove local automations that are no longer in the cloud.
+    // Only prune on FULL sync. Important: also prune when the cloud returns
+    // an EMPTY list, otherwise stale automations from a previous gateway
+    // assignment (e.g. wrong tenant/location) would stay in the local DB
+    // forever and keep being executed.
+    if (isFullSync) {
+      const cloudIds = new Set<string>(data.automations.map((a: any) => a.id));
       const localAutomations = getLocalAutomations();
       for (const local of localAutomations) {
-        if (!cloudIds.includes(local.id)) {
+        if (!cloudIds.has(local.id)) {
           db.prepare(`DELETE FROM automations_local WHERE id = ?`).run(local.id);
           console.log(`[sync] Pruned local automation ${local.id} (no longer in cloud)`);
         }
