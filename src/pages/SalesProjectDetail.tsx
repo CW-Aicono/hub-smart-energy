@@ -81,6 +81,7 @@ export default function SalesProjectDetail() {
   const [loading, setLoading] = useState(true);
   const [distSheet, setDistSheet] = useState<{ open: boolean; editing?: Distribution | null }>({ open: false });
   const [pointSheet, setPointSheet] = useState<{ open: boolean; distributionId?: string; editing?: MeasurementPoint | null }>({ open: false });
+  const [hardwareOpenFor, setHardwareOpenFor] = useState<string | null>(null);
   const [quoteSheet, setQuoteSheet] = useState(false);
   const [quotesReload, setQuotesReload] = useState(0);
 
