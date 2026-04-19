@@ -2,11 +2,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { EditIntegrationDialog } from "../integrations/EditIntegrationDialog";
 
-const invokeMock = vi.fn();
-const singleMock = vi.fn();
-const eqMock = vi.fn(() => ({ single: singleMock }));
-const selectMock = vi.fn(() => ({ eq: eqMock }));
-const fromMock = vi.fn(() => ({ select: selectMock }));
+const invokeMock = vi.fn((..._args: any[]) => undefined);
+const singleMock = vi.fn(() => undefined);
+const eqMock = vi.fn((_field: string, _value: string) => ({ single: singleMock }));
+const selectMock = vi.fn((_query?: string) => ({ eq: eqMock }));
+const fromMock = vi.fn((_table: string) => ({ select: selectMock }));
 
 vi.mock("@/hooks/use-toast", () => ({
   useToast: () => ({ toast: vi.fn() }),
