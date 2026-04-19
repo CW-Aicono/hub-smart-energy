@@ -5,8 +5,23 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Trash2, Loader2, Pencil, Check, X } from "lucide-react";
+import { Plus, Trash2, Loader2, Pencil, Check, X, GripVertical } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  arrayMove,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 
 interface CatalogItem {
   id: string;
@@ -28,6 +43,76 @@ interface Props {
   sourceDeviceId: string;
 }
 
+const RELATION_STYLES: Record<string, { label: string; className: string }> = {
+  requires: {
+    label: "Pflicht",
+    className: "bg-destructive text-destructive-foreground hover:bg-destructive",
+  },
+  recommends: {
+    label: "Empfehlung",
+    className:
+      "bg-amber-500 text-white hover:bg-amber-500 dark:bg-amber-500 dark:text-white",
+  },
+  alternative: {
+    label: "Alternative",
+    className:
+      "bg-emerald-600 text-white hover:bg-emerald-600 dark:bg-emerald-600 dark:text-white",
+  },
+};
+
+function RelationBadge({ type }: { type: string }) {
+  const s = RELATION_STYLES[type] ?? RELATION_STYLES.requires;
+  return <Badge className={s.className}>{s.label}</Badge>;
+}
+
+interface RowProps {
+  it: Compat;
+  target: CatalogItem | undefined;
+  onEdit: (it: Compat) => void;
+  onRemove: (id: string) => void;
+}
+
+function SortableRow({ it, target, onEdit, onRemove }: RowProps) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
+    useSortable({ id: it.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.6 : 1,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className="flex items-center gap-2 rounded-md border bg-card p-2 text-sm"
+    >
+      <button
+        type="button"
+        className="cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground touch-none"
+        {...attributes}
+        {...listeners}
+        title="Ziehen zum Sortieren"
+      >
+        <GripVertical className="h-4 w-4" />
+      </button>
+      <RelationBadge type={it.relation_type} />
+      <div className="flex-1 min-w-0">
+        <div className="truncate">{target ? `${target.hersteller} ${target.modell}` : it.target_device_id}</div>
+        {it.notiz && <div className="text-xs text-muted-foreground truncate">{it.notiz}</div>}
+      </div>
+      <Badge variant="outline" className="text-xs">{it.auto_quantity_formula}</Badge>
+      <Button size="icon" variant="ghost" onClick={() => onEdit(it)} title="Bearbeiten">
+        <Pencil className="h-4 w-4" />
+      </Button>
+      <Button size="icon" variant="ghost" onClick={() => onRemove(it.id)} title="Löschen">
+        <Trash2 className="h-4 w-4 text-destructive" />
+      </Button>
+    </div>
+  );
+}
+
 export function CompatibilityEditor({ sourceDeviceId }: Props) {
   const [items, setItems] = useState<Compat[]>([]);
   const [catalog, setCatalog] = useState<CatalogItem[]>([]);
@@ -45,6 +130,8 @@ export function CompatibilityEditor({ sourceDeviceId }: Props) {
   const [editNotiz, setEditNotiz] = useState("");
   const [savingEdit, setSavingEdit] = useState(false);
 
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
+
   const load = async () => {
     setLoading(true);
     const [c, cat] = await Promise.all([
@@ -52,7 +139,8 @@ export function CompatibilityEditor({ sourceDeviceId }: Props) {
         .from("device_compatibility")
         .select("*")
         .eq("source_device_id", sourceDeviceId)
-        .order("prio"),
+        .order("prio")
+        .order("created_at"),
       supabase.from("device_catalog").select("id, hersteller, modell").eq("is_active", true).order("hersteller"),
     ]);
     setItems((c.data ?? []) as Compat[]);
@@ -65,12 +153,14 @@ export function CompatibilityEditor({ sourceDeviceId }: Props) {
   const add = async () => {
     if (!newTarget) return;
     setAdding(true);
+    const nextPrio = (items.reduce((m, x) => Math.max(m, x.prio ?? 0), 0) ?? 0) + 1;
     const { error } = await supabase.from("device_compatibility").insert({
       source_device_id: sourceDeviceId,
       target_device_id: newTarget,
       relation_type: newRel,
       auto_quantity_formula: newQty || "1",
       notiz: newNotiz.trim() || null,
+      prio: nextPrio,
     });
     setAdding(false);
     if (error) {
@@ -94,9 +184,7 @@ export function CompatibilityEditor({ sourceDeviceId }: Props) {
     setEditNotiz(it.notiz ?? "");
   };
 
-  const cancelEdit = () => {
-    setEditingId(null);
-  };
+  const cancelEdit = () => setEditingId(null);
 
   const saveEdit = async (id: string) => {
     setSavingEdit(true);
@@ -117,6 +205,32 @@ export function CompatibilityEditor({ sourceDeviceId }: Props) {
     load();
   };
 
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const oldIndex = items.findIndex((i) => i.id === active.id);
+    const newIndex = items.findIndex((i) => i.id === over.id);
+    if (oldIndex < 0 || newIndex < 0) return;
+
+    const reordered = arrayMove(items, oldIndex, newIndex).map((it, idx) => ({
+      ...it,
+      prio: idx + 1,
+    }));
+    setItems(reordered);
+
+    // Persist new prio for all items
+    const updates = await Promise.all(
+      reordered.map((it) =>
+        supabase.from("device_compatibility").update({ prio: it.prio }).eq("id", it.id),
+      ),
+    );
+    const failed = updates.find((u) => u.error);
+    if (failed?.error) {
+      toast({ title: "Sortierung nicht gespeichert", description: failed.error.message, variant: "destructive" });
+      load();
+    }
+  };
+
   if (loading) return <div className="text-sm text-muted-foreground">Lade…</div>;
 
   const catMap = new Map(catalog.map((c) => [c.id, c]));
@@ -127,69 +241,55 @@ export function CompatibilityEditor({ sourceDeviceId }: Props) {
         {items.length === 0 ? (
           <div className="text-sm text-muted-foreground py-2">Noch keine Beziehungen.</div>
         ) : (
-          items.map((it) => {
-            const t = catMap.get(it.target_device_id);
-            const isEditing = editingId === it.id;
-
-            if (isEditing) {
-              return (
-                <div key={it.id} className="rounded-md border border-primary/40 bg-primary/5 p-2 space-y-2">
-                  <div className="text-sm font-medium truncate">
-                    {t ? `${t.hersteller} ${t.modell}` : it.target_device_id}
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <Label className="text-xs">Beziehung</Label>
-                      <Select value={editRel} onValueChange={setEditRel}>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="requires">Pflicht</SelectItem>
-                          <SelectItem value="recommends">Empfehlung</SelectItem>
-                          <SelectItem value="alternative">Alternative</SelectItem>
-                        </SelectContent>
-                      </Select>
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+            <SortableContext items={items.map((i) => i.id)} strategy={verticalListSortingStrategy}>
+              {items.map((it) => {
+                const t = catMap.get(it.target_device_id);
+                if (editingId === it.id) {
+                  return (
+                    <div key={it.id} className="rounded-md border border-primary/40 bg-primary/5 p-2 space-y-2">
+                      <div className="text-sm font-medium truncate">
+                        {t ? `${t.hersteller} ${t.modell}` : it.target_device_id}
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <Label className="text-xs">Beziehung</Label>
+                          <Select value={editRel} onValueChange={setEditRel}>
+                            <SelectTrigger><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="requires">Pflicht</SelectItem>
+                              <SelectItem value="recommends">Empfehlung</SelectItem>
+                              <SelectItem value="alternative">Alternative</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <Label className="text-xs">Menge / Formel</Label>
+                          <Input value={editQty} onChange={(e) => setEditQty(e.target.value)} />
+                        </div>
+                        <div className="col-span-2">
+                          <Label className="text-xs">Notiz</Label>
+                          <Input value={editNotiz} onChange={(e) => setEditNotiz(e.target.value)} placeholder="optional" />
+                        </div>
+                      </div>
+                      <div className="flex gap-2 justify-end">
+                        <Button size="sm" variant="ghost" onClick={cancelEdit} disabled={savingEdit}>
+                          <X className="h-4 w-4 mr-1" /> Abbrechen
+                        </Button>
+                        <Button size="sm" onClick={() => saveEdit(it.id)} disabled={savingEdit}>
+                          {savingEdit ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Check className="h-4 w-4 mr-1" />}
+                          Speichern
+                        </Button>
+                      </div>
                     </div>
-                    <div>
-                      <Label className="text-xs">Menge / Formel</Label>
-                      <Input value={editQty} onChange={(e) => setEditQty(e.target.value)} />
-                    </div>
-                    <div className="col-span-2">
-                      <Label className="text-xs">Notiz</Label>
-                      <Input value={editNotiz} onChange={(e) => setEditNotiz(e.target.value)} placeholder="optional" />
-                    </div>
-                  </div>
-                  <div className="flex gap-2 justify-end">
-                    <Button size="sm" variant="ghost" onClick={cancelEdit} disabled={savingEdit}>
-                      <X className="h-4 w-4 mr-1" /> Abbrechen
-                    </Button>
-                    <Button size="sm" onClick={() => saveEdit(it.id)} disabled={savingEdit}>
-                      {savingEdit ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Check className="h-4 w-4 mr-1" />}
-                      Speichern
-                    </Button>
-                  </div>
-                </div>
-              );
-            }
-
-            return (
-              <div key={it.id} className="flex items-center gap-2 rounded-md border p-2 text-sm">
-                <Badge variant={it.relation_type === "requires" ? "destructive" : "secondary"}>
-                  {it.relation_type === "requires" ? "Pflicht" : it.relation_type === "recommends" ? "Empfehlung" : "Alternative"}
-                </Badge>
-                <div className="flex-1 min-w-0">
-                  <div className="truncate">{t ? `${t.hersteller} ${t.modell}` : it.target_device_id}</div>
-                  {it.notiz && <div className="text-xs text-muted-foreground truncate">{it.notiz}</div>}
-                </div>
-                <Badge variant="outline" className="text-xs">{it.auto_quantity_formula}</Badge>
-                <Button size="icon" variant="ghost" onClick={() => startEdit(it)} title="Bearbeiten">
-                  <Pencil className="h-4 w-4" />
-                </Button>
-                <Button size="icon" variant="ghost" onClick={() => remove(it.id)} title="Löschen">
-                  <Trash2 className="h-4 w-4 text-destructive" />
-                </Button>
-              </div>
-            );
-          })
+                  );
+                }
+                return (
+                  <SortableRow key={it.id} it={it} target={t} onEdit={startEdit} onRemove={remove} />
+                );
+              })}
+            </SortableContext>
+          </DndContext>
         )}
       </div>
 
