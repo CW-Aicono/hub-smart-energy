@@ -1,4 +1,4 @@
-import { ReactNode } from "react";
+import { ReactNode, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Briefcase, ArrowLeft, LogOut, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -18,6 +18,27 @@ export function SalesLayout({ children, title = "Sales Scout", showBack, backTo,
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
   const { hasAccess, loading } = useSalesPartner();
+
+  // Set PWA manifest & Apple meta for the Sales Scout PWA (Add-to-Homescreen)
+  useEffect(() => {
+    let link = document.querySelector("link[rel='manifest']") as HTMLLinkElement | null;
+    if (!link) {
+      link = document.createElement("link");
+      link.rel = "manifest";
+      document.head.appendChild(link);
+    }
+    const previous = link.href;
+    link.href = "/manifest-sales.json";
+
+    const meta = document.querySelector('meta[name="apple-mobile-web-app-title"]');
+    const previousTitle = meta?.getAttribute("content");
+    if (meta) meta.setAttribute("content", "Sales Scout");
+
+    return () => {
+      if (link && previous) link.href = previous;
+      if (meta && previousTitle) meta.setAttribute("content", previousTitle);
+    };
+  }, []);
 
   if (loading) {
     return (
