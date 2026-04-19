@@ -78,7 +78,7 @@ export function QuotesList({ projectId, onCreate, reloadKey = 0 }: Props) {
   };
 
   const statusBadge = (q: Quote) => {
-    if (q.signed_at) return <Badge className="text-[10px] bg-green-600">✓ Signiert von {q.signer_name}</Badge>;
+    if (q.signed_at) return <Badge className="text-[10px]">✓ Signiert von {q.signer_name}</Badge>;
     if (q.rejected_at) return <Badge variant="destructive" className="text-[10px]">Abgelehnt</Badge>;
     if (q.viewed_at) return <Badge variant="secondary" className="text-[10px]"><Eye className="h-3 w-3 mr-1" />Angesehen</Badge>;
     return <Badge variant="outline" className="text-[10px]">Versendbar</Badge>;
