@@ -25,17 +25,22 @@ interface SuggestionsResponse {
 interface Args {
   projectId?: string;
   measurementPointId?: string;
+  distributionId?: string;
   enabled?: boolean;
 }
 
-export function useAccessorySuggestions({ projectId, measurementPointId, enabled = true }: Args) {
-  const key = ["accessory-suggestions", projectId ?? null, measurementPointId ?? null];
+export function useAccessorySuggestions({ projectId, measurementPointId, distributionId, enabled = true }: Args) {
+  const key = ["accessory-suggestions", projectId ?? null, measurementPointId ?? null, distributionId ?? null];
   const query = useQuery<SuggestionsResponse>({
     queryKey: key,
-    enabled: enabled && (!!projectId || !!measurementPointId),
+    enabled: enabled && (!!projectId || !!measurementPointId || !!distributionId),
     queryFn: async () => {
       const { data, error } = await supabase.functions.invoke("sales-suggest-accessories", {
-        body: { project_id: projectId, measurement_point_id: measurementPointId },
+        body: {
+          project_id: projectId,
+          measurement_point_id: measurementPointId,
+          distribution_id: distributionId,
+        },
       });
       if (error) throw error;
       return (data ?? { required: [], recommended: [] }) as SuggestionsResponse;
