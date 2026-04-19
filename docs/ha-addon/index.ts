@@ -1105,10 +1105,16 @@ async function sendHeartbeat(): Promise<void> {
 }
 
 let cachedHostIP: string | null = null;
+let cachedHostIPAt = 0;
+const HOST_IP_TTL_MS = 5 * 60 * 1000; // refresh every 5 min to catch DHCP changes after reboot
 
 async function getLocalIP(): Promise<string> {
-  // Try cached value first (refresh every heartbeat cycle anyway)
-  if (cachedHostIP) return cachedHostIP;
+  // Cached value is valid for HOST_IP_TTL_MS – ensures DHCP changes
+  // (e.g. after a power outage / reboot) are picked up automatically.
+  if (cachedHostIP && Date.now() - cachedHostIPAt < HOST_IP_TTL_MS) {
+    return cachedHostIP;
+  }
+  cachedHostIP = null;
 
   // Use HA Supervisor API to get actual host LAN IP
   try {
