@@ -122,7 +122,9 @@ export function EditIntegrationDialog({
         tunnel_token: data.tunnel_token,
       });
 
-      await onUpdate(locationIntegration.id, { config: refreshedConfig });
+      // NOTE: Intentionally NOT calling onUpdate() here. The Edge Function already
+      // persisted the new config in the DB. Calling onUpdate would trigger a parent
+      // refetch that re-renders this dialog and wipes the one-time-visible token.
 
       toast({
         title: "Tunnel-Token neu erstellt",
