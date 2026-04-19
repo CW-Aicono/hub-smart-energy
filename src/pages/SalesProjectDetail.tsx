@@ -231,6 +231,16 @@ export default function SalesProjectDetail() {
             {project.notizen && (
               <p className="text-sm text-muted-foreground italic border-l-2 pl-2 mt-2">{project.notizen}</p>
             )}
+            {Object.keys(classCounts).length > 0 && (
+              <div className="flex flex-wrap gap-1.5 pt-2 border-t mt-2">
+                {Object.entries(classCounts).map(([k, n]) => (
+                  <div key={k} className="flex items-center gap-1 text-xs text-muted-foreground">
+                    <ClassBadge klasse={k} />
+                    <span>{n}× {CLASS_LABELS[k] ?? k}</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
 
