@@ -85,10 +85,12 @@ export function DistributionHardwareList({ distributionId, hideAddButton, addOpe
             <Badge variant="outline" className="text-[10px] h-4 px-1">{items.length}</Badge>
           )}
         </div>
-        <Button size="sm" variant="ghost" onClick={() => setAddOpen(true)}>
-          <Plus className="h-3.5 w-3.5 mr-1" />
-          Hardware
-        </Button>
+        {!hideAddButton && (
+          <Button size="sm" variant="ghost" onClick={() => setAddOpen(true)}>
+            <Plus className="h-3.5 w-3.5 mr-1" />
+            Hardware
+          </Button>
+        )}
       </div>
 
       {loading ? (
