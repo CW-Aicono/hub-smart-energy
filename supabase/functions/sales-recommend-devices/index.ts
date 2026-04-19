@@ -66,6 +66,23 @@ function matchesRule(point: MeasurementPoint, cond: Record<string, unknown>): bo
   return true;
 }
 
+// Sehr eingeschränkter Mengenformel-Evaluator: Whitelist-Pattern, Variable source.menge
+function parseFormulaSafe(formula: string | null | undefined, sourceMenge: number): number {
+  if (!formula) return 1;
+  const f = formula.trim();
+  if (/^\d+$/.test(f)) return Math.max(1, parseInt(f, 10));
+  const m = f.match(/^(ceil|floor|round)\(\s*source\.menge\s*\/\s*(\d+(?:\.\d+)?)\s*\)$/);
+  if (m) {
+    const n = parseFloat(m[2]);
+    if (n > 0) {
+      const v = sourceMenge / n;
+      const r = m[1] === "ceil" ? Math.ceil(v) : m[1] === "floor" ? Math.floor(v) : Math.round(v);
+      return Math.max(1, r);
+    }
+  }
+  return 1;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
