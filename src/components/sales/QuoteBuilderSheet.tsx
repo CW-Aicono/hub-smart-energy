@@ -48,6 +48,9 @@ interface DeviceLine {
   menge: number;
   vk: number;
   inst: number;
+  einheit: string;
+  klasse: string;
+  isChild: boolean;
 }
 
 export function QuoteBuilderSheet({ open, onOpenChange, projectId, kundeTyp, onGenerated }: Props) {
@@ -98,7 +101,7 @@ export function QuoteBuilderSheet({ open, onOpenChange, projectId, kundeTyp, onG
           } else {
             const { data: recs } = await supabase
               .from("sales_recommended_devices")
-              .select("device_catalog_id, menge, ist_alternativ")
+              .select("device_catalog_id, menge, ist_alternativ, parent_recommendation_id, geraete_klasse")
               .in("measurement_point_id", ptIds)
               .eq("ist_alternativ", false);
             const ids = Array.from(new Set((recs ?? []).map((r) => r.device_catalog_id)));
@@ -107,7 +110,7 @@ export function QuoteBuilderSheet({ open, onOpenChange, projectId, kundeTyp, onG
             } else {
               const { data: cat } = await supabase
                 .from("device_catalog")
-                .select("id, hersteller, modell, vk_preis, installations_pauschale")
+                .select("id, hersteller, modell, vk_preis, installations_pauschale, geraete_klasse, einheit")
                 .in("id", ids);
               const catMap = new Map((cat ?? []).map((c) => [c.id, c]));
               const lines: DeviceLine[] = [];
@@ -119,6 +122,9 @@ export function QuoteBuilderSheet({ open, onOpenChange, projectId, kundeTyp, onG
                   menge: r.menge,
                   vk: Number(c.vk_preis),
                   inst: Number(c.installations_pauschale),
+                  einheit: c.einheit ?? "Stück",
+                  klasse: c.geraete_klasse ?? r.geraete_klasse ?? "misc",
+                  isChild: !!r.parent_recommendation_id,
                 });
               }
               setDevices(lines);
