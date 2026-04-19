@@ -75,6 +75,7 @@ export default function SalesProjectDetail() {
   const [project, setProject] = useState<Project | null>(null);
   const [distributions, setDistributions] = useState<Distribution[]>([]);
   const [points, setPoints] = useState<MeasurementPoint[]>([]);
+  const [classCounts, setClassCounts] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [distSheet, setDistSheet] = useState<{ open: boolean; editing?: Distribution | null }>({ open: false });
   const [pointSheet, setPointSheet] = useState<{ open: boolean; distributionId?: string; editing?: MeasurementPoint | null }>({ open: false });
@@ -98,9 +99,28 @@ export default function SalesProjectDetail() {
         .select("id, distribution_id, bezeichnung, energieart, phasen, strombereich_a, anwendungsfall, hinweise, montage, bestand, bestand_geraet")
         .in("distribution_id", distIds)
         .order("created_at", { ascending: true });
-      setPoints((mp ?? []) as unknown as MeasurementPoint[]);
+      const ptList = (mp ?? []) as unknown as MeasurementPoint[];
+      setPoints(ptList);
+
+      const ptIds = ptList.map((p) => p.id);
+      if (ptIds.length > 0) {
+        const { data: recs } = await supabase
+          .from("sales_recommended_devices")
+          .select("geraete_klasse, device_catalog:device_catalog_id(geraete_klasse)")
+          .in("measurement_point_id", ptIds)
+          .eq("ist_alternativ", false);
+        const counts: Record<string, number> = {};
+        for (const r of (recs ?? []) as any[]) {
+          const k = r.device_catalog?.geraete_klasse ?? r.geraete_klasse ?? "misc";
+          counts[k] = (counts[k] ?? 0) + 1;
+        }
+        setClassCounts(counts);
+      } else {
+        setClassCounts({});
+      }
     } else {
       setPoints([]);
+      setClassCounts({});
     }
     setLoading(false);
   }, [id]);
