@@ -241,9 +241,9 @@ export function AddIntegrationDialog({ locationId, onSuccess }: AddIntegrationDi
                 </div>
                 <ol className="text-sm list-decimal list-inside space-y-1">
                   <li>Token kopieren (Button rechts).</li>
-                  <li>In Home Assistant → Add-ons → AICONO EMS Gateway → Konfiguration.</li>
-                  <li><code className="text-xs">cloudflare_enabled: true</code> setzen und Token in <code className="text-xs">cloudflare_tunnel_token</code> einfügen.</li>
-                  <li>Add-on neu starten.</li>
+                  <li>In der installierten AICONO-EMS-Gateway-Komponente hinterlegen.</li>
+                  <li>Falls ein neuer Tunnel benötigt wird: später in der Edit-Maske auf <strong>„Tunnel-Token neu generieren“</strong> klicken.</li>
+                  <li>Gateway/Add-on neu starten.</li>
                 </ol>
               </AlertDescription>
             </Alert>
