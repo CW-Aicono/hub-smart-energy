@@ -14,6 +14,9 @@ import {
 
 interface Props {
   distributionId: string;
+  hideAddButton?: boolean;
+  addOpen?: boolean;
+  onAddOpenChange?: (open: boolean) => void;
 }
 
 interface HardwareRow {
