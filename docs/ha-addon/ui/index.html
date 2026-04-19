@@ -1180,7 +1180,7 @@
             '<div class="header-meta">' +
               '<div class="pill"><span class="status-dot ' + (online ? 'online' : 'offline') + '"></span>' + (online ? 'Gateway online' : 'Gateway offline') + '</div>' +
               '<div class="pill"><span class="status-dot ' + (cloudReachable ? 'online' : 'offline') + '"></span>' + (cloudReachable ? 'Cloud verbunden' : 'Cloud offline') + '</div>' +
-              '<div class="pill">Version ' + escapeHtml((state.version && state.version.version) || status.addon_version || '–') + '</div>' +
+              '<div class="pill">Version ' + escapeHtml(status.addon_version || (state.version && state.version.version) || '–') + '</div>' +
             '</div>' +
           '</div>' +
           '<div class="nav">' + Object.keys(pageLabels).map(function (key) {
