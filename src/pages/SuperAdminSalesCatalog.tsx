@@ -130,6 +130,8 @@ export default function SuperAdminSalesCatalog() {
       datasheet_url: item.datasheet_url || "",
       bild_url: item.bild_url || "",
       is_active: item.is_active,
+      geraete_klasse: item.geraete_klasse || "meter",
+      einheit: item.einheit || "Stück",
       phasen: Array.isArray(k.phasen) ? k.phasen.join(",") : (k.phasen ? String(k.phasen) : "3"),
       max_strom_a: k.max_strom_a ? String(k.max_strom_a) : "",
       montage: k.montage || "",
@@ -163,6 +165,8 @@ export default function SuperAdminSalesCatalog() {
       datasheet_url: form.datasheet_url.trim() || null,
       bild_url: form.bild_url.trim() || null,
       is_active: form.is_active,
+      geraete_klasse: form.geraete_klasse as any,
+      einheit: form.einheit || "Stück",
       kompatibilitaet,
     };
 
