@@ -33,9 +33,9 @@ vi.mock("@/lib/gatewayRegistry", () => ({
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
     functions: {
-      invoke: (...args: unknown[]) => invokeMock(...args),
+      invoke: (...args: any[]) => invokeMock(...args),
     },
-    from: (...args: unknown[]) => fromMock(...args),
+    from: (...args: any[]) => fromMock(...args),
   },
 }));
 
