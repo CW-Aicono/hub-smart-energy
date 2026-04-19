@@ -34,10 +34,12 @@ interface HardwareRow {
   } | null;
 }
 
-export function DistributionHardwareList({ distributionId }: Props) {
+export function DistributionHardwareList({ distributionId, hideAddButton, addOpen: addOpenProp, onAddOpenChange }: Props) {
   const [items, setItems] = useState<HardwareRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [addOpen, setAddOpen] = useState(false);
+  const [addOpenInner, setAddOpenInner] = useState(false);
+  const addOpen = addOpenProp ?? addOpenInner;
+  const setAddOpen = (v: boolean) => { onAddOpenChange ? onAddOpenChange(v) : setAddOpenInner(v); };
 
   const load = useCallback(async () => {
     setLoading(true);
