@@ -80,13 +80,34 @@ export function QuoteBuilderSheet({ open, onOpenChange, projectId, kundeTyp, onG
         const list: Suggestion[] = sugg?.suggestions ?? [];
         setSuggestions(list);
         setAvailable(sugg?.available ?? []);
-        const sel = new Set(list.map((s) => s.module_code));
-        setSelected(sel);
+
+        // Vorhandenen Draft laden
+        const { data: draft } = await supabase
+          .from("sales_quotes")
+          .select("id")
+          .eq("project_id", projectId)
+          .eq("status", "draft")
+          .maybeSingle();
+
+        let preselected: Set<string>;
+        let draftNotes = "";
+        if (draft) {
+          const { data: dm } = await supabase
+            .from("sales_quote_modules")
+            .select("module_code")
+            .eq("quote_id", draft.id);
+          preselected = new Set((dm ?? []).map((m: any) => m.module_code));
+        } else {
+          preselected = new Set(list.map((s) => s.module_code));
+        }
+        setSelected(preselected);
+        setNotes(draftNotes);
+
         const rmap: Record<string, string> = {};
         list.forEach((s) => { rmap[s.module_code] = s.reason; });
         setReasons(rmap);
 
-        // Devices
+        // Devices: aus Messpunkten UND Verteilungen
         const { data: dists } = await supabase
           .from("sales_distributions").select("id").eq("project_id", projectId);
         const distIds = (dists ?? []).map((d) => d.id);
@@ -96,39 +117,50 @@ export function QuoteBuilderSheet({ open, onOpenChange, projectId, kundeTyp, onG
           const { data: pts } = await supabase
             .from("sales_measurement_points").select("id").in("distribution_id", distIds);
           const ptIds = (pts ?? []).map((p) => p.id);
-          if (ptIds.length === 0) {
-            setDevices([]);
-          } else {
-            const { data: recs } = await supabase
+
+          const queries: Promise<any>[] = [];
+          if (ptIds.length) {
+            queries.push(
+              supabase
+                .from("sales_recommended_devices")
+                .select("device_catalog_id, menge, ist_alternativ, parent_recommendation_id, geraete_klasse")
+                .in("measurement_point_id", ptIds)
+                .eq("ist_alternativ", false),
+            );
+          }
+          queries.push(
+            supabase
               .from("sales_recommended_devices")
               .select("device_catalog_id, menge, ist_alternativ, parent_recommendation_id, geraete_klasse")
-              .in("measurement_point_id", ptIds)
-              .eq("ist_alternativ", false);
-            const ids = Array.from(new Set((recs ?? []).map((r) => r.device_catalog_id)));
-            if (ids.length === 0) {
-              setDevices([]);
-            } else {
-              const { data: cat } = await supabase
-                .from("device_catalog")
-                .select("id, hersteller, modell, vk_preis, installations_pauschale, geraete_klasse, einheit")
-                .in("id", ids);
-              const catMap = new Map((cat ?? []).map((c) => [c.id, c]));
-              const lines: DeviceLine[] = [];
-              for (const r of recs ?? []) {
-                const c = catMap.get(r.device_catalog_id);
-                if (!c) continue;
-                lines.push({
-                  name: `${c.hersteller} ${c.modell}`,
-                  menge: r.menge,
-                  vk: Number(c.vk_preis),
-                  inst: Number(c.installations_pauschale),
-                  einheit: c.einheit ?? "Stück",
-                  klasse: c.geraete_klasse ?? r.geraete_klasse ?? "misc",
-                  isChild: !!r.parent_recommendation_id,
-                });
-              }
-              setDevices(lines);
+              .in("distribution_id", distIds)
+              .eq("ist_alternativ", false),
+          );
+          const recsResults = await Promise.all(queries);
+          const recs = recsResults.flatMap((r) => r.data ?? []);
+          const ids = Array.from(new Set(recs.map((r: any) => r.device_catalog_id)));
+          if (ids.length === 0) {
+            setDevices([]);
+          } else {
+            const { data: cat } = await supabase
+              .from("device_catalog")
+              .select("id, hersteller, modell, vk_preis, installations_pauschale, geraete_klasse, einheit")
+              .in("id", ids);
+            const catMap = new Map((cat ?? []).map((c) => [c.id, c]));
+            const lines: DeviceLine[] = [];
+            for (const r of recs as any[]) {
+              const c: any = catMap.get(r.device_catalog_id);
+              if (!c) continue;
+              lines.push({
+                name: `${c.hersteller} ${c.modell}`,
+                menge: r.menge,
+                vk: Number(c.vk_preis),
+                inst: Number(c.installations_pauschale),
+                einheit: c.einheit ?? "Stück",
+                klasse: c.geraete_klasse ?? r.geraete_klasse ?? "misc",
+                isChild: !!r.parent_recommendation_id,
+              });
             }
+            setDevices(lines);
           }
         }
       } catch (e) {
@@ -166,6 +198,30 @@ export function QuoteBuilderSheet({ open, onOpenChange, projectId, kundeTyp, onG
   const installationSumme = devices.reduce((s, d) => s + d.inst * d.menge, 0);
   const einmalig = geraeteSumme + installationSumme;
 
+  const buildModulesPayload = () =>
+    Array.from(selected).map((code) => ({
+      module_code: code,
+      preis_monatlich: priceFor(code),
+    }));
+
+  const [savingDraft, setSavingDraft] = useState(false);
+  const saveDraft = async () => {
+    setSavingDraft(true);
+    try {
+      const { error } = await supabase.functions.invoke("sales-generate-quote", {
+        body: { project_id: projectId, modules: buildModulesPayload(), notes, finalize: false },
+      });
+      if (error) throw error;
+      toast.success("Entwurf gespeichert");
+      onGenerated();
+      onOpenChange(false);
+    } catch (e) {
+      toast.error("Speichern fehlgeschlagen", { description: String(e) });
+    } finally {
+      setSavingDraft(false);
+    }
+  };
+
   const generate = async () => {
     if (selected.size === 0) {
       toast.error("Bitte mindestens ein Modul auswählen");
@@ -173,15 +229,11 @@ export function QuoteBuilderSheet({ open, onOpenChange, projectId, kundeTyp, onG
     }
     setGenerating(true);
     try {
-      const modules = Array.from(selected).map((code) => ({
-        module_code: code,
-        preis_monatlich: priceFor(code),
-      }));
       const { data, error } = await supabase.functions.invoke("sales-generate-quote", {
-        body: { project_id: projectId, modules, notes },
+        body: { project_id: projectId, modules: buildModulesPayload(), notes, finalize: true },
       });
       if (error) throw error;
-      toast.success(`Angebot v${data.version} erstellt`);
+      toast.success(`Angebot v${data.version} fertiggestellt`);
       onGenerated();
       onOpenChange(false);
     } catch (e) {
