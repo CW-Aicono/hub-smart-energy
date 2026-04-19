@@ -1,40 +1,52 @@
 
 
-## Iteration 11 – Projekt bearbeiten + Dokumenten-Anhänge
+## Plan – Cloudflare-Domain-Umstellung + Duplikat-Fix
 
-### 1. Projekt bearbeiten
-- `SalesProjectNew.tsx` → extrahieren in wiederverwendbare `SalesProjectForm.tsx` (Props: `mode: 'create' | 'edit'`, optional `initialValues` + `projectId`)
-- Neue Seite `SalesProjectEdit.tsx` an Route `/sales/:id/edit` (lädt Projekt, rendert Form im Edit-Modus, schreibt via `update`)
-- "Bearbeiten"-Button (Pencil) im Header von `SalesProjectDetail.tsx` neben Trash → navigiert zu `/sales/:id/edit`
+### 1. Datenbank-Cleanup + Unique-Constraint (Migration)
 
-### 2. Dokumenten-Anhänge
+- **Duplikate löschen:** Pro `(tenant_id, device_name)` nur die zuletzt aktive Row behalten (`ORDER BY last_heartbeat_at DESC NULLS LAST, created_at DESC`). Cascade löscht abhängige Metrics automatisch.
+- **Unique Index** anlegen: `CREATE UNIQUE INDEX gateway_devices_tenant_device_uq ON gateway_devices(tenant_id, device_name);`
+  → Verhindert künftige Duplikate auf DB-Ebene als zweite Verteidigungslinie.
 
-**Schema (Migration):**
-- Neue Tabelle `sales_project_attachments`: `id`, `project_id` (FK cascade), `partner_id`, `file_path`, `file_name`, `content_type`, `file_size`, `kategorie` (default `'sonstiges'`: grundriss/rechnung/foto/sonstiges), `notiz`, `created_at`
-- RLS: Partner darf nur eigene Projekte verwalten (`sales_projects.partner_id = auth.uid()`)
-- Storage: bestehender `sales-photos` Bucket; Pfad: `${partner_id}/projects/${project_id}/${uuid}.${ext}`
-- Storage-RLS-Policy auf bestehendes Muster (`split_part(name,'/',1) = auth.uid()`)
+### 2. Edge Function `gateway-ingest` – Upsert statt manueller Existenz-Check
 
-**UI – `ProjectAttachments.tsx`:**
-- Eingebettet in `SalesProjectDetail.tsx` als Card "Dokumente" zwischen Kundeninfo und Verteilungen
-- Zwei Upload-Buttons:
-  - **Kamera** (`<input capture="environment" accept="image/*">`)
-  - **Datei wählen** (`<input accept="image/*,application/pdf">`)
-- Liste mit Bild-Thumbnail (signed URL, 1h) bzw. PDF-Icon
-- Pro Eintrag: Vorschau-Klick (signed URL neuer Tab), Kategorie-Dropdown inline editierbar, Löschen
+In `handleHeartbeat`:
+- Aktuell: `SELECT … maybeSingle()` → bei >1 Row Fehler → Fallback INSERT (= Bug-Quelle)
+- Neu: `.upsert(deviceData, { onConflict: 'tenant_id,device_name' })`  
+  → Atomar, race-condition-frei, funktioniert auch bei parallelen Heartbeats.
 
-### 3. Anlage-Flow (gewählter Weg)
-`SalesProjectForm` legt Projekt an wie bisher und navigiert zu `/sales/:id`. Dort sieht der User die Upload-Card direkt – **keine Sondermechanik im Create-Flow**.
+### 3. Edge Function `cf-tunnel-provision` – Domain-Umstellung
 
-### 4. Distributions-Foto-Thumbnail
-- `CabinetPhotoAnalyzer` existiert bereits in `DistributionSheet` (Kamera-Aufnahme NSHV-Foto) – keine Änderung
-- Ergänzung: kleines Vorschau-Thumbnail in der Verteilungs-Kachel auf `SalesProjectDetail` (signed URL des `cabinet_photo_path`), wenn vorhanden
+- `TUNNEL_DOMAIN = "tunnel.aicono.org"` → **`TUNNEL_DOMAIN = "aicono.org"`**
+- Subdomain-Prefix bleibt 12-stellig aus der Tunnel-UUID → `b77488c1-e58.aicono.org`
+- Universal SSL von Cloudflare deckt `*.aicono.org` automatisch ab → kein Zusatzcert nötig.
+- Eindeutige Zuordnung Gateway ↔ Liegenschaft bleibt durch UUID garantiert.
 
-### Reihenfolge
-1. Migration: `sales_project_attachments` + RLS + Storage-RLS für `sales-photos` Pfad `${uid}/projects/...`
-2. `SalesProjectForm.tsx` extrahieren, `SalesProjectNew.tsx` darauf umstellen
-3. `SalesProjectEdit.tsx` + Route in `App.tsx`
-4. "Bearbeiten"-Button im Header `SalesProjectDetail.tsx`
-5. `ProjectAttachments.tsx` + Einbindung
-6. Verteilungs-Kachel: Cabinet-Foto-Thumbnail
+### 4. Bestehenden Test-Tunnel migrieren
+
+Da nur ein Test-Gateway aktiv ist:
+- Alte `location_integrations.config`-Felder (`cloudflare_tunnel_id`, `cloudflare_public_url`, `…token_enc`) auf `NULL` setzen für die betroffene Liegenschaft → triggert Re-Provisioning beim nächsten Klick auf „Tunnel einrichten".
+- Alter Tunnel + DNS-Record bleiben in Cloudflare ungenutzt liegen (manuell später aufräumen) – stört nicht.
+
+### 5. Doku-Update
+
+`docs/ha-addon/INSTALLATION.md` + Memory `gateway-worker-installation-guide`: Hinweis ergänzen, dass Public-Hostnames automatisch unter `*.aicono.org` (nicht `*.tunnel.aicono.org`) angelegt werden.
+
+### Reihenfolge der Implementierung
+1. Migration: Duplikat-Cleanup + Unique Index
+2. `gateway-ingest/index.ts`: Upsert-Refactor
+3. `cf-tunnel-provision/index.ts`: TUNNEL_DOMAIN-Konstante ändern
+4. SQL-Insert: Test-Liegenschafts-Config zurücksetzen
+5. Doku/Memory aktualisieren
+
+### Anschließende Anleitung für den User (nach Implementierung)
+
+Nach dem Deploy bekommst du eine **5-Schritte-Klick-Anleitung** im Chat:
+1. Im Browser: alte Gateway-Einträge sind weg, nur eines bleibt sichtbar → Status prüfen
+2. Liegenschaft öffnen → Integration „Home Assistant" → **„Tunnel neu einrichten"** klicken
+3. Neuen Tunnel-Token kopieren (wird einmalig angezeigt)
+4. Im Home Assistant Add-on: Token einfügen → Add-on neu starten
+5. Im Browser auf die neue URL `https://<id>.aicono.org` → HA-Login erscheint → fertig
+
+Komplette Schritt-für-Schritt-Anleitung mit Screenshots-Beschreibungen folgt direkt nach Umsetzung.
 
