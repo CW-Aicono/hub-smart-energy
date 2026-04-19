@@ -118,22 +118,22 @@ export function QuoteBuilderSheet({ open, onOpenChange, projectId, kundeTyp, onG
             .from("sales_measurement_points").select("id").in("distribution_id", distIds);
           const ptIds = (pts ?? []).map((p) => p.id);
 
-          const queries: Promise<any>[] = [];
+          const queries: Array<Promise<{ data: any[] | null }>> = [];
           if (ptIds.length) {
             queries.push(
-              supabase
+              (async () => await supabase
                 .from("sales_recommended_devices")
                 .select("device_catalog_id, menge, ist_alternativ, parent_recommendation_id, geraete_klasse")
                 .in("measurement_point_id", ptIds)
-                .eq("ist_alternativ", false),
+                .eq("ist_alternativ", false))(),
             );
           }
           queries.push(
-            supabase
+            (async () => await supabase
               .from("sales_recommended_devices")
               .select("device_catalog_id, menge, ist_alternativ, parent_recommendation_id, geraete_klasse")
               .in("distribution_id", distIds)
-              .eq("ist_alternativ", false),
+              .eq("ist_alternativ", false))(),
           );
           const recsResults = await Promise.all(queries);
           const recs = recsResults.flatMap((r) => r.data ?? []);
