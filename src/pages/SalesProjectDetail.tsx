@@ -81,6 +81,7 @@ export default function SalesProjectDetail() {
   const [loading, setLoading] = useState(true);
   const [distSheet, setDistSheet] = useState<{ open: boolean; editing?: Distribution | null }>({ open: false });
   const [pointSheet, setPointSheet] = useState<{ open: boolean; distributionId?: string; editing?: MeasurementPoint | null }>({ open: false });
+  const [hardwareOpenFor, setHardwareOpenFor] = useState<string | null>(null);
   const [quoteSheet, setQuoteSheet] = useState(false);
   const [quotesReload, setQuotesReload] = useState(0);
 
@@ -314,7 +315,12 @@ export default function SalesProjectDetail() {
                     </div>
 
                     <div className="border-t bg-background/50 px-3 py-2 space-y-3">
-                      <DistributionHardwareList distributionId={d.id} />
+                      <DistributionHardwareList
+                        distributionId={d.id}
+                        hideAddButton
+                        addOpen={hardwareOpenFor === d.id}
+                        onAddOpenChange={(o) => setHardwareOpenFor(o ? d.id : null)}
+                      />
                       {dPoints.length === 0 ? (
                         <p className="text-xs text-muted-foreground py-1">Noch keine Messpunkte.</p>
                       ) : (
@@ -362,14 +368,22 @@ export default function SalesProjectDetail() {
                           </div>
                         ))
                       )}
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="w-full justify-start"
-                        onClick={() => setPointSheet({ open: true, distributionId: d.id, editing: null })}
-                      >
-                        <Plus className="h-4 w-4 mr-1" /> Messpunkt
-                      </Button>
+                      <div className="grid grid-cols-2 gap-2 pt-1">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setPointSheet({ open: true, distributionId: d.id, editing: null })}
+                        >
+                          <Plus className="h-4 w-4 mr-1" /> Messpunkt
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setHardwareOpenFor(d.id)}
+                        >
+                          <Plus className="h-4 w-4 mr-1" /> Hardware
+                        </Button>
+                      </div>
                     </div>
                   </div>
                 );
