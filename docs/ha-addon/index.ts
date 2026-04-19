@@ -67,7 +67,7 @@ const config = loadConfig();
 const SUPERVISOR_TOKEN = process.env.SUPERVISOR_TOKEN || "";
 const HA_API_BASE = "http://supervisor/core/api";
 const INGEST_URL = `${config.cloud_url}/functions/v1/gateway-ingest`;
-const ADDON_VERSION = "2.2.0";
+const ADDON_VERSION = "2.2.1";
 
 /* ── Cloudflare Tunnel Subprocess ────────────────────────────────────────────── */
 import { spawn, ChildProcess } from "child_process";
