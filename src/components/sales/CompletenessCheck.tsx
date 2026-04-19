@@ -32,17 +32,32 @@ export function CompletenessCheck({ projectId, onFixed }: Props) {
       setIssues([]); setLoading(false); return;
     }
     const { data: pts } = await supabase
-      .from("sales_measurement_points").select("id").in("distribution_id", distIds);
+      .from("sales_measurement_points").select("id, distribution_id").in("distribution_id", distIds);
     const ptIds = (pts ?? []).map((p) => p.id);
-    if (ptIds.length === 0) {
+
+    // Empfehlungen aus beiden Scopes (Messpunkte + Verteilungen)
+    const recQueries: Array<Promise<{ data: any[] | null }>> = [];
+    if (ptIds.length) {
+      recQueries.push(
+        (async () => await supabase
+          .from("sales_recommended_devices")
+          .select("id, device_catalog_id, geraete_klasse, parent_recommendation_id, measurement_point_id, distribution_id, scope, device_catalog:device_catalog_id(geraete_klasse, benoetigt_klassen, hersteller, modell)")
+          .in("measurement_point_id", ptIds)
+          .eq("ist_alternativ", false))(),
+      );
+    }
+    recQueries.push(
+      (async () => await supabase
+        .from("sales_recommended_devices")
+        .select("id, device_catalog_id, geraete_klasse, parent_recommendation_id, measurement_point_id, distribution_id, scope, device_catalog:device_catalog_id(geraete_klasse, benoetigt_klassen, hersteller, modell)")
+        .in("distribution_id", distIds)
+        .eq("ist_alternativ", false))(),
+    );
+    const recResults = await Promise.all(recQueries);
+    const recs = recResults.flatMap((r) => r.data ?? []);
+    if (recs.length === 0) {
       setIssues([]); setLoading(false); return;
     }
-
-    const { data: recs } = await supabase
-      .from("sales_recommended_devices")
-      .select("id, device_catalog_id, geraete_klasse, parent_recommendation_id, measurement_point_id, device_catalog:device_catalog_id(geraete_klasse, benoetigt_klassen, hersteller, modell)")
-      .in("measurement_point_id", ptIds)
-      .eq("ist_alternativ", false);
 
     const allRecs = (recs ?? []) as any[];
     const allClasses = new Set<string>(

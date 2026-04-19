@@ -12,7 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useModulePrices } from "@/hooks/useModulePrices";
 import { toast } from "sonner";
-import { Loader2, Sparkles, FileDown, Package } from "lucide-react";
+import { Loader2, Sparkles, FileDown, Package, Pencil } from "lucide-react";
 import { ClassBadge } from "./ClassBadge";
 import { CompletenessCheck } from "./CompletenessCheck";
 
@@ -398,18 +398,33 @@ export function QuoteBuilderSheet({ open, onOpenChange, projectId, kundeTyp, onG
               <div className="font-semibold">{monthlySum.toFixed(2)} €</div>
             </div>
           </div>
-          <Button
-            className="w-full"
-            onClick={generate}
-            disabled={generating || loading}
-          >
-            {generating ? (
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-            ) : (
-              <FileDown className="h-4 w-4 mr-2" />
-            )}
-            Angebots-PDF generieren
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              className="flex-1"
+              onClick={saveDraft}
+              disabled={savingDraft || generating || loading}
+            >
+              {savingDraft ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Pencil className="h-4 w-4 mr-2" />
+              )}
+              Als Entwurf speichern
+            </Button>
+            <Button
+              className="flex-1"
+              onClick={generate}
+              disabled={generating || savingDraft || loading}
+            >
+              {generating ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <FileDown className="h-4 w-4 mr-2" />
+              )}
+              Fertigstellen & PDF
+            </Button>
+          </div>
         </div>
       </SheetContent>
     </Sheet>
