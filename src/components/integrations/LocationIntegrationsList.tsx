@@ -16,7 +16,7 @@ export function LocationIntegrationsList({ locationId }: LocationIntegrationsLis
   const { isAdmin } = useUserRole();
   const { t } = useTranslation();
 
-  if (loading) {
+  if (loading && locationIntegrations.length === 0) {
     return (
       <Card>
         <CardHeader>
