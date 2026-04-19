@@ -4430,6 +4430,44 @@ export type Database = {
           },
         ]
       }
+      sales_quote_events: {
+        Row: {
+          created_at: string
+          event_type: string
+          id: string
+          ip_address: string | null
+          metadata: Json | null
+          quote_id: string
+          user_agent: string | null
+        }
+        Insert: {
+          created_at?: string
+          event_type: string
+          id?: string
+          ip_address?: string | null
+          metadata?: Json | null
+          quote_id: string
+          user_agent?: string | null
+        }
+        Update: {
+          created_at?: string
+          event_type?: string
+          id?: string
+          ip_address?: string | null
+          metadata?: Json | null
+          quote_id?: string
+          user_agent?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sales_quote_events_quote_id_fkey"
+            columns: ["quote_id"]
+            isOneToOne: false
+            referencedRelation: "sales_quotes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sales_quote_modules: {
         Row: {
           created_at: string
@@ -4471,11 +4509,19 @@ export type Database = {
           modul_summe_monatlich: number
           pdf_storage_path: string | null
           project_id: string
+          public_token: string | null
+          rejected_at: string | null
+          rejection_reason: string | null
           signature_data: Json | null
           signed_at: string | null
+          signer_email: string | null
+          signer_ip: string | null
+          signer_name: string | null
+          signer_user_agent: string | null
           total_einmalig: number
           updated_at: string
           version: number
+          viewed_at: string | null
         }
         Insert: {
           created_at?: string
@@ -4485,11 +4531,19 @@ export type Database = {
           modul_summe_monatlich?: number
           pdf_storage_path?: string | null
           project_id: string
+          public_token?: string | null
+          rejected_at?: string | null
+          rejection_reason?: string | null
           signature_data?: Json | null
           signed_at?: string | null
+          signer_email?: string | null
+          signer_ip?: string | null
+          signer_name?: string | null
+          signer_user_agent?: string | null
           total_einmalig?: number
           updated_at?: string
           version?: number
+          viewed_at?: string | null
         }
         Update: {
           created_at?: string
@@ -4499,11 +4553,19 @@ export type Database = {
           modul_summe_monatlich?: number
           pdf_storage_path?: string | null
           project_id?: string
+          public_token?: string | null
+          rejected_at?: string | null
+          rejection_reason?: string | null
           signature_data?: Json | null
           signed_at?: string | null
+          signer_email?: string | null
+          signer_ip?: string | null
+          signer_name?: string | null
+          signer_user_agent?: string | null
           total_einmalig?: number
           updated_at?: string
           version?: number
+          viewed_at?: string | null
         }
         Relationships: [
           {

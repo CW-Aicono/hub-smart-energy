@@ -122,3 +122,9 @@ verify_jwt = false
 
 [functions.cf-tunnel-provision]
 verify_jwt = false
+
+[functions.sales-public-quote]
+verify_jwt = false
+
+[functions.sales-sign-quote]
+verify_jwt = false
