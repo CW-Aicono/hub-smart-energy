@@ -1,115 +1,94 @@
 
 
-## Vertriebspartner-Tool "AICONO Sales Scout"
+## Iteration 9 – Komplettes Angebot: Zubehör, Gateways & "Andere kauften auch"
 
-Ein neuer Bereich `/sales` (Mobile-First-PWA) im selben Projekt – nutzt bestehende Modul-/Preistabellen, Geräte-Registry und Mandanten-Anlage.
+Der Katalog kennt bisher nur Zähler. Für ein vollständiges Angebot fehlen Geräteklassen (Gateway, Netzteil, Switch, Router, Addon-Modul, Verkabelung) sowie eine Verknüpfungslogik, damit z. B. ein Loxone Miniserver automatisch ein passendes Netzteil + Modbus-Extension vorschlägt.
 
-## Architektur
+### 1. Datenbank-Erweiterung (Migration)
 
-```text
-[Vertriebspartner Tablet]
-        │
-        ▼
-   /sales (Mobile-First-PWA)
-   ┌─────────────────────────────────┐
-   │ 1. Projekt anlegen (Kunde)      │
-   │ 2. Liegenschaft + Etagen        │
-   │ 3. Verteilungen (NSHV/UV)       │
-   │    └─ Foto + KI-Vorschlag       │
-   │ 4. Messpunkte je Verteilung     │
-   │    └─ Scan / Manuell / KI       │
-   │ 5. Geräte-Auswahl               │
-   │    └─ Regelbasiert + KI         │
-   │ 6. Module wählen (AICONO)       │
-   │ 7. Angebot generieren           │
-   │    ├─ PDF                       │
-   │    ├─ Online-Link/QR            │
-   │    └─ → Mandant vorbereiten     │
-   └─────────────────────────────────┘
-```
+**`device_catalog` ergänzen:**
+- `geraete_klasse` enum: `meter | gateway | power_supply | network_switch | router | addon_module | cable | accessory | misc`
+- `benoetigt_klassen` text[] – welche Klassen MÜSSEN mitbestellt werden (z. B. `['power_supply']`)
+- `kompatible_klassen` text[] – Klassen, die typischerweise dazu passen
+- `tech_specs` jsonb – z. B. `{ voltage: "24V", din_rail: true, ports: 8 }`
+- `einheit` text – "Stück" / "Meter" / "Pauschal"
 
-## Datenmodell (neue Tabellen)
+**Neue Tabelle `device_compatibility`** (gerichtete Beziehungen):
+- `source_device_id` → `target_device_id`
+- `relation_type`: `requires` (Pflicht) | `recommends` (optional Vorschlag) | `alternative`
+- `auto_quantity_formula` text – z. B. `"1"` oder `"ceil(source.menge/8)"` für Switch-Ports
+- `prio` integer, `notiz` text
 
-- **sales_projects** – Projekt pro Termin: kunde_name, kontakt, status (draft/sent/accepted/rejected/converted), partner_id, created_at, accepted_at, public_token (für Online-Angebot)
-- **sales_distributions** – NSHV/UV pro Projekt: name, typ (NSHV/UV), foto_url, ki_analyse (jsonb), parent_id (UV→NSHV)
-- **sales_measurement_points** – Messpunkte pro Verteilung: bezeichnung, energieart, phasen (1/3), strombereich_a, anwendungsfall (Hauptzähler/Abgang/Maschine/etc.), foto_url, hinweise
-- **sales_recommended_devices** – Geräte-Vorschlag pro Messpunkt: device_catalog_id, begründung, ist_alternativ, partner_override
-- **device_catalog** – globaler Geräte-Katalog (Super-Admin pflegt): hersteller, modell, ek_preis, vk_preis, installations_pauschale, kompatibilität (jsonb: phasen, max_strom, montage, gateway_typ), beschreibung, datasheet_url
-- **device_selection_rules** – Regelwerk (Super-Admin): name, bedingung (jsonb), device_catalog_id, prio
-- **sales_quotes** – Angebot: projekt_id, version, geräte_summe, installation_summe, modul_summe_monatlich, total_einmalig, pdf_url, online_url, signed_at, signature_data
-- **sales_quote_modules** – gewählte AICONO-Module pro Angebot (referenziert ALL_MODULES + module_prices)
+**`sales_recommended_devices` ergänzen:**
+- `parent_recommendation_id` uuid (self-FK) – markiert Zubehör eines Hauptgeräts
+- `geraete_klasse` text (denormalisiert für schnelle UI-Filter)
 
-RLS: nur Vertriebspartner (neue Rolle `sales_partner`) und Super-Admins haben Zugriff. Public Token für Online-Angebot ohne Login.
+**Seed-Daten** für realistischen Start:
+- Loxone: Miniserver Go, Miniserver, Modbus Extension, Tree Extension, Energiezähler 1-/3-phasig, Netzteil 24V/2.5A, DIN-Hutschienen-PSU
+- Netzwerk: TP-Link 8-Port Switch, Ubiquiti Switch, FritzBox 7530
+- Universal: USB-C Netzteil 5V, Patchkabel Cat6 (1m/3m/5m)
+- Compatibility-Regeln: Miniserver → erfordert Netzteil 24V; Miniserver → empfiehlt Modbus Extension; jeder Gateway → empfiehlt Switch wenn >4 Geräte
 
-## Features im Detail
+### 2. Edge Functions
 
-### Erfassungs-Flow (Beides kombiniert)
-- **Wizard-Skelett**: Projekt → Liegenschaft → Verteilung hinzufügen → Messpunkt hinzufügen
-- **KI-Foto-Analyse** pro Verteilung (Edge Function `sales-analyze-cabinet`):
-  - Gemini 2.5 Pro Vision analysiert Foto vom Schaltschrank
-  - Erkennt: Anzahl Sicherungen, Phasen, freie Hutschienen-Plätze, vermutete Hauptzähler-Position
-  - Schlägt Messpunkte mit Bezeichnung, Phasen, Strombereich vor
-  - Partner sieht Vorschläge, kann annehmen/anpassen/löschen
-- **QR-/Foto-Scan** für Bestandszähler (Zählernummer-Erkennung über Gemini Vision)
+**Neu: `sales-suggest-accessories`**
+- Input: `project_id` oder `measurement_point_id`
+- Sammelt alle aktuell empfohlenen Hauptgeräte → liest `device_compatibility` → liefert:
+  - `required[]` (rot/Pflicht – auto-übernehmbar)
+  - `recommended[]` ("Andere kauften auch …")
+- Berechnet Mengen über `auto_quantity_formula` (sicherer Mini-Evaluator, keine `eval()`)
 
-### Geräte-Empfehlung (Hybrid)
-- Edge Function `sales-recommend-devices`:
-  1. **Regelbasiert**: matche Messpunkt-Eigenschaften gegen `device_selection_rules` (z. B. "3-phasig + ≤63A + Hutschiene → Shelly Pro 3EM")
-  2. **KI-Fallback** (nur wenn keine Regel matcht): Gemini bekommt Messpunkt + verfügbaren Katalog → Vorschlag mit Begründung
-  3. Speichert Empfehlung in `sales_recommended_devices`
-- Partner kann Gerät überschreiben; Override wird gespeichert
+**Erweitern: `sales-recommend-devices`**
+- Nach KI/Regel-Auswahl des Hauptgeräts: ruft intern Pflicht-Zubehör ab und legt diese als Kind-Empfehlungen (`parent_recommendation_id` gesetzt) an
+- Optionales Zubehör NUR vorschlagen, nicht automatisch anlegen
 
-### Modul-Auswahl
-- Liste aller `ALL_MODULES` mit Preisen aus `module_prices` (industry vs. standard je nach Kundentyp)
-- Modul-Bundles aus `module_bundles` als Quick-Auswahl
-- Live-Berechnung der monatlichen Gebühr
+**Erweitern: `sales-generate-quote`**
+- PDF gruppiert nach Geräteklasse: "Zähler", "Gateways & Steuerung", "Netzwerk", "Zubehör & Montagematerial"
+- Zwischensummen pro Gruppe
+- Eltern-Kind-Hierarchie sichtbar (Einrückung)
 
-### Angebots-Output (Beides + Mandanten-Vorbereitung)
-- Edge Function `sales-generate-quote`:
-  - Generiert PDF (jsPDF mit AICONO-Branding) → speichert in neuem Bucket `sales-quotes` (privat)
-  - Erstellt `public_token`, Online-Angebot erreichbar unter `/sales/quote/:token` (kein Login, mobil-optimiert, Module ein/aus toggelbar)
-  - QR-Code im PDF zum Online-Angebot
-- Bei Annahme (Online-Signatur oder Partner markiert "accepted"):
-  - Edge Function `sales-convert-to-tenant`: legt Tenant + Liegenschaft + Etagen + Verteilungen (als integrations) + Messpunkte (als meters) + Modul-Aktivierung an
-  - Status `converted`, Übergabe an Onboarding/Installation
+### 3. UI-Erweiterungen
 
-### Super-Admin-Bereich (neue Seiten)
-- `/super-admin/sales/catalog` – Geräte-Katalog CRUD
-- `/super-admin/sales/rules` – Auswahl-Regeln CRUD
-- `/super-admin/sales/projects` – Übersicht aller Vertriebsprojekte (Pipeline-Ansicht)
-- `/super-admin/sales/partners` – Partner-Verwaltung (User-Zuordnung Rolle `sales_partner`)
+**`src/pages/admin/DeviceCatalogAdmin.tsx`** (Super-Admin):
+- Neue Felder: Geräteklasse-Select, benötigte/kompatible Klassen (Multi-Select Chips), Einheit
+- Neuer Tab "Kompatibilität": pro Gerät die Beziehungen verwalten (Drag-Liste mit `requires`/`recommends`)
 
-### Vertriebspartner-Bereich (neu)
-- `/sales` – Projekt-Liste (eigene Projekte)
-- `/sales/new` – Wizard
-- `/sales/:id` – Projekt-Detail mit allen Verteilungen/Messpunkten/Geräten
-- `/sales/:id/quote` – Angebot generieren
+**`src/components/sales/DeviceRecommendation.tsx`** (Hauptkomponente am Messpunkt):
+- Klassen-Badge (Icon je Klasse: ⚡ Zähler, 🌐 Gateway, 🔌 Netzteil, 🖧 Switch, 🧩 Addon)
+- Neuer Bereich **"Zubehör"** unter dem Hauptgerät:
+  - Pflicht-Zubehör automatisch sichtbar mit Badge "Erforderlich" – beim ersten Anlegen direkt mit erstellt
+  - **"Andere Kunden wählten auch"**-Block mit Karten + "+ Hinzufügen"-Button (Amazon-Style)
+  - Trash-Button entfernt nur das Kind, Hinweis falls Pflicht-Zubehör entfernt wird
 
-## Voraussichtliche Edge Functions
-- `sales-analyze-cabinet` (Foto → Messpunkt-Vorschläge, Gemini Vision)
-- `sales-recommend-devices` (Messpunkte → Geräte-Empfehlung, Regeln + KI-Fallback)
-- `sales-generate-quote` (PDF + Online-Token)
-- `sales-convert-to-tenant` (Angebot → Mandant-Anlage)
+**Neu: `src/components/sales/AccessorySuggestions.tsx`**
+- Lädt von `sales-suggest-accessories`
+- Horizontale Scroll-Karten mit Bild/Name/Preis und Quick-Add
+- Dedup: blendet bereits hinzugefügtes Zubehör aus
 
-## Implementierungs-Reihenfolge
+**`QuoteBuilderSheet.tsx`**:
+- Vor "Angebot generieren" eine letzte Übersicht "Vollständigkeitsprüfung":
+  - Warnt wenn Gateway ohne Netzteil, Switch fehlt bei >4 IP-Geräten, etc.
+  - Gelbe Banner mit "Empfehlung übernehmen"-Button
 
-1. **Datenmodell**: Migration für alle neuen Tabellen + Rolle `sales_partner` + RLS
-2. **Super-Admin-Katalog**: Geräte-Katalog + Auswahl-Regeln pflegen (damit Tool später echte Daten hat)
-3. **Sales-PWA-Skelett**: `/sales` Routing, Layout, Projekt-CRUD
-4. **Wizard**: Liegenschaft → Verteilung → Messpunkt erfassen (manuell zuerst)
-5. **KI-Foto-Analyse**: Edge Function + UI-Integration
-6. **Geräte-Empfehlung**: Edge Function + UI
-7. **Modul-Auswahl**: Re-use `useModulePrices` / `useModuleBundles`
-8. **Angebots-Generierung**: PDF + Online-Token + öffentliche Quote-Seite
-9. **Mandanten-Konvertierung**: Edge Function + Übergabe-Workflow
-10. **Mobile-Optimierung & PWA-Manifest** (optional, nur Add-to-Homescreen, kein Service Worker)
+**`SalesProjectDetail.tsx`**: Projekt-Summary-Karte zeigt Anzahl pro Klasse ("3 Zähler · 1 Gateway · 1 Netzteil · 1 Switch")
 
-## Out of Scope (Phase 2)
-- Digitale Signatur mit Rechtskraft (Phase 1: einfache Bestätigung + E-Mail)
-- Offline-Modus während Begehung (Phase 2: IndexedDB-Cache)
-- Mehrere Angebots-Varianten parallel pro Projekt
-- Automatische Lieferanten-Bestellung der Geräte
+### 4. Dependency-Resolver (Frontend-Hook)
 
-## Klärungs-Punkt vor Implementierung
-Da dies sehr umfangreich wird, schlage ich vor in **5 separaten Iterationen** umzusetzen (Datenmodell+Katalog → Wizard → KI → Angebot → Konvertierung). Die erste Iteration legt die Grundlage; jede weitere ist sofort testbar.
+**Neu: `src/hooks/useAccessorySuggestions.ts`**
+- Zentral verwendet von `DeviceRecommendation` und `QuoteBuilderSheet`
+- Cache via React Query, Invalidation bei Änderung von `sales_recommended_devices`
+
+### Technische Details
+- Mengenformel-Evaluator: nur Whitelist-Ausdrücke (`ceil`, `floor`, Variablen `source.menge`, Konstanten), kein dynamischer JS-Code
+- RLS: `device_compatibility` analog zu `device_catalog` (lesen für Authenticated, schreiben nur Super-Admin)
+- Migration legt Indizes auf `device_compatibility(source_device_id)` und `sales_recommended_devices(parent_recommendation_id)`
+- i18n: neue Keys nur DE (Sales-App ist DE-only laut bisherigem Stand)
+
+### Reihenfolge
+1. Migration + Seed (Geräte, Klassen, Compat-Regeln)
+2. Admin-UI für Katalog-Pflege
+3. Edge Function `sales-suggest-accessories` + Erweiterung `sales-recommend-devices`
+4. UI: `AccessorySuggestions` + Integration in `DeviceRecommendation`
+5. PDF-Gruppierung in `sales-generate-quote`
+6. Vollständigkeitsprüfung im QuoteBuilder
 
