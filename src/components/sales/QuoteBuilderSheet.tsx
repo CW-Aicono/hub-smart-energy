@@ -13,6 +13,21 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useModulePrices } from "@/hooks/useModulePrices";
 import { toast } from "sonner";
 import { Loader2, Sparkles, FileDown, Package } from "lucide-react";
+import { ClassBadge } from "./ClassBadge";
+import { CompletenessCheck } from "./CompletenessCheck";
+
+const CLASS_LABELS: Record<string, string> = {
+  meter: "Zähler",
+  gateway: "Gateways & Steuerung",
+  power_supply: "Netzteile",
+  network_switch: "Netzwerk-Switches",
+  router: "Router",
+  addon_module: "Addon-Module",
+  cable: "Verkabelung",
+  accessory: "Zubehör & Montagematerial",
+  misc: "Sonstige",
+};
+const CLASS_ORDER = ["meter", "gateway", "addon_module", "power_supply", "network_switch", "router", "cable", "accessory", "misc"];
 
 interface Props {
   open: boolean;
