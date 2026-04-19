@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Trash2, Loader2 } from "lucide-react";
+import { Plus, Trash2, Loader2, Pencil, Check, X } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 
 interface CatalogItem {
@@ -37,6 +37,13 @@ export function CompatibilityEditor({ sourceDeviceId }: Props) {
   const [newRel, setNewRel] = useState("requires");
   const [newQty, setNewQty] = useState("1");
   const [newNotiz, setNewNotiz] = useState("");
+
+  // Inline edit state
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editRel, setEditRel] = useState("requires");
+  const [editQty, setEditQty] = useState("1");
+  const [editNotiz, setEditNotiz] = useState("");
+  const [savingEdit, setSavingEdit] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -80,6 +87,36 @@ export function CompatibilityEditor({ sourceDeviceId }: Props) {
     else load();
   };
 
+  const startEdit = (it: Compat) => {
+    setEditingId(it.id);
+    setEditRel(it.relation_type);
+    setEditQty(it.auto_quantity_formula || "1");
+    setEditNotiz(it.notiz ?? "");
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+  };
+
+  const saveEdit = async (id: string) => {
+    setSavingEdit(true);
+    const { error } = await supabase
+      .from("device_compatibility")
+      .update({
+        relation_type: editRel,
+        auto_quantity_formula: editQty || "1",
+        notiz: editNotiz.trim() || null,
+      })
+      .eq("id", id);
+    setSavingEdit(false);
+    if (error) {
+      toast({ title: "Fehler", description: error.message, variant: "destructive" });
+      return;
+    }
+    setEditingId(null);
+    load();
+  };
+
   if (loading) return <div className="text-sm text-muted-foreground">Lade…</div>;
 
   const catMap = new Map(catalog.map((c) => [c.id, c]));
@@ -92,6 +129,48 @@ export function CompatibilityEditor({ sourceDeviceId }: Props) {
         ) : (
           items.map((it) => {
             const t = catMap.get(it.target_device_id);
+            const isEditing = editingId === it.id;
+
+            if (isEditing) {
+              return (
+                <div key={it.id} className="rounded-md border border-primary/40 bg-primary/5 p-2 space-y-2">
+                  <div className="text-sm font-medium truncate">
+                    {t ? `${t.hersteller} ${t.modell}` : it.target_device_id}
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <Label className="text-xs">Beziehung</Label>
+                      <Select value={editRel} onValueChange={setEditRel}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="requires">Pflicht</SelectItem>
+                          <SelectItem value="recommends">Empfehlung</SelectItem>
+                          <SelectItem value="alternative">Alternative</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label className="text-xs">Menge / Formel</Label>
+                      <Input value={editQty} onChange={(e) => setEditQty(e.target.value)} />
+                    </div>
+                    <div className="col-span-2">
+                      <Label className="text-xs">Notiz</Label>
+                      <Input value={editNotiz} onChange={(e) => setEditNotiz(e.target.value)} placeholder="optional" />
+                    </div>
+                  </div>
+                  <div className="flex gap-2 justify-end">
+                    <Button size="sm" variant="ghost" onClick={cancelEdit} disabled={savingEdit}>
+                      <X className="h-4 w-4 mr-1" /> Abbrechen
+                    </Button>
+                    <Button size="sm" onClick={() => saveEdit(it.id)} disabled={savingEdit}>
+                      {savingEdit ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Check className="h-4 w-4 mr-1" />}
+                      Speichern
+                    </Button>
+                  </div>
+                </div>
+              );
+            }
+
             return (
               <div key={it.id} className="flex items-center gap-2 rounded-md border p-2 text-sm">
                 <Badge variant={it.relation_type === "requires" ? "destructive" : "secondary"}>
@@ -102,7 +181,10 @@ export function CompatibilityEditor({ sourceDeviceId }: Props) {
                   {it.notiz && <div className="text-xs text-muted-foreground truncate">{it.notiz}</div>}
                 </div>
                 <Badge variant="outline" className="text-xs">{it.auto_quantity_formula}</Badge>
-                <Button size="icon" variant="ghost" onClick={() => remove(it.id)}>
+                <Button size="icon" variant="ghost" onClick={() => startEdit(it)} title="Bearbeiten">
+                  <Pencil className="h-4 w-4" />
+                </Button>
+                <Button size="icon" variant="ghost" onClick={() => remove(it.id)} title="Löschen">
                   <Trash2 className="h-4 w-4 text-destructive" />
                 </Button>
               </div>
