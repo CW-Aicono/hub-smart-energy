@@ -239,6 +239,12 @@ curl http://homeassistant.local:8099/api/status
 }
 ```
 
+### Cloudflare-Tunnel-Hostname
+
+Beim Anlegen einer Home-Assistant-Integration im Backend wird automatisch ein Cloudflare Tunnel mit einem Public-Hostname unter **`<id>.aicono.org`** erzeugt (z. B. `b77488c1-e58.aicono.org`).
+
+> ⚠️ **Wichtig:** Es wird **nicht** mehr `<id>.tunnel.aicono.org` verwendet. Der 2-stufige Hostname ist nötig, damit Cloudflares Universal SSL automatisch ein gültiges HTTPS-Zertifikat ausstellt. Bestehende Tunnel mit `*.tunnel.aicono.org` müssen einmalig neu provisioniert werden („Tunnel neu einrichten" in der Liegenschafts-Integration klicken).
+
 ---
 
 ## 9. Lokales Dashboard (v2.0)
