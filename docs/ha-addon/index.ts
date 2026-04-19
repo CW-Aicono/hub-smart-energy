@@ -921,6 +921,7 @@ async function syncAutomationsFromCloud(): Promise<void> {
           console.log(`[sync] Pruned local automation ${local.id} (no longer in cloud)`);
         }
       }
+      lastAutomationCount = data.automations.length;
     }
   } catch (err) {
     markCloudUnreachable();
