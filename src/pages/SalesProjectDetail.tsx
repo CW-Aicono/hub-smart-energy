@@ -14,6 +14,7 @@ import { DeviceRecommendation } from "@/components/sales/DeviceRecommendation";
 import { QuoteBuilderSheet } from "@/components/sales/QuoteBuilderSheet";
 import { QuotesList } from "@/components/sales/QuotesList";
 import { ConvertProjectDialog } from "@/components/sales/ConvertProjectDialog";
+import { ClassBadge, CLASS_LABELS } from "@/components/sales/ClassBadge";
 import {
   AlertDialog,
   AlertDialogAction,
