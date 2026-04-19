@@ -11,6 +11,8 @@ import { Plus, Zap, Boxes, FileText, Trash2, MapPin, ChevronRight, Box, Camera }
 import { DistributionSheet } from "@/components/sales/DistributionSheet";
 import { MeasurementPointSheet } from "@/components/sales/MeasurementPointSheet";
 import { DeviceRecommendation } from "@/components/sales/DeviceRecommendation";
+import { QuoteBuilderSheet } from "@/components/sales/QuoteBuilderSheet";
+import { QuotesList } from "@/components/sales/QuotesList";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -74,6 +76,8 @@ export default function SalesProjectDetail() {
   const [loading, setLoading] = useState(true);
   const [distSheet, setDistSheet] = useState<{ open: boolean; editing?: Distribution | null }>({ open: false });
   const [pointSheet, setPointSheet] = useState<{ open: boolean; distributionId?: string; editing?: MeasurementPoint | null }>({ open: false });
+  const [quoteSheet, setQuoteSheet] = useState(false);
+  const [quotesReload, setQuotesReload] = useState(0);
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -339,13 +343,19 @@ export default function SalesProjectDetail() {
           </CardContent>
         </Card>
 
-        <Card className="opacity-60">
-          <CardContent className="p-4 flex items-center gap-3">
-            <FileText className="h-5 w-5 text-muted-foreground" />
-            <div className="flex-1">
-              <div className="font-medium text-sm">Angebot generieren</div>
-              <div className="text-xs text-muted-foreground">Verfügbar in Iteration 4</div>
-            </div>
+        <Card>
+          <CardHeader className="py-3">
+            <CardTitle className="text-base flex items-center gap-2">
+              <FileText className="h-4 w-4" />
+              Angebote
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <QuotesList
+              projectId={id!}
+              reloadKey={quotesReload}
+              onCreate={() => setQuoteSheet(true)}
+            />
           </CardContent>
         </Card>
       </div>
@@ -364,6 +374,14 @@ export default function SalesProjectDetail() {
         distributionId={pointSheet.distributionId ?? ""}
         editing={pointSheet.editing ?? null}
         onSaved={load}
+      />
+
+      <QuoteBuilderSheet
+        open={quoteSheet}
+        onOpenChange={setQuoteSheet}
+        projectId={id!}
+        kundeTyp={(project.kunde_typ as "standard" | "industry") ?? "standard"}
+        onGenerated={() => setQuotesReload((k) => k + 1)}
       />
     </SalesLayout>
   );
