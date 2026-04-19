@@ -105,19 +105,20 @@ export function DeviceCard({ device, onCommand, isAdmin, onKeyGenerated }: Devic
                 <Button variant="ghost" size="icon" onClick={() => setKeyDialogOpen(true)} title={t("gatewayDevices.apiKey")}>
                   <Key className="h-4 w-4" />
                 </Button>
-              <Button variant="ghost" size="icon" onClick={() => onCommand(device.id, "backup")} title={t("gatewayDevices.backup")}>
-                <Download className="h-4 w-4" />
-              </Button>
-              {hasUpdate && (
-                <Button variant="ghost" size="icon" onClick={() => onCommand(device.id, "update")} title={t("gatewayDevices.update")}>
-                  <ArrowUpCircle className="h-4 w-4" />
+                <Button variant="ghost" size="icon" onClick={() => onCommand(device.id, "backup")} title={t("gatewayDevices.backup")}>
+                  <Download className="h-4 w-4" />
                 </Button>
-              )}
-              <Button variant="ghost" size="icon" onClick={() => onCommand(device.id, "restart")} title={t("gatewayDevices.restart")}>
-                <RefreshCw className="h-4 w-4" />
-              </Button>
-            </div>
-          )}
+                {hasUpdate && (
+                  <Button variant="ghost" size="icon" onClick={() => onCommand(device.id, "update")} title={t("gatewayDevices.update")}>
+                    <ArrowUpCircle className="h-4 w-4" />
+                  </Button>
+                )}
+                <Button variant="ghost" size="icon" onClick={() => onCommand(device.id, "restart")} title={t("gatewayDevices.restart")}>
+                  <RefreshCw className="h-4 w-4" />
+                </Button>
+              </>
+            )}
+          </div>
         </div>
 
         {/* Metrics row */}
