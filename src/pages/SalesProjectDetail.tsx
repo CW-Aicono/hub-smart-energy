@@ -13,6 +13,7 @@ import { MeasurementPointSheet } from "@/components/sales/MeasurementPointSheet"
 import { DeviceRecommendation } from "@/components/sales/DeviceRecommendation";
 import { QuoteBuilderSheet } from "@/components/sales/QuoteBuilderSheet";
 import { QuotesList } from "@/components/sales/QuotesList";
+import { ConvertProjectDialog } from "@/components/sales/ConvertProjectDialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -33,6 +34,7 @@ interface Project {
   adresse: string | null;
   status: string;
   notizen: string | null;
+  converted_tenant_id: string | null;
 }
 
 interface Distribution {
@@ -82,7 +84,7 @@ export default function SalesProjectDetail() {
   const load = useCallback(async () => {
     if (!id) return;
     const [prRes, distRes] = await Promise.all([
-      supabase.from("sales_projects").select("id, kunde_name, kunde_typ, kontakt_name, adresse, status, notizen").eq("id", id).maybeSingle(),
+      supabase.from("sales_projects").select("id, kunde_name, kunde_typ, kontakt_name, adresse, status, notizen, converted_tenant_id").eq("id", id).maybeSingle(),
       supabase.from("sales_distributions").select("id, name, typ, standort, notizen, foto_url, ki_analyse").eq("project_id", id).order("created_at", { ascending: true }),
     ]);
     setProject((prRes.data as unknown) as Project | null);
@@ -350,11 +352,17 @@ export default function SalesProjectDetail() {
               Angebote
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-3">
             <QuotesList
               projectId={id!}
               reloadKey={quotesReload}
               onCreate={() => setQuoteSheet(true)}
+            />
+            <ConvertProjectDialog
+              projectId={id!}
+              alreadyConverted={!!project.converted_tenant_id}
+              convertedTenantId={project.converted_tenant_id}
+              onConverted={load}
             />
           </CardContent>
         </Card>
