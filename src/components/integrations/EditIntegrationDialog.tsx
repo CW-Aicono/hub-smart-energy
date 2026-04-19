@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -42,6 +42,8 @@ export function EditIntegrationDialog({
   const [tunnelResult, setTunnelResult] = useState<TunnelResult | null>(null);
   const [tokenCopied, setTokenCopied] = useState(false);
   const [baseConfig, setBaseConfig] = useState<Record<string, string>>({});
+  const previousOpenRef = useRef(false);
+  const previousIntegrationIdRef = useRef<string | null>(null);
   const { toast } = useToast();
   const { t } = useTranslation();
 
@@ -67,17 +69,30 @@ export function EditIntegrationDialog({
   });
 
   useEffect(() => {
-    if (locationIntegration && gatewayDef) {
-      const nextConfig = (locationIntegration.config as Record<string, string> | undefined) ?? {};
-      const vals: Record<string, string> = {};
-      for (const field of gatewayDef.configFields) {
-        vals[field.name] = nextConfig[field.name] || "";
-      }
-      setBaseConfig(nextConfig);
+    if (!locationIntegration || !gatewayDef || !open) {
+      previousOpenRef.current = open;
+      return;
+    }
+
+    const nextConfig = (locationIntegration.config as Record<string, string> | undefined) ?? {};
+    const vals: Record<string, string> = {};
+    for (const field of gatewayDef.configFields) {
+      vals[field.name] = nextConfig[field.name] || "";
+    }
+
+    const dialogJustOpened = !previousOpenRef.current && open;
+    const integrationChanged = previousIntegrationIdRef.current !== locationIntegration.id;
+
+    setBaseConfig(nextConfig);
+    form.reset(vals);
+
+    if (dialogJustOpened || integrationChanged) {
       setTunnelResult(null);
       setTokenCopied(false);
-      form.reset(vals);
     }
+
+    previousOpenRef.current = open;
+    previousIntegrationIdRef.current = locationIntegration.id;
   }, [locationIntegration, gatewayDef, form, open]);
 
   const handleProvisionTunnel = async () => {
