@@ -4434,6 +4434,53 @@ export type Database = {
           },
         ]
       }
+      sales_project_attachments: {
+        Row: {
+          content_type: string | null
+          created_at: string
+          file_name: string
+          file_path: string
+          file_size: number | null
+          id: string
+          kategorie: string
+          notiz: string | null
+          partner_id: string
+          project_id: string
+        }
+        Insert: {
+          content_type?: string | null
+          created_at?: string
+          file_name: string
+          file_path: string
+          file_size?: number | null
+          id?: string
+          kategorie?: string
+          notiz?: string | null
+          partner_id: string
+          project_id: string
+        }
+        Update: {
+          content_type?: string | null
+          created_at?: string
+          file_name?: string
+          file_path?: string
+          file_size?: number | null
+          id?: string
+          kategorie?: string
+          notiz?: string | null
+          partner_id?: string
+          project_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sales_project_attachments_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "sales_projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sales_projects: {
         Row: {
           accepted_at: string | null
