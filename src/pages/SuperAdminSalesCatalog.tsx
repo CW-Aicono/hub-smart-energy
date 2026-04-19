@@ -9,6 +9,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import {
@@ -18,8 +21,21 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Plus, Pencil, Trash2, Cpu } from "lucide-react";
+import { Plus, Pencil, Trash2, Cpu, Link2 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
+import { CompatibilityEditor } from "@/components/super-admin/CompatibilityEditor";
+
+const DEVICE_CLASSES = [
+  { value: "meter", label: "Zähler" },
+  { value: "gateway", label: "Gateway" },
+  { value: "power_supply", label: "Netzteil" },
+  { value: "network_switch", label: "Switch" },
+  { value: "router", label: "Router" },
+  { value: "addon_module", label: "Addon-Modul" },
+  { value: "cable", label: "Kabel" },
+  { value: "accessory", label: "Zubehör" },
+  { value: "misc", label: "Sonstige" },
+];
 
 interface DeviceCatalog {
   id: string;
