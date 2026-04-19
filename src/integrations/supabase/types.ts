@@ -4584,6 +4584,7 @@ export type Database = {
           signer_ip: string | null
           signer_name: string | null
           signer_user_agent: string | null
+          status: string
           total_einmalig: number
           updated_at: string
           version: number
@@ -4606,6 +4607,7 @@ export type Database = {
           signer_ip?: string | null
           signer_name?: string | null
           signer_user_agent?: string | null
+          status?: string
           total_einmalig?: number
           updated_at?: string
           version?: number
@@ -4628,6 +4630,7 @@ export type Database = {
           signer_ip?: string | null
           signer_name?: string | null
           signer_user_agent?: string | null
+          status?: string
           total_einmalig?: number
           updated_at?: string
           version?: number
@@ -4648,13 +4651,15 @@ export type Database = {
           begruendung: string | null
           created_at: string
           device_catalog_id: string
+          distribution_id: string | null
           geraete_klasse: string | null
           id: string
           ist_alternativ: boolean
-          measurement_point_id: string
+          measurement_point_id: string | null
           menge: number
           parent_recommendation_id: string | null
           partner_override: boolean
+          scope: string
           source: string
           updated_at: string
         }
@@ -4662,13 +4667,15 @@ export type Database = {
           begruendung?: string | null
           created_at?: string
           device_catalog_id: string
+          distribution_id?: string | null
           geraete_klasse?: string | null
           id?: string
           ist_alternativ?: boolean
-          measurement_point_id: string
+          measurement_point_id?: string | null
           menge?: number
           parent_recommendation_id?: string | null
           partner_override?: boolean
+          scope?: string
           source?: string
           updated_at?: string
         }
@@ -4676,13 +4683,15 @@ export type Database = {
           begruendung?: string | null
           created_at?: string
           device_catalog_id?: string
+          distribution_id?: string | null
           geraete_klasse?: string | null
           id?: string
           ist_alternativ?: boolean
-          measurement_point_id?: string
+          measurement_point_id?: string | null
           menge?: number
           parent_recommendation_id?: string | null
           partner_override?: boolean
+          scope?: string
           source?: string
           updated_at?: string
         }
@@ -4692,6 +4701,13 @@ export type Database = {
             columns: ["device_catalog_id"]
             isOneToOne: false
             referencedRelation: "device_catalog"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sales_recommended_devices_distribution_id_fkey"
+            columns: ["distribution_id"]
+            isOneToOne: false
+            referencedRelation: "sales_distributions"
             referencedColumns: ["id"]
           },
           {

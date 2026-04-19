@@ -13,6 +13,7 @@ import { MeasurementPointSheet } from "@/components/sales/MeasurementPointSheet"
 import { DeviceRecommendation } from "@/components/sales/DeviceRecommendation";
 import { QuoteBuilderSheet } from "@/components/sales/QuoteBuilderSheet";
 import { QuotesList } from "@/components/sales/QuotesList";
+import { DistributionHardwareList } from "@/components/sales/DistributionHardwareList";
 import { ConvertProjectDialog } from "@/components/sales/ConvertProjectDialog";
 import { ClassBadge, CLASS_LABELS } from "@/components/sales/ClassBadge";
 import {
@@ -312,7 +313,8 @@ export default function SalesProjectDetail() {
                       </div>
                     </div>
 
-                    <div className="border-t bg-background/50 px-3 py-2 space-y-2">
+                    <div className="border-t bg-background/50 px-3 py-2 space-y-3">
+                      <DistributionHardwareList distributionId={d.id} />
                       {dPoints.length === 0 ? (
                         <p className="text-xs text-muted-foreground py-1">Noch keine Messpunkte.</p>
                       ) : (

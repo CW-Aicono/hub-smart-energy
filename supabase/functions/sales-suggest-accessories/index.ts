@@ -146,45 +146,67 @@ Deno.serve(async (req) => {
       { global: { headers: { Authorization: authHeader } } },
     );
 
-    const { project_id, measurement_point_id } = await req.json() as {
+    const { project_id, measurement_point_id, distribution_id } = await req.json() as {
       project_id?: string;
       measurement_point_id?: string;
+      distribution_id?: string;
     };
-    if (!project_id && !measurement_point_id) {
-      return new Response(JSON.stringify({ error: "project_id or measurement_point_id required" }), {
+    if (!project_id && !measurement_point_id && !distribution_id) {
+      return new Response(JSON.stringify({ error: "project_id, measurement_point_id or distribution_id required" }), {
         status: 400, headers: { ...cors, "Content-Type": "application/json" },
       });
     }
 
-    // Resolve scope -> measurement_point_ids
+    // Sammle Geräte über Messpunkte + Verteilungen
     let pointIds: string[] = [];
+    let distIds: string[] = [];
+
     if (measurement_point_id) {
       pointIds = [measurement_point_id];
-    } else {
-      const { data: dists } = await supabase
-        .from("sales_distributions").select("id").eq("project_id", project_id!);
-      const distIds = (dists ?? []).map((d) => d.id);
-      if (distIds.length === 0) {
-        return new Response(JSON.stringify({ required: [], recommended: [] }), {
-          headers: { ...cors, "Content-Type": "application/json" },
-        });
-      }
+    } else if (distribution_id) {
+      distIds = [distribution_id];
       const { data: pts } = await supabase
-        .from("sales_measurement_points").select("id").in("distribution_id", distIds);
+        .from("sales_measurement_points").select("id").eq("distribution_id", distribution_id);
       pointIds = (pts ?? []).map((p) => p.id);
+    } else if (project_id) {
+      const { data: dists } = await supabase
+        .from("sales_distributions").select("id").eq("project_id", project_id);
+      distIds = (dists ?? []).map((d) => d.id);
+      if (distIds.length > 0) {
+        const { data: pts } = await supabase
+          .from("sales_measurement_points").select("id").in("distribution_id", distIds);
+        pointIds = (pts ?? []).map((p) => p.id);
+      }
     }
-    if (pointIds.length === 0) {
+
+    if (pointIds.length === 0 && distIds.length === 0) {
       return new Response(JSON.stringify({ required: [], recommended: [] }), {
         headers: { ...cors, "Content-Type": "application/json" },
       });
     }
 
-    // Aktuelle Hauptgerät-Empfehlungen (parent IS NULL) UND bereits verknüpftes Zubehör
-    const { data: allRecs } = await supabase
-      .from("sales_recommended_devices")
-      .select("id, device_catalog_id, menge, parent_recommendation_id, ist_alternativ")
-      .in("measurement_point_id", pointIds)
-      .eq("ist_alternativ", false);
+    // Aktuelle Empfehlungen aus beiden Scopes
+    const recPromises: Promise<any>[] = [];
+    if (pointIds.length) {
+      recPromises.push(
+        supabase
+          .from("sales_recommended_devices")
+          .select("id, device_catalog_id, menge, parent_recommendation_id, ist_alternativ, scope, distribution_id, measurement_point_id")
+          .in("measurement_point_id", pointIds)
+          .eq("ist_alternativ", false),
+      );
+    }
+    if (distIds.length) {
+      recPromises.push(
+        supabase
+          .from("sales_recommended_devices")
+          .select("id, device_catalog_id, menge, parent_recommendation_id, ist_alternativ, scope, distribution_id, measurement_point_id")
+          .in("distribution_id", distIds)
+          .eq("ist_alternativ", false),
+      );
+    }
+    const recResults = await Promise.all(recPromises);
+    const allRecs = recResults.flatMap((r) => r.data ?? []);
 
     const recs = allRecs ?? [];
     const mainRecs = recs.filter((r) => !r.parent_recommendation_id);
