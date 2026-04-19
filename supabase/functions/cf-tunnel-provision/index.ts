@@ -18,7 +18,9 @@ const CF_TOKEN = Deno.env.get("CLOUDFLARE_API_TOKEN")!;
 const CF_ACCOUNT = Deno.env.get("CLOUDFLARE_ACCOUNT_ID")!;
 const CF_ZONE = Deno.env.get("CLOUDFLARE_ZONE_ID")!;
 const ENC_KEY = Deno.env.get("BRIGHTHUB_ENCRYPTION_KEY") || SERVICE_KEY;
-const TUNNEL_DOMAIN = "tunnel.aicono.org";
+// 2-stufige Domain — Cloudflare Universal SSL deckt *.aicono.org automatisch ab.
+// 3-stufige Hosts wie *.tunnel.aicono.org würden ein Advanced-Certificate erfordern.
+const TUNNEL_DOMAIN = "aicono.org";
 
 interface CfApiResp<T> {
   success: boolean;
