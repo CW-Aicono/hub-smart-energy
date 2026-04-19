@@ -103,7 +103,12 @@ export function SalesLayout({ children, title = "Sales Scout", showBack, backTo,
           </div>
         </div>
       </header>
-      <main className="flex-1 max-w-3xl mx-auto w-full px-4 py-4 pb-24">{children}</main>
+      <main
+        className="flex-1 max-w-3xl mx-auto w-full px-4 py-4"
+        style={{ paddingBottom: "calc(6rem + env(safe-area-inset-bottom))" }}
+      >
+        {children}
+      </main>
     </div>
   );
 }
@@ -112,7 +117,8 @@ export function SalesFab({ to, label = "Neu" }: { to: string; label?: string }) 
   return (
     <Link
       to={to}
-      className="fixed bottom-6 right-6 z-40 flex items-center gap-2 rounded-full bg-primary text-primary-foreground shadow-lg px-5 py-3 hover:opacity-90 transition"
+      className="fixed right-4 z-40 flex items-center gap-2 rounded-full bg-primary text-primary-foreground shadow-lg px-5 py-4 hover:opacity-90 active:scale-95 transition min-h-[56px]"
+      style={{ bottom: "calc(1.5rem + env(safe-area-inset-bottom))" }}
     >
       <Plus className="h-5 w-5" />
       <span className="font-medium">{label}</span>
