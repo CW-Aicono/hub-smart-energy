@@ -9,6 +9,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import {
@@ -18,8 +21,21 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Plus, Pencil, Trash2, Cpu } from "lucide-react";
+import { Plus, Pencil, Trash2, Cpu, Link2 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
+import { CompatibilityEditor } from "@/components/super-admin/CompatibilityEditor";
+
+const DEVICE_CLASSES = [
+  { value: "meter", label: "Zähler" },
+  { value: "gateway", label: "Gateway" },
+  { value: "power_supply", label: "Netzteil" },
+  { value: "network_switch", label: "Switch" },
+  { value: "router", label: "Router" },
+  { value: "addon_module", label: "Addon-Modul" },
+  { value: "cable", label: "Kabel" },
+  { value: "accessory", label: "Zubehör" },
+  { value: "misc", label: "Sonstige" },
+];
 
 interface DeviceCatalog {
   id: string;
@@ -33,6 +49,8 @@ interface DeviceCatalog {
   bild_url: string | null;
   is_active: boolean;
   kompatibilitaet: any;
+  geraete_klasse: string;
+  einheit: string;
 }
 
 interface FormData {
@@ -45,11 +63,12 @@ interface FormData {
   datasheet_url: string;
   bild_url: string;
   is_active: boolean;
-  // kompatibilitaet (flat fields)
-  phasen: string; // "1" | "3" | "1,3"
+  geraete_klasse: string;
+  einheit: string;
+  phasen: string;
   max_strom_a: string;
-  montage: string; // "Hutschiene" | "Aufputz" | "Klemme" | ""
-  gateway_typ: string; // "Shelly" | "Loxone" | "Siemens" | "Unabhängig" | ""
+  montage: string;
+  gateway_typ: string;
 }
 
 const emptyForm: FormData = {
@@ -62,6 +81,8 @@ const emptyForm: FormData = {
   datasheet_url: "",
   bild_url: "",
   is_active: true,
+  geraete_klasse: "meter",
+  einheit: "Stück",
   phasen: "3",
   max_strom_a: "63",
   montage: "Hutschiene",
@@ -114,6 +135,8 @@ export default function SuperAdminSalesCatalog() {
       datasheet_url: item.datasheet_url || "",
       bild_url: item.bild_url || "",
       is_active: item.is_active,
+      geraete_klasse: item.geraete_klasse || "meter",
+      einheit: item.einheit || "Stück",
       phasen: Array.isArray(k.phasen) ? k.phasen.join(",") : (k.phasen ? String(k.phasen) : "3"),
       max_strom_a: k.max_strom_a ? String(k.max_strom_a) : "",
       montage: k.montage || "",
@@ -147,6 +170,8 @@ export default function SuperAdminSalesCatalog() {
       datasheet_url: form.datasheet_url.trim() || null,
       bild_url: form.bild_url.trim() || null,
       is_active: form.is_active,
+      geraete_klasse: form.geraete_klasse as any,
+      einheit: form.einheit || "Stück",
       kompatibilitaet,
     };
 

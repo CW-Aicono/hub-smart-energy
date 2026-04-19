@@ -66,6 +66,23 @@ function matchesRule(point: MeasurementPoint, cond: Record<string, unknown>): bo
   return true;
 }
 
+// Sehr eingeschränkter Mengenformel-Evaluator: Whitelist-Pattern, Variable source.menge
+function parseFormulaSafe(formula: string | null | undefined, sourceMenge: number): number {
+  if (!formula) return 1;
+  const f = formula.trim();
+  if (/^\d+$/.test(f)) return Math.max(1, parseInt(f, 10));
+  const m = f.match(/^(ceil|floor|round)\(\s*source\.menge\s*\/\s*(\d+(?:\.\d+)?)\s*\)$/);
+  if (m) {
+    const n = parseFloat(m[2]);
+    if (n > 0) {
+      const v = sourceMenge / n;
+      const r = m[1] === "ceil" ? Math.ceil(v) : m[1] === "floor" ? Math.floor(v) : Math.round(v);
+      return Math.max(1, r);
+    }
+  }
+  return 1;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -290,6 +307,13 @@ Deno.serve(async (req) => {
         .eq("partner_override", false);
     }
 
+    // Hauptgerät: Klasse mitspeichern (denormalisiert für UI-Filter)
+    const { data: chosenCat } = await supabase
+      .from("device_catalog")
+      .select("geraete_klasse")
+      .eq("id", chosenDeviceId)
+      .maybeSingle();
+
     const { data: inserted, error: insErr } = await supabase
       .from("sales_recommended_devices")
       .insert({
@@ -300,6 +324,7 @@ Deno.serve(async (req) => {
         ist_alternativ: false,
         partner_override: false,
         menge: 1,
+        geraete_klasse: chosenCat?.geraete_klasse ?? null,
       })
       .select("id, device_catalog_id, begruendung, source")
       .single();
@@ -309,6 +334,50 @@ Deno.serve(async (req) => {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
+    }
+
+    // Pflicht-Zubehör automatisch als Kind-Empfehlungen anlegen
+    try {
+      const { data: requiredCompats } = await supabase
+        .from("device_compatibility")
+        .select("target_device_id, auto_quantity_formula, notiz")
+        .eq("source_device_id", chosenDeviceId)
+        .eq("relation_type", "requires");
+
+      if (requiredCompats && requiredCompats.length > 0) {
+        const targetIds = requiredCompats.map((c) => c.target_device_id);
+        const { data: targets } = await supabase
+          .from("device_catalog")
+          .select("id, hersteller, modell, geraete_klasse")
+          .in("id", targetIds)
+          .eq("is_active", true);
+        const targetMap = new Map((targets ?? []).map((t) => [t.id, t]));
+
+        const childRows = requiredCompats
+          .map((c) => {
+            const t = targetMap.get(c.target_device_id);
+            if (!t) return null;
+            // Formel "1" für Pflichtteile als Default; komplexere Formeln gegen menge=1 evaluieren
+            const menge = parseFormulaSafe(c.auto_quantity_formula, 1);
+            return {
+              measurement_point_id,
+              device_catalog_id: c.target_device_id,
+              menge,
+              ist_alternativ: false,
+              partner_override: false,
+              source: "rule",
+              begruendung: `Pflicht-Zubehör für ${chosenCat ? "" : ""}${t.hersteller} ${t.modell}${c.notiz ? " – " + c.notiz : ""}`,
+              parent_recommendation_id: inserted.id,
+              geraete_klasse: t.geraete_klasse,
+            };
+          })
+          .filter(Boolean);
+        if (childRows.length > 0) {
+          await supabase.from("sales_recommended_devices").insert(childRows as unknown[]);
+        }
+      }
+    } catch (childErr) {
+      console.error("Pflicht-Zubehör konnte nicht angelegt werden:", childErr);
     }
 
     return new Response(JSON.stringify(inserted), {

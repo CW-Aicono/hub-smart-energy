@@ -1554,51 +1554,117 @@ export type Database = {
       }
       device_catalog: {
         Row: {
+          benoetigt_klassen: string[]
           beschreibung: string | null
           bild_url: string | null
           created_at: string
           datasheet_url: string | null
+          einheit: string
           ek_preis: number
+          geraete_klasse: Database["public"]["Enums"]["device_class"]
           hersteller: string
           id: string
           installations_pauschale: number
           is_active: boolean
           kompatibilitaet: Json
+          kompatible_klassen: string[]
           modell: string
+          tech_specs: Json
           updated_at: string
           vk_preis: number
         }
         Insert: {
+          benoetigt_klassen?: string[]
           beschreibung?: string | null
           bild_url?: string | null
           created_at?: string
           datasheet_url?: string | null
+          einheit?: string
           ek_preis?: number
+          geraete_klasse?: Database["public"]["Enums"]["device_class"]
           hersteller: string
           id?: string
           installations_pauschale?: number
           is_active?: boolean
           kompatibilitaet?: Json
+          kompatible_klassen?: string[]
           modell: string
+          tech_specs?: Json
           updated_at?: string
           vk_preis?: number
         }
         Update: {
+          benoetigt_klassen?: string[]
           beschreibung?: string | null
           bild_url?: string | null
           created_at?: string
           datasheet_url?: string | null
+          einheit?: string
           ek_preis?: number
+          geraete_klasse?: Database["public"]["Enums"]["device_class"]
           hersteller?: string
           id?: string
           installations_pauschale?: number
           is_active?: boolean
           kompatibilitaet?: Json
+          kompatible_klassen?: string[]
           modell?: string
+          tech_specs?: Json
           updated_at?: string
           vk_preis?: number
         }
         Relationships: []
+      }
+      device_compatibility: {
+        Row: {
+          auto_quantity_formula: string
+          created_at: string
+          id: string
+          notiz: string | null
+          prio: number
+          relation_type: string
+          source_device_id: string
+          target_device_id: string
+          updated_at: string
+        }
+        Insert: {
+          auto_quantity_formula?: string
+          created_at?: string
+          id?: string
+          notiz?: string | null
+          prio?: number
+          relation_type: string
+          source_device_id: string
+          target_device_id: string
+          updated_at?: string
+        }
+        Update: {
+          auto_quantity_formula?: string
+          created_at?: string
+          id?: string
+          notiz?: string | null
+          prio?: number
+          relation_type?: string
+          source_device_id?: string
+          target_device_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "device_compatibility_source_device_id_fkey"
+            columns: ["source_device_id"]
+            isOneToOne: false
+            referencedRelation: "device_catalog"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "device_compatibility_target_device_id_fkey"
+            columns: ["target_device_id"]
+            isOneToOne: false
+            referencedRelation: "device_catalog"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       device_selection_rules: {
         Row: {
@@ -4582,10 +4648,12 @@ export type Database = {
           begruendung: string | null
           created_at: string
           device_catalog_id: string
+          geraete_klasse: string | null
           id: string
           ist_alternativ: boolean
           measurement_point_id: string
           menge: number
+          parent_recommendation_id: string | null
           partner_override: boolean
           source: string
           updated_at: string
@@ -4594,10 +4662,12 @@ export type Database = {
           begruendung?: string | null
           created_at?: string
           device_catalog_id: string
+          geraete_klasse?: string | null
           id?: string
           ist_alternativ?: boolean
           measurement_point_id: string
           menge?: number
+          parent_recommendation_id?: string | null
           partner_override?: boolean
           source?: string
           updated_at?: string
@@ -4606,10 +4676,12 @@ export type Database = {
           begruendung?: string | null
           created_at?: string
           device_catalog_id?: string
+          geraete_klasse?: string | null
           id?: string
           ist_alternativ?: boolean
           measurement_point_id?: string
           menge?: number
+          parent_recommendation_id?: string | null
           partner_override?: boolean
           source?: string
           updated_at?: string
@@ -4627,6 +4699,13 @@ export type Database = {
             columns: ["measurement_point_id"]
             isOneToOne: false
             referencedRelation: "sales_measurement_points"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sales_recommended_devices_parent_recommendation_id_fkey"
+            columns: ["parent_recommendation_id"]
+            isOneToOne: false
+            referencedRelation: "sales_recommended_devices"
             referencedColumns: ["id"]
           },
         ]
@@ -6148,6 +6227,16 @@ export type Database = {
     }
     Enums: {
       app_role: "admin" | "user" | "super_admin" | "sales_partner"
+      device_class:
+        | "meter"
+        | "gateway"
+        | "power_supply"
+        | "network_switch"
+        | "router"
+        | "addon_module"
+        | "cable"
+        | "accessory"
+        | "misc"
       energy_type: "strom" | "gas" | "waerme" | "wasser"
       location_type: "einzelgebaeude" | "gebaeudekomplex" | "sonstiges"
       location_usage_type:
@@ -6288,6 +6377,17 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["admin", "user", "super_admin", "sales_partner"],
+      device_class: [
+        "meter",
+        "gateway",
+        "power_supply",
+        "network_switch",
+        "router",
+        "addon_module",
+        "cable",
+        "accessory",
+        "misc",
+      ],
       energy_type: ["strom", "gas", "waerme", "wasser"],
       location_type: ["einzelgebaeude", "gebaeudekomplex", "sonstiges"],
       location_usage_type: [

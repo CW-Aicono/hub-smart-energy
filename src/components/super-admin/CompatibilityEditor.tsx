@@ -1,0 +1,155 @@
+import { useEffect, useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Plus, Trash2, Loader2 } from "lucide-react";
+import { toast } from "@/hooks/use-toast";
+
+interface CatalogItem {
+  id: string;
+  hersteller: string;
+  modell: string;
+}
+
+interface Compat {
+  id: string;
+  source_device_id: string;
+  target_device_id: string;
+  relation_type: string;
+  auto_quantity_formula: string;
+  prio: number;
+  notiz: string | null;
+}
+
+interface Props {
+  sourceDeviceId: string;
+}
+
+export function CompatibilityEditor({ sourceDeviceId }: Props) {
+  const [items, setItems] = useState<Compat[]>([]);
+  const [catalog, setCatalog] = useState<CatalogItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [adding, setAdding] = useState(false);
+  const [newTarget, setNewTarget] = useState("");
+  const [newRel, setNewRel] = useState("requires");
+  const [newQty, setNewQty] = useState("1");
+  const [newNotiz, setNewNotiz] = useState("");
+
+  const load = async () => {
+    setLoading(true);
+    const [c, cat] = await Promise.all([
+      supabase
+        .from("device_compatibility")
+        .select("*")
+        .eq("source_device_id", sourceDeviceId)
+        .order("prio"),
+      supabase.from("device_catalog").select("id, hersteller, modell").eq("is_active", true).order("hersteller"),
+    ]);
+    setItems((c.data ?? []) as Compat[]);
+    setCatalog((cat.data ?? []) as CatalogItem[]);
+    setLoading(false);
+  };
+
+  useEffect(() => { load(); }, [sourceDeviceId]);
+
+  const add = async () => {
+    if (!newTarget) return;
+    setAdding(true);
+    const { error } = await supabase.from("device_compatibility").insert({
+      source_device_id: sourceDeviceId,
+      target_device_id: newTarget,
+      relation_type: newRel,
+      auto_quantity_formula: newQty || "1",
+      notiz: newNotiz.trim() || null,
+    });
+    setAdding(false);
+    if (error) {
+      toast({ title: "Fehler", description: error.message, variant: "destructive" });
+      return;
+    }
+    setNewTarget(""); setNewQty("1"); setNewNotiz("");
+    load();
+  };
+
+  const remove = async (id: string) => {
+    const { error } = await supabase.from("device_compatibility").delete().eq("id", id);
+    if (error) toast({ title: "Fehler", description: error.message, variant: "destructive" });
+    else load();
+  };
+
+  if (loading) return <div className="text-sm text-muted-foreground">Lade…</div>;
+
+  const catMap = new Map(catalog.map((c) => [c.id, c]));
+
+  return (
+    <div className="space-y-3">
+      <div className="space-y-1.5">
+        {items.length === 0 ? (
+          <div className="text-sm text-muted-foreground py-2">Noch keine Beziehungen.</div>
+        ) : (
+          items.map((it) => {
+            const t = catMap.get(it.target_device_id);
+            return (
+              <div key={it.id} className="flex items-center gap-2 rounded-md border p-2 text-sm">
+                <Badge variant={it.relation_type === "requires" ? "destructive" : "secondary"}>
+                  {it.relation_type === "requires" ? "Pflicht" : it.relation_type === "recommends" ? "Empfehlung" : "Alternative"}
+                </Badge>
+                <div className="flex-1 min-w-0">
+                  <div className="truncate">{t ? `${t.hersteller} ${t.modell}` : it.target_device_id}</div>
+                  {it.notiz && <div className="text-xs text-muted-foreground truncate">{it.notiz}</div>}
+                </div>
+                <Badge variant="outline" className="text-xs">{it.auto_quantity_formula}</Badge>
+                <Button size="icon" variant="ghost" onClick={() => remove(it.id)}>
+                  <Trash2 className="h-4 w-4 text-destructive" />
+                </Button>
+              </div>
+            );
+          })
+        )}
+      </div>
+
+      <div className="rounded-md border p-3 space-y-2">
+        <div className="text-sm font-medium">Beziehung hinzufügen</div>
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <Label className="text-xs">Ziel-Gerät</Label>
+            <Select value={newTarget} onValueChange={setNewTarget}>
+              <SelectTrigger><SelectValue placeholder="Gerät wählen" /></SelectTrigger>
+              <SelectContent>
+                {catalog.filter((c) => c.id !== sourceDeviceId).map((c) => (
+                  <SelectItem key={c.id} value={c.id}>{c.hersteller} {c.modell}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label className="text-xs">Beziehung</Label>
+            <Select value={newRel} onValueChange={setNewRel}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="requires">Pflicht</SelectItem>
+                <SelectItem value="recommends">Empfehlung</SelectItem>
+                <SelectItem value="alternative">Alternative</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label className="text-xs">Menge / Formel</Label>
+            <Input value={newQty} onChange={(e) => setNewQty(e.target.value)} placeholder="1 oder ceil(source.menge/8)" />
+          </div>
+          <div>
+            <Label className="text-xs">Notiz</Label>
+            <Input value={newNotiz} onChange={(e) => setNewNotiz(e.target.value)} placeholder="optional" />
+          </div>
+        </div>
+        <Button size="sm" onClick={add} disabled={!newTarget || adding} className="w-full">
+          {adding ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Plus className="h-4 w-4 mr-1" />}
+          Hinzufügen
+        </Button>
+      </div>
+    </div>
+  );
+}
