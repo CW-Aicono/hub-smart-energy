@@ -67,7 +67,7 @@ const config = loadConfig();
 const SUPERVISOR_TOKEN = process.env.SUPERVISOR_TOKEN || "";
 const HA_API_BASE = "http://supervisor/core/api";
 const INGEST_URL = `${config.cloud_url}/functions/v1/gateway-ingest`;
-const ADDON_VERSION = "2.2.2";
+const ADDON_VERSION = "2.2.3";
 
 /* ── Cloudflare Tunnel Subprocess ────────────────────────────────────────────── */
 import { spawn, ChildProcess } from "child_process";
@@ -1105,10 +1105,16 @@ async function sendHeartbeat(): Promise<void> {
 }
 
 let cachedHostIP: string | null = null;
+let cachedHostIPAt = 0;
+const HOST_IP_TTL_MS = 5 * 60 * 1000; // refresh every 5 min to catch DHCP changes after reboot
 
 async function getLocalIP(): Promise<string> {
-  // Try cached value first (refresh every heartbeat cycle anyway)
-  if (cachedHostIP) return cachedHostIP;
+  // Cached value is valid for HOST_IP_TTL_MS – ensures DHCP changes
+  // (e.g. after a power outage / reboot) are picked up automatically.
+  if (cachedHostIP && Date.now() - cachedHostIPAt < HOST_IP_TTL_MS) {
+    return cachedHostIP;
+  }
+  cachedHostIP = null;
 
   // Use HA Supervisor API to get actual host LAN IP
   try {
@@ -1127,6 +1133,7 @@ async function getLocalIP(): Promise<string> {
               if (ipv4) {
                 // Format is "192.168.1.100/24" – strip CIDR suffix
                 cachedHostIP = ipv4.split("/")[0] ?? "localhost";
+                cachedHostIPAt = Date.now();
                 return cachedHostIP ?? "localhost";
               }
             }
@@ -1137,6 +1144,7 @@ async function getLocalIP(): Promise<string> {
               const ipv4 = iface.ipv4?.address?.[0];
               if (ipv4) {
                 cachedHostIP = ipv4.split("/")[0] ?? "localhost";
+                cachedHostIPAt = Date.now();
                 return cachedHostIP ?? "localhost";
               }
             }
@@ -1651,12 +1659,29 @@ async function main(): Promise<void> {
   // Flush loop
   setInterval(() => flushBuffer(), config.flush_interval_seconds * 1000);
 
-  // Heartbeat loop
-  setInterval(async () => {
-    await checkCloudConnectivity();
-    await fetchHAVersion();
-    await sendHeartbeat();
-  }, config.heartbeat_interval_seconds * 1000);
+  // Heartbeat loop – self-healing recursive timer.
+  // After a power outage / reboot, the first heartbeat may fail (DNS, network
+  // not yet up). We retry quickly (10s) instead of waiting a full cycle, and
+  // we wrap in try/catch so an unhandled error never kills the loop.
+  const heartbeatTick = async () => {
+    let nextDelayMs = config.heartbeat_interval_seconds * 1000;
+    try {
+      await checkCloudConnectivity();
+      await fetchHAVersion();
+      await sendHeartbeat();
+      if (!isCloudReachable) {
+        // Retry quickly while cloud is unreachable so recovery after reboot
+        // is reflected on the dashboard within seconds, not a full minute.
+        nextDelayMs = 10_000;
+      }
+    } catch (err) {
+      console.error("[heartbeat-loop] Tick failed:", err);
+      nextDelayMs = 10_000;
+    } finally {
+      setTimeout(heartbeatTick, nextDelayMs);
+    }
+  };
+  setTimeout(heartbeatTick, config.heartbeat_interval_seconds * 1000);
 
   // Automation evaluation loop
   setInterval(() => evaluateAndExecuteAutomations(), config.automation_eval_seconds * 1000);
