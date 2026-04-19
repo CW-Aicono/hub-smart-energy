@@ -58,12 +58,6 @@ export default function PublicSalesQuote() {
     document.title = "Ihr AICONO-Angebot";
     (async () => {
       try {
-        const { data, error: fnError } = await supabase.functions.invoke("sales-public-quote", {
-          method: "GET",
-          // @ts-expect-error supabase-js v2 supports query but typing is loose
-          headers: {},
-        });
-        // Workaround: invoke doesn't pass query params well via GET; use direct fetch
         const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/sales-public-quote?token=${encodeURIComponent(token)}`;
         const resp = await fetch(url, {
           headers: { apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY },
