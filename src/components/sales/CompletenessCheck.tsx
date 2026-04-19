@@ -105,6 +105,24 @@ export function CompletenessCheck({ projectId, onFixed }: Props) {
       });
     }
 
+    // Pro Verteilung: >1 Gateway → Switch empfohlen
+    const gatewaysByDist = new Map<string, number>();
+    for (const r of allRecs) {
+      const klasse = r.device_catalog?.geraete_klasse ?? r.geraete_klasse;
+      if (klasse !== "gateway") continue;
+      const distKey = r.distribution_id ?? "_mp_" + (r.measurement_point_id ?? "");
+      gatewaysByDist.set(distKey, (gatewaysByDist.get(distKey) ?? 0) + 1);
+    }
+    for (const [distKey, count] of gatewaysByDist) {
+      if (count > 1 && !allClasses.has("network_switch")) {
+        found.push({
+          severity: "info",
+          message: `Eine Verteilung hat ${count} Gateways – ein Switch wird empfohlen.`,
+        });
+        break;
+      }
+    }
+
     setIssues(found);
     setLoading(false);
   };
