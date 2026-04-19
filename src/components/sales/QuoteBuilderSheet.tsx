@@ -13,6 +13,21 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useModulePrices } from "@/hooks/useModulePrices";
 import { toast } from "sonner";
 import { Loader2, Sparkles, FileDown, Package } from "lucide-react";
+import { ClassBadge } from "./ClassBadge";
+import { CompletenessCheck } from "./CompletenessCheck";
+
+const CLASS_LABELS: Record<string, string> = {
+  meter: "Zähler",
+  gateway: "Gateways & Steuerung",
+  power_supply: "Netzteile",
+  network_switch: "Netzwerk-Switches",
+  router: "Router",
+  addon_module: "Addon-Module",
+  cable: "Verkabelung",
+  accessory: "Zubehör & Montagematerial",
+  misc: "Sonstige",
+};
+const CLASS_ORDER = ["meter", "gateway", "addon_module", "power_supply", "network_switch", "router", "cable", "accessory", "misc"];
 
 interface Props {
   open: boolean;
@@ -33,6 +48,9 @@ interface DeviceLine {
   menge: number;
   vk: number;
   inst: number;
+  einheit: string;
+  klasse: string;
+  isChild: boolean;
 }
 
 export function QuoteBuilderSheet({ open, onOpenChange, projectId, kundeTyp, onGenerated }: Props) {
@@ -83,7 +101,7 @@ export function QuoteBuilderSheet({ open, onOpenChange, projectId, kundeTyp, onG
           } else {
             const { data: recs } = await supabase
               .from("sales_recommended_devices")
-              .select("device_catalog_id, menge, ist_alternativ")
+              .select("device_catalog_id, menge, ist_alternativ, parent_recommendation_id, geraete_klasse")
               .in("measurement_point_id", ptIds)
               .eq("ist_alternativ", false);
             const ids = Array.from(new Set((recs ?? []).map((r) => r.device_catalog_id)));
@@ -92,7 +110,7 @@ export function QuoteBuilderSheet({ open, onOpenChange, projectId, kundeTyp, onG
             } else {
               const { data: cat } = await supabase
                 .from("device_catalog")
-                .select("id, hersteller, modell, vk_preis, installations_pauschale")
+                .select("id, hersteller, modell, vk_preis, installations_pauschale, geraete_klasse, einheit")
                 .in("id", ids);
               const catMap = new Map((cat ?? []).map((c) => [c.id, c]));
               const lines: DeviceLine[] = [];
@@ -104,6 +122,9 @@ export function QuoteBuilderSheet({ open, onOpenChange, projectId, kundeTyp, onG
                   menge: r.menge,
                   vk: Number(c.vk_preis),
                   inst: Number(c.installations_pauschale),
+                  einheit: c.einheit ?? "Stück",
+                  klasse: c.geraete_klasse ?? r.geraete_klasse ?? "misc",
+                  isChild: !!r.parent_recommendation_id,
                 });
               }
               setDevices(lines);
@@ -190,7 +211,7 @@ export function QuoteBuilderSheet({ open, onOpenChange, projectId, kundeTyp, onG
           </div>
         ) : (
           <div className="space-y-5 mt-4 pb-32">
-            {/* Devices */}
+            {/* Devices grouped by class */}
             <section>
               <h3 className="text-sm font-semibold flex items-center gap-2 mb-2">
                 <Package className="h-4 w-4" /> Hardware (einmalig)
@@ -200,20 +221,41 @@ export function QuoteBuilderSheet({ open, onOpenChange, projectId, kundeTyp, onG
                   Keine Geräte ausgewählt. Lege zuerst Empfehlungen pro Messpunkt an.
                 </div>
               ) : (
-                <div className="border rounded-md divide-y">
-                  {devices.map((d, i) => (
-                    <div key={i} className="p-2 flex items-center justify-between text-sm">
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate font-medium">{d.name}</div>
-                        <div className="text-xs text-muted-foreground">
-                          {d.menge}× · {d.vk.toFixed(2)} € + {d.inst.toFixed(2)} € Inst.
+                <div className="space-y-3">
+                  {CLASS_ORDER.filter((k) => devices.some((d) => d.klasse === k)).map((klasse) => {
+                    const group = devices.filter((d) => d.klasse === klasse);
+                    const groupSum = group.reduce((s, d) => s + (d.vk + d.inst) * d.menge, 0);
+                    return (
+                      <div key={klasse} className="border rounded-md">
+                        <div className="flex items-center justify-between gap-2 px-2 py-1.5 bg-muted/40 rounded-t-md">
+                          <div className="flex items-center gap-2">
+                            <ClassBadge klasse={klasse} />
+                            <span className="text-xs font-medium">{CLASS_LABELS[klasse] ?? klasse}</span>
+                            <Badge variant="outline" className="text-[10px] h-4 px-1">{group.length}</Badge>
+                          </div>
+                          <span className="text-xs font-medium tabular-nums">{groupSum.toFixed(2)} €</span>
+                        </div>
+                        <div className="divide-y">
+                          {group.map((d, i) => (
+                            <div key={i} className={`p-2 flex items-center justify-between text-sm ${d.isChild ? "pl-6" : ""}`}>
+                              <div className="min-w-0 flex-1">
+                                <div className="truncate font-medium">
+                                  {d.isChild && <span className="text-muted-foreground mr-1">↳</span>}
+                                  {d.name}
+                                </div>
+                                <div className="text-xs text-muted-foreground">
+                                  {d.menge} {d.einheit} · {d.vk.toFixed(2)} € + {d.inst.toFixed(2)} € Inst.
+                                </div>
+                              </div>
+                              <div className="text-sm font-medium tabular-nums">
+                                {((d.vk + d.inst) * d.menge).toFixed(2)} €
+                              </div>
+                            </div>
+                          ))}
                         </div>
                       </div>
-                      <div className="text-sm font-medium tabular-nums">
-                        {((d.vk + d.inst) * d.menge).toFixed(2)} €
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
               <div className="text-right text-sm mt-2">
@@ -221,6 +263,10 @@ export function QuoteBuilderSheet({ open, onOpenChange, projectId, kundeTyp, onG
                 <span className="font-medium">{installationSumme.toFixed(2)} €</span>
               </div>
             </section>
+
+            <Separator />
+
+            <CompletenessCheck projectId={projectId} onFixed={() => { /* reload trigger */ }} />
 
             <Separator />
 

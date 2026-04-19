@@ -21,9 +21,11 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Plus, Pencil, Trash2, Cpu, Link2 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { CompatibilityEditor } from "@/components/super-admin/CompatibilityEditor";
+import { ClassBadge } from "@/components/sales/ClassBadge";
 
 const DEVICE_CLASSES = [
   { value: "meter", label: "Zähler" },
@@ -36,6 +38,8 @@ const DEVICE_CLASSES = [
   { value: "accessory", label: "Zubehör" },
   { value: "misc", label: "Sonstige" },
 ];
+
+const EINHEITEN = ["Stück", "Meter", "Pauschal"];
 
 interface DeviceCatalog {
   id: string;
@@ -96,12 +100,14 @@ export default function SuperAdminSalesCatalog() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<FormData>(emptyForm);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [classFilter, setClassFilter] = useState<string>("all");
 
   const load = async () => {
     setLoading(true);
     const { data, error } = await supabase
       .from("device_catalog")
       .select("*")
+      .order("geraete_klasse")
       .order("hersteller")
       .order("modell");
     if (error) {
@@ -137,7 +143,7 @@ export default function SuperAdminSalesCatalog() {
       is_active: item.is_active,
       geraete_klasse: item.geraete_klasse || "meter",
       einheit: item.einheit || "Stück",
-      phasen: Array.isArray(k.phasen) ? k.phasen.join(",") : (k.phasen ? String(k.phasen) : "3"),
+      phasen: Array.isArray(k.phasen) ? k.phasen.join(",") : (k.phasen ? String(k.phasen) : ""),
       max_strom_a: k.max_strom_a ? String(k.max_strom_a) : "",
       montage: k.montage || "",
       gateway_typ: k.gateway_typ || "",
@@ -175,17 +181,24 @@ export default function SuperAdminSalesCatalog() {
       kompatibilitaet,
     };
 
-    const { error } = editingId
-      ? await supabase.from("device_catalog").update(payload).eq("id", editingId)
-      : await supabase.from("device_catalog").insert(payload);
-
-    if (error) {
-      toast({ title: "Fehler", description: error.message, variant: "destructive" });
-      return;
+    if (editingId) {
+      const { error } = await supabase.from("device_catalog").update(payload).eq("id", editingId);
+      if (error) {
+        toast({ title: "Fehler", description: error.message, variant: "destructive" });
+        return;
+      }
+      toast({ title: "Aktualisiert" });
+      load();
+    } else {
+      const { data, error } = await supabase.from("device_catalog").insert(payload).select("id").single();
+      if (error) {
+        toast({ title: "Fehler", description: error.message, variant: "destructive" });
+        return;
+      }
+      toast({ title: "Angelegt" });
+      setEditingId(data.id);
+      load();
     }
-    toast({ title: editingId ? "Aktualisiert" : "Angelegt" });
-    setDialogOpen(false);
-    load();
   };
 
   const remove = async () => {
@@ -199,6 +212,12 @@ export default function SuperAdminSalesCatalog() {
     setDeleteId(null);
     load();
   };
+
+  const filtered = classFilter === "all" ? items : items.filter((i) => i.geraete_klasse === classFilter);
+  const classCounts = DEVICE_CLASSES.map((c) => ({
+    ...c,
+    count: items.filter((i) => i.geraete_klasse === c.value).length,
+  }));
 
   return (
     <div className="flex min-h-screen bg-background">
@@ -221,23 +240,44 @@ export default function SuperAdminSalesCatalog() {
             </Button>
           </div>
 
+          <div className="flex flex-wrap gap-2">
+            <Button
+              size="sm"
+              variant={classFilter === "all" ? "default" : "outline"}
+              onClick={() => setClassFilter("all")}
+            >
+              Alle ({items.length})
+            </Button>
+            {classCounts.filter((c) => c.count > 0).map((c) => (
+              <Button
+                key={c.value}
+                size="sm"
+                variant={classFilter === c.value ? "default" : "outline"}
+                onClick={() => setClassFilter(c.value)}
+              >
+                {c.label} ({c.count})
+              </Button>
+            ))}
+          </div>
+
           <Card>
             <CardHeader>
-              <CardTitle>Geräte ({items.length})</CardTitle>
+              <CardTitle>Geräte ({filtered.length})</CardTitle>
             </CardHeader>
             <CardContent>
               {loading ? (
                 <div className="text-muted-foreground">Lade …</div>
-              ) : items.length === 0 ? (
+              ) : filtered.length === 0 ? (
                 <div className="py-8 text-center text-muted-foreground">
-                  Noch keine Geräte angelegt.
+                  Keine Geräte in dieser Klasse.
                 </div>
               ) : (
                 <Table>
                   <TableHeader>
                     <TableRow>
+                      <TableHead>Klasse</TableHead>
                       <TableHead>Hersteller / Modell</TableHead>
-                      <TableHead>Kompatibilität</TableHead>
+                      <TableHead>Einheit</TableHead>
                       <TableHead className="text-right">EK €</TableHead>
                       <TableHead className="text-right">VK €</TableHead>
                       <TableHead className="text-right">Installation €</TableHead>
@@ -246,49 +286,32 @@ export default function SuperAdminSalesCatalog() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {items.map((it) => {
-                      const k = it.kompatibilitaet || {};
-                      return (
-                        <TableRow key={it.id}>
-                          <TableCell>
-                            <div className="font-medium">{it.hersteller}</div>
-                            <div className="text-xs text-muted-foreground">{it.modell}</div>
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex flex-wrap gap-1">
-                              {k.phasen && (
-                                <Badge variant="outline">
-                                  {Array.isArray(k.phasen) ? k.phasen.join("/") : k.phasen}-phasig
-                                </Badge>
-                              )}
-                              {k.max_strom_a && <Badge variant="outline">≤ {k.max_strom_a} A</Badge>}
-                              {k.montage && <Badge variant="outline">{k.montage}</Badge>}
-                              {k.gateway_typ && <Badge variant="secondary">{k.gateway_typ}</Badge>}
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-right">{Number(it.ek_preis).toFixed(2)}</TableCell>
-                          <TableCell className="text-right">{Number(it.vk_preis).toFixed(2)}</TableCell>
-                          <TableCell className="text-right">{Number(it.installations_pauschale).toFixed(2)}</TableCell>
-                          <TableCell>
-                            {it.is_active ? (
-                              <Badge>aktiv</Badge>
-                            ) : (
-                              <Badge variant="outline">inaktiv</Badge>
-                            )}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <div className="flex justify-end gap-1">
-                              <Button size="icon" variant="ghost" onClick={() => openEdit(it)}>
-                                <Pencil className="h-4 w-4" />
-                              </Button>
-                              <Button size="icon" variant="ghost" onClick={() => setDeleteId(it.id)}>
-                                <Trash2 className="h-4 w-4 text-destructive" />
-                              </Button>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
+                    {filtered.map((it) => (
+                      <TableRow key={it.id}>
+                        <TableCell><ClassBadge klasse={it.geraete_klasse} /></TableCell>
+                        <TableCell>
+                          <div className="font-medium">{it.hersteller}</div>
+                          <div className="text-xs text-muted-foreground">{it.modell}</div>
+                        </TableCell>
+                        <TableCell><span className="text-xs">{it.einheit}</span></TableCell>
+                        <TableCell className="text-right">{Number(it.ek_preis).toFixed(2)}</TableCell>
+                        <TableCell className="text-right">{Number(it.vk_preis).toFixed(2)}</TableCell>
+                        <TableCell className="text-right">{Number(it.installations_pauschale).toFixed(2)}</TableCell>
+                        <TableCell>
+                          {it.is_active ? <Badge>aktiv</Badge> : <Badge variant="outline">inaktiv</Badge>}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-1">
+                            <Button size="icon" variant="ghost" onClick={() => openEdit(it)}>
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            <Button size="icon" variant="ghost" onClick={() => setDeleteId(it.id)}>
+                              <Trash2 className="h-4 w-4 text-destructive" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
                   </TableBody>
                 </Table>
               )}
@@ -302,77 +325,119 @@ export default function SuperAdminSalesCatalog() {
           <DialogHeader>
             <DialogTitle>{editingId ? "Gerät bearbeiten" : "Neues Gerät"}</DialogTitle>
           </DialogHeader>
-          <div className="grid gap-4 py-2">
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label>Hersteller *</Label>
-                <Input value={form.hersteller} onChange={(e) => setForm({ ...form, hersteller: e.target.value })} placeholder="z. B. Shelly" />
-              </div>
-              <div>
-                <Label>Modell *</Label>
-                <Input value={form.modell} onChange={(e) => setForm({ ...form, modell: e.target.value })} placeholder="z. B. Pro 3EM" />
-              </div>
-            </div>
 
-            <div className="grid grid-cols-3 gap-3">
-              <div>
-                <Label>EK-Preis €</Label>
-                <Input type="number" step="0.01" value={form.ek_preis} onChange={(e) => setForm({ ...form, ek_preis: e.target.value })} />
-              </div>
-              <div>
-                <Label>VK-Preis €</Label>
-                <Input type="number" step="0.01" value={form.vk_preis} onChange={(e) => setForm({ ...form, vk_preis: e.target.value })} />
-              </div>
-              <div>
-                <Label>Installation €</Label>
-                <Input type="number" step="0.01" value={form.installations_pauschale} onChange={(e) => setForm({ ...form, installations_pauschale: e.target.value })} />
-              </div>
-            </div>
+          <Tabs defaultValue="basis">
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="basis">Basis & Preise</TabsTrigger>
+              <TabsTrigger value="compat" disabled={!editingId}>
+                <Link2 className="h-3.5 w-3.5 mr-1" /> Kompatibilität
+              </TabsTrigger>
+            </TabsList>
 
-            <div className="rounded-md border p-3 space-y-3">
-              <div className="text-sm font-medium">Kompatibilität (für Auswahl-Regeln)</div>
+            <TabsContent value="basis" className="space-y-4 py-2">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <Label>Phasen (Komma-getrennt)</Label>
-                  <Input value={form.phasen} onChange={(e) => setForm({ ...form, phasen: e.target.value })} placeholder="1,3" />
+                  <Label>Geräteklasse *</Label>
+                  <Select value={form.geraete_klasse} onValueChange={(v) => setForm({ ...form, geraete_klasse: v })}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {DEVICE_CLASSES.map((c) => (
+                        <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div>
-                  <Label>Max. Strom (A)</Label>
-                  <Input type="number" value={form.max_strom_a} onChange={(e) => setForm({ ...form, max_strom_a: e.target.value })} />
-                </div>
-                <div>
-                  <Label>Montage</Label>
-                  <Input value={form.montage} onChange={(e) => setForm({ ...form, montage: e.target.value })} placeholder="Hutschiene / Aufputz / Klemme" />
-                </div>
-                <div>
-                  <Label>Gateway-Typ</Label>
-                  <Input value={form.gateway_typ} onChange={(e) => setForm({ ...form, gateway_typ: e.target.value })} placeholder="Shelly / Loxone / Siemens / Unabhängig" />
+                  <Label>Einheit</Label>
+                  <Select value={form.einheit} onValueChange={(v) => setForm({ ...form, einheit: v })}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {EINHEITEN.map((e) => <SelectItem key={e} value={e}>{e}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
-            </div>
 
-            <div>
-              <Label>Beschreibung</Label>
-              <Textarea value={form.beschreibung} onChange={(e) => setForm({ ...form, beschreibung: e.target.value })} rows={2} />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label>Datasheet URL</Label>
-                <Input value={form.datasheet_url} onChange={(e) => setForm({ ...form, datasheet_url: e.target.value })} />
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label>Hersteller *</Label>
+                  <Input value={form.hersteller} onChange={(e) => setForm({ ...form, hersteller: e.target.value })} placeholder="z. B. Shelly" />
+                </div>
+                <div>
+                  <Label>Modell *</Label>
+                  <Input value={form.modell} onChange={(e) => setForm({ ...form, modell: e.target.value })} placeholder="z. B. Pro 3EM" />
+                </div>
               </div>
-              <div>
-                <Label>Bild URL</Label>
-                <Input value={form.bild_url} onChange={(e) => setForm({ ...form, bild_url: e.target.value })} />
-              </div>
-            </div>
 
-            <div className="flex items-center gap-2">
-              <Switch checked={form.is_active} onCheckedChange={(v) => setForm({ ...form, is_active: v })} />
-              <Label>Aktiv (in Vorschlägen verwenden)</Label>
-            </div>
-          </div>
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <Label>EK-Preis €</Label>
+                  <Input type="number" step="0.01" value={form.ek_preis} onChange={(e) => setForm({ ...form, ek_preis: e.target.value })} />
+                </div>
+                <div>
+                  <Label>VK-Preis €</Label>
+                  <Input type="number" step="0.01" value={form.vk_preis} onChange={(e) => setForm({ ...form, vk_preis: e.target.value })} />
+                </div>
+                <div>
+                  <Label>Installation €</Label>
+                  <Input type="number" step="0.01" value={form.installations_pauschale} onChange={(e) => setForm({ ...form, installations_pauschale: e.target.value })} />
+                </div>
+              </div>
+
+              <div className="rounded-md border p-3 space-y-3">
+                <div className="text-sm font-medium">Tech-Specs (für Auswahl-Regeln)</div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label>Phasen (Komma)</Label>
+                    <Input value={form.phasen} onChange={(e) => setForm({ ...form, phasen: e.target.value })} placeholder="1,3" />
+                  </div>
+                  <div>
+                    <Label>Max. Strom (A)</Label>
+                    <Input type="number" value={form.max_strom_a} onChange={(e) => setForm({ ...form, max_strom_a: e.target.value })} />
+                  </div>
+                  <div>
+                    <Label>Montage</Label>
+                    <Input value={form.montage} onChange={(e) => setForm({ ...form, montage: e.target.value })} placeholder="Hutschiene / Aufputz" />
+                  </div>
+                  <div>
+                    <Label>Gateway-Typ</Label>
+                    <Input value={form.gateway_typ} onChange={(e) => setForm({ ...form, gateway_typ: e.target.value })} placeholder="Loxone / Shelly / …" />
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <Label>Beschreibung</Label>
+                <Textarea value={form.beschreibung} onChange={(e) => setForm({ ...form, beschreibung: e.target.value })} rows={2} />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label>Datasheet URL</Label>
+                  <Input value={form.datasheet_url} onChange={(e) => setForm({ ...form, datasheet_url: e.target.value })} />
+                </div>
+                <div>
+                  <Label>Bild URL</Label>
+                  <Input value={form.bild_url} onChange={(e) => setForm({ ...form, bild_url: e.target.value })} />
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <Switch checked={form.is_active} onCheckedChange={(v) => setForm({ ...form, is_active: v })} />
+                <Label>Aktiv (in Vorschlägen verwenden)</Label>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="compat" className="py-2">
+              {editingId ? (
+                <CompatibilityEditor sourceDeviceId={editingId} />
+              ) : (
+                <div className="text-sm text-muted-foreground">Erst speichern, dann Kompatibilität pflegen.</div>
+              )}
+            </TabsContent>
+          </Tabs>
+
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>Abbrechen</Button>
+            <Button variant="outline" onClick={() => setDialogOpen(false)}>Schließen</Button>
             <Button onClick={save}>Speichern</Button>
           </DialogFooter>
         </DialogContent>
