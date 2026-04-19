@@ -848,14 +848,21 @@ async function executeHAService(entityId: string, cmdValue: string): Promise<voi
 
 let lastAutomationSync = "";
 let automationSyncCount = 0;
+let lastAutomationCount = -1;
 
 async function syncAutomationsFromCloud(): Promise<void> {
   // Always attempt sync – use result to update connectivity status
 
   try {
-    // Every 6th sync (≈30min) do a full sync to prune deleted automations
+    // Force full sync if:
+    //  - first run (no lastAutomationSync)
+    //  - every 6th cycle (≈30min) for pruning
+    //  - previous sync returned 0 cloud automations but local DB is empty/out-of-date
+    //    (incremental syncs would otherwise never recover after a stale prune)
     automationSyncCount++;
-    const isFullSync = !lastAutomationSync || automationSyncCount % 6 === 0;
+    const localCount = (db.prepare(`SELECT COUNT(*) as c FROM automations_local`).get() as { c: number }).c;
+    const mismatch = lastAutomationCount >= 0 && localCount !== lastAutomationCount;
+    const isFullSync = !lastAutomationSync || automationSyncCount % 6 === 0 || mismatch;
 
     const params = new URLSearchParams({
       action: "sync-automations",
