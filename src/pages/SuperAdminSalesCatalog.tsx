@@ -49,6 +49,8 @@ interface DeviceCatalog {
   bild_url: string | null;
   is_active: boolean;
   kompatibilitaet: any;
+  geraete_klasse: string;
+  einheit: string;
 }
 
 interface FormData {
@@ -61,11 +63,12 @@ interface FormData {
   datasheet_url: string;
   bild_url: string;
   is_active: boolean;
-  // kompatibilitaet (flat fields)
-  phasen: string; // "1" | "3" | "1,3"
+  geraete_klasse: string;
+  einheit: string;
+  phasen: string;
   max_strom_a: string;
-  montage: string; // "Hutschiene" | "Aufputz" | "Klemme" | ""
-  gateway_typ: string; // "Shelly" | "Loxone" | "Siemens" | "Unabhängig" | ""
+  montage: string;
+  gateway_typ: string;
 }
 
 const emptyForm: FormData = {
@@ -78,6 +81,8 @@ const emptyForm: FormData = {
   datasheet_url: "",
   bild_url: "",
   is_active: true,
+  geraete_klasse: "meter",
+  einheit: "Stück",
   phasen: "3",
   max_strom_a: "63",
   montage: "Hutschiene",
