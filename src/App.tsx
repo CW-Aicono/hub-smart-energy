@@ -74,6 +74,7 @@ const SuperAdminSalesCatalog = lazy(() => import("./pages/SuperAdminSalesCatalog
 const SuperAdminSalesRules = lazy(() => import("./pages/SuperAdminSalesRules"));
 const SalesProjects = lazy(() => import("./pages/SalesProjects"));
 const SalesProjectNew = lazy(() => import("./pages/SalesProjectNew"));
+const SalesProjectEdit = lazy(() => import("./pages/SalesProjectEdit"));
 const SalesProjectDetail = lazy(() => import("./pages/SalesProjectDetail"));
 const EmbedPitchDashboard = lazy(() => import("./pages/EmbedPitchDashboard"));
 const EnergyReport = lazy(() => import("./pages/EnergyReport"));
@@ -183,6 +184,7 @@ const App = () => (
                       <Route path="/sales" element={<SalesProjects />} />
                       <Route path="/sales/new" element={<SalesProjectNew />} />
                       <Route path="/sales/quote/:token" element={<PublicSalesQuote />} />
+                      <Route path="/sales/:id/edit" element={<SalesProjectEdit />} />
                       <Route path="/sales/:id" element={<SalesProjectDetail />} />
                       <Route path="/charging/points" element={<M><ChargingPoints /></M>} />
                       <Route path="/charging/points/:id" element={<M><ChargePointDetail /></M>} />
