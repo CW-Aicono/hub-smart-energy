@@ -7,8 +7,10 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
-import { Plus, Zap, Boxes, FileText, Trash2, MapPin, ChevronRight, Box, Camera } from "lucide-react";
+import { Plus, Zap, Boxes, FileText, Trash2, MapPin, ChevronRight, Box, Camera, Pencil } from "lucide-react";
 import { DistributionSheet } from "@/components/sales/DistributionSheet";
+import { ProjectAttachments } from "@/components/sales/ProjectAttachments";
+import { DistributionPhotoThumb } from "@/components/sales/DistributionPhotoThumb";
 import { MeasurementPointSheet } from "@/components/sales/MeasurementPointSheet";
 import { DeviceRecommendation } from "@/components/sales/DeviceRecommendation";
 import { QuoteBuilderSheet } from "@/components/sales/QuoteBuilderSheet";
@@ -188,25 +190,30 @@ export default function SalesProjectDetail() {
       showBack
       backTo="/sales"
       action={
-        <AlertDialog>
-          <AlertDialogTrigger asChild>
-            <Button variant="ghost" size="icon">
-              <Trash2 className="h-4 w-4 text-destructive" />
-            </Button>
-          </AlertDialogTrigger>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Projekt löschen?</AlertDialogTitle>
-              <AlertDialogDescription>
-                Alle Verteilungen, Messpunkte und Empfehlungen werden gelöscht.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Abbrechen</AlertDialogCancel>
-              <AlertDialogAction onClick={handleDeleteProject}>Löschen</AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
+        <div className="flex items-center gap-1">
+          <Button variant="ghost" size="icon" onClick={() => navigate(`/sales/${id}/edit`)} aria-label="Bearbeiten">
+            <Pencil className="h-4 w-4" />
+          </Button>
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button variant="ghost" size="icon">
+                <Trash2 className="h-4 w-4 text-destructive" />
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Projekt löschen?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Alle Verteilungen, Messpunkte und Empfehlungen werden gelöscht.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Abbrechen</AlertDialogCancel>
+                <AlertDialogAction onClick={handleDeleteProject}>Löschen</AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </div>
       }
     >
       <div className="space-y-4">
@@ -246,6 +253,8 @@ export default function SalesProjectDetail() {
           </CardContent>
         </Card>
 
+        <ProjectAttachments projectId={id!} />
+
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 py-3">
             <CardTitle className="text-base flex items-center gap-2">
@@ -267,6 +276,7 @@ export default function SalesProjectDetail() {
                 return (
                   <div key={d.id} className="rounded-lg border bg-card/50">
                     <div className="p-3 flex items-center justify-between gap-2">
+                      <DistributionPhotoThumb path={d.foto_url} />
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2 flex-wrap">
                           <Box className="h-4 w-4 text-primary shrink-0" />
