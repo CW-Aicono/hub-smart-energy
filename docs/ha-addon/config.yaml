@@ -5,7 +5,7 @@
 
 name: "AICONO EMS Gateway"
 description: "Lokaler Gateway-Hub für das AICONO Energiemanagementsystem. Sammelt Sensordaten, führt Automationen lokal aus und synchronisiert mit der Cloud. Optional integrierter Cloudflare Tunnel als Nabu-Casa-Ersatz."
-version: "2.2.2"
+version: "2.2.3"
 slug: "aicono-ems-gateway"
 url: "https://hub-smart-energy.lovable.app"
 arch:
