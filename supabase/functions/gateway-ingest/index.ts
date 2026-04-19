@@ -914,29 +914,20 @@ async function handleHeartbeat(req: Request): Promise<Response> {
     config: mergedConfig,
   };
 
-  let result;
-  if (existing?.id) {
-    const { error } = await supabase
-      .from("gateway_devices")
-      .update(deviceData)
-      .eq("id", existing.id);
-    if (error) {
-      console.error("[gateway-ingest] heartbeat update error:", error.message);
-      return json({ error: "Database error" }, 500);
-    }
-    result = { id: existing.id, action: "updated" };
-  } else {
-    const { data: inserted, error } = await supabase
-      .from("gateway_devices")
-      .insert(deviceData)
-      .select("id")
-      .single();
-    if (error) {
-      console.error("[gateway-ingest] heartbeat insert error:", error.message);
-      return json({ error: "Database error" }, 500);
-    }
-    result = { id: inserted.id, action: "created" };
+  // Atomic upsert via unique constraint (tenant_id, device_name) — prevents duplicates
+  const { data: upserted, error } = await supabase
+    .from("gateway_devices")
+    .upsert(deviceData, { onConflict: "tenant_id,device_name" })
+    .select("id")
+    .single();
+  if (error) {
+    console.error("[gateway-ingest] heartbeat upsert error:", error.message);
+    return json({ error: "Database error" }, 500);
   }
+  const result = {
+    id: upserted.id,
+    action: existing?.id ? "updated" : "created",
+  };
 
   const responseData: Record<string, unknown> = {
     success: true,
