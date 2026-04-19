@@ -401,28 +401,30 @@ export function QuoteBuilderSheet({ open, onOpenChange, projectId, kundeTyp, onG
           <div className="flex gap-2">
             <Button
               variant="outline"
-              className="flex-1"
+              size="sm"
+              className="flex-1 min-w-0"
               onClick={saveDraft}
               disabled={savingDraft || generating || loading}
             >
               {savingDraft ? (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
               ) : (
-                <Pencil className="h-4 w-4 mr-2" />
+                <Pencil className="h-4 w-4 mr-1.5" />
               )}
-              Als Entwurf speichern
+              <span className="truncate">Entwurf</span>
             </Button>
             <Button
-              className="flex-1"
+              size="sm"
+              className="flex-1 min-w-0"
               onClick={generate}
               disabled={generating || savingDraft || loading}
             >
               {generating ? (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
               ) : (
-                <FileDown className="h-4 w-4 mr-2" />
+                <FileDown className="h-4 w-4 mr-1.5" />
               )}
-              Fertigstellen & PDF
+              <span className="truncate">Fertigstellen</span>
             </Button>
           </div>
         </div>
