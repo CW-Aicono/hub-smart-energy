@@ -125,6 +125,12 @@ export function DeviceCard({ device, onCommand, isAdmin, onKeyGenerated }: Devic
         <DeviceMetrics device={device} />
       </div>
 
+      <HaConfigDialog
+        device={device}
+        open={haConfigOpen}
+        onOpenChange={setHaConfigOpen}
+      />
+
       {isAdmin && (
         <>
           <ApiKeyDialog
