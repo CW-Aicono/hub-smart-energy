@@ -132,7 +132,7 @@ export function HaConfigDialog({ device, open, onOpenChange }: HaConfigDialogPro
           <CopyRow
             label="cloudflare_tunnel_token"
             value={null}
-            missingHint="Wird nur einmalig nach Provisionierung im Klartext angezeigt. Falls verloren: Integration löschen und neu anlegen (API URL leer lassen) — neuer Tunnel + Token werden automatisch erzeugt."
+            missingHint="Wird nur einmalig nach Provisionierung im Klartext angezeigt. Falls verloren: Integration bearbeiten und über „Tunnel-Token neu generieren“ einen neuen Token erzeugen."
           />
 
           <Alert className="bg-muted/50">
