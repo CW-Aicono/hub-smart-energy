@@ -29,10 +29,11 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
 
   try {
-    const { project_id, modules, notes } = await req.json() as {
+    const { project_id, modules, notes, finalize = false } = await req.json() as {
       project_id: string;
       modules: ModuleSelection[];
       notes?: string;
+      finalize?: boolean;
     };
     if (!project_id || !Array.isArray(modules)) {
       return new Response(JSON.stringify({ error: "project_id + modules required" }), {
@@ -64,35 +65,49 @@ Deno.serve(async (req) => {
       : { data: [] };
 
     const pointIds = (points ?? []).map((p) => p.id);
-    const { data: recs } = pointIds.length
-      ? await supabase
-          .from("sales_recommended_devices")
-          .select("id, measurement_point_id, device_catalog_id, menge, ist_alternativ, parent_recommendation_id, geraete_klasse")
-          .in("measurement_point_id", pointIds)
-          .eq("ist_alternativ", false)
-      : { data: [] };
 
-    const deviceIds = Array.from(new Set((recs ?? []).map((r) => r.device_catalog_id)));
+    // Sammle Geräte aus beiden Scopes (Messpunkte + Verteilungen)
+    const recPromises: Promise<any>[] = [];
+    if (pointIds.length) {
+      recPromises.push(
+        supabase
+          .from("sales_recommended_devices")
+          .select("id, measurement_point_id, distribution_id, scope, device_catalog_id, menge, ist_alternativ, parent_recommendation_id, geraete_klasse")
+          .in("measurement_point_id", pointIds)
+          .eq("ist_alternativ", false),
+      );
+    }
+    if (distIds.length) {
+      recPromises.push(
+        supabase
+          .from("sales_recommended_devices")
+          .select("id, measurement_point_id, distribution_id, scope, device_catalog_id, menge, ist_alternativ, parent_recommendation_id, geraete_klasse")
+          .in("distribution_id", distIds)
+          .eq("ist_alternativ", false),
+      );
+    }
+    const recResults = await Promise.all(recPromises);
+    const recs = recResults.flatMap((r) => r.data ?? []);
+
+    const deviceIds = Array.from(new Set(recs.map((r: any) => r.device_catalog_id)));
     const { data: devices } = deviceIds.length
       ? await supabase
           .from("device_catalog")
           .select("id, hersteller, modell, vk_preis, installations_pauschale, geraete_klasse, einheit")
           .in("id", deviceIds)
       : { data: [] };
-    const devMap = new Map((devices ?? []).map((d) => [d.id, d]));
+    const devMap = new Map((devices ?? []).map((d: any) => [d.id, d]));
 
-    // Group by class
     interface Row {
       name: string; menge: number; ek: number; inst: number;
-      einheit: string; klasse: string; isChild: boolean;
+      einheit: string; klasse: string; isChild: boolean; scope: string;
     }
-    const recById = new Map((recs ?? []).map((r) => [r.id, r]));
     const grouped = new Map<string, Row[]>();
     let geraeteSumme = 0;
     let installationSumme = 0;
 
-    for (const r of recs ?? []) {
-      const d = devMap.get(r.device_catalog_id);
+    for (const r of recs as any[]) {
+      const d: any = devMap.get(r.device_catalog_id);
       if (!d) continue;
       const klasse = d.geraete_klasse ?? r.geraete_klasse ?? "misc";
       const lineGeraete = Number(d.vk_preis) * r.menge;
@@ -108,6 +123,7 @@ Deno.serve(async (req) => {
         einheit: d.einheit ?? "Stück",
         klasse,
         isChild: !!r.parent_recommendation_id,
+        scope: r.scope ?? "measurement_point",
       });
       grouped.set(klasse, arr);
     }
@@ -115,9 +131,68 @@ Deno.serve(async (req) => {
     const modulSumme = modules.reduce((s, m) => s + Number(m.preis_monatlich), 0);
     const totalEinmalig = geraeteSumme + installationSumme;
 
+    // ===== DRAFT-MODUS: Kein PDF, version 0, upsert =====
+    if (!finalize) {
+      // Bestehenden Draft suchen
+      const { data: existingDraft } = await supabase
+        .from("sales_quotes")
+        .select("id")
+        .eq("project_id", project_id)
+        .eq("status", "draft")
+        .maybeSingle();
+
+      let quoteId: string;
+      if (existingDraft) {
+        const { error: uErr } = await supabase
+          .from("sales_quotes")
+          .update({
+            geraete_summe: geraeteSumme,
+            installation_summe: installationSumme,
+            total_einmalig: totalEinmalig,
+            modul_summe_monatlich: modulSumme,
+          })
+          .eq("id", existingDraft.id);
+        if (uErr) throw uErr;
+        quoteId = existingDraft.id;
+        // Module zurücksetzen
+        await supabase.from("sales_quote_modules").delete().eq("quote_id", quoteId);
+      } else {
+        const { data: q, error: qErr } = await supabase
+          .from("sales_quotes")
+          .insert({
+            project_id, version: 0, status: "draft",
+            geraete_summe: geraeteSumme,
+            installation_summe: installationSumme,
+            total_einmalig: totalEinmalig,
+            modul_summe_monatlich: modulSumme,
+          })
+          .select("id").single();
+        if (qErr) throw qErr;
+        quoteId = q.id;
+      }
+
+      if (modules.length > 0) {
+        await supabase.from("sales_quote_modules").insert(
+          modules.map((m) => ({
+            quote_id: quoteId,
+            module_code: m.module_code,
+            preis_monatlich: m.preis_monatlich,
+          })),
+        );
+      }
+
+      return new Response(JSON.stringify({
+        quote_id: quoteId, status: "draft",
+        totals: { geraeteSumme, installationSumme, totalEinmalig, modulSumme },
+      }), { headers: { ...cors, "Content-Type": "application/json" } });
+    }
+
+    // ===== FINALIZE-MODUS: PDF + neue Version =====
     const { data: existing } = await supabase
       .from("sales_quotes").select("version")
-      .eq("project_id", project_id).order("version", { ascending: false }).limit(1);
+      .eq("project_id", project_id)
+      .neq("status", "draft")
+      .order("version", { ascending: false }).limit(1);
     const nextVersion = (existing?.[0]?.version ?? 0) + 1;
 
     const doc = new jsPDF();
@@ -139,7 +214,6 @@ Deno.serve(async (req) => {
     }
     y += 5;
 
-    // Hardware grouped
     doc.setFontSize(12);
     doc.text("Hardware (einmalig)", 14, y); y += 7;
 
@@ -165,8 +239,9 @@ Deno.serve(async (req) => {
       for (const r of rows) {
         if (y > 270) { doc.addPage(); y = 20; }
         const indent = r.isChild ? 4 : 0;
-        const prefix = r.isChild ? "↳ " : "";
-        doc.text(`${prefix}${r.name.substring(0, 48)}`, 16 + indent, y);
+        const prefix = r.isChild ? "↳ " : (r.scope === "distribution" ? "▸ " : "");
+        const suffix = r.scope === "distribution" && !r.isChild ? " (Schaltschrank)" : "";
+        doc.text(`${prefix}${r.name.substring(0, 44)}${suffix}`, 16 + indent, y);
         doc.text(`${r.menge} ${r.einheit}`, 110, y);
         doc.text(`${r.ek.toFixed(2)} €`, 130, y);
         doc.text(`${r.inst.toFixed(2)} €`, 155, y);
@@ -192,7 +267,6 @@ Deno.serve(async (req) => {
     doc.setFont(undefined, "normal");
     y += 10;
 
-    // Modules
     if (y > 230) { doc.addPage(); y = 20; }
     doc.setFontSize(12);
     doc.text("Software-Module (monatlich)", 14, y); y += 6;
@@ -227,18 +301,48 @@ Deno.serve(async (req) => {
       });
     if (upErr) throw upErr;
 
-    const { data: quote, error: qErr } = await supabase
+    // Vorhandenen Draft auf finalized hochziehen, sonst neu anlegen
+    const { data: existingDraft } = await supabase
       .from("sales_quotes")
-      .insert({
-        project_id, version: nextVersion,
-        geraete_summe: geraeteSumme,
-        installation_summe: installationSumme,
-        total_einmalig: totalEinmalig,
-        modul_summe_monatlich: modulSumme,
-        pdf_storage_path: path,
-      })
-      .select("id, version").single();
-    if (qErr) throw qErr;
+      .select("id")
+      .eq("project_id", project_id)
+      .eq("status", "draft")
+      .maybeSingle();
+
+    let quote: { id: string; version: number };
+    if (existingDraft) {
+      const { data: q, error: qErr } = await supabase
+        .from("sales_quotes")
+        .update({
+          version: nextVersion,
+          status: "finalized",
+          geraete_summe: geraeteSumme,
+          installation_summe: installationSumme,
+          total_einmalig: totalEinmalig,
+          modul_summe_monatlich: modulSumme,
+          pdf_storage_path: path,
+        })
+        .eq("id", existingDraft.id)
+        .select("id, version").single();
+      if (qErr) throw qErr;
+      quote = q;
+      await supabase.from("sales_quote_modules").delete().eq("quote_id", quote.id);
+    } else {
+      const { data: q, error: qErr } = await supabase
+        .from("sales_quotes")
+        .insert({
+          project_id, version: nextVersion,
+          status: "finalized",
+          geraete_summe: geraeteSumme,
+          installation_summe: installationSumme,
+          total_einmalig: totalEinmalig,
+          modul_summe_monatlich: modulSumme,
+          pdf_storage_path: path,
+        })
+        .select("id, version").single();
+      if (qErr) throw qErr;
+      quote = q;
+    }
 
     if (modules.length > 0) {
       await supabase.from("sales_quote_modules").insert(
@@ -251,7 +355,7 @@ Deno.serve(async (req) => {
     }
 
     return new Response(JSON.stringify({
-      quote_id: quote.id, version: quote.version, pdf_path: path,
+      quote_id: quote.id, version: quote.version, pdf_path: path, status: "finalized",
       totals: { geraeteSumme, installationSumme, totalEinmalig, modulSumme },
     }), { headers: { ...cors, "Content-Type": "application/json" } });
   } catch (e) {
