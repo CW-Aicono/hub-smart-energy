@@ -25,6 +25,9 @@ interface AddonConfig {
   gateway_api_key: string;
   tenant_id: string;
   device_name: string;
+  // Loxone-style identification (preferred since v2.3.0)
+  gateway_username?: string;
+  gateway_password?: string;
   poll_interval_seconds: number;
   flush_interval_seconds: number;
   heartbeat_interval_seconds: number;
@@ -36,23 +39,27 @@ interface AddonConfig {
   cloudflare_tunnel_token?: string;
 }
 
+const DEFAULT_CLOUD_URL = "https://xnveugycurplszevdxtw.supabase.co";
+
 function loadConfig(): AddonConfig {
   const optionsPath = "/data/options.json";
   try {
     const raw = fs.readFileSync(optionsPath, "utf-8");
     console.log("[config] Loaded /data/options.json");
     const parsed = JSON.parse(raw);
-    // Fallback: support old 'supabase_url' field
-    const cloudUrl = parsed.cloud_url || parsed.supabase_url || "";
+    // Fallback: support old 'supabase_url' field; default to fixed cloud URL
+    const cloudUrl = parsed.cloud_url || parsed.supabase_url || DEFAULT_CLOUD_URL;
     return { automation_eval_seconds: 30, ...parsed, cloud_url: cloudUrl };
   } catch (error: any) {
     console.warn(`[config] Cannot read ${optionsPath} (${error?.code || error?.message}), using env vars`);
   }
   return {
-    cloud_url: process.env.CLOUD_URL || process.env.SUPABASE_URL || "",
+    cloud_url: process.env.CLOUD_URL || process.env.SUPABASE_URL || DEFAULT_CLOUD_URL,
     gateway_api_key: process.env.GATEWAY_API_KEY || "",
     tenant_id: process.env.TENANT_ID || "",
     device_name: process.env.DEVICE_NAME || "aicono-ems",
+    gateway_username: process.env.GATEWAY_USERNAME || "",
+    gateway_password: process.env.GATEWAY_PASSWORD || "",
     poll_interval_seconds: Number(process.env.POLL_INTERVAL_SECONDS) || 30,
     flush_interval_seconds: Number(process.env.FLUSH_INTERVAL_SECONDS) || 5,
     heartbeat_interval_seconds: Number(process.env.HEARTBEAT_INTERVAL_SECONDS) || 60,
@@ -67,7 +74,18 @@ const config = loadConfig();
 const SUPERVISOR_TOKEN = process.env.SUPERVISOR_TOKEN || "";
 const HA_API_BASE = "http://supervisor/core/api";
 const INGEST_URL = `${config.cloud_url}/functions/v1/gateway-ingest`;
-const ADDON_VERSION = "2.2.3";
+const ADDON_VERSION = "2.3.0";
+
+/* ── Auth header helper (Loxone-style: Basic Auth, fallback to Bearer key) ──── */
+
+function authHeader(): string {
+  if (config.gateway_username && config.gateway_password) {
+    const creds = `${config.gateway_username}:${config.gateway_password}`;
+    // Buffer is available in Node runtime
+    return `Basic ${Buffer.from(creds, "utf-8").toString("base64")}`;
+  }
+  return `Bearer ${config.gateway_api_key}`;
+}
 
 /* ── Cloudflare Tunnel Subprocess ────────────────────────────────────────────── */
 import { spawn, ChildProcess } from "child_process";
