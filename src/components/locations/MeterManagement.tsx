@@ -465,7 +465,7 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
                             </Button>
                           )}
                           {m.is_archived && (
-                            <Button variant="ghost" size="icon" onClick={() => deleteMeter(m.id)} title="Endgültig löschen">
+                            <Button variant="ghost" size="icon" onClick={() => confirmDelete(m)} title="Endgültig löschen">
                               <Trash2 className="h-4 w-4 text-destructive" />
                             </Button>
                           )}
