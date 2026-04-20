@@ -93,12 +93,20 @@ function DeviceTable({
   meters,
   onEditMeter,
   onCreateAndEdit,
+  onArchive,
+  onDelete,
+  showArchived,
+  isAdmin,
 }: {
   devices: (LoxoneSensor & { _integrationLabel: string; _integrationId: string })[];
   type: "sensor" | "actuator";
   meters: Meter[];
   onEditMeter: (meter: Meter) => void;
   onCreateAndEdit: (device: LoxoneSensor & { _integrationId: string }, deviceType: string) => void;
+  onArchive?: (meter: Meter, archive: boolean) => void;
+  onDelete?: (meter: Meter) => void;
+  showArchived?: boolean;
+  isAdmin?: boolean;
 }) {
   if (devices.length === 0) {
     return (
