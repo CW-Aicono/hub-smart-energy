@@ -1,88 +1,119 @@
 
+Ziel: Die eigentliche Ursache sauber beheben, damit beide Raspberry Pis in der Liegenschaft korrekt als online erscheinen und die vollständigen Home-Assistant-Geräte in der UI sichtbar und zuordenbar werden.
 
-## Bewertung
+1. Hauptursachen, die die Analyse ergeben hat
+- Ursache A: Der Sensor-/Geräteabruf aus der UI scheitert nicht fachlich, sondern technisch auf HTTP-Ebene.
+  - Im Browser schlägt `POST /functions/v1/gateway-ws` mit `Failed to fetch` fehl.
+  - Dieselbe Funktion liefert per direktem Backend-Test korrekt Daten zurück.
+  - Das zeigt: `getSensors` funktioniert serverseitig, aber der Browser-Request scheitert sehr wahrscheinlich an fehlenden CORS-Headern im HTTP-Zweig von `gateway-ws`.
+- Ursache B: Der Status in der Liegenschaftsübersicht ist veraltet bzw. falsch modelliert.
+  - In der Datenbank stehen beide AICONO-Gateway-Integrationen bereits auf `sync_status = success`.
+  - Die Übersicht arbeitet aber nur mit `location_integrations.sync_status` und ignoriert die tatsächlichen `gateway_devices.last_heartbeat_at` / `status`.
+  - Dadurch kann die Übersicht offline/pending zeigen, obwohl die Detailkarte aus den echten Gateway-Geräten korrekt „online“ ableitet.
+- Ursache C: Für „Schule Buchenberg Altbau“ liegen im Backend aktuell wirklich nur 12 Geräte vor.
+  - Das ist kein reines UI-Problem.
+  - Der direkte Backend-Abruf für `locationIntegrationId = a32d...` liefert exakt diese 12 Geräte.
+  - Die Tabelle `gateway_device_inventory` bestätigt ebenfalls nur 12 Einträge für das Pi `aicono-ems-4a2cee`.
+  - Das andere Pi (`aicono-ems-7e4852`) liefert dagegen 44 Geräte.
+- Ursache D: Das Add-on filtert beim Snapshot die Geräte nicht über `entity_filter`, aber der verfügbare HA-State-Bestand (`latestHAStates`) wird trotzdem durch den aktuellen HA-Zustand bestimmt.
+  - Deshalb müssen wir unterscheiden zwischen:
+    - „Snapshot-Code filtert falsch“ und
+    - „dieses Pi sieht in Home Assistant tatsächlich nur diese 12 relevanten Entities“.
+  - Für Buchenberg sieht aktuell alles danach aus, dass das Add-on/HA auf diesem Pi nur diese 12 Entities im State-Feed verfügbar hat oder die übrigen Geräte auf diesem Pi nicht in `latestHAStates` landen.
 
-**Ja, exakt machbar — und konzeptionell die sauberste Lösung.** Loxone-Modell = drei Felder, alle vom Nutzer kontrollierbar, kein Cloud-Geheimnis im Add-on-Code. Schauen wir kurz, wie Loxone heute im Code abgebildet ist, und übertragen das 1:1 auf den Pi.
+2. Geplanter Fix – Backend
+- `supabase/functions/gateway-ws/index.ts`
+  - Den HTTP-Antworten im `handleHttpAction()` konsequent dieselben CORS-Header geben wie andere Funktionen.
+  - Besonders für:
+    - erfolgreiche `getSensors`-Antwort
+    - 400/500-Fehler
+    - OPTIONS-Preflight
+  - Dadurch kann der Browser die Funktion endlich direkt aufrufen, statt mit `Failed to fetch` abzubrechen.
+- Zusätzlich Logging ergänzen:
+  - im HTTP-Zweig `gateway-ws` bei `getSensors`
+  - mit `locationIntegrationId`, Anzahl gefundener Meter, Automationen, Inventory-Einträge
+  - damit künftig sofort sichtbar ist, ob ein Problem aus HA-Daten, DB oder Transport kommt.
 
-## Loxone-Vorbild (kurz)
+3. Geplanter Fix – Statuslogik in der Übersicht
+- `src/hooks/useLocationStatus.tsx`
+  - Die Übersicht nicht mehr nur auf `location_integrations.sync_status === "success"` stützen.
+  - Für `aicono_gateway` zusätzlich die echten `gateway_devices` der jeweiligen `location_integration_id` berücksichtigen:
+    - online, wenn mindestens ein zugehöriges Gateway-Gerät `status = online` hat und der letzte Heartbeat jünger als 3 Minuten ist
+    - optional „syncing“, wenn `offline_buffer_count > 0`
+  - Damit wird die Übersicht dieselbe Wahrheit anzeigen wie die Detailkarte.
+- Vorteil:
+  - Keine Schein-Offlines mehr
+  - Robust gegen verspätete oder hängende `sync_status`-Felder
 
-In `useLocationIntegrations` / `IntegrationCard` werden Loxone-Miniserver pro Liegenschaft mit drei Feldern angelegt: `host` (IP/MAC-Identifier), `username`, `password` (verschlüsselt via `BRIGHTHUB_ENCRYPTION_KEY`). Die Cloud nutzt diese Credentials für Outbound-Polling. Beim Pi drehen wir die Richtung um (Push), aber das Modell bleibt identisch.
+4. Geplanter Fix – Geräteanzeige in der UI
+- `src/components/locations/MeterManagement.tsx`
+  - Die aktuelle Loxone-/Gateway-Mischlogik vereinheitlichen und auf die zentrale Geräteklassifizierung umstellen.
+  - Die Zuordnung in Tabs (`Zähler`, `Sensoren`, `Aktoren`) soll für AICONO Gateway ausschließlich auf den zurückgegebenen Inventar-Geräten plus vorhandenen DB-Overrides (`device_type`) basieren.
+  - Bereits angelegte Messstellen mit `sensor_uuid` sollen weiterhin dedupliziert werden.
+- `src/lib/deviceClassification.ts`
+  - Die Klassifikation für Home-Assistant-/AICONO-Gateway-Geräte robuster machen:
+    - `switch`, `light`, `cover`, `climate`, `fan`, `lock`, `valve` sicher als Aktoren
+    - `sensor` mit `device_class`/`unit` für Energie, Leistung, Wasser, Gas sicher als Zähler
+    - Rest als Sensor
+  - `MeterManagement.tsx` soll diese zentrale Logik benutzen statt lokaler Parallel-Logik.
+- Ergebnis:
+  - Einheitliches Verhalten „wie Loxone“
+  - Geräte per Stift zu `Zähler`, `Aktor`, `Sensor` umklassifizierbar
+  - weniger Sonderfälle und weniger Drift zwischen Tabs
 
-## Endzustand User-Sicht
+5. Geplanter Fix – Add-on-Analyse für das schwächere Pi
+- `docs/ha-addon/index.ts`
+  - Tieferes Debug-Logging nur für den Snapshot-Aufbau ergänzen:
+    - Anzahl `latestHAStates`
+    - Anzahl Geräte pro Domain
+    - Anzahl erkannter Kategorien (`meter`, `actuator`, `sensor`)
+    - optional die ersten 20 Entity-IDs im Snapshot
+  - Separat loggen:
+    - wie viele States aus HA `/states` kamen
+    - wie viele nur aus lokalem Cache stammen
+- Ziel:
+  - Sicher feststellen, warum Pi `192.168.188.141` nur 12 Geräte liefert, obwohl laut Screenshot beide Pis „gleich“ wirken.
+- Erwartete wahrscheinliche Erklärung:
+  - Das Pi ist zwar online und korrekt verbunden, aber Home Assistant stellt diesem konkreten Add-on aktuell nur die 12 System-/Basis-Entities bereit oder die erwarteten Geräte sind auf diesem Host/HA-Setup nicht im globalen State-Feed vorhanden.
 
-**Im Add-on (HA-Konfig):**
-```
-gateway_username: <vom User vergeben, z.B. "buero-pi">
-gateway_password: <vom User vergeben>
-```
-Das war's. Keine URL, kein Tenant, kein Key. MAC liest das Add-on selbst aus.
+6. Validierung nach dem Fix
+- Test 1: Browser
+  - Dialog „Gefundene Geräte“ öffnen
+  - prüfen, dass kein `Failed to fetch` mehr erscheint
+  - prüfen, dass `getSensors` im Browser sauber lädt
+- Test 2: Übersicht
+  - beide Liegenschaften müssen innerhalb eines Heartbeat-Zyklus als online erscheinen
+  - keine Diskrepanz mehr zwischen Übersicht und Detailansicht
+- Test 3: Realschule
+  - erwartbar weiter ca. 44 Geräte sichtbar
+  - Zähler/Aktoren/Sensoren korrekt verteilt
+- Test 4: Schule Buchenberg Altbau
+  - zunächst prüfen, ob nach CORS-Fix wenigstens dieselben 12 Geräte sauber sichtbar werden
+  - anschließend mit neuem Add-on-Debug klären, warum dort nicht die gleichen HA-Entities ankommen
+- Test 5: Klassenzuordnung
+  - ein gefundenes Gerät per Stift öffnen
+  - Typ auf `Zähler`, `Sensor` oder `Aktor` setzen
+  - prüfen, dass das Gerät danach im richtigen Tab erscheint
 
-**Lokale Add-on-UI (Port 8099, Ingress):**
-```
-Gateway-MAC:       aabbccddeeff   [Kopieren]
-Gateway-User:      buero-pi
-Status:            🟡 Wartet auf Zuordnung in AICONO
-```
+7. Erwartetes Ergebnis nach Umsetzung
+- Der Geräte-Dialog funktioniert wieder technisch zuverlässig.
+- Die Übersicht zeigt den echten Online-Status der AICONO Gateways.
+- Die Geräteverwaltung zeigt die aus dem Gateway gelieferten Geräte konsistent an.
+- Für das zweite Pi ist danach eindeutig unterscheidbar:
+  - UI-/Transportproblem behoben
+  - verbleibendes Problem ist dann wirklich ein Add-on-/HA-Datenproblem und nicht mehr ein Cloud- oder Frontend-Problem.
 
-**In AICONO (Liegenschaft → Integration "AICONO EMS Gateway"):**
-```
-MAC-Adresse:    [aabbccddeeff]
-Benutzername:   [buero-pi]
-Passwort:       [••••••••]
-[Speichern]
-```
-Innerhalb ~60 Sek. → 🟢 Online. Fertig.
-
-## Sicherheitsmodell
-
-- **MAC** = Identifier (welcher Pi?), kein Geheimnis.
-- **User+Passwort** = Authentifizierung (ist es wirklich dieser Pi?).
-- **Triple-Match** in `gateway-ingest`: MAC + User + bcrypt(Passwort) müssen übereinstimmen → erst dann wird der Heartbeat/Datenpunkt akzeptiert und einer Liegenschaft zugeordnet.
-- Passwort liegt **nur als bcrypt-Hash** in der DB (analog `mqtt_credentials`). In `location_integrations.config` wird es AES-verschlüsselt gespeichert (analog Loxone), damit die Cloud-Bridge auch Outbound-Commands signieren kann, falls das später nötig ist.
-- Rotation: User generiert in der Add-on-Konfig ein neues Passwort, trägt es zusätzlich in AICONO ein → Speichern. Alter Hash wird überschrieben.
-
-## Datenmodell
-
-**Erweiterung `gateway_devices`:**
-- `mac_address` (text, lowercase 12 hex, UNIQUE global) — neuer primärer Identifier.
-- `gateway_username` (text) — Klartext, nicht sensibel.
-- `gateway_password_hash` (text, bcrypt) — nur Hash.
-- `device_name` bleibt, aber rein als Display-Label (nicht mehr Identifier).
-- Unique-Constraint `(tenant_id, device_name)` wird entfernt → löst die Kollision aus dem Vorgespräch automatisch.
-
-**Keine separate `gateway_accounts`-Tabelle mehr nötig** — Credentials hängen direkt am Device, exakt wie bei Loxone die Credentials am Miniserver hängen.
-
-## Plan in 3 Schritten
-
-### Schritt 1 — DB-Migration
-- `gateway_devices`: neue Spalten `mac_address`, `gateway_username`, `gateway_password_hash`.
-- Unique-Index `gateway_devices_mac_unique` auf `mac_address` (partial: `WHERE mac_address IS NOT NULL`).
-- Alter Index `(tenant_id, device_name)` auf non-unique umstellen (rückwärtskompatibel).
-
-### Schritt 2 — Add-on v2.3.0
-- `docs/ha-addon/index.ts`:
-  - `getHostMAC()` analog `getHostIP()` via Supervisor `/network/info`, Cache mit TTL.
-  - Heartbeat-Header: `Authorization: Basic base64(username:password)` + neues Body-Feld `mac_address`.
-  - Alte `gateway_api_key`-Auth bleibt parallel (Übergang).
-- `docs/ha-addon/config.yaml`:
-  - Neue Felder `gateway_username` (Pflicht), `gateway_password` (Pflicht, type `password`).
-  - `gateway_api_key`, `tenant_id`, `cloud_url` werden optional.
-  - Version `2.3.0`.
-- `docs/ha-addon/ui/`: MAC + User prominent in Header-Karte, Status-Anzeige "Zuordnung pending / verbunden".
-
-### Schritt 3 — `gateway-ingest` + AICONO-UI
-- **Edge Function:**
-  - Neuer Auth-Pfad: Basic-Auth-Header parsen → `gateway_devices` per `mac_address` lookup → `username` vergleichen → bcrypt(`password`) gegen `gateway_password_hash`.
-  - Bei Match ohne `tenant_id` (= unzugeordnet): Heartbeat mit `status='pending_assignment'` ablegen, sonst normale Verarbeitung.
-  - Erste Heartbeat eines unbekannten Pi: Auto-Insert mit `status='pending_assignment'`, `tenant_id=NULL`.
-- **AICONO-UI:**
-  - Liegenschaft → "AICONO EMS Gateway" hinzufügen: 3 Felder (MAC, User, Passwort) + Validator (MAC = 12 hex lowercase, User = 3-32 chars, Passwort = min 8 chars).
-  - Beim Speichern: `gateway_devices`-Zeile per MAC suchen → `tenant_id` + `location_integration_id` setzen, `gateway_password_hash` schreiben (bcrypt).
-  - Übersicht "Unzugeordnete Geräte" oben in der Gateway-Liste mit Hinweis "Neuer Pi mit MAC `xy` möchte sich verbinden".
-
-## Risiken / offene Punkte
-
-1. **Bestehende zwei Pis:** Übergangsweise akzeptiert die Edge-Function weiter den alten `gateway_api_key`. Migration für bestehende Pis: einmalig MAC + User/PW in AICONO eintragen, in Add-on neue Felder setzen, alten Key entfernen. Schritt-für-Schritt-Anleitung wird Teil des Add-on-Updates.
-2. **Kollisionsfix automatisch erledigt** durch Wegfall des `(tenant_id, device_name)`-Unique-Constraints und Einführung von `mac_address` als neuer Identifier. Kein separater Hotfix nötig.
-3. **Passwort in `config.yaml`** liegt im Klartext auf dem Pi-Dateisystem (HA-Standard). Akzeptabel, da Scope = lokal + bcrypt-Hash in Cloud.
-
+8. Technische Details
+- Betroffene Dateien:
+  - `supabase/functions/gateway-ws/index.ts`
+  - `src/hooks/useLocationStatus.tsx`
+  - `src/components/locations/MeterManagement.tsx`
+  - `src/lib/deviceClassification.ts`
+  - `docs/ha-addon/index.ts`
+- Keine neue Tabelle erforderlich.
+- Keine Migration erforderlich, sofern wir nur Logik und Logging anpassen.
+- Wichtigster Fix zuerst:
+  - CORS im HTTP-Pfad von `gateway-ws`
+  - danach Statuslogik
+  - danach UI-Klassifikation
+  - zuletzt Add-on-Debug für das Pi mit nur 12 Geräten
