@@ -63,19 +63,11 @@ export function AiconoGatewayCredentials({ locationIntegrationId, onSaved }: Aic
     setLoadingPending(true);
     try {
       const { data, error } = await supabase.functions.invoke("gateway-credentials", {
-        method: "GET" as any,
-        body: undefined,
+        body: { action: "pending" },
       });
-      // Edge functions invoked with GET use query string; fall back to direct fetch
-      if (error || !data) {
-        const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
-        const { data: { session } } = await supabase.auth.getSession();
-        const res = await fetch(
-          `https://${projectId}.supabase.co/functions/v1/gateway-credentials?action=pending`,
-          { headers: { Authorization: `Bearer ${session?.access_token ?? ""}` } },
-        );
-        const j = await res.json();
-        setPending(j?.devices || []);
+      if (error) {
+        console.warn("[gateway-credentials] pending fetch error", error);
+        setPending([]);
       } else {
         setPending((data as any)?.devices || []);
       }
