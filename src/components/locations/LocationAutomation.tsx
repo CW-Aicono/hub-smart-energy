@@ -189,7 +189,8 @@ function AutomationFlowDiagram({ auto, actuatorStates }: {
       )}
       <div className="flex flex-col gap-1">
         {actionChips.map((action, i) => {
-          const state = actuatorStates.get(action.actuator_uuid);
+          const state = actuatorStates.get(`${auto.location_integration_id}:${action.actuator_uuid}`)
+            || actuatorStates.get(action.actuator_uuid);
           return (
             <span
               key={i}
@@ -325,7 +326,11 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
     const map = new Map<string, { value: string; status: string }>();
     allSensorsWithSource.forEach((s) => {
       if (s.value !== undefined && s.value !== null) {
-        map.set(s.id, { value: String(s.value), status: s.status });
+        const state = { value: String(s.value), status: s.status };
+        map.set(`${s._integrationId}:${s.id}`, state);
+        if (!map.has(s.id)) {
+          map.set(s.id, state);
+        }
       }
     });
     return map;
