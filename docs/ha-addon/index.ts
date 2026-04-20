@@ -1984,8 +1984,10 @@ async function main(): Promise<void> {
   // Refresh meter mappings every 5 minutes
   setInterval(() => fetchMeterMappings(), 5 * 60 * 1000);
 
-  // Push device inventory snapshot to cloud (initial + every 2 minutes)
-  setTimeout(() => pushDeviceSnapshot(), 15_000);
+  // Push device inventory snapshot to cloud.
+  // Erster Push erst nach 25s, damit der initiale pollHAStates() (oben) sicher
+  // alle Entities von HA geladen hat. Danach alle 2 Minuten erneut.
+  setTimeout(() => pushDeviceSnapshot(), 25_000);
   setInterval(() => pushDeviceSnapshot(), 2 * 60 * 1000);
 
   // Auto backup
