@@ -118,7 +118,7 @@ const SUPERVISOR_TOKEN = process.env.SUPERVISOR_TOKEN || "";
 const HA_API_BASE = "http://supervisor/core/api";
 const INGEST_URL = `${config.cloud_url}/functions/v1/gateway-ingest`;
 const GATEWAY_WS_URL = `${config.cloud_url.replace(/^http/, "ws")}/functions/v1/gateway-ws`;
-const ADDON_VERSION = "3.0.1";
+const ADDON_VERSION = "3.0.2";
 
 /* ── Auth header helper for gateway-ingest (Daten-Upload) ────────────────────── */
 // gateway-ingest akzeptiert weiterhin Basic Auth (username/password) ODER Bearer.
@@ -130,6 +130,20 @@ function authHeader(): string {
     return `Basic ${Buffer.from(creds, "utf-8").toString("base64")}`;
   }
   return `Bearer ${config.gateway_api_key || ""}`;
+}
+
+async function cloudAuthHeaders(extra: Record<string, string> = {}): Promise<Record<string, string>> {
+  const headers: Record<string, string> = {
+    Authorization: authHeader(),
+    ...extra,
+  };
+  try {
+    const mac = (await getHostMAC() || "").toLowerCase().replace(/[^0-9a-f]/g, "").slice(0, 12);
+    if (mac.length === 12) headers["x-gateway-mac"] = mac;
+  } catch {
+    // ignore MAC lookup failures
+  }
+  return headers;
 }
 
 /* ── (Cloudflare-Tunnel entfernt in v3.0 – ersetzt durch WebSocket-Push) ─────── */
