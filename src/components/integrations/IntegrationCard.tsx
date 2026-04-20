@@ -52,8 +52,9 @@ export function IntegrationCard({ locationIntegration, onUpdate, onDelete }: Int
   const isLoxone = integration?.type === "loxone" || integration?.type === "loxone_miniserver";
   const isAiconoGateway = integration?.type === "aicono_gateway";
 
-  // For AICONO Gateway integrations, fetch all tenant devices (including unlinked ones)
-  const { devices: gatewayDevices, sendCommand, refetch: refetchDevices } = useGatewayDevices(isAiconoGateway ? undefined : locationIntegration.id, locationIntegration.location_id);
+  // Fetch only the gateway devices linked to THIS location_integration so each
+  // location card shows its own hub (avoids cross-tenant duplicate display).
+  const { devices: gatewayDevices, sendCommand, refetch: refetchDevices } = useGatewayDevices(locationIntegration.id, locationIntegration.location_id);
   const gatewayLocalTime = !isLoxone && gatewayDevices.length > 0 ? gatewayDevices[0].local_time : null;
 
   const handleToggleEnabled = async (enabled: boolean) => {
