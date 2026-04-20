@@ -1635,13 +1635,9 @@ function startServer(): void {
         gateway_username: config.gateway_username || "",
         assignment_status: currentAssignmentStatus,
         credentials_configured: !!(config.gateway_username && config.gateway_password),
-        tunnel: {
-          enabled: !!config.cloudflare_enabled,
-          configured: !!config.cloudflare_tunnel_token,
-          connected: cfTunnelConnected,
-          restart_count: cfTunnelRestartCount,
-          last_error: cfTunnelLastError,
-        },
+        cloud_ws_connected: cloudWsConnected,
+        cloud_ws_device_id: cloudWsAssignment.device_id || null,
+        cloud_ws_location_id: cloudWsAssignment.location_id || null,
       }));
       return;
     }
