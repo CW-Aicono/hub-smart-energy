@@ -10,7 +10,7 @@ PREV_SHA="${2:?previous sha required}"
 REPO_ROOT="/opt/hub-smart-energy"
 BACKUP_FILE="${REPO_ROOT}/backups/${TS}.sql"
 DB_CONTAINER="${DB_CONTAINER:-supabase-db}"
-DB_USER="${DB_USER:-postgres}"
+DB_USER="${DB_USER:-supabase_admin}"
 
 log() { printf '[rollback %s] %s\n' "$(date +%H:%M:%S)" "$*"; }
 

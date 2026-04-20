@@ -7,7 +7,7 @@ set -euo pipefail
 REPO_ROOT="${REPO_ROOT:-/opt/hub-smart-energy}"
 MIG_DIR="${REPO_ROOT}/supabase/migrations"
 DB_CONTAINER="${DB_CONTAINER:-supabase-db}"
-DB_USER="${DB_USER:-postgres}"
+DB_USER="${DB_USER:-supabase_admin}"
 DB_NAME="${DB_NAME:-postgres}"
 
 log() { printf '[migrations %s] %s\n' "$(date +%H:%M:%S)" "$*"; }

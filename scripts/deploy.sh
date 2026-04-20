@@ -19,7 +19,7 @@ PREV_SHA="$(git rev-parse HEAD)"
 log "Vorheriger Commit: $PREV_SHA"
 
 log "1/6 DB-Snapshot nach $BACKUP_DIR/${TS}.sql"
-docker exec supabase-db pg_dumpall -U postgres > "$BACKUP_DIR/${TS}.sql"
+docker exec supabase-db pg_dumpall -U supabase_admin > "$BACKUP_DIR/${TS}.sql"
 
 log "2/6 Code-Update (git fetch + reset)"
 git fetch origin main
