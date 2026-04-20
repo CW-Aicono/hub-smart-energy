@@ -839,9 +839,10 @@ async function syncAutomationsFromCloud(): Promise<void> {
     const mismatch = lastAutomationCount >= 0 && localCount !== lastAutomationCount;
     const isFullSync = !lastAutomationSync || automationSyncCount % 6 === 0 || mismatch;
 
+    const tenantIdParam = config.tenant_id || cloudWsAssignment.tenant_id || "";
     const params = new URLSearchParams({
       action: "sync-automations",
-      tenant_id: config.tenant_id || cloudWsAssignment.tenant_id || "",
+      tenant_id: tenantIdParam,
       device_name: config.device_name,
     });
     if (!isFullSync && lastAutomationSync) {
