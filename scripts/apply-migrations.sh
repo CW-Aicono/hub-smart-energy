@@ -29,14 +29,28 @@ CREATE TABLE IF NOT EXISTS public._deploy_migrations (
 );
 SQL
 
+# Alle Migrations-Dateien sortiert einlesen.
+# Wichtig: erst in ein Array einlesen, nicht direkt via `while read < <(find ...)` iterieren —
+# sonst konsumiert `docker exec -i` innerhalb der Schleife den Pipe-stdin und die Iteration bricht
+# nach der ersten Datei ab.
+migration_files=()
+while IFS= read -r -d '' file; do
+  migration_files+=("$file")
+done < <(find "$MIG_DIR" -maxdepth 1 -type f -name '*.sql' -print0 | sort -z)
+
 # Bootstrap: auf einem bestehenden Server, wo bereits alle Migrations appliziert sind,
 # einmalig mit BOOTSTRAP=1 aufrufen. Markiert alle vorhandenen .sql als applied, ohne sie auszufuehren.
 if [ "${BOOTSTRAP:-0}" = "1" ]; then
-  log "BOOTSTRAP-Modus: markiere alle bestehenden Migrations als applied (ohne Ausfuehrung)"
-  while IFS= read -r -d '' file; do
-    filename="$(basename "$file")"
-    psql_exec -c "INSERT INTO public._deploy_migrations (filename) VALUES ('$(printf '%s' "$filename" | sed "s/'/''/g")') ON CONFLICT DO NOTHING"
-  done < <(find "$MIG_DIR" -maxdepth 1 -type f -name '*.sql' -print0 | sort -z)
+  log "BOOTSTRAP-Modus: markiere ${#migration_files[@]} bestehende Migrations als applied (ohne Ausfuehrung)"
+  {
+    echo "BEGIN;"
+    for file in "${migration_files[@]}"; do
+      filename="$(basename "$file")"
+      escaped="$(printf '%s' "$filename" | sed "s/'/''/g")"
+      echo "INSERT INTO public._deploy_migrations (filename) VALUES ('$escaped') ON CONFLICT DO NOTHING;"
+    done
+    echo "COMMIT;"
+  } | docker exec -i "$DB_CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -v ON_ERROR_STOP=1 > /dev/null
   log "Bootstrap fertig."
   exit 0
 fi
@@ -44,11 +58,11 @@ fi
 applied_count=0
 skipped_count=0
 
-# Sortierte Liste aller .sql-Dateien (Timestamp-Prefix sorgt fuer Reihenfolge)
-while IFS= read -r -d '' file; do
+for file in "${migration_files[@]}"; do
   filename="$(basename "$file")"
+  escaped="$(printf '%s' "$filename" | sed "s/'/''/g")"
 
-  already="$(psql_exec -At -c "SELECT 1 FROM public._deploy_migrations WHERE filename = '$(printf '%s' "$filename" | sed "s/'/''/g")'")"
+  already="$(psql_exec -At -c "SELECT 1 FROM public._deploy_migrations WHERE filename = '$escaped'")"
   if [ "$already" = "1" ]; then
     skipped_count=$((skipped_count + 1))
     continue
@@ -60,8 +74,8 @@ while IFS= read -r -d '' file; do
     exit 1
   fi
 
-  psql_exec -c "INSERT INTO public._deploy_migrations (filename) VALUES ('$(printf '%s' "$filename" | sed "s/'/''/g")')"
+  psql_exec -c "INSERT INTO public._deploy_migrations (filename) VALUES ('$escaped')"
   applied_count=$((applied_count + 1))
-done < <(find "$MIG_DIR" -maxdepth 1 -type f -name '*.sql' -print0 | sort -z)
+done
 
 log "Fertig: $applied_count neue, $skipped_count bereits appliziert."
