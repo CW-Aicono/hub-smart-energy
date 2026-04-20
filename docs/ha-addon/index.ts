@@ -1282,6 +1282,8 @@ async function getHostMAC(): Promise<string> {
   return "";
 }
 
+let cachedHostIP: string | null = null;
+
 async function getLocalIP(): Promise<string> {
   // Cached value is valid for HOST_IP_TTL_MS – ensures DHCP changes
   // (e.g. after a power outage / reboot) are picked up automatically.
