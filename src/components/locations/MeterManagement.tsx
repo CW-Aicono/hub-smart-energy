@@ -427,9 +427,22 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
                 </TableBody>
               </Table>
             )}
-          </TabsContent>
 
-          {/* Sensoren Tab */}
+            {/* Unzugeordnete Gateway-Devices vom Typ "Zähler" */}
+            {unmappedMeterDevices.length > 0 && (
+              <div className="space-y-2 pt-2">
+                <p className="text-xs text-muted-foreground">
+                  Vom Gateway erkannte Zähler – klicken Sie auf einen Eintrag, um ihn als Messstelle anzulegen.
+                </p>
+                <DeviceTable
+                  devices={unmappedMeterDevices}
+                  type="sensor"
+                  meters={meters}
+                  onEditMeter={(m) => setEditingMeter(m)}
+                  onCreateAndEdit={(d) => handleCreateAndEdit(d, "meter")}
+                />
+              </div>
+            )}
           <TabsContent value="sensors" className="space-y-4">
             {sensorTypeMeters.length > 0 && (
               <Table>
