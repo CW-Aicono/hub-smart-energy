@@ -73,6 +73,92 @@ function safeSend(ws: WebSocket, msg: unknown) {
   }
 }
 
+async function handleHttpAction(req: Request): Promise<Response | null> {
+  if (req.method !== "POST") return null;
+
+  let body: any;
+  try {
+    body = await req.json();
+  } catch {
+    return new Response(JSON.stringify({ error: "Invalid JSON body" }), {
+      status: 400,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  if (body?.action !== "getSensors") return null;
+
+  const locationIntegrationId = String(body.locationIntegrationId || "").trim();
+  if (!locationIntegrationId) {
+    return new Response(JSON.stringify({ success: false, error: "locationIntegrationId is required" }), {
+      status: 400,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  const sb = svc();
+  const { data: meters, error: meterError } = await sb
+    .from("meters")
+    .select("id, name, sensor_uuid, unit, energy_type")
+    .eq("location_integration_id", locationIntegrationId)
+    .eq("is_archived", false)
+    .not("sensor_uuid", "is", null)
+    .order("name");
+
+  if (meterError) {
+    console.error("[gateway-ws] getSensors meter query failed", meterError);
+    return new Response(JSON.stringify({ success: false, error: "Database error" }), {
+      status: 500,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  const { data: automations } = await sb
+    .from("location_automations")
+    .select("actuator_uuid, actuator_name")
+    .eq("location_integration_id", locationIntegrationId)
+    .not("actuator_uuid", "is", null);
+
+  const sensorItems = (meters ?? []).map((meter: any) => ({
+    id: meter.sensor_uuid,
+    name: meter.name,
+    type: meter.energy_type === "strom" ? "power" : meter.energy_type,
+    controlType: "Meter",
+    room: "",
+    category: "Zähler",
+    value: "—",
+    unit: meter.unit || "",
+    status: "online",
+    stateName: meter.energy_type,
+  }));
+
+  const seenActuators = new Set<string>();
+  const actuatorItems = (automations ?? [])
+    .filter((row: any) => row.actuator_uuid)
+    .filter((row: any) => {
+      const key = String(row.actuator_uuid);
+      if (seenActuators.has(key)) return false;
+      seenActuators.add(key);
+      return true;
+    })
+    .map((row: any) => ({
+      id: row.actuator_uuid,
+      name: row.actuator_name || row.actuator_uuid,
+      type: "actuator",
+      controlType: row.actuator_uuid?.split?.(".")?.[0] || "switch",
+      room: "",
+      category: "Aktor",
+      value: "—",
+      unit: "",
+      status: "online",
+      stateName: "state",
+    }));
+
+  return new Response(JSON.stringify({ success: true, sensors: [...sensorItems, ...actuatorItems] }), {
+    headers: { "Content-Type": "application/json" },
+  });
+}
+
 /** Mark device offline + tear down realtime subscription. */
 async function tearDown(session: Session) {
   if (session.closeRequested) return;
@@ -275,14 +361,14 @@ async function handleFrame(session: Session, raw: any) {
 }
 
 Deno.serve((req) => {
-  // Health probe (HTTP GET)
   if (req.headers.get("upgrade")?.toLowerCase() !== "websocket") {
-    return new Response(
+    return handleHttpAction(req).then((response) => response ?? new Response(
       JSON.stringify({ ok: true, service: "gateway-ws" }),
       { headers: { "Content-Type": "application/json" } },
-    );
+    ));
   }
 
+  // Health probe (HTTP GET)
   const { socket, response } = Deno.upgradeWebSocket(req);
   let session: Session | null = null;
   let authTimeout: number | undefined = setTimeout(() => {
