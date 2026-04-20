@@ -17,6 +17,7 @@ import { CheckCircle2, Copy, Loader2, RefreshCw, Settings } from "lucide-react";
 import { LocationIntegration } from "@/hooks/useIntegrations";
 import { getGatewayDefinition } from "@/lib/gatewayRegistry";
 import { supabase } from "@/integrations/supabase/client";
+import { AiconoGatewayCredentials } from "./gateway/AiconoGatewayCredentials";
 
 interface EditIntegrationDialogProps {
   locationIntegration: LocationIntegration | null;
@@ -199,10 +200,19 @@ export function EditIntegrationDialog({
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            {isHomeAssistant && locationIntegration && (
+              <div className="rounded-lg border border-border bg-muted/20 p-4">
+                <AiconoGatewayCredentials
+                  locationIntegrationId={locationIntegration.id}
+                  onSaved={() => onOpenChange(false)}
+                />
+              </div>
+            )}
+
             {isHomeAssistant && (
               <Alert>
                 <RefreshCw className="h-4 w-4" />
-                <AlertTitle>Tunnel-Token neu generieren</AlertTitle>
+                <AlertTitle>Tunnel-Token neu generieren (optional)</AlertTitle>
                 <AlertDescription className="space-y-3 text-sm">
                   <p>
                     Erzeugt einen neuen Cloudflare-Tunnel-Token für diese Integration. Der bisherige Token wird sofort ungültig.
