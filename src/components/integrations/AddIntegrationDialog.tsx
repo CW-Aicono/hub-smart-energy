@@ -397,6 +397,61 @@ export function AddIntegrationDialog({ locationId, onSuccess }: AddIntegrationDi
               </Alert>
             )}
 
+            {isHomeAssistant && (
+              <div className="space-y-4 rounded-lg border border-border bg-muted/20 p-4">
+                <div className="space-y-1">
+                  <p className="text-sm font-medium text-foreground">Gateway-Identität (optional beim Anlegen)</p>
+                  <p className="text-xs text-muted-foreground">
+                    Wenn MAC-Adresse, Benutzername und Passwort schon bekannt sind, kann der Pi direkt beim Anlegen zugeordnet werden.
+                  </p>
+                </div>
+
+                <FormField
+                  control={form.control}
+                  name="mac_address"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>MAC-Adresse</FormLabel>
+                      <FormControl>
+                        <Input placeholder="aabbccddeeff" className="font-mono" autoComplete="off" {...field} value={field.value || ""} />
+                      </FormControl>
+                      <FormDescription>12 Hex-Zeichen ohne Doppelpunkte, z. B. aabbccddeeff.</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="gateway_username"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Benutzername</FormLabel>
+                      <FormControl>
+                        <Input placeholder="buero-pi" autoComplete="off" {...field} value={field.value || ""} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="gateway_password"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Passwort</FormLabel>
+                      <FormControl>
+                        <Input type="password" placeholder="••••••••" autoComplete="new-password" {...field} value={field.value || ""} />
+                      </FormControl>
+                      <FormDescription>Muss exakt mit dem Passwort im Add-on übereinstimmen.</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            )}
+
             {gatewayDef && (
               <div className="space-y-4 pt-2 border-t">
                 {gatewayDef.configFields.map((fieldDef) => (
