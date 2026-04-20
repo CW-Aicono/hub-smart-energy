@@ -270,7 +270,14 @@ async function handleHttpAction(req: Request): Promise<Response | null> {
 async function handleExecuteCommand(req: Request, body: any): Promise<Response> {
   const locationIntegrationId = String(body.locationIntegrationId || "").trim();
   const entityId = String(body.entity_id || body.controlUuid || "").trim();
-  const command = String(body.command || body.commandValue || body.action_value || body.action_type || "toggle").trim();
+  const service = String(body.service || "").trim().toLowerCase();
+  const command = String(
+    body.command
+      || body.commandValue
+      || body.action_value
+      || body.action_type
+      || (service === "turn_on" ? "on" : service === "turn_off" ? "off" : service === "toggle" ? "toggle" : "toggle"),
+  ).trim().toLowerCase();
 
   if (!locationIntegrationId || !entityId) {
     return jsonResponse(req, { success: false, error: "locationIntegrationId and entity_id (or controlUuid) are required" }, 400);
