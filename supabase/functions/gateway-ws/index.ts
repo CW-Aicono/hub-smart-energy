@@ -367,6 +367,15 @@ async function handleExecuteCommand(req: Request, body: any): Promise<Response> 
       .maybeSingle();
     if (!row) continue;
     if (row.status === "completed") {
+      const explicitState = getExplicitBinaryState(command);
+      if (explicitState) {
+        await mirrorGatewayInventoryState({
+          gatewayDeviceId: device.id,
+          entityId,
+          nextState: explicitState,
+          locationIntegrationId,
+        });
+      }
       return jsonResponse(req, { success: true, response: row.response ?? null });
     }
     if (row.status === "failed") {
@@ -580,7 +589,15 @@ async function handleFrame(session: Session, raw: any) {
       const cmdId = String(raw.command_id || "");
       if (!cmdId) return;
       const isError = !!raw.error;
-      await svc()
+      const sb = svc();
+      const { data: cmdRow } = await sb
+        .from("gateway_commands")
+        .select("payload")
+        .eq("id", cmdId)
+        .eq("gateway_device_id", session.deviceId)
+        .maybeSingle();
+
+      await sb
         .from("gateway_commands")
         .update({
           status: isError ? "failed" : "completed",
@@ -590,6 +607,20 @@ async function handleFrame(session: Session, raw: any) {
         })
         .eq("id", cmdId)
         .eq("gateway_device_id", session.deviceId);
+
+      if (!isError) {
+        const payload = (cmdRow?.payload ?? {}) as Record<string, unknown>;
+        const entityId = String(payload.entity_id || "").trim();
+        const explicitState = getExplicitBinaryState(payload.command);
+        if (entityId && explicitState) {
+          await mirrorGatewayInventoryState({
+            gatewayDeviceId: session.deviceId,
+            entityId,
+            nextState: explicitState,
+            locationIntegrationId: session.locationIntegrationId,
+          });
+        }
+      }
       break;
     }
     default:
