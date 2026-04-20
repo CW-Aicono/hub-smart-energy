@@ -363,6 +363,20 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
             <TabsTrigger value="alerts">{t("mm.tabs.alerts" as any)} ({alertRules.length})</TabsTrigger>
           </TabsList>
 
+          {unassignedDevicesCount > 0 && (
+            <div className="mt-3 flex items-center justify-between gap-3 rounded-md border border-dashed border-primary/40 bg-primary/5 px-3 py-2">
+              <div className="flex items-center gap-2 text-sm">
+                <Inbox className="h-4 w-4 text-primary" />
+                <span>
+                  <strong>{unassignedDevicesCount}</strong> neue Geräte vom Gateway verfügbar – noch keinem Standort zugeordnet.
+                </span>
+              </div>
+              <Button variant="link" size="sm" className="h-auto p-0 text-primary" onClick={scrollToIntegrations}>
+                Jetzt zuordnen →
+              </Button>
+            </div>
+          )}
+
           <TabsContent value="meters" className="space-y-4">
             <div className="flex items-center justify-between">
               {(archivedMeters.length > 0 || showArchived) && (
