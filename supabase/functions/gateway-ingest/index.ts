@@ -109,6 +109,10 @@ function parseBasicAuth(req: Request): { username: string; password: string } | 
 async function bcryptVerify(plain: string, hash: string): Promise<boolean> {
   try {
     const bcrypt = await import("https://deno.land/x/bcrypt@v0.4.1/mod.ts");
+    // Edge Runtime has no Worker → use sync API as fallback.
+    if (typeof globalThis.Worker === "undefined") {
+      return bcrypt.compareSync(plain, hash);
+    }
     return await bcrypt.compare(plain, hash);
   } catch (e) {
     console.error("[gateway-ingest] bcrypt verify error:", e);
