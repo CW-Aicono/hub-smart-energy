@@ -50,10 +50,10 @@ export function IntegrationCard({ locationIntegration, onUpdate, onDelete }: Int
   const gatewayDef = integration ? getGatewayDefinition(integration.type) : undefined;
 
   const isLoxone = integration?.type === "loxone" || integration?.type === "loxone_miniserver";
-  const isHaType = integration?.type === "home_assistant" || integration?.type === "ha-addon";
+  const isAiconoGateway = integration?.type === "aicono_gateway";
 
-  // For HA integrations, fetch all tenant devices (including unlinked ones)
-  const { devices: gatewayDevices, sendCommand, refetch: refetchDevices } = useGatewayDevices(isHaType ? undefined : locationIntegration.id, locationIntegration.location_id);
+  // For AICONO Gateway integrations, fetch all tenant devices (including unlinked ones)
+  const { devices: gatewayDevices, sendCommand, refetch: refetchDevices } = useGatewayDevices(isAiconoGateway ? undefined : locationIntegration.id, locationIntegration.location_id);
   const gatewayLocalTime = !isLoxone && gatewayDevices.length > 0 ? gatewayDevices[0].local_time : null;
 
   const handleToggleEnabled = async (enabled: boolean) => {
@@ -224,7 +224,7 @@ export function IntegrationCard({ locationIntegration, onUpdate, onDelete }: Int
             </div>
           </div>
           {/* Inline gateway devices for HA integrations */}
-          {isHaType && gatewayDevices.length > 0 && (
+          {isAiconoGateway && gatewayDevices.length > 0 && (
             <div className="mt-3 pt-3 border-t border-border/50 space-y-3">
               {gatewayDevices.map((device) => (
                 <DeviceCard

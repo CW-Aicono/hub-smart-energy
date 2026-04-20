@@ -95,10 +95,10 @@ export function HaConfigDialog({ device, open, onOpenChange }: HaConfigDialogPro
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <ClipboardList className="h-5 w-5" />
-            HA-Add-on-Konfiguration: {device.device_name}
+            AICONO Gateway-Konfiguration: {device.device_name}
           </DialogTitle>
           <DialogDescription>
-            Diese Werte 1:1 in das Home-Assistant Add-on{" "}
+            Diese Werte 1:1 in das Add-on{" "}
             <code className="text-xs bg-muted px-1 rounded">AICONO EMS Gateway</code>{" "}
             → Tab <strong>Konfiguration</strong> übernehmen.
           </DialogDescription>
@@ -127,12 +127,6 @@ export function HaConfigDialog({ device, open, onOpenChange }: HaConfigDialogPro
             label="gateway_api_key"
             value={null}
             missingHint="Aus Sicherheitsgründen nicht abrufbar. Falls verloren: Schlüssel-Symbol (🔑) auf der Kachel klicken und neuen Key generieren — der alte wird damit ungültig."
-          />
-
-          <CopyRow
-            label="cloudflare_tunnel_token"
-            value={null}
-            missingHint="Wird nur einmalig nach Provisionierung im Klartext angezeigt. Falls verloren: Integration bearbeiten und über „Tunnel-Token neu generieren“ einen neuen Token erzeugen."
           />
 
           <Alert className="bg-muted/50">
