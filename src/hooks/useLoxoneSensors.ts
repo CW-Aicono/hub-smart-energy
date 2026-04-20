@@ -1,6 +1,46 @@
-import { useQuery, useQueries } from "@tanstack/react-query";
+import { useEffect } from "react";
+import { useQuery, useQueries, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { getEdgeFunctionName } from "@/lib/gatewayRegistry";
+
+/**
+ * Subscribe to realtime updates of gateway_device_inventory for the given
+ * location_integration_ids. Whenever a row changes (e.g. an actuator is
+ * toggled locally on the device or via HA), invalidate the matching
+ * "gateway-sensors" query so the UI reflects the new state immediately.
+ */
+function useGatewayInventoryRealtime(integrationIds: string[]) {
+  const queryClient = useQueryClient();
+  const key = integrationIds.filter(Boolean).slice().sort().join(",");
+
+  useEffect(() => {
+    const ids = key ? key.split(",") : [];
+    if (ids.length === 0) return;
+
+    const channel = supabase
+      .channel(`gw-inventory-${key}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "gateway_device_inventory",
+        },
+        (payload) => {
+          const row: any = (payload.new as any) ?? (payload.old as any);
+          const liId = row?.location_integration_id;
+          if (!liId || !ids.includes(liId)) return;
+          queryClient.invalidateQueries({ queryKey: ["gateway-sensors", liId] });
+        },
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
+}
 
 export interface GatewaySensor {
   id: string;
@@ -46,6 +86,7 @@ async function fetchSensors(integrationId: string, integrationType?: string): Pr
 }
 
 export function useLoxoneSensors(integrationId: string | undefined, integrationType?: string) {
+  useGatewayInventoryRealtime(integrationId ? [integrationId] : []);
   return useQuery<GatewaySensor[]>({
     queryKey: ["gateway-sensors", integrationId],
     queryFn: () => fetchSensors(integrationId!, integrationType),
@@ -57,6 +98,7 @@ export function useLoxoneSensors(integrationId: string | undefined, integrationT
 }
 
 export function useLoxoneSensorsMulti(integrationIds: string[], integrationTypes?: (string | undefined)[]) {
+  useGatewayInventoryRealtime(integrationIds);
   return useQueries({
     queries: integrationIds.map((id, idx) => ({
       queryKey: ["gateway-sensors", id],
