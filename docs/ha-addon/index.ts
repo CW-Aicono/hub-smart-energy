@@ -1877,18 +1877,17 @@ async function main(): Promise<void> {
 
   startServer();
 
-  // Start Cloudflare Tunnel if enabled
-  startCloudflaredTunnel();
-
   // Initial setup
   await checkCloudConnectivity();
   await fetchHAVersion();
   await fetchMeterMappings();
   await syncAutomationsFromCloud();
-  await sendHeartbeat();
 
   // Connect HA WebSocket for live sensor updates
   connectHAWebSocket();
+
+  // Connect persistent WSS to AICONO Cloud (gateway-ws) for heartbeat + commands
+  connectCloudWebSocket();
 
   // Polling loop (REST-based, for readings)
   setInterval(() => pollHAStates(), config.poll_interval_seconds * 1000);
@@ -1896,29 +1895,20 @@ async function main(): Promise<void> {
   // Flush loop
   setInterval(() => flushBuffer(), config.flush_interval_seconds * 1000);
 
-  // Heartbeat loop – self-healing recursive timer.
-  // After a power outage / reboot, the first heartbeat may fail (DNS, network
-  // not yet up). We retry quickly (10s) instead of waiting a full cycle, and
-  // we wrap in try/catch so an unhandled error never kills the loop.
-  const heartbeatTick = async () => {
-    let nextDelayMs = config.heartbeat_interval_seconds * 1000;
+  // Cloud-Health-Watchdog: prüft alle 60s ob die WS noch lebt; falls nein,
+  // wird der Reconnect bereits durch das `close`-Event getriggert. Wir nutzen
+  // diesen Tick zusätzlich, um HA-Version aktuell zu halten.
+  setInterval(async () => {
     try {
-      await checkCloudConnectivity();
       await fetchHAVersion();
-      await sendHeartbeat();
-      if (!isCloudReachable) {
-        // Retry quickly while cloud is unreachable so recovery after reboot
-        // is reflected on the dashboard within seconds, not a full minute.
-        nextDelayMs = 10_000;
+      if (!cloudWsConnected) {
+        // markCloudUnreachable kümmert sich um den UI-Status
+        markCloudUnreachable();
       }
     } catch (err) {
-      console.error("[heartbeat-loop] Tick failed:", err);
-      nextDelayMs = 10_000;
-    } finally {
-      setTimeout(heartbeatTick, nextDelayMs);
+      console.error("[watchdog] tick failed:", err);
     }
-  };
-  setTimeout(heartbeatTick, config.heartbeat_interval_seconds * 1000);
+  }, 60_000);
 
   // Automation evaluation loop
   setInterval(() => evaluateAndExecuteAutomations(), config.automation_eval_seconds * 1000);
