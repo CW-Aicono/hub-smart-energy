@@ -106,7 +106,8 @@ export function useLocationStatus(locationIds: string[]): UseLocationStatusRetur
       });
 
       // Group integrations by location
-      const integrationsByLocation = new Map<string, LocationIntegrationStatus[]>();
+      const integrationsByLocation = new Map<string, (LocationIntegrationStatus & { location_integration_id: string })[]>();
+      const aiconoIntegrationIds: string[] = [];
       (data || []).forEach((row: any) => {
         const locationId = row.location_id;
         if (!integrationsByLocation.has(locationId)) {
@@ -114,13 +115,35 @@ export function useLocationStatus(locationIds: string[]): UseLocationStatusRetur
         }
         integrationsByLocation.get(locationId)!.push({
           id: row.id,
+          location_integration_id: row.id,
           is_enabled: row.is_enabled,
           sync_status: row.sync_status,
           config: (row.config || {}) as Record<string, unknown>,
           integration_name: row.integration?.name || "",
           integration_type: row.integration?.type || "",
         });
+        if (row.is_enabled && row.integration?.type === "aicono_gateway") {
+          aiconoIntegrationIds.push(row.id);
+        }
       });
+
+      // For aicono_gateway: fetch live gateway_devices heartbeat info
+      const liveGatewayMap = new Map<string, { online: boolean }>();
+      if (aiconoIntegrationIds.length > 0) {
+        const { data: gateways } = await supabase
+          .from("gateway_devices")
+          .select("location_integration_id, status, last_heartbeat_at")
+          .in("location_integration_id", aiconoIntegrationIds);
+        const threshold = Date.now() - 3 * 60 * 1000; // 3 min
+        (gateways || []).forEach((g: any) => {
+          const liId = g.location_integration_id;
+          if (!liId) return;
+          const hbMs = g.last_heartbeat_at ? new Date(g.last_heartbeat_at).getTime() : 0;
+          const isOnline = g.status === "online" && hbMs >= threshold;
+          const prev = liveGatewayMap.get(liId);
+          liveGatewayMap.set(liId, { online: (prev?.online ?? false) || isOnline });
+        });
+      }
 
       // Calculate status for each location
       integrationsByLocation.forEach((integrations, locationId) => {
@@ -147,16 +170,25 @@ export function useLocationStatus(locationIds: string[]): UseLocationStatusRetur
           
           if (!configured) {
             unconfiguredNames.push(integrationShortName(integration.integration_type, integration.integration_name));
-          } else if (integration.sync_status === "success") {
+            return;
+          }
+
+          // For AICONO Gateway, prefer live gateway_devices heartbeat over sync_status
+          if (integration.integration_type === "aicono_gateway") {
+            const live = liveGatewayMap.get(integration.location_integration_id);
+            if (live?.online || integration.sync_status === "success") {
+              online++;
+            }
+            return;
+          }
+
+          if (integration.sync_status === "success") {
             online++;
           }
         });
 
-        const configuredCount = enabledIntegrations.length - unconfiguredNames.length;
-
         statusMap.set(locationId, {
           locationId,
-          // Online if at least one configured integration is connected
           isOnline: online > 0,
           totalIntegrations: total,
           onlineIntegrations: online,
