@@ -148,6 +148,7 @@ function startCloudflaredTunnel() {
 let isCloudReachable = true;
 let lastCloudCheck = 0;
 let cloudFailCount = 0;
+let currentAssignmentStatus: "assigned" | "pending_assignment" | "unknown" = "unknown";
 
 /* ── PIN Auth State ──────────────────────────────────────────────────────────── */
 
