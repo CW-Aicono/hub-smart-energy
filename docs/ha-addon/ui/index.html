@@ -1303,6 +1303,20 @@
             }
           });
         }
+
+        // Copy MAC button
+        var copyMacBtn = document.getElementById('copy-mac-btn');
+        if (copyMacBtn) {
+          copyMacBtn.addEventListener('click', function () {
+            var mac = copyMacBtn.getAttribute('data-mac') || '';
+            if (!mac) return;
+            try {
+              navigator.clipboard.writeText(mac);
+              copyMacBtn.textContent = '✓';
+              setTimeout(function () { copyMacBtn.textContent = '📋'; }, 1500);
+            } catch (e) { /* ignore */ }
+          });
+        }
       }
 
       async function loadStatus() {
