@@ -4,8 +4,8 @@
 # Sammelt Sensordaten, führt Automationen lokal aus und synchronisiert mit der Cloud.
 
 name: "AICONO EMS Gateway"
-description: "Lokaler Gateway-Hub für das AICONO Energiemanagementsystem. Sammelt Sensordaten, führt Automationen lokal aus und synchronisiert mit der Cloud. Optional integrierter Cloudflare Tunnel als Nabu-Casa-Ersatz."
-version: "2.2.3"
+description: "Lokaler Gateway-Hub für das AICONO Energiemanagementsystem. Identifiziert sich per MAC-Adresse + Benutzername/Passwort (Loxone-Modell). Cloud-URL und Schlüssel sind fest hinterlegt – Sie müssen nur Ihre Zugangsdaten eintragen und in AICONO die MAC der Liegenschaft zuordnen."
+version: "2.3.0"
 slug: "aicono-ems-gateway"
 url: "https://hub-smart-energy.lovable.app"
 arch:
@@ -29,10 +29,12 @@ ports_description:
 
 # Konfigurationsoptionen
 options:
+  gateway_username: ""
+  gateway_password: ""
+  device_name: "aicono-ems"
   cloud_url: null
   gateway_api_key: null
   tenant_id: null
-  device_name: "aicono-ems"
   poll_interval_seconds: 30
   flush_interval_seconds: 5
   heartbeat_interval_seconds: 60
@@ -44,10 +46,12 @@ options:
   cloudflare_tunnel_token: ""
 
 schema:
-  cloud_url: url
-  gateway_api_key: str
-  tenant_id: str
+  gateway_username: "str?"
+  gateway_password: "password?"
   device_name: str
+  cloud_url: "url?"
+  gateway_api_key: "str?"
+  tenant_id: "str?"
   poll_interval_seconds: int
   flush_interval_seconds: int
   heartbeat_interval_seconds: int
@@ -57,3 +61,4 @@ schema:
   auto_backup_hours: int
   cloudflare_enabled: bool
   cloudflare_tunnel_token: "str?"
+

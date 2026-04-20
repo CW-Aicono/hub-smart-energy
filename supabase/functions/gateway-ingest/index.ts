@@ -52,17 +52,25 @@ async function validateApiKey(req: Request): Promise<Response | null> {
     return json({ error: "Service misconfigured" }, 500);
   }
   const authHeader = req.headers.get("Authorization") || "";
+
+  // 1) Basic Auth (Loxone-style: username + password against gateway_devices)
+  if (/^Basic\s+/i.test(authHeader)) {
+    const ctx = await getDeviceFromBasicAuth(req);
+    if (ctx) return null;
+    return json({ error: "Unauthorized" }, 401);
+  }
+
   const providedKey = authHeader.replace(/^Bearer\s+/i, "").trim();
   if (!providedKey) {
     return json({ error: "Unauthorized" }, 401);
   }
 
-  // Accept global GATEWAY_API_KEY
+  // 2) Global GATEWAY_API_KEY (legacy)
   if (providedKey === gatewayApiKey) {
     return null;
   }
 
-  // Per-device API key: hash and check against gateway_devices.api_key_hash
+  // 3) Per-device API key: hash and check against gateway_devices.api_key_hash
   const keyHash = await hashApiKey(providedKey);
   const supabase = getSupabase();
   const { data: device } = await supabase
@@ -79,10 +87,70 @@ async function validateApiKey(req: Request): Promise<Response | null> {
 }
 
 /**
- * Extracts device context from a per-device API key.
- * Returns { device_id, tenant_id } if the key matches a device, null otherwise.
+ * Parses Basic-Auth header → { username, password }.
  */
-async function getDeviceFromApiKey(req: Request): Promise<{ device_id: string; tenant_id: string } | null> {
+function parseBasicAuth(req: Request): { username: string; password: string } | null {
+  const h = req.headers.get("Authorization") || "";
+  const m = h.match(/^Basic\s+(.+)$/i);
+  if (!m) return null;
+  try {
+    const decoded = atob(m[1].trim());
+    const idx = decoded.indexOf(":");
+    if (idx < 0) return null;
+    return { username: decoded.slice(0, idx), password: decoded.slice(idx + 1) };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * bcrypt verify – uses Web Crypto via deno-std bcrypt.
+ */
+async function bcryptVerify(plain: string, hash: string): Promise<boolean> {
+  try {
+    const bcrypt = await import("https://deno.land/x/bcrypt@v0.4.1/mod.ts");
+    return await bcrypt.compare(plain, hash);
+  } catch (e) {
+    console.error("[gateway-ingest] bcrypt verify error:", e);
+    return false;
+  }
+}
+
+/**
+ * Looks up a gateway_devices row by Basic-Auth username + verified password.
+ * Returns device context (may have tenant_id=null when pending_assignment).
+ */
+async function getDeviceFromBasicAuth(req: Request): Promise<
+  { device_id: string; tenant_id: string | null; mac_address: string | null; assignment_status: "assigned" | "pending_assignment" } | null
+> {
+  const creds = parseBasicAuth(req);
+  if (!creds || !creds.username || !creds.password) return null;
+  const supabase = getSupabase();
+  const { data: device } = await supabase
+    .from("gateway_devices")
+    .select("id, tenant_id, mac_address, gateway_password_hash")
+    .eq("gateway_username", creds.username)
+    .maybeSingle();
+  if (!device || !device.gateway_password_hash) return null;
+  const ok = await bcryptVerify(creds.password, device.gateway_password_hash);
+  if (!ok) return null;
+  return {
+    device_id: device.id,
+    tenant_id: device.tenant_id,
+    mac_address: device.mac_address,
+    assignment_status: device.tenant_id ? "assigned" : "pending_assignment",
+  };
+}
+
+/**
+ * Extracts device context from a per-device API key OR Basic-Auth.
+ * Returns { device_id, tenant_id } when known, null otherwise.
+ */
+async function getDeviceFromApiKey(req: Request): Promise<{ device_id: string; tenant_id: string | null } | null> {
+  // Basic Auth path
+  const basic = await getDeviceFromBasicAuth(req);
+  if (basic) return { device_id: basic.device_id, tenant_id: basic.tenant_id };
+
   const gatewayApiKey = Deno.env.get("GATEWAY_API_KEY");
   const authHeader = req.headers.get("Authorization") || "";
   const providedKey = authHeader.replace(/^Bearer\s+/i, "").trim();
@@ -829,66 +897,70 @@ async function handleHeartbeat(req: Request): Promise<Response> {
     return json({ error: "Invalid JSON body" }, 400);
   }
 
-  if (!body.tenant_id || !body.device_name) {
-    return json({ error: "tenant_id and device_name are required" }, 400);
+  // Either MAC or (tenant_id + device_name) is required (legacy support)
+  if (!(body as any).mac_address && (!body.tenant_id || !body.device_name)) {
+    return json({ error: "mac_address or (tenant_id + device_name) required" }, 400);
   }
 
   // Per-device key tenant_id cross-check
   const deviceCtx = await getDeviceFromApiKey(req);
-  if (deviceCtx && deviceCtx.tenant_id !== body.tenant_id) {
+  if (deviceCtx && deviceCtx.tenant_id && body.tenant_id && deviceCtx.tenant_id !== body.tenant_id) {
     console.warn(`[gateway-ingest] Per-device key tenant mismatch: key=${deviceCtx.tenant_id}, body=${body.tenant_id}`);
     return json({ error: "Tenant mismatch – API key does not belong to this tenant" }, 403);
   }
 
   const supabase = getSupabase();
 
-  // Upsert by tenant_id + device_name
-  const { data: existing } = await supabase
-    .from("gateway_devices")
-    .select("id, config, latest_available_version")
-    .eq("tenant_id", body.tenant_id)
-    .eq("device_name", body.device_name)
-    .maybeSingle();
+  // Normalize MAC (lowercase 12 hex)
+  const macRaw = (body as any).mac_address as string | undefined;
+  const mac = macRaw ? macRaw.toLowerCase().replace(/[^0-9a-f]/g, "").slice(0, 12) : "";
+  const macValid = mac.length === 12;
+
+  // Lookup existing device: prefer MAC, fallback to (tenant_id + device_name) for legacy
+  let existing: { id: string; tenant_id: string | null; config: any; latest_available_version: any; location_integration_id: string | null } | null = null;
+  if (macValid) {
+    const { data } = await supabase
+      .from("gateway_devices")
+      .select("id, tenant_id, config, latest_available_version, location_integration_id")
+      .eq("mac_address", mac)
+      .maybeSingle();
+    existing = data as any;
+  }
+  if (!existing && body.tenant_id && body.device_name) {
+    const { data } = await supabase
+      .from("gateway_devices")
+      .select("id, tenant_id, config, latest_available_version, location_integration_id")
+      .eq("tenant_id", body.tenant_id)
+      .eq("device_name", body.device_name)
+      .maybeSingle();
+    existing = data as any;
+  }
+
+  // Pending assignment check: device known by MAC but no tenant_id assigned
+  const effectiveTenantId = existing?.tenant_id ?? body.tenant_id ?? null;
+  const isPending = !effectiveTenantId;
 
   // Extract pending command BEFORE overwriting config
   const existingConfig = (existing?.config || {}) as Record<string, unknown>;
   const pendingCommand = existingConfig.pending_command as string | undefined;
   const pendingCommandParams = existingConfig.pending_command_params as Record<string, unknown> | undefined;
 
-  // Merge addon config with server-side fields (preserve non-pending fields)
-  const mergedConfig = {
-    ...(body.config || {}),
-    // Clear pending command after delivering it
-  };
+  const mergedConfig = { ...(body.config || {}) };
 
-  // Auto-resolve location_integration_id if not explicitly provided
-  let resolvedLiId: string | null = body.location_integration_id || null;
-  if (!resolvedLiId && existing?.id) {
-    // Check if the existing device already has one
-    const { data: existingDevice } = await supabase
-      .from("gateway_devices")
-      .select("location_integration_id")
-      .eq("id", existing.id)
-      .maybeSingle();
-    resolvedLiId = existingDevice?.location_integration_id || null;
-  }
-  if (!resolvedLiId) {
-    // Find the HA integration for this tenant:
-    // 1) Get all locations for this tenant
+  // Auto-resolve location_integration_id (skip when pending)
+  let resolvedLiId: string | null = body.location_integration_id || existing?.location_integration_id || null;
+  if (!resolvedLiId && effectiveTenantId) {
     const { data: locations } = await supabase
       .from("locations")
       .select("id")
-      .eq("tenant_id", body.tenant_id);
-
+      .eq("tenant_id", effectiveTenantId);
     if (locations && locations.length > 0) {
       const locationIds = locations.map((l: any) => l.id);
-      // 2) Find enabled HA integrations for those locations
       const { data: lis } = await supabase
         .from("location_integrations")
         .select("id, integration_id, integrations!inner(type)")
         .in("location_id", locationIds)
         .eq("is_enabled", true);
-
       if (lis) {
         const haLi = lis.find((li: any) => li.integrations?.type === "home_assistant");
         if (haLi) {
@@ -899,33 +971,58 @@ async function handleHeartbeat(req: Request): Promise<Response> {
     }
   }
 
-  const deviceData = {
-    tenant_id: body.tenant_id,
-    device_name: body.device_name,
+  const deviceData: Record<string, unknown> = {
+    tenant_id: effectiveTenantId,
+    device_name: body.device_name || "aicono-ems",
     device_type: body.device_type || "ha-addon",
     local_ip: body.local_ip || null,
     ha_version: body.ha_version || null,
     addon_version: body.addon_version || null,
     offline_buffer_count: body.offline_buffer_count ?? 0,
     local_time: body.local_time || null,
-    status: "online",
+    status: isPending ? "pending_assignment" : "online",
     last_heartbeat_at: new Date().toISOString(),
     location_integration_id: resolvedLiId,
     config: mergedConfig,
   };
+  if (macValid) deviceData.mac_address = mac;
+  const usernameRaw = (body as any).gateway_username as string | undefined;
+  if (usernameRaw) deviceData.gateway_username = usernameRaw;
 
-  // Atomic upsert via unique constraint (tenant_id, device_name) — prevents duplicates
-  const { data: upserted, error } = await supabase
-    .from("gateway_devices")
-    .upsert(deviceData, { onConflict: "tenant_id,device_name" })
-    .select("id")
-    .single();
-  if (error) {
-    console.error("[gateway-ingest] heartbeat upsert error:", error.message);
+  // Upsert: prefer mac_address as conflict target when MAC is set
+  let upserted: { id: string } | null = null;
+  let upsertErr: any = null;
+  if (existing?.id) {
+    const { data, error } = await supabase
+      .from("gateway_devices")
+      .update(deviceData)
+      .eq("id", existing.id)
+      .select("id")
+      .single();
+    upserted = data as any; upsertErr = error;
+  } else if (macValid) {
+    const { data, error } = await supabase
+      .from("gateway_devices")
+      .upsert({ ...deviceData, mac_address: mac }, { onConflict: "mac_address" })
+      .select("id")
+      .single();
+    upserted = data as any; upsertErr = error;
+  } else if (effectiveTenantId && body.device_name) {
+    const { data, error } = await supabase
+      .from("gateway_devices")
+      .insert(deviceData)
+      .select("id")
+      .single();
+    upserted = data as any; upsertErr = error;
+  } else {
+    return json({ error: "mac_address or (tenant_id + device_name) required" }, 400);
+  }
+  if (upsertErr) {
+    console.error("[gateway-ingest] heartbeat upsert error:", upsertErr.message);
     return json({ error: "Database error" }, 500);
   }
   const result = {
-    id: upserted.id,
+    id: upserted!.id,
     action: existing?.id ? "updated" : "created",
   };
 
@@ -933,6 +1030,7 @@ async function handleHeartbeat(req: Request): Promise<Response> {
     success: true,
     ...result,
     latest_available_version: existing?.latest_available_version || null,
+    assignment_status: isPending ? "pending_assignment" : "assigned",
   };
 
   // Deliver ui_pin_hash to the gateway for local PIN protection

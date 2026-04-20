@@ -25,6 +25,9 @@ interface AddonConfig {
   gateway_api_key: string;
   tenant_id: string;
   device_name: string;
+  // Loxone-style identification (preferred since v2.3.0)
+  gateway_username?: string;
+  gateway_password?: string;
   poll_interval_seconds: number;
   flush_interval_seconds: number;
   heartbeat_interval_seconds: number;
@@ -36,23 +39,27 @@ interface AddonConfig {
   cloudflare_tunnel_token?: string;
 }
 
+const DEFAULT_CLOUD_URL = "https://xnveugycurplszevdxtw.supabase.co";
+
 function loadConfig(): AddonConfig {
   const optionsPath = "/data/options.json";
   try {
     const raw = fs.readFileSync(optionsPath, "utf-8");
     console.log("[config] Loaded /data/options.json");
     const parsed = JSON.parse(raw);
-    // Fallback: support old 'supabase_url' field
-    const cloudUrl = parsed.cloud_url || parsed.supabase_url || "";
+    // Fallback: support old 'supabase_url' field; default to fixed cloud URL
+    const cloudUrl = parsed.cloud_url || parsed.supabase_url || DEFAULT_CLOUD_URL;
     return { automation_eval_seconds: 30, ...parsed, cloud_url: cloudUrl };
   } catch (error: any) {
     console.warn(`[config] Cannot read ${optionsPath} (${error?.code || error?.message}), using env vars`);
   }
   return {
-    cloud_url: process.env.CLOUD_URL || process.env.SUPABASE_URL || "",
+    cloud_url: process.env.CLOUD_URL || process.env.SUPABASE_URL || DEFAULT_CLOUD_URL,
     gateway_api_key: process.env.GATEWAY_API_KEY || "",
     tenant_id: process.env.TENANT_ID || "",
     device_name: process.env.DEVICE_NAME || "aicono-ems",
+    gateway_username: process.env.GATEWAY_USERNAME || "",
+    gateway_password: process.env.GATEWAY_PASSWORD || "",
     poll_interval_seconds: Number(process.env.POLL_INTERVAL_SECONDS) || 30,
     flush_interval_seconds: Number(process.env.FLUSH_INTERVAL_SECONDS) || 5,
     heartbeat_interval_seconds: Number(process.env.HEARTBEAT_INTERVAL_SECONDS) || 60,
@@ -67,7 +74,18 @@ const config = loadConfig();
 const SUPERVISOR_TOKEN = process.env.SUPERVISOR_TOKEN || "";
 const HA_API_BASE = "http://supervisor/core/api";
 const INGEST_URL = `${config.cloud_url}/functions/v1/gateway-ingest`;
-const ADDON_VERSION = "2.2.3";
+const ADDON_VERSION = "2.3.0";
+
+/* ── Auth header helper (Loxone-style: Basic Auth, fallback to Bearer key) ──── */
+
+function authHeader(): string {
+  if (config.gateway_username && config.gateway_password) {
+    const creds = `${config.gateway_username}:${config.gateway_password}`;
+    // Buffer is available in Node runtime
+    return `Basic ${Buffer.from(creds, "utf-8").toString("base64")}`;
+  }
+  return `Bearer ${config.gateway_api_key}`;
+}
 
 /* ── Cloudflare Tunnel Subprocess ────────────────────────────────────────────── */
 import { spawn, ChildProcess } from "child_process";
@@ -130,6 +148,7 @@ function startCloudflaredTunnel() {
 let isCloudReachable = true;
 let lastCloudCheck = 0;
 let cloudFailCount = 0;
+let currentAssignmentStatus: "assigned" | "pending_assignment" | "unknown" = "unknown";
 
 /* ── PIN Auth State ──────────────────────────────────────────────────────────── */
 
@@ -195,7 +214,7 @@ function markCloudUnreachable(): void {
 async function checkCloudConnectivity(): Promise<boolean> {
   try {
     const res = await fetch(`${config.cloud_url}/functions/v1/gateway-ingest?action=addon-version`, {
-      headers: { Authorization: `Bearer ${config.gateway_api_key}` },
+      headers: { Authorization: authHeader() },
       signal: AbortSignal.timeout(15000),
     });
     if (res.ok) {
@@ -402,7 +421,7 @@ async function fetchMeterMappings(): Promise<void> {
   }
   try {
     const res = await fetch(`${INGEST_URL}?action=list-meters`, {
-      headers: { Authorization: `Bearer ${config.gateway_api_key}` },
+      headers: { Authorization: authHeader() },
     });
     if (!res.ok) {
       console.error(`[mapping] Failed to fetch meters: ${res.status}`);
@@ -874,7 +893,7 @@ async function syncAutomationsFromCloud(): Promise<void> {
     }
 
     const res = await fetch(`${INGEST_URL}?${params.toString()}`, {
-      headers: { Authorization: `Bearer ${config.gateway_api_key}` },
+      headers: { Authorization: authHeader() },
       signal: AbortSignal.timeout(15000),
     });
 
@@ -965,7 +984,7 @@ async function pushExecutionLogs(): Promise<void> {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${config.gateway_api_key}`,
+        Authorization: authHeader(),
       },
       body: JSON.stringify({ logs }),
     });
@@ -1011,7 +1030,7 @@ async function flushBuffer(): Promise<void> {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${config.gateway_api_key}`,
+        Authorization: authHeader(),
       },
       body: JSON.stringify({ readings }),
     });
@@ -1052,12 +1071,14 @@ async function sendHeartbeat(): Promise<void> {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${config.gateway_api_key}`,
+        Authorization: authHeader(),
       },
       body: JSON.stringify({
         device_name: config.device_name,
         device_type: "aicono-ems",
-        tenant_id: config.tenant_id,
+        tenant_id: config.tenant_id || undefined,
+        mac_address: await getHostMAC(),
+        gateway_username: config.gateway_username || undefined,
         local_ip: await getLocalIP(),
         ha_version: haVersion,
         addon_version: ADDON_VERSION,
@@ -1080,7 +1101,11 @@ async function sendHeartbeat(): Promise<void> {
         pending_command?: string;
         pending_command_params?: Record<string, unknown>;
         ui_pin_hash?: string | null;
+        assignment_status?: "assigned" | "pending_assignment" | "unknown";
       };
+      if (data.assignment_status) {
+        currentAssignmentStatus = data.assignment_status;
+      }
       // Sync UI PIN hash from cloud
       if (data.ui_pin_hash !== undefined) {
         uiPinHash = data.ui_pin_hash || null;
@@ -1107,6 +1132,72 @@ async function sendHeartbeat(): Promise<void> {
 let cachedHostIP: string | null = null;
 let cachedHostIPAt = 0;
 const HOST_IP_TTL_MS = 5 * 60 * 1000; // refresh every 5 min to catch DHCP changes after reboot
+
+let cachedHostMAC: string | null = null;
+let cachedHostMACAt = 0;
+const HOST_MAC_TTL_MS = 60 * 60 * 1000; // 1h – MAC is effectively static
+
+function normalizeMac(mac: string): string {
+  return mac.toLowerCase().replace(/[^0-9a-f]/g, "").slice(0, 12);
+}
+
+async function getHostMAC(): Promise<string> {
+  if (cachedHostMAC && Date.now() - cachedHostMACAt < HOST_MAC_TTL_MS) {
+    return cachedHostMAC;
+  }
+  // 1) Supervisor API – preferred (real host MAC, not docker bridge)
+  try {
+    const token = process.env.SUPERVISOR_TOKEN;
+    if (token) {
+      const res = await fetch("http://supervisor/network/info", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json() as any;
+        const ifaces = data?.data?.interfaces;
+        if (Array.isArray(ifaces)) {
+          // Prefer enabled ethernet
+          const pickMac = (it: any): string | null => {
+            const candidates = [it?.mac, it?.mac_address, it?.hw_address, it?.hardware];
+            for (const c of candidates) {
+              if (typeof c === "string" && /[0-9a-f]/i.test(c)) {
+                const norm = normalizeMac(c);
+                if (norm.length === 12) return norm;
+              }
+            }
+            return null;
+          };
+          for (const it of ifaces) {
+            if (it.enabled && it.type === "ethernet") {
+              const m = pickMac(it);
+              if (m) { cachedHostMAC = m; cachedHostMACAt = Date.now(); return m; }
+            }
+          }
+          for (const it of ifaces) {
+            if (it.enabled) {
+              const m = pickMac(it);
+              if (m) { cachedHostMAC = m; cachedHostMACAt = Date.now(); return m; }
+            }
+          }
+        }
+      }
+    }
+  } catch { /* ignore */ }
+  // 2) os.networkInterfaces fallback (container MAC – not ideal but stable)
+  try {
+    const os = require("os");
+    const interfaces = os.networkInterfaces();
+    for (const name of Object.keys(interfaces)) {
+      for (const iface of interfaces[name] || []) {
+        if (iface.family === "IPv4" && !iface.internal && iface.mac && iface.mac !== "00:00:00:00:00:00") {
+          const m = normalizeMac(iface.mac);
+          if (m.length === 12) { cachedHostMAC = m; cachedHostMACAt = Date.now(); return m; }
+        }
+      }
+    }
+  } catch { /* ignore */ }
+  return "";
+}
 
 async function getLocalIP(): Promise<string> {
   // Cached value is valid for HOST_IP_TTL_MS – ensures DHCP changes
@@ -1235,7 +1326,7 @@ async function sendBackup(): Promise<void> {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${config.gateway_api_key}`,
+        Authorization: authHeader(),
       },
       body: JSON.stringify({
         tenant_id: config.tenant_id,
@@ -1383,6 +1474,7 @@ function startServer(): void {
 
     // API endpoints
     if (pathname === "/api/status") {
+      const mac = await getHostMAC();
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end(JSON.stringify({
         status: "running",
@@ -1394,6 +1486,10 @@ function startServer(): void {
         uptime_seconds: Math.floor(process.uptime()),
         cloud_reachable: isCloudReachable,
         ha_ws_connected: haWsConnected,
+        mac_address: mac,
+        gateway_username: config.gateway_username || "",
+        assignment_status: currentAssignmentStatus,
+        credentials_configured: !!(config.gateway_username && config.gateway_password),
         tunnel: {
           enabled: !!config.cloudflare_enabled,
           configured: !!config.cloudflare_tunnel_token,
