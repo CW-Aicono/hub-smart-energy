@@ -443,6 +443,9 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
                 />
               </div>
             )}
+          </TabsContent>
+
+          {/* Sensoren Tab */}
           <TabsContent value="sensors" className="space-y-4">
             {sensorTypeMeters.length > 0 && (
               <Table>
