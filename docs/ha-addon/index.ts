@@ -841,7 +841,7 @@ async function syncAutomationsFromCloud(): Promise<void> {
 
     const params = new URLSearchParams({
       action: "sync-automations",
-      tenant_id: config.tenant_id,
+      tenant_id: config.tenant_id || cloudWsAssignment.tenant_id || "",
       device_name: config.device_name,
     });
     if (!isFullSync && lastAutomationSync) {
