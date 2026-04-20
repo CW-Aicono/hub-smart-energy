@@ -1,6 +1,8 @@
-# AICONO EMS Gateway
+# AICONO EMS Gateway v3.0
 # =========================================
-# Multi-stage build for minimal production image
+# Multi-stage build for minimal production image.
+# v3.0: Cloudflared entfernt – Worker kommuniziert ausschließlich via
+#       ausgehende WebSocket-Verbindung zur AICONO Cloud.
 
 # ── Stage 1: Build TypeScript ────────────────────────────────────────────────
 FROM node:20-alpine AS builder
@@ -23,18 +25,8 @@ FROM node:20-alpine AS runner
 
 WORKDIR /app
 
-# Install cloudflared (multi-arch) for optional Cloudflare Tunnel
-RUN apk add --no-cache curl ca-certificates && \
-    ARCH=$(uname -m) && \
-    case "$ARCH" in \
-      x86_64)   CF_ARCH="amd64" ;; \
-      aarch64)  CF_ARCH="arm64" ;; \
-      armv7l)   CF_ARCH="arm" ;; \
-      *)        CF_ARCH="amd64" ;; \
-    esac && \
-    curl -fsSL "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-${CF_ARCH}" \
-      -o /usr/local/bin/cloudflared && \
-    chmod +x /usr/local/bin/cloudflared
+# Minimal runtime deps – no cloudflared needed in v3.0
+RUN apk add --no-cache ca-certificates
 
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/dist/index.js ./index.js
