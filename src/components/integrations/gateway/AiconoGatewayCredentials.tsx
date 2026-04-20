@@ -153,9 +153,9 @@ export function AiconoGatewayCredentials({ locationIntegrationId, onSaved }: Aic
       </Alert>
 
       {pending.length > 0 && (
-        <div className="rounded-md border border-amber-500/30 bg-amber-500/5 p-3 space-y-2">
+        <div className="rounded-md border border-warning/30 bg-warning/5 p-3 space-y-2">
           <div className="flex items-center justify-between">
-            <Label className="text-sm font-semibold text-amber-700 dark:text-amber-400">
+            <Label className="text-sm font-semibold text-warning-foreground">
               Unzugeordnete Geräte ({pending.length})
             </Label>
             <Button type="button" variant="ghost" size="sm" onClick={fetchPending} disabled={loadingPending}>
