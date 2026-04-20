@@ -108,11 +108,17 @@ export function IntegrationCard({ locationIntegration, onUpdate, onDelete }: Int
   };
 
   const isConfigured = (() => {
+    if (isAiconoGateway) return true;
     if (!gatewayDef || !config) return false;
     return gatewayDef.configFields.filter((f) => f.required).every((f) => { const val = config[f.name]; return val && String(val).length > 0; });
   })();
 
   const configSubtitle = (() => {
+    if (isAiconoGateway) {
+      const count = gatewayDevices.length;
+      if (count === 0) return "Warte auf Hub-Verbindung…";
+      return count === 1 ? "1 Hub verbunden" : `${count} Hubs verbunden`;
+    }
     if (!gatewayDef || !config) return t("intCard.notConfigured" as any);
     const firstField = gatewayDef.configFields.find((f) => f.type !== "password" && config[f.name]);
     if (!firstField) return t("intCard.notConfigured" as any);
