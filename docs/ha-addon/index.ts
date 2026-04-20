@@ -1072,10 +1072,18 @@ async function pushDeviceSnapshot(): Promise<void> {
     "media_player", "camera", "weather", "sun", "moon",
   ]);
 
+  const domainCounts: Record<string, number> = {};
+  const categoryCounts: Record<string, number> = { meter: 0, actuator: 0, sensor: 0 };
+  let ignoredCount = 0;
+
   const devices: Array<Record<string, unknown>> = [];
   for (const s of latestHAStates) {
     const domain = s.entity_id.split(".")[0];
-    if (ignoredDomains.has(domain)) continue;
+    domainCounts[domain] = (domainCounts[domain] || 0) + 1;
+    if (ignoredDomains.has(domain)) {
+      ignoredCount++;
+      continue;
+    }
 
     let category = "sensor";
     if (actuatorDomains.has(domain)) {
@@ -1087,6 +1095,7 @@ async function pushDeviceSnapshot(): Promise<void> {
         category = "meter";
       }
     }
+    categoryCounts[category] = (categoryCounts[category] || 0) + 1;
 
     devices.push({
       entity_id: s.entity_id,
@@ -1100,7 +1109,20 @@ async function pushDeviceSnapshot(): Promise<void> {
     });
   }
 
-  if (devices.length === 0) return;
+  console.log(
+    `[snapshot] inventory analysis: ha_states=${latestHAStates.length} ignored=${ignoredCount} ` +
+    `meters=${categoryCounts.meter} actuators=${categoryCounts.actuator} sensors=${categoryCounts.sensor} ` +
+    `domains=${JSON.stringify(domainCounts)}`,
+  );
+  if (devices.length > 0) {
+    const sample = devices.slice(0, 20).map((d) => `${d.entity_id}[${d.category}]`);
+    console.log(`[snapshot] sample entities: ${sample.join(", ")}`);
+  }
+
+  if (devices.length === 0) {
+    console.warn("[snapshot] no devices to push (after filtering). Check HA entity_filter / available domains.");
+    return;
+  }
 
   try {
     const res = await fetch(`${INGEST_URL}?action=device-snapshot`, {
