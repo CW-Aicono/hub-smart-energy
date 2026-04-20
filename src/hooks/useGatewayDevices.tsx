@@ -20,6 +20,8 @@ export interface GatewayDevice {
   config: Record<string, unknown>;
   offline_buffer_count: number;
   api_key_hash: string | null;
+  mac_address: string | null;
+  gateway_username: string | null;
   created_at: string;
   updated_at: string;
 }
