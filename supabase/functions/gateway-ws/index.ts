@@ -355,9 +355,11 @@ async function handleExecuteCommand(req: Request, body: any): Promise<Response> 
     return jsonResponse(req, { success: false, error: insErr?.message || "Failed to enqueue command" }, 500);
   }
 
-  // Poll briefly for ack (max ~6s).
+  // Poll for ack long enough to cover observed gateway delivery delays.
+  // Real requests have been acknowledged just after ~6s, which produced false
+  // 504s even though the command ultimately completed successfully.
   const cmdId = cmd.id as string;
-  const deadline = Date.now() + 6000;
+  const deadline = Date.now() + 12000;
   while (Date.now() < deadline) {
     await new Promise((r) => setTimeout(r, 250));
     const { data: row } = await sb
