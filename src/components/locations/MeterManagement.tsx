@@ -130,13 +130,14 @@ function DeviceTable({
           <TableHead>Steuerungstyp</TableHead>
           <TableHead className="text-right">Wert</TableHead>
           <TableHead>Status</TableHead>
+          {isAdmin && <TableHead className="w-32" />}
         </TableRow>
       </TableHeader>
       <TableBody>
         {devices.map((d) => {
           const linkedMeter = sensorUuidToMeter.get(d.id);
           return (
-            <TableRow key={`${d._integrationLabel}-${d.id}`}>
+            <TableRow key={`${d._integrationLabel}-${d.id}`} className={linkedMeter?.is_archived ? "opacity-60" : ""}>
               <TableCell>
                 <div className="p-1.5 rounded bg-muted w-fit">
                   {d.unit ? getUnitIcon(d.unit) : getSensorIcon(d.type)}
@@ -169,6 +170,25 @@ function DeviceTable({
                   {d.status === "online" ? "Online" : "Offline"}
                 </Badge>
               </TableCell>
+              {isAdmin && (
+                <TableCell className="flex gap-1">
+                  {linkedMeter && !linkedMeter.is_archived && onArchive && (
+                    <Button variant="ghost" size="icon" onClick={() => onArchive(linkedMeter, true)} title="Archivieren">
+                      <Archive className="h-4 w-4" />
+                    </Button>
+                  )}
+                  {linkedMeter && linkedMeter.is_archived && onArchive && (
+                    <Button variant="ghost" size="icon" onClick={() => onArchive(linkedMeter, false)} title="Wiederherstellen">
+                      <ArchiveRestore className="h-4 w-4 text-primary" />
+                    </Button>
+                  )}
+                  {linkedMeter && linkedMeter.is_archived && onDelete && (
+                    <Button variant="ghost" size="icon" onClick={() => onDelete(linkedMeter)} title="Endgültig löschen">
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                    </Button>
+                  )}
+                </TableCell>
+              )}
             </TableRow>
           );
         })}
