@@ -542,8 +542,8 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
               </div>
             ) : gatewayIntegrations.length === 0 && actuatorTypeMeters.length === 0 ? (
               <p className="text-sm text-muted-foreground py-4">Keine Aktoren vorhanden.</p>
-            ) : actuatorDevices.length > 0 ? (
-              <DeviceTable devices={actuatorDevices} type="actuator" meters={meters} onEditMeter={(m) => setEditingMeter(m)} onCreateAndEdit={handleCreateAndEdit} />
+            ) : unmappedActuatorDevices.length > 0 ? (
+              <DeviceTable devices={unmappedActuatorDevices} type="actuator" meters={meters} onEditMeter={(m) => setEditingMeter(m)} onCreateAndEdit={handleCreateAndEdit} />
             ) : null}
           </TabsContent>
 
