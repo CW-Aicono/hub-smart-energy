@@ -1085,7 +1085,196 @@ async function sendHeartbeat(): Promise<void> {
   }
 }
 
-let cachedHostIP: string | null = null;
+/* ── Cloud WebSocket Client (gateway-ws) ─────────────────────────────────────── */
+/**
+ * Persistente WSS-Verbindung zur AICONO Cloud:
+ *  - Sendet `auth`-Frame mit MAC + Username + Passwort
+ *  - Sendet alle 30s `heartbeat` (inkl. local_ip, ha/addon-Version, Buffer-Count)
+ *  - Empfängt `command`-Frames aus gateway_commands und führt sie aus
+ *  - Sendet `ack`-Frames mit Erfolg/Fehler zurück
+ *
+ * Reconnect-Strategie: exponentielles Backoff (max 60s) – gleicher Stil wie haWs.
+ */
+
+let cloudWs: import("ws") | null = null;
+let cloudWsConnected = false;
+let cloudWsReconnectDelay = 5_000;
+const CLOUD_WS_RECONNECT_MAX = 60_000;
+let cloudWsHeartbeatTimer: NodeJS.Timeout | null = null;
+let cloudWsAssignment: { device_id?: string; tenant_id?: string; location_id?: string | null } = {};
+
+function safeWsSend(ws: import("ws") | null, msg: unknown): void {
+  if (!ws || ws.readyState !== 1 /* OPEN */) return;
+  try { ws.send(JSON.stringify(msg)); } catch { /* ignore */ }
+}
+
+async function sendCloudHeartbeat(): Promise<void> {
+  if (!cloudWs || !cloudWsConnected) return;
+  safeWsSend(cloudWs, {
+    type: "heartbeat",
+    local_ip: await getLocalIP(),
+    local_time: new Date().toISOString(),
+    addon_version: ADDON_VERSION,
+    ha_version: haVersion,
+    offline_buffer_count: getBufferCount(),
+  });
+}
+
+async function connectCloudWebSocket(): Promise<void> {
+  if (!WebSocketClient) {
+    console.error("[cloud-ws] ws module not available – cannot connect");
+    return;
+  }
+  if (!config.gateway_username || !config.gateway_password) {
+    console.warn("[cloud-ws] gateway_username/password missing – skipping WS connect");
+    setTimeout(connectCloudWebSocket, 30_000);
+    return;
+  }
+  const mac = await getHostMAC();
+  if (!mac) {
+    console.warn("[cloud-ws] MAC not yet available – retry in 10s");
+    setTimeout(connectCloudWebSocket, 10_000);
+    return;
+  }
+
+  console.log(`[cloud-ws] Connecting to ${GATEWAY_WS_URL} (mac=${mac.slice(0, 4)}…)`);
+  try {
+    cloudWs = new WebSocketClient(GATEWAY_WS_URL);
+  } catch (err) {
+    console.error("[cloud-ws] Constructor failed:", err);
+    scheduleCloudReconnect();
+    return;
+  }
+
+  cloudWs.on("open", async () => {
+    console.log("[cloud-ws] TCP/WS open – sending auth frame");
+    safeWsSend(cloudWs, {
+      type: "auth",
+      mac,
+      username: config.gateway_username,
+      password: config.gateway_password,
+      addon_version: ADDON_VERSION,
+      ha_version: haVersion,
+      local_ip: await getLocalIP(),
+      local_time: new Date().toISOString(),
+    });
+  });
+
+  cloudWs.on("message", async (data: Buffer) => {
+    let msg: any;
+    try { msg = JSON.parse(data.toString()); } catch { return; }
+
+    switch (msg?.type) {
+      case "auth_ok": {
+        cloudWsConnected = true;
+        cloudWsReconnectDelay = 5_000;
+        cloudWsAssignment = {
+          device_id: msg.device_id,
+          tenant_id: msg.tenant_id,
+          location_id: msg.location_id,
+        };
+        currentAssignmentStatus = msg.tenant_id ? "assigned" : "pending_assignment";
+        markCloudReachable();
+        console.log(`[cloud-ws] Authenticated. device=${msg.device_id} tenant=${msg.tenant_id || "(none)"}`);
+        // Sofort einen Heartbeat senden, damit Backend-UI die Werte hat
+        await sendCloudHeartbeat();
+        // Periodischer Heartbeat
+        if (cloudWsHeartbeatTimer) clearInterval(cloudWsHeartbeatTimer);
+        cloudWsHeartbeatTimer = setInterval(sendCloudHeartbeat, 30_000);
+        break;
+      }
+      case "auth_error": {
+        console.error(`[cloud-ws] Auth failed: ${msg.error}`);
+        // Bei Auth-Fehlern langsamer reconnecten (kein Brute-Force)
+        cloudWsReconnectDelay = 60_000;
+        try { cloudWs?.close(); } catch { /* ignore */ }
+        break;
+      }
+      case "pong":
+        // Server bestätigt Heartbeat
+        markCloudReachable();
+        break;
+      case "command": {
+        const cmdId = String(msg.id || "");
+        const cmdType = String(msg.command_type || "");
+        const payload = msg.payload || {};
+        console.log(`[cloud-ws] command received: ${cmdType} (${cmdId})`);
+        try {
+          const response = await handleCloudCommand(cmdType, payload);
+          safeWsSend(cloudWs, { type: "ack", command_id: cmdId, response });
+        } catch (err: any) {
+          console.error(`[cloud-ws] command ${cmdType} failed:`, err);
+          safeWsSend(cloudWs, { type: "ack", command_id: cmdId, error: err?.message || String(err) });
+        }
+        break;
+      }
+      default:
+        // unknown – ignore
+        break;
+    }
+  });
+
+  cloudWs.on("close", (code: number, reason: Buffer) => {
+    cloudWsConnected = false;
+    if (cloudWsHeartbeatTimer) {
+      clearInterval(cloudWsHeartbeatTimer);
+      cloudWsHeartbeatTimer = null;
+    }
+    console.warn(`[cloud-ws] closed (code=${code}, reason=${reason.toString().slice(0, 80) || "n/a"})`);
+    scheduleCloudReconnect();
+  });
+
+  cloudWs.on("error", (err: Error) => {
+    console.error("[cloud-ws] error:", err.message);
+    markCloudUnreachable();
+  });
+}
+
+function scheduleCloudReconnect(): void {
+  const delay = cloudWsReconnectDelay;
+  cloudWsReconnectDelay = Math.min(cloudWsReconnectDelay * 2, CLOUD_WS_RECONNECT_MAX);
+  console.log(`[cloud-ws] reconnect in ${Math.round(delay / 1000)}s`);
+  setTimeout(connectCloudWebSocket, delay);
+}
+
+/**
+ * Mappt einen Cloud-Befehl auf eine lokale Aktion.
+ * - `backup` / `restart` / `update`: nutzt bestehenden executePendingCommand-Pfad
+ * - `execute_actuator`: Schaltbefehl an HA REST API (entity_id + command in payload)
+ * - `sync_automations` / `sync_meters`: forciert Pull aus der Cloud
+ */
+async function handleCloudCommand(cmdType: string, payload: Record<string, unknown>): Promise<unknown> {
+  switch (cmdType) {
+    case "execute_actuator": {
+      const entityId = String(payload.entity_id || payload.actuator_uuid || "");
+      const commandValue = String(payload.command || payload.action_value || payload.action_type || "toggle");
+      if (!entityId) throw new Error("entity_id missing");
+      await executeWithRetry(entityId, commandValue);
+      return { ok: true, entity_id: entityId, command: commandValue };
+    }
+    case "sync_automations":
+      await syncAutomationsFromCloud();
+      return { ok: true, count: getLocalAutomations().length };
+    case "sync_meters":
+      await fetchMeterMappings();
+      return { ok: true, count: meterMappings.length };
+    case "backup":
+    case "restart":
+    case "update":
+      await executePendingCommand(cmdType, payload);
+      return { ok: true };
+    case "set_ui_pin": {
+      // Cloud kann den UI-PIN-Hash live aktualisieren
+      const hash = payload.ui_pin_hash;
+      uiPinHash = (typeof hash === "string" && hash.length > 0) ? hash : null;
+      console.log(`[cloud-ws] UI PIN ${uiPinHash ? "updated" : "cleared"}`);
+      return { ok: true };
+    }
+    default:
+      throw new Error(`Unknown command: ${cmdType}`);
+  }
+}
+
 let cachedHostIPAt = 0;
 const HOST_IP_TTL_MS = 5 * 60 * 1000; // refresh every 5 min to catch DHCP changes after reboot
 
