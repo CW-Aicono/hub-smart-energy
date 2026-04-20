@@ -616,11 +616,28 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
                 <Skeleton className="h-10 w-full" />
                 <Skeleton className="h-10 w-full" />
               </div>
-            ) : gatewayIntegrations.length === 0 && sensorTypeMeters.length === 0 && assignedSensorDevices.length === 0 ? (
-              <p className="text-sm text-muted-foreground py-4">Keine Sensoren vorhanden.</p>
-            ) : assignedSensorDevices.length > 0 ? (
-              <DeviceTable devices={assignedSensorDevices} type="sensor" meters={meters} onEditMeter={(m) => setEditingMeter(m)} onCreateAndEdit={handleCreateAndEdit} />
-            ) : null}
+            ) : (() => {
+              const list = showArchived ? archivedAssignedSensorDevices : assignedSensorDevices;
+              if (gatewayIntegrations.length === 0 && displayedSensors.length === 0 && list.length === 0) {
+                return <p className="text-sm text-muted-foreground py-4">Keine Sensoren vorhanden.</p>;
+              }
+              if (list.length > 0) {
+                return (
+                  <DeviceTable
+                    devices={list}
+                    type="sensor"
+                    meters={meters}
+                    onEditMeter={(m) => setEditingMeter(m)}
+                    onCreateAndEdit={handleCreateAndEdit}
+                    onArchive={(m, archive) => archiveMeter(m.id, archive)}
+                    onDelete={confirmDelete}
+                    showArchived={showArchived}
+                    isAdmin={isAdmin}
+                  />
+                );
+              }
+              return null;
+            })()}
           </TabsContent>
 
           {/* Aktoren Tab */}
