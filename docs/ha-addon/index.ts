@@ -31,10 +31,12 @@ try {
 
 interface AddonConfig {
   cloud_url: string;
-  gateway_api_key: string;
-  tenant_id: string;
+  /** Optional Legacy-Bearer für gateway-ingest (Daten-Upload). */
+  gateway_api_key?: string;
+  /** Optional – wird per MAC zugewiesen, kann aber lokal überschrieben werden. */
+  tenant_id?: string;
   device_name: string;
-  // Loxone-style identification (preferred since v2.3.0)
+  /** Pflicht ab v3.0 – Gateway-Login (gemeinsam mit MAC bcrypt-geprüft). */
   gateway_username?: string;
   gateway_password?: string;
   poll_interval_seconds: number;
@@ -44,8 +46,6 @@ interface AddonConfig {
   offline_buffer_max_mb: number;
   auto_backup_hours: number;
   automation_eval_seconds: number;
-  cloudflare_enabled?: boolean;
-  cloudflare_tunnel_token?: string;
 }
 
 const DEFAULT_CLOUD_URL = "https://xnveugycurplszevdxtw.supabase.co";
@@ -56,7 +56,6 @@ function loadConfig(): AddonConfig {
     const raw = fs.readFileSync(optionsPath, "utf-8");
     console.log("[config] Loaded /data/options.json");
     const parsed = JSON.parse(raw);
-    // Fallback: support old 'supabase_url' field; default to fixed cloud URL
     const cloudUrl = parsed.cloud_url || parsed.supabase_url || DEFAULT_CLOUD_URL;
     return { automation_eval_seconds: 30, ...parsed, cloud_url: cloudUrl };
   } catch (error: any) {
@@ -83,17 +82,19 @@ const config = loadConfig();
 const SUPERVISOR_TOKEN = process.env.SUPERVISOR_TOKEN || "";
 const HA_API_BASE = "http://supervisor/core/api";
 const INGEST_URL = `${config.cloud_url}/functions/v1/gateway-ingest`;
-const ADDON_VERSION = "2.3.0";
+const GATEWAY_WS_URL = `${config.cloud_url.replace(/^http/, "ws")}/functions/v1/gateway-ws`;
+const ADDON_VERSION = "3.0.0";
 
-/* ── Auth header helper (Loxone-style: Basic Auth, fallback to Bearer key) ──── */
+/* ── Auth header helper for gateway-ingest (Daten-Upload) ────────────────────── */
+// gateway-ingest akzeptiert weiterhin Basic Auth (username/password) ODER Bearer.
+// Die WS-Verbindung nutzt einen eigenen JSON-Auth-Frame (siehe gatewayWsClient).
 
 function authHeader(): string {
   if (config.gateway_username && config.gateway_password) {
     const creds = `${config.gateway_username}:${config.gateway_password}`;
-    // Buffer is available in Node runtime
     return `Basic ${Buffer.from(creds, "utf-8").toString("base64")}`;
   }
-  return `Bearer ${config.gateway_api_key}`;
+  return `Bearer ${config.gateway_api_key || ""}`;
 }
 
 /* ── Cloudflare Tunnel Subprocess ────────────────────────────────────────────── */
