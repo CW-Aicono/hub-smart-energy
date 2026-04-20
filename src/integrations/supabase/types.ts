@@ -2517,6 +2517,82 @@ export type Database = {
           },
         ]
       }
+      gateway_device_inventory: {
+        Row: {
+          category: string
+          created_at: string
+          device_class: string | null
+          domain: string
+          entity_id: string
+          friendly_name: string | null
+          gateway_device_id: string
+          id: string
+          last_seen_at: string
+          last_state_at: string | null
+          location_integration_id: string | null
+          state: string | null
+          tenant_id: string
+          unit: string | null
+          updated_at: string
+        }
+        Insert: {
+          category?: string
+          created_at?: string
+          device_class?: string | null
+          domain: string
+          entity_id: string
+          friendly_name?: string | null
+          gateway_device_id: string
+          id?: string
+          last_seen_at?: string
+          last_state_at?: string | null
+          location_integration_id?: string | null
+          state?: string | null
+          tenant_id: string
+          unit?: string | null
+          updated_at?: string
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          device_class?: string | null
+          domain?: string
+          entity_id?: string
+          friendly_name?: string | null
+          gateway_device_id?: string
+          id?: string
+          last_seen_at?: string
+          last_state_at?: string | null
+          location_integration_id?: string | null
+          state?: string | null
+          tenant_id?: string
+          unit?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gateway_device_inventory_gateway_device_id_fkey"
+            columns: ["gateway_device_id"]
+            isOneToOne: false
+            referencedRelation: "gateway_devices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gateway_device_inventory_location_integration_id_fkey"
+            columns: ["location_integration_id"]
+            isOneToOne: false
+            referencedRelation: "location_integrations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gateway_device_inventory_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       gateway_devices: {
         Row: {
           addon_version: string | null
