@@ -118,7 +118,9 @@ const SUPERVISOR_TOKEN = process.env.SUPERVISOR_TOKEN || "";
 const HA_API_BASE = "http://supervisor/core/api";
 const INGEST_URL = `${config.cloud_url}/functions/v1/gateway-ingest`;
 const GATEWAY_WS_URL = `${config.cloud_url.replace(/^http/, "ws")}/functions/v1/gateway-ws`;
-const ADDON_VERSION = "3.0.5";
+// Version wird beim Docker-Build automatisch aus config.yaml injiziert
+// (siehe Dockerfile: ENV ADDON_VERSION=...). Fallback nur für lokale Dev-Runs.
+const ADDON_VERSION = process.env.ADDON_VERSION || "dev";
 
 /* ── Auth header helper for gateway-ingest (Daten-Upload) ────────────────────── */
 // gateway-ingest akzeptiert weiterhin Basic Auth (username/password) ODER Bearer.
