@@ -60,6 +60,7 @@ interface Session {
   deviceId: string;
   tenantId: string;
   locationId: string | null;
+  locationIntegrationId: string | null;
   channel: ReturnType<SupabaseClient["channel"]> | null;
   closeRequested: boolean;
 }
@@ -301,7 +302,7 @@ async function handleAuth(
   const sb = svc();
   const { data: device, error } = await sb
     .from("gateway_devices")
-    .select("id, tenant_id, location_id, gateway_username, gateway_password_hash, mac_address")
+    .select("id, tenant_id, location_id, location_integration_id, gateway_username, gateway_password_hash, mac_address")
     .eq("mac_address", mac)
     .maybeSingle();
 
@@ -344,6 +345,20 @@ async function handleAuth(
     })
     .eq("id", device.id);
 
+  // Mark the parent location_integration as successfully connected so the
+  // map / locations overview shows the gateway as online (not "pending").
+  if (device.location_integration_id) {
+    await sb
+      .from("location_integrations")
+      .update({
+        sync_status: "success",
+        last_sync_at: nowIso,
+        sync_error: null,
+        updated_at: nowIso,
+      })
+      .eq("id", device.location_integration_id);
+  }
+
   safeSend(socket, {
     type: "auth_ok",
     device_id: device.id,
@@ -356,6 +371,7 @@ async function handleAuth(
     deviceId: device.id,
     tenantId: device.tenant_id,
     locationId: device.location_id,
+    locationIntegrationId: device.location_integration_id ?? null,
     channel: null,
     closeRequested: false,
   };
@@ -381,6 +397,12 @@ async function handleFrame(session: Session, raw: any) {
         update.offline_buffer_count = raw.offline_buffer_count;
       }
       await svc().from("gateway_devices").update(update).eq("id", session.deviceId);
+      if (session.locationIntegrationId) {
+        await svc()
+          .from("location_integrations")
+          .update({ sync_status: "success", last_sync_at: nowIso, sync_error: null, updated_at: nowIso })
+          .eq("id", session.locationIntegrationId);
+      }
       safeSend(session.socket, { type: "pong" });
       break;
     }
