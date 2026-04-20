@@ -52,17 +52,25 @@ async function validateApiKey(req: Request): Promise<Response | null> {
     return json({ error: "Service misconfigured" }, 500);
   }
   const authHeader = req.headers.get("Authorization") || "";
+
+  // 1) Basic Auth (Loxone-style: username + password against gateway_devices)
+  if (/^Basic\s+/i.test(authHeader)) {
+    const ctx = await getDeviceFromBasicAuth(req);
+    if (ctx) return null;
+    return json({ error: "Unauthorized" }, 401);
+  }
+
   const providedKey = authHeader.replace(/^Bearer\s+/i, "").trim();
   if (!providedKey) {
     return json({ error: "Unauthorized" }, 401);
   }
 
-  // Accept global GATEWAY_API_KEY
+  // 2) Global GATEWAY_API_KEY (legacy)
   if (providedKey === gatewayApiKey) {
     return null;
   }
 
-  // Per-device API key: hash and check against gateway_devices.api_key_hash
+  // 3) Per-device API key: hash and check against gateway_devices.api_key_hash
   const keyHash = await hashApiKey(providedKey);
   const supabase = getSupabase();
   const { data: device } = await supabase
@@ -79,10 +87,70 @@ async function validateApiKey(req: Request): Promise<Response | null> {
 }
 
 /**
- * Extracts device context from a per-device API key.
- * Returns { device_id, tenant_id } if the key matches a device, null otherwise.
+ * Parses Basic-Auth header → { username, password }.
  */
-async function getDeviceFromApiKey(req: Request): Promise<{ device_id: string; tenant_id: string } | null> {
+function parseBasicAuth(req: Request): { username: string; password: string } | null {
+  const h = req.headers.get("Authorization") || "";
+  const m = h.match(/^Basic\s+(.+)$/i);
+  if (!m) return null;
+  try {
+    const decoded = atob(m[1].trim());
+    const idx = decoded.indexOf(":");
+    if (idx < 0) return null;
+    return { username: decoded.slice(0, idx), password: decoded.slice(idx + 1) };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * bcrypt verify – uses Web Crypto via deno-std bcrypt.
+ */
+async function bcryptVerify(plain: string, hash: string): Promise<boolean> {
+  try {
+    const bcrypt = await import("https://deno.land/x/bcrypt@v0.4.1/mod.ts");
+    return await bcrypt.compare(plain, hash);
+  } catch (e) {
+    console.error("[gateway-ingest] bcrypt verify error:", e);
+    return false;
+  }
+}
+
+/**
+ * Looks up a gateway_devices row by Basic-Auth username + verified password.
+ * Returns device context (may have tenant_id=null when pending_assignment).
+ */
+async function getDeviceFromBasicAuth(req: Request): Promise<
+  { device_id: string; tenant_id: string | null; mac_address: string | null; assignment_status: "assigned" | "pending_assignment" } | null
+> {
+  const creds = parseBasicAuth(req);
+  if (!creds || !creds.username || !creds.password) return null;
+  const supabase = getSupabase();
+  const { data: device } = await supabase
+    .from("gateway_devices")
+    .select("id, tenant_id, mac_address, gateway_password_hash")
+    .eq("gateway_username", creds.username)
+    .maybeSingle();
+  if (!device || !device.gateway_password_hash) return null;
+  const ok = await bcryptVerify(creds.password, device.gateway_password_hash);
+  if (!ok) return null;
+  return {
+    device_id: device.id,
+    tenant_id: device.tenant_id,
+    mac_address: device.mac_address,
+    assignment_status: device.tenant_id ? "assigned" : "pending_assignment",
+  };
+}
+
+/**
+ * Extracts device context from a per-device API key OR Basic-Auth.
+ * Returns { device_id, tenant_id } when known, null otherwise.
+ */
+async function getDeviceFromApiKey(req: Request): Promise<{ device_id: string; tenant_id: string | null } | null> {
+  // Basic Auth path
+  const basic = await getDeviceFromBasicAuth(req);
+  if (basic) return { device_id: basic.device_id, tenant_id: basic.tenant_id };
+
   const gatewayApiKey = Deno.env.get("GATEWAY_API_KEY");
   const authHeader = req.headers.get("Authorization") || "";
   const providedKey = authHeader.replace(/^Bearer\s+/i, "").trim();
