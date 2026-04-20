@@ -1474,6 +1474,7 @@ function startServer(): void {
 
     // API endpoints
     if (pathname === "/api/status") {
+      const mac = await getHostMAC();
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end(JSON.stringify({
         status: "running",
@@ -1485,6 +1486,10 @@ function startServer(): void {
         uptime_seconds: Math.floor(process.uptime()),
         cloud_reachable: isCloudReachable,
         ha_ws_connected: haWsConnected,
+        mac_address: mac,
+        gateway_username: config.gateway_username || "",
+        assignment_status: currentAssignmentStatus,
+        credentials_configured: !!(config.gateway_username && config.gateway_password),
         tunnel: {
           enabled: !!config.cloudflare_enabled,
           configured: !!config.cloudflare_tunnel_token,
