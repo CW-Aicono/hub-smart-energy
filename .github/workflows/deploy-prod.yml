@@ -61,15 +61,42 @@ jobs:
             fi
           fi
 
-      - name: Fast-Forward Merge staging -> main
+      - name: App-Code aus staging in main syncen (CI auf main geschützt)
         run: |
           git fetch origin staging main
           git checkout main
-          if ! git merge --ff-only origin/staging; then
-            echo "::error::Fast-forward nicht moeglich. main und staging sind divergiert."
-            echo "::error::Bitte David kontaktieren - manuelles Rebase noetig."
-            exit 1
+          CI_BASELINE="$(git rev-parse HEAD)"
+
+          # Merge staging in main; Konflikte immer zugunsten staging auflösen
+          # (Lovable ist Source-of-Truth für App-Code).
+          git merge --no-ff --no-edit -X theirs origin/staging \
+            -m "sync app from staging" \
+            -m "Auto-Merge vom Deploy-Workflow. App-Code kommt von staging," \
+            -m "CI-Pfade werden danach aus main wiederhergestellt."
+
+          # Lovable kann durch Reverts CI-Dateien auf staging löschen. Wir stellen
+          # sie aus dem main-Zustand vor dem Merge wieder her.
+          CI_PATHS=(
+            .github/workflows
+            Dockerfile
+            nginx.conf
+            scripts
+            supabase-docker
+            docs/GO-LIVE.md
+            docs/CI-SETUP.md
+            docs/DEPLOYMENT.md
+          )
+          for path in "${CI_PATHS[@]}"; do
+            if git cat-file -e "${CI_BASELINE}:${path}" 2>/dev/null; then
+              git checkout "${CI_BASELINE}" -- "${path}"
+            fi
+          done
+
+          if ! git diff --cached --quiet HEAD; then
+            echo "CI-Pfade aus main-Baseline wiederhergestellt"
+            git commit --amend --no-edit
           fi
+
           git push origin main
 
       - name: Kurz-SHA ermitteln
