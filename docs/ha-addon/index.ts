@@ -1126,6 +1126,72 @@ let cachedHostIP: string | null = null;
 let cachedHostIPAt = 0;
 const HOST_IP_TTL_MS = 5 * 60 * 1000; // refresh every 5 min to catch DHCP changes after reboot
 
+let cachedHostMAC: string | null = null;
+let cachedHostMACAt = 0;
+const HOST_MAC_TTL_MS = 60 * 60 * 1000; // 1h – MAC is effectively static
+
+function normalizeMac(mac: string): string {
+  return mac.toLowerCase().replace(/[^0-9a-f]/g, "").slice(0, 12);
+}
+
+async function getHostMAC(): Promise<string> {
+  if (cachedHostMAC && Date.now() - cachedHostMACAt < HOST_MAC_TTL_MS) {
+    return cachedHostMAC;
+  }
+  // 1) Supervisor API – preferred (real host MAC, not docker bridge)
+  try {
+    const token = process.env.SUPERVISOR_TOKEN;
+    if (token) {
+      const res = await fetch("http://supervisor/network/info", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json() as any;
+        const ifaces = data?.data?.interfaces;
+        if (Array.isArray(ifaces)) {
+          // Prefer enabled ethernet
+          const pickMac = (it: any): string | null => {
+            const candidates = [it?.mac, it?.mac_address, it?.hw_address, it?.hardware];
+            for (const c of candidates) {
+              if (typeof c === "string" && /[0-9a-f]/i.test(c)) {
+                const norm = normalizeMac(c);
+                if (norm.length === 12) return norm;
+              }
+            }
+            return null;
+          };
+          for (const it of ifaces) {
+            if (it.enabled && it.type === "ethernet") {
+              const m = pickMac(it);
+              if (m) { cachedHostMAC = m; cachedHostMACAt = Date.now(); return m; }
+            }
+          }
+          for (const it of ifaces) {
+            if (it.enabled) {
+              const m = pickMac(it);
+              if (m) { cachedHostMAC = m; cachedHostMACAt = Date.now(); return m; }
+            }
+          }
+        }
+      }
+    }
+  } catch { /* ignore */ }
+  // 2) os.networkInterfaces fallback (container MAC – not ideal but stable)
+  try {
+    const os = require("os");
+    const interfaces = os.networkInterfaces();
+    for (const name of Object.keys(interfaces)) {
+      for (const iface of interfaces[name] || []) {
+        if (iface.family === "IPv4" && !iface.internal && iface.mac && iface.mac !== "00:00:00:00:00:00") {
+          const m = normalizeMac(iface.mac);
+          if (m.length === 12) { cachedHostMAC = m; cachedHostMACAt = Date.now(); return m; }
+        }
+      }
+    }
+  } catch { /* ignore */ }
+  return "";
+}
+
 async function getLocalIP(): Promise<string> {
   // Cached value is valid for HOST_IP_TTL_MS – ensures DHCP changes
   // (e.g. after a power outage / reboot) are picked up automatically.
