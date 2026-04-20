@@ -103,6 +103,10 @@ function parseBasicAuth(req: Request): { username: string; password: string } | 
   }
 }
 
+function normalizeMac(input: string | null): string {
+  return (input || "").toLowerCase().replace(/[^0-9a-f]/g, "").slice(0, 12);
+}
+
 /**
  * bcrypt verify – uses bcryptjs (pure JS) via npm: specifier.
  */
@@ -126,12 +130,17 @@ async function getDeviceFromBasicAuth(req: Request): Promise<
 > {
   const creds = parseBasicAuth(req);
   if (!creds || !creds.username || !creds.password) return null;
+  const requestMac = normalizeMac(req.headers.get("x-gateway-mac"));
   const supabase = getSupabase();
-  const { data: device } = await supabase
+  const { data: devices } = await supabase
     .from("gateway_devices")
     .select("id, tenant_id, mac_address, gateway_password_hash")
     .eq("gateway_username", creds.username)
-    .maybeSingle();
+    .limit(requestMac ? 10 : 2);
+  const device = (devices || []).find((row) => {
+    if (!requestMac) return true;
+    return normalizeMac(row.mac_address) === requestMac;
+  });
   if (!device || !device.gateway_password_hash) return null;
   const ok = await bcryptVerify(creds.password, device.gateway_password_hash);
   if (!ok) return null;
