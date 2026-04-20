@@ -271,6 +271,20 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
 
   const displayedMeters = showArchived ? archivedMeters : meterTypeMeters;
 
+  // Gateway-Devices vom Typ "meter", die noch keiner Messstelle zugeordnet sind
+  const unmappedMeterDevices = useMemo(
+    () => meterDevices.filter((d) => !meters.some((m) => m.sensor_uuid === d.id)),
+    [meterDevices, meters],
+  );
+  const unmappedActuatorDevices = useMemo(
+    () => actuatorDevices.filter((d) => !meters.some((m) => m.sensor_uuid === d.id)),
+    [actuatorDevices, meters],
+  );
+  const unmappedSensorDevices = useMemo(
+    () => sensorDevices.filter((d) => !meters.some((m) => m.sensor_uuid === d.id)),
+    [sensorDevices, meters],
+  );
+
   // When a new meter is created for a gateway device, watch for it to appear and open edit
   useEffect(() => {
     if (!pendingSensorUuid) return;
