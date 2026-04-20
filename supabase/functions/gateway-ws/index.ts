@@ -263,6 +263,74 @@ async function handleHttpAction(req: Request): Promise<Response | null> {
   });
 }
 
+/**
+ * HTTP → enqueue actuator command for the connected Pi via gateway_commands.
+ * The Pi receives it through the realtime subscription set up in subscribeCommands().
+ */
+async function handleExecuteCommand(req: Request, body: any): Promise<Response> {
+  const locationIntegrationId = String(body.locationIntegrationId || "").trim();
+  const entityId = String(body.entity_id || body.controlUuid || "").trim();
+  const command = String(body.command || body.commandValue || body.action_value || body.action_type || "toggle").trim();
+
+  if (!locationIntegrationId || !entityId) {
+    return jsonResponse(req, { success: false, error: "locationIntegrationId and entity_id (or controlUuid) are required" }, 400);
+  }
+
+  const sb = svc();
+
+  const { data: devices, error: devErr } = await sb
+    .from("gateway_devices")
+    .select("id, tenant_id, status")
+    .eq("location_integration_id", locationIntegrationId);
+  if (devErr || !devices || devices.length === 0) {
+    return jsonResponse(req, { success: false, error: "No gateway device found for this integration" }, 404);
+  }
+  const device = devices.find((d: any) => d.status === "online") || devices[0];
+
+  console.log("[gateway-ws] executeCommand enqueue", { deviceId: device.id, entityId, command });
+
+  const payload: Record<string, unknown> = { entity_id: entityId, command };
+  if (body.domain) payload.domain = body.domain;
+  if (body.service) payload.service = body.service;
+
+  const { data: cmd, error: insErr } = await sb
+    .from("gateway_commands")
+    .insert({
+      tenant_id: device.tenant_id,
+      gateway_device_id: device.id,
+      command_type: "execute_actuator",
+      payload,
+      status: "pending",
+    })
+    .select("id")
+    .single();
+
+  if (insErr || !cmd) {
+    console.error("[gateway-ws] executeCommand insert failed", insErr);
+    return jsonResponse(req, { success: false, error: insErr?.message || "Failed to enqueue command" }, 500);
+  }
+
+  // Poll briefly for ack (max ~6s).
+  const cmdId = cmd.id as string;
+  const deadline = Date.now() + 6000;
+  while (Date.now() < deadline) {
+    await new Promise((r) => setTimeout(r, 250));
+    const { data: row } = await sb
+      .from("gateway_commands")
+      .select("status, error_message, response")
+      .eq("id", cmdId)
+      .maybeSingle();
+    if (!row) continue;
+    if (row.status === "completed") {
+      return jsonResponse(req, { success: true, response: row.response ?? null });
+    }
+    if (row.status === "failed") {
+      return jsonResponse(req, { success: false, error: row.error_message || "Command failed on gateway" }, 502);
+    }
+  }
+  return jsonResponse(req, { success: false, error: "Gateway did not acknowledge command in time" }, 504);
+}
+
 /** Mark device offline + tear down realtime subscription. */
 async function tearDown(session: Session) {
   if (session.closeRequested) return;
