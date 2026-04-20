@@ -30,9 +30,17 @@
  */
 
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { getCorsHeaders } from "../_shared/cors.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+
+function jsonResponse(req: Request, body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
+  });
+}
 
 function svc(): SupabaseClient {
   return createClient(SUPABASE_URL, SERVICE_KEY, { auth: { persistSession: false } });
@@ -81,21 +89,17 @@ async function handleHttpAction(req: Request): Promise<Response | null> {
   try {
     body = await req.json();
   } catch {
-    return new Response(JSON.stringify({ error: "Invalid JSON body" }), {
-      status: 400,
-      headers: { "Content-Type": "application/json" },
-    });
+    return jsonResponse(req, { error: "Invalid JSON body" }, 400);
   }
 
   if (body?.action !== "getSensors") return null;
 
   const locationIntegrationId = String(body.locationIntegrationId || "").trim();
   if (!locationIntegrationId) {
-    return new Response(JSON.stringify({ success: false, error: "locationIntegrationId is required" }), {
-      status: 400,
-      headers: { "Content-Type": "application/json" },
-    });
+    return jsonResponse(req, { success: false, error: "locationIntegrationId is required" }, 400);
   }
+
+  console.log("[gateway-ws] getSensors request", { locationIntegrationId });
 
   const sb = svc();
   const { data: meters, error: meterError } = await sb
@@ -108,10 +112,7 @@ async function handleHttpAction(req: Request): Promise<Response | null> {
 
   if (meterError) {
     console.error("[gateway-ws] getSensors meter query failed", meterError);
-    return new Response(JSON.stringify({ success: false, error: "Database error" }), {
-      status: 500,
-      headers: { "Content-Type": "application/json" },
-    });
+    return jsonResponse(req, { success: false, error: "Database error" }, 500);
   }
 
   const { data: automations } = await sb
@@ -201,8 +202,17 @@ async function handleHttpAction(req: Request): Promise<Response | null> {
       };
     });
 
-  return new Response(JSON.stringify({ success: true, sensors: [...sensorItems, ...actuatorItems, ...inventoryItems] }), {
-    headers: { "Content-Type": "application/json" },
+  console.log("[gateway-ws] getSensors response", {
+    locationIntegrationId,
+    meters: sensorItems.length,
+    actuators: actuatorItems.length,
+    inventory: inventoryItems.length,
+    gatewayCount: gatewayIds.length,
+  });
+
+  return jsonResponse(req, {
+    success: true,
+    sensors: [...sensorItems, ...actuatorItems, ...inventoryItems],
   });
 }
 
@@ -429,11 +439,15 @@ async function handleFrame(session: Session, raw: any) {
 }
 
 Deno.serve((req) => {
+  // CORS preflight
+  if (req.method === "OPTIONS") {
+    return new Response(null, { headers: getCorsHeaders(req) });
+  }
+
   if (req.headers.get("upgrade")?.toLowerCase() !== "websocket") {
-    return handleHttpAction(req).then((response) => response ?? new Response(
-      JSON.stringify({ ok: true, service: "gateway-ws" }),
-      { headers: { "Content-Type": "application/json" } },
-    ));
+    return handleHttpAction(req).then((response) =>
+      response ?? jsonResponse(req, { ok: true, service: "gateway-ws" }),
+    );
   }
 
   // Health probe (HTTP GET)
