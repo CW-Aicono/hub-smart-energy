@@ -50,19 +50,54 @@ interface AddonConfig {
 
 const DEFAULT_CLOUD_URL = "https://xnveugycurplszevdxtw.supabase.co";
 
+/**
+ * Normalize cloud_url so the rest of the code can safely append paths.
+ * - Accepts ws://, wss://, http://, https:// and rewrites to http(s)://
+ * - Strips trailing slashes
+ * - Strips any accidentally appended /functions/... path so URL builders
+ *   like `${cloud_url}/functions/v1/gateway-ingest` produce clean URLs
+ *   instead of `wss://.../functions/v1/gateway-ws/functions/v1/gateway-ingest`.
+ * - Falls back to DEFAULT_CLOUD_URL if input is empty/invalid.
+ */
+function normalizeCloudUrl(input: string | undefined | null): string {
+  let url = (input || "").trim();
+  if (!url) return DEFAULT_CLOUD_URL;
+  // ws:// → http:// , wss:// → https://
+  url = url.replace(/^wss:\/\//i, "https://").replace(/^ws:\/\//i, "http://");
+  // If user pasted a bare host without scheme, default to https
+  if (!/^https?:\/\//i.test(url)) {
+    url = "https://" + url.replace(/^\/+/, "");
+  }
+  // Strip trailing slashes
+  url = url.replace(/\/+$/, "");
+  // Strip any /functions/... suffix the user may have included
+  url = url.replace(/\/functions\/.*$/i, "");
+  // Final sanity check
+  try {
+    const u = new URL(url);
+    return `${u.protocol}//${u.host}`;
+  } catch {
+    console.warn(`[config] Invalid cloud_url "${input}", falling back to default`);
+    return DEFAULT_CLOUD_URL;
+  }
+}
+
 function loadConfig(): AddonConfig {
   const optionsPath = "/data/options.json";
   try {
     const raw = fs.readFileSync(optionsPath, "utf-8");
     console.log("[config] Loaded /data/options.json");
     const parsed = JSON.parse(raw);
-    const cloudUrl = parsed.cloud_url || parsed.supabase_url || DEFAULT_CLOUD_URL;
+    const cloudUrl = normalizeCloudUrl(parsed.cloud_url || parsed.supabase_url);
+    if (cloudUrl !== (parsed.cloud_url || parsed.supabase_url)) {
+      console.log(`[config] Normalized cloud_url → ${cloudUrl}`);
+    }
     return { automation_eval_seconds: 30, ...parsed, cloud_url: cloudUrl };
   } catch (error: any) {
     console.warn(`[config] Cannot read ${optionsPath} (${error?.code || error?.message}), using env vars`);
   }
   return {
-    cloud_url: process.env.CLOUD_URL || process.env.SUPABASE_URL || DEFAULT_CLOUD_URL,
+    cloud_url: normalizeCloudUrl(process.env.CLOUD_URL || process.env.SUPABASE_URL),
     gateway_api_key: process.env.GATEWAY_API_KEY || "",
     tenant_id: process.env.TENANT_ID || "",
     device_name: process.env.DEVICE_NAME || "aicono-ems",
