@@ -301,7 +301,7 @@ async function handleAuth(
   const sb = svc();
   const { data: device, error } = await sb
     .from("gateway_devices")
-    .select("id, tenant_id, location_id, gateway_username, gateway_password_hash, mac_address")
+    .select("id, tenant_id, location_id, location_integration_id, gateway_username, gateway_password_hash, mac_address")
     .eq("mac_address", mac)
     .maybeSingle();
 
@@ -343,6 +343,20 @@ async function handleAuth(
       updated_at: nowIso,
     })
     .eq("id", device.id);
+
+  // Mark the parent location_integration as successfully connected so the
+  // map / locations overview shows the gateway as online (not "pending").
+  if (device.location_integration_id) {
+    await sb
+      .from("location_integrations")
+      .update({
+        sync_status: "success",
+        last_sync_at: nowIso,
+        sync_error: null,
+        updated_at: nowIso,
+      })
+      .eq("id", device.location_integration_id);
+  }
 
   safeSend(socket, {
     type: "auth_ok",
