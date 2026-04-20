@@ -17,7 +17,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import {
   Gauge, Plus, Pencil, Trash2, Archive, ArchiveRestore, Eye, EyeOff, Network,
   ChevronDown, ChevronRight, Thermometer, ToggleLeft, Lightbulb, DoorOpen,
-  Activity, Server, Zap,
+  Activity, Server, Zap, Inbox,
 } from "lucide-react";
 import { HelpTooltip } from "@/components/ui/help-tooltip";
 import { useTranslation } from "@/hooks/useTranslation";
@@ -28,6 +28,7 @@ import { EditAlertRuleDialog } from "./EditAlertRuleDialog";
 import { MeterTreeView } from "./MeterTreeView";
 import { MeterAggregationWidget } from "./MeterAggregationWidget";
 import { ENERGY_TYPE_LABELS, ENERGY_BADGE_CLASSES } from "@/lib/energyTypeColors";
+import { filterAssignedGatewayDevices } from "@/lib/gatewayDeviceFiltering";
 
 interface MeterManagementProps {
   locationId: string;
@@ -92,12 +93,20 @@ function DeviceTable({
   meters,
   onEditMeter,
   onCreateAndEdit,
+  onArchive,
+  onDelete,
+  showArchived,
+  isAdmin,
 }: {
   devices: (LoxoneSensor & { _integrationLabel: string; _integrationId: string })[];
   type: "sensor" | "actuator";
   meters: Meter[];
   onEditMeter: (meter: Meter) => void;
   onCreateAndEdit: (device: LoxoneSensor & { _integrationId: string }, deviceType: string) => void;
+  onArchive?: (meter: Meter, archive: boolean) => void;
+  onDelete?: (meter: Meter) => void;
+  showArchived?: boolean;
+  isAdmin?: boolean;
 }) {
   if (devices.length === 0) {
     return (
@@ -121,13 +130,14 @@ function DeviceTable({
           <TableHead>Steuerungstyp</TableHead>
           <TableHead className="text-right">Wert</TableHead>
           <TableHead>Status</TableHead>
+          {isAdmin && <TableHead className="w-32" />}
         </TableRow>
       </TableHeader>
       <TableBody>
         {devices.map((d) => {
           const linkedMeter = sensorUuidToMeter.get(d.id);
           return (
-            <TableRow key={`${d._integrationLabel}-${d.id}`}>
+            <TableRow key={`${d._integrationLabel}-${d.id}`} className={linkedMeter?.is_archived ? "opacity-60" : ""}>
               <TableCell>
                 <div className="p-1.5 rounded bg-muted w-fit">
                   {d.unit ? getUnitIcon(d.unit) : getSensorIcon(d.type)}
@@ -160,6 +170,25 @@ function DeviceTable({
                   {d.status === "online" ? "Online" : "Offline"}
                 </Badge>
               </TableCell>
+              {isAdmin && (
+                <TableCell className="flex gap-1">
+                  {linkedMeter && !linkedMeter.is_archived && onArchive && (
+                    <Button variant="ghost" size="icon" onClick={() => onArchive(linkedMeter, true)} title="Archivieren">
+                      <Archive className="h-4 w-4" />
+                    </Button>
+                  )}
+                  {linkedMeter && linkedMeter.is_archived && onArchive && (
+                    <Button variant="ghost" size="icon" onClick={() => onArchive(linkedMeter, false)} title="Wiederherstellen">
+                      <ArchiveRestore className="h-4 w-4 text-primary" />
+                    </Button>
+                  )}
+                  {linkedMeter && linkedMeter.is_archived && onDelete && (
+                    <Button variant="ghost" size="icon" onClick={() => onDelete(linkedMeter)} title="Endgültig löschen">
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                    </Button>
+                  )}
+                </TableCell>
+              )}
             </TableRow>
           );
         })}
@@ -264,26 +293,78 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
   const archivedMeters = meters.filter((m) => m.is_archived);
 
   // Split meters by device_type for tab filtering
-  const meterTypeMeters = activeMeters.filter((m) => (m as any).device_type === "meter" || !(m as any).device_type);
-  // Exclude meters whose sensor_uuid is already shown in the gateway DeviceTable
+  // Exclude meters whose sensor_uuid is already shown in the gateway DeviceTable (deduplication)
+  const meterTypeMeters = activeMeters.filter(
+    (m) =>
+      ((m as any).device_type === "meter" || !(m as any).device_type) &&
+      !(m.sensor_uuid && gatewayDeviceIds.has(m.sensor_uuid)),
+  );
   const sensorTypeMeters = activeMeters.filter((m) => (m as any).device_type === "sensor" && !(m.sensor_uuid && gatewayDeviceIds.has(m.sensor_uuid)));
   const actuatorTypeMeters = activeMeters.filter((m) => (m as any).device_type === "actuator" && !(m.sensor_uuid && gatewayDeviceIds.has(m.sensor_uuid)));
 
-  const displayedMeters = showArchived ? archivedMeters : meterTypeMeters;
+  // Archivierte, aufgeteilt nach Geräte-Typ
+  const archivedMetersByType = archivedMeters.filter((m) => (m as any).device_type === "meter" || !(m as any).device_type);
+  const archivedSensorsByType = archivedMeters.filter((m) => (m as any).device_type === "sensor");
+  const archivedActuatorsByType = archivedMeters.filter((m) => (m as any).device_type === "actuator");
 
-  // Gateway-Devices vom Typ "meter", die noch keiner Messstelle zugeordnet sind
-  const unmappedMeterDevices = useMemo(
-    () => meterDevices.filter((d) => !meters.some((m) => m.sensor_uuid === d.id)),
-    [meterDevices, meters],
+  const displayedMeters = showArchived ? archivedMetersByType : meterTypeMeters;
+  const displayedSensors = showArchived ? archivedSensorsByType : sensorTypeMeters;
+  const displayedActuators = showArchived ? archivedActuatorsByType : actuatorTypeMeters;
+
+  const confirmDelete = (m: Meter) => {
+    if (window.confirm(`Möchten Sie "${m.name}" endgültig löschen? Historische Messwerte bleiben erhalten, sind aber nicht mehr dieser Messstelle zugeordnet.`)) {
+      deleteMeter(m.id);
+    }
+  };
+
+  // Gateway-Devices, die der User über den "Gefundene Geräte"-Dialog aktiv
+  // zugeordnet hat (= existieren als meters-Eintrag mit passender sensor_uuid).
+  // Nur diese werden in den Tabs gelistet. Single source of truth:
+  // src/lib/gatewayDeviceFiltering.ts
+  // Nur aktive (nicht archivierte) Meters für die Geräte-Zuordnung verwenden
+  const activeMetersForFilter = useMemo(() => meters.filter((m) => !m.is_archived), [meters]);
+  const archivedMetersForFilter = useMemo(() => meters.filter((m) => m.is_archived), [meters]);
+
+  const assignedMeterDevices = useMemo(
+    () => filterAssignedGatewayDevices(meterDevices, activeMetersForFilter),
+    [meterDevices, activeMetersForFilter],
   );
-  const unmappedActuatorDevices = useMemo(
-    () => actuatorDevices.filter((d) => !meters.some((m) => m.sensor_uuid === d.id)),
-    [actuatorDevices, meters],
+  const assignedActuatorDevices = useMemo(
+    () => filterAssignedGatewayDevices(actuatorDevices, activeMetersForFilter),
+    [actuatorDevices, activeMetersForFilter],
   );
-  const unmappedSensorDevices = useMemo(
-    () => sensorDevices.filter((d) => !meters.some((m) => m.sensor_uuid === d.id)),
-    [sensorDevices, meters],
+  const assignedSensorDevices = useMemo(
+    () => filterAssignedGatewayDevices(sensorDevices, activeMetersForFilter),
+    [sensorDevices, activeMetersForFilter],
   );
+
+  // Archivierte Gateway-Geräte (für die Archiv-Ansicht)
+  const archivedAssignedMeterDevices = useMemo(
+    () => filterAssignedGatewayDevices(meterDevices, archivedMetersForFilter),
+    [meterDevices, archivedMetersForFilter],
+  );
+  const archivedAssignedActuatorDevices = useMemo(
+    () => filterAssignedGatewayDevices(actuatorDevices, archivedMetersForFilter),
+    [actuatorDevices, archivedMetersForFilter],
+  );
+  const archivedAssignedSensorDevices = useMemo(
+    () => filterAssignedGatewayDevices(sensorDevices, archivedMetersForFilter),
+    [sensorDevices, archivedMetersForFilter],
+  );
+
+  // Anzahl der noch nicht zugeordneten Gateway-Geräte – nur für den Hinweis-
+  // Banner ("X neue Geräte verfügbar"), NICHT für die Listen-Anzeige.
+  const unassignedDevicesCount = useMemo(() => {
+    const assignedIds = new Set(meters.map((m) => m.sensor_uuid).filter(Boolean));
+    return allDevicesWithSource.filter((d) => !assignedIds.has(d.id)).length;
+  }, [allDevicesWithSource, meters]);
+
+  const scrollToIntegrations = () => {
+    const el = document.getElementById("location-integrations");
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  };
 
   // When a new meter is created for a gateway device, watch for it to appear and open edit
   useEffect(() => {
@@ -335,15 +416,29 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
       <CardContent>
         <Tabs defaultValue="meters">
           <TabsList>
-            <TabsTrigger value="meters">{t("mm.tabs.meters" as any)} ({meterTypeMeters.length + unmappedMeterDevices.length})</TabsTrigger>
-            <TabsTrigger value="sensors">Sensoren ({unmappedSensorDevices.length + sensorTypeMeters.length})</TabsTrigger>
-            <TabsTrigger value="actuators">Aktoren ({unmappedActuatorDevices.length + actuatorTypeMeters.length})</TabsTrigger>
+            <TabsTrigger value="meters">{t("mm.tabs.meters" as any)} ({meterTypeMeters.length + assignedMeterDevices.length})</TabsTrigger>
+            <TabsTrigger value="sensors">Sensoren ({assignedSensorDevices.length + sensorTypeMeters.length})</TabsTrigger>
+            <TabsTrigger value="actuators">Aktoren ({assignedActuatorDevices.length + actuatorTypeMeters.length})</TabsTrigger>
             <TabsTrigger value="tree" className="gap-1">
               <Network className="h-3.5 w-3.5" />
               {t("mm.tabs.tree" as any)}
             </TabsTrigger>
             <TabsTrigger value="alerts">{t("mm.tabs.alerts" as any)} ({alertRules.length})</TabsTrigger>
           </TabsList>
+
+          {unassignedDevicesCount > 0 && (
+            <div className="mt-3 flex items-center justify-between gap-3 rounded-md border border-dashed border-primary/40 bg-primary/5 px-3 py-2">
+              <div className="flex items-center gap-2 text-sm">
+                <Inbox className="h-4 w-4 text-primary" />
+                <span>
+                  <strong>{unassignedDevicesCount}</strong> neue Geräte vom Gateway verfügbar – noch keinem Standort zugeordnet.
+                </span>
+              </div>
+              <Button variant="link" size="sm" className="h-auto p-0 text-primary" onClick={scrollToIntegrations}>
+                Jetzt zuordnen →
+              </Button>
+            </div>
+          )}
 
           <TabsContent value="meters" className="space-y-4">
             <div className="flex items-center justify-between">
@@ -416,7 +511,7 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
                             </Button>
                           )}
                           {m.is_archived && (
-                            <Button variant="ghost" size="icon" onClick={() => deleteMeter(m.id)} title="Endgültig löschen">
+                            <Button variant="ghost" size="icon" onClick={() => confirmDelete(m)} title="Endgültig löschen">
                               <Trash2 className="h-4 w-4 text-destructive" />
                             </Button>
                           )}
@@ -428,26 +523,42 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
               </Table>
             )}
 
-            {/* Unzugeordnete Gateway-Devices vom Typ "Zähler" */}
-            {unmappedMeterDevices.length > 0 && (
-              <div className="space-y-2 pt-2">
-                <p className="text-xs text-muted-foreground">
-                  Vom Gateway erkannte Zähler – klicken Sie auf einen Eintrag, um ihn als Messstelle anzulegen.
-                </p>
-                <DeviceTable
-                  devices={unmappedMeterDevices}
-                  type="sensor"
-                  meters={meters}
-                  onEditMeter={(m) => setEditingMeter(m)}
-                  onCreateAndEdit={(d) => handleCreateAndEdit(d, "meter")}
-                />
-              </div>
-            )}
+            {/* Vom User zugeordnete Gateway-Devices vom Typ "Zähler" */}
+            {(() => {
+              const list = showArchived ? archivedAssignedMeterDevices : assignedMeterDevices;
+              if (list.length === 0) return null;
+              return (
+                <div className="space-y-2 pt-2">
+                  <p className="text-xs text-muted-foreground">
+                    Vom Gateway gelieferte Zähler-Geräte – klicken Sie auf einen Eintrag, um die zugehörige Messstelle zu bearbeiten.
+                  </p>
+                  <DeviceTable
+                    devices={list}
+                    type="sensor"
+                    meters={meters}
+                    onEditMeter={(m) => setEditingMeter(m)}
+                    onCreateAndEdit={(d) => handleCreateAndEdit(d, "meter")}
+                    onArchive={(m, archive) => archiveMeter(m.id, archive)}
+                    onDelete={confirmDelete}
+                    showArchived={showArchived}
+                    isAdmin={isAdmin}
+                  />
+                </div>
+              );
+            })()}
           </TabsContent>
 
           {/* Sensoren Tab */}
           <TabsContent value="sensors" className="space-y-4">
-            {sensorTypeMeters.length > 0 && (
+            {(archivedSensorsByType.length > 0 || showArchived) && (
+              <div className="flex items-center">
+                <Button variant={showArchived ? "outline" : "ghost"} size="sm" className="gap-1.5 text-xs" onClick={() => setShowArchived(!showArchived)}>
+                  {showArchived ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+                  {showArchived ? `Aktive anzeigen (${sensorTypeMeters.length})` : `Archiv (${archivedSensorsByType.length})`}
+                </Button>
+              </div>
+            )}
+            {displayedSensors.length > 0 && (
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -458,8 +569,8 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {sensorTypeMeters.map((m) => (
-                    <TableRow key={m.id}>
+                  {displayedSensors.map((m) => (
+                    <TableRow key={m.id} className={m.is_archived ? "opacity-60" : ""}>
                       <TableCell>
                         <button className="font-medium text-left hover:underline text-primary cursor-pointer" onClick={() => setEditingMeter(m)}>
                           {m.name}
@@ -473,9 +584,25 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
                       <TableCell className="text-muted-foreground">{m.notes || "–"}</TableCell>
                       {isAdmin && (
                         <TableCell className="flex gap-1">
-                          <Button variant="ghost" size="icon" onClick={() => setEditingMeter(m)} title="Bearbeiten">
-                            <Pencil className="h-4 w-4" />
-                          </Button>
+                          {!m.is_archived && (
+                            <Button variant="ghost" size="icon" onClick={() => setEditingMeter(m)} title="Bearbeiten">
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                          )}
+                          {m.is_archived ? (
+                            <>
+                              <Button variant="ghost" size="icon" onClick={() => archiveMeter(m.id, false)} title="Wiederherstellen">
+                                <ArchiveRestore className="h-4 w-4 text-primary" />
+                              </Button>
+                              <Button variant="ghost" size="icon" onClick={() => confirmDelete(m)} title="Endgültig löschen">
+                                <Trash2 className="h-4 w-4 text-destructive" />
+                              </Button>
+                            </>
+                          ) : (
+                            <Button variant="ghost" size="icon" onClick={() => archiveMeter(m.id, true)} title="Archivieren">
+                              <Archive className="h-4 w-4" />
+                            </Button>
+                          )}
                         </TableCell>
                       )}
                     </TableRow>
@@ -489,16 +616,41 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
                 <Skeleton className="h-10 w-full" />
                 <Skeleton className="h-10 w-full" />
               </div>
-            ) : gatewayIntegrations.length === 0 && sensorTypeMeters.length === 0 ? (
-              <p className="text-sm text-muted-foreground py-4">Keine Sensoren vorhanden.</p>
-            ) : unmappedSensorDevices.length > 0 ? (
-              <DeviceTable devices={unmappedSensorDevices} type="sensor" meters={meters} onEditMeter={(m) => setEditingMeter(m)} onCreateAndEdit={handleCreateAndEdit} />
-            ) : null}
+            ) : (() => {
+              const list = showArchived ? archivedAssignedSensorDevices : assignedSensorDevices;
+              if (gatewayIntegrations.length === 0 && displayedSensors.length === 0 && list.length === 0) {
+                return <p className="text-sm text-muted-foreground py-4">Keine Sensoren vorhanden.</p>;
+              }
+              if (list.length > 0) {
+                return (
+                  <DeviceTable
+                    devices={list}
+                    type="sensor"
+                    meters={meters}
+                    onEditMeter={(m) => setEditingMeter(m)}
+                    onCreateAndEdit={handleCreateAndEdit}
+                    onArchive={(m, archive) => archiveMeter(m.id, archive)}
+                    onDelete={confirmDelete}
+                    showArchived={showArchived}
+                    isAdmin={isAdmin}
+                  />
+                );
+              }
+              return null;
+            })()}
           </TabsContent>
 
           {/* Aktoren Tab */}
           <TabsContent value="actuators" className="space-y-4">
-            {actuatorTypeMeters.length > 0 && (
+            {(archivedActuatorsByType.length > 0 || showArchived) && (
+              <div className="flex items-center">
+                <Button variant={showArchived ? "outline" : "ghost"} size="sm" className="gap-1.5 text-xs" onClick={() => setShowArchived(!showArchived)}>
+                  {showArchived ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+                  {showArchived ? `Aktive anzeigen (${actuatorTypeMeters.length})` : `Archiv (${archivedActuatorsByType.length})`}
+                </Button>
+              </div>
+            )}
+            {displayedActuators.length > 0 && (
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -509,8 +661,8 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {actuatorTypeMeters.map((m) => (
-                    <TableRow key={m.id}>
+                  {displayedActuators.map((m) => (
+                    <TableRow key={m.id} className={m.is_archived ? "opacity-60" : ""}>
                       <TableCell>
                         <button className="font-medium text-left hover:underline text-primary cursor-pointer" onClick={() => setEditingMeter(m)}>
                           {m.name}
@@ -524,9 +676,25 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
                       <TableCell className="text-muted-foreground">{m.notes || "–"}</TableCell>
                       {isAdmin && (
                         <TableCell className="flex gap-1">
-                          <Button variant="ghost" size="icon" onClick={() => setEditingMeter(m)} title="Bearbeiten">
-                            <Pencil className="h-4 w-4" />
-                          </Button>
+                          {!m.is_archived && (
+                            <Button variant="ghost" size="icon" onClick={() => setEditingMeter(m)} title="Bearbeiten">
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                          )}
+                          {m.is_archived ? (
+                            <>
+                              <Button variant="ghost" size="icon" onClick={() => archiveMeter(m.id, false)} title="Wiederherstellen">
+                                <ArchiveRestore className="h-4 w-4 text-primary" />
+                              </Button>
+                              <Button variant="ghost" size="icon" onClick={() => confirmDelete(m)} title="Endgültig löschen">
+                                <Trash2 className="h-4 w-4 text-destructive" />
+                              </Button>
+                            </>
+                          ) : (
+                            <Button variant="ghost" size="icon" onClick={() => archiveMeter(m.id, true)} title="Archivieren">
+                              <Archive className="h-4 w-4" />
+                            </Button>
+                          )}
                         </TableCell>
                       )}
                     </TableRow>
@@ -540,11 +708,28 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
                 <Skeleton className="h-10 w-full" />
                 <Skeleton className="h-10 w-full" />
               </div>
-            ) : gatewayIntegrations.length === 0 && actuatorTypeMeters.length === 0 ? (
-              <p className="text-sm text-muted-foreground py-4">Keine Aktoren vorhanden.</p>
-            ) : unmappedActuatorDevices.length > 0 ? (
-              <DeviceTable devices={unmappedActuatorDevices} type="actuator" meters={meters} onEditMeter={(m) => setEditingMeter(m)} onCreateAndEdit={handleCreateAndEdit} />
-            ) : null}
+            ) : (() => {
+              const list = showArchived ? archivedAssignedActuatorDevices : assignedActuatorDevices;
+              if (gatewayIntegrations.length === 0 && displayedActuators.length === 0 && list.length === 0) {
+                return <p className="text-sm text-muted-foreground py-4">Keine Aktoren vorhanden.</p>;
+              }
+              if (list.length > 0) {
+                return (
+                  <DeviceTable
+                    devices={list}
+                    type="actuator"
+                    meters={meters}
+                    onEditMeter={(m) => setEditingMeter(m)}
+                    onCreateAndEdit={handleCreateAndEdit}
+                    onArchive={(m, archive) => archiveMeter(m.id, archive)}
+                    onDelete={confirmDelete}
+                    showArchived={showArchived}
+                    isAdmin={isAdmin}
+                  />
+                );
+              }
+              return null;
+            })()}
           </TabsContent>
 
           <TabsContent value="tree" className="space-y-4">

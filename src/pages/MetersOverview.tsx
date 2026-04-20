@@ -278,7 +278,11 @@ const MetersOverview = () => {
                                     <Button size="sm" variant="ghost" onClick={() => archiveMeter(m.id, false)} title="Wiederherstellen">
                                       <ArchiveRestore className="h-4 w-4 text-primary" />
                                     </Button>
-                                    <Button size="sm" variant="ghost" onClick={() => deleteMeter(m.id)} title="Endgültig löschen">
+                                    <Button size="sm" variant="ghost" onClick={() => {
+                                      if (window.confirm(`Möchten Sie "${m.name}" endgültig löschen? Historische Messwerte bleiben erhalten, sind aber nicht mehr dieser Messstelle zugeordnet.`)) {
+                                        deleteMeter(m.id);
+                                      }
+                                    }} title="Endgültig löschen">
                                       <Trash2 className="h-4 w-4 text-destructive" />
                                     </Button>
                                   </>

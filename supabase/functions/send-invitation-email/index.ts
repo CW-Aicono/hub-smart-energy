@@ -122,7 +122,6 @@ const handler = async (req: Request): Promise<Response> => {
       console.error("RESEND_API_KEY is not configured");
       throw new Error("RESEND_API_KEY is not configured");
     }
-    const FROM_EMAIL = Deno.env.get("RESEND_FROM_EMAIL") || "info@aicono.org";
 
     const resend = new Resend(RESEND_API_KEY);
     const { email, inviteLink, invitedByEmail, role, tenantId }: InvitationEmailRequest = await req.json();
@@ -137,7 +136,7 @@ const handler = async (req: Request): Promise<Response> => {
     const roleLabel = role === "admin" ? "Administrator" : "Benutzer";
 
     const emailResponse = await resend.emails.send({
-      from: `${branding.name} <${FROM_EMAIL}>`,
+      from: `${branding.name} <noreply@mailtest.my-ips.de>`,
       to: [email],
       subject: `Einladung – ${branding.name}`,
       html: buildInvitationHTML(email, inviteLink, invitedByEmail, roleLabel, branding),
