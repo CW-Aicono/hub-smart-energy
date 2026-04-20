@@ -82,6 +82,44 @@ function safeSend(ws: WebSocket, msg: unknown) {
   }
 }
 
+function getExplicitBinaryState(value: unknown): "on" | "off" | null {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (normalized === "on") return "on";
+  if (normalized === "off") return "off";
+  return null;
+}
+
+async function mirrorGatewayInventoryState(params: {
+  gatewayDeviceId: string;
+  entityId: string;
+  nextState: "on" | "off";
+  locationIntegrationId?: string | null;
+}) {
+  const nowIso = new Date().toISOString();
+  const update: Record<string, unknown> = {
+    state: params.nextState,
+    last_state_at: nowIso,
+    last_seen_at: nowIso,
+    updated_at: nowIso,
+  };
+  if (params.locationIntegrationId) update.location_integration_id = params.locationIntegrationId;
+
+  const { error } = await svc()
+    .from("gateway_device_inventory")
+    .update(update)
+    .eq("gateway_device_id", params.gatewayDeviceId)
+    .eq("entity_id", params.entityId);
+
+  if (error) {
+    console.warn("[gateway-ws] inventory mirror failed", {
+      gatewayDeviceId: params.gatewayDeviceId,
+      entityId: params.entityId,
+      nextState: params.nextState,
+      error: error.message,
+    });
+  }
+}
+
 async function handleHttpAction(req: Request): Promise<Response | null> {
   if (req.method !== "POST") return null;
 
