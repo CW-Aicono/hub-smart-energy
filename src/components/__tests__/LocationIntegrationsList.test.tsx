@@ -46,7 +46,7 @@ describe("LocationIntegrationsList", () => {
       locationIntegrations: [
         {
           id: "li-1",
-          integration: { name: "Test AICONO Gateway V2 (Cloudflare)" },
+          integration: { name: "Test AICONO Gateway v3 (WebSocket)" },
         },
       ],
       loading: true,
@@ -57,7 +57,7 @@ describe("LocationIntegrationsList", () => {
 
     render(<LocationIntegrationsList locationId="loc-1" />);
 
-    expect(screen.getByText("Test AICONO Gateway V2 (Cloudflare)")).toBeInTheDocument();
+    expect(screen.getByText("Test AICONO Gateway v3 (WebSocket)")).toBeInTheDocument();
     expect(screen.queryByText("Keine Integrationen")).not.toBeInTheDocument();
   });
 });

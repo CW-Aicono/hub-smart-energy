@@ -114,9 +114,6 @@ verify_jwt = false
 [functions.automation-scheduler]
 verify_jwt = false
 
-[functions.cf-tunnel-cleanup]
-verify_jwt = false
-
 [functions.gateway-ws]
 verify_jwt = false
 

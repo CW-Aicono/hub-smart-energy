@@ -12,7 +12,6 @@ import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Copy, Check, Info, ClipboardList } from "lucide-react";
 import { toast } from "sonner";
-import { useTenant } from "@/hooks/useTenant";
 import type { GatewayDevice } from "@/hooks/useGatewayDevices";
 
 interface HaConfigDialogProps {
@@ -81,12 +80,10 @@ function CopyRow({ label, value, hint, missingHint }: CopyRowProps) {
 }
 
 export function HaConfigDialog({ device, open, onOpenChange }: HaConfigDialogProps) {
-  const { tenant } = useTenant();
-
-  // Derive cloud_url from current Supabase project
+  // v3.0: WebSocket-Push. Identifikation über MAC-Adresse + Benutzer/Passwort.
   const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
-  const cloudUrl = projectId
-    ? `https://${projectId}.supabase.co/functions/v1/gateway-ingest`
+  const cloudWsUrl = projectId
+    ? `wss://${projectId}.supabase.co/functions/v1/gateway-ws`
     : null;
 
   return (
@@ -106,34 +103,36 @@ export function HaConfigDialog({ device, open, onOpenChange }: HaConfigDialogPro
 
         <div className="space-y-4 mt-2">
           <CopyRow
-            label="cloud_url"
-            value={cloudUrl}
-            hint="Endpoint, an den das Gateway Heartbeats und Messdaten sendet."
+            label="cloud_ws_url"
+            value={cloudWsUrl}
+            hint="WebSocket-Endpoint für die persistente Push-Verbindung zur Cloud."
           />
 
           <CopyRow
-            label="tenant_id"
-            value={tenant?.id}
-            hint="UUID des Mandanten."
+            label="mac_address"
+            value={device.mac_address}
+            hint="MAC-Adresse des Raspberry Pi — eindeutige Identifikation des Gateways."
+            missingHint="Wird automatisch beim ersten Verbindungsaufbau des Gateways gesetzt."
           />
 
           <CopyRow
-            label="device_name"
-            value={device.device_name}
-            hint="Eindeutiger Gerätename — muss exakt mit diesem Eintrag übereinstimmen."
+            label="gateway_username"
+            value={device.gateway_username}
+            missingHint="Beim Erstellen der Integration vergeben. Falls verloren: Integration neu konfigurieren."
           />
 
           <CopyRow
-            label="gateway_api_key"
+            label="gateway_password"
             value={null}
-            missingHint="Aus Sicherheitsgründen nicht abrufbar. Falls verloren: Schlüssel-Symbol (🔑) auf der Kachel klicken und neuen Key generieren — der alte wird damit ungültig."
+            missingHint="Aus Sicherheitsgründen nicht abrufbar (bcrypt-Hash). Falls verloren: Passwort in der Integration neu setzen."
           />
 
           <Alert className="bg-muted/50">
             <Info className="h-4 w-4" />
             <AlertDescription className="text-xs">
               Nach dem Einfügen aller Werte: Add-on speichern → <strong>Neu starten</strong>.
-              Der Status hier wechselt innerhalb ~60 Sek. auf 🟢 Online.
+              Die WebSocket-Verbindung wird automatisch aufgebaut, der Status wechselt
+              innerhalb weniger Sekunden auf 🟢 Online.
             </AlertDescription>
           </Alert>
         </div>
