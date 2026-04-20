@@ -571,7 +571,15 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
 
           {/* Aktoren Tab */}
           <TabsContent value="actuators" className="space-y-4">
-            {actuatorTypeMeters.length > 0 && (
+            {(archivedActuatorsByType.length > 0 || showArchived) && (
+              <div className="flex items-center">
+                <Button variant={showArchived ? "outline" : "ghost"} size="sm" className="gap-1.5 text-xs" onClick={() => setShowArchived(!showArchived)}>
+                  {showArchived ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+                  {showArchived ? `Aktive anzeigen (${actuatorTypeMeters.length})` : `Archiv (${archivedActuatorsByType.length})`}
+                </Button>
+              </div>
+            )}
+            {displayedActuators.length > 0 && (
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -582,8 +590,8 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {actuatorTypeMeters.map((m) => (
-                    <TableRow key={m.id}>
+                  {displayedActuators.map((m) => (
+                    <TableRow key={m.id} className={m.is_archived ? "opacity-60" : ""}>
                       <TableCell>
                         <button className="font-medium text-left hover:underline text-primary cursor-pointer" onClick={() => setEditingMeter(m)}>
                           {m.name}
@@ -597,9 +605,25 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
                       <TableCell className="text-muted-foreground">{m.notes || "–"}</TableCell>
                       {isAdmin && (
                         <TableCell className="flex gap-1">
-                          <Button variant="ghost" size="icon" onClick={() => setEditingMeter(m)} title="Bearbeiten">
-                            <Pencil className="h-4 w-4" />
-                          </Button>
+                          {!m.is_archived && (
+                            <Button variant="ghost" size="icon" onClick={() => setEditingMeter(m)} title="Bearbeiten">
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                          )}
+                          {m.is_archived ? (
+                            <>
+                              <Button variant="ghost" size="icon" onClick={() => archiveMeter(m.id, false)} title="Wiederherstellen">
+                                <ArchiveRestore className="h-4 w-4 text-primary" />
+                              </Button>
+                              <Button variant="ghost" size="icon" onClick={() => confirmDelete(m)} title="Endgültig löschen">
+                                <Trash2 className="h-4 w-4 text-destructive" />
+                              </Button>
+                            </>
+                          ) : (
+                            <Button variant="ghost" size="icon" onClick={() => archiveMeter(m.id, true)} title="Archivieren">
+                              <Archive className="h-4 w-4" />
+                            </Button>
+                          )}
                         </TableCell>
                       )}
                     </TableRow>
