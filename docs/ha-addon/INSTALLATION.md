@@ -229,21 +229,30 @@ curl http://homeassistant.local:8099/api/status
 
 ```json
 {
-  "status": "online",
+  "status": "running",
   "uptime_seconds": 3600,
   "buffer_count": 0,
-  "last_flush_at": "2026-04-03T10:00:00Z",
-  "version": "2.0.0",
-  "automations_loaded": 3,
-  "ws_connected": true
+  "addon_version": "3.0.0",
+  "automation_count": 3,
+  "cloud_ws_connected": true,
+  "cloud_ws_device_id": "…",
+  "cloud_ws_location_id": "…",
+  "ha_ws_connected": true,
+  "mac_address": "aabbccddeeff",
+  "assignment_status": "assigned"
 }
 ```
 
-### Cloudflare-Tunnel-Hostname
+### Cloud-Verbindung (v3.0)
 
-Beim Anlegen einer Home-Assistant-Integration im Backend wird automatisch ein Cloudflare Tunnel mit einem Public-Hostname unter **`<id>.aicono.org`** erzeugt (z. B. `b77488c1-e58.aicono.org`).
+Ab v3.0 entfällt der bisherige Cloudflare-Tunnel komplett. Das Add-on baut stattdessen eine **ausgehende WebSocket-Verbindung** zur AICONO Cloud auf (`wss://…/functions/v1/gateway-ws`) und authentifiziert sich mit:
 
-> ⚠️ **Wichtig:** Es wird **nicht** mehr `<id>.tunnel.aicono.org` verwendet. Der 2-stufige Hostname ist nötig, damit Cloudflares Universal SSL automatisch ein gültiges HTTPS-Zertifikat ausstellt. Bestehende Tunnel mit `*.tunnel.aicono.org` müssen einmalig neu provisioniert werden („Tunnel neu einrichten" in der Liegenschafts-Integration klicken).
+- **MAC-Adresse** (automatisch erkannt, im Dashboard sichtbar)
+- **Benutzername + Passwort** (in der Add-on-Konfiguration gesetzt)
+
+Die Cloud sendet Schaltbefehle, Automations-Sync und Konfigurations-Updates *push-basiert* über diesen Kanal – es müssen keine Ports geöffnet und keine DNS-Records angelegt werden.
+
+> ℹ️ **Migration von v2 → v3:** Bestehende Cloudflare-Tunnel können entfernt werden. Im AICONO-Backend muss die Liegenschafts-Integration mit MAC + Benutzername + Passwort neu konfiguriert werden.
 
 ---
 
