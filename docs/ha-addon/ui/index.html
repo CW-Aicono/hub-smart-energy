@@ -1215,6 +1215,7 @@
         var status = state.status || {};
         var online = status.status === 'running';
         var cloudReachable = !!status.cloud_reachable;
+        var wsConnected = !!status.cloud_ws_connected;
         var errorHtml = state.error
           ? '<div class="error-state" style="margin-bottom:18px"><div class="icon">⚠️</div><p><strong>API aktuell nicht erreichbar</strong></p><p>' + escapeHtml(state.error) + '</p></div>'
           : '';
@@ -1230,7 +1231,7 @@
             '</div>' +
             '<div class="header-meta">' +
               '<div class="pill"><span class="status-dot ' + (online ? 'online' : 'offline') + '"></span>' + (online ? 'Gateway online' : 'Gateway offline') + '</div>' +
-              '<div class="pill"><span class="status-dot ' + (cloudReachable ? 'online' : 'offline') + '"></span>' + (cloudReachable ? 'Cloud verbunden' : 'Cloud offline') + '</div>' +
+              '<div class="pill"><span class="status-dot ' + (wsConnected ? 'online' : 'offline') + '"></span>' + (wsConnected ? 'Cloud-Push aktiv' : 'Cloud-Push offline') + '</div>' +
               (status.assignment_status === 'assigned'
                 ? '<div class="pill"><span class="status-dot online"></span>AICONO zugeordnet</div>'
                 : status.assignment_status === 'pending_assignment'
