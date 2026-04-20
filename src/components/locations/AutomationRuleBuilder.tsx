@@ -512,7 +512,16 @@ function ActionCard({
     return gw?.sensors || [];
   }, [isMLA, action.gateway_id, gatewayOptions, sensors]);
 
-  const actuators = effectiveSensors.filter((s) => getResolvedDeviceType(s, deviceTypeMap) === "actuator");
+  const actuators = useMemo(() => {
+    const list = effectiveSensors.filter((s) => getResolvedDeviceType(s, deviceTypeMap) === "actuator");
+    // Deduplicate by id to prevent duplicate SelectItems (causes "Name ()Name ()" display bug)
+    const seen = new Set<string>();
+    return list.filter((s) => {
+      if (seen.has(s.id)) return false;
+      seen.add(s.id);
+      return true;
+    });
+  }, [effectiveSensors, deviceTypeMap]);
   const selected = actuators.find((s) => s.id === action.actuator_uuid);
   const SIcon = selected ? getSensorIcon(selected.type) : Server;
 
@@ -571,7 +580,11 @@ function ActionCard({
           <div className="space-y-1">
             <Label className="text-xs">Aktion</Label>
             {(() => {
-              const isMeterControl = action.control_type === "Meter" || action.control_type === "EFM" || action.control_type === "EnergyManager2";
+              // Resolve effective device type (respects user's manual classification override)
+              const resolvedType = selected ? getResolvedDeviceType(selected, deviceTypeMap) : undefined;
+              const isMeterControl =
+                resolvedType !== "actuator" &&
+                (action.control_type === "Meter" || action.control_type === "EFM" || action.control_type === "EnergyManager2");
               const availableActions = isMeterControl ? METER_ACTION_TYPES : ACTION_TYPES;
               return (
                 <Select

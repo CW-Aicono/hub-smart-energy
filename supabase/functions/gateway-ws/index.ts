@@ -142,19 +142,55 @@ async function handleHttpAction(req: Request): Promise<Response | null> {
   const mappedSensorIds = new Set((meters ?? []).map((m: any) => m.sensor_uuid));
   const mappedActuatorIds = new Set((automations ?? []).map((a: any) => a.actuator_uuid));
 
-  const sensorItems = (meters ?? []).map((meter: any) => ({
-    id: meter.sensor_uuid,
-    name: meter.name,
-    type: meter.energy_type === "strom" ? "power" : meter.energy_type,
-    controlType: "Meter",
-    room: "",
-    category: "Zähler",
-    value: "—",
-    unit: meter.unit || "",
-    status: "online",
-    stateName: meter.energy_type,
-    isMapped: true,
-  }));
+  // Build entity_id -> latest inventory row map (inventory may contain duplicates,
+  // pick the row with the most recent last_state_at).
+  const latestByEntity = new Map<string, any>();
+  for (const inv of inventory) {
+    const eid = String(inv.entity_id || "");
+    if (!eid) continue;
+    const existing = latestByEntity.get(eid);
+    if (!existing) {
+      latestByEntity.set(eid, inv);
+      continue;
+    }
+    const a = existing.last_state_at ? new Date(existing.last_state_at).getTime() : 0;
+    const b = inv.last_state_at ? new Date(inv.last_state_at).getTime() : 0;
+    if (b > a) latestByEntity.set(eid, inv);
+  }
+
+  /** Try to convert a HA state string to a number; returns null if not numeric. */
+  const toNumeric = (s: any): number | null => {
+    if (s == null) return null;
+    if (typeof s === "number") return isFinite(s) ? s : null;
+    const str = String(s).trim();
+    if (str === "" || str === "—" || str === "unknown" || str === "unavailable") return null;
+    if (str === "on") return 1;
+    if (str === "off") return 0;
+    const n = parseFloat(str.replace(",", "."));
+    return isFinite(n) ? n : null;
+  };
+
+  const sensorItems = (meters ?? []).map((meter: any) => {
+    const inv = latestByEntity.get(String(meter.sensor_uuid));
+    const rawState = inv?.state ?? null;
+    const numeric = toNumeric(rawState);
+    const unit = inv?.unit || meter.unit || "";
+    return {
+      id: meter.sensor_uuid,
+      name: meter.name,
+      type: meter.energy_type === "strom" ? "power" : meter.energy_type,
+      controlType: "Meter",
+      room: "",
+      category: "Zähler",
+      value: rawState ?? "—",
+      rawValue: numeric,
+      unit,
+      status: "online",
+      stateName: meter.energy_type,
+      isMapped: true,
+      lastStateAt: inv?.last_state_at ?? null,
+    };
+  });
 
   const seenActuators = new Set<string>();
   const actuatorItems = (automations ?? [])
@@ -165,19 +201,26 @@ async function handleHttpAction(req: Request): Promise<Response | null> {
       seenActuators.add(key);
       return true;
     })
-    .map((row: any) => ({
-      id: row.actuator_uuid,
-      name: row.actuator_name || row.actuator_uuid,
-      type: "actuator",
-      controlType: row.actuator_uuid?.split?.(".")?.[0] || "switch",
-      room: "",
-      category: "Aktor",
-      value: "—",
-      unit: "",
-      status: "online",
-      stateName: "state",
-      isMapped: true,
-    }));
+    .map((row: any) => {
+      const inv = latestByEntity.get(String(row.actuator_uuid));
+      const rawState = inv?.state ?? null;
+      const numeric = toNumeric(rawState);
+      return {
+        id: row.actuator_uuid,
+        name: row.actuator_name || row.actuator_uuid,
+        type: "actuator",
+        controlType: row.actuator_uuid?.split?.(".")?.[0] || "switch",
+        room: "",
+        category: "Aktor",
+        value: rawState ?? "—",
+        rawValue: numeric,
+        unit: inv?.unit || "",
+        status: "online",
+        stateName: "state",
+        isMapped: true,
+        lastStateAt: inv?.last_state_at ?? null,
+      };
+    });
 
   // Append discovered (unmapped) entities from the live inventory so the UI
   // can offer them for assignment to a meter / automation.
