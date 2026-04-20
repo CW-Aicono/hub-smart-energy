@@ -6,6 +6,7 @@ import type { GatewayDeviceWithMetrics } from "@/hooks/useGatewayDevices";
 import { StatusBadge } from "./StatusBadge";
 import { ApiKeyDialog } from "./ApiKeyDialog";
 import { PinConfigDialog } from "./PinConfigDialog";
+import { HaConfigDialog } from "./HaConfigDialog";
 import { DeviceMetrics } from "./DeviceMetrics";
 import {
   Server,
@@ -16,6 +17,7 @@ import {
   Key,
   Lock,
   ShieldCheck,
+  ClipboardList,
 } from "lucide-react";
 
 interface DeviceCardProps {
@@ -29,6 +31,7 @@ export function DeviceCard({ device, onCommand, isAdmin, onKeyGenerated }: Devic
   const { t } = useTranslation();
   const [keyDialogOpen, setKeyDialogOpen] = useState(false);
   const [pinDialogOpen, setPinDialogOpen] = useState(false);
+  const [haConfigOpen, setHaConfigOpen] = useState(false);
   const hasUpdate =
     device.latest_available_version &&
     device.addon_version &&
@@ -90,32 +93,43 @@ export function DeviceCard({ device, onCommand, isAdmin, onKeyGenerated }: Devic
             </div>
           </div>
 
-          {isAdmin && (
-            <div className="flex items-center gap-1">
-              <Button variant="ghost" size="icon" onClick={() => setPinDialogOpen(true)} title="UI-PIN konfigurieren">
-                <Lock className="h-4 w-4" />
-              </Button>
-              <Button variant="ghost" size="icon" onClick={() => setKeyDialogOpen(true)} title={t("gatewayDevices.apiKey")}>
-                <Key className="h-4 w-4" />
-              </Button>
-              <Button variant="ghost" size="icon" onClick={() => onCommand(device.id, "backup")} title={t("gatewayDevices.backup")}>
-                <Download className="h-4 w-4" />
-              </Button>
-              {hasUpdate && (
-                <Button variant="ghost" size="icon" onClick={() => onCommand(device.id, "update")} title={t("gatewayDevices.update")}>
-                  <ArrowUpCircle className="h-4 w-4" />
+          <div className="flex items-center gap-1">
+            <Button variant="ghost" size="icon" onClick={() => setHaConfigOpen(true)} title="HA-Konfiguration anzeigen">
+              <ClipboardList className="h-4 w-4" />
+            </Button>
+            {isAdmin && (
+              <>
+                <Button variant="ghost" size="icon" onClick={() => setPinDialogOpen(true)} title="UI-PIN konfigurieren">
+                  <Lock className="h-4 w-4" />
                 </Button>
-              )}
-              <Button variant="ghost" size="icon" onClick={() => onCommand(device.id, "restart")} title={t("gatewayDevices.restart")}>
-                <RefreshCw className="h-4 w-4" />
-              </Button>
-            </div>
-          )}
+                <Button variant="ghost" size="icon" onClick={() => setKeyDialogOpen(true)} title={t("gatewayDevices.apiKey")}>
+                  <Key className="h-4 w-4" />
+                </Button>
+                <Button variant="ghost" size="icon" onClick={() => onCommand(device.id, "backup")} title={t("gatewayDevices.backup")}>
+                  <Download className="h-4 w-4" />
+                </Button>
+                {hasUpdate && (
+                  <Button variant="ghost" size="icon" onClick={() => onCommand(device.id, "update")} title={t("gatewayDevices.update")}>
+                    <ArrowUpCircle className="h-4 w-4" />
+                  </Button>
+                )}
+                <Button variant="ghost" size="icon" onClick={() => onCommand(device.id, "restart")} title={t("gatewayDevices.restart")}>
+                  <RefreshCw className="h-4 w-4" />
+                </Button>
+              </>
+            )}
+          </div>
         </div>
 
         {/* Metrics row */}
         <DeviceMetrics device={device} />
       </div>
+
+      <HaConfigDialog
+        device={device}
+        open={haConfigOpen}
+        onOpenChange={setHaConfigOpen}
+      />
 
       {isAdmin && (
         <>

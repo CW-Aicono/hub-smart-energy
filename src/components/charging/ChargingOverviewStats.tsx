@@ -67,15 +67,18 @@ export default function ChargingOverviewStats({ chargePoints, sessions }: Props)
         return sum + (effectiveEnd.getTime() - effectiveStart.getTime()) / 3600000;
       }, 0));
 
-      const errorHours = isToday
-        ? chargePoints.filter((cp) => cp.status === "faulted").length * hoursInDay
-        : 0;
+      // Approximate: project current status onto all days (no historic status log)
+      const errorCpCount = chargePoints.filter(
+        (cp) => cp.status === "faulted" || cp.status === "offline"
+      ).length;
+      const errorHours = errorCpCount * hoursInDay;
 
+      const availableHours = Math.max(0, totalHours - chargingHours - errorHours);
       days.push({
         day: dayLabel,
-        available: Math.max(0, totalHours - chargingHours - errorHours),
-        charging: chargingHours,
-        error: errorHours,
+        available: totalHours > 0 ? (availableHours / totalHours) * 100 : 0,
+        charging: totalHours > 0 ? (chargingHours / totalHours) * 100 : 0,
+        error: totalHours > 0 ? (errorHours / totalHours) * 100 : 0,
       });
     }
     return days;
@@ -124,7 +127,7 @@ export default function ChargingOverviewStats({ chargePoints, sessions }: Props)
               <YAxis hide />
               <Tooltip
                 formatter={(value: number, name: string) => [
-                  `${value.toFixed(1)} h`,
+                  `${value.toFixed(1)} %`,
                   name === "available" ? t("cos.available" as any) : name === "charging" ? t("cos.charging" as any) : t("cos.error" as any),
                 ]}
               />

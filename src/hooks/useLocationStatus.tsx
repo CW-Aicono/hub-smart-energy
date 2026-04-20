@@ -23,6 +23,8 @@ export interface LocationStatus {
 function isIntegrationConfigured(type: string, config: Record<string, unknown>): boolean {
   if (!config) return false;
   switch (type) {
+    case "aicono_gateway":
+      return true;
     case "loxone_miniserver":
       return !!(config.serial_number && config.username && config.password);
     case "omada_cloud":
@@ -46,6 +48,7 @@ function isIntegrationConfigured(type: string, config: Record<string, unknown>):
 /** Map integration type to a short display name */
 function integrationShortName(type: string, name: string): string {
   const typeMap: Record<string, string> = {
+    aicono_gateway: "AICONO Gateway",
     loxone_miniserver: "Loxone",
     omada_cloud: "TP-Link",
     shelly_cloud: "Shelly",

@@ -21,7 +21,10 @@ describe("gatewayRegistry", () => {
         expect(def.icon).toBeTruthy();
         expect(def.edgeFunctionName).toBeTruthy();
         expect(Array.isArray(def.configFields)).toBe(true);
-        expect(def.configFields.length).toBeGreaterThan(0);
+        // aicono_gateway intentionally has 0 configFields (credentials live on gateway_devices)
+        if (def.type !== "aicono_gateway") {
+          expect(def.configFields.length).toBeGreaterThan(0);
+        }
       }
     });
   });
@@ -50,7 +53,7 @@ describe("gatewayRegistry", () => {
     it("returns correct edge function for known types", () => {
       expect(getEdgeFunctionName("loxone_miniserver")).toBe("loxone-api");
       expect(getEdgeFunctionName("shelly_cloud")).toBe("shelly-api");
-      expect(getEdgeFunctionName("home_assistant")).toBe("home-assistant-api");
+      expect(getEdgeFunctionName("aicono_gateway")).toBe("gateway-ws");
       expect(getEdgeFunctionName("omada_cloud")).toBe("omada-api");
       expect(getEdgeFunctionName("schneider_panel_server")).toBe("gateway-ingest");
       expect(getEdgeFunctionName("schneider_cloud")).toBe("schneider-api");
@@ -79,11 +82,13 @@ describe("gatewayRegistry", () => {
       expect(deviceId!.required).toBe(false);
     });
 
-    it("home_assistant has optional entity_filter", () => {
-      const fields = GATEWAY_DEFINITIONS.home_assistant.configFields;
-      const filter = fields.find((f) => f.name === "entity_filter");
-      expect(filter).toBeDefined();
-      expect(filter!.required).toBe(false);
+    it("aicono_gateway uses gateway-ws and has no config fields (credentials live on gateway_devices)", () => {
+      const def = GATEWAY_DEFINITIONS.aicono_gateway;
+      expect(def).toBeDefined();
+      expect(def.label).toBe("AICONO Gateway");
+      expect(def.edgeFunctionName).toBe("gateway-ws");
+      expect(def.configFields.length).toBe(0);
+      expect(def.setupInstructions?.authMethod).toMatch(/MAC/);
     });
 
     it("schneider_panel_server requires push_username and push_password, has optional webhook_secret and device_mapping", () => {
@@ -125,14 +130,40 @@ describe("gatewayRegistry", () => {
       expect(GATEWAY_DEFINITIONS.sentron_powercenter_3000.edgeFunctionName).toBe("sentron-poc3000-api");
     });
 
-    it("schneider_cloud requires api_url, client_id, client_secret, site_id", () => {
+    it("mqtt_generic requires broker_url, username, password, topic_prefix, payload_format and uses gateway-ingest", () => {
+      const def = GATEWAY_DEFINITIONS.mqtt_generic;
+      expect(def).toBeDefined();
+      expect(def.edgeFunctionName).toBe("gateway-ingest");
+      const fields = def.configFields;
+      const names = fields.map((f) => f.name);
+      for (const required of ["broker_url", "username", "password", "topic_prefix", "payload_format"]) {
+        expect(names).toContain(required);
+        expect(fields.find((f) => f.name === required)!.required).toBe(true);
+      }
+      expect(names).toContain("device_mapping");
+      expect(fields.find((f) => f.name === "device_mapping")!.required).toBe(false);
+      expect(def.setupInstructions?.port).toBe("8883");
+    });
+
+    it("shelly_mqtt is registered with shelly_gen2 default and uses gateway-ingest", () => {
+      const def = GATEWAY_DEFINITIONS.shelly_mqtt;
+      expect(def).toBeDefined();
+      expect(def.edgeFunctionName).toBe("gateway-ingest");
+      const names = def.configFields.map((f) => f.name);
+      for (const required of ["broker_url", "username", "password", "topic_prefix", "payload_format"]) {
+        expect(names).toContain(required);
+      }
+    });
+
+    it("schneider_cloud requires client_id, client_secret, site_id (api_url + token_url have defaults)", () => {
       const fields = GATEWAY_DEFINITIONS.schneider_cloud.configFields;
       const names = fields.map((f) => f.name);
       expect(names).toContain("api_url");
       expect(names).toContain("client_id");
       expect(names).toContain("client_secret");
       expect(names).toContain("site_id");
-      expect(fields.every((f) => f.required)).toBe(true);
+      const requiredNames = fields.filter((f) => f.required).map((f) => f.name);
+      expect(requiredNames).toEqual(expect.arrayContaining(["client_id", "client_secret", "site_id"]));
     });
   });
 });

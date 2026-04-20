@@ -213,7 +213,7 @@ function ChargingAppAuth({ onAuth }: { onAuth: () => void }) {
 // ---- Map Tab ----
 const LazyMap = lazy(() => import("@/components/charging/ChargePointsMap"));
 
-function MapTab({ chargePoints, onStartCharge, initialCpId, onInitialCpHandled }: { chargePoints: AppChargePoint[]; onStartCharge: (cpId: string) => void; initialCpId?: string | null; onInitialCpHandled?: () => void }) {
+function MapTab({ chargePoints, onStartCharge, initialCpId, initialConnectorId, onInitialCpHandled }: { chargePoints: AppChargePoint[]; onStartCharge: (cpId: string, connectorId?: number) => void; initialCpId?: string | null; initialConnectorId?: number | null; onInitialCpHandled?: () => void }) {
   const [userPos, setUserPos] = useState<[number, number] | null>(null);
   const [locating, setLocating] = useState(false);
   const [typeFilter, setTypeFilter] = useState<string>("all");
@@ -224,6 +224,8 @@ function MapTab({ chargePoints, onStartCharge, initialCpId, onInitialCpHandled }
   const [filterOpen, setFilterOpen] = useState(false);
   const [selectedCp, setSelectedCp] = useState<AppChargePoint | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [drawerConnectorId, setDrawerConnectorId] = useState<number | null>(null);
+  const [drawerConnectors, setDrawerConnectors] = useState<Array<{ connector_id: number; status: string; connector_type: string; max_power_kw: number; name: string | null }>>([]);
   const [locationGroup, setLocationGroup] = useState<AppChargePoint[] | null>(null);
   const [locationDrawerOpen, setLocationDrawerOpen] = useState(false);
   const [publicPoints, setPublicPoints] = useState<AppChargePoint[]>([]);
@@ -326,6 +328,7 @@ function MapTab({ chargePoints, onStartCharge, initialCpId, onInitialCpHandled }
       setLocationDrawerOpen(true);
     } else {
       setSelectedCp(cp);
+      setDrawerConnectorId(null);
       setDrawerOpen(true);
     }
   }, [allPoints]);
@@ -336,11 +339,38 @@ function MapTab({ chargePoints, onStartCharge, initialCpId, onInitialCpHandled }
       const found = chargePoints.find((cp) => cp.ocpp_id === initialCpId || cp.id === initialCpId);
       if (found) {
         setSelectedCp(found);
+        setDrawerConnectorId(initialConnectorId || null);
         setDrawerOpen(true);
       }
       onInitialCpHandled?.();
     }
-  }, [initialCpId, chargePoints, onInitialCpHandled]);
+  }, [initialCpId, initialConnectorId, chargePoints, onInitialCpHandled]);
+
+  // Load connectors when a station is selected in drawer
+  useEffect(() => {
+    if (!selectedCp || selectedCp.connector_count <= 1) {
+      setDrawerConnectors([]);
+      return;
+    }
+    supabase
+      .from("charge_point_connectors")
+      .select("connector_id, status, connector_type, max_power_kw, name")
+      .eq("charge_point_id", selectedCp.id)
+      .order("connector_id")
+      .then(({ data }) => {
+        if (data && data.length > 0) {
+          setDrawerConnectors(data);
+          // Auto-select initial connector if valid
+          if (drawerConnectorId && data.some(c => c.connector_id === drawerConnectorId)) {
+            // already set
+          } else {
+            setDrawerConnectorId(null);
+          }
+        } else {
+          setDrawerConnectors([]);
+        }
+      });
+  }, [selectedCp?.id, selectedCp?.connector_count]);
 
 
   const statusLabel: Record<string, string> = {
@@ -514,6 +544,7 @@ function MapTab({ chargePoints, onStartCharge, initialCpId, onInitialCpHandled }
                         setLocationDrawerOpen(false);
                         setTimeout(() => {
                           setSelectedCp(cp);
+                          setDrawerConnectorId(null);
                           setDrawerOpen(true);
                         }, 200);
                       }}
@@ -591,6 +622,45 @@ function MapTab({ chargePoints, onStartCharge, initialCpId, onInitialCpHandled }
                 </div>
               </div>
 
+              {/* Connector selection for multi-connector stations */}
+              {drawerConnectors.length > 1 && selectedCp.isAppCompatible !== false && (
+                <div className="mb-4 space-y-2">
+                  <p className="text-xs font-medium text-muted-foreground">Anschluss wählen</p>
+                  <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${Math.min(drawerConnectors.length, 3)}, 1fr)` }}>
+                    {drawerConnectors.map((c) => {
+                      const isSelected = drawerConnectorId === c.connector_id;
+                      const isAvailable = c.status === "available";
+                      return (
+                        <button
+                          key={c.connector_id}
+                          type="button"
+                          onClick={() => isAvailable && setDrawerConnectorId(c.connector_id)}
+                          disabled={!isAvailable}
+                          className={`
+                            border rounded-lg p-2.5 text-center transition-all
+                            ${isAvailable ? "cursor-pointer" : "cursor-not-allowed opacity-60"}
+                            ${isSelected ? "border-primary ring-2 ring-primary/20 bg-primary/5" : "border-border"}
+                          `}
+                        >
+                          <div className="flex items-center justify-center gap-1.5 mb-0.5">
+                            <span className={`h-2 w-2 rounded-full ${
+                              c.status === "available" ? "bg-emerald-500" :
+                              c.status === "charging" ? "bg-blue-500" :
+                              c.status === "faulted" ? "bg-destructive" : "bg-muted-foreground"
+                            }`} />
+                            {isSelected && <Check className="h-3.5 w-3.5 text-primary" />}
+                          </div>
+                          <p className="text-xs font-medium">{c.name || `Anschluss ${c.connector_id}`}</p>
+                          <p className="text-[10px] text-muted-foreground">
+                            {c.status === "available" ? "Frei" : c.status === "charging" ? "Lädt" : c.status === "faulted" ? "Gestört" : c.status}
+                          </p>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               {selectedCp.vendor && (
                 <p className="text-sm text-muted-foreground mb-4">
                   {selectedCp.vendor}{selectedCp.model ? ` — ${selectedCp.model}` : ""}
@@ -610,11 +680,11 @@ function MapTab({ chargePoints, onStartCharge, initialCpId, onInitialCpHandled }
                 {selectedCp.isAppCompatible !== false && (
                   <Button
                     className="flex-1 h-12"
-                    disabled={selectedCp.status !== "available"}
-                    onClick={() => { onStartCharge(selectedCp.id); setDrawerOpen(false); }}
+                    disabled={selectedCp.status !== "available" || (drawerConnectors.length > 1 && !drawerConnectorId)}
+                    onClick={() => { onStartCharge(selectedCp.id, drawerConnectors.length > 1 ? (drawerConnectorId || 1) : undefined); setDrawerOpen(false); }}
                   >
                     <PlugZap className="h-4 w-4 mr-2" />
-                    {selectedCp.status === "available" ? "Laden starten" : "Nicht verfügbar"}
+                    {selectedCp.status !== "available" ? "Nicht verfügbar" : (drawerConnectors.length > 1 && !drawerConnectorId) ? "Anschluss wählen" : "Laden starten"}
                   </Button>
                 )}
               </div>
@@ -627,16 +697,61 @@ function MapTab({ chargePoints, onStartCharge, initialCpId, onInitialCpHandled }
 }
 
 // ---- Station Detail ----
-function StationDetail({ cp, onBack, onStartCharge }: { cp: AppChargePoint; onBack: () => void; onStartCharge: (cpId: string) => void }) {
+function StationDetail({ cp, onBack, onStartCharge, initialConnector }: { cp: AppChargePoint; onBack: () => void; onStartCharge: (cpId: string, connectorId?: number) => void; initialConnector?: number | null }) {
   const statusLabel: Record<string, string> = {
     available: "Verfügbar", charging: "Belegt", faulted: "Gestört", unavailable: "Nicht verfügbar", offline: "Offline",
   };
   const canCharge = cp.status === "available";
+  const [selectedConnector, setSelectedConnector] = useState<number>(initialConnector || 1);
+  const [connectors, setConnectors] = useState<Array<{ connector_id: number; status: string; connector_type: string; max_power_kw: number; name: string | null }>>([]);
+
+  useEffect(() => {
+    if (cp.connector_count <= 1) return;
+    supabase
+      .from("charge_point_connectors")
+      .select("connector_id, status, connector_type, max_power_kw, name")
+      .eq("charge_point_id", cp.id)
+      .order("connector_id")
+      .then(({ data }) => {
+        if (data && data.length > 0) setConnectors(data);
+      });
+  }, [cp.id, cp.connector_count]);
+
+  // Realtime for connector updates
+  useEffect(() => {
+    if (cp.connector_count <= 1) return;
+    const channel = supabase
+      .channel(`app-connectors-${cp.id}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "charge_point_connectors", filter: `charge_point_id=eq.${cp.id}` }, () => {
+        supabase
+          .from("charge_point_connectors")
+          .select("connector_id, status, connector_type, max_power_kw, name")
+          .eq("charge_point_id", cp.id)
+          .order("connector_id")
+          .then(({ data }) => { if (data) setConnectors(data); });
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [cp.id, cp.connector_count]);
 
   const openNavigation = () => {
     if (cp.latitude && cp.longitude) {
       window.open(`https://www.google.com/maps/dir/?api=1&destination=${cp.latitude},${cp.longitude}`, "_blank");
     }
+  };
+
+  const connectorStatusColor: Record<string, string> = {
+    available: "bg-emerald-500",
+    charging: "bg-blue-500",
+    unavailable: "bg-muted-foreground",
+    faulted: "bg-destructive",
+  };
+
+  const connectorStatusLabel: Record<string, string> = {
+    available: "Frei",
+    charging: "Lädt",
+    unavailable: "Belegt",
+    faulted: "Gestört",
   };
 
   return (
@@ -655,6 +770,40 @@ function StationDetail({ cp, onBack, onStartCharge }: { cp: AppChargePoint; onBa
           <Card><CardContent className="p-3 text-center"><p className="text-xs text-muted-foreground">Stecker</p><p className="text-sm font-medium mt-1">{cp.connector_type}</p></CardContent></Card>
           <Card><CardContent className="p-3 text-center"><p className="text-xs text-muted-foreground">Anschlüsse</p><p className="text-lg font-bold mt-1">{cp.connector_count}</p></CardContent></Card>
         </div>
+
+        {/* Connector selection for multi-connector stations */}
+        {connectors.length > 1 && (
+          <div className="space-y-2">
+            <p className="text-xs font-medium text-muted-foreground">Anschluss wählen</p>
+            <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${Math.min(connectors.length, 3)}, 1fr)` }}>
+              {connectors.map((c) => {
+                const isSelected = selectedConnector === c.connector_id;
+                const isAvailable = c.status === "available";
+                return (
+                  <button
+                    key={c.connector_id}
+                    type="button"
+                    onClick={() => isAvailable && setSelectedConnector(c.connector_id)}
+                    disabled={!isAvailable}
+                    className={`
+                      border rounded-lg p-3 text-center transition-all
+                      ${isAvailable ? "cursor-pointer" : "cursor-not-allowed opacity-60"}
+                      ${isSelected ? "border-primary ring-2 ring-primary/20 bg-primary/5" : "border-border"}
+                    `}
+                  >
+                    <div className="flex items-center justify-center gap-1.5 mb-1">
+                      <span className={`h-2.5 w-2.5 rounded-full ${connectorStatusColor[c.status] || "bg-muted-foreground"}`} />
+                      {isSelected && <Check className="h-3.5 w-3.5 text-primary" />}
+                    </div>
+                    <p className="text-xs font-medium">{c.name || `Anschluss ${c.connector_id}`}</p>
+                    <p className="text-[10px] text-muted-foreground">{connectorStatusLabel[c.status] || c.status}</p>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {cp.vendor && (
           <Card><CardContent className="p-3"><p className="text-xs text-muted-foreground">Hersteller / Modell</p><p className="text-sm font-medium">{cp.vendor} {cp.model && `— ${cp.model}`}</p></CardContent></Card>
         )}
@@ -664,7 +813,7 @@ function StationDetail({ cp, onBack, onStartCharge }: { cp: AppChargePoint; onBa
               <Navigation className="h-4 w-4 mr-2" />Navigation
             </Button>
           )}
-          <Button className="flex-1 h-12" disabled={!canCharge} onClick={() => onStartCharge(cp.id)}>
+          <Button className="flex-1 h-12" disabled={!canCharge} onClick={() => onStartCharge(cp.id, connectors.length > 1 ? selectedConnector : undefined)}>
             <PlugZap className="h-4 w-4 mr-2" />{canCharge ? "Ladevorgang starten" : "Nicht verfügbar"}
           </Button>
         </div>
@@ -913,8 +1062,14 @@ function HistoryTab({ sessions, chargePoints, tariff, onStopCharge }: { sessions
           {/* Stats row */}
           <div className="grid grid-cols-3 gap-2 text-center">
             <div className="rounded-md bg-background p-2">
-              <p className="text-lg font-bold">{fmtKwh(s.energy_kwh)}</p>
-              <p className="text-[10px] text-muted-foreground">Energie</p>
+              <div className="flex items-center justify-center gap-1">
+                <p className="text-lg font-bold">{fmtKwh(s.energy_kwh)}</p>
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                </span>
+              </div>
+              <p className="text-[10px] text-muted-foreground">Energie (live)</p>
             </div>
             <div className="rounded-md bg-background p-2">
               <p className="text-lg font-bold">{renderDuration(s)}</p>
@@ -1364,6 +1519,7 @@ const ChargingApp = () => {
   const [tariff, setTariff] = useState<AppTariff | null>(null);
   const [tenantInfo, setTenantInfo] = useState<AppTenantInfo | null>(null);
   const [initialCpOcppId, setInitialCpOcppId] = useState<string | null>(null);
+  const [initialConnectorId, setInitialConnectorId] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
 
   // Ensure charging_users entry exists for app user (no group assignment – done manually later)
@@ -1463,11 +1619,40 @@ const ChargingApp = () => {
     loadData();
   }, [user]);
 
+  // Realtime subscription for live energy updates during charging
+  useEffect(() => {
+    if (!user) return;
+    const channel = supabase
+      .channel("app-sessions-realtime")
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "charging_sessions" },
+        (payload) => {
+          const updated = payload.new as AppSession;
+          setSessions((prev) =>
+            prev.map((s) => (s.id === updated.id ? { ...s, ...updated } : s))
+          );
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "charging_sessions" },
+        (payload) => {
+          const inserted = payload.new as AppSession;
+          setSessions((prev) => [inserted, ...prev]);
+        }
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [user]);
+
   // Handle deep link
   useEffect(() => {
     const cpParam = searchParams.get("cp");
+    const connParam = searchParams.get("conn");
     if (cpParam && chargePoints.length > 0) {
       setInitialCpOcppId(cpParam);
+      setInitialConnectorId(connParam ? parseInt(connParam) || null : null);
       setTab("map");
     }
   }, [searchParams, chargePoints]);
@@ -1475,14 +1660,18 @@ const ChargingApp = () => {
   const handleQrScanned = (data: string) => {
     // Try to parse QR code - could be URL with cp param or just an OCPP ID
     let ocppId = data;
+    let connId: number | null = null;
     try {
       const url = new URL(data);
       ocppId = url.searchParams.get("cp") || data;
+      const connParam = url.searchParams.get("conn");
+      connId = connParam ? parseInt(connParam) || null : null;
     } catch { /* not a URL, use as-is */ }
 
     const found = chargePoints.find((cp) => cp.ocpp_id === ocppId || cp.id === ocppId);
     if (found) {
       setInitialCpOcppId(ocppId);
+      setInitialConnectorId(connId);
       setTab("map");
       toast.success(`Ladestation "${found.name}" erkannt`);
     } else {
@@ -1490,7 +1679,7 @@ const ChargingApp = () => {
     }
   };
 
-  const handleStartCharge = async (cpId: string) => {
+  const handleStartCharge = async (cpId: string, connectorId?: number) => {
     const cp = chargePoints.find((c) => c.id === cpId);
     if (!cp) { toast.error("Ladepunkt nicht gefunden"); return; }
 
@@ -1520,7 +1709,7 @@ const ChargingApp = () => {
           body: JSON.stringify({
             chargePointId: cp.ocpp_id,
             idTag,
-            connectorId: 1,
+            ...(connectorId ? { connectorId } : {}),
           }),
         }
       );
@@ -1619,7 +1808,7 @@ const ChargingApp = () => {
           <div className="flex-1 flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
         ) : (
           <>
-            {tab === "map" && <div className="flex-1 flex flex-col" style={{ minHeight: 0 }}><MapTab chargePoints={chargePoints} onStartCharge={handleStartCharge} initialCpId={initialCpOcppId} onInitialCpHandled={() => setInitialCpOcppId(null)} /></div>}
+            {tab === "map" && <div className="flex-1 flex flex-col" style={{ minHeight: 0 }}><MapTab chargePoints={chargePoints} onStartCharge={handleStartCharge} initialCpId={initialCpOcppId} initialConnectorId={initialConnectorId} onInitialCpHandled={() => { setInitialCpOcppId(null); setInitialConnectorId(null); }} /></div>}
             {tab === "qr" && <QrScannerTab onScanned={handleQrScanned} />}
             {tab === "history" && <HistoryTab sessions={sessions} chargePoints={chargePoints} tariff={tariff} onStopCharge={handleStopCharge} />}
             {tab === "invoices" && <InvoicesTab invoices={invoices} sessions={sessions} chargePoints={chargePoints} tariff={tariff} tenantInfo={tenantInfo} userEmail={user.email} />}

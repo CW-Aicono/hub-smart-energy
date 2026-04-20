@@ -1,5 +1,6 @@
 import { useState, useRef } from "react";
 import { ChargePoint } from "@/hooks/useChargePoints";
+import { useChargePointConnectors } from "@/hooks/useChargePointConnectors";
 import { ChargingSession } from "@/hooks/useChargingSessions";
 import { ChargerModel } from "@/hooks/useChargerModels";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -12,6 +13,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Zap, PlugZap, AlertTriangle, ZapOff, WifiOff, Wifi, Camera, Trash2, Edit, Save, X, Clock, MapPin, Search, Shield, Info as InfoIcon, Settings } from "lucide-react";
+import { ConnectorStatusGrid } from "@/components/charging/ConnectorStatusGrid";
 import { format } from "date-fns";
 import { fmtKwh, fmtKw } from "@/lib/formatCharging";
 import { supabase } from "@/integrations/supabase/client";
@@ -55,6 +57,7 @@ export default function ChargePointDetailDialog({
   const [uploading, setUploading] = useState(false);
   const [geocoding, setGeocoding] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const { connectors } = useChargePointConnectors(cp?.id ?? undefined);
 
   const startEdit = () => {
     if (!cp) return;
@@ -200,6 +203,14 @@ export default function ChargePointDetailDialog({
               )}
             </div>
 
+            {/* Connector Status */}
+            {connectors.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-sm font-medium text-muted-foreground">Anschluss-Status</p>
+                <ConnectorStatusGrid connectors={connectors} wsConnected={cp?.ws_connected ?? false} />
+              </div>
+            )}
+
             {/* Details */}
             {editing ? (
               <div className="space-y-4">
@@ -276,6 +287,32 @@ export default function ChargePointDetailDialog({
                     </div>
                   )}
                 </div>
+
+                {/* OCPP Connection URLs */}
+                <Separator />
+                <div className="space-y-2">
+                  <p className="text-sm font-medium text-muted-foreground flex items-center gap-1.5">
+                    <Wifi className="h-3.5 w-3.5" /> Verbindungs-URLs für Wallbox
+                  </p>
+                  <div className="space-y-1.5">
+                    <div className="flex items-start gap-2">
+                      <Badge variant="outline" className="text-[10px] mt-0.5 shrink-0">wss://</Badge>
+                      <code className="text-xs break-all text-muted-foreground font-mono bg-muted px-2 py-1 rounded">
+                        wss://xnveugycurplszevdxtw.supabase.co/functions/v1/ocpp-ws-proxy/{cp.ocpp_id}
+                      </code>
+                    </div>
+                    <div className="flex items-start gap-2">
+                      <Badge variant="outline" className="text-[10px] mt-0.5 shrink-0 border-amber-500/50 text-amber-600 dark:text-amber-400">ws://</Badge>
+                      <code className="text-xs break-all text-muted-foreground font-mono bg-muted px-2 py-1 rounded">
+                        ws://ocpp.aicono.org/{cp.ocpp_id}
+                      </code>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground/70">
+                      <span className="font-medium">wss://</span> für neue Wallboxen (TLS-verschlüsselt) · <span className="font-medium">ws://</span> für ältere Wallboxen ohne TLS-Support
+                    </p>
+                  </div>
+                </div>
+
                 {isAdmin && (
                   <div className="flex gap-2 justify-end">
                     <Button variant="outline" onClick={startEdit}><Edit className="h-4 w-4 mr-1" />Bearbeiten</Button>

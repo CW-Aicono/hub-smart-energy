@@ -8,6 +8,7 @@ import {
   LayoutDashboard, LogOut, Building2, BarChart3, Receipt, HeadsetIcon,
   ChevronDown, ChevronRight, PanelLeftClose, PanelLeft, Users, ShieldCheck, Shield, Euro,
   Sun, Moon, Monitor, Globe, Palette, Check, Server, PlugZap, Settings, Activity,
+  Cpu, ListChecks, Briefcase,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -124,6 +125,15 @@ export default function SuperAdminSidebar() {
         { to: "/super-admin/ocpp/control", icon: Server, label: "OCPP Control" },
       ],
     },
+    {
+      to: "/super-admin/sales",
+      icon: Briefcase,
+      label: "Sales Scout",
+      children: [
+        { to: "/super-admin/sales/catalog", icon: Cpu, label: "Geräte-Katalog" },
+        { to: "/super-admin/sales/rules", icon: ListChecks, label: "Auswahl-Regeln" },
+      ],
+    },
     { to: "/super-admin/monitoring", icon: Activity, label: t("nav.monitoring") },
     { to: "/super-admin/support", icon: HeadsetIcon, label: t("nav.support") },
     { to: "/super-admin/settings", icon: Settings, label: t("nav.settings") },
@@ -142,6 +152,9 @@ export default function SuperAdminSidebar() {
     }
     if (location.pathname === "/super-admin/billing" || location.pathname === "/super-admin/licenses") {
       setOpenMenus((prev) => prev.includes("/super-admin/billing") ? prev : [...prev, "/super-admin/billing"]);
+    }
+    if (location.pathname.startsWith("/super-admin/sales")) {
+      setOpenMenus((prev) => prev.includes("/super-admin/sales") ? prev : [...prev, "/super-admin/sales"]);
     }
   }, [location.pathname]);
 

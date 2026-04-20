@@ -20,6 +20,8 @@ export interface GatewayDevice {
   config: Record<string, unknown>;
   offline_buffer_count: number;
   api_key_hash: string | null;
+  mac_address: string | null;
+  gateway_username: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -38,8 +40,9 @@ export function useGatewayDevices(locationIntegrationId?: string, locationId?: s
   const query = useQuery({
     queryKey: ["gateway-devices", tenant?.id, locationIntegrationId, locationId],
     enabled: !!tenant?.id,
-    staleTime: 30_000,
-    refetchInterval: 60_000,
+    staleTime: 60_000,
+    // Real-time invalidation handles instant updates; 5-min poll is the fallback.
+    refetchInterval: 5 * 60_000,
     queryFn: async (): Promise<GatewayDeviceWithMetrics[]> => {
       // Fetch devices
       let q = supabase

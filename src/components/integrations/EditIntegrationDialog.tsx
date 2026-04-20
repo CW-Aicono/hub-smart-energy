@@ -15,6 +15,7 @@ import { useTranslation } from "@/hooks/useTranslation";
 import { Loader2, Settings } from "lucide-react";
 import { LocationIntegration } from "@/hooks/useIntegrations";
 import { getGatewayDefinition } from "@/lib/gatewayRegistry";
+import { AiconoGatewayCredentials } from "./gateway/AiconoGatewayCredentials";
 
 interface EditIntegrationDialogProps {
   locationIntegration: LocationIntegration | null;
@@ -23,19 +24,20 @@ interface EditIntegrationDialogProps {
   onUpdate: (id: string, updates: Partial<LocationIntegration>) => Promise<{ error: Error | null }>;
 }
 
-export function EditIntegrationDialog({ 
-  locationIntegration, 
-  open, 
-  onOpenChange, 
-  onUpdate 
+export function EditIntegrationDialog({
+  locationIntegration,
+  open,
+  onOpenChange,
+  onUpdate,
 }: EditIntegrationDialogProps) {
   const [isSaving, setIsSaving] = useState(false);
+  const [baseConfig, setBaseConfig] = useState<Record<string, string>>({});
   const { toast } = useToast();
   const { t } = useTranslation();
 
   const integrationType = locationIntegration?.integration?.type;
   const gatewayDef = integrationType ? getGatewayDefinition(integrationType) : undefined;
-  const config = locationIntegration?.config as Record<string, string> | undefined;
+  const isAiconoGateway = integrationType === "aicono_gateway";
 
   const formSchema = useMemo(() => {
     const shape: Record<string, z.ZodTypeAny> = {};
@@ -55,20 +57,23 @@ export function EditIntegrationDialog({
   });
 
   useEffect(() => {
-    if (locationIntegration && config && gatewayDef) {
-      const vals: Record<string, string> = {};
-      for (const field of gatewayDef.configFields) {
-        vals[field.name] = config[field.name] || "";
-      }
-      form.reset(vals);
+    if (!locationIntegration || !gatewayDef || !open) return;
+
+    const nextConfig = (locationIntegration.config as Record<string, string> | undefined) ?? {};
+    const vals: Record<string, string> = {};
+    for (const field of gatewayDef.configFields) {
+      vals[field.name] = nextConfig[field.name] || "";
     }
-  }, [locationIntegration, config, gatewayDef, form]);
+
+    setBaseConfig(nextConfig);
+    form.reset(vals);
+  }, [locationIntegration, gatewayDef, form, open]);
 
   const onSubmit = async (data: Record<string, string>) => {
     if (!locationIntegration) return;
 
     setIsSaving(true);
-    const newConfig: Record<string, string> = {};
+    const newConfig: Record<string, string> = { ...baseConfig };
     if (gatewayDef) {
       for (const field of gatewayDef.configFields) {
         newConfig[field.name] = data[field.name] || "";
@@ -93,9 +98,11 @@ export function EditIntegrationDialog({
     }
   };
 
+  const hasConfigFields = (gatewayDef?.configFields.length ?? 0) > 0;
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[500px]">
+      <DialogContent className="sm:max-w-[560px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Settings className="h-5 w-5" />
@@ -106,50 +113,71 @@ export function EditIntegrationDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            {gatewayDef?.configFields.map((fieldDef) => (
-              <FormField
-                key={fieldDef.name}
-                control={form.control}
-                name={fieldDef.name}
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>{fieldDef.label}</FormLabel>
-                    <FormControl>
-                      <Input
-                        type={fieldDef.type === "password" ? "password" : "text"}
-                        placeholder={fieldDef.placeholder}
-                        {...field}
-                        value={field.value || ""}
-                      />
-                    </FormControl>
-                    {fieldDef.description && (
-                      <FormDescription>{fieldDef.description}</FormDescription>
-                    )}
-                    <FormMessage />
-                  </FormItem>
-                )}
+        <div className="space-y-4">
+          {isAiconoGateway && locationIntegration && (
+            <div className="rounded-lg border border-border bg-muted/20 p-4">
+              <AiconoGatewayCredentials
+                locationIntegrationId={locationIntegration.id}
+                onSaved={() => onOpenChange(false)}
               />
-            ))}
+            </div>
+          )}
 
-            <div className="flex gap-2 justify-end pt-4">
+          {hasConfigFields && (
+            <Form {...form}>
+              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                {gatewayDef?.configFields.map((fieldDef) => (
+                  <FormField
+                    key={fieldDef.name}
+                    control={form.control}
+                    name={fieldDef.name}
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{fieldDef.label}</FormLabel>
+                        <FormControl>
+                          <Input
+                            type={fieldDef.type === "password" ? "password" : "text"}
+                            placeholder={fieldDef.placeholder}
+                            {...field}
+                            value={field.value || ""}
+                          />
+                        </FormControl>
+                        {fieldDef.description && (
+                          <FormDescription>{fieldDef.description}</FormDescription>
+                        )}
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                ))}
+
+                <div className="flex gap-2 justify-end pt-4">
+                  <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+                    {t("common.cancel" as any)}
+                  </Button>
+                  <Button type="submit" disabled={isSaving}>
+                    {isSaving ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        {t("common.saving" as any)}
+                      </>
+                    ) : (
+                      t("common.save" as any)
+                    )}
+                  </Button>
+                </div>
+              </form>
+            </Form>
+          )}
+
+          {!hasConfigFields && !isAiconoGateway && (
+            <div className="flex justify-end">
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-                {t("common.cancel" as any)}
-              </Button>
-              <Button type="submit" disabled={isSaving}>
-                {isSaving ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    {t("common.saving" as any)}
-                  </>
-                ) : (
-                  t("common.save" as any)
-                )}
+                {t("common.close" as any)}
               </Button>
             </div>
-          </form>
-        </Form>
+          )}
+        </div>
       </DialogContent>
     </Dialog>
   );

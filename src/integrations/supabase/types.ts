@@ -461,6 +461,59 @@ export type Database = {
           },
         ]
       }
+      charge_point_connectors: {
+        Row: {
+          charge_point_id: string
+          charging_mode: string
+          connector_id: number
+          connector_type: string
+          created_at: string
+          display_order: number
+          id: string
+          last_status_at: string | null
+          max_power_kw: number
+          name: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          charge_point_id: string
+          charging_mode?: string
+          connector_id: number
+          connector_type?: string
+          created_at?: string
+          display_order?: number
+          id?: string
+          last_status_at?: string | null
+          max_power_kw?: number
+          name?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          charge_point_id?: string
+          charging_mode?: string
+          connector_id?: number
+          connector_type?: string
+          created_at?: string
+          display_order?: number
+          id?: string
+          last_status_at?: string | null
+          max_power_kw?: number
+          name?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "charge_point_connectors_charge_point_id_fkey"
+            columns: ["charge_point_id"]
+            isOneToOne: false
+            referencedRelation: "charge_points"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       charge_point_group_allowed_user_groups: {
         Row: {
           created_at: string
@@ -675,48 +728,193 @@ export type Database = {
         }
         Relationships: []
       }
+      charging_invoice_counter: {
+        Row: {
+          last_number: number
+          tenant_id: string
+          year: number
+        }
+        Insert: {
+          last_number?: number
+          tenant_id: string
+          year: number
+        }
+        Update: {
+          last_number?: number
+          tenant_id?: string
+          year?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "charging_invoice_counter_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      charging_invoice_sessions: {
+        Row: {
+          created_at: string
+          id: string
+          invoice_id: string
+          session_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          invoice_id: string
+          session_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          invoice_id?: string
+          session_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "charging_invoice_sessions_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "charging_invoices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "charging_invoice_sessions_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "charging_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      charging_invoice_settings: {
+        Row: {
+          bank_name: string | null
+          bic: string | null
+          company_address: string
+          company_email: string | null
+          company_name: string
+          company_phone: string | null
+          created_at: string
+          footer_text: string | null
+          iban: string | null
+          id: string
+          logo_url: string | null
+          tax_id: string | null
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          bank_name?: string | null
+          bic?: string | null
+          company_address?: string
+          company_email?: string | null
+          company_name?: string
+          company_phone?: string | null
+          created_at?: string
+          footer_text?: string | null
+          iban?: string | null
+          id?: string
+          logo_url?: string | null
+          tax_id?: string | null
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          bank_name?: string | null
+          bic?: string | null
+          company_address?: string
+          company_email?: string | null
+          company_name?: string
+          company_phone?: string | null
+          created_at?: string
+          footer_text?: string | null
+          iban?: string | null
+          id?: string
+          logo_url?: string | null
+          tax_id?: string | null
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "charging_invoice_settings_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: true
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       charging_invoices: {
         Row: {
           created_at: string
           currency: string
           id: string
           idle_fee_amount: number
+          invoice_date: string
           invoice_number: string | null
           issued_at: string | null
-          session_id: string
+          net_amount: number
+          pdf_storage_path: string | null
+          period_end: string | null
+          period_start: string | null
+          session_id: string | null
           status: string
           tariff_id: string | null
+          tax_amount: number
+          tax_rate_percent: number
           tenant_id: string
           total_amount: number
           total_energy_kwh: number
+          user_id: string | null
         }
         Insert: {
           created_at?: string
           currency?: string
           id?: string
           idle_fee_amount?: number
+          invoice_date?: string
           invoice_number?: string | null
           issued_at?: string | null
-          session_id: string
+          net_amount?: number
+          pdf_storage_path?: string | null
+          period_end?: string | null
+          period_start?: string | null
+          session_id?: string | null
           status?: string
           tariff_id?: string | null
+          tax_amount?: number
+          tax_rate_percent?: number
           tenant_id: string
           total_amount?: number
           total_energy_kwh?: number
+          user_id?: string | null
         }
         Update: {
           created_at?: string
           currency?: string
           id?: string
           idle_fee_amount?: number
+          invoice_date?: string
           invoice_number?: string | null
           issued_at?: string | null
-          session_id?: string
+          net_amount?: number
+          pdf_storage_path?: string | null
+          period_end?: string | null
+          period_start?: string | null
+          session_id?: string | null
           status?: string
           tariff_id?: string | null
+          tax_amount?: number
+          tax_rate_percent?: number
           tenant_id?: string
           total_amount?: number
           total_energy_kwh?: number
+          user_id?: string | null
         }
         Relationships: [
           {
@@ -738,6 +936,20 @@ export type Database = {
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "charging_invoices_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "charging_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "charging_invoices_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "charging_users_public"
             referencedColumns: ["id"]
           },
         ]
@@ -819,6 +1031,7 @@ export type Database = {
           is_active: boolean
           name: string
           price_per_kwh: number
+          tax_rate_percent: number
           tenant_id: string
           updated_at: string
         }
@@ -832,6 +1045,7 @@ export type Database = {
           is_active?: boolean
           name: string
           price_per_kwh?: number
+          tax_rate_percent?: number
           tenant_id: string
           updated_at?: string
         }
@@ -845,6 +1059,7 @@ export type Database = {
           is_active?: boolean
           name?: string
           price_per_kwh?: number
+          tax_rate_percent?: number
           tenant_id?: string
           updated_at?: string
         }
@@ -865,6 +1080,7 @@ export type Database = {
           id: string
           is_app_user: boolean
           name: string
+          tariff_id: string | null
           tenant_id: string
           updated_at: string
         }
@@ -874,6 +1090,7 @@ export type Database = {
           id?: string
           is_app_user?: boolean
           name: string
+          tariff_id?: string | null
           tenant_id: string
           updated_at?: string
         }
@@ -883,10 +1100,18 @@ export type Database = {
           id?: string
           is_app_user?: boolean
           name?: string
+          tariff_id?: string | null
           tenant_id?: string
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "charging_user_groups_tariff_id_fkey"
+            columns: ["tariff_id"]
+            isOneToOne: false
+            referencedRelation: "charging_tariffs"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "charging_user_groups_tenant_id_fkey"
             columns: ["tenant_id"]
@@ -909,6 +1134,7 @@ export type Database = {
           phone: string | null
           rfid_tag: string | null
           status: string
+          tariff_id: string | null
           tenant_id: string
           updated_at: string
         }
@@ -924,6 +1150,7 @@ export type Database = {
           phone?: string | null
           rfid_tag?: string | null
           status?: string
+          tariff_id?: string | null
           tenant_id: string
           updated_at?: string
         }
@@ -939,6 +1166,7 @@ export type Database = {
           phone?: string | null
           rfid_tag?: string | null
           status?: string
+          tariff_id?: string | null
           tenant_id?: string
           updated_at?: string
         }
@@ -948,6 +1176,13 @@ export type Database = {
             columns: ["group_id"]
             isOneToOne: false
             referencedRelation: "charging_user_groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "charging_users_tariff_id_fkey"
+            columns: ["tariff_id"]
+            isOneToOne: false
+            referencedRelation: "charging_tariffs"
             referencedColumns: ["id"]
           },
           {
@@ -1316,6 +1551,164 @@ export type Database = {
           widget_type?: string
         }
         Relationships: []
+      }
+      device_catalog: {
+        Row: {
+          benoetigt_klassen: string[]
+          beschreibung: string | null
+          bild_url: string | null
+          created_at: string
+          datasheet_url: string | null
+          einheit: string
+          ek_preis: number
+          geraete_klasse: Database["public"]["Enums"]["device_class"]
+          hersteller: string
+          id: string
+          installations_pauschale: number
+          is_active: boolean
+          kompatibilitaet: Json
+          kompatible_klassen: string[]
+          modell: string
+          tech_specs: Json
+          updated_at: string
+          vk_preis: number
+        }
+        Insert: {
+          benoetigt_klassen?: string[]
+          beschreibung?: string | null
+          bild_url?: string | null
+          created_at?: string
+          datasheet_url?: string | null
+          einheit?: string
+          ek_preis?: number
+          geraete_klasse?: Database["public"]["Enums"]["device_class"]
+          hersteller: string
+          id?: string
+          installations_pauschale?: number
+          is_active?: boolean
+          kompatibilitaet?: Json
+          kompatible_klassen?: string[]
+          modell: string
+          tech_specs?: Json
+          updated_at?: string
+          vk_preis?: number
+        }
+        Update: {
+          benoetigt_klassen?: string[]
+          beschreibung?: string | null
+          bild_url?: string | null
+          created_at?: string
+          datasheet_url?: string | null
+          einheit?: string
+          ek_preis?: number
+          geraete_klasse?: Database["public"]["Enums"]["device_class"]
+          hersteller?: string
+          id?: string
+          installations_pauschale?: number
+          is_active?: boolean
+          kompatibilitaet?: Json
+          kompatible_klassen?: string[]
+          modell?: string
+          tech_specs?: Json
+          updated_at?: string
+          vk_preis?: number
+        }
+        Relationships: []
+      }
+      device_compatibility: {
+        Row: {
+          auto_quantity_formula: string
+          created_at: string
+          id: string
+          notiz: string | null
+          prio: number
+          relation_type: string
+          source_device_id: string
+          target_device_id: string
+          updated_at: string
+        }
+        Insert: {
+          auto_quantity_formula?: string
+          created_at?: string
+          id?: string
+          notiz?: string | null
+          prio?: number
+          relation_type: string
+          source_device_id: string
+          target_device_id: string
+          updated_at?: string
+        }
+        Update: {
+          auto_quantity_formula?: string
+          created_at?: string
+          id?: string
+          notiz?: string | null
+          prio?: number
+          relation_type?: string
+          source_device_id?: string
+          target_device_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "device_compatibility_source_device_id_fkey"
+            columns: ["source_device_id"]
+            isOneToOne: false
+            referencedRelation: "device_catalog"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "device_compatibility_target_device_id_fkey"
+            columns: ["target_device_id"]
+            isOneToOne: false
+            referencedRelation: "device_catalog"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      device_selection_rules: {
+        Row: {
+          bedingung: Json
+          beschreibung: string | null
+          created_at: string
+          device_catalog_id: string
+          id: string
+          is_active: boolean
+          name: string
+          prio: number
+          updated_at: string
+        }
+        Insert: {
+          bedingung?: Json
+          beschreibung?: string | null
+          created_at?: string
+          device_catalog_id: string
+          id?: string
+          is_active?: boolean
+          name: string
+          prio?: number
+          updated_at?: string
+        }
+        Update: {
+          bedingung?: Json
+          beschreibung?: string | null
+          created_at?: string
+          device_catalog_id?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+          prio?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "device_selection_rules_device_catalog_id_fkey"
+            columns: ["device_catalog_id"]
+            isOneToOne: false
+            referencedRelation: "device_catalog"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       email_templates: {
         Row: {
@@ -2061,6 +2454,145 @@ export type Database = {
         }
         Relationships: []
       }
+      gateway_commands: {
+        Row: {
+          acked_at: string | null
+          command_type: string
+          created_at: string
+          created_by: string | null
+          error_message: string | null
+          expires_at: string
+          gateway_device_id: string
+          id: string
+          payload: Json
+          response: Json | null
+          sent_at: string | null
+          status: string
+          tenant_id: string
+        }
+        Insert: {
+          acked_at?: string | null
+          command_type: string
+          created_at?: string
+          created_by?: string | null
+          error_message?: string | null
+          expires_at?: string
+          gateway_device_id: string
+          id?: string
+          payload?: Json
+          response?: Json | null
+          sent_at?: string | null
+          status?: string
+          tenant_id: string
+        }
+        Update: {
+          acked_at?: string | null
+          command_type?: string
+          created_at?: string
+          created_by?: string | null
+          error_message?: string | null
+          expires_at?: string
+          gateway_device_id?: string
+          id?: string
+          payload?: Json
+          response?: Json | null
+          sent_at?: string | null
+          status?: string
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gateway_commands_gateway_device_id_fkey"
+            columns: ["gateway_device_id"]
+            isOneToOne: false
+            referencedRelation: "gateway_devices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gateway_commands_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      gateway_device_inventory: {
+        Row: {
+          category: string
+          created_at: string
+          device_class: string | null
+          domain: string
+          entity_id: string
+          friendly_name: string | null
+          gateway_device_id: string
+          id: string
+          last_seen_at: string
+          last_state_at: string | null
+          location_integration_id: string | null
+          state: string | null
+          tenant_id: string
+          unit: string | null
+          updated_at: string
+        }
+        Insert: {
+          category?: string
+          created_at?: string
+          device_class?: string | null
+          domain: string
+          entity_id: string
+          friendly_name?: string | null
+          gateway_device_id: string
+          id?: string
+          last_seen_at?: string
+          last_state_at?: string | null
+          location_integration_id?: string | null
+          state?: string | null
+          tenant_id: string
+          unit?: string | null
+          updated_at?: string
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          device_class?: string | null
+          domain?: string
+          entity_id?: string
+          friendly_name?: string | null
+          gateway_device_id?: string
+          id?: string
+          last_seen_at?: string
+          last_state_at?: string | null
+          location_integration_id?: string | null
+          state?: string | null
+          tenant_id?: string
+          unit?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gateway_device_inventory_gateway_device_id_fkey"
+            columns: ["gateway_device_id"]
+            isOneToOne: false
+            referencedRelation: "gateway_devices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gateway_device_inventory_location_integration_id_fkey"
+            columns: ["location_integration_id"]
+            isOneToOne: false
+            referencedRelation: "location_integrations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gateway_device_inventory_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       gateway_devices: {
         Row: {
           addon_version: string | null
@@ -2069,17 +2601,23 @@ export type Database = {
           created_at: string
           device_name: string
           device_type: string
+          gateway_password_hash: string | null
+          gateway_username: string | null
           ha_version: string | null
           id: string
           last_heartbeat_at: string | null
+          last_ws_ping_at: string | null
           latest_available_version: string | null
           local_ip: string | null
           local_time: string | null
+          location_id: string | null
           location_integration_id: string | null
+          mac_address: string | null
           offline_buffer_count: number
           status: string
-          tenant_id: string
+          tenant_id: string | null
           updated_at: string
+          ws_connected_since: string | null
         }
         Insert: {
           addon_version?: string | null
@@ -2088,17 +2626,23 @@ export type Database = {
           created_at?: string
           device_name: string
           device_type?: string
+          gateway_password_hash?: string | null
+          gateway_username?: string | null
           ha_version?: string | null
           id?: string
           last_heartbeat_at?: string | null
+          last_ws_ping_at?: string | null
           latest_available_version?: string | null
           local_ip?: string | null
           local_time?: string | null
+          location_id?: string | null
           location_integration_id?: string | null
+          mac_address?: string | null
           offline_buffer_count?: number
           status?: string
-          tenant_id: string
+          tenant_id?: string | null
           updated_at?: string
+          ws_connected_since?: string | null
         }
         Update: {
           addon_version?: string | null
@@ -2107,19 +2651,32 @@ export type Database = {
           created_at?: string
           device_name?: string
           device_type?: string
+          gateway_password_hash?: string | null
+          gateway_username?: string | null
           ha_version?: string | null
           id?: string
           last_heartbeat_at?: string | null
+          last_ws_ping_at?: string | null
           latest_available_version?: string | null
           local_ip?: string | null
           local_time?: string | null
+          location_id?: string | null
           location_integration_id?: string | null
+          mac_address?: string | null
           offline_buffer_count?: number
           status?: string
-          tenant_id?: string
+          tenant_id?: string | null
           updated_at?: string
+          ws_connected_since?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "gateway_devices_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "gateway_devices_location_integration_id_fkey"
             columns: ["location_integration_id"]
@@ -2995,6 +3552,9 @@ export type Database = {
           capture_type: string
           created_at: string
           device_type: string
+          discovery_confirmed: boolean
+          discovery_payload: Json | null
+          discovery_source: string | null
           energy_type: string
           floor_id: string | null
           gas_type: string | null
@@ -3030,6 +3590,9 @@ export type Database = {
           capture_type?: string
           created_at?: string
           device_type?: string
+          discovery_confirmed?: boolean
+          discovery_payload?: Json | null
+          discovery_source?: string | null
           energy_type?: string
           floor_id?: string | null
           gas_type?: string | null
@@ -3065,6 +3628,9 @@ export type Database = {
           capture_type?: string
           created_at?: string
           device_type?: string
+          discovery_confirmed?: boolean
+          discovery_payload?: Json | null
+          discovery_source?: string | null
           energy_type?: string
           floor_id?: string | null
           gas_type?: string | null
@@ -3231,6 +3797,125 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      mqtt_actuators: {
+        Row: {
+          actuator_uuid: string
+          command_topic: string
+          created_at: string
+          discovery_confirmed: boolean
+          discovery_payload: Json | null
+          discovery_source: string | null
+          id: string
+          location_integration_id: string
+          name: string
+          payload_off: string
+          payload_on: string
+          payload_template: string | null
+          qos: number
+          retain: boolean
+          state_topic: string | null
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          actuator_uuid: string
+          command_topic: string
+          created_at?: string
+          discovery_confirmed?: boolean
+          discovery_payload?: Json | null
+          discovery_source?: string | null
+          id?: string
+          location_integration_id: string
+          name: string
+          payload_off?: string
+          payload_on?: string
+          payload_template?: string | null
+          qos?: number
+          retain?: boolean
+          state_topic?: string | null
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          actuator_uuid?: string
+          command_topic?: string
+          created_at?: string
+          discovery_confirmed?: boolean
+          discovery_payload?: Json | null
+          discovery_source?: string | null
+          id?: string
+          location_integration_id?: string
+          name?: string
+          payload_off?: string
+          payload_on?: string
+          payload_template?: string | null
+          qos?: number
+          retain?: boolean
+          state_topic?: string | null
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mqtt_actuators_location_integration_id_fkey"
+            columns: ["location_integration_id"]
+            isOneToOne: false
+            referencedRelation: "location_integrations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mqtt_actuators_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      mqtt_credentials: {
+        Row: {
+          created_at: string
+          id: string
+          is_active: boolean
+          last_rotated_at: string
+          password_hash: string
+          tenant_id: string
+          topic_prefix: string
+          updated_at: string
+          username: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          last_rotated_at?: string
+          password_hash: string
+          tenant_id: string
+          topic_prefix: string
+          updated_at?: string
+          username: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          last_rotated_at?: string
+          password_hash?: string
+          tenant_id?: string
+          topic_prefix?: string
+          updated_at?: string
+          username?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mqtt_credentials_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       ocpp_integration_guides: {
         Row: {
@@ -3794,6 +4479,579 @@ export type Database = {
           },
         ]
       }
+      sales_distributions: {
+        Row: {
+          created_at: string
+          foto_url: string | null
+          id: string
+          ki_analyse: Json | null
+          name: string
+          notizen: string | null
+          parent_id: string | null
+          project_id: string
+          standort: string | null
+          typ: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          foto_url?: string | null
+          id?: string
+          ki_analyse?: Json | null
+          name: string
+          notizen?: string | null
+          parent_id?: string | null
+          project_id: string
+          standort?: string | null
+          typ?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          foto_url?: string | null
+          id?: string
+          ki_analyse?: Json | null
+          name?: string
+          notizen?: string | null
+          parent_id?: string | null
+          project_id?: string
+          standort?: string | null
+          typ?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sales_distributions_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "sales_distributions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sales_distributions_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "sales_projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sales_measurement_points: {
+        Row: {
+          anwendungsfall: string | null
+          bestand: boolean
+          bestand_geraet: string | null
+          bezeichnung: string
+          created_at: string
+          distribution_id: string
+          energieart: string
+          foto_url: string | null
+          hinweise: string | null
+          id: string
+          montage: string | null
+          phasen: number
+          spannung_v: number | null
+          strombereich_a: number | null
+          updated_at: string
+        }
+        Insert: {
+          anwendungsfall?: string | null
+          bestand?: boolean
+          bestand_geraet?: string | null
+          bezeichnung: string
+          created_at?: string
+          distribution_id: string
+          energieart?: string
+          foto_url?: string | null
+          hinweise?: string | null
+          id?: string
+          montage?: string | null
+          phasen?: number
+          spannung_v?: number | null
+          strombereich_a?: number | null
+          updated_at?: string
+        }
+        Update: {
+          anwendungsfall?: string | null
+          bestand?: boolean
+          bestand_geraet?: string | null
+          bezeichnung?: string
+          created_at?: string
+          distribution_id?: string
+          energieart?: string
+          foto_url?: string | null
+          hinweise?: string | null
+          id?: string
+          montage?: string | null
+          phasen?: number
+          spannung_v?: number | null
+          strombereich_a?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sales_measurement_points_distribution_id_fkey"
+            columns: ["distribution_id"]
+            isOneToOne: false
+            referencedRelation: "sales_distributions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sales_project_attachments: {
+        Row: {
+          content_type: string | null
+          created_at: string
+          file_name: string
+          file_path: string
+          file_size: number | null
+          id: string
+          kategorie: string
+          notiz: string | null
+          partner_id: string
+          project_id: string
+        }
+        Insert: {
+          content_type?: string | null
+          created_at?: string
+          file_name: string
+          file_path: string
+          file_size?: number | null
+          id?: string
+          kategorie?: string
+          notiz?: string | null
+          partner_id: string
+          project_id: string
+        }
+        Update: {
+          content_type?: string | null
+          created_at?: string
+          file_name?: string
+          file_path?: string
+          file_size?: number | null
+          id?: string
+          kategorie?: string
+          notiz?: string | null
+          partner_id?: string
+          project_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sales_project_attachments_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "sales_projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sales_projects: {
+        Row: {
+          accepted_at: string | null
+          adresse: string | null
+          converted_tenant_id: string | null
+          created_at: string
+          id: string
+          kontakt_email: string | null
+          kontakt_name: string | null
+          kontakt_telefon: string | null
+          kunde_name: string
+          kunde_typ: string
+          notizen: string | null
+          partner_id: string
+          public_token: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          accepted_at?: string | null
+          adresse?: string | null
+          converted_tenant_id?: string | null
+          created_at?: string
+          id?: string
+          kontakt_email?: string | null
+          kontakt_name?: string | null
+          kontakt_telefon?: string | null
+          kunde_name: string
+          kunde_typ?: string
+          notizen?: string | null
+          partner_id: string
+          public_token?: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          accepted_at?: string | null
+          adresse?: string | null
+          converted_tenant_id?: string | null
+          created_at?: string
+          id?: string
+          kontakt_email?: string | null
+          kontakt_name?: string | null
+          kontakt_telefon?: string | null
+          kunde_name?: string
+          kunde_typ?: string
+          notizen?: string | null
+          partner_id?: string
+          public_token?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sales_projects_converted_tenant_id_fkey"
+            columns: ["converted_tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sales_quote_events: {
+        Row: {
+          created_at: string
+          event_type: string
+          id: string
+          ip_address: string | null
+          metadata: Json | null
+          quote_id: string
+          user_agent: string | null
+        }
+        Insert: {
+          created_at?: string
+          event_type: string
+          id?: string
+          ip_address?: string | null
+          metadata?: Json | null
+          quote_id: string
+          user_agent?: string | null
+        }
+        Update: {
+          created_at?: string
+          event_type?: string
+          id?: string
+          ip_address?: string | null
+          metadata?: Json | null
+          quote_id?: string
+          user_agent?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sales_quote_events_quote_id_fkey"
+            columns: ["quote_id"]
+            isOneToOne: false
+            referencedRelation: "sales_quotes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sales_quote_modules: {
+        Row: {
+          created_at: string
+          id: string
+          module_code: string
+          preis_monatlich: number
+          quote_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          module_code: string
+          preis_monatlich?: number
+          quote_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          module_code?: string
+          preis_monatlich?: number
+          quote_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sales_quote_modules_quote_id_fkey"
+            columns: ["quote_id"]
+            isOneToOne: false
+            referencedRelation: "sales_quotes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sales_quotes: {
+        Row: {
+          created_at: string
+          geraete_summe: number
+          id: string
+          installation_summe: number
+          modul_summe_monatlich: number
+          pdf_storage_path: string | null
+          project_id: string
+          public_token: string | null
+          rejected_at: string | null
+          rejection_reason: string | null
+          signature_data: Json | null
+          signed_at: string | null
+          signer_email: string | null
+          signer_ip: string | null
+          signer_name: string | null
+          signer_user_agent: string | null
+          status: string
+          total_einmalig: number
+          updated_at: string
+          version: number
+          viewed_at: string | null
+        }
+        Insert: {
+          created_at?: string
+          geraete_summe?: number
+          id?: string
+          installation_summe?: number
+          modul_summe_monatlich?: number
+          pdf_storage_path?: string | null
+          project_id: string
+          public_token?: string | null
+          rejected_at?: string | null
+          rejection_reason?: string | null
+          signature_data?: Json | null
+          signed_at?: string | null
+          signer_email?: string | null
+          signer_ip?: string | null
+          signer_name?: string | null
+          signer_user_agent?: string | null
+          status?: string
+          total_einmalig?: number
+          updated_at?: string
+          version?: number
+          viewed_at?: string | null
+        }
+        Update: {
+          created_at?: string
+          geraete_summe?: number
+          id?: string
+          installation_summe?: number
+          modul_summe_monatlich?: number
+          pdf_storage_path?: string | null
+          project_id?: string
+          public_token?: string | null
+          rejected_at?: string | null
+          rejection_reason?: string | null
+          signature_data?: Json | null
+          signed_at?: string | null
+          signer_email?: string | null
+          signer_ip?: string | null
+          signer_name?: string | null
+          signer_user_agent?: string | null
+          status?: string
+          total_einmalig?: number
+          updated_at?: string
+          version?: number
+          viewed_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sales_quotes_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "sales_projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sales_recommended_devices: {
+        Row: {
+          begruendung: string | null
+          created_at: string
+          device_catalog_id: string
+          distribution_id: string | null
+          geraete_klasse: string | null
+          id: string
+          ist_alternativ: boolean
+          measurement_point_id: string | null
+          menge: number
+          parent_recommendation_id: string | null
+          partner_override: boolean
+          scope: string
+          source: string
+          updated_at: string
+        }
+        Insert: {
+          begruendung?: string | null
+          created_at?: string
+          device_catalog_id: string
+          distribution_id?: string | null
+          geraete_klasse?: string | null
+          id?: string
+          ist_alternativ?: boolean
+          measurement_point_id?: string | null
+          menge?: number
+          parent_recommendation_id?: string | null
+          partner_override?: boolean
+          scope?: string
+          source?: string
+          updated_at?: string
+        }
+        Update: {
+          begruendung?: string | null
+          created_at?: string
+          device_catalog_id?: string
+          distribution_id?: string | null
+          geraete_klasse?: string | null
+          id?: string
+          ist_alternativ?: boolean
+          measurement_point_id?: string | null
+          menge?: number
+          parent_recommendation_id?: string | null
+          partner_override?: boolean
+          scope?: string
+          source?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sales_recommended_devices_device_catalog_id_fkey"
+            columns: ["device_catalog_id"]
+            isOneToOne: false
+            referencedRelation: "device_catalog"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sales_recommended_devices_distribution_id_fkey"
+            columns: ["distribution_id"]
+            isOneToOne: false
+            referencedRelation: "sales_distributions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sales_recommended_devices_measurement_point_id_fkey"
+            columns: ["measurement_point_id"]
+            isOneToOne: false
+            referencedRelation: "sales_measurement_points"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sales_recommended_devices_parent_recommendation_id_fkey"
+            columns: ["parent_recommendation_id"]
+            isOneToOne: false
+            referencedRelation: "sales_recommended_devices"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      solar_charging_config: {
+        Row: {
+          created_at: string
+          group_id: string | null
+          id: string
+          is_active: boolean
+          min_charge_power_w: number
+          priority_mode: string
+          reference_meter_id: string | null
+          safety_buffer_w: number
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          group_id?: string | null
+          id?: string
+          is_active?: boolean
+          min_charge_power_w?: number
+          priority_mode?: string
+          reference_meter_id?: string | null
+          safety_buffer_w?: number
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          group_id?: string | null
+          id?: string
+          is_active?: boolean
+          min_charge_power_w?: number
+          priority_mode?: string
+          reference_meter_id?: string | null
+          safety_buffer_w?: number
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "solar_charging_config_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "charge_point_groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "solar_charging_config_reference_meter_id_fkey"
+            columns: ["reference_meter_id"]
+            isOneToOne: false
+            referencedRelation: "meters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "solar_charging_config_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      solar_charging_log: {
+        Row: {
+          actions_taken: Json | null
+          active_connectors: number | null
+          allocated_w: number | null
+          error_message: string | null
+          executed_at: string
+          group_id: string | null
+          id: string
+          status: string
+          surplus_w: number | null
+          tenant_id: string
+        }
+        Insert: {
+          actions_taken?: Json | null
+          active_connectors?: number | null
+          allocated_w?: number | null
+          error_message?: string | null
+          executed_at?: string
+          group_id?: string | null
+          id?: string
+          status?: string
+          surplus_w?: number | null
+          tenant_id: string
+        }
+        Update: {
+          actions_taken?: Json | null
+          active_connectors?: number | null
+          allocated_w?: number | null
+          error_message?: string | null
+          executed_at?: string
+          group_id?: string | null
+          id?: string
+          status?: string
+          surplus_w?: number | null
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "solar_charging_log_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "charge_point_groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "solar_charging_log_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       spot_prices: {
         Row: {
           created_at: string
@@ -3864,6 +5122,81 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "support_sessions_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      system_settings: {
+        Row: {
+          description: string | null
+          key: string
+          updated_at: string
+          updated_by: string | null
+          value: string | null
+        }
+        Insert: {
+          description?: string | null
+          key: string
+          updated_at?: string
+          updated_by?: string | null
+          value?: string | null
+        }
+        Update: {
+          description?: string | null
+          key?: string
+          updated_at?: string
+          updated_by?: string | null
+          value?: string | null
+        }
+        Relationships: []
+      }
+      task_attachments: {
+        Row: {
+          content_type: string | null
+          created_at: string
+          file_name: string
+          file_path: string
+          file_size: number | null
+          id: string
+          task_id: string
+          tenant_id: string
+          uploaded_by: string | null
+        }
+        Insert: {
+          content_type?: string | null
+          created_at?: string
+          file_name: string
+          file_path: string
+          file_size?: number | null
+          id?: string
+          task_id: string
+          tenant_id: string
+          uploaded_by?: string | null
+        }
+        Update: {
+          content_type?: string | null
+          created_at?: string
+          file_name?: string
+          file_path?: string
+          file_size?: number | null
+          id?: string
+          task_id?: string
+          tenant_id?: string
+          uploaded_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "task_attachments_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "task_attachments_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "tenants"
@@ -4975,6 +6308,7 @@ export type Database = {
       }
       cleanup_expired_backups: { Args: never; Returns: number }
       cleanup_old_infra_metrics: { Args: never; Returns: number }
+      cleanup_old_ocpp_logs: { Args: never; Returns: number }
       collect_db_metrics: { Args: never; Returns: Json }
       compact_power_readings_day: {
         Args: { p_day?: string }
@@ -4998,6 +6332,15 @@ export type Database = {
           day: string
           meter_id: string
           total_value: number
+        }[]
+      }
+      get_meter_daily_totals_split: {
+        Args: { p_from_date: string; p_meter_ids: string[]; p_to_date: string }
+        Returns: {
+          bezug: number
+          day: string
+          einspeisung: number
+          meter_id: string
         }[]
       }
       get_meter_period_sums: {
@@ -5104,9 +6447,23 @@ export type Database = {
         Returns: boolean
       }
       is_own_profile: { Args: { profile_user_id: string }; Returns: boolean }
+      next_charging_invoice_number: {
+        Args: { p_tenant_id: string; p_year: number }
+        Returns: string
+      }
     }
     Enums: {
-      app_role: "admin" | "user" | "super_admin"
+      app_role: "admin" | "user" | "super_admin" | "sales_partner"
+      device_class:
+        | "meter"
+        | "gateway"
+        | "power_supply"
+        | "network_switch"
+        | "router"
+        | "addon_module"
+        | "cable"
+        | "accessory"
+        | "misc"
       energy_type: "strom" | "gas" | "waerme" | "wasser"
       location_type: "einzelgebaeude" | "gebaeudekomplex" | "sonstiges"
       location_usage_type:
@@ -5246,7 +6603,18 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["admin", "user", "super_admin"],
+      app_role: ["admin", "user", "super_admin", "sales_partner"],
+      device_class: [
+        "meter",
+        "gateway",
+        "power_supply",
+        "network_switch",
+        "router",
+        "addon_module",
+        "cable",
+        "accessory",
+        "misc",
+      ],
       energy_type: ["strom", "gas", "waerme", "wasser"],
       location_type: ["einzelgebaeude", "gebaeudekomplex", "sonstiges"],
       location_usage_type: [

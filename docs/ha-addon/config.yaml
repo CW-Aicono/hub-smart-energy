@@ -1,11 +1,20 @@
-# AICONO EMS Gateway
+# AICONO EMS Gateway v3.0
 # ========================================
-# Lokaler Gateway-Hub für Energiemanagementsysteme.
-# Sammelt Sensordaten, führt Automationen lokal aus und synchronisiert mit der Cloud.
+# Lokaler Gateway-Hub für das AICONO Energiemanagementsystem.
+#
+# v3.0 BREAKING CHANGES:
+#  - Cloudflare-Tunnel entfernt (komplett ersetzt durch WebSocket-Push)
+#  - Identifikation jetzt zwingend über MAC-Adresse + Benutzername + Passwort
+#  - Bidirektionale Kommunikation via Supabase Realtime (gateway-ws)
+#  - Schaltbefehle aus der Cloud kommen in Echtzeit ohne Polling an
+#
+# Nach dem Update muss in den Add-on-Optionen lediglich Benutzername + Passwort
+# eingetragen werden – die MAC wird automatisch ausgelesen und an die Cloud
+# gemeldet. Die Liegenschafts-Zuordnung erfolgt im AICONO Backend per MAC.
 
 name: "AICONO EMS Gateway"
-description: "Lokaler Gateway-Hub für das AICONO Energiemanagementsystem. Sammelt Sensordaten, führt Automationen lokal aus und synchronisiert mit der Cloud."
-version: "2.1.1"
+description: "Lokaler Gateway-Hub für das AICONO EMS. Identifiziert sich per MAC-Adresse + Benutzername/Passwort. Kommuniziert bidirektional via WebSocket mit der AICONO Cloud – ohne Cloudflare, ohne offene Ports."
+version: "3.0.5"
 slug: "aicono-ems-gateway"
 url: "https://hub-smart-energy.lovable.app"
 arch:
@@ -20,6 +29,7 @@ panel_icon: "mdi:lightning-bolt-circle"
 panel_title: "AICONO EMS"
 hassio_api: true
 homeassistant_api: true
+host_network: false
 
 # Lokaler Health + UI Endpoint
 ports:
@@ -29,10 +39,11 @@ ports_description:
 
 # Konfigurationsoptionen
 options:
-  cloud_url: null
-  gateway_api_key: null
-  tenant_id: null
+  gateway_username: ""
+  gateway_password: ""
   device_name: "aicono-ems"
+  cloud_url: null
+  tenant_id: null
   poll_interval_seconds: 30
   flush_interval_seconds: 5
   heartbeat_interval_seconds: 60
@@ -42,10 +53,11 @@ options:
   auto_backup_hours: 24
 
 schema:
-  cloud_url: url
-  gateway_api_key: str
-  tenant_id: str
+  gateway_username: "str?"
+  gateway_password: "password?"
   device_name: str
+  cloud_url: "url?"
+  tenant_id: "str?"
   poll_interval_seconds: int
   flush_interval_seconds: int
   heartbeat_interval_seconds: int

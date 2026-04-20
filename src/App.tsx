@@ -70,11 +70,26 @@ const Demo = lazy(() => import("./pages/Demo"));
 const SuperAdminMap = lazy(() => import("./pages/SuperAdminMap"));
 const SuperAdminSettings = lazy(() => import("./pages/SuperAdminSettings"));
 const SuperAdminMonitoring = lazy(() => import("./pages/SuperAdminMonitoring"));
+const SuperAdminSalesCatalog = lazy(() => import("./pages/SuperAdminSalesCatalog"));
+const SuperAdminSalesRules = lazy(() => import("./pages/SuperAdminSalesRules"));
+const SalesProjects = lazy(() => import("./pages/SalesProjects"));
+const SalesProjectNew = lazy(() => import("./pages/SalesProjectNew"));
+const SalesProjectEdit = lazy(() => import("./pages/SalesProjectEdit"));
+const SalesProjectDetail = lazy(() => import("./pages/SalesProjectDetail"));
 const EmbedPitchDashboard = lazy(() => import("./pages/EmbedPitchDashboard"));
 const EnergyReport = lazy(() => import("./pages/EnergyReport"));
 const LegalPageView = lazy(() => import("./pages/LegalPageView"));
+const PublicSalesQuote = lazy(() => import("./pages/PublicSalesQuote"));
 
-const queryClient = new QueryClient();
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      refetchOnWindowFocus: false,
+      staleTime: 5 * 60 * 1000, // 5 minutes
+    },
+  },
+});
 
 const M = ({ children }: { children: React.ReactNode }) => (
   <ModuleGuard>{children}</ModuleGuard>
@@ -112,6 +127,7 @@ const App = () => (
                       <Route path="/demo/charging/billing" element={<ChargingBilling />} />
                       <Route path="/demo/charging/app" element={<ChargingAppAdmin />} />
                       <Route path="/demo/charging/ocpp-integration" element={<OcppIntegration />} />
+                      
                       <Route path="/demo/automation" element={<Automation />} />
                       <Route path="/demo/arbitrage" element={<ArbitrageTrading />} />
                       <Route path="/demo/copilot" element={<Copilot />} />
@@ -163,11 +179,19 @@ const App = () => (
                       <Route path="/super-admin/ocpp/integrations" element={<SA><SuperAdminOcppIntegrations /></SA>} />
                       <Route path="/super-admin/ocpp/control" element={<SA><SuperAdminOcppControl /></SA>} />
                       <Route path="/super-admin/map" element={<SA><SuperAdminMap /></SA>} />
+                      <Route path="/super-admin/sales/catalog" element={<SA><SuperAdminSalesCatalog /></SA>} />
+                      <Route path="/super-admin/sales/rules" element={<SA><SuperAdminSalesRules /></SA>} />
+                      <Route path="/sales" element={<SalesProjects />} />
+                      <Route path="/sales/new" element={<SalesProjectNew />} />
+                      <Route path="/sales/quote/:token" element={<PublicSalesQuote />} />
+                      <Route path="/sales/:id/edit" element={<SalesProjectEdit />} />
+                      <Route path="/sales/:id" element={<SalesProjectDetail />} />
                       <Route path="/charging/points" element={<M><ChargingPoints /></M>} />
                       <Route path="/charging/points/:id" element={<M><ChargePointDetail /></M>} />
                       <Route path="/charging/billing" element={<M><ChargingBilling /></M>} />
                       <Route path="/charging/app" element={<M><ChargingAppAdmin /></M>} />
                       <Route path="/charging/ocpp-integration" element={<M><OcppIntegration /></M>} />
+                      
                       <Route path="/automation" element={<M><Automation /></M>} />
                       <Route path="/tasks" element={<M><Tasks /></M>} />
                       <Route path="/network" element={<M><NetworkInfrastructure /></M>} />

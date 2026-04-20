@@ -1,0 +1,1 @@
+ALTER TABLE public.charge_point_connectors ADD COLUMN name TEXT;

@@ -1,7 +1,7 @@
 {
   "name": "aicono-ems-gateway",
-  "version": "2.1.0",
-  "description": "AICONO EMS Gateway – Lokaler Gateway-Hub mit Automations-Engine",
+  "version": "3.0.0",
+  "description": "AICONO EMS Gateway v3.0 – Bidirektionaler WebSocket-Worker für die AICONO Cloud",
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc",

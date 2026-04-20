@@ -1,0 +1,79 @@
+name: Sync HA Add-on to ha-addons repo
+
+# Postbote: Kopiert bei jeder Änderung in docs/ha-addon/ den Inhalt
+# in das öffentliche Add-on-Repository CW-Aicono/ha-addons,
+# damit Home Assistant das Update automatisch erkennt.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "docs/ha-addon/**"
+  workflow_dispatch: # Erlaubt manuellen Trigger über GitHub-UI
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source repo (hub-smart-energy)
+        uses: actions/checkout@v4
+        with:
+          path: source
+
+      - name: Checkout target repo (ha-addons)
+        uses: actions/checkout@v4
+        with:
+          repository: CW-Aicono/ha-addons
+          token: ${{ secrets.HA_ADDONS_PUSH_TOKEN }}
+          path: target
+
+      - name: Read add-on version
+        id: version
+        run: |
+          VERSION=$(grep '^version:' source/docs/ha-addon/config.yaml | sed -E 's/version: *"?([^"]+)"?/\1/')
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Add-on version detected: $VERSION"
+
+      - name: Sync add-on files
+        run: |
+          # Add-on lebt im Unterordner aicono-ems-gateway/ im Ziel-Repo
+          ADDON_DIR="target/aicono-ems-gateway"
+          mkdir -p "$ADDON_DIR"
+
+          # Alles im Ziel löschen außer .git, dann neu kopieren
+          find "$ADDON_DIR" -mindepth 1 -maxdepth 1 ! -name '.git' -exec rm -rf {} +
+          cp -r source/docs/ha-addon/. "$ADDON_DIR/"
+
+          # README + repository.yaml im Repo-Root sicherstellen (HA verlangt das)
+          if [ ! -f target/repository.yaml ]; then
+            cat > target/repository.yaml << 'EOF'
+          name: AICONO Home Assistant Add-ons
+          url: https://github.com/CW-Aicono/ha-addons
+          maintainer: AICONO <support@aicono.org>
+          EOF
+          fi
+
+      - name: Commit & push to ha-addons
+        working-directory: target
+        run: |
+          git config user.name "AICONO Lovable Bot"
+          git config user.email "bot@aicono.org"
+          git add -A
+          if git diff --staged --quiet; then
+            echo "No changes to publish."
+            exit 0
+          fi
+          git commit -m "chore: sync add-on v${{ steps.version.outputs.version }} from hub-smart-energy"
+          git push
+
+      - name: Create release tag
+        working-directory: target
+        run: |
+          TAG="v${{ steps.version.outputs.version }}"
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG already exists – skipping."
+          else
+            git tag "$TAG"
+            git push origin "$TAG"
+            echo "Created tag $TAG"
+          fi

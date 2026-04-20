@@ -202,7 +202,7 @@ export function useLocationAutomations(locationId: string | undefined) {
         const commandValue = sanitizeCommand(action.action_value || action.action_type);
 
         let body: Record<string, unknown>;
-        if (integrationType === "home_assistant" || integrationType === "ha-addon") {
+        if (integrationType === "aicono_gateway") {
           const entityId = action.actuator_uuid;
           const domain = entityId.split(".")[0];
           const cmd = commandValue.toLowerCase();

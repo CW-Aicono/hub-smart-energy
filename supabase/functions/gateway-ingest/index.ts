@@ -16,6 +16,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders } from "../_shared/cors.ts";
+import { recordWorkerHeartbeat } from "../_shared/workerStatus.ts";
 
 // Module-level default for helpers called outside handler context
 let corsHeaders: Record<string, string> = getCorsHeaders();
@@ -51,17 +52,25 @@ async function validateApiKey(req: Request): Promise<Response | null> {
     return json({ error: "Service misconfigured" }, 500);
   }
   const authHeader = req.headers.get("Authorization") || "";
+
+  // 1) Basic Auth (Loxone-style: username + password against gateway_devices)
+  if (/^Basic\s+/i.test(authHeader)) {
+    const ctx = await getDeviceFromBasicAuth(req);
+    if (ctx) return null;
+    return json({ error: "Unauthorized" }, 401);
+  }
+
   const providedKey = authHeader.replace(/^Bearer\s+/i, "").trim();
   if (!providedKey) {
     return json({ error: "Unauthorized" }, 401);
   }
 
-  // Accept global GATEWAY_API_KEY
+  // 2) Global GATEWAY_API_KEY (legacy)
   if (providedKey === gatewayApiKey) {
     return null;
   }
 
-  // Per-device API key: hash and check against gateway_devices.api_key_hash
+  // 3) Per-device API key: hash and check against gateway_devices.api_key_hash
   const keyHash = await hashApiKey(providedKey);
   const supabase = getSupabase();
   const { data: device } = await supabase
@@ -78,10 +87,80 @@ async function validateApiKey(req: Request): Promise<Response | null> {
 }
 
 /**
- * Extracts device context from a per-device API key.
- * Returns { device_id, tenant_id } if the key matches a device, null otherwise.
+ * Parses Basic-Auth header → { username, password }.
  */
-async function getDeviceFromApiKey(req: Request): Promise<{ device_id: string; tenant_id: string } | null> {
+function parseBasicAuth(req: Request): { username: string; password: string } | null {
+  const h = req.headers.get("Authorization") || "";
+  const m = h.match(/^Basic\s+(.+)$/i);
+  if (!m) return null;
+  try {
+    const decoded = atob(m[1].trim());
+    const idx = decoded.indexOf(":");
+    if (idx < 0) return null;
+    return { username: decoded.slice(0, idx), password: decoded.slice(idx + 1) };
+  } catch {
+    return null;
+  }
+}
+
+function normalizeMac(input: string | null): string {
+  return (input || "").toLowerCase().replace(/[^0-9a-f]/g, "").slice(0, 12);
+}
+
+/**
+ * bcrypt verify – uses bcryptjs (pure JS) via npm: specifier.
+ */
+async function bcryptVerify(plain: string, hash: string): Promise<boolean> {
+  try {
+    const bcrypt: any = await import("npm:bcryptjs@2.4.3");
+    const compare = bcrypt.compare ?? bcrypt.default?.compare;
+    return await compare(plain, hash);
+  } catch (e) {
+    console.error("[gateway-ingest] bcrypt verify error:", e);
+    return false;
+  }
+}
+
+/**
+ * Looks up a gateway_devices row by Basic-Auth username + verified password.
+ * Returns device context (may have tenant_id=null when pending_assignment).
+ */
+async function getDeviceFromBasicAuth(req: Request): Promise<
+  { device_id: string; tenant_id: string | null; mac_address: string | null; assignment_status: "assigned" | "pending_assignment" } | null
+> {
+  const creds = parseBasicAuth(req);
+  if (!creds || !creds.username || !creds.password) return null;
+  const requestMac = normalizeMac(req.headers.get("x-gateway-mac"));
+  const supabase = getSupabase();
+  const { data: devices } = await supabase
+    .from("gateway_devices")
+    .select("id, tenant_id, mac_address, gateway_password_hash")
+    .eq("gateway_username", creds.username)
+    .limit(requestMac ? 10 : 2);
+  const device = (devices || []).find((row) => {
+    if (!requestMac) return true;
+    return normalizeMac(row.mac_address) === requestMac;
+  });
+  if (!device || !device.gateway_password_hash) return null;
+  const ok = await bcryptVerify(creds.password, device.gateway_password_hash);
+  if (!ok) return null;
+  return {
+    device_id: device.id,
+    tenant_id: device.tenant_id,
+    mac_address: device.mac_address,
+    assignment_status: device.tenant_id ? "assigned" : "pending_assignment",
+  };
+}
+
+/**
+ * Extracts device context from a per-device API key OR Basic-Auth.
+ * Returns { device_id, tenant_id } when known, null otherwise.
+ */
+async function getDeviceFromApiKey(req: Request): Promise<{ device_id: string; tenant_id: string | null } | null> {
+  // Basic Auth path
+  const basic = await getDeviceFromBasicAuth(req);
+  if (basic) return { device_id: basic.device_id, tenant_id: basic.tenant_id };
+
   const gatewayApiKey = Deno.env.get("GATEWAY_API_KEY");
   const authHeader = req.headers.get("Authorization") || "";
   const providedKey = authHeader.replace(/^Bearer\s+/i, "").trim();
@@ -828,66 +907,70 @@ async function handleHeartbeat(req: Request): Promise<Response> {
     return json({ error: "Invalid JSON body" }, 400);
   }
 
-  if (!body.tenant_id || !body.device_name) {
-    return json({ error: "tenant_id and device_name are required" }, 400);
+  // Either MAC or (tenant_id + device_name) is required (legacy support)
+  if (!(body as any).mac_address && (!body.tenant_id || !body.device_name)) {
+    return json({ error: "mac_address or (tenant_id + device_name) required" }, 400);
   }
 
   // Per-device key tenant_id cross-check
   const deviceCtx = await getDeviceFromApiKey(req);
-  if (deviceCtx && deviceCtx.tenant_id !== body.tenant_id) {
+  if (deviceCtx && deviceCtx.tenant_id && body.tenant_id && deviceCtx.tenant_id !== body.tenant_id) {
     console.warn(`[gateway-ingest] Per-device key tenant mismatch: key=${deviceCtx.tenant_id}, body=${body.tenant_id}`);
     return json({ error: "Tenant mismatch – API key does not belong to this tenant" }, 403);
   }
 
   const supabase = getSupabase();
 
-  // Upsert by tenant_id + device_name
-  const { data: existing } = await supabase
-    .from("gateway_devices")
-    .select("id, config, latest_available_version")
-    .eq("tenant_id", body.tenant_id)
-    .eq("device_name", body.device_name)
-    .maybeSingle();
+  // Normalize MAC (lowercase 12 hex)
+  const macRaw = (body as any).mac_address as string | undefined;
+  const mac = macRaw ? macRaw.toLowerCase().replace(/[^0-9a-f]/g, "").slice(0, 12) : "";
+  const macValid = mac.length === 12;
+
+  // Lookup existing device: prefer MAC, fallback to (tenant_id + device_name) for legacy
+  let existing: { id: string; tenant_id: string | null; config: any; latest_available_version: any; location_integration_id: string | null } | null = null;
+  if (macValid) {
+    const { data } = await supabase
+      .from("gateway_devices")
+      .select("id, tenant_id, config, latest_available_version, location_integration_id")
+      .eq("mac_address", mac)
+      .maybeSingle();
+    existing = data as any;
+  }
+  if (!existing && body.tenant_id && body.device_name) {
+    const { data } = await supabase
+      .from("gateway_devices")
+      .select("id, tenant_id, config, latest_available_version, location_integration_id")
+      .eq("tenant_id", body.tenant_id)
+      .eq("device_name", body.device_name)
+      .maybeSingle();
+    existing = data as any;
+  }
+
+  // Pending assignment check: device known by MAC but no tenant_id assigned
+  const effectiveTenantId = existing?.tenant_id ?? body.tenant_id ?? null;
+  const isPending = !effectiveTenantId;
 
   // Extract pending command BEFORE overwriting config
   const existingConfig = (existing?.config || {}) as Record<string, unknown>;
   const pendingCommand = existingConfig.pending_command as string | undefined;
   const pendingCommandParams = existingConfig.pending_command_params as Record<string, unknown> | undefined;
 
-  // Merge addon config with server-side fields (preserve non-pending fields)
-  const mergedConfig = {
-    ...(body.config || {}),
-    // Clear pending command after delivering it
-  };
+  const mergedConfig = { ...(body.config || {}) };
 
-  // Auto-resolve location_integration_id if not explicitly provided
-  let resolvedLiId: string | null = body.location_integration_id || null;
-  if (!resolvedLiId && existing?.id) {
-    // Check if the existing device already has one
-    const { data: existingDevice } = await supabase
-      .from("gateway_devices")
-      .select("location_integration_id")
-      .eq("id", existing.id)
-      .maybeSingle();
-    resolvedLiId = existingDevice?.location_integration_id || null;
-  }
-  if (!resolvedLiId) {
-    // Find the HA integration for this tenant:
-    // 1) Get all locations for this tenant
+  // Auto-resolve location_integration_id (skip when pending)
+  let resolvedLiId: string | null = body.location_integration_id || existing?.location_integration_id || null;
+  if (!resolvedLiId && effectiveTenantId) {
     const { data: locations } = await supabase
       .from("locations")
       .select("id")
-      .eq("tenant_id", body.tenant_id);
-
+      .eq("tenant_id", effectiveTenantId);
     if (locations && locations.length > 0) {
       const locationIds = locations.map((l: any) => l.id);
-      // 2) Find enabled HA integrations for those locations
       const { data: lis } = await supabase
         .from("location_integrations")
         .select("id, integration_id, integrations!inner(type)")
         .in("location_id", locationIds)
         .eq("is_enabled", true);
-
       if (lis) {
         const haLi = lis.find((li: any) => li.integrations?.type === "home_assistant");
         if (haLi) {
@@ -898,49 +981,66 @@ async function handleHeartbeat(req: Request): Promise<Response> {
     }
   }
 
-  const deviceData = {
-    tenant_id: body.tenant_id,
-    device_name: body.device_name,
+  const deviceData: Record<string, unknown> = {
+    tenant_id: effectiveTenantId,
+    device_name: body.device_name || "aicono-ems",
     device_type: body.device_type || "ha-addon",
     local_ip: body.local_ip || null,
     ha_version: body.ha_version || null,
     addon_version: body.addon_version || null,
     offline_buffer_count: body.offline_buffer_count ?? 0,
     local_time: body.local_time || null,
-    status: "online",
+    status: isPending ? "pending_assignment" : "online",
     last_heartbeat_at: new Date().toISOString(),
     location_integration_id: resolvedLiId,
     config: mergedConfig,
   };
+  if (macValid) deviceData.mac_address = mac;
+  const usernameRaw = (body as any).gateway_username as string | undefined;
+  if (usernameRaw) deviceData.gateway_username = usernameRaw;
 
-  let result;
+  // Upsert: prefer mac_address as conflict target when MAC is set
+  let upserted: { id: string } | null = null;
+  let upsertErr: any = null;
   if (existing?.id) {
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from("gateway_devices")
       .update(deviceData)
-      .eq("id", existing.id);
-    if (error) {
-      console.error("[gateway-ingest] heartbeat update error:", error.message);
-      return json({ error: "Database error" }, 500);
-    }
-    result = { id: existing.id, action: "updated" };
-  } else {
-    const { data: inserted, error } = await supabase
+      .eq("id", existing.id)
+      .select("id")
+      .single();
+    upserted = data as any; upsertErr = error;
+  } else if (macValid) {
+    const { data, error } = await supabase
+      .from("gateway_devices")
+      .upsert({ ...deviceData, mac_address: mac }, { onConflict: "mac_address" })
+      .select("id")
+      .single();
+    upserted = data as any; upsertErr = error;
+  } else if (effectiveTenantId && body.device_name) {
+    const { data, error } = await supabase
       .from("gateway_devices")
       .insert(deviceData)
       .select("id")
       .single();
-    if (error) {
-      console.error("[gateway-ingest] heartbeat insert error:", error.message);
-      return json({ error: "Database error" }, 500);
-    }
-    result = { id: inserted.id, action: "created" };
+    upserted = data as any; upsertErr = error;
+  } else {
+    return json({ error: "mac_address or (tenant_id + device_name) required" }, 400);
   }
+  if (upsertErr) {
+    console.error("[gateway-ingest] heartbeat upsert error:", upsertErr.message);
+    return json({ error: "Database error" }, 500);
+  }
+  const result = {
+    id: upserted!.id,
+    action: existing?.id ? "updated" : "created",
+  };
 
   const responseData: Record<string, unknown> = {
     success: true,
     ...result,
     latest_available_version: existing?.latest_available_version || null,
+    assignment_status: isPending ? "pending_assignment" : "assigned",
   };
 
   // Deliver ui_pin_hash to the gateway for local PIN protection
@@ -955,7 +1055,42 @@ async function handleHeartbeat(req: Request): Promise<Response> {
     console.log(`[gateway-ingest] Delivering pending command '${pendingCommand}' to device ${result.id}`);
   }
 
+  // Also bump the global worker heartbeat so the WORKER_ACTIVE feature flag
+  // in loxone-api/shelly-api knows a writer is alive.
+  try { await recordWorkerHeartbeat(supabase); } catch (e) { console.warn("[heartbeat] worker-heartbeat upsert failed:", e); }
+
   return json(responseData);
+}
+
+/* ── Dedicated worker heartbeat (Hetzner gateway-worker) ─────────────────────── */
+/**
+ * Lightweight endpoint for the central Hetzner gateway worker that doesn't have
+ * a per-device gateway_devices row. Just bumps system_settings.worker_last_heartbeat
+ * so loxone-api can defer the write path to the worker.
+ *
+ * POST ?action=worker-heartbeat   Body: { worker_id?: string, version?: string }
+ */
+async function handleWorkerHeartbeat(req: Request): Promise<Response> {
+  const authErr = await validateApiKey(req);
+  if (authErr) return authErr;
+
+  let body: { worker_id?: string; version?: string } = {};
+  try { body = await req.json(); } catch { /* body optional */ }
+
+  const supabase = getSupabase();
+  await recordWorkerHeartbeat(supabase);
+
+  // Optional: also persist worker metadata for the admin widget
+  if (body.worker_id || body.version) {
+    await supabase
+      .from("system_settings")
+      .upsert(
+        { key: "worker_meta", value: JSON.stringify({ worker_id: body.worker_id, version: body.version, last_seen: new Date().toISOString() }) },
+        { onConflict: "key" },
+      );
+  }
+
+  return json({ success: true, recorded_at: new Date().toISOString() });
 }
 
 /* ── Gateway backup handler ──────────────────────────────────────────────────── */
@@ -1271,6 +1406,113 @@ async function handlePushExecutionLogs(req: Request): Promise<Response> {
   return json({ success: true, inserted: rows.length });
 }
 
+/* ── Device Inventory Snapshot (HA Add-on -> Cloud) ──────────────────────────── */
+/**
+ * POST ?action=device-snapshot
+ * Body: { mac_address?, devices: [{ entity_id, domain, category, friendly_name, state, unit, device_class, last_updated }] }
+ * Speichert/aktualisiert das vollständige lokale Geräte-Inventar des Add-ons,
+ * damit die Cloud-UI Sensoren/Aktoren/Zähler zur Zuordnung anbieten kann.
+ */
+async function handleDeviceSnapshot(req: Request): Promise<Response> {
+  const authErr = await validateApiKey(req);
+  if (authErr) {
+    console.warn("[device-snapshot] auth failed");
+    return authErr;
+  }
+
+  let bodyText = "";
+  let body: { mac_address?: string; devices?: any[] };
+  try {
+    bodyText = await req.text();
+    body = JSON.parse(bodyText);
+  } catch (e) {
+    console.error("[device-snapshot] invalid JSON. Length=", bodyText.length, "first200=", bodyText.slice(0, 200));
+    return json({ error: "Invalid JSON", stage: "parse", length: bodyText.length }, 400);
+  }
+
+  if (!Array.isArray(body?.devices)) {
+    console.error("[device-snapshot] devices not array. keys=", Object.keys(body || {}), "type=", typeof (body as any)?.devices);
+    return json({ error: "devices array is required", stage: "validate", got_keys: Object.keys(body || {}) }, 400);
+  }
+
+  const supabase = getSupabase();
+
+  const macRaw = body.mac_address || req.headers.get("x-gateway-mac") || "";
+  const mac = macRaw.toLowerCase().replace(/[^0-9a-f]/g, "").slice(0, 12);
+  let device: { id: string; tenant_id: string | null; location_integration_id: string | null } | null = null;
+
+  if (mac.length === 12) {
+    const { data } = await supabase
+      .from("gateway_devices")
+      .select("id, tenant_id, location_integration_id")
+      .eq("mac_address", mac)
+      .maybeSingle();
+    device = data as any;
+  }
+  if (!device) {
+    const ctx = await getDeviceFromBasicAuth(req);
+    if (ctx?.id) {
+      const { data } = await supabase
+        .from("gateway_devices")
+        .select("id, tenant_id, location_integration_id")
+        .eq("id", ctx.id)
+        .maybeSingle();
+      device = data as any;
+    }
+  }
+  if (!device || !device.tenant_id) {
+    return json({ error: "Gateway device not found or not assigned to a tenant" }, 404);
+  }
+
+  const nowIso = new Date().toISOString();
+  const rows = body.devices
+    .filter((d: any) => typeof d?.entity_id === "string" && d.entity_id.includes("."))
+    .slice(0, 2000)
+    .map((d: any) => ({
+      gateway_device_id: device!.id,
+      tenant_id: device!.tenant_id,
+      location_integration_id: device!.location_integration_id,
+      entity_id: String(d.entity_id),
+      domain: String(d.domain || d.entity_id.split(".")[0] || "unknown"),
+      category: String(d.category || "sensor"),
+      friendly_name: d.friendly_name ? String(d.friendly_name).slice(0, 200) : null,
+      state: d.state != null ? String(d.state).slice(0, 200) : null,
+      unit: d.unit ? String(d.unit).slice(0, 32) : null,
+      device_class: d.device_class ? String(d.device_class).slice(0, 64) : null,
+      last_seen_at: nowIso,
+      last_state_at: d.last_updated || null,
+    }));
+
+  if (rows.length === 0) {
+    return json({ success: true, upserted: 0, pruned: 0 });
+  }
+
+  const { error: upErr } = await supabase
+    .from("gateway_device_inventory")
+    .upsert(rows, { onConflict: "gateway_device_id,entity_id" });
+  if (upErr) {
+    console.error("[gateway-ingest] device-snapshot upsert error:", upErr.message);
+    return json({ error: "Database error", details: upErr.message }, 500);
+  }
+
+  const seen = new Set(rows.map((r) => r.entity_id));
+  const { data: existing } = await supabase
+    .from("gateway_device_inventory")
+    .select("id, entity_id")
+    .eq("gateway_device_id", device.id);
+  const stale = (existing || []).filter((e: any) => !seen.has(e.entity_id)).map((e: any) => e.id);
+  let pruned = 0;
+  if (stale.length > 0) {
+    const { error: delErr } = await supabase
+      .from("gateway_device_inventory")
+      .delete()
+      .in("id", stale);
+    if (!delErr) pruned = stale.length;
+  }
+
+  return json({ success: true, upserted: rows.length, pruned });
+}
+
 /* ── Main router ─────────────────────────────────────────────────────────────── */
 
 Deno.serve(async (req) => {
@@ -1300,10 +1542,12 @@ Deno.serve(async (req) => {
     if (action === "compact-day") return handleCompactDay(req);
     if (action === "schneider-push") return handleSchneiderPush(req);
     if (action === "heartbeat") return handleHeartbeat(req);
+    if (action === "worker-heartbeat") return handleWorkerHeartbeat(req);
     if (action === "gateway-backup") return handleGatewayBackup(req);
     if (action === "gateway-command") return handleGatewayCommand(req);
     if (action === "push-execution-logs") return handlePushExecutionLogs(req);
     if (action === "sync-automations") return handleSyncAutomations(url, req);
+    if (action === "device-snapshot") return handleDeviceSnapshot(req);
 
     // Check if the body contains a getSensors action (called by frontend for all integration types).
     // Push-based gateways don't support sensor discovery — return empty list gracefully.

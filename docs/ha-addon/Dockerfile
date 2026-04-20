@@ -1,6 +1,8 @@
-# AICONO EMS Gateway
+# AICONO EMS Gateway v3.0
 # =========================================
-# Multi-stage build for minimal production image
+# Multi-stage build for minimal production image.
+# v3.0: Cloudflared entfernt – Worker kommuniziert ausschließlich via
+#       ausgehende WebSocket-Verbindung zur AICONO Cloud.
 
 # ── Stage 1: Build TypeScript ────────────────────────────────────────────────
 FROM node:20-alpine AS builder
@@ -22,6 +24,9 @@ FROM node:20-alpine AS runner
 # Do NOT add USER or adduser directives here
 
 WORKDIR /app
+
+# Minimal runtime deps – no cloudflared needed in v3.0
+RUN apk add --no-cache ca-certificates
 
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/dist/index.js ./index.js

@@ -24,7 +24,7 @@ export function useInfraMetrics() {
       if (error) throw error;
       return data as unknown as InfraMetric[];
     },
-    refetchInterval: 60_000,
+    refetchInterval: 5 * 60_000,
   });
 
   const collectMetrics = useMutation({

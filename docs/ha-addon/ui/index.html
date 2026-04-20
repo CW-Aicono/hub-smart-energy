@@ -829,14 +829,65 @@
           return '<div class="empty-state"><div class="icon">⏳</div><p>Lade Status…</p></div>';
         }
 
-        return '' +
+        var s = state.status;
+        var mac = s.mac_address || '';
+        var formattedMac = mac.replace(/(.{2})(?=.)/g, '$1:').toUpperCase();
+        var assignment = s.assignment_status || 'unknown';
+        var assignmentBadge =
+          assignment === 'assigned'
+            ? '<span class="badge badge-success">🟢 Mit AICONO verbunden</span>'
+            : assignment === 'pending_assignment'
+              ? '<span class="badge badge-warn">🟡 Wartet auf Zuordnung</span>'
+              : '<span class="badge badge-inactive">⚪ Status unbekannt</span>';
+        var credBadge = s.credentials_configured
+          ? '<span class="badge badge-active">✓ Zugangsdaten gesetzt</span>'
+          : '<span class="badge badge-error">✗ Bitte Benutzername & Passwort in der Add-on-Konfiguration setzen</span>';
+
+        var identityCard =
+          '<div class="panel" style="margin-bottom:18px">' +
+            '<div class="section-title">🔑 Gateway-Identität</div>' +
+            '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px">' +
+              '<div>' +
+                '<div class="card-label">MAC-Adresse</div>' +
+                '<div style="display:flex;align-items:center;gap:8px;margin-top:4px">' +
+                  '<code style="font-size:1rem;font-weight:700;color:var(--accent-teal);background:var(--accent-teal-dim);padding:6px 10px;border-radius:8px;letter-spacing:0.05em">' +
+                    escapeHtml(formattedMac || '–') +
+                  '</code>' +
+                  (mac ? '<button class="ctrl-btn" id="copy-mac-btn" data-mac="' + escapeHtml(mac) + '" title="MAC kopieren">📋</button>' : '') +
+                '</div>' +
+                '<div class="card-sub">In AICONO als Identifier eintragen</div>' +
+              '</div>' +
+              '<div>' +
+                '<div class="card-label">Benutzername</div>' +
+                '<div style="font-size:1rem;font-weight:700;margin-top:4px">' + escapeHtml(s.gateway_username || '–') + '</div>' +
+                '<div class="card-sub">' + credBadge + '</div>' +
+              '</div>' +
+              '<div>' +
+                '<div class="card-label">Status</div>' +
+                '<div style="margin-top:6px">' + assignmentBadge + '</div>' +
+                '<div class="card-sub">' +
+                  (assignment === 'assigned'
+                    ? 'Daten werden an die Liegenschaft gesendet.'
+                    : 'In AICONO unter „Liegenschaft → AICONO EMS Gateway" MAC + Benutzer + Passwort eintragen.') +
+                '</div>' +
+              '</div>' +
+            '</div>' +
+          '</div>';
+
+        var wsConnected = !!s.cloud_ws_connected;
+        var wsSub = wsConnected
+          ? (s.cloud_ws_device_id ? 'Device: ' + String(s.cloud_ws_device_id).slice(0, 8) + '…' : 'Push-Kanal aktiv')
+          : 'Versuche Verbindung zur AICONO Cloud…';
+
+        return identityCard +
           '<div class="grid">' +
-            card('Status', '<span class="status-dot ' + (state.status.status === 'running' ? 'online' : 'offline') + '"></span> ' + (state.status.status === 'running' ? 'Online' : 'Offline'), 'Uptime: ' + escapeHtml(formatUptime(state.status.uptime_seconds))) +
-            card('Cloud-Verbindung', '<span class="status-dot ' + (state.status.cloud_reachable ? 'online' : 'offline') + '"></span> ' + (state.status.cloud_reachable ? 'Verbunden' : 'Offline'), 'WebSocket: ' + (state.status.ha_ws_connected ? '✓ aktiv' : '✗ getrennt')) +
-            card('Messwert-Puffer', escapeHtml(state.status.buffer_count || 0), 'Readings im lokalen Speicher') +
-            card('Zähler-Mappings', escapeHtml(state.status.meter_mappings || 0), 'Aktive Zuordnungen') +
-            card('Automationen', escapeHtml(state.status.automation_count || 0), 'Lokal gespeicherte Regeln') +
-            card('System', escapeHtml(state.status.ha_version || 'N/A'), 'Gateway v' + escapeHtml(state.status.addon_version || '?')) +
+            card('Status', '<span class="status-dot ' + (s.status === 'running' ? 'online' : 'offline') + '"></span> ' + (s.status === 'running' ? 'Online' : 'Offline'), 'Uptime: ' + escapeHtml(formatUptime(s.uptime_seconds))) +
+            card('Cloud-WebSocket', '<span class="status-dot ' + (wsConnected ? 'online' : 'offline') + '"></span> ' + (wsConnected ? 'Push aktiv' : 'Getrennt'), wsSub) +
+            card('Home Assistant', '<span class="status-dot ' + (s.ha_ws_connected ? 'online' : 'offline') + '"></span> ' + (s.ha_ws_connected ? 'Verbunden' : 'Getrennt'), 'HA-API ' + (s.cloud_reachable ? '+ Cloud erreichbar' : '– Cloud offline')) +
+            card('Messwert-Puffer', escapeHtml(s.buffer_count || 0), 'Readings im lokalen Speicher') +
+            card('Zähler-Mappings', escapeHtml(s.meter_mappings || 0), 'Aktive Zuordnungen') +
+            card('Automationen', escapeHtml(s.automation_count || 0), 'Lokal (laufen offline weiter)') +
+            card('System', escapeHtml(s.ha_version || 'N/A'), 'Gateway v' + escapeHtml(s.addon_version || '?')) +
           '</div>';
       }
 
@@ -1164,6 +1215,7 @@
         var status = state.status || {};
         var online = status.status === 'running';
         var cloudReachable = !!status.cloud_reachable;
+        var wsConnected = !!status.cloud_ws_connected;
         var errorHtml = state.error
           ? '<div class="error-state" style="margin-bottom:18px"><div class="icon">⚠️</div><p><strong>API aktuell nicht erreichbar</strong></p><p>' + escapeHtml(state.error) + '</p></div>'
           : '';
@@ -1179,8 +1231,13 @@
             '</div>' +
             '<div class="header-meta">' +
               '<div class="pill"><span class="status-dot ' + (online ? 'online' : 'offline') + '"></span>' + (online ? 'Gateway online' : 'Gateway offline') + '</div>' +
-              '<div class="pill"><span class="status-dot ' + (cloudReachable ? 'online' : 'offline') + '"></span>' + (cloudReachable ? 'Cloud verbunden' : 'Cloud offline') + '</div>' +
-              '<div class="pill">Version ' + escapeHtml((state.version && state.version.version) || status.addon_version || '–') + '</div>' +
+              '<div class="pill"><span class="status-dot ' + (wsConnected ? 'online' : 'offline') + '"></span>' + (wsConnected ? 'Cloud-Push aktiv' : 'Cloud-Push offline') + '</div>' +
+              (status.assignment_status === 'assigned'
+                ? '<div class="pill"><span class="status-dot online"></span>AICONO zugeordnet</div>'
+                : status.assignment_status === 'pending_assignment'
+                  ? '<div class="pill" style="border-color:var(--accent-yellow);color:var(--accent-yellow)">⏳ Zuordnung ausstehend</div>'
+                  : '') +
+              '<div class="pill">Version ' + escapeHtml(status.addon_version || (state.version && state.version.version) || '–') + '</div>' +
             '</div>' +
           '</div>' +
           '<div class="nav">' + Object.keys(pageLabels).map(function (key) {
@@ -1251,6 +1308,20 @@
               newInput.focus();
               newInput.setSelectionRange(state.deviceSearch.length, state.deviceSearch.length);
             }
+          });
+        }
+
+        // Copy MAC button
+        var copyMacBtn = document.getElementById('copy-mac-btn');
+        if (copyMacBtn) {
+          copyMacBtn.addEventListener('click', function () {
+            var mac = copyMacBtn.getAttribute('data-mac') || '';
+            if (!mac) return;
+            try {
+              navigator.clipboard.writeText(mac);
+              copyMacBtn.textContent = '✓';
+              setTimeout(function () { copyMacBtn.textContent = '📋'; }, 1500);
+            } catch (e) { /* ignore */ }
           });
         }
       }

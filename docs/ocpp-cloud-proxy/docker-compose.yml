@@ -1,0 +1,43 @@
+# OCPP Cloud Proxy – Docker Compose
+# ====================================
+# Deployment auf einem VPS (z.B. Hetzner CX22, ~4€/Monat)
+#
+# Starten:  docker compose up -d
+# Logs:     docker compose logs -f
+# Stoppen:  docker compose down
+
+services:
+  ocpp-proxy:
+    build: .
+    container_name: ocpp-cloud-proxy
+    restart: always
+    ports:
+      - "80:80"
+      # Optional: TLS auf Port 443 (siehe ENABLE_TLS unten)
+      # - "443:443"
+    environment:
+      # ── Pflicht ──────────────────────────────────────────────────
+      - UPSTREAM_URL=wss://xnveugycurplszevdxtw.supabase.co/functions/v1/ocpp-ws-proxy
+
+      # ── Optional ─────────────────────────────────────────────────
+      - LISTEN_PORT=80
+      - LOG_LEVEL=info
+      - RECONNECT_DELAY_MS=3000
+      - MAX_RECONNECT_ATTEMPTS=5
+      - HEARTBEAT_INTERVAL_MS=30000
+
+      # ── TLS (optional – für Dual-Mode ws:// + wss://) ───────────
+      # - ENABLE_TLS=true
+      # - TLS_PORT=443
+      # - TLS_CERT_PATH=/etc/letsencrypt/live/ocpp.aicono.org/fullchain.pem
+      # - TLS_KEY_PATH=/etc/letsencrypt/live/ocpp.aicono.org/privkey.pem
+
+    # Volumes für TLS-Zertifikate (nur bei ENABLE_TLS=true)
+    # volumes:
+    #   - /etc/letsencrypt:/etc/letsencrypt:ro
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"

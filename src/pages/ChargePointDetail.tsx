@@ -31,6 +31,8 @@ import { de } from "date-fns/locale";
 import { fmtKwh, fmtKw, fmtNum } from "@/lib/formatCharging";
 import { supabase } from "@/integrations/supabase/client";
 import { useOcppMeterValue } from "@/hooks/useOcppMeterValue";
+import { useChargePointConnectors } from "@/hooks/useChargePointConnectors";
+import { ConnectorStatusGrid } from "@/components/charging/ConnectorStatusGrid";
 import OcppLogViewer from "@/components/charging/OcppLogViewer";
 import ChargePointQrCode from "@/components/charging/ChargePointQrCode";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
@@ -88,12 +90,14 @@ const ChargePointDetail = () => {
   const [powerLimit, setPowerLimit] = useState<PowerLimitSchedule | null>(null);
   const [savingPowerLimit, setSavingPowerLimit] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const [selectedConnectorId, setSelectedConnectorId] = useState<number>(1);
 
   useEffect(() => { window.scrollTo(0, 0); }, [id]);
 
   const cp = chargePoints.find((c) => c.id === id);
   const cpGroup = cp?.group_id ? groups.find((g) => g.id === cp.group_id) ?? null : null;
   const ocppMeter = useOcppMeterValue(cp?.ocpp_id);
+  const { connectors, reorderConnectors } = useChargePointConnectors(cp?.id);
 
   // Sync powerLimit state from cp when cp loads or changes
   const cpPowerLimit = (cp as any)?.power_limit_schedule as PowerLimitSchedule | null | undefined;
@@ -205,15 +209,16 @@ const ChargePointDetail = () => {
         return sum + (effectiveEnd.getTime() - effectiveStart.getTime()) / 3600000;
       }, 0));
 
-      // Only apply error hours for today's live status – historic status is unknown
-      const errorHours = isToday && cp && cp.status === "faulted" ? hoursInDay : 0;
+      // Approximate: project current status onto all days (no historic status log)
+      const errorHours = cp && (cp.status === "faulted" || cp.status === "offline") ? hoursInDay : 0;
 
+      const availableHours = Math.max(0, hoursInDay - chargingHours - errorHours);
       days.push({
         day: dayLabel,
         date: dateLabel,
-        available: Math.max(0, hoursInDay - chargingHours - errorHours),
-        charging: chargingHours,
-        error: errorHours,
+        available: hoursInDay > 0 ? (availableHours / hoursInDay) * 100 : 0,
+        charging: hoursInDay > 0 ? (chargingHours / hoursInDay) * 100 : 0,
+        error: hoursInDay > 0 ? (errorHours / hoursInDay) * 100 : 0,
       });
     }
     return days;
@@ -341,7 +346,7 @@ const ChargePointDetail = () => {
           result = await callOcppCommand("Reset", { chargePointId: cp.ocpp_id, type: "Soft" });
           break;
         case "Ladevorgang starten":
-          result = await callOcppCommand("RemoteStartTransaction", { chargePointId: cp.ocpp_id, idTag: "ADMIN", connectorId: 1 });
+          result = await callOcppCommand("RemoteStartTransaction", { chargePointId: cp.ocpp_id, idTag: "ADMIN", connectorId: selectedConnectorId });
           break;
         case "Ladevorgang stoppen": {
           const activeSession = sessions.find((s) => s.status === "active" && s.transaction_id);
@@ -353,7 +358,7 @@ const ChargePointDetail = () => {
           break;
         }
         case "Kabel entriegeln":
-          result = await callOcppCommand("UnlockConnector", { chargePointId: cp.ocpp_id, connectorId: 1 });
+          result = await callOcppCommand("UnlockConnector", { chargePointId: cp.ocpp_id, connectorId: selectedConnectorId });
           break;
         case "Auf inaktiv setzen":
           result = await callOcppCommand("ChangeAvailability", { chargePointId: cp.ocpp_id, connectorId: 0, type: "Inoperative" });
@@ -451,7 +456,20 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
                   </Badge>
                 )}
               </div>
-              <ChargePointQrCode ocppId={cp.ocpp_id} name={cp.name} address={cp.address} variant="button" />
+              <div className="flex items-center gap-1 flex-wrap">
+                <ChargePointQrCode ocppId={cp.ocpp_id} name={cp.name} address={cp.address} variant="button" />
+                {connectors.length > 1 && connectors.map((c) => (
+                  <ChargePointQrCode
+                    key={c.connector_id}
+                    ocppId={cp.ocpp_id}
+                    name={cp.name}
+                    address={cp.address}
+                    connectorId={c.connector_id}
+                    connectorName={c.name || undefined}
+                    variant="button"
+                  />
+                ))}
+              </div>
             </div>
           </div>
 
@@ -537,7 +555,7 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
                             <YAxis hide />
                             <Tooltip
                               formatter={(value: number, name: string) => [
-                                `${value.toFixed(1)} h`,
+                                `${value.toFixed(1)} %`,
                                 name === "available" ? t("cpd.available" as any) : name === "charging" ? t("cpd.occupied" as any) : t("cpd.error" as any),
                               ]}
                             />
@@ -579,6 +597,34 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
 
                 {/* Right sidebar */}
                 <div className="space-y-6">
+                  {/* Connector Status */}
+                  {connectors.length > 0 && (
+                    <Card>
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-base flex items-center gap-2">
+                          <PlugZap className="h-4 w-4" />
+                          Anschlüsse
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <ConnectorStatusGrid
+                          connectors={connectors}
+                          selectedConnectorId={selectedConnectorId}
+                          onSelectConnector={setSelectedConnectorId}
+                          selectable={isAdmin}
+                          wsConnected={cp?.ws_connected ?? false}
+                          editable={isAdmin}
+                          onReorder={isAdmin ? reorderConnectors : undefined}
+                        />
+                        {isAdmin && connectors.length > 1 && (
+                          <p className="text-[10px] text-muted-foreground mt-2">
+                            {(() => { const sc = connectors.find(c => c.connector_id === selectedConnectorId); return sc?.name || `Anschluss ${selectedConnectorId}`; })()} ausgewählt für Fernbefehle
+                          </p>
+                        )}
+                      </CardContent>
+                    </Card>
+                  )}
+
                   {/* Remote actions */}
                   {isAdmin && (
                     <Card>
@@ -824,7 +870,13 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
                           {knownVendors.length > 0 ? (
                             <Select value={form.vendor} onValueChange={(v) => setForm({ ...form, vendor: v, model: "" })}>
                               <SelectTrigger><SelectValue placeholder="Hersteller wählen" /></SelectTrigger>
-                              <SelectContent>{knownVendors.map((v) => <SelectItem key={v} value={v}>{v}</SelectItem>)}</SelectContent>
+                              <SelectContent>
+                                {/* Include current vendor if not in known list */}
+                                {form.vendor && !knownVendors.includes(form.vendor) && (
+                                  <SelectItem value={form.vendor}>{form.vendor}</SelectItem>
+                                )}
+                                {knownVendors.map((v) => <SelectItem key={v} value={v}>{v}</SelectItem>)}
+                              </SelectContent>
                             </Select>
                           ) : (
                             <Input value={form.vendor} onChange={(e) => setForm({ ...form, vendor: e.target.value })} />
@@ -972,12 +1024,14 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
                         </div>
                         <Switch disabled />
                       </div>
-                      <div className="flex items-center justify-between p-4 border rounded-lg opacity-60">
+                      <div className="flex items-center justify-between p-4 border rounded-lg border-primary/30 bg-primary/5">
                         <div>
                           <p className="font-medium">PV-Überschussladen</p>
-                          <p className="text-sm text-muted-foreground">Laden priorisiert mit eigenem Solarstrom</p>
+                          <p className="text-sm text-muted-foreground">Laden priorisiert mit eigenem Solarstrom – Konfiguration über Ladepunkt-Gruppen</p>
                         </div>
-                        <Switch disabled />
+                        <Button variant="outline" size="sm" className="gap-1.5" onClick={() => navigate("/charging/points")}>
+                          <Zap className="h-3.5 w-3.5" /> Zur Gruppe
+                        </Button>
                       </div>
                       <div className="flex items-center justify-between p-4 border rounded-lg opacity-60">
                         <div>

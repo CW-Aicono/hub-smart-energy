@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { isWorkerPrimary } from "../_shared/workerStatus.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders } from "../_shared/cors.ts";
 
@@ -774,13 +775,22 @@ serve(async (req) => {
           }
 
           if (powerInserts.length > 0) {
-            const { error: powerError } = await supabase
-              .from("meter_power_readings")
-              .insert(powerInserts);
-            if (powerError) {
-              console.error("Error inserting power readings:", powerError);
+            // WORKER_ACTIVE feature flag: when the Hetzner gateway-worker is the
+            // authoritative writer (flag on + heartbeat fresh), skip this insert
+            // to avoid double-writes. Falls back automatically if the worker is
+            // missing or stale (>5 min), so no data gap occurs.
+            const workerOwnsWrites = await isWorkerPrimary(supabase);
+            if (workerOwnsWrites) {
+              console.log(`[loxone-api] WORKER_ACTIVE → skipping ${powerInserts.length} power-readings inserts (worker is primary)`);
             } else {
-              console.log(`Inserted ${powerInserts.length} power readings`);
+              const { error: powerError } = await supabase
+                .from("meter_power_readings")
+                .insert(powerInserts);
+              if (powerError) {
+                console.error("Error inserting power readings:", powerError);
+              } else {
+                console.log(`Inserted ${powerInserts.length} power readings`);
+              }
             }
           }
         }

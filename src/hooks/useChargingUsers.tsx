@@ -9,6 +9,7 @@ export interface ChargingUserGroup {
   name: string;
   description: string | null;
   is_app_user: boolean;
+  tariff_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -24,6 +25,7 @@ export interface ChargingUser {
   phone: string | null;
   status: "active" | "blocked" | "archived";
   notes: string | null;
+  tariff_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -45,7 +47,7 @@ export function useChargingUserGroups() {
   });
 
   const addGroup = useMutation({
-    mutationFn: async (g: { tenant_id: string; name: string; description?: string }) => {
+    mutationFn: async (g: { tenant_id: string; name: string; description?: string; tariff_id?: string | null; is_app_user?: boolean }) => {
       const { error } = await supabase.from("charging_user_groups").insert(g);
       if (error) throw error;
     },
@@ -54,7 +56,7 @@ export function useChargingUserGroups() {
   });
 
   const updateGroup = useMutation({
-    mutationFn: async ({ id, ...rest }: { id: string; name?: string; description?: string }) => {
+    mutationFn: async ({ id, ...rest }: { id: string; name?: string; description?: string; tariff_id?: string | null; is_app_user?: boolean }) => {
       const { error } = await supabase.from("charging_user_groups").update(rest).eq("id", id);
       if (error) throw error;
     },
@@ -98,6 +100,7 @@ export function useChargingUsers() {
       rfid_tag?: string;
       phone?: string;
       group_id?: string | null;
+      tariff_id?: string | null;
       notes?: string;
     }) => {
       const { error } = await supabase.from("charging_users").insert(u);
@@ -115,6 +118,7 @@ export function useChargingUsers() {
       rfid_tag?: string;
       phone?: string;
       group_id?: string | null;
+      tariff_id?: string | null;
       status?: string;
       notes?: string;
     }) => {

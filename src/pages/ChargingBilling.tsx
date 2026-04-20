@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { startOfDay, startOfWeek, startOfMonth, startOfQuarter, startOfYear } from "date-fns";
+import { startOfDay, startOfWeek, startOfMonth, startOfQuarter, startOfYear, subMonths, endOfMonth } from "date-fns";
 import { Navigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
@@ -9,20 +9,26 @@ import { useChargingTariffs, ChargingTariff } from "@/hooks/useChargingTariffs";
 import { useChargingInvoices } from "@/hooks/useChargingInvoices";
 import { useChargePoints } from "@/hooks/useChargePoints";
 import { useTenant } from "@/hooks/useTenant";
+import { useChargingInvoiceSettings } from "@/hooks/useChargingInvoiceSettings";
 import ChargingUsersTab from "@/components/charging/ChargingUsersTab";
+import ChargingInvoiceSettingsDialog from "@/components/charging/ChargingInvoiceSettingsDialog";
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Receipt, Euro, Zap, Clock, Trash2, Edit, Users, Globe, Calendar, TrendingUp, Percent } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Plus, Receipt, Euro, Zap, Clock, Trash2, Edit, Users, Globe, Calendar, TrendingUp, Percent, FileText, Send, Settings, Download } from "lucide-react";
 import { format } from "date-fns";
 import { fmtNum, fmtCurrency, fmtKwh } from "@/lib/formatCharging";
+import { generateChargingInvoicePdf, downloadBlob } from "@/lib/generateChargingInvoicePdf";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "@/hooks/use-toast";
 
 const ChargingBilling = () => {
   const { user, loading: authLoading } = useAuth();
@@ -32,13 +38,30 @@ const ChargingBilling = () => {
   const { sessions, isLoading: sessionsLoading } = useChargingSessions();
   const resolveTag = useIdTagResolver();
   const { tariffs, isLoading: tariffsLoading, addTariff, updateTariff, deleteTariff } = useChargingTariffs();
-  const { invoices, createInvoice } = useChargingInvoices();
+  const { invoices, generateInvoices, sendInvoices, finalizeInvoice, markAsPaid } = useChargingInvoices();
+  const [selectedInvoice, setSelectedInvoice] = useState<any | null>(null);
   const { chargePoints } = useChargePoints();
+  const { settings: invoiceSettings } = useChargingInvoiceSettings();
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const [tariffOpen, setTariffOpen] = useState(false);
   const [editTariff, setEditTariff] = useState<ChargingTariff | null>(null);
-  const [tariffForm, setTariffForm] = useState({ name: "", price_per_kwh: "0.35", base_fee: "0", idle_fee_per_minute: "0", idle_fee_grace_minutes: "60", currency: "EUR" });
+  const [tariffForm, setTariffForm] = useState({ name: "", price_per_kwh: "0.35", base_fee: "0", idle_fee_per_minute: "0", idle_fee_grace_minutes: "60", tax_rate_percent: "19", currency: "EUR" });
   const [period, setPeriod] = useState<"day" | "week" | "month" | "quarter" | "year">("month");
+
+  // Invoice generation dialog
+  const [generateOpen, setGenerateOpen] = useState(false);
+  const [genMonth, setGenMonth] = useState(() => {
+    const last = subMonths(new Date(), 1);
+    return format(last, "yyyy-MM");
+  });
+
+  const genPeriod = useMemo(() => {
+    const [y, m] = genMonth.split("-").map(Number);
+    const start = new Date(y, m - 1, 1);
+    const end = endOfMonth(start);
+    return { start: format(start, "yyyy-MM-dd"), end: format(end, "yyyy-MM-dd"), label: format(start, "MMMM yyyy") };
+  }, [genMonth]);
 
   const periodStart = useMemo(() => {
     const now = new Date();
@@ -65,7 +88,7 @@ const ChargingBilling = () => {
 
   const getCpName = (id: string) => chargePoints.find((cp) => cp.id === id)?.name || "—";
 
-  const resetTariffForm = () => setTariffForm({ name: "", price_per_kwh: "0.35", base_fee: "0", idle_fee_per_minute: "0", idle_fee_grace_minutes: "60", currency: "EUR" });
+  const resetTariffForm = () => setTariffForm({ name: "", price_per_kwh: "0.35", base_fee: "0", idle_fee_per_minute: "0", idle_fee_grace_minutes: "60", tax_rate_percent: "19", currency: "EUR" });
 
   const handleAddTariff = () => {
     if (!tenant?.id) return;
@@ -76,6 +99,7 @@ const ChargingBilling = () => {
       base_fee: parseFloat(tariffForm.base_fee),
       idle_fee_per_minute: parseFloat(tariffForm.idle_fee_per_minute),
       idle_fee_grace_minutes: parseInt(tariffForm.idle_fee_grace_minutes),
+      tax_rate_percent: parseFloat(tariffForm.tax_rate_percent),
       currency: tariffForm.currency,
     } as any);
     setTariffOpen(false);
@@ -91,14 +115,34 @@ const ChargingBilling = () => {
       base_fee: parseFloat(tariffForm.base_fee),
       idle_fee_per_minute: parseFloat(tariffForm.idle_fee_per_minute),
       idle_fee_grace_minutes: parseInt(tariffForm.idle_fee_grace_minutes),
+      tax_rate_percent: parseFloat(tariffForm.tax_rate_percent),
     } as any);
     setEditTariff(null);
     resetTariffForm();
   };
 
   const openEditTariff = (t: ChargingTariff) => {
-    setTariffForm({ name: t.name, price_per_kwh: String(t.price_per_kwh), base_fee: String(t.base_fee), idle_fee_per_minute: String(t.idle_fee_per_minute || 0), idle_fee_grace_minutes: String(t.idle_fee_grace_minutes || 60), currency: t.currency });
+    setTariffForm({
+      name: t.name,
+      price_per_kwh: String(t.price_per_kwh),
+      base_fee: String(t.base_fee),
+      idle_fee_per_minute: String(t.idle_fee_per_minute || 0),
+      idle_fee_grace_minutes: String(t.idle_fee_grace_minutes || 60),
+      tax_rate_percent: String(t.tax_rate_percent ?? 19),
+      currency: t.currency,
+    });
     setEditTariff(t);
+  };
+
+  const handleGenerate = () => {
+    if (!tenant?.id) return;
+    generateInvoices.mutate({ tenant_id: tenant.id, period_start: genPeriod.start, period_end: genPeriod.end });
+    setGenerateOpen(false);
+  };
+
+  const handleSendAll = () => {
+    if (!tenant?.id) return;
+    sendInvoices.mutate({ tenant_id: tenant.id, period_start: genPeriod.start, period_end: genPeriod.end });
   };
 
   const periodKeys = [
@@ -115,6 +159,9 @@ const ChargingBilling = () => {
       <div className="grid grid-cols-2 gap-4">
         <div><Label>{t("charging.pricePerKwh" as any)}</Label><Input type="number" step="0.01" value={tariffForm.price_per_kwh} onChange={(e) => setTariffForm({ ...tariffForm, price_per_kwh: e.target.value })} /></div>
         <div><Label>{t("charging.baseFee" as any)}</Label><Input type="number" step="0.01" value={tariffForm.base_fee} onChange={(e) => setTariffForm({ ...tariffForm, base_fee: e.target.value })} /></div>
+      </div>
+      <div className="grid grid-cols-2 gap-4">
+        <div><Label>MwSt-Satz (%)</Label><Input type="number" step="0.1" min="0" max="100" value={tariffForm.tax_rate_percent} onChange={(e) => setTariffForm({ ...tariffForm, tax_rate_percent: e.target.value })} /></div>
       </div>
       <div className="border-t pt-4">
         <Label className="text-sm font-medium flex items-center gap-2 mb-3"><Clock className="h-4 w-4" />{t("charging.idleFee" as any)}</Label>
@@ -232,6 +279,7 @@ const ChargingBilling = () => {
                           <TableHead>{t("charging.priceKwh" as any)}</TableHead>
                           <TableHead>{t("charging.baseFee" as any)}</TableHead>
                           <TableHead>{t("charging.idleFee" as any)}</TableHead>
+                          <TableHead>MwSt</TableHead>
                           <TableHead>{t("charging.active" as any)}</TableHead>
                           {isAdmin && <TableHead className="w-24">{t("charging.actions" as any)}</TableHead>}
                         </TableRow>
@@ -243,6 +291,7 @@ const ChargingBilling = () => {
                             <TableCell>{fmtCurrency(tariff.price_per_kwh)}</TableCell>
                             <TableCell>{fmtCurrency(tariff.base_fee)}</TableCell>
                             <TableCell>{tariff.idle_fee_per_minute > 0 ? <span className="text-sm">{fmtCurrency(tariff.idle_fee_per_minute)}/Min. <span className="text-muted-foreground">ab {tariff.idle_fee_grace_minutes} Min.</span></span> : <span className="text-muted-foreground">—</span>}</TableCell>
+                            <TableCell>{fmtNum(tariff.tax_rate_percent ?? 19, 0)} %</TableCell>
                             <TableCell>
                               <Switch
                                 checked={tariff.is_active}
@@ -278,31 +327,74 @@ const ChargingBilling = () => {
             {/* Invoices Tab */}
             <TabsContent value="invoices">
               <Card>
-                <CardHeader><CardTitle>{t("charging.invoices" as any)}</CardTitle></CardHeader>
+                <CardHeader className="flex flex-row items-center justify-between">
+                  <CardTitle>{t("charging.invoices" as any)}</CardTitle>
+                  {isAdmin && (
+                    <div className="flex gap-2">
+                      <Button size="sm" variant="outline" onClick={() => setSettingsOpen(true)}>
+                        <Settings className="h-4 w-4 mr-2" />Rechnungsdesign
+                      </Button>
+                      <Dialog open={generateOpen} onOpenChange={setGenerateOpen}>
+                        <DialogTrigger asChild>
+                          <Button size="sm"><FileText className="h-4 w-4 mr-2" />Rechnungen erstellen</Button>
+                        </DialogTrigger>
+                        <DialogContent>
+                          <DialogHeader><DialogTitle>Rechnungen erstellen</DialogTitle></DialogHeader>
+                          <div className="space-y-4">
+                            <div>
+                              <Label>Abrechnungsmonat</Label>
+                              <Input type="month" value={genMonth} onChange={(e) => setGenMonth(e.target.value)} />
+                            </div>
+                            <div className="p-3 bg-muted rounded-lg text-sm">
+                              <p>Zeitraum: <strong>{genPeriod.start}</strong> bis <strong>{genPeriod.end}</strong></p>
+                              <p className="text-muted-foreground mt-1">Es werden Sammelrechnungen pro Nutzer für alle abgeschlossenen Ladevorgänge in diesem Zeitraum erstellt.</p>
+                            </div>
+                          </div>
+                          <DialogFooter>
+                            <Button variant="outline" onClick={() => setGenerateOpen(false)}>Abbrechen</Button>
+                            <Button onClick={handleGenerate} disabled={generateInvoices.isPending}>
+                              {generateInvoices.isPending ? "Wird erstellt…" : "Rechnungen erstellen"}
+                            </Button>
+                          </DialogFooter>
+                        </DialogContent>
+                      </Dialog>
+                      <Button size="sm" variant="outline" onClick={handleSendAll} disabled={sendInvoices.isPending}>
+                        <Send className="h-4 w-4 mr-2" />
+                        {sendInvoices.isPending ? "Wird versendet…" : "Per E-Mail senden"}
+                      </Button>
+                    </div>
+                  )}
+                </CardHeader>
                 <CardContent>
                   {invoices.length === 0 ? <p className="text-muted-foreground">{t("charging.noInvoices" as any)}</p> : (
                     <Table>
                       <TableHeader>
                         <TableRow>
                           <TableHead>{t("charging.invoiceNo" as any)}</TableHead>
+                          <TableHead>Rechnungsdatum</TableHead>
+                          <TableHead>Zeitraum</TableHead>
                           <TableHead>{t("charging.energyCol" as any)}</TableHead>
-                          <TableHead>{t("charging.chargingCosts" as any)}</TableHead>
-                          <TableHead>{t("charging.idleFee" as any)}</TableHead>
+                          <TableHead>Netto</TableHead>
+                          <TableHead>MwSt</TableHead>
                           <TableHead>{t("charging.totalAmount" as any)}</TableHead>
                           <TableHead>{t("common.status" as any)}</TableHead>
-                          <TableHead>{t("charging.created" as any)}</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {invoices.map((inv) => (
-                          <TableRow key={inv.id}>
+                          <TableRow key={inv.id} className="cursor-pointer hover:bg-muted/50" onClick={() => setSelectedInvoice(inv)}>
                             <TableCell className="font-mono">{inv.invoice_number || "—"}</TableCell>
+                            <TableCell>{inv.invoice_date ? format(new Date(inv.invoice_date), "dd.MM.yyyy") : format(new Date(inv.created_at), "dd.MM.yyyy")}</TableCell>
+                            <TableCell className="text-sm">
+                              {inv.period_start && inv.period_end
+                                ? `${format(new Date(inv.period_start), "dd.MM.")} – ${format(new Date(inv.period_end), "dd.MM.yyyy")}`
+                                : "—"}
+                            </TableCell>
                             <TableCell>{fmtKwh(inv.total_energy_kwh)}</TableCell>
-                            <TableCell>{fmtCurrency(inv.total_amount - (inv.idle_fee_amount || 0))}</TableCell>
-                            <TableCell>{inv.idle_fee_amount > 0 ? fmtCurrency(inv.idle_fee_amount) : <span className="text-muted-foreground">—</span>}</TableCell>
+                            <TableCell>{fmtCurrency(inv.net_amount || (inv.total_amount - (inv.tax_amount || 0)))}</TableCell>
+                            <TableCell>{fmtCurrency(inv.tax_amount || 0)}</TableCell>
                             <TableCell className="font-medium">{fmtCurrency(inv.total_amount)}</TableCell>
                             <TableCell><Badge variant={inv.status === "paid" ? "default" : inv.status === "issued" ? "secondary" : "outline"}>{inv.status === "paid" ? t("charging.statusPaid" as any) : inv.status === "issued" ? t("charging.statusIssued" as any) : t("charging.statusDraft" as any)}</Badge></TableCell>
-                            <TableCell>{format(new Date(inv.created_at), "dd.MM.yyyy")}</TableCell>
                           </TableRow>
                         ))}
                       </TableBody>
@@ -310,6 +402,119 @@ const ChargingBilling = () => {
                   )}
                 </CardContent>
               </Card>
+
+              {/* Invoice Preview Dialog */}
+              <Dialog open={!!selectedInvoice} onOpenChange={(open) => { if (!open) setSelectedInvoice(null); }}>
+                <DialogContent className="max-w-lg">
+                  <DialogHeader>
+                    <DialogTitle>Rechnungsvorschau</DialogTitle>
+                  </DialogHeader>
+                  {selectedInvoice && (
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-2 gap-4 text-sm">
+                        <div>
+                          <p className="text-muted-foreground text-xs uppercase tracking-wide mb-1">Rechnungsnummer</p>
+                          <p className="font-mono font-semibold">{selectedInvoice.invoice_number || "—"}</p>
+                        </div>
+                        <div>
+                          <p className="text-muted-foreground text-xs uppercase tracking-wide mb-1">Status</p>
+                          <Badge variant={selectedInvoice.status === "paid" ? "default" : selectedInvoice.status === "issued" ? "secondary" : "outline"}>
+                            {selectedInvoice.status === "paid" ? "Bezahlt" : selectedInvoice.status === "issued" ? "Ausgestellt" : "Entwurf"}
+                          </Badge>
+                        </div>
+                        <div>
+                          <p className="text-muted-foreground text-xs uppercase tracking-wide mb-1">Rechnungsdatum</p>
+                          <p>{selectedInvoice.invoice_date ? format(new Date(selectedInvoice.invoice_date), "dd.MM.yyyy") : "—"}</p>
+                        </div>
+                        <div>
+                          <p className="text-muted-foreground text-xs uppercase tracking-wide mb-1">Zeitraum</p>
+                          <p>{selectedInvoice.period_start && selectedInvoice.period_end
+                            ? `${format(new Date(selectedInvoice.period_start), "dd.MM.")} – ${format(new Date(selectedInvoice.period_end), "dd.MM.yyyy")}`
+                            : "—"}</p>
+                        </div>
+                      </div>
+
+                      <div className="border rounded-lg p-4 space-y-2">
+                        <div className="flex justify-between text-sm">
+                          <span>Energie</span>
+                          <span>{fmtKwh(selectedInvoice.total_energy_kwh)}</span>
+                        </div>
+                        {selectedInvoice.idle_fee_amount > 0 && (
+                          <div className="flex justify-between text-sm text-destructive">
+                            <span>Blockiergebühr</span>
+                            <span>{fmtCurrency(selectedInvoice.idle_fee_amount)}</span>
+                          </div>
+                        )}
+                        <div className="flex justify-between text-sm border-t pt-2">
+                          <span>Nettobetrag</span>
+                          <span>{fmtCurrency(selectedInvoice.net_amount || (selectedInvoice.total_amount - (selectedInvoice.tax_amount || 0)))}</span>
+                        </div>
+                        <div className="flex justify-between text-sm text-muted-foreground">
+                          <span>MwSt ({fmtNum(selectedInvoice.tax_rate_percent, 0)} %)</span>
+                          <span>{fmtCurrency(selectedInvoice.tax_amount || 0)}</span>
+                        </div>
+                        <div className="flex justify-between font-semibold text-base border-t pt-2">
+                          <span>Gesamtbetrag (brutto)</span>
+                          <span>{fmtCurrency(selectedInvoice.total_amount)}</span>
+                        </div>
+                      </div>
+
+                      {selectedInvoice.issued_at && (
+                        <p className="text-xs text-muted-foreground">
+                          Ausgestellt am {format(new Date(selectedInvoice.issued_at), "dd.MM.yyyy HH:mm")}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                  <DialogFooter>
+                    <Button variant="outline" onClick={() => setSelectedInvoice(null)}>Schließen</Button>
+                    {selectedInvoice && invoiceSettings && (
+                      <Button
+                        variant="outline"
+                        onClick={async () => {
+                          try {
+                            const blob = await generateChargingInvoicePdf({
+                              invoice: selectedInvoice,
+                              settings: invoiceSettings,
+                            });
+                            const filename = `Rechnung_${selectedInvoice.invoice_number || selectedInvoice.id}.pdf`;
+                            downloadBlob(blob, filename);
+                          } catch (e: any) {
+                            toast({ title: "PDF-Fehler", description: e.message, variant: "destructive" });
+                          }
+                        }}
+                      >
+                        <Download className="h-4 w-4 mr-2" />PDF
+                      </Button>
+                    )}
+                    {selectedInvoice?.status === "draft" && isAdmin && (
+                      <Button
+                        onClick={() => {
+                          finalizeInvoice.mutate(selectedInvoice.id);
+                          setSelectedInvoice(null);
+                        }}
+                        disabled={finalizeInvoice.isPending}
+                      >
+                        <FileText className="h-4 w-4 mr-2" />
+                        {finalizeInvoice.isPending ? "Wird ausgestellt…" : "Fertigstellen"}
+                      </Button>
+                    )}
+                    {selectedInvoice?.status === "issued" && isAdmin && (
+                      <Button
+                        variant="default"
+                        onClick={() => {
+                          markAsPaid.mutate(selectedInvoice.id);
+                          setSelectedInvoice(null);
+                        }}
+                        disabled={markAsPaid.isPending}
+                      >
+                        <Euro className="h-4 w-4 mr-2" />
+                        {markAsPaid.isPending ? "Wird markiert…" : "Als bezahlt markieren"}
+                      </Button>
+                    )}
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
             </TabsContent>
 
             {/* Users Tab */}
@@ -328,6 +533,7 @@ const ChargingBilling = () => {
             </TabsContent>
           </Tabs>
         </div>
+        <ChargingInvoiceSettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
       </main>
     </div>
   );

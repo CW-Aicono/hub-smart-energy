@@ -349,8 +349,9 @@ const PvForecastWidget = ({ locationId }: PvForecastWidgetProps) => {
       return totalKw;
     },
     enabled: isToday,
-    refetchInterval: 60_000,
-    staleTime: 30_000,
+    // Realtime invalidation pushes new PV power readings instantly; 5-min fallback poll.
+    refetchInterval: 5 * 60_000,
+    staleTime: 60_000,
   });
 
   if (isLoading) {

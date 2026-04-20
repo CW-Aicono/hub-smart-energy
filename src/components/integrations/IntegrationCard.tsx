@@ -50,10 +50,11 @@ export function IntegrationCard({ locationIntegration, onUpdate, onDelete }: Int
   const gatewayDef = integration ? getGatewayDefinition(integration.type) : undefined;
 
   const isLoxone = integration?.type === "loxone" || integration?.type === "loxone_miniserver";
-  const isHaType = integration?.type === "home_assistant" || integration?.type === "ha-addon";
+  const isAiconoGateway = integration?.type === "aicono_gateway";
 
-  // For HA integrations, fetch all tenant devices (including unlinked ones)
-  const { devices: gatewayDevices, sendCommand, refetch: refetchDevices } = useGatewayDevices(isHaType ? undefined : locationIntegration.id, locationIntegration.location_id);
+  // Fetch only the gateway devices linked to THIS location_integration so each
+  // location card shows its own hub (avoids cross-tenant duplicate display).
+  const { devices: gatewayDevices, sendCommand, refetch: refetchDevices } = useGatewayDevices(locationIntegration.id, locationIntegration.location_id);
   const gatewayLocalTime = !isLoxone && gatewayDevices.length > 0 ? gatewayDevices[0].local_time : null;
 
   const handleToggleEnabled = async (enabled: boolean) => {
@@ -107,11 +108,17 @@ export function IntegrationCard({ locationIntegration, onUpdate, onDelete }: Int
   };
 
   const isConfigured = (() => {
+    if (isAiconoGateway) return true;
     if (!gatewayDef || !config) return false;
     return gatewayDef.configFields.filter((f) => f.required).every((f) => { const val = config[f.name]; return val && String(val).length > 0; });
   })();
 
   const configSubtitle = (() => {
+    if (isAiconoGateway) {
+      const count = gatewayDevices.length;
+      if (count === 0) return "Warte auf Hub-Verbindung…";
+      return count === 1 ? "1 Hub verbunden" : `${count} Hubs verbunden`;
+    }
     if (!gatewayDef || !config) return t("intCard.notConfigured" as any);
     const firstField = gatewayDef.configFields.find((f) => f.type !== "password" && config[f.name]);
     if (!firstField) return t("intCard.notConfigured" as any);
@@ -119,8 +126,20 @@ export function IntegrationCard({ locationIntegration, onUpdate, onDelete }: Int
   })();
 
   const getSyncStatusBadge = () => {
-    if (!isConfigured) {
+    if (!isConfigured && !isAiconoGateway) {
       return <Badge variant="outline" className="gap-1 bg-muted text-muted-foreground border-border"><Clock className="h-3 w-3" />{t("intCard.notConfigured" as any)}</Badge>;
+    }
+    // For AICONO Gateway parent cards: derive status from connected child gateway_devices
+    // (the parent itself never syncs – it's a virtual container for the push-based hubs).
+    if (isAiconoGateway) {
+      const hasOnlineChild = gatewayDevices.some((d) => d.status === "online");
+      if (hasOnlineChild) {
+        return <Badge variant="outline" className="gap-1 bg-primary/10 text-primary border-primary/20"><CheckCircle2 className="h-3 w-3" />{t("intCard.connected" as any)}</Badge>;
+      }
+      if (gatewayDevices.length > 0) {
+        return <Badge variant="outline" className="gap-1 bg-destructive/10 text-destructive border-destructive/20"><XCircle className="h-3 w-3" />Offline</Badge>;
+      }
+      return <Badge variant="outline" className="gap-1 bg-muted text-muted-foreground border-border"><Clock className="h-3 w-3" />{t("intCard.pending" as any)}</Badge>;
     }
     switch (locationIntegration.sync_status) {
       case "success": return <Badge variant="outline" className="gap-1 bg-primary/10 text-primary border-primary/20"><CheckCircle2 className="h-3 w-3" />{t("intCard.connected" as any)}</Badge>;
@@ -224,7 +243,7 @@ export function IntegrationCard({ locationIntegration, onUpdate, onDelete }: Int
             </div>
           </div>
           {/* Inline gateway devices for HA integrations */}
-          {isHaType && gatewayDevices.length > 0 && (
+          {isAiconoGateway && gatewayDevices.length > 0 && (
             <div className="mt-3 pt-3 border-t border-border/50 space-y-3">
               {gatewayDevices.map((device) => (
                 <DeviceCard

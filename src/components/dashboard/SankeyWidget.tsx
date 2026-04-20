@@ -110,12 +110,14 @@ const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
     [meters]
   );
 
+  // Option B: enable DB fallback for ALL periods (incl. "day") so the Sankey
+  // remains resilient against gateway outages or empty live caches.
   const { data: dbPeriodSums } = usePeriodSumsWithFallback(
     "sankey-period-sums",
     mainAutoMeterIds,
     rangeStart,
     rangeEnd,
-    period !== "day",
+    true,
   );
 
   // Build price lookup: location_id:energy_type -> price_per_unit
@@ -272,10 +274,11 @@ const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
       if (!allowedTypes.has(m.energy_type || "strom")) return;
 
       if (period === "day") {
-        const pt = livePeriodTotals[m.id];
-        if (!pt) return;
-        const val = pt.totalDay;
-        if (val == null || val <= 0) return;
+        // Use max(live, db) so widget works even when gateway cache is empty
+        const liveVal = livePeriodTotals[m.id]?.totalDay ?? 0;
+        const dbVal = dbPeriodSums?.[m.id] ?? 0;
+        const val = Math.max(liveVal, dbVal);
+        if (val <= 0) return;
         const converted = toBaseUnit(m.id, val);
         addFlow(m.energy_type || "strom", m.location_id, m.floor_id || null, m.room_id || null, converted);
       } else {
