@@ -1020,70 +1020,8 @@ async function fetchHAVersion(): Promise<void> {
   } catch { /* ignore */ }
 }
 
-async function sendHeartbeat(): Promise<void> {
-  // Always attempt heartbeat – use result to update connectivity status
-  try {
-    const res = await fetch(`${INGEST_URL}?action=heartbeat`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: authHeader(),
-      },
-      body: JSON.stringify({
-        device_name: config.device_name,
-        device_type: "aicono-ems",
-        tenant_id: config.tenant_id || undefined,
-        mac_address: await getHostMAC(),
-        gateway_username: config.gateway_username || undefined,
-        local_ip: await getLocalIP(),
-        ha_version: haVersion,
-        addon_version: ADDON_VERSION,
-        offline_buffer_count: getBufferCount(),
-        local_time: new Date().toISOString(),
-        config: {
-          poll_interval_seconds: config.poll_interval_seconds,
-          entity_filter: config.entity_filter,
-          meter_count: meterMappings.length,
-          automation_count: getLocalAutomations().length,
-          cloud_reachable: isCloudReachable,
-        },
-      }),
-    });
+// (Legacy HTTP-Heartbeat in v3.0 entfernt – ersetzt durch sendCloudHeartbeat() via WSS.)
 
-    if (res.ok) {
-      markCloudReachable();
-      const data = await res.json() as {
-        latest_available_version?: string;
-        pending_command?: string;
-        pending_command_params?: Record<string, unknown>;
-        ui_pin_hash?: string | null;
-        assignment_status?: "assigned" | "pending_assignment" | "unknown";
-      };
-      if (data.assignment_status) {
-        currentAssignmentStatus = data.assignment_status;
-      }
-      // Sync UI PIN hash from cloud
-      if (data.ui_pin_hash !== undefined) {
-        uiPinHash = data.ui_pin_hash || null;
-        console.log(`[heartbeat] UI PIN ${uiPinHash ? "synced" : "cleared"}`);
-      }
-      if (data.latest_available_version && data.latest_available_version !== ADDON_VERSION) {
-        console.log(`[heartbeat] Update available: ${data.latest_available_version}`);
-      }
-      // Process pending commands from cloud
-      if (data.pending_command) {
-        console.log(`[heartbeat] Received pending command: ${data.pending_command}`);
-        await executePendingCommand(data.pending_command, data.pending_command_params || {});
-      }
-    } else {
-      markCloudUnreachable();
-      console.warn(`[heartbeat] Cloud returned ${res.status}`);
-    }
-  } catch (err) {
-    markCloudUnreachable();
-    console.warn("[heartbeat] Failed:", err);
-  }
-}
 
 /* ── Cloud WebSocket Client (gateway-ws) ─────────────────────────────────────── */
 /**
