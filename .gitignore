@@ -23,6 +23,9 @@ supabase-docker/volumes/db/data/
 supabase-docker/volumes/storage/
 supabase-docker/volumes/logs/
 
+# Deploy-Backups (pg_dumpall vor jedem Deploy)
+backups/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
