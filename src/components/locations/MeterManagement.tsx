@@ -321,17 +321,35 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
   // zugeordnet hat (= existieren als meters-Eintrag mit passender sensor_uuid).
   // Nur diese werden in den Tabs gelistet. Single source of truth:
   // src/lib/gatewayDeviceFiltering.ts
+  // Nur aktive (nicht archivierte) Meters für die Geräte-Zuordnung verwenden
+  const activeMetersForFilter = useMemo(() => meters.filter((m) => !m.is_archived), [meters]);
+  const archivedMetersForFilter = useMemo(() => meters.filter((m) => m.is_archived), [meters]);
+
   const assignedMeterDevices = useMemo(
-    () => filterAssignedGatewayDevices(meterDevices, meters),
-    [meterDevices, meters],
+    () => filterAssignedGatewayDevices(meterDevices, activeMetersForFilter),
+    [meterDevices, activeMetersForFilter],
   );
   const assignedActuatorDevices = useMemo(
-    () => filterAssignedGatewayDevices(actuatorDevices, meters),
-    [actuatorDevices, meters],
+    () => filterAssignedGatewayDevices(actuatorDevices, activeMetersForFilter),
+    [actuatorDevices, activeMetersForFilter],
   );
   const assignedSensorDevices = useMemo(
-    () => filterAssignedGatewayDevices(sensorDevices, meters),
-    [sensorDevices, meters],
+    () => filterAssignedGatewayDevices(sensorDevices, activeMetersForFilter),
+    [sensorDevices, activeMetersForFilter],
+  );
+
+  // Archivierte Gateway-Geräte (für die Archiv-Ansicht)
+  const archivedAssignedMeterDevices = useMemo(
+    () => filterAssignedGatewayDevices(meterDevices, archivedMetersForFilter),
+    [meterDevices, archivedMetersForFilter],
+  );
+  const archivedAssignedActuatorDevices = useMemo(
+    () => filterAssignedGatewayDevices(actuatorDevices, archivedMetersForFilter),
+    [actuatorDevices, archivedMetersForFilter],
+  );
+  const archivedAssignedSensorDevices = useMemo(
+    () => filterAssignedGatewayDevices(sensorDevices, archivedMetersForFilter),
+    [sensorDevices, archivedMetersForFilter],
   );
 
   // Anzahl der noch nicht zugeordneten Gateway-Geräte – nur für den Hinweis-
