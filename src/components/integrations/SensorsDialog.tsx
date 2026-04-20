@@ -111,10 +111,10 @@ export function SensorsDialog({ locationIntegration, open, onOpenChange, locatio
   const integrationType = locationIntegration?.integration?.type || "";
   const edgeFunctionName = getEdgeFunctionName(integrationType);
 
-  // Push-based gateways don't support getSensors – they receive data, not poll it.
-  // gateway-ingest (Schneider/Siemens) and gateway-ws (AICONO Gateway) are both push-based:
-  // their sensors arrive via WebSocket / HTTPS push and are managed via gateway_devices.
-  const isPushGateway = edgeFunctionName === "gateway-ingest" || edgeFunctionName === "gateway-ws";
+  // Push-based gateways without getSensors support – they receive data, not poll it.
+  // gateway-ingest (Schneider/Siemens) is push-only.
+  // gateway-ws (AICONO Gateway) DOES support getSensors via HTTP POST action="getSensors".
+  const isPushGateway = edgeFunctionName === "gateway-ingest";
 
   // For non-Loxone gateways, show all sensors; for Loxone filter to meter types
   const meterSensors = integrationType === "loxone_miniserver"
