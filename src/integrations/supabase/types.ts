@@ -3309,7 +3309,7 @@ export type Database = {
           created_at: string | null
           energy_type: string
           id: string
-          meter_id: string
+          meter_id: string | null
           period_start: string
           period_type: string
           source: string
@@ -3321,7 +3321,7 @@ export type Database = {
           created_at?: string | null
           energy_type: string
           id?: string
-          meter_id: string
+          meter_id?: string | null
           period_start: string
           period_type: string
           source?: string
@@ -3333,7 +3333,7 @@ export type Database = {
           created_at?: string | null
           energy_type?: string
           id?: string
-          meter_id?: string
+          meter_id?: string | null
           period_start?: string
           period_type?: string
           source?: string
@@ -3363,7 +3363,7 @@ export type Database = {
           created_at: string | null
           energy_type: string
           id: string
-          meter_id: string
+          meter_id: string | null
           power_value: number
           recorded_at: string
           tenant_id: string
@@ -3372,7 +3372,7 @@ export type Database = {
           created_at?: string | null
           energy_type: string
           id?: string
-          meter_id: string
+          meter_id?: string | null
           power_value: number
           recorded_at?: string
           tenant_id: string
@@ -3381,7 +3381,7 @@ export type Database = {
           created_at?: string | null
           energy_type?: string
           id?: string
-          meter_id?: string
+          meter_id?: string | null
           power_value?: number
           recorded_at?: string
           tenant_id?: string
@@ -3409,7 +3409,7 @@ export type Database = {
           created_at: string
           energy_type: string
           id: string
-          meter_id: string
+          meter_id: string | null
           power_avg: number
           power_max: number
           sample_count: number
@@ -3420,7 +3420,7 @@ export type Database = {
           created_at?: string
           energy_type: string
           id?: string
-          meter_id: string
+          meter_id?: string | null
           power_avg: number
           power_max: number
           sample_count?: number
@@ -3431,7 +3431,7 @@ export type Database = {
           created_at?: string
           energy_type?: string
           id?: string
-          meter_id?: string
+          meter_id?: string | null
           power_avg?: number
           power_max?: number
           sample_count?: number
@@ -3460,7 +3460,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           id: string
-          meter_id: string
+          meter_id: string | null
           notes: string | null
           reading_date: string
           tenant_id: string
@@ -3472,7 +3472,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           id?: string
-          meter_id: string
+          meter_id?: string | null
           notes?: string | null
           reading_date?: string
           tenant_id: string
@@ -3484,7 +3484,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           id?: string
-          meter_id?: string
+          meter_id?: string | null
           notes?: string | null
           reading_date?: string
           tenant_id?: string
@@ -4172,7 +4172,7 @@ export type Database = {
           hour_start: string
           id: string
           location_id: string
-          meter_id: string
+          meter_id: string | null
           sample_count: number
           source: string
           tenant_id: string
@@ -4185,7 +4185,7 @@ export type Database = {
           hour_start: string
           id?: string
           location_id: string
-          meter_id: string
+          meter_id?: string | null
           sample_count?: number
           source?: string
           tenant_id: string
@@ -4198,7 +4198,7 @@ export type Database = {
           hour_start?: string
           id?: string
           location_id?: string
-          meter_id?: string
+          meter_id?: string | null
           sample_count?: number
           source?: string
           tenant_id?: string
