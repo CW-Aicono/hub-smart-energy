@@ -68,6 +68,9 @@ function normalizeMac(input: string): string {
 
 async function bcryptHash(plain: string): Promise<string> {
   const bcrypt = await import("https://deno.land/x/bcrypt@v0.4.1/mod.ts");
+  if (typeof globalThis.Worker === "undefined") {
+    return bcrypt.hashSync(plain);
+  }
   return await bcrypt.hash(plain);
 }
 
