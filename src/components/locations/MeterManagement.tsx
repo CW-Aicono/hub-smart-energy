@@ -93,12 +93,20 @@ function DeviceTable({
   meters,
   onEditMeter,
   onCreateAndEdit,
+  onArchive,
+  onDelete,
+  showArchived,
+  isAdmin,
 }: {
   devices: (LoxoneSensor & { _integrationLabel: string; _integrationId: string })[];
   type: "sensor" | "actuator";
   meters: Meter[];
   onEditMeter: (meter: Meter) => void;
   onCreateAndEdit: (device: LoxoneSensor & { _integrationId: string }, deviceType: string) => void;
+  onArchive?: (meter: Meter, archive: boolean) => void;
+  onDelete?: (meter: Meter) => void;
+  showArchived?: boolean;
+  isAdmin?: boolean;
 }) {
   if (devices.length === 0) {
     return (
@@ -122,13 +130,14 @@ function DeviceTable({
           <TableHead>Steuerungstyp</TableHead>
           <TableHead className="text-right">Wert</TableHead>
           <TableHead>Status</TableHead>
+          {isAdmin && <TableHead className="w-32" />}
         </TableRow>
       </TableHeader>
       <TableBody>
         {devices.map((d) => {
           const linkedMeter = sensorUuidToMeter.get(d.id);
           return (
-            <TableRow key={`${d._integrationLabel}-${d.id}`}>
+            <TableRow key={`${d._integrationLabel}-${d.id}`} className={linkedMeter?.is_archived ? "opacity-60" : ""}>
               <TableCell>
                 <div className="p-1.5 rounded bg-muted w-fit">
                   {d.unit ? getUnitIcon(d.unit) : getSensorIcon(d.type)}
@@ -161,6 +170,25 @@ function DeviceTable({
                   {d.status === "online" ? "Online" : "Offline"}
                 </Badge>
               </TableCell>
+              {isAdmin && (
+                <TableCell className="flex gap-1">
+                  {linkedMeter && !linkedMeter.is_archived && onArchive && (
+                    <Button variant="ghost" size="icon" onClick={() => onArchive(linkedMeter, true)} title="Archivieren">
+                      <Archive className="h-4 w-4" />
+                    </Button>
+                  )}
+                  {linkedMeter && linkedMeter.is_archived && onArchive && (
+                    <Button variant="ghost" size="icon" onClick={() => onArchive(linkedMeter, false)} title="Wiederherstellen">
+                      <ArchiveRestore className="h-4 w-4 text-primary" />
+                    </Button>
+                  )}
+                  {linkedMeter && linkedMeter.is_archived && onDelete && (
+                    <Button variant="ghost" size="icon" onClick={() => onDelete(linkedMeter)} title="Endgültig löschen">
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                    </Button>
+                  )}
+                </TableCell>
+              )}
             </TableRow>
           );
         })}
@@ -293,17 +321,35 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
   // zugeordnet hat (= existieren als meters-Eintrag mit passender sensor_uuid).
   // Nur diese werden in den Tabs gelistet. Single source of truth:
   // src/lib/gatewayDeviceFiltering.ts
+  // Nur aktive (nicht archivierte) Meters für die Geräte-Zuordnung verwenden
+  const activeMetersForFilter = useMemo(() => meters.filter((m) => !m.is_archived), [meters]);
+  const archivedMetersForFilter = useMemo(() => meters.filter((m) => m.is_archived), [meters]);
+
   const assignedMeterDevices = useMemo(
-    () => filterAssignedGatewayDevices(meterDevices, meters),
-    [meterDevices, meters],
+    () => filterAssignedGatewayDevices(meterDevices, activeMetersForFilter),
+    [meterDevices, activeMetersForFilter],
   );
   const assignedActuatorDevices = useMemo(
-    () => filterAssignedGatewayDevices(actuatorDevices, meters),
-    [actuatorDevices, meters],
+    () => filterAssignedGatewayDevices(actuatorDevices, activeMetersForFilter),
+    [actuatorDevices, activeMetersForFilter],
   );
   const assignedSensorDevices = useMemo(
-    () => filterAssignedGatewayDevices(sensorDevices, meters),
-    [sensorDevices, meters],
+    () => filterAssignedGatewayDevices(sensorDevices, activeMetersForFilter),
+    [sensorDevices, activeMetersForFilter],
+  );
+
+  // Archivierte Gateway-Geräte (für die Archiv-Ansicht)
+  const archivedAssignedMeterDevices = useMemo(
+    () => filterAssignedGatewayDevices(meterDevices, archivedMetersForFilter),
+    [meterDevices, archivedMetersForFilter],
+  );
+  const archivedAssignedActuatorDevices = useMemo(
+    () => filterAssignedGatewayDevices(actuatorDevices, archivedMetersForFilter),
+    [actuatorDevices, archivedMetersForFilter],
+  );
+  const archivedAssignedSensorDevices = useMemo(
+    () => filterAssignedGatewayDevices(sensorDevices, archivedMetersForFilter),
+    [sensorDevices, archivedMetersForFilter],
   );
 
   // Anzahl der noch nicht zugeordneten Gateway-Geräte – nur für den Hinweis-
@@ -478,20 +524,28 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
             )}
 
             {/* Vom User zugeordnete Gateway-Devices vom Typ "Zähler" */}
-            {assignedMeterDevices.length > 0 && (
-              <div className="space-y-2 pt-2">
-                <p className="text-xs text-muted-foreground">
-                  Vom Gateway gelieferte Zähler-Geräte – klicken Sie auf einen Eintrag, um die zugehörige Messstelle zu bearbeiten.
-                </p>
-                <DeviceTable
-                  devices={assignedMeterDevices}
-                  type="sensor"
-                  meters={meters}
-                  onEditMeter={(m) => setEditingMeter(m)}
-                  onCreateAndEdit={(d) => handleCreateAndEdit(d, "meter")}
-                />
-              </div>
-            )}
+            {(() => {
+              const list = showArchived ? archivedAssignedMeterDevices : assignedMeterDevices;
+              if (list.length === 0) return null;
+              return (
+                <div className="space-y-2 pt-2">
+                  <p className="text-xs text-muted-foreground">
+                    Vom Gateway gelieferte Zähler-Geräte – klicken Sie auf einen Eintrag, um die zugehörige Messstelle zu bearbeiten.
+                  </p>
+                  <DeviceTable
+                    devices={list}
+                    type="sensor"
+                    meters={meters}
+                    onEditMeter={(m) => setEditingMeter(m)}
+                    onCreateAndEdit={(d) => handleCreateAndEdit(d, "meter")}
+                    onArchive={(m, archive) => archiveMeter(m.id, archive)}
+                    onDelete={confirmDelete}
+                    showArchived={showArchived}
+                    isAdmin={isAdmin}
+                  />
+                </div>
+              );
+            })()}
           </TabsContent>
 
           {/* Sensoren Tab */}
@@ -562,11 +616,28 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
                 <Skeleton className="h-10 w-full" />
                 <Skeleton className="h-10 w-full" />
               </div>
-            ) : gatewayIntegrations.length === 0 && sensorTypeMeters.length === 0 && assignedSensorDevices.length === 0 ? (
-              <p className="text-sm text-muted-foreground py-4">Keine Sensoren vorhanden.</p>
-            ) : assignedSensorDevices.length > 0 ? (
-              <DeviceTable devices={assignedSensorDevices} type="sensor" meters={meters} onEditMeter={(m) => setEditingMeter(m)} onCreateAndEdit={handleCreateAndEdit} />
-            ) : null}
+            ) : (() => {
+              const list = showArchived ? archivedAssignedSensorDevices : assignedSensorDevices;
+              if (gatewayIntegrations.length === 0 && displayedSensors.length === 0 && list.length === 0) {
+                return <p className="text-sm text-muted-foreground py-4">Keine Sensoren vorhanden.</p>;
+              }
+              if (list.length > 0) {
+                return (
+                  <DeviceTable
+                    devices={list}
+                    type="sensor"
+                    meters={meters}
+                    onEditMeter={(m) => setEditingMeter(m)}
+                    onCreateAndEdit={handleCreateAndEdit}
+                    onArchive={(m, archive) => archiveMeter(m.id, archive)}
+                    onDelete={confirmDelete}
+                    showArchived={showArchived}
+                    isAdmin={isAdmin}
+                  />
+                );
+              }
+              return null;
+            })()}
           </TabsContent>
 
           {/* Aktoren Tab */}
@@ -637,11 +708,28 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
                 <Skeleton className="h-10 w-full" />
                 <Skeleton className="h-10 w-full" />
               </div>
-            ) : gatewayIntegrations.length === 0 && actuatorTypeMeters.length === 0 && assignedActuatorDevices.length === 0 ? (
-              <p className="text-sm text-muted-foreground py-4">Keine Aktoren vorhanden.</p>
-            ) : assignedActuatorDevices.length > 0 ? (
-              <DeviceTable devices={assignedActuatorDevices} type="actuator" meters={meters} onEditMeter={(m) => setEditingMeter(m)} onCreateAndEdit={handleCreateAndEdit} />
-            ) : null}
+            ) : (() => {
+              const list = showArchived ? archivedAssignedActuatorDevices : assignedActuatorDevices;
+              if (gatewayIntegrations.length === 0 && displayedActuators.length === 0 && list.length === 0) {
+                return <p className="text-sm text-muted-foreground py-4">Keine Aktoren vorhanden.</p>;
+              }
+              if (list.length > 0) {
+                return (
+                  <DeviceTable
+                    devices={list}
+                    type="actuator"
+                    meters={meters}
+                    onEditMeter={(m) => setEditingMeter(m)}
+                    onCreateAndEdit={handleCreateAndEdit}
+                    onArchive={(m, archive) => archiveMeter(m.id, archive)}
+                    onDelete={confirmDelete}
+                    showArchived={showArchived}
+                    isAdmin={isAdmin}
+                  />
+                );
+              }
+              return null;
+            })()}
           </TabsContent>
 
           <TabsContent value="tree" className="space-y-4">
