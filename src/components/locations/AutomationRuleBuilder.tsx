@@ -571,7 +571,11 @@ function ActionCard({
           <div className="space-y-1">
             <Label className="text-xs">Aktion</Label>
             {(() => {
-              const isMeterControl = action.control_type === "Meter" || action.control_type === "EFM" || action.control_type === "EnergyManager2";
+              // Resolve effective device type (respects user's manual classification override)
+              const resolvedType = selected ? getResolvedDeviceType(selected, deviceTypeMap) : undefined;
+              const isMeterControl =
+                resolvedType !== "actuator" &&
+                (action.control_type === "Meter" || action.control_type === "EFM" || action.control_type === "EnergyManager2");
               const availableActions = isMeterControl ? METER_ACTION_TYPES : ACTION_TYPES;
               return (
                 <Select
