@@ -265,8 +265,12 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
   const archivedMeters = meters.filter((m) => m.is_archived);
 
   // Split meters by device_type for tab filtering
-  const meterTypeMeters = activeMeters.filter((m) => (m as any).device_type === "meter" || !(m as any).device_type);
-  // Exclude meters whose sensor_uuid is already shown in the gateway DeviceTable
+  // Exclude meters whose sensor_uuid is already shown in the gateway DeviceTable (deduplication)
+  const meterTypeMeters = activeMeters.filter(
+    (m) =>
+      ((m as any).device_type === "meter" || !(m as any).device_type) &&
+      !(m.sensor_uuid && gatewayDeviceIds.has(m.sensor_uuid)),
+  );
   const sensorTypeMeters = activeMeters.filter((m) => (m as any).device_type === "sensor" && !(m.sensor_uuid && gatewayDeviceIds.has(m.sensor_uuid)));
   const actuatorTypeMeters = activeMeters.filter((m) => (m as any).device_type === "actuator" && !(m.sensor_uuid && gatewayDeviceIds.has(m.sensor_uuid)));
 
