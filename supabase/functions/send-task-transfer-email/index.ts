@@ -103,6 +103,7 @@ const handler = async (req: Request): Promise<Response> => {
   try {
     const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
     if (!RESEND_API_KEY) throw new Error("RESEND_API_KEY is not configured");
+    const FROM_EMAIL = Deno.env.get("RESEND_FROM_EMAIL") || "info@aicono.org";
 
     const resend = new Resend(RESEND_API_KEY);
     const body: TaskTransferRequest = await req.json();
@@ -114,7 +115,7 @@ const handler = async (req: Request): Promise<Response> => {
     const branding = await getTenantBranding(body.tenantId);
 
     const emailResponse = await resend.emails.send({
-      from: `${branding.name} <noreply@mailtest.my-ips.de>`,
+      from: `${branding.name} <${FROM_EMAIL}>`,
       to: [body.contactEmail],
       subject: `Aufgabe: ${body.taskTitle} – ${branding.name}`,
       html: buildTaskEmailHTML(body, branding),

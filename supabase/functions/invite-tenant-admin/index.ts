@@ -118,10 +118,11 @@ const handler = async (req: Request): Promise<Response> => {
     // Send email via Resend
     const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
     if (!RESEND_API_KEY) throw new Error("RESEND_API_KEY not configured");
+    const FROM_EMAIL = Deno.env.get("RESEND_FROM_EMAIL") || "info@aicono.org";
 
     const resend = new Resend(RESEND_API_KEY);
     await resend.emails.send({
-      from: `${tenantName} <noreply@mailtest.my-ips.de>`,
+      from: `${tenantName} <${FROM_EMAIL}>`,
       to: [adminEmail],
       subject: `Ihr Administrator-Konto bei ${tenantName}`,
       html: `<!DOCTYPE html>

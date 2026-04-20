@@ -177,6 +177,7 @@ serve(async (req) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const resendKey = Deno.env.get("RESEND_API_KEY");
+    const FROM_EMAIL = Deno.env.get("RESEND_FROM_EMAIL") || "info@aicono.org";
 
     const supabase = createClient(supabaseUrl, serviceKey);
     const resend = resendKey ? new Resend(resendKey) : null;
@@ -467,7 +468,7 @@ serve(async (req) => {
 
               try {
                 await resend.emails.send({
-                  from: `${tenantName || "Ladeinfrastruktur"} <noreply@mailtest.my-ips.de>`,
+                  from: `${tenantName || "Ladeinfrastruktur"} <${FROM_EMAIL}>`,
                   to: [user.email],
                   subject: `Laderechnung ${invoiceNumber} – ${period.label}`,
                   html: emailHtml,
