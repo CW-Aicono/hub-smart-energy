@@ -92,6 +92,10 @@ async function handleHttpAction(req: Request): Promise<Response | null> {
     return jsonResponse(req, { error: "Invalid JSON body" }, 400);
   }
 
+  if (body?.action === "executeCommand") {
+    return await handleExecuteCommand(req, body);
+  }
+
   if (body?.action !== "getSensors") return null;
 
   const locationIntegrationId = String(body.locationIntegrationId || "").trim();
