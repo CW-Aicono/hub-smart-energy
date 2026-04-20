@@ -6,7 +6,7 @@ name: Sync HA Add-on to ha-addons repo
 
 on:
   push:
-    branches: [main]
+    branches: [main, staging]
     paths:
       - "docs/ha-addon/**"
   workflow_dispatch: # Erlaubt manuellen Trigger über GitHub-UI
