@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { Resend } from "https://esm.sh/resend@2.0.0";
+import { Resend } from "npm:resend@2.0.0";
 import { getCorsHeaders } from "../_shared/cors.ts";
 
 interface TaskTransferRequest {
@@ -103,7 +103,6 @@ const handler = async (req: Request): Promise<Response> => {
   try {
     const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
     if (!RESEND_API_KEY) throw new Error("RESEND_API_KEY is not configured");
-    const FROM_EMAIL = Deno.env.get("RESEND_FROM_EMAIL") || "info@aicono.org";
 
     const resend = new Resend(RESEND_API_KEY);
     const body: TaskTransferRequest = await req.json();
@@ -115,7 +114,7 @@ const handler = async (req: Request): Promise<Response> => {
     const branding = await getTenantBranding(body.tenantId);
 
     const emailResponse = await resend.emails.send({
-      from: `${branding.name} <${FROM_EMAIL}>`,
+      from: `${branding.name} <noreply@mailtest.my-ips.de>`,
       to: [body.contactEmail],
       subject: `Aufgabe: ${body.taskTitle} – ${branding.name}`,
       html: buildTaskEmailHTML(body, branding),

@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { Resend } from "https://esm.sh/resend@2.0.0";
+import { Resend } from "npm:resend@2.0.0";
 import { getCorsHeaders } from "../_shared/cors.ts";
 
 const handler = async (req: Request): Promise<Response> => {
@@ -118,11 +118,10 @@ const handler = async (req: Request): Promise<Response> => {
     // Send email via Resend
     const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
     if (!RESEND_API_KEY) throw new Error("RESEND_API_KEY not configured");
-    const FROM_EMAIL = Deno.env.get("RESEND_FROM_EMAIL") || "info@aicono.org";
 
     const resend = new Resend(RESEND_API_KEY);
     await resend.emails.send({
-      from: `${tenantName} <${FROM_EMAIL}>`,
+      from: `${tenantName} <noreply@mailtest.my-ips.de>`,
       to: [adminEmail],
       subject: `Ihr Administrator-Konto bei ${tenantName}`,
       html: `<!DOCTYPE html>

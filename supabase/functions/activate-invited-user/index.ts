@@ -283,7 +283,6 @@ async function sendInvitationEmail(
 ): Promise<boolean> {
   const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
   if (!RESEND_API_KEY) return false;
-  const FROM_EMAIL = Deno.env.get("RESEND_FROM_EMAIL") || "info@aicono.org";
 
   try {
     let tenantName = "Smart Energy Hub";
@@ -304,12 +303,12 @@ async function sendInvitationEmail(
       }
     }
 
-    const { Resend } = await import("https://esm.sh/resend@2.0.0");
+    const { Resend } = await import("npm:resend@2.0.0");
     const resend = new Resend(RESEND_API_KEY);
     const roleLabel = role === "admin" ? "Administrator" : "Benutzer";
 
     await resend.emails.send({
-      from: `${tenantName} <${FROM_EMAIL}>`,
+      from: `${tenantName} <noreply@mailtest.my-ips.de>`,
       to: [email],
       subject: `Ihr Konto wurde erstellt – ${tenantName}`,
       html: `<!DOCTYPE html>

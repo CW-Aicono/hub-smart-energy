@@ -219,7 +219,7 @@ async function fetchAllStates(
 
 // Update sync status in database
 async function updateSyncStatus(
-  supabase: any,
+  supabase: ReturnType<typeof createClient>,
   locationIntegrationId: string,
   status: "success" | "error" | "syncing"
 ) {

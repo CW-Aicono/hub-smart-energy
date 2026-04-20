@@ -11,7 +11,7 @@ interface HomematicConfig {
 const HMIP_CLOUD_URL = "https://lookup.homematic.com:48335";
 const HMIP_API_URL = "https://ps1.homematic.com:6969";
 
-async function updateSyncStatus(supabase: any, id: string, status: string) {
+async function updateSyncStatus(supabase: ReturnType<typeof createClient>, id: string, status: string) {
   await supabase.from("location_integrations").update({ sync_status: status, last_sync_at: new Date().toISOString() }).eq("id", id);
 }
 

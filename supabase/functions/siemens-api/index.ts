@@ -9,7 +9,7 @@ interface SiemensConfig {
   partition_id: string;
 }
 
-async function updateSyncStatus(supabase: any, id: string, status: string) {
+async function updateSyncStatus(supabase: ReturnType<typeof createClient>, id: string, status: string) {
   await supabase.from("location_integrations").update({ sync_status: status, last_sync_at: new Date().toISOString() }).eq("id", id);
 }
 

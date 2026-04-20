@@ -245,7 +245,7 @@ function buildActionPayload(
 
 class CloudSensorProvider implements SensorProvider {
   constructor(
-    private supabase: any,
+    private supabase: ReturnType<typeof createClient>,
     private supabaseUrl: string,
     private supabaseKey: string,
     private defaultGatewayId?: string,

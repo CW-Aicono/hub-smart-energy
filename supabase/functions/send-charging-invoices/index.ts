@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { Resend } from "https://esm.sh/resend@2.0.0";
+import { Resend } from "npm:resend@2.0.0";
 import { getCorsHeaders } from "../_shared/cors.ts";
 
 function formatDE(n: number, decimals = 2): string {
@@ -177,7 +177,6 @@ serve(async (req) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const resendKey = Deno.env.get("RESEND_API_KEY");
-    const FROM_EMAIL = Deno.env.get("RESEND_FROM_EMAIL") || "info@aicono.org";
 
     const supabase = createClient(supabaseUrl, serviceKey);
     const resend = resendKey ? new Resend(resendKey) : null;
@@ -468,7 +467,7 @@ serve(async (req) => {
 
               try {
                 await resend.emails.send({
-                  from: `${tenantName || "Ladeinfrastruktur"} <${FROM_EMAIL}>`,
+                  from: `${tenantName || "Ladeinfrastruktur"} <noreply@mailtest.my-ips.de>`,
                   to: [user.email],
                   subject: `Laderechnung ${invoiceNumber} – ${period.label}`,
                   html: emailHtml,

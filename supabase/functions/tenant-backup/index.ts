@@ -47,13 +47,13 @@ const USER_SCOPED_TABLES = new Set([
   "dashboard_widgets", "user_preferences", "user_location_access",
 ]);
 
-async function getTenantUserIds(admin: any, tenantId: string): Promise<string[]> {
+async function getTenantUserIds(admin: ReturnType<typeof createClient>, tenantId: string): Promise<string[]> {
   const { data } = await admin.from("profiles").select("user_id").eq("tenant_id", tenantId);
   return (data || []).map((p: { user_id: string }) => p.user_id);
 }
 
 async function backupTable(
-  admin: any,
+  admin: ReturnType<typeof createClient>,
   table: string,
   tenantId: string,
   userIds: string[],
@@ -84,7 +84,7 @@ async function backupTable(
 }
 
 async function getStorageFiles(
-  admin: any,
+  admin: ReturnType<typeof createClient>,
   tenantId: string,
 ): Promise<Record<string, string[]>> {
   const buckets = ["meter-photos", "tenant-assets", "floor-plans", "floor-3d-models"];
