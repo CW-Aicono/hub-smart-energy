@@ -160,7 +160,7 @@ export function AssignMeterDialog({
         await addMeter({
           name: s.name.trim(),
           location_id: selectedLocationId,
-          energy_type: dt === "meter" ? energyType : "none",
+          energy_type: energyType,
           unit: s.unit || (dt === "meter" ? "kWh" : ""),
           capture_type: "automatic",
           device_type: dt,
@@ -243,26 +243,26 @@ export function AssignMeterDialog({
             </div>
           )}
 
-          {/* Energy type - only when ALL selected devices are meters */}
-          {allMeters && (
-            <div>
-              <Label>Energieart</Label>
-              <Select value={energyType} onValueChange={setEnergyType}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="strom">{T("energy.strom")}</SelectItem>
-                  <SelectItem value="gas">{T("energy.gas")}</SelectItem>
-                  <SelectItem value="waerme">{T("energy.waerme")}</SelectItem>
-                  <SelectItem value="wasser">{T("energy.wasser")}</SelectItem>
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground mt-1">
-                Gilt für alle ausgewählten Zähler. Kann später je Zähler angepasst werden.
-              </p>
-            </div>
-          )}
+          {/* Energy type – relevant for meters AND for sensors/actuators
+              that measure or switch a specific energy medium */}
+          <div>
+            <Label>Energieart</Label>
+            <Select value={energyType} onValueChange={setEnergyType}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="strom">{T("energy.strom")}</SelectItem>
+                <SelectItem value="gas">{T("energy.gas")}</SelectItem>
+                <SelectItem value="waerme">{T("energy.waerme")}</SelectItem>
+                <SelectItem value="wasser">{T("energy.wasser")}</SelectItem>
+                <SelectItem value="none">Keine / Sonstige</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground mt-1">
+              Gilt für alle ausgewählten Geräte. Kann später je Gerät angepasst werden.
+            </p>
+          </div>
 
           {/* Hierarchical assignment */}
           <div className="space-y-3 rounded-md border p-3 bg-muted/30">
