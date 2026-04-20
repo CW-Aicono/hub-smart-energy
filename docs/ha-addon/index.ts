@@ -1947,6 +1947,11 @@ async function main(): Promise<void> {
   connectCloudWebSocket();
 
   // Polling loop (REST-based, for readings)
+  // WICHTIG: initialer Poll sofort ausführen, damit latestHAStates die volle
+  // HA-Entity-Liste enthält BEVOR der erste Device-Snapshot gepusht wird.
+  // Ohne diesen Init-Poll würde nur der lokale SQLite-Cache (max 500, ggf. nur
+  // wenige System-Sensoren) als Inventar an die Cloud gehen.
+  pollHAStates().catch((e) => console.error("[ha-poll] initial poll failed", e));
   setInterval(() => pollHAStates(), config.poll_interval_seconds * 1000);
 
   // Flush loop
