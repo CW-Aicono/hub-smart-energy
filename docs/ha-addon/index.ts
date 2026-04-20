@@ -118,7 +118,7 @@ const SUPERVISOR_TOKEN = process.env.SUPERVISOR_TOKEN || "";
 const HA_API_BASE = "http://supervisor/core/api";
 const INGEST_URL = `${config.cloud_url}/functions/v1/gateway-ingest`;
 const GATEWAY_WS_URL = `${config.cloud_url.replace(/^http/, "ws")}/functions/v1/gateway-ws`;
-const ADDON_VERSION = "3.0.2";
+const ADDON_VERSION = "3.0.3";
 
 /* ── Auth header helper for gateway-ingest (Daten-Upload) ────────────────────── */
 // gateway-ingest akzeptiert weiterhin Basic Auth (username/password) ODER Bearer.
@@ -1054,7 +1054,73 @@ async function flushBuffer(): Promise<void> {
   }
 }
 
-/* ── Heartbeat ───────────────────────────────────────────────────────────────── */
+/* ── Device Inventory Snapshot Push (HA -> Cloud) ────────────────────────────── */
+/**
+ * Sendet das vollständige lokale Geräte-Inventar (Sensoren, Aktoren, Zähler)
+ * an die Cloud, damit AICONO sie für Zuordnung und Steuerung anbieten kann.
+ */
+async function pushDeviceSnapshot(): Promise<void> {
+  if (!isCloudReachable && !cloudWsConnected) return;
+  if (latestHAStates.length === 0) return;
+
+  const actuatorDomains = new Set(["switch", "light", "cover", "climate", "fan", "lock", "valve"]);
+  const ignoredDomains = new Set([
+    "automation", "script", "scene", "zone", "person", "persistent_notification",
+    "update", "button", "number", "select", "input_boolean", "input_number",
+    "input_select", "input_text", "input_datetime", "timer", "counter", "schedule",
+    "todo", "conversation", "tts", "stt", "wake_word", "calendar", "device_tracker",
+    "media_player", "camera", "weather", "sun", "moon",
+  ]);
+
+  const devices: Array<Record<string, unknown>> = [];
+  for (const s of latestHAStates) {
+    const domain = s.entity_id.split(".")[0];
+    if (ignoredDomains.has(domain)) continue;
+
+    let category = "sensor";
+    if (actuatorDomains.has(domain)) {
+      category = "actuator";
+    } else if (domain === "sensor") {
+      const unit = asString(s.attributes?.unit_of_measurement);
+      const dc = asString(s.attributes?.device_class);
+      if (["energy", "power", "gas", "water"].includes(dc) || /kwh|kw|wh|m³/i.test(unit)) {
+        category = "meter";
+      }
+    }
+
+    devices.push({
+      entity_id: s.entity_id,
+      domain,
+      category,
+      friendly_name: asString(s.attributes?.friendly_name, s.entity_id),
+      state: s.state,
+      unit: asString(s.attributes?.unit_of_measurement),
+      device_class: asString(s.attributes?.device_class),
+      last_updated: s.last_updated,
+    });
+  }
+
+  if (devices.length === 0) return;
+
+  try {
+    const res = await fetch(`${INGEST_URL}?action=device-snapshot`, {
+      method: "POST",
+      headers: { ...(await cloudAuthHeaders()), "Content-Type": "application/json" },
+      body: JSON.stringify({ devices }),
+      signal: AbortSignal.timeout(20_000),
+    });
+    if (!res.ok) {
+      console.warn(`[snapshot] device-snapshot returned ${res.status}`);
+      return;
+    }
+    const data = await res.json() as { success?: boolean; upserted?: number; pruned?: number };
+    if (data.success) {
+      console.log(`[snapshot] pushed ${devices.length} devices (upserted=${data.upserted ?? 0}, pruned=${data.pruned ?? 0})`);
+    }
+  } catch (err) {
+    console.warn("[snapshot] failed:", err);
+  }
+}
 
 let haVersion = "unknown";
 
@@ -1911,6 +1977,10 @@ async function main(): Promise<void> {
 
   // Refresh meter mappings every 5 minutes
   setInterval(() => fetchMeterMappings(), 5 * 60 * 1000);
+
+  // Push device inventory snapshot to cloud (initial + every 2 minutes)
+  setTimeout(() => pushDeviceSnapshot(), 15_000);
+  setInterval(() => pushDeviceSnapshot(), 2 * 60 * 1000);
 
   // Auto backup
   if (config.auto_backup_hours > 0) {
