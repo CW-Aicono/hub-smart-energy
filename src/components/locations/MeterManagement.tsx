@@ -17,7 +17,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import {
   Gauge, Plus, Pencil, Trash2, Archive, ArchiveRestore, Eye, EyeOff, Network,
   ChevronDown, ChevronRight, Thermometer, ToggleLeft, Lightbulb, DoorOpen,
-  Activity, Server, Zap,
+  Activity, Server, Zap, Inbox,
 } from "lucide-react";
 import { HelpTooltip } from "@/components/ui/help-tooltip";
 import { useTranslation } from "@/hooks/useTranslation";
@@ -28,6 +28,7 @@ import { EditAlertRuleDialog } from "./EditAlertRuleDialog";
 import { MeterTreeView } from "./MeterTreeView";
 import { MeterAggregationWidget } from "./MeterAggregationWidget";
 import { ENERGY_TYPE_LABELS, ENERGY_BADGE_CLASSES } from "@/lib/energyTypeColors";
+import { filterAssignedGatewayDevices } from "@/lib/gatewayDeviceFiltering";
 
 interface MeterManagementProps {
   locationId: string;
