@@ -272,19 +272,36 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
 
   const displayedMeters = showArchived ? archivedMeters : meterTypeMeters;
 
-  // Gateway-Devices vom Typ "meter", die noch keiner Messstelle zugeordnet sind
-  const unmappedMeterDevices = useMemo(
-    () => meterDevices.filter((d) => !meters.some((m) => m.sensor_uuid === d.id)),
+  // Gateway-Devices, die der User über den "Gefundene Geräte"-Dialog aktiv
+  // zugeordnet hat (= existieren als meters-Eintrag mit passender sensor_uuid).
+  // Nur diese werden in den Tabs gelistet. Single source of truth:
+  // src/lib/gatewayDeviceFiltering.ts
+  const assignedMeterDevices = useMemo(
+    () => filterAssignedGatewayDevices(meterDevices, meters),
     [meterDevices, meters],
   );
-  const unmappedActuatorDevices = useMemo(
-    () => actuatorDevices.filter((d) => !meters.some((m) => m.sensor_uuid === d.id)),
+  const assignedActuatorDevices = useMemo(
+    () => filterAssignedGatewayDevices(actuatorDevices, meters),
     [actuatorDevices, meters],
   );
-  const unmappedSensorDevices = useMemo(
-    () => sensorDevices.filter((d) => !meters.some((m) => m.sensor_uuid === d.id)),
+  const assignedSensorDevices = useMemo(
+    () => filterAssignedGatewayDevices(sensorDevices, meters),
     [sensorDevices, meters],
   );
+
+  // Anzahl der noch nicht zugeordneten Gateway-Geräte – nur für den Hinweis-
+  // Banner ("X neue Geräte verfügbar"), NICHT für die Listen-Anzeige.
+  const unassignedDevicesCount = useMemo(() => {
+    const assignedIds = new Set(meters.map((m) => m.sensor_uuid).filter(Boolean));
+    return allDevicesWithSource.filter((d) => !assignedIds.has(d.id)).length;
+  }, [allDevicesWithSource, meters]);
+
+  const scrollToIntegrations = () => {
+    const el = document.getElementById("location-integrations");
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  };
 
   // When a new meter is created for a gateway device, watch for it to appear and open edit
   useEffect(() => {
