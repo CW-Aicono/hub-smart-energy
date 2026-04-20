@@ -198,105 +198,107 @@ export function EditIntegrationDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            {isHomeAssistant && locationIntegration && (
-              <div className="rounded-lg border border-border bg-muted/20 p-4">
-                <AiconoGatewayCredentials
-                  locationIntegrationId={locationIntegration.id}
-                  onSaved={() => onOpenChange(false)}
-                />
-              </div>
-            )}
-
-            {isHomeAssistant && (
-              <Alert>
-                <RefreshCw className="h-4 w-4" />
-                <AlertTitle>Tunnel-Token neu generieren (optional)</AlertTitle>
-                <AlertDescription className="space-y-3 text-sm">
-                  <p>
-                    Erzeugt einen neuen Cloudflare-Tunnel-Token für diese Integration. Der bisherige Token wird sofort ungültig.
-                  </p>
-                  <Button type="button" variant="outline" onClick={handleProvisionTunnel} disabled={tunnelLoading || isSaving}>
-                    {tunnelLoading ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Tunnel wird erstellt...
-                      </>
-                    ) : (
-                      <>
-                        <RefreshCw className="mr-2 h-4 w-4" />
-                        Tunnel-Token neu generieren
-                      </>
-                    )}
-                  </Button>
-                </AlertDescription>
-              </Alert>
-            )}
-
-            {tunnelResult && (
-              <Alert>
-                <CheckCircle2 className="h-4 w-4" />
-                <AlertTitle>Neuer Tunnel aktiv</AlertTitle>
-                <AlertDescription className="space-y-3">
-                  <p>
-                    Öffentliche URL: <code className="text-xs bg-muted px-1 py-0.5 rounded">{tunnelResult.public_url}</code>
-                  </p>
-                  <div className="space-y-1.5">
-                    <p className="text-sm font-medium">Tunnel-Token (einmalig sichtbar):</p>
-                    <div className="flex gap-2">
-                      <Input readOnly value={tunnelResult.tunnel_token} className="font-mono text-xs" />
-                      <Button type="button" size="icon" variant="outline" onClick={copyToken} title="Token kopieren">
-                        {tokenCopied ? <CheckCircle2 className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                      </Button>
-                    </div>
-                  </div>
-                </AlertDescription>
-              </Alert>
-            )}
-
-            {gatewayDef?.configFields.map((fieldDef) => (
-              <FormField
-                key={fieldDef.name}
-                control={form.control}
-                name={fieldDef.name}
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>{fieldDef.label}</FormLabel>
-                    <FormControl>
-                      <Input
-                        type={fieldDef.type === "password" ? "password" : "text"}
-                        placeholder={fieldDef.placeholder}
-                        {...field}
-                        value={field.value || ""}
-                      />
-                    </FormControl>
-                    {fieldDef.description && (
-                      <FormDescription>{fieldDef.description}</FormDescription>
-                    )}
-                    <FormMessage />
-                  </FormItem>
-                )}
+        <div className="space-y-4">
+          {isHomeAssistant && locationIntegration && (
+            <div className="rounded-lg border border-border bg-muted/20 p-4">
+              <AiconoGatewayCredentials
+                locationIntegrationId={locationIntegration.id}
+                onSaved={() => onOpenChange(false)}
               />
-            ))}
-
-            <div className="flex gap-2 justify-end pt-4">
-              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-                {t("common.cancel" as any)}
-              </Button>
-              <Button type="submit" disabled={isSaving || tunnelLoading}>
-                {isSaving ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    {t("common.saving" as any)}
-                  </>
-                ) : (
-                  t("common.save" as any)
-                )}
-              </Button>
             </div>
-          </form>
-        </Form>
+          )}
+
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+              {isHomeAssistant && (
+                <Alert>
+                  <RefreshCw className="h-4 w-4" />
+                  <AlertTitle>Tunnel-Token neu generieren (optional)</AlertTitle>
+                  <AlertDescription className="space-y-3 text-sm">
+                    <p>
+                      Erzeugt einen neuen Cloudflare-Tunnel-Token für diese Integration. Der bisherige Token wird sofort ungültig.
+                    </p>
+                    <Button type="button" variant="outline" onClick={handleProvisionTunnel} disabled={tunnelLoading || isSaving}>
+                      {tunnelLoading ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Tunnel wird erstellt...
+                        </>
+                      ) : (
+                        <>
+                          <RefreshCw className="mr-2 h-4 w-4" />
+                          Tunnel-Token neu generieren
+                        </>
+                      )}
+                    </Button>
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              {tunnelResult && (
+                <Alert>
+                  <CheckCircle2 className="h-4 w-4" />
+                  <AlertTitle>Neuer Tunnel aktiv</AlertTitle>
+                  <AlertDescription className="space-y-3">
+                    <p>
+                      Öffentliche URL: <code className="text-xs bg-muted px-1 py-0.5 rounded">{tunnelResult.public_url}</code>
+                    </p>
+                    <div className="space-y-1.5">
+                      <p className="text-sm font-medium">Tunnel-Token (einmalig sichtbar):</p>
+                      <div className="flex gap-2">
+                        <Input readOnly value={tunnelResult.tunnel_token} className="font-mono text-xs" />
+                        <Button type="button" size="icon" variant="outline" onClick={copyToken} title="Token kopieren">
+                          {tokenCopied ? <CheckCircle2 className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                        </Button>
+                      </div>
+                    </div>
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              {gatewayDef?.configFields.map((fieldDef) => (
+                <FormField
+                  key={fieldDef.name}
+                  control={form.control}
+                  name={fieldDef.name}
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{fieldDef.label}</FormLabel>
+                      <FormControl>
+                        <Input
+                          type={fieldDef.type === "password" ? "password" : "text"}
+                          placeholder={fieldDef.placeholder}
+                          {...field}
+                          value={field.value || ""}
+                        />
+                      </FormControl>
+                      {fieldDef.description && (
+                        <FormDescription>{fieldDef.description}</FormDescription>
+                      )}
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              ))}
+
+              <div className="flex gap-2 justify-end pt-4">
+                <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+                  {t("common.cancel" as any)}
+                </Button>
+                <Button type="submit" disabled={isSaving || tunnelLoading}>
+                  {isSaving ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      {t("common.saving" as any)}
+                    </>
+                  ) : (
+                    t("common.save" as any)
+                  )}
+                </Button>
+              </div>
+            </form>
+          </Form>
+        </div>
       </DialogContent>
     </Dialog>
   );

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -17,6 +17,12 @@ interface PendingDevice {
   gateway_username: string | null;
   last_heartbeat_at: string | null;
   local_ip: string | null;
+}
+
+interface CurrentGatewayDevice {
+  mac_address: string | null;
+  gateway_username: string | null;
+  has_password: boolean;
 }
 
 const formSchema = z.object({
@@ -59,7 +65,34 @@ export function AiconoGatewayCredentials({ locationIntegrationId, onSaved }: Aic
     defaultValues: { mac_address: "", gateway_username: "", gateway_password: "" },
   });
 
-  const fetchPending = async () => {
+  const fetchCurrent = useCallback(async () => {
+    try {
+      const { data, error } = await supabase.functions.invoke("gateway-credentials", {
+        body: {
+          action: "current",
+          location_integration_id: locationIntegrationId,
+        },
+      });
+
+      if (error) {
+        console.warn("[gateway-credentials] current fetch error", error);
+        return;
+      }
+
+      const device = (data as { device?: CurrentGatewayDevice | null })?.device;
+      if (!device) return;
+
+      form.reset({
+        mac_address: device.mac_address ?? "",
+        gateway_username: device.gateway_username ?? "",
+        gateway_password: "",
+      });
+    } catch (e) {
+      console.warn("[gateway-credentials] current fetch failed", e);
+    }
+  }, [form, locationIntegrationId]);
+
+  const fetchPending = useCallback(async () => {
     setLoadingPending(true);
     try {
       const { data, error } = await supabase.functions.invoke("gateway-credentials", {
@@ -76,14 +109,14 @@ export function AiconoGatewayCredentials({ locationIntegrationId, onSaved }: Aic
     } finally {
       setLoadingPending(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    fetchPending();
+    void fetchCurrent();
+    void fetchPending();
     const interval = setInterval(fetchPending, 30_000);
     return () => clearInterval(interval);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [fetchCurrent, fetchPending]);
 
   const onSubmit = async (values: FormValues) => {
     setSaving(true);
@@ -103,9 +136,13 @@ export function AiconoGatewayCredentials({ locationIntegrationId, onSaved }: Aic
         title: "Gateway zugeordnet",
         description: "Innerhalb von ~60 Sekunden meldet sich der Pi mit Status 'Online'.",
       });
-      form.reset({ mac_address: "", gateway_username: "", gateway_password: "" });
+      form.reset({
+        mac_address: values.mac_address,
+        gateway_username: values.gateway_username,
+        gateway_password: "",
+      });
       onSaved?.();
-      fetchPending();
+      void fetchPending();
     } catch (e) {
       toast({
         title: "Fehler bei Zuordnung",
