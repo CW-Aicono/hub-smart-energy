@@ -71,6 +71,68 @@ async function bcryptHash(plain: string): Promise<string> {
   return await bcrypt.hash(plain);
 }
 
+async function locationIntegrationBelongsToTenant(
+  svc: ReturnType<typeof getServiceClient>,
+  tenantId: string,
+  locationIntegrationId: string,
+): Promise<boolean> {
+  const { data: li } = await svc
+    .from("location_integrations")
+    .select("id, location_id, locations!inner(tenant_id)")
+    .eq("id", locationIntegrationId)
+    .maybeSingle();
+
+  return Boolean(li && (li as any).locations?.tenant_id === tenantId);
+}
+
+/** POST: fetch existing safe credential fields for a location integration. */
+async function handleCurrent(req: Request): Promise<Response> {
+  const ctx = await resolveTenant(req);
+  if (!ctx) return json({ error: "Unauthorized" }, 401);
+
+  let body: { location_integration_id?: string };
+  try {
+    body = await req.json();
+  } catch {
+    return json({ error: "Invalid JSON" }, 400);
+  }
+
+  const liId = body.location_integration_id;
+  if (!liId) {
+    return json({ error: "location_integration_id is required" }, 400);
+  }
+
+  const svc = getServiceClient();
+  const isAllowed = await locationIntegrationBelongsToTenant(svc, ctx.tenantId, liId);
+  if (!isAllowed) {
+    return json({ error: "Liegenschaft gehört nicht zu Ihrem Mandanten" }, 403);
+  }
+
+  const { data: device, error } = await svc
+    .from("gateway_devices")
+    .select("id, mac_address, gateway_username, gateway_password_hash")
+    .eq("location_integration_id", liId)
+    .eq("tenant_id", ctx.tenantId)
+    .maybeSingle();
+
+  if (error) {
+    console.error("[gateway-credentials] current error:", error.message);
+    return json({ error: "Datenbankfehler" }, 500);
+  }
+
+  return json({
+    success: true,
+    device: device
+      ? {
+          id: device.id,
+          mac_address: device.mac_address,
+          gateway_username: device.gateway_username,
+          has_password: Boolean(device.gateway_password_hash),
+        }
+      : null,
+  });
+}
+
 /** POST: assign credentials. */
 async function handleAssign(req: Request): Promise<Response> {
   const ctx = await resolveTenant(req);
@@ -102,32 +164,24 @@ async function handleAssign(req: Request): Promise<Response> {
 
   const svc = getServiceClient();
 
-  // Verify location_integration belongs to the user's tenant (if given)
   let resolvedLiId: string | null = liId || null;
   if (liId) {
-    const { data: li } = await svc
-      .from("location_integrations")
-      .select("id, location_id, locations!inner(tenant_id)")
-      .eq("id", liId)
-      .maybeSingle();
-    if (!li || (li as any).locations?.tenant_id !== ctx.tenantId) {
+    const isAllowed = await locationIntegrationBelongsToTenant(svc, ctx.tenantId, liId);
+    if (!isAllowed) {
       return json({ error: "Liegenschaft gehört nicht zu Ihrem Mandanten" }, 403);
     }
   }
 
-  // Look up existing device by MAC
   const { data: existing } = await svc
     .from("gateway_devices")
     .select("id, tenant_id, gateway_password_hash")
     .eq("mac_address", mac)
     .maybeSingle();
 
-  // If device is already claimed by another tenant → abort
   if (existing && existing.tenant_id && existing.tenant_id !== ctx.tenantId) {
     return json({ error: "Diese MAC ist bereits einem anderen Mandanten zugeordnet" }, 409);
   }
 
-  // Hash password (only if provided; allow rotation by leaving empty when keeping old)
   let passwordHash: string | undefined;
   if (password) {
     if (password.length < 8) {
@@ -156,10 +210,10 @@ async function handleAssign(req: Request): Promise<Response> {
       console.error("[gateway-credentials] update error:", error.message);
       return json({ error: "Datenbankfehler" }, 500);
     }
+    console.info("[gateway-credentials] assigned existing device", { mac, location_integration_id: resolvedLiId });
     return json({ success: true, device_id: existing.id, action: "updated" });
   }
 
-  // No existing row → create one (Pi has not pushed a heartbeat yet)
   const { data: inserted, error: insertErr } = await svc
     .from("gateway_devices")
     .insert({
@@ -173,6 +227,7 @@ async function handleAssign(req: Request): Promise<Response> {
     console.error("[gateway-credentials] insert error:", insertErr.message);
     return json({ error: "Datenbankfehler" }, 500);
   }
+  console.info("[gateway-credentials] created device", { mac, location_integration_id: resolvedLiId });
   return json({ success: true, device_id: inserted.id, action: "created" });
 }
 
