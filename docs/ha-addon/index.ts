@@ -218,8 +218,8 @@ function markCloudUnreachable(): void {
 
 async function checkCloudConnectivity(): Promise<boolean> {
   try {
-    const res = await fetch(`${config.cloud_url}/functions/v1/gateway-ingest?action=addon-version`, {
-      headers: { Authorization: authHeader() },
+    const res = await fetch(`${INGEST_URL}?action=addon-version`, {
+      headers: await cloudAuthHeaders(),
       signal: AbortSignal.timeout(15000),
     });
     if (res.ok) {
@@ -426,7 +426,7 @@ async function fetchMeterMappings(): Promise<void> {
   }
   try {
     const res = await fetch(`${INGEST_URL}?action=list-meters`, {
-      headers: { Authorization: authHeader() },
+      headers: await cloudAuthHeaders(),
     });
     if (!res.ok) {
       console.error(`[mapping] Failed to fetch meters: ${res.status}`);
@@ -899,7 +899,7 @@ async function syncAutomationsFromCloud(): Promise<void> {
     }
 
     const res = await fetch(`${INGEST_URL}?${params.toString()}`, {
-      headers: { Authorization: authHeader() },
+      headers: await cloudAuthHeaders(),
       signal: AbortSignal.timeout(15000),
     });
 
