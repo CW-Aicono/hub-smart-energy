@@ -201,8 +201,18 @@ Deno.serve(async (req) => {
   }
   try {
     const url = new URL(req.url);
-    const action = url.searchParams.get("action");
-    if (req.method === "GET" && action === "pending") return handlePending(req);
+    let action = url.searchParams.get("action");
+    // Allow action via JSON body too (supabase.functions.invoke does not forward query strings reliably)
+    if (!action && req.method === "POST") {
+      try {
+        const cloned = req.clone();
+        const peek = await cloned.json().catch(() => null);
+        if (peek && typeof peek === "object" && peek.action) {
+          action = String(peek.action);
+        }
+      } catch { /* ignore */ }
+    }
+    if (action === "pending") return handlePending(req);
     if (req.method === "POST") return handleAssign(req);
     return json({ error: "Not found" }, 404);
   } catch (err) {
