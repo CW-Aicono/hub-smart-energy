@@ -1075,7 +1075,9 @@ async function sendHeartbeat(): Promise<void> {
       body: JSON.stringify({
         device_name: config.device_name,
         device_type: "aicono-ems",
-        tenant_id: config.tenant_id,
+        tenant_id: config.tenant_id || undefined,
+        mac_address: await getHostMAC(),
+        gateway_username: config.gateway_username || undefined,
         local_ip: await getLocalIP(),
         ha_version: haVersion,
         addon_version: ADDON_VERSION,
