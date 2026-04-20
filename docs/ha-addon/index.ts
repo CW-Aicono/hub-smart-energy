@@ -1,10 +1,19 @@
 /**
- * AICONO EMS Gateway v2.1
+ * AICONO EMS Gateway v3.0
  * ==============================================
- * Lokaler Gateway-Hub: Pollt HA REST API, puffert offline via SQLite,
- * pusht Readings batched an gateway-ingest.
- * Features: Lokale Automationsausführung, WebSocket-Client, Preact-UI,
- * Priority-Buffer, Offline-Caches, Lokale Aktor-Steuerung.
+ * Lokaler Gateway-Hub mit bidirektionaler WebSocket-Verbindung zur AICONO Cloud.
+ *
+ * Architektur:
+ *  - HA REST/WS Polling -> SQLite-Buffer -> Push an /functions/v1/gateway-ingest
+ *  - Persistenter WSS-Client zu /functions/v1/gateway-ws (MAC + Username + Passwort)
+ *    -> empfängt Heartbeat-Bestätigungen, UI-PIN-Sync, Schaltbefehle
+ *  - Lokaler Automationsmotor (automation-core kompatibel) läuft auch ohne Internet
+ *  - Offline-Caches (meter mappings, HA states), Priority-Buffer, FIFO-Eviction
+ *
+ * v3.0 BREAKING:
+ *  - Cloudflare-Tunnel komplett entfernt (kein eingehender HTTP mehr)
+ *  - Cloud-Steuerbefehle kommen jetzt push-basiert über die WS-Verbindung an
+ *  - Pflicht-Konfig: gateway_username + gateway_password (Bcrypt-Auth gegen MAC)
  */
 
 import http from "http";
@@ -22,10 +31,12 @@ try {
 
 interface AddonConfig {
   cloud_url: string;
-  gateway_api_key: string;
-  tenant_id: string;
+  /** Optional Legacy-Bearer für gateway-ingest (Daten-Upload). */
+  gateway_api_key?: string;
+  /** Optional – wird per MAC zugewiesen, kann aber lokal überschrieben werden. */
+  tenant_id?: string;
   device_name: string;
-  // Loxone-style identification (preferred since v2.3.0)
+  /** Pflicht ab v3.0 – Gateway-Login (gemeinsam mit MAC bcrypt-geprüft). */
   gateway_username?: string;
   gateway_password?: string;
   poll_interval_seconds: number;
@@ -35,8 +46,6 @@ interface AddonConfig {
   offline_buffer_max_mb: number;
   auto_backup_hours: number;
   automation_eval_seconds: number;
-  cloudflare_enabled?: boolean;
-  cloudflare_tunnel_token?: string;
 }
 
 const DEFAULT_CLOUD_URL = "https://xnveugycurplszevdxtw.supabase.co";
@@ -47,7 +56,6 @@ function loadConfig(): AddonConfig {
     const raw = fs.readFileSync(optionsPath, "utf-8");
     console.log("[config] Loaded /data/options.json");
     const parsed = JSON.parse(raw);
-    // Fallback: support old 'supabase_url' field; default to fixed cloud URL
     const cloudUrl = parsed.cloud_url || parsed.supabase_url || DEFAULT_CLOUD_URL;
     return { automation_eval_seconds: 30, ...parsed, cloud_url: cloudUrl };
   } catch (error: any) {
@@ -74,74 +82,22 @@ const config = loadConfig();
 const SUPERVISOR_TOKEN = process.env.SUPERVISOR_TOKEN || "";
 const HA_API_BASE = "http://supervisor/core/api";
 const INGEST_URL = `${config.cloud_url}/functions/v1/gateway-ingest`;
-const ADDON_VERSION = "2.3.0";
+const GATEWAY_WS_URL = `${config.cloud_url.replace(/^http/, "ws")}/functions/v1/gateway-ws`;
+const ADDON_VERSION = "3.0.0";
 
-/* ── Auth header helper (Loxone-style: Basic Auth, fallback to Bearer key) ──── */
+/* ── Auth header helper for gateway-ingest (Daten-Upload) ────────────────────── */
+// gateway-ingest akzeptiert weiterhin Basic Auth (username/password) ODER Bearer.
+// Die WS-Verbindung nutzt einen eigenen JSON-Auth-Frame (siehe gatewayWsClient).
 
 function authHeader(): string {
   if (config.gateway_username && config.gateway_password) {
     const creds = `${config.gateway_username}:${config.gateway_password}`;
-    // Buffer is available in Node runtime
     return `Basic ${Buffer.from(creds, "utf-8").toString("base64")}`;
   }
-  return `Bearer ${config.gateway_api_key}`;
+  return `Bearer ${config.gateway_api_key || ""}`;
 }
 
-/* ── Cloudflare Tunnel Subprocess ────────────────────────────────────────────── */
-import { spawn, ChildProcess } from "child_process";
-
-let cfTunnelProc: ChildProcess | null = null;
-let cfTunnelConnected = false;
-let cfTunnelRestartCount = 0;
-let cfTunnelLastError: string | null = null;
-
-function startCloudflaredTunnel() {
-  if (!config.cloudflare_enabled || !config.cloudflare_tunnel_token) {
-    console.log("[cloudflared] disabled (set cloudflare_enabled=true and provide token)");
-    return;
-  }
-  if (cfTunnelProc) {
-    console.log("[cloudflared] already running");
-    return;
-  }
-  console.log("[cloudflared] starting tunnel...");
-  try {
-    cfTunnelProc = spawn(
-      "cloudflared",
-      ["tunnel", "--no-autoupdate", "run", "--token", config.cloudflare_tunnel_token],
-      { stdio: ["ignore", "pipe", "pipe"] },
-    );
-    cfTunnelProc.stdout?.on("data", (d: Buffer) => {
-      const line = d.toString().trim();
-      if (line) console.log(`[cloudflared] ${line}`);
-      if (/Registered tunnel connection|Connection .* registered/i.test(line)) {
-        cfTunnelConnected = true;
-        cfTunnelLastError = null;
-      }
-    });
-    cfTunnelProc.stderr?.on("data", (d: Buffer) => {
-      const line = d.toString().trim();
-      if (line) console.error(`[cloudflared] ${line}`);
-      if (/Registered tunnel connection|Connection .* registered/i.test(line)) {
-        cfTunnelConnected = true;
-        cfTunnelLastError = null;
-      } else if (/error|failed/i.test(line)) {
-        cfTunnelLastError = line.slice(0, 200);
-      }
-    });
-    cfTunnelProc.on("exit", (code) => {
-      console.warn(`[cloudflared] exited with code ${code}, restarting in 5s...`);
-      cfTunnelProc = null;
-      cfTunnelConnected = false;
-      cfTunnelRestartCount++;
-      setTimeout(startCloudflaredTunnel, 5000);
-    });
-  } catch (err) {
-    console.error("[cloudflared] failed to spawn:", err);
-    cfTunnelLastError = String(err);
-    cfTunnelProc = null;
-  }
-}
+/* ── (Cloudflare-Tunnel entfernt in v3.0 – ersetzt durch WebSocket-Push) ─────── */
 
 /* ── Connectivity State ──────────────────────────────────────────────────────── */
 
@@ -883,9 +839,10 @@ async function syncAutomationsFromCloud(): Promise<void> {
     const mismatch = lastAutomationCount >= 0 && localCount !== lastAutomationCount;
     const isFullSync = !lastAutomationSync || automationSyncCount % 6 === 0 || mismatch;
 
+    const tenantIdParam = config.tenant_id || cloudWsAssignment.tenant_id || "";
     const params = new URLSearchParams({
       action: "sync-automations",
-      tenant_id: config.tenant_id,
+      tenant_id: tenantIdParam,
       device_name: config.device_name,
     });
     if (!isFullSync && lastAutomationSync) {
@@ -1064,72 +1021,199 @@ async function fetchHAVersion(): Promise<void> {
   } catch { /* ignore */ }
 }
 
-async function sendHeartbeat(): Promise<void> {
-  // Always attempt heartbeat – use result to update connectivity status
-  try {
-    const res = await fetch(`${INGEST_URL}?action=heartbeat`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: authHeader(),
-      },
-      body: JSON.stringify({
-        device_name: config.device_name,
-        device_type: "aicono-ems",
-        tenant_id: config.tenant_id || undefined,
-        mac_address: await getHostMAC(),
-        gateway_username: config.gateway_username || undefined,
-        local_ip: await getLocalIP(),
-        ha_version: haVersion,
-        addon_version: ADDON_VERSION,
-        offline_buffer_count: getBufferCount(),
-        local_time: new Date().toISOString(),
-        config: {
-          poll_interval_seconds: config.poll_interval_seconds,
-          entity_filter: config.entity_filter,
-          meter_count: meterMappings.length,
-          automation_count: getLocalAutomations().length,
-          cloud_reachable: isCloudReachable,
-        },
-      }),
-    });
+// (Legacy HTTP-Heartbeat in v3.0 entfernt – ersetzt durch sendCloudHeartbeat() via WSS.)
 
-    if (res.ok) {
-      markCloudReachable();
-      const data = await res.json() as {
-        latest_available_version?: string;
-        pending_command?: string;
-        pending_command_params?: Record<string, unknown>;
-        ui_pin_hash?: string | null;
-        assignment_status?: "assigned" | "pending_assignment" | "unknown";
-      };
-      if (data.assignment_status) {
-        currentAssignmentStatus = data.assignment_status;
-      }
-      // Sync UI PIN hash from cloud
-      if (data.ui_pin_hash !== undefined) {
-        uiPinHash = data.ui_pin_hash || null;
-        console.log(`[heartbeat] UI PIN ${uiPinHash ? "synced" : "cleared"}`);
-      }
-      if (data.latest_available_version && data.latest_available_version !== ADDON_VERSION) {
-        console.log(`[heartbeat] Update available: ${data.latest_available_version}`);
-      }
-      // Process pending commands from cloud
-      if (data.pending_command) {
-        console.log(`[heartbeat] Received pending command: ${data.pending_command}`);
-        await executePendingCommand(data.pending_command, data.pending_command_params || {});
-      }
-    } else {
-      markCloudUnreachable();
-      console.warn(`[heartbeat] Cloud returned ${res.status}`);
-    }
+
+/* ── Cloud WebSocket Client (gateway-ws) ─────────────────────────────────────── */
+/**
+ * Persistente WSS-Verbindung zur AICONO Cloud:
+ *  - Sendet `auth`-Frame mit MAC + Username + Passwort
+ *  - Sendet alle 30s `heartbeat` (inkl. local_ip, ha/addon-Version, Buffer-Count)
+ *  - Empfängt `command`-Frames aus gateway_commands und führt sie aus
+ *  - Sendet `ack`-Frames mit Erfolg/Fehler zurück
+ *
+ * Reconnect-Strategie: exponentielles Backoff (max 60s) – gleicher Stil wie haWs.
+ */
+
+let cloudWs: import("ws") | null = null;
+let cloudWsConnected = false;
+let cloudWsReconnectDelay = 5_000;
+const CLOUD_WS_RECONNECT_MAX = 60_000;
+let cloudWsHeartbeatTimer: NodeJS.Timeout | null = null;
+let cloudWsAssignment: { device_id?: string; tenant_id?: string; location_id?: string | null } = {};
+
+function safeWsSend(ws: import("ws") | null, msg: unknown): void {
+  if (!ws || ws.readyState !== 1 /* OPEN */) return;
+  try { ws.send(JSON.stringify(msg)); } catch { /* ignore */ }
+}
+
+async function sendCloudHeartbeat(): Promise<void> {
+  if (!cloudWs || !cloudWsConnected) return;
+  safeWsSend(cloudWs, {
+    type: "heartbeat",
+    local_ip: await getLocalIP(),
+    local_time: new Date().toISOString(),
+    addon_version: ADDON_VERSION,
+    ha_version: haVersion,
+    offline_buffer_count: getBufferCount(),
+  });
+}
+
+async function connectCloudWebSocket(): Promise<void> {
+  if (!WebSocketClient) {
+    console.error("[cloud-ws] ws module not available – cannot connect");
+    return;
+  }
+  if (!config.gateway_username || !config.gateway_password) {
+    console.warn("[cloud-ws] gateway_username/password missing – skipping WS connect");
+    setTimeout(connectCloudWebSocket, 30_000);
+    return;
+  }
+  const mac = await getHostMAC();
+  if (!mac) {
+    console.warn("[cloud-ws] MAC not yet available – retry in 10s");
+    setTimeout(connectCloudWebSocket, 10_000);
+    return;
+  }
+
+  console.log(`[cloud-ws] Connecting to ${GATEWAY_WS_URL} (mac=${mac.slice(0, 4)}…)`);
+  try {
+    cloudWs = new WebSocketClient(GATEWAY_WS_URL);
   } catch (err) {
+    console.error("[cloud-ws] Constructor failed:", err);
+    scheduleCloudReconnect();
+    return;
+  }
+
+  cloudWs.on("open", async () => {
+    console.log("[cloud-ws] TCP/WS open – sending auth frame");
+    safeWsSend(cloudWs, {
+      type: "auth",
+      mac,
+      username: config.gateway_username,
+      password: config.gateway_password,
+      addon_version: ADDON_VERSION,
+      ha_version: haVersion,
+      local_ip: await getLocalIP(),
+      local_time: new Date().toISOString(),
+    });
+  });
+
+  cloudWs.on("message", async (data: Buffer) => {
+    let msg: any;
+    try { msg = JSON.parse(data.toString()); } catch { return; }
+
+    switch (msg?.type) {
+      case "auth_ok": {
+        cloudWsConnected = true;
+        cloudWsReconnectDelay = 5_000;
+        cloudWsAssignment = {
+          device_id: msg.device_id,
+          tenant_id: msg.tenant_id,
+          location_id: msg.location_id,
+        };
+        currentAssignmentStatus = msg.tenant_id ? "assigned" : "pending_assignment";
+        markCloudReachable();
+        console.log(`[cloud-ws] Authenticated. device=${msg.device_id} tenant=${msg.tenant_id || "(none)"}`);
+        // Sofort einen Heartbeat senden, damit Backend-UI die Werte hat
+        await sendCloudHeartbeat();
+        // Periodischer Heartbeat
+        if (cloudWsHeartbeatTimer) clearInterval(cloudWsHeartbeatTimer);
+        cloudWsHeartbeatTimer = setInterval(sendCloudHeartbeat, 30_000);
+        break;
+      }
+      case "auth_error": {
+        console.error(`[cloud-ws] Auth failed: ${msg.error}`);
+        // Bei Auth-Fehlern langsamer reconnecten (kein Brute-Force)
+        cloudWsReconnectDelay = 60_000;
+        try { cloudWs?.close(); } catch { /* ignore */ }
+        break;
+      }
+      case "pong":
+        // Server bestätigt Heartbeat
+        markCloudReachable();
+        break;
+      case "command": {
+        const cmdId = String(msg.id || "");
+        const cmdType = String(msg.command_type || "");
+        const payload = msg.payload || {};
+        console.log(`[cloud-ws] command received: ${cmdType} (${cmdId})`);
+        try {
+          const response = await handleCloudCommand(cmdType, payload);
+          safeWsSend(cloudWs, { type: "ack", command_id: cmdId, response });
+        } catch (err: any) {
+          console.error(`[cloud-ws] command ${cmdType} failed:`, err);
+          safeWsSend(cloudWs, { type: "ack", command_id: cmdId, error: err?.message || String(err) });
+        }
+        break;
+      }
+      default:
+        // unknown – ignore
+        break;
+    }
+  });
+
+  cloudWs.on("close", (code: number, reason: Buffer) => {
+    cloudWsConnected = false;
+    if (cloudWsHeartbeatTimer) {
+      clearInterval(cloudWsHeartbeatTimer);
+      cloudWsHeartbeatTimer = null;
+    }
+    console.warn(`[cloud-ws] closed (code=${code}, reason=${reason.toString().slice(0, 80) || "n/a"})`);
+    scheduleCloudReconnect();
+  });
+
+  cloudWs.on("error", (err: Error) => {
+    console.error("[cloud-ws] error:", err.message);
     markCloudUnreachable();
-    console.warn("[heartbeat] Failed:", err);
+  });
+}
+
+function scheduleCloudReconnect(): void {
+  const delay = cloudWsReconnectDelay;
+  cloudWsReconnectDelay = Math.min(cloudWsReconnectDelay * 2, CLOUD_WS_RECONNECT_MAX);
+  console.log(`[cloud-ws] reconnect in ${Math.round(delay / 1000)}s`);
+  setTimeout(connectCloudWebSocket, delay);
+}
+
+/**
+ * Mappt einen Cloud-Befehl auf eine lokale Aktion.
+ * - `backup` / `restart` / `update`: nutzt bestehenden executePendingCommand-Pfad
+ * - `execute_actuator`: Schaltbefehl an HA REST API (entity_id + command in payload)
+ * - `sync_automations` / `sync_meters`: forciert Pull aus der Cloud
+ */
+async function handleCloudCommand(cmdType: string, payload: Record<string, unknown>): Promise<unknown> {
+  switch (cmdType) {
+    case "execute_actuator": {
+      const entityId = String(payload.entity_id || payload.actuator_uuid || "");
+      const commandValue = String(payload.command || payload.action_value || payload.action_type || "toggle");
+      if (!entityId) throw new Error("entity_id missing");
+      await executeWithRetry(entityId, commandValue);
+      return { ok: true, entity_id: entityId, command: commandValue };
+    }
+    case "sync_automations":
+      await syncAutomationsFromCloud();
+      return { ok: true, count: getLocalAutomations().length };
+    case "sync_meters":
+      await fetchMeterMappings();
+      return { ok: true, count: meterMappings.length };
+    case "backup":
+    case "restart":
+    case "update":
+      await executePendingCommand(cmdType, payload);
+      return { ok: true };
+    case "set_ui_pin": {
+      // Cloud kann den UI-PIN-Hash live aktualisieren
+      const hash = payload.ui_pin_hash;
+      uiPinHash = (typeof hash === "string" && hash.length > 0) ? hash : null;
+      console.log(`[cloud-ws] UI PIN ${uiPinHash ? "updated" : "cleared"}`);
+      return { ok: true };
+    }
+    default:
+      throw new Error(`Unknown command: ${cmdType}`);
   }
 }
 
-let cachedHostIP: string | null = null;
 let cachedHostIPAt = 0;
 const HOST_IP_TTL_MS = 5 * 60 * 1000; // refresh every 5 min to catch DHCP changes after reboot
 
@@ -1198,6 +1282,8 @@ async function getHostMAC(): Promise<string> {
   } catch { /* ignore */ }
   return "";
 }
+
+let cachedHostIP: string | null = null;
 
 async function getLocalIP(): Promise<string> {
   // Cached value is valid for HOST_IP_TTL_MS – ensures DHCP changes
@@ -1490,13 +1576,9 @@ function startServer(): void {
         gateway_username: config.gateway_username || "",
         assignment_status: currentAssignmentStatus,
         credentials_configured: !!(config.gateway_username && config.gateway_password),
-        tunnel: {
-          enabled: !!config.cloudflare_enabled,
-          configured: !!config.cloudflare_tunnel_token,
-          connected: cfTunnelConnected,
-          restart_count: cfTunnelRestartCount,
-          last_error: cfTunnelLastError,
-        },
+        cloud_ws_connected: cloudWsConnected,
+        cloud_ws_device_id: cloudWsAssignment.device_id || null,
+        cloud_ws_location_id: cloudWsAssignment.location_id || null,
       }));
       return;
     }
@@ -1736,18 +1818,17 @@ async function main(): Promise<void> {
 
   startServer();
 
-  // Start Cloudflare Tunnel if enabled
-  startCloudflaredTunnel();
-
   // Initial setup
   await checkCloudConnectivity();
   await fetchHAVersion();
   await fetchMeterMappings();
   await syncAutomationsFromCloud();
-  await sendHeartbeat();
 
   // Connect HA WebSocket for live sensor updates
   connectHAWebSocket();
+
+  // Connect persistent WSS to AICONO Cloud (gateway-ws) for heartbeat + commands
+  connectCloudWebSocket();
 
   // Polling loop (REST-based, for readings)
   setInterval(() => pollHAStates(), config.poll_interval_seconds * 1000);
@@ -1755,29 +1836,20 @@ async function main(): Promise<void> {
   // Flush loop
   setInterval(() => flushBuffer(), config.flush_interval_seconds * 1000);
 
-  // Heartbeat loop – self-healing recursive timer.
-  // After a power outage / reboot, the first heartbeat may fail (DNS, network
-  // not yet up). We retry quickly (10s) instead of waiting a full cycle, and
-  // we wrap in try/catch so an unhandled error never kills the loop.
-  const heartbeatTick = async () => {
-    let nextDelayMs = config.heartbeat_interval_seconds * 1000;
+  // Cloud-Health-Watchdog: prüft alle 60s ob die WS noch lebt; falls nein,
+  // wird der Reconnect bereits durch das `close`-Event getriggert. Wir nutzen
+  // diesen Tick zusätzlich, um HA-Version aktuell zu halten.
+  setInterval(async () => {
     try {
-      await checkCloudConnectivity();
       await fetchHAVersion();
-      await sendHeartbeat();
-      if (!isCloudReachable) {
-        // Retry quickly while cloud is unreachable so recovery after reboot
-        // is reflected on the dashboard within seconds, not a full minute.
-        nextDelayMs = 10_000;
+      if (!cloudWsConnected) {
+        // markCloudUnreachable kümmert sich um den UI-Status
+        markCloudUnreachable();
       }
     } catch (err) {
-      console.error("[heartbeat-loop] Tick failed:", err);
-      nextDelayMs = 10_000;
-    } finally {
-      setTimeout(heartbeatTick, nextDelayMs);
+      console.error("[watchdog] tick failed:", err);
     }
-  };
-  setTimeout(heartbeatTick, config.heartbeat_interval_seconds * 1000);
+  }, 60_000);
 
   // Automation evaluation loop
   setInterval(() => evaluateAndExecuteAutomations(), config.automation_eval_seconds * 1000);

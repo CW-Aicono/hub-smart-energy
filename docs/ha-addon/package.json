@@ -9,8 +9,6 @@
     "dev": "ts-node index.ts"
   },
   "dependencies": {
-    "@supabase/realtime-js": "^2.10.7",
-    "@supabase/supabase-js": "^2.45.0",
     "better-sqlite3": "^11.0.0",
     "ws": "^8.16.0"
   },
