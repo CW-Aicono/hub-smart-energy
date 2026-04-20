@@ -1059,34 +1059,50 @@ async function flushBuffer(): Promise<void> {
  * Sendet das vollständige lokale Geräte-Inventar (Sensoren, Aktoren, Zähler)
  * an die Cloud, damit AICONO sie für Zuordnung und Steuerung anbieten kann.
  */
-async function pushDeviceSnapshot(): Promise<void> {
-  if (!isCloudReachable && !cloudWsConnected) return;
-  if (latestHAStates.length === 0) return;
+/**
+ * Single Source of Truth: classify HA entities exactly the way the local
+ * Add-on UI (/api/devices) groups them. Used by both the local UI and the
+ * Cloud snapshot push so the AICONO Cloud sees EXACTLY the same devices
+ * the operator sees in the local Add-on UI – no more, no less.
+ */
+const HA_ACTUATOR_DOMAINS = new Set(["switch", "light", "cover", "climate", "fan", "lock", "valve"]);
+const HA_IGNORED_DOMAINS = new Set([
+  "automation", "script", "scene", "zone", "person", "persistent_notification",
+  "update", "button", "number", "select", "input_boolean", "input_number",
+  "input_select", "input_text", "input_datetime", "timer", "counter", "schedule",
+  "todo", "conversation", "tts", "stt", "wake_word", "calendar", "device_tracker",
+  "media_player", "camera", "weather", "sun", "moon",
+]);
 
-  const actuatorDomains = new Set(["switch", "light", "cover", "climate", "fan", "lock", "valve"]);
-  const ignoredDomains = new Set([
-    "automation", "script", "scene", "zone", "person", "persistent_notification",
-    "update", "button", "number", "select", "input_boolean", "input_number",
-    "input_select", "input_text", "input_datetime", "timer", "counter", "schedule",
-    "todo", "conversation", "tts", "stt", "wake_word", "calendar", "device_tracker",
-    "media_player", "camera", "weather", "sun", "moon",
-  ]);
+interface ClassifiedHADevice {
+  entity_id: string;
+  domain: string;
+  category: "meter" | "actuator" | "sensor";
+  friendly_name: string;
+  state: string;
+  unit: string;
+  device_class: string;
+  last_updated: string;
+}
 
+function classifyLocalHAStates(): {
+  devices: ClassifiedHADevice[];
+  ignoredCount: number;
+  domainCounts: Record<string, number>;
+  categoryCounts: { meter: number; actuator: number; sensor: number };
+} {
   const domainCounts: Record<string, number> = {};
-  const categoryCounts: Record<string, number> = { meter: 0, actuator: 0, sensor: 0 };
+  const categoryCounts = { meter: 0, actuator: 0, sensor: 0 };
   let ignoredCount = 0;
+  const devices: ClassifiedHADevice[] = [];
 
-  const devices: Array<Record<string, unknown>> = [];
   for (const s of latestHAStates) {
     const domain = s.entity_id.split(".")[0];
     domainCounts[domain] = (domainCounts[domain] || 0) + 1;
-    if (ignoredDomains.has(domain)) {
-      ignoredCount++;
-      continue;
-    }
+    if (HA_IGNORED_DOMAINS.has(domain)) { ignoredCount++; continue; }
 
-    let category = "sensor";
-    if (actuatorDomains.has(domain)) {
+    let category: "meter" | "actuator" | "sensor" = "sensor";
+    if (HA_ACTUATOR_DOMAINS.has(domain)) {
       category = "actuator";
     } else if (domain === "sensor") {
       const unit = asString(s.attributes?.unit_of_measurement);
@@ -1095,7 +1111,7 @@ async function pushDeviceSnapshot(): Promise<void> {
         category = "meter";
       }
     }
-    categoryCounts[category] = (categoryCounts[category] || 0) + 1;
+    categoryCounts[category]++;
 
     devices.push({
       entity_id: s.entity_id,
@@ -1108,6 +1124,14 @@ async function pushDeviceSnapshot(): Promise<void> {
       last_updated: s.last_updated,
     });
   }
+  return { devices, ignoredCount, domainCounts, categoryCounts };
+}
+
+async function pushDeviceSnapshot(): Promise<void> {
+  if (!isCloudReachable && !cloudWsConnected) return;
+  if (latestHAStates.length === 0) return;
+
+  const { devices, ignoredCount, domainCounts, categoryCounts } = classifyLocalHAStates();
 
   console.log(
     `[snapshot] inventory analysis: ha_states=${latestHAStates.length} ignored=${ignoredCount} ` +
@@ -1116,7 +1140,7 @@ async function pushDeviceSnapshot(): Promise<void> {
   );
   if (devices.length > 0) {
     const sample = devices.slice(0, 20).map((d) => `${d.entity_id}[${d.category}]`);
-    console.log(`[snapshot] sample entities: ${sample.join(", ")}`);
+    console.log(`[snapshot] sample entities (matches local /api/devices): ${sample.join(", ")}`);
   }
 
   if (devices.length === 0) {
