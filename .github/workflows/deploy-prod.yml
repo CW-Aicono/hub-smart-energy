@@ -38,6 +38,29 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
+      - name: Node.js einrichten
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Lockfile auf staging auto-heilen (falls drift)
+        run: |
+          git fetch origin staging
+          git checkout -B staging origin/staging
+          if npm ci --dry-run --no-audit --no-fund > /dev/null 2>&1; then
+            echo "Lockfile ist in sync."
+          else
+            echo "::notice::Lockfile-Drift erkannt - regeneriere package-lock.json"
+            npm install --package-lock-only --no-audit --no-fund
+            if git diff --quiet package-lock.json; then
+              echo "::warning::npm ci scheitert, aber package-lock.json hat sich nicht geaendert - vermutlich anderer Grund."
+            else
+              git add package-lock.json
+              git commit -m "chore(deps): auto-regenerate package-lock.json [skip ci]"
+              git push origin staging
+            fi
+          fi
+
       - name: Fast-Forward Merge staging -> main
         run: |
           git fetch origin staging main
