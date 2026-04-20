@@ -271,6 +271,20 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
 
   const displayedMeters = showArchived ? archivedMeters : meterTypeMeters;
 
+  // Gateway-Devices vom Typ "meter", die noch keiner Messstelle zugeordnet sind
+  const unmappedMeterDevices = useMemo(
+    () => meterDevices.filter((d) => !meters.some((m) => m.sensor_uuid === d.id)),
+    [meterDevices, meters],
+  );
+  const unmappedActuatorDevices = useMemo(
+    () => actuatorDevices.filter((d) => !meters.some((m) => m.sensor_uuid === d.id)),
+    [actuatorDevices, meters],
+  );
+  const unmappedSensorDevices = useMemo(
+    () => sensorDevices.filter((d) => !meters.some((m) => m.sensor_uuid === d.id)),
+    [sensorDevices, meters],
+  );
+
   // When a new meter is created for a gateway device, watch for it to appear and open edit
   useEffect(() => {
     if (!pendingSensorUuid) return;
@@ -321,9 +335,9 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
       <CardContent>
         <Tabs defaultValue="meters">
           <TabsList>
-            <TabsTrigger value="meters">{t("mm.tabs.meters" as any)} ({meterTypeMeters.length})</TabsTrigger>
-            <TabsTrigger value="sensors">Sensoren ({sensorDevices.length + sensorTypeMeters.length})</TabsTrigger>
-            <TabsTrigger value="actuators">Aktoren ({actuatorDevices.length + actuatorTypeMeters.length})</TabsTrigger>
+            <TabsTrigger value="meters">{t("mm.tabs.meters" as any)} ({meterTypeMeters.length + unmappedMeterDevices.length})</TabsTrigger>
+            <TabsTrigger value="sensors">Sensoren ({unmappedSensorDevices.length + sensorTypeMeters.length})</TabsTrigger>
+            <TabsTrigger value="actuators">Aktoren ({unmappedActuatorDevices.length + actuatorTypeMeters.length})</TabsTrigger>
             <TabsTrigger value="tree" className="gap-1">
               <Network className="h-3.5 w-3.5" />
               {t("mm.tabs.tree" as any)}
@@ -413,6 +427,22 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
                 </TableBody>
               </Table>
             )}
+
+            {/* Unzugeordnete Gateway-Devices vom Typ "Zähler" */}
+            {unmappedMeterDevices.length > 0 && (
+              <div className="space-y-2 pt-2">
+                <p className="text-xs text-muted-foreground">
+                  Vom Gateway erkannte Zähler – klicken Sie auf einen Eintrag, um ihn als Messstelle anzulegen.
+                </p>
+                <DeviceTable
+                  devices={unmappedMeterDevices}
+                  type="sensor"
+                  meters={meters}
+                  onEditMeter={(m) => setEditingMeter(m)}
+                  onCreateAndEdit={(d) => handleCreateAndEdit(d, "meter")}
+                />
+              </div>
+            )}
           </TabsContent>
 
           {/* Sensoren Tab */}
@@ -461,8 +491,8 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
               </div>
             ) : gatewayIntegrations.length === 0 && sensorTypeMeters.length === 0 ? (
               <p className="text-sm text-muted-foreground py-4">Keine Sensoren vorhanden.</p>
-            ) : sensorDevices.length > 0 ? (
-              <DeviceTable devices={sensorDevices} type="sensor" meters={meters} onEditMeter={(m) => setEditingMeter(m)} onCreateAndEdit={handleCreateAndEdit} />
+            ) : unmappedSensorDevices.length > 0 ? (
+              <DeviceTable devices={unmappedSensorDevices} type="sensor" meters={meters} onEditMeter={(m) => setEditingMeter(m)} onCreateAndEdit={handleCreateAndEdit} />
             ) : null}
           </TabsContent>
 
@@ -512,8 +542,8 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
               </div>
             ) : gatewayIntegrations.length === 0 && actuatorTypeMeters.length === 0 ? (
               <p className="text-sm text-muted-foreground py-4">Keine Aktoren vorhanden.</p>
-            ) : actuatorDevices.length > 0 ? (
-              <DeviceTable devices={actuatorDevices} type="actuator" meters={meters} onEditMeter={(m) => setEditingMeter(m)} onCreateAndEdit={handleCreateAndEdit} />
+            ) : unmappedActuatorDevices.length > 0 ? (
+              <DeviceTable devices={unmappedActuatorDevices} type="actuator" meters={meters} onEditMeter={(m) => setEditingMeter(m)} onCreateAndEdit={handleCreateAndEdit} />
             ) : null}
           </TabsContent>
 
