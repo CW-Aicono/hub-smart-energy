@@ -29,6 +29,8 @@ interface AssignMeterSensor {
   name: string;
   controlType?: string;
   unit: string;
+  /** Pre-classified device type from the discovery dialog */
+  deviceType?: "meter" | "sensor" | "actuator";
 }
 
 interface AssignMeterDialogProps {
@@ -68,8 +70,18 @@ export function AssignMeterDialog({
   const T = (key: string) => t(key as any);
   const { addMeter } = useMeters();
 
-  const [deviceType, setDeviceType] = useState<"meter" | "sensor" | "actuator">("meter");
   const [energyType, setEnergyType] = useState("strom");
+  // Whether all selected devices share the same pre-classified type.
+  // If they do, we skip the manual device-type picker entirely – the
+  // assignment then preserves the per-device classification from the
+  // "Gefundene Geräte"-Dialog.
+  const uniformDeviceType: "meter" | "sensor" | "actuator" | null = (() => {
+    if (sensorList.length === 0) return null;
+    const first = sensorList[0].deviceType;
+    if (!first) return null;
+    return sensorList.every((s) => s.deviceType === first) ? first : null;
+  })();
+  const allMeters = sensorList.length > 0 && sensorList.every((s) => s.deviceType === "meter");
   const [selectedLocationId, setSelectedLocationId] = useState(currentLocationId);
   const [selectedFloorId, setSelectedFloorId] = useState<string>("");
   const [selectedRoomId, setSelectedRoomId] = useState<string>("");
@@ -144,13 +156,14 @@ export function AssignMeterDialog({
 
     try {
       for (const s of sensorList) {
+        const dt: "meter" | "sensor" | "actuator" = s.deviceType ?? "sensor";
         await addMeter({
           name: s.name.trim(),
           location_id: selectedLocationId,
-          energy_type: deviceType === "meter" ? energyType : "none",
-          unit: s.unit || (deviceType === "meter" ? "kWh" : ""),
-          capture_type: deviceType === "meter" ? "automatic" : "automatic",
-          device_type: deviceType,
+          energy_type: dt === "meter" ? energyType : "none",
+          unit: s.unit || (dt === "meter" ? "kWh" : ""),
+          capture_type: "automatic",
+          device_type: dt,
           location_integration_id: locationIntegrationId,
           sensor_uuid: s.id,
         });
@@ -176,10 +189,23 @@ export function AssignMeterDialog({
       }
 
       const count = sensorList.length;
-      const typeLabel = deviceType === "meter" ? "Zähler" : deviceType === "sensor" ? "Sensor" : "Aktor";
+      const typeLabel = uniformDeviceType === "meter"
+        ? "Zähler"
+        : uniformDeviceType === "actuator"
+          ? "Aktor"
+          : uniformDeviceType === "sensor"
+            ? "Sensor"
+            : "Gerät";
+      const pluralLabel = uniformDeviceType === "meter"
+        ? "Zähler"
+        : uniformDeviceType === "actuator"
+          ? "Aktoren"
+          : uniformDeviceType === "sensor"
+            ? "Sensoren"
+            : "Geräte";
       toast.success(count === 1
         ? `${typeLabel} "${sensorList[0].name}" erfolgreich zugeordnet`
-        : `${count} ${typeLabel} erfolgreich zugeordnet`
+        : `${count} ${pluralLabel} erfolgreich zugeordnet`
       );
       onOpenChange(false);
     } catch (err) {
@@ -199,8 +225,8 @@ export function AssignMeterDialog({
           </DialogTitle>
           <DialogDescription>
             {sensorList.length === 1
-              ? `Ordnen Sie „${sensorList[0].name}" einem Gerätetyp und Standort zu.`
-              : `Ordnen Sie ${sensorList.length} ausgewählte Geräte dem Standort zu.`}
+              ? `Ordnen Sie „${sensorList[0].name}" einem Standort zu.`
+              : `Ordnen Sie ${sensorList.length} ausgewählte Geräte einem Standort zu.`}
           </DialogDescription>
         </DialogHeader>
 
@@ -217,23 +243,8 @@ export function AssignMeterDialog({
             </div>
           )}
 
-          {/* Device type */}
-          <div>
-            <Label>Gerätetyp</Label>
-            <Select value={deviceType} onValueChange={(v) => setDeviceType(v as "meter" | "sensor" | "actuator")}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="meter">Zähler</SelectItem>
-                <SelectItem value="sensor">Sensor</SelectItem>
-                <SelectItem value="actuator">Aktor</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Energy type - only for meters */}
-          {deviceType === "meter" && (
+          {/* Energy type - only when ALL selected devices are meters */}
+          {allMeters && (
             <div>
               <Label>Energieart</Label>
               <Select value={energyType} onValueChange={setEnergyType}>
@@ -247,6 +258,9 @@ export function AssignMeterDialog({
                   <SelectItem value="wasser">{T("energy.wasser")}</SelectItem>
                 </SelectContent>
               </Select>
+              <p className="text-xs text-muted-foreground mt-1">
+                Gilt für alle ausgewählten Zähler. Kann später je Zähler angepasst werden.
+              </p>
             </div>
           )}
 

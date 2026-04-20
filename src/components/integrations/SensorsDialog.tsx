@@ -28,6 +28,8 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AssignMeterDialog } from "./AssignMeterDialog";
 import { useMeters } from "@/hooks/useMeters";
 import { getGatewayDefinition, getEdgeFunctionName } from "@/lib/gatewayRegistry";
+import { getResolvedDeviceType } from "@/lib/deviceClassification";
+import type { LoxoneSensor } from "@/hooks/useLoxoneSensors";
 
 interface Sensor {
   id: string;
@@ -350,7 +352,13 @@ export function SensorsDialog({ locationIntegration, open, onOpenChange, locatio
               setSelectedSensorIds(new Set());
             }
           }}
-          sensors={selectedSensors.map((s) => ({ id: s.id, name: s.name, controlType: s.controlType, unit: s.unit }))}
+          sensors={selectedSensors.map((s) => ({
+            id: s.id,
+            name: s.name,
+            controlType: s.controlType,
+            unit: s.unit,
+            deviceType: getResolvedDeviceType(s as unknown as LoxoneSensor),
+          }))}
           locationIntegrationId={locationIntegration.id}
           currentLocationId={effectiveLocationId}
         />
