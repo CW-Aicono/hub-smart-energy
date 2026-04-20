@@ -63,19 +63,17 @@ jobs:
 
       - name: App-Code aus staging in main syncen (CI auf main geschützt)
         run: |
+          set -euo pipefail
           git fetch origin staging main
-          git checkout main
-          CI_BASELINE="$(git rev-parse HEAD)"
 
-          # Merge staging in main; Konflikte immer zugunsten staging auflösen
-          # (Lovable ist Source-of-Truth für App-Code).
-          git merge --no-ff --no-edit -X theirs origin/staging \
-            -m "sync app from staging" \
-            -m "Auto-Merge vom Deploy-Workflow. App-Code kommt von staging," \
-            -m "CI-Pfade werden danach aus main wiederhergestellt."
+          CI_BASELINE="$(git rev-parse origin/main)"
+          STAGING_SHA="$(git rev-parse origin/staging)"
 
-          # Lovable kann durch Reverts CI-Dateien auf staging löschen. Wir stellen
-          # sie aus dem main-Zustand vor dem Merge wieder her.
+          # Statt klassischem `git merge` (der an modify/delete-Konflikten scheitert,
+          # wenn Lovable CI-Dateien auf staging per Revert gelöscht hat) bauen wir
+          # den Ziel-Tree direkt: staging-Tree als Basis, CI-Pfade aus main drüberlegen.
+          git checkout --detach "$STAGING_SHA"
+
           CI_PATHS=(
             .github/workflows
             Dockerfile
@@ -92,12 +90,23 @@ jobs:
             fi
           done
 
-          if ! git diff --cached --quiet HEAD; then
-            echo "CI-Pfade aus main-Baseline wiederhergestellt"
-            git commit --amend --no-edit
-          fi
+          git add -A
+          TARGET_TREE="$(git write-tree)"
+          MAIN_TREE="$(git rev-parse "${CI_BASELINE}^{tree}")"
 
-          git push origin main
+          if [ "$TARGET_TREE" = "$MAIN_TREE" ]; then
+            echo "Nichts zu syncen (Ziel-Tree = main-Tree)."
+            git checkout main
+          else
+            MERGE_COMMIT="$(git commit-tree "$TARGET_TREE" \
+              -p "$CI_BASELINE" \
+              -p "$STAGING_SHA" \
+              -m "sync app from staging (CI on main preserved)" \
+              -m "Auto-Merge vom Deploy-Workflow.")"
+            echo "Neuer Merge-Commit: $MERGE_COMMIT"
+            git checkout -B main "$MERGE_COMMIT"
+            git push origin main
+          fi
 
       - name: Kurz-SHA ermitteln
         id: sha
