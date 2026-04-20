@@ -82,6 +82,44 @@ function safeSend(ws: WebSocket, msg: unknown) {
   }
 }
 
+function getExplicitBinaryState(value: unknown): "on" | "off" | null {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (normalized === "on") return "on";
+  if (normalized === "off") return "off";
+  return null;
+}
+
+async function mirrorGatewayInventoryState(params: {
+  gatewayDeviceId: string;
+  entityId: string;
+  nextState: "on" | "off";
+  locationIntegrationId?: string | null;
+}) {
+  const nowIso = new Date().toISOString();
+  const update: Record<string, unknown> = {
+    state: params.nextState,
+    last_state_at: nowIso,
+    last_seen_at: nowIso,
+    updated_at: nowIso,
+  };
+  if (params.locationIntegrationId) update.location_integration_id = params.locationIntegrationId;
+
+  const { error } = await svc()
+    .from("gateway_device_inventory")
+    .update(update)
+    .eq("gateway_device_id", params.gatewayDeviceId)
+    .eq("entity_id", params.entityId);
+
+  if (error) {
+    console.warn("[gateway-ws] inventory mirror failed", {
+      gatewayDeviceId: params.gatewayDeviceId,
+      entityId: params.entityId,
+      nextState: params.nextState,
+      error: error.message,
+    });
+  }
+}
+
 async function handleHttpAction(req: Request): Promise<Response | null> {
   if (req.method !== "POST") return null;
 
@@ -329,6 +367,15 @@ async function handleExecuteCommand(req: Request, body: any): Promise<Response> 
       .maybeSingle();
     if (!row) continue;
     if (row.status === "completed") {
+      const explicitState = getExplicitBinaryState(command);
+      if (explicitState) {
+        await mirrorGatewayInventoryState({
+          gatewayDeviceId: device.id,
+          entityId,
+          nextState: explicitState,
+          locationIntegrationId,
+        });
+      }
       return jsonResponse(req, { success: true, response: row.response ?? null });
     }
     if (row.status === "failed") {
@@ -542,7 +589,15 @@ async function handleFrame(session: Session, raw: any) {
       const cmdId = String(raw.command_id || "");
       if (!cmdId) return;
       const isError = !!raw.error;
-      await svc()
+      const sb = svc();
+      const { data: cmdRow } = await sb
+        .from("gateway_commands")
+        .select("payload")
+        .eq("id", cmdId)
+        .eq("gateway_device_id", session.deviceId)
+        .maybeSingle();
+
+      await sb
         .from("gateway_commands")
         .update({
           status: isError ? "failed" : "completed",
@@ -552,6 +607,20 @@ async function handleFrame(session: Session, raw: any) {
         })
         .eq("id", cmdId)
         .eq("gateway_device_id", session.deviceId);
+
+      if (!isError) {
+        const payload = (cmdRow?.payload ?? {}) as Record<string, unknown>;
+        const entityId = String(payload.entity_id || "").trim();
+        const explicitState = getExplicitBinaryState(payload.command);
+        if (entityId && explicitState) {
+          await mirrorGatewayInventoryState({
+            gatewayDeviceId: session.deviceId,
+            entityId,
+            nextState: explicitState,
+            locationIntegrationId: session.locationIntegrationId,
+          });
+        }
+      }
       break;
     }
     default:
