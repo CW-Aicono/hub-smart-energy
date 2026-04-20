@@ -1796,48 +1796,15 @@ function startServer(): void {
     }
 
     // ── Devices overview: all entities grouped by type ──
+    // Uses the SAME classifier as the cloud snapshot push, so the local UI
+    // and the AICONO Cloud always show identical device sets.
     if (pathname === "/api/devices") {
-      const actuatorDomains = new Set(["switch", "light", "cover", "climate", "fan", "lock", "valve"]);
-      const meterDomains = new Set(["sensor"]);
-      const ignoredDomains = new Set(["automation", "script", "scene", "zone", "person", "persistent_notification", "update", "button", "number", "select", "input_boolean", "input_number", "input_select", "input_text", "input_datetime", "timer", "counter", "schedule", "todo", "conversation", "tts", "stt", "wake_word", "calendar", "device_tracker", "media_player", "camera", "weather", "sun", "moon"]);
-
-      const devices: { entity_id: string; state: string; domain: string; friendly_name: string; unit: string; device_class: string; last_updated: string; category: string }[] = [];
-
-      for (const s of latestHAStates) {
-        const domain = s.entity_id.split(".")[0];
-        if (ignoredDomains.has(domain)) continue;
-
-        let category = "sensor";
-        if (actuatorDomains.has(domain)) {
-          category = "actuator";
-        } else if (domain === "sensor") {
-          const unit = asString(s.attributes?.unit_of_measurement);
-          const dc = asString(s.attributes?.device_class);
-          if (["energy", "power", "gas", "water"].includes(dc) || /kwh|kw|wh|m³/i.test(unit)) {
-            category = "meter";
-          }
-        } else if (domain === "binary_sensor") {
-          category = "sensor";
-        }
-
-        devices.push({
-          entity_id: s.entity_id,
-          state: s.state,
-          domain,
-          friendly_name: asString(s.attributes?.friendly_name, s.entity_id),
-          unit: asString(s.attributes?.unit_of_measurement),
-          device_class: asString(s.attributes?.device_class),
-          last_updated: s.last_updated,
-          category,
-        });
-      }
-
+      const { devices } = classifyLocalHAStates();
       const grouped = {
         meters: devices.filter((d) => d.category === "meter"),
         sensors: devices.filter((d) => d.category === "sensor"),
         actuators: devices.filter((d) => d.category === "actuator"),
       };
-
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ success: true, devices: grouped, total: devices.length }));
       return;
