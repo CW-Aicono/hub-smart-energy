@@ -213,7 +213,7 @@ function markCloudUnreachable(): void {
 async function checkCloudConnectivity(): Promise<boolean> {
   try {
     const res = await fetch(`${config.cloud_url}/functions/v1/gateway-ingest?action=addon-version`, {
-      headers: { Authorization: `Bearer ${config.gateway_api_key}` },
+      headers: { Authorization: authHeader() },
       signal: AbortSignal.timeout(15000),
     });
     if (res.ok) {
@@ -420,7 +420,7 @@ async function fetchMeterMappings(): Promise<void> {
   }
   try {
     const res = await fetch(`${INGEST_URL}?action=list-meters`, {
-      headers: { Authorization: `Bearer ${config.gateway_api_key}` },
+      headers: { Authorization: authHeader() },
     });
     if (!res.ok) {
       console.error(`[mapping] Failed to fetch meters: ${res.status}`);
@@ -892,7 +892,7 @@ async function syncAutomationsFromCloud(): Promise<void> {
     }
 
     const res = await fetch(`${INGEST_URL}?${params.toString()}`, {
-      headers: { Authorization: `Bearer ${config.gateway_api_key}` },
+      headers: { Authorization: authHeader() },
       signal: AbortSignal.timeout(15000),
     });
 
@@ -983,7 +983,7 @@ async function pushExecutionLogs(): Promise<void> {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${config.gateway_api_key}`,
+        Authorization: authHeader(),
       },
       body: JSON.stringify({ logs }),
     });
@@ -1029,7 +1029,7 @@ async function flushBuffer(): Promise<void> {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${config.gateway_api_key}`,
+        Authorization: authHeader(),
       },
       body: JSON.stringify({ readings }),
     });
@@ -1070,7 +1070,7 @@ async function sendHeartbeat(): Promise<void> {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${config.gateway_api_key}`,
+        Authorization: authHeader(),
       },
       body: JSON.stringify({
         device_name: config.device_name,
@@ -1253,7 +1253,7 @@ async function sendBackup(): Promise<void> {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${config.gateway_api_key}`,
+        Authorization: authHeader(),
       },
       body: JSON.stringify({
         tenant_id: config.tenant_id,
