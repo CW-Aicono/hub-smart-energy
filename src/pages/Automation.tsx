@@ -86,7 +86,7 @@ const Automation = () => {
         .order("created_at");
 
       if (data) {
-        const gwTypes = ["loxone_miniserver", "loxone_miniserver_go", "home_assistant"];
+        const gwTypes = ["loxone_miniserver", "loxone_miniserver_go", "aicono_gateway"];
         const mapped: GatewayInfo[] = (data as any[])
           .filter((row) => gwTypes.includes(row.integrations?.type))
           .map((row) => {
