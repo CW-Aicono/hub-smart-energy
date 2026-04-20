@@ -81,12 +81,6 @@ verify_jwt = false
 [functions.gateway-ingest]
 verify_jwt = false
 
-[functions.home-assistant-api]
-verify_jwt = false
-
-[functions.ha-ws-proxy]
-verify_jwt = false
-
 [functions.pitch-stats]
 verify_jwt = false
 
@@ -120,7 +114,10 @@ verify_jwt = false
 [functions.automation-scheduler]
 verify_jwt = false
 
-[functions.cf-tunnel-provision]
+[functions.cf-tunnel-cleanup]
+verify_jwt = false
+
+[functions.gateway-ws]
 verify_jwt = false
 
 [functions.sales-public-quote]
