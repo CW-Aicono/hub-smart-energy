@@ -2454,6 +2454,69 @@ export type Database = {
         }
         Relationships: []
       }
+      gateway_commands: {
+        Row: {
+          acked_at: string | null
+          command_type: string
+          created_at: string
+          created_by: string | null
+          error_message: string | null
+          expires_at: string
+          gateway_device_id: string
+          id: string
+          payload: Json
+          response: Json | null
+          sent_at: string | null
+          status: string
+          tenant_id: string
+        }
+        Insert: {
+          acked_at?: string | null
+          command_type: string
+          created_at?: string
+          created_by?: string | null
+          error_message?: string | null
+          expires_at?: string
+          gateway_device_id: string
+          id?: string
+          payload?: Json
+          response?: Json | null
+          sent_at?: string | null
+          status?: string
+          tenant_id: string
+        }
+        Update: {
+          acked_at?: string | null
+          command_type?: string
+          created_at?: string
+          created_by?: string | null
+          error_message?: string | null
+          expires_at?: string
+          gateway_device_id?: string
+          id?: string
+          payload?: Json
+          response?: Json | null
+          sent_at?: string | null
+          status?: string
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gateway_commands_gateway_device_id_fkey"
+            columns: ["gateway_device_id"]
+            isOneToOne: false
+            referencedRelation: "gateway_devices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gateway_commands_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       gateway_devices: {
         Row: {
           addon_version: string | null
@@ -2467,15 +2530,18 @@ export type Database = {
           ha_version: string | null
           id: string
           last_heartbeat_at: string | null
+          last_ws_ping_at: string | null
           latest_available_version: string | null
           local_ip: string | null
           local_time: string | null
+          location_id: string | null
           location_integration_id: string | null
           mac_address: string | null
           offline_buffer_count: number
           status: string
           tenant_id: string | null
           updated_at: string
+          ws_connected_since: string | null
         }
         Insert: {
           addon_version?: string | null
@@ -2489,15 +2555,18 @@ export type Database = {
           ha_version?: string | null
           id?: string
           last_heartbeat_at?: string | null
+          last_ws_ping_at?: string | null
           latest_available_version?: string | null
           local_ip?: string | null
           local_time?: string | null
+          location_id?: string | null
           location_integration_id?: string | null
           mac_address?: string | null
           offline_buffer_count?: number
           status?: string
           tenant_id?: string | null
           updated_at?: string
+          ws_connected_since?: string | null
         }
         Update: {
           addon_version?: string | null
@@ -2511,17 +2580,27 @@ export type Database = {
           ha_version?: string | null
           id?: string
           last_heartbeat_at?: string | null
+          last_ws_ping_at?: string | null
           latest_available_version?: string | null
           local_ip?: string | null
           local_time?: string | null
+          location_id?: string | null
           location_integration_id?: string | null
           mac_address?: string | null
           offline_buffer_count?: number
           status?: string
           tenant_id?: string | null
           updated_at?: string
+          ws_connected_since?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "gateway_devices_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "gateway_devices_location_integration_id_fkey"
             columns: ["location_integration_id"]
