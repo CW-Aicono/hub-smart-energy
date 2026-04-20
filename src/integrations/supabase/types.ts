@@ -2462,6 +2462,8 @@ export type Database = {
           created_at: string
           device_name: string
           device_type: string
+          gateway_password_hash: string | null
+          gateway_username: string | null
           ha_version: string | null
           id: string
           last_heartbeat_at: string | null
@@ -2469,6 +2471,7 @@ export type Database = {
           local_ip: string | null
           local_time: string | null
           location_integration_id: string | null
+          mac_address: string | null
           offline_buffer_count: number
           status: string
           tenant_id: string | null
@@ -2481,6 +2484,8 @@ export type Database = {
           created_at?: string
           device_name: string
           device_type?: string
+          gateway_password_hash?: string | null
+          gateway_username?: string | null
           ha_version?: string | null
           id?: string
           last_heartbeat_at?: string | null
@@ -2488,6 +2493,7 @@ export type Database = {
           local_ip?: string | null
           local_time?: string | null
           location_integration_id?: string | null
+          mac_address?: string | null
           offline_buffer_count?: number
           status?: string
           tenant_id?: string | null
@@ -2500,6 +2506,8 @@ export type Database = {
           created_at?: string
           device_name?: string
           device_type?: string
+          gateway_password_hash?: string | null
+          gateway_username?: string | null
           ha_version?: string | null
           id?: string
           last_heartbeat_at?: string | null
@@ -2507,6 +2515,7 @@ export type Database = {
           local_ip?: string | null
           local_time?: string | null
           location_integration_id?: string | null
+          mac_address?: string | null
           offline_buffer_count?: number
           status?: string
           tenant_id?: string | null
