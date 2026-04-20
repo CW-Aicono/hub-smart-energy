@@ -91,9 +91,13 @@ export function useLoxoneSensors(integrationId: string | undefined, integrationT
     queryKey: ["gateway-sensors", integrationId],
     queryFn: () => fetchSensors(integrationId!, integrationType),
     enabled: !!integrationId,
-    staleTime: 60_000,
-    // Background safety net – realtime invalidation handles instant updates.
-    refetchInterval: 5 * 60_000,
+    staleTime: 0,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
+    refetchIntervalInBackground: true,
+    // Short polling fallback for setups where DB realtime invalidation is delayed
+    // or unavailable, so actuator states don't stay stale in the UI.
+    refetchInterval: 15_000,
   });
 }
 
@@ -103,8 +107,11 @@ export function useLoxoneSensorsMulti(integrationIds: string[], integrationTypes
     queries: integrationIds.map((id, idx) => ({
       queryKey: ["gateway-sensors", id],
       queryFn: () => fetchSensors(id, integrationTypes?.[idx]),
-      staleTime: 60_000,
-      refetchInterval: 5 * 60_000,
+      staleTime: 0,
+      refetchOnMount: "always" as const,
+      refetchOnWindowFocus: true,
+      refetchIntervalInBackground: true,
+      refetchInterval: 15_000,
       enabled: !!id,
     })),
   });
