@@ -21,7 +21,10 @@ describe("gatewayRegistry", () => {
         expect(def.icon).toBeTruthy();
         expect(def.edgeFunctionName).toBeTruthy();
         expect(Array.isArray(def.configFields)).toBe(true);
-        expect(def.configFields.length).toBeGreaterThan(0);
+        // aicono_gateway intentionally has 0 configFields (credentials live on gateway_devices)
+        if (def.type !== "aicono_gateway") {
+          expect(def.configFields.length).toBeGreaterThan(0);
+        }
       }
     });
   });
@@ -152,14 +155,15 @@ describe("gatewayRegistry", () => {
       }
     });
 
-    it("schneider_cloud requires api_url, client_id, client_secret, site_id", () => {
+    it("schneider_cloud requires client_id, client_secret, site_id (api_url + token_url have defaults)", () => {
       const fields = GATEWAY_DEFINITIONS.schneider_cloud.configFields;
       const names = fields.map((f) => f.name);
       expect(names).toContain("api_url");
       expect(names).toContain("client_id");
       expect(names).toContain("client_secret");
       expect(names).toContain("site_id");
-      expect(fields.every((f) => f.required)).toBe(true);
+      const requiredNames = fields.filter((f) => f.required).map((f) => f.name);
+      expect(requiredNames).toEqual(expect.arrayContaining(["client_id", "client_secret", "site_id"]));
     });
   });
 });
