@@ -1,10 +1,19 @@
 /**
- * AICONO EMS Gateway v2.1
+ * AICONO EMS Gateway v3.0
  * ==============================================
- * Lokaler Gateway-Hub: Pollt HA REST API, puffert offline via SQLite,
- * pusht Readings batched an gateway-ingest.
- * Features: Lokale Automationsausführung, WebSocket-Client, Preact-UI,
- * Priority-Buffer, Offline-Caches, Lokale Aktor-Steuerung.
+ * Lokaler Gateway-Hub mit bidirektionaler WebSocket-Verbindung zur AICONO Cloud.
+ *
+ * Architektur:
+ *  - HA REST/WS Polling -> SQLite-Buffer -> Push an /functions/v1/gateway-ingest
+ *  - Persistenter WSS-Client zu /functions/v1/gateway-ws (MAC + Username + Passwort)
+ *    -> empfängt Heartbeat-Bestätigungen, UI-PIN-Sync, Schaltbefehle
+ *  - Lokaler Automationsmotor (automation-core kompatibel) läuft auch ohne Internet
+ *  - Offline-Caches (meter mappings, HA states), Priority-Buffer, FIFO-Eviction
+ *
+ * v3.0 BREAKING:
+ *  - Cloudflare-Tunnel komplett entfernt (kein eingehender HTTP mehr)
+ *  - Cloud-Steuerbefehle kommen jetzt push-basiert über die WS-Verbindung an
+ *  - Pflicht-Konfig: gateway_username + gateway_password (Bcrypt-Auth gegen MAC)
  */
 
 import http from "http";
