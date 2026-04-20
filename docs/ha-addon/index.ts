@@ -1110,7 +1110,8 @@ async function pushDeviceSnapshot(): Promise<void> {
       signal: AbortSignal.timeout(20_000),
     });
     if (!res.ok) {
-      console.warn(`[snapshot] device-snapshot returned ${res.status}`);
+      const errText = await res.text().catch(() => "");
+      console.warn(`[snapshot] device-snapshot returned ${res.status} body=${errText.slice(0, 300)} sent_devices=${devices.length}`);
       return;
     }
     const data = await res.json() as { success?: boolean; upserted?: number; pruned?: number };
