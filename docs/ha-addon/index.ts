@@ -1100,7 +1100,11 @@ async function sendHeartbeat(): Promise<void> {
         pending_command?: string;
         pending_command_params?: Record<string, unknown>;
         ui_pin_hash?: string | null;
+        assignment_status?: "assigned" | "pending_assignment" | "unknown";
       };
+      if (data.assignment_status) {
+        currentAssignmentStatus = data.assignment_status;
+      }
       // Sync UI PIN hash from cloud
       if (data.ui_pin_hash !== undefined) {
         uiPinHash = data.ui_pin_hash || null;
