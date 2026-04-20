@@ -32,6 +32,17 @@ interface TunnelResult {
   tunnel_token: string;
 }
 
+const normalizeMacAddress = (value: string) => value.toLowerCase().replace(/[^0-9a-f]/g, "");
+
+const emptyFormValues: Record<string, string> = {
+  name: "",
+  type: "",
+  description: "",
+  mac_address: "",
+  gateway_username: "",
+  gateway_password: "",
+};
+
 export function AddIntegrationDialog({ locationId, onSuccess }: AddIntegrationDialogProps) {
   const [open, setOpen] = useState(false);
   const [testing, setTesting] = useState(false);
@@ -61,12 +72,51 @@ export function AddIntegrationDialog({ locationId, onSuccess }: AddIntegrationDi
           : z.string().optional();
       }
     }
-    return z.object(shape);
+    if (isHomeAssistant) {
+      shape.mac_address = z.string().trim().transform(normalizeMacAddress);
+      shape.gateway_username = z.string().trim();
+      shape.gateway_password = z.string();
+    }
+
+    return z.object(shape).superRefine((values, ctx) => {
+      if (!isHomeAssistant) return;
+
+      const macAddress = typeof values.mac_address === "string" ? values.mac_address : "";
+      const gatewayUsername = typeof values.gateway_username === "string" ? values.gateway_username.trim() : "";
+      const gatewayPassword = typeof values.gateway_password === "string" ? values.gateway_password : "";
+      const hasGatewayIdentity = Boolean(macAddress || gatewayUsername || gatewayPassword);
+
+      if (!hasGatewayIdentity) return;
+
+      if (macAddress.length !== 12) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "MAC muss 12 Hex-Zeichen sein (z. B. aabbccddeeff)",
+          path: ["mac_address"],
+        });
+      }
+
+      if (gatewayUsername.length < 3 || gatewayUsername.length > 32) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Benutzername muss 3 bis 32 Zeichen lang sein",
+          path: ["gateway_username"],
+        });
+      }
+
+      if (gatewayPassword.length < 8) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Passwort muss mindestens 8 Zeichen lang sein",
+          path: ["gateway_password"],
+        });
+      }
+    });
   }, [gatewayDef, isHomeAssistant]);
 
   const form = useForm<Record<string, string>>({
     resolver: zodResolver(formSchema),
-    defaultValues: { name: "", type: "", description: "" },
+    defaultValues: emptyFormValues,
   });
 
   const handleTypeChange = (value: string) => {
@@ -74,6 +124,7 @@ export function AddIntegrationDialog({ locationId, onSuccess }: AddIntegrationDi
     setTunnelResult(null);
     const current = form.getValues();
     const resetVals: Record<string, string> = {
+      ...emptyFormValues,
       name: current.name || "",
       type: value,
       description: current.description || "",
@@ -167,7 +218,32 @@ export function AddIntegrationDialog({ locationId, onSuccess }: AddIntegrationDi
       return;
     }
 
-    toast({ title: "Integration hinzugefügt", description: "Die Integration wurde erfolgreich angelegt." });
+    let gatewayAssignmentWarning: string | null = null;
+
+    if (isHomeAssistant && data.mac_address && data.gateway_username && data.gateway_password) {
+      const { data: assignmentData, error: assignmentError } = await supabase.functions.invoke("gateway-credentials", {
+        body: {
+          mac_address: data.mac_address,
+          gateway_username: data.gateway_username,
+          gateway_password: data.gateway_password,
+          location_integration_id: linkData.id,
+        },
+      });
+
+      if (assignmentError) {
+        gatewayAssignmentWarning = assignmentError.message;
+      } else if ((assignmentData as { error?: string } | null)?.error) {
+        gatewayAssignmentWarning = (assignmentData as { error: string }).error;
+      }
+    }
+
+    toast({
+      title: gatewayAssignmentWarning ? "Integration hinzugefügt, Gateway-Zuordnung offen" : "Integration hinzugefügt",
+      description: gatewayAssignmentWarning
+        ? `Die Integration wurde angelegt. MAC/Benutzername/Passwort konnten noch nicht gespeichert werden: ${gatewayAssignmentWarning}`
+        : "Die Integration wurde erfolgreich angelegt.",
+      variant: gatewayAssignmentWarning ? "destructive" : undefined,
+    });
 
     // For HA without manual api_url → offer immediate tunnel provisioning
     if (isHomeAssistant && !data.api_url) {
@@ -177,7 +253,7 @@ export function AddIntegrationDialog({ locationId, onSuccess }: AddIntegrationDi
       return;
     }
 
-    form.reset({ name: "", type: "", description: "" });
+    form.reset(emptyFormValues);
     setSelectedType("");
     setTunnelResult(null);
     setOpen(false);
@@ -192,7 +268,7 @@ export function AddIntegrationDialog({ locationId, onSuccess }: AddIntegrationDi
   };
 
   const closeDialog = () => {
-    form.reset({ name: "", type: "", description: "" });
+    form.reset(emptyFormValues);
     setSelectedType("");
     setTunnelResult(null);
     setOpen(false);
@@ -319,6 +395,61 @@ export function AddIntegrationDialog({ locationId, onSuccess }: AddIntegrationDi
                   bestehende Nabu-Casa- oder Reverse-Proxy-URL manuell ein.
                 </AlertDescription>
               </Alert>
+            )}
+
+            {isHomeAssistant && (
+              <div className="space-y-4 rounded-lg border border-border bg-muted/20 p-4">
+                <div className="space-y-1">
+                  <p className="text-sm font-medium text-foreground">Gateway-Identität (optional beim Anlegen)</p>
+                  <p className="text-xs text-muted-foreground">
+                    Wenn MAC-Adresse, Benutzername und Passwort schon bekannt sind, kann der Pi direkt beim Anlegen zugeordnet werden.
+                  </p>
+                </div>
+
+                <FormField
+                  control={form.control}
+                  name="mac_address"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>MAC-Adresse</FormLabel>
+                      <FormControl>
+                        <Input placeholder="aabbccddeeff" className="font-mono" autoComplete="off" {...field} value={field.value || ""} />
+                      </FormControl>
+                      <FormDescription>12 Hex-Zeichen ohne Doppelpunkte, z. B. aabbccddeeff.</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="gateway_username"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Benutzername</FormLabel>
+                      <FormControl>
+                        <Input placeholder="buero-pi" autoComplete="off" {...field} value={field.value || ""} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="gateway_password"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Passwort</FormLabel>
+                      <FormControl>
+                        <Input type="password" placeholder="••••••••" autoComplete="new-password" {...field} value={field.value || ""} />
+                      </FormControl>
+                      <FormDescription>Muss exakt mit dem Passwort im Add-on übereinstimmen.</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
             )}
 
             {gatewayDef && (
