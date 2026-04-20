@@ -111,8 +111,10 @@ export function SensorsDialog({ locationIntegration, open, onOpenChange, locatio
   const integrationType = locationIntegration?.integration?.type || "";
   const edgeFunctionName = getEdgeFunctionName(integrationType);
 
-  // Push-based gateways (gateway-ingest) don't support getSensors – they receive data, not poll it
-  const isPushGateway = edgeFunctionName === "gateway-ingest";
+  // Push-based gateways don't support getSensors – they receive data, not poll it.
+  // gateway-ingest (Schneider/Siemens) and gateway-ws (AICONO Gateway) are both push-based:
+  // their sensors arrive via WebSocket / HTTPS push and are managed via gateway_devices.
+  const isPushGateway = edgeFunctionName === "gateway-ingest" || edgeFunctionName === "gateway-ws";
 
   // For non-Loxone gateways, show all sensors; for Loxone filter to meter types
   const meterSensors = integrationType === "loxone_miniserver"
@@ -222,9 +224,10 @@ export function SensorsDialog({ locationIntegration, open, onOpenChange, locatio
             {isPushGateway ? (
               <div className="text-center py-12 text-muted-foreground space-y-2">
                 <p className="font-medium">Push-basiertes Gateway</p>
-                <p className="text-sm">
-                  Dieses Gateway sendet Daten aktiv an das System. Zähler können nicht automatisch abgerufen werden.
-                  Bitte ordnen Sie die Zähler manuell über das Device-Mapping in der Integrationskonfiguration zu.
+                <p className="text-sm max-w-xl mx-auto">
+                  {integrationType === "aicono_gateway"
+                    ? "Das AICONO Gateway sendet Geräte und Messwerte automatisch an die Cloud. Die erkannten Geräte erscheinen unten direkt auf der Integrationskarte sowie unter Geräteverwaltung – sie werden nicht über diesen Dialog abgerufen."
+                    : "Dieses Gateway sendet Daten aktiv an das System. Zähler können nicht automatisch abgerufen werden. Bitte ordnen Sie die Zähler manuell über das Device-Mapping in der Integrationskonfiguration zu."}
                 </p>
               </div>
             ) : error ? (
