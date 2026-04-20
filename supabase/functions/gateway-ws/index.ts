@@ -60,6 +60,7 @@ interface Session {
   deviceId: string;
   tenantId: string;
   locationId: string | null;
+  locationIntegrationId: string | null;
   channel: ReturnType<SupabaseClient["channel"]> | null;
   closeRequested: boolean;
 }
@@ -370,6 +371,7 @@ async function handleAuth(
     deviceId: device.id,
     tenantId: device.tenant_id,
     locationId: device.location_id,
+    locationIntegrationId: device.location_integration_id ?? null,
     channel: null,
     closeRequested: false,
   };
