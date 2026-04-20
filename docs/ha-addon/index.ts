@@ -118,7 +118,7 @@ const SUPERVISOR_TOKEN = process.env.SUPERVISOR_TOKEN || "";
 const HA_API_BASE = "http://supervisor/core/api";
 const INGEST_URL = `${config.cloud_url}/functions/v1/gateway-ingest`;
 const GATEWAY_WS_URL = `${config.cloud_url.replace(/^http/, "ws")}/functions/v1/gateway-ws`;
-const ADDON_VERSION = "3.0.3";
+const ADDON_VERSION = "3.0.5";
 
 /* ── Auth header helper for gateway-ingest (Daten-Upload) ────────────────────── */
 // gateway-ingest akzeptiert weiterhin Basic Auth (username/password) ODER Bearer.
@@ -1947,6 +1947,11 @@ async function main(): Promise<void> {
   connectCloudWebSocket();
 
   // Polling loop (REST-based, for readings)
+  // WICHTIG: initialer Poll sofort ausführen, damit latestHAStates die volle
+  // HA-Entity-Liste enthält BEVOR der erste Device-Snapshot gepusht wird.
+  // Ohne diesen Init-Poll würde nur der lokale SQLite-Cache (max 500, ggf. nur
+  // wenige System-Sensoren) als Inventar an die Cloud gehen.
+  pollHAStates().catch((e) => console.error("[ha-poll] initial poll failed", e));
   setInterval(() => pollHAStates(), config.poll_interval_seconds * 1000);
 
   // Flush loop
@@ -1979,8 +1984,10 @@ async function main(): Promise<void> {
   // Refresh meter mappings every 5 minutes
   setInterval(() => fetchMeterMappings(), 5 * 60 * 1000);
 
-  // Push device inventory snapshot to cloud (initial + every 2 minutes)
-  setTimeout(() => pushDeviceSnapshot(), 15_000);
+  // Push device inventory snapshot to cloud.
+  // Erster Push erst nach 25s, damit der initiale pollHAStates() (oben) sicher
+  // alle Entities von HA geladen hat. Danach alle 2 Minuten erneut.
+  setTimeout(() => pushDeviceSnapshot(), 25_000);
   setInterval(() => pushDeviceSnapshot(), 2 * 60 * 1000);
 
   // Auto backup
