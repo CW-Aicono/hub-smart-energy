@@ -225,8 +225,8 @@ export function AssignMeterDialog({
           </DialogTitle>
           <DialogDescription>
             {sensorList.length === 1
-              ? `Ordnen Sie „${sensorList[0].name}" einem Gerätetyp und Standort zu.`
-              : `Ordnen Sie ${sensorList.length} ausgewählte Geräte dem Standort zu.`}
+              ? `Ordnen Sie „${sensorList[0].name}" einem Standort zu.`
+              : `Ordnen Sie ${sensorList.length} ausgewählte Geräte einem Standort zu.`}
           </DialogDescription>
         </DialogHeader>
 
