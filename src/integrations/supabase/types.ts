@@ -2471,7 +2471,7 @@ export type Database = {
           location_integration_id: string | null
           offline_buffer_count: number
           status: string
-          tenant_id: string
+          tenant_id: string | null
           updated_at: string
         }
         Insert: {
@@ -2490,7 +2490,7 @@ export type Database = {
           location_integration_id?: string | null
           offline_buffer_count?: number
           status?: string
-          tenant_id: string
+          tenant_id?: string | null
           updated_at?: string
         }
         Update: {
@@ -2509,7 +2509,7 @@ export type Database = {
           location_integration_id?: string | null
           offline_buffer_count?: number
           status?: string
-          tenant_id?: string
+          tenant_id?: string | null
           updated_at?: string
         }
         Relationships: [
