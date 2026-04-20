@@ -1415,13 +1415,24 @@ async function handlePushExecutionLogs(req: Request): Promise<Response> {
  */
 async function handleDeviceSnapshot(req: Request): Promise<Response> {
   const authErr = await validateApiKey(req);
-  if (authErr) return authErr;
+  if (authErr) {
+    console.warn("[device-snapshot] auth failed");
+    return authErr;
+  }
 
+  let bodyText = "";
   let body: { mac_address?: string; devices?: any[] };
-  try { body = await req.json(); } catch { return json({ error: "Invalid JSON" }, 400); }
+  try {
+    bodyText = await req.text();
+    body = JSON.parse(bodyText);
+  } catch (e) {
+    console.error("[device-snapshot] invalid JSON. Length=", bodyText.length, "first200=", bodyText.slice(0, 200));
+    return json({ error: "Invalid JSON", stage: "parse", length: bodyText.length }, 400);
+  }
 
   if (!Array.isArray(body?.devices)) {
-    return json({ error: "devices array is required" }, 400);
+    console.error("[device-snapshot] devices not array. keys=", Object.keys(body || {}), "type=", typeof (body as any)?.devices);
+    return json({ error: "devices array is required", stage: "validate", got_keys: Object.keys(body || {}) }, 400);
   }
 
   const supabase = getSupabase();
