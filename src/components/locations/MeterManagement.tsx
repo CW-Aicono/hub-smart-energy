@@ -17,7 +17,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import {
   Gauge, Plus, Pencil, Trash2, Archive, ArchiveRestore, Eye, EyeOff, Network,
   ChevronDown, ChevronRight, Thermometer, ToggleLeft, Lightbulb, DoorOpen,
-  Activity, Server, Zap,
+  Activity, Server, Zap, Inbox,
 } from "lucide-react";
 import { HelpTooltip } from "@/components/ui/help-tooltip";
 import { useTranslation } from "@/hooks/useTranslation";
@@ -28,6 +28,7 @@ import { EditAlertRuleDialog } from "./EditAlertRuleDialog";
 import { MeterTreeView } from "./MeterTreeView";
 import { MeterAggregationWidget } from "./MeterAggregationWidget";
 import { ENERGY_TYPE_LABELS, ENERGY_BADGE_CLASSES } from "@/lib/energyTypeColors";
+import { filterAssignedGatewayDevices } from "@/lib/gatewayDeviceFiltering";
 
 interface MeterManagementProps {
   locationId: string;
@@ -271,19 +272,36 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
 
   const displayedMeters = showArchived ? archivedMeters : meterTypeMeters;
 
-  // Gateway-Devices vom Typ "meter", die noch keiner Messstelle zugeordnet sind
-  const unmappedMeterDevices = useMemo(
-    () => meterDevices.filter((d) => !meters.some((m) => m.sensor_uuid === d.id)),
+  // Gateway-Devices, die der User über den "Gefundene Geräte"-Dialog aktiv
+  // zugeordnet hat (= existieren als meters-Eintrag mit passender sensor_uuid).
+  // Nur diese werden in den Tabs gelistet. Single source of truth:
+  // src/lib/gatewayDeviceFiltering.ts
+  const assignedMeterDevices = useMemo(
+    () => filterAssignedGatewayDevices(meterDevices, meters),
     [meterDevices, meters],
   );
-  const unmappedActuatorDevices = useMemo(
-    () => actuatorDevices.filter((d) => !meters.some((m) => m.sensor_uuid === d.id)),
+  const assignedActuatorDevices = useMemo(
+    () => filterAssignedGatewayDevices(actuatorDevices, meters),
     [actuatorDevices, meters],
   );
-  const unmappedSensorDevices = useMemo(
-    () => sensorDevices.filter((d) => !meters.some((m) => m.sensor_uuid === d.id)),
+  const assignedSensorDevices = useMemo(
+    () => filterAssignedGatewayDevices(sensorDevices, meters),
     [sensorDevices, meters],
   );
+
+  // Anzahl der noch nicht zugeordneten Gateway-Geräte – nur für den Hinweis-
+  // Banner ("X neue Geräte verfügbar"), NICHT für die Listen-Anzeige.
+  const unassignedDevicesCount = useMemo(() => {
+    const assignedIds = new Set(meters.map((m) => m.sensor_uuid).filter(Boolean));
+    return allDevicesWithSource.filter((d) => !assignedIds.has(d.id)).length;
+  }, [allDevicesWithSource, meters]);
+
+  const scrollToIntegrations = () => {
+    const el = document.getElementById("location-integrations");
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  };
 
   // When a new meter is created for a gateway device, watch for it to appear and open edit
   useEffect(() => {
@@ -335,15 +353,29 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
       <CardContent>
         <Tabs defaultValue="meters">
           <TabsList>
-            <TabsTrigger value="meters">{t("mm.tabs.meters" as any)} ({meterTypeMeters.length + unmappedMeterDevices.length})</TabsTrigger>
-            <TabsTrigger value="sensors">Sensoren ({unmappedSensorDevices.length + sensorTypeMeters.length})</TabsTrigger>
-            <TabsTrigger value="actuators">Aktoren ({unmappedActuatorDevices.length + actuatorTypeMeters.length})</TabsTrigger>
+            <TabsTrigger value="meters">{t("mm.tabs.meters" as any)} ({meterTypeMeters.length + assignedMeterDevices.length})</TabsTrigger>
+            <TabsTrigger value="sensors">Sensoren ({assignedSensorDevices.length + sensorTypeMeters.length})</TabsTrigger>
+            <TabsTrigger value="actuators">Aktoren ({assignedActuatorDevices.length + actuatorTypeMeters.length})</TabsTrigger>
             <TabsTrigger value="tree" className="gap-1">
               <Network className="h-3.5 w-3.5" />
               {t("mm.tabs.tree" as any)}
             </TabsTrigger>
             <TabsTrigger value="alerts">{t("mm.tabs.alerts" as any)} ({alertRules.length})</TabsTrigger>
           </TabsList>
+
+          {unassignedDevicesCount > 0 && (
+            <div className="mt-3 flex items-center justify-between gap-3 rounded-md border border-dashed border-primary/40 bg-primary/5 px-3 py-2">
+              <div className="flex items-center gap-2 text-sm">
+                <Inbox className="h-4 w-4 text-primary" />
+                <span>
+                  <strong>{unassignedDevicesCount}</strong> neue Geräte vom Gateway verfügbar – noch keinem Standort zugeordnet.
+                </span>
+              </div>
+              <Button variant="link" size="sm" className="h-auto p-0 text-primary" onClick={scrollToIntegrations}>
+                Jetzt zuordnen →
+              </Button>
+            </div>
+          )}
 
           <TabsContent value="meters" className="space-y-4">
             <div className="flex items-center justify-between">
@@ -428,14 +460,14 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
               </Table>
             )}
 
-            {/* Unzugeordnete Gateway-Devices vom Typ "Zähler" */}
-            {unmappedMeterDevices.length > 0 && (
+            {/* Vom User zugeordnete Gateway-Devices vom Typ "Zähler" */}
+            {assignedMeterDevices.length > 0 && (
               <div className="space-y-2 pt-2">
                 <p className="text-xs text-muted-foreground">
-                  Vom Gateway erkannte Zähler – klicken Sie auf einen Eintrag, um ihn als Messstelle anzulegen.
+                  Vom Gateway gelieferte Zähler-Geräte – klicken Sie auf einen Eintrag, um die zugehörige Messstelle zu bearbeiten.
                 </p>
                 <DeviceTable
-                  devices={unmappedMeterDevices}
+                  devices={assignedMeterDevices}
                   type="sensor"
                   meters={meters}
                   onEditMeter={(m) => setEditingMeter(m)}
@@ -489,10 +521,10 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
                 <Skeleton className="h-10 w-full" />
                 <Skeleton className="h-10 w-full" />
               </div>
-            ) : gatewayIntegrations.length === 0 && sensorTypeMeters.length === 0 ? (
+            ) : gatewayIntegrations.length === 0 && sensorTypeMeters.length === 0 && assignedSensorDevices.length === 0 ? (
               <p className="text-sm text-muted-foreground py-4">Keine Sensoren vorhanden.</p>
-            ) : unmappedSensorDevices.length > 0 ? (
-              <DeviceTable devices={unmappedSensorDevices} type="sensor" meters={meters} onEditMeter={(m) => setEditingMeter(m)} onCreateAndEdit={handleCreateAndEdit} />
+            ) : assignedSensorDevices.length > 0 ? (
+              <DeviceTable devices={assignedSensorDevices} type="sensor" meters={meters} onEditMeter={(m) => setEditingMeter(m)} onCreateAndEdit={handleCreateAndEdit} />
             ) : null}
           </TabsContent>
 
@@ -540,10 +572,10 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
                 <Skeleton className="h-10 w-full" />
                 <Skeleton className="h-10 w-full" />
               </div>
-            ) : gatewayIntegrations.length === 0 && actuatorTypeMeters.length === 0 ? (
+            ) : gatewayIntegrations.length === 0 && actuatorTypeMeters.length === 0 && assignedActuatorDevices.length === 0 ? (
               <p className="text-sm text-muted-foreground py-4">Keine Aktoren vorhanden.</p>
-            ) : unmappedActuatorDevices.length > 0 ? (
-              <DeviceTable devices={unmappedActuatorDevices} type="actuator" meters={meters} onEditMeter={(m) => setEditingMeter(m)} onCreateAndEdit={handleCreateAndEdit} />
+            ) : assignedActuatorDevices.length > 0 ? (
+              <DeviceTable devices={assignedActuatorDevices} type="actuator" meters={meters} onEditMeter={(m) => setEditingMeter(m)} onCreateAndEdit={handleCreateAndEdit} />
             ) : null}
           </TabsContent>
 

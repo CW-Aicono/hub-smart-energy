@@ -58,6 +58,7 @@ import { useLocationIntegrations } from "@/hooks/useIntegrations";
 import { useLoxoneSensorsMulti, LoxoneSensor } from "@/hooks/useLoxoneSensors";
 import { GATEWAY_DEFINITIONS } from "@/lib/gatewayRegistry";
 import { getResolvedDeviceType } from "@/lib/deviceClassification";
+import { filterAssignedGatewayDevices } from "@/lib/gatewayDeviceFiltering";
 import { useLocationAutomations, LocationAutomationRecord } from "@/hooks/useLocationAutomations";
 import { useMeters } from "@/hooks/useMeters";
 import { AutomationRuleBuilder, AutomationRuleData } from "@/components/locations/AutomationRuleBuilder";
@@ -303,12 +304,21 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
   } = useLocationAutomations(locationId);
 
   // Use explicit device_type when available and fall back to the same gateway heuristics as the tabs.
-  const actuators = allSensorsWithSource.filter((s) => getResolvedDeviceType(s, deviceTypeMap) === "actuator");
-  const sensorDevices = allSensorsWithSource.filter((s) => {
+  // IMPORTANT: Only show devices that the user has explicitly assigned via the
+  // "Gefundene Geräte"-Dialog (= devices that have a corresponding meters row
+  // with matching sensor_uuid). Single source of truth for this rule:
+  // src/lib/gatewayDeviceFiltering.ts
+  const assignedDevicesWithSource = useMemo(
+    () => filterAssignedGatewayDevices(allSensorsWithSource, meters),
+    [allSensorsWithSource, meters],
+  );
+
+  const actuators = assignedDevicesWithSource.filter((s) => getResolvedDeviceType(s, deviceTypeMap) === "actuator");
+  const sensorDevices = assignedDevicesWithSource.filter((s) => {
     const t = getResolvedDeviceType(s, deviceTypeMap);
     return t === "sensor";
   });
-  const allSensors = allSensorsWithSource as LoxoneSensor[];
+  const allSensors = assignedDevicesWithSource as LoxoneSensor[];
 
   // Build actuator state map for live status display
   const actuatorStates = useMemo(() => {
