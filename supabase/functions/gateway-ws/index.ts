@@ -44,10 +44,11 @@ function normalizeMac(input: string): string {
 
 async function bcryptVerify(plain: string, hash: string): Promise<boolean> {
   try {
-    // Use bcryptjs (pure JS, no Web Worker required) — works in Supabase Edge Runtime.
-    const mod: any = await import("https://esm.sh/[email protected]");
-    const bcrypt = mod.default ?? mod;
-    return await bcrypt.compare(plain, hash);
+    // Use bcryptjs via npm: specifier — pure JS, no Web Worker, works in Supabase Edge Runtime.
+    // npm: avoids the email-obfuscation issue that mangles esm.sh URLs containing "@".
+    const bcrypt: any = await import("npm:bcryptjs@2.4.3");
+    const compare = bcrypt.compare ?? bcrypt.default?.compare;
+    return await compare(plain, hash);
   } catch (e) {
     console.error("[gateway-ws] bcrypt error", e);
     return false;
