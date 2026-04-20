@@ -119,6 +119,27 @@ async function handleHttpAction(req: Request): Promise<Response | null> {
     .eq("location_integration_id", locationIntegrationId)
     .not("actuator_uuid", "is", null);
 
+  // Pull live device inventory pushed by the HA add-on (any gateway_device
+  // linked to this location_integration).
+  const { data: gateways } = await sb
+    .from("gateway_devices")
+    .select("id")
+    .eq("location_integration_id", locationIntegrationId);
+  const gatewayIds = (gateways ?? []).map((g: any) => g.id);
+
+  let inventory: any[] = [];
+  if (gatewayIds.length > 0) {
+    const { data: inv } = await sb
+      .from("gateway_device_inventory")
+      .select("entity_id, domain, category, friendly_name, state, unit, device_class, last_state_at")
+      .in("gateway_device_id", gatewayIds)
+      .order("friendly_name");
+    inventory = inv || [];
+  }
+
+  const mappedSensorIds = new Set((meters ?? []).map((m: any) => m.sensor_uuid));
+  const mappedActuatorIds = new Set((automations ?? []).map((a: any) => a.actuator_uuid));
+
   const sensorItems = (meters ?? []).map((meter: any) => ({
     id: meter.sensor_uuid,
     name: meter.name,
@@ -130,6 +151,7 @@ async function handleHttpAction(req: Request): Promise<Response | null> {
     unit: meter.unit || "",
     status: "online",
     stateName: meter.energy_type,
+    isMapped: true,
   }));
 
   const seenActuators = new Set<string>();
@@ -152,9 +174,33 @@ async function handleHttpAction(req: Request): Promise<Response | null> {
       unit: "",
       status: "online",
       stateName: "state",
+      isMapped: true,
     }));
 
-  return new Response(JSON.stringify({ success: true, sensors: [...sensorItems, ...actuatorItems] }), {
+  // Append discovered (unmapped) entities from the live inventory so the UI
+  // can offer them for assignment to a meter / automation.
+  const inventoryItems = inventory
+    .filter((d: any) => !mappedSensorIds.has(d.entity_id) && !mappedActuatorIds.has(d.entity_id))
+    .map((d: any) => {
+      const cat = String(d.category || "sensor");
+      const isActuator = cat === "actuator";
+      const isMeter = cat === "meter";
+      return {
+        id: d.entity_id,
+        name: d.friendly_name || d.entity_id,
+        type: isActuator ? "actuator" : (d.device_class || "sensor"),
+        controlType: isActuator ? d.domain : (isMeter ? "Meter" : "Sensor"),
+        room: "",
+        category: isActuator ? "Aktor" : (isMeter ? "Zähler" : "Sensor"),
+        value: d.state ?? "—",
+        unit: d.unit || "",
+        status: "online",
+        stateName: d.device_class || "state",
+        isMapped: false,
+      };
+    });
+
+  return new Response(JSON.stringify({ success: true, sensors: [...sensorItems, ...actuatorItems, ...inventoryItems] }), {
     headers: { "Content-Type": "application/json" },
   });
 }

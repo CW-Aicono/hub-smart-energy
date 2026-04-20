@@ -1406,6 +1406,102 @@ async function handlePushExecutionLogs(req: Request): Promise<Response> {
   return json({ success: true, inserted: rows.length });
 }
 
+/* ── Device Inventory Snapshot (HA Add-on -> Cloud) ──────────────────────────── */
+/**
+ * POST ?action=device-snapshot
+ * Body: { mac_address?, devices: [{ entity_id, domain, category, friendly_name, state, unit, device_class, last_updated }] }
+ * Speichert/aktualisiert das vollständige lokale Geräte-Inventar des Add-ons,
+ * damit die Cloud-UI Sensoren/Aktoren/Zähler zur Zuordnung anbieten kann.
+ */
+async function handleDeviceSnapshot(req: Request): Promise<Response> {
+  const authErr = await validateApiKey(req);
+  if (authErr) return authErr;
+
+  let body: { mac_address?: string; devices?: any[] };
+  try { body = await req.json(); } catch { return json({ error: "Invalid JSON" }, 400); }
+
+  if (!Array.isArray(body?.devices)) {
+    return json({ error: "devices array is required" }, 400);
+  }
+
+  const supabase = getSupabase();
+
+  const macRaw = body.mac_address || req.headers.get("x-gateway-mac") || "";
+  const mac = macRaw.toLowerCase().replace(/[^0-9a-f]/g, "").slice(0, 12);
+  let device: { id: string; tenant_id: string | null; location_integration_id: string | null } | null = null;
+
+  if (mac.length === 12) {
+    const { data } = await supabase
+      .from("gateway_devices")
+      .select("id, tenant_id, location_integration_id")
+      .eq("mac_address", mac)
+      .maybeSingle();
+    device = data as any;
+  }
+  if (!device) {
+    const ctx = await getDeviceFromBasicAuth(req);
+    if (ctx?.id) {
+      const { data } = await supabase
+        .from("gateway_devices")
+        .select("id, tenant_id, location_integration_id")
+        .eq("id", ctx.id)
+        .maybeSingle();
+      device = data as any;
+    }
+  }
+  if (!device || !device.tenant_id) {
+    return json({ error: "Gateway device not found or not assigned to a tenant" }, 404);
+  }
+
+  const nowIso = new Date().toISOString();
+  const rows = body.devices
+    .filter((d: any) => typeof d?.entity_id === "string" && d.entity_id.includes("."))
+    .slice(0, 2000)
+    .map((d: any) => ({
+      gateway_device_id: device!.id,
+      tenant_id: device!.tenant_id,
+      location_integration_id: device!.location_integration_id,
+      entity_id: String(d.entity_id),
+      domain: String(d.domain || d.entity_id.split(".")[0] || "unknown"),
+      category: String(d.category || "sensor"),
+      friendly_name: d.friendly_name ? String(d.friendly_name).slice(0, 200) : null,
+      state: d.state != null ? String(d.state).slice(0, 200) : null,
+      unit: d.unit ? String(d.unit).slice(0, 32) : null,
+      device_class: d.device_class ? String(d.device_class).slice(0, 64) : null,
+      last_seen_at: nowIso,
+      last_state_at: d.last_updated || null,
+    }));
+
+  if (rows.length === 0) {
+    return json({ success: true, upserted: 0, pruned: 0 });
+  }
+
+  const { error: upErr } = await supabase
+    .from("gateway_device_inventory")
+    .upsert(rows, { onConflict: "gateway_device_id,entity_id" });
+  if (upErr) {
+    console.error("[gateway-ingest] device-snapshot upsert error:", upErr.message);
+    return json({ error: "Database error", details: upErr.message }, 500);
+  }
+
+  const seen = new Set(rows.map((r) => r.entity_id));
+  const { data: existing } = await supabase
+    .from("gateway_device_inventory")
+    .select("id, entity_id")
+    .eq("gateway_device_id", device.id);
+  const stale = (existing || []).filter((e: any) => !seen.has(e.entity_id)).map((e: any) => e.id);
+  let pruned = 0;
+  if (stale.length > 0) {
+    const { error: delErr } = await supabase
+      .from("gateway_device_inventory")
+      .delete()
+      .in("id", stale);
+    if (!delErr) pruned = stale.length;
+  }
+
+  return json({ success: true, upserted: rows.length, pruned });
+}
+
 /* ── Main router ─────────────────────────────────────────────────────────────── */
 
 Deno.serve(async (req) => {
@@ -1440,6 +1536,7 @@ Deno.serve(async (req) => {
     if (action === "gateway-command") return handleGatewayCommand(req);
     if (action === "push-execution-logs") return handlePushExecutionLogs(req);
     if (action === "sync-automations") return handleSyncAutomations(url, req);
+    if (action === "device-snapshot") return handleDeviceSnapshot(req);
 
     // Check if the body contains a getSensors action (called by frontend for all integration types).
     // Push-based gateways don't support sensor discovery — return empty list gracefully.
