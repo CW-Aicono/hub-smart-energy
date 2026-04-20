@@ -35,6 +35,7 @@ RUN apk add --no-cache ca-certificates
 
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/dist/index.js ./index.js
+COPY --from=builder /addon_version.txt /addon_version.txt
 
 # Copy UI files
 COPY ui/ ./ui/
@@ -44,4 +45,6 @@ HEALTHCHECK --interval=60s --timeout=10s --start-period=30s --retries=3 \
 
 ENV NODE_ENV=production
 
-CMD ["node", "index.js"]
+# ADDON_VERSION zur Laufzeit aus der beim Build extrahierten Datei lesen –
+# garantiert, dass UI-Anzeige === config.yaml-Version.
+CMD ["sh", "-c", "export ADDON_VERSION=$(cat /addon_version.txt) && node index.js"]
