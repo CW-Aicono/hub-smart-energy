@@ -17,6 +17,11 @@ RUN npm install
 COPY index.ts ./
 RUN npm run build && npm prune --omit=dev
 
+# Version aus config.yaml extrahieren – wird im Runner-Stage als ENV gesetzt,
+# damit Worker-Code (ADDON_VERSION) und Add-on-Manifest immer synchron sind.
+COPY config.yaml ./config.yaml
+RUN grep '^version:' config.yaml | sed -E 's/version: *"?([^"]+)"?/\1/' > /addon_version.txt
+
 # ── Stage 2: Production image ────────────────────────────────────────────────
 FROM node:20-alpine AS runner
 
