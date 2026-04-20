@@ -44,7 +44,9 @@ function normalizeMac(input: string): string {
 
 async function bcryptVerify(plain: string, hash: string): Promise<boolean> {
   try {
-    const bcrypt = await import("https://deno.land/x/bcrypt@v0.4.1/mod.ts");
+    // Use bcryptjs (pure JS, no Web Worker required) — works in Supabase Edge Runtime.
+    const mod: any = await import("https://esm.sh/[email protected]");
+    const bcrypt = mod.default ?? mod;
     return await bcrypt.compare(plain, hash);
   } catch (e) {
     console.error("[gateway-ws] bcrypt error", e);
