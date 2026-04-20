@@ -97,61 +97,7 @@ function authHeader(): string {
   return `Bearer ${config.gateway_api_key || ""}`;
 }
 
-/* ── Cloudflare Tunnel Subprocess ────────────────────────────────────────────── */
-import { spawn, ChildProcess } from "child_process";
-
-let cfTunnelProc: ChildProcess | null = null;
-let cfTunnelConnected = false;
-let cfTunnelRestartCount = 0;
-let cfTunnelLastError: string | null = null;
-
-function startCloudflaredTunnel() {
-  if (!config.cloudflare_enabled || !config.cloudflare_tunnel_token) {
-    console.log("[cloudflared] disabled (set cloudflare_enabled=true and provide token)");
-    return;
-  }
-  if (cfTunnelProc) {
-    console.log("[cloudflared] already running");
-    return;
-  }
-  console.log("[cloudflared] starting tunnel...");
-  try {
-    cfTunnelProc = spawn(
-      "cloudflared",
-      ["tunnel", "--no-autoupdate", "run", "--token", config.cloudflare_tunnel_token],
-      { stdio: ["ignore", "pipe", "pipe"] },
-    );
-    cfTunnelProc.stdout?.on("data", (d: Buffer) => {
-      const line = d.toString().trim();
-      if (line) console.log(`[cloudflared] ${line}`);
-      if (/Registered tunnel connection|Connection .* registered/i.test(line)) {
-        cfTunnelConnected = true;
-        cfTunnelLastError = null;
-      }
-    });
-    cfTunnelProc.stderr?.on("data", (d: Buffer) => {
-      const line = d.toString().trim();
-      if (line) console.error(`[cloudflared] ${line}`);
-      if (/Registered tunnel connection|Connection .* registered/i.test(line)) {
-        cfTunnelConnected = true;
-        cfTunnelLastError = null;
-      } else if (/error|failed/i.test(line)) {
-        cfTunnelLastError = line.slice(0, 200);
-      }
-    });
-    cfTunnelProc.on("exit", (code) => {
-      console.warn(`[cloudflared] exited with code ${code}, restarting in 5s...`);
-      cfTunnelProc = null;
-      cfTunnelConnected = false;
-      cfTunnelRestartCount++;
-      setTimeout(startCloudflaredTunnel, 5000);
-    });
-  } catch (err) {
-    console.error("[cloudflared] failed to spawn:", err);
-    cfTunnelLastError = String(err);
-    cfTunnelProc = null;
-  }
-}
+/* ── (Cloudflare-Tunnel entfernt in v3.0 – ersetzt durch WebSocket-Push) ─────── */
 
 /* ── Connectivity State ──────────────────────────────────────────────────────── */
 
