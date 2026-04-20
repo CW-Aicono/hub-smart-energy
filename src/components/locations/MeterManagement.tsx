@@ -524,20 +524,28 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
             )}
 
             {/* Vom User zugeordnete Gateway-Devices vom Typ "Zähler" */}
-            {assignedMeterDevices.length > 0 && (
-              <div className="space-y-2 pt-2">
-                <p className="text-xs text-muted-foreground">
-                  Vom Gateway gelieferte Zähler-Geräte – klicken Sie auf einen Eintrag, um die zugehörige Messstelle zu bearbeiten.
-                </p>
-                <DeviceTable
-                  devices={assignedMeterDevices}
-                  type="sensor"
-                  meters={meters}
-                  onEditMeter={(m) => setEditingMeter(m)}
-                  onCreateAndEdit={(d) => handleCreateAndEdit(d, "meter")}
-                />
-              </div>
-            )}
+            {(() => {
+              const list = showArchived ? archivedAssignedMeterDevices : assignedMeterDevices;
+              if (list.length === 0) return null;
+              return (
+                <div className="space-y-2 pt-2">
+                  <p className="text-xs text-muted-foreground">
+                    Vom Gateway gelieferte Zähler-Geräte – klicken Sie auf einen Eintrag, um die zugehörige Messstelle zu bearbeiten.
+                  </p>
+                  <DeviceTable
+                    devices={list}
+                    type="sensor"
+                    meters={meters}
+                    onEditMeter={(m) => setEditingMeter(m)}
+                    onCreateAndEdit={(d) => handleCreateAndEdit(d, "meter")}
+                    onArchive={(m, archive) => archiveMeter(m.id, archive)}
+                    onDelete={confirmDelete}
+                    showArchived={showArchived}
+                    isAdmin={isAdmin}
+                  />
+                </div>
+              );
+            })()}
           </TabsContent>
 
           {/* Sensoren Tab */}
