@@ -397,6 +397,12 @@ async function handleFrame(session: Session, raw: any) {
         update.offline_buffer_count = raw.offline_buffer_count;
       }
       await svc().from("gateway_devices").update(update).eq("id", session.deviceId);
+      if (session.locationIntegrationId) {
+        await svc()
+          .from("location_integrations")
+          .update({ sync_status: "success", last_sync_at: nowIso, sync_error: null, updated_at: nowIso })
+          .eq("id", session.locationIntegrationId);
+      }
       safeSend(session.socket, { type: "pong" });
       break;
     }
