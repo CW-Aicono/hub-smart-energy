@@ -1225,6 +1225,11 @@
             '<div class="header-meta">' +
               '<div class="pill"><span class="status-dot ' + (online ? 'online' : 'offline') + '"></span>' + (online ? 'Gateway online' : 'Gateway offline') + '</div>' +
               '<div class="pill"><span class="status-dot ' + (cloudReachable ? 'online' : 'offline') + '"></span>' + (cloudReachable ? 'Cloud verbunden' : 'Cloud offline') + '</div>' +
+              (status.assignment_status === 'assigned'
+                ? '<div class="pill"><span class="status-dot online"></span>AICONO zugeordnet</div>'
+                : status.assignment_status === 'pending_assignment'
+                  ? '<div class="pill" style="border-color:var(--accent-yellow);color:var(--accent-yellow)">⏳ Zuordnung ausstehend</div>'
+                  : '') +
               '<div class="pill">Version ' + escapeHtml(status.addon_version || (state.version && state.version.version) || '–') + '</div>' +
             '</div>' +
           '</div>' +
