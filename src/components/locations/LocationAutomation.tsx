@@ -58,6 +58,7 @@ import { useLocationIntegrations } from "@/hooks/useIntegrations";
 import { useLoxoneSensorsMulti, LoxoneSensor } from "@/hooks/useLoxoneSensors";
 import { GATEWAY_DEFINITIONS } from "@/lib/gatewayRegistry";
 import { getResolvedDeviceType } from "@/lib/deviceClassification";
+import { filterAssignedGatewayDevices } from "@/lib/gatewayDeviceFiltering";
 import { useLocationAutomations, LocationAutomationRecord } from "@/hooks/useLocationAutomations";
 import { useMeters } from "@/hooks/useMeters";
 import { AutomationRuleBuilder, AutomationRuleData } from "@/components/locations/AutomationRuleBuilder";
@@ -307,14 +308,9 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
   // "Gefundene Geräte"-Dialog (= devices that have a corresponding meters row
   // with matching sensor_uuid). Single source of truth for this rule:
   // src/lib/gatewayDeviceFiltering.ts
-  const assignedSensorIds = useMemo(() => {
-    const set = new Set<string>();
-    meters.forEach((m) => { if (m.sensor_uuid) set.add(m.sensor_uuid); });
-    return set;
-  }, [meters]);
   const assignedDevicesWithSource = useMemo(
-    () => allSensorsWithSource.filter((s) => assignedSensorIds.has(s.id)),
-    [allSensorsWithSource, assignedSensorIds],
+    () => filterAssignedGatewayDevices(allSensorsWithSource, meters),
+    [allSensorsWithSource, meters],
   );
 
   const actuators = assignedDevicesWithSource.filter((s) => getResolvedDeviceType(s, deviceTypeMap) === "actuator");
