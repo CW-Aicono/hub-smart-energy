@@ -119,8 +119,20 @@ export function IntegrationCard({ locationIntegration, onUpdate, onDelete }: Int
   })();
 
   const getSyncStatusBadge = () => {
-    if (!isConfigured) {
+    if (!isConfigured && !isAiconoGateway) {
       return <Badge variant="outline" className="gap-1 bg-muted text-muted-foreground border-border"><Clock className="h-3 w-3" />{t("intCard.notConfigured" as any)}</Badge>;
+    }
+    // For AICONO Gateway parent cards: derive status from connected child gateway_devices
+    // (the parent itself never syncs – it's a virtual container for the push-based hubs).
+    if (isAiconoGateway) {
+      const hasOnlineChild = gatewayDevices.some((d) => d.status === "online");
+      if (hasOnlineChild) {
+        return <Badge variant="outline" className="gap-1 bg-primary/10 text-primary border-primary/20"><CheckCircle2 className="h-3 w-3" />{t("intCard.connected" as any)}</Badge>;
+      }
+      if (gatewayDevices.length > 0) {
+        return <Badge variant="outline" className="gap-1 bg-destructive/10 text-destructive border-destructive/20"><XCircle className="h-3 w-3" />Offline</Badge>;
+      }
+      return <Badge variant="outline" className="gap-1 bg-muted text-muted-foreground border-border"><Clock className="h-3 w-3" />{t("intCard.pending" as any)}</Badge>;
     }
     switch (locationIntegration.sync_status) {
       case "success": return <Badge variant="outline" className="gap-1 bg-primary/10 text-primary border-primary/20"><CheckCircle2 className="h-3 w-3" />{t("intCard.connected" as any)}</Badge>;
