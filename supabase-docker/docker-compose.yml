@@ -659,6 +659,12 @@ services:
 
   frontend:
     container_name: hub-frontend
+    # Prod: Bild wird vom CI-Workflow gebaut, als ghcr.io/...:<sha> gepusht, auf dem
+    # Server per deploy.sh gepullt und als `hub-smart-energy-frontend:latest` getaggt.
+    # Ohne dieses image:-Feld nutzt compose einen auto-generierten Tag (`supabase-frontend`)
+    # und die getaggten CI-Builds laufen nie.
+    image: hub-smart-energy-frontend:latest
+    # build bleibt fuer lokale Entwicklung ohne CI-Pipeline.
     build:
       context: ..
       dockerfile: Dockerfile
