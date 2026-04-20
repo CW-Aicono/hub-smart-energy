@@ -897,8 +897,9 @@ async function handleHeartbeat(req: Request): Promise<Response> {
     return json({ error: "Invalid JSON body" }, 400);
   }
 
-  if (!body.tenant_id || !body.device_name) {
-    return json({ error: "tenant_id and device_name are required" }, 400);
+  // Either MAC or (tenant_id + device_name) is required (legacy support)
+  if (!(body as any).mac_address && (!body.tenant_id || !body.device_name)) {
+    return json({ error: "mac_address or (tenant_id + device_name) required" }, 400);
   }
 
   // Per-device key tenant_id cross-check
