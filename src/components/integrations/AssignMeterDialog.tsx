@@ -29,6 +29,8 @@ interface AssignMeterSensor {
   name: string;
   controlType?: string;
   unit: string;
+  /** Pre-classified device type from the discovery dialog */
+  deviceType?: "meter" | "sensor" | "actuator";
 }
 
 interface AssignMeterDialogProps {
@@ -68,8 +70,18 @@ export function AssignMeterDialog({
   const T = (key: string) => t(key as any);
   const { addMeter } = useMeters();
 
-  const [deviceType, setDeviceType] = useState<"meter" | "sensor" | "actuator">("meter");
   const [energyType, setEnergyType] = useState("strom");
+  // Whether all selected devices share the same pre-classified type.
+  // If they do, we skip the manual device-type picker entirely – the
+  // assignment then preserves the per-device classification from the
+  // "Gefundene Geräte"-Dialog.
+  const uniformDeviceType: "meter" | "sensor" | "actuator" | null = (() => {
+    if (sensorList.length === 0) return null;
+    const first = sensorList[0].deviceType;
+    if (!first) return null;
+    return sensorList.every((s) => s.deviceType === first) ? first : null;
+  })();
+  const allMeters = sensorList.length > 0 && sensorList.every((s) => s.deviceType === "meter");
   const [selectedLocationId, setSelectedLocationId] = useState(currentLocationId);
   const [selectedFloorId, setSelectedFloorId] = useState<string>("");
   const [selectedRoomId, setSelectedRoomId] = useState<string>("");
