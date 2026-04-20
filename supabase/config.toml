@@ -128,3 +128,6 @@ verify_jwt = false
 
 [functions.sales-sign-quote]
 verify_jwt = false
+
+[functions.gateway-credentials]
+verify_jwt = false
