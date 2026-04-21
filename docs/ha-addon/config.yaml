@@ -14,7 +14,7 @@
 
 name: "AICONO EMS Gateway"
 description: "Lokaler Gateway-Hub für das AICONO EMS. Identifiziert sich per MAC-Adresse + Benutzername/Passwort. Kommuniziert bidirektional via WebSocket mit der AICONO Cloud – ohne Cloudflare, ohne offene Ports."
-version: "3.0.9"
+version: "3.0.10"
 slug: "aicono-ems-gateway"
 url: "https://hub-smart-energy.lovable.app"
 arch:
