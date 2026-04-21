@@ -30,9 +30,10 @@ const json = (body: unknown, status = 200) =>
 /* ── Auth helper ─────────────────────────────────────────────────────────────── */
 
 /**
- * Hash an API key using SHA-256 for storage/comparison.
+ * Hash a string using SHA-256.
+ * Kept as utility for future use; no per-device API keys anymore.
  */
-async function hashApiKey(key: string): Promise<string> {
+async function sha256Hex(key: string): Promise<string> {
   const encoder = new TextEncoder();
   const data = encoder.encode(key);
   const hashBuffer = await crypto.subtle.digest("SHA-256", data);
@@ -41,9 +42,9 @@ async function hashApiKey(key: string): Promise<string> {
 }
 
 /**
- * Validates the API key from the request.
- * Supports both the global GATEWAY_API_KEY and per-device keys.
- * Per-device keys are validated against gateway_devices.api_key_hash (SHA-256).
+ * Validates the request authentication.
+ * Supports Basic Auth (username/password) and the global GATEWAY_API_KEY.
+ * Per-device API keys have been removed.
  */
 async function validateApiKey(req: Request): Promise<Response | null> {
   const gatewayApiKey = Deno.env.get("GATEWAY_API_KEY");
@@ -53,7 +54,7 @@ async function validateApiKey(req: Request): Promise<Response | null> {
   }
   const authHeader = req.headers.get("Authorization") || "";
 
-  // 1) Basic Auth (Loxone-style: username + password against gateway_devices)
+  // 1) Basic Auth (username + password against gateway_devices)
   if (/^Basic\s+/i.test(authHeader)) {
     const ctx = await getDeviceFromBasicAuth(req);
     if (ctx) return null;
@@ -65,22 +66,9 @@ async function validateApiKey(req: Request): Promise<Response | null> {
     return json({ error: "Unauthorized" }, 401);
   }
 
-  // 2) Global GATEWAY_API_KEY (legacy)
+  // 2) Global GATEWAY_API_KEY (legacy server-to-server)
   if (providedKey === gatewayApiKey) {
     return null;
-  }
-
-  // 3) Per-device API key: hash and check against gateway_devices.api_key_hash
-  const keyHash = await hashApiKey(providedKey);
-  const supabase = getSupabase();
-  const { data: device } = await supabase
-    .from("gateway_devices")
-    .select("id, tenant_id")
-    .eq("api_key_hash", keyHash)
-    .maybeSingle();
-
-  if (device) {
-    return null; // Per-device key valid
   }
 
   return json({ error: "Unauthorized" }, 401);
@@ -153,28 +141,13 @@ async function getDeviceFromBasicAuth(req: Request): Promise<
 }
 
 /**
- * Extracts device context from a per-device API key OR Basic-Auth.
- * Returns { device_id, tenant_id } when known, null otherwise.
+ * Extracts device context from Basic-Auth only.
+ * Per-device API keys are no longer supported.
  */
 async function getDeviceFromApiKey(req: Request): Promise<{ device_id: string; tenant_id: string | null } | null> {
-  // Basic Auth path
   const basic = await getDeviceFromBasicAuth(req);
   if (basic) return { device_id: basic.device_id, tenant_id: basic.tenant_id };
-
-  const gatewayApiKey = Deno.env.get("GATEWAY_API_KEY");
-  const authHeader = req.headers.get("Authorization") || "";
-  const providedKey = authHeader.replace(/^Bearer\s+/i, "").trim();
-  if (!providedKey || providedKey === gatewayApiKey) return null;
-
-  const keyHash = await hashApiKey(providedKey);
-  const supabase = getSupabase();
-  const { data: device } = await supabase
-    .from("gateway_devices")
-    .select("id, tenant_id")
-    .eq("api_key_hash", keyHash)
-    .maybeSingle();
-
-  return device ? { device_id: device.id, tenant_id: device.tenant_id } : null;
+  return null;
 }
 
 function getSupabase() {
