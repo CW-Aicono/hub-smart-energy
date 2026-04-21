@@ -82,7 +82,7 @@ export function useLocationStatus(locationIds: string[]): UseLocationStatusRetur
     try {
       const { data, error } = await supabase
         .from("location_integrations")
-        .select("id, location_id, is_enabled, sync_status, config, integration:integrations!inner(name, type)")
+        .select("id, location_id, is_enabled, sync_status, last_sync_at, config, integration:integrations!inner(name, type)")
         .in("location_id", locationIds);
 
       if (error) {
