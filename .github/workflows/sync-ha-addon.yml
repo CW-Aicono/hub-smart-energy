@@ -34,6 +34,17 @@ jobs:
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "Add-on version detected: $VERSION"
 
+      - name: Remove legacy add-on directories
+        run: |
+          # Alle Top-Level-Verzeichnisse im Ziel-Repo löschen, außer Allowlist.
+          # Damit verschwinden Alt-Ordner wie ems-gateway-hub/ endgültig und
+          # Home Assistant sieht nur noch das aktuelle Add-on.
+          find target -mindepth 1 -maxdepth 1 -type d \
+            ! -name '.git' \
+            ! -name '.github' \
+            ! -name 'aicono-ems-gateway' \
+            -exec rm -rf {} +
+
       - name: Sync add-on files
         run: |
           # Add-on lebt im Unterordner aicono-ems-gateway/ im Ziel-Repo
