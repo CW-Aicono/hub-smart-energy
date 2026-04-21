@@ -191,6 +191,7 @@ export function useLocationStatus(locationIds: string[]): UseLocationStatusRetur
           if (integration.sync_status === "success" || (integration.sync_status === "syncing" && syncFresh)) {
             online++;
           }
+        });
 
         statusMap.set(locationId, {
           locationId,
