@@ -249,13 +249,13 @@ const ChargingPoints = () => {
               <CardContent className="p-4 flex items-center gap-3">
                 <PlugZap className={`h-5 w-5 ${statusFilter === null ? "text-primary" : "text-muted-foreground"}`} />
                 <div>
-                  <p className="text-2xl font-bold">{chargePoints.length.toLocaleString("de-DE")}</p>
+                  <p className="text-2xl font-bold">{chargePoints.reduce((sum, cp) => sum + (cp.connector_count || 1), 0).toLocaleString("de-DE")}</p>
                   <p className="text-sm text-muted-foreground">{t("charging.all" as any)}</p>
                 </div>
               </CardContent>
             </Card>
             {Object.entries(statusConfig).map(([key, cfg]) => {
-              const count = chargePoints.filter((cp) => cp.status === key).length;
+              const count = chargePoints.filter((cp) => cp.status === key).reduce((sum, cp) => sum + (cp.connector_count || 1), 0);
               const isActive = statusFilter === key;
               return (
                 <Card
