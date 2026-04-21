@@ -289,6 +289,7 @@ Deno.serve(async (req) => {
   socket.onclose = async (event) => {
     console.log(`[ocpp-ws-proxy] Socket closed for ${chargePointId}: code=${event.code} reason=${event.reason}`);
     if (commandPollTimer) clearInterval(commandPollTimer);
+    if (pingTimer) clearInterval(pingTimer);
     // Mark charge point as WS-disconnected
     await supabase
       .from("charge_points")
@@ -299,6 +300,7 @@ Deno.serve(async (req) => {
   socket.onerror = (error) => {
     console.error(`[ocpp-ws-proxy] Socket error for ${chargePointId}:`, error);
     if (commandPollTimer) clearInterval(commandPollTimer);
+    if (pingTimer) clearInterval(pingTimer);
   };
 
   return response;
