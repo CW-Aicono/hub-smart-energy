@@ -214,22 +214,19 @@ Deno.serve(async (req) => {
   }
 
   socket.onopen = async () => {
-    console.log(`[ocpp-ws-proxy] Socket open for ${chargePointId}`);
-    // Mark charge point as WS-connected
+    console.log(`[ocpp-ws-proxy] [${sessionId}] Socket open for ${chargePointId}`);
+    probePingSupport(socket, sessionId);
     await supabase
       .from("charge_points")
       .update({ ws_connected: true, ws_connected_since: new Date().toISOString() } as any)
       .eq("ocpp_id", chargePointId);
-    // Start polling for pending commands
     commandPollTimer = setInterval(pollPendingCommands, COMMAND_POLL_INTERVAL);
-    // Server-side keep-alive: send WebSocket ping every 25s to prevent idle timeouts
-    // and satisfy chargers (e.g. Bender, Nidec) that expect periodic pongs.
     pingTimer = setInterval(() => {
       if (socket.readyState === WebSocket.OPEN) {
         try {
           (socket as any).ping?.();
         } catch (e) {
-          console.warn(`[ocpp-ws-proxy] ping() failed for ${chargePointId}:`, (e as Error).message);
+          console.warn(`[ocpp-ws-proxy] [${sessionId}] ping() failed for ${chargePointId}:`, (e as Error).message);
         }
       }
     }, 25_000);
