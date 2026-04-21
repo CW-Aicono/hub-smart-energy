@@ -1331,15 +1331,19 @@ serve(async (req) => {
           }
 
           // Upsert into meter_power_readings_5min
-          const fiveMinInserts = Array.from(buckets.entries()).map(([bucket, d]) => ({
-            meter_id: meter!.id,
-            tenant_id: meter!.tenant_id,
-            energy_type: meter!.energy_type,
-            bucket,
-            power_avg: d.sum / d.count,
-            power_max: d.max,
-            sample_count: d.count,
-          }));
+          // Skip single-sample buckets: a 30-min Loxone statistics value would otherwise
+          // anchor a sawtooth pattern in charts where 1-min live data is also present.
+          const fiveMinInserts = Array.from(buckets.entries())
+            .filter(([, d]) => d.count >= 2)
+            .map(([bucket, d]) => ({
+              meter_id: meter!.id,
+              tenant_id: meter!.tenant_id,
+              energy_type: meter!.energy_type,
+              bucket,
+              power_avg: d.sum / d.count,
+              power_max: d.max,
+              sample_count: d.count,
+            }));
 
           if (fiveMinInserts.length > 0) {
             for (let i = 0; i < fiveMinInserts.length; i += 500) {
