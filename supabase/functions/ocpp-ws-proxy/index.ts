@@ -96,11 +96,20 @@ Deno.serve(async (req) => {
 
   const { socket, response } = Deno.upgradeWebSocket(req, {
     protocol: OCPP_SUBPROTOCOL,
+    idleTimeout: 240, // seconds; default 120 is too tight for chargers like Bender/Nidec
   });
 
   const ocppCentralUrl = `${supabaseUrl}/functions/v1/ocpp-central?cp=${encodeURIComponent(chargePointId)}`;
   const supabase = createSupabase();
   let commandPollTimer: number | undefined;
+  let pingTimer: number | undefined;
+
+  // Listen for pong frames (verification of keep-alive)
+  try {
+    (socket as any).addEventListener?.("pong", () => {
+      console.log(`[ocpp-ws-proxy] Pong received from ${chargePointId}`);
+    });
+  } catch { /* not supported in all runtimes */ }
 
   // Track pending CALL responses from charger (for remote commands)
   const pendingCalls = new Map<string, { commandId: string; resolve: (data: unknown) => void }>();
@@ -193,6 +202,17 @@ Deno.serve(async (req) => {
       .eq("ocpp_id", chargePointId);
     // Start polling for pending commands
     commandPollTimer = setInterval(pollPendingCommands, COMMAND_POLL_INTERVAL);
+    // Server-side keep-alive: send WebSocket ping every 25s to prevent idle timeouts
+    // and satisfy chargers (e.g. Bender, Nidec) that expect periodic pongs.
+    pingTimer = setInterval(() => {
+      if (socket.readyState === WebSocket.OPEN) {
+        try {
+          (socket as any).ping?.();
+        } catch (e) {
+          console.warn(`[ocpp-ws-proxy] ping() failed for ${chargePointId}:`, (e as Error).message);
+        }
+      }
+    }, 25_000);
   };
 
   socket.onmessage = async (event) => {
@@ -269,6 +289,7 @@ Deno.serve(async (req) => {
   socket.onclose = async (event) => {
     console.log(`[ocpp-ws-proxy] Socket closed for ${chargePointId}: code=${event.code} reason=${event.reason}`);
     if (commandPollTimer) clearInterval(commandPollTimer);
+    if (pingTimer) clearInterval(pingTimer);
     // Mark charge point as WS-disconnected
     await supabase
       .from("charge_points")
@@ -279,6 +300,7 @@ Deno.serve(async (req) => {
   socket.onerror = (error) => {
     console.error(`[ocpp-ws-proxy] Socket error for ${chargePointId}:`, error);
     if (commandPollTimer) clearInterval(commandPollTimer);
+    if (pingTimer) clearInterval(pingTimer);
   };
 
   return response;
