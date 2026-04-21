@@ -1,0 +1,1 @@
+ALTER TABLE public.gateway_devices DROP COLUMN IF EXISTS api_key_hash;
