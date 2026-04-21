@@ -82,7 +82,7 @@ export function useLocationStatus(locationIds: string[]): UseLocationStatusRetur
     try {
       const { data, error } = await supabase
         .from("location_integrations")
-        .select("id, location_id, is_enabled, sync_status, config, integration:integrations!inner(name, type)")
+        .select("id, location_id, is_enabled, sync_status, last_sync_at, config, integration:integrations!inner(name, type)")
         .in("location_id", locationIds);
 
       if (error) {
@@ -106,7 +106,7 @@ export function useLocationStatus(locationIds: string[]): UseLocationStatusRetur
       });
 
       // Group integrations by location
-      const integrationsByLocation = new Map<string, (LocationIntegrationStatus & { location_integration_id: string })[]>();
+      const integrationsByLocation = new Map<string, (LocationIntegrationStatus & { location_integration_id: string; last_sync_at: string | null })[]>();
       const aiconoIntegrationIds: string[] = [];
       (data || []).forEach((row: any) => {
         const locationId = row.location_id;
@@ -118,6 +118,7 @@ export function useLocationStatus(locationIds: string[]): UseLocationStatusRetur
           location_integration_id: row.id,
           is_enabled: row.is_enabled,
           sync_status: row.sync_status,
+          last_sync_at: row.last_sync_at ?? null,
           config: (row.config || {}) as Record<string, unknown>,
           integration_name: row.integration?.name || "",
           integration_type: row.integration?.type || "",
@@ -182,7 +183,12 @@ export function useLocationStatus(locationIds: string[]): UseLocationStatusRetur
             return;
           }
 
-          if (integration.sync_status === "success") {
+          // sync_status === 'success' OR 'syncing' with a fresh last_sync_at (≤ 15 min) counts as online.
+          // 'syncing' is set transiently at the start of every periodic sync; without this, the dashboard
+          // shows a warning during normal sync windows.
+          const lastSyncMs = integration.last_sync_at ? new Date(integration.last_sync_at).getTime() : 0;
+          const syncFresh = Date.now() - lastSyncMs < 15 * 60 * 1000;
+          if (integration.sync_status === "success" || (integration.sync_status === "syncing" && syncFresh)) {
             online++;
           }
         });
