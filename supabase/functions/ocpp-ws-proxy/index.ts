@@ -234,10 +234,11 @@ Deno.serve(async (req) => {
 
   socket.onmessage = async (event) => {
     const rawData = typeof event.data === "string" ? event.data : new TextDecoder().decode(event.data);
+    lastIncomingAt = new Date().toISOString();
+    lastIncomingFrame = rawData.substring(0, 500);
 
-    console.log(`[ocpp-ws-proxy] Received from ${chargePointId}: ${rawData.substring(0, 200)}`);
+    console.log(`[ocpp-ws-proxy] [${sessionId}] Received from ${chargePointId}: ${rawData.substring(0, 200)}`);
 
-    // Log incoming message
     await logMessage(supabase, chargePointId, "incoming", rawData);
 
     // Check if this is a CALLRESULT/CALLERROR for one of our remote commands
