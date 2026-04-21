@@ -106,7 +106,7 @@ export function useLocationStatus(locationIds: string[]): UseLocationStatusRetur
       });
 
       // Group integrations by location
-      const integrationsByLocation = new Map<string, (LocationIntegrationStatus & { location_integration_id: string })[]>();
+      const integrationsByLocation = new Map<string, (LocationIntegrationStatus & { location_integration_id: string; last_sync_at: string | null })[]>();
       const aiconoIntegrationIds: string[] = [];
       (data || []).forEach((row: any) => {
         const locationId = row.location_id;
@@ -118,6 +118,7 @@ export function useLocationStatus(locationIds: string[]): UseLocationStatusRetur
           location_integration_id: row.id,
           is_enabled: row.is_enabled,
           sync_status: row.sync_status,
+          last_sync_at: row.last_sync_at ?? null,
           config: (row.config || {}) as Record<string, unknown>,
           integration_name: row.integration?.name || "",
           integration_type: row.integration?.type || "",
