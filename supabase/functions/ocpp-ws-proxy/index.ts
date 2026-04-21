@@ -127,7 +127,14 @@ Deno.serve(async (req) => {
   // Track pending CALL responses from charger (for remote commands)
   const pendingCalls = new Map<string, { commandId: string; resolve: (data: unknown) => void }>();
 
-  console.log(`[ocpp-ws-proxy] WebSocket connected: chargePointId=${chargePointId}`);
+  const sessionId = shortSession();
+  let lastIncomingAt: string | null = null;
+  let lastIncomingFrame: string | null = null;
+  let lastOutgoingAt: string | null = null;
+  let lastOutgoingFrame: string | null = null;
+  const openedAt = new Date().toISOString();
+
+  console.log(`[ocpp-ws-proxy] [${sessionId}] WebSocket connected: chargePointId=${chargePointId} openedAt=${openedAt}`);
 
   // Poll for pending commands and send them via WebSocket
   async function pollPendingCommands() {
