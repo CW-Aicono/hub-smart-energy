@@ -306,10 +306,11 @@ Deno.serve(async (req) => {
   };
 
   socket.onclose = async (event) => {
-    console.log(`[ocpp-ws-proxy] Socket closed for ${chargePointId}: code=${event.code} reason=${event.reason}`);
-    if (commandPollTimer) clearInterval(commandPollTimer);
-    if (pingTimer) clearInterval(pingTimer);
-    // Mark charge point as WS-disconnected
+    const closedAt = new Date().toISOString();
+    console.log(`[ocpp-ws-proxy] [${sessionId}] Socket closed for ${chargePointId}: code=${event.code} reason="${event.reason}" wasClean=${event.wasClean} openedAt=${openedAt} closedAt=${closedAt} lastIncomingAt=${lastIncomingAt} lastOutgoingAt=${lastOutgoingAt} lastIncomingFrame=${lastIncomingFrame} lastOutgoingFrame=${lastOutgoingFrame}`);
+    if (commandPollTimer) { clearInterval(commandPollTimer); commandPollTimer = undefined; }
+    if (pingTimer) { clearInterval(pingTimer); pingTimer = undefined; }
+    pendingCalls.clear();
     await supabase
       .from("charge_points")
       .update({ ws_connected: false, ws_connected_since: null } as any)
@@ -317,9 +318,9 @@ Deno.serve(async (req) => {
   };
 
   socket.onerror = (error) => {
-    console.error(`[ocpp-ws-proxy] Socket error for ${chargePointId}:`, error);
-    if (commandPollTimer) clearInterval(commandPollTimer);
-    if (pingTimer) clearInterval(pingTimer);
+    console.error(`[ocpp-ws-proxy] [${sessionId}] Socket error for ${chargePointId}:`, error);
+    if (commandPollTimer) { clearInterval(commandPollTimer); commandPollTimer = undefined; }
+    if (pingTimer) { clearInterval(pingTimer); pingTimer = undefined; }
   };
 
   return response;
