@@ -1,119 +1,74 @@
 
-Ziel: Die eigentliche Ursache sauber beheben, damit beide Raspberry Pis in der Liegenschaft korrekt als online erscheinen und die vollständigen Home-Assistant-Geräte in der UI sichtbar und zuordenbar werden.
 
-1. Hauptursachen, die die Analyse ergeben hat
-- Ursache A: Der Sensor-/Geräteabruf aus der UI scheitert nicht fachlich, sondern technisch auf HTTP-Ebene.
-  - Im Browser schlägt `POST /functions/v1/gateway-ws` mit `Failed to fetch` fehl.
-  - Dieselbe Funktion liefert per direktem Backend-Test korrekt Daten zurück.
-  - Das zeigt: `getSensors` funktioniert serverseitig, aber der Browser-Request scheitert sehr wahrscheinlich an fehlenden CORS-Headern im HTTP-Zweig von `gateway-ws`.
-- Ursache B: Der Status in der Liegenschaftsübersicht ist veraltet bzw. falsch modelliert.
-  - In der Datenbank stehen beide AICONO-Gateway-Integrationen bereits auf `sync_status = success`.
-  - Die Übersicht arbeitet aber nur mit `location_integrations.sync_status` und ignoriert die tatsächlichen `gateway_devices.last_heartbeat_at` / `status`.
-  - Dadurch kann die Übersicht offline/pending zeigen, obwohl die Detailkarte aus den echten Gateway-Geräten korrekt „online“ ableitet.
-- Ursache C: Für „Schule Buchenberg Altbau“ liegen im Backend aktuell wirklich nur 12 Geräte vor.
-  - Das ist kein reines UI-Problem.
-  - Der direkte Backend-Abruf für `locationIntegrationId = a32d...` liefert exakt diese 12 Geräte.
-  - Die Tabelle `gateway_device_inventory` bestätigt ebenfalls nur 12 Einträge für das Pi `aicono-ems-4a2cee`.
-  - Das andere Pi (`aicono-ems-7e4852`) liefert dagegen 44 Geräte.
-- Ursache D: Das Add-on filtert beim Snapshot die Geräte nicht über `entity_filter`, aber der verfügbare HA-State-Bestand (`latestHAStates`) wird trotzdem durch den aktuellen HA-Zustand bestimmt.
-  - Deshalb müssen wir unterscheiden zwischen:
-    - „Snapshot-Code filtert falsch“ und
-    - „dieses Pi sieht in Home Assistant tatsächlich nur diese 12 relevanten Entities“.
-  - Für Buchenberg sieht aktuell alles danach aus, dass das Add-on/HA auf diesem Pi nur diese 12 Entities im State-Feed verfügbar hat oder die übrigen Geräte auf diesem Pi nicht in `latestHAStates` landen.
+## Bender / Nidec Disconnect — Korrekte Ursachenanalyse
 
-2. Geplanter Fix – Backend
-- `supabase/functions/gateway-ws/index.ts`
-  - Den HTTP-Antworten im `handleHttpAction()` konsequent dieselben CORS-Header geben wie andere Funktionen.
-  - Besonders für:
-    - erfolgreiche `getSensors`-Antwort
-    - 400/500-Fehler
-    - OPTIONS-Preflight
-  - Dadurch kann der Browser die Funktion endlich direkt aufrufen, statt mit `Failed to fetch` abzubrechen.
-- Zusätzlich Logging ergänzen:
-  - im HTTP-Zweig `gateway-ws` bei `getSensors`
-  - mit `locationIntegrationId`, Anzahl gefundener Meter, Automationen, Inventory-Einträge
-  - damit künftig sofort sichtbar ist, ob ein Problem aus HA-Daten, DB oder Transport kommt.
+### Was die echten Logs zeigen
 
-3. Geplanter Fix – Statuslogik in der Übersicht
-- `src/hooks/useLocationStatus.tsx`
-  - Die Übersicht nicht mehr nur auf `location_integrations.sync_status === "success"` stützen.
-  - Für `aicono_gateway` zusätzlich die echten `gateway_devices` der jeweiligen `location_integration_id` berücksichtigen:
-    - online, wenn mindestens ein zugehöriges Gateway-Gerät `status = online` hat und der letzte Heartbeat jünger als 3 Minuten ist
-    - optional „syncing“, wenn `offline_buffer_count > 0`
-  - Damit wird die Übersicht dieselbe Wahrheit anzeigen wie die Detailkarte.
-- Vorteil:
-  - Keine Schein-Offlines mehr
-  - Robust gegen verspätete oder hängende `sync_status`-Felder
+Tenant ESB hat **NIDAC000003 (Nidec)**, keinen Bender. Reconnect-Pattern aus den Edge-Logs:
 
-4. Geplanter Fix – Geräteanzeige in der UI
-- `src/components/locations/MeterManagement.tsx`
-  - Die aktuelle Loxone-/Gateway-Mischlogik vereinheitlichen und auf die zentrale Geräteklassifizierung umstellen.
-  - Die Zuordnung in Tabs (`Zähler`, `Sensoren`, `Aktoren`) soll für AICONO Gateway ausschließlich auf den zurückgegebenen Inventar-Geräten plus vorhandenen DB-Overrides (`device_type`) basieren.
-  - Bereits angelegte Messstellen mit `sensor_uuid` sollen weiterhin dedupliziert werden.
-- `src/lib/deviceClassification.ts`
-  - Die Klassifikation für Home-Assistant-/AICONO-Gateway-Geräte robuster machen:
-    - `switch`, `light`, `cover`, `climate`, `fan`, `lock`, `valve` sicher als Aktoren
-    - `sensor` mit `device_class`/`unit` für Energie, Leistung, Wasser, Gas sicher als Zähler
-    - Rest als Sensor
-  - `MeterManagement.tsx` soll diese zentrale Logik benutzen statt lokaler Parallel-Logik.
-- Ergebnis:
-  - Einheitliches Verhalten „wie Loxone“
-  - Geräte per Stift zu `Zähler`, `Aktor`, `Sensor` umklassifizierbar
-  - weniger Sonderfälle und weniger Drift zwischen Tabs
+| Ladepunkt | Reconnects | Intervall |
+|-----------|------------|-----------|
+| CoCSAG773 | 09:28:18 → 09:31:49 → 09:31:49+ | ~3:30 min |
+| 0311303102122250589 | 09:28:31 → 09:31:52 → 09:35:14 | ~3:20 min |
+| NIDAC000003 (Nidec) | 09:01:41 → 09:01:42 → 09:15:45 → 09:30:35 | 14 min, dann silent |
 
-5. Geplanter Fix – Add-on-Analyse für das schwächere Pi
-- `docs/ha-addon/index.ts`
-  - Tieferes Debug-Logging nur für den Snapshot-Aufbau ergänzen:
-    - Anzahl `latestHAStates`
-    - Anzahl Geräte pro Domain
-    - Anzahl erkannter Kategorien (`meter`, `actuator`, `sensor`)
-    - optional die ersten 20 Entity-IDs im Snapshot
-  - Separat loggen:
-    - wie viele States aus HA `/states` kamen
-    - wie viele nur aus lokalem Cache stammen
-- Ziel:
-  - Sicher feststellen, warum Pi `192.168.188.141` nur 12 Geräte liefert, obwohl laut Screenshot beide Pis „gleich“ wirken.
-- Erwartete wahrscheinliche Erklärung:
-  - Das Pi ist zwar online und korrekt verbunden, aber Home Assistant stellt diesem konkreten Add-on aktuell nur die 12 System-/Basis-Entities bereit oder die erwarteten Geräte sind auf diesem Host/HA-Setup nicht im globalen State-Feed vorhanden.
+**Alle drei** Ladepunkte trennen regelmäßig — nicht nur der Bender. Die OCPP-Heartbeats (alle 30s) und StatusNotifications laufen weiterhin sauber, aber die **WebSocket-Verbindung wird vom Server beendet**, nicht vom Charger. Das eliminiert die Bender-spezifische Hypothese.
 
-6. Validierung nach dem Fix
-- Test 1: Browser
-  - Dialog „Gefundene Geräte“ öffnen
-  - prüfen, dass kein `Failed to fetch` mehr erscheint
-  - prüfen, dass `getSensors` im Browser sauber lädt
-- Test 2: Übersicht
-  - beide Liegenschaften müssen innerhalb eines Heartbeat-Zyklus als online erscheinen
-  - keine Diskrepanz mehr zwischen Übersicht und Detailansicht
-- Test 3: Realschule
-  - erwartbar weiter ca. 44 Geräte sichtbar
-  - Zähler/Aktoren/Sensoren korrekt verteilt
-- Test 4: Schule Buchenberg Altbau
-  - zunächst prüfen, ob nach CORS-Fix wenigstens dieselben 12 Geräte sauber sichtbar werden
-  - anschließend mit neuem Add-on-Debug klären, warum dort nicht die gleichen HA-Entities ankommen
-- Test 5: Klassenzuordnung
-  - ein gefundenes Gerät per Stift öffnen
-  - Typ auf `Zähler`, `Sensor` oder `Aktor` setzen
-  - prüfen, dass das Gerät danach im richtigen Tab erscheint
+### Wahre Ursache
 
-7. Erwartetes Ergebnis nach Umsetzung
-- Der Geräte-Dialog funktioniert wieder technisch zuverlässig.
-- Die Übersicht zeigt den echten Online-Status der AICONO Gateways.
-- Die Geräteverwaltung zeigt die aus dem Gateway gelieferten Geräte konsistent an.
-- Für das zweite Pi ist danach eindeutig unterscheidbar:
-  - UI-/Transportproblem behoben
-  - verbleibendes Problem ist dann wirklich ein Add-on-/HA-Datenproblem und nicht mehr ein Cloud- oder Frontend-Problem.
+**Supabase Edge Functions (Deno Deploy) erzwingen ein Worker-Recycling**. Jede Edge-Function-Invocation hat eine maximale Lebensdauer (im freien Tier ca. 150 Sekunden CPU-Zeit, im Pro-Tier länger, aber nie unbegrenzt). Bei `Deno.upgradeWebSocket` läuft die Funktion **so lange wie die WebSocket-Verbindung**. Sobald die Worker-Lifetime erreicht ist oder der Worker recycelt wird (Deployment, Scale-Down), wird der Socket geschlossen.
 
-8. Technische Details
-- Betroffene Dateien:
-  - `supabase/functions/gateway-ws/index.ts`
-  - `src/hooks/useLocationStatus.tsx`
-  - `src/components/locations/MeterManagement.tsx`
-  - `src/lib/deviceClassification.ts`
-  - `docs/ha-addon/index.ts`
-- Keine neue Tabelle erforderlich.
-- Keine Migration erforderlich, sofern wir nur Logik und Logging anpassen.
-- Wichtigster Fix zuerst:
-  - CORS im HTTP-Pfad von `gateway-ws`
-  - danach Statuslogik
-  - danach UI-Klassifikation
-  - zuletzt Add-on-Debug für das Pi mit nur 12 Geräten
+Zusätzlich:
+1. **`idleTimeout` Default = 120s**: Wenn zwischen zwei Frames mehr als 120s vergehen (Heartbeat ist alle 30s — knapp drunter, aber bei Jitter über die Schwelle), schließt Deno selbst.
+2. **Kein WebSocket-Ping/Pong Server-seitig**: Manche Charger (insbes. Bender, Compleo, Nidec) erwarten Pong-Antworten auf eigene Ping-Frames innerhalb 60–120s. Bleibt das Pong aus, bricht der Charger zusätzlich ab.
+3. **`pendingCalls` und `commandPollTimer`** überleben den Reconnect nicht — bei Wiederaufbau ist der State weg, was bei `RemoteStartTransaction` zu inkonsistenten States führen kann.
+
+Die Architektur "OCPP-WebSocket via Supabase Edge Function" ist **nicht für langlebige WebSockets gedacht**. Edge Functions sind serverless und für kurze Request/Response-Zyklen optimiert.
+
+### Empfohlener Fix (zwei Stufen)
+
+**Stufe 1 — Sofortmaßnahme im bestehenden Proxy (mildert die Symptome):**
+
+Änderungen in `supabase/functions/ocpp-ws-proxy/index.ts`:
+
+1. **`idleTimeout` explizit hochsetzen**:
+   ```ts
+   const { socket, response } = Deno.upgradeWebSocket(req, {
+     protocol: OCPP_SUBPROTOCOL,
+     idleTimeout: 240, // statt default 120s
+   });
+   ```
+
+2. **Keep-Alive durch Server-seitige Ping-Frames** alle 25s (Deno's WebSocket unterstützt `.ping()` ab v1.40):
+   ```ts
+   const pingTimer = setInterval(() => {
+     if (socket.readyState === WebSocket.OPEN) {
+       try { (socket as any).ping?.(); } catch {}
+     }
+   }, 25_000);
+   ```
+   Cleanup analog zu `commandPollTimer` in `onclose`/`onerror`.
+
+3. **Pong-Empfang loggen** zur Verifikation der Keep-Alive-Frames.
+
+**Erwartung:** Reconnects werden seltener (von ~3 min auf >5 min), aber **nicht eliminiert** — die Edge-Function-Worker-Lifetime bleibt die harte Grenze.
+
+**Stufe 2 — Architektur-Empfehlung (eigentliche Lösung):**
+
+Für stabile, langlebige OCPP-Verbindungen sollte der WebSocket-Endpunkt **nicht** auf Supabase Edge Functions laufen. Optionen:
+
+- **Variante A:** Eigener Node.js/Deno-Service auf Hetzner/Fly.io (`ws://aicono-ocpp.<domain>:8080`), der die OCPP-Verbindung dauerhaft hält und Nachrichten in Supabase persistiert. Der bestehende `docs/ocpp-cloud-proxy/index.ts` ist genau dafür gedacht — er muss nur dauerhaft auf einem Server laufen statt Lovable Cloud Functions zu fronten.
+- **Variante B:** Supabase Realtime-Channels für Backend↔Charger umstellen (kein OCPP-Standard, erfordert Charger-seitige Adaption — nicht praktikabel für Bender/Nidec/Compleo).
+
+### Verifikation nach Stufe-1-Fix
+
+1. Edge-Logs `Socket open for ...` Counter beobachten: Reconnect-Frequenz muss messbar sinken.
+2. `ocpp_message_log` für NIDAC000003: Lücken zwischen Heartbeats sollten nicht > 60s werden.
+3. Falls weiter Disconnects: Stufe 2 empfehlen.
+
+### Betroffene Datei (Stufe 1)
+
+- `supabase/functions/ocpp-ws-proxy/index.ts` (3 Stellen: `upgradeWebSocket`-Optionen, Ping-Timer in `onopen`, Cleanup in `onclose`/`onerror`)
+
+Keine Datenbank-Änderungen, keine Frontend-Änderungen.
+
