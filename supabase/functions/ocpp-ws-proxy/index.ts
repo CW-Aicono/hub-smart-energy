@@ -96,11 +96,20 @@ Deno.serve(async (req) => {
 
   const { socket, response } = Deno.upgradeWebSocket(req, {
     protocol: OCPP_SUBPROTOCOL,
+    idleTimeout: 240, // seconds; default 120 is too tight for chargers like Bender/Nidec
   });
 
   const ocppCentralUrl = `${supabaseUrl}/functions/v1/ocpp-central?cp=${encodeURIComponent(chargePointId)}`;
   const supabase = createSupabase();
   let commandPollTimer: number | undefined;
+  let pingTimer: number | undefined;
+
+  // Listen for pong frames (verification of keep-alive)
+  try {
+    (socket as any).addEventListener?.("pong", () => {
+      console.log(`[ocpp-ws-proxy] Pong received from ${chargePointId}`);
+    });
+  } catch { /* not supported in all runtimes */ }
 
   // Track pending CALL responses from charger (for remote commands)
   const pendingCalls = new Map<string, { commandId: string; resolve: (data: unknown) => void }>();
