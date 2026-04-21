@@ -1,0 +1,24 @@
+{
+  "name": "ocpp-persistent-server",
+  "version": "1.0.0",
+  "description": "Persistenter OCPP 1.6 WebSocket-Server für AICONO EMS (läuft 24/7 auf eigenem Host).",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "ts-node src/index.ts"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.4",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/ws": "^8.5.13",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.4.5"
+  }
+}
