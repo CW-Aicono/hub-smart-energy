@@ -393,13 +393,23 @@ export function useEnergyData(locationId?: string | null) {
   }, [allReadings, locationId, meterMap]);
 
   // Monthly energy data grouped by energy type
+  // IMPORTANT: live readings are instantaneous power (W/kW), NOT cumulative energy.
+  // They must be excluded from monthly consumption totals — only `livePeriodTotals.totalMonth`
+  // (gateway-provided cumulative monthly energy) is added to the current month bucket.
   const monthlyData = useMemo((): MonthlyEnergyData[] => {
     const buckets: Record<string, EnergyTypeTotals> = {};
     MONTH_LABELS.forEach((m) => {
       buckets[m] = { strom: 0, gas: 0, waerme: 0, wasser: 0 };
     });
 
+    // Build a set of automatic meter IDs so we can skip their live (instantaneous) readings here
+    const autoMeterIds = new Set(
+      meters.filter((m) => !m.is_archived && m.capture_type === "automatic").map((m) => m.id),
+    );
+
     filteredReadings.forEach((r) => {
+      // Skip live instantaneous readings from automatic meters — they are power, not energy.
+      if (autoMeterIds.has(r.meter_id)) return;
       const date = new Date(r.reading_date);
       const monthLabel = MONTH_LABELS[date.getMonth()];
       const energyType = meterMap[r.meter_id]?.energy_type || "strom";
@@ -408,6 +418,7 @@ export function useEnergyData(locationId?: string | null) {
       }
     });
 
+    // Only the current month gets the cumulative gateway "totalMonth" value.
     const currentMonthLabel = MONTH_LABELS[new Date().getMonth()];
     if (buckets[currentMonthLabel]) {
       addAutoMeterTotals(buckets[currentMonthLabel], meters, livePeriodTotals, meterMap, locationId);
