@@ -183,10 +183,14 @@ export function useLocationStatus(locationIds: string[]): UseLocationStatusRetur
             return;
           }
 
-          if (integration.sync_status === "success") {
+          // sync_status === 'success' OR 'syncing' with a fresh last_sync_at (≤ 15 min) counts as online.
+          // 'syncing' is set transiently at the start of every periodic sync; without this, the dashboard
+          // shows a warning during normal sync windows.
+          const lastSyncMs = integration.last_sync_at ? new Date(integration.last_sync_at).getTime() : 0;
+          const syncFresh = Date.now() - lastSyncMs < 15 * 60 * 1000;
+          if (integration.sync_status === "success" || (integration.sync_status === "syncing" && syncFresh)) {
             online++;
           }
-        });
 
         statusMap.set(locationId, {
           locationId,
