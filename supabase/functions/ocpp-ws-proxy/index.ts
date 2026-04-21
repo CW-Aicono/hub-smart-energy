@@ -202,6 +202,17 @@ Deno.serve(async (req) => {
       .eq("ocpp_id", chargePointId);
     // Start polling for pending commands
     commandPollTimer = setInterval(pollPendingCommands, COMMAND_POLL_INTERVAL);
+    // Server-side keep-alive: send WebSocket ping every 25s to prevent idle timeouts
+    // and satisfy chargers (e.g. Bender, Nidec) that expect periodic pongs.
+    pingTimer = setInterval(() => {
+      if (socket.readyState === WebSocket.OPEN) {
+        try {
+          (socket as any).ping?.();
+        } catch (e) {
+          console.warn(`[ocpp-ws-proxy] ping() failed for ${chargePointId}:`, (e as Error).message);
+        }
+      }
+    }, 25_000);
   };
 
   socket.onmessage = async (event) => {
