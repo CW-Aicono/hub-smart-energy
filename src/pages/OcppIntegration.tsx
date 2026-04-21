@@ -8,15 +8,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Copy, PlugZap, BookOpen, Search, ExternalLink, Server, Shield, AlertTriangle } from "lucide-react";
+import { Copy, PlugZap, BookOpen, Search, Shield, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/hooks/use-toast";
+import { OcppServerUrlCard } from "@/components/ocpp/OcppServerUrlCard";
 
 const OCPP_WS_URL_SHORT = "wss://ocpp.aicono.org";
-const OCPP_WS_URL_LONG = `${import.meta.env.VITE_SUPABASE_URL?.replace("https://", "wss://")}/functions/v1/ocpp-ws-proxy`;
-const OCPP_WS_URL = OCPP_WS_URL_SHORT;
-const SELF_HOSTED_KEY = "ocpp_self_hosted_url";
 
 const DIFFICULTY_COLORS: Record<string, string> = {
   easy: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400",
@@ -109,71 +107,8 @@ const OcppIntegration = () => {
           <p className="text-muted-foreground text-sm mt-0.5">{t("ocppIntegration.subtitle" as any)}</p>
         </div>
 
-        {/* OCPP Backend URL Card */}
-        <Card className="border-primary/20 bg-primary/5">
-          <CardContent className="pt-4 pb-4">
-            <div className="flex items-start gap-2">
-              <Server className="h-4 w-4 text-primary mt-0.5 shrink-0" />
-              <div className="flex-1 min-w-0 space-y-2">
-                <p className="text-xs font-medium">{t("ocppIntegration.backendUrl" as any)}</p>
-
-                {/* Short URL (if configured) */}
-                {OCPP_WS_URL_SHORT && (
-                  <div>
-                    <p className="text-[11px] font-medium text-primary mb-0.5">{t("ocppIntegration.shortUrl" as any)}</p>
-                    <div className="flex items-center gap-1.5">
-                      <code className="text-xs bg-background border rounded px-2 py-1.5 break-all select-all flex-1 font-semibold">
-                        {OCPP_WS_URL_SHORT}/{"<OCPP_ID>"}
-                      </code>
-                      <Button variant="outline" size="icon" className="shrink-0 h-8 w-8" onClick={() => copyUrl(OCPP_WS_URL_SHORT)}>
-                        <Copy className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
-                  </div>
-                )}
-
-                {/* Long URL */}
-                <div>
-                  {OCPP_WS_URL_SHORT && (
-                    <p className="text-[11px] text-muted-foreground mb-0.5">{t("ocppIntegration.fullUrl" as any)}</p>
-                  )}
-                  <div className="flex items-center gap-1.5">
-                    <code className="text-[11px] bg-background border rounded px-2 py-1.5 break-all select-all flex-1 text-muted-foreground">
-                      {OCPP_WS_URL_LONG}/{"<OCPP_ID>"}
-                    </code>
-                    <Button variant="outline" size="icon" className="shrink-0 h-8 w-8" onClick={() => copyUrl(OCPP_WS_URL_LONG)}>
-                      <Copy className="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
-                </div>
-
-                {/* Port info */}
-                <div className="p-2 bg-background border rounded-md">
-                  <p className="text-[11px] font-medium mb-1">Port-Konfiguration</p>
-                  <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-[11px]">
-                    <div className="flex items-center gap-1.5">
-                      <code className="font-semibold text-primary">wss://</code>
-                      <span className="text-muted-foreground">→ Port</span>
-                      <code className="font-bold">443</code>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <code className="font-semibold text-destructive">ws://</code>
-                      <span className="text-muted-foreground">→ Port</span>
-                      <code className="font-bold">80</code>
-                    </div>
-                  </div>
-                  <p className="text-[10px] text-muted-foreground mt-1">
-                    Für verschlüsselte Verbindungen (wss://) muss Port <strong>443</strong> verwendet werden. Port 80 gilt nur für unverschlüsseltes ws:// und sollte vermieden werden.
-                  </p>
-                </div>
-
-                <p className="text-[11px] text-muted-foreground">
-                  {t("ocppIntegration.backendUrlHint" as any)}
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        {/* OCPP Server URL Auswahl (Cloud vs. Eigener Server) */}
+        <OcppServerUrlCard cloudUrl={OCPP_WS_URL_SHORT} />
 
         {/* ws:// Cloud-Proxy für ältere Ladepunkte */}
         <Card className="border-yellow-500/20 bg-yellow-500/5">
