@@ -16,6 +16,7 @@ import { toast } from "@/hooks/use-toast";
 const OCPP_WS_URL_SHORT = "wss://ocpp.aicono.org";
 const OCPP_WS_URL_LONG = `${import.meta.env.VITE_SUPABASE_URL?.replace("https://", "wss://")}/functions/v1/ocpp-ws-proxy`;
 const OCPP_WS_URL = OCPP_WS_URL_SHORT;
+const SELF_HOSTED_KEY = "ocpp_self_hosted_url";
 
 const DIFFICULTY_COLORS: Record<string, string> = {
   easy: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400",
