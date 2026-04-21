@@ -42,6 +42,19 @@ function generateUniqueId(): string {
   return crypto.randomUUID().substring(0, 36);
 }
 
+function shortSession(): string {
+  return crypto.randomUUID().substring(0, 8);
+}
+
+// Log once at boot whether ws.ping() is available in this runtime
+let pingProbeLogged = false;
+function probePingSupport(socket: WebSocket, sessionId: string) {
+  if (pingProbeLogged) return;
+  pingProbeLogged = true;
+  const supported = typeof (socket as any).ping === "function";
+  console.log(`[ocpp-ws-proxy] [${sessionId}] ping() supported: ${supported ? "yes" : "no"}`);
+}
+
 Deno.serve(async (req) => {
   const url = new URL(req.url);
   const pathParts = url.pathname.split("/").filter(Boolean);
