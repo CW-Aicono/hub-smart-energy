@@ -270,10 +270,11 @@ Deno.serve(async (req) => {
       });
 
       const responseText = await httpResponse.text();
+      lastOutgoingAt = new Date().toISOString();
+      lastOutgoingFrame = responseText.substring(0, 500);
 
-      console.log(`[ocpp-ws-proxy] Response for ${chargePointId}: ${responseText.substring(0, 200)}`);
+      console.log(`[ocpp-ws-proxy] [${sessionId}] Response for ${chargePointId}: ${responseText.substring(0, 200)}`);
 
-      // Log outgoing message
       await logMessage(supabase, chargePointId, "outgoing", responseText);
 
       if (socket.readyState === WebSocket.OPEN) {
