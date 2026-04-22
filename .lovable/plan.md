@@ -1,53 +1,83 @@
 
+Ziel: Das Gateway-Onboarding so anpassen, dass es für Nicht-Techniker eindeutig und ohne MAC-/Tenant-ID-Rätsel funktioniert.
 
-## HA-Update-Problem: Aufräumen + Cache-Reset
+1. Onboarding-Logik fachlich bereinigen
+- Die aktuelle Rolle der `tenant_id` im Add-on prüfen und vereinheitlichen.
+- Da das v3-WebSocket-Onboarding bereits über `MAC + gateway_username + gateway_password` arbeitet und die Zuordnung aus der Cloud zurückkommt, soll `tenant_id` nicht mehr als manuell auszufüllender Pflichtwert wahrgenommen werden.
+- Geplante Umsetzung:
+  - In der Cloud-Konfigurationshilfe klar anzeigen, welche Werte wirklich manuell eingetragen werden müssen.
+  - Falls `tenant_id` für den aktuellen Laufzeitpfad nicht mehr benötigt wird: aus der HA-Add-on-Konfiguration entfernen oder mindestens deutlich als „nicht manuell erforderlich / Legacy“ kennzeichnen.
+  - Dadurch verschwindet die heutige Verwirrung aus Screenshot 1.
 
-### Diagnose (verifiziert)
+2. Tenant-ID in der Cloud-Konfigurationshilfe korrekt behandeln
+- Den Dialog `HaConfigDialog.tsx` erweitern.
+- Wenn `tenant_id` weiterhin technisch notwendig bleibt:
+  - neue Copy-Zeile `tenant_id` ergänzen
+  - mit klarer Erklärung, wo dieser Wert in Home Assistant einzutragen ist
+- Wenn `tenant_id` nicht mehr nötig ist:
+  - bewusst nicht anzeigen
+  - stattdessen den Hinweistext im Dialog anpassen: „Für die Verbindung werden nur cloud_ws_url, MAC-Adresse, Benutzername und Passwort benötigt.“
+- Ergebnis: kein Widerspruch mehr zwischen Cloud-Dialog und HA-Addon-Konfiguration.
 
-- `repository.yaml` ist **gültig** für HA — Claudes Vermutung dort ist falsch. Wir lassen sie unverändert.
-- Im Ziel-Repo `CW-Aicono/ha-addons` existiert vermutlich noch ein Alt-Ordner `ems-gateway-hub/` aus der v1/v2-Zeit. Unser Sync-Workflow legt nur `aicono-ems-gateway/` an — entfernt aber alte Ordner **nicht**. HA sieht dadurch potenziell zwei Add-ons und cached durcheinander.
-- Die neue Version v3.0.9 liegt korrekt in `docs/ha-addon/config.yaml`. Sync wurde durch deinen letzten Bump getriggert. Wenn HA trotzdem nichts findet, ist es der **Add-on-Store-Cache**.
+3. MAC-Adresse vor finaler Zuordnung sichtbar machen
+- Das bestehende Muster mit „unzugeordneten Geräten“ weiter ausbauen.
+- In `AiconoGatewayCredentials.tsx` die Liste unzugeordneter Geräte prominenter machen:
+  - MAC-Adresse klar sichtbar
+  - Benutzername, letzte Meldung und ggf. lokale IP ergänzen
+  - Button „Übernehmen“ beibehalten
+- Zusätzlich eine laienverständliche Erklärung einbauen:
+  - „Gateway zuerst im Home Assistant Add-on starten“
+  - „Danach erscheint die MAC hier automatisch“
+  - „Dann nur noch übernehmen und speichern“
+- So muss die MAC nicht mehr manuell am Raspberry Pi ermittelt werden.
 
-### Fix in zwei Schritten
+4. Optionalen Null-Fehler-Onboarding-Pfad ergänzen
+- Für den AICONO-Gateway-Zuordnungsdialog eine klare Schritt-für-Schritt-Reihenfolge im UI ergänzen:
+  1. Add-on in Home Assistant öffnen
+  2. Benutzername und Passwort setzen
+  3. Add-on speichern und starten
+  4. In AICONO auf „Aktualisieren“ klicken
+  5. Erkanntes Gateway aus der Liste übernehmen
+- Dadurch wird die manuelle Eingabe der MAC nur noch Fallback, nicht Standard.
 
-**Schritt 1 — Alt-Ordner sauber entfernen (Code-Änderung)**
+5. Lokale Add-on-UI als MAC-Quelle weiter absichern
+- Die lokale Add-on-UI zeigt die MAC bereits im Dashboard an; diese Anzeige bleibt erhalten.
+- Zusätzlich prüfen und sicherstellen, dass die MAC auch ohne abgeschlossene Cloud-Zuordnung zuverlässig im lokalen Status verfügbar bleibt.
+- Falls sinnvoll, in der lokalen UI einen noch deutlich sichtbareren Copy-Block für die MAC ergänzen, damit Screenshot-/Support-Fälle einfacher werden.
 
-Sync-Workflow `.github/workflows/sync-ha-addon.yml` so erweitern, dass beim Sync alle alten Add-on-Verzeichnisse außer `aicono-ems-gateway/` und außer Repo-Metadaten (`.git`, `repository.yaml`, `README.md`, `.github`) gelöscht werden. Das räumt einmalig den Alt-Ordner `ems-gateway-hub/` weg und verhindert künftige Doppelungen.
+6. Texte und Hinweise für Anfänger umschreiben
+- Alle relevanten Texte in:
+  - `HaConfigDialog.tsx`
+  - `AiconoGatewayCredentials.tsx`
+  - ggf. `docs/ha-addon/ui/index.html`
+  so umformulieren, dass klar ist:
+  - welche Werte aus AICONO kommen
+  - welche Werte in Home Assistant gesetzt werden
+  - welche Werte automatisch erkannt werden
+  - dass die MAC normalerweise nicht mehr händisch gesucht werden muss
 
-Konkret als zusätzlicher Schritt vor dem `cp`:
-```bash
-# Alt-Verzeichnisse im Ziel-Repo entfernen (alles außer Allowlist)
-find target -mindepth 1 -maxdepth 1 -type d \
-  ! -name '.git' \
-  ! -name '.github' \
-  ! -name 'aicono-ems-gateway' \
-  -exec rm -rf {} +
-```
+7. Versionierung
+- Nach Umsetzung Version auf die nächste gewünschte Add-on-Version anheben.
+- Betroffene Stellen:
+  - `docs/ha-addon/config.yaml`
+  - `docs/ha-addon/package.json`
 
-Anschließend Version-Bump auf `3.0.10` in `docs/ha-addon/config.yaml` + `docs/ha-addon/package.json`, damit der Sync-Workflow erneut feuert und der Cleanup ausgeführt wird.
+Technische Details
+- Relevante Dateien:
+  - `src/components/integrations/gateway/HaConfigDialog.tsx`
+  - `src/components/integrations/gateway/AiconoGatewayCredentials.tsx`
+  - `docs/ha-addon/config.yaml`
+  - `docs/ha-addon/index.ts`
+  - `docs/ha-addon/ui/index.html`
+- Bereits vorhanden:
+  - lokale MAC-Anzeige im Add-on-Dashboard (`/api/status` → `mac_address`)
+  - Liste unzugeordneter Geräte über `gateway-credentials?action=pending`
+  - Copy/Übernehmen-Mechanik in der Cloud
+- Hauptentscheidung bei der Umsetzung:
+  - `tenant_id` konsequent entfernen, wenn sie im v3-Flow nicht mehr benötigt wird
+  - andernfalls in beiden UIs konsistent sichtbar und erklärt machen
 
-**Schritt 2 — HA-Cache zurücksetzen (manuell durch dich, nach Schritt 1)**
-
-In Home Assistant:
-1. **Einstellungen → Add-ons → Add-on Store** öffnen
-2. Oben rechts auf **⋮ (drei Punkte)** → **„Check for updates"** klicken
-3. Falls v3.0.9/v3.0.10 immer noch nicht erscheint:
-   - **⋮ → „Repositories"** öffnen
-   - `https://github.com/CW-Aicono/ha-addons` löschen
-   - **HA neu starten** (Einstellungen → System → ⋮ → Neustart)
-   - Repo neu hinzufügen
-4. Add-on-Store erneut öffnen — die neue Version muss jetzt sichtbar sein
-
-### Was wir **nicht** tun
-
-- `repository.yaml` → `repository.json` umbenennen: nicht nötig, beide Formate sind offiziell unterstützt. Eine Umbenennung würde nur kosmetisch wirken und kein Problem lösen.
-- An den Sync-Tokens / Workflow-Triggern schrauben: der Workflow läuft korrekt, das sehen wir am v3.0.9-Push.
-
-### Betroffene Dateien
-
-- `.github/workflows/sync-ha-addon.yml` — Cleanup-Schritt für alte Add-on-Ordner
-- `docs/ha-addon/config.yaml` — Version `3.0.9` → `3.0.10`
-- `docs/ha-addon/package.json` — Version `3.0.9` → `3.0.10`
-
-Keine Änderungen am Add-on-Code, keine Änderungen am `repository.yaml`-Format.
-
+Erwartetes Ergebnis
+- Kein Widerspruch mehr zwischen AICONO-Dialog und HA-Konfiguration
+- MAC-Adresse muss im Regelfall nicht mehr manuell technisch ermittelt werden
+- Zuordnung des Gateways wird für Laien deutlich einfacher und fehlersicherer
