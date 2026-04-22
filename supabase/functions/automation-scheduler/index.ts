@@ -198,6 +198,22 @@ function resolveActions(auto: Record<string, unknown>): AutomationAction[] {
   }];
 }
 
+function hasForeignGatewayReference(
+  auto: Record<string, unknown>,
+  conditions: AutomationCondition[],
+  actions: AutomationAction[],
+): boolean {
+  const integrationId = auto.location_integration_id as string | null | undefined;
+  if (!integrationId) return false;
+
+  const conditionMismatch = conditions.some((condition) =>
+    condition.gateway_id && condition.gateway_id !== integrationId
+  );
+  if (conditionMismatch) return true;
+
+  return actions.some((action) => action.gateway_id && action.gateway_id !== integrationId);
+}
+
 // ── Shared payload builder (from automation-core/executor.ts) ────────────────
 
 function buildActionPayload(
@@ -315,6 +331,11 @@ Deno.serve(async (req) => {
         .map((g: any) => g.location_integration_id)
         .filter(Boolean)
     );
+    const localGatewayLocationIds = new Set<string>(
+      (onlineGateways || [])
+        .map((g: any) => g.location_id)
+        .filter(Boolean)
+    );
     if (localGatewayIntegrationIds.size > 0) {
       console.log(`Found ${localGatewayIntegrationIds.size} online local gateways – their automations will be skipped.`);
     }
@@ -358,7 +379,10 @@ Deno.serve(async (req) => {
       if (conditions.length === 0) continue;
 
       // Skip if a local gateway is online for this automation's integration
-      if (auto.location_integration_id && localGatewayIntegrationIds.has(auto.location_integration_id)) {
+      if (
+        (auto.location_integration_id && localGatewayIntegrationIds.has(auto.location_integration_id)) ||
+        (auto.location_id && localGatewayLocationIds.has(auto.location_id))
+      ) {
         skippedLocalCount++;
         continue;
       }
@@ -366,6 +390,13 @@ Deno.serve(async (req) => {
       // Debounce check using shared logic
       if (!isDebounceExpired(auto.last_executed_at)) {
         skippedCount++;
+        continue;
+      }
+
+      const actions = resolveActions(auto as any);
+      if (hasForeignGatewayReference(auto as any, conditions, actions)) {
+        skippedCount++;
+        console.warn(`Automation "${auto.name}" (${automationId}) skipped: foreign gateway_id reference outside assigned location_integration_id.`);
         continue;
       }
 
@@ -391,15 +422,16 @@ Deno.serve(async (req) => {
       const startTime = Date.now();
 
       try {
-        const actions = resolveActions(auto as any);
-
         for (const action of actions) {
           const gatewayId = (action as any).gateway_id || auto.location_integration_id;
           const { data: liData } = await supabase
             .from("location_integrations")
-            .select("*, integration:integrations(type)")
+            .select("id, location_id, integration:integrations(type)")
             .eq("id", gatewayId)
             .maybeSingle();
+          if (!liData || liData.location_id !== auto.location_id) {
+            throw new Error("Automation verweist auf eine Integration außerhalb der zugeordneten Location");
+          }
           const intType = (liData as any)?.integration?.type || "";
           const edgeFn = getEdgeFunction(intType);
 
