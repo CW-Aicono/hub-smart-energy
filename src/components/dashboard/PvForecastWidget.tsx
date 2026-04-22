@@ -506,26 +506,9 @@ const PvForecastWidget = ({ locationId }: PvForecastWidgetProps) => {
           </div>
         </div>
 
-        {isToday && (weatherSource || dwdReference) && (
-          <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-3">
-            <div className="flex flex-wrap gap-2">
-              {weatherSource && (
-                <>
-                  <Badge variant="outline">Quelle: {weatherSource.provider}</Badge>
-                  <Badge variant="outline">Modell: {weatherSource.model}</Badge>
-                  <Badge variant="outline">TZ: {weatherSource.response_timezone}</Badge>
-                </>
-              )}
-              {typeof summary.ai_correction_factor === "number" && summary.ai_correction_factor !== 1 && (
-                <Badge variant="outline">KI-Faktor: {summary.ai_correction_factor.toFixed(2)}</Badge>
-              )}
-            </div>
-
-            {weatherSource && (
-              <p className="text-xs text-muted-foreground">
-                {weatherSource.profile} · {weatherSource.requested_coordinates.latitude.toFixed(4)}, {weatherSource.requested_coordinates.longitude.toFixed(4)} · {weatherSource.hourly_variables.join(", ")}
-              </p>
-            )}
+        {isToday && typeof summary.ai_correction_factor === "number" && summary.ai_correction_factor !== 1 && (
+          <div className="flex flex-wrap gap-2">
+            <Badge variant="outline">KI-Faktor: {summary.ai_correction_factor.toFixed(2)}</Badge>
           </div>
         )}
 
