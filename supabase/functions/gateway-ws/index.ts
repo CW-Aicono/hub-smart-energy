@@ -391,7 +391,13 @@ async function handleExecuteCommand(req: Request, body: any): Promise<Response> 
       return jsonResponse(req, { success: false, error: row.error_message || "Command failed on gateway" }, 502);
     }
   }
-  return jsonResponse(req, { success: false, error: "Gateway did not acknowledge command in time" }, 504);
+  return jsonResponse(req, {
+    success: true,
+    status: "queued",
+    pending_ack: true,
+    command_id: cmdId,
+    message: "Gateway command queued; acknowledgement is still pending",
+  });
 }
 
 /** Mark device offline + tear down realtime subscription. */
