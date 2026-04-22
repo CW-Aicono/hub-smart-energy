@@ -878,7 +878,7 @@
 
         var wsConnected = !!s.cloud_ws_connected;
         var tenantName = s.cloud_ws_tenant_name || 'Noch nicht zugeordnet';
-        var locationName = s.cloud_ws_location_name || 'Noch nicht zugeordnet';
+        var locationName = s.cloud_ws_location_name || (assignment === 'assigned' ? 'Liegenschaft wird geladen…' : 'Noch nicht zugeordnet');
         var wsSub = wsConnected
           ? (s.cloud_ws_device_id ? 'Device: ' + String(s.cloud_ws_device_id).slice(0, 8) + '…' : 'Push-Kanal aktiv')
           : 'Versuche Verbindung zur AICONO Cloud…';
