@@ -483,7 +483,17 @@ async function handleAuth(
   const sb = svc();
   const { data: device, error } = await sb
     .from("gateway_devices")
-    .select("id, tenant_id, location_id, location_integration_id, gateway_username, gateway_password_hash, mac_address")
+    .select(`
+      id,
+      tenant_id,
+      location_id,
+      location_integration_id,
+      gateway_username,
+      gateway_password_hash,
+      mac_address,
+      tenants:tenant_id (name),
+      locations:location_id (name)
+    `)
     .eq("mac_address", mac)
     .maybeSingle();
 
@@ -546,6 +556,8 @@ async function handleAuth(
     tenant_id: device.tenant_id,
     location_id: device.location_id,
     location_integration_id: device.location_integration_id,
+    tenant_name: (device as any).tenants?.name ?? null,
+    location_name: (device as any).locations?.name ?? null,
   });
 
   return {
