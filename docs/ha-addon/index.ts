@@ -913,6 +913,12 @@ async function syncAutomationsFromCloud(): Promise<void> {
       tenant_id: tenantIdParam,
       device_name: config.device_name,
     });
+    if (cloudWsAssignment.location_id) {
+      params.set("location_id", cloudWsAssignment.location_id);
+    }
+    if (cloudWsAssignment.location_integration_id) {
+      params.set("location_integration_id", cloudWsAssignment.location_integration_id);
+    }
     if (!isFullSync && lastAutomationSync) {
       params.set("since", lastAutomationSync);
     }
@@ -1197,7 +1203,12 @@ let cloudWsConnected = false;
 let cloudWsReconnectDelay = 5_000;
 const CLOUD_WS_RECONNECT_MAX = 60_000;
 let cloudWsHeartbeatTimer: NodeJS.Timeout | null = null;
-let cloudWsAssignment: { device_id?: string; tenant_id?: string; location_id?: string | null } = {};
+let cloudWsAssignment: {
+  device_id?: string;
+  tenant_id?: string;
+  location_id?: string | null;
+  location_integration_id?: string | null;
+} = {};
 
 function safeWsSend(ws: import("ws") | null, msg: unknown): void {
   if (!ws || ws.readyState !== 1 /* OPEN */) return;
@@ -1268,6 +1279,7 @@ async function connectCloudWebSocket(): Promise<void> {
           device_id: msg.device_id,
           tenant_id: msg.tenant_id,
           location_id: msg.location_id,
+          location_integration_id: msg.location_integration_id,
         };
         currentAssignmentStatus = msg.tenant_id ? "assigned" : "pending_assignment";
         markCloudReachable();

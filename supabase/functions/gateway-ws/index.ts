@@ -545,6 +545,7 @@ async function handleAuth(
     device_id: device.id,
     tenant_id: device.tenant_id,
     location_id: device.location_id,
+    location_integration_id: device.location_integration_id,
   });
 
   return {
