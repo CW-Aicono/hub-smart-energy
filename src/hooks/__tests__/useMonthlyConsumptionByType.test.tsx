@@ -55,15 +55,20 @@ function createQueryMock(resolver: (table: string, state: Record<string, any>) =
 describe("useMonthlyConsumptionByType", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-04-22T12:00:00Z"));
-  });
-
-  afterEach(() => {
-    vi.useRealTimers();
   });
 
   it("fills missing monthly totals from daily rows for past months and current month", async () => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const currentMonth = now.getMonth() + 1;
+    const previousMonth = currentMonth > 1 ? currentMonth - 1 : 1;
+    const earlierMonth = currentMonth > 2 ? currentMonth - 2 : 1;
+
+    const currentMonthKey = `${year}-${String(currentMonth).padStart(2, "0")}`;
+    const previousMonthKey = `${year}-${String(previousMonth).padStart(2, "0")}`;
+    const earlierMonthKey = `${year}-${String(earlierMonth).padStart(2, "0")}`;
+    const currentMonthEnd = new Date(year, currentMonth, 0).toISOString().substring(0, 10);
+
     mockSupabase.from.mockImplementation(
       createQueryMock((table, state) => {
         if (table === "meters") {
@@ -77,15 +82,15 @@ describe("useMonthlyConsumptionByType", () => {
         }
 
         if (table === "meter_period_totals" && state.filters.period_type === "day") {
-          expect(state.filters["gte:period_start"]).toBe("2026-01-01");
-          expect(state.filters["lte:period_start"]).toBe("2026-04-30");
+          expect(state.filters["gte:period_start"]).toBe(`${year}-01-01`);
+          expect(state.filters["lte:period_start"]).toBe(currentMonthEnd);
 
           return [
-            { meter_id: "m-main", period_start: "2026-02-16", total_value: 100 },
-            { meter_id: "m-main", period_start: "2026-02-17", total_value: 150 },
-            { meter_id: "m-main", period_start: "2026-03-01", total_value: 200 },
-            { meter_id: "m-main", period_start: "2026-04-01", total_value: 300 },
-            { meter_id: "m-main", period_start: "2026-04-02", total_value: 400 },
+            { meter_id: "m-main", period_start: `${earlierMonthKey}-16`, total_value: 100 },
+            { meter_id: "m-main", period_start: `${earlierMonthKey}-17`, total_value: 150 },
+            { meter_id: "m-main", period_start: `${previousMonthKey}-01`, total_value: 200 },
+            { meter_id: "m-main", period_start: `${currentMonthKey}-01`, total_value: 300 },
+            { meter_id: "m-main", period_start: `${currentMonthKey}-02`, total_value: 400 },
           ];
         }
 
@@ -94,15 +99,15 @@ describe("useMonthlyConsumptionByType", () => {
     );
 
     const { result } = renderHook(
-      () => useMonthlyConsumptionByType({ locationId: "loc-1", energyType: "strom", year: 2026 }),
+      () => useMonthlyConsumptionByType({ locationId: "loc-1", energyType: "strom", year }),
       { wrapper: createWrapper() },
     );
 
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
     expect(result.current.data).toHaveLength(12);
-    expect(result.current.data?.[1].value).toBe(250000);
-    expect(result.current.data?.[2].value).toBe(200000);
-    expect(result.current.data?.[3].value).toBe(700000);
+    expect(result.current.data?.[earlierMonth - 1].value).toBe(250000);
+    expect(result.current.data?.[previousMonth - 1].value).toBe(200000);
+    expect(result.current.data?.[currentMonth - 1].value).toBe(700000);
   });
 });
