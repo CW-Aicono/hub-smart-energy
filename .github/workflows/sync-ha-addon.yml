@@ -26,6 +26,13 @@ jobs:
           repository: CW-Aicono/ha-addons
           token: ${{ secrets.HA_ADDONS_PUSH_TOKEN }}
           path: target
+          fetch-depth: 0
+
+      - name: Validate add-on build
+        working-directory: source/docs/ha-addon
+        run: |
+          npm ci
+          npm run build
 
       - name: Read add-on version
         id: version
@@ -69,22 +76,28 @@ jobs:
         run: |
           git config user.name "AICONO Lovable Bot"
           git config user.email "bot@aicono.org"
+          git fetch origin --tags
           git add -A
           if git diff --staged --quiet; then
             echo "No changes to publish."
             exit 0
           fi
           git commit -m "chore: sync add-on v${{ steps.version.outputs.version }} from hub-smart-energy"
-          git push
+          BRANCH=$(git rev-parse --abbrev-ref HEAD)
+          git push origin "HEAD:${BRANCH}"
 
       - name: Create release tag
         working-directory: target
         run: |
           TAG="v${{ steps.version.outputs.version }}"
-          if git rev-parse "$TAG" >/dev/null 2>&1; then
+          git fetch origin --tags
+          if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
             echo "Tag $TAG already exists – skipping."
           else
+            if git rev-parse "$TAG" >/dev/null 2>&1; then
+              git tag -d "$TAG"
+            fi
             git tag "$TAG"
-            git push origin "$TAG"
+            git push origin "refs/tags/$TAG"
             echo "Created tag $TAG"
           fi
