@@ -393,6 +393,20 @@ db.exec(`
   );
 `);
 
+db.exec(`
+  CREATE TABLE IF NOT EXISTS gateway_assignment_cache (
+    cache_key TEXT PRIMARY KEY,
+    device_id TEXT,
+    tenant_id TEXT,
+    tenant_name TEXT,
+    location_id TEXT,
+    location_name TEXT,
+    location_integration_id TEXT,
+    assignment_status TEXT NOT NULL DEFAULT 'unknown',
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+`);
+
 /* ── Readings Buffer Statements ──────────────────────────────────────────────── */
 
 const insertReading = db.prepare(
@@ -1278,6 +1292,44 @@ let cloudWsAssignment: {
   location_integration_id?: string | null;
 } = {};
 
+function loadGatewayAssignmentFromCache(): typeof cloudWsAssignment & { assignment_status?: string } {
+  return (db.prepare(`
+    SELECT device_id, tenant_id, tenant_name, location_id, location_name, location_integration_id, assignment_status
+    FROM gateway_assignment_cache
+    WHERE cache_key = 'primary'
+    LIMIT 1
+  `).get() as (typeof cloudWsAssignment & { assignment_status?: string }) | undefined) || {};
+}
+
+function saveGatewayAssignmentToCache(
+  assignment: typeof cloudWsAssignment,
+  assignmentStatus: "assigned" | "pending_assignment" | "unknown",
+): void {
+  db.prepare(`
+    INSERT INTO gateway_assignment_cache (
+      cache_key, device_id, tenant_id, tenant_name, location_id, location_name, location_integration_id, assignment_status, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+    ON CONFLICT(cache_key) DO UPDATE SET
+      device_id = excluded.device_id,
+      tenant_id = excluded.tenant_id,
+      tenant_name = excluded.tenant_name,
+      location_id = excluded.location_id,
+      location_name = excluded.location_name,
+      location_integration_id = excluded.location_integration_id,
+      assignment_status = excluded.assignment_status,
+      updated_at = datetime('now')
+  `).run(
+    'primary',
+    assignment.device_id || null,
+    assignment.tenant_id || null,
+    assignment.tenant_name || null,
+    assignment.location_id || null,
+    assignment.location_name || null,
+    assignment.location_integration_id || null,
+    assignmentStatus,
+  );
+}
+
 function safeWsSend(ws: import("ws") | null, msg: unknown): void {
   if (!ws || ws.readyState !== 1 /* OPEN */) return;
   try { ws.send(JSON.stringify(msg)); } catch { /* ignore */ }
@@ -1352,6 +1404,7 @@ async function connectCloudWebSocket(): Promise<void> {
           location_integration_id: msg.location_integration_id,
         };
         currentAssignmentStatus = msg.tenant_id ? "assigned" : "pending_assignment";
+        saveGatewayAssignmentToCache(cloudWsAssignment, currentAssignmentStatus);
         markCloudReachable();
         console.log(`[cloud-ws] Authenticated. device=${msg.device_id} tenant=${msg.tenant_id || "(none)"}`);
         // Sofort einen Heartbeat senden, damit Backend-UI die Werte hat
@@ -2072,6 +2125,19 @@ async function main(): Promise<void> {
   if (cachedStates.length > 0) {
     latestHAStates = cachedStates;
     console.log(`[offline] Loaded ${cachedStates.length} HA states from cache`);
+  }
+  const cachedAssignment = loadGatewayAssignmentFromCache();
+  if (cachedAssignment.location_id || cachedAssignment.location_name || cachedAssignment.tenant_name) {
+    cloudWsAssignment = {
+      device_id: cachedAssignment.device_id,
+      tenant_id: cachedAssignment.tenant_id,
+      tenant_name: cachedAssignment.tenant_name,
+      location_id: cachedAssignment.location_id,
+      location_name: cachedAssignment.location_name,
+      location_integration_id: cachedAssignment.location_integration_id,
+    };
+    currentAssignmentStatus = (cachedAssignment.assignment_status as typeof currentAssignmentStatus) || (cachedAssignment.location_name ? "assigned" : "unknown");
+    console.log(`[offline] Loaded cached gateway assignment: ${cachedAssignment.location_name || cachedAssignment.tenant_name || 'unknown'}`);
   }
 
   await startServer();
