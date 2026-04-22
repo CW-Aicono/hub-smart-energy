@@ -497,9 +497,7 @@ async function handleAuth(
       location_integration_id,
       gateway_username,
       gateway_password_hash,
-      mac_address,
-      tenants:tenant_id (name),
-      locations:location_id (name)
+      mac_address
     `)
     .eq("mac_address", mac)
     .maybeSingle();
@@ -516,6 +514,36 @@ async function handleAuth(
     safeSend(socket, { type: "auth_error", error: "Device has no credentials configured" });
     return null;
   }
+
+  let tenantName: string | null = null;
+  let locationName: string | null = null;
+
+  if (device.tenant_id) {
+    const { data: tenantRow, error: tenantError } = await sb
+      .from("tenants")
+      .select("name")
+      .eq("id", device.tenant_id)
+      .maybeSingle();
+    if (tenantError) {
+      console.warn("[gateway-ws] tenant lookup failed", { tenantId: device.tenant_id, error: tenantError.message });
+    } else {
+      tenantName = (tenantRow as any)?.name ?? null;
+    }
+  }
+
+  if (device.location_id) {
+    const { data: locationRow, error: locationError } = await sb
+      .from("locations")
+      .select("name")
+      .eq("id", device.location_id)
+      .maybeSingle();
+    if (locationError) {
+      console.warn("[gateway-ws] location lookup failed", { locationId: device.location_id, error: locationError.message });
+    } else {
+      locationName = (locationRow as any)?.name ?? null;
+    }
+  }
+
   if (device.gateway_username !== username) {
     safeSend(socket, { type: "auth_error", error: "Invalid username/password" });
     return null;
@@ -563,8 +591,8 @@ async function handleAuth(
     tenant_id: device.tenant_id,
     location_id: device.location_id,
     location_integration_id: device.location_integration_id,
-    tenant_name: (device as any).tenants?.name ?? null,
-    location_name: (device as any).locations?.name ?? null,
+    tenant_name: tenantName,
+    location_name: locationName,
   });
 
   return {
