@@ -233,24 +233,9 @@ export function PvForecastSection({ locationId }: PvForecastSectionProps) {
                   </div>
                 )}
 
-                {(weatherSource || dwdReference) && (
-                  <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-3">
-                    <div className="flex flex-wrap gap-2">
-                      {weatherSource && (
-                        <>
-                          <Badge variant="outline">Quelle: {weatherSource.provider}</Badge>
-                          <Badge variant="outline">Modell: {weatherSource.model}</Badge>
-                          <Badge variant="outline">TZ: {weatherSource.response_timezone}</Badge>
-                        </>
-                      )}
-                      {forecast.summary.pr_auto_updated && <Badge variant="outline">PR auto-aktualisiert</Badge>}
-                    </div>
-
-                    {weatherSource && (
-                      <p className="text-xs text-muted-foreground">
-                        {weatherSource.profile} · {weatherSource.requested_coordinates.latitude.toFixed(4)}, {weatherSource.requested_coordinates.longitude.toFixed(4)} · {weatherSource.hourly_variables.join(", ")}
-                      </p>
-                    )}
+                {forecast.summary.pr_auto_updated && (
+                  <div className="flex flex-wrap gap-2">
+                    <Badge variant="outline">PR auto-aktualisiert</Badge>
                   </div>
                 )}
 
