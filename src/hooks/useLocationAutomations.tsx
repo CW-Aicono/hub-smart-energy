@@ -29,6 +29,8 @@ export interface LocationAutomationRecord {
   actions: AutomationAction[];
   logic_operator: "AND" | "OR";
   schedule: unknown | null;
+  scope_type?: string | null;
+  target_location_ids?: string[] | null;
 }
 
 interface CreateAutomationInput {
