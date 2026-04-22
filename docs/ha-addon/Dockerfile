@@ -9,8 +9,8 @@ FROM node:20-bullseye-slim AS builder
 
 WORKDIR /app
 
-COPY package.json tsconfig.json ./
-RUN npm install
+COPY package.json package-lock.json tsconfig.json ./
+RUN npm ci
 
 COPY index.ts ./
 RUN npm run build && npm prune --omit=dev
@@ -21,7 +21,7 @@ COPY config.yaml ./config.yaml
 RUN grep '^version:' config.yaml | sed -E 's/version: *"?([^"]+)"?/\1/' > /addon_version.txt
 
 # ── Stage 2: Production image ────────────────────────────────────────────────
-FROM node:20-alpine AS runner
+FROM node:20-bullseye-slim AS runner
 
 # IMPORTANT: Must run as root to access /data/options.json
 # Do NOT add USER or adduser directives here
@@ -29,7 +29,8 @@ FROM node:20-alpine AS runner
 WORKDIR /app
 
 # Minimal runtime deps – no cloudflared needed in v3.0
-RUN apk add --no-cache ca-certificates
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates \
+  && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/dist/index.js ./index.js
