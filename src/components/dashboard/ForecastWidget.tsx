@@ -34,7 +34,7 @@ const ENERGY_UNITS: Record<string, "kWh" | "m³"> = {
 const ForecastWidget = ({ locationId }: ForecastWidgetProps) => {
   const isDemo = useDemoMode();
   const { t } = useTranslation();
-  const [energyType, setEnergyType] = useState<string>("gas");
+  const [energyType, setEnergyType] = useState<string>("strom");
 
   const { data: monthly, isLoading } = useMonthlyConsumptionByType({
     locationId,

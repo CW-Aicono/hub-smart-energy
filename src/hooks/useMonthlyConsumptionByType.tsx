@@ -35,6 +35,7 @@ export function useMonthlyConsumptionByType({ locationId, energyType, year }: Op
 
       const startDate = `${selectedYear}-01-01`;
       const endDate = `${selectedYear}-12-31`;
+      const emptyMonths = Array.from({ length: 12 }, (_, i) => ({ monthIndex: i, value: 0 }));
 
       // Resolve eligible main meters for this energy type (and location if given)
       let metersQuery = supabase
@@ -62,7 +63,7 @@ export function useMonthlyConsumptionByType({ locationId, energyType, year }: Op
       }
       const meterIds = new Set(Object.keys(meterMap));
       if (meterIds.size === 0) {
-        return Array.from({ length: 12 }, (_, i) => ({ monthIndex: i, value: 0 }));
+        return emptyMonths;
       }
 
       const toWh = (rawValue: number, meterId: string): number => {
@@ -120,7 +121,7 @@ export function useMonthlyConsumptionByType({ locationId, energyType, year }: Op
         const key = `${selectedYear}-${String(i + 1).padStart(2, "0")}`;
         result.push({ monthIndex: i, value: monthlyByKey[key] || 0 });
       }
-      return result;
+      return result.length === 12 ? result : emptyMonths;
     },
     enabled: !!user && !!tenant && !!energyType,
     staleTime: 60_000,
