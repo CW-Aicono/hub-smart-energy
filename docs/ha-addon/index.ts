@@ -998,9 +998,9 @@ async function syncAutomationsFromCloud(): Promise<void> {
     if (cloudWsAssignment.location_integration_id) {
       params.set("location_integration_id", cloudWsAssignment.location_integration_id);
     }
-    if (!isFullSync && lastAutomationSync) {
-      params.set("since", lastAutomationSync);
-    }
+    // Always request a full automation snapshot.
+    // Reason: status changes (active/inactive) must reach the gateway reliably,
+    // even if the cloud row timestamp was not updated exactly as expected.
 
     const res = await fetch(`${INGEST_URL}?${params.toString()}`, {
       headers: await cloudAuthHeaders(),
@@ -1403,7 +1403,11 @@ async function connectCloudWebSocket(): Promise<void> {
           location_name: msg.location_name,
           location_integration_id: msg.location_integration_id,
         };
-        currentAssignmentStatus = msg.tenant_id ? "assigned" : "pending_assignment";
+        currentAssignmentStatus = msg.tenant_id && (msg.location_id || msg.location_name || msg.location_integration_id)
+          ? "assigned"
+          : msg.tenant_id
+            ? "pending_assignment"
+            : "unknown";
         saveGatewayAssignmentToCache(cloudWsAssignment, currentAssignmentStatus);
         markCloudReachable();
         console.log(`[cloud-ws] Authenticated. device=${msg.device_id} tenant=${msg.tenant_id || "(none)"}`);
