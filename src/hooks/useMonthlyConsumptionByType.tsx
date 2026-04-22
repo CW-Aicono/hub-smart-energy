@@ -93,27 +93,58 @@ export function useMonthlyConsumptionByType({ locationId, energyType, year }: Op
         monthlyByKey[key] = (monthlyByKey[key] || 0) + toWh(row.total_value as number, row.meter_id);
       }
 
-      // For the current month always rebuild from daily rows (monthly aggregate may lag)
+      // Fill any month without a monthly total from daily rows.
+      // The current month is always rebuilt from daily values because the monthly aggregate may lag.
       const now = new Date();
       const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-      if (selectedYear === now.getFullYear()) {
-        const dStart = `${currentMonthKey}-01`;
-        const dEnd = `${currentMonthKey}-31`;
+      const monthsToFillFromDaily: string[] = [];
+
+      for (let i = 0; i < 12; i++) {
+        const monthKey = `${selectedYear}-${String(i + 1).padStart(2, "0")}`;
+        const monthDate = new Date(selectedYear, i, 1);
+        if (monthDate > now) break;
+
+        const hasMonthlyTotal = Object.prototype.hasOwnProperty.call(monthlyByKey, monthKey);
+        if (!hasMonthlyTotal || monthKey === currentMonthKey) {
+          monthsToFillFromDaily.push(monthKey);
+        }
+      }
+
+      if (monthsToFillFromDaily.length > 0) {
+        const dailyStart = `${monthsToFillFromDaily[0]}-01`;
+        const lastMonthKey = monthsToFillFromDaily[monthsToFillFromDaily.length - 1];
+        const [lastYear, lastMonth] = lastMonthKey.split("-").map(Number);
+        const dailyEnd = new Date(lastYear, lastMonth, 0).toISOString().substring(0, 10);
+
         const { data: dailyRows } = await supabase
           .from("meter_period_totals")
           .select("period_start, total_value, meter_id")
           .eq("tenant_id", tenant.id)
           .eq("period_type", "day")
           .eq("energy_type", energyType)
-          .gte("period_start", dStart)
-          .lte("period_start", dEnd);
+          .gte("period_start", dailyStart)
+          .lte("period_start", dailyEnd)
+          .order("period_start", { ascending: true });
 
-        let currentSum = 0;
+        const monthsToFillSet = new Set(monthsToFillFromDaily);
+        const rebuiltFromDaily = new Set<string>();
+
         for (const row of dailyRows || []) {
           if (!meterIds.has(row.meter_id)) continue;
-          currentSum += toWh(row.total_value as number, row.meter_id);
+
+          const monthKey = (row.period_start as string).substring(0, 7);
+          if (!monthsToFillSet.has(monthKey)) continue;
+
+          const hasMonthlyTotal = Object.prototype.hasOwnProperty.call(monthlyByKey, monthKey);
+          if (hasMonthlyTotal && monthKey !== currentMonthKey) continue;
+
+          if (monthKey === currentMonthKey && !rebuiltFromDaily.has(monthKey)) {
+            monthlyByKey[monthKey] = 0;
+            rebuiltFromDaily.add(monthKey);
+          }
+
+          monthlyByKey[monthKey] = (monthlyByKey[monthKey] || 0) + toWh(row.total_value as number, row.meter_id);
         }
-        monthlyByKey[currentMonthKey] = currentSum;
       }
 
       const result: MonthlyConsumptionPoint[] = [];
