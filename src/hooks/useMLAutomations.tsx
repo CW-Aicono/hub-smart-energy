@@ -42,6 +42,11 @@ export interface MLAutomationRecord {
   location_name?: string;
 }
 
+const hasCrossLocationScope = (automation: {
+  scope_type?: string | null;
+  target_location_ids?: string[] | null;
+}) => automation.scope_type === "cross_location" || (automation.target_location_ids?.length ?? 0) > 0;
+
 export interface ExecutionLogEntry {
   id: string;
   tenant_id: string;
@@ -103,15 +108,17 @@ export function useMLAutomations() {
       .order("created_at", { ascending: false });
 
     if (!error && data) {
-      setAutomations(data.map((d: any) => ({
+      const normalized = data.map((d: any) => ({
         ...d,
         conditions: Array.isArray(d.conditions) ? d.conditions as unknown as AutomationCondition[] : [],
         actions: Array.isArray(d.actions) ? d.actions as unknown as AutomationAction[] : [],
         logic_operator: (d.logic_operator || "AND") as "AND" | "OR",
-        target_location_ids: d.target_location_ids || [],
-        tags: d.tags || [],
+        target_location_ids: Array.isArray(d.target_location_ids) ? d.target_location_ids : [],
+        tags: Array.isArray(d.tags) ? d.tags : [],
         location_name: d.locations?.name || "",
-      })));
+      }));
+
+      setAutomations(normalized.filter((automation) => hasCrossLocationScope(automation)));
     }
     setLoading(false);
   }, [tenant?.id]);
@@ -189,6 +196,11 @@ export function useMLAutomations() {
   };
 
   const updateAutomation = async (id: string, updates: Record<string, any>) => {
+    const currentAutomation = automations.find((automation) => automation.id === id);
+    if (currentAutomation && !hasCrossLocationScope(currentAutomation)) {
+      return { error: new Error("Nur standortübergreifende Automationen dürfen im MLA bearbeitet werden.") };
+    }
+
     const { conditions, actions, tags, target_location_ids, ...rest } = updates;
     const dbUpdate: any = {
       ...rest,
@@ -203,12 +215,21 @@ export function useMLAutomations() {
   };
 
   const deleteAutomation = async (id: string) => {
+    const currentAutomation = automations.find((automation) => automation.id === id);
+    if (currentAutomation && !hasCrossLocationScope(currentAutomation)) {
+      return { error: new Error("Nur standortübergreifende Automationen dürfen im MLA gelöscht werden.") };
+    }
+
     const { error } = await supabase.from("location_automations").delete().eq("id", id);
     if (!error) await fetchAutomations();
     return { error };
   };
 
   const executeAutomation = async (automation: MLAutomationRecord) => {
+    if (!hasCrossLocationScope(automation)) {
+      return { success: false, error: "Im MLA dürfen nur standortübergreifende Automationen ausgeführt werden." };
+    }
+
     setExecuting(automation.id);
     const startTime = Date.now();
     try {
