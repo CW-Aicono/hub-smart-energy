@@ -60,6 +60,11 @@ export function AiconoGatewayCredentials({ locationIntegrationId, onSaved }: Aic
   const [pending, setPending] = useState<PendingDevice[]>([]);
   const [loadingPending, setLoadingPending] = useState(false);
 
+  const formatLastSeen = (value: string | null) => {
+    if (!value) return "Noch keine Meldung";
+    return new Date(value).toLocaleString("de-DE");
+  };
+
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: { mac_address: "", gateway_username: "", gateway_password: "" },
@@ -176,8 +181,21 @@ export function AiconoGatewayCredentials({ locationIntegrationId, onSaved }: Aic
         <Cpu className="h-4 w-4" />
         <AlertTitle>AICONO EMS Gateway zuordnen</AlertTitle>
         <AlertDescription className="text-sm">
-          Tragen Sie die MAC-Adresse des Pi (in der lokalen Add-on UI sichtbar) sowie den
-          Benutzernamen und das Passwort aus der Add-on-Konfiguration ein.
+          Starten Sie zuerst das Home-Assistant-Add-on mit Benutzername und Passwort.
+          Danach erscheint das Gateway hier automatisch und die MAC-Adresse kann direkt übernommen werden.
+        </AlertDescription>
+      </Alert>
+
+      <Alert className="bg-muted/40">
+        <AlertDescription className="text-sm space-y-1">
+          <p><strong>Empfohlener Ablauf</strong></p>
+          <ol className="list-decimal pl-5 space-y-1 text-muted-foreground">
+            <li>Add-on in Home Assistant öffnen</li>
+            <li>Benutzername und Passwort setzen</li>
+            <li>Add-on speichern und starten</li>
+            <li>Hier auf Aktualisieren klicken</li>
+            <li>Erkanntes Gateway übernehmen und speichern</li>
+          </ol>
         </AlertDescription>
       </Alert>
 
@@ -192,16 +210,22 @@ export function AiconoGatewayCredentials({ locationIntegrationId, onSaved }: Aic
             </Button>
           </div>
           <p className="text-xs text-muted-foreground">
-            Diese Pis haben sich gemeldet, sind aber noch keiner Liegenschaft zugeordnet.
+            Diese Gateways haben sich bereits gemeldet. Die MAC-Adresse wird automatisch erkannt und kann ohne Fachkenntnisse übernommen werden.
           </p>
           <div className="space-y-1.5">
             {pending.map((d) => (
-              <div key={d.id} className="flex items-center justify-between gap-2 text-sm">
-                <div className="flex items-center gap-2 min-w-0">
-                  <code className="font-mono text-xs bg-muted px-1.5 py-0.5 rounded">{d.mac_address}</code>
-                  {d.gateway_username && (
-                    <span className="text-xs text-muted-foreground truncate">user: {d.gateway_username}</span>
-                  )}
+              <div key={d.id} className="flex items-center justify-between gap-3 rounded-md border border-border/60 bg-background/60 px-3 py-2 text-sm">
+                <div className="min-w-0 space-y-1">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <code className="font-mono text-xs bg-muted px-1.5 py-0.5 rounded">{d.mac_address}</code>
+                    {d.gateway_username && (
+                      <span className="text-xs text-muted-foreground truncate">user: {d.gateway_username}</span>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
+                    <span>Letzte Meldung: {formatLastSeen(d.last_heartbeat_at)}</span>
+                    {d.local_ip && <span>Lokale IP: {d.local_ip}</span>}
+                  </div>
                 </div>
                 <div className="flex gap-1">
                   <Button type="button" size="sm" variant="ghost" onClick={() => copyMac(d.mac_address)}>
@@ -233,7 +257,9 @@ export function AiconoGatewayCredentials({ locationIntegrationId, onSaved }: Aic
                     {...field}
                   />
                 </FormControl>
-                <FormDescription>12 Hex-Zeichen ohne Doppelpunkte. In der Add-on UI sichtbar.</FormDescription>
+                <FormDescription>
+                  12 Hex-Zeichen ohne Doppelpunkte. Im Regelfall oben aus der Geräteliste übernehmen, nur selten manuell eintragen.
+                </FormDescription>
                 <FormMessage />
               </FormItem>
             )}
