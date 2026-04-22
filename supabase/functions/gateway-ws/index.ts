@@ -516,6 +516,7 @@ async function handleAuth(
   }
 
   let tenantName: string | null = null;
+  let resolvedLocationId: string | null = device.location_id ?? null;
   let locationName: string | null = null;
 
   if (device.tenant_id) {
@@ -531,14 +532,30 @@ async function handleAuth(
     }
   }
 
-  if (device.location_id) {
+  if (!resolvedLocationId && device.location_integration_id) {
+    const { data: integrationRow, error: integrationError } = await sb
+      .from("location_integrations")
+      .select("location_id")
+      .eq("id", device.location_integration_id)
+      .maybeSingle();
+    if (integrationError) {
+      console.warn("[gateway-ws] location integration lookup failed", {
+        locationIntegrationId: device.location_integration_id,
+        error: integrationError.message,
+      });
+    } else {
+      resolvedLocationId = (integrationRow as any)?.location_id ?? null;
+    }
+  }
+
+  if (resolvedLocationId) {
     const { data: locationRow, error: locationError } = await sb
       .from("locations")
       .select("name")
-      .eq("id", device.location_id)
+      .eq("id", resolvedLocationId)
       .maybeSingle();
     if (locationError) {
-      console.warn("[gateway-ws] location lookup failed", { locationId: device.location_id, error: locationError.message });
+      console.warn("[gateway-ws] location lookup failed", { locationId: resolvedLocationId, error: locationError.message });
     } else {
       locationName = (locationRow as any)?.name ?? null;
     }
@@ -589,7 +606,7 @@ async function handleAuth(
     type: "auth_ok",
     device_id: device.id,
     tenant_id: device.tenant_id,
-    location_id: device.location_id,
+    location_id: resolvedLocationId,
     location_integration_id: device.location_integration_id,
     tenant_name: tenantName,
     location_name: locationName,
@@ -599,7 +616,7 @@ async function handleAuth(
     socket,
     deviceId: device.id,
     tenantId: device.tenant_id,
-    locationId: device.location_id,
+    locationId: resolvedLocationId,
     locationIntegrationId: device.location_integration_id ?? null,
     channel: null,
     closeRequested: false,
