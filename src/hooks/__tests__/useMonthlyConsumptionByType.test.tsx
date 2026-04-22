@@ -105,8 +105,6 @@ describe("useMonthlyConsumptionByType", () => {
 
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
-    console.log(result.current.data);
-
     expect(result.current.data).toHaveLength(12);
     expect(result.current.data?.[earlierMonth - 1].value).toBe(250000);
     expect(result.current.data?.[previousMonth - 1].value).toBe(200000);
