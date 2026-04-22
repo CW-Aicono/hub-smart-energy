@@ -1271,7 +1271,9 @@ let cloudWsHeartbeatTimer: NodeJS.Timeout | null = null;
 let cloudWsAssignment: {
   device_id?: string;
   tenant_id?: string;
+  tenant_name?: string | null;
   location_id?: string | null;
+  location_name?: string | null;
   location_integration_id?: string | null;
 } = {};
 
@@ -1343,7 +1345,9 @@ async function connectCloudWebSocket(): Promise<void> {
         cloudWsAssignment = {
           device_id: msg.device_id,
           tenant_id: msg.tenant_id,
+          tenant_name: msg.tenant_name,
           location_id: msg.location_id,
+          location_name: msg.location_name,
           location_integration_id: msg.location_integration_id,
         };
         currentAssignmentStatus = msg.tenant_id ? "assigned" : "pending_assignment";
@@ -1796,7 +1800,9 @@ function startServer(): void {
         credentials_configured: !!(config.gateway_username && config.gateway_password),
         cloud_ws_connected: cloudWsConnected,
         cloud_ws_device_id: cloudWsAssignment.device_id || null,
+        cloud_ws_tenant_name: cloudWsAssignment.tenant_name || null,
         cloud_ws_location_id: cloudWsAssignment.location_id || null,
+        cloud_ws_location_name: cloudWsAssignment.location_name || null,
       }));
       return;
     }
