@@ -55,6 +55,11 @@ export interface AutomationLastError {
   trigger_type: string;
 }
 
+const isLocationScopedAutomation = (automation: {
+  scope_type?: string | null;
+  target_location_ids?: string[] | null;
+}) => automation.scope_type !== "cross_location" && (automation.target_location_ids?.length ?? 0) === 0;
+
 export function useLocationAutomations(locationId: string | undefined) {
   const { tenant } = useTenant();
   const queryClient = useQueryClient();
@@ -78,10 +83,11 @@ export function useLocationAutomations(locationId: string | undefined) {
         actions: Array.isArray(d.actions) ? d.actions as unknown as AutomationAction[] : [],
         logic_operator: (d.logic_operator || "AND") as "AND" | "OR",
       })) as LocationAutomationRecord[];
-      setAutomations(mapped);
+      const locationScopedAutomations = mapped.filter((automation) => isLocationScopedAutomation(automation));
+      setAutomations(locationScopedAutomations);
 
       // Fetch last execution log entry per automation (most recent, regardless of status)
-      const autoIds = mapped.map((a) => a.id);
+      const autoIds = locationScopedAutomations.map((a) => a.id);
       if (autoIds.length > 0) {
         const { data: logs } = await supabase
           .from("automation_execution_log")
@@ -110,6 +116,7 @@ export function useLocationAutomations(locationId: string | undefined) {
     const dbInsert: AutomationInsertDB = {
       ...input,
       tenant_id: tenant.id,
+      scope_type: "location",
       conditions: (input.conditions ?? []) as unknown as Json,
       actions: (input.actions ?? []) as unknown as Json,
     };
@@ -162,6 +169,7 @@ export function useLocationAutomations(locationId: string | undefined) {
       conditions: (automation.conditions ?? []) as unknown as Json,
       actions: (automation.actions ?? []) as unknown as Json,
       logic_operator: automation.logic_operator,
+      scope_type: "location",
       is_active: false,
     };
     const { data, error } = await supabase
