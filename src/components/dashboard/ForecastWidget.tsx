@@ -24,6 +24,13 @@ const DEMO_BY_TYPE: Record<string, number[]> = {
   wasser: [3200, 2900, 3100, 3400, 3800, 4200, 4500, 4300, 3700, 3300, 3000, 3100],
 };
 
+const ENERGY_UNITS: Record<string, "kWh" | "m³"> = {
+  strom: "kWh",
+  gas: "kWh",
+  waerme: "kWh",
+  wasser: "m³",
+};
+
 const ForecastWidget = ({ locationId }: ForecastWidgetProps) => {
   const isDemo = useDemoMode();
   const { t } = useTranslation();
@@ -55,6 +62,18 @@ const ForecastWidget = ({ locationId }: ForecastWidgetProps) => {
   }, [monthly, isDemo, energyType]);
 
   const localizedMonths = MONTH_KEYS.map((k) => t(k as any));
+  const displayUnit = ENERGY_UNITS[energyType] ?? "kWh";
+
+  const formatValueByType = (value: number) => {
+    if (displayUnit === "m³") {
+      return `${value.toLocaleString("de-DE", {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 2,
+      })} m³`;
+    }
+
+    return formatEnergy(value);
+  };
 
   // Find last month with actual data
   const lastIdx = (() => {
@@ -135,7 +154,7 @@ const ForecastWidget = ({ locationId }: ForecastWidgetProps) => {
       {Header}
       <CardHeader className="pt-0">
         <p className="text-sm text-muted-foreground">
-          {t("dashboard.forecastTotal" as any).replace("{value}", formatEnergy(totalForecast))}
+          {t("dashboard.forecastTotal" as any).replace("{value}", formatValueByType(totalForecast))}
         </p>
       </CardHeader>
       <CardContent>
@@ -145,7 +164,7 @@ const ForecastWidget = ({ locationId }: ForecastWidgetProps) => {
             <XAxis dataKey="month" tick={{ fill: "hsl(var(--muted-foreground))" }} />
             <YAxis
               tick={{ fill: "hsl(var(--muted-foreground))" }}
-              tickFormatter={(value: number) => formatEnergy(value)}
+              tickFormatter={(value: number) => formatValueByType(value)}
             />
             <Tooltip
               contentStyle={{
@@ -155,7 +174,7 @@ const ForecastWidget = ({ locationId }: ForecastWidgetProps) => {
                 color: "hsl(var(--card-foreground))",
               }}
               formatter={(value: number | null, name: string) =>
-                value !== null ? [formatEnergy(value), name === "ist" ? actualLabel : forecastLabel] : ["-", name]
+                value !== null ? [formatValueByType(value), name === "ist" ? actualLabel : forecastLabel] : ["-", name]
               }
             />
             <Legend formatter={(value) => (value === "ist" ? actualLabel : forecastLabel)} />
