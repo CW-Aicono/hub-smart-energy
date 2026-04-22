@@ -50,6 +50,10 @@ function normalizeMac(input: string): string {
   return (input || "").toLowerCase().replace(/[^0-9a-f]/g, "").slice(0, 12);
 }
 
+function isUuid(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+
 async function bcryptVerify(plain: string, hash: string): Promise<boolean> {
   try {
     // Use bcryptjs via npm: specifier — pure JS, no Web Worker, works in Supabase Edge Runtime.
@@ -139,6 +143,9 @@ async function handleHttpAction(req: Request): Promise<Response | null> {
   const locationIntegrationId = String(body.locationIntegrationId || "").trim();
   if (!locationIntegrationId) {
     return jsonResponse(req, { success: false, error: "locationIntegrationId is required" }, 400);
+  }
+  if (!isUuid(locationIntegrationId)) {
+    return jsonResponse(req, { success: false, error: "locationIntegrationId must be a valid UUID" }, 400);
   }
 
   console.log("[gateway-ws] getSensors request", { locationIntegrationId });
