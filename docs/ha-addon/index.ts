@@ -726,6 +726,15 @@ function updateLocalExecutionTime(id: string): void {
     .run(new Date().toISOString(), id);
 }
 
+function normalizeSqliteTimestampToIso(value: string | null | undefined): string | null {
+  if (!value) return null;
+  if (/z$/i.test(value) || /[+-]\d{2}:\d{2}$/.test(value)) return value;
+  if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(value)) {
+    return value.replace(" ", "T") + "Z";
+  }
+  return value;
+}
+
 function insertExecLog(entry: {
   automation_id: string;
   tenant_id: string;
@@ -735,7 +744,7 @@ function insertExecLog(entry: {
   duration_ms?: number;
   trigger_type?: string;
 }): void {
-  db.prepare(`INSERT INTO automation_exec_log (automation_id, tenant_id, status, error_message, actions_executed, duration_ms, trigger_type) VALUES (?, ?, ?, ?, ?, ?, ?)`)
+  db.prepare(`INSERT INTO automation_exec_log (automation_id, tenant_id, status, error_message, actions_executed, duration_ms, trigger_type, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
     .run(
       entry.automation_id,
       entry.tenant_id,
@@ -743,7 +752,8 @@ function insertExecLog(entry: {
       entry.error_message || null,
       entry.actions_executed ? JSON.stringify(entry.actions_executed) : null,
       entry.duration_ms || null,
-      entry.trigger_type || "scheduled"
+      entry.trigger_type || "scheduled",
+      new Date().toISOString()
     );
 
   pruneExecutionLogs();
@@ -2043,6 +2053,7 @@ function startServer(): Promise<void> {
 
       const enrichedLogs = logs.map((log) => ({
         ...log,
+        created_at: normalizeSqliteTimestampToIso(log.created_at) || log.created_at,
         automation_name: automationNameById.get(log.automation_id) || log.automation_id,
       }));
 
