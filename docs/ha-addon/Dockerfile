@@ -5,11 +5,9 @@
 #       ausgehende WebSocket-Verbindung zur AICONO Cloud.
 
 # ── Stage 1: Build TypeScript ────────────────────────────────────────────────
-FROM node:20-alpine AS builder
+FROM node:20-bullseye-slim AS builder
 
 WORKDIR /app
-
-RUN apk add --no-cache python3 make g++
 
 COPY package.json tsconfig.json ./
 RUN npm install
