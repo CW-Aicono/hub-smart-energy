@@ -877,6 +877,8 @@
           '</div>';
 
         var wsConnected = !!s.cloud_ws_connected;
+        var tenantName = s.cloud_ws_tenant_name || 'Noch nicht zugeordnet';
+        var locationName = s.cloud_ws_location_name || 'Noch nicht zugeordnet';
         var wsSub = wsConnected
           ? (s.cloud_ws_device_id ? 'Device: ' + String(s.cloud_ws_device_id).slice(0, 8) + '…' : 'Push-Kanal aktiv')
           : 'Versuche Verbindung zur AICONO Cloud…';
@@ -885,6 +887,7 @@
           '<div class="grid">' +
             card('Status', '<span class="status-dot ' + (s.status === 'running' ? 'online' : 'offline') + '"></span> ' + (s.status === 'running' ? 'Online' : 'Offline'), 'Uptime: ' + escapeHtml(formatUptime(s.uptime_seconds))) +
             card('Cloud-WebSocket', '<span class="status-dot ' + (wsConnected ? 'online' : 'offline') + '"></span> ' + (wsConnected ? 'Push aktiv' : 'Getrennt'), wsSub) +
+            card('Zugeordnete Liegenschaft', escapeHtml(locationName), 'Mandant: ' + tenantName) +
             card('Home Assistant', '<span class="status-dot ' + (s.ha_ws_connected ? 'online' : 'offline') + '"></span> ' + (s.ha_ws_connected ? 'Verbunden' : 'Getrennt'), 'HA-API ' + (s.cloud_reachable ? '+ Cloud erreichbar' : '– Cloud offline')) +
             card('Messwert-Puffer', escapeHtml(s.buffer_count || 0), 'Readings im lokalen Speicher') +
             card('Zähler-Mappings', escapeHtml(s.meter_mappings || 0), 'Aktive Zuordnungen') +
