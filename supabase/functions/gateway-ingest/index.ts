@@ -1183,11 +1183,9 @@ async function handleGatewayCommand(req: Request): Promise<Response> {
   }
 
   const supabase = getSupabase();
-
-  // Store command in device config for the add-on to pick up on next heartbeat
   const { data: device, error: fetchErr } = await supabase
     .from("gateway_devices")
-    .select("id, config")
+    .select("id, tenant_id, status, config")
     .eq("id", body.device_id)
     .single();
 
@@ -1196,6 +1194,47 @@ async function handleGatewayCommand(req: Request): Promise<Response> {
   }
 
   const currentConfig = (device.config || {}) as Record<string, unknown>;
+  const pendingCommand = currentConfig.pending_command as string | undefined;
+  const pendingCommandAt = currentConfig.pending_command_at as string | undefined;
+
+  if (pendingCommand && pendingCommand === body.command && pendingCommandAt) {
+    const pendingAgeMs = Date.now() - new Date(pendingCommandAt).getTime();
+    if (Number.isFinite(pendingAgeMs) && pendingAgeMs < 5 * 60 * 1000) {
+      return json({ success: true, command: body.command, device_id: device.id, status: "already_pending" });
+    }
+  }
+
+  if (device.status === "online" && device.tenant_id) {
+    const { data: existingQueued } = await supabase
+      .from("gateway_commands")
+      .select("id")
+      .eq("gateway_device_id", device.id)
+      .in("status", ["pending", "sent"])
+      .in("command_type", [body.command, "execute_actuator"])
+      .limit(1);
+
+    if ((existingQueued?.length ?? 0) > 0) {
+      return json({ success: true, command: body.command, device_id: device.id, status: "already_queued" });
+    }
+
+    const { error: queueError } = await supabase
+      .from("gateway_commands")
+      .insert({
+        tenant_id: device.tenant_id,
+        gateway_device_id: device.id,
+        command_type: body.command,
+        payload: body.params || {},
+        status: "pending",
+      });
+
+    if (queueError) {
+      console.error("[gateway-ingest] gateway-command queue error:", queueError.message);
+      return json({ error: "Database error" }, 500);
+    }
+
+    return json({ success: true, command: body.command, device_id: device.id, status: "queued" });
+  }
+
   const { error } = await supabase
     .from("gateway_devices")
     .update({
@@ -1209,11 +1248,11 @@ async function handleGatewayCommand(req: Request): Promise<Response> {
     .eq("id", device.id);
 
   if (error) {
-    console.error("[gateway-ingest] gateway-command error:", error.message);
+    console.error("[gateway-ingest] gateway-command pending fallback error:", error.message);
     return json({ error: "Database error" }, 500);
   }
 
-  return json({ success: true, command: body.command, device_id: device.id });
+  return json({ success: true, command: body.command, device_id: device.id, status: "scheduled_for_heartbeat" });
 }
 
 /* ── Sync Automations handler (Cloud → Hub) ──────────────────────────────────── */
