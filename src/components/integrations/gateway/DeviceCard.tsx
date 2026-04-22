@@ -15,6 +15,7 @@ import {
   Clock,
   Lock,
   ClipboardList,
+  Sparkles,
 } from "lucide-react";
 
 interface DeviceCardProps {
