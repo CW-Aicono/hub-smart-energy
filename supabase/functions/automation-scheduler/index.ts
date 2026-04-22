@@ -322,7 +322,7 @@ Deno.serve(async (req) => {
     const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
     const { data: onlineGateways } = await supabase
       .from("gateway_devices")
-      .select("location_integration_id")
+      .select("location_integration_id, location_id")
       .eq("status", "online")
       .gte("last_heartbeat_at", fiveMinAgo);
 
