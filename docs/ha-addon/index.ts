@@ -275,6 +275,9 @@ db.exec(`
 `);
 
 // Local execution log
+const LOCAL_EXEC_LOG_RETENTION_DAYS = 30;
+const LOCAL_EXEC_LOG_MAX_ROWS = 2000;
+
 db.exec(`
   CREATE TABLE IF NOT EXISTS automation_exec_log (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -290,6 +293,18 @@ db.exec(`
   );
   CREATE INDEX IF NOT EXISTS idx_exec_log_synced ON automation_exec_log(synced);
 `);
+
+function pruneExecutionLogs(): void {
+  db.prepare(`DELETE FROM automation_exec_log WHERE created_at < datetime('now', ?)`)
+    .run(`-${LOCAL_EXEC_LOG_RETENTION_DAYS} days`);
+
+  db.prepare(`
+    DELETE FROM automation_exec_log
+    WHERE id NOT IN (
+      SELECT id FROM automation_exec_log ORDER BY id DESC LIMIT ?
+    )
+  `).run(LOCAL_EXEC_LOG_MAX_ROWS);
+}
 
 // ── NEW: Meter Mappings Cache (Offline-Persistent) ──
 db.exec(`
@@ -651,6 +666,8 @@ function insertExecLog(entry: {
       entry.duration_ms || null,
       entry.trigger_type || "scheduled"
     );
+
+  pruneExecutionLogs();
 }
 
 function getLocalTimeParts(timezone: string): { hours: number; minutes: number; seconds: number; weekday: number; timeStr: string; totalSeconds: number } {
@@ -1876,10 +1893,34 @@ function startServer(): void {
       const logs = db.prepare(
         `SELECT automation_id, tenant_id, status, error_message, duration_ms, trigger_type, created_at
          FROM automation_exec_log ORDER BY id DESC LIMIT ?`
-      ).all(Math.min(limit, 200));
+      ).all(Math.min(limit, 200)) as Array<{
+        automation_id: string;
+        tenant_id: string;
+        status: string;
+        error_message: string | null;
+        duration_ms: number | null;
+        trigger_type: string | null;
+        created_at: string;
+      }>;
+
+      const automationRows = db.prepare(`SELECT id, data FROM automations_local`).all() as Array<{ id: string; data: string }>;
+      const automationNameById = new Map<string, string>();
+      for (const row of automationRows) {
+        try {
+          const parsed = JSON.parse(row.data) as { name?: string };
+          automationNameById.set(row.id, parsed.name || row.id);
+        } catch {
+          automationNameById.set(row.id, row.id);
+        }
+      }
+
+      const enrichedLogs = logs.map((log) => ({
+        ...log,
+        automation_name: automationNameById.get(log.automation_id) || log.automation_id,
+      }));
 
       res.writeHead(200, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ success: true, logs }));
+      res.end(JSON.stringify({ success: true, logs: enrichedLogs }));
       return;
     }
 
