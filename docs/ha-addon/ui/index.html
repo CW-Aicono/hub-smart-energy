@@ -796,6 +796,7 @@
         if (!value) return '–';
         try {
           return new Date(value).toLocaleString('de-DE', {
+            timeZone: 'Europe/Berlin',
             day: '2-digit', month: '2-digit', year: 'numeric',
             hour: '2-digit', minute: '2-digit', second: '2-digit'
           });
@@ -808,6 +809,7 @@
         if (!value) return '–';
         try {
           return new Date(value).toLocaleString('de-DE', {
+            timeZone: 'Europe/Berlin',
             day: '2-digit', month: '2-digit',
             hour: '2-digit', minute: '2-digit'
           });
@@ -1153,13 +1155,23 @@
         }
 
         return renderTable([
-          'Zeit', 'Status', 'Trigger', 'Dauer', 'Fehler'
+          'Zeit (lokal)', 'Status', 'Trigger', 'Hinweis', 'Dauer', 'Fehler'
         ], state.logs.map(function (item) {
           var statusClass = item.status === 'success' ? 'badge-success' : (item.status === 'error' ? 'badge-error' : 'badge-warn');
+          var hint = item.trigger_type === 'heartbeat'
+            ? 'Heartbeat / Lebenszeichen des Gateways'
+            : item.trigger_type === 'scheduled'
+              ? 'Geplante Automation'
+              : item.trigger_type === 'manual'
+                ? 'Manuell ausgelöste Aktion'
+                : item.automation_name
+                  ? 'Automation: ' + item.automation_name
+                  : 'Systemeintrag';
           return [
             escapeHtml(formatTime(item.created_at)),
             '<span class="badge ' + statusClass + '">' + escapeHtml(item.status || 'unbekannt') + '</span>',
             escapeHtml(item.trigger_type || '–'),
+            escapeHtml(hint),
             escapeHtml(item.duration_ms != null ? item.duration_ms + ' ms' : '–'),
             escapeHtml(item.error_message || '–')
           ];
