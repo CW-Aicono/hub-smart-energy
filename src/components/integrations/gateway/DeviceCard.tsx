@@ -96,11 +96,6 @@ export function DeviceCard({ device, onCommand, isAdmin, onKeyGenerated }: Devic
                 <Button variant="ghost" size="icon" onClick={() => onCommand(device.id, "backup")} title={t("gatewayDevices.backup")}>
                   <Download className="h-4 w-4" />
                 </Button>
-                {hasUpdate && (
-                  <Button variant="ghost" size="icon" onClick={() => onCommand(device.id, "update")} title={t("gatewayDevices.update")}>
-                    <ArrowUpCircle className="h-4 w-4" />
-                  </Button>
-                )}
                 <Button variant="ghost" size="icon" onClick={() => onCommand(device.id, "restart")} title={t("gatewayDevices.restart")}>
                   <RefreshCw className="h-4 w-4" />
                 </Button>
@@ -108,6 +103,29 @@ export function DeviceCard({ device, onCommand, isAdmin, onKeyGenerated }: Devic
             )}
           </div>
         </div>
+
+        {/* Update banner */}
+        {hasUpdate && (
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-md border border-primary/30 bg-primary/5 p-2">
+            <div className="flex items-center gap-2 text-sm">
+              <Sparkles className="h-4 w-4 text-primary" />
+              <span className="font-medium">Update verfügbar</span>
+              <span className="text-muted-foreground">
+                v{device.addon_version} → v{device.latest_available_version}
+              </span>
+            </div>
+            {isAdmin && (
+              <Button
+                size="sm"
+                onClick={() => onCommand(device.id, "update")}
+                className="gap-1"
+              >
+                <ArrowUpCircle className="h-4 w-4" />
+                Update installieren
+              </Button>
+            )}
+          </div>
+        )}
 
         {/* Metrics row */}
         <DeviceMetrics device={device} />
