@@ -98,6 +98,7 @@ export function useMonthlyConsumptionByType({ locationId, energyType, year }: Op
       const now = new Date();
       const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
       const monthsToFillFromDaily: string[] = [];
+      const monthsWithMonthlyTotals = new Set(Object.keys(monthlyByKey));
 
       for (let i = 0; i < 12; i++) {
         const monthKey = `${selectedYear}-${String(i + 1).padStart(2, "0")}`;
@@ -135,7 +136,7 @@ export function useMonthlyConsumptionByType({ locationId, energyType, year }: Op
           const monthKey = (row.period_start as string).substring(0, 7);
           if (!monthsToFillSet.has(monthKey)) continue;
 
-          const hasMonthlyTotal = Object.prototype.hasOwnProperty.call(monthlyByKey, monthKey);
+          const hasMonthlyTotal = monthsWithMonthlyTotals.has(monthKey);
           if (hasMonthlyTotal && monthKey !== currentMonthKey) continue;
 
           if (monthKey === currentMonthKey && !rebuiltFromDaily.has(monthKey)) {
