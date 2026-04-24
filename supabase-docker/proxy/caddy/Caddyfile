@@ -1,0 +1,21 @@
+{
+    email {$LETSENCRYPT_EMAIL}
+}
+
+# Frontend (React-App)
+{$APP_DOMAIN} {
+    reverse_proxy frontend:80
+    header -server
+    header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://{$API_DOMAIN} https://*.tile.openstreetmap.org; font-src 'self'; connect-src 'self' https://{$API_DOMAIN} wss://{$API_DOMAIN} https://api.open-meteo.com https://*.tile.openstreetmap.org https://api.energy-charts.info https://nominatim.openstreetmap.org; frame-ancestors 'self' https://*.lovable.app https://*.lovable.dev https://*.lovableproject.com; frame-src 'self' https://{$API_DOMAIN} blob:; object-src 'none'; base-uri 'self';"
+}
+
+# Supabase API (Kong)
+{$API_DOMAIN} {
+    @supabase_api path /auth/v1/* /rest/v1/* /graphql/v1 /realtime/v1/* /storage/v1/* /functions/v1/* /mcp /sso/*
+
+    handle @supabase_api {
+        reverse_proxy kong:8000
+    }
+
+    header -server
+}
