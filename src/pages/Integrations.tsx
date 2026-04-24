@@ -89,7 +89,8 @@ const Integrations = () => {
 
     try {
       const edgeFunction = gatewayDef?.edgeFunctionName || "loxone-api";
-      const { data, error: fnError } = await supabase.functions.invoke(edgeFunction, {
+      const { invokeWithRetry } = await import("@/lib/invokeWithRetry");
+      const { data, error: fnError } = await invokeWithRetry(edgeFunction, {
         body: { locationIntegrationId: locIntegrations[0].id, action: "getSensors" },
       });
       const success = !fnError && data?.success;
