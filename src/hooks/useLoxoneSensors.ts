@@ -70,19 +70,36 @@ async function fetchSensors(integrationId: string, integrationType?: string): Pr
   const edgeFunction = integrationType ? getEdgeFunctionName(integrationType) : "loxone-api";
   // Refresh JWT before invoking – avoids 401 "Ungültiges Token" after idle periods.
   await supabase.auth.getSession();
-  const { data, error } = await supabase.functions.invoke(edgeFunction, {
-    body: { locationIntegrationId: integrationId, action: "getSensors" },
-  });
-  if (error) {
-    // Silently ignore auth errors – Realtime + DB cache keep UI fresh.
-    if (error.message?.includes("401") || error.message?.includes("Token")) {
-      console.warn(`[useLoxoneSensors] Auth error (ignored): ${error.message}`);
-      return [];
+
+  // Retry transient 503 "Service is temporarily unavailable" from the edge runtime.
+  let lastErr: any = null;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const { data, error } = await supabase.functions.invoke(edgeFunction, {
+      body: { locationIntegrationId: integrationId, action: "getSensors" },
+    });
+    if (error) {
+      // Silently ignore auth errors – Realtime + DB cache keep UI fresh.
+      if (error.message?.includes("401") || error.message?.includes("Token")) {
+        console.warn(`[useLoxoneSensors] Auth error (ignored): ${error.message}`);
+        return [];
+      }
+      lastErr = new Error(error.message || "Failed to fetch sensors");
+      const isTransient = /503|temporarily unavailable|SUPABASE_EDGE_RUNTIME_ERROR/i.test(error.message || "");
+      if (!isTransient) throw lastErr;
+      await new Promise((r) => setTimeout(r, 500 * (attempt + 1)));
+      continue;
     }
-    throw new Error(error.message || "Failed to fetch sensors");
+    if (!data?.success) {
+      const msg = data?.error || "Failed to fetch sensors";
+      const isTransient = /503|temporarily unavailable|SUPABASE_EDGE_RUNTIME_ERROR/i.test(msg);
+      lastErr = new Error(msg);
+      if (!isTransient) throw lastErr;
+      await new Promise((r) => setTimeout(r, 500 * (attempt + 1)));
+      continue;
+    }
+    return data.sensors as GatewaySensor[];
   }
-  if (!data?.success) throw new Error(data?.error || "Failed to fetch sensors");
-  return data.sensors as GatewaySensor[];
+  throw lastErr ?? new Error("Failed to fetch sensors");
 }
 
 export function useLoxoneSensors(integrationId: string | undefined, integrationType?: string) {
