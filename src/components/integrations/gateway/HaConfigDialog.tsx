@@ -85,6 +85,7 @@ export function HaConfigDialog({ device, open, onOpenChange }: HaConfigDialogPro
   const cloudWsUrl = projectId
     ? `wss://${projectId}.supabase.co/functions/v1/gateway-ws`
     : null;
+  const hasTenantId = Boolean(device.tenant_id);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -97,7 +98,8 @@ export function HaConfigDialog({ device, open, onOpenChange }: HaConfigDialogPro
           <DialogDescription>
             Diese Werte 1:1 in das Add-on{" "}
             <code className="text-xs bg-muted px-1 rounded">AICONO EMS Gateway</code>{" "}
-            → Tab <strong>Konfiguration</strong> übernehmen.
+            → Tab <strong>Konfiguration</strong> übernehmen. Für die Verbindung werden
+            nur WebSocket-URL, MAC-Adresse, Benutzername und Passwort benötigt.
           </DialogDescription>
         </DialogHeader>
 
@@ -111,9 +113,17 @@ export function HaConfigDialog({ device, open, onOpenChange }: HaConfigDialogPro
           <CopyRow
             label="mac_address"
             value={device.mac_address}
-            hint="MAC-Adresse des Raspberry Pi — eindeutige Identifikation des Gateways."
+            hint="MAC-Adresse des Raspberry Pi — eindeutige Identifikation des Gateways. Wird außerdem im lokalen Gateway-Dashboard angezeigt."
             missingHint="Wird automatisch beim ersten Verbindungsaufbau des Gateways gesetzt."
           />
+
+          {hasTenantId && (
+            <CopyRow
+              label="tenant_id"
+              value={device.tenant_id}
+              hint="Nur für Legacy-/Fallback-Fälle relevant. Im aktuellen v3-Onboarding wird die Zuordnung primär über MAC-Adresse und Zugangsdaten hergestellt."
+            />
+          )}
 
           <CopyRow
             label="gateway_username"
@@ -131,8 +141,7 @@ export function HaConfigDialog({ device, open, onOpenChange }: HaConfigDialogPro
             <Info className="h-4 w-4" />
             <AlertDescription className="text-xs">
               Nach dem Einfügen aller Werte: Add-on speichern → <strong>Neu starten</strong>.
-              Die WebSocket-Verbindung wird automatisch aufgebaut, der Status wechselt
-              innerhalb weniger Sekunden auf 🟢 Online.
+              Die MAC-Adresse wird lokal automatisch erkannt. Danach erscheint das Gateway in AICONO zur Zuordnung und der Status wechselt innerhalb weniger Sekunden auf 🟢 Online.
             </AlertDescription>
           </Alert>
         </div>

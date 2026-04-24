@@ -50,6 +50,10 @@ function normalizeMac(input: string): string {
   return (input || "").toLowerCase().replace(/[^0-9a-f]/g, "").slice(0, 12);
 }
 
+function isUuid(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+
 async function bcryptVerify(plain: string, hash: string): Promise<boolean> {
   try {
     // Use bcryptjs via npm: specifier — pure JS, no Web Worker, works in Supabase Edge Runtime.
@@ -139,6 +143,9 @@ async function handleHttpAction(req: Request): Promise<Response | null> {
   const locationIntegrationId = String(body.locationIntegrationId || "").trim();
   if (!locationIntegrationId) {
     return jsonResponse(req, { success: false, error: "locationIntegrationId is required" }, 400);
+  }
+  if (!isUuid(locationIntegrationId)) {
+    return jsonResponse(req, { success: false, error: "locationIntegrationId must be a valid UUID" }, 400);
   }
 
   console.log("[gateway-ws] getSensors request", { locationIntegrationId });
@@ -384,7 +391,13 @@ async function handleExecuteCommand(req: Request, body: any): Promise<Response> 
       return jsonResponse(req, { success: false, error: row.error_message || "Command failed on gateway" }, 502);
     }
   }
-  return jsonResponse(req, { success: false, error: "Gateway did not acknowledge command in time" }, 504);
+  return jsonResponse(req, {
+    success: true,
+    status: "queued",
+    pending_ack: true,
+    command_id: cmdId,
+    message: "Gateway command queued; acknowledgement is still pending",
+  });
 }
 
 /** Mark device offline + tear down realtime subscription. */
@@ -483,7 +496,15 @@ async function handleAuth(
   const sb = svc();
   const { data: device, error } = await sb
     .from("gateway_devices")
-    .select("id, tenant_id, location_id, location_integration_id, gateway_username, gateway_password_hash, mac_address")
+    .select(`
+      id,
+      tenant_id,
+      location_id,
+      location_integration_id,
+      gateway_username,
+      gateway_password_hash,
+      mac_address
+    `)
     .eq("mac_address", mac)
     .maybeSingle();
 
@@ -499,6 +520,53 @@ async function handleAuth(
     safeSend(socket, { type: "auth_error", error: "Device has no credentials configured" });
     return null;
   }
+
+  let tenantName: string | null = null;
+  let resolvedLocationId: string | null = device.location_id ?? null;
+  let locationName: string | null = null;
+
+  if (device.tenant_id) {
+    const { data: tenantRow, error: tenantError } = await sb
+      .from("tenants")
+      .select("name")
+      .eq("id", device.tenant_id)
+      .maybeSingle();
+    if (tenantError) {
+      console.warn("[gateway-ws] tenant lookup failed", { tenantId: device.tenant_id, error: tenantError.message });
+    } else {
+      tenantName = (tenantRow as any)?.name ?? null;
+    }
+  }
+
+  if (!resolvedLocationId && device.location_integration_id) {
+    const { data: integrationRow, error: integrationError } = await sb
+      .from("location_integrations")
+      .select("location_id")
+      .eq("id", device.location_integration_id)
+      .maybeSingle();
+    if (integrationError) {
+      console.warn("[gateway-ws] location integration lookup failed", {
+        locationIntegrationId: device.location_integration_id,
+        error: integrationError.message,
+      });
+    } else {
+      resolvedLocationId = (integrationRow as any)?.location_id ?? null;
+    }
+  }
+
+  if (resolvedLocationId) {
+    const { data: locationRow, error: locationError } = await sb
+      .from("locations")
+      .select("name")
+      .eq("id", resolvedLocationId)
+      .maybeSingle();
+    if (locationError) {
+      console.warn("[gateway-ws] location lookup failed", { locationId: resolvedLocationId, error: locationError.message });
+    } else {
+      locationName = (locationRow as any)?.name ?? null;
+    }
+  }
+
   if (device.gateway_username !== username) {
     safeSend(socket, { type: "auth_error", error: "Invalid username/password" });
     return null;
@@ -544,14 +612,17 @@ async function handleAuth(
     type: "auth_ok",
     device_id: device.id,
     tenant_id: device.tenant_id,
-    location_id: device.location_id,
+    location_id: resolvedLocationId,
+    location_integration_id: device.location_integration_id,
+    tenant_name: tenantName,
+    location_name: locationName,
   });
 
   return {
     socket,
     deviceId: device.id,
     tenantId: device.tenant_id,
-    locationId: device.location_id,
+    locationId: resolvedLocationId,
     locationIntegrationId: device.location_integration_id ?? null,
     channel: null,
     closeRequested: false,

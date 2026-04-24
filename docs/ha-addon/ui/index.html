@@ -796,6 +796,7 @@
         if (!value) return '–';
         try {
           return new Date(value).toLocaleString('de-DE', {
+            timeZone: 'Europe/Berlin',
             day: '2-digit', month: '2-digit', year: 'numeric',
             hour: '2-digit', minute: '2-digit', second: '2-digit'
           });
@@ -808,6 +809,7 @@
         if (!value) return '–';
         try {
           return new Date(value).toLocaleString('de-DE', {
+            timeZone: 'Europe/Berlin',
             day: '2-digit', month: '2-digit',
             hour: '2-digit', minute: '2-digit'
           });
@@ -843,6 +845,17 @@
           ? '<span class="badge badge-active">✓ Zugangsdaten gesetzt</span>'
           : '<span class="badge badge-error">✗ Bitte Benutzername & Passwort in der Add-on-Konfiguration setzen</span>';
 
+        var onboardingCard =
+          '<div class="panel" style="margin-bottom:18px">' +
+            '<div class="section-title">🧭 Einfache Einrichtung</div>' +
+            '<div style="display:grid;gap:8px;color:var(--text-secondary);font-size:0.9rem">' +
+              '<div><strong>1.</strong> Im Add-on Benutzername und Passwort eintragen</div>' +
+              '<div><strong>2.</strong> Add-on speichern und starten</div>' +
+              '<div><strong>3.</strong> MAC-Adresse unten kopieren oder in AICONO automatisch übernehmen</div>' +
+              '<div><strong>4.</strong> Gateway in AICONO einer Liegenschaft zuordnen</div>' +
+            '</div>' +
+          '</div>';
+
         var identityCard =
           '<div class="panel" style="margin-bottom:18px">' +
             '<div class="section-title">🔑 Gateway-Identität</div>' +
@@ -863,6 +876,11 @@
                 '<div class="card-sub">' + credBadge + '</div>' +
               '</div>' +
               '<div>' +
+                '<div class="card-label">Tenant-ID</div>' +
+                '<div style="font-size:1rem;font-weight:700;margin-top:4px">' + escapeHtml(s.cloud_ws_tenant_id || 'Automatisch via Cloud') + '</div>' +
+                '<div class="card-sub">Nur für Legacy-/Support-Fälle relevant; normalerweise keine manuelle Eingabe nötig.</div>' +
+              '</div>' +
+              '<div>' +
                 '<div class="card-label">Status</div>' +
                 '<div style="margin-top:6px">' + assignmentBadge + '</div>' +
                 '<div class="card-sub">' +
@@ -875,14 +893,17 @@
           '</div>';
 
         var wsConnected = !!s.cloud_ws_connected;
+        var tenantName = s.cloud_ws_tenant_name || 'Noch nicht zugeordnet';
+        var locationName = s.cloud_ws_location_name || (assignment === 'assigned' ? 'Liegenschaft wird geladen…' : 'Noch nicht zugeordnet');
         var wsSub = wsConnected
           ? (s.cloud_ws_device_id ? 'Device: ' + String(s.cloud_ws_device_id).slice(0, 8) + '…' : 'Push-Kanal aktiv')
           : 'Versuche Verbindung zur AICONO Cloud…';
 
-        return identityCard +
+        return onboardingCard + identityCard +
           '<div class="grid">' +
             card('Status', '<span class="status-dot ' + (s.status === 'running' ? 'online' : 'offline') + '"></span> ' + (s.status === 'running' ? 'Online' : 'Offline'), 'Uptime: ' + escapeHtml(formatUptime(s.uptime_seconds))) +
             card('Cloud-WebSocket', '<span class="status-dot ' + (wsConnected ? 'online' : 'offline') + '"></span> ' + (wsConnected ? 'Push aktiv' : 'Getrennt'), wsSub) +
+            card('Zugeordnete Liegenschaft', escapeHtml(locationName), 'Mandant: ' + tenantName) +
             card('Home Assistant', '<span class="status-dot ' + (s.ha_ws_connected ? 'online' : 'offline') + '"></span> ' + (s.ha_ws_connected ? 'Verbunden' : 'Getrennt'), 'HA-API ' + (s.cloud_reachable ? '+ Cloud erreichbar' : '– Cloud offline')) +
             card('Messwert-Puffer', escapeHtml(s.buffer_count || 0), 'Readings im lokalen Speicher') +
             card('Zähler-Mappings', escapeHtml(s.meter_mappings || 0), 'Aktive Zuordnungen') +
@@ -1153,13 +1174,23 @@
         }
 
         return renderTable([
-          'Zeit', 'Status', 'Trigger', 'Dauer', 'Fehler'
+          'Zeit (lokal)', 'Status', 'Trigger', 'Hinweis', 'Dauer', 'Fehler'
         ], state.logs.map(function (item) {
           var statusClass = item.status === 'success' ? 'badge-success' : (item.status === 'error' ? 'badge-error' : 'badge-warn');
+          var hint = item.trigger_type === 'heartbeat'
+            ? 'Heartbeat / Lebenszeichen des Gateways'
+            : item.trigger_type === 'scheduled'
+              ? 'Geplante Automation'
+              : item.trigger_type === 'manual'
+                ? 'Manuell ausgelöste Aktion'
+                : item.automation_name
+                  ? 'Automation: ' + item.automation_name
+                  : 'Systemeintrag';
           return [
             escapeHtml(formatTime(item.created_at)),
             '<span class="badge ' + statusClass + '">' + escapeHtml(item.status || 'unbekannt') + '</span>',
             escapeHtml(item.trigger_type || '–'),
+            escapeHtml(hint),
             escapeHtml(item.duration_ms != null ? item.duration_ms + ' ms' : '–'),
             escapeHtml(item.error_message || '–')
           ];
@@ -1171,12 +1202,20 @@
           return '<div class="empty-state"><div class="icon">⚙️</div><p>Konfiguration wird geladen…</p></div>';
         }
 
+        var keyLabels = {
+          cloud_url: 'Cloud-URL',
+          tenant_id_legacy: 'Tenant-ID (Legacy)',
+          gateway_username: 'Gateway-Benutzername',
+          gateway_password: 'Gateway-Passwort',
+          device_name: 'Gerätename'
+        };
+
         var entries = Object.keys(state.config).sort().map(function (key) {
           var value = state.config[key];
           if (value && typeof value === 'object') value = JSON.stringify(value);
           return '' +
             '<li>' +
-              '<span class="config-key">' + escapeHtml(key.replace(/_/g, ' ')) + '</span>' +
+              '<span class="config-key">' + escapeHtml(keyLabels[key] || key.replace(/_/g, ' ')) + '</span>' +
               '<span class="config-val">' + escapeHtml(value == null ? '–' : value) + '</span>' +
             '</li>';
         }).join('');
@@ -1184,6 +1223,7 @@
         return '' +
           '<div class="panel">' +
             '<div class="section-title">Lokale Gateway-Konfiguration</div>' +
+            '<p class="muted" style="margin-bottom:14px">Für das aktuelle Onboarding sind Benutzername, Passwort und die automatisch erkannte MAC-Adresse entscheidend. Die Tenant-ID wird nur noch für Legacy-/Support-Fälle angezeigt.</p>' +
             '<ul class="config-list">' + entries + '</ul>' +
           '</div>';
       }

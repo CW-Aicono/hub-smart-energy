@@ -42,6 +42,19 @@ function generateUniqueId(): string {
   return crypto.randomUUID().substring(0, 36);
 }
 
+function shortSession(): string {
+  return crypto.randomUUID().substring(0, 8);
+}
+
+// Log once at boot whether ws.ping() is available in this runtime
+let pingProbeLogged = false;
+function probePingSupport(socket: WebSocket, sessionId: string) {
+  if (pingProbeLogged) return;
+  pingProbeLogged = true;
+  const supported = typeof (socket as any).ping === "function";
+  console.log(`[ocpp-ws-proxy] [${sessionId}] ping() supported: ${supported ? "yes" : "no"}`);
+}
+
 Deno.serve(async (req) => {
   const url = new URL(req.url);
   const pathParts = url.pathname.split("/").filter(Boolean);
@@ -96,16 +109,32 @@ Deno.serve(async (req) => {
 
   const { socket, response } = Deno.upgradeWebSocket(req, {
     protocol: OCPP_SUBPROTOCOL,
+    idleTimeout: 240, // seconds; default 120 is too tight for chargers like Bender/Nidec
   });
 
   const ocppCentralUrl = `${supabaseUrl}/functions/v1/ocpp-central?cp=${encodeURIComponent(chargePointId)}`;
   const supabase = createSupabase();
   let commandPollTimer: number | undefined;
+  let pingTimer: number | undefined;
+
+  // Listen for pong frames (verification of keep-alive)
+  try {
+    (socket as any).addEventListener?.("pong", () => {
+      console.log(`[ocpp-ws-proxy] Pong received from ${chargePointId}`);
+    });
+  } catch { /* not supported in all runtimes */ }
 
   // Track pending CALL responses from charger (for remote commands)
   const pendingCalls = new Map<string, { commandId: string; resolve: (data: unknown) => void }>();
 
-  console.log(`[ocpp-ws-proxy] WebSocket connected: chargePointId=${chargePointId}`);
+  const sessionId = shortSession();
+  let lastIncomingAt: string | null = null;
+  let lastIncomingFrame: string | null = null;
+  let lastOutgoingAt: string | null = null;
+  let lastOutgoingFrame: string | null = null;
+  const openedAt = new Date().toISOString();
+
+  console.log(`[ocpp-ws-proxy] [${sessionId}] WebSocket connected: chargePointId=${chargePointId} openedAt=${openedAt}`);
 
   // Poll for pending commands and send them via WebSocket
   async function pollPendingCommands() {
@@ -185,22 +214,31 @@ Deno.serve(async (req) => {
   }
 
   socket.onopen = async () => {
-    console.log(`[ocpp-ws-proxy] Socket open for ${chargePointId}`);
-    // Mark charge point as WS-connected
+    console.log(`[ocpp-ws-proxy] [${sessionId}] Socket open for ${chargePointId}`);
+    probePingSupport(socket, sessionId);
     await supabase
       .from("charge_points")
       .update({ ws_connected: true, ws_connected_since: new Date().toISOString() } as any)
       .eq("ocpp_id", chargePointId);
-    // Start polling for pending commands
     commandPollTimer = setInterval(pollPendingCommands, COMMAND_POLL_INTERVAL);
+    pingTimer = setInterval(() => {
+      if (socket.readyState === WebSocket.OPEN) {
+        try {
+          (socket as any).ping?.();
+        } catch (e) {
+          console.warn(`[ocpp-ws-proxy] [${sessionId}] ping() failed for ${chargePointId}:`, (e as Error).message);
+        }
+      }
+    }, 25_000);
   };
 
   socket.onmessage = async (event) => {
     const rawData = typeof event.data === "string" ? event.data : new TextDecoder().decode(event.data);
+    lastIncomingAt = new Date().toISOString();
+    lastIncomingFrame = rawData.substring(0, 500);
 
-    console.log(`[ocpp-ws-proxy] Received from ${chargePointId}: ${rawData.substring(0, 200)}`);
+    console.log(`[ocpp-ws-proxy] [${sessionId}] Received from ${chargePointId}: ${rawData.substring(0, 200)}`);
 
-    // Log incoming message
     await logMessage(supabase, chargePointId, "incoming", rawData);
 
     // Check if this is a CALLRESULT/CALLERROR for one of our remote commands
@@ -232,10 +270,11 @@ Deno.serve(async (req) => {
       });
 
       const responseText = await httpResponse.text();
+      lastOutgoingAt = new Date().toISOString();
+      lastOutgoingFrame = responseText.substring(0, 500);
 
-      console.log(`[ocpp-ws-proxy] Response for ${chargePointId}: ${responseText.substring(0, 200)}`);
+      console.log(`[ocpp-ws-proxy] [${sessionId}] Response for ${chargePointId}: ${responseText.substring(0, 200)}`);
 
-      // Log outgoing message
       await logMessage(supabase, chargePointId, "outgoing", responseText);
 
       if (socket.readyState === WebSocket.OPEN) {
@@ -267,9 +306,11 @@ Deno.serve(async (req) => {
   };
 
   socket.onclose = async (event) => {
-    console.log(`[ocpp-ws-proxy] Socket closed for ${chargePointId}: code=${event.code} reason=${event.reason}`);
-    if (commandPollTimer) clearInterval(commandPollTimer);
-    // Mark charge point as WS-disconnected
+    const closedAt = new Date().toISOString();
+    console.log(`[ocpp-ws-proxy] [${sessionId}] Socket closed for ${chargePointId}: code=${event.code} reason="${event.reason}" wasClean=${event.wasClean} openedAt=${openedAt} closedAt=${closedAt} lastIncomingAt=${lastIncomingAt} lastOutgoingAt=${lastOutgoingAt} lastIncomingFrame=${lastIncomingFrame} lastOutgoingFrame=${lastOutgoingFrame}`);
+    if (commandPollTimer) { clearInterval(commandPollTimer); commandPollTimer = undefined; }
+    if (pingTimer) { clearInterval(pingTimer); pingTimer = undefined; }
+    pendingCalls.clear();
     await supabase
       .from("charge_points")
       .update({ ws_connected: false, ws_connected_since: null } as any)
@@ -277,8 +318,9 @@ Deno.serve(async (req) => {
   };
 
   socket.onerror = (error) => {
-    console.error(`[ocpp-ws-proxy] Socket error for ${chargePointId}:`, error);
-    if (commandPollTimer) clearInterval(commandPollTimer);
+    console.error(`[ocpp-ws-proxy] [${sessionId}] Socket error for ${chargePointId}:`, error);
+    if (commandPollTimer) { clearInterval(commandPollTimer); commandPollTimer = undefined; }
+    if (pingTimer) { clearInterval(pingTimer); pingTimer = undefined; }
   };
 
   return response;

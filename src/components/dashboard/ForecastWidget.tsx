@@ -1,7 +1,9 @@
+import { useState, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import { HelpTooltip } from "@/components/ui/help-tooltip";
-import { useEnergyData, type MonthlyEnergyData } from "@/hooks/useEnergyData";
+import { useMonthlyConsumptionByType } from "@/hooks/useMonthlyConsumptionByType";
 import { useTranslation } from "@/hooks/useTranslation";
 import { TrendingUp } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -14,54 +16,113 @@ interface ForecastWidgetProps {
 
 const MONTH_KEYS = Array.from({ length: 12 }, (_, i) => `month.short.${i}`);
 
-/** Realistic demo monthly data (Wh) for a typical municipal building */
-const DEMO_MONTHLY_DATA: MonthlyEnergyData[] = [
-  { month: "Jan", strom: 42000, gas: 28000, waerme: 18000, wasser: 3200 },
-  { month: "Feb", strom: 39000, gas: 31000, waerme: 20000, wasser: 2900 },
-  { month: "Mär", strom: 41000, gas: 26000, waerme: 16000, wasser: 3100 },
-  { month: "Apr", strom: 38000, gas: 21000, waerme: 12000, wasser: 3400 },
-  { month: "Mai", strom: 40000, gas: 18000, waerme: 8000, wasser: 3800 },
-  { month: "Jun", strom: 45000, gas: 15000, waerme: 5000, wasser: 4200 },
-  { month: "Jul", strom: 48000, gas: 12000, waerme: 4000, wasser: 4500 },
-  { month: "Aug", strom: 46000, gas: 13000, waerme: 4500, wasser: 4300 },
-  { month: "Sep", strom: 42000, gas: 17000, waerme: 7000, wasser: 3700 },
-  { month: "Okt", strom: 39000, gas: 22000, waerme: 11000, wasser: 3300 },
-  { month: "Nov", strom: 41000, gas: 27000, waerme: 15000, wasser: 3000 },
-  { month: "Dez", strom: 43000, gas: 30000, waerme: 19000, wasser: 3100 },
-];
+/** Realistic demo monthly data (Wh) for a typical municipal building, per energy type */
+const DEMO_BY_TYPE: Record<string, number[]> = {
+  strom: [42000, 39000, 41000, 38000, 40000, 45000, 48000, 46000, 42000, 39000, 41000, 43000],
+  gas: [28000, 31000, 26000, 21000, 18000, 15000, 12000, 13000, 17000, 22000, 27000, 30000],
+  waerme: [18000, 20000, 16000, 12000, 8000, 5000, 4000, 4500, 7000, 11000, 15000, 19000],
+  wasser: [3200, 2900, 3100, 3400, 3800, 4200, 4500, 4300, 3700, 3300, 3000, 3100],
+};
+
+const ENERGY_UNITS: Record<string, "kWh" | "m³"> = {
+  strom: "kWh",
+  gas: "kWh",
+  waerme: "kWh",
+  wasser: "m³",
+};
 
 const ForecastWidget = ({ locationId }: ForecastWidgetProps) => {
-  const { monthlyData: realData, loading, hasData: realHasData } = useEnergyData(locationId);
   const isDemo = useDemoMode();
   const { t } = useTranslation();
+  const [energyType, setEnergyType] = useState<string>("strom");
 
-  // Use demo data when in demo mode or when real data is unrealistically low
-  const totalReal = realData.reduce((s, d) => s + d.strom + d.gas + d.waerme + d.wasser, 0);
-  const useDemo = isDemo || (realHasData && totalReal < 5000);
-  const monthlyData = useDemo
-    ? DEMO_MONTHLY_DATA.map((d, i) =>
-        i <= new Date().getMonth() ? d : { ...d, strom: 0, gas: 0, waerme: 0, wasser: 0 }
-      )
-    : realData;
-  const hasData = useDemo ? true : realHasData;
+  const { data: monthly, isLoading } = useMonthlyConsumptionByType({
+    locationId,
+    energyType,
+  });
 
-  if (loading) return <Card><CardContent className="p-6"><Skeleton className="h-[300px]" /></CardContent></Card>;
+  const ENERGY_TYPES = [
+    { value: "strom", label: t("energy.strom" as any) },
+    { value: "gas", label: t("energy.gas" as any) },
+    { value: "waerme", label: t("energy.waerme" as any) },
+    { value: "wasser", label: t("energy.wasser" as any) },
+  ];
 
-  // Find the last month with data
-  const monthsWithData = monthlyData.filter((d) => d.strom + d.gas + d.waerme + d.wasser > 0);
-  const currentMonthIndex = monthsWithData.length > 0
-    ? monthlyData.findIndex((d) => d.month === monthsWithData[monthsWithData.length - 1].month)
-    : -1;
+  // monthlyValues = array of 12 numbers (Wh)
+  const monthlyValues = useMemo(() => {
+    const real = (monthly ?? []).map((d) => d.value);
+    if (real.length === 12 && real.some((v) => v > 0)) return real;
 
-  if (!hasData || currentMonthIndex < 0) {
+    if (isDemo) {
+      const demo = DEMO_BY_TYPE[energyType] ?? DEMO_BY_TYPE.gas;
+      const month = new Date().getMonth();
+      return demo.map((v, i) => (i <= month ? v : 0));
+    }
+    return Array.from({ length: 12 }, () => 0);
+  }, [monthly, isDemo, energyType]);
+
+  const localizedMonths = MONTH_KEYS.map((k) => t(k as any));
+  const displayUnit = ENERGY_UNITS[energyType] ?? "kWh";
+
+  const formatValueByType = (value: number) => {
+    if (displayUnit === "m³") {
+      return `${value.toLocaleString("de-DE", {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 2,
+      })} m³`;
+    }
+
+    return formatEnergy(value);
+  };
+
+  // Find last month with actual data
+  const lastIdx = (() => {
+    for (let i = monthlyValues.length - 1; i >= 0; i--) {
+      if (monthlyValues[i] > 0) return i;
+    }
+    return -1;
+  })();
+
+  const hasData = lastIdx >= 0;
+
+  if (isLoading) {
     return (
       <Card>
-        <CardHeader>
-          <CardTitle className="font-display text-lg flex items-center gap-2">
-            <TrendingUp className="h-5 w-5 text-primary" />
-            {t("dashboard.annualForecast" as any)}
-          </CardTitle>
-        </CardHeader>
+        <CardContent className="p-6">
+          <Skeleton className="h-[300px]" />
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const Header = (
+    <CardHeader>
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <CardTitle className="font-display text-lg flex items-center gap-2">
+          <TrendingUp className="h-5 w-5 text-primary" />
+          {t("dashboard.annualForecast" as any)}
+          <HelpTooltip text={t("tooltip.forecast" as any)} />
+        </CardTitle>
+        <Select value={energyType} onValueChange={setEnergyType}>
+          <SelectTrigger className="h-8 w-[110px] text-xs">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {ENERGY_TYPES.map((et) => (
+              <SelectItem key={et.value} value={et.value} className="text-xs">
+                {et.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+    </CardHeader>
+  );
+
+  if (!hasData) {
+    return (
+      <Card>
+        {Header}
         <CardContent>
           <div className="h-[300px] flex items-center justify-center text-muted-foreground text-sm">
             {t("dashboard.noDataForForecast" as any)}
@@ -71,51 +132,39 @@ const ForecastWidget = ({ locationId }: ForecastWidgetProps) => {
     );
   }
 
-  // Build localized month labels
-  const localizedMonths = MONTH_KEYS.map((k) => t(k as any));
+  // Forecast = average of months with data, projected over remaining months
+  const actualSlice = monthlyValues.slice(0, lastIdx + 1);
+  const totalActual = actualSlice.reduce((s, v) => s + v, 0);
+  const avgPerMonth = totalActual / actualSlice.length;
+  const forecastRemaining = Math.round(avgPerMonth) * (12 - actualSlice.length);
+  const totalForecast = totalActual + forecastRemaining;
 
-  const actualData = monthlyData.slice(0, currentMonthIndex + 1);
-  const avgTotal = actualData.reduce((s, d) => s + d.strom + d.gas + d.waerme + d.wasser, 0) / actualData.length;
-
-  const forecastData = monthlyData.map((d, i) => {
-    const actual = d.strom + d.gas + d.waerme + d.wasser;
-    const label = localizedMonths[i] || d.month;
-    if (i <= currentMonthIndex) {
-      return { month: label, ist: actual, prognose: null as number | null };
-    }
-    return { month: label, ist: null as number | null, prognose: Math.round(avgTotal) };
+  const chartData = monthlyValues.map((v, i) => {
+    const label = localizedMonths[i] || MONTH_KEYS[i];
+    if (i < lastIdx) return { month: label, ist: v, prognose: null as number | null };
+    if (i === lastIdx) return { month: label, ist: v, prognose: v }; // bridge point
+    return { month: label, ist: null as number | null, prognose: Math.round(avgPerMonth) };
   });
-
-  if (currentMonthIndex < forecastData.length - 1) {
-    forecastData[currentMonthIndex].prognose = forecastData[currentMonthIndex].ist;
-  }
-
-  const totalActual = actualData.reduce((s, d) => s + d.strom + d.gas + d.waerme + d.wasser, 0);
-  const totalForecast = totalActual + Math.round(avgTotal) * (12 - actualData.length);
 
   const actualLabel = t("dashboard.forecastActual" as any);
   const forecastLabel = t("dashboard.forecastForecast" as any);
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle className="font-display text-lg flex items-center gap-2">
-          <TrendingUp className="h-5 w-5 text-primary" />
-          {t("dashboard.annualForecast" as any)}
-          <HelpTooltip text={t("tooltip.forecast" as any)} />
-        </CardTitle>
+      {Header}
+      <CardHeader className="pt-0">
         <p className="text-sm text-muted-foreground">
-          {t("dashboard.forecastTotal" as any).replace("{value}", formatEnergy(totalForecast))}
+          {t("dashboard.forecastTotal" as any).replace("{value}", formatValueByType(totalForecast))}
         </p>
       </CardHeader>
       <CardContent>
         <ResponsiveContainer width="100%" height={300}>
-          <LineChart data={forecastData} margin={{ left: 10, right: 10, top: 5, bottom: 5 }}>
+          <LineChart data={chartData} margin={{ left: 10, right: 10, top: 5, bottom: 5 }}>
             <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
             <XAxis dataKey="month" tick={{ fill: "hsl(var(--muted-foreground))" }} />
             <YAxis
               tick={{ fill: "hsl(var(--muted-foreground))" }}
-              tickFormatter={(value: number) => formatEnergy(value)}
+              tickFormatter={(value: number) => formatValueByType(value)}
             />
             <Tooltip
               contentStyle={{
@@ -125,7 +174,7 @@ const ForecastWidget = ({ locationId }: ForecastWidgetProps) => {
                 color: "hsl(var(--card-foreground))",
               }}
               formatter={(value: number | null, name: string) =>
-                value !== null ? [formatEnergy(value), name === "ist" ? actualLabel : forecastLabel] : ["-", name]
+                value !== null ? [formatValueByType(value), name === "ist" ? actualLabel : forecastLabel] : ["-", name]
               }
             />
             <Legend formatter={(value) => (value === "ist" ? actualLabel : forecastLabel)} />

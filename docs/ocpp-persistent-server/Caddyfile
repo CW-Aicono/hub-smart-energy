@@ -1,0 +1,16 @@
+{$OCPP_DOMAIN} {
+	encode gzip
+	# WebSocket + HTTP an den Node-Container
+	reverse_proxy ocpp:8080 {
+		header_up Host {host}
+		header_up X-Real-IP {remote}
+		header_up X-Forwarded-For {remote}
+		header_up X-Forwarded-Proto {scheme}
+	}
+}
+
+# ws:// Fallback-Port 80 (für ältere Wallboxen ohne TLS).
+# Caddy terminiert hier KEINE Verschlüsselung; die Verbindung Wallbox→Server ist unverschlüsselt.
+:80 {
+	reverse_proxy ocpp:8080
+}
