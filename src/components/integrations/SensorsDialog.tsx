@@ -29,6 +29,7 @@ import { AssignMeterDialog } from "./AssignMeterDialog";
 import { useMeters } from "@/hooks/useMeters";
 import { getGatewayDefinition, getEdgeFunctionName } from "@/lib/gatewayRegistry";
 import { getResolvedDeviceType } from "@/lib/deviceClassification";
+import { invokeWithRetry } from "@/lib/invokeWithRetry";
 import type { LoxoneSensor } from "@/hooks/useLoxoneSensors";
 
 interface Sensor {
@@ -142,7 +143,7 @@ export function SensorsDialog({ locationIntegration, open, onOpenChange, locatio
     setError(null);
 
     try {
-      const { data, error: fnError } = await supabase.functions.invoke(edgeFunctionName, {
+      const { data, error: fnError } = await invokeWithRetry(edgeFunctionName, {
         body: {
           locationIntegrationId: locationIntegration.id,
           action: "getSensors",
