@@ -296,12 +296,15 @@ serve(async (req) => {
 
     const requestBody = await req.json();
     const { locationIntegrationId, action, sensorName } = requestBody;
+    const shouldPersistReadings = isServiceRole || requestBody?.persistToDb === true;
 
     if (!locationIntegrationId) {
       throw new Error("Location Integration ID ist erforderlich");
     }
 
-    console.log(`Loxone API request: action=${action}, locationIntegrationId=${locationIntegrationId}, sensorName=${sensorName || "N/A"}`);
+    console.log(
+      `Loxone API request: action=${action}, locationIntegrationId=${locationIntegrationId}, sensorName=${sensorName || "N/A"}, persist=${shouldPersistReadings}`,
+    );
 
     const { data: locationIntegration, error: liError } = await supabase
       .from("location_integrations")
@@ -327,7 +330,9 @@ serve(async (req) => {
 
     const baseUrl = await resolveLoxoneCloudURL(config.serial_number);
     if (!baseUrl) {
-      await updateSyncStatus(supabase, locationIntegrationId, "error");
+      if (shouldPersistReadings) {
+        await updateSyncStatus(supabase, locationIntegrationId, "error");
+      }
       throw new Error("Cloud DNS Auflösung fehlgeschlagen. Miniserver nicht erreichbar.");
     }
 
@@ -350,7 +355,9 @@ serve(async (req) => {
 
     // ── ACTION: getSensors ──
     if (action === "getSensors") {
-      await updateSyncStatus(supabase, locationIntegrationId, "syncing");
+      if (shouldPersistReadings) {
+        await updateSyncStatus(supabase, locationIntegrationId, "syncing");
+      }
 
       const structureUrl = `${baseUrl}/data/LoxAPP3.json`;
       console.log(`Fetching structure: ${structureUrl}`);
@@ -628,7 +635,9 @@ serve(async (req) => {
 
       console.log(`Parsed ${sensors.length} sensors with values`);
 
-      // Auto-save instantaneous power readings for time-series charts
+      // Only background sync jobs should persist readings and archive totals.
+      // Interactive UI reads must stay lightweight to avoid edge-runtime timeouts.
+      if (shouldPersistReadings) {
       try {
         const { data: linkedMeters } = await supabase
           .from("meters")
@@ -797,8 +806,11 @@ serve(async (req) => {
       } catch (archiveErr) {
         console.error("Error archiving data:", archiveErr);
       }
+      }
 
-      await updateSyncStatus(supabase, locationIntegrationId, "success");
+      if (shouldPersistReadings) {
+        await updateSyncStatus(supabase, locationIntegrationId, "success");
+      }
 
       return new Response(
         JSON.stringify({ success: true, sensors, systemMessages }),
