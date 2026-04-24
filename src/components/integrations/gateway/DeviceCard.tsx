@@ -4,7 +4,6 @@ import { Badge } from "@/components/ui/badge";
 import { useTranslation } from "@/hooks/useTranslation";
 import type { GatewayDeviceWithMetrics } from "@/hooks/useGatewayDevices";
 import { StatusBadge } from "./StatusBadge";
-import { ApiKeyDialog } from "./ApiKeyDialog";
 import { PinConfigDialog } from "./PinConfigDialog";
 import { HaConfigDialog } from "./HaConfigDialog";
 import { DeviceMetrics } from "./DeviceMetrics";
@@ -14,9 +13,7 @@ import {
   Download,
   ArrowUpCircle,
   Clock,
-  Key,
   Lock,
-  ShieldCheck,
   ClipboardList,
 } from "lucide-react";
 
@@ -29,7 +26,6 @@ interface DeviceCardProps {
 
 export function DeviceCard({ device, onCommand, isAdmin, onKeyGenerated }: DeviceCardProps) {
   const { t } = useTranslation();
-  const [keyDialogOpen, setKeyDialogOpen] = useState(false);
   const [pinDialogOpen, setPinDialogOpen] = useState(false);
   const [haConfigOpen, setHaConfigOpen] = useState(false);
   const hasUpdate =
@@ -65,12 +61,6 @@ export function DeviceCard({ device, onCommand, isAdmin, onKeyGenerated }: Devic
                     Update
                   </Badge>
                 )}
-                {device.api_key_hash && (
-                  <Badge variant="outline" className="bg-primary/10 text-primary border-primary/30">
-                    <ShieldCheck className="h-3 w-3 mr-1" />
-                    Device-Key
-                  </Badge>
-                )}
                 {(device.config as any)?.ui_pin_hash && (
                   <Badge variant="outline" className="bg-primary/10 text-primary border-primary/30">
                     <Lock className="h-3 w-3 mr-1" />
@@ -102,9 +92,6 @@ export function DeviceCard({ device, onCommand, isAdmin, onKeyGenerated }: Devic
                 <Button variant="ghost" size="icon" onClick={() => setPinDialogOpen(true)} title="UI-PIN konfigurieren">
                   <Lock className="h-4 w-4" />
                 </Button>
-                <Button variant="ghost" size="icon" onClick={() => setKeyDialogOpen(true)} title={t("gatewayDevices.apiKey")}>
-                  <Key className="h-4 w-4" />
-                </Button>
                 <Button variant="ghost" size="icon" onClick={() => onCommand(device.id, "backup")} title={t("gatewayDevices.backup")}>
                   <Download className="h-4 w-4" />
                 </Button>
@@ -132,20 +119,12 @@ export function DeviceCard({ device, onCommand, isAdmin, onKeyGenerated }: Devic
       />
 
       {isAdmin && (
-        <>
-          <ApiKeyDialog
-            device={device}
-            open={keyDialogOpen}
-            onOpenChange={setKeyDialogOpen}
-            onKeyGenerated={onKeyGenerated}
-          />
-          <PinConfigDialog
-            device={device}
-            open={pinDialogOpen}
-            onOpenChange={setPinDialogOpen}
-            onUpdated={onKeyGenerated}
-          />
-        </>
+        <PinConfigDialog
+          device={device}
+          open={pinDialogOpen}
+          onOpenChange={setPinDialogOpen}
+          onUpdated={onKeyGenerated}
+        />
       )}
     </>
   );
