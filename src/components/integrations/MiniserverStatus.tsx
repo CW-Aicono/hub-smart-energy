@@ -17,13 +17,20 @@ interface SystemStatus {
   localTime: string | null;
 }
 
+interface SystemStatusResponse {
+  success?: boolean;
+  error?: string;
+  systemStatus: SystemStatus;
+  lastSync: string | null;
+}
+
 export function MiniserverStatus({ locationIntegrationId, integrationType, lastSyncAt }: MiniserverStatusProps) {
   const isLoxone = !integrationType || integrationType === "loxone" || integrationType === "loxone_miniserver";
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["miniserver-status", locationIntegrationId],
     queryFn: async () => {
-      const { data, error } = await invokeWithRetry<{ systemStatus: SystemStatus; lastSync: string | null; success?: boolean }>("loxone-api", {
+      const { data, error } = await invokeWithRetry<SystemStatusResponse>("loxone-api", {
         body: { locationIntegrationId, action: "getSystemStatus" },
       });
 
