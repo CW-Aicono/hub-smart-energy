@@ -1,8 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
 import { Cpu, Thermometer, HardDrive, RefreshCw, Loader2, Clock } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { de } from "date-fns/locale";
+import { invokeWithRetry } from "@/lib/invokeWithRetry";
 
 interface MiniserverStatusProps {
   locationIntegrationId: string;
@@ -23,22 +23,15 @@ export function MiniserverStatus({ locationIntegrationId, integrationType, lastS
   const { data, isLoading, error } = useQuery({
     queryKey: ["miniserver-status", locationIntegrationId],
     queryFn: async () => {
-      // Retry transient 503 "Service is temporarily unavailable" from edge runtime
-      let lastErr: any = null;
-      for (let attempt = 0; attempt < 3; attempt++) {
-        const { data, error } = await supabase.functions.invoke("loxone-api", {
-          body: { locationIntegrationId, action: "getSystemStatus" },
-        });
-        const msg = error?.message || data?.error || "";
-        const isTransient = /503|temporarily unavailable|SUPABASE_EDGE_RUNTIME_ERROR/i.test(msg);
-        if (!error && data?.success) {
-          return data as { systemStatus: SystemStatus; lastSync: string | null };
-        }
-        lastErr = new Error(msg || "Fehler");
-        if (!isTransient) break;
-        await new Promise((r) => setTimeout(r, 500 * (attempt + 1)));
+      const { data, error } = await invokeWithRetry<{ systemStatus: SystemStatus; lastSync: string | null; success?: boolean }>("loxone-api", {
+        body: { locationIntegrationId, action: "getSystemStatus" },
+      });
+
+      if (error || !data?.success) {
+        throw new Error(error?.message || data?.error || "Fehler");
       }
-      throw lastErr;
+
+      return data;
     },
     enabled: isLoxone,
     staleTime: 120_000,
