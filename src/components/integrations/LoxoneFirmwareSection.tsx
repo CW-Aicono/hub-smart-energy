@@ -30,7 +30,7 @@ export function LoxoneFirmwareSection({ locationIntegrationId }: LoxoneFirmwareS
   const handleCheckFirmware = async () => {
     setIsChecking(true);
     try {
-      const { data, error } = await supabase.functions.invoke("loxone-api", {
+      const { data, error } = await invokeWithRetry("loxone-api", {
         body: { locationIntegrationId, action: "getVersion" },
       });
       if (error || !data?.success) {
