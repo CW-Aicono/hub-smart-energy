@@ -663,7 +663,8 @@ function MeterTab({ tenantRecord, lang }: { tenantRecord: TenantRecord; lang: Te
             const edgeFn = integrationType
               ? (await import("@/lib/gatewayRegistry")).getEdgeFunctionName(integrationType)
               : "loxone-api";
-            const { data } = await supabase.functions.invoke(edgeFn, {
+            const { invokeWithRetry } = await import("@/lib/invokeWithRetry");
+            const { data } = await invokeWithRetry(edgeFn, {
               body: { locationIntegrationId: integrationId, action: "getSensors" },
             });
             if (data?.sensors) {
