@@ -52,7 +52,7 @@ export function LoxoneFirmwareSection({ locationIntegrationId }: LoxoneFirmwareS
   const handleTriggerUpdate = async () => {
     setIsUpdating(true);
     try {
-      const { data, error } = await supabase.functions.invoke("loxone-api", {
+      const { data, error } = await invokeWithRetry("loxone-api", {
         body: { locationIntegrationId, action: "triggerUpdate", confirmed: true },
       });
       if (error || !data?.success) {
