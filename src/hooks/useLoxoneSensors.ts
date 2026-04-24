@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { useQuery, useQueries, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { getEdgeFunctionName } from "@/lib/gatewayRegistry";
+import { invokeWithRetry } from "@/lib/invokeWithRetry";
 
 /**
  * Subscribe to realtime updates of gateway_device_inventory for the given
@@ -71,35 +72,23 @@ async function fetchSensors(integrationId: string, integrationType?: string): Pr
   // Refresh JWT before invoking – avoids 401 "Ungültiges Token" after idle periods.
   await supabase.auth.getSession();
 
-  // Retry transient 503 "Service is temporarily unavailable" from the edge runtime.
-  let lastErr: any = null;
-  for (let attempt = 0; attempt < 3; attempt++) {
-    const { data, error } = await supabase.functions.invoke(edgeFunction, {
-      body: { locationIntegrationId: integrationId, action: "getSensors" },
-    });
-    if (error) {
-      // Silently ignore auth errors – Realtime + DB cache keep UI fresh.
-      if (error.message?.includes("401") || error.message?.includes("Token")) {
-        console.warn(`[useLoxoneSensors] Auth error (ignored): ${error.message}`);
-        return [];
-      }
-      lastErr = new Error(error.message || "Failed to fetch sensors");
-      const isTransient = /503|temporarily unavailable|SUPABASE_EDGE_RUNTIME_ERROR/i.test(error.message || "");
-      if (!isTransient) throw lastErr;
-      await new Promise((r) => setTimeout(r, 500 * (attempt + 1)));
-      continue;
+  const { data, error } = await invokeWithRetry(edgeFunction, {
+    body: { locationIntegrationId: integrationId, action: "getSensors" },
+  });
+
+  if (error) {
+    if (error.message?.includes("401") || error.message?.includes("Token")) {
+      console.warn(`[useLoxoneSensors] Auth error (ignored): ${error.message}`);
+      return [];
     }
-    if (!data?.success) {
-      const msg = data?.error || "Failed to fetch sensors";
-      const isTransient = /503|temporarily unavailable|SUPABASE_EDGE_RUNTIME_ERROR/i.test(msg);
-      lastErr = new Error(msg);
-      if (!isTransient) throw lastErr;
-      await new Promise((r) => setTimeout(r, 500 * (attempt + 1)));
-      continue;
-    }
-    return data.sensors as GatewaySensor[];
+    throw new Error(error.message || "Failed to fetch sensors");
   }
-  throw lastErr ?? new Error("Failed to fetch sensors");
+
+  if (!data?.success) {
+    throw new Error(data?.error || "Failed to fetch sensors");
+  }
+
+  return data.sensors as GatewaySensor[];
 }
 
 export function useLoxoneSensors(integrationId: string | undefined, integrationType?: string) {
@@ -108,13 +97,13 @@ export function useLoxoneSensors(integrationId: string | undefined, integrationT
     queryKey: ["gateway-sensors", integrationId],
     queryFn: () => fetchSensors(integrationId!, integrationType),
     enabled: !!integrationId,
-    staleTime: 0,
-    refetchOnMount: "always",
-    refetchOnWindowFocus: true,
+    staleTime: 10_000,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
     refetchIntervalInBackground: true,
     // Short polling fallback for setups where DB realtime invalidation is delayed
     // or unavailable, so actuator states don't stay stale in the UI.
-    refetchInterval: 15_000,
+    refetchInterval: 30_000,
   });
 }
 
@@ -124,11 +113,11 @@ export function useLoxoneSensorsMulti(integrationIds: string[], integrationTypes
     queries: integrationIds.map((id, idx) => ({
       queryKey: ["gateway-sensors", id],
       queryFn: () => fetchSensors(id, integrationTypes?.[idx]),
-      staleTime: 0,
-      refetchOnMount: "always" as const,
-      refetchOnWindowFocus: true,
+      staleTime: 10_000,
+      refetchOnMount: false,
+      refetchOnWindowFocus: false,
       refetchIntervalInBackground: true,
-      refetchInterval: 15_000,
+      refetchInterval: 30_000,
       enabled: !!id,
     })),
   });
