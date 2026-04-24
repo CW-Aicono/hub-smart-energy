@@ -46,6 +46,10 @@ if ! docker compose -f docker-compose.yml -f docker-compose.caddy.yml up -d fron
   exit 1
 fi
 
+log "5b/6 Caddy-Config reload (falls Caddyfile geaendert)"
+docker exec supabase-caddy caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile \
+  || log "WARN: caddy reload fehlgeschlagen (Container laeuft evtl. noch nicht) - ueberspringe"
+
 log "6/6 Healthcheck auf $HEALTH_URL"
 sleep 10
 for attempt in 1 2 3 4 5; do

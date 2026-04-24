@@ -80,6 +80,8 @@ jobs:
             nginx.conf
             scripts
             supabase-docker
+            build
+            tsconfig.node.json
             docs/GO-LIVE.md
             docs/CI-SETUP.md
             docs/DEPLOYMENT.md
