@@ -243,9 +243,19 @@ export function useLocationAutomations(locationId: string | undefined) {
           };
         }
 
-        const { data, error } = await supabase.functions.invoke(edgeFunction, { body });
+        let data: any = null;
+        let error: any = null;
+        for (let attempt = 0; attempt < 3; attempt++) {
+          const res = await supabase.functions.invoke(edgeFunction, { body });
+          data = res.data;
+          error = res.error;
+          const msg = error?.message || data?.error || "";
+          const isTransient = /503|temporarily unavailable|SUPABASE_EDGE_RUNTIME_ERROR/i.test(msg);
+          if (!isTransient) break;
+          await new Promise((r) => setTimeout(r, 500 * (attempt + 1)));
+        }
         if (error || !data?.success) {
-          throw new Error(data?.error || "Ausführung fehlgeschlagen");
+          throw new Error(data?.error || error?.message || "Ausführung fehlgeschlagen");
         }
       }
 
