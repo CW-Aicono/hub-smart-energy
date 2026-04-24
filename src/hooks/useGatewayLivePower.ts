@@ -115,9 +115,18 @@ export function useGatewayLivePower(meters: Meter[]) {
             // Push-based gateways (gateway-ingest) don't support getSensors – skip them
             if (edgeFunction === "gateway-ingest") return;
 
-            const { data } = await supabase.functions.invoke(edgeFunction, {
-              body: { locationIntegrationId: integrationId, action: "getSensors" },
-            });
+            let data: any = null;
+            for (let attempt = 0; attempt < 3; attempt++) {
+              const res = await supabase.functions.invoke(edgeFunction, {
+                body: { locationIntegrationId: integrationId, action: "getSensors" },
+              });
+              data = res.data;
+              const msg = res.error?.message || res.data?.error || "";
+              const isTransient = /503|temporarily unavailable|SUPABASE_EDGE_RUNTIME_ERROR/i.test(msg);
+              if (!res.error && data?.success) break;
+              if (!isTransient) break;
+              await new Promise((r) => setTimeout(r, 500 * (attempt + 1)));
+            }
 
             if (!data?.success || !Array.isArray(data.sensors)) return;
 
