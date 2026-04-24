@@ -23,15 +23,27 @@ export function MiniserverStatus({ locationIntegrationId, integrationType, lastS
   const { data, isLoading, error } = useQuery({
     queryKey: ["miniserver-status", locationIntegrationId],
     queryFn: async () => {
-      const { data, error } = await supabase.functions.invoke("loxone-api", {
-        body: { locationIntegrationId, action: "getSystemStatus" },
-      });
-      if (error || !data?.success) throw new Error(data?.error || "Fehler");
-      return data as { systemStatus: SystemStatus; lastSync: string | null };
+      // Retry transient 503 "Service is temporarily unavailable" from edge runtime
+      let lastErr: any = null;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const { data, error } = await supabase.functions.invoke("loxone-api", {
+          body: { locationIntegrationId, action: "getSystemStatus" },
+        });
+        const msg = error?.message || data?.error || "";
+        const isTransient = /503|temporarily unavailable|SUPABASE_EDGE_RUNTIME_ERROR/i.test(msg);
+        if (!error && data?.success) {
+          return data as { systemStatus: SystemStatus; lastSync: string | null };
+        }
+        lastErr = new Error(msg || "Fehler");
+        if (!isTransient) break;
+        await new Promise((r) => setTimeout(r, 500 * (attempt + 1)));
+      }
+      throw lastErr;
     },
     enabled: isLoxone,
     staleTime: 120_000,
     refetchInterval: 300_000,
+    retry: 2,
   });
 
   if (!isLoxone) return null;
