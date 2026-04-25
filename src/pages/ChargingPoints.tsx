@@ -58,7 +58,22 @@ const ChargingPoints = () => {
 
   const [addOpen, setAddOpen] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
-  const [form, setForm] = useState({ name: "", ocpp_id: "", address: "", connector_count: "1", max_power_kw: "22", vendor: "", model: "", connector_type: "Type2" });
+  const [showAddPassword, setShowAddPassword] = useState(false);
+  const generatePw = () => {
+    const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
+    const arr = new Uint32Array(32);
+    crypto.getRandomValues(arr);
+    let pw = "";
+    for (let i = 0; i < 32; i++) pw += chars[arr[i] % chars.length];
+    return pw;
+  };
+  const [form, setForm] = useState({
+    name: "", ocpp_id: "", address: "", connector_count: "1", max_power_kw: "22",
+    vendor: "", model: "", connector_type: "Type2",
+    connection_protocol: "wss" as "ws" | "wss",
+    auth_required: true,
+    ocpp_password: generatePw(),
+  });
   const CONNECTOR_OPTIONS = [
     { value: "Type2", label: "Typ 2" },
     { value: "CCS", label: "CCS" },
@@ -76,7 +91,15 @@ const ChargingPoints = () => {
   if (authLoading) return null;
   if (!user) return <Navigate to="/auth" replace />;
 
-  const resetForm = () => { setForm({ name: "", ocpp_id: "", address: "", connector_count: "1", max_power_kw: "22", vendor: "", model: "", connector_type: "Type2" }); setAddCoords({ lat: null, lng: null }); };
+  const resetForm = () => {
+    setForm({
+      name: "", ocpp_id: "", address: "", connector_count: "1", max_power_kw: "22",
+      vendor: "", model: "", connector_type: "Type2",
+      connection_protocol: "wss", auth_required: true, ocpp_password: generatePw(),
+    });
+    setAddCoords({ lat: null, lng: null });
+    setShowAddPassword(false);
+  };
 
   const handleAdd = () => {
     if (!tenant?.id) return;
@@ -92,6 +115,9 @@ const ChargingPoints = () => {
       vendor: form.vendor || null,
       model: form.model || null,
       connector_type: form.connector_type || "Type2",
+      connection_protocol: form.connection_protocol,
+      auth_required: form.auth_required,
+      ocpp_password: form.auth_required ? form.ocpp_password : null,
     } as any);
     setAddOpen(false);
     resetForm();
