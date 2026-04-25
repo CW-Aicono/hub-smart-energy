@@ -24,7 +24,8 @@ import {
   ArrowLeft, Zap, PlugZap, AlertTriangle, ZapOff, WifiOff, Camera,
   Trash2, Save, X, MapPin, Search, MoreHorizontal, RefreshCw, Play,
   Square, Unlock, Power, Wrench, CheckCircle, Clock, BarChart3, Info, Settings,
-  Shield, Bell, BatteryCharging, Users, Calendar, Timer, Gauge, ExternalLink
+  Shield, Bell, BatteryCharging, Users, Calendar, Timer, Gauge, ExternalLink,
+  Eye, EyeOff, Copy
 } from "lucide-react";
 import { format, subDays, isAfter } from "date-fns";
 import { de } from "date-fns/locale";
@@ -65,7 +66,15 @@ const ChargePointDetail = () => {
   const { vendors: knownVendors, getModelsForVendor } = useChargerModels();
 
   const [editing, setEditing] = useState(false);
-  const [form, setForm] = useState({ name: "", ocpp_id: "", address: "", connector_count: "1", max_power_kw: "22", vendor: "", model: "", connector_type: "Type2" });
+  const [form, setForm] = useState({ name: "", ocpp_id: "", ocpp_password: "", address: "", connector_count: "1", max_power_kw: "22", vendor: "", model: "", connector_type: "Type2" });
+  const [showPassword, setShowPassword] = useState(false);
+  const generatePassword = () => {
+    const bytes = new Uint8Array(18);
+    crypto.getRandomValues(bytes);
+    const pw = btoa(String.fromCharCode(...bytes)).replace(/[+/=]/g, "").slice(0, 24);
+    setForm((f) => ({ ...f, ocpp_password: pw }));
+    setShowPassword(true);
+  };
   const CONNECTOR_OPTIONS = [
     { value: "Type2", label: "Typ 2" },
     { value: "CCS", label: "CCS" },
@@ -253,6 +262,7 @@ const ChargePointDetail = () => {
     setForm({
       name: cp.name,
       ocpp_id: cp.ocpp_id,
+      ocpp_password: cp.ocpp_password || "",
       address: cp.address || "",
       connector_count: String(cp.connector_count),
       max_power_kw: String(cp.max_power_kw),
@@ -270,6 +280,7 @@ const ChargePointDetail = () => {
       id: cp.id,
       name: form.name,
       ocpp_id: form.ocpp_id,
+      ocpp_password: form.ocpp_password ? form.ocpp_password : null,
       address: form.address || null,
       latitude: coords.lat,
       longitude: coords.lng,
@@ -831,6 +842,35 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
                       <div className="grid grid-cols-2 gap-4">
                         <div><Label>Name</Label><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
                         <div><Label>OCPP-ID</Label><Input value={form.ocpp_id} onChange={(e) => setForm({ ...form, ocpp_id: e.target.value })} /></div>
+                      </div>
+                      <div>
+                        <Label className="flex items-center gap-1">
+                          <Shield className="h-3.5 w-3.5" /> OCPP-Passwort (Basic Auth)
+                        </Label>
+                        <div className="flex gap-2">
+                          <Input
+                            type={showPassword ? "text" : "password"}
+                            value={form.ocpp_password}
+                            onChange={(e) => setForm({ ...form, ocpp_password: e.target.value })}
+                            placeholder="z.B. 24-stelliges Zufallspasswort"
+                            className="flex-1 font-mono"
+                            autoComplete="new-password"
+                          />
+                          <Button type="button" variant="outline" size="icon" onClick={() => setShowPassword((v) => !v)} title={showPassword ? "Verbergen" : "Anzeigen"}>
+                            {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                          </Button>
+                          <Button type="button" variant="outline" size="icon" onClick={generatePassword} title="Sicheres Passwort generieren">
+                            <RefreshCw className="h-4 w-4" />
+                          </Button>
+                          {form.ocpp_password && (
+                            <Button type="button" variant="outline" size="icon" onClick={() => { navigator.clipboard.writeText(form.ocpp_password); toast({ title: "Passwort kopiert" }); }} title="Kopieren">
+                              <Copy className="h-4 w-4" />
+                            </Button>
+                          )}
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Wird vom Ladepunkt im <code>Authorization: Basic</code>-Header beim WebSocket-Handshake gesendet. Leer lassen nur bei Test-Servern ohne Auth.
+                        </p>
                       </div>
                       <div>
                         <Label>Adresse / Standort</Label>
