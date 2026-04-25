@@ -844,6 +844,35 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
                         <div><Label>OCPP-ID</Label><Input value={form.ocpp_id} onChange={(e) => setForm({ ...form, ocpp_id: e.target.value })} /></div>
                       </div>
                       <div>
+                        <Label className="flex items-center gap-1">
+                          <Shield className="h-3.5 w-3.5" /> OCPP-Passwort (Basic Auth)
+                        </Label>
+                        <div className="flex gap-2">
+                          <Input
+                            type={showPassword ? "text" : "password"}
+                            value={form.ocpp_password}
+                            onChange={(e) => setForm({ ...form, ocpp_password: e.target.value })}
+                            placeholder="z.B. 24-stelliges Zufallspasswort"
+                            className="flex-1 font-mono"
+                            autoComplete="new-password"
+                          />
+                          <Button type="button" variant="outline" size="icon" onClick={() => setShowPassword((v) => !v)} title={showPassword ? "Verbergen" : "Anzeigen"}>
+                            {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                          </Button>
+                          <Button type="button" variant="outline" size="icon" onClick={generatePassword} title="Sicheres Passwort generieren">
+                            <RefreshCw className="h-4 w-4" />
+                          </Button>
+                          {form.ocpp_password && (
+                            <Button type="button" variant="outline" size="icon" onClick={() => { navigator.clipboard.writeText(form.ocpp_password); toast({ title: "Passwort kopiert" }); }} title="Kopieren">
+                              <Copy className="h-4 w-4" />
+                            </Button>
+                          )}
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Wird vom Ladepunkt im <code>Authorization: Basic</code>-Header beim WebSocket-Handshake gesendet. Leer lassen nur bei Test-Servern ohne Auth.
+                        </p>
+                      </div>
+                      <div>
                         <Label>Adresse / Standort</Label>
                         <div className="flex gap-2">
                           <Input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} placeholder="z.B. Musterstraße 1, 12345 Berlin" className="flex-1" />
