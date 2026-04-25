@@ -38,13 +38,74 @@ Deno.serve(async (req) => {
   const url = new URL(req.url);
   const upgradeHeader = req.headers.get("upgrade") || "";
 
-  // Health / info endpoint (HTTP)
+  // HTTP endpoint: list charge points for super-admins (bypasses RLS)
   if (upgradeHeader.toLowerCase() !== "websocket") {
+    const action = url.searchParams.get("action");
+
+    if (action === "list-charge-points") {
+      const token =
+        url.searchParams.get("access_token") ||
+        req.headers.get("Authorization")?.replace(/^Bearer\s+/i, "") ||
+        "";
+      if (!token) {
+        return new Response(JSON.stringify({ error: "Missing access_token" }), {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      const userClient = createClient(supabaseUrl, anonKey, {
+        global: { headers: { Authorization: `Bearer ${token}` } },
+      });
+      const { data: claims, error: claimsErr } = await userClient.auth.getClaims(token);
+      if (claimsErr || !claims?.claims?.sub) {
+        return new Response(JSON.stringify({ error: "Unauthorized" }), {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      const userId = claims.claims.sub as string;
+      const adminClient = createClient(supabaseUrl, serviceKey);
+      const { data: roleRow } = await adminClient
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", userId)
+        .eq("role", "super_admin")
+        .maybeSingle();
+      if (!roleRow) {
+        return new Response(JSON.stringify({ error: "Forbidden: super_admin only" }), {
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      const { data: cps, error: cpErr } = await adminClient
+        .from("charge_points")
+        .select("id, name, ocpp_id, ocpp_password, tenant_id")
+        .order("name");
+      if (cpErr) {
+        return new Response(JSON.stringify({ error: cpErr.message }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      // Mask password — only return whether it exists
+      const sanitized = (cps ?? []).map((c) => ({
+        id: c.id,
+        name: c.name,
+        ocpp_id: c.ocpp_id,
+        has_password: !!c.ocpp_password,
+        tenant_id: c.tenant_id,
+      }));
+      return new Response(JSON.stringify({ charge_points: sanitized }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     return new Response(
       JSON.stringify({
         info: "OCPP Simulator Proxy",
         usage:
-          "Connect via WebSocket with ?target=<wss-host>&cp=<ocppId>&access_token=<jwt>",
+          "WebSocket: ?target=<wss-host>&cp=<ocppId>&access_token=<jwt> | HTTP: ?action=list-charge-points",
       }),
       {
         status: 200,
