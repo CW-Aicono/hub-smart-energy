@@ -123,6 +123,7 @@ export default function SuperAdminSidebar() {
       children: [
         { to: "/super-admin/ocpp/integrations", icon: PlugZap, label: t("nav.ocpp_integrations") },
         { to: "/super-admin/ocpp/control", icon: Server, label: "OCPP Control" },
+        { to: "/super-admin/ocpp/simulator", icon: PlugZap, label: "OCPP Simulator" },
       ],
     },
     {
