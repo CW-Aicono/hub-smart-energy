@@ -147,7 +147,7 @@ async function resolveLoxoneCloudURL(serialNumber: string): Promise<string | nul
   try {
     const dnsUrl = `http://dns.loxonecloud.com/${serialNumber}`;
     console.log(`Resolving via Loxone Cloud redirect: ${dnsUrl}`);
-    const response = await fetch(dnsUrl, { method: "HEAD", redirect: "follow" });
+    const response = await fetchWithTimeout(dnsUrl, { method: "HEAD", redirect: "follow" });
     const finalUrl = response.url;
     console.log(`Resolved to final URL: ${finalUrl}`);
     const urlObj = new URL(finalUrl);
@@ -170,7 +170,7 @@ async function fetchStateValue(
   try {
     const url = `${baseUrl}/jdev/sps/io/${controlUuid}/state`;
     console.log(`Fetching state: ${url}`);
-    const response = await fetch(url, { method: "GET", headers: { Authorization: authHeader } });
+    const response = await fetchWithTimeout(url, { method: "GET", headers: { Authorization: authHeader } }, LOXONE_STATE_FETCH_TIMEOUT_MS);
     if (!response.ok) {
       console.warn(`State fetch failed for ${controlUuid}: HTTP ${response.status}`);
       return null;
@@ -199,13 +199,13 @@ async function fetchAllStates(
   try {
     const url = `${baseUrl}/jdev/sps/io/${controlUuid}/all`;
     console.log(`Fetching all states: ${url}`);
-    const response = await fetch(url, { method: "GET", headers: { Authorization: authHeader } });
+    const response = await fetchWithTimeout(url, { method: "GET", headers: { Authorization: authHeader } }, LOXONE_STATE_FETCH_TIMEOUT_MS);
     if (!response.ok) {
       console.warn(`All-states fetch failed for ${controlUuid}: HTTP ${response.status}`);
       return results;
     }
     const data = await response.json();
-    console.log(`All-states response for ${controlUuid}: ${JSON.stringify(data).substring(0, 500)}`);
+    console.log(`All-states response for ${controlUuid}: HTTP ${data?.LL?.Code ?? "unknown"}`);
     
     if (data?.LL) {
       const ll = data.LL;
