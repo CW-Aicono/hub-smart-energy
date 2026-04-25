@@ -237,34 +237,72 @@ export default function ChargePointDetailDialog({
                   <div><Label>Name</Label><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
                   <div><Label>OCPP-ID</Label><Input value={form.ocpp_id} onChange={(e) => setForm({ ...form, ocpp_id: e.target.value })} /></div>
                 </div>
-                <div>
-                  <Label className="flex items-center gap-1">
-                    <Shield className="h-3.5 w-3.5" /> OCPP-Passwort (Basic Auth)
-                  </Label>
-                  <div className="flex gap-2">
-                    <Input
-                      type={showPassword ? "text" : "password"}
-                      value={form.ocpp_password}
-                      onChange={(e) => setForm({ ...form, ocpp_password: e.target.value })}
-                      placeholder="z.B. 24-stelliges Zufallspasswort"
-                      className="flex-1 font-mono"
-                      autoComplete="new-password"
-                    />
-                    <Button type="button" variant="outline" size="icon" onClick={() => setShowPassword((v) => !v)} title={showPassword ? "Verbergen" : "Anzeigen"}>
-                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                    </Button>
-                    <Button type="button" variant="outline" size="icon" onClick={generatePassword} title="Sicheres Passwort generieren">
-                      <RefreshCw className="h-4 w-4" />
-                    </Button>
-                    {form.ocpp_password && (
-                      <Button type="button" variant="outline" size="icon" onClick={() => { navigator.clipboard.writeText(form.ocpp_password); toast({ title: "Passwort kopiert" }); }} title="Kopieren">
-                        <Copy className="h-4 w-4" />
-                      </Button>
+                <div className="space-y-3 p-3 border rounded-lg bg-muted/30">
+                  <p className="text-sm font-medium flex items-center gap-2"><Shield className="h-4 w-4" /> Verbindungs-Konfiguration</p>
+                  <div>
+                    <Label className="text-xs">Protokoll</Label>
+                    <div className="grid grid-cols-2 gap-2 mt-1">
+                      <button
+                        type="button"
+                        onClick={() => setForm({ ...form, connection_protocol: "wss" })}
+                        className={`flex items-center gap-2 p-2 border rounded-md text-sm ${form.connection_protocol === "wss" ? "border-primary bg-primary/10" : "border-border"}`}
+                      >
+                        <Lock className="h-4 w-4" /> wss:// (empfohlen)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setForm({ ...form, connection_protocol: "ws" })}
+                        className={`flex items-center gap-2 p-2 border rounded-md text-sm ${form.connection_protocol === "ws" ? "border-primary bg-primary/10" : "border-border"}`}
+                      >
+                        <Unlock className="h-4 w-4" /> ws:// (unverschlüsselt)
+                      </button>
+                    </div>
+                    {form.connection_protocol === "ws" && (
+                      <p className="text-xs text-destructive mt-1">⚠ Unverschlüsselt – nur für Wallboxen ohne TLS.</p>
                     )}
                   </div>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Wird vom Ladepunkt im <code>Authorization: Basic</code>-Header beim WebSocket-Handshake gesendet. Leer lassen nur bei Test-Servern ohne Auth.
-                  </p>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <Label className="text-sm">Passwort-geschützt (Basic Auth)</Label>
+                      <p className="text-xs text-muted-foreground">Aus, wenn die Wallbox keine Passwort-Eingabe unterstützt.</p>
+                    </div>
+                    <Switch
+                      checked={form.auth_required}
+                      onCheckedChange={(v) => setForm({ ...form, auth_required: v, ocpp_password: v ? form.ocpp_password : "" })}
+                    />
+                  </div>
+                  {form.auth_required && (
+                    <div>
+                      <Label className="text-xs">OCPP-Passwort (Basic Auth)</Label>
+                      <div className="flex gap-2">
+                        <Input
+                          type={showPassword ? "text" : "password"}
+                          value={form.ocpp_password}
+                          onChange={(e) => setForm({ ...form, ocpp_password: e.target.value })}
+                          placeholder="z.B. 24-stelliges Zufallspasswort"
+                          className="flex-1 font-mono text-xs"
+                          autoComplete="new-password"
+                        />
+                        <Button type="button" variant="outline" size="icon" onClick={() => setShowPassword((v) => !v)} title={showPassword ? "Verbergen" : "Anzeigen"}>
+                          {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        </Button>
+                        <Button type="button" variant="outline" size="icon" onClick={generatePassword} title="Sicheres Passwort generieren">
+                          <RefreshCw className="h-4 w-4" />
+                        </Button>
+                        {form.ocpp_password && (
+                          <Button type="button" variant="outline" size="icon" onClick={() => { navigator.clipboard.writeText(form.ocpp_password); toast({ title: "Passwort kopiert" }); }} title="Kopieren">
+                            <Copy className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                  <Alert className="py-2">
+                    <InfoIcon className="h-3.5 w-3.5" />
+                    <AlertDescription className="text-xs">
+                      Falls die Wallbox ein Server-Zertifikat verlangt: <strong>„Amazon Root CA 1"</strong> oder <strong>„Let's Encrypt R3"</strong> wählen.
+                    </AlertDescription>
+                  </Alert>
                 </div>
                 <div>
                   <Label>Adresse / Standort</Label>
