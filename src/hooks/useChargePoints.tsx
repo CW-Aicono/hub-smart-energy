@@ -16,6 +16,7 @@ export interface ChargePoint {
   location_id: string | null;
   group_id: string | null;
   ocpp_id: string;
+  ocpp_password: string | null;
   name: string;
   status: string;
   connector_count: number;
