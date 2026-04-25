@@ -58,32 +58,37 @@ const SuperAdminOcppSimulator = () => {
   const [logEntries, setLogEntries] = useState<FrameLogEntry[]>([]);
   const clientRef = useRef<OcppSimulatorClient | null>(null);
 
-  // Load charge points via edge function (bypasses RLS for super-admins)
-  const { data: chargePoints = [], isLoading: cpLoading } = useQuery({
+  // Load charge points via edge function (bypasses RLS for super-admins).
+  // Use fetch directly because supabase.functions.invoke() does not append GET query params reliably.
+  const { data: chargePoints = [], isLoading: cpLoading, error: cpError } = useQuery({
     queryKey: ["sa-ocpp-sim-charge-points"],
     enabled: !!user && isSuperAdmin,
     queryFn: async () => {
-      const { data, error } = await supabase.functions.invoke("ocpp-simulator-proxy", {
+      const session = (await supabase.auth.getSession()).data.session;
+      const token = session?.access_token;
+      if (!token) throw new Error("Keine aktive Sitzung gefunden.");
+
+      const url = new URL(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ocpp-simulator-proxy`);
+      url.searchParams.set("action", "list-charge-points");
+
+      const res = await fetch(url.toString(), {
         method: "GET",
-        // @ts-expect-error supabase-js types don't include query, but the runtime appends it
-        query: { action: "list-charge-points" },
+        headers: {
+          Authorization: `Bearer ${token}`,
+          apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+        },
       });
-      // Fallback: invoke() may not support query; build URL manually
-      if (error || !data) {
-        const session = (await supabase.auth.getSession()).data.session;
-        const token = session?.access_token;
-        const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ocpp-simulator-proxy?action=list-charge-points`;
-        const res = await fetch(url, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-          },
-        });
-        if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
-        const json = await res.json();
-        return (json.charge_points ?? []) as ChargePointRow[];
+      const text = await res.text();
+      const json = text ? JSON.parse(text) : {};
+
+      if (!res.ok) {
+        throw new Error(json?.error || `Wallboxen konnten nicht geladen werden (${res.status}).`);
       }
-      return ((data as { charge_points?: ChargePointRow[] }).charge_points ?? []);
+      if (!Array.isArray(json?.charge_points)) {
+        throw new Error("Der Simulator-Proxy hat keine Wallbox-Liste geliefert.");
+      }
+
+      return json.charge_points as ChargePointRow[];
     },
   });
 
@@ -216,8 +221,10 @@ const SuperAdminOcppSimulator = () => {
               <CardContent className="space-y-3">
                 <div>
                   <Label className="text-xs">Wallbox</Label>
-                  <Select value={selectedCpId} onValueChange={setSelectedCpId} disabled={isConnected || cpLoading}>
-                    <SelectTrigger><SelectValue placeholder={cpLoading ? "Laden…" : "Wallbox auswählen"} /></SelectTrigger>
+                  <Select value={selectedCpId} onValueChange={setSelectedCpId} disabled={isConnected || cpLoading || !!cpError}>
+                    <SelectTrigger>
+                      <SelectValue placeholder={cpLoading ? "Laden…" : cpError ? "Ladefehler" : chargePoints.length ? "Wallbox auswählen" : "Keine Wallboxen gefunden"} />
+                    </SelectTrigger>
                     <SelectContent>
                       {chargePoints.map((cp) => (
                         <SelectItem key={cp.id} value={cp.id}>
@@ -226,6 +233,11 @@ const SuperAdminOcppSimulator = () => {
                       ))}
                     </SelectContent>
                   </Select>
+                  {cpError && (
+                    <p className="text-xs text-destructive mt-1">
+                      {cpError instanceof Error ? cpError.message : "Wallboxen konnten nicht geladen werden."}
+                    </p>
+                  )}
                   {selectedCp && !selectedCp.has_password && (
                     <p className="text-xs text-muted-foreground mt-1">
                       Diese Wallbox hat kein OCPP-Passwort — Verbindung erfolgt ohne Authentifizierung.
