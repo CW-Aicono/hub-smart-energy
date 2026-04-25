@@ -24,7 +24,7 @@ import { toast } from "@/hooks/use-toast";
 
 const STATUS_OPTIONS = ["Available", "Preparing", "Charging", "SuspendedEV", "SuspendedEVSE", "Finishing", "Faulted", "Unavailable"];
 const ERROR_CODES = ["NoError", "ConnectorLockFailure", "EVCommunicationError", "GroundFailure", "HighTemperature", "InternalError", "OverCurrentFailure", "PowerMeterFailure", "ResetFailure"];
-
+const DEFAULT_OCPP_TARGET = `${(import.meta.env.VITE_SUPABASE_URL as string).replace(/^https:/, "wss:")}/functions/v1/ocpp-ws-proxy`;
 interface ChargePointRow {
   id: string;
   name: string;
@@ -38,7 +38,7 @@ const SuperAdminOcppSimulator = () => {
   const { isSuperAdmin, loading: roleLoading } = useSuperAdmin();
 
   // Form state
-  const [target, setTarget] = useState("wss://ocpp.aicono.org");
+  const [target, setTarget] = useState(DEFAULT_OCPP_TARGET);
   const [selectedCpId, setSelectedCpId] = useState<string>("");
   const [vendor, setVendor] = useState("AICONO");
   const [model, setModel] = useState("SimBox");
@@ -120,7 +120,7 @@ const SuperAdminOcppSimulator = () => {
       setBusy("connect");
       const normalizedTarget = target
         .trim()
-        .replace(/^ws:\/\/ocpp\.aicono\.org/i, "wss://ocpp.aicono.org")
+        .replace(/^ws:\/\//i, "wss://")
         .replace(/\/+$/, "");
       if (normalizedTarget !== target.trim().replace(/\/+$/, "")) {
         setTarget(normalizedTarget);
