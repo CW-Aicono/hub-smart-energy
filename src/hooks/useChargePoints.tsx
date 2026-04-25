@@ -89,6 +89,57 @@ export function useChargePoints() {
     mutationFn: async ({ id, ...updates }: Partial<ChargePoint> & { id: string }) => {
       const { error } = await supabase.from("charge_points").update(updates as any).eq("id", id);
       if (error) throw error;
+
+      // Sync charge_point_connectors when count or type changed
+      const targetCount = typeof updates.connector_count === "number" ? updates.connector_count : undefined;
+      const targetType = typeof updates.connector_type === "string" ? updates.connector_type : undefined;
+      const targetMaxPower = typeof updates.max_power_kw === "number" ? updates.max_power_kw : undefined;
+
+      if (targetCount !== undefined || targetType !== undefined || targetMaxPower !== undefined) {
+        const { data: existing } = await supabase
+          .from("charge_point_connectors")
+          .select("id, connector_id")
+          .eq("charge_point_id", id)
+          .order("connector_id");
+
+        const existingRows = (existing ?? []) as Array<{ id: string; connector_id: number }>;
+
+        // 1) Update type/power on all existing rows if those fields changed
+        if (targetType !== undefined || targetMaxPower !== undefined) {
+          const patch: Record<string, unknown> = {};
+          if (targetType !== undefined) patch.connector_type = targetType;
+          if (targetMaxPower !== undefined) patch.max_power_kw = targetMaxPower;
+          if (Object.keys(patch).length > 0) {
+            await supabase.from("charge_point_connectors").update(patch as any).eq("charge_point_id", id);
+          }
+        }
+
+        // 2) Add/remove rows when count changed
+        if (targetCount !== undefined) {
+          const currentIds = existingRows.map((r) => r.connector_id);
+          const desiredIds = Array.from({ length: targetCount }, (_, i) => i + 1);
+
+          const toAdd = desiredIds.filter((i) => !currentIds.includes(i));
+          const toRemove = existingRows.filter((r) => !desiredIds.includes(r.connector_id)).map((r) => r.id);
+
+          if (toRemove.length > 0) {
+            await supabase.from("charge_point_connectors").delete().in("id", toRemove);
+          }
+          if (toAdd.length > 0) {
+            const inserts = toAdd.map((connector_id) => ({
+              charge_point_id: id,
+              connector_id,
+              display_order: connector_id - 1,
+              status: "unconfigured",
+              connector_type: targetType ?? "Type2",
+              max_power_kw: targetMaxPower ?? 22,
+            }));
+            await supabase.from("charge_point_connectors").insert(inserts as any);
+          }
+        }
+
+        queryClient.invalidateQueries({ queryKey: ["charge-point-connectors", id] });
+      }
     },
     onSuccess: () => {
       const t = getT();
