@@ -66,7 +66,15 @@ const ChargePointDetail = () => {
   const { vendors: knownVendors, getModelsForVendor } = useChargerModels();
 
   const [editing, setEditing] = useState(false);
-  const [form, setForm] = useState({ name: "", ocpp_id: "", address: "", connector_count: "1", max_power_kw: "22", vendor: "", model: "", connector_type: "Type2" });
+  const [form, setForm] = useState({ name: "", ocpp_id: "", ocpp_password: "", address: "", connector_count: "1", max_power_kw: "22", vendor: "", model: "", connector_type: "Type2" });
+  const [showPassword, setShowPassword] = useState(false);
+  const generatePassword = () => {
+    const bytes = new Uint8Array(18);
+    crypto.getRandomValues(bytes);
+    const pw = btoa(String.fromCharCode(...bytes)).replace(/[+/=]/g, "").slice(0, 24);
+    setForm((f) => ({ ...f, ocpp_password: pw }));
+    setShowPassword(true);
+  };
   const CONNECTOR_OPTIONS = [
     { value: "Type2", label: "Typ 2" },
     { value: "CCS", label: "CCS" },
