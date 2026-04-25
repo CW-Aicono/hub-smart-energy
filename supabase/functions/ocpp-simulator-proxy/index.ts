@@ -30,6 +30,66 @@ function shortId(): string {
   return crypto.randomUUID().slice(0, 8);
 }
 
+function randomWebSocketKey(): string {
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  return btoa(String.fromCharCode(...bytes));
+}
+
+function toHttpHandshakeUrl(wsUrl: string): string {
+  if (/^wss:\/\//i.test(wsUrl)) return wsUrl.replace(/^wss:\/\//i, "https://");
+  if (/^ws:\/\//i.test(wsUrl)) return wsUrl.replace(/^ws:\/\//i, "http://");
+  return wsUrl;
+}
+
+async function checkUpstreamHandshake(params: {
+  target: string;
+  cpId: string;
+  password?: string | null;
+}): Promise<{ ok: boolean; status?: number; statusText?: string; body?: string; url: string; error?: string }> {
+  const upstreamBase = params.target.replace(/\/+$/, "");
+  const upstreamWsUrl = `${upstreamBase}/${encodeURIComponent(params.cpId)}`;
+  const handshakeUrl = toHttpHandshakeUrl(upstreamWsUrl);
+  const headers: Record<string, string> = {
+    "Connection": "Upgrade",
+    "Upgrade": "websocket",
+    "Sec-WebSocket-Key": randomWebSocketKey(),
+    "Sec-WebSocket-Version": "13",
+    "Sec-WebSocket-Protocol": OCPP_SUBPROTOCOL,
+  };
+
+  if (params.password) {
+    headers.Authorization = `Basic ${btoa(`${params.cpId}:${params.password}`)}`;
+  }
+
+  try {
+    const response = await fetch(handshakeUrl, {
+      method: "GET",
+      headers,
+      redirect: "manual",
+    });
+
+    let body = "";
+    if (response.status !== 101) {
+      body = (await response.text().catch(() => "")).slice(0, 500);
+    }
+
+    return {
+      ok: response.status === 101,
+      status: response.status,
+      statusText: response.statusText,
+      body,
+      url: upstreamWsUrl,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : String(error),
+      url: upstreamWsUrl,
+    };
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
