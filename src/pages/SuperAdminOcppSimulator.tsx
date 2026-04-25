@@ -38,7 +38,7 @@ const SuperAdminOcppSimulator = () => {
   const { isSuperAdmin, loading: roleLoading } = useSuperAdmin();
 
   // Form state
-  const [target, setTarget] = useState("wss://ocpp.aicono.org");
+  const [target, setTarget] = useState(DEFAULT_OCPP_TARGET);
   const [selectedCpId, setSelectedCpId] = useState<string>("");
   const [vendor, setVendor] = useState("AICONO");
   const [model, setModel] = useState("SimBox");
