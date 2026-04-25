@@ -111,7 +111,7 @@ const integrateDailyEnergyFromRawRows = (rows: Array<{ power_value: number; reco
 };
 
 const fetchRawMeterDailyHistory = async (
-  supabase: ReturnType<typeof createClient>,
+  supabase: any,
   meterId: string,
   days = 30,
 ) => {
