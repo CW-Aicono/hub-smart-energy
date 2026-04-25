@@ -357,7 +357,7 @@ serve(async (req) => {
     if (action === "test") {
       const testUrl = `${baseUrl}/jdev/cfg/api`;
       console.log(`Testing connection: ${testUrl}`);
-      const response = await fetch(testUrl, { method: "GET", headers: { Authorization: loxoneAuth } });
+      const response = await fetchWithTimeout(testUrl, { method: "GET", headers: { Authorization: loxoneAuth } });
       if (!response.ok) {
         await updateSyncStatus(supabase, locationIntegrationId, "error");
         throw new Error(`Verbindung fehlgeschlagen: ${response.status}`);
@@ -375,10 +375,12 @@ serve(async (req) => {
 
       const structureUrl = `${baseUrl}/data/LoxAPP3.json`;
       console.log(`Fetching structure: ${structureUrl}`);
-      const structureResponse = await fetch(structureUrl, { method: "GET", headers: { Authorization: loxoneAuth } });
+      const structureResponse = await fetchWithTimeout(structureUrl, { method: "GET", headers: { Authorization: loxoneAuth } });
 
       if (!structureResponse.ok) {
-        await updateSyncStatus(supabase, locationIntegrationId, "error");
+        if (shouldPersistReadings) {
+          await updateSyncStatus(supabase, locationIntegrationId, "error");
+        }
         if (structureResponse.status === 401) throw new Error("Authentifizierung fehlgeschlagen.");
         throw new Error(`Struktur konnte nicht geladen werden: ${structureResponse.status}`);
       }
@@ -423,7 +425,7 @@ serve(async (req) => {
 
       // Batch fetch all states using control UUIDs
       const stateResults: Record<string, StateValueResult> = {};
-      const batchSize = 20;
+      const batchSize = LOXONE_STATE_BATCH_SIZE;
 
       for (let i = 0; i < controlUuids.length; i += batchSize) {
         const batch = controlUuids.slice(i, i + batchSize);
@@ -838,7 +840,7 @@ serve(async (req) => {
 
       console.log(`Searching for sensor: "${sensorName}"`);
       const structureUrl = `${baseUrl}/data/LoxAPP3.json`;
-      const structureResponse = await fetch(structureUrl, { method: "GET", headers: { Authorization: loxoneAuth } });
+      const structureResponse = await fetchWithTimeout(structureUrl, { method: "GET", headers: { Authorization: loxoneAuth } });
       if (!structureResponse.ok) throw new Error(`Struktur konnte nicht geladen werden: ${structureResponse.status}`);
 
       const structure: LoxoneStructure = await structureResponse.json();
@@ -910,7 +912,7 @@ serve(async (req) => {
     // ── ACTION: listAllSensors ──
     if (action === "listAllSensors") {
       const structureUrl = `${baseUrl}/data/LoxAPP3.json`;
-      const structureResponse = await fetch(structureUrl, { method: "GET", headers: { Authorization: loxoneAuth } });
+      const structureResponse = await fetchWithTimeout(structureUrl, { method: "GET", headers: { Authorization: loxoneAuth } });
       if (!structureResponse.ok) throw new Error(`Struktur konnte nicht geladen werden: ${structureResponse.status}`);
 
       const structure: LoxoneStructure = await structureResponse.json();
@@ -1197,7 +1199,7 @@ serve(async (req) => {
 
       // Also fetch structure to map statistic output UUIDs back to control UUIDs
       const structureUrl = `${baseUrl}/data/LoxAPP3.json`;
-      const structureResponse = await fetch(structureUrl, { method: "GET", headers: { Authorization: loxoneAuth } });
+      const structureResponse = await fetchWithTimeout(structureUrl, { method: "GET", headers: { Authorization: loxoneAuth } });
       let statsUuidToControlUuid = new Map<string, string>();
       if (structureResponse.ok) {
         const structure = await structureResponse.json() as LoxoneStructure;
