@@ -94,6 +94,20 @@ const IGNORED_STATES = new Set(["jLocked", "locked"]);
 // Fallback priority list for unknown control types
 const FALLBACK_STATES = ["value", "actual", "position", "level", "brightness", "temperature"];
 
+const LOXONE_FETCH_TIMEOUT_MS = 8_000;
+const LOXONE_STATE_FETCH_TIMEOUT_MS = 2_500;
+const LOXONE_STATE_BATCH_SIZE = 5;
+
+async function fetchWithTimeout(url: string, init: RequestInit = {}, timeoutMs = LOXONE_FETCH_TIMEOUT_MS) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 function getStateMapping(controlType: string, availableStates: string[]): { primary?: string; secondary?: string; mapping?: StateMapping } {
   // 1. Check exact match in mapping table
   const mapping = CONTROL_TYPE_MAPPINGS[controlType];
@@ -133,7 +147,7 @@ async function resolveLoxoneCloudURL(serialNumber: string): Promise<string | nul
   try {
     const dnsUrl = `http://dns.loxonecloud.com/${serialNumber}`;
     console.log(`Resolving via Loxone Cloud redirect: ${dnsUrl}`);
-    const response = await fetch(dnsUrl, { method: "HEAD", redirect: "follow" });
+    const response = await fetchWithTimeout(dnsUrl, { method: "HEAD", redirect: "follow" });
     const finalUrl = response.url;
     console.log(`Resolved to final URL: ${finalUrl}`);
     const urlObj = new URL(finalUrl);
@@ -156,7 +170,7 @@ async function fetchStateValue(
   try {
     const url = `${baseUrl}/jdev/sps/io/${controlUuid}/state`;
     console.log(`Fetching state: ${url}`);
-    const response = await fetch(url, { method: "GET", headers: { Authorization: authHeader } });
+    const response = await fetchWithTimeout(url, { method: "GET", headers: { Authorization: authHeader } }, LOXONE_STATE_FETCH_TIMEOUT_MS);
     if (!response.ok) {
       console.warn(`State fetch failed for ${controlUuid}: HTTP ${response.status}`);
       return null;
@@ -185,13 +199,13 @@ async function fetchAllStates(
   try {
     const url = `${baseUrl}/jdev/sps/io/${controlUuid}/all`;
     console.log(`Fetching all states: ${url}`);
-    const response = await fetch(url, { method: "GET", headers: { Authorization: authHeader } });
+    const response = await fetchWithTimeout(url, { method: "GET", headers: { Authorization: authHeader } }, LOXONE_STATE_FETCH_TIMEOUT_MS);
     if (!response.ok) {
       console.warn(`All-states fetch failed for ${controlUuid}: HTTP ${response.status}`);
       return results;
     }
     const data = await response.json();
-    console.log(`All-states response for ${controlUuid}: ${JSON.stringify(data).substring(0, 500)}`);
+    console.log(`All-states response for ${controlUuid}: HTTP ${data?.LL?.Code ?? "unknown"}`);
     
     if (data?.LL) {
       const ll = data.LL;
@@ -219,7 +233,7 @@ async function fetchAllStates(
 
 // Update sync status in database
 async function updateSyncStatus(
-  supabase: ReturnType<typeof createClient>,
+  supabase: any,
   locationIntegrationId: string,
   status: "success" | "error" | "syncing"
 ) {
@@ -228,6 +242,83 @@ async function updateSyncStatus(
     .update({ sync_status: status, last_sync_at: new Date().toISOString() })
     .eq("id", locationIntegrationId);
   console.log(`Updated sync_status to: ${status}`);
+}
+
+// ── Snapshot Cache Helpers (Cache-First Architecture) ──
+async function writeSensorSnapshot(
+  supabase: any,
+  locationIntegrationId: string,
+  payload: {
+    sensors: any[];
+    systemMessages?: any[];
+    status?: "fresh" | "stale" | "error";
+    errorMessage?: string | null;
+    tenantId?: string | null;
+    locationId?: string | null;
+  },
+) {
+  try {
+    const row: Record<string, unknown> = {
+      location_integration_id: locationIntegrationId,
+      sensors: payload.sensors ?? [],
+      system_messages: payload.systemMessages ?? [],
+      status: payload.status ?? "fresh",
+      error_message: payload.errorMessage ?? null,
+      fetched_at: new Date().toISOString(),
+      source: "loxone-api",
+    };
+    if (payload.tenantId) row.tenant_id = payload.tenantId;
+    if (payload.locationId) row.location_id = payload.locationId;
+
+    const { error } = await supabase
+      .from("gateway_sensor_snapshots")
+      .upsert(row, { onConflict: "location_integration_id" });
+    if (error) console.warn("[snapshot] upsert failed:", error.message);
+  } catch (err) {
+    console.warn("[snapshot] write error:", err);
+  }
+}
+
+async function readSensorSnapshot(supabase: any, locationIntegrationId: string) {
+  const { data, error } = await supabase
+    .from("gateway_sensor_snapshots")
+    .select("sensors, system_messages, status, fetched_at, error_message")
+    .eq("location_integration_id", locationIntegrationId)
+    .maybeSingle();
+  if (error) {
+    console.warn("[snapshot] read failed:", error.message);
+    return null;
+  }
+  return data;
+}
+
+async function tryAcquireRefreshLock(
+  supabase: any,
+  locationIntegrationId: string,
+  owner: string,
+  ttlSeconds = 60,
+): Promise<boolean> {
+  const { data, error } = await supabase.rpc("try_acquire_gateway_refresh_lock", {
+    p_integration_id: locationIntegrationId,
+    p_owner: owner,
+    p_ttl_seconds: ttlSeconds,
+  });
+  if (error) {
+    console.warn("[lock] acquire failed:", error.message);
+    return true; // fail-open
+  }
+  return Boolean(data);
+}
+
+async function releaseRefreshLock(supabase: any, locationIntegrationId: string, owner: string) {
+  try {
+    await supabase.rpc("release_gateway_refresh_lock", {
+      p_integration_id: locationIntegrationId,
+      p_owner: owner,
+    });
+  } catch (err) {
+    console.warn("[lock] release failed:", err);
+  }
 }
 
 // Format a numeric value for display
@@ -295,13 +386,66 @@ serve(async (req) => {
     }
 
     const requestBody = await req.json();
-    const { locationIntegrationId, action, sensorName } = requestBody;
+    let { locationIntegrationId, action, sensorName } = requestBody;
+    // refreshSensors is implemented as getSensors + persist + lock
+    const isRefreshAction = action === "refreshSensors";
+    if (isRefreshAction) action = "getSensors";
+    const shouldPersistReadings = isServiceRole || isRefreshAction || requestBody?.persistToDb === true;
 
     if (!locationIntegrationId) {
       throw new Error("Location Integration ID ist erforderlich");
     }
 
-    console.log(`Loxone API request: action=${action}, locationIntegrationId=${locationIntegrationId}, sensorName=${sensorName || "N/A"}`);
+    // ── ACTION: getSensorsCached ── (cache-first, no external HTTP)
+    if (action === "getSensorsCached") {
+      const snap = await readSensorSnapshot(supabase, locationIntegrationId);
+      if (snap) {
+        return new Response(
+          JSON.stringify({
+            success: true,
+            sensors: snap.sensors ?? [],
+            systemMessages: snap.system_messages ?? [],
+            cached: true,
+            snapshotStatus: snap.status,
+            fetchedAt: snap.fetched_at,
+            errorMessage: snap.error_message,
+          }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+      // No snapshot yet → return empty result; the UI can trigger refreshSensors.
+      return new Response(
+        JSON.stringify({ success: true, sensors: [], systemMessages: [], cached: true, snapshotStatus: "missing" }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
+    console.log(
+      `Loxone API request: action=${action}, locationIntegrationId=${locationIntegrationId}, sensorName=${sensorName || "N/A"}, persist=${shouldPersistReadings}, refresh=${isRefreshAction}`,
+    );
+
+    // ── refreshSensors: acquire lock so parallel UI calls don't stampede ──
+    const lockOwner = `loxone-api:${crypto.randomUUID()}`;
+    let heldLock = false;
+    if (isRefreshAction) {
+      heldLock = await tryAcquireRefreshLock(supabase, locationIntegrationId, lockOwner, 60);
+      if (!heldLock) {
+        // Another refresh is in flight – return current snapshot instead of duplicating work
+        const snap = await readSensorSnapshot(supabase, locationIntegrationId);
+        return new Response(
+          JSON.stringify({
+            success: true,
+            sensors: snap?.sensors ?? [],
+            systemMessages: snap?.system_messages ?? [],
+            cached: true,
+            snapshotStatus: snap?.status ?? "refreshing",
+            fetchedAt: snap?.fetched_at ?? null,
+            refreshing: true,
+          }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+    }
 
     const { data: locationIntegration, error: liError } = await supabase
       .from("location_integrations")
@@ -327,7 +471,9 @@ serve(async (req) => {
 
     const baseUrl = await resolveLoxoneCloudURL(config.serial_number);
     if (!baseUrl) {
-      await updateSyncStatus(supabase, locationIntegrationId, "error");
+      if (shouldPersistReadings) {
+        await updateSyncStatus(supabase, locationIntegrationId, "error");
+      }
       throw new Error("Cloud DNS Auflösung fehlgeschlagen. Miniserver nicht erreichbar.");
     }
 
@@ -338,7 +484,7 @@ serve(async (req) => {
     if (action === "test") {
       const testUrl = `${baseUrl}/jdev/cfg/api`;
       console.log(`Testing connection: ${testUrl}`);
-      const response = await fetch(testUrl, { method: "GET", headers: { Authorization: loxoneAuth } });
+      const response = await fetchWithTimeout(testUrl, { method: "GET", headers: { Authorization: loxoneAuth } });
       if (!response.ok) {
         await updateSyncStatus(supabase, locationIntegrationId, "error");
         throw new Error(`Verbindung fehlgeschlagen: ${response.status}`);
@@ -350,14 +496,18 @@ serve(async (req) => {
 
     // ── ACTION: getSensors ──
     if (action === "getSensors") {
-      await updateSyncStatus(supabase, locationIntegrationId, "syncing");
+      if (shouldPersistReadings) {
+        await updateSyncStatus(supabase, locationIntegrationId, "syncing");
+      }
 
       const structureUrl = `${baseUrl}/data/LoxAPP3.json`;
       console.log(`Fetching structure: ${structureUrl}`);
-      const structureResponse = await fetch(structureUrl, { method: "GET", headers: { Authorization: loxoneAuth } });
+      const structureResponse = await fetchWithTimeout(structureUrl, { method: "GET", headers: { Authorization: loxoneAuth } });
 
       if (!structureResponse.ok) {
-        await updateSyncStatus(supabase, locationIntegrationId, "error");
+        if (shouldPersistReadings) {
+          await updateSyncStatus(supabase, locationIntegrationId, "error");
+        }
         if (structureResponse.status === 401) throw new Error("Authentifizierung fehlgeschlagen.");
         throw new Error(`Struktur konnte nicht geladen werden: ${structureResponse.status}`);
       }
@@ -402,7 +552,7 @@ serve(async (req) => {
 
       // Batch fetch all states using control UUIDs
       const stateResults: Record<string, StateValueResult> = {};
-      const batchSize = 20;
+      const batchSize = LOXONE_STATE_BATCH_SIZE;
 
       for (let i = 0; i < controlUuids.length; i += batchSize) {
         const batch = controlUuids.slice(i, i + batchSize);
@@ -628,7 +778,9 @@ serve(async (req) => {
 
       console.log(`Parsed ${sensors.length} sensors with values`);
 
-      // Auto-save instantaneous power readings for time-series charts
+      // Only background sync jobs should persist readings and archive totals.
+      // Interactive UI reads must stay lightweight to avoid edge-runtime timeouts.
+      if (shouldPersistReadings) {
       try {
         const { data: linkedMeters } = await supabase
           .from("meters")
@@ -797,11 +949,24 @@ serve(async (req) => {
       } catch (archiveErr) {
         console.error("Error archiving data:", archiveErr);
       }
+      }
 
-      await updateSyncStatus(supabase, locationIntegrationId, "success");
+      if (shouldPersistReadings) {
+        await updateSyncStatus(supabase, locationIntegrationId, "success");
+      }
+
+      // ── Always write snapshot on successful sensor fetch ──
+      await writeSensorSnapshot(supabase, locationIntegrationId, {
+        sensors,
+        systemMessages,
+        status: "fresh",
+        tenantId: (locationIntegration as any).location?.tenant_id ?? null,
+        locationId: (locationIntegration as any).location_id ?? null,
+      });
+      if (heldLock) await releaseRefreshLock(supabase, locationIntegrationId, lockOwner);
 
       return new Response(
-        JSON.stringify({ success: true, sensors, systemMessages }),
+        JSON.stringify({ success: true, sensors, systemMessages, cached: false }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -812,7 +977,7 @@ serve(async (req) => {
 
       console.log(`Searching for sensor: "${sensorName}"`);
       const structureUrl = `${baseUrl}/data/LoxAPP3.json`;
-      const structureResponse = await fetch(structureUrl, { method: "GET", headers: { Authorization: loxoneAuth } });
+      const structureResponse = await fetchWithTimeout(structureUrl, { method: "GET", headers: { Authorization: loxoneAuth } });
       if (!structureResponse.ok) throw new Error(`Struktur konnte nicht geladen werden: ${structureResponse.status}`);
 
       const structure: LoxoneStructure = await structureResponse.json();
@@ -884,7 +1049,7 @@ serve(async (req) => {
     // ── ACTION: listAllSensors ──
     if (action === "listAllSensors") {
       const structureUrl = `${baseUrl}/data/LoxAPP3.json`;
-      const structureResponse = await fetch(structureUrl, { method: "GET", headers: { Authorization: loxoneAuth } });
+      const structureResponse = await fetchWithTimeout(structureUrl, { method: "GET", headers: { Authorization: loxoneAuth } });
       if (!structureResponse.ok) throw new Error(`Struktur konnte nicht geladen werden: ${structureResponse.status}`);
 
       const structure: LoxoneStructure = await structureResponse.json();
@@ -1171,7 +1336,7 @@ serve(async (req) => {
 
       // Also fetch structure to map statistic output UUIDs back to control UUIDs
       const structureUrl = `${baseUrl}/data/LoxAPP3.json`;
-      const structureResponse = await fetch(structureUrl, { method: "GET", headers: { Authorization: loxoneAuth } });
+      const structureResponse = await fetchWithTimeout(structureUrl, { method: "GET", headers: { Authorization: loxoneAuth } });
       let statsUuidToControlUuid = new Map<string, string>();
       if (structureResponse.ok) {
         const structure = await structureResponse.json() as LoxoneStructure;

@@ -209,7 +209,8 @@ const LiveValues = () => {
     for (const [integrationId, intMeters] of byIntegration) {
       try {
         const edgeFunction = getEdgeFunctionName(typeMap.get(integrationId) || "");
-        const { data, error } = await supabase.functions.invoke(edgeFunction, {
+        const { invokeWithRetry } = await import("@/lib/invokeWithRetry");
+        const { data, error } = await invokeWithRetry(edgeFunction, {
           body: { locationIntegrationId: integrationId, action: "getSensors" },
         });
         if (error || !data?.success) continue;

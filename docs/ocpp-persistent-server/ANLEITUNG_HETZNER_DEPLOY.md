@@ -30,20 +30,38 @@ Diese Anleitung führt dich Klick für Klick durch das komplette Deployment des 
 
 ---
 
-## Schritt 3 — Domain vorbereiten (DNS A-Record)
+## Schritt 3 — Domain vorbereiten (DNS A-Record bei Cloudflare)
 
-Du brauchst eine Subdomain, z. B. `ocpp.deine-domain.de`.
+Wichtig in deinem Setup: Die Domain `aicono.org` ist bei **IONOS** registriert, die DNS-Verwaltung läuft aber über **Cloudflare**. A-Records müssen daher **bei Cloudflare** angelegt werden, nicht bei IONOS.
 
-1. Logge dich beim Anbieter deiner Domain ein (Strato, IONOS, Hetzner DNS, Cloudflare, …).
-2. Suche **„DNS-Verwaltung“ → „A-Record hinzufügen“**.
-3. Trage ein:
-   - **Name / Host:** `ocpp` (das wird zu `ocpp.deine-domain.de`)
-   - **Typ:** A
-   - **Wert / Ziel:** die IPv4 deines Hetzner-Servers
-   - **TTL:** 3600 (oder Standard)
-4. Speichern. Die DNS-Änderung dauert 5–30 Minuten, bis sie weltweit bekannt ist.
+> Voraussetzung: Bei IONOS sind in den Domain-Einstellungen die **Cloudflare-Nameserver** hinterlegt (z. B. `xxx.ns.cloudflare.com` + `yyy.ns.cloudflare.com`). Das ist bei dir bereits der Fall — IONOS dient nur noch als Registrar, alle DNS-Änderungen wirken über Cloudflare.
 
-Test: Im Terminal `nslookup ocpp.deine-domain.de` — die IP muss matchen.
+### Schritt 3.1 — A-Record in Cloudflare anlegen
+
+1. Login auf https://dash.cloudflare.com → Domain **`aicono.org`** auswählen.
+2. Links im Menü **„DNS“ → „Records“** öffnen.
+3. **„Add record“** klicken und ausfüllen:
+   - **Type:** `A`
+   - **Name:** `ocpp` (Cloudflare ergänzt automatisch zu `ocpp.aicono.org`)
+   - **IPv4 address:** die IPv4 deines Hetzner-Servers (z. B. `116.203.XX.XX`)
+   - **Proxy status:** **DNS only** (graue Wolke, **nicht** orange!) — sehr wichtig, sonst blockiert Cloudflare den WebSocket-Verkehr und Caddy bekommt kein Let's-Encrypt-Zertifikat
+   - **TTL:** `Auto`
+4. **„Save“** klicken.
+
+### Schritt 3.2 — Test
+
+DNS-Propagation dauert in Cloudflare meist nur 1–2 Minuten. Test im Terminal:
+
+```bash
+nslookup ocpp.aicono.org
+# Erwartete Antwort: Address: <deine Hetzner-IP>
+```
+
+Wenn stattdessen eine `104.x.x.x`- oder `172.x.x.x`-Adresse erscheint, steht die Wolke noch auf **Proxied (orange)** — in Cloudflare auf **DNS only (grau)** umstellen.
+
+### Bei IONOS ist nichts zu tun
+
+Solange die Cloudflare-Nameserver bei IONOS aktiv sind, ignoriert IONOS jegliche dort eingetragenen A-Records. Lege A-Records also **niemals bei IONOS** zusätzlich an — das verwirrt nur.
 
 ---
 
@@ -74,7 +92,7 @@ Kopiere die nächsten 4 Zeilen in einem Stück in dein Terminal und drücke Ente
 
 ```bash
 apt-get update && apt-get -y upgrade && \
-apt-get install -y docker.io docker-compose-plugin ufw fail2ban git curl && \
+apt-get install -y docker.io docker-compose-v2 ufw fail2ban git curl && \
 ufw allow 22/tcp && ufw allow 80/tcp && ufw allow 443/tcp && ufw --force enable && \
 systemctl enable --now docker fail2ban
 ```
@@ -222,7 +240,245 @@ Der laufende Container wird durch die neue Version ersetzt. Verbindungen brechen
 
 ---
 
-## Schritt 14 — Notfall-Rollback
+## Schritt 14 — Zwei Instanzen auf demselben Server (Live + Test)
+
+Empfohlen: **ein** Hetzner-Server, **zwei** komplett getrennte Docker-Compose-Projekte. So sparst du Kosten (1× CX22 reicht) und hast trotzdem eine saubere Trennung zwischen Produktion und Test/Lovable-Preview.
+
+### Aufbau
+
+```
+ocpp.aicono.org       ──►  Caddy ──►  ocpp-live  (Container, eigenes .env, Live-Backend)
+ocpp-test.aicono.org  ──►  Caddy ──►  ocpp-test  (Container, eigenes .env, Lovable-Test-Backend)
+```
+
+Beide Domains zeigen per A-Record auf dieselbe Server-IP. Caddy holt für jede Subdomain ein eigenes Let's-Encrypt-Zertifikat.
+
+### Schritt 14.1 — DNS (beide Subdomains in Cloudflare)
+
+Beide Subdomains werden **in Cloudflare** angelegt (Domain ist bei IONOS registriert, DNS läuft über Cloudflare-Nameserver — bei IONOS selbst musst du **nichts** tun).
+
+1. https://dash.cloudflare.com → `aicono.org` → **DNS → Records**.
+2. Zwei A-Records anlegen, **beide auf dieselbe Hetzner-IP**:
+
+| Type | Name | IPv4 address | Proxy status | TTL |
+|---|---|---|---|---|
+| A | `ocpp` | Server-IP (z. B. `116.203.XX.XX`) | **DNS only (grau)** | Auto |
+| A | `ocpp-test` | dieselbe Server-IP | **DNS only (grau)** | Auto |
+
+> ⚠ **Proxy status muss „DNS only" (graue Wolke) sein.** Mit orange/Proxied blockiert Cloudflare die OCPP-WebSocket-Verbindung und Caddy kann kein Let's-Encrypt-Zertifikat ausstellen.
+
+Test:
+```bash
+nslookup ocpp.aicono.org
+nslookup ocpp-test.aicono.org
+```
+Beide IPs müssen identisch sein und der Hetzner-Server-IP entsprechen (nicht `104.x.x.x` — das wäre Cloudflare-Proxy).
+
+### Schritt 14.2 — Verzeichnisstruktur
+
+```bash
+mkdir -p /opt/aicono/ocpp-live /opt/aicono/ocpp-test
+cp -r /opt/aicono/aicono-ems/docs/ocpp-persistent-server/. /opt/aicono/ocpp-live/
+cp -r /opt/aicono/aicono-ems/docs/ocpp-persistent-server/. /opt/aicono/ocpp-test/
+```
+
+So bekommst du **zwei unabhängige Compose-Projekte**, die du getrennt updaten und neustarten kannst.
+
+### Schritt 14.3 — `.env` für die Live-Instanz
+
+```bash
+cd /opt/aicono/ocpp-live
+cp .env.example .env
+nano .env
+```
+
+| Variable | Wert |
+|---|---|
+| `SUPABASE_URL` | `https://<live-project-ref>.supabase.co` |
+| `SUPABASE_SERVICE_ROLE_KEY` | service_role-Key des **Live**-Projekts |
+| `OCPP_DOMAIN` | `ocpp.aicono.org` |
+| `LOG_LEVEL` | `info` |
+
+### Schritt 14.4 — `.env` für die Test-Instanz (Lovable-Preview-Projekt)
+
+```bash
+cd /opt/aicono/ocpp-test
+cp .env.example .env
+nano .env
+```
+
+| Variable | Wert |
+|---|---|
+| `SUPABASE_URL` | `https://xnveugycurplszevdxtw.supabase.co` (dieses Lovable-Projekt) |
+| `SUPABASE_SERVICE_ROLE_KEY` | service_role-Key dieses Lovable-Projekts (Lovable Cloud → Backend → Settings → API) |
+| `OCPP_DOMAIN` | `ocpp-test.aicono.org` |
+| `LOG_LEVEL` | `debug` (mehr Details für Tests) |
+
+### Schritt 14.5 — Port-Konflikt vermeiden
+
+Beide Compose-Files würden standardmäßig die Ports 80 + 443 belegen. Lösung: **nur EIN Caddy** für beide Instanzen. Wir entfernen den Caddy-Block aus dem Test-Compose und ergänzen das Test-Routing im Live-Caddy.
+
+#### a) Test-Compose ohne Caddy
+
+Bearbeite `/opt/aicono/ocpp-test/docker-compose.yml` und **entferne den kompletten `caddy:`-Service** sowie die Volumes/Networks-Einträge, die nur Caddy braucht. Übrig bleibt nur der `ocpp:`-Service. Außerdem den Container umbenennen, damit er nicht mit dem Live-Container kollidiert:
+
+```yaml
+services:
+  ocpp:
+    build: .
+    container_name: ocpp-server-test
+    restart: always
+    env_file: .env
+    expose:
+      - "8080"
+    networks:
+      - shared-ocpp-net
+
+networks:
+  shared-ocpp-net:
+    external: true
+    name: ocpp-shared
+```
+
+#### b) Live-Compose: Caddy + gemeinsames Netz
+
+In `/opt/aicono/ocpp-live/docker-compose.yml` den Container umbenennen und das gemeinsame Netz nutzen:
+
+```yaml
+services:
+  ocpp:
+    build: .
+    container_name: ocpp-server-live
+    restart: always
+    env_file: .env
+    expose:
+      - "8080"
+    networks:
+      - shared-ocpp-net
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: ocpp-caddy
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - ocpp
+    networks:
+      - shared-ocpp-net
+
+volumes:
+  caddy_data:
+  caddy_config:
+
+networks:
+  shared-ocpp-net:
+    external: true
+    name: ocpp-shared
+```
+
+Gemeinsames Netz einmalig anlegen:
+```bash
+docker network create ocpp-shared
+```
+
+#### c) Caddyfile für beide Domains
+
+`/opt/aicono/ocpp-live/Caddyfile` ersetzen durch:
+
+```caddy
+ocpp.aicono.org {
+  encode gzip
+  reverse_proxy ocpp-server-live:8080 {
+    header_up Host {host}
+    header_up X-Real-IP {remote}
+    header_up X-Forwarded-For {remote}
+    header_up X-Forwarded-Proto {scheme}
+  }
+}
+
+ocpp-test.aicono.org {
+  encode gzip
+  reverse_proxy ocpp-server-test:8080 {
+    header_up Host {host}
+    header_up X-Real-IP {remote}
+    header_up X-Forwarded-For {remote}
+    header_up X-Forwarded-Proto {scheme}
+  }
+}
+```
+
+> Hinweis: Die `OCPP_DOMAIN`-Variable in den `.env`-Dateien dient ab jetzt nur noch der Logik im Node-Server (Logging/Health). Caddy hat die Domains direkt im Caddyfile.
+
+### Schritt 14.6 — Beide Instanzen starten
+
+```bash
+# Live
+cd /opt/aicono/ocpp-live
+docker compose up -d --build
+
+# Test
+cd /opt/aicono/ocpp-test
+docker compose up -d --build
+```
+
+Prüfen:
+```bash
+docker ps
+# Erwartet: ocpp-server-live, ocpp-server-test, ocpp-caddy — alle "Up"
+
+curl -sf https://ocpp.aicono.org/health        # Live
+curl -sf https://ocpp-test.aicono.org/health   # Test
+```
+
+Caddy-Log auf erfolgreiche Zertifikate prüfen:
+```bash
+docker logs ocpp-caddy --tail 100 | grep "certificate obtained"
+# Erwartet: zwei Zeilen (eine pro Domain)
+```
+
+### Schritt 14.7 — Wallboxen zuordnen
+
+| Umgebung | OCPP-URL für die Wallbox |
+|---|---|
+| **Produktion** (echte Wallboxen) | `wss://ocpp.aicono.org/<OCPP_ID>` |
+| **Test/Lovable-Preview** (Test-Wallbox, Simulator) | `wss://ocpp-test.aicono.org/<OCPP_ID>` |
+
+Wichtig: **eine Wallbox pro Umgebung**, niemals beide gleichzeitig — sonst landen Sessions doppelt.
+
+### Schritt 14.8 — Updates pro Instanz
+
+```bash
+# Nur Live updaten (Test bleibt wie es ist)
+cd /opt/aicono/aicono-ems && git pull
+cd /opt/aicono/ocpp-live
+cp -r /opt/aicono/aicono-ems/docs/ocpp-persistent-server/src/. ./src/
+docker compose up -d --build
+
+# Nur Test updaten
+cd /opt/aicono/ocpp-test
+cp -r /opt/aicono/aicono-ems/docs/ocpp-persistent-server/src/. ./src/
+docker compose up -d --build
+```
+
+So kannst du neue Features **erst auf Test ausprobieren** und nach erfolgreicher Prüfung auf Live übertragen.
+
+### Schritt 14.9 — Logs getrennt lesen
+
+```bash
+docker logs -f ocpp-server-live    # nur Live-Verkehr
+docker logs -f ocpp-server-test    # nur Test-Verkehr
+docker logs -f ocpp-caddy          # TLS / Routing für beide
+```
+
+---
+
+## Schritt 15 — Notfall-Rollback
 
 Wenn der neue Server Probleme macht und du sofort zurück auf die alte Edge-Function-URL willst:
 

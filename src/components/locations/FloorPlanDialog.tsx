@@ -17,6 +17,7 @@ import { useMeters } from "@/hooks/useMeters";
 import { useMeterReadings } from "@/hooks/useMeterReadings";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { invokeWithRetry } from "@/lib/invokeWithRetry";
 
 // Lazy load 3D viewer and room editor for performance
 const FloorPlan3DViewer = lazy(() => import("./FloorPlan3DViewer").then(m => ({ default: m.FloorPlan3DViewer })));
@@ -200,7 +201,7 @@ export function FloorPlanDialog({ floor, locationId, open, onOpenChange }: Floor
         
         try {
           const edgeFunction = getEdgeFunctionName(li.integration?.type || "");
-          const { data, error: fnError } = await supabase.functions.invoke(edgeFunction, {
+          const { data, error: fnError } = await invokeWithRetry(edgeFunction, {
             body: {
               locationIntegrationId: li.id,
               action: "getSensors",

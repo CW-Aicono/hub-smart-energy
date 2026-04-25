@@ -1,8 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
 import { Cpu, Thermometer, HardDrive, RefreshCw, Loader2, Clock } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { de } from "date-fns/locale";
+import { invokeWithRetry } from "@/lib/invokeWithRetry";
 
 interface MiniserverStatusProps {
   locationIntegrationId: string;
@@ -17,21 +17,33 @@ interface SystemStatus {
   localTime: string | null;
 }
 
+interface SystemStatusResponse {
+  success?: boolean;
+  error?: string;
+  systemStatus: SystemStatus;
+  lastSync: string | null;
+}
+
 export function MiniserverStatus({ locationIntegrationId, integrationType, lastSyncAt }: MiniserverStatusProps) {
   const isLoxone = !integrationType || integrationType === "loxone" || integrationType === "loxone_miniserver";
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["miniserver-status", locationIntegrationId],
     queryFn: async () => {
-      const { data, error } = await supabase.functions.invoke("loxone-api", {
+      const { data, error } = await invokeWithRetry<SystemStatusResponse>("loxone-api", {
         body: { locationIntegrationId, action: "getSystemStatus" },
       });
-      if (error || !data?.success) throw new Error(data?.error || "Fehler");
-      return data as { systemStatus: SystemStatus; lastSync: string | null };
+
+      if (error || !data?.success) {
+        throw new Error(error?.message || data?.error || "Fehler");
+      }
+
+      return data;
     },
     enabled: isLoxone,
     staleTime: 120_000,
     refetchInterval: 300_000,
+    retry: 2,
   });
 
   if (!isLoxone) return null;

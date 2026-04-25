@@ -17,6 +17,7 @@ import { useUserRole } from "@/hooks/useUserRole";
 import { MiniserverStatus } from "./MiniserverStatus";
 import { EditIntegrationDialog } from "./EditIntegrationDialog";
 import { getGatewayDefinition, getEdgeFunctionName } from "@/lib/gatewayRegistry";
+import { invokeWithRetry } from "@/lib/invokeWithRetry";
 import { LoxoneFirmwareSection } from "./LoxoneFirmwareSection";
 import { SchneiderSetupInfo } from "./SchneiderSetupInfo";
 import { supabase } from "@/integrations/supabase/client";
@@ -86,7 +87,7 @@ export function IntegrationCard({ locationIntegration, onUpdate, onDelete }: Int
     setIsBackfilling(true);
     try {
       const edgeFunction = getEdgeFunctionName(locationIntegration.integration?.type || "");
-      const { data, error } = await supabase.functions.invoke(edgeFunction, {
+      const { data, error } = await invokeWithRetry(edgeFunction, {
         body: { locationIntegrationId: locationIntegration.id, action: "backfillStatistics", fromDate: backfillFrom, toDate: backfillTo },
       });
       if (error || !data?.success) {

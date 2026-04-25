@@ -138,7 +138,8 @@ async function handleHttpAction(req: Request): Promise<Response | null> {
     return await handleExecuteCommand(req, body);
   }
 
-  if (body?.action !== "getSensors") return null;
+  const action = body?.action;
+  if (action !== "getSensors" && action !== "refreshSensors" && action !== "getSensorsCached") return null;
 
   const locationIntegrationId = String(body.locationIntegrationId || "").trim();
   if (!locationIntegrationId) {
@@ -148,9 +149,30 @@ async function handleHttpAction(req: Request): Promise<Response | null> {
     return jsonResponse(req, { success: false, error: "locationIntegrationId must be a valid UUID" }, 400);
   }
 
-  console.log("[gateway-ws] getSensors request", { locationIntegrationId });
-
   const sb = svc();
+
+  // ── Cache-first short-circuit ──
+  if (action === "getSensorsCached") {
+    const { data: snap } = await sb
+      .from("gateway_sensor_snapshots")
+      .select("sensors, system_messages, status, fetched_at, error_message")
+      .eq("location_integration_id", locationIntegrationId)
+      .maybeSingle();
+    if (snap) {
+      return jsonResponse(req, {
+        success: true,
+        sensors: (snap as any).sensors ?? [],
+        systemMessages: (snap as any).system_messages ?? [],
+        cached: true,
+        snapshotStatus: (snap as any).status,
+        fetchedAt: (snap as any).fetched_at,
+      });
+    }
+    // No snapshot yet → fall through and build it live (cheap DB read).
+  }
+
+  console.log(`[gateway-ws] ${action} request`, { locationIntegrationId });
+
   const { data: meters, error: meterError } = await sb
     .from("meters")
     .select("id, name, sensor_uuid, unit, energy_type")
@@ -302,10 +324,33 @@ async function handleHttpAction(req: Request): Promise<Response | null> {
     gatewayCount: gatewayIds.length,
   });
 
-  return jsonResponse(req, {
-    success: true,
-    sensors: [...sensorItems, ...actuatorItems, ...inventoryItems],
-  });
+  const allSensors = [...sensorItems, ...actuatorItems, ...inventoryItems];
+
+  // ── Write snapshot so cache-first reads stay instant ──
+  try {
+    const { data: liRow } = await sb
+      .from("location_integrations")
+      .select("location_id, location:locations!inner(tenant_id)")
+      .eq("id", locationIntegrationId)
+      .maybeSingle();
+    const tenantId = (liRow as any)?.location?.tenant_id ?? null;
+    const locationId = (liRow as any)?.location_id ?? null;
+    const row: Record<string, unknown> = {
+      location_integration_id: locationIntegrationId,
+      sensors: allSensors,
+      system_messages: [],
+      status: "fresh",
+      fetched_at: new Date().toISOString(),
+      source: "gateway-ws",
+    };
+    if (tenantId) row.tenant_id = tenantId;
+    if (locationId) row.location_id = locationId;
+    await sb.from("gateway_sensor_snapshots").upsert(row, { onConflict: "location_integration_id" });
+  } catch (snapErr) {
+    console.warn("[gateway-ws] snapshot write failed:", snapErr);
+  }
+
+  return jsonResponse(req, { success: true, sensors: allSensors, cached: false });
 }
 
 /**

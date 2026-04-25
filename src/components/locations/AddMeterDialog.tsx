@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useTranslation } from "@/hooks/useTranslation";
 import { getEdgeFunctionName } from "@/lib/gatewayRegistry";
+import { invokeWithRetry } from "@/lib/invokeWithRetry";
 import { useMeters } from "@/hooks/useMeters";
 import { useLocationIntegrations, LocationIntegration } from "@/hooks/useIntegrations";
 import { supabase } from "@/integrations/supabase/client";
@@ -84,7 +85,7 @@ export const AddMeterDialog = ({ locationId, open, onOpenChange }: AddMeterDialo
       try {
         const integrationType = li.integration?.type || "";
         const edgeFunction = getEdgeFunctionName(integrationType);
-        const { data, error } = await supabase.functions.invoke(edgeFunction, {
+        const { data, error } = await invokeWithRetry(edgeFunction, {
           body: {
             locationIntegrationId: li.id,
             action: "getSensors",
@@ -94,7 +95,7 @@ export const AddMeterDialog = ({ locationId, open, onOpenChange }: AddMeterDialo
         if (error || !data?.sensors) {
           // Fallback: try structure action for Loxone-type integrations
           if (integrationType === "loxone_miniserver") {
-            const { data: structData, error: structErr } = await supabase.functions.invoke(edgeFunction, {
+            const { data: structData, error: structErr } = await invokeWithRetry(edgeFunction, {
               body: { action: "structure", config: li.config },
             });
             if (!structErr && structData?.controls) {

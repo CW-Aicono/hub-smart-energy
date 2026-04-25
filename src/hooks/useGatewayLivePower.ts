@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { getEdgeFunctionName } from "@/lib/gatewayRegistry";
+import { invokeWithRetry } from "@/lib/invokeWithRetry";
 import type { Meter } from "./useMeters";
 
 export interface GatewayLivePowerValue {
@@ -115,7 +116,7 @@ export function useGatewayLivePower(meters: Meter[]) {
             // Push-based gateways (gateway-ingest) don't support getSensors – skip them
             if (edgeFunction === "gateway-ingest") return;
 
-            const { data } = await supabase.functions.invoke(edgeFunction, {
+            const { data } = await invokeWithRetry(edgeFunction, {
               body: { locationIntegrationId: integrationId, action: "getSensors" },
             });
 
