@@ -24,7 +24,7 @@ import { toast } from "@/hooks/use-toast";
 
 const STATUS_OPTIONS = ["Available", "Preparing", "Charging", "SuspendedEV", "SuspendedEVSE", "Finishing", "Faulted", "Unavailable"];
 const ERROR_CODES = ["NoError", "ConnectorLockFailure", "EVCommunicationError", "GroundFailure", "HighTemperature", "InternalError", "OverCurrentFailure", "PowerMeterFailure", "ResetFailure"];
-
+const DEFAULT_OCPP_TARGET = `${(import.meta.env.VITE_SUPABASE_URL as string).replace(/^https:/, "wss:")}/functions/v1/ocpp-ws-proxy`;
 interface ChargePointRow {
   id: string;
   name: string;
