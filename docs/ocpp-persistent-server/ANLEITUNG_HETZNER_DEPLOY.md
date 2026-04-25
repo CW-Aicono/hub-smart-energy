@@ -253,21 +253,26 @@ ocpp-test.aicono.org  ──►  Caddy ──►  ocpp-test  (Container, eigenes
 
 Beide Domains zeigen per A-Record auf dieselbe Server-IP. Caddy holt für jede Subdomain ein eigenes Let's-Encrypt-Zertifikat.
 
-### Schritt 14.1 — DNS
+### Schritt 14.1 — DNS (beide Subdomains in Cloudflare)
 
-Lege beim Domain-Anbieter **zwei A-Records** an, beide auf dieselbe Hetzner-IP:
+Beide Subdomains werden **in Cloudflare** angelegt (Domain ist bei IONOS registriert, DNS läuft über Cloudflare-Nameserver — bei IONOS selbst musst du **nichts** tun).
 
-| Name | Typ | Wert |
-|---|---|---|
-| `ocpp` | A | Server-IP (z. B. `116.203.XX.XX`) |
-| `ocpp-test` | A | dieselbe Server-IP |
+1. https://dash.cloudflare.com → `aicono.org` → **DNS → Records**.
+2. Zwei A-Records anlegen, **beide auf dieselbe Hetzner-IP**:
+
+| Type | Name | IPv4 address | Proxy status | TTL |
+|---|---|---|---|---|
+| A | `ocpp` | Server-IP (z. B. `116.203.XX.XX`) | **DNS only (grau)** | Auto |
+| A | `ocpp-test` | dieselbe Server-IP | **DNS only (grau)** | Auto |
+
+> ⚠ **Proxy status muss „DNS only" (graue Wolke) sein.** Mit orange/Proxied blockiert Cloudflare die OCPP-WebSocket-Verbindung und Caddy kann kein Let's-Encrypt-Zertifikat ausstellen.
 
 Test:
 ```bash
 nslookup ocpp.aicono.org
 nslookup ocpp-test.aicono.org
 ```
-Beide IPs müssen identisch sein.
+Beide IPs müssen identisch sein und der Hetzner-Server-IP entsprechen (nicht `104.x.x.x` — das wäre Cloudflare-Proxy).
 
 ### Schritt 14.2 — Verzeichnisstruktur
 
