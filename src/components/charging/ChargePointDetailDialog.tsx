@@ -89,7 +89,7 @@ export default function ChargePointDetailDialog({
       id: cp.id,
       name: form.name,
       ocpp_id: form.ocpp_id,
-      ocpp_password: form.ocpp_password ? form.ocpp_password : null,
+      ocpp_password: form.auth_required && form.ocpp_password ? form.ocpp_password : null,
       address: form.address || null,
       latitude: coords.lat,
       longitude: coords.lng,
@@ -98,6 +98,8 @@ export default function ChargePointDetailDialog({
       vendor: form.vendor || null,
       model: form.model || null,
       photo_url: photoUrl,
+      connection_protocol: form.connection_protocol,
+      auth_required: form.auth_required,
     } as any);
     setEditing(false);
   };
