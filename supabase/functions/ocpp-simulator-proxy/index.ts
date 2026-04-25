@@ -100,14 +100,13 @@ Deno.serve(async (req) => {
 
   // HTTP endpoint: list charge points for super-admins (bypasses RLS)
   if (upgradeHeader.toLowerCase() !== "websocket") {
-    let bodyAction: string | null = null;
+    let body: Record<string, unknown> | null = null;
     if (req.method === "POST") {
       try {
-        const body = await req.json();
-        bodyAction = typeof body?.action === "string" ? body.action : null;
+        body = await req.json();
       } catch { /* ignore invalid/empty body */ }
     }
-    const action = url.searchParams.get("action") || bodyAction;
+    const action = url.searchParams.get("action") || (typeof body?.action === "string" ? body.action : null);
 
     if (action === "list-charge-points") {
       const token =
