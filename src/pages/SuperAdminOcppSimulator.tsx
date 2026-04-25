@@ -221,14 +221,14 @@ const SuperAdminOcppSimulator = () => {
                     <SelectContent>
                       {chargePoints.map((cp) => (
                         <SelectItem key={cp.id} value={cp.id}>
-                          {cp.name} ({cp.ocpp_id}) {cp.has_password ? "" : "⚠ kein Passwort"}
+                          {cp.name} ({cp.ocpp_id}) {cp.has_password ? "🔒" : ""}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                   {selectedCp && !selectedCp.has_password && (
-                    <p className="text-xs text-destructive mt-1">
-                      Diese Wallbox hat kein OCPP-Passwort. Bitte unter Ladepunkt-Details setzen.
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Diese Wallbox hat kein OCPP-Passwort — Verbindung erfolgt ohne Authentifizierung.
                     </p>
                   )}
                 </div>
