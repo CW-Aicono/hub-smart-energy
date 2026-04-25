@@ -73,7 +73,7 @@ export function useTenantElectricityTenants() {
 
   const updateTenant = useMutation({
     mutationFn: async ({ id, meter_ids, ...values }: { id: string; meter_ids?: string[] } & Record<string, any>) => {
-      const { error } = await supabase.from("tenant_electricity_tenants").update(values).eq("id", id);
+      const { error } = await supabase.from("tenant_electricity_tenants").update(values as any).eq("id", id);
       if (error) throw error;
       if (meter_ids !== undefined) {
         // Remove old assignments and insert new ones

@@ -62,7 +62,7 @@ export function useIntegrationErrors() {
       const chunk = errorIds.slice(i, i + BATCH);
       const { error } = await supabase
         .from("integration_errors")
-        .update(payload)
+        .update(payload as any)
         .in("id", chunk);
       if (error) throw error;
     }
