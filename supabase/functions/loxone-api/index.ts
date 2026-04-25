@@ -244,6 +244,83 @@ async function updateSyncStatus(
   console.log(`Updated sync_status to: ${status}`);
 }
 
+// ── Snapshot Cache Helpers (Cache-First Architecture) ──
+async function writeSensorSnapshot(
+  supabase: any,
+  locationIntegrationId: string,
+  payload: {
+    sensors: any[];
+    systemMessages?: any[];
+    status?: "fresh" | "stale" | "error";
+    errorMessage?: string | null;
+    tenantId?: string | null;
+    locationId?: string | null;
+  },
+) {
+  try {
+    const row: Record<string, unknown> = {
+      location_integration_id: locationIntegrationId,
+      sensors: payload.sensors ?? [],
+      system_messages: payload.systemMessages ?? [],
+      status: payload.status ?? "fresh",
+      error_message: payload.errorMessage ?? null,
+      fetched_at: new Date().toISOString(),
+      source: "loxone-api",
+    };
+    if (payload.tenantId) row.tenant_id = payload.tenantId;
+    if (payload.locationId) row.location_id = payload.locationId;
+
+    const { error } = await supabase
+      .from("gateway_sensor_snapshots")
+      .upsert(row, { onConflict: "location_integration_id" });
+    if (error) console.warn("[snapshot] upsert failed:", error.message);
+  } catch (err) {
+    console.warn("[snapshot] write error:", err);
+  }
+}
+
+async function readSensorSnapshot(supabase: any, locationIntegrationId: string) {
+  const { data, error } = await supabase
+    .from("gateway_sensor_snapshots")
+    .select("sensors, system_messages, status, fetched_at, error_message")
+    .eq("location_integration_id", locationIntegrationId)
+    .maybeSingle();
+  if (error) {
+    console.warn("[snapshot] read failed:", error.message);
+    return null;
+  }
+  return data;
+}
+
+async function tryAcquireRefreshLock(
+  supabase: any,
+  locationIntegrationId: string,
+  owner: string,
+  ttlSeconds = 60,
+): Promise<boolean> {
+  const { data, error } = await supabase.rpc("try_acquire_gateway_refresh_lock", {
+    p_integration_id: locationIntegrationId,
+    p_owner: owner,
+    p_ttl_seconds: ttlSeconds,
+  });
+  if (error) {
+    console.warn("[lock] acquire failed:", error.message);
+    return true; // fail-open
+  }
+  return Boolean(data);
+}
+
+async function releaseRefreshLock(supabase: any, locationIntegrationId: string, owner: string) {
+  try {
+    await supabase.rpc("release_gateway_refresh_lock", {
+      p_integration_id: locationIntegrationId,
+      p_owner: owner,
+    });
+  } catch (err) {
+    console.warn("[lock] release failed:", err);
+  }
+}
+
 // Format a numeric value for display
 function formatValue(rawValue: number | string, sensorType: string): string {
   if (typeof rawValue === "number") {
