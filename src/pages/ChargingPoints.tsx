@@ -201,7 +201,7 @@ const ChargingPoints = () => {
           </button>
         </div>
         {form.connection_protocol === "ws" && (
-          <p className="text-xs text-amber-600 dark:text-amber-500 mt-1">
+          <p className="text-xs text-destructive mt-1">
             ⚠ Daten werden im Klartext übertragen. Nur für Wallboxen ohne TLS-Support.
           </p>
         )}
