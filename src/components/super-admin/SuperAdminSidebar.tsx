@@ -8,7 +8,7 @@ import {
   LayoutDashboard, LogOut, Building2, BarChart3, Receipt, HeadsetIcon,
   ChevronDown, ChevronRight, PanelLeftClose, PanelLeft, Users, ShieldCheck, Shield, Euro,
   Sun, Moon, Monitor, Globe, Palette, Check, Server, PlugZap, Settings, Activity,
-  Cpu, ListChecks, Briefcase,
+  Cpu, ListChecks, Briefcase, Plug,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -121,6 +121,7 @@ export default function SuperAdminSidebar() {
       icon: Server,
       label: t("nav.ocpp_backend"),
       children: [
+        { to: "/super-admin/ocpp/onboarding", icon: Plug, label: "Ladepunkt anlegen" },
         { to: "/super-admin/ocpp/integrations", icon: PlugZap, label: t("nav.ocpp_integrations") },
         { to: "/super-admin/ocpp/control", icon: Server, label: "OCPP Control" },
         { to: "/super-admin/ocpp/simulator", icon: PlugZap, label: "OCPP Simulator" },

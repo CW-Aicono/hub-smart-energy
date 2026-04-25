@@ -48,7 +48,10 @@ server.on("upgrade", async (req, socket, head) => {
       return;
     }
 
-    if (cp.ocpp_password) {
+    // Auth nur prüfen, wenn die Wallbox auf Passwort-Schutz konfiguriert ist
+    // UND in der DB ein Passwort hinterlegt ist. Sonst akzeptieren wir den
+    // Connect ohne Authorization-Header (z. B. ältere go-e/KEBA-Modelle).
+    if (cp.auth_required && cp.ocpp_password) {
       const ok = checkBasicAuth(req.headers.authorization, cp.ocpp_password);
       if (!ok) {
         log.warn("Auth failed", { chargePointId });
@@ -56,6 +59,8 @@ server.on("upgrade", async (req, socket, head) => {
         socket.destroy();
         return;
       }
+    } else {
+      log.info("Accepting unauthenticated connection", { chargePointId, authRequired: cp.auth_required });
     }
 
     wss.handleUpgrade(req, socket, head, (ws) => {
