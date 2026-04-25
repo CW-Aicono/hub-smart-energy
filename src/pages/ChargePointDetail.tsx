@@ -280,6 +280,7 @@ const ChargePointDetail = () => {
       id: cp.id,
       name: form.name,
       ocpp_id: form.ocpp_id,
+      ocpp_password: form.ocpp_password ? form.ocpp_password : null,
       address: form.address || null,
       latitude: coords.lat,
       longitude: coords.lng,
