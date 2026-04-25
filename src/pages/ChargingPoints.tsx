@@ -143,22 +143,28 @@ const ChargingPoints = () => {
     ? chargePoints.filter((cp) => cp.status === statusFilter)
     : chargePoints;
 
+  const wsScheme = form.connection_protocol === "ws" ? "ws" : "wss";
+  const wsHostUrl = `${wsScheme}://ocpp.aicono.org`;
+
   const ocppHint = (
     <Alert className="mt-4">
       <Info className="h-4 w-4" />
       <AlertDescription className="space-y-2">
         <p className="font-medium">{t("charging.ocppHintTitle" as any)}</p>
 
-        <p className="text-sm font-medium mt-2">Option 1: WebSocket</p>
-        <p className="text-sm text-muted-foreground">
-          <code>wss://</code>
-        </p>
+        <p className="text-sm font-medium mt-2">Option 1: WebSocket ({wsScheme}://)</p>
         <code className="block text-xs bg-muted p-2 rounded break-all select-all">
-          {OCPP_WS_ENDPOINT_URL}/{form.ocpp_id || "{OCPP_ID}"}
+          {wsHostUrl}/{form.ocpp_id || "{OCPP_ID}"}
         </code>
         <p className="text-sm text-muted-foreground">
-          Subprotokoll: <strong>ocpp1.6</strong>
+          Subprotokoll: <strong>ocpp1.6</strong> · Port: <strong>{wsScheme === "wss" ? "443" : "80"}</strong>
         </p>
+        {form.auth_required && form.ocpp_password && (
+          <>
+            <p className="text-sm font-medium mt-2">Basic-Auth Passwort</p>
+            <code className="block text-xs bg-muted p-2 rounded break-all select-all">{form.ocpp_password}</code>
+          </>
+        )}
 
         <p className="text-sm font-medium mt-2">Option 2: HTTP POST</p>
         <code className="block text-xs bg-muted p-2 rounded break-all select-all">
@@ -170,6 +176,79 @@ const ChargingPoints = () => {
         </p>
       </AlertDescription>
     </Alert>
+  );
+
+  const connectionBlock = (
+    <div className="space-y-3 p-3 border rounded-lg bg-muted/30">
+      <p className="text-sm font-medium flex items-center gap-2"><Shield className="h-4 w-4" /> Verbindungs-Konfiguration</p>
+
+      <div>
+        <Label className="text-xs">Protokoll</Label>
+        <div className="grid grid-cols-2 gap-2 mt-1">
+          <button
+            type="button"
+            onClick={() => setForm({ ...form, connection_protocol: "wss" })}
+            className={`flex items-center gap-2 p-2 border rounded-md text-sm ${form.connection_protocol === "wss" ? "border-primary bg-primary/10" : "border-border"}`}
+          >
+            <Lock className="h-4 w-4" /> wss:// (empfohlen)
+          </button>
+          <button
+            type="button"
+            onClick={() => setForm({ ...form, connection_protocol: "ws" })}
+            className={`flex items-center gap-2 p-2 border rounded-md text-sm ${form.connection_protocol === "ws" ? "border-primary bg-primary/10" : "border-border"}`}
+          >
+            <Unlock className="h-4 w-4" /> ws:// (unverschlüsselt)
+          </button>
+        </div>
+        {form.connection_protocol === "ws" && (
+          <p className="text-xs text-amber-600 dark:text-amber-500 mt-1">
+            ⚠ Daten werden im Klartext übertragen. Nur für Wallboxen ohne TLS-Support.
+          </p>
+        )}
+      </div>
+
+      <div className="flex items-center justify-between">
+        <div>
+          <Label className="text-sm">Passwort-geschützt (Basic Auth)</Label>
+          <p className="text-xs text-muted-foreground">Aus, wenn die Wallbox keine Passwort-Eingabe unterstützt.</p>
+        </div>
+        <Switch
+          checked={form.auth_required}
+          onCheckedChange={(v) => setForm({ ...form, auth_required: v, ocpp_password: v ? (form.ocpp_password || generatePw()) : "" })}
+        />
+      </div>
+
+      {form.auth_required && (
+        <div>
+          <Label className="text-xs">OCPP-Passwort</Label>
+          <div className="flex gap-2">
+            <Input
+              type={showAddPassword ? "text" : "password"}
+              value={form.ocpp_password}
+              onChange={(e) => setForm({ ...form, ocpp_password: e.target.value })}
+              className="flex-1 font-mono text-xs"
+              autoComplete="new-password"
+            />
+            <Button type="button" variant="outline" size="icon" onClick={() => setShowAddPassword((v) => !v)}>
+              {showAddPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </Button>
+            <Button type="button" variant="outline" size="icon" onClick={() => setForm({ ...form, ocpp_password: generatePw() })} title="Neu generieren">
+              <RefreshCw className="h-4 w-4" />
+            </Button>
+            <Button type="button" variant="outline" size="icon" onClick={() => { navigator.clipboard.writeText(form.ocpp_password); toast({ title: "Passwort kopiert" }); }} title="Kopieren">
+              <Copy className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      )}
+
+      <Alert className="py-2">
+        <Info className="h-3.5 w-3.5" />
+        <AlertDescription className="text-xs">
+          Falls die Wallbox ein Server-Zertifikat verlangt: <strong>„Amazon Root CA 1"</strong> oder <strong>„Let's Encrypt R3"</strong> wählen. Eigene Client-Zertifikate folgen in einer kommenden Version.
+        </AlertDescription>
+      </Alert>
+    </div>
   );
 
   const formFields = (
@@ -240,6 +319,7 @@ const ChargingPoints = () => {
           )}
         </div>
       </div>
+      {connectionBlock}
       {ocppHint}
     </div>
   );
