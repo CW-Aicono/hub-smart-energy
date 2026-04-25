@@ -118,8 +118,15 @@ const SuperAdminOcppSimulator = () => {
     }
     try {
       setBusy("connect");
+      const normalizedTarget = target
+        .trim()
+        .replace(/^ws:\/\/ocpp\.aicono\.org/i, "wss://ocpp.aicono.org")
+        .replace(/\/+$/, "");
+      if (normalizedTarget !== target.trim().replace(/\/+$/, "")) {
+        setTarget(normalizedTarget);
+      }
       const client = new OcppSimulatorClient({
-        target: target.trim().replace(/\/+$/, ""),
+        target: normalizedTarget,
         ocppId: selectedCp.ocpp_id,
         vendor, model, serial: serial || selectedCp.ocpp_id, firmware,
       });
