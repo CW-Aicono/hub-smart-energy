@@ -386,16 +386,66 @@ serve(async (req) => {
     }
 
     const requestBody = await req.json();
-    const { locationIntegrationId, action, sensorName } = requestBody;
-    const shouldPersistReadings = isServiceRole || requestBody?.persistToDb === true;
+    let { locationIntegrationId, action, sensorName } = requestBody;
+    // refreshSensors is implemented as getSensors + persist + lock
+    const isRefreshAction = action === "refreshSensors";
+    if (isRefreshAction) action = "getSensors";
+    const shouldPersistReadings = isServiceRole || isRefreshAction || requestBody?.persistToDb === true;
 
     if (!locationIntegrationId) {
       throw new Error("Location Integration ID ist erforderlich");
     }
 
+    // ── ACTION: getSensorsCached ── (cache-first, no external HTTP)
+    if (action === "getSensorsCached") {
+      const snap = await readSensorSnapshot(supabase, locationIntegrationId);
+      if (snap) {
+        return new Response(
+          JSON.stringify({
+            success: true,
+            sensors: snap.sensors ?? [],
+            systemMessages: snap.system_messages ?? [],
+            cached: true,
+            snapshotStatus: snap.status,
+            fetchedAt: snap.fetched_at,
+            errorMessage: snap.error_message,
+          }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+      // No snapshot yet → return empty result; the UI can trigger refreshSensors.
+      return new Response(
+        JSON.stringify({ success: true, sensors: [], systemMessages: [], cached: true, snapshotStatus: "missing" }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
     console.log(
-      `Loxone API request: action=${action}, locationIntegrationId=${locationIntegrationId}, sensorName=${sensorName || "N/A"}, persist=${shouldPersistReadings}`,
+      `Loxone API request: action=${action}, locationIntegrationId=${locationIntegrationId}, sensorName=${sensorName || "N/A"}, persist=${shouldPersistReadings}, refresh=${isRefreshAction}`,
     );
+
+    // ── refreshSensors: acquire lock so parallel UI calls don't stampede ──
+    const lockOwner = `loxone-api:${crypto.randomUUID()}`;
+    let heldLock = false;
+    if (isRefreshAction) {
+      heldLock = await tryAcquireRefreshLock(supabase, locationIntegrationId, lockOwner, 60);
+      if (!heldLock) {
+        // Another refresh is in flight – return current snapshot instead of duplicating work
+        const snap = await readSensorSnapshot(supabase, locationIntegrationId);
+        return new Response(
+          JSON.stringify({
+            success: true,
+            sensors: snap?.sensors ?? [],
+            systemMessages: snap?.system_messages ?? [],
+            cached: true,
+            snapshotStatus: snap?.status ?? "refreshing",
+            fetchedAt: snap?.fetched_at ?? null,
+            refreshing: true,
+          }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+    }
 
     const { data: locationIntegration, error: liError } = await supabase
       .from("location_integrations")
