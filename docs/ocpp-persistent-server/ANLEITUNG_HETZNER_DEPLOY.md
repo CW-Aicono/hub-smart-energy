@@ -92,7 +92,7 @@ Kopiere die nächsten 4 Zeilen in einem Stück in dein Terminal und drücke Ente
 
 ```bash
 apt-get update && apt-get -y upgrade && \
-apt-get install -y docker.io docker-compose-plugin ufw fail2ban git curl && \
+apt-get install -y docker.io docker-compose-v2 ufw fail2ban git curl && \
 ufw allow 22/tcp && ufw allow 80/tcp && ufw allow 443/tcp && ufw --force enable && \
 systemctl enable --now docker fail2ban
 ```
