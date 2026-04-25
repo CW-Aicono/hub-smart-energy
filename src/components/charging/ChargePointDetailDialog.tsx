@@ -85,6 +85,7 @@ export default function ChargePointDetailDialog({
       id: cp.id,
       name: form.name,
       ocpp_id: form.ocpp_id,
+      ocpp_password: form.ocpp_password ? form.ocpp_password : null,
       address: form.address || null,
       latitude: coords.lat,
       longitude: coords.lng,
@@ -95,6 +96,16 @@ export default function ChargePointDetailDialog({
       photo_url: photoUrl,
     } as any);
     setEditing(false);
+  };
+
+  const generatePassword = () => {
+    const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
+    let pw = "";
+    const arr = new Uint32Array(24);
+    crypto.getRandomValues(arr);
+    for (let i = 0; i < 24; i++) pw += chars[arr[i] % chars.length];
+    setForm((f) => ({ ...f, ocpp_password: pw }));
+    setShowPassword(true);
   };
 
   const geocodeAddress = async () => {
