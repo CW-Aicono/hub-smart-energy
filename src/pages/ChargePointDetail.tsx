@@ -262,6 +262,7 @@ const ChargePointDetail = () => {
     setForm({
       name: cp.name,
       ocpp_id: cp.ocpp_id,
+      ocpp_password: cp.ocpp_password || "",
       address: cp.address || "",
       connector_count: String(cp.connector_count),
       max_power_kw: String(cp.max_power_kw),
