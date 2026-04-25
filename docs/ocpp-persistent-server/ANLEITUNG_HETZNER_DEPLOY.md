@@ -30,20 +30,38 @@ Diese Anleitung führt dich Klick für Klick durch das komplette Deployment des 
 
 ---
 
-## Schritt 3 — Domain vorbereiten (DNS A-Record)
+## Schritt 3 — Domain vorbereiten (DNS A-Record bei Cloudflare)
 
-Du brauchst eine Subdomain, z. B. `ocpp.deine-domain.de`.
+Wichtig in deinem Setup: Die Domain `aicono.org` ist bei **IONOS** registriert, die DNS-Verwaltung läuft aber über **Cloudflare**. A-Records müssen daher **bei Cloudflare** angelegt werden, nicht bei IONOS.
 
-1. Logge dich beim Anbieter deiner Domain ein (Strato, IONOS, Hetzner DNS, Cloudflare, …).
-2. Suche **„DNS-Verwaltung“ → „A-Record hinzufügen“**.
-3. Trage ein:
-   - **Name / Host:** `ocpp` (das wird zu `ocpp.deine-domain.de`)
-   - **Typ:** A
-   - **Wert / Ziel:** die IPv4 deines Hetzner-Servers
-   - **TTL:** 3600 (oder Standard)
-4. Speichern. Die DNS-Änderung dauert 5–30 Minuten, bis sie weltweit bekannt ist.
+> Voraussetzung: Bei IONOS sind in den Domain-Einstellungen die **Cloudflare-Nameserver** hinterlegt (z. B. `xxx.ns.cloudflare.com` + `yyy.ns.cloudflare.com`). Das ist bei dir bereits der Fall — IONOS dient nur noch als Registrar, alle DNS-Änderungen wirken über Cloudflare.
 
-Test: Im Terminal `nslookup ocpp.deine-domain.de` — die IP muss matchen.
+### Schritt 3.1 — A-Record in Cloudflare anlegen
+
+1. Login auf https://dash.cloudflare.com → Domain **`aicono.org`** auswählen.
+2. Links im Menü **„DNS“ → „Records“** öffnen.
+3. **„Add record“** klicken und ausfüllen:
+   - **Type:** `A`
+   - **Name:** `ocpp` (Cloudflare ergänzt automatisch zu `ocpp.aicono.org`)
+   - **IPv4 address:** die IPv4 deines Hetzner-Servers (z. B. `116.203.XX.XX`)
+   - **Proxy status:** **DNS only** (graue Wolke, **nicht** orange!) — sehr wichtig, sonst blockiert Cloudflare den WebSocket-Verkehr und Caddy bekommt kein Let's-Encrypt-Zertifikat
+   - **TTL:** `Auto`
+4. **„Save“** klicken.
+
+### Schritt 3.2 — Test
+
+DNS-Propagation dauert in Cloudflare meist nur 1–2 Minuten. Test im Terminal:
+
+```bash
+nslookup ocpp.aicono.org
+# Erwartete Antwort: Address: <deine Hetzner-IP>
+```
+
+Wenn stattdessen eine `104.x.x.x`- oder `172.x.x.x`-Adresse erscheint, steht die Wolke noch auf **Proxied (orange)** — in Cloudflare auf **DNS only (grau)** umstellen.
+
+### Bei IONOS ist nichts zu tun
+
+Solange die Cloudflare-Nameserver bei IONOS aktiv sind, ignoriert IONOS jegliche dort eingetragenen A-Records. Lege A-Records also **niemals bei IONOS** zusätzlich an — das verwirrt nur.
 
 ---
 
