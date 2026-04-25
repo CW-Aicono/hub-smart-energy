@@ -40,7 +40,14 @@ Deno.serve(async (req) => {
 
   // HTTP endpoint: list charge points for super-admins (bypasses RLS)
   if (upgradeHeader.toLowerCase() !== "websocket") {
-    const action = url.searchParams.get("action");
+    let bodyAction: string | null = null;
+    if (req.method === "POST") {
+      try {
+        const body = await req.json();
+        bodyAction = typeof body?.action === "string" ? body.action : null;
+      } catch { /* ignore invalid/empty body */ }
+    }
+    const action = url.searchParams.get("action") || bodyAction;
 
     if (action === "list-charge-points") {
       const token =
@@ -56,14 +63,14 @@ Deno.serve(async (req) => {
       const userClient = createClient(supabaseUrl, anonKey, {
         global: { headers: { Authorization: `Bearer ${token}` } },
       });
-      const { data: claims, error: claimsErr } = await userClient.auth.getClaims(token);
-      if (claimsErr || !claims?.claims?.sub) {
+      const { data: userData, error: userErr } = await userClient.auth.getUser(token);
+      if (userErr || !userData?.user?.id) {
         return new Response(JSON.stringify({ error: "Unauthorized" }), {
           status: 401,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-      const userId = claims.claims.sub as string;
+      const userId = userData.user.id;
       const adminClient = createClient(supabaseUrl, serviceKey);
       const { data: roleRow } = await adminClient
         .from("user_roles")
@@ -145,11 +152,11 @@ Deno.serve(async (req) => {
   const userClient = createClient(supabaseUrl, anonKey, {
     global: { headers: { Authorization: `Bearer ${token}` } },
   });
-  const { data: claims, error: claimsErr } = await userClient.auth.getClaims(token);
-  if (claimsErr || !claims?.claims?.sub) {
+  const { data: userData, error: userErr } = await userClient.auth.getUser(token);
+  if (userErr || !userData?.user?.id) {
     return new Response("Unauthorized", { status: 401, headers: corsHeaders });
   }
-  const userId = claims.claims.sub as string;
+  const userId = userData.user.id;
 
   // 2) Check super_admin role using service role (bypasses RLS)
   const adminClient = createClient(supabaseUrl, serviceKey);

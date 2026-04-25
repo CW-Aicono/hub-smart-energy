@@ -59,7 +59,6 @@ const SuperAdminOcppSimulator = () => {
   const clientRef = useRef<OcppSimulatorClient | null>(null);
 
   // Load charge points via edge function (bypasses RLS for super-admins).
-  // Use fetch directly because supabase.functions.invoke() does not append GET query params reliably.
   const { data: chargePoints = [], isLoading: cpLoading, error: cpError } = useQuery({
     queryKey: ["sa-ocpp-sim-charge-points"],
     enabled: !!user && isSuperAdmin,
@@ -68,27 +67,18 @@ const SuperAdminOcppSimulator = () => {
       const token = session?.access_token;
       if (!token) throw new Error("Keine aktive Sitzung gefunden.");
 
-      const url = new URL(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ocpp-simulator-proxy`);
-      url.searchParams.set("action", "list-charge-points");
-
-      const res = await fetch(url.toString(), {
-        method: "GET",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-        },
+      const { data, error } = await supabase.functions.invoke("ocpp-simulator-proxy", {
+        body: { action: "list-charge-points" },
       });
-      const text = await res.text();
-      const json = text ? JSON.parse(text) : {};
 
-      if (!res.ok) {
-        throw new Error(json?.error || `Wallboxen konnten nicht geladen werden (${res.status}).`);
+      if (error) {
+        throw new Error(error.message || "Wallboxen konnten nicht geladen werden.");
       }
-      if (!Array.isArray(json?.charge_points)) {
+      if (!Array.isArray(data?.charge_points)) {
         throw new Error("Der Simulator-Proxy hat keine Wallbox-Liste geliefert.");
       }
 
-      return json.charge_points as ChargePointRow[];
+      return data.charge_points as ChargePointRow[];
     },
   });
 
