@@ -30,6 +30,66 @@ function shortId(): string {
   return crypto.randomUUID().slice(0, 8);
 }
 
+function randomWebSocketKey(): string {
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  return btoa(String.fromCharCode(...bytes));
+}
+
+function toHttpHandshakeUrl(wsUrl: string): string {
+  if (/^wss:\/\//i.test(wsUrl)) return wsUrl.replace(/^wss:\/\//i, "https://");
+  if (/^ws:\/\//i.test(wsUrl)) return wsUrl.replace(/^ws:\/\//i, "http://");
+  return wsUrl;
+}
+
+async function checkUpstreamHandshake(params: {
+  target: string;
+  cpId: string;
+  password?: string | null;
+}): Promise<{ ok: boolean; status?: number; statusText?: string; body?: string; url: string; error?: string }> {
+  const upstreamBase = params.target.replace(/\/+$/, "");
+  const upstreamWsUrl = `${upstreamBase}/${encodeURIComponent(params.cpId)}`;
+  const handshakeUrl = toHttpHandshakeUrl(upstreamWsUrl);
+  const headers: Record<string, string> = {
+    "Connection": "Upgrade",
+    "Upgrade": "websocket",
+    "Sec-WebSocket-Key": randomWebSocketKey(),
+    "Sec-WebSocket-Version": "13",
+    "Sec-WebSocket-Protocol": OCPP_SUBPROTOCOL,
+  };
+
+  if (params.password) {
+    headers.Authorization = `Basic ${btoa(`${params.cpId}:${params.password}`)}`;
+  }
+
+  try {
+    const response = await fetch(handshakeUrl, {
+      method: "GET",
+      headers,
+      redirect: "manual",
+    });
+
+    let body = "";
+    if (response.status !== 101) {
+      body = (await response.text().catch(() => "")).slice(0, 500);
+    }
+
+    return {
+      ok: response.status === 101,
+      status: response.status,
+      statusText: response.statusText,
+      body,
+      url: upstreamWsUrl,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : String(error),
+      url: upstreamWsUrl,
+    };
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -40,14 +100,79 @@ Deno.serve(async (req) => {
 
   // HTTP endpoint: list charge points for super-admins (bypasses RLS)
   if (upgradeHeader.toLowerCase() !== "websocket") {
-    let bodyAction: string | null = null;
+    let body: Record<string, unknown> | null = null;
     if (req.method === "POST") {
       try {
-        const body = await req.json();
-        bodyAction = typeof body?.action === "string" ? body.action : null;
+        body = await req.json();
       } catch { /* ignore invalid/empty body */ }
     }
-    const action = url.searchParams.get("action") || bodyAction;
+    const action = url.searchParams.get("action") || (typeof body?.action === "string" ? body.action : null);
+
+    if (action === "check-upstream") {
+      const token =
+        url.searchParams.get("access_token") ||
+        req.headers.get("Authorization")?.replace(/^Bearer\s+/i, "") ||
+        "";
+      if (!token) {
+        return new Response(JSON.stringify({ error: "Missing access_token" }), {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const userClient = createClient(supabaseUrl, anonKey, {
+        global: { headers: { Authorization: `Bearer ${token}` } },
+      });
+      const { data: userData, error: userErr } = await userClient.auth.getUser(token);
+      if (userErr || !userData?.user?.id) {
+        return new Response(JSON.stringify({ error: "Unauthorized" }), {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const adminClient = createClient(supabaseUrl, serviceKey);
+      const { data: roleRow } = await adminClient
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", userData.user.id)
+        .eq("role", "super_admin")
+        .maybeSingle();
+      if (!roleRow) {
+        return new Response(JSON.stringify({ error: "Forbidden: super_admin only" }), {
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const target = typeof body?.target === "string" ? body.target : "";
+      const cpId = typeof body?.cp === "string" ? body.cp : "";
+      if (!target || !cpId || !/^wss?:\/\//i.test(target)) {
+        return new Response(JSON.stringify({ error: "Missing or invalid target/cp" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const { data: cp, error: cpErr } = await adminClient
+        .from("charge_points")
+        .select("ocpp_password")
+        .eq("ocpp_id", cpId)
+        .maybeSingle();
+      if (cpErr || !cp) {
+        return new Response(JSON.stringify({ error: `Unknown charge point: ${cpId}` }), {
+          status: 404,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const result = await checkUpstreamHandshake({ target, cpId, password: cp.ocpp_password });
+      console.log(`[ocpp-sim-proxy] upstream check cp=${cpId} target=${target} result=${JSON.stringify(result)}`);
+      return new Response(JSON.stringify(result), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     if (action === "list-charge-points") {
       const token =

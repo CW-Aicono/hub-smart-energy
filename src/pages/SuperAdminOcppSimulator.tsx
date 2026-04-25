@@ -24,7 +24,7 @@ import { toast } from "@/hooks/use-toast";
 
 const STATUS_OPTIONS = ["Available", "Preparing", "Charging", "SuspendedEV", "SuspendedEVSE", "Finishing", "Faulted", "Unavailable"];
 const ERROR_CODES = ["NoError", "ConnectorLockFailure", "EVCommunicationError", "GroundFailure", "HighTemperature", "InternalError", "OverCurrentFailure", "PowerMeterFailure", "ResetFailure"];
-const DEFAULT_OCPP_TARGET = `${(import.meta.env.VITE_SUPABASE_URL as string).replace(/^https:/, "wss:")}/functions/v1/ocpp-ws-proxy`;
+const DEFAULT_OCPP_TARGET = "wss://ocpp.aicono.org";
 interface ChargePointRow {
   id: string;
   name: string;
@@ -103,12 +103,56 @@ const SuperAdminOcppSimulator = () => {
 
   const isConnected = status === "connected";
 
+  const appendLog = (direction: FrameLogEntry["direction"], raw: string) => {
+    setLogEntries((prev) => [
+      ...prev,
+      { id: crypto.randomUUID(), ts: Date.now(), direction, raw },
+    ].slice(-1000));
+  };
+
+  const normalizeTarget = () => target
+    .trim()
+    .replace(/^ws:\/\//i, "wss://")
+    .replace(/\/+$/, "");
+
   const ensureConnected = (): OcppSimulatorClient | null => {
     if (!clientRef.current || !isConnected) {
       toast({ title: "Nicht verbunden", description: "Bitte zuerst verbinden.", variant: "destructive" });
       return null;
     }
     return clientRef.current;
+  };
+
+  const handleCheckUpstream = async () => {
+    if (!selectedCp) {
+      toast({ title: "Bitte Wallbox auswählen", variant: "destructive" });
+      return;
+    }
+    try {
+      setBusy("check");
+      const normalizedTarget = normalizeTarget();
+      if (normalizedTarget !== target.trim().replace(/\/+$/, "")) setTarget(normalizedTarget);
+      appendLog("info", `Checking external OCPP handshake → ${normalizedTarget}/${selectedCp.ocpp_id}`);
+
+      const { data, error } = await supabase.functions.invoke("ocpp-simulator-proxy", {
+        body: { action: "check-upstream", target: normalizedTarget, cp: selectedCp.ocpp_id },
+      });
+
+      if (error) throw new Error(error.message || "Handshake-Check fehlgeschlagen.");
+      const statusText = data?.status ? `${data.status} ${data.statusText || ""}`.trim() : data?.error || "unknown";
+      const detail = data?.body || data?.error || "";
+      const message = data?.ok
+        ? `Handshake OK (${statusText})`
+        : `Handshake fehlgeschlagen (${statusText})${detail ? `: ${detail}` : ""}`;
+      appendLog(data?.ok ? "info" : "error", message);
+      toast({ title: data?.ok ? "OCPP-Server erreichbar" : "OCPP-Server nicht erreichbar", description: message, variant: data?.ok ? "default" : "destructive" });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      appendLog("error", `Handshake-Check fehlgeschlagen: ${msg}`);
+      toast({ title: "Handshake-Check fehlgeschlagen", description: msg, variant: "destructive" });
+    } finally {
+      setBusy(null);
+    }
   };
 
   const handleConnect = async () => {
@@ -118,10 +162,7 @@ const SuperAdminOcppSimulator = () => {
     }
     try {
       setBusy("connect");
-      const normalizedTarget = target
-        .trim()
-        .replace(/^ws:\/\//i, "wss://")
-        .replace(/\/+$/, "");
+      const normalizedTarget = normalizeTarget();
       if (normalizedTarget !== target.trim().replace(/\/+$/, "")) {
         setTarget(normalizedTarget);
       }
@@ -251,6 +292,10 @@ const SuperAdminOcppSimulator = () => {
                   )}
                 </div>
                 <div className="flex gap-2 pt-2">
+                  <Button onClick={handleCheckUpstream} disabled={!selectedCp || !!busy || isConnected} variant="outline" className="flex-1">
+                    {busy === "check" ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <RadioTower className="h-4 w-4 mr-1" />}
+                    Server prüfen
+                  </Button>
                   {!isConnected ? (
                     <Button onClick={handleConnect} disabled={!selectedCp || busy === "connect"} className="flex-1">
                       {busy === "connect" ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Plug className="h-4 w-4 mr-1" />}
