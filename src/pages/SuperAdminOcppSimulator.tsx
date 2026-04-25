@@ -221,8 +221,10 @@ const SuperAdminOcppSimulator = () => {
               <CardContent className="space-y-3">
                 <div>
                   <Label className="text-xs">Wallbox</Label>
-                  <Select value={selectedCpId} onValueChange={setSelectedCpId} disabled={isConnected || cpLoading}>
-                    <SelectTrigger><SelectValue placeholder={cpLoading ? "Laden…" : "Wallbox auswählen"} /></SelectTrigger>
+                  <Select value={selectedCpId} onValueChange={setSelectedCpId} disabled={isConnected || cpLoading || !!cpError}>
+                    <SelectTrigger>
+                      <SelectValue placeholder={cpLoading ? "Laden…" : cpError ? "Ladefehler" : chargePoints.length ? "Wallbox auswählen" : "Keine Wallboxen gefunden"} />
+                    </SelectTrigger>
                     <SelectContent>
                       {chargePoints.map((cp) => (
                         <SelectItem key={cp.id} value={cp.id}>
@@ -231,6 +233,11 @@ const SuperAdminOcppSimulator = () => {
                       ))}
                     </SelectContent>
                   </Select>
+                  {cpError && (
+                    <p className="text-xs text-destructive mt-1">
+                      {cpError instanceof Error ? cpError.message : "Wallboxen konnten nicht geladen werden."}
+                    </p>
+                  )}
                   {selectedCp && !selectedCp.has_password && (
                     <p className="text-xs text-muted-foreground mt-1">
                       Diese Wallbox hat kein OCPP-Passwort — Verbindung erfolgt ohne Authentifizierung.
