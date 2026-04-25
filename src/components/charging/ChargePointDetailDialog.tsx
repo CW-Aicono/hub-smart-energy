@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Zap, PlugZap, AlertTriangle, ZapOff, WifiOff, Wifi, Camera, Trash2, Edit, Save, X, Clock, MapPin, Search, Shield, Info as InfoIcon, Settings } from "lucide-react";
+import { Zap, PlugZap, AlertTriangle, ZapOff, WifiOff, Wifi, Camera, Trash2, Edit, Save, X, Clock, MapPin, Search, Shield, Info as InfoIcon, Settings, Eye, EyeOff, RefreshCw, Copy } from "lucide-react";
 import { ConnectorStatusGrid } from "@/components/charging/ConnectorStatusGrid";
 import { format } from "date-fns";
 import { fmtKwh, fmtKw } from "@/lib/formatCharging";
