@@ -108,6 +108,72 @@ Deno.serve(async (req) => {
     }
     const action = url.searchParams.get("action") || (typeof body?.action === "string" ? body.action : null);
 
+    if (action === "check-upstream") {
+      const token =
+        url.searchParams.get("access_token") ||
+        req.headers.get("Authorization")?.replace(/^Bearer\s+/i, "") ||
+        "";
+      if (!token) {
+        return new Response(JSON.stringify({ error: "Missing access_token" }), {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const userClient = createClient(supabaseUrl, anonKey, {
+        global: { headers: { Authorization: `Bearer ${token}` } },
+      });
+      const { data: userData, error: userErr } = await userClient.auth.getUser(token);
+      if (userErr || !userData?.user?.id) {
+        return new Response(JSON.stringify({ error: "Unauthorized" }), {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const adminClient = createClient(supabaseUrl, serviceKey);
+      const { data: roleRow } = await adminClient
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", userData.user.id)
+        .eq("role", "super_admin")
+        .maybeSingle();
+      if (!roleRow) {
+        return new Response(JSON.stringify({ error: "Forbidden: super_admin only" }), {
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const target = typeof body?.target === "string" ? body.target : "";
+      const cpId = typeof body?.cp === "string" ? body.cp : "";
+      if (!target || !cpId || !/^wss?:\/\//i.test(target)) {
+        return new Response(JSON.stringify({ error: "Missing or invalid target/cp" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const { data: cp, error: cpErr } = await adminClient
+        .from("charge_points")
+        .select("ocpp_password")
+        .eq("ocpp_id", cpId)
+        .maybeSingle();
+      if (cpErr || !cp) {
+        return new Response(JSON.stringify({ error: `Unknown charge point: ${cpId}` }), {
+          status: 404,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const result = await checkUpstreamHandshake({ target, cpId, password: cp.ocpp_password });
+      console.log(`[ocpp-sim-proxy] upstream check cp=${cpId} target=${target} result=${JSON.stringify(result)}`);
+      return new Response(JSON.stringify(result), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     if (action === "list-charge-points") {
       const token =
         url.searchParams.get("access_token") ||
