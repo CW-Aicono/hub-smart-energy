@@ -292,6 +292,10 @@ const SuperAdminOcppSimulator = () => {
                   )}
                 </div>
                 <div className="flex gap-2 pt-2">
+                  <Button onClick={handleCheckUpstream} disabled={!selectedCp || !!busy || isConnected} variant="outline" className="flex-1">
+                    {busy === "check" ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <RadioTower className="h-4 w-4 mr-1" />}
+                    Server prüfen
+                  </Button>
                   {!isConnected ? (
                     <Button onClick={handleConnect} disabled={!selectedCp || busy === "connect"} className="flex-1">
                       {busy === "connect" ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Plug className="h-4 w-4 mr-1" />}
