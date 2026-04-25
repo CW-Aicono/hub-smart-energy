@@ -73,6 +73,8 @@ export default function ChargePointDetailDialog({
       max_power_kw: String(cp.max_power_kw),
       vendor: cp.vendor || "",
       model: cp.model || "",
+      connection_protocol: ((cp as any).connection_protocol === "ws" ? "ws" : "wss"),
+      auth_required: (cp as any).auth_required ?? true,
     });
     setCoords({ lat: cp.latitude, lng: cp.longitude });
     setPhotoUrl(cp.photo_url || null);
