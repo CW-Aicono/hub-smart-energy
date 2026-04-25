@@ -2690,6 +2690,69 @@ export type Database = {
           },
         ]
       }
+      gateway_refresh_locks: {
+        Row: {
+          location_integration_id: string
+          locked_at: string
+          locked_by: string | null
+        }
+        Insert: {
+          location_integration_id: string
+          locked_at?: string
+          locked_by?: string | null
+        }
+        Update: {
+          location_integration_id?: string
+          locked_at?: string
+          locked_by?: string | null
+        }
+        Relationships: []
+      }
+      gateway_sensor_snapshots: {
+        Row: {
+          created_at: string
+          error_message: string | null
+          expires_at: string | null
+          fetched_at: string
+          location_id: string | null
+          location_integration_id: string
+          sensors: Json
+          source: string | null
+          status: string
+          system_messages: Json
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          error_message?: string | null
+          expires_at?: string | null
+          fetched_at?: string
+          location_id?: string | null
+          location_integration_id: string
+          sensors?: Json
+          source?: string | null
+          status?: string
+          system_messages?: Json
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          error_message?: string | null
+          expires_at?: string | null
+          fetched_at?: string
+          location_id?: string | null
+          location_integration_id?: string
+          sensors?: Json
+          source?: string | null
+          status?: string
+          system_messages?: Json
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       infrastructure_metrics: {
         Row: {
           id: string
@@ -6447,6 +6510,18 @@ export type Database = {
       next_charging_invoice_number: {
         Args: { p_tenant_id: string; p_year: number }
         Returns: string
+      }
+      release_gateway_refresh_lock: {
+        Args: { p_integration_id: string; p_owner: string }
+        Returns: undefined
+      }
+      try_acquire_gateway_refresh_lock: {
+        Args: {
+          p_integration_id: string
+          p_owner: string
+          p_ttl_seconds?: number
+        }
+        Returns: boolean
       }
     }
     Enums: {
