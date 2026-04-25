@@ -29,7 +29,8 @@ interface ChargePointRow {
   id: string;
   name: string;
   ocpp_id: string;
-  ocpp_password: string | null;
+  has_password: boolean;
+  tenant_id: string;
 }
 
 const SuperAdminOcppSimulator = () => {
@@ -57,16 +58,32 @@ const SuperAdminOcppSimulator = () => {
   const [logEntries, setLogEntries] = useState<FrameLogEntry[]>([]);
   const clientRef = useRef<OcppSimulatorClient | null>(null);
 
-  // Load charge points (any tenant — super-admin sees all)
+  // Load charge points via edge function (bypasses RLS for super-admins)
   const { data: chargePoints = [], isLoading: cpLoading } = useQuery({
     queryKey: ["sa-ocpp-sim-charge-points"],
+    enabled: !!user && isSuperAdmin,
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("charge_points")
-        .select("id, name, ocpp_id, ocpp_password")
-        .order("name");
-      if (error) throw error;
-      return data as ChargePointRow[];
+      const { data, error } = await supabase.functions.invoke("ocpp-simulator-proxy", {
+        method: "GET",
+        // @ts-expect-error supabase-js types don't include query, but the runtime appends it
+        query: { action: "list-charge-points" },
+      });
+      // Fallback: invoke() may not support query; build URL manually
+      if (error || !data) {
+        const session = (await supabase.auth.getSession()).data.session;
+        const token = session?.access_token;
+        const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ocpp-simulator-proxy?action=list-charge-points`;
+        const res = await fetch(url, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+          },
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
+        const json = await res.json();
+        return (json.charge_points ?? []) as ChargePointRow[];
+      }
+      return ((data as { charge_points?: ChargePointRow[] }).charge_points ?? []);
     },
   });
 
