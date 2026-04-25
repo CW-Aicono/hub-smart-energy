@@ -94,6 +94,20 @@ const IGNORED_STATES = new Set(["jLocked", "locked"]);
 // Fallback priority list for unknown control types
 const FALLBACK_STATES = ["value", "actual", "position", "level", "brightness", "temperature"];
 
+const LOXONE_FETCH_TIMEOUT_MS = 8_000;
+const LOXONE_STATE_FETCH_TIMEOUT_MS = 2_500;
+const LOXONE_STATE_BATCH_SIZE = 5;
+
+async function fetchWithTimeout(url: string, init: RequestInit = {}, timeoutMs = LOXONE_FETCH_TIMEOUT_MS) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 function getStateMapping(controlType: string, availableStates: string[]): { primary?: string; secondary?: string; mapping?: StateMapping } {
   // 1. Check exact match in mapping table
   const mapping = CONTROL_TYPE_MAPPINGS[controlType];
@@ -133,7 +147,7 @@ async function resolveLoxoneCloudURL(serialNumber: string): Promise<string | nul
   try {
     const dnsUrl = `http://dns.loxonecloud.com/${serialNumber}`;
     console.log(`Resolving via Loxone Cloud redirect: ${dnsUrl}`);
-    const response = await fetch(dnsUrl, { method: "HEAD", redirect: "follow" });
+    const response = await fetchWithTimeout(dnsUrl, { method: "HEAD", redirect: "follow" });
     const finalUrl = response.url;
     console.log(`Resolved to final URL: ${finalUrl}`);
     const urlObj = new URL(finalUrl);
@@ -156,7 +170,7 @@ async function fetchStateValue(
   try {
     const url = `${baseUrl}/jdev/sps/io/${controlUuid}/state`;
     console.log(`Fetching state: ${url}`);
-    const response = await fetch(url, { method: "GET", headers: { Authorization: authHeader } });
+    const response = await fetchWithTimeout(url, { method: "GET", headers: { Authorization: authHeader } }, LOXONE_STATE_FETCH_TIMEOUT_MS);
     if (!response.ok) {
       console.warn(`State fetch failed for ${controlUuid}: HTTP ${response.status}`);
       return null;
@@ -185,13 +199,13 @@ async function fetchAllStates(
   try {
     const url = `${baseUrl}/jdev/sps/io/${controlUuid}/all`;
     console.log(`Fetching all states: ${url}`);
-    const response = await fetch(url, { method: "GET", headers: { Authorization: authHeader } });
+    const response = await fetchWithTimeout(url, { method: "GET", headers: { Authorization: authHeader } }, LOXONE_STATE_FETCH_TIMEOUT_MS);
     if (!response.ok) {
       console.warn(`All-states fetch failed for ${controlUuid}: HTTP ${response.status}`);
       return results;
     }
     const data = await response.json();
-    console.log(`All-states response for ${controlUuid}: ${JSON.stringify(data).substring(0, 500)}`);
+    console.log(`All-states response for ${controlUuid}: HTTP ${data?.LL?.Code ?? "unknown"}`);
     
     if (data?.LL) {
       const ll = data.LL;
@@ -219,7 +233,7 @@ async function fetchAllStates(
 
 // Update sync status in database
 async function updateSyncStatus(
-  supabase: ReturnType<typeof createClient>,
+  supabase: any,
   locationIntegrationId: string,
   status: "success" | "error" | "syncing"
 ) {
@@ -343,7 +357,7 @@ serve(async (req) => {
     if (action === "test") {
       const testUrl = `${baseUrl}/jdev/cfg/api`;
       console.log(`Testing connection: ${testUrl}`);
-      const response = await fetch(testUrl, { method: "GET", headers: { Authorization: loxoneAuth } });
+      const response = await fetchWithTimeout(testUrl, { method: "GET", headers: { Authorization: loxoneAuth } });
       if (!response.ok) {
         await updateSyncStatus(supabase, locationIntegrationId, "error");
         throw new Error(`Verbindung fehlgeschlagen: ${response.status}`);
@@ -361,10 +375,12 @@ serve(async (req) => {
 
       const structureUrl = `${baseUrl}/data/LoxAPP3.json`;
       console.log(`Fetching structure: ${structureUrl}`);
-      const structureResponse = await fetch(structureUrl, { method: "GET", headers: { Authorization: loxoneAuth } });
+      const structureResponse = await fetchWithTimeout(structureUrl, { method: "GET", headers: { Authorization: loxoneAuth } });
 
       if (!structureResponse.ok) {
-        await updateSyncStatus(supabase, locationIntegrationId, "error");
+        if (shouldPersistReadings) {
+          await updateSyncStatus(supabase, locationIntegrationId, "error");
+        }
         if (structureResponse.status === 401) throw new Error("Authentifizierung fehlgeschlagen.");
         throw new Error(`Struktur konnte nicht geladen werden: ${structureResponse.status}`);
       }
@@ -409,7 +425,7 @@ serve(async (req) => {
 
       // Batch fetch all states using control UUIDs
       const stateResults: Record<string, StateValueResult> = {};
-      const batchSize = 20;
+      const batchSize = LOXONE_STATE_BATCH_SIZE;
 
       for (let i = 0; i < controlUuids.length; i += batchSize) {
         const batch = controlUuids.slice(i, i + batchSize);
@@ -824,7 +840,7 @@ serve(async (req) => {
 
       console.log(`Searching for sensor: "${sensorName}"`);
       const structureUrl = `${baseUrl}/data/LoxAPP3.json`;
-      const structureResponse = await fetch(structureUrl, { method: "GET", headers: { Authorization: loxoneAuth } });
+      const structureResponse = await fetchWithTimeout(structureUrl, { method: "GET", headers: { Authorization: loxoneAuth } });
       if (!structureResponse.ok) throw new Error(`Struktur konnte nicht geladen werden: ${structureResponse.status}`);
 
       const structure: LoxoneStructure = await structureResponse.json();
@@ -896,7 +912,7 @@ serve(async (req) => {
     // ── ACTION: listAllSensors ──
     if (action === "listAllSensors") {
       const structureUrl = `${baseUrl}/data/LoxAPP3.json`;
-      const structureResponse = await fetch(structureUrl, { method: "GET", headers: { Authorization: loxoneAuth } });
+      const structureResponse = await fetchWithTimeout(structureUrl, { method: "GET", headers: { Authorization: loxoneAuth } });
       if (!structureResponse.ok) throw new Error(`Struktur konnte nicht geladen werden: ${structureResponse.status}`);
 
       const structure: LoxoneStructure = await structureResponse.json();
@@ -1183,7 +1199,7 @@ serve(async (req) => {
 
       // Also fetch structure to map statistic output UUIDs back to control UUIDs
       const structureUrl = `${baseUrl}/data/LoxAPP3.json`;
-      const structureResponse = await fetch(structureUrl, { method: "GET", headers: { Authorization: loxoneAuth } });
+      const structureResponse = await fetchWithTimeout(structureUrl, { method: "GET", headers: { Authorization: loxoneAuth } });
       let statsUuidToControlUuid = new Map<string, string>();
       if (structureResponse.ok) {
         const structure = await structureResponse.json() as LoxoneStructure;
