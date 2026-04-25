@@ -120,7 +120,7 @@ const SuperAdminOcppSimulator = () => {
       setBusy("connect");
       const normalizedTarget = target
         .trim()
-        .replace(/^ws:\/\/ocpp\.aicono\.org/i, "wss://ocpp.aicono.org")
+        .replace(/^ws:\/\//i, "wss://")
         .replace(/\/+$/, "");
       if (normalizedTarget !== target.trim().replace(/\/+$/, "")) {
         setTarget(normalizedTarget);
