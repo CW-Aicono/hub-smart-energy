@@ -1,219 +1,119 @@
-Ich nehme das ernst: Die bisherigen Fixes waren Symptombehandlung. Die aktuelle Analyse zeigt, dass der eigentliche Fehler nicht primär ein einzelner kaputter Codeblock ist, sondern die Architektur der Live-Gateway-Abfragen.
-
-Do I know what the issue is? Ja.
-
-## Diagnose
-
-Die App ruft auf normalen Seiten weiterhin direkt Gateway-Funktionen auf, insbesondere `loxone-api` mit `action: "getSensors"`.
-
-Das ist problematisch, weil `getSensors` bei Loxone kein kleiner Datenbank-Read ist. Pro Integration passiert ungefähr Folgendes:
-
-```text
-Browser-Seite öffnet
-  -> mehrere React-Komponenten/Hooks wollen Live-Werte
-  -> loxone-api getSensors
-      -> Loxone Cloud DNS auflösen
-      -> LoxAPP3.json laden
-      -> für jeden Loxone-Control /all abrufen
-      -> Sensorliste bauen
-      -> optional Daten speichern
-```
-
-In den Logs sieht man genau dieses Muster:
-
-- viele `loxone-api`-Starts und `shutdown`-Ereignisse innerhalb weniger Sekunden
-- mehrere parallele/nahezu gleichzeitige `getSensors`-Aufrufe
-- pro Aufruf viele externe Loxone-Requests (`/jdev/sps/io/.../all`)
-- teilweise Laufzeiten bis ca. 8 Sekunden, während im Hintergrund zusätzlich periodische Syncs laufen
-- ähnliche Polling-Muster bei `gateway-ws`
-
-Die bisherigen Retry-Mechanismen helfen nur kurzfristig. Sie verhindern nicht, dass die App überhaupt zu viele schwere Edge-Function-Aufrufe erzeugt. Im Gegenteil: In Lastsituationen können Retries die Last noch erhöhen.
-
-## Root Cause
-
-Die UI ist aktuell zu stark an externe Gateway-Live-Abfragen gekoppelt.
-
-Eine normale Dashboard-/Zähler-/Automationsseite darf nicht davon abhängen, dass in diesem Moment ein externer Miniserver, Shelly Cloud oder Gateway über eine Edge Function abgefragt wird. Wenn diese Funktion kurz überlastet, kalt startet, blockiert oder vom Runtime-System beendet wird, erscheint beim Nutzer sofort der 503-Fehler bzw. ein Blank Screen.
-
-Die nachhaltige Lösung ist deshalb:
-
-```text
-Alt:
-Browser -> Edge Function -> externer Gateway/Miniserver -> UI
-
-Neu:
-Background Sync -> Edge Function -> externer Gateway/Miniserver -> Cache in Datenbank
-Browser -> Datenbank-Cache -> UI
-```
-
-Die UI liest also stabile, zuletzt bekannte Werte. Externe Gateway-Abfragen laufen kontrolliert im Hintergrund oder nur bei bewusstem manuellem Refresh.
-
-## Nachhaltiger Fix
-
-### 1. Gateway-Snapshot-Cache einführen
-
-Ich werde eine neue backendseitige Cache-Tabelle anlegen, z. B. `gateway_sensor_snapshots`.
-
-Sie speichert pro Standort-Integration die zuletzt erfolgreich gelesene Sensorliste:
-
-- `tenant_id`
-- `location_id`
-- `location_integration_id`
-- `sensors` als JSONB
-- `system_messages` als JSONB
-- `status`: `fresh`, `stale`, `error`, `refreshing`
-- `fetched_at`
-- `expires_at`
-- `error_message`
-- Timestamps
-
-Wichtig: Zugang wird per RLS mandantensicher gemacht. Nutzer dürfen nur Snapshots ihres eigenen Mandanten lesen. Schreiben darf nur die Backend-Logik.
-
-### 2. Pro-Integration-Lock gegen parallele Refreshes
-
-Ich werde zusätzlich einen kleinen Lock-Mechanismus einbauen, damit eine Integration nicht mehrfach gleichzeitig live abgefragt wird.
-
-Beispiel:
-
-```text
-Integration A wird gerade aktualisiert
-  -> zweiter Refresh-Versuch erkennt Lock
-  -> gibt vorhandenen Cache zurück
-  -> startet keinen weiteren Loxone-/Shelly-/Gateway-Aufruf
-```
-
-Dafür wird eine kleine Lock-Tabelle oder eine atomare Datenbankfunktion genutzt, damit parallele Edge-Function-Instanzen sich gegenseitig sauber begrenzen.
-
-### 3. `loxone-api` umbauen: Cache-first statt immer live
-
-`loxone-api` wird so angepasst, dass normale Nutzeraufrufe nicht mehr blind live pollen.
-
-Geplantes Verhalten:
-
-- `cacheOnly`: gibt nur gespeicherte Werte zurück, ruft Loxone nie live ab
-- `refresh`: führt bewusst einen Live-Refresh aus, aber nur mit Lock und Rate Limit
-- Hintergrund-Job: darf live abrufen und danach den Snapshot aktualisieren
-- wenn Loxone temporär nicht erreichbar ist: alter Snapshot bleibt nutzbar, UI zeigt höchstens „Daten veraltet“ statt Blank Screen
-
-### 4. `shelly-api` und `gateway-ws` in dieselbe Strategie einbeziehen
-
-Die Fehler kamen nicht nur von Loxone, sondern vorher auch von Shelly und `gateway-ws`.
-
-Deshalb wird nicht nur `loxone-api` gepatcht. Ich werde die UI-Abfragen für alle Gateway-Arten vereinheitlichen:
-
-- Loxone Miniserver
-- Shelly Cloud
-- AICONO Gateway / `gateway-ws`
-- vorhandene pushbasierte Gateways bleiben pushbasiert
-
-AICONO Gateway-Daten liegen bereits teilweise in `gateway_device_inventory`; diese werden entweder direkt cachefähig gelesen oder in denselben Snapshot-Mechanismus überführt.
-
-### 5. Frontend-Hooks refactoren: keine schweren Edge Calls im Render-Pfad
-
-Die zentralen Hooks werden geändert:
-
-- `useLoxoneSensors`
-- `useLoxoneSensorsMulti`
-- `useGatewayLivePower`
-- indirekte Nutzer in Dashboard, Meter Management, Automation, Floorplan/Live Values
-
-Ziel:
-
-```text
-Normale Seitenanzeige:
-  liest nur Cache/Datenbank
-
-Manueller Button „Aktualisieren“:
-  darf refresh auslösen
-  zeigt Ladezustand
-  fällt bei Fehler auf Cache zurück
-```
-
-Die bestehenden Importnamen können weitgehend kompatibel bleiben, damit nicht die ganze App unnötig umgebaut werden muss.
-
-### 6. Client-Retry entschärfen
-
-`invokeWithRetry` bleibt für echte manuelle Aktionen sinnvoll, aber nicht mehr als Hauptstabilisator.
-
-Ich werde verhindern, dass automatische UI-Polling-Fehler weiter eskalieren:
-
-- keine aggressiven Retries bei Gateway-Live-Daten
-- kein Throw, der einen Runtime Error / Blank Screen erzeugt
-- Fehler werden als UI-Status dargestellt: „Live-Aktualisierung aktuell nicht verfügbar, letzte Werte werden angezeigt“
-
-### 7. Periodische Syncs kontrollieren
-
-Die bestehenden Hintergrundfunktionen wie `loxone-periodic-sync` und `shelly-periodic-sync` werden auf den neuen Cache ausgerichtet:
-
-- kontrollierte Reihenfolge
-- Lock pro Integration
-- keine unnötigen parallelen Refreshes
-- optional Jitter/Abstand zwischen Integrationen
-- Snapshot wird auch bei Teilerfolg gespeichert
-- bei Fehler bleibt letzter erfolgreicher Snapshot erhalten
-
-### 8. Monitoring und Beweis der Stabilisierung
-
-Nach der Umsetzung werde ich nicht einfach behaupten, dass es funktioniert. Ich werde prüfen:
-
-1. Build/TypeScript läuft sauber.
-2. Die betroffenen Edge Functions lassen sich deployen.
-3. Direkte Testaufrufe liefern kontrollierte Antworten.
-4. Im Preview-Netzwerk sieht man auf normalen Seiten keine massenhaften `loxone-api`-Live-Aufrufe mehr.
-5. Logs zeigen deutlich weniger Edge-Function-Boots/Shutdowns.
-6. Die UI zeigt Werte weiterhin an, aber aus dem Cache.
-7. Wenn ein Gateway nicht erreichbar ist, bleibt die Seite sichtbar und zeigt einen verständlichen Status statt Blank Screen.
-
-## Ergebnis nach Umsetzung
-
-Nach dem Fix sollte die App so funktionieren:
-
-```text
-Gateway erreichbar:
-  Hintergrund aktualisiert Cache
-  UI zeigt frische Werte
-
-Gateway kurz langsam/offline:
-  UI zeigt letzte Werte
-  Status: veraltet / nicht erreichbar
-  kein Blank Screen
-  kein 503-Runtime-Overlay
-
-Viele Komponenten auf einer Seite:
-  lesen denselben Cache
-  erzeugen keine eigene Gateway-Abfrage pro Komponente
-
-Mehrere Nutzer gleichzeitig:
-  Cache wird geteilt
-  nicht jeder Browser startet eigene Loxone-/Shelly-Abfragen
-```
-
-## Warum das diesmal dauerhaft ist
-
-Der Unterschied zu den bisherigen Fixes:
-
-- bisher: „Wenn Edge Function 503 liefert, nochmal versuchen“
-- jetzt: „Die UI darf diese schwere Edge Function im Normalbetrieb gar nicht mehr benötigen“
-
-Damit wird die Ursache reduziert, nicht nur der Fehler abgefangen.
-
-## Technische Umsetzungsschwerpunkte
-
-Betroffene Bereiche:
-
-- Datenbankmigration für Snapshot-Cache und Locking
-- `supabase/functions/loxone-api/index.ts`
-- `supabase/functions/shelly-api/index.ts`
-- `supabase/functions/gateway-ws/index.ts` bzw. dessen Datenquelle
-- `supabase/functions/loxone-periodic-sync/index.ts`
-- `supabase/functions/shelly-periodic-sync/index.ts`
-- `src/hooks/useLoxoneSensors.ts`
-- `src/hooks/useGatewayLivePower.ts`
-- Komponenten, die noch direkt `getSensors` live aufrufen
-
-Optional, falls nach dem Architekturfix weiterhin Lastgrenzen sichtbar bleiben: Die Lovable-Cloud-Instanz kann zusätzlich größer dimensioniert werden. Das ist aber nicht der erste Schritt; zuerst wird die unnötige Last aus der App entfernt.
-
-<lov-actions>
-  <lov-open-history>View History</lov-open-history>
-  <lov-link url="https://docs.lovable.dev/tips-tricks/troubleshooting">Troubleshooting docs</lov-link>
-</lov-actions>
+# OCPP 1.6 Wallbox-Simulator — Plan
+
+## Ziel
+Ein webbasiertes Tool zum Testen des OCPP-Backends (`wss://ocpp.aicono.org`). Es simuliert eine oder mehrere Wallboxen, sendet OCPP-1.6-JSON-Nachrichten (Boot, Heartbeat, StatusNotification, StartTransaction, MeterValues, StopTransaction) und reagiert auf Remote-Commands vom Server (RemoteStart/Stop, Reset).
+
+## Architektur-Entscheidung: Separates Projekt
+**Empfehlung:** Neues Lovable-Projekt `ocpp-wallbox-simulator`.
+
+| Pro separates Projekt | Pro Integration ins EMS |
+|---|---|
+| Eigene URL (`ocpp-sim.lovable.app`) — auch für Partner/Kunden | — |
+| Kein RLS-/Tenant-Risiko | — |
+| Frei deploybar/verwerfbar | — |
+| Saubere Trennung Test-Tool vs. Produktiv-EMS | — |
+
+Entscheidung: **Separates Projekt**.
+
+---
+
+## Phase 1 — Projekt-Setup
+- Neues Lovable-Projekt mit Lovable Cloud
+- Tabelle `simulator_charge_points` (id, name, ocpp_id, password, vendor, model, serial, last_used_at)
+- Tabelle `simulator_sessions` (id, charge_point_id, started_at, stopped_at, last_status, transaction_id, meter_start, meter_stop, log JSONB)
+- AICONO-CI (Dark, Blue/Teal, Montserrat/Inter) für visuelle Konsistenz
+
+## Phase 2 — WebSocket-Proxy (Edge Function)
+**Problem:** Browser können bei WebSocket-Handshakes keine `Authorization: Basic ...`-Header setzen.
+
+**Lösung:** Edge Function `ws-proxy` als Relay:
+- Browser ↔ `wss://<projekt>.functions.supabase.co/ws-proxy?target=<url>&user=<id>&pass=<pw>` ↔ Wallbox-Server
+- Edge Function nutzt `Deno.upgradeWebSocket` und öffnet nach Auth eine ausgehende WS-Verbindung mit Basic-Auth-Header
+- Forwardet bidirektional alle Frames 1:1
+- Subprotocol `ocpp1.6` durchreichen
+- Logging der Frames für Debug
+
+Damit funktionieren:
+- `wss://ocpp.aicono.org/<cpId>` (Produktion mit TLS + Basic Auth)
+- `ws://lokaler-server:8080/<cpId>` (lokaler Test ohne TLS)
+
+## Phase 3 — Simulator-Engine (Frontend)
+TypeScript-Modul `OcppClient`:
+- Verbindungs-Management (connect, disconnect, reconnect mit Backoff)
+- OCPP-Frame-Builder (CALL `[2,id,action,payload]`, CALLRESULT `[3,...]`, CALLERROR `[4,...]`)
+- Pending-Call-Map (UUIDs → Promises) für CALLRESULT-Zuordnung
+- Heartbeat-Scheduler (Intervall aus BootNotification-Antwort, default 30 s)
+- Handler für Server-CALLs:
+  - `RemoteStartTransaction` → automatisch `StartTransaction` auslösen
+  - `RemoteStopTransaction` → `StopTransaction` auslösen
+  - `Reset` → Reconnect simulieren
+  - `ChangeConfiguration`, `GetConfiguration`, `TriggerMessage` → Standardantworten
+- MeterValues-Scheduler während aktiver Transaktion (alle 60 s, konfigurierbar)
+
+## Phase 4 — UI: Einzelne Wallbox
+Eine Seite pro simulierter Wallbox mit Tabs/Cards:
+
+**Verbindung:**
+- Eingaben: Server-URL, OCPP-ID, Passwort (optional)
+- Toggle `wss` / `ws`
+- Buttons: Verbinden / Trennen
+- Status-Badge: Disconnected / Connecting / Connected / Authenticated
+
+**Boot & Identity:**
+- Vendor, Model, Serial, FirmwareVersion (editierbar, Defaults Bender/Nidec-like)
+- Button: BootNotification senden
+- Anzeige: gewährter HeartbeatInterval
+
+**Connector-Status:**
+- Auswahl Connector-ID (1 oder 2)
+- Status-Auswahl: `Available`, `Preparing`, `Charging`, `SuspendedEV`, `Finishing`, `Faulted`
+- Button: StatusNotification senden
+
+**Ladevorgang simulieren:**
+- idTag-Eingabe
+- Connector-Auswahl
+- Meter-Start (Wh)
+- Slider: Ladeleistung (kW), Dauer (Min)
+- Button: Start → sendet StartTransaction, generiert MeterValues alle 60 s, inkrementiert Energy-Register linear
+- Button: Stopp → sendet StopTransaction mit finalem Meter-Wert
+- Live-Anzeige: aktuelle Energy, geladene Zeit, geschätzte Endenergie
+
+**Live-Frame-Log:**
+- Scrollbare Liste aller gesendeten/empfangenen Frames
+- Farbig: outgoing (blau), incoming (grün), error (rot)
+- Filter: nach Action
+- Export als JSON
+
+## Phase 5 — UI: Multi-Charger-Dashboard
+- Liste aller gespeicherten Wallboxen mit Status-Indikator
+- "Alle verbinden" / "Alle trennen"
+- "Heartbeat-Storm" für Last-Tests (z. B. 50 Wallboxen parallel)
+- Übersicht aktiver Transaktionen
+
+## Phase 6 — Presets & Persistenz
+- CRUD für `simulator_charge_points` (Name, OCPP-ID, Passwort, Default-Server)
+- Quick-Connect aus Liste
+- Letzte 50 Sessions mit Frame-Log persistieren (für Nachanalyse)
+
+## Phase 7 — Komfortfunktionen
+- **Auto-Heartbeat-Toggle** (an/aus, Intervall-Override)
+- **Reconnect-on-Drop** (Toggle + Backoff-Strategie)
+- **Frame-Injector**: beliebigen JSON-Frame manuell senden (für Edge-Cases)
+- **Szenario-Recorder**: Aufzeichnen einer Frame-Sequenz und als Test-Szenario abspielen
+- **Vorlagen** für gängige Fehler: `FaultedConnector`, `MeterValueOverflow`, `Auth-Reject`
+
+## Out of Scope (vorerst)
+- OCPP 2.0.1 (anderes Protokoll, Plug & Charge, ISO 15118)
+- Smart Charging Profiles (`SetChargingProfile`) — kann in Phase 8 nachgezogen werden
+- Echte CSMS-Funktion (ist bewusst nur Client-Simulator)
+
+## Geschätzter Aufwand
+- Phase 1–3: Grundlauffähig (Verbinden, Boot, Heartbeat, eine Transaktion) — kleinere Iteration
+- Phase 4–5: Vollständige UI für 1+ Wallboxen — mittlere Iteration
+- Phase 6–7: Komfort & Persistenz — mehrere kleinere Iterationen
+
+## Vorgehen nach Plan-Freigabe
+1. **Du legst neues Lovable-Projekt an** (`ocpp-wallbox-simulator`), aktivierst Lovable Cloud
+2. Du sendest mir den Projekt-Link, ich kann dort weiterarbeiten
+3. Wir starten mit Phase 1–3 (MVP: 1 Wallbox, Boot + Heartbeat + Transaktion gegen `wss://ocpp.aicono.org`)
+4. Iteration nach deiner Validierung
