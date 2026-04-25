@@ -94,6 +94,20 @@ const IGNORED_STATES = new Set(["jLocked", "locked"]);
 // Fallback priority list for unknown control types
 const FALLBACK_STATES = ["value", "actual", "position", "level", "brightness", "temperature"];
 
+const LOXONE_FETCH_TIMEOUT_MS = 8_000;
+const LOXONE_STATE_FETCH_TIMEOUT_MS = 2_500;
+const LOXONE_STATE_BATCH_SIZE = 5;
+
+async function fetchWithTimeout(url: string, init: RequestInit = {}, timeoutMs = LOXONE_FETCH_TIMEOUT_MS) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 function getStateMapping(controlType: string, availableStates: string[]): { primary?: string; secondary?: string; mapping?: StateMapping } {
   // 1. Check exact match in mapping table
   const mapping = CONTROL_TYPE_MAPPINGS[controlType];
