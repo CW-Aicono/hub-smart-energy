@@ -222,7 +222,240 @@ Der laufende Container wird durch die neue Version ersetzt. Verbindungen brechen
 
 ---
 
-## Schritt 14 — Notfall-Rollback
+## Schritt 14 — Zwei Instanzen auf demselben Server (Live + Test)
+
+Empfohlen: **ein** Hetzner-Server, **zwei** komplett getrennte Docker-Compose-Projekte. So sparst du Kosten (1× CX22 reicht) und hast trotzdem eine saubere Trennung zwischen Produktion und Test/Lovable-Preview.
+
+### Aufbau
+
+```
+ocpp.aicono.org       ──►  Caddy ──►  ocpp-live  (Container, eigenes .env, Live-Backend)
+ocpp-test.aicono.org  ──►  Caddy ──►  ocpp-test  (Container, eigenes .env, Lovable-Test-Backend)
+```
+
+Beide Domains zeigen per A-Record auf dieselbe Server-IP. Caddy holt für jede Subdomain ein eigenes Let's-Encrypt-Zertifikat.
+
+### Schritt 14.1 — DNS
+
+Lege beim Domain-Anbieter **zwei A-Records** an, beide auf dieselbe Hetzner-IP:
+
+| Name | Typ | Wert |
+|---|---|---|
+| `ocpp` | A | Server-IP (z. B. `116.203.XX.XX`) |
+| `ocpp-test` | A | dieselbe Server-IP |
+
+Test:
+```bash
+nslookup ocpp.aicono.org
+nslookup ocpp-test.aicono.org
+```
+Beide IPs müssen identisch sein.
+
+### Schritt 14.2 — Verzeichnisstruktur
+
+```bash
+mkdir -p /opt/aicono/ocpp-live /opt/aicono/ocpp-test
+cp -r /opt/aicono/aicono-ems/docs/ocpp-persistent-server/. /opt/aicono/ocpp-live/
+cp -r /opt/aicono/aicono-ems/docs/ocpp-persistent-server/. /opt/aicono/ocpp-test/
+```
+
+So bekommst du **zwei unabhängige Compose-Projekte**, die du getrennt updaten und neustarten kannst.
+
+### Schritt 14.3 — `.env` für die Live-Instanz
+
+```bash
+cd /opt/aicono/ocpp-live
+cp .env.example .env
+nano .env
+```
+
+| Variable | Wert |
+|---|---|
+| `SUPABASE_URL` | `https://<live-project-ref>.supabase.co` |
+| `SUPABASE_SERVICE_ROLE_KEY` | service_role-Key des **Live**-Projekts |
+| `OCPP_DOMAIN` | `ocpp.aicono.org` |
+| `LOG_LEVEL` | `info` |
+
+### Schritt 14.4 — `.env` für die Test-Instanz (Lovable-Preview-Projekt)
+
+```bash
+cd /opt/aicono/ocpp-test
+cp .env.example .env
+nano .env
+```
+
+| Variable | Wert |
+|---|---|
+| `SUPABASE_URL` | `https://xnveugycurplszevdxtw.supabase.co` (dieses Lovable-Projekt) |
+| `SUPABASE_SERVICE_ROLE_KEY` | service_role-Key dieses Lovable-Projekts (Lovable Cloud → Backend → Settings → API) |
+| `OCPP_DOMAIN` | `ocpp-test.aicono.org` |
+| `LOG_LEVEL` | `debug` (mehr Details für Tests) |
+
+### Schritt 14.5 — Port-Konflikt vermeiden
+
+Beide Compose-Files würden standardmäßig die Ports 80 + 443 belegen. Lösung: **nur EIN Caddy** für beide Instanzen. Wir entfernen den Caddy-Block aus dem Test-Compose und ergänzen das Test-Routing im Live-Caddy.
+
+#### a) Test-Compose ohne Caddy
+
+Bearbeite `/opt/aicono/ocpp-test/docker-compose.yml` und **entferne den kompletten `caddy:`-Service** sowie die Volumes/Networks-Einträge, die nur Caddy braucht. Übrig bleibt nur der `ocpp:`-Service. Außerdem den Container umbenennen, damit er nicht mit dem Live-Container kollidiert:
+
+```yaml
+services:
+  ocpp:
+    build: .
+    container_name: ocpp-server-test
+    restart: always
+    env_file: .env
+    expose:
+      - "8080"
+    networks:
+      - shared-ocpp-net
+
+networks:
+  shared-ocpp-net:
+    external: true
+    name: ocpp-shared
+```
+
+#### b) Live-Compose: Caddy + gemeinsames Netz
+
+In `/opt/aicono/ocpp-live/docker-compose.yml` den Container umbenennen und das gemeinsame Netz nutzen:
+
+```yaml
+services:
+  ocpp:
+    build: .
+    container_name: ocpp-server-live
+    restart: always
+    env_file: .env
+    expose:
+      - "8080"
+    networks:
+      - shared-ocpp-net
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: ocpp-caddy
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - ocpp
+    networks:
+      - shared-ocpp-net
+
+volumes:
+  caddy_data:
+  caddy_config:
+
+networks:
+  shared-ocpp-net:
+    external: true
+    name: ocpp-shared
+```
+
+Gemeinsames Netz einmalig anlegen:
+```bash
+docker network create ocpp-shared
+```
+
+#### c) Caddyfile für beide Domains
+
+`/opt/aicono/ocpp-live/Caddyfile` ersetzen durch:
+
+```caddy
+ocpp.aicono.org {
+  encode gzip
+  reverse_proxy ocpp-server-live:8080 {
+    header_up Host {host}
+    header_up X-Real-IP {remote}
+    header_up X-Forwarded-For {remote}
+    header_up X-Forwarded-Proto {scheme}
+  }
+}
+
+ocpp-test.aicono.org {
+  encode gzip
+  reverse_proxy ocpp-server-test:8080 {
+    header_up Host {host}
+    header_up X-Real-IP {remote}
+    header_up X-Forwarded-For {remote}
+    header_up X-Forwarded-Proto {scheme}
+  }
+}
+```
+
+> Hinweis: Die `OCPP_DOMAIN`-Variable in den `.env`-Dateien dient ab jetzt nur noch der Logik im Node-Server (Logging/Health). Caddy hat die Domains direkt im Caddyfile.
+
+### Schritt 14.6 — Beide Instanzen starten
+
+```bash
+# Live
+cd /opt/aicono/ocpp-live
+docker compose up -d --build
+
+# Test
+cd /opt/aicono/ocpp-test
+docker compose up -d --build
+```
+
+Prüfen:
+```bash
+docker ps
+# Erwartet: ocpp-server-live, ocpp-server-test, ocpp-caddy — alle "Up"
+
+curl -sf https://ocpp.aicono.org/health        # Live
+curl -sf https://ocpp-test.aicono.org/health   # Test
+```
+
+Caddy-Log auf erfolgreiche Zertifikate prüfen:
+```bash
+docker logs ocpp-caddy --tail 100 | grep "certificate obtained"
+# Erwartet: zwei Zeilen (eine pro Domain)
+```
+
+### Schritt 14.7 — Wallboxen zuordnen
+
+| Umgebung | OCPP-URL für die Wallbox |
+|---|---|
+| **Produktion** (echte Wallboxen) | `wss://ocpp.aicono.org/<OCPP_ID>` |
+| **Test/Lovable-Preview** (Test-Wallbox, Simulator) | `wss://ocpp-test.aicono.org/<OCPP_ID>` |
+
+Wichtig: **eine Wallbox pro Umgebung**, niemals beide gleichzeitig — sonst landen Sessions doppelt.
+
+### Schritt 14.8 — Updates pro Instanz
+
+```bash
+# Nur Live updaten (Test bleibt wie es ist)
+cd /opt/aicono/aicono-ems && git pull
+cd /opt/aicono/ocpp-live
+cp -r /opt/aicono/aicono-ems/docs/ocpp-persistent-server/src/. ./src/
+docker compose up -d --build
+
+# Nur Test updaten
+cd /opt/aicono/ocpp-test
+cp -r /opt/aicono/aicono-ems/docs/ocpp-persistent-server/src/. ./src/
+docker compose up -d --build
+```
+
+So kannst du neue Features **erst auf Test ausprobieren** und nach erfolgreicher Prüfung auf Live übertragen.
+
+### Schritt 14.9 — Logs getrennt lesen
+
+```bash
+docker logs -f ocpp-server-live    # nur Live-Verkehr
+docker logs -f ocpp-server-test    # nur Test-Verkehr
+docker logs -f ocpp-caddy          # TLS / Routing für beide
+```
+
+---
+
+## Schritt 15 — Notfall-Rollback
 
 Wenn der neue Server Probleme macht und du sofort zurück auf die alte Edge-Function-URL willst:
 
