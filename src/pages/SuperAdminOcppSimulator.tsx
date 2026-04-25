@@ -121,14 +121,6 @@ const SuperAdminOcppSimulator = () => {
       toast({ title: "Bitte Wallbox auswählen", variant: "destructive" });
       return;
     }
-    if (!selectedCp.has_password) {
-      toast({
-        title: "Kein OCPP-Passwort gesetzt",
-        description: `Für '${selectedCp.name}' ist kein Passwort hinterlegt. Bitte unter Ladepunkt-Details ergänzen.`,
-        variant: "destructive",
-      });
-      return;
-    }
     try {
       setBusy("connect");
       const client = new OcppSimulatorClient({
