@@ -24,7 +24,8 @@ import {
   ArrowLeft, Zap, PlugZap, AlertTriangle, ZapOff, WifiOff, Camera,
   Trash2, Save, X, MapPin, Search, MoreHorizontal, RefreshCw, Play,
   Square, Unlock, Power, Wrench, CheckCircle, Clock, BarChart3, Info, Settings,
-  Shield, Bell, BatteryCharging, Users, Calendar, Timer, Gauge, ExternalLink
+  Shield, Bell, BatteryCharging, Users, Calendar, Timer, Gauge, ExternalLink,
+  Eye, EyeOff, Copy
 } from "lucide-react";
 import { format, subDays, isAfter } from "date-fns";
 import { de } from "date-fns/locale";
