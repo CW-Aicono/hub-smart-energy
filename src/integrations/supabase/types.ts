@@ -587,6 +587,10 @@ export type Database = {
         Row: {
           access_settings: Json
           address: string | null
+          auth_required: boolean
+          certificate_required: boolean
+          certificate_type: string | null
+          connection_protocol: string
           connector_count: number
           connector_type: string
           created_at: string
@@ -614,6 +618,10 @@ export type Database = {
         Insert: {
           access_settings?: Json
           address?: string | null
+          auth_required?: boolean
+          certificate_required?: boolean
+          certificate_type?: string | null
+          connection_protocol?: string
           connector_count?: number
           connector_type?: string
           created_at?: string
@@ -641,6 +649,10 @@ export type Database = {
         Update: {
           access_settings?: Json
           address?: string | null
+          auth_required?: boolean
+          certificate_required?: boolean
+          certificate_type?: string | null
+          connection_protocol?: string
           connector_count?: number
           connector_type?: string
           created_at?: string
