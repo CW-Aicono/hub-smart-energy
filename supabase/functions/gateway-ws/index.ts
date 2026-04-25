@@ -324,10 +324,33 @@ async function handleHttpAction(req: Request): Promise<Response | null> {
     gatewayCount: gatewayIds.length,
   });
 
-  return jsonResponse(req, {
-    success: true,
-    sensors: [...sensorItems, ...actuatorItems, ...inventoryItems],
-  });
+  const allSensors = [...sensorItems, ...actuatorItems, ...inventoryItems];
+
+  // ── Write snapshot so cache-first reads stay instant ──
+  try {
+    const { data: liRow } = await sb
+      .from("location_integrations")
+      .select("location_id, location:locations!inner(tenant_id)")
+      .eq("id", locationIntegrationId)
+      .maybeSingle();
+    const tenantId = (liRow as any)?.location?.tenant_id ?? null;
+    const locationId = (liRow as any)?.location_id ?? null;
+    const row: Record<string, unknown> = {
+      location_integration_id: locationIntegrationId,
+      sensors: allSensors,
+      system_messages: [],
+      status: "fresh",
+      fetched_at: new Date().toISOString(),
+      source: "gateway-ws",
+    };
+    if (tenantId) row.tenant_id = tenantId;
+    if (locationId) row.location_id = locationId;
+    await sb.from("gateway_sensor_snapshots").upsert(row, { onConflict: "location_integration_id" });
+  } catch (snapErr) {
+    console.warn("[gateway-ws] snapshot write failed:", snapErr);
+  }
+
+  return jsonResponse(req, { success: true, sensors: allSensors, cached: false });
 }
 
 /**
