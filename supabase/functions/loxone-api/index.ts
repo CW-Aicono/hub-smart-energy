@@ -955,8 +955,18 @@ serve(async (req) => {
         await updateSyncStatus(supabase, locationIntegrationId, "success");
       }
 
+      // ── Always write snapshot on successful sensor fetch ──
+      await writeSensorSnapshot(supabase, locationIntegrationId, {
+        sensors,
+        systemMessages,
+        status: "fresh",
+        tenantId: (locationIntegration as any).location?.tenant_id ?? null,
+        locationId: (locationIntegration as any).location_id ?? null,
+      });
+      if (heldLock) await releaseRefreshLock(supabase, locationIntegrationId, lockOwner);
+
       return new Response(
-        JSON.stringify({ success: true, sensors, systemMessages }),
+        JSON.stringify({ success: true, sensors, systemMessages, cached: false }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
