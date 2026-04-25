@@ -125,3 +125,7 @@ verify_jwt = false
 
 [functions.gateway-credentials]
 verify_jwt = false
+
+[functions.ocpp-simulator-proxy]
+verify_jwt = false
+
