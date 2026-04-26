@@ -509,9 +509,6 @@ export default function SuperAdminChargePointOnboarding() {
                 <Button variant="outline" onClick={() => navigate("/super-admin/ocpp/integrations")}>
                   Zur Übersicht
                 </Button>
-                <Button variant="outline" onClick={() => navigate("/super-admin/ocpp/simulator")}>
-                  Im Simulator testen
-                </Button>
                 <Button onClick={() => {
                   setStep(1); setName(""); setVendor(""); setModel("");
                   setOcppId(generateOcppId()); setPassword(generatePassword());
