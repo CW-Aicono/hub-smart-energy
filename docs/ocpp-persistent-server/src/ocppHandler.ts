@@ -1,6 +1,13 @@
-import { supabase } from "./supabaseClient";
 import { log } from "./logger";
 import type { Session } from "./chargePointRegistry";
+import {
+  authorizeIdTag,
+  createChargingSession,
+  getChargingSessionByTransaction,
+  updateChargePoint,
+  updateChargingSession,
+  updateConnectorStatus,
+} from "./backendApi";
 
 type OcppCall = [2, string, string, Record<string, unknown>];
 type OcppCallResult = [3, string, Record<string, unknown>];
