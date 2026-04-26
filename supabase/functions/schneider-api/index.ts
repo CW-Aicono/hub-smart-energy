@@ -536,7 +536,8 @@ Deno.serve(async (req) => {
     }
 
     const config = (li.config || {}) as Record<string, string>;
-    const tenantId = (li.integration as Record<string, string>)?.tenant_id;
+    const integrationRows = Array.isArray(li.integration) ? li.integration : [li.integration];
+    const tenantId = (integrationRows[0] as { tenant_id?: string } | null)?.tenant_id;
 
     if (!config.client_id || !config.client_secret || !config.site_id) {
       return json({ error: "Incomplete Schneider Cloud configuration (client_id, client_secret, site_id required)" }, 400);

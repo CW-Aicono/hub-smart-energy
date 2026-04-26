@@ -344,8 +344,27 @@ Deno.serve(async (req) => {
   let upstreamOpen = false;
   let upstreamOpenedAt = 0;
   let lastUpstreamError = "";
+  let pendingClientClose: { code: number; reason: string } | null = null;
   const connectStart = Date.now();
   const queuedFromClient: (string | ArrayBuffer | Blob)[] = [];
+
+  const closeClientWithUpstreamReason = (code: number, reason: string) => {
+    const safeCode = code >= 4000 && code <= 4999 ? code : 4400;
+    const safeReason = reason.slice(0, 120);
+    if (clientWs.readyState === WebSocket.OPEN) {
+      try { clientWs.close(safeCode, safeReason); } catch { /* ignore */ }
+      return;
+    }
+    pendingClientClose = { code: safeCode, reason: safeReason };
+  };
+
+  clientWs.onopen = () => {
+    if (pendingClientClose) {
+      const pending = pendingClientClose;
+      pendingClientClose = null;
+      closeClientWithUpstreamReason(pending.code, pending.reason);
+    }
+  };
 
   upstream.onopen = () => {
     upstreamOpen = true;
@@ -372,25 +391,18 @@ Deno.serve(async (req) => {
     console.log(
       `[ocpp-sim-proxy] [${sessionId}] upstream closed code=${ev.code} reason="${ev.reason}" ${phase} lastErr="${lastUpstreamError}"`
     );
-    // Build a verbose reason for the browser so the UI can display the real cause.
     const guess = !upstreamOpen
       ? (lastUpstreamError
           ? `handshake failed: ${lastUpstreamError}`
-          : (ev.code === 1006
-              ? "handshake failed (likely 401/404/subprotocol mismatch — check ocpp_id, password, server logs)"
+          : (ev.code === 1006 || ev.code === 0
+              ? "handshake failed (check ocpp_id, server key, TLS/subprotocol, and Hetzner logs)"
               : `closed before open (code=${ev.code})`))
       : (ev.reason || `closed (code=${ev.code})`);
-    const fullReason = `Upstream ${phase}: ${guess}`.slice(0, 120);
-    try {
-      if (clientWs.readyState === WebSocket.OPEN) {
-        // Use 4000-range so browser receives our reason intact (1006 is reserved/abnormal).
-        clientWs.close(4000 + (ev.code % 1000), fullReason);
-      }
-    } catch { /* ignore */ }
+    closeClientWithUpstreamReason(4400, `Upstream ${phase}: ${guess}`);
   };
 
   upstream.onerror = (e) => {
-    lastUpstreamError = (e as any)?.message ?? "unknown error";
+    lastUpstreamError = (e as Error)?.message ?? String(e);
     console.error(`[ocpp-sim-proxy] [${sessionId}] upstream error: ${lastUpstreamError}`);
   };
 

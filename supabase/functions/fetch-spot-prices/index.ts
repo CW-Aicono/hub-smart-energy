@@ -68,7 +68,8 @@ Deno.serve(async (req) => {
     );
   } catch (err) {
     console.error("fetch-spot-prices error:", err);
-    return new Response(JSON.stringify({ error: err.message }), {
+    const errorMessage = err instanceof Error ? err.message : String(err);
+    return new Response(JSON.stringify({ error: errorMessage }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

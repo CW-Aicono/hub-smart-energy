@@ -81,7 +81,8 @@ async function tryGetAccessToken(
       }
       errors.push(`[${attempt.label}] Code ${data.errorCode}: ${data.msg}`);
     } catch (e) {
-      errors.push(`[${attempt.label}] Fetch error: ${e.message}`);
+      const errorMessage = e instanceof Error ? e.message : String(e);
+      errors.push(`[${attempt.label}] Fetch error: ${errorMessage}`);
     }
   }
 
@@ -267,7 +268,8 @@ Deno.serve(async (req) => {
       status: 400,
     });
   } catch (err) {
-    return new Response(JSON.stringify({ success: false, error: err.message }), {
+    const errorMessage = err instanceof Error ? err.message : String(err);
+    return new Response(JSON.stringify({ success: false, error: errorMessage }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 500,
     });
