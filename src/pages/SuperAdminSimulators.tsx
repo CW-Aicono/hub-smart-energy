@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { useTenants } from "@/hooks/useTenants";
 import { supabase } from "@/integrations/supabase/client";
+import { invokeWithRetry } from "@/lib/invokeWithRetry";
 import SuperAdminSidebar from "@/components/super-admin/SuperAdminSidebar";
 import {
   Card,
@@ -94,9 +95,9 @@ const SuperAdminSimulators = () => {
   const { data, isFetching, refetch } = useQuery({
     queryKey: ["simulator-instances"],
     queryFn: async () => {
-      const { data, error } = await supabase.functions.invoke(
+      const { data, error } = await invokeWithRetry(
         "ocpp-simulator-control?action=status",
-        { method: "GET" },
+        { },
       );
       if (error) throw error;
       return (data as { instances: SimulatorRow[] }).instances ?? [];
@@ -107,9 +108,9 @@ const SuperAdminSimulators = () => {
   const startMut = useMutation({
     mutationFn: async () => {
       if (!tenantId) throw new Error("Tenant erforderlich");
-      const { data, error } = await supabase.functions.invoke(
+      const { data, error } = await invokeWithRetry(
         "ocpp-simulator-control?action=start",
-        { method: "POST", body: { tenantId, vendor, model, protocol } },
+        { body: { tenantId, vendor, model, protocol } },
       );
       if (error) throw error;
       return data;
@@ -127,12 +128,9 @@ const SuperAdminSimulators = () => {
       instanceId: string;
       action: "startTx" | "stopTx";
     }) => {
-      const { data, error } = await supabase.functions.invoke(
+      const { data, error } = await invokeWithRetry(
         "ocpp-simulator-control?action=action",
-        {
-          method: "POST",
-          body: { instanceId: vars.instanceId, action: vars.action },
-        },
+        { body: { instanceId: vars.instanceId, action: vars.action } },
       );
       if (error) throw error;
       return data;
@@ -146,9 +144,9 @@ const SuperAdminSimulators = () => {
 
   const stopMut = useMutation({
     mutationFn: async (instanceId: string) => {
-      const { data, error } = await supabase.functions.invoke(
+      const { data, error } = await invokeWithRetry(
         "ocpp-simulator-control?action=stop",
-        { method: "POST", body: { instanceId } },
+        { body: { instanceId } },
       );
       if (error) throw error;
       return data;
