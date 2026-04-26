@@ -68,6 +68,7 @@ interface SimulatorRow {
   live_status: string | null;
   live_meter_wh: number | null;
   live_transaction_id: number | null;
+  live_last_error: string | null;
 }
 
 const statusVariant = (
