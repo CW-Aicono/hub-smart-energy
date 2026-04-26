@@ -318,16 +318,7 @@ Deno.serve(async (req) => {
     } catch { /* not JSON, continue normal flow */ }
 
     try {
-      const httpResponse = await fetch(ocppCentralUrl, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${serviceKey}`,
-        },
-        body: rawData,
-      });
-
-      const responseText = await httpResponse.text();
+      const responseText = await forwardToOcppCentral(ocppCentralUrl, rawData);
       lastOutgoingAt = new Date().toISOString();
       lastOutgoingFrame = responseText.substring(0, 500);
 
