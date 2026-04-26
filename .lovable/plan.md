@@ -1,109 +1,174 @@
+Ich stoppe hier bewusst alle Änderungen. Du hast recht: Der richtige nächste Schritt ist nicht weiter herumprobieren, sondern den vorhandenen Code sauber mit dem Server-Zustand abgleichen und dann genau einen sicheren Weg gehen.
 
-# Iteration A + B – Wallbox-Simulator Funktionsausbau
+## Was ich aus Code und Chat sicher ableite
 
-Erweitert den OCPP-1.6-Simulator von einer Demo-Wallbox zu einem vollwertigen Test-Werkzeug für Abrechnung, PV-Überschuss, Lastmanagement und Alarmierung.
+### 1. Der Hetzner-Ordner ist bekannt
+Der laufende Docker-Container hat selbst verraten, wo sein Projekt liegt:
 
-> ⚠️ **Hetzner-Update nötig:** Der Simulator-Container (`docs/ocpp-simulator-server/src/index.ts`) bekommt diesmal substantielle neue Funktionen. Du musst den Container nach dem Lovable-Deploy einmalig neu bauen + neu starten. Schritt-für-Schritt-Anleitung liefere ich am Ende mit.
+```text
+/opt/aicono/aicono-ems/docs/ocpp-simulator-server
+```
 
----
+Das ist der korrekte Ordner für den Simulator-Container.
 
-## Iteration A – Realistischere Ladevorgänge & Live-Steuerung
+### 2. Der aktuell laufende Container ist noch alt
+Der ursprüngliche Fehler war:
 
-### A1. Konfigurierbare Ladeleistung (Hetzner + Edge + UI)
-- Neues Feld `power_kw` (Standard 11) pro Sim-Instanz, wählbar beim Start: **3.7 / 11 / 22 / 50 / 150 kW**
-- MeterValues-Tick alle 30 s addiert `power_kw * 1000 * 30/3600` Wh statt fest 1000 Wh → realistische kWh-Werte für Abrechnungstests
-- Im UI sichtbar in der Tabelle als neue Spalte „Leistung"
+```text
+Edge function returned 404: {"error":"Logs unavailable","details":{"error":"Not found"}}
+```
 
-### A2. Live-Steuerung pro laufender Instanz
-Neue Buttons in der Tabellenzeile (nur bei `online`/`charging`):
+Das passt exakt zu folgendem Zustand:
 
-| Button | Wirkung |
-|---|---|
-| **Slider „kW live"** | Sendet `setPower` an Container → ändert Tick-Energie sofort, simuliert PV-Drosselung |
-| **Pause / Resume** | Schickt StatusNotification `SuspendedEV` bzw. `Charging`, MeterValues pausieren |
-| **Stecker ziehen** | StatusNotification `Finishing` → `Available` (beendet Tx ordentlich) |
+- Die Lovable-/Cloud-Seite ruft bereits die neue Funktion auf: `GET /sim-api/logs?...`
+- Der Hetzner-Container, der gerade läuft, kennt diesen neuen Endpoint noch nicht.
+- Deshalb antwortet der Container mit `404 Not found`.
 
-Container-API neu: `POST /action` mit `{ id, action: "setPower"|"pause"|"resume"|"unplug", value? }`.
+Im neuen Code ist `/logs` bzw. `/sim-api/logs` vorhanden. Im alten Container nicht.
 
-### A3. Echten idTag aus `charging_users` wählen
-- Im „Simulator starten"-Dialog: zusätzlicher Select „Lade-User (idTag)" – holt `charging_users` des gewählten Tenants (zeigt Name + RFID/App-Tag)
-- Der gewählte Tag wird beim Start an den Container übermittelt und ersetzt das hartkodierte `SIM-IDTAG` in `StartTransaction`/`StopTransaction`
-- **Effekt:** Sessions im Tenant werden korrekt einem User zugeordnet → Abrechnung funktioniert end-to-end
+### 3. Mein vorheriger lokaler Healthcheck war falsch eingeordnet
+Der Befehl
 
----
+```bash
+curl http://127.0.0.1:8090/health
+```
 
-## Iteration B – Fehlersimulation & Live-Logs
+ist auf deinem Server nicht aussagekräftig, weil der Zugriff real über Caddy/Reverse-Proxy und Docker-Netzwerke läuft. Dass dieser lokale Curl fehlschlägt, bedeutet nicht automatisch, dass der Simulator kaputt ist.
 
-### B1. Fehler-Buttons pro Instanz
-Neuer Dropdown „Fehler simulieren" mit OCPP-1.6-Standardfehlern:
-- `GroundFailure`, `OverCurrentFailure`, `OverVoltage`, `ConnectorLockFailure`, `EVCommunicationError`, `InternalError`
-- Plus Button **„Fehler löschen"** → sendet `NoError` / `Available`
+### 4. Der echte Blocker ist nicht Docker, sondern Git
+Dein `git pull` ist nicht am Simulator gescheitert, sondern an einer lokalen Änderung in:
 
-Container schickt entsprechende `StatusNotification` mit `errorCode` und `status: "Faulted"`. Damit testbar:
-- Alarmierungs-Logik im EMS (Tasks/Notifications)
-- Anzeige fehlerhafter Wallboxen im EV-Dashboard
-- Auto-Recovery beim Zurücksetzen
+```text
+docs/ocpp-persistent-server/Caddyfile
+```
 
-### B2. Live-OCPP-Logs in der UI
-- Container hält Ringpuffer (letzte 50 Messages) pro Sim-Instanz im RAM
-- Neuer Container-Endpoint `GET /logs?id=<simId>` → liefert Array `{ts, dir: "in"|"out", action, payload}`
-- Neue Edge-Action `?action=logs&instanceId=...` reicht das durch
-- UI: Klick auf Tabellenzeile öffnet Sheet mit Log-Stream (auto-refresh alle 3 s), monospace, In = grün-Pfeil / Out = blau-Pfeil
+Fehlermeldung:
 
-> Persistenz nur im Container-RAM, geht beim Neustart verloren – das ist für Tests akzeptabel und vermeidet DB-Last.
+```text
+Your local changes to the following files would be overwritten by merge:
+        docs/ocpp-persistent-server/Caddyfile
+Aborting
+```
 
----
+Das bedeutet: Git schützt deine Server-Konfiguration. Gut so. Wir dürfen diese Datei nicht blind überschreiben.
 
-## Geänderte / neue Dateien
+### 5. Wichtig: Die Caddyfile ist vermutlich absichtlich lokal angepasst
+Im Projekt-Code steht aktuell:
 
-**Hetzner-Container (Update erforderlich):**
-- `docs/ocpp-simulator-server/src/index.ts`
-  - SimInstance-Interface: `+ powerKw, idTag, paused, logRing[]`
-  - StartTransaction nutzt `inst.idTag` statt fester String
-  - MeterValues-Tick rechnet mit `powerKw`
-  - Neue Actions: `setPower`, `pause`, `resume`, `unplug`, `fault`, `clearFault`
-  - Neuer Endpoint `GET /logs?id=...`
-  - Logging-Helper schreibt zusätzlich in `inst.logRing` (cap 50)
+```caddy
+handle_path /sim-api/* {
+    reverse_proxy ocpp-simulator:8090
+}
+```
 
-**Edge Function:**
-- `supabase/functions/ocpp-simulator-control/index.ts`
-  - `start` akzeptiert `powerKw`, `idTag` und reicht beide an Container
-  - `action` akzeptiert die neuen Aktionen + optionalen `value` (für setPower)
-  - Neue Action `logs` → ruft `/logs?id=...` am Container auf
+Das kann nur funktionieren, wenn `ocpp-caddy` und `ocpp-simulator` im selben Docker-Netzwerk sind. Dein laufender Container zeigt aber beim Simulator:
 
-**DB-Migration:**
-- `simulator_instances`: neue Spalten `power_kw numeric default 11`, `id_tag text`
+```text
+PORTS: 8090/tcp
+```
 
-**UI:**
-- `src/pages/SuperAdminSimulators.tsx`
-  - Start-Dialog: Power-Select + idTag-Select (Daten via `useChargingUsers(tenantId)`)
-  - Tabelle: neue Spalte „Leistung"
-  - Neue Action-Komponente `SimulatorRowActions` mit Power-Slider, Pause/Resume, Stecker, Fehler-Dropdown
-  - Klick auf Zeile öffnet `SimulatorLogSheet` (neue Komponente) mit Live-Logs
-- `src/components/super-admin/SimulatorLogSheet.tsx` *(neu)*
-- `src/components/super-admin/SimulatorRowActions.tsx` *(neu)*
-- `src/hooks/useChargingUsers.tsx`: kleiner Helper `useChargingUsersByTenant(tenantId)` ergänzen (nur Filter, keine RLS-Änderung)
+Das spricht dafür, dass die tatsächliche Server-Konfiguration anders sein kann als der Repo-Stand. Genau deshalb dürfen wir die lokale `Caddyfile` nicht einfach mit `git pull` überschreiben.
 
----
+## Sichere Lösung, die wir als nächsten Schritt verwenden
 
-## Hetzner-Update-Anleitung (kommt nach Implementierung)
+Wir aktualisieren NICHT das ganze Repository per normalem `git pull`, solange Git die lokale Caddyfile blockiert.
 
-Nach dem Deploy in Lovable bekommst du eine **klick-für-klick-Anleitung in einfachem Deutsch**, die genau so aussieht:
+Stattdessen machen wir einen kontrollierten, minimalen Weg:
 
-1. SSH-Verbindung zum Hetzner-Server (genauer Befehl)
-2. In Container-Verzeichnis wechseln (genauer Pfad)
-3. `git pull` ODER (falls kein Git) Datei manuell ersetzen (kompletter neuer Dateiinhalt zum Kopieren)
-4. `docker compose up -d --build ocpp-simulator` (genauer Befehl)
-5. Healthcheck: `curl http://127.0.0.1:8090/health` – erwartetes Ergebnis
-6. Test in Lovable: neuen Simulator starten, Logs öffnen → Erfolg sichtbar
+1. Zuerst sichern wir die aktuelle Server-Konfiguration sichtbar als Datei.
+2. Dann holen wir nur den aktuellen Git-Stand, ohne die Arbeitsdateien sofort zu überschreiben.
+3. Danach ersetzen wir gezielt nur die Simulator-Dateien, die für v1.1 nötig sind.
+4. Die lokale `docs/ocpp-persistent-server/Caddyfile` bleibt unangetastet.
+5. Danach bauen wir nur den Container `ocpp-simulator` neu.
+6. Danach prüfen wir die Version direkt im Container und zusätzlich über die öffentliche `/sim-api/status`-Route.
 
----
+Damit vermeiden wir genau die Sackgasse: kein blindes Überschreiben der Proxy-Konfiguration, keine unnötige Änderung am OCPP-Server, kein Herumprobieren an Ports.
 
-## Was NICHT in dieser Iteration enthalten ist
+## Der genaue nächste Ablauf für den Server
 
-- Authorize-Flow vor StartTransaction (Iteration C)
-- SetChargingProfile / PV-Surplus-Reaktion (Iteration C, braucht EMS-seitige Profile)
-- Bulk-Start, Szenario-Presets, Reconnect-Test (Iteration C)
-- Mehrere Connectoren pro Wallbox (Iteration C – größerer DB-Umbau)
+Diese Befehle sollten erst ausgeführt werden, wenn du diesen Plan freigibst. Ich gebe sie danach einzeln, Schritt für Schritt, mit erwarteter Ausgabe.
 
-Wenn A+B stabil läuft, machen wir Iteration C als nächsten Schritt.
+### Schritt A — Lokale Caddyfile sichern
+
+```bash
+cp /opt/aicono/aicono-ems/docs/ocpp-persistent-server/Caddyfile /root/Caddyfile.backup-before-simulator-v11
+```
+
+Zweck: Falls irgendetwas schiefgeht, haben wir deine aktuell funktionierende Proxy-Konfiguration separat gesichert.
+
+### Schritt B — Git-Stand nur herunterladen, nicht mergen
+
+```bash
+git -C /opt/aicono/aicono-ems fetch origin staging
+```
+
+Zweck: Wir holen den neuen Code auf den Server, ohne lokale Dateien zu überschreiben.
+
+### Schritt C — Nur Simulator-Dateien gezielt aus dem neuen Git-Stand übernehmen
+
+```bash
+git -C /opt/aicono/aicono-ems checkout origin/staging -- docs/ocpp-simulator-server/src/index.ts docs/ocpp-simulator-server/Dockerfile docs/ocpp-simulator-server/package.json docs/ocpp-simulator-server/tsconfig.json docs/ocpp-simulator-server/docker-compose.yml
+```
+
+Wichtig: Die `docs/ocpp-persistent-server/Caddyfile` wird dabei nicht angefasst.
+
+### Schritt D — Prüfen, ob der neue Code wirklich auf dem Server liegt
+
+```bash
+grep -n "version.*1.1.0\|GET /logs\|/sim-api/logs" /opt/aicono/aicono-ems/docs/ocpp-simulator-server/src/index.ts
+```
+
+Erwartet: Zeilen mit `1.1.0` und `/sim-api/logs`.
+
+### Schritt E — Nur Simulator-Container neu bauen
+
+```bash
+cd /opt/aicono/aicono-ems/docs/ocpp-simulator-server && docker compose up -d --build ocpp-simulator
+```
+
+Zweck: Es wird nur der Simulator neu gebaut, nicht der komplette OCPP-Server.
+
+### Schritt F — Version direkt im Container prüfen
+
+```bash
+docker exec ocpp-simulator wget -qO- http://127.0.0.1:8090/health
+```
+
+Erwartet:
+
+```json
+{"ok":true,"instances":0,"version":"1.1.0"}
+```
+
+### Schritt G — Öffentliche Simulator-API prüfen
+
+Dafür brauchen wir den API-Key nicht im Chat auszuschreiben. Auf dem Server liegt er normalerweise in der Simulator-`.env`. Der Befehl kann ihn direkt daraus lesen:
+
+```bash
+cd /opt/aicono/aicono-ems/docs/ocpp-simulator-server && . ./.env && curl -sS -H "Authorization: Bearer $SIMULATOR_API_KEY" https://ocpp.aicono.org/sim-api/status
+```
+
+Erwartet:
+
+```json
+{"instances":[]}
+```
+
+oder eine Liste laufender Instanzen.
+
+## Warum diese Lösung im ersten Versuch funktionieren soll
+
+- Sie behebt genau den belegten Fehler: alter Container kennt `/logs` nicht.
+- Sie verändert nicht die Caddyfile, die aktuell den funktionierenden Betrieb sichern kann.
+- Sie aktualisiert nur die v1.1-Dateien des Simulator-Containers.
+- Sie prüft Erfolg zweifach: intern im Container und extern über die Route, die die Cloud-Funktion nutzt.
+- Sie vermeidet `git stash pop`, weil das bei Caddyfile-Konflikten wieder neue Probleme erzeugen kann.
+
+## Was ich nicht mehr machen werde
+
+- Kein weiteres Raten an Ports.
+- Kein blindes `git pull`, solange lokale Server-Dateien blockieren.
+- Kein Ändern der Caddyfile ohne vorherige Sicherung und ohne klaren Beweis, dass es nötig ist.
+- Kein dritter Reparaturversuch, falls dieser kontrollierte Weg scheitert; dann wird zuerst ehrlich bewertet, ob die Server-Architektur anders ist als im Repo dokumentiert.
+
+Nach Freigabe führe ich dich exakt durch Schritt A, warte auf deine Ausgabe, dann Schritt B, usw. — immer nur ein Schritt auf einmal.
