@@ -1,22 +1,25 @@
 
 https://{$OCPP_DOMAIN} {
 	encode gzip
+
+	# Simulator-API (intern erreichbar über Container-Namen)
+	handle_path /sim-api/* {
+		reverse_proxy ocpp-simulator:8090
+	}
+
 	# WSS + HTTPS an den Node-Container
 	reverse_proxy ocpp:8080 {
 		header_up Host {host}
 		header_up X-Real-IP {remote}
-		header_up X-Forwarded-For {remote}
 		header_up X-Forwarded-Proto https
 	}
 }
 
 # ws:// Fallback-Port 80 für ältere Wallboxen ohne TLS.
-# Wichtig: explizit http:// verwenden, damit Caddy NICHT automatisch auf HTTPS/WSS umleitet.
 http://{$OCPP_DOMAIN} {
 	reverse_proxy ocpp:8080 {
 		header_up Host {host}
 		header_up X-Real-IP {remote}
-		header_up X-Forwarded-For {remote}
 		header_up X-Forwarded-Proto http
 	}
 }
