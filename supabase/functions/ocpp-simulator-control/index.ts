@@ -107,8 +107,19 @@ Deno.serve(async (req) => {
   }
 
   const url = new URL(req.url);
+  let bodyJson: any = null;
+  if (req.method !== "GET" && req.method !== "OPTIONS") {
+    try {
+      const text = await req.text();
+      bodyJson = text ? JSON.parse(text) : null;
+    } catch {
+      bodyJson = null;
+    }
+  }
   const action =
-    req.headers.get("x-ocpp-simulator-action") ??
+    (bodyJson && typeof bodyJson.__action === "string"
+      ? bodyJson.__action
+      : null) ??
     url.searchParams.get("action") ??
     "status";
 
