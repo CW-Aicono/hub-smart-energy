@@ -35,6 +35,9 @@ interface SimDto {
   startedAt: string;
   meterWh: number;
   transactionId: number | null;
+  powerKw?: number;
+  idTag?: string;
+  paused?: boolean;
 }
 
 function json(status: number, body: unknown) {
