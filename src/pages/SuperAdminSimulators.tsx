@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Navigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
@@ -6,6 +6,8 @@ import { useTenants } from "@/hooks/useTenants";
 import { supabase } from "@/integrations/supabase/client";
 import { invokeWithRetry } from "@/lib/invokeWithRetry";
 import SuperAdminSidebar from "@/components/super-admin/SuperAdminSidebar";
+import { SimulatorRowActions } from "@/components/super-admin/SimulatorRowActions";
+import { SimulatorLogSheet } from "@/components/super-admin/SimulatorLogSheet";
 import {
   Card,
   CardContent,
@@ -44,14 +46,11 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import {
   Play,
-  Square,
   Plug,
   RefreshCw,
-  Zap,
-  ZapOff,
   Loader2,
-  Trash2,
   AlertTriangle,
+  ScrollText,
 } from "lucide-react";
 import { format } from "date-fns";
 
@@ -73,18 +72,32 @@ interface SimulatorRow {
   started_at: string;
   stopped_at: string | null;
   charge_point_id: string | null;
+  power_kw: number | null;
+  id_tag: string | null;
   live_status: string | null;
   live_meter_wh: number | null;
   live_transaction_id: number | null;
   live_last_error: string | null;
+  live_power_kw?: number | null;
+  live_paused?: boolean | null;
 }
+
+interface ChargingUserLite {
+  id: string;
+  tenant_id: string;
+  name: string;
+  rfid_tag: string | null;
+  app_tag: string | null;
+}
+
+const POWER_OPTIONS = [3.7, 11, 22, 50, 150];
 
 const statusVariant = (
   status: string,
 ): "default" | "secondary" | "destructive" | "outline" => {
   if (status === "charging") return "default";
   if (status === "online") return "secondary";
-  if (status === "error") return "destructive";
+  if (status === "error" || status === "faulted") return "destructive";
   return "outline";
 };
 
@@ -98,13 +111,40 @@ const SuperAdminSimulators = () => {
   const [vendor, setVendor] = useState("AICONO");
   const [model, setModel] = useState("Simulator");
   const [protocol, setProtocol] = useState<"ws" | "wss">("wss");
+  const [powerKw, setPowerKw] = useState<number>(11);
+  const [idTagSelect, setIdTagSelect] = useState<string>("__sim__");
+
+  const [logInstanceId, setLogInstanceId] = useState<string | null>(null);
+  const [logOcppId, setLogOcppId] = useState<string | undefined>(undefined);
+
+  // Lade-User des gewählten Tenants laden (nur wenn Dialog offen)
+  const { data: chargingUsers = [] } = useQuery({
+    queryKey: ["sim-charging-users", tenantId],
+    enabled: openStart && !!tenantId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("charging_users")
+        .select("id, tenant_id, name, rfid_tag, app_tag")
+        .eq("tenant_id", tenantId)
+        .eq("status", "active")
+        .order("name");
+      if (error) throw error;
+      return (data ?? []) as ChargingUserLite[];
+    },
+  });
+
+  const selectedIdTag = useMemo(() => {
+    if (idTagSelect === "__sim__") return "SIM-IDTAG";
+    const u = chargingUsers.find((x) => x.id === idTagSelect);
+    return u?.rfid_tag || u?.app_tag || "SIM-IDTAG";
+  }, [idTagSelect, chargingUsers]);
 
   const { data, isFetching, refetch, error: statusError } = useQuery({
     queryKey: ["simulator-instances"],
     queryFn: async () => {
       const { data, error } = await invokeWithRetry(
         "ocpp-simulator-control?action=status",
-        { },
+        {},
         5,
       );
       if (error) throw error;
@@ -129,7 +169,16 @@ const SuperAdminSimulators = () => {
       if (!tenantId) throw new Error("Tenant erforderlich");
       const { data, error } = await invokeWithRetry(
         "ocpp-simulator-control?action=start",
-        { body: { tenantId, vendor, model, protocol } },
+        {
+          body: {
+            tenantId,
+            vendor,
+            model,
+            protocol,
+            powerKw,
+            idTag: selectedIdTag,
+          },
+        },
         5,
       );
       if (error) throw error;
@@ -146,18 +195,18 @@ const SuperAdminSimulators = () => {
   const actionMut = useMutation({
     mutationFn: async (vars: {
       instanceId: string;
-      action: "startTx" | "stopTx";
+      action: string;
+      value?: number | string;
     }) => {
       const { data, error } = await invokeWithRetry(
         "ocpp-simulator-control?action=action",
-        { body: { instanceId: vars.instanceId, action: vars.action } },
+        { body: { instanceId: vars.instanceId, action: vars.action, value: vars.value } },
         5,
       );
       if (error) throw error;
       return data;
     },
     onSuccess: () => {
-      toast.success("Aktion gesendet");
       qc.invalidateQueries({ queryKey: ["simulator-instances"] });
     },
     onError: (e: unknown) => toast.error(friendlyError(e)),
@@ -203,6 +252,11 @@ const SuperAdminSimulators = () => {
   const tenantName = (id: string) =>
     tenants.find((t) => t.id === id)?.name || id.slice(0, 8);
 
+  const openLogs = (row: SimulatorRow) => {
+    setLogInstanceId(row.id);
+    setLogOcppId(row.ocpp_id);
+  };
+
   return (
     <div className="flex h-screen bg-background">
       <SuperAdminSidebar />
@@ -235,7 +289,7 @@ const SuperAdminSimulators = () => {
                     Simulator starten
                   </Button>
                 </DialogTrigger>
-                <DialogContent>
+                <DialogContent className="max-w-lg">
                   <DialogHeader>
                     <DialogTitle>Neuen Simulator starten</DialogTitle>
                     <DialogDescription>
@@ -247,7 +301,7 @@ const SuperAdminSimulators = () => {
                   <div className="space-y-4 py-2">
                     <div className="space-y-2">
                       <Label>Tenant</Label>
-                      <Select value={tenantId} onValueChange={setTenantId}>
+                      <Select value={tenantId} onValueChange={(v) => { setTenantId(v); setIdTagSelect("__sim__"); }}>
                         <SelectTrigger>
                           <SelectValue placeholder="Tenant auswählen" />
                         </SelectTrigger>
@@ -260,55 +314,81 @@ const SuperAdminSimulators = () => {
                         </SelectContent>
                       </Select>
                     </div>
+
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <Label>Hersteller</Label>
-                        <Input
-                          value={vendor}
-                          onChange={(e) => setVendor(e.target.value)}
-                        />
+                        <Input value={vendor} onChange={(e) => setVendor(e.target.value)} />
                       </div>
                       <div className="space-y-2">
                         <Label>Modell</Label>
-                        <Input
-                          value={model}
-                          onChange={(e) => setModel(e.target.value)}
-                        />
+                        <Input value={model} onChange={(e) => setModel(e.target.value)} />
                       </div>
                     </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>Ladeleistung</Label>
+                        <Select value={String(powerKw)} onValueChange={(v) => setPowerKw(Number(v))}>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {POWER_OPTIONS.map((kw) => (
+                              <SelectItem key={kw} value={String(kw)}>
+                                {kw} kW
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Protokoll</Label>
+                        <Select value={protocol} onValueChange={(v) => setProtocol(v as "ws" | "wss")}>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="wss">wss (TLS)</SelectItem>
+                            <SelectItem value="ws">ws (unverschlüsselt)</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+
                     <div className="space-y-2">
-                      <Label>Protokoll</Label>
+                      <Label>Lade-User (idTag)</Label>
                       <Select
-                        value={protocol}
-                        onValueChange={(v) => setProtocol(v as "ws" | "wss")}
+                        value={idTagSelect}
+                        onValueChange={setIdTagSelect}
+                        disabled={!tenantId}
                       >
                         <SelectTrigger>
-                          <SelectValue />
+                          <SelectValue placeholder="User auswählen" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="wss">wss (TLS, empfohlen für Cloud)</SelectItem>
-                          <SelectItem value="ws">ws (unverschlüsselt, lokales LAN)</SelectItem>
+                          <SelectItem value="__sim__">SIM-IDTAG (Standard)</SelectItem>
+                          {chargingUsers.map((u) => {
+                            const tag = u.rfid_tag || u.app_tag;
+                            return (
+                              <SelectItem key={u.id} value={u.id} disabled={!tag}>
+                                {u.name} {tag ? `· ${tag}` : "(kein Tag)"}
+                              </SelectItem>
+                            );
+                          })}
                         </SelectContent>
                       </Select>
                       <p className="text-xs text-muted-foreground">
-                        Reale Wallboxen ohne TLS-Support nutzen ws://. Der Hetzner-Cloud-Simulator selbst verbindet intern immer per wss.
+                        Effektiver idTag: <span className="font-mono">{selectedIdTag}</span>
                       </p>
                     </div>
                   </div>
                   <DialogFooter>
-                    <Button
-                      variant="outline"
-                      onClick={() => setOpenStart(false)}
-                    >
+                    <Button variant="outline" onClick={() => setOpenStart(false)}>
                       Abbrechen
                     </Button>
-                    <Button
-                      onClick={() => startMut.mutate()}
-                      disabled={!tenantId || startMut.isPending}
-                    >
-                      {startMut.isPending && (
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      )}
+                    <Button onClick={() => startMut.mutate()} disabled={!tenantId || startMut.isPending}>
+                      {startMut.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
                       Starten
                     </Button>
                   </DialogFooter>
@@ -324,8 +404,7 @@ const SuperAdminSimulators = () => {
                 Aktive & vergangene Instanzen
               </CardTitle>
               <CardDescription>
-                Live-Status wird alle 5 Sekunden mit dem Hetzner-Container
-                synchronisiert.
+                Live-Status wird alle 5 Sekunden mit dem Hetzner-Container synchronisiert.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -354,8 +433,9 @@ const SuperAdminSimulators = () => {
                       <TableHead>Tenant</TableHead>
                       <TableHead>OCPP-ID</TableHead>
                       <TableHead>Status</TableHead>
+                      <TableHead className="text-right">Leistung</TableHead>
                       <TableHead className="text-right">Zähler (kWh)</TableHead>
-                      <TableHead>Tx-ID</TableHead>
+                      <TableHead>idTag</TableHead>
                       <TableHead>Gestartet</TableHead>
                       <TableHead className="text-right">Aktionen</TableHead>
                     </TableRow>
@@ -363,23 +443,27 @@ const SuperAdminSimulators = () => {
                   <TableBody>
                     {data.map((row) => {
                       const live = row.live_status ?? row.status;
-                      const isActive = !["stopped", "error"].includes(live);
-                      const isCharging = live === "charging";
+                      const livePower = row.live_power_kw ?? row.power_kw ?? 11;
+                      const livePaused = !!row.live_paused;
+                      const pending =
+                        actionMut.isPending || stopMut.isPending || deleteMut.isPending;
                       return (
                         <TableRow key={row.id}>
                           <TableCell className="font-medium">
                             {tenantName(row.tenant_id)}
                           </TableCell>
-                          <TableCell className="font-mono text-xs">
-                            {row.ocpp_id}
-                          </TableCell>
+                          <TableCell className="font-mono text-xs">{row.ocpp_id}</TableCell>
                           <TableCell>
                             <Badge variant={statusVariant(live)}>{live}</Badge>
-                            {row.live_last_error && (
-                              <p className="text-xs text-destructive mt-1">
-                                {row.live_last_error}
-                              </p>
+                            {livePaused && (
+                              <Badge variant="outline" className="ml-1">paused</Badge>
                             )}
+                            {row.live_last_error && (
+                              <p className="text-xs text-destructive mt-1">{row.live_last_error}</p>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right font-mono text-xs">
+                            {livePower.toFixed(1)} kW
                           </TableCell>
                           <TableCell className="text-right font-mono">
                             {row.live_meter_wh != null
@@ -387,69 +471,57 @@ const SuperAdminSimulators = () => {
                               : "—"}
                           </TableCell>
                           <TableCell className="font-mono text-xs">
-                            {row.live_transaction_id ?? "—"}
+                            {row.id_tag ?? "—"}
                           </TableCell>
                           <TableCell className="text-xs text-muted-foreground">
                             {format(new Date(row.started_at), "dd.MM. HH:mm")}
                           </TableCell>
                           <TableCell className="text-right">
-                            <div className="flex gap-1 justify-end">
-                              {isActive && !isCharging && (
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() =>
-                                    actionMut.mutate({
-                                      instanceId: row.id,
-                                      action: "startTx",
-                                    })
-                                  }
-                                  disabled={actionMut.isPending}
-                                >
-                                  <Zap className="h-3 w-3 mr-1" />
-                                  Laden
-                                </Button>
-                              )}
-                              {isCharging && (
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() =>
-                                    actionMut.mutate({
-                                      instanceId: row.id,
-                                      action: "stopTx",
-                                    })
-                                  }
-                                  disabled={actionMut.isPending}
-                                >
-                                  <ZapOff className="h-3 w-3 mr-1" />
-                                  Stop Tx
-                                </Button>
-                              )}
-                              {isActive && (
-                                <Button
-                                  size="sm"
-                                  variant="destructive"
-                                  onClick={() => stopMut.mutate(row.id)}
-                                  disabled={stopMut.isPending}
-                                >
-                                  <Square className="h-3 w-3 mr-1" />
-                                  Stoppen
-                                </Button>
-                              )}
+                            <div className="flex items-center justify-end gap-1">
                               <Button
                                 size="sm"
                                 variant="ghost"
-                                onClick={() => {
+                                onClick={() => openLogs(row)}
+                                title="OCPP-Logs anzeigen"
+                              >
+                                <ScrollText className="h-4 w-4" />
+                              </Button>
+                              <SimulatorRowActions
+                                liveStatus={live}
+                                powerKw={livePower}
+                                paused={livePaused}
+                                pending={pending}
+                                onStartTx={() =>
+                                  actionMut.mutate({ instanceId: row.id, action: "startTx" })
+                                }
+                                onStopTx={() =>
+                                  actionMut.mutate({ instanceId: row.id, action: "stopTx" })
+                                }
+                                onSetPower={(kw) =>
+                                  actionMut.mutate({ instanceId: row.id, action: "setPower", value: kw })
+                                }
+                                onPause={() =>
+                                  actionMut.mutate({ instanceId: row.id, action: "pause" })
+                                }
+                                onResume={() =>
+                                  actionMut.mutate({ instanceId: row.id, action: "resume" })
+                                }
+                                onUnplug={() =>
+                                  actionMut.mutate({ instanceId: row.id, action: "unplug" })
+                                }
+                                onFault={(code) =>
+                                  actionMut.mutate({ instanceId: row.id, action: "fault", value: code })
+                                }
+                                onClearFault={() =>
+                                  actionMut.mutate({ instanceId: row.id, action: "clearFault" })
+                                }
+                                onStop={() => stopMut.mutate(row.id)}
+                                onDelete={() => {
                                   if (confirm("Eintrag dauerhaft löschen?")) {
                                     deleteMut.mutate(row.id);
                                   }
                                 }}
-                                disabled={deleteMut.isPending}
-                                title="Eintrag löschen"
-                              >
-                                <Trash2 className="h-4 w-4 text-destructive" />
-                              </Button>
+                              />
                             </div>
                           </TableCell>
                         </TableRow>
@@ -462,6 +534,13 @@ const SuperAdminSimulators = () => {
           </Card>
         </div>
       </main>
+
+      <SimulatorLogSheet
+        instanceId={logInstanceId}
+        ocppId={logOcppId}
+        open={!!logInstanceId}
+        onOpenChange={(o) => { if (!o) setLogInstanceId(null); }}
+      />
     </div>
   );
 };
