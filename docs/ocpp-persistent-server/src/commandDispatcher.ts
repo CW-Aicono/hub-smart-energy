@@ -1,9 +1,9 @@
 import { randomUUID } from "crypto";
-import { supabase } from "./supabaseClient";
 import { config } from "./config";
 import { log } from "./logger";
 import { getSession, listSessions } from "./chargePointRegistry";
 import { logOcppMessage } from "./messageLog";
+import { fetchPendingCommands, updatePendingCommand } from "./backendApi";
 
 interface PendingRow {
   id: string;
@@ -54,20 +54,20 @@ async function dispatchOne(cmd: PendingRow): Promise<void> {
   const uniqueId = randomUUID();
   const ocppCall = buildOcppCall(uniqueId, cmd);
   if (!ocppCall) {
-    await supabase.from("pending_ocpp_commands").update({
+    await updatePendingCommand(cmd.id, {
       status: "rejected",
       processed_at: new Date().toISOString(),
       result: { error: `Unknown command ${cmd.command}` },
-    }).eq("id", cmd.id);
+    });
     return;
   }
 
   const callStr = JSON.stringify(ocppCall);
   await logOcppMessage(cmd.charge_point_ocpp_id, "outgoing", callStr);
-  await supabase.from("pending_ocpp_commands").update({
+  await updatePendingCommand(cmd.id, {
     status: "sent",
     processed_at: new Date().toISOString(),
-  }).eq("id", cmd.id);
+  });
   session.pendingCalls.set(uniqueId, { commandId: cmd.id, createdAt: Date.now() });
   session.socket.send(callStr);
   session.lastOutgoingAt = Date.now();
@@ -79,20 +79,14 @@ async function fetchAndDispatch() {
   const connectedIds = listSessions().map(s => s.chargePointId);
   if (connectedIds.length === 0) return;
 
-  const { data, error } = await supabase
-    .from("pending_ocpp_commands")
-    .select("*")
-    .in("charge_point_ocpp_id", connectedIds)
-    .in("status", ["pending", "scheduled"])
-    .or(`scheduled_at.is.null,scheduled_at.lte.${new Date().toISOString()}`)
-    .order("created_at", { ascending: true })
-    .limit(50);
-
-  if (error) {
-    log.error("fetch pending commands failed", { error: error.message });
+  let data: PendingRow[] = [];
+  try {
+    data = await fetchPendingCommands(connectedIds);
+  } catch (error) {
+    log.error("fetch pending commands failed", { error: (error as Error).message });
     return;
   }
-  for (const cmd of (data ?? []) as PendingRow[]) {
+  for (const cmd of data) {
     await dispatchOne(cmd);
   }
 }
@@ -105,29 +99,9 @@ export function startCommandDispatcher() {
     log.info("Command polling enabled", { intervalMs: config.commandPollIntervalMs });
   }
 
-  // Realtime (Postgres Changes)
-  if (config.enableRealtime) {
-    const channel = supabase
-      .channel("pending-ocpp-commands")
-      .on(
-        "postgres_changes" as any,
-        { event: "INSERT", schema: "public", table: "pending_ocpp_commands" },
-        (payload: any) => {
-          const row = payload.new as PendingRow;
-          if (!row || !row.charge_point_ocpp_id) return;
-          dispatchOne(row).catch(e =>
-            log.error("realtime dispatch failed", { error: (e as Error).message })
-          );
-        },
-      )
-      .subscribe((status: string) => {
-        log.info("Realtime subscription status", { status });
-      });
-    return () => {
-      if (pollTimer) clearInterval(pollTimer);
-      supabase.removeChannel(channel);
-    };
-  }
+  // Echtzeit ist mit der begrenzten Backend-Funktion nicht verfügbar.
+  // Polling alle 2 Sekunden reicht für Remote-Commands aus.
+  return () => { if (pollTimer) clearInterval(pollTimer); };
 
   return () => { if (pollTimer) clearInterval(pollTimer); };
 }
@@ -143,10 +117,10 @@ export async function resolvePendingCall(
   const pending = session.pendingCalls.get(uniqueId);
   if (!pending) return false;
   session.pendingCalls.delete(uniqueId);
-  await supabase.from("pending_ocpp_commands").update({
+  await updatePendingCommand(pending.commandId, {
     status: "completed",
     result: result as unknown as Record<string, unknown>,
-  }).eq("id", pending.commandId);
+  });
   log.info("Command response received", { chargePointId, uniqueId, status: result.status });
   return true;
 }
