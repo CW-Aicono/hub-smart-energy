@@ -308,6 +308,33 @@ Deno.serve(async (req) => {
       return json(200, { live: simDto });
     }
 
+    // Helper: aktive Simulator-Charging-Sessions abschließen
+    const closeSimSessions = async (
+      tenantId: string | null | undefined,
+      chargePointId: string | null | undefined,
+    ) => {
+      try {
+        const q = supabaseAdmin
+          .from("charging_sessions")
+          .update({
+            status: "completed",
+            stop_time: new Date().toISOString(),
+            stop_reason: "simulator_cleanup",
+          })
+          .eq("status", "active");
+        if (chargePointId) {
+          await q.eq("charge_point_id", chargePointId);
+        } else if (tenantId) {
+          // Fallback: verwaiste Simulator-Sessions ohne charge_point_id
+          await q.eq("tenant_id", tenantId)
+            .is("charge_point_id", null)
+            .eq("id_tag", "SIM-IDTAG");
+        }
+      } catch (e) {
+        console.error("closeSimSessions failed", e);
+      }
+    };
+
     // ---------------- STOP ----------------
     if (action === "stop" && req.method === "POST") {
       const body = bodyJson ?? {};
@@ -316,7 +343,7 @@ Deno.serve(async (req) => {
 
       const { data: row, error } = await supabaseAdmin
         .from("simulator_instances")
-        .select("external_id, charge_point_id")
+        .select("external_id, charge_point_id, tenant_id")
         .eq("id", instanceId)
         .maybeSingle();
       if (error || !row) return json(404, { error: "Instance not found" });
@@ -338,6 +365,9 @@ Deno.serve(async (req) => {
         .update({ status: "stopped", stopped_at: new Date().toISOString() })
         .eq("id", instanceId);
 
+      // Aktive Ladevorgänge dieser Sim-Instanz beenden
+      await closeSimSessions(row.tenant_id, row.charge_point_id);
+
       // Charge Point optional aufräumen
       if (row.charge_point_id) {
         await supabaseAdmin
@@ -357,7 +387,7 @@ Deno.serve(async (req) => {
 
       const { data: row } = await supabaseAdmin
         .from("simulator_instances")
-        .select("external_id, charge_point_id, status")
+        .select("external_id, charge_point_id, status, tenant_id")
         .eq("id", instanceId)
         .maybeSingle();
 
@@ -368,8 +398,14 @@ Deno.serve(async (req) => {
             "/stop",
             { method: "POST", body: JSON.stringify({ id: row.external_id }) },
             SIM_KEY,
+            8000,
           );
         } catch (_) { /* ignore */ }
+      }
+
+      // Aktive Ladevorgänge dieser Sim-Instanz beenden
+      if (row) {
+        await closeSimSessions(row.tenant_id, row.charge_point_id);
       }
 
       // Charge Point aufräumen
