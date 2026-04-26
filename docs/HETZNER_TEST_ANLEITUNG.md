@@ -89,7 +89,12 @@ INFO  Disconnected (code=1006)
 ```
 oder einen anderen Disconnect-Text **innerhalb der ersten 5 Sekunden**.
 
-→ **Mach jetzt TEST 2 weiter unten** und schicke mir die Ausgabe.
+→ **Nicht weiter testen. Nicht die echten Wallboxen umstellen.**
+
+Dieser Fehler bedeutet sehr wahrscheinlich: Der Hetzner erreicht zwar die Adresse, darf aber noch nicht korrekt auf die gespeicherten Wallbox-Daten zugreifen.
+In der Praxis ist fast immer der OCPP-Server-Schlüssel auf dem Hetzner falsch oder fehlt.
+
+Mach jetzt **TEST 2** weiter unten und schicke mir die Ausgabe.
 
 ---
 
@@ -147,6 +152,19 @@ docker compose logs --tail=200 ocpp
 ```
 
 → Es erscheinen viele Zeilen. **Markiere alles ab den letzten 30 Zeilen** und kopiere es.
+
+## Schritt 2.3b — Prüfen, ob der OCPP-Schlüssel auf dem Hetzner gesetzt ist
+
+Kopiere und führe aus:
+
+```bash
+docker compose exec ocpp sh -lc 'test -n "$OCPP_SERVER_API_KEY" && echo "OCPP_SERVER_API_KEY ist gesetzt" || echo "OCPP_SERVER_API_KEY FEHLT"'
+```
+
+Wichtig:
+- Wenn dort **„OCPP_SERVER_API_KEY FEHLT"** steht, ist die Ursache gefunden.
+- Schicke mir dann genau diese Zeile.
+- Schreibe den geheimen Schlüssel **niemals** in den Chat.
 
 ## Schritt 2.4 — Logs an mich schicken
 
