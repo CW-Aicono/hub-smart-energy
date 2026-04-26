@@ -97,7 +97,7 @@ const SuperAdminSimulators = () => {
   const [tenantId, setTenantId] = useState("");
   const [vendor, setVendor] = useState("AICONO");
   const [model, setModel] = useState("Simulator");
-  const [protocol] = useState<"wss">("wss");
+  const [protocol, setProtocol] = useState<"ws" | "wss">("wss");
 
   const { data, isFetching, refetch, error: statusError } = useQuery({
     queryKey: ["simulator-instances"],
