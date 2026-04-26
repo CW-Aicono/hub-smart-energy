@@ -60,6 +60,7 @@ const Tasks = lazy(() => import("./pages/Tasks"));
 const NetworkInfrastructure = lazy(() => import("./pages/NetworkInfrastructure"));
 const SuperAdminOcppIntegrations = lazy(() => import("./pages/SuperAdminOcppIntegrations"));
 const SuperAdminOcppControl = lazy(() => import("./pages/SuperAdminOcppControl"));
+const SuperAdminSimulators = lazy(() => import("./pages/SuperAdminSimulators"));
 
 const SuperAdminChargePointOnboarding = lazy(() => import("./pages/SuperAdminChargePointOnboarding"));
 const ChargingApp = lazy(() => import("./pages/ChargingApp"));
