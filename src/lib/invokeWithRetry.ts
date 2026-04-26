@@ -94,7 +94,7 @@ export async function invokeWithRetry<T = any>(
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       let res: { data: any; error: any };
       try {
-        res = await supabase.functions.invoke(normalized.fnName, normalized.options);
+        res = await invokeFunction(normalized.fnName, normalized.options);
       } catch (error) {
         res = { data: null, error };
       }
