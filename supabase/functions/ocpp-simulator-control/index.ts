@@ -186,6 +186,8 @@ Deno.serve(async (req) => {
       const vendor = (body.vendor as string) || "AICONO";
       const model = (body.model as string) || "Simulator";
       const protocol = (body.protocol === "ws" ? "ws" : "wss") as "ws" | "wss";
+      const powerKw = typeof body.powerKw === "number" && body.powerKw > 0 ? body.powerKw : 11;
+      const idTag = typeof body.idTag === "string" && body.idTag.length > 0 ? body.idTag : "SIM-IDTAG";
 
       if (!tenantId) return json(400, { error: "tenantId required" });
 
