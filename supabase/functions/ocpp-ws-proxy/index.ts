@@ -5,6 +5,8 @@ const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
 const OCPP_SUBPROTOCOL = "ocpp1.6";
 const COMMAND_POLL_INTERVAL = 3000; // Check for pending commands every 3s
+const FORWARD_MAX_ATTEMPTS = 3;
+const TRANSIENT_EDGE_ERROR = /503|temporarily unavailable|SUPABASE_EDGE_RUNTIME_ERROR|BOOT_ERROR|Service is temporarily unavailable/i;
 
 function createSupabase() {
   return createClient(supabaseUrl, serviceKey);
@@ -44,6 +46,62 @@ function generateUniqueId(): string {
 
 function shortSession(): string {
   return crypto.randomUUID().substring(0, 8);
+}
+
+function parseOcppFrame(rawData: string): { uniqueId: string; action: string | null } {
+  try {
+    const parsed = JSON.parse(rawData);
+    if (Array.isArray(parsed)) {
+      return {
+        uniqueId: typeof parsed[1] === "string" ? parsed[1] : "0",
+        action: typeof parsed[2] === "string" ? parsed[2] : null,
+      };
+    }
+  } catch { /* handled by fallback */ }
+  return { uniqueId: "0", action: null };
+}
+
+function isOcppResponseFrame(text: string): boolean {
+  try {
+    const parsed = JSON.parse(text);
+    return Array.isArray(parsed) && (parsed[0] === 3 || parsed[0] === 4) && typeof parsed[1] === "string";
+  } catch {
+    return false;
+  }
+}
+
+function fallbackOcppResponse(rawData: string, reason: string): string {
+  const { uniqueId, action } = parseOcppFrame(rawData);
+  if (action === "Heartbeat") return JSON.stringify([3, uniqueId, { currentTime: new Date().toISOString() }]);
+  if (action === "StatusNotification" || action === "MeterValues") return JSON.stringify([3, uniqueId, {}]);
+  return JSON.stringify([4, uniqueId, "InternalError", reason, {}]);
+}
+
+async function forwardToOcppCentral(ocppCentralUrl: string, rawData: string) {
+  let lastText = "";
+  let lastStatus = 0;
+  for (let attempt = 0; attempt < FORWARD_MAX_ATTEMPTS; attempt++) {
+    const httpResponse = await fetch(ocppCentralUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${serviceKey}`,
+      },
+      body: rawData,
+    });
+
+    const responseText = await httpResponse.text();
+    lastText = responseText;
+    lastStatus = httpResponse.status;
+
+    const transient = httpResponse.status >= 500 || TRANSIENT_EDGE_ERROR.test(responseText);
+    if (httpResponse.ok && isOcppResponseFrame(responseText)) return responseText;
+    if (!transient || attempt === FORWARD_MAX_ATTEMPTS - 1) break;
+    await new Promise((resolve) => setTimeout(resolve, 400 * (attempt + 1)));
+  }
+
+  console.warn(`[ocpp-ws-proxy] ocpp-central unavailable/invalid response status=${lastStatus} body=${lastText.substring(0, 200)}`);
+  return fallbackOcppResponse(rawData, "OCPP backend temporarily unavailable");
 }
 
 // Log once at boot whether ws.ping() is available in this runtime
