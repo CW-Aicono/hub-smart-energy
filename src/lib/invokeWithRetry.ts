@@ -17,6 +17,23 @@ function getInvocationKey(fnName: string, options: { body?: any; headers?: Recor
   return `${fnName}::${stableSerialize({ body: options.body ?? null, headers: options.headers ?? null })}`;
 }
 
+function normalizeInvocation(fnName: string, options: { body?: any; headers?: Record<string, string> }) {
+  const [name, query] = fnName.split("?");
+  if (!query) return { fnName, options };
+
+  const action = new URLSearchParams(query).get("action");
+  return {
+    fnName: name,
+    options: {
+      ...options,
+      headers: {
+        ...(options.headers ?? {}),
+        ...(action ? { "x-ocpp-simulator-action": action } : {}),
+      },
+    },
+  };
+}
+
 async function getErrorSignal(res: { data: any; error: any }): Promise<string> {
   const parts = [res.error?.message, res.error?.status, res.data?.error, res.data?.message, res.data?.code]
     .filter(Boolean)
@@ -44,14 +61,15 @@ export async function invokeWithRetry<T = any>(
   options: { body?: any; headers?: Record<string, string> } = {},
   maxAttempts = 3,
 ): Promise<{ data: T | null; error: any }> {
-  const key = getInvocationKey(fnName, options);
+  const normalized = normalizeInvocation(fnName, options);
+  const key = getInvocationKey(normalized.fnName, normalized.options);
   const existing = inFlightInvocations.get(key);
   if (existing) return existing as Promise<{ data: T | null; error: any }>;
 
   const request = (async () => {
     let lastResult: { data: any; error: any } = { data: null, error: null };
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
-      const res = await supabase.functions.invoke(fnName, options);
+      const res = await supabase.functions.invoke(normalized.fnName, normalized.options);
       lastResult = res as any;
       const msg = await getErrorSignal(res as any);
       const isTransient = TRANSIENT_EDGE_ERROR.test(msg);
