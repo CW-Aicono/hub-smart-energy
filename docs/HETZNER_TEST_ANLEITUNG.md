@@ -153,6 +153,15 @@ docker compose logs --tail=200 ocpp
 
 → Es erscheinen viele Zeilen. **Markiere alles ab den letzten 30 Zeilen** und kopiere es.
 
+Wenn du diese Zeile siehst:
+
+```text
+Startup check failed for testbox01
+```
+
+dann ist die Ursache eindeutig: Der Hetzner verwendet den falschen OCPP-Schlüssel oder die falsche Backend-Adresse.
+In diesem Fall darfst du keine Wallbox umstellen.
+
 ## Schritt 2.3b — Prüfen, ob der OCPP-Schlüssel auf dem Hetzner gesetzt ist
 
 Kopiere und führe aus:
