@@ -152,8 +152,8 @@ Deno.serve(async (req) => {
         });
       }
 
-      const result = await checkUpstreamHandshake({ target, cpId, password: cp.ocpp_password });
-      console.log(`[ocpp-sim-proxy] upstream check cp=${cpId} target=${target} result=${JSON.stringify(result)}`);
+      const result = await checkUpstreamHealth({ target, cpId });
+      console.log(`[ocpp-sim-proxy] upstream health check cp=${cpId} target=${target} result=${JSON.stringify(result)}`);
       return new Response(JSON.stringify(result), {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
