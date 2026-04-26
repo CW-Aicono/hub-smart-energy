@@ -82,7 +82,7 @@ export function SimulatorLogSheet({ instanceId, ocppId, open, onOpenChange }: Pr
         <SheetHeader>
           <SheetTitle>OCPP Live-Log</SheetTitle>
           <SheetDescription>
-            Letzte 50 Nachrichten — {ocppId ?? "—"} (auto-refresh alle 3s)
+            Letzte 50 Nachrichten — {ocppId ?? "—"} (auto-refresh bei aktiver Sitzung)
           </SheetDescription>
         </SheetHeader>
 
