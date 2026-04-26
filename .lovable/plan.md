@@ -1,115 +1,165 @@
-# OCPP Hetzner-Server – Vollständiger Analyse- und Behebungsplan
 
-**Datum:** 26.04.2026
-**Status:** Analyse abgeschlossen, Lösungen validiert, Anleitung bereit
+# OCPP-Wallbox-Simulator auf Hetzner — Plan zur Umsetzung
 
----
-
-## 1. Was wir wissen (Fakten, keine Vermutungen)
-
-### 1.1 Was funktioniert ✅
-- **Cloud-WebSocket-Proxy** (`ocpp-ws-proxy` als Edge Function in Lovable Cloud) läuft einwandfrei. Logs zeigen:
-  - `0311303102122250589` (DUOSIDA „Ost 1"): regelmäßige Heartbeats, BootNotifications akzeptiert
-  - `CoCSAG773` (Compleo „Compleo Rechts"): Heartbeats alle 30 s
-- Datenbank bestätigt für beide Wallboxen `ws_connected = true` mit aktuellem `last_heartbeat`.
-- Hetzner-Server `ocpp.aicono.org` läuft: `/health` liefert `200 OK`.
-
-### 1.2 Was nicht funktioniert ❌
-- **Keine echte Wallbox ist mit dem Hetzner-Server verbunden.** Beide echten Wallboxen reden mit der Cloud-Funktion, nicht mit Hetzner.
-- Der Simulator (`/super-admin/ocpp/simulator`) baut eine WebSocket-Verbindung zum Hetzner auf (Status: `Connected (subprotocol: ocpp1.6)`) und wird sofort danach mit Code `1006` getrennt — vor dem ersten OCPP-Frame.
-- `testbox01` existiert in der Datenbank mit `auth_required = false`, `ocpp_password = NULL`. Trotzdem schließt der Hetzner die Verbindung sofort.
-
-### 1.3 Wichtigste Schlussfolgerung
-Die echten Wallboxen sind in ihrer Konfiguration auf den **Cloud-Endpunkt** gestellt — nicht auf `wss://ocpp.aicono.org`. Deshalb laufen sie nicht über den Hetzner. **Das ist ein Konfigurations-Thema in den Wallboxen, kein Server-Bug.**
-
-Zusätzlich gibt es ein WebSocket-Handshake-Problem im Hetzner, das vor dem ersten OCPP-Frame zuschlägt — aber **erst relevant**, sobald wir Wallboxen umstellen.
+## Ziel in einem Satz
+Ein zusätzlicher Container auf deinem Hetzner-Server, der echte Wallboxen vortäuscht. Steuerbar von jedem Tenant-Admin direkt aus dem Browser, ohne eigene Hardware. Für Tests gegen den OCPP-Server, gegen Abrechnung, gegen Lade-App.
 
 ---
 
-## 2. Wurzelursachen-Analyse
+## 1. Was am Ende für dich/die Tenants sichtbar ist
 
-### Problem A: Wallboxen rufen die falsche Adresse an
-**Ursache:** Im Wallbox-Display ist die OCPP-Server-URL auf den alten Cloud-Endpunkt eingestellt. Der Hetzner wird nie kontaktiert.
+Im Tenant-Backend (sichtbar für **Tenant-Admins und Super-Admins**) entsteht eine neue Seite:
 
-**Beweis:**
-- `ocpp-ws-proxy`-Logs zeigen sekündlich Frames von `0311303102122250589` und `CoCSAG773`.
-- `ocpp-persistent-api`-Logs (das ist die Cloud-Function, die der Hetzner-Server für Wallbox-Daten anspricht) zeigen **nur Boot-Events**, keinerlei Auth-Aufrufe.
-- Wenn Wallboxen am Hetzner wären, müsste der Hetzner ständig `authenticate-charge-point` rufen — tut er nicht.
+**„Test-Wallboxen (Simulator)"**
 
-### Problem B: Hetzner-WebSocket schließt sofort nach Open
-**Hypothese 1 (am wahrscheinlichsten):** Der gerade aktualisierte `OCPP_SERVER_API_KEY` ist im Hetzner-`.env` **nicht** identisch mit dem in der Cloud. Folge: `loadChargePoint()` schlägt fehl, der Hetzner schließt mit 401 — aber das Schließ-Statement ist nach `wss.handleUpgrade()` zu spät und der Browser sieht nur 1006.
+Darauf:
+- Liste der aktuell laufenden eigenen Simulatoren (max. 3 pro Tenant)
+- Button **„Neue Test-Wallbox starten"** mit Auswahl:
+  - Name (z. B. „Test-Box Büro")
+  - Verbindungsart: **wss:// (verschlüsselt)** oder **ws:// (unverschlüsselt)**
+  - Mit oder ohne OCPP-Passwort
+  - Anzahl Ladepunkte (1 oder 2)
+- Pro laufender Simulator-Box Aktions-Buttons:
+  - „BootNotification senden"
+  - „Heartbeat senden"
+  - „Ladevorgang starten" (mit RFID-Tag-Eingabe)
+  - „Messwerte senden" (z. B. 7,4 kW)
+  - „Ladevorgang beenden"
+  - „Status ändern" (Available, Charging, Faulted, …)
+  - „Stoppen & löschen"
+- Live-Ansicht der letzten gesendeten/empfangenen Nachrichten der ausgewählten Simulator-Box.
 
-**Hypothese 2:** Die Cloud-Function `ocpp-persistent-api` antwortet zu langsam (>5 s). Der Browser-Client hinter Caddy bricht die Verbindung ab. Unwahrscheinlich, weil die Function in <100 ms bootet.
-
-**Hypothese 3:** Caddy oder der Hetzner-Code beendet die Verbindung wegen fehlender OCPP-Subprotokoll-Antwort. Unwahrscheinlich, weil der Code `handleProtocols: () => "ocpp1.6"` setzt und der Browser bereits `subprotocol: ocpp1.6` sieht.
-
-**Verifizierung morgen:** Hetzner-Server-Logs prüfen (Schritt 4 der Anleitung). Daraus wird sofort klar, welche Hypothese stimmt.
-
-### Problem C: Simulator-Fehler ohne Aussagekraft
-**Ursache:** Bei sehr schnellem Schließen vor dem ersten Frame zeigt der Browser nur Code `1006`. Der Patch im letzten Loop hat das teilweise verbessert — der Proxy gibt jetzt `4400 Upstream handshake failed: …` zurück. Reicht aber nicht, solange wir den Hetzner-Log-Inhalt nicht sehen.
+**Wichtig:** Jeder Tenant sieht nur seine eigenen Simulator-Boxen. Super-Admin sieht alle.
 
 ---
 
-## 3. Validierungs-Schritte (morgen früh, in Reihenfolge)
+## 2. Wie es technisch im Hintergrund funktioniert
 
-### Schritt 1: Ist Problem B durch den API-Key-Fix gelöst?
-Im Browser, eingeloggt als super-admin, unter `/super-admin/ocpp/simulator`:
-1. Wallbox `testbox01` auswählen.
-2. Target-URL: `wss://ocpp.aicono.org/`
-3. „Verbinden" klicken.
-4. **Erwartet (gut):** Verbindung bleibt offen, Heartbeats lassen sich senden.
-5. **Erwartet (schlecht):** Wieder Code 1006 → weiter mit Schritt 2.
-
-### Schritt 2: Hetzner-Server-Logs ansehen
-Per SSH auf dem Hetzner einloggen:
-```bash
-cd /opt/aicono/aicono-ems/docs/ocpp-persistent-server
-docker compose logs --tail=200 ocpp
+```
+   Tenant-Admin (Browser)
+            │
+            │  klickt „Heartbeat senden"
+            ▼
+   Datenbank: simulator_commands (neuer Eintrag)
+            │
+            │  alle 2 Sek. abgefragt
+            ▼
+   Hetzner: ocpp-simulator-Container
+            │
+            │  baut/hält WebSocket
+            ▼
+   Hetzner: ocpp-Server (bestehend)
+            │
+            ▼
+   Datenbank: charge_points / sessions / message_log
 ```
 
-Aussagekräftige Zeilen:
-- `OCPP backend API failed action=authenticate-charge-point` → **API-Key falsch**, Lösung: API-Key auf Hetzner mit Cloud abgleichen.
-- `WebSocket open ... testbox01` aber sofort danach `WebSocket closed code=1006` → Caddy-Konfig-Problem.
-- `upgrade failed` → Code-Bug im Hetzner-Server.
-
-### Schritt 3: Bei Bedarf Hetzner-Code patchen
-Erst wenn Schritt 2 klare Logs liefert, gezielt patchen — kein Raten.
+**Kein CORS-Problem**, weil der Browser nichts direkt zum Hetzner-Container schickt. Alle Befehle gehen über die Datenbank — genau wie bei echten Wallboxen.
 
 ---
 
-## 4. Lösungen (priorisiert nach Impact)
+## 3. Was konkret gebaut wird
 
-### Lösung A (HÖCHSTE PRIORITÄT): Wallboxen auf Hetzner umkonfigurieren
-**Nur du kannst das machen** (am Wallbox-Display oder über das Hersteller-Tool).
+### 3.1 Datenbank (2 neue Tabellen)
 
-| Wallbox | Alte URL (vermutlich) | Neue URL |
-|---|---|---|
-| DUOSIDA „Ost 1" | `wss://xnveugycurplszevdxtw.functions.supabase.co/ocpp-ws-proxy/0311303102122250589` | `wss://ocpp.aicono.org/0311303102122250589` |
-| Compleo „Rechts" | `wss://xnveugycurplszevdxtw.functions.supabase.co/ocpp-ws-proxy/CoCSAG773` | `wss://ocpp.aicono.org/CoCSAG773` |
+**`simulator_instances`** — eine Zeile pro laufender Simulator-Box
+- `id`, `tenant_id`, `created_by` (User), `name`
+- `ocpp_id` (automatisch generiert, z. B. `SIM-{tenant-kürzel}-{zufall}`)
+- `protocol` (`wss` oder `ws`)
+- `use_password` (true/false), `password` (falls gesetzt, verschlüsselt)
+- `connector_count` (1 oder 2)
+- `status` (`pending`, `running`, `stopped`, `error`)
+- `last_seen_at`, `created_at`
 
-**Wichtig:** Erst umstellen, **nachdem** der Simulator-Test in Schritt 1 erfolgreich war. Sonst sind beide Wallboxen offline.
+Mit RLS:
+- Tenant-Admin sieht/ändert nur eigene Tenant-Zeilen.
+- Super-Admin sieht alles.
+- Hard-Limit: max. 3 aktive (`status='running'`) pro Tenant — per Datenbank-Trigger erzwungen.
 
-### Lösung B: Hetzner-Code härten (von mir vorbereitet, deployment durch Update auf Hetzner)
-Zwei kleine Änderungen, die ich bei Bedarf in `docs/ocpp-persistent-server/src/index.ts` einbaue:
-1. **Detail-Logs beim Upgrade:** Jeder Schritt wird mit Zeitstempel geloggt.
-2. **Fail-fast-Antwort:** Bei Auth-Fehler wird vor dem Schließen ein klarer HTTP-Statuscode an den Browser gesendet, statt direkt zu droppen.
+**`simulator_commands`** — Befehlswarteschlange
+- `id`, `simulator_instance_id`, `command` (z. B. `boot`, `heartbeat`, `start_tx`, `meter`, `stop_tx`, `status`, `terminate`)
+- `payload` (JSON), `status` (`pending`, `done`, `failed`), `result`, `created_at`, `executed_at`
 
-### Lösung C: Simulator-Vorprüfung
-Vor jedem WebSocket-Upgrade ruft der Simulator einen neuen `POST /authenticate-charge-point` an Hetzner. Wenn der schon scheitert (z. B. 401), zeigt die UI **„Wallbox unbekannt"** oder **„Server-Schlüssel falsch"** statt `1006`.
+### 3.2 Hetzner-Container `ocpp-simulator`
+
+Neuer kleiner Node.js-Dienst neben dem bestehenden OCPP-Server. Aufgaben:
+- Startet beim Hochfahren bestehende `running`-Simulatoren neu (Resilienz nach Server-Reboot).
+- Pollt alle 2 Sek. die Tabelle `simulator_commands` auf neue Aufgaben.
+- Hält je laufendem Simulator eine eigene WebSocket-Verbindung zum OCPP-Server offen — wahlweise als `wss://ocpp.aicono.org/<ocpp_id>` oder `ws://ocpp.aicono.org/<ocpp_id>`, wahlweise mit Basic-Auth-Header (Passwort) oder ohne.
+- Führt eingehende Befehle aus und schreibt das Ergebnis zurück.
+- Schickt regelmäßige Heartbeats automatisch (wie eine echte Wallbox).
+- Beendet sich sauber, wenn `terminate` kommt oder Tenant das löscht.
+
+**Ressourcen:** Pro Simulator ca. 5 MB RAM. Bei 30 Tenants × 3 = 90 Boxen → ca. 500 MB. Unkritisch.
+
+### 3.3 Tenant-Frontend
+Neue Seite unter `/super-admin/simulator` (Super-Admin-Sicht: alle Tenants) **und** `/admin/simulator` (Tenant-Admin-Sicht: nur eigene). Liste, Erstell-Dialog, Aktionen wie oben beschrieben.
+
+### 3.4 Edge Function (klein)
+Eine einzige Edge Function `simulator-control` für:
+- Simulator anlegen (prüft Limit, generiert ocpp_id, legt evtl. `charge_point`-Eintrag an damit der OCPP-Server die Box kennt).
+- Befehl absenden (schreibt Zeile in `simulator_commands`).
+- Simulator löschen (terminate + cleanup).
 
 ---
 
-## 5. Konkrete Reihenfolge für morgen
+## 4. Sicherheit & Missbrauchsschutz
 
-1. **`docs/HETZNER_TEST_ANLEITUNG.md` öffnen und Schritt für Schritt durchgehen.**
-2. Simulator-Test mit `testbox01` ausführen.
-3. **Wenn grün:** Wallbox-URLs im Display auf `wss://ocpp.aicono.org/<id>` umstellen.
-4. **Wenn rot:** Hetzner-Logs (Befehl in Anleitung) in den Lovable-Chat kopieren. Dann patche ich gezielt.
+| Maßnahme | Umsetzung |
+|---|---|
+| Nur Admins | RLS + Frontend-Rollencheck |
+| Max. 3 Simulatoren pro Tenant gleichzeitig | Datenbank-Trigger beim Insert |
+| Keine fremden Tenants beeinflussbar | RLS auf beiden Tabellen, ocpp_id enthält tenant-kürzel |
+| Container-Crash zerstört nichts | Auto-Restart beim Hochfahren aus DB |
+| ws:// nur intern erlaubt? | Nein — explizit gewünscht, für Realismus älterer Wallboxen. Hinweis-Banner im UI |
+| Audit | Jede Erstellung/Löschung mit `created_by` und Zeitstempel |
 
 ---
 
-## 6. Was wir nicht mehr machen
+## 5. Technische Hürden, die ich vorab geprüft habe
 
-- ❌ Keine „vielleicht-fix"-Code-Änderungen ohne Beweis.
-- ❌ Keine parallele Bearbeitung von 10 Edge Functions wegen Build-Errors. Build-Errors sind ein separates Thema und werden separat gefixt.
-- ❌ Keine Erfolgsmeldung ohne Verifikation in den Hetzner-Logs.
+**1. Mehrere WebSockets aus einem Container — geht das?**
+Ja. Node.js mit `ws`-Library hält problemlos hunderte parallele Verbindungen. Unser bestehender OCPP-Server nutzt dieselbe Library.
+
+**2. Findet der OCPP-Server die Simulator-Boxen?**
+Ja, weil wir beim Anlegen automatisch einen `charge_points`-Eintrag mit `auth_required=false` (oder `true` mit Passwort) erzeugen. Der Server unterscheidet nicht zwischen echt und simuliert.
+
+**3. Was, wenn der Hetzner-Server neu startet?**
+Der Container liest beim Start alle `running`-Einträge aus `simulator_instances` und stellt die WebSockets wieder her. Tenant merkt nichts.
+
+**4. Kollisionen bei OCPP-IDs?**
+Ausgeschlossen durch Format `SIM-{6-stelliges Tenant-Kürzel}-{8 Zufallszeichen}` + Unique-Constraint.
+
+**5. Datenmüll bei Tests?**
+Charging Sessions vom Simulator bekommen einen Marker `is_test=true` (neue Spalte). Abrechnung filtert diese standardmäßig raus. Du kannst sie aber sehen, um die Abrechnungslogik zu testen.
+
+**6. Was geht NICHT?**
+- Hersteller-Sondernachrichten (z. B. proprietäre KEBA-Pakete) — nur OCPP-1.6-Standard.
+- Realistisches Funkverhalten / Verbindungsabbrüche — wir können sie nur simulieren, indem wir die Verbindung manuell trennen.
+
+---
+
+## 6. Umsetzungsreihenfolge (in dieser Reihenfolge, jedes Stück testbar)
+
+1. **Datenbank-Tabellen + RLS + Limit-Trigger** anlegen.
+2. **Edge Function `simulator-control`** mit Endpunkten Anlegen/Befehlen/Löschen.
+3. **Hetzner-Container-Code** (`docs/ocpp-simulator-server/`) mit Docker-Compose-Eintrag schreiben + Anleitung zum Deployen (du machst nur einen einzigen Befehl auf dem Server).
+4. **Frontend-Seite** für Tenant-Admins + Super-Admins.
+5. **Ende-zu-Ende-Test**: Simulator anlegen → Boot → Heartbeat → Ladevorgang → Messwerte → Stop → in OCPP-Übersicht und Abrechnung sichtbar.
+6. **Doku** als laienverständliche Anleitung in Deutsch (sowohl für dich zum Deployen als auch für Tenant-Admins zum Bedienen).
+
+---
+
+## 7. Was ich von dir nach Freigabe brauche
+
+Nur **eine Sache**: Nach Freigabe baue ich alles. Wenn der Hetzner-Container fertig ist, gebe ich dir **einen einzigen Befehl** zum Kopieren in dein SSH-Fenster auf dem Hetzner. Mehr nicht. Schritt für Schritt mit Erwartungs-Ausgabe.
+
+---
+
+## 8. Was bewusst NICHT in diesem Plan ist (um Credits zu sparen)
+
+- Keine Simulation von OCPP 2.0.1 — nur 1.6 (was dein Server unterstützt).
+- Kein Last-Test-Modus mit hunderten Wallboxen aus einem Knopf.
+- Keine Auto-Lade-Simulation (Wallbox lädt von alleine über Stunden) — kommt bei Bedarf später.
+
+Diese Sachen können wir nach erfolgreichem ersten Wurf ergänzen.
