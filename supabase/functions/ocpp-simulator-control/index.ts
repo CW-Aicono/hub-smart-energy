@@ -174,7 +174,7 @@ Deno.serve(async (req) => {
             .from("simulator_instances")
             .update({ status: l.status, last_error: l.lastError })
             .eq("id", row.id);
-        } else if (!l && !["stopped", "error"].includes(row.status)) {
+        } else if (liveAvailable && !l && !["stopped", "error"].includes(row.status)) {
           // nicht mehr im Container -> als gestoppt markieren
           await supabaseAdmin
             .from("simulator_instances")
