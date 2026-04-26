@@ -42,50 +42,36 @@ function toHttpHandshakeUrl(wsUrl: string): string {
   return wsUrl;
 }
 
-async function checkUpstreamHandshake(params: {
+async function checkUpstreamHealth(params: {
   target: string;
   cpId: string;
-  password?: string | null;
-}): Promise<{ ok: boolean; status?: number; statusText?: string; body?: string; url: string; error?: string }> {
+}): Promise<{ ok: boolean; status?: number; statusText?: string; body?: string; url: string; healthUrl: string; error?: string }> {
   const upstreamBase = params.target.replace(/\/+$/, "");
   const upstreamWsUrl = `${upstreamBase}/${encodeURIComponent(params.cpId)}`;
-  const handshakeUrl = toHttpHandshakeUrl(upstreamWsUrl);
-  const headers: Record<string, string> = {
-    "Connection": "Upgrade",
-    "Upgrade": "websocket",
-    "Sec-WebSocket-Key": randomWebSocketKey(),
-    "Sec-WebSocket-Version": "13",
-    "Sec-WebSocket-Protocol": OCPP_SUBPROTOCOL,
-  };
-
-  if (params.password) {
-    headers.Authorization = `Basic ${btoa(`${params.cpId}:${params.password}`)}`;
-  }
+  const healthUrl = `${toHttpHandshakeUrl(upstreamBase)}/health`;
 
   try {
-    const response = await fetch(handshakeUrl, {
+    const response = await fetch(healthUrl, {
       method: "GET",
-      headers,
       redirect: "manual",
     });
 
-    let body = "";
-    if (response.status !== 101) {
-      body = (await response.text().catch(() => "")).slice(0, 500);
-    }
+    const body = (await response.text().catch(() => "")).slice(0, 500);
 
     return {
-      ok: response.status === 101,
+      ok: response.ok,
       status: response.status,
       statusText: response.statusText,
       body,
       url: upstreamWsUrl,
+      healthUrl,
     };
   } catch (error) {
     return {
       ok: false,
       error: error instanceof Error ? error.message : String(error),
       url: upstreamWsUrl,
+      healthUrl,
     };
   }
 }
@@ -166,8 +152,8 @@ Deno.serve(async (req) => {
         });
       }
 
-      const result = await checkUpstreamHandshake({ target, cpId, password: cp.ocpp_password });
-      console.log(`[ocpp-sim-proxy] upstream check cp=${cpId} target=${target} result=${JSON.stringify(result)}`);
+      const result = await checkUpstreamHealth({ target, cpId });
+      console.log(`[ocpp-sim-proxy] upstream health check cp=${cpId} target=${target} result=${JSON.stringify(result)}`);
       return new Response(JSON.stringify(result), {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
