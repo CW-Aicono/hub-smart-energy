@@ -5016,9 +5016,11 @@ export type Database = {
           created_by: string | null
           external_id: string | null
           id: string
+          id_tag: string | null
           last_error: string | null
           model: string
           ocpp_id: string
+          power_kw: number
           protocol: string
           server_host: string
           started_at: string
@@ -5034,9 +5036,11 @@ export type Database = {
           created_by?: string | null
           external_id?: string | null
           id?: string
+          id_tag?: string | null
           last_error?: string | null
           model?: string
           ocpp_id: string
+          power_kw?: number
           protocol?: string
           server_host?: string
           started_at?: string
@@ -5052,9 +5056,11 @@ export type Database = {
           created_by?: string | null
           external_id?: string | null
           id?: string
+          id_tag?: string | null
           last_error?: string | null
           model?: string
           ocpp_id?: string
+          power_kw?: number
           protocol?: string
           server_host?: string
           started_at?: string
