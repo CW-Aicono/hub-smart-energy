@@ -69,7 +69,13 @@ export async function invokeWithRetry<T = any>(
   const request = (async () => {
     let lastResult: { data: any; error: any } = { data: null, error: null };
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
-      const res = await supabase.functions.invoke(normalized.fnName, normalized.options);
+      let res: { data: any; error: any };
+      try {
+        res = await supabase.functions.invoke(normalized.fnName, normalized.options);
+      } catch (error) {
+        res = { data: null, error };
+      }
+
       lastResult = res as any;
       const msg = await getErrorSignal(res as any);
       const isTransient = TRANSIENT_EDGE_ERROR.test(msg);
