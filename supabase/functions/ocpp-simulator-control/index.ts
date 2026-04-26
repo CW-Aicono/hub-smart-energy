@@ -185,7 +185,7 @@ Deno.serve(async (req) => {
       const tenantId = body.tenantId as string;
       const vendor = (body.vendor as string) || "AICONO";
       const model = (body.model as string) || "Simulator";
-      const protocol = (body.protocol as string) === "ws" ? "ws" : "wss";
+      const protocol = "wss";
 
       if (!tenantId) return json(400, { error: "tenantId required" });
 
