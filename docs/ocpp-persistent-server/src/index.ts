@@ -156,8 +156,23 @@ function handleConnection(ws: WebSocket, chargePointId: string, chargePointPk: s
 const stopDispatcher = startCommandDispatcher();
 const sweeper = startIdleSweeper();
 
-server.listen(config.port, () => {
-  log.info("OCPP server started", { port: config.port, domain: config.ocppDomain });
+async function startServer() {
+  if (config.startupCheckOcppId) {
+    const auth = await loadChargePoint(config.startupCheckOcppId);
+    if (!auth.chargePoint) {
+      throw new Error(`Startup check failed for ${config.startupCheckOcppId}: ${auth.message}`);
+    }
+    log.info("Startup check ok", { chargePointId: config.startupCheckOcppId });
+  }
+
+  server.listen(config.port, () => {
+    log.info("OCPP server started", { port: config.port, domain: config.ocppDomain });
+  });
+}
+
+startServer().catch((error) => {
+  log.error("OCPP server startup failed", { error: (error as Error).message });
+  process.exit(1);
 });
 
 function shutdown(signal: string) {
