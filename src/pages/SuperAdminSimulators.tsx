@@ -97,7 +97,7 @@ const SuperAdminSimulators = () => {
   const [tenantId, setTenantId] = useState("");
   const [vendor, setVendor] = useState("AICONO");
   const [model, setModel] = useState("Simulator");
-  const [protocol] = useState<"wss">("wss");
+  const [protocol, setProtocol] = useState<"ws" | "wss">("wss");
 
   const { data, isFetching, refetch, error: statusError } = useQuery({
     queryKey: ["simulator-instances"],
@@ -278,9 +278,21 @@ const SuperAdminSimulators = () => {
                     </div>
                     <div className="space-y-2">
                       <Label>Protokoll</Label>
-                      <div className="rounded-md border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
-                        wss (TLS)
-                      </div>
+                      <Select
+                        value={protocol}
+                        onValueChange={(v) => setProtocol(v as "ws" | "wss")}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="wss">wss (TLS, empfohlen für Cloud)</SelectItem>
+                          <SelectItem value="ws">ws (unverschlüsselt, lokales LAN)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground">
+                        Reale Wallboxen ohne TLS-Support nutzen ws://. Der Hetzner-Cloud-Simulator selbst verbindet intern immer per wss.
+                      </p>
                     </div>
                   </div>
                   <DialogFooter>
