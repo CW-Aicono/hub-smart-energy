@@ -3,9 +3,9 @@ import { randomUUID } from "crypto";
 import { WebSocketServer, WebSocket } from "ws";
 import { config } from "./config";
 import { log } from "./logger";
-import { supabase } from "./supabaseClient";
-import { loadChargePoint, checkBasicAuth } from "./auth";
+import { loadChargePoint } from "./auth";
 import { logOcppMessage } from "./messageLog";
+import { updateChargePoint } from "./backendApi";
 import { handleCall } from "./ocppHandler";
 import { registerSession, removeSession, getSession, listSessions } from "./chargePointRegistry";
 import { startPing, startIdleSweeper } from "./keepAlive";
@@ -40,26 +40,20 @@ server.on("upgrade", async (req, socket, head) => {
       return;
     }
 
-    const cp = await loadChargePoint(chargePointId);
+    const auth = await loadChargePoint(chargePointId, req.headers.authorization);
+    const cp = auth.chargePoint;
     if (!cp) {
-      log.warn("Unknown charge point", { chargePointId });
-      socket.write("HTTP/1.1 404 Not Found\r\n\r\nUnknown charge point");
+      log.warn(auth.message, { chargePointId });
+      if (auth.statusCode === 401) {
+        socket.write(`HTTP/1.1 401 Unauthorized\r\nWWW-Authenticate: Basic realm="OCPP"\r\n\r\n`);
+      } else {
+        socket.write(`HTTP/1.1 ${auth.statusCode} ${auth.message}\r\n\r\n${auth.message}`);
+      }
       socket.destroy();
       return;
     }
 
-    // Auth nur prüfen, wenn die Wallbox auf Passwort-Schutz konfiguriert ist
-    // UND in der DB ein Passwort hinterlegt ist. Sonst akzeptieren wir den
-    // Connect ohne Authorization-Header (z. B. ältere go-e/KEBA-Modelle).
-    if (cp.auth_required && cp.ocpp_password) {
-      const ok = checkBasicAuth(req.headers.authorization, cp.ocpp_password);
-      if (!ok) {
-        log.warn("Auth failed", { chargePointId });
-        socket.write(`HTTP/1.1 401 Unauthorized\r\nWWW-Authenticate: Basic realm="OCPP"\r\n\r\n`);
-        socket.destroy();
-        return;
-      }
-    } else {
+    if (auth.authSkipped) {
       log.info("Accepting unauthenticated connection", { chargePointId, authRequired: cp.auth_required });
     }
 
@@ -83,11 +77,11 @@ function handleConnection(ws: WebSocket, chargePointId: string, chargePointPk: s
   registerSession(session);
   log.info("WebSocket open", { sessionId, chargePointId });
 
-  // DB: connected markieren
-  supabase.from("charge_points").update({
-    ws_connected: true, ws_connected_since: new Date().toISOString(),
-  }).eq("id", chargePointPk).then(({ error }) => {
-    if (error) log.warn("ws_connected update failed", { error: error.message });
+  updateChargePoint(chargePointPk, {
+    ws_connected: true,
+    ws_connected_since: new Date().toISOString(),
+  }).catch((error) => {
+    log.warn("ws_connected update failed", { error: error.message });
   });
 
   const pingTimer = startPing(ws, sessionId, chargePointId);
@@ -144,10 +138,14 @@ function handleConnection(ws: WebSocket, chargePointId: string, chargePointPk: s
       durationSec: Math.round((Date.now() - session.openedAt) / 1000),
     });
     removeSession(chargePointId, sessionId);
-    const { error } = await supabase.from("charge_points").update({
-      ws_connected: false, ws_connected_since: null,
-    }).eq("id", chargePointPk);
-    if (error) log.warn("ws_connected=false update failed", { error: error.message });
+    try {
+      await updateChargePoint(chargePointPk, {
+        ws_connected: false,
+        ws_connected_since: null,
+      });
+    } catch (error) {
+      log.warn("ws_connected=false update failed", { error: (error as Error).message });
+    }
   });
 
   ws.on("error", (e) => {
