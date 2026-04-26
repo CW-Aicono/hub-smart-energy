@@ -38,7 +38,13 @@ const SuperAdminUsers = () => {
   const { data: users = [], isLoading } = useQuery({
     queryKey: ["super-admin-users"],
     queryFn: async () => {
-      const { data: profiles, error: pErr } = await supabase.from("profiles").select("*");
+      // STRIKTE TRENNUNG: Super-Admin-Bereich zeigt ausschließlich Plattform-User
+      // (Profile OHNE tenant_id). Tenant-User werden ausschließlich in der
+      // Tenant-Benutzerverwaltung angezeigt und verwaltet.
+      const { data: profiles, error: pErr } = await supabase
+        .from("profiles")
+        .select("*")
+        .is("tenant_id", null);
       if (pErr) throw pErr;
       const { data: roles, error: rErr } = await supabase.from("user_roles").select("*");
       if (rErr) throw rErr;
