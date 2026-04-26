@@ -181,6 +181,7 @@ const App = () => (
                       <Route path="/super-admin/monitoring" element={<SA><SuperAdminMonitoring /></SA>} />
                       <Route path="/super-admin/ocpp/integrations" element={<SA><SuperAdminOcppIntegrations /></SA>} />
                       <Route path="/super-admin/ocpp/control" element={<SA><SuperAdminOcppControl /></SA>} />
+                      <Route path="/super-admin/ocpp/simulators" element={<SA><SuperAdminSimulators /></SA>} />
                       
                       <Route path="/super-admin/ocpp/onboarding" element={<SA><SuperAdminChargePointOnboarding /></SA>} />
                       <Route path="/super-admin/map" element={<SA><SuperAdminMap /></SA>} />
