@@ -107,8 +107,19 @@ Deno.serve(async (req) => {
   }
 
   const url = new URL(req.url);
+  let bodyJson: any = null;
+  if (req.method !== "GET" && req.method !== "OPTIONS") {
+    try {
+      const text = await req.text();
+      bodyJson = text ? JSON.parse(text) : null;
+    } catch {
+      bodyJson = null;
+    }
+  }
   const action =
-    req.headers.get("x-ocpp-simulator-action") ??
+    (bodyJson && typeof bodyJson.__action === "string"
+      ? bodyJson.__action
+      : null) ??
     url.searchParams.get("action") ??
     "status";
 
@@ -160,7 +171,7 @@ Deno.serve(async (req) => {
 
     // ---------------- START ----------------
     if (action === "start" && req.method === "POST") {
-      const body = await req.json();
+      const body = bodyJson ?? {};
       const tenantId = body.tenantId as string;
       const vendor = (body.vendor as string) || "AICONO";
       const model = (body.model as string) || "Simulator";
@@ -253,7 +264,7 @@ Deno.serve(async (req) => {
 
     // ---------------- ACTION (startTx / stopTx) ----------------
     if (action === "action" && req.method === "POST") {
-      const body = await req.json();
+      const body = bodyJson ?? {};
       const instanceId = body.instanceId as string;
       const act = body.action as string;
       if (!instanceId || !["startTx", "stopTx"].includes(act)) {
@@ -288,7 +299,7 @@ Deno.serve(async (req) => {
 
     // ---------------- STOP ----------------
     if (action === "stop" && req.method === "POST") {
-      const body = await req.json();
+      const body = bodyJson ?? {};
       const instanceId = body.instanceId as string;
       if (!instanceId) return json(400, { error: "instanceId required" });
 
@@ -328,7 +339,7 @@ Deno.serve(async (req) => {
 
     // ---------------- DELETE ----------------
     if (action === "delete" && req.method === "POST") {
-      const body = await req.json();
+      const body = bodyJson ?? {};
       const instanceId = body.instanceId as string;
       if (!instanceId) return json(400, { error: "instanceId required" });
 
