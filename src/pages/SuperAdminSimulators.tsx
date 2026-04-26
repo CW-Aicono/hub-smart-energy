@@ -400,6 +400,19 @@ const SuperAdminSimulators = () => {
                                   Stoppen
                                 </Button>
                               )}
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => {
+                                  if (confirm("Eintrag dauerhaft löschen?")) {
+                                    deleteMut.mutate(row.id);
+                                  }
+                                }}
+                                disabled={deleteMut.isPending}
+                                title="Eintrag löschen"
+                              >
+                                <Trash2 className="h-4 w-4 text-destructive" />
+                              </Button>
                             </div>
                           </TableCell>
                         </TableRow>
