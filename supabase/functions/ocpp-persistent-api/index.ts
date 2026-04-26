@@ -69,19 +69,23 @@ function onlyPatch(input: Record<string, unknown>, allowed: string[]) {
 async function handle(action: string, body: Record<string, unknown>) {
   switch (action) {
     case "authenticate-charge-point": {
-      const ocppId = String(body.ocppId ?? "");
+      const rawOcppId = String(body.ocppId ?? "");
+      const ocppId = rawOcppId.trim();
       const authorization = typeof body.authorization === "string" ? body.authorization : null;
       if (!ocppId) return fail(400, "Missing ocppId");
+
+      console.log(`[ocpp-persistent-api] authenticate-charge-point raw="${rawOcppId}" trimmed="${ocppId}"`);
 
       const { data: cp, error } = await admin
         .from("charge_points")
         .select("id, ocpp_id, tenant_id, ocpp_password, auth_required, connection_protocol")
-        .eq("ocpp_id", ocppId)
+        .ilike("ocpp_id", ocppId)
         .maybeSingle();
 
       if (error) return fail(500, error.message);
       if (!cp) {
-        return ok({ authorized: false, statusCode: 404, message: "Unknown charge point" });
+        console.warn(`[ocpp-persistent-api] unknown charge point raw="${rawOcppId}" trimmed="${ocppId}"`);
+        return ok({ authorized: false, statusCode: 404, message: `Unknown charge point: ${ocppId}` });
       }
 
       const needsPassword = Boolean(cp.auth_required ?? true) && Boolean(cp.ocpp_password);
