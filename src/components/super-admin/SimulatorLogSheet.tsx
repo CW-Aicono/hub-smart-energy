@@ -37,33 +37,38 @@ export function SimulatorLogSheet({ instanceId, ocppId, open, onOpenChange }: Pr
     },
     retry: false,
     queryFn: async () => {
-      // Direct fetch so we can inspect HTTP status (invoke throws on non-2xx and bubbles a toast)
       const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ocpp-simulator-control?action=logs&instanceId=${instanceId}`;
       const session = (await supabase.auth.getSession()).data.session;
-      try {
-        const res = await fetch(url, {
-          method: "GET",
-          headers: {
-            Authorization: `Bearer ${session?.access_token ?? ""}`,
-            apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string,
-          },
-        });
-        if (res.status === 404) {
-          // Instance gone (e.g. after Stop Tx or container restart) — stop polling
-          return { logs: [], unavailable: true, notFound: true };
+      const headers = {
+        Authorization: `Bearer ${session?.access_token ?? ""}`,
+        apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string,
+      };
+      // Retry transient 5xx (e.g. 503 SUPABASE_EDGE_RUNTIME_ERROR)
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          const res = await fetch(url, { method: "GET", headers });
+          if (res.status === 404) {
+            return { logs: [], unavailable: true, notFound: true };
+          }
+          if (res.status >= 500 && res.status < 600 && attempt < 2) {
+            await new Promise((r) => setTimeout(r, 500 * (attempt + 1)));
+            continue;
+          }
+          if (!res.ok) {
+            return { logs: [], unavailable: true, notFound: false };
+          }
+          const json = (await res.json()) as { logs?: OcppLogEntry[] };
+          return {
+            logs: (json.logs ?? []).slice().reverse(),
+            unavailable: false,
+            notFound: false,
+          };
+        } catch {
+          if (attempt === 2) return { logs: [], unavailable: true, notFound: false };
+          await new Promise((r) => setTimeout(r, 500 * (attempt + 1)));
         }
-        if (!res.ok) {
-          return { logs: [], unavailable: true, notFound: false };
-        }
-        const json = (await res.json()) as { logs?: OcppLogEntry[] };
-        return {
-          logs: (json.logs ?? []).slice().reverse(),
-          unavailable: false,
-          notFound: false,
-        };
-      } catch {
-        return { logs: [], unavailable: true, notFound: false };
       }
+      return { logs: [], unavailable: true, notFound: false };
     },
   });
 
