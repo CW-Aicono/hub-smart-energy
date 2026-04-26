@@ -140,8 +140,10 @@ Deno.serve(async (req) => {
     // ---------------- STATUS ----------------
     if (action === "status") {
       const live = await callSim("/status", { method: "GET" }, SIM_KEY);
-      const liveInstances: SimDto[] =
-        (live.data as { instances?: SimDto[] } | null)?.instances ?? [];
+      const liveAvailable = live.ok;
+      const liveInstances: SimDto[] = liveAvailable
+        ? (live.data as { instances?: SimDto[] } | null)?.instances ?? []
+        : [];
       const liveById = new Map(liveInstances.map((i) => [i.id, i]));
 
       const { data: dbRows, error } = await supabaseAdmin
