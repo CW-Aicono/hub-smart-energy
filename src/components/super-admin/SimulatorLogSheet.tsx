@@ -69,23 +69,30 @@ export function SimulatorLogSheet({ instanceId, ocppId, open, onOpenChange }: Pr
               <Loader2 className="h-4 w-4 animate-spin" />
               Logs werden geladen …
             </div>
-          ) : !data || data.length === 0 ? (
+          ) : unavailable ? (
+            <div className="py-12 text-center text-sm text-muted-foreground px-6">
+              Live-Logs sind noch nicht verfügbar.
+              <br />
+              Der Simulator-Container muss auf v1.1 aktualisiert werden
+              (siehe <code>docs/ocpp-simulator-server/UPDATE_v1.1_ANLEITUNG.md</code>).
+            </div>
+          ) : logs.length === 0 ? (
             <div className="py-12 text-center text-sm text-muted-foreground">
               Noch keine OCPP-Nachrichten in dieser Sitzung.
             </div>
           ) : (
             <ScrollArea className="h-full pr-4">
               <div className="space-y-2 font-mono text-xs">
-                {data.map((entry, idx) => (
+                {logs.map((entry, idx) => (
                   <div
                     key={idx}
                     className="rounded-md border border-border bg-muted/30 p-2"
                   >
                     <div className="flex items-center gap-2 mb-1">
                       {entry.dir === "in" ? (
-                        <ArrowDown className="h-3 w-3 text-green-600" />
+                        <ArrowDown className="h-3 w-3 text-primary" />
                       ) : (
-                        <ArrowUp className="h-3 w-3 text-blue-600" />
+                        <ArrowUp className="h-3 w-3 text-accent-foreground" />
                       )}
                       <Badge variant="outline" className="text-xs">
                         {entry.action}
