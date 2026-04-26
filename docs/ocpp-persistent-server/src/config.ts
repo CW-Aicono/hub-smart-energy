@@ -19,7 +19,7 @@ function bool(name: string, def: boolean): boolean {
 
 export const config = {
   supabaseUrl: req("SUPABASE_URL"),
-  ocppServerApiKey: process.env.OCPP_SERVER_API_KEY || process.env.GATEWAY_API_KEY || req("SUPABASE_SERVICE_ROLE_KEY"),
+  ocppServerApiKey: req("OCPP_SERVER_API_KEY"),
   ocppDomain: process.env.OCPP_DOMAIN ?? "",
   port: num("PORT", 8080),
   logLevel: (process.env.LOG_LEVEL ?? "info") as "debug" | "info" | "warn" | "error",
@@ -27,5 +27,6 @@ export const config = {
   idleTimeoutSec: num("IDLE_TIMEOUT_SECONDS", 120),
   commandPollIntervalMs: num("COMMAND_POLL_INTERVAL_MS", 2000),
   enableRealtime: bool("ENABLE_REALTIME", false),
+  startupCheckOcppId: process.env.OCPP_STARTUP_CHECK_ID ?? "testbox01",
   ocppSubprotocol: "ocpp1.6",
 };
