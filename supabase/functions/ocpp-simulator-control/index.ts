@@ -237,12 +237,13 @@ Deno.serve(async (req) => {
             protocol,
             vendor,
             model,
+            powerKw,
+            idTag,
           }),
         },
         SIM_KEY,
       );
       if (!sim.ok) {
-        // rollback charge_point
         await supabaseAdmin.from("charge_points").delete().eq("id", cp.id);
         return json(sim.status, {
           error: "Simulator start failed",
@@ -252,7 +253,6 @@ Deno.serve(async (req) => {
 
       const simDto = sim.data as SimDto;
 
-      // simulator_instances anlegen
       const { data: inst, error: instErr } = await supabaseAdmin
         .from("simulator_instances")
         .insert({
@@ -266,6 +266,8 @@ Deno.serve(async (req) => {
           status: simDto.status,
           charge_point_id: cp.id,
           created_by: userId,
+          power_kw: powerKw,
+          id_tag: idTag,
         })
         .select()
         .single();
@@ -274,12 +276,18 @@ Deno.serve(async (req) => {
       return json(200, { instance: inst, live: simDto });
     }
 
-    // ---------------- ACTION (startTx / stopTx) ----------------
+    // ---------------- ACTION (startTx / stopTx / setPower / pause / resume / unplug / fault / clearFault) ----
     if (action === "action" && req.method === "POST") {
       const body = bodyJson ?? {};
       const instanceId = body.instanceId as string;
       const act = body.action as string;
-      if (!instanceId || !["startTx", "stopTx"].includes(act)) {
+      const value = body.value;
+      const allowed = [
+        "startTx", "stopTx",
+        "setPower", "pause", "resume", "unplug",
+        "fault", "clearFault",
+      ];
+      if (!instanceId || !allowed.includes(act)) {
         return json(400, { error: "instanceId and valid action required" });
       }
       const { data: row, error } = await supabaseAdmin
@@ -294,7 +302,7 @@ Deno.serve(async (req) => {
         "/action",
         {
           method: "POST",
-          body: JSON.stringify({ id: row.external_id, action: act }),
+          body: JSON.stringify({ id: row.external_id, action: act, value }),
         },
         SIM_KEY,
         8000,
@@ -303,11 +311,37 @@ Deno.serve(async (req) => {
         return json(sim.status, { error: "Action failed", details: sim.data });
       }
       const simDto = sim.data as SimDto;
+      const updates: Record<string, unknown> = { status: simDto.status };
+      if (act === "setPower" && typeof value === "number") {
+        updates.power_kw = value;
+      }
       await supabaseAdmin
         .from("simulator_instances")
-        .update({ status: simDto.status })
+        .update(updates)
         .eq("id", instanceId);
       return json(200, { live: simDto });
+    }
+
+    // ---------------- LOGS ----------------
+    if (action === "logs" && req.method === "GET") {
+      const instanceId = url.searchParams.get("instanceId");
+      if (!instanceId) return json(400, { error: "instanceId required" });
+      const { data: row } = await supabaseAdmin
+        .from("simulator_instances")
+        .select("external_id")
+        .eq("id", instanceId)
+        .maybeSingle();
+      if (!row?.external_id) return json(404, { error: "Instance not found" });
+      const sim = await callSim(
+        `/logs?id=${encodeURIComponent(row.external_id)}`,
+        { method: "GET" },
+        SIM_KEY,
+        5000,
+      );
+      if (!sim.ok) {
+        return json(sim.status, { error: "Logs unavailable", details: sim.data });
+      }
+      return json(200, sim.data);
     }
 
     // Helper: aktive Simulator-Charging-Sessions abschließen
