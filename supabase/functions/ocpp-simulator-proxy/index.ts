@@ -402,7 +402,7 @@ Deno.serve(async (req) => {
   };
 
   upstream.onerror = (e) => {
-    lastUpstreamError = (e as Error)?.message ?? String(e);
+    lastUpstreamError = (e as ErrorEvent)?.message ?? String(e);
     console.error(`[ocpp-sim-proxy] [${sessionId}] upstream error: ${lastUpstreamError}`);
   };
 

@@ -542,6 +542,9 @@ Deno.serve(async (req) => {
     if (!config.client_id || !config.client_secret || !config.site_id) {
       return json({ error: "Incomplete Schneider Cloud configuration (client_id, client_secret, site_id required)" }, 400);
     }
+    if (!tenantId) {
+      return json({ error: "Integration tenant not found" }, 400);
+    }
 
     // Default endpoints based on research
     const apiUrl = config.api_url || "https://api.exchange.se.com";
