@@ -159,6 +159,22 @@ const SuperAdminSimulators = () => {
     onError: (e: Error) => toast.error(e.message),
   });
 
+  const deleteMut = useMutation({
+    mutationFn: async (instanceId: string) => {
+      const { data, error } = await invokeWithRetry(
+        "ocpp-simulator-control?action=delete",
+        { body: { instanceId } },
+      );
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      toast.success("Eintrag gelöscht");
+      qc.invalidateQueries({ queryKey: ["simulator-instances"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
   if (loading) return null;
   if (!user) return <Navigate to="/auth" replace />;
 
