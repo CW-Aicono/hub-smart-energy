@@ -39,7 +39,6 @@ async function callBackend<T>(action: string, payload: Record<string, unknown>):
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "x-ocpp-server-key": config.ocppServerApiKey,
     },
     body: JSON.stringify({ action, ...payload }),
   });
