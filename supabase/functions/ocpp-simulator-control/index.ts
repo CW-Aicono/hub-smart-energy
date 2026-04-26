@@ -111,7 +111,7 @@ Deno.serve(async (req) => {
 
   try {
     // ---------------- STATUS ----------------
-    if (action === "status" && req.method === "GET") {
+    if (action === "status") {
       const live = await callSim("/status", { method: "GET" }, SIM_KEY);
       const liveInstances: SimDto[] =
         (live.data as { instances?: SimDto[] } | null)?.instances ?? [];
@@ -323,9 +323,15 @@ Deno.serve(async (req) => {
       return json(200, { ok: true });
     }
 
-    return json(400, { error: "Unknown action or method" });
+    return json(400, { error: `Unknown action or method: ${action} ${req.method}` });
   } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
+    let msg: string;
+    if (e instanceof Error) msg = e.message;
+    else if (typeof e === "string") msg = e;
+    else {
+      try { msg = JSON.stringify(e); } catch { msg = String(e); }
+    }
+    console.error("ocpp-simulator-control error:", e);
     return json(500, { error: msg });
   }
 });
