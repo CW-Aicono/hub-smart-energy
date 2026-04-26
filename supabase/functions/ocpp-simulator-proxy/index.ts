@@ -317,35 +317,31 @@ Deno.serve(async (req) => {
     `[ocpp-sim-proxy] [${sessionId}] open cp=${cpId} target=${upstreamBase} hasPw=${!!cp.ocpp_password}`
   );
 
-  // 6) Connect upstream WebSocket. Deno's WebSocket constructor doesn't allow
-  // custom headers, so use fetch() upgrade pattern via Deno.upgradeWebSocket?
-  // No — instead use the standard WebSocket but rely on URL credentials for
-  // Basic auth (most servers including ours accept "wss://user:pass@host/path").
-  let upstreamUrlWithAuth = upstreamUrl;
-  if (cp.ocpp_password) {
-    const u = new URL(upstreamUrl);
-    u.username = encodeURIComponent(cpId);
-    u.password = encodeURIComponent(cp.ocpp_password);
-    upstreamUrlWithAuth = u.toString();
+  // 6) Connect upstream WebSocket. The Edge runtime can fail TLS WebSocket
+  // handshakes against some Caddy setups with an HTTP/2 protocol error. For the
+  // simulator only, try the public wss:// URL first and then the Hetzner ws://
+  // fallback once before closing the browser connection.
+  const withOptionalBasicAuth = (rawUrl: string) => {
+    if (!cp.ocpp_password) return rawUrl;
+    const u = new URL(rawUrl);
+    u.username = cpId;
+    u.password = cp.ocpp_password;
+    return u.toString();
+  };
+
+  const upstreamCandidates = [withOptionalBasicAuth(upstreamUrl)];
+  if (/^wss:\/\//i.test(upstreamUrl)) {
+    upstreamCandidates.push(withOptionalBasicAuth(upstreamUrl.replace(/^wss:\/\//i, "ws://")));
   }
 
-  let upstream: WebSocket;
-  try {
-    upstream = new WebSocket(upstreamUrlWithAuth, [OCPP_SUBPROTOCOL]);
-  } catch (e) {
-    const msg = (e as Error)?.message ?? String(e);
-    console.error(`[ocpp-sim-proxy] [${sessionId}] upstream ctor failed:`, msg);
-    try {
-      clientWs.close(4001, `Upstream connect failed: ${msg}`.slice(0, 120));
-    } catch { /* ignore */ }
-    return response;
-  }
-
+  let upstream: WebSocket | null = null;
   let upstreamOpen = false;
   let upstreamOpenedAt = 0;
   let lastUpstreamError = "";
   let pendingClientClose: { code: number; reason: string } | null = null;
-  const connectStart = Date.now();
+  let candidateIndex = 0;
+  let connectStart = Date.now();
+  let clientClosed = false;
   const queuedFromClient: (string | ArrayBuffer | Blob)[] = [];
 
   const closeClientWithUpstreamReason = (code: number, reason: string) => {
@@ -358,6 +354,81 @@ Deno.serve(async (req) => {
     pendingClientClose = { code: safeCode, reason: safeReason };
   };
 
+  const connectUpstream = () => {
+    const candidate = upstreamCandidates[candidateIndex];
+    connectStart = Date.now();
+    lastUpstreamError = "";
+    upstreamOpen = false;
+    upstreamOpenedAt = 0;
+
+    console.log(
+      `[ocpp-sim-proxy] [${sessionId}] upstream attempt ${candidateIndex + 1}/${upstreamCandidates.length} ` +
+      `url=${candidate.replace(/:\/\/[^:@/]+:[^@/]+@/, "://***:***@")}`
+    );
+
+    try {
+      upstream = new WebSocket(candidate, [OCPP_SUBPROTOCOL]);
+    } catch (e) {
+      lastUpstreamError = (e as Error)?.message ?? String(e);
+      console.error(`[ocpp-sim-proxy] [${sessionId}] upstream ctor failed: ${lastUpstreamError}`);
+      if (candidateIndex + 1 < upstreamCandidates.length && !clientClosed) {
+        candidateIndex += 1;
+        connectUpstream();
+      } else {
+        closeClientWithUpstreamReason(4401, `Upstream connect failed: ${lastUpstreamError}`);
+      }
+      return;
+    }
+
+    upstream.onopen = () => {
+      upstreamOpen = true;
+      upstreamOpenedAt = Date.now();
+      console.log(
+        `[ocpp-sim-proxy] [${sessionId}] upstream open after ${upstreamOpenedAt - connectStart}ms ` +
+        `subprotocol="${(upstream as any)?.protocol ?? ""}"`
+      );
+      for (const m of queuedFromClient) {
+        try { upstream?.send(m as any); } catch { /* ignore */ }
+      }
+      queuedFromClient.length = 0;
+    };
+
+    upstream.onmessage = (ev) => {
+      if (clientWs.readyState === WebSocket.OPEN) {
+        clientWs.send(ev.data);
+      }
+    };
+
+    upstream.onclose = (ev) => {
+      const aliveMs = upstreamOpenedAt ? Date.now() - upstreamOpenedAt : 0;
+      const phase = upstreamOpen ? `after ${aliveMs}ms open` : `before open (after ${Date.now() - connectStart}ms)`;
+      console.log(
+        `[ocpp-sim-proxy] [${sessionId}] upstream closed code=${ev.code} reason="${ev.reason}" ${phase} ` +
+        `attempt=${candidateIndex + 1}/${upstreamCandidates.length} lastErr="${lastUpstreamError}"`
+      );
+
+      if (!upstreamOpen && candidateIndex + 1 < upstreamCandidates.length && !clientClosed) {
+        candidateIndex += 1;
+        connectUpstream();
+        return;
+      }
+
+      const guess = !upstreamOpen
+        ? (lastUpstreamError
+            ? `handshake failed: ${lastUpstreamError}`
+            : (ev.code === 1006 || ev.code === 0
+                ? "handshake failed (check ocpp_id, server key, TLS/subprotocol, and Hetzner logs)"
+                : `closed before open (code=${ev.code})`))
+        : (ev.reason || `closed (code=${ev.code})`);
+      closeClientWithUpstreamReason(4400, `Upstream ${phase}: ${guess}`);
+    };
+
+    upstream.onerror = (e) => {
+      lastUpstreamError = (e as ErrorEvent)?.message ?? String(e);
+      console.error(`[ocpp-sim-proxy] [${sessionId}] upstream error: ${lastUpstreamError}`);
+    };
+  };
+
   clientWs.onopen = () => {
     if (pendingClientClose) {
       const pending = pendingClientClose;
@@ -366,48 +437,10 @@ Deno.serve(async (req) => {
     }
   };
 
-  upstream.onopen = () => {
-    upstreamOpen = true;
-    upstreamOpenedAt = Date.now();
-    console.log(
-      `[ocpp-sim-proxy] [${sessionId}] upstream open after ${upstreamOpenedAt - connectStart}ms ` +
-      `subprotocol="${(upstream as any).protocol ?? ""}"`
-    );
-    for (const m of queuedFromClient) {
-      try { upstream.send(m as any); } catch { /* ignore */ }
-    }
-    queuedFromClient.length = 0;
-  };
-
-  upstream.onmessage = (ev) => {
-    if (clientWs.readyState === WebSocket.OPEN) {
-      clientWs.send(ev.data);
-    }
-  };
-
-  upstream.onclose = (ev) => {
-    const aliveMs = upstreamOpenedAt ? Date.now() - upstreamOpenedAt : 0;
-    const phase = upstreamOpen ? `after ${aliveMs}ms open` : `before open (after ${Date.now() - connectStart}ms)`;
-    console.log(
-      `[ocpp-sim-proxy] [${sessionId}] upstream closed code=${ev.code} reason="${ev.reason}" ${phase} lastErr="${lastUpstreamError}"`
-    );
-    const guess = !upstreamOpen
-      ? (lastUpstreamError
-          ? `handshake failed: ${lastUpstreamError}`
-          : (ev.code === 1006 || ev.code === 0
-              ? "handshake failed (check ocpp_id, server key, TLS/subprotocol, and Hetzner logs)"
-              : `closed before open (code=${ev.code})`))
-      : (ev.reason || `closed (code=${ev.code})`);
-    closeClientWithUpstreamReason(4400, `Upstream ${phase}: ${guess}`);
-  };
-
-  upstream.onerror = (e) => {
-    lastUpstreamError = (e as ErrorEvent)?.message ?? String(e);
-    console.error(`[ocpp-sim-proxy] [${sessionId}] upstream error: ${lastUpstreamError}`);
-  };
+  connectUpstream();
 
   clientWs.onmessage = (ev) => {
-    if (upstreamOpen && upstream.readyState === WebSocket.OPEN) {
+    if (upstreamOpen && upstream?.readyState === WebSocket.OPEN) {
       upstream.send(ev.data);
     } else {
       queuedFromClient.push(ev.data);
@@ -415,9 +448,10 @@ Deno.serve(async (req) => {
   };
 
   clientWs.onclose = () => {
+    clientClosed = true;
     console.log(`[ocpp-sim-proxy] [${sessionId}] client closed`);
     try {
-      if (upstream.readyState === WebSocket.OPEN || upstream.readyState === WebSocket.CONNECTING) {
+      if (upstream && (upstream.readyState === WebSocket.OPEN || upstream.readyState === WebSocket.CONNECTING)) {
         upstream.close();
       }
     } catch { /* ignore */ }
