@@ -60,6 +60,7 @@ const Tasks = lazy(() => import("./pages/Tasks"));
 const NetworkInfrastructure = lazy(() => import("./pages/NetworkInfrastructure"));
 const SuperAdminOcppIntegrations = lazy(() => import("./pages/SuperAdminOcppIntegrations"));
 const SuperAdminOcppControl = lazy(() => import("./pages/SuperAdminOcppControl"));
+const SuperAdminSimulators = lazy(() => import("./pages/SuperAdminSimulators"));
 
 const SuperAdminChargePointOnboarding = lazy(() => import("./pages/SuperAdminChargePointOnboarding"));
 const ChargingApp = lazy(() => import("./pages/ChargingApp"));
@@ -180,6 +181,7 @@ const App = () => (
                       <Route path="/super-admin/monitoring" element={<SA><SuperAdminMonitoring /></SA>} />
                       <Route path="/super-admin/ocpp/integrations" element={<SA><SuperAdminOcppIntegrations /></SA>} />
                       <Route path="/super-admin/ocpp/control" element={<SA><SuperAdminOcppControl /></SA>} />
+                      <Route path="/super-admin/ocpp/simulators" element={<SA><SuperAdminSimulators /></SA>} />
                       
                       <Route path="/super-admin/ocpp/onboarding" element={<SA><SuperAdminChargePointOnboarding /></SA>} />
                       <Route path="/super-admin/map" element={<SA><SuperAdminMap /></SA>} />
