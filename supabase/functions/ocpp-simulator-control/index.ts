@@ -329,6 +329,7 @@ Deno.serve(async (req) => {
             body: JSON.stringify({ id: row.external_id }),
           },
           SIM_KEY,
+          8000,
         );
       }
 
