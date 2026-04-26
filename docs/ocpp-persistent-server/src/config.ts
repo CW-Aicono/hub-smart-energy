@@ -27,5 +27,6 @@ export const config = {
   idleTimeoutSec: num("IDLE_TIMEOUT_SECONDS", 120),
   commandPollIntervalMs: num("COMMAND_POLL_INTERVAL_MS", 2000),
   enableRealtime: bool("ENABLE_REALTIME", false),
+  startupCheckOcppId: process.env.OCPP_STARTUP_CHECK_ID ?? "testbox01",
   ocppSubprotocol: "ocpp1.6",
 };
