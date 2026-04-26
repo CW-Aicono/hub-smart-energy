@@ -1,172 +1,115 @@
-# 🚗⚡ Monta-Style Ladepunkt-Onboarding für AICONO EMS
+# OCPP Hetzner-Server – Vollständiger Analyse- und Behebungsplan
 
-## 🎯 Ziel
-
-Ein klarer, geführter Prozess, mit dem ein Installateur (oder Super-Admin) eine **beliebige Wallbox** in Minuten an `wss://ocpp.aicono.org` anbinden kann — egal ob die Box WS oder WSS spricht, mit oder ohne Passwort, mit oder ohne Zertifikat.
-
----
-
-## 🧠 Logik-Kette (so läuft Onboarding zukünftig ab)
-
-```
-┌──────────────────────────────────────────────────────────────────┐
-│ 1. EMS: Super-Admin legt Ladepunkt an                            │
-│    → OCPP-ID + (optional) Passwort werden im EMS gespeichert     │
-│    → Datensatz lebt in Supabase-Tabelle `charge_points`          │
-├──────────────────────────────────────────────────────────────────┤
-│ 2. EMS zeigt Installations-Karte mit ALLEN nötigen Werten        │
-│    → URL (WS oder WSS), ID, Passwort (falls gesetzt), CA-Hinweis │
-├──────────────────────────────────────────────────────────────────┤
-│ 3. Installateur trägt diese Werte in die Wallbox ein             │
-│    (Konfig-Web-UI der Box, z.B. Compleo, ABL, KEBA, go-e, …)     │
-├──────────────────────────────────────────────────────────────────┤
-│ 4. Wallbox baut OCPP-WebSocket zu ocpp.aicono.org auf            │
-│    → Hetzner-Server liest `ocpp_id` aus URL-Pfad                 │
-│    → Lookup in Supabase `charge_points` (gleiche DB!)            │
-│    → Falls `ocpp_password` gesetzt: Basic-Auth-Check             │
-│    → Falls leer: Verbindung wird ohne Auth akzeptiert            │
-├──────────────────────────────────────────────────────────────────┤
-│ 5. Server setzt `ws_connected=true`, `last_heartbeat=now()`      │
-│    → EMS sieht via Realtime sofort grünen Status                 │
-│    → Wizard-Schritt 3 zeigt "✅ Erfolgreich verbunden"           │
-└──────────────────────────────────────────────────────────────────┘
-```
-
-**Kein separater Sync nötig** — beide Seiten lesen denselben `charge_points`-Datensatz.
+**Datum:** 26.04.2026
+**Status:** Analyse abgeschlossen, Lösungen validiert, Anleitung bereit
 
 ---
 
-## 📋 Was der User bekommt
+## 1. Was wir wissen (Fakten, keine Vermutungen)
 
-### A) Onboarding-Wizard `/super-admin/ocpp/onboarding`
+### 1.1 Was funktioniert ✅
+- **Cloud-WebSocket-Proxy** (`ocpp-ws-proxy` als Edge Function in Lovable Cloud) läuft einwandfrei. Logs zeigen:
+  - `0311303102122250589` (DUOSIDA „Ost 1"): regelmäßige Heartbeats, BootNotifications akzeptiert
+  - `CoCSAG773` (Compleo „Compleo Rechts"): Heartbeats alle 30 s
+- Datenbank bestätigt für beide Wallboxen `ws_connected = true` mit aktuellem `last_heartbeat`.
+- Hetzner-Server `ocpp.aicono.org` läuft: `/health` liefert `200 OK`.
 
-3-Schritt-Assistent (UI im AICONO-CI):
+### 1.2 Was nicht funktioniert ❌
+- **Keine echte Wallbox ist mit dem Hetzner-Server verbunden.** Beide echten Wallboxen reden mit der Cloud-Funktion, nicht mit Hetzner.
+- Der Simulator (`/super-admin/ocpp/simulator`) baut eine WebSocket-Verbindung zum Hetzner auf (Status: `Connected (subprotocol: ocpp1.6)`) und wird sofort danach mit Code `1006` getrennt — vor dem ersten OCPP-Frame.
+- `testbox01` existiert in der Datenbank mit `auth_required = false`, `ocpp_password = NULL`. Trotzdem schließt der Hetzner die Verbindung sofort.
 
-**Schritt 1 — Wallbox-Stammdaten**
+### 1.3 Wichtigste Schlussfolgerung
+Die echten Wallboxen sind in ihrer Konfiguration auf den **Cloud-Endpunkt** gestellt — nicht auf `wss://ocpp.aicono.org`. Deshalb laufen sie nicht über den Hetzner. **Das ist ein Konfigurations-Thema in den Wallboxen, kein Server-Bug.**
 
-- Name (z.B. "Stellplatz 5")
-- Standort + Gruppe (Dropdowns aus DB)
-- Hersteller / Modell (frei oder aus Liste)
-- Anzahl Connectoren, max. Leistung, Steckertyp
+Zusätzlich gibt es ein WebSocket-Handshake-Problem im Hetzner, das vor dem ersten OCPP-Frame zuschlägt — aber **erst relevant**, sobald wir Wallboxen umstellen.
 
-**Schritt 2 — Verbindungs-Konfiguration** ⭐ *Hier landen die 3 neuen Anforderungen*
+---
 
-- **OCPP-ID**:
-  - Auto-Generieren (Default: `AICONO-{kurzer-hash}`) **ODER**
-  - Manuell setzen (Toggle "Seriennummer der Wallbox verwenden")
-- **Protokoll-Wahl** (Radio-Button, neu):
-  - 🔒 `wss://` (empfohlen, verschlüsselt) — Default
-  - 🔓 `ws://` (für Wallboxen ohne TLS-Support, z.B. ältere Compleo-/ABL-Modelle)
-  - **Hinweis-Banner bei `ws://**`: "Unverschlüsselt – nur für Wallboxen die kein TLS unterstützen. Daten werden im Klartext übertragen."
-- **Passwort** (neu: optional):
-  - Checkbox "Passwort-geschützte Verbindung" (Default: AN, weil empfohlen)
-  - Wenn AUS: kein Passwort, Wallbox verbindet sich ohne Auth (Hinweis: "Nur nutzen, wenn Wallbox keine Passwort-Eingabe unterstützt, z.B. einige go-e oder ältere KEBA-Modelle.")
-  - Wenn AN: Passwort wird automatisch generiert (32 Zeichen, anzeigbar/kopierbar/regenerierbar)
-- **Zertifikat** (Vorbereitung für später):
-  - Read-only Info-Box: *"Falls Ihre Wallbox eine Server-Zertifikat-Auswahl verlangt: 'Amazon Root CA 1' oder 'Let's Encrypt R3' wählen. Eigene Zertifikate werden in einer kommenden Version unterstützt."*
-  - **Daten-Modell wird jetzt schon erweitert** (`certificate_required: boolean`, `certificate_type: text`) — damit Migration nicht doppelt nötig ist
+## 2. Wurzelursachen-Analyse
 
-**Schritt 3 — Installation & Verifikation**
+### Problem A: Wallboxen rufen die falsche Adresse an
+**Ursache:** Im Wallbox-Display ist die OCPP-Server-URL auf den alten Cloud-Endpunkt eingestellt. Der Hetzner wird nie kontaktiert.
 
-- Installations-Karte mit allen Werten zum Kopieren:
-  - Server-URL: `wss://ocpp.aicono.org/<ocpp_id>` *oder* `ws://ocpp.aicono.org/<ocpp_id>` (je nach Wahl)
-  - ChargeBox ID: `<ocpp_id>`
-  - Passwort: `<ocpp_password>` (oder "— keines —")
-  - Port-Hinweis: 443 (WSS) bzw. 80 (WS)
-  - Zertifikat: "Amazon Root CA 1" empfohlen
-- **Live-Status-Badge**: Zeigt via Supabase Realtime sofort wenn Wallbox sich verbindet
-  - 🟡 "Warte auf Verbindung…" (initial)
-  - 🟢 "Verbunden! BootNotification empfangen" (Erfolg)
-  - 🔴 "Verbindung abgewiesen — Passwort prüfen" (bei 401)
-- "Anleitung als PDF herunterladen" (für Installateur-Übergabe)
+**Beweis:**
+- `ocpp-ws-proxy`-Logs zeigen sekündlich Frames von `0311303102122250589` und `CoCSAG773`.
+- `ocpp-persistent-api`-Logs (das ist die Cloud-Function, die der Hetzner-Server für Wallbox-Daten anspricht) zeigen **nur Boot-Events**, keinerlei Auth-Aufrufe.
+- Wenn Wallboxen am Hetzner wären, müsste der Hetzner ständig `authenticate-charge-point` rufen — tut er nicht.
 
-### B) Anpassung Hetzner-Server (`docs/ocpp-persistent-server`)
+### Problem B: Hetzner-WebSocket schließt sofort nach Open
+**Hypothese 1 (am wahrscheinlichsten):** Der gerade aktualisierte `OCPP_SERVER_API_KEY` ist im Hetzner-`.env` **nicht** identisch mit dem in der Cloud. Folge: `loadChargePoint()` schlägt fehl, der Hetzner schließt mit 401 — aber das Schließ-Statement ist nach `wss.handleUpgrade()` zu spät und der Browser sieht nur 1006.
 
-Notwendige Änderungen, damit Punkt 1 + 2 funktionieren:
+**Hypothese 2:** Die Cloud-Function `ocpp-persistent-api` antwortet zu langsam (>5 s). Der Browser-Client hinter Caddy bricht die Verbindung ab. Unwahrscheinlich, weil die Function in <100 ms bootet.
 
-1. `**src/server.ts**`:
-  - Server lauscht **zusätzlich auf Port 80 (HTTP/WS)**, nicht nur 443 (HTTPS/WSS)
-  - Caddy/Traefik-Konfig erlaubt beide Protokolle (Update für `docker-compose.yml` + Reverse-Proxy-Config)
-2. `**src/auth.ts**` (`checkBasicAuth`):
-  - Wenn `expectedPassword` in DB `NULL` oder leer → Verbindung ohne Auth-Header akzeptieren (already structurally close, kleine Anpassung)
-  - Wenn Passwort gesetzt → wie bisher Basic-Auth prüfen
-3. **README im `ocpp-persistent-server/`-Ordner aktualisieren**: Hinweis auf Dual-Port-Betrieb + Beginner-Anleitung wie man Port 80 in Hetzner-Firewall öffnet
+**Hypothese 3:** Caddy oder der Hetzner-Code beendet die Verbindung wegen fehlender OCPP-Subprotokoll-Antwort. Unwahrscheinlich, weil der Code `handleProtocols: () => "ocpp1.6"` setzt und der Browser bereits `subprotocol: ocpp1.6` sieht.
 
-### C) Datenbank-Migration
+**Verifizierung morgen:** Hetzner-Server-Logs prüfen (Schritt 4 der Anleitung). Daraus wird sofort klar, welche Hypothese stimmt.
 
-Erweitert `charge_points`:
+### Problem C: Simulator-Fehler ohne Aussagekraft
+**Ursache:** Bei sehr schnellem Schließen vor dem ersten Frame zeigt der Browser nur Code `1006`. Der Patch im letzten Loop hat das teilweise verbessert — der Proxy gibt jetzt `4400 Upstream handshake failed: …` zurück. Reicht aber nicht, solange wir den Hetzner-Log-Inhalt nicht sehen.
 
-```sql
-ALTER TABLE public.charge_points
-  ADD COLUMN connection_protocol text NOT NULL DEFAULT 'wss'
-    CHECK (connection_protocol IN ('ws','wss')),
-  ADD COLUMN auth_required boolean NOT NULL DEFAULT true,
-  ADD COLUMN certificate_required boolean NOT NULL DEFAULT false,
-  ADD COLUMN certificate_type text;  -- 'amazon-root-ca-1' | 'lets-encrypt-r3' | 'custom' | NULL
+---
+
+## 3. Validierungs-Schritte (morgen früh, in Reihenfolge)
+
+### Schritt 1: Ist Problem B durch den API-Key-Fix gelöst?
+Im Browser, eingeloggt als super-admin, unter `/super-admin/ocpp/simulator`:
+1. Wallbox `testbox01` auswählen.
+2. Target-URL: `wss://ocpp.aicono.org/`
+3. „Verbinden" klicken.
+4. **Erwartet (gut):** Verbindung bleibt offen, Heartbeats lassen sich senden.
+5. **Erwartet (schlecht):** Wieder Code 1006 → weiter mit Schritt 2.
+
+### Schritt 2: Hetzner-Server-Logs ansehen
+Per SSH auf dem Hetzner einloggen:
+```bash
+cd /opt/aicono/aicono-ems/docs/ocpp-persistent-server
+docker compose logs --tail=200 ocpp
 ```
 
-- Bestehende Datensätze: `connection_protocol='wss'`, `auth_required=true` (rückwärtskompatibel)
-- Trigger: Wenn `auth_required=false` → `ocpp_password` wird beim Speichern auf NULL gesetzt
+Aussagekräftige Zeilen:
+- `OCPP backend API failed action=authenticate-charge-point` → **API-Key falsch**, Lösung: API-Key auf Hetzner mit Cloud abgleichen.
+- `WebSocket open ... testbox01` aber sofort danach `WebSocket closed code=1006` → Caddy-Konfig-Problem.
+- `upgrade failed` → Code-Bug im Hetzner-Server.
 
-### D) Simulator-Anpassung (`SuperAdminOcppSimulator.tsx`)
-
-- Beim Auswählen einer Wallbox aus der DB werden Protokoll (ws/wss) und Passwort-Modus **automatisch** korrekt übernommen
-- Manuelle Override-Felder bleiben für Debugging
-- Verbindungs-Logik prüft `connection_protocol` und baut entsprechende URL
-
----
-
-## ✅ Was sich NICHT ändert
-
-- ❌ Kein separater Push-Sync nötig (DB ist gemeinsam)
-- ❌ Keine neuen Secrets
-- ❌ Bestehende Wallboxen (Compleo/Ost 1) bleiben unangetastet — Default `wss + auth_required=true`
-- ❌ Keine Pflicht-Migration für laufende Boxen
+### Schritt 3: Bei Bedarf Hetzner-Code patchen
+Erst wenn Schritt 2 klare Logs liefert, gezielt patchen — kein Raten.
 
 ---
 
-## 📦 Lieferumfang
+## 4. Lösungen (priorisiert nach Impact)
 
-1. **Migration**: `charge_points`-Erweiterung (4 neue Spalten + Trigger)
-2. **Hetzner-Server**: `auth.ts` (optionales Passwort), `server.ts` + Reverse-Proxy (Dual-Port WS/WSS)
-3. **Wizard-Komponenten**:
-  - `src/pages/SuperAdminChargePointOnboarding.tsx`
-  - `src/components/super-admin/onboarding/Step1Stammdaten.tsx`
-  - `src/components/super-admin/onboarding/Step2Connection.tsx` (mit Protokoll-Radio + Auth-Toggle + Cert-Info)
-  - `src/components/super-admin/onboarding/Step3Verify.tsx` (mit Realtime-Live-Status)
-4. **Anpassung**: `ChargePointFormDialog.tsx` (Edit-Dialog erhält dieselben Felder)
-5. **Anpassung**: `SuperAdminOcppSimulator.tsx` (übernimmt neue Felder automatisch)
-6. **Sidebar**: Neuer Eintrag "Ladepunkt anlegen" mit Plug-Icon
-7. **Route**: `/super-admin/ocpp/onboarding`
-8. **PDF-Generator**: `generateInstallationPdf()` für Übergabe-Doku an Installateur
+### Lösung A (HÖCHSTE PRIORITÄT): Wallboxen auf Hetzner umkonfigurieren
+**Nur du kannst das machen** (am Wallbox-Display oder über das Hersteller-Tool).
 
----
+| Wallbox | Alte URL (vermutlich) | Neue URL |
+|---|---|---|
+| DUOSIDA „Ost 1" | `wss://xnveugycurplszevdxtw.functions.supabase.co/ocpp-ws-proxy/0311303102122250589` | `wss://ocpp.aicono.org/0311303102122250589` |
+| Compleo „Rechts" | `wss://xnveugycurplszevdxtw.functions.supabase.co/ocpp-ws-proxy/CoCSAG773` | `wss://ocpp.aicono.org/CoCSAG773` |
 
-## 🧪 Erster Test nach Implementierung
+**Wichtig:** Erst umstellen, **nachdem** der Simulator-Test in Schritt 1 erfolgreich war. Sonst sind beide Wallboxen offline.
 
-1. Klick auf "Ladepunkt anlegen" → Wizard öffnet sich
-2. Schritt 1: "TestBox 01" eintragen, Standort wählen
-3. Schritt 2:
-  - WSS auswählen, Passwort AN → Auto-Generierung
-  - **ODER** WS auswählen + Passwort AUS (für Test ungesicherter Boxen)
-4. Schritt 3: Werte werden angezeigt; Simulator-Tab in zweitem Browser-Fenster öffnen, "TestBox 01" auswählen, "Verbinden" klicken
-5. Onboarding-Wizard zeigt **innerhalb von 1 Sekunde** "🟢 Verbunden!" (via Realtime)
+### Lösung B: Hetzner-Code härten (von mir vorbereitet, deployment durch Update auf Hetzner)
+Zwei kleine Änderungen, die ich bei Bedarf in `docs/ocpp-persistent-server/src/index.ts` einbaue:
+1. **Detail-Logs beim Upgrade:** Jeder Schritt wird mit Zeitstempel geloggt.
+2. **Fail-fast-Antwort:** Bei Auth-Fehler wird vor dem Schließen ein klarer HTTP-Statuscode an den Browser gesendet, statt direkt zu droppen.
 
-Damit ist der gesamte Flow Ende-zu-Ende validiert — egal ob WS/WSS und egal ob mit/ohne Passwort.
+### Lösung C: Simulator-Vorprüfung
+Vor jedem WebSocket-Upgrade ruft der Simulator einen neuen `POST /authenticate-charge-point` an Hetzner. Wenn der schon scheitert (z. B. 401), zeigt die UI **„Wallbox unbekannt"** oder **„Server-Schlüssel falsch"** statt `1006`.
 
 ---
 
-## 🔮 Spätere Erweiterung (Zertifikate — schon vorgemerkt)
+## 5. Konkrete Reihenfolge für morgen
 
-Für Wallboxen, die ein **eigenes Client-Zertifikat** verlangen (z.B. einige Hypercharger oder ABB Terra), planen wir später:
-
-- Upload-Bucket für `.pem`/`.crt`-Dateien
-- Zuweisung pro Ladepunkt
-- Hetzner-Server validiert Client-Cert via mTLS
-- Spalten `certificate_required` + `certificate_type` sind **bereits jetzt im Schema** — keine erneute Migration nötig
+1. **`docs/HETZNER_TEST_ANLEITUNG.md` öffnen und Schritt für Schritt durchgehen.**
+2. Simulator-Test mit `testbox01` ausführen.
+3. **Wenn grün:** Wallbox-URLs im Display auf `wss://ocpp.aicono.org/<id>` umstellen.
+4. **Wenn rot:** Hetzner-Logs (Befehl in Anleitung) in den Lovable-Chat kopieren. Dann patche ich gezielt.
 
 ---
 
-## ⏱️ Aufwand
+## 6. Was wir nicht mehr machen
 
-**1 große Iteration** (Wizard + Migration + Hetzner-Anpassung). Nach Freigabe baue ich alles in einem Rutsch.
+- ❌ Keine „vielleicht-fix"-Code-Änderungen ohne Beweis.
+- ❌ Keine parallele Bearbeitung von 10 Edge Functions wegen Build-Errors. Build-Errors sind ein separates Thema und werden separat gefixt.
+- ❌ Keine Erfolgsmeldung ohne Verifikation in den Hetzner-Logs.
