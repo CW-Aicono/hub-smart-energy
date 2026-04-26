@@ -117,12 +117,20 @@ const SuperAdminSimulators = () => {
   });
   const showTemporaryStatusError = !!statusError && isTemporaryEdgeError(statusError);
 
+  const friendlyError = (e: unknown): string => {
+    if (isTemporaryEdgeError(e)) {
+      return "Server kurzzeitig nicht erreichbar. Bitte erneut versuchen.";
+    }
+    return e instanceof Error ? e.message : String(e);
+  };
+
   const startMut = useMutation({
     mutationFn: async () => {
       if (!tenantId) throw new Error("Tenant erforderlich");
       const { data, error } = await invokeWithRetry(
         "ocpp-simulator-control?action=start",
         { body: { tenantId, vendor, model, protocol } },
+        5,
       );
       if (error) throw error;
       return data;
@@ -132,7 +140,7 @@ const SuperAdminSimulators = () => {
       setOpenStart(false);
       qc.invalidateQueries({ queryKey: ["simulator-instances"] });
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: unknown) => toast.error(friendlyError(e)),
   });
 
   const actionMut = useMutation({
@@ -143,6 +151,7 @@ const SuperAdminSimulators = () => {
       const { data, error } = await invokeWithRetry(
         "ocpp-simulator-control?action=action",
         { body: { instanceId: vars.instanceId, action: vars.action } },
+        5,
       );
       if (error) throw error;
       return data;
@@ -151,7 +160,7 @@ const SuperAdminSimulators = () => {
       toast.success("Aktion gesendet");
       qc.invalidateQueries({ queryKey: ["simulator-instances"] });
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: unknown) => toast.error(friendlyError(e)),
   });
 
   const stopMut = useMutation({
@@ -159,6 +168,7 @@ const SuperAdminSimulators = () => {
       const { data, error } = await invokeWithRetry(
         "ocpp-simulator-control?action=stop",
         { body: { instanceId } },
+        5,
       );
       if (error) throw error;
       return data;
@@ -167,7 +177,7 @@ const SuperAdminSimulators = () => {
       toast.success("Simulator gestoppt");
       qc.invalidateQueries({ queryKey: ["simulator-instances"] });
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: unknown) => toast.error(friendlyError(e)),
   });
 
   const deleteMut = useMutation({
@@ -175,6 +185,7 @@ const SuperAdminSimulators = () => {
       const { data, error } = await invokeWithRetry(
         "ocpp-simulator-control?action=delete",
         { body: { instanceId } },
+        5,
       );
       if (error) throw error;
       return data;
@@ -183,7 +194,7 @@ const SuperAdminSimulators = () => {
       toast.success("Eintrag gelöscht");
       qc.invalidateQueries({ queryKey: ["simulator-instances"] });
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: unknown) => toast.error(friendlyError(e)),
   });
 
   if (loading) return null;
