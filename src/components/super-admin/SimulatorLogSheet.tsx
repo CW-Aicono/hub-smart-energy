@@ -38,8 +38,9 @@ export function SimulatorLogSheet({ instanceId, ocppId, open, onOpenChange }: Pr
           `ocpp-simulator-control?action=logs&instanceId=${instanceId}`,
           { method: "GET" },
         );
-        if (error) {
-          // Container v1.0 ohne /logs-Endpunkt → leise als "noch nicht verfügbar" behandeln
+        if (error || !data) {
+          // Container v1.0 ohne /logs-Endpunkt ODER Instanz existiert im Container nicht mehr
+          // (z. B. nach Container-Neustart) → leise als "noch nicht verfügbar" behandeln
           return { logs: [], unavailable: true };
         }
         const logs = ((data as { logs?: OcppLogEntry[] }).logs ?? []).slice().reverse();
