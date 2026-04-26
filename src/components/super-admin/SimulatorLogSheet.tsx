@@ -31,9 +31,9 @@ export function SimulatorLogSheet({ instanceId, ocppId, open, onOpenChange }: Pr
     queryKey: ["simulator-logs", instanceId],
     enabled: !!instanceId && open,
     refetchInterval: (query) => {
-      // Stop polling once instance is gone — prevents repeated 404 toasts
-      if ((query.state.data as { notFound?: boolean } | undefined)?.notFound) return false;
-      return open ? 3000 : false;
+      const state = query.state.data as { notFound?: boolean; unavailable?: boolean } | undefined;
+      if (state?.notFound || state?.unavailable) return false;
+      return open ? 10000 : false;
     },
     retry: false,
     queryFn: async () => {
