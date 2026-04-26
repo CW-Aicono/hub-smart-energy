@@ -414,7 +414,7 @@ const SuperAdminSimulators = () => {
                 Aktive & vergangene Instanzen
               </CardTitle>
               <CardDescription>
-                Live-Status wird alle 5 Sekunden mit dem Hetzner-Container synchronisiert.
+                Live-Status wird bei aktiven Simulatoren automatisch synchronisiert.
               </CardDescription>
             </CardHeader>
             <CardContent>
