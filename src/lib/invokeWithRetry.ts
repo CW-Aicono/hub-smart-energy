@@ -26,10 +26,10 @@ function normalizeInvocation(fnName: string, options: { body?: any; headers?: Re
     fnName: name,
     options: {
       ...options,
-      headers: {
-        ...(options.headers ?? {}),
-        ...(action ? { "x-ocpp-simulator-action": action } : {}),
-      },
+      body:
+        action != null
+          ? { ...(options.body ?? {}), __action: action }
+          : options.body,
     },
   };
 }
