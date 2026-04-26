@@ -156,7 +156,11 @@ const SuperAdminSimulators = () => {
       return (data as { instances: SimulatorRow[] }).instances ?? [];
     },
     initialData: [] as SimulatorRow[],
-    refetchInterval: 5000,
+    refetchInterval: (query) => {
+      const rows = (query.state.data as SimulatorRow[] | undefined) ?? [];
+      const hasLiveInstance = rows.some((row) => !["stopped", "error"].includes(row.live_status ?? row.status));
+      return hasLiveInstance ? 10000 : false;
+    },
     retry: (failureCount, error) => !isTemporaryEdgeError(error) && failureCount < 2,
     retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 10000),
     throwOnError: false,
@@ -410,7 +414,7 @@ const SuperAdminSimulators = () => {
                 Aktive & vergangene Instanzen
               </CardTitle>
               <CardDescription>
-                Live-Status wird alle 5 Sekunden mit dem Hetzner-Container synchronisiert.
+                Live-Status wird bei aktiven Simulatoren automatisch synchronisiert.
               </CardDescription>
             </CardHeader>
             <CardContent>

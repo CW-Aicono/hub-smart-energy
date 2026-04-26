@@ -140,8 +140,10 @@ Deno.serve(async (req) => {
     // ---------------- STATUS ----------------
     if (action === "status") {
       const live = await callSim("/status", { method: "GET" }, SIM_KEY);
-      const liveInstances: SimDto[] =
-        (live.data as { instances?: SimDto[] } | null)?.instances ?? [];
+      const liveAvailable = live.ok;
+      const liveInstances: SimDto[] = liveAvailable
+        ? (live.data as { instances?: SimDto[] } | null)?.instances ?? []
+        : [];
       const liveById = new Map(liveInstances.map((i) => [i.id, i]));
 
       const { data: dbRows, error } = await supabaseAdmin
@@ -172,7 +174,7 @@ Deno.serve(async (req) => {
             .from("simulator_instances")
             .update({ status: l.status, last_error: l.lastError })
             .eq("id", row.id);
-        } else if (!l && !["stopped", "error"].includes(row.status)) {
+        } else if (liveAvailable && !l && !["stopped", "error"].includes(row.status)) {
           // nicht mehr im Container -> als gestoppt markieren
           await supabaseAdmin
             .from("simulator_instances")
