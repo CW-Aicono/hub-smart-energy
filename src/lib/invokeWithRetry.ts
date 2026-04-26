@@ -2,6 +2,8 @@ import { supabase } from "@/integrations/supabase/client";
 
 const inFlightInvocations = new Map<string, Promise<{ data: any; error: any }>>();
 
+const TRANSIENT_EDGE_ERROR = /503|temporarily unavailable|SUPABASE_EDGE_RUNTIME_ERROR|BOOT_ERROR|Service is temporarily unavailable/i;
+
 function stableSerialize(value: unknown): string {
   if (value === null || value === undefined) return String(value);
   if (typeof value !== "object") return JSON.stringify(value);
@@ -13,6 +15,24 @@ function stableSerialize(value: unknown): string {
 
 function getInvocationKey(fnName: string, options: { body?: any; headers?: Record<string, string> }) {
   return `${fnName}::${stableSerialize({ body: options.body ?? null, headers: options.headers ?? null })}`;
+}
+
+async function getErrorSignal(res: { data: any; error: any }): Promise<string> {
+  const parts = [res.error?.message, res.error?.status, res.data?.error, res.data?.message, res.data?.code]
+    .filter(Boolean)
+    .map(String);
+
+  const context = res.error?.context;
+  if (context instanceof Response) {
+    parts.push(String(context.status));
+    try {
+      parts.push(await context.clone().text());
+    } catch {
+      /* ignore unreadable response bodies */
+    }
+  }
+
+  return parts.join(" ");
 }
 
 /**
@@ -33,10 +53,11 @@ export async function invokeWithRetry<T = any>(
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       const res = await supabase.functions.invoke(fnName, options);
       lastResult = res as any;
-      const msg = res.error?.message || (res.data as any)?.error || "";
-      const isTransient = /503|temporarily unavailable|SUPABASE_EDGE_RUNTIME_ERROR|BOOT_ERROR/i.test(msg);
+      const msg = await getErrorSignal(res as any);
+      const isTransient = TRANSIENT_EDGE_ERROR.test(msg);
       if (!res.error && (res.data as any)?.success !== false) return res as any;
       if (!isTransient) return res as any;
+      if (attempt === maxAttempts - 1) return res as any;
       await new Promise((r) => setTimeout(r, 500 * (attempt + 1)));
     }
     return lastResult;

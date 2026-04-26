@@ -51,8 +51,14 @@ import {
   ZapOff,
   Loader2,
   Trash2,
+  AlertTriangle,
 } from "lucide-react";
 import { format } from "date-fns";
+
+const isTemporaryEdgeError = (error: unknown) => {
+  const message = error instanceof Error ? error.message : JSON.stringify(error);
+  return /503|temporarily unavailable|SUPABASE_EDGE_RUNTIME_ERROR|BOOT_ERROR|Service is temporarily unavailable/i.test(message);
+};
 
 interface SimulatorRow {
   id: string;
@@ -93,18 +99,23 @@ const SuperAdminSimulators = () => {
   const [model, setModel] = useState("Simulator");
   const [protocol, setProtocol] = useState<"ws" | "wss">("wss");
 
-  const { data, isFetching, refetch } = useQuery({
+  const { data, isFetching, refetch, error: statusError } = useQuery({
     queryKey: ["simulator-instances"],
     queryFn: async () => {
       const { data, error } = await invokeWithRetry(
         "ocpp-simulator-control?action=status",
         { },
+        5,
       );
       if (error) throw error;
       return (data as { instances: SimulatorRow[] }).instances ?? [];
     },
     refetchInterval: 5000,
+    retry: (failureCount, error) => isTemporaryEdgeError(error) && failureCount < 5,
+    retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 10000),
+    throwOnError: false,
   });
+  const showTemporaryStatusError = !!statusError && isTemporaryEdgeError(statusError);
 
   const startMut = useMutation({
     mutationFn: async () => {
@@ -306,7 +317,21 @@ const SuperAdminSimulators = () => {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              {!data || data.length === 0 ? (
+              {showTemporaryStatusError && (
+                <div className="mb-4 flex items-start gap-3 rounded-md border border-border bg-muted/40 p-4 text-sm text-muted-foreground">
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                  <div>
+                    <p className="font-medium text-foreground">Live-Status kurzzeitig nicht erreichbar</p>
+                    <p>Die Seite bleibt geöffnet und versucht automatisch erneut zu synchronisieren.</p>
+                  </div>
+                </div>
+              )}
+              {(!data || data.length === 0) && isFetching ? (
+                <div className="flex items-center justify-center gap-2 py-12 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Live-Status wird geladen …
+                </div>
+              ) : !data || data.length === 0 ? (
                 <div className="py-12 text-center text-sm text-muted-foreground">
                   Noch keine Simulator-Instanzen vorhanden.
                 </div>
