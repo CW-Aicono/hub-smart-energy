@@ -440,7 +440,7 @@ Deno.serve(async (req) => {
   connectUpstream();
 
   clientWs.onmessage = (ev) => {
-    if (upstreamOpen && upstream.readyState === WebSocket.OPEN) {
+    if (upstreamOpen && upstream?.readyState === WebSocket.OPEN) {
       upstream.send(ev.data);
     } else {
       queuedFromClient.push(ev.data);
@@ -448,9 +448,10 @@ Deno.serve(async (req) => {
   };
 
   clientWs.onclose = () => {
+    clientClosed = true;
     console.log(`[ocpp-sim-proxy] [${sessionId}] client closed`);
     try {
-      if (upstream.readyState === WebSocket.OPEN || upstream.readyState === WebSocket.CONNECTING) {
+      if (upstream && (upstream.readyState === WebSocket.OPEN || upstream.readyState === WebSocket.CONNECTING)) {
         upstream.close();
       }
     } catch { /* ignore */ }
