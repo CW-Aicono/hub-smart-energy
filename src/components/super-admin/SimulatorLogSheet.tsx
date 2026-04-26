@@ -27,19 +27,31 @@ interface Props {
 }
 
 export function SimulatorLogSheet({ instanceId, ocppId, open, onOpenChange }: Props) {
-  const { data, isFetching } = useQuery({
+  const { data, isFetching } = useQuery<{ logs: OcppLogEntry[]; unavailable: boolean }>({
     queryKey: ["simulator-logs", instanceId],
     enabled: !!instanceId && open,
     refetchInterval: open ? 3000 : false,
+    retry: false,
     queryFn: async () => {
-      const { data, error } = await supabase.functions.invoke(
-        `ocpp-simulator-control?action=logs&instanceId=${instanceId}`,
-        { method: "GET" },
-      );
-      if (error) throw error;
-      return ((data as { logs?: OcppLogEntry[] }).logs ?? []).slice().reverse();
+      try {
+        const { data, error } = await supabase.functions.invoke(
+          `ocpp-simulator-control?action=logs&instanceId=${instanceId}`,
+          { method: "GET" },
+        );
+        if (error) {
+          // Container v1.0 ohne /logs-Endpunkt → leise als "noch nicht verfügbar" behandeln
+          return { logs: [], unavailable: true };
+        }
+        const logs = ((data as { logs?: OcppLogEntry[] }).logs ?? []).slice().reverse();
+        return { logs, unavailable: false };
+      } catch {
+        return { logs: [], unavailable: true };
+      }
     },
   });
+
+  const logs = data?.logs ?? [];
+  const unavailable = data?.unavailable ?? false;
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
