@@ -295,6 +295,7 @@ Deno.serve(async (req) => {
           body: JSON.stringify({ id: row.external_id, action: act }),
         },
         SIM_KEY,
+        8000,
       );
       if (!sim.ok) {
         return json(sim.status, { error: "Action failed", details: sim.data });
@@ -328,6 +329,7 @@ Deno.serve(async (req) => {
             body: JSON.stringify({ id: row.external_id }),
           },
           SIM_KEY,
+          8000,
         );
       }
 
