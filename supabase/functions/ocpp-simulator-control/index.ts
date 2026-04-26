@@ -159,6 +159,8 @@ Deno.serve(async (req) => {
           live_meter_wh: l?.meterWh ?? null,
           live_transaction_id: l?.transactionId ?? null,
           live_last_error: l?.lastError ?? null,
+          live_power_kw: l?.powerKw ?? null,
+          live_paused: l?.paused ?? null,
         };
       });
 
