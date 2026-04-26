@@ -5009,6 +5009,78 @@ export type Database = {
           },
         ]
       }
+      simulator_instances: {
+        Row: {
+          charge_point_id: string | null
+          created_at: string
+          created_by: string | null
+          external_id: string | null
+          id: string
+          last_error: string | null
+          model: string
+          ocpp_id: string
+          protocol: string
+          server_host: string
+          started_at: string
+          status: string
+          stopped_at: string | null
+          tenant_id: string
+          updated_at: string
+          vendor: string
+        }
+        Insert: {
+          charge_point_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          external_id?: string | null
+          id?: string
+          last_error?: string | null
+          model?: string
+          ocpp_id: string
+          protocol?: string
+          server_host?: string
+          started_at?: string
+          status?: string
+          stopped_at?: string | null
+          tenant_id: string
+          updated_at?: string
+          vendor?: string
+        }
+        Update: {
+          charge_point_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          external_id?: string | null
+          id?: string
+          last_error?: string | null
+          model?: string
+          ocpp_id?: string
+          protocol?: string
+          server_host?: string
+          started_at?: string
+          status?: string
+          stopped_at?: string | null
+          tenant_id?: string
+          updated_at?: string
+          vendor?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "simulator_instances_charge_point_id_fkey"
+            columns: ["charge_point_id"]
+            isOneToOne: false
+            referencedRelation: "charge_points"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "simulator_instances_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       solar_charging_config: {
         Row: {
           created_at: string
