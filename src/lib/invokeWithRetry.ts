@@ -35,21 +35,44 @@ function normalizeInvocation(fnName: string, options: { body?: any; headers?: Re
 }
 
 async function getErrorSignal(res: { data: any; error: any }): Promise<string> {
-  const parts = [res.error?.message, res.error?.status, res.data?.error, res.data?.message, res.data?.code]
+  return [res.error?.message, res.error?.status, res.data?.error, res.data?.message, res.data?.code]
     .filter(Boolean)
-    .map(String);
+    .map(String)
+    .join(" ");
+}
 
-  const context = res.error?.context;
-  if (context instanceof Response) {
-    parts.push(String(context.status));
-    try {
-      parts.push(await context.clone().text());
-    } catch {
-      /* ignore unreadable response bodies */
-    }
+async function invokeFunction(fnName: string, options: { body?: any; headers?: Record<string, string> }) {
+  const session = (await supabase.auth.getSession()).data.session;
+  const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/${fnName}`, {
+    method: "POST",
+    headers: {
+      apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string,
+      Authorization: `Bearer ${session?.access_token ?? ""}`,
+      "Content-Type": "application/json",
+      ...(options.headers ?? {}),
+    },
+    body: options.body === undefined ? undefined : JSON.stringify(options.body),
+  });
+
+  const text = await res.text();
+  let data: any = null;
+  try {
+    data = text ? JSON.parse(text) : null;
+  } catch {
+    data = text ? { message: text } : null;
   }
 
-  return parts.join(" ");
+  if (!res.ok) {
+    return {
+      data,
+      error: {
+        message: data?.message ?? data?.error ?? `Edge function returned ${res.status}`,
+        status: res.status,
+      },
+    };
+  }
+
+  return { data, error: null };
 }
 
 /**
@@ -71,7 +94,7 @@ export async function invokeWithRetry<T = any>(
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       let res: { data: any; error: any };
       try {
-        res = await supabase.functions.invoke(normalized.fnName, normalized.options);
+        res = await invokeFunction(normalized.fnName, normalized.options);
       } catch (error) {
         res = { data: null, error };
       }
