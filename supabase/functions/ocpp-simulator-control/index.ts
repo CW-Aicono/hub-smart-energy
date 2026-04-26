@@ -231,7 +231,7 @@ Deno.serve(async (req) => {
         .single();
       if (cpErr) throw cpErr;
 
-      // Simulator beim Container starten
+      // Simulator beim Container starten (15s Timeout: WebSocket-Connect zum OCPP-Server kann dauern)
       const sim = await callSim(
         "/start",
         {
@@ -247,12 +247,15 @@ Deno.serve(async (req) => {
           }),
         },
         SIM_KEY,
+        15000,
       );
       if (!sim.ok) {
         await supabaseAdmin.from("charge_points").delete().eq("id", cp.id);
-        return json(sim.status, {
+        console.error("Simulator /start failed", { status: sim.status, data: sim.data });
+        return json(sim.status === 504 ? 504 : 502, {
           error: "Simulator start failed",
-          details: sim.data,
+          status: sim.status,
+          details: sim.data ?? { message: "Empty response from simulator (timeout or network error)" },
         });
       }
 
