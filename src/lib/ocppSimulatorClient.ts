@@ -1,8 +1,5 @@
 // OCPP 1.6 simulator client (browser-side).
-// Connects via the ocpp-simulator-proxy Edge Function so that Basic Auth
-// and TLS are handled server-side.
-
-import { supabase } from "@/integrations/supabase/client";
+// Connects directly to the configured OCPP WebSocket endpoint.
 
 export type FrameDirection = "out" | "in" | "info" | "error";
 
@@ -65,19 +62,9 @@ export class OcppSimulatorClient {
     }
     this.setStatus("connecting");
 
-    const { data: sessionData } = await supabase.auth.getSession();
-    const token = sessionData.session?.access_token;
-    if (!token) throw new Error("Not authenticated");
+    const wsUrl = `${this.opts.target.replace(/\/+$/, "")}/${encodeURIComponent(this.opts.ocppId)}`;
 
-    const projectRef = (import.meta.env.VITE_SUPABASE_PROJECT_ID as string) || "";
-    const proxyUrl = new URL(`https://${projectRef}.functions.supabase.co/ocpp-simulator-proxy`);
-    proxyUrl.searchParams.set("target", this.opts.target);
-    proxyUrl.searchParams.set("cp", this.opts.ocppId);
-    proxyUrl.searchParams.set("access_token", token);
-    // wss not https
-    const wsUrl = proxyUrl.toString().replace(/^https:/, "wss:");
-
-    this.log("info", `Connecting via proxy → ${this.opts.target}/${this.opts.ocppId}`);
+    this.log("info", `Connecting directly → ${wsUrl}`);
 
     const ws = new WebSocket(wsUrl, ["ocpp1.6"]);
     this.ws = ws;
