@@ -1463,11 +1463,11 @@ async function handleDeviceSnapshot(req: Request): Promise<Response> {
   }
   if (!device) {
     const ctx = await getDeviceFromBasicAuth(req);
-    if (ctx?.id) {
+    if (ctx?.device_id) {
       const { data } = await supabase
         .from("gateway_devices")
         .select("id, tenant_id, location_integration_id")
-        .eq("id", ctx.id)
+        .eq("id", ctx.device_id)
         .maybeSingle();
       device = data as any;
     }

@@ -281,7 +281,8 @@ Deno.serve(async (req) => {
         socket.send(responseText);
       }
     } catch (error) {
-      console.error(`[ocpp-ws-proxy] Error forwarding message for ${chargePointId}:`, error.message);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error(`[ocpp-ws-proxy] Error forwarding message for ${chargePointId}:`, errorMessage);
 
       try {
         const parsed = JSON.parse(rawData);
