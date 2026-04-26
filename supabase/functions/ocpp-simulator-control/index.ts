@@ -171,7 +171,7 @@ Deno.serve(async (req) => {
 
     // ---------------- START ----------------
     if (action === "start" && req.method === "POST") {
-      const body = await req.json();
+      const body = bodyJson ?? {};
       const tenantId = body.tenantId as string;
       const vendor = (body.vendor as string) || "AICONO";
       const model = (body.model as string) || "Simulator";
@@ -264,7 +264,7 @@ Deno.serve(async (req) => {
 
     // ---------------- ACTION (startTx / stopTx) ----------------
     if (action === "action" && req.method === "POST") {
-      const body = await req.json();
+      const body = bodyJson ?? {};
       const instanceId = body.instanceId as string;
       const act = body.action as string;
       if (!instanceId || !["startTx", "stopTx"].includes(act)) {
@@ -299,7 +299,7 @@ Deno.serve(async (req) => {
 
     // ---------------- STOP ----------------
     if (action === "stop" && req.method === "POST") {
-      const body = await req.json();
+      const body = bodyJson ?? {};
       const instanceId = body.instanceId as string;
       if (!instanceId) return json(400, { error: "instanceId required" });
 
@@ -339,7 +339,7 @@ Deno.serve(async (req) => {
 
     // ---------------- DELETE ----------------
     if (action === "delete" && req.method === "POST") {
-      const body = await req.json();
+      const body = bodyJson ?? {};
       const instanceId = body.instanceId as string;
       if (!instanceId) return json(400, { error: "instanceId required" });
 
