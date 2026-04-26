@@ -87,6 +87,12 @@ export function SimulatorLogSheet({ instanceId, ocppId, open, onOpenChange }: Pr
               <Loader2 className="h-4 w-4 animate-spin" />
               Logs werden geladen …
             </div>
+          ) : notFound ? (
+            <div className="py-12 text-center text-sm text-muted-foreground px-6">
+              Diese Simulator-Sitzung wurde beendet.
+              <br />
+              Starte den Simulator neu, um wieder Live-Logs zu sehen.
+            </div>
           ) : unavailable ? (
             <div className="py-12 text-center text-sm text-muted-foreground px-6">
               Live-Logs sind noch nicht verfügbar.
