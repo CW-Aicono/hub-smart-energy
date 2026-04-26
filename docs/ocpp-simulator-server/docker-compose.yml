@@ -8,7 +8,13 @@ services:
       - "127.0.0.1:8090:8090"
     networks:
       - default
+      - ocppnet
 
 networks:
   default:
     name: ocpp-simulator-net
+  ocppnet:
+    # Dasselbe Netzwerk, das vom Persistent-Server-Stack erzeugt wird,
+    # damit Caddy den Simulator via DNS-Namen `ocpp-simulator` erreicht.
+    external: true
+    name: ocpp-persistent-server_ocppnet
