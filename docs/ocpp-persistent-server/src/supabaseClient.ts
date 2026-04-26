@@ -1,7 +1,4 @@
-import { createClient } from "@supabase/supabase-js";
-import { config } from "./config";
-
-export const supabase = createClient(config.supabaseUrl, config.supabaseServiceKey, {
-  auth: { persistSession: false, autoRefreshToken: false },
-  realtime: { params: { eventsPerSecond: 10 } },
-});
+// Direkter Datenbankzugriff ist in Lovable Cloud nicht möglich, weil der interne
+// Service-Schlüssel nicht angezeigt wird. Der persistente Hetzner-Server nutzt
+// stattdessen src/backendApi.ts und ruft eine begrenzte Backend-Funktion auf.
+export const supabase = null as never;
