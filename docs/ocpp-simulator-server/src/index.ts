@@ -1,21 +1,12 @@
 /**
- * AICONO EMS - OCPP 1.6 Wallbox-Simulator-Service
- * ------------------------------------------------
- * Laeuft als eigenstaendiger Container auf Hetzner.
- *
- * Verantwortlichkeiten:
- *  - HTTP-API zum Starten/Stoppen/Abfragen von simulierten Wallboxen
- *  - Pro Simulator-Instanz: WebSocket-Client gegen den OCPP-Zentralserver
- *    (wss://ocpp.aicono.org/<ocppId> oder ws://...)
- *  - Voller OCPP-1.6-Funktionsumfang:
- *      BootNotification, Heartbeat, StatusNotification,
- *      StartTransaction, MeterValues, StopTransaction
- *
- * Sicherheit:
- *  - Bearer-Token (SIMULATOR_API_KEY) auf jeder API-Anfrage erforderlich
- *  - Lauscht nur auf 127.0.0.1; oeffentliche Erreichbarkeit erfolgt
- *    ausschliesslich ueber den Reverse-Proxy (Caddy) unter
- *    https://ocpp.aicono.org/sim-api/
+ * AICONO EMS - OCPP 1.6 Wallbox-Simulator-Service (v1.1)
+ * ------------------------------------------------------
+ * Erweitert um:
+ *  - Konfigurierbare Ladeleistung (powerKw)
+ *  - Live-Steuerung: setPower, pause, resume, unplug
+ *  - Echte idTags (statt fester SIM-IDTAG)
+ *  - Fehlersimulation (fault / clearFault) mit OCPP-1.6-Errorcodes
+ *  - Live-OCPP-Logs (Ringpuffer, GET /logs?id=...)
  */
 
 import http, { IncomingMessage, ServerResponse } from "node:http";
@@ -29,6 +20,8 @@ const API_KEY = process.env.SIMULATOR_API_KEY ?? "";
 const PORT = Number(process.env.PORT ?? 8090);
 const MAX_PER_TENANT = Number(process.env.MAX_INSTANCES_PER_TENANT ?? 3);
 const MAX_TOTAL = Number(process.env.MAX_TOTAL_INSTANCES ?? 50);
+const TICK_SECONDS = 30;
+const LOG_RING_SIZE = 50;
 
 if (!API_KEY || API_KEY.length < 16) {
   console.error(
@@ -52,31 +45,50 @@ function log(level: LogLevel, msg: string, extra: Record<string, unknown> = {}) 
 // ============================================================
 // Simulator-Instanzen (in-memory)
 // ============================================================
-type SimStatus = "connecting" | "online" | "charging" | "stopped" | "error";
+type SimStatus = "connecting" | "online" | "charging" | "stopped" | "error" | "faulted";
+
+interface OcppLogEntry {
+  ts: string;
+  dir: "in" | "out";
+  action: string;
+  payload: unknown;
+}
 
 interface SimInstance {
-  id: string;                    // interne ID (UUID)
-  tenantId: string;              // zugehoeriger Tenant
-  ocppId: string;                // OCPP-Identifier (Pfad-Suffix)
-  protocol: "ws" | "wss";        // Verbindungsart
-  serverHost: string;            // z. B. "ocpp.aicono.org"
-  ocppPassword: string | null;   // optional, fuer HTTP Basic Auth
+  id: string;
+  tenantId: string;
+  ocppId: string;
+  protocol: "ws" | "wss";
+  serverHost: string;
+  ocppPassword: string | null;
   vendor: string;
   model: string;
   ws: WebSocket | null;
   status: SimStatus;
   lastError: string | null;
   startedAt: string;
-  meterWh: number;               // simulierter Zaehlerstand (Wh)
+  meterWh: number;
   transactionId: number | null;
-  intervals: NodeJS.Timeout[];   // alle aktiven Intervalle (Heartbeat, MeterValues)
+  intervals: NodeJS.Timeout[];
   pendingCalls: Map<string, (payload: unknown) => void>;
+  // Neu in v1.1:
+  powerKw: number;
+  idTag: string;
+  paused: boolean;
+  logRing: OcppLogEntry[];
 }
 
 const instances = new Map<string, SimInstance>();
 
 function instancesByTenant(tenantId: string): SimInstance[] {
   return [...instances.values()].filter((i) => i.tenantId === tenantId);
+}
+
+function pushLog(inst: SimInstance, dir: "in" | "out", action: string, payload: unknown): void {
+  inst.logRing.push({ ts: new Date().toISOString(), dir, action, payload });
+  if (inst.logRing.length > LOG_RING_SIZE) {
+    inst.logRing.splice(0, inst.logRing.length - LOG_RING_SIZE);
+  }
 }
 
 // ============================================================
@@ -97,6 +109,7 @@ function sendCall(
   const msg = ocppCall(action, payload);
   if (onResult) inst.pendingCalls.set(msg[1], onResult);
   inst.ws.send(JSON.stringify(msg));
+  pushLog(inst, "out", action, payload);
   log("info", "OCPP -> server", { id: inst.id, action, messageId: msg[1] });
 }
 
@@ -112,9 +125,9 @@ function handleIncoming(inst: SimInstance, raw: WebSocket.RawData): void {
   if (!Array.isArray(parsed)) return;
   const [messageType, messageId] = parsed as [number, string, ...unknown[]];
 
-  // CALLRESULT (3): Antwort auf unseren Call
   if (messageType === 3) {
     const payload = parsed[2];
+    pushLog(inst, "in", "CALLRESULT", payload);
     const cb = inst.pendingCalls.get(messageId);
     if (cb) {
       inst.pendingCalls.delete(messageId);
@@ -123,11 +136,11 @@ function handleIncoming(inst: SimInstance, raw: WebSocket.RawData): void {
     return;
   }
 
-  // CALL (2) vom Server (z. B. RemoteStartTransaction, ChangeConfiguration)
   if (messageType === 2) {
     const action = parsed[2] as string;
+    const payload = parsed[3];
+    pushLog(inst, "in", action, payload);
     log("info", "OCPP <- server CALL", { id: inst.id, action, messageId });
-    // Generische Accept-Antwort, damit der Server zufrieden ist.
     const result =
       action === "RemoteStartTransaction" || action === "RemoteStopTransaction"
         ? { status: "Accepted" }
@@ -136,7 +149,6 @@ function handleIncoming(inst: SimInstance, raw: WebSocket.RawData): void {
         : { status: "Accepted" };
     inst.ws?.send(JSON.stringify([3, messageId, result]));
 
-    // Wenn der Server RemoteStart sendet, starten wir auch lokal eine Transaction.
     if (action === "RemoteStartTransaction" && inst.status === "online") {
       setTimeout(() => startTransaction(inst), 500);
     }
@@ -146,8 +158,8 @@ function handleIncoming(inst: SimInstance, raw: WebSocket.RawData): void {
     return;
   }
 
-  // CALLERROR (4): wir loggen, ignorieren ansonsten
   if (messageType === 4) {
+    pushLog(inst, "in", "CALLERROR", parsed);
     log("warn", "OCPP <- server CALLERROR", { id: inst.id, payload: parsed });
     return;
   }
@@ -163,17 +175,15 @@ function startBootSequence(inst: SimInstance): void {
     {
       chargePointVendor: inst.vendor,
       chargePointModel: inst.model,
-      firmwareVersion: "sim-1.0.0",
+      firmwareVersion: "sim-1.1.0",
     },
     () => {
       inst.status = "online";
-      // Direkt nach Boot: StatusNotification "Available"
       sendCall(inst, "StatusNotification", {
         connectorId: 1,
         errorCode: "NoError",
         status: "Available",
       });
-      // Heartbeat alle 30s
       const hb = setInterval(() => {
         sendCall(inst, "Heartbeat", {});
       }, 30_000);
@@ -190,7 +200,7 @@ function startTransaction(inst: SimInstance): void {
     "StartTransaction",
     {
       connectorId: 1,
-      idTag: "SIM-IDTAG",
+      idTag: inst.idTag,
       meterStart,
       timestamp: new Date().toISOString(),
     },
@@ -199,14 +209,17 @@ function startTransaction(inst: SimInstance): void {
       if (p?.idTagInfo?.status === "Accepted" && typeof p.transactionId === "number") {
         inst.transactionId = p.transactionId;
         inst.status = "charging";
+        inst.paused = false;
         sendCall(inst, "StatusNotification", {
           connectorId: 1,
           errorCode: "NoError",
           status: "Charging",
         });
-        // MeterValues alle 30s, +1000 Wh pro Tick (~120 kW gemittelt fuer Demo)
+        // MeterValues alle TICK_SECONDS, Wh-Zuwachs anhand powerKw
         const mv = setInterval(() => {
-          inst.meterWh += 1000;
+          if (inst.paused) return;
+          const tickWh = (inst.powerKw * 1000 * TICK_SECONDS) / 3600;
+          inst.meterWh += tickWh;
           sendCall(inst, "MeterValues", {
             connectorId: 1,
             transactionId: inst.transactionId,
@@ -215,16 +228,22 @@ function startTransaction(inst: SimInstance): void {
                 timestamp: new Date().toISOString(),
                 sampledValue: [
                   {
-                    value: String(inst.meterWh),
+                    value: String(Math.round(inst.meterWh)),
                     context: "Sample.Periodic",
                     measurand: "Energy.Active.Import.Register",
                     unit: "Wh",
+                  },
+                  {
+                    value: String(Math.round(inst.powerKw * 1000)),
+                    context: "Sample.Periodic",
+                    measurand: "Power.Active.Import",
+                    unit: "W",
                   },
                 ],
               },
             ],
           });
-        }, 30_000);
+        }, TICK_SECONDS * 1000);
         inst.intervals.push(mv);
       } else {
         log("warn", "StartTransaction rejected", { id: inst.id, payload });
@@ -240,13 +259,22 @@ function stopTransaction(inst: SimInstance): void {
     "StopTransaction",
     {
       transactionId: inst.transactionId,
-      idTag: "SIM-IDTAG",
-      meterStop: inst.meterWh,
+      idTag: inst.idTag,
+      meterStop: Math.round(inst.meterWh),
       timestamp: new Date().toISOString(),
     },
     () => {
       inst.transactionId = null;
       inst.status = "online";
+      inst.paused = false;
+      // Tick-Intervalle stoppen, Heartbeat behalten
+      // (intervals[0] = Heartbeat, alle weiteren = MeterValues etc.)
+      if (inst.intervals.length > 1) {
+        for (let i = 1; i < inst.intervals.length; i++) {
+          clearInterval(inst.intervals[i]);
+        }
+        inst.intervals = inst.intervals.slice(0, 1);
+      }
       sendCall(inst, "StatusNotification", {
         connectorId: 1,
         errorCode: "NoError",
@@ -256,9 +284,94 @@ function stopTransaction(inst: SimInstance): void {
   );
 }
 
+// Live-Steuerungs-Aktionen
+function setPower(inst: SimInstance, kw: number): void {
+  const clamped = Math.max(0, Math.min(350, kw));
+  inst.powerKw = clamped;
+  log("info", "Power changed", { id: inst.id, powerKw: clamped });
+}
+
+function pauseCharging(inst: SimInstance): void {
+  if (inst.status !== "charging") return;
+  inst.paused = true;
+  sendCall(inst, "StatusNotification", {
+    connectorId: 1,
+    errorCode: "NoError",
+    status: "SuspendedEV",
+  });
+}
+
+function resumeCharging(inst: SimInstance): void {
+  if (inst.status !== "charging") return;
+  inst.paused = false;
+  sendCall(inst, "StatusNotification", {
+    connectorId: 1,
+    errorCode: "NoError",
+    status: "Charging",
+  });
+}
+
+function unplug(inst: SimInstance): void {
+  if (inst.status === "charging") stopTransaction(inst);
+  setTimeout(() => {
+    sendCall(inst, "StatusNotification", {
+      connectorId: 1,
+      errorCode: "NoError",
+      status: "Finishing",
+    });
+    setTimeout(() => {
+      sendCall(inst, "StatusNotification", {
+        connectorId: 1,
+        errorCode: "NoError",
+        status: "Available",
+      });
+    }, 500);
+  }, 300);
+}
+
+const VALID_ERRORS = new Set([
+  "ConnectorLockFailure",
+  "EVCommunicationError",
+  "GroundFailure",
+  "HighTemperature",
+  "InternalError",
+  "LocalListConflict",
+  "NoError",
+  "OtherError",
+  "OverCurrentFailure",
+  "OverVoltage",
+  "PowerMeterFailure",
+  "PowerSwitchFailure",
+  "ReaderFailure",
+  "ResetFailure",
+  "UnderVoltage",
+  "WeakSignal",
+]);
+
+function injectFault(inst: SimInstance, errorCode: string): void {
+  const code = VALID_ERRORS.has(errorCode) ? errorCode : "OtherError";
+  inst.status = "faulted";
+  inst.lastError = code;
+  sendCall(inst, "StatusNotification", {
+    connectorId: 1,
+    errorCode: code,
+    status: "Faulted",
+    info: `Simulated fault: ${code}`,
+  });
+}
+
+function clearFault(inst: SimInstance): void {
+  inst.lastError = null;
+  inst.status = inst.transactionId !== null ? "charging" : "online";
+  sendCall(inst, "StatusNotification", {
+    connectorId: 1,
+    errorCode: "NoError",
+    status: inst.transactionId !== null ? "Charging" : "Available",
+  });
+}
+
 function buildWebSocketUrl(inst: SimInstance): string {
-  const base = `${inst.protocol}://${inst.serverHost}/${encodeURIComponent(inst.ocppId)}`;
-  return base;
+  return `${inst.protocol}://${inst.serverHost}/${encodeURIComponent(inst.ocppId)}`;
 }
 
 function connectWebSocket(inst: SimInstance): void {
@@ -303,18 +416,9 @@ function shutdownInstance(inst: SimInstance): void {
   inst.intervals.forEach(clearInterval);
   inst.intervals = [];
   if (inst.transactionId !== null) {
-    // best-effort StopTransaction
-    try {
-      stopTransaction(inst);
-    } catch {
-      /* ignore */
-    }
+    try { stopTransaction(inst); } catch { /* ignore */ }
   }
-  try {
-    inst.ws?.close(1000, "Simulator stopped by API");
-  } catch {
-    /* ignore */
-  }
+  try { inst.ws?.close(1000, "Simulator stopped by API"); } catch { /* ignore */ }
   inst.status = "stopped";
 }
 
@@ -329,6 +433,8 @@ type StartBody = {
   ocppPassword?: string | null;
   vendor?: string;
   model?: string;
+  powerKw?: number;
+  idTag?: string;
 };
 
 function readJson(req: IncomingMessage): Promise<unknown> {
@@ -371,15 +477,17 @@ function instanceToDto(inst: SimInstance) {
     status: inst.status,
     lastError: inst.lastError,
     startedAt: inst.startedAt,
-    meterWh: inst.meterWh,
+    meterWh: Math.round(inst.meterWh),
     transactionId: inst.transactionId,
+    powerKw: inst.powerKw,
+    idTag: inst.idTag,
+    paused: inst.paused,
   };
 }
 
 const server = http.createServer(async (req, res) => {
-  // Health-Endpoint (ohne Auth) fuer Container-/Reverse-Proxy-Checks
   if (req.method === "GET" && req.url === "/health") {
-    return send(res, 200, { ok: true, instances: instances.size });
+    return send(res, 200, { ok: true, instances: instances.size, version: "1.1.0" });
   }
 
   if (!authOk(req)) {
@@ -387,9 +495,11 @@ const server = http.createServer(async (req, res) => {
   }
 
   const url = req.url ?? "";
+  const parsedUrl = new URL(url, "http://localhost");
+  const pathname = parsedUrl.pathname;
 
   // --- POST /start ----------------------------------------------------------
-  if (req.method === "POST" && (url === "/start" || url === "/sim-api/start")) {
+  if (req.method === "POST" && (pathname === "/start" || pathname === "/sim-api/start")) {
     let body: StartBody;
     try {
       body = (await readJson(req)) as StartBody;
@@ -426,6 +536,10 @@ const server = http.createServer(async (req, res) => {
       transactionId: null,
       intervals: [],
       pendingCalls: new Map(),
+      powerKw: typeof body.powerKw === "number" && body.powerKw > 0 ? body.powerKw : 11,
+      idTag: body.idTag && body.idTag.length > 0 ? body.idTag : "SIM-IDTAG",
+      paused: false,
+      logRing: [],
     };
     instances.set(inst.id, inst);
     connectWebSocket(inst);
@@ -433,24 +547,32 @@ const server = http.createServer(async (req, res) => {
   }
 
   // --- POST /action ---------------------------------------------------------
-  // Manuelles Triggern: { id, action: "startTx" | "stopTx" }
-  if (req.method === "POST" && (url === "/action" || url === "/sim-api/action")) {
-    let body: { id?: string; action?: string };
+  if (req.method === "POST" && (pathname === "/action" || pathname === "/sim-api/action")) {
+    let body: { id?: string; action?: string; value?: number | string };
     try {
-      body = (await readJson(req)) as { id?: string; action?: string };
+      body = (await readJson(req)) as { id?: string; action?: string; value?: number | string };
     } catch {
       return send(res, 400, { error: "Invalid JSON" });
     }
     const inst = body.id ? instances.get(body.id) : undefined;
     if (!inst) return send(res, 404, { error: "Instance not found" });
-    if (body.action === "startTx") startTransaction(inst);
-    else if (body.action === "stopTx") stopTransaction(inst);
-    else return send(res, 400, { error: "Unknown action" });
+    const action = body.action;
+    switch (action) {
+      case "startTx": startTransaction(inst); break;
+      case "stopTx": stopTransaction(inst); break;
+      case "setPower": setPower(inst, Number(body.value ?? inst.powerKw)); break;
+      case "pause": pauseCharging(inst); break;
+      case "resume": resumeCharging(inst); break;
+      case "unplug": unplug(inst); break;
+      case "fault": injectFault(inst, String(body.value ?? "OtherError")); break;
+      case "clearFault": clearFault(inst); break;
+      default: return send(res, 400, { error: "Unknown action" });
+    }
     return send(res, 200, instanceToDto(inst));
   }
 
   // --- POST /stop -----------------------------------------------------------
-  if (req.method === "POST" && (url === "/stop" || url === "/sim-api/stop")) {
+  if (req.method === "POST" && (pathname === "/stop" || pathname === "/sim-api/stop")) {
     let body: { id?: string };
     try {
       body = (await readJson(req)) as { id?: string };
@@ -465,10 +587,19 @@ const server = http.createServer(async (req, res) => {
   }
 
   // --- GET /status ----------------------------------------------------------
-  if (req.method === "GET" && (url.startsWith("/status") || url.startsWith("/sim-api/status"))) {
-    const tenantId = new URL(url, "http://localhost").searchParams.get("tenantId");
+  if (req.method === "GET" && (pathname === "/status" || pathname === "/sim-api/status")) {
+    const tenantId = parsedUrl.searchParams.get("tenantId");
     const list = tenantId ? instancesByTenant(tenantId) : [...instances.values()];
     return send(res, 200, { instances: list.map(instanceToDto) });
+  }
+
+  // --- GET /logs?id=... -----------------------------------------------------
+  if (req.method === "GET" && (pathname === "/logs" || pathname === "/sim-api/logs")) {
+    const id = parsedUrl.searchParams.get("id");
+    if (!id) return send(res, 400, { error: "id query param required" });
+    const inst = instances.get(id);
+    if (!inst) return send(res, 404, { error: "Instance not found" });
+    return send(res, 200, { logs: inst.logRing });
   }
 
   return send(res, 404, { error: "Not found" });
@@ -479,6 +610,7 @@ server.listen(PORT, "0.0.0.0", () => {
     port: PORT,
     maxPerTenant: MAX_PER_TENANT,
     maxTotal: MAX_TOTAL,
+    version: "1.1.0",
   });
 });
 
