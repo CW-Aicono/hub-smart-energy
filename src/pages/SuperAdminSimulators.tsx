@@ -147,11 +147,17 @@ const SuperAdminSimulators = () => {
         {},
         5,
       );
-      if (error) throw error;
+      if (error) {
+        if (isTemporaryEdgeError(error)) {
+          return (qc.getQueryData(["simulator-instances"]) as SimulatorRow[] | undefined) ?? [];
+        }
+        throw error;
+      }
       return (data as { instances: SimulatorRow[] }).instances ?? [];
     },
+    initialData: [] as SimulatorRow[],
     refetchInterval: 5000,
-    retry: (failureCount, error) => isTemporaryEdgeError(error) && failureCount < 5,
+    retry: (failureCount, error) => !isTemporaryEdgeError(error) && failureCount < 2,
     retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 10000),
     throwOnError: false,
   });
