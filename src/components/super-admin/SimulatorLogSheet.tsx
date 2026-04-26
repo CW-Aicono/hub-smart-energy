@@ -27,32 +27,49 @@ interface Props {
 }
 
 export function SimulatorLogSheet({ instanceId, ocppId, open, onOpenChange }: Props) {
-  const { data, isFetching } = useQuery<{ logs: OcppLogEntry[]; unavailable: boolean }>({
+  const { data, isFetching } = useQuery<{ logs: OcppLogEntry[]; unavailable: boolean; notFound: boolean }>({
     queryKey: ["simulator-logs", instanceId],
     enabled: !!instanceId && open,
-    refetchInterval: open ? 3000 : false,
+    refetchInterval: (query) => {
+      // Stop polling once instance is gone — prevents repeated 404 toasts
+      if ((query.state.data as { notFound?: boolean } | undefined)?.notFound) return false;
+      return open ? 3000 : false;
+    },
     retry: false,
     queryFn: async () => {
+      // Direct fetch so we can inspect HTTP status (invoke throws on non-2xx and bubbles a toast)
+      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ocpp-simulator-control?action=logs&instanceId=${instanceId}`;
+      const session = (await supabase.auth.getSession()).data.session;
       try {
-        const { data, error } = await supabase.functions.invoke(
-          `ocpp-simulator-control?action=logs&instanceId=${instanceId}`,
-          { method: "GET" },
-        );
-        if (error || !data) {
-          // Container v1.0 ohne /logs-Endpunkt ODER Instanz existiert im Container nicht mehr
-          // (z. B. nach Container-Neustart) → leise als "noch nicht verfügbar" behandeln
-          return { logs: [], unavailable: true };
+        const res = await fetch(url, {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${session?.access_token ?? ""}`,
+            apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string,
+          },
+        });
+        if (res.status === 404) {
+          // Instance gone (e.g. after Stop Tx or container restart) — stop polling
+          return { logs: [], unavailable: true, notFound: true };
         }
-        const logs = ((data as { logs?: OcppLogEntry[] }).logs ?? []).slice().reverse();
-        return { logs, unavailable: false };
+        if (!res.ok) {
+          return { logs: [], unavailable: true, notFound: false };
+        }
+        const json = (await res.json()) as { logs?: OcppLogEntry[] };
+        return {
+          logs: (json.logs ?? []).slice().reverse(),
+          unavailable: false,
+          notFound: false,
+        };
       } catch {
-        return { logs: [], unavailable: true };
+        return { logs: [], unavailable: true, notFound: false };
       }
     },
   });
 
   const logs = data?.logs ?? [];
   const unavailable = data?.unavailable ?? false;
+  const notFound = data?.notFound ?? false;
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
