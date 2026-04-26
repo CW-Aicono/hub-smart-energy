@@ -19,7 +19,6 @@ function bool(name: string, def: boolean): boolean {
 
 export const config = {
   supabaseUrl: req("SUPABASE_URL"),
-  ocppServerApiKey: req("OCPP_SERVER_API_KEY"),
   ocppDomain: process.env.OCPP_DOMAIN ?? "",
   port: num("PORT", 8080),
   logLevel: (process.env.LOG_LEVEL ?? "info") as "debug" | "info" | "warn" | "error",

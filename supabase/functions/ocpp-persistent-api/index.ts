@@ -2,12 +2,11 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const expectedServerKey = Deno.env.get("OCPP_SERVER_API_KEY") || Deno.env.get("GATEWAY_API_KEY") || "";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-ocpp-server-key",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
 const admin = createClient(supabaseUrl, serviceKey, {
@@ -258,10 +257,6 @@ async function handle(action: string, body: Record<string, unknown>) {
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   if (req.method !== "POST") return fail(405, "Method not allowed");
-
-  if (!expectedServerKey) return fail(500, "OCPP server key is not configured");
-  const provided = req.headers.get("x-ocpp-server-key") || req.headers.get("authorization")?.replace(/^Bearer\s+/i, "") || "";
-  if (provided !== expectedServerKey) return fail(401, "Invalid OCPP server key");
 
   let body: Record<string, unknown>;
   try {
