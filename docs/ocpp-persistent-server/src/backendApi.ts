@@ -39,6 +39,8 @@ async function callBackend<T>(action: string, payload: Record<string, unknown>):
     method: "POST",
     headers: {
       "Content-Type": "application/json",
+      "apikey": config.supabaseAnonKey,
+      "Authorization": `Bearer ${config.supabaseAnonKey}`,
     },
     body: JSON.stringify({ action, ...payload }),
   });
