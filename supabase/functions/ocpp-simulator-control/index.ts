@@ -44,23 +44,33 @@ function json(status: number, body: unknown) {
   });
 }
 
-async function callSim(path: string, init: RequestInit, simKey: string) {
-  const resp = await fetch(`${SIM_API_BASE}${path}`, {
-    ...init,
-    headers: {
-      ...(init.headers ?? {}),
-      Authorization: `Bearer ${simKey}`,
-      "Content-Type": "application/json",
-    },
-  });
-  const text = await resp.text();
-  let data: unknown = null;
+async function callSim(path: string, init: RequestInit, simKey: string, timeoutMs = 3000) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    data = text ? JSON.parse(text) : null;
-  } catch {
-    /* ignore */
+    const resp = await fetch(`${SIM_API_BASE}${path}`, {
+      ...init,
+      signal: controller.signal,
+      headers: {
+        ...(init.headers ?? {}),
+        Authorization: `Bearer ${simKey}`,
+        "Content-Type": "application/json",
+      },
+    });
+    const text = await resp.text();
+    let data: unknown = null;
+    try {
+      data = text ? JSON.parse(text) : null;
+    } catch {
+      /* ignore */
+    }
+    return { ok: resp.ok, status: resp.status, data };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return { ok: false, status: 504, data: { error: "Simulator API timeout", message } };
+  } finally {
+    clearTimeout(timeout);
   }
-  return { ok: resp.ok, status: resp.status, data };
 }
 
 Deno.serve(async (req) => {
