@@ -107,7 +107,10 @@ Deno.serve(async (req) => {
   }
 
   const url = new URL(req.url);
-  const action = url.searchParams.get("action") ?? "status";
+  const action =
+    req.headers.get("x-ocpp-simulator-action") ??
+    url.searchParams.get("action") ??
+    "status";
 
   try {
     // ---------------- STATUS ----------------
