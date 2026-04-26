@@ -50,6 +50,7 @@ import {
   Zap,
   ZapOff,
   Loader2,
+  Trash2,
 } from "lucide-react";
 import { format } from "date-fns";
 
@@ -153,6 +154,22 @@ const SuperAdminSimulators = () => {
     },
     onSuccess: () => {
       toast.success("Simulator gestoppt");
+      qc.invalidateQueries({ queryKey: ["simulator-instances"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const deleteMut = useMutation({
+    mutationFn: async (instanceId: string) => {
+      const { data, error } = await invokeWithRetry(
+        "ocpp-simulator-control?action=delete",
+        { body: { instanceId } },
+      );
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      toast.success("Eintrag gelöscht");
       qc.invalidateQueries({ queryKey: ["simulator-instances"] });
     },
     onError: (e: Error) => toast.error(e.message),
@@ -383,6 +400,19 @@ const SuperAdminSimulators = () => {
                                   Stoppen
                                 </Button>
                               )}
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => {
+                                  if (confirm("Eintrag dauerhaft löschen?")) {
+                                    deleteMut.mutate(row.id);
+                                  }
+                                }}
+                                disabled={deleteMut.isPending}
+                                title="Eintrag löschen"
+                              >
+                                <Trash2 className="h-4 w-4 text-destructive" />
+                              </Button>
                             </div>
                           </TableCell>
                         </TableRow>

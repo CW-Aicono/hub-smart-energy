@@ -323,6 +323,45 @@ Deno.serve(async (req) => {
       return json(200, { ok: true });
     }
 
+    // ---------------- DELETE ----------------
+    if (action === "delete" && req.method === "POST") {
+      const body = await req.json();
+      const instanceId = body.instanceId as string;
+      if (!instanceId) return json(400, { error: "instanceId required" });
+
+      const { data: row } = await supabaseAdmin
+        .from("simulator_instances")
+        .select("external_id, charge_point_id, status")
+        .eq("id", instanceId)
+        .maybeSingle();
+
+      // Best-effort: stoppe Sim-Instanz falls noch aktiv
+      if (row?.external_id) {
+        try {
+          await callSim(
+            "/stop",
+            { method: "POST", body: JSON.stringify({ id: row.external_id }) },
+            SIM_KEY,
+          );
+        } catch (_) { /* ignore */ }
+      }
+
+      // Charge Point aufräumen
+      if (row?.charge_point_id) {
+        await supabaseAdmin
+          .from("charge_points")
+          .delete()
+          .eq("id", row.charge_point_id);
+      }
+
+      await supabaseAdmin
+        .from("simulator_instances")
+        .delete()
+        .eq("id", instanceId);
+
+      return json(200, { ok: true });
+    }
+
     return json(400, { error: `Unknown action or method: ${action} ${req.method}` });
   } catch (e) {
     let msg: string;
