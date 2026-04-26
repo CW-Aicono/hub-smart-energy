@@ -192,7 +192,7 @@ Deno.serve(async (req) => {
           vendor,
           model,
           status: "available",
-          connection_protocol: "ocpp1.6",
+          connection_protocol: protocol,
           auth_required: false,
           max_power_kw: 22,
         })
