@@ -85,6 +85,7 @@ jobs:
             docs/GO-LIVE.md
             docs/CI-SETUP.md
             docs/DEPLOYMENT.md
+            supabase/functions/_shared/resend-from.ts
           )
           for path in "${CI_PATHS[@]}"; do
             if git cat-file -e "${CI_BASELINE}:${path}" 2>/dev/null; then
@@ -100,6 +101,19 @@ jobs:
             echo "Nichts zu syncen (Ziel-Tree = main-Tree)."
             git checkout main
           else
+            # Resend-Hardcode-Guard: blocken, wenn Lovable die alte Test-Domain
+            # zurückgeschrieben oder den resendFrom()-Helper rausgenommen hat.
+            BAD_DOMAIN_HITS="$(git grep --cached -nE 'noreply@mailtest\.my-ips\.de' -- 'supabase/functions/' || true)"
+            if [ -n "$BAD_DOMAIN_HITS" ]; then
+              echo "::error::Resend-Hardcode 'noreply@mailtest.my-ips.de' im staging-Sync gefunden. Lovable hat den resendFrom()-Helper überschrieben. Fix in staging zurückbringen, dann erneut deployen."
+              echo "$BAD_DOMAIN_HITS"
+              exit 1
+            fi
+            if ! git grep --cached -q 'resendFrom(' -- 'supabase/functions/' ; then
+              echo "::error::resendFrom()-Helper wird im staging-Function-Code nicht mehr verwendet. Fix in staging zurückbringen."
+              exit 1
+            fi
+
             MERGE_COMMIT="$(git commit-tree "$TARGET_TREE" \
               -p "$CI_BASELINE" \
               -p "$STAGING_SHA" \
