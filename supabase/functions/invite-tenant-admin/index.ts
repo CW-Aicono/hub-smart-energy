@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { Resend } from "npm:resend@2.0.0";
 import { getCorsHeaders } from "../_shared/cors.ts";
+import { resendFrom } from "../_shared/resend-from.ts";
 
 const handler = async (req: Request): Promise<Response> => {
   const corsHeaders = getCorsHeaders(req);
@@ -121,7 +122,7 @@ const handler = async (req: Request): Promise<Response> => {
 
     const resend = new Resend(RESEND_API_KEY);
     await resend.emails.send({
-      from: `${tenantName} <noreply@mailtest.my-ips.de>`,
+      from: resendFrom(tenantName),
       to: [adminEmail],
       subject: `Ihr Administrator-Konto bei ${tenantName}`,
       html: `<!DOCTYPE html>

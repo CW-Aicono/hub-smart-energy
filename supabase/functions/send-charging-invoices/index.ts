@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { Resend } from "npm:resend@2.0.0";
 import { getCorsHeaders } from "../_shared/cors.ts";
+import { resendFrom } from "../_shared/resend-from.ts";
 
 function formatDE(n: number, decimals = 2): string {
   return n.toLocaleString("de-DE", { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
@@ -467,7 +468,7 @@ serve(async (req) => {
 
               try {
                 await resend.emails.send({
-                  from: `${tenantName || "Ladeinfrastruktur"} <noreply@mailtest.my-ips.de>`,
+                  from: resendFrom(tenantName || "Ladeinfrastruktur"),
                   to: [user.email],
                   subject: `Laderechnung ${invoiceNumber} – ${period.label}`,
                   html: emailHtml,

@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders } from "../_shared/cors.ts";
+import { resendFrom } from "../_shared/resend-from.ts";
 
 const handler = async (req: Request): Promise<Response> => {
   const corsHeaders = getCorsHeaders(req);
@@ -308,7 +309,7 @@ async function sendInvitationEmail(
     const roleLabel = role === "admin" ? "Administrator" : "Benutzer";
 
     await resend.emails.send({
-      from: `${tenantName} <noreply@mailtest.my-ips.de>`,
+      from: resendFrom(tenantName),
       to: [email],
       subject: `Ihr Konto wurde erstellt – ${tenantName}`,
       html: `<!DOCTYPE html>

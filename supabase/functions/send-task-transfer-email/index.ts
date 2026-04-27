@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { Resend } from "npm:resend@2.0.0";
 import { getCorsHeaders } from "../_shared/cors.ts";
+import { resendFrom } from "../_shared/resend-from.ts";
 
 interface TaskTransferRequest {
   contactName: string;
@@ -114,7 +115,7 @@ const handler = async (req: Request): Promise<Response> => {
     const branding = await getTenantBranding(body.tenantId);
 
     const emailResponse = await resend.emails.send({
-      from: `${branding.name} <noreply@mailtest.my-ips.de>`,
+      from: resendFrom(branding.name),
       to: [body.contactEmail],
       subject: `Aufgabe: ${body.taskTitle} – ${branding.name}`,
       html: buildTaskEmailHTML(body, branding),

@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { Resend } from "npm:resend@2.0.0";
 import { jsPDF } from "npm:jspdf@2.5.2";
 import { getCorsHeaders } from "../_shared/cors.ts";
+import { resendFrom } from "../_shared/resend-from.ts";
 
 const ENERGY_LABELS: Record<string, string> = {
   strom: "Strom", gas: "Gas", waerme: "Wärme", wasser: "Wasser",
@@ -629,7 +630,7 @@ serve(async (req) => {
 
         if (resend && schedule.recipients.length > 0) {
           await resend.emails.send({
-            from: `${tenantName || "Energiebericht"} <noreply@mailtest.my-ips.de>`,
+            from: resendFrom(tenantName || "Energiebericht"),
             to: schedule.recipients,
             subject: `${reportTitle} (${formatDateDE(from)} – ${formatDateDE(to)})`,
             html: htmlContent,
