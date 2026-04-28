@@ -341,7 +341,10 @@ Deno.serve(async (req) => {
         .select("external_id")
         .eq("id", instanceId)
         .maybeSingle();
-      if (!row?.external_id) return json(404, { error: "Instance not found" });
+      // Instanz wurde gelöscht/gestoppt — kein Fehler, sondern leere Logs zurückgeben
+      if (!row?.external_id) {
+        return json(200, { logs: [], notFound: true });
+      }
       const sim = await callSim(
         `/logs?id=${encodeURIComponent(row.external_id)}`,
         { method: "GET" },
@@ -349,7 +352,11 @@ Deno.serve(async (req) => {
         5000,
       );
       if (!sim.ok) {
-        return json(sim.status, { error: "Logs unavailable", details: sim.data });
+        // Container kennt die Instanz nicht (mehr) — als beendet behandeln
+        if (sim.status === 404) {
+          return json(200, { logs: [], notFound: true });
+        }
+        return json(200, { logs: [], unavailable: true });
       }
       return json(200, sim.data);
     }
