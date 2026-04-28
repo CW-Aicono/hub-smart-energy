@@ -140,7 +140,7 @@ const ChargingPoints = () => {
   const getActiveSession = (cpId: string) => sessions.find((s) => s.charge_point_id === cpId && s.status === "active");
 
   const filteredChargePoints = statusFilter
-    ? chargePoints.filter((cp) => cp.status === statusFilter)
+    ? chargePoints.filter((cp) => normalizeConnectorStatus(cp.status, cp.ws_connected !== false) === statusFilter)
     : chargePoints;
 
   const wsScheme = form.connection_protocol === "ws" ? "ws" : "wss";
@@ -363,7 +363,7 @@ const ChargingPoints = () => {
               </CardContent>
             </Card>
             {Object.entries(statusConfig).map(([key, cfg]) => {
-              const count = chargePoints.filter((cp) => cp.status === key).reduce((sum, cp) => sum + (cp.connector_count || 1), 0);
+              const count = chargePoints.filter((cp) => normalizeConnectorStatus(cp.status, cp.ws_connected !== false) === key).reduce((sum, cp) => sum + (cp.connector_count || 1), 0);
               const isActive = statusFilter === key;
               return (
                 <Card
@@ -424,7 +424,7 @@ const ChargingPoints = () => {
                       </TableHeader>
                       <TableBody>
                         {filteredChargePoints.map((cp) => {
-                          const cfg = statusConfig[cp.status] || statusConfig.offline;
+                          const cfg = statusConfig[normalizeConnectorStatus(cp.status, cp.ws_connected !== false)] || statusConfig.offline;
                           const activeSession = getActiveSession(cp.id);
                           return (
                             <TableRow key={cp.id}>

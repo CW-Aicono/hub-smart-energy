@@ -33,7 +33,10 @@ export default function ChargingOverviewStats({ chargePoints, sessions }: Props)
     : 0;
 
   const uptimePercent = chargePoints.length > 0
-    ? (chargePoints.filter((cp) => cp.status === "available" || cp.status === "charging").length / chargePoints.length * 100)
+    ? (chargePoints.filter((cp) => {
+        const s = normalizeConnectorStatus(cp.status, (cp as any).ws_connected !== false);
+        return s === "available" || s === "charging";
+      }).length / chargePoints.length * 100)
     : 0;
 
   const chartData = useMemo(() => {
@@ -68,9 +71,10 @@ export default function ChargingOverviewStats({ chargePoints, sessions }: Props)
       }, 0));
 
       // Approximate: project current status onto all days (no historic status log)
-      const errorCpCount = chargePoints.filter(
-        (cp) => cp.status === "faulted" || cp.status === "offline"
-      ).length;
+      const errorCpCount = chargePoints.filter((cp) => {
+        const s = normalizeConnectorStatus(cp.status, (cp as any).ws_connected !== false);
+        return s === "faulted" || s === "offline";
+      }).length;
       const errorHours = errorCpCount * hoursInDay;
 
       const availableHours = Math.max(0, totalHours - chargingHours - errorHours);
