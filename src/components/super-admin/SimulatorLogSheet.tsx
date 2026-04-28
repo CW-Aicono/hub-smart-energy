@@ -57,7 +57,13 @@ export function SimulatorLogSheet({ instanceId, ocppId, open, onOpenChange }: Pr
           if (!res.ok) {
             return { logs: [], unavailable: true, notFound: false };
           }
-          const json = (await res.json()) as { logs?: OcppLogEntry[] };
+          const json = (await res.json()) as { logs?: OcppLogEntry[]; notFound?: boolean; unavailable?: boolean };
+          if (json.notFound) {
+            return { logs: [], unavailable: true, notFound: true };
+          }
+          if (json.unavailable) {
+            return { logs: [], unavailable: true, notFound: false };
+          }
           return {
             logs: (json.logs ?? []).slice().reverse(),
             unavailable: false,
