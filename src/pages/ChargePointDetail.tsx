@@ -381,7 +381,8 @@ const ChargePointDetail = () => {
       if (result?.status === "Accepted") {
         toast({ title: "Fernbefehl gesendet", description: `${action} wird ausgeführt…` });
       } else {
-        toast({ title: "Fehler", description: result?.message || "Befehl abgelehnt", variant: "destructive" });
+        const friendly = mapOcppRejectMessage(action, result?.message, result?.errorCode);
+        toast({ title: "Befehl abgelehnt", description: friendly, variant: "destructive" });
       }
     } catch (e: any) {
       toast({ title: "Fehler", description: e.message, variant: "destructive" });
