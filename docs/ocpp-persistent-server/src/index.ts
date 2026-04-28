@@ -91,7 +91,9 @@ function handleConnection(ws: WebSocket, chargePointId: string, chargePointPk: s
     const text = raw.toString();
     session.lastIncomingAt = Date.now();
     log.info("recv", { sessionId, chargePointId, frame: text.substring(0, 200) });
-    await logOcppMessage(chargePointId, "incoming", text);
+    // WICHTIG: Logs werden mit der UUID (chargePointPk) geschrieben, damit das
+    // Frontend (das per UUID filtert) sie zuordnen kann.
+    await logOcppMessage(chargePointPk, "incoming", text);
 
     let msg: unknown;
     try { msg = JSON.parse(text); } catch {
@@ -121,7 +123,7 @@ function handleConnection(ws: WebSocket, chargePointId: string, chargePointPk: s
       const response = await handleCall(session, msg as [2, string, string, Record<string, unknown>]);
       const responseStr = JSON.stringify(response);
       session.lastOutgoingAt = Date.now();
-      await logOcppMessage(chargePointId, "outgoing", responseStr);
+      await logOcppMessage(chargePointPk, "outgoing", responseStr);
       if (ws.readyState === ws.OPEN) ws.send(responseStr);
       log.info("send", { sessionId, chargePointId, frame: responseStr.substring(0, 200) });
     }
