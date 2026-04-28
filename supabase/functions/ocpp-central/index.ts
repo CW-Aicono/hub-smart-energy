@@ -576,7 +576,11 @@ async function handleRemoteCommand(
         .maybeSingle();
 
       if (!cp) return { status: "Rejected", message: "Charge point not found" };
-      if (cp.status !== "available" && cp.status !== "unavailable") return { status: "Rejected", message: "Charge point not available" };
+      // Normalize status to lowercase: gateways may report "Available" or "available"
+      const cpStatus = (cp.status ?? "").toLowerCase();
+      if (cpStatus !== "available" && cpStatus !== "unavailable") {
+        return { status: "Rejected", message: `Charge point not ready (current status: ${cp.status || "unknown"})` };
+      }
 
       const idTag = (body.idTag as string) || "APP_USER";
       const connectorId = (body.connectorId as number) || 1;
