@@ -30,6 +30,7 @@ import {
 import { format, subDays, isAfter } from "date-fns";
 import { de } from "date-fns/locale";
 import { fmtKwh, fmtKw, fmtNum } from "@/lib/formatCharging";
+import { mapOcppRejectMessage } from "@/lib/ocppErrorMessages";
 import { supabase } from "@/integrations/supabase/client";
 import { useOcppMeterValue } from "@/hooks/useOcppMeterValue";
 import { useChargePointConnectors } from "@/hooks/useChargePointConnectors";
@@ -381,7 +382,8 @@ const ChargePointDetail = () => {
       if (result?.status === "Accepted") {
         toast({ title: "Fernbefehl gesendet", description: `${action} wird ausgeführt…` });
       } else {
-        toast({ title: "Fehler", description: result?.message || "Befehl abgelehnt", variant: "destructive" });
+        const friendly = mapOcppRejectMessage(action, result?.message, result?.errorCode);
+        toast({ title: "Befehl abgelehnt", description: friendly, variant: "destructive" });
       }
     } catch (e: any) {
       toast({ title: "Fehler", description: e.message, variant: "destructive" });
