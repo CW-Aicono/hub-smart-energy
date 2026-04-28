@@ -27,7 +27,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import ChargePointQrCode from "@/components/charging/ChargePointQrCode";
 import ConnectorTypeIcons from "@/components/charging/ConnectorTypeIcons";
 import { format } from "date-fns";
-import { fmtKwh, fmtKw } from "@/lib/formatCharging";
+import { fmtKwh, fmtKw, normalizeConnectorStatus } from "@/lib/formatCharging";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import ChargingOverviewStats from "@/components/charging/ChargingOverviewStats";
 

@@ -5,7 +5,7 @@ import { BarChart3 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { subDays, isAfter, format } from "date-fns";
 import { de } from "date-fns/locale";
-import { fmtNum } from "@/lib/formatCharging";
+import { fmtNum, normalizeConnectorStatus } from "@/lib/formatCharging";
 import { useTranslation } from "@/hooks/useTranslation";
 import type { ChargePoint } from "@/hooks/useChargePoints";
 import type { ChargingSession } from "@/hooks/useChargingSessions";
