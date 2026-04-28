@@ -76,7 +76,7 @@ export function ConnectorStatusGrid({ connectors, selectedConnectorId, onSelectC
   return (
     <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${Math.min(connectors.length, 4)}, 1fr)` }}>
       {connectors.map((c, index) => {
-        const effectiveStatus = !wsConnected ? "offline" : c.status;
+        const effectiveStatus = normalizeConnectorStatus(c.status, wsConnected);
         const cfg = connectorStatusConfig[effectiveStatus] || connectorStatusConfig.offline;
         const Icon = cfg.icon;
         const isSelected = selectedConnectorId === c.connector_id;
