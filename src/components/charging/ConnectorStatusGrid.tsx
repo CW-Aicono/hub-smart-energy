@@ -1,11 +1,14 @@
 import { useState, useRef } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Zap, PlugZap, AlertTriangle, ZapOff, Pencil, Check, X, GripVertical } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Zap, PlugZap, AlertTriangle, ZapOff, Pencil, Check, X, GripVertical, Clock } from "lucide-react";
 import { ChargePointConnector, connectorDisplayName } from "@/hooks/useChargePointConnectors";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { normalizeConnectorStatus } from "@/lib/formatCharging";
+import { formatDistanceToNow } from "date-fns";
+import { de } from "date-fns/locale";
 
 const connectorStatusConfig: Record<string, { label: string; color: string; icon: typeof Zap }> = {
   available: { label: "Verfügbar", color: "bg-emerald-500", icon: Zap },
@@ -14,6 +17,16 @@ const connectorStatusConfig: Record<string, { label: string; color: string; icon
   faulted: { label: "Gestört", color: "bg-destructive", icon: AlertTriangle },
   offline: { label: "Offline", color: "bg-muted-foreground", icon: ZapOff },
 };
+
+// Connector data is considered stale if last_status_at is older than 5 minutes.
+const STALE_THRESHOLD_MS = 5 * 60 * 1000;
+
+function getStaleness(lastStatusAt: string | null): { isStale: boolean; ageMs: number | null; label: string } {
+  if (!lastStatusAt) return { isStale: true, ageMs: null, label: "noch keine Daten" };
+  const ageMs = Date.now() - new Date(lastStatusAt).getTime();
+  const label = formatDistanceToNow(new Date(lastStatusAt), { addSuffix: true, locale: de });
+  return { isStale: ageMs > STALE_THRESHOLD_MS, ageMs, label };
+}
 
 interface Props {
   connectors: ChargePointConnector[];
