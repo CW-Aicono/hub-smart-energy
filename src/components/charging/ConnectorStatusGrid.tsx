@@ -5,6 +5,7 @@ import { Zap, PlugZap, AlertTriangle, ZapOff, Pencil, Check, X, GripVertical } f
 import { ChargePointConnector, connectorDisplayName } from "@/hooks/useChargePointConnectors";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
+import { normalizeConnectorStatus } from "@/lib/formatCharging";
 
 const connectorStatusConfig: Record<string, { label: string; color: string; icon: typeof Zap }> = {
   available: { label: "Verfügbar", color: "bg-emerald-500", icon: Zap },
@@ -76,7 +77,7 @@ export function ConnectorStatusGrid({ connectors, selectedConnectorId, onSelectC
   return (
     <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${Math.min(connectors.length, 4)}, 1fr)` }}>
       {connectors.map((c, index) => {
-        const effectiveStatus = !wsConnected ? "offline" : c.status;
+        const effectiveStatus = normalizeConnectorStatus(c.status, wsConnected);
         const cfg = connectorStatusConfig[effectiveStatus] || connectorStatusConfig.offline;
         const Icon = cfg.icon;
         const isSelected = selectedConnectorId === c.connector_id;

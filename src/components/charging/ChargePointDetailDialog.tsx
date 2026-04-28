@@ -17,7 +17,7 @@ import { Switch } from "@/components/ui/switch";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ConnectorStatusGrid } from "@/components/charging/ConnectorStatusGrid";
 import { format } from "date-fns";
-import { fmtKwh, fmtKw } from "@/lib/formatCharging";
+import { fmtKwh, fmtKw, normalizeConnectorStatus } from "@/lib/formatCharging";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { AccessControlSettings } from "@/components/charging/AccessControlSettings";
@@ -157,7 +157,7 @@ export default function ChargePointDetailDialog({
 
   if (!cp) return null;
 
-  const cfg = statusConfig[cp.status] || statusConfig.offline;
+  const cfg = statusConfig[normalizeConnectorStatus(cp.status, cp.ws_connected !== false)] || statusConfig.offline;
   const StatusIcon = cfg.icon;
   const cpSessions = sessions
     .filter((s) => s.charge_point_id === cp.id)
