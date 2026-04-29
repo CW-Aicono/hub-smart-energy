@@ -826,7 +826,7 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
 
             {/* OCPP Log tab */}
             <TabsContent value="ocpp-log" className="mt-6">
-              <OcppLogViewer chargePointId={cp.ocpp_id} />
+              <OcppLogViewer chargePointId={cp.id} />
             </TabsContent>
 
             {/* Details tab */}
