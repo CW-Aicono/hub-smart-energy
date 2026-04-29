@@ -511,6 +511,11 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
                       <div>
                         <p className="text-sm text-muted-foreground">{t("cpd.stabilityScore" as any)}</p>
                         <p className="text-2xl font-bold">{uptimePercent == null ? "—" : `${fmtNum(uptimePercent, 2)} %`}</p>
+                        <p className="text-[11px] text-muted-foreground mt-0.5">
+                          {uptimePercent == null
+                            ? "Noch keine Verbindungsdaten – Statistik startet, sobald die Wallbox erstmals verbunden war."
+                            : "Online-Anteil der letzten 30 Tage (5-Minuten-Snapshots)"}
+                        </p>
                       </div>
                     </CardContent>
                   </Card>
