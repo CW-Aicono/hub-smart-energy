@@ -226,7 +226,7 @@ export default function ChargePointDetailDialog({
             {connectors.length > 0 && (
               <div className="space-y-2">
                 <p className="text-sm font-medium text-muted-foreground">Anschluss-Status</p>
-                <ConnectorStatusGrid connectors={connectors} wsConnected={cp?.ws_connected ?? false} />
+                <ConnectorStatusGrid connectors={connectors} wsConnected={cp?.ws_connected ?? false} lastHeartbeat={cp?.last_heartbeat ?? null} />
               </div>
             )}
 
