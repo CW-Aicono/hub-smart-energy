@@ -23,9 +23,20 @@ const OcppLogViewer = ({ chargePointId, showCpColumn = false }: OcppLogViewerPro
   const [directionFilter, setDirectionFilter] = useState<"all" | "incoming" | "outgoing" | "error">("all");
   const [messageTypeFilter, setMessageTypeFilter] = useState<string>("all");
 
-  // Collect unique message types for the dropdown
+  // Standard OCPP 1.6 message types + types found in current logs
+  const STANDARD_OCPP_TYPES = [
+    "Authorize", "BootNotification", "CALLERROR", "CALLRESULT",
+    "ChangeAvailability", "ChangeConfiguration", "ClearCache",
+    "DataTransfer", "DiagnosticsStatusNotification", "FirmwareStatusNotification",
+    "GetConfiguration", "Heartbeat", "MeterValues", "RemoteStartTransaction",
+    "RemoteStopTransaction", "Reset", "StartTransaction", "StatusNotification",
+    "StopTransaction", "TriggerMessage", "UnlockConnector",
+  ];
   const messageTypes = Array.from(
-    new Set(logs.map((l) => l.message_type).filter(Boolean) as string[])
+    new Set([
+      ...STANDARD_OCPP_TYPES,
+      ...(logs.map((l) => l.message_type).filter(Boolean) as string[]),
+    ])
   ).sort();
 
   // Detect Preparing→Available timeout (no StartTransaction in between)
