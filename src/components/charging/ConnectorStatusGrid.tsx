@@ -18,13 +18,24 @@ const connectorStatusConfig: Record<string, { label: string; color: string; icon
   offline: { label: "Offline", color: "bg-muted-foreground", icon: ZapOff },
 };
 
-// Connector data is considered stale if last_status_at is older than 5 minutes.
+// Connector data is considered stale if last contact is older than 5 minutes.
 const STALE_THRESHOLD_MS = 5 * 60 * 1000;
 
-function getStaleness(lastStatusAt: string | null): { isStale: boolean; ageMs: number | null; label: string } {
-  if (!lastStatusAt) return { isStale: true, ageMs: null, label: "noch keine Daten" };
-  const ageMs = Date.now() - new Date(lastStatusAt).getTime();
-  const label = formatDistanceToNow(new Date(lastStatusAt), { addSuffix: true, locale: de });
+/**
+ * Liveness der Wallbox: nutzt den jüngsten Zeitstempel aus
+ *   (a) StatusNotification (last_status_at)  und
+ *   (b) Heartbeat der gesamten Wallbox (lastHeartbeat).
+ * StatusNotifications kommen nur bei Status-Wechseln, daher ist der Heartbeat
+ * der bessere "ist online"-Indikator, sobald keine Wechsel mehr passieren.
+ */
+function getStaleness(lastStatusAt: string | null, lastHeartbeat?: string | null): { isStale: boolean; ageMs: number | null; label: string } {
+  const candidates = [lastStatusAt, lastHeartbeat]
+    .filter(Boolean)
+    .map((ts) => new Date(ts as string).getTime());
+  if (candidates.length === 0) return { isStale: true, ageMs: null, label: "noch keine Daten" };
+  const newest = Math.max(...candidates);
+  const ageMs = Date.now() - newest;
+  const label = formatDistanceToNow(new Date(newest), { addSuffix: true, locale: de });
   return { isStale: ageMs > STALE_THRESHOLD_MS, ageMs, label };
 }
 
@@ -34,11 +45,12 @@ interface Props {
   onSelectConnector?: (connectorId: number) => void;
   selectable?: boolean;
   wsConnected?: boolean;
+  lastHeartbeat?: string | null;
   editable?: boolean;
   onReorder?: (reordered: ChargePointConnector[]) => void;
 }
 
-export function ConnectorStatusGrid({ connectors, selectedConnectorId, onSelectConnector, selectable = false, wsConnected = true, editable = false, onReorder }: Props) {
+export function ConnectorStatusGrid({ connectors, selectedConnectorId, onSelectConnector, selectable = false, wsConnected = true, lastHeartbeat = null, editable = false, onReorder }: Props) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
   const dragItem = useRef<number | null>(null);
@@ -97,7 +109,7 @@ export function ConnectorStatusGrid({ connectors, selectedConnectorId, onSelectC
           const isSelected = selectedConnectorId === c.connector_id;
           const isEditing = editingId === c.id;
           const canDrag = editable && onReorder && connectors.length > 1;
-          const stale = getStaleness(c.last_status_at);
+          const stale = getStaleness(c.last_status_at, lastHeartbeat);
 
           return (
             <button
@@ -167,10 +179,14 @@ export function ConnectorStatusGrid({ connectors, selectedConnectorId, onSelectC
                   </div>
                 </TooltipTrigger>
                 <TooltipContent side="bottom" className="text-xs">
-                  {c.last_status_at ? (
+                  {c.last_status_at || lastHeartbeat ? (
                     <>
-                      Letzte Statusmeldung:<br />
-                      {new Date(c.last_status_at).toLocaleString("de-DE")}
+                      {c.last_status_at && (
+                        <>Letzte Statusmeldung:<br />{new Date(c.last_status_at).toLocaleString("de-DE")}<br /></>
+                      )}
+                      {lastHeartbeat && (
+                        <>Letzter Heartbeat:<br />{new Date(lastHeartbeat).toLocaleString("de-DE")}</>
+                      )}
                       {stale.isStale && (
                         <div className="mt-1 text-amber-500">
                           ⚠ Daten älter als 5 Minuten – Wallbox meldet sich nicht zuverlässig.

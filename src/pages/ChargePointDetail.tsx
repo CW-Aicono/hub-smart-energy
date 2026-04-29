@@ -185,11 +185,19 @@ const ChargePointDetail = () => {
     ? (periodSessions.filter((s) => s.status === "completed" || s.energy_kwh > 0).length / sessionCount * 100)
     : 0;
 
-  // Uptime: based on current status (simple real-time snapshot)
-  const uptimePercent = useMemo(() => {
+  // Stability score: live heartbeat-based snapshot.
+  // - null  = noch nie verbunden (kein Heartbeat, kein ws_connected_since) → "—" anzeigen
+  // - 100   = aktuell verbunden (ws_connected ODER Heartbeat < 5 Min)
+  // - 0     = war schon verbunden, aber aktuell offline/faulted
+  const uptimePercent = useMemo<number | null>(() => {
     if (!cp) return 0;
-    return cp.status === "available" || cp.status === "charging" ? 100 : 0;
-  }, [cp?.status]);
+    const neverConnected = !cp.last_heartbeat && !cp.ws_connected_since;
+    if (neverConnected) return null;
+    const hbAgeMs = cp.last_heartbeat ? Date.now() - new Date(cp.last_heartbeat).getTime() : Infinity;
+    const fresh = hbAgeMs < 5 * 60 * 1000;
+    if (cp.ws_connected || fresh) return 100;
+    return 0;
+  }, [cp?.status, cp?.ws_connected, cp?.last_heartbeat, cp?.ws_connected_since]);
 
   // Daily chart data – real data only
   const chartData = useMemo(() => {
@@ -506,12 +514,12 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
                   {/* Stability score */}
                   <Card>
                     <CardContent className="p-6 flex items-center gap-4">
-                      <div className={`h-10 w-10 rounded-full flex items-center justify-center ${uptimePercent > 80 ? "bg-primary/10 text-primary" : "bg-destructive/10 text-destructive"}`}>
+                      <div className={`h-10 w-10 rounded-full flex items-center justify-center ${uptimePercent == null ? "bg-muted text-muted-foreground" : uptimePercent > 80 ? "bg-primary/10 text-primary" : "bg-destructive/10 text-destructive"}`}>
                         <CheckCircle className="h-5 w-5" />
                       </div>
                       <div>
                         <p className="text-sm text-muted-foreground">{t("cpd.stabilityScore" as any)}</p>
-                        <p className="text-2xl font-bold">{fmtNum(uptimePercent, 2)} %</p>
+                        <p className="text-2xl font-bold">{uptimePercent == null ? "—" : `${fmtNum(uptimePercent, 2)} %`}</p>
                       </div>
                     </CardContent>
                   </Card>
@@ -558,7 +566,7 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
                         </div>
                         <div className="border rounded-lg p-3">
                           <p className="text-xs text-muted-foreground">{t("cpd.uptime" as any)}</p>
-                          <p className="text-xl font-bold">{fmtNum(uptimePercent, 2)} %</p>
+                          <p className="text-xl font-bold">{uptimePercent == null ? "—" : `${fmtNum(uptimePercent, 2)} %`}</p>
                         </div>
                       </div>
 
@@ -628,6 +636,7 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
                           onSelectConnector={setSelectedConnectorId}
                           selectable={isAdmin}
                           wsConnected={cp?.ws_connected ?? false}
+                          lastHeartbeat={cp?.last_heartbeat ?? null}
                           editable={isAdmin}
                           onReorder={isAdmin ? reorderConnectors : undefined}
                         />
