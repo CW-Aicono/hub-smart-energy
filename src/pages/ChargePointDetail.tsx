@@ -185,11 +185,19 @@ const ChargePointDetail = () => {
     ? (periodSessions.filter((s) => s.status === "completed" || s.energy_kwh > 0).length / sessionCount * 100)
     : 0;
 
-  // Uptime: based on current status (simple real-time snapshot)
-  const uptimePercent = useMemo(() => {
+  // Stability score: live heartbeat-based snapshot.
+  // - null  = noch nie verbunden (kein Heartbeat, kein ws_connected_since) → "—" anzeigen
+  // - 100   = aktuell verbunden (ws_connected ODER Heartbeat < 5 Min)
+  // - 0     = war schon verbunden, aber aktuell offline/faulted
+  const uptimePercent = useMemo<number | null>(() => {
     if (!cp) return 0;
-    return cp.status === "available" || cp.status === "charging" ? 100 : 0;
-  }, [cp?.status]);
+    const neverConnected = !cp.last_heartbeat && !cp.ws_connected_since;
+    if (neverConnected) return null;
+    const hbAgeMs = cp.last_heartbeat ? Date.now() - new Date(cp.last_heartbeat).getTime() : Infinity;
+    const fresh = hbAgeMs < 5 * 60 * 1000;
+    if (cp.ws_connected || fresh) return 100;
+    return 0;
+  }, [cp?.status, cp?.ws_connected, cp?.last_heartbeat, cp?.ws_connected_since]);
 
   // Daily chart data – real data only
   const chartData = useMemo(() => {
