@@ -109,7 +109,7 @@ export function ConnectorStatusGrid({ connectors, selectedConnectorId, onSelectC
           const isSelected = selectedConnectorId === c.connector_id;
           const isEditing = editingId === c.id;
           const canDrag = editable && onReorder && connectors.length > 1;
-          const stale = getStaleness(c.last_status_at);
+          const stale = getStaleness(c.last_status_at, lastHeartbeat);
 
           return (
             <button
