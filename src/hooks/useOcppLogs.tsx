@@ -14,7 +14,7 @@ export interface OcppLogEntry {
 // A single `as any` on the table name is the minimal workaround.
 const OCPP_TABLE = "ocpp_message_log";
 
-export function useOcppLogs(chargePointId?: string) {
+export function useOcppLogs(chargePointId?: string, messageTypeFilter?: string) {
   const [logs, setLogs] = useState<OcppLogEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [paused, setPaused] = useState(false);
@@ -24,6 +24,8 @@ export function useOcppLogs(chargePointId?: string) {
   useEffect(() => {
     pausedRef.current = paused;
   }, [paused]);
+
+  const activeType = messageTypeFilter && messageTypeFilter !== "all" ? messageTypeFilter : undefined;
 
   const fetchLogs = useCallback(async () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -35,19 +37,22 @@ export function useOcppLogs(chargePointId?: string) {
     if (chargePointId) {
       query = query.eq("charge_point_id", chargePointId);
     }
+    if (activeType) {
+      query = query.eq("message_type", activeType);
+    }
 
     const { data, error } = await query;
     if (!error && data) {
       setLogs(data as unknown as OcppLogEntry[]);
     }
     setLoading(false);
-  }, [chargePointId]);
+  }, [chargePointId, activeType]);
 
   useEffect(() => {
     fetchLogs();
 
     const channel = supabase
-      .channel(`ocpp-logs-${chargePointId || "all"}`)
+      .channel(`ocpp-logs-${chargePointId || "all"}-${activeType || "all"}`)
       .on(
         "postgres_changes" as const,
         {
@@ -58,9 +63,10 @@ export function useOcppLogs(chargePointId?: string) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         } as any,
         (payload: { new: Record<string, unknown> }) => {
-          if (!pausedRef.current) {
-            setLogs((prev) => [payload.new as unknown as OcppLogEntry, ...prev].slice(0, 500));
-          }
+          if (pausedRef.current) return;
+          const entry = payload.new as unknown as OcppLogEntry;
+          if (activeType && entry.message_type !== activeType) return;
+          setLogs((prev) => [entry, ...prev].slice(0, 500));
         }
       )
       .subscribe();
@@ -68,7 +74,7 @@ export function useOcppLogs(chargePointId?: string) {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [chargePointId, fetchLogs]);
+  }, [chargePointId, activeType, fetchLogs]);
 
   return { logs, loading, paused, setPaused, refetch: fetchLogs };
 }
