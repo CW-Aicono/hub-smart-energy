@@ -219,6 +219,7 @@ startServer().catch((error) => {
 function shutdown(signal: string) {
   log.info("Shutdown signal received", { signal });
   clearInterval(sweeper);
+  clearInterval(reconcileTimer);
   stopDispatcher();
   for (const s of listSessions()) {
     try { s.socket.close(1001, "Server shutdown"); } catch { /* ignore */ }
