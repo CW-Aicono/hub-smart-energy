@@ -16,12 +16,12 @@ interface OcppLogViewerProps {
 }
 
 const OcppLogViewer = ({ chargePointId, showCpColumn = false }: OcppLogViewerProps) => {
-  const { logs, loading, paused, setPaused, refetch } = useOcppLogs(chargePointId);
-  const { chargePoints } = useChargePoints();
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [filterText, setFilterText] = useState("");
   const [directionFilter, setDirectionFilter] = useState<"all" | "incoming" | "outgoing" | "error">("all");
   const [messageTypeFilter, setMessageTypeFilter] = useState<string>("all");
+  const { logs, loading, paused, setPaused, refetch } = useOcppLogs(chargePointId, messageTypeFilter);
+  const { chargePoints } = useChargePoints();
 
   // Standard OCPP 1.6 message types + types found in current logs
   const STANDARD_OCPP_TYPES = [
