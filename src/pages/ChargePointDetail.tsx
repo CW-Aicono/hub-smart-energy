@@ -514,12 +514,12 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
                   {/* Stability score */}
                   <Card>
                     <CardContent className="p-6 flex items-center gap-4">
-                      <div className={`h-10 w-10 rounded-full flex items-center justify-center ${uptimePercent > 80 ? "bg-primary/10 text-primary" : "bg-destructive/10 text-destructive"}`}>
+                      <div className={`h-10 w-10 rounded-full flex items-center justify-center ${uptimePercent == null ? "bg-muted text-muted-foreground" : uptimePercent > 80 ? "bg-primary/10 text-primary" : "bg-destructive/10 text-destructive"}`}>
                         <CheckCircle className="h-5 w-5" />
                       </div>
                       <div>
                         <p className="text-sm text-muted-foreground">{t("cpd.stabilityScore" as any)}</p>
-                        <p className="text-2xl font-bold">{fmtNum(uptimePercent, 2)} %</p>
+                        <p className="text-2xl font-bold">{uptimePercent == null ? "—" : `${fmtNum(uptimePercent, 2)} %`}</p>
                       </div>
                     </CardContent>
                   </Card>
