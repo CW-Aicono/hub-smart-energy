@@ -583,6 +583,35 @@ export type Database = {
         }
         Relationships: []
       }
+      charge_point_uptime_snapshots: {
+        Row: {
+          charge_point_id: string
+          id: number
+          is_online: boolean
+          recorded_at: string
+        }
+        Insert: {
+          charge_point_id: string
+          id?: number
+          is_online: boolean
+          recorded_at?: string
+        }
+        Update: {
+          charge_point_id?: string
+          id?: number
+          is_online?: boolean
+          recorded_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "charge_point_uptime_snapshots_charge_point_id_fkey"
+            columns: ["charge_point_id"]
+            isOneToOne: false
+            referencedRelation: "charge_points"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       charge_points: {
         Row: {
           access_settings: Json
@@ -6489,6 +6518,7 @@ export type Database = {
         Args: never
         Returns: Database["public"]["Enums"]["app_role"]
       }
+      cleanup_charge_point_uptime_snapshots: { Args: never; Returns: number }
       cleanup_expired_backups: { Args: never; Returns: number }
       cleanup_old_infra_metrics: { Args: never; Returns: number }
       cleanup_old_ocpp_logs: { Args: never; Returns: number }
@@ -6509,6 +6539,10 @@ export type Database = {
         Returns: Database["public"]["Enums"]["app_role"]
       }
       get_auth_user_email: { Args: never; Returns: string }
+      get_charge_point_uptime_pct: {
+        Args: { p_charge_point_id: string; p_days?: number }
+        Returns: number
+      }
       get_meter_daily_totals: {
         Args: { p_from_date: string; p_meter_ids: string[]; p_to_date: string }
         Returns: {
@@ -6638,6 +6672,7 @@ export type Database = {
         Args: { p_integration_id: string; p_owner: string }
         Returns: undefined
       }
+      snapshot_charge_point_uptime: { Args: never; Returns: number }
       try_acquire_gateway_refresh_lock: {
         Args: {
           p_integration_id: string

@@ -35,6 +35,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useOcppMeterValue } from "@/hooks/useOcppMeterValue";
 import { useChargePointConnectors } from "@/hooks/useChargePointConnectors";
 import { ConnectorStatusGrid } from "@/components/charging/ConnectorStatusGrid";
+import { useChargePointStability } from "@/hooks/useChargePointStability";
 import OcppLogViewer from "@/components/charging/OcppLogViewer";
 import ChargePointQrCode from "@/components/charging/ChargePointQrCode";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
@@ -185,19 +186,9 @@ const ChargePointDetail = () => {
     ? (periodSessions.filter((s) => s.status === "completed" || s.energy_kwh > 0).length / sessionCount * 100)
     : 0;
 
-  // Stability score: live heartbeat-based snapshot.
-  // - null  = noch nie verbunden (kein Heartbeat, kein ws_connected_since) → "—" anzeigen
-  // - 100   = aktuell verbunden (ws_connected ODER Heartbeat < 5 Min)
-  // - 0     = war schon verbunden, aber aktuell offline/faulted
-  const uptimePercent = useMemo<number | null>(() => {
-    if (!cp) return 0;
-    const neverConnected = !cp.last_heartbeat && !cp.ws_connected_since;
-    if (neverConnected) return null;
-    const hbAgeMs = cp.last_heartbeat ? Date.now() - new Date(cp.last_heartbeat).getTime() : Infinity;
-    const fresh = hbAgeMs < 5 * 60 * 1000;
-    if (cp.ws_connected || fresh) return 100;
-    return 0;
-  }, [cp?.status, cp?.ws_connected, cp?.last_heartbeat, cp?.ws_connected_since]);
+  // Stabilitätsbewertung: rollierende 30-Tage-Statistik aus charge_point_uptime_snapshots.
+  // null = noch nie verbunden (keine Snapshots).
+  const { data: uptimePercent = null } = useChargePointStability(cp?.id, 30);
 
   // Daily chart data – real data only
   const chartData = useMemo(() => {
@@ -520,6 +511,11 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
                       <div>
                         <p className="text-sm text-muted-foreground">{t("cpd.stabilityScore" as any)}</p>
                         <p className="text-2xl font-bold">{uptimePercent == null ? "—" : `${fmtNum(uptimePercent, 2)} %`}</p>
+                        <p className="text-[11px] text-muted-foreground mt-0.5">
+                          {uptimePercent == null
+                            ? "Noch keine Verbindungsdaten – Statistik startet, sobald die Wallbox erstmals verbunden war."
+                            : "Online-Anteil der letzten 30 Tage (5-Minuten-Snapshots)"}
+                        </p>
                       </div>
                     </CardContent>
                   </Card>
