@@ -77,12 +77,10 @@ function handleConnection(ws: WebSocket, chargePointId: string, chargePointPk: s
   registerSession(session);
   log.info("WebSocket open", { sessionId, chargePointId });
 
-  updateChargePoint(chargePointPk, {
-    ws_connected: true,
-    ws_connected_since: new Date().toISOString(),
-  }).catch((error) => {
-    log.warn("ws_connected update failed", { error: error.message });
-  });
+  // ws_connected=true mit Retry. Fire-and-forget hat in der Vergangenheit
+  // dazu geführt, dass das Flag bei einem kurzen Backend-Fehler permanent
+  // false blieb. Jetzt: bis zu 3 Versuche mit exponential backoff.
+  void markConnectedWithRetry(chargePointPk, sessionId, chargePointId);
 
   const pingTimer = startPing(ws, sessionId, chargePointId);
   ws.on("pong", () => log.debug("pong", { sessionId, chargePointId }));
