@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React, { useState } from "react";
 import { useOcppLogs, OcppLogEntry } from "@/hooks/useOcppLogs";
 import { useChargePoints } from "@/hooks/useChargePoints";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -186,9 +186,8 @@ const OcppLogViewer = ({ chargePointId, showCpColumn = false }: OcppLogViewerPro
               </TableHeader>
               <TableBody>
                 {filtered.map((log) => (
-                  <>
+                  <React.Fragment key={log.id}>
                     <TableRow
-                      key={log.id}
                       className="cursor-pointer hover:bg-muted/50"
                       onClick={() => setExpandedId(expandedId === log.id ? null : log.id)}
                     >
@@ -236,7 +235,7 @@ const OcppLogViewer = ({ chargePointId, showCpColumn = false }: OcppLogViewerPro
                       </TableCell>
                     </TableRow>
                     {expandedId === log.id && (
-                      <TableRow key={`${log.id}-detail`}>
+                      <TableRow>
                         <TableCell colSpan={showCpColumn ? 5 : 4} className="bg-muted/30 p-0">
                           <pre className="text-xs font-mono p-4 overflow-x-auto whitespace-pre-wrap break-all max-h-64">
                             {JSON.stringify(log.raw_message, null, 2)}
@@ -244,7 +243,7 @@ const OcppLogViewer = ({ chargePointId, showCpColumn = false }: OcppLogViewerPro
                         </TableCell>
                       </TableRow>
                     )}
-                  </>
+                  </React.Fragment>
                 ))}
               </TableBody>
             </Table>
