@@ -636,6 +636,7 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
                           onSelectConnector={setSelectedConnectorId}
                           selectable={isAdmin}
                           wsConnected={cp?.ws_connected ?? false}
+                          lastHeartbeat={cp?.last_heartbeat ?? null}
                           editable={isAdmin}
                           onReorder={isAdmin ? reorderConnectors : undefined}
                         />
