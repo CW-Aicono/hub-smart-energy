@@ -179,10 +179,14 @@ export function ConnectorStatusGrid({ connectors, selectedConnectorId, onSelectC
                   </div>
                 </TooltipTrigger>
                 <TooltipContent side="bottom" className="text-xs">
-                  {c.last_status_at ? (
+                  {c.last_status_at || lastHeartbeat ? (
                     <>
-                      Letzte Statusmeldung:<br />
-                      {new Date(c.last_status_at).toLocaleString("de-DE")}
+                      {c.last_status_at && (
+                        <>Letzte Statusmeldung:<br />{new Date(c.last_status_at).toLocaleString("de-DE")}<br /></>
+                      )}
+                      {lastHeartbeat && (
+                        <>Letzter Heartbeat:<br />{new Date(lastHeartbeat).toLocaleString("de-DE")}</>
+                      )}
                       {stale.isStale && (
                         <div className="mt-1 text-amber-500">
                           ⚠ Daten älter als 5 Minuten – Wallbox meldet sich nicht zuverlässig.
