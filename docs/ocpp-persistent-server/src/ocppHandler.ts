@@ -35,11 +35,15 @@ export async function handleCall(
   try {
     switch (action) {
       case "BootNotification": {
+        // Self-healing: stellt ws_connected=true sicher, falls der initiale
+        // Connect-Update fehlgeschlagen ist.
         await updateChargePoint(chargePointPk, {
           vendor: payload.chargePointVendor as string ?? null,
           model: payload.chargePointModel as string ?? null,
           firmware_version: payload.firmwareVersion as string ?? null,
           last_heartbeat: new Date().toISOString(),
+          ws_connected: true,
+          ws_connected_since: new Date().toISOString(),
         });
         return callResult(messageId, {
           currentTime: new Date().toISOString(),
@@ -49,8 +53,12 @@ export async function handleCall(
       }
 
       case "Heartbeat": {
+        // Self-healing: jeder Heartbeat bestätigt ws_connected=true.
+        // So korrigiert sich der Status spätestens nach 30 s, falls der
+        // initiale Connect-Update einen Backend-Fehler hatte.
         await updateChargePoint(chargePointPk, {
           last_heartbeat: new Date().toISOString(),
+          ws_connected: true,
         });
         return callResult(messageId, { currentTime: new Date().toISOString() });
       }

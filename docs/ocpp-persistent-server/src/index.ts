@@ -77,12 +77,10 @@ function handleConnection(ws: WebSocket, chargePointId: string, chargePointPk: s
   registerSession(session);
   log.info("WebSocket open", { sessionId, chargePointId });
 
-  updateChargePoint(chargePointPk, {
-    ws_connected: true,
-    ws_connected_since: new Date().toISOString(),
-  }).catch((error) => {
-    log.warn("ws_connected update failed", { error: error.message });
-  });
+  // ws_connected=true mit Retry. Fire-and-forget hat in der Vergangenheit
+  // dazu geführt, dass das Flag bei einem kurzen Backend-Fehler permanent
+  // false blieb. Jetzt: bis zu 3 Versuche mit exponential backoff.
+  void markConnectedWithRetry(chargePointPk, sessionId, chargePointId);
 
   const pingTimer = startPing(ws, sessionId, chargePointId);
   ws.on("pong", () => log.debug("pong", { sessionId, chargePointId }));
@@ -155,6 +153,47 @@ function handleConnection(ws: WebSocket, chargePointId: string, chargePointPk: s
   });
 }
 
+async function markConnectedWithRetry(chargePointPk: string, sessionId: string, chargePointId: string) {
+  const sinceIso = new Date().toISOString();
+  const maxAttempts = 3;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      await updateChargePoint(chargePointPk, {
+        ws_connected: true,
+        ws_connected_since: sinceIso,
+      });
+      if (attempt > 1) {
+        log.info("ws_connected=true updated after retry", { sessionId, chargePointId, attempt });
+      }
+      return;
+    } catch (error) {
+      const msg = (error as Error).message;
+      if (attempt === maxAttempts) {
+        log.error("ws_connected=true update FAILED after retries; relying on Heartbeat self-heal", {
+          sessionId, chargePointId, attempt, error: msg,
+        });
+        return;
+      }
+      const delayMs = 500 * Math.pow(2, attempt - 1); // 500, 1000
+      log.warn("ws_connected=true update failed, retrying", { sessionId, chargePointId, attempt, delayMs, error: msg });
+      await new Promise((r) => setTimeout(r, delayMs));
+    }
+  }
+}
+
+// Periodischer Re-Sync: alle 60 s wird für jede aktive Session ws_connected=true
+// in die DB geschrieben. Das schützt vor Edge-Cases, in denen Connect-Update UND
+// alle bisherigen Heartbeat-Updates an Backend-Fehlern gescheitert sind.
+const reconcileTimer = setInterval(() => {
+  for (const s of listSessions()) {
+    updateChargePoint(s.chargePointPk, { ws_connected: true }).catch((error) => {
+      log.debug("periodic ws_connected reconcile failed", {
+        sessionId: s.sessionId, chargePointId: s.chargePointId, error: (error as Error).message,
+      });
+    });
+  }
+}, 60_000);
+
 const stopDispatcher = startCommandDispatcher();
 const sweeper = startIdleSweeper();
 
@@ -180,6 +219,7 @@ startServer().catch((error) => {
 function shutdown(signal: string) {
   log.info("Shutdown signal received", { signal });
   clearInterval(sweeper);
+  clearInterval(reconcileTimer);
   stopDispatcher();
   for (const s of listSessions()) {
     try { s.socket.close(1001, "Server shutdown"); } catch { /* ignore */ }
