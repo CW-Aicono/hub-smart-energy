@@ -106,7 +106,8 @@ const OcppLogViewer = ({ chargePointId, showCpColumn = false }: OcppLogViewerPro
         <div className="flex items-center gap-3">
           <CardTitle className="text-base">OCPP-Nachrichtenlog</CardTitle>
           {chargePointId && (() => {
-            const cp = chargePoints.find(c => c.ocpp_id === chargePointId);
+            // chargePointId is the UUID (cp.id), since logs store the UUID in charge_point_id
+            const cp = chargePoints.find(c => c.id === chargePointId || c.ocpp_id === chargePointId);
             if (!cp) return null;
             return cp.ws_connected ? (
               <Badge className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30 text-xs gap-1">
@@ -202,13 +203,17 @@ const OcppLogViewer = ({ chargePointId, showCpColumn = false }: OcppLogViewerPro
                         <TableCell className="font-mono text-xs">
                           <span className="flex items-center gap-1.5">
                             {(() => {
-                              const cp = chargePoints.find(c => c.ocpp_id === log.charge_point_id);
+                              // log.charge_point_id is now the UUID; match by id, fall back to ocpp_id
+                              const cp = chargePoints.find(c => c.id === log.charge_point_id || c.ocpp_id === log.charge_point_id);
                               const connected = cp?.ws_connected;
                               return connected
                                 ? <Wifi className="h-3 w-3 text-emerald-500 shrink-0" />
                                 : <WifiOff className="h-3 w-3 text-muted-foreground shrink-0" />;
                             })()}
-                            {log.charge_point_id}
+                            {(() => {
+                              const cp = chargePoints.find(c => c.id === log.charge_point_id || c.ocpp_id === log.charge_point_id);
+                              return cp?.ocpp_id ?? log.charge_point_id;
+                            })()}
                           </span>
                         </TableCell>
                       )}

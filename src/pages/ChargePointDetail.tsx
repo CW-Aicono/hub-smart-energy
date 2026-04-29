@@ -29,7 +29,7 @@ import {
 } from "lucide-react";
 import { format, subDays, isAfter } from "date-fns";
 import { de } from "date-fns/locale";
-import { fmtKwh, fmtKw, fmtNum } from "@/lib/formatCharging";
+import { fmtKwh, fmtKw, fmtNum, normalizeConnectorStatus } from "@/lib/formatCharging";
 import { mapOcppRejectMessage } from "@/lib/ocppErrorMessages";
 import { supabase } from "@/integrations/supabase/client";
 import { useOcppMeterValue } from "@/hooks/useOcppMeterValue";
@@ -239,7 +239,9 @@ const ChargePointDetail = () => {
   if (!cp && chargePoints.length > 0) return <Navigate to="/charging/points" replace />;
   if (!cp) return null;
 
-  const cfg = STATUS_KEYS[cp.status] || STATUS_KEYS.offline;
+  // Status-Lookup case-insensitiv (DB liefert "Available" mit Großbuchstabe direkt von OCPP)
+  const normalizedStatus = normalizeConnectorStatus(cp.status, cp.ws_connected !== false);
+  const cfg = STATUS_KEYS[normalizedStatus] || STATUS_KEYS.offline;
   const StatusIcon = cfg.icon;
 
   // Warnings
@@ -826,7 +828,7 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
 
             {/* OCPP Log tab */}
             <TabsContent value="ocpp-log" className="mt-6">
-              <OcppLogViewer chargePointId={cp.ocpp_id} />
+              <OcppLogViewer chargePointId={cp.id} />
             </TabsContent>
 
             {/* Details tab */}
