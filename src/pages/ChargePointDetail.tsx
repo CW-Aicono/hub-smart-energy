@@ -566,7 +566,7 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
                         </div>
                         <div className="border rounded-lg p-3">
                           <p className="text-xs text-muted-foreground">{t("cpd.uptime" as any)}</p>
-                          <p className="text-xl font-bold">{fmtNum(uptimePercent, 2)} %</p>
+                          <p className="text-xl font-bold">{uptimePercent == null ? "—" : `${fmtNum(uptimePercent, 2)} %`}</p>
                         </div>
                       </div>
 
