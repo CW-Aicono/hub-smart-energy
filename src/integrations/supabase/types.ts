@@ -666,6 +666,7 @@ export type Database = {
           auth_required: boolean
           certificate_required: boolean
           certificate_type: string | null
+          cheap_charging_schedule: Json | null
           connection_protocol: string
           connector_count: number
           connector_type: string
@@ -699,6 +700,7 @@ export type Database = {
           auth_required?: boolean
           certificate_required?: boolean
           certificate_type?: string | null
+          cheap_charging_schedule?: Json | null
           connection_protocol?: string
           connector_count?: number
           connector_type?: string
@@ -732,6 +734,7 @@ export type Database = {
           auth_required?: boolean
           certificate_required?: boolean
           certificate_type?: string | null
+          cheap_charging_schedule?: Json | null
           connection_protocol?: string
           connector_count?: number
           connector_type?: string
