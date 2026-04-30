@@ -441,7 +441,29 @@ export function EditLocationDialog({ location, onSuccess, trigger }: EditLocatio
                 )} />
               </div>
 
-              {/* Coordinates */}
+              {/* DLM Hardlimit (Hausanschluss) */}
+              <div className="space-y-4">
+                <h4 className="text-sm font-medium">Lastmanagement (DLM)</h4>
+                <FormField control={form.control} name="grid_limit_kw" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Maximale Bezugsleistung am Hausanschluss (kW)</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        min={0}
+                        step="0.1"
+                        placeholder="z.B. 35"
+                        {...field}
+                      />
+                    </FormControl>
+                    <p className="text-xs text-muted-foreground">
+                      Hardlimit: alle Ladepunkte an diesem Standort werden bei Überschreitung automatisch gedrosselt.
+                      Voraussetzung: ein Hauptzähler ist diesem Standort zugeordnet. Leer lassen = kein Limit.
+                    </p>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+              </div>
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <h4 className="text-sm font-medium">{t("locations.coordinates")}</h4>
