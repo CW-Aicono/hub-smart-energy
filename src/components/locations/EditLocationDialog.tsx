@@ -173,7 +173,8 @@ export function EditLocationDialog({ location, onSuccess, trigger }: EditLocatio
       net_floor_area: typeof rest.net_floor_area === "number" ? rest.net_floor_area : null,
       gross_floor_area: typeof rest.gross_floor_area === "number" ? rest.gross_floor_area : null,
       heating_type: rest.heating_type || null,
-    };
+      grid_limit_kw: typeof rest.grid_limit_kw === "number" ? rest.grid_limit_kw : null,
+    } as any;
 
     const { error } = await updateLocation(location.id, updates);
 
