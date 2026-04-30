@@ -364,12 +364,116 @@ function ChargePointGroupDetail({ group, open, onOpenChange, chargePoints, isAdm
               </div>
               <Switch checked={energy.pv_surplus_charging} onCheckedChange={(v) => setEnergy({ ...energy, pv_surplus_charging: v })} disabled={!isAdmin} />
             </div>
-            <div className="flex items-center justify-between p-4 border rounded-lg">
-              <div>
-                <p className="font-medium">Günstig-Laden-Modus</p>
-                <p className="text-sm text-muted-foreground">Laden automatisch in Niedrigtarifzeiten verschieben</p>
+            <div className="p-4 border rounded-lg space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-medium">Günstig-Laden (EPEX Spot)</p>
+                  <p className="text-sm text-muted-foreground">Laden automatisch in Niedrigpreis-Stunden verschieben</p>
+                </div>
+                <Switch
+                  checked={energy.cheap_charging?.enabled ?? energy.cheap_charging_mode ?? false}
+                  onCheckedChange={(v) => setEnergy({
+                    ...energy,
+                    cheap_charging_mode: v,
+                    cheap_charging: {
+                      ...(energy.cheap_charging ?? { max_price_eur_mwh: 60, limit_kw: 11, use_fallback_window: true, fallback_time_from: "22:00", fallback_time_to: "06:00" }),
+                      enabled: v,
+                    },
+                  })}
+                  disabled={!isAdmin}
+                />
               </div>
-              <Switch checked={energy.cheap_charging_mode} onCheckedChange={(v) => setEnergy({ ...energy, cheap_charging_mode: v })} disabled={!isAdmin} />
+              {(energy.cheap_charging?.enabled ?? energy.cheap_charging_mode) && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
+                  <div>
+                    <Label className="text-xs">Max. Spotpreis (€/MWh)</Label>
+                    <Input
+                      type="number"
+                      min={-100}
+                      max={500}
+                      step={1}
+                      value={energy.cheap_charging?.max_price_eur_mwh ?? 60}
+                      onChange={(e) => setEnergy({
+                        ...energy,
+                        cheap_charging: {
+                          ...(energy.cheap_charging ?? { enabled: true, limit_kw: 11, use_fallback_window: true, fallback_time_from: "22:00", fallback_time_to: "06:00" }),
+                          max_price_eur_mwh: Number(e.target.value),
+                        },
+                      })}
+                      disabled={!isAdmin}
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs">Lade-Leistung (kW)</Label>
+                    <Input
+                      type="number"
+                      min={1.4}
+                      max={350}
+                      step={0.1}
+                      value={energy.cheap_charging?.limit_kw ?? 11}
+                      onChange={(e) => setEnergy({
+                        ...energy,
+                        cheap_charging: {
+                          ...(energy.cheap_charging ?? { enabled: true, max_price_eur_mwh: 60, use_fallback_window: true, fallback_time_from: "22:00", fallback_time_to: "06:00" }),
+                          limit_kw: Number(e.target.value),
+                        },
+                      })}
+                      disabled={!isAdmin}
+                    />
+                  </div>
+                  <div className="flex items-center gap-2 md:col-span-2 pt-1">
+                    <Switch
+                      checked={energy.cheap_charging?.use_fallback_window ?? true}
+                      onCheckedChange={(v) => setEnergy({
+                        ...energy,
+                        cheap_charging: {
+                          ...(energy.cheap_charging ?? { enabled: true, max_price_eur_mwh: 60, limit_kw: 11, fallback_time_from: "22:00", fallback_time_to: "06:00" }),
+                          use_fallback_window: v,
+                        },
+                      })}
+                      disabled={!isAdmin}
+                    />
+                    <Label className="text-xs">Fallback-Zeitfenster nutzen, wenn keine Spotpreise verfügbar</Label>
+                  </div>
+                  {(energy.cheap_charging?.use_fallback_window ?? true) && (
+                    <>
+                      <div>
+                        <Label className="text-xs">Fallback von</Label>
+                        <Input
+                          type="time"
+                          value={energy.cheap_charging?.fallback_time_from ?? "22:00"}
+                          onChange={(e) => setEnergy({
+                            ...energy,
+                            cheap_charging: {
+                              ...(energy.cheap_charging ?? { enabled: true, max_price_eur_mwh: 60, limit_kw: 11, use_fallback_window: true, fallback_time_to: "06:00" }),
+                              fallback_time_from: e.target.value,
+                            },
+                          })}
+                          disabled={!isAdmin}
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-xs">Fallback bis</Label>
+                        <Input
+                          type="time"
+                          value={energy.cheap_charging?.fallback_time_to ?? "06:00"}
+                          onChange={(e) => setEnergy({
+                            ...energy,
+                            cheap_charging: {
+                              ...(energy.cheap_charging ?? { enabled: true, max_price_eur_mwh: 60, limit_kw: 11, use_fallback_window: true, fallback_time_from: "22:00" }),
+                              fallback_time_to: e.target.value,
+                            },
+                          })}
+                          disabled={!isAdmin}
+                        />
+                      </div>
+                    </>
+                  )}
+                  <p className="text-xs text-muted-foreground md:col-span-2 flex items-center gap-1">
+                    <Info className="h-3 w-3" /> Die EPEX Day-Ahead Preise werden stündlich automatisch aktualisiert. Der Scheduler prüft alle 5 Minuten und passt die Lade-Leistung entsprechend an.
+                  </p>
+                </div>
+              )}
             </div>
             {isAdmin && (
               <Button onClick={handleSaveEnergy} variant={energySaved ? "outline" : "default"} className="gap-1.5">
