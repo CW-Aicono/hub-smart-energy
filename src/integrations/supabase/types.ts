@@ -425,6 +425,53 @@ export type Database = {
           },
         ]
       }
+      charge_point_active_profile: {
+        Row: {
+          applied_at: string
+          charge_point_id: string
+          connector_id: number
+          current_limit_a: number | null
+          current_limit_w: number | null
+          expires_at: string | null
+          id: string
+          metadata: Json | null
+          profile_purpose: string
+          source: string
+        }
+        Insert: {
+          applied_at?: string
+          charge_point_id: string
+          connector_id?: number
+          current_limit_a?: number | null
+          current_limit_w?: number | null
+          expires_at?: string | null
+          id?: string
+          metadata?: Json | null
+          profile_purpose?: string
+          source: string
+        }
+        Update: {
+          applied_at?: string
+          charge_point_id?: string
+          connector_id?: number
+          current_limit_a?: number | null
+          current_limit_w?: number | null
+          expires_at?: string | null
+          id?: string
+          metadata?: Json | null
+          profile_purpose?: string
+          source?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "charge_point_active_profile_charge_point_id_fkey"
+            columns: ["charge_point_id"]
+            isOneToOne: false
+            referencedRelation: "charge_points"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       charge_point_allowed_user_groups: {
         Row: {
           charge_point_id: string
@@ -638,6 +685,8 @@ export type Database = {
           photo_url: string | null
           power_limit_schedule: Json | null
           status: string
+          supports_change_configuration: boolean | null
+          supports_charging_profile: boolean | null
           tenant_id: string
           updated_at: string
           vendor: string | null
@@ -669,6 +718,8 @@ export type Database = {
           photo_url?: string | null
           power_limit_schedule?: Json | null
           status?: string
+          supports_change_configuration?: boolean | null
+          supports_charging_profile?: boolean | null
           tenant_id: string
           updated_at?: string
           vendor?: string | null
@@ -700,6 +751,8 @@ export type Database = {
           photo_url?: string | null
           power_limit_schedule?: Json | null
           status?: string
+          supports_change_configuration?: boolean | null
+          supports_charging_profile?: boolean | null
           tenant_id?: string
           updated_at?: string
           vendor?: string | null
@@ -768,6 +821,50 @@ export type Database = {
           vendor?: string
         }
         Relationships: []
+      }
+      charging_access_log: {
+        Row: {
+          charge_point_id: string | null
+          charge_point_ocpp_id: string | null
+          created_at: string
+          id: string
+          id_tag: string | null
+          metadata: Json | null
+          reason: string | null
+          result: string
+          tenant_id: string
+        }
+        Insert: {
+          charge_point_id?: string | null
+          charge_point_ocpp_id?: string | null
+          created_at?: string
+          id?: string
+          id_tag?: string | null
+          metadata?: Json | null
+          reason?: string | null
+          result: string
+          tenant_id: string
+        }
+        Update: {
+          charge_point_id?: string | null
+          charge_point_ocpp_id?: string | null
+          created_at?: string
+          id?: string
+          id_tag?: string | null
+          metadata?: Json | null
+          reason?: string | null
+          result?: string
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "charging_access_log_charge_point_id_fkey"
+            columns: ["charge_point_id"]
+            isOneToOne: false
+            referencedRelation: "charge_points"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       charging_invoice_counter: {
         Row: {
@@ -3306,6 +3403,7 @@ export type Database = {
           created_at: string
           description: string | null
           energy_sources: string[] | null
+          grid_limit_kw: number | null
           gross_floor_area: number | null
           heating_type: string | null
           id: string
@@ -3337,6 +3435,7 @@ export type Database = {
           created_at?: string
           description?: string | null
           energy_sources?: string[] | null
+          grid_limit_kw?: number | null
           gross_floor_area?: number | null
           heating_type?: string | null
           id?: string
@@ -3368,6 +3467,7 @@ export type Database = {
           created_at?: string
           description?: string | null
           energy_sources?: string[] | null
+          grid_limit_kw?: number | null
           gross_floor_area?: number | null
           heating_type?: string | null
           id?: string
