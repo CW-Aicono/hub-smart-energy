@@ -187,12 +187,19 @@ function ChargePointGroupDetail({ group, open, onOpenChange, chargePoints, isAdm
   const [powerLimit, setPowerLimit] = useState<PowerLimitSchedule>(
     (group.energy_settings as any).power_limit_schedule ?? defaultPowerLimitSchedule
   );
+  const [dlm, setDlm] = useState<{ enabled: boolean; limit_kw: number | null; reference_meter_id: string | null }>(
+    (group.energy_settings as any).dlm ?? { enabled: false, limit_kw: null, reference_meter_id: null }
+  );
+  const { meters } = useMeters();
 
   const members = chargePoints.filter((cp) => cp.group_id === group.id);
   const nonMembers = chargePoints.filter((cp) => !cp.group_id || cp.group_id === group.id);
 
   const handleSaveEnergy = () => {
-    onUpdate({ id: group.id, energy_settings: { ...energy, power_limit_schedule: powerLimit } });
+    onUpdate({
+      id: group.id,
+      energy_settings: { ...energy, power_limit_schedule: powerLimit, dlm },
+    });
     setEnergySaved(true);
     setTimeout(() => setEnergySaved(false), 2000);
   };
