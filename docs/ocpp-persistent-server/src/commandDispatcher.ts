@@ -85,7 +85,12 @@ async function dispatchOne(cmd: PendingRow): Promise<void> {
     status: "sent",
     processed_at: new Date().toISOString(),
   });
-  session.pendingCalls.set(uniqueId, { commandId: cmd.id, createdAt: Date.now() });
+  session.pendingCalls.set(uniqueId, {
+    commandId: cmd.id,
+    createdAt: Date.now(),
+    command: cmd.command,
+    chargePointPk: session.chargePointPk,
+  });
   session.socket.send(callStr);
   session.lastOutgoingAt = Date.now();
   log.info("Command dispatched", { cmd: cmd.command, chargePointId: cmd.charge_point_ocpp_id, uniqueId });
