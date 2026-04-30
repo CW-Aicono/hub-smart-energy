@@ -6,6 +6,7 @@ import { useEffect } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { normalizeConnectorStatus } from "@/lib/formatCharging";
 import { PlugZap, Zap, ZapOff, AlertTriangle, WifiOff, LocateFixed, Loader2, Navigation, Move, Check } from "lucide-react";
 import { toast } from "sonner";
 import { useTranslation } from "@/hooks/useTranslation";
@@ -213,14 +214,15 @@ export default function ChargePointsMap({ chargePoints, onChargePointClick, onVi
           </>
         )}
         {validPoints.map((cp) => {
-          const statusKey = `chargePointStatus.${cp.status}` as any;
-          const statusLabel = t(statusKey) || cp.status;
-          const cfgVariant = statusVariantMap[cp.status] || statusVariantMap.offline;
+          const s = normalizeConnectorStatus(cp.status, (cp as any).ws_connected !== false);
+          const statusKey = `chargePointStatus.${s}` as any;
+          const statusLabel = t(statusKey) || s;
+          const cfgVariant = statusVariantMap[s] || statusVariantMap.offline;
           return (
             <Marker
               key={cp.id}
               position={[cp.latitude!, cp.longitude!]}
-              icon={createColoredIcon(statusColors[cp.status] || statusColors.offline)}
+              icon={createColoredIcon(statusColors[s] || statusColors.offline)}
               draggable={editMode}
               eventHandlers={{
                 click: () => { if (!editMode) onChargePointClick?.(cp); },

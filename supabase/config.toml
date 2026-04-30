@@ -125,3 +125,7 @@ verify_jwt = false
 
 [functions.gateway-credentials]
 verify_jwt = false
+
+[functions.ocpp-persistent-api]
+verify_jwt = false
+

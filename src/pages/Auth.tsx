@@ -100,7 +100,7 @@ const Auth = () => {
               <img src={aiconoLogo} alt="AICONO" className="h-28 object-contain drop-shadow-lg" />
             </div>
           </div>
-          <p className="text-base text-primary-foreground/70 leading-relaxed">
+          <p className="text-base leading-relaxed" style={{ color: 'hsl(0, 0%, 100%, 0.75)' }}>
             Ihr intelligentes B2B-Dashboard für Energiemanagement. Verbrauch analysieren, Kosten optimieren und Nachhaltigkeitsziele erreichen.
           </p>
         </div>

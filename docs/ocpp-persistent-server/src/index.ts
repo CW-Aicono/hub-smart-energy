@@ -3,9 +3,9 @@ import { randomUUID } from "crypto";
 import { WebSocketServer, WebSocket } from "ws";
 import { config } from "./config";
 import { log } from "./logger";
-import { supabase } from "./supabaseClient";
-import { loadChargePoint, checkBasicAuth } from "./auth";
+import { loadChargePoint } from "./auth";
 import { logOcppMessage } from "./messageLog";
+import { updateChargePoint } from "./backendApi";
 import { handleCall } from "./ocppHandler";
 import { registerSession, removeSession, getSession, listSessions } from "./chargePointRegistry";
 import { startPing, startIdleSweeper } from "./keepAlive";
@@ -40,22 +40,21 @@ server.on("upgrade", async (req, socket, head) => {
       return;
     }
 
-    const cp = await loadChargePoint(chargePointId);
+    const auth = await loadChargePoint(chargePointId, req.headers.authorization);
+    const cp = auth.chargePoint;
     if (!cp) {
-      log.warn("Unknown charge point", { chargePointId });
-      socket.write("HTTP/1.1 404 Not Found\r\n\r\nUnknown charge point");
+      log.warn(auth.message, { chargePointId });
+      if (auth.statusCode === 401) {
+        socket.write(`HTTP/1.1 401 Unauthorized\r\nWWW-Authenticate: Basic realm="OCPP"\r\n\r\n`);
+      } else {
+        socket.write(`HTTP/1.1 ${auth.statusCode} ${auth.message}\r\n\r\n${auth.message}`);
+      }
       socket.destroy();
       return;
     }
 
-    if (cp.ocpp_password) {
-      const ok = checkBasicAuth(req.headers.authorization, cp.ocpp_password);
-      if (!ok) {
-        log.warn("Auth failed", { chargePointId });
-        socket.write(`HTTP/1.1 401 Unauthorized\r\nWWW-Authenticate: Basic realm="OCPP"\r\n\r\n`);
-        socket.destroy();
-        return;
-      }
+    if (auth.authSkipped) {
+      log.info("Accepting unauthenticated connection", { chargePointId, authRequired: cp.auth_required });
     }
 
     wss.handleUpgrade(req, socket, head, (ws) => {
@@ -78,12 +77,10 @@ function handleConnection(ws: WebSocket, chargePointId: string, chargePointPk: s
   registerSession(session);
   log.info("WebSocket open", { sessionId, chargePointId });
 
-  // DB: connected markieren
-  supabase.from("charge_points").update({
-    ws_connected: true, ws_connected_since: new Date().toISOString(),
-  }).eq("id", chargePointPk).then(({ error }) => {
-    if (error) log.warn("ws_connected update failed", { error: error.message });
-  });
+  // ws_connected=true mit Retry. Fire-and-forget hat in der Vergangenheit
+  // dazu geführt, dass das Flag bei einem kurzen Backend-Fehler permanent
+  // false blieb. Jetzt: bis zu 3 Versuche mit exponential backoff.
+  void markConnectedWithRetry(chargePointPk, sessionId, chargePointId);
 
   const pingTimer = startPing(ws, sessionId, chargePointId);
   ws.on("pong", () => log.debug("pong", { sessionId, chargePointId }));
@@ -92,7 +89,9 @@ function handleConnection(ws: WebSocket, chargePointId: string, chargePointPk: s
     const text = raw.toString();
     session.lastIncomingAt = Date.now();
     log.info("recv", { sessionId, chargePointId, frame: text.substring(0, 200) });
-    await logOcppMessage(chargePointId, "incoming", text);
+    // WICHTIG: Logs werden mit der UUID (chargePointPk) geschrieben, damit das
+    // Frontend (das per UUID filtert) sie zuordnen kann.
+    await logOcppMessage(chargePointPk, "incoming", text);
 
     let msg: unknown;
     try { msg = JSON.parse(text); } catch {
@@ -122,7 +121,7 @@ function handleConnection(ws: WebSocket, chargePointId: string, chargePointPk: s
       const response = await handleCall(session, msg as [2, string, string, Record<string, unknown>]);
       const responseStr = JSON.stringify(response);
       session.lastOutgoingAt = Date.now();
-      await logOcppMessage(chargePointId, "outgoing", responseStr);
+      await logOcppMessage(chargePointPk, "outgoing", responseStr);
       if (ws.readyState === ws.OPEN) ws.send(responseStr);
       log.info("send", { sessionId, chargePointId, frame: responseStr.substring(0, 200) });
     }
@@ -139,10 +138,14 @@ function handleConnection(ws: WebSocket, chargePointId: string, chargePointPk: s
       durationSec: Math.round((Date.now() - session.openedAt) / 1000),
     });
     removeSession(chargePointId, sessionId);
-    const { error } = await supabase.from("charge_points").update({
-      ws_connected: false, ws_connected_since: null,
-    }).eq("id", chargePointPk);
-    if (error) log.warn("ws_connected=false update failed", { error: error.message });
+    try {
+      await updateChargePoint(chargePointPk, {
+        ws_connected: false,
+        ws_connected_since: null,
+      });
+    } catch (error) {
+      log.warn("ws_connected=false update failed", { error: (error as Error).message });
+    }
   });
 
   ws.on("error", (e) => {
@@ -150,16 +153,73 @@ function handleConnection(ws: WebSocket, chargePointId: string, chargePointPk: s
   });
 }
 
+async function markConnectedWithRetry(chargePointPk: string, sessionId: string, chargePointId: string) {
+  const sinceIso = new Date().toISOString();
+  const maxAttempts = 3;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      await updateChargePoint(chargePointPk, {
+        ws_connected: true,
+        ws_connected_since: sinceIso,
+      });
+      if (attempt > 1) {
+        log.info("ws_connected=true updated after retry", { sessionId, chargePointId, attempt });
+      }
+      return;
+    } catch (error) {
+      const msg = (error as Error).message;
+      if (attempt === maxAttempts) {
+        log.error("ws_connected=true update FAILED after retries; relying on Heartbeat self-heal", {
+          sessionId, chargePointId, attempt, error: msg,
+        });
+        return;
+      }
+      const delayMs = 500 * Math.pow(2, attempt - 1); // 500, 1000
+      log.warn("ws_connected=true update failed, retrying", { sessionId, chargePointId, attempt, delayMs, error: msg });
+      await new Promise((r) => setTimeout(r, delayMs));
+    }
+  }
+}
+
+// Periodischer Re-Sync: alle 60 s wird für jede aktive Session ws_connected=true
+// in die DB geschrieben. Das schützt vor Edge-Cases, in denen Connect-Update UND
+// alle bisherigen Heartbeat-Updates an Backend-Fehlern gescheitert sind.
+const reconcileTimer = setInterval(() => {
+  for (const s of listSessions()) {
+    updateChargePoint(s.chargePointPk, { ws_connected: true }).catch((error) => {
+      log.debug("periodic ws_connected reconcile failed", {
+        sessionId: s.sessionId, chargePointId: s.chargePointId, error: (error as Error).message,
+      });
+    });
+  }
+}, 60_000);
+
 const stopDispatcher = startCommandDispatcher();
 const sweeper = startIdleSweeper();
 
-server.listen(config.port, () => {
-  log.info("OCPP server started", { port: config.port, domain: config.ocppDomain });
+async function startServer() {
+  if (config.startupCheckOcppId) {
+    const auth = await loadChargePoint(config.startupCheckOcppId);
+    if (!auth.chargePoint) {
+      throw new Error(`Startup check failed for ${config.startupCheckOcppId}: ${auth.message}`);
+    }
+    log.info("Startup check ok", { chargePointId: config.startupCheckOcppId });
+  }
+
+  server.listen(config.port, () => {
+    log.info("OCPP server started", { port: config.port, domain: config.ocppDomain });
+  });
+}
+
+startServer().catch((error) => {
+  log.error("OCPP server startup failed", { error: (error as Error).message });
+  process.exit(1);
 });
 
 function shutdown(signal: string) {
   log.info("Shutdown signal received", { signal });
   clearInterval(sweeper);
+  clearInterval(reconcileTimer);
   stopDispatcher();
   for (const s of listSessions()) {
     try { s.socket.close(1001, "Server shutdown"); } catch { /* ignore */ }

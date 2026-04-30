@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders } from "../_shared/cors.ts";
+import { resendFrom } from "../_shared/resend-from.ts";
 
 const handler = async (req: Request): Promise<Response> => {
   const corsHeaders = getCorsHeaders(req);
@@ -109,11 +110,11 @@ const handler = async (req: Request): Promise<Response> => {
         if (createError.message?.toLowerCase().includes("already") || createError.message?.toLowerCase().includes("exists")) {
           // User already exists – find them and reuse
           const { data: listData, error: listError } = await supabase.auth.admin.listUsers({
-            filter: `email.eq.${email}`,
-            perPage: 1,
+            page: 1,
+            perPage: 1000,
           });
           if (listError) throw new Error("Benutzer konnte nicht gefunden werden");
-          const existingUser = listData?.users?.[0];
+          const existingUser = listData?.users?.find((u) => u.email?.toLowerCase() === email.toLowerCase());
           if (!existingUser) throw new Error("Benutzer mit dieser E-Mail konnte nicht gefunden werden.");
           newUserId = existingUser.id;
         } else {
@@ -308,7 +309,7 @@ async function sendInvitationEmail(
     const roleLabel = role === "admin" ? "Administrator" : "Benutzer";
 
     await resend.emails.send({
-      from: `${tenantName} <noreply@mailtest.my-ips.de>`,
+      from: resendFrom(tenantName),
       to: [email],
       subject: `Ihr Konto wurde erstellt – ${tenantName}`,
       html: `<!DOCTYPE html>

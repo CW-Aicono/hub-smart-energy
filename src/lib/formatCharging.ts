@@ -30,3 +30,19 @@ export function fmtKwh(value: number, decimals: number = 2): string {
 export function fmtKw(value: number, decimals: number = 1): string {
   return `${fmtNum(value, decimals)} kW`;
 }
+
+/**
+ * Normalizes an OCPP connector/charge-point status to lowercase, so that
+ * frontend lookups work regardless of whether the backend (Hetzner OCPP server,
+ * ws-proxy, edge function, etc.) stored "Available" or "available".
+ *
+ * If `wsConnected` is explicitly `false`, the status is forced to "offline".
+ * Pass `true` (default) when you don't have / don't need a connectivity check.
+ */
+export function normalizeConnectorStatus(
+  raw: string | null | undefined,
+  wsConnected: boolean = true,
+): string {
+  if (wsConnected === false) return "offline";
+  return (raw ?? "").toLowerCase();
+}

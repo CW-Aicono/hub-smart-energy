@@ -29,11 +29,13 @@ import {
 } from "lucide-react";
 import { format, subDays, isAfter } from "date-fns";
 import { de } from "date-fns/locale";
-import { fmtKwh, fmtKw, fmtNum } from "@/lib/formatCharging";
+import { fmtKwh, fmtKw, fmtNum, normalizeConnectorStatus } from "@/lib/formatCharging";
+import { mapOcppRejectMessage } from "@/lib/ocppErrorMessages";
 import { supabase } from "@/integrations/supabase/client";
 import { useOcppMeterValue } from "@/hooks/useOcppMeterValue";
 import { useChargePointConnectors } from "@/hooks/useChargePointConnectors";
 import { ConnectorStatusGrid } from "@/components/charging/ConnectorStatusGrid";
+import { useChargePointStability } from "@/hooks/useChargePointStability";
 import OcppLogViewer from "@/components/charging/OcppLogViewer";
 import ChargePointQrCode from "@/components/charging/ChargePointQrCode";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
@@ -184,11 +186,9 @@ const ChargePointDetail = () => {
     ? (periodSessions.filter((s) => s.status === "completed" || s.energy_kwh > 0).length / sessionCount * 100)
     : 0;
 
-  // Uptime: based on current status (simple real-time snapshot)
-  const uptimePercent = useMemo(() => {
-    if (!cp) return 0;
-    return cp.status === "available" || cp.status === "charging" ? 100 : 0;
-  }, [cp?.status]);
+  // Stabilitätsbewertung: rollierende 30-Tage-Statistik aus charge_point_uptime_snapshots.
+  // null = noch nie verbunden (keine Snapshots).
+  const { data: uptimePercent = null } = useChargePointStability(cp?.id, 30);
 
   // Daily chart data – real data only
   const chartData = useMemo(() => {
@@ -238,7 +238,9 @@ const ChargePointDetail = () => {
   if (!cp && chargePoints.length > 0) return <Navigate to="/charging/points" replace />;
   if (!cp) return null;
 
-  const cfg = STATUS_KEYS[cp.status] || STATUS_KEYS.offline;
+  // Status-Lookup case-insensitiv (DB liefert "Available" mit Großbuchstabe direkt von OCPP)
+  const normalizedStatus = normalizeConnectorStatus(cp.status, cp.ws_connected !== false);
+  const cfg = STATUS_KEYS[normalizedStatus] || STATUS_KEYS.offline;
   const StatusIcon = cfg.icon;
 
   // Warnings
@@ -381,7 +383,8 @@ const ChargePointDetail = () => {
       if (result?.status === "Accepted") {
         toast({ title: "Fernbefehl gesendet", description: `${action} wird ausgeführt…` });
       } else {
-        toast({ title: "Fehler", description: result?.message || "Befehl abgelehnt", variant: "destructive" });
+        const friendly = mapOcppRejectMessage(action, result?.message, result?.errorCode);
+        toast({ title: "Befehl abgelehnt", description: friendly, variant: "destructive" });
       }
     } catch (e: any) {
       toast({ title: "Fehler", description: e.message, variant: "destructive" });
@@ -502,12 +505,17 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
                   {/* Stability score */}
                   <Card>
                     <CardContent className="p-6 flex items-center gap-4">
-                      <div className={`h-10 w-10 rounded-full flex items-center justify-center ${uptimePercent > 80 ? "bg-primary/10 text-primary" : "bg-destructive/10 text-destructive"}`}>
+                      <div className={`h-10 w-10 rounded-full flex items-center justify-center ${uptimePercent == null ? "bg-muted text-muted-foreground" : uptimePercent > 80 ? "bg-primary/10 text-primary" : "bg-destructive/10 text-destructive"}`}>
                         <CheckCircle className="h-5 w-5" />
                       </div>
                       <div>
                         <p className="text-sm text-muted-foreground">{t("cpd.stabilityScore" as any)}</p>
-                        <p className="text-2xl font-bold">{fmtNum(uptimePercent, 2)} %</p>
+                        <p className="text-2xl font-bold">{uptimePercent == null ? "—" : `${fmtNum(uptimePercent, 2)} %`}</p>
+                        <p className="text-[11px] text-muted-foreground mt-0.5">
+                          {uptimePercent == null
+                            ? "Noch keine Verbindungsdaten – Statistik startet, sobald die Wallbox erstmals verbunden war."
+                            : "Online-Anteil der letzten 30 Tage (5-Minuten-Snapshots)"}
+                        </p>
                       </div>
                     </CardContent>
                   </Card>
@@ -554,7 +562,7 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
                         </div>
                         <div className="border rounded-lg p-3">
                           <p className="text-xs text-muted-foreground">{t("cpd.uptime" as any)}</p>
-                          <p className="text-xl font-bold">{fmtNum(uptimePercent, 2)} %</p>
+                          <p className="text-xl font-bold">{uptimePercent == null ? "—" : `${fmtNum(uptimePercent, 2)} %`}</p>
                         </div>
                       </div>
 
@@ -624,6 +632,7 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
                           onSelectConnector={setSelectedConnectorId}
                           selectable={isAdmin}
                           wsConnected={cp?.ws_connected ?? false}
+                          lastHeartbeat={cp?.last_heartbeat ?? null}
                           editable={isAdmin}
                           onReorder={isAdmin ? reorderConnectors : undefined}
                         />
@@ -824,7 +833,7 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
 
             {/* OCPP Log tab */}
             <TabsContent value="ocpp-log" className="mt-6">
-              <OcppLogViewer chargePointId={cp.ocpp_id} />
+              <OcppLogViewer chargePointId={cp.id} />
             </TabsContent>
 
             {/* Details tab */}

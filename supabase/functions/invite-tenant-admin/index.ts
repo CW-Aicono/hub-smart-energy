@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { Resend } from "npm:resend@2.0.0";
 import { getCorsHeaders } from "../_shared/cors.ts";
+import { resendFrom } from "../_shared/resend-from.ts";
 
 const handler = async (req: Request): Promise<Response> => {
   const corsHeaders = getCorsHeaders(req);
@@ -70,11 +71,11 @@ const handler = async (req: Request): Promise<Response> => {
       if (createError.message?.includes("already")) {
         // User already exists in auth – find them and reassign to new tenant
         const { data: listData, error: listError } = await supabase.auth.admin.listUsers({
-          filter: `email.eq.${adminEmail}`,
-          perPage: 1,
+          page: 1,
+          perPage: 1000,
         });
         if (listError) throw new Error("Benutzer konnte nicht gefunden werden");
-        const existingUser = listData?.users?.[0];
+        const existingUser = listData?.users?.find((u) => u.email?.toLowerCase() === adminEmail.toLowerCase());
         if (!existingUser) throw new Error("Benutzer mit dieser E-Mail konnte nicht gefunden werden.");
         newUserId = existingUser.id;
       } else {
@@ -121,7 +122,7 @@ const handler = async (req: Request): Promise<Response> => {
 
     const resend = new Resend(RESEND_API_KEY);
     await resend.emails.send({
-      from: `${tenantName} <noreply@mailtest.my-ips.de>`,
+      from: resendFrom(tenantName),
       to: [adminEmail],
       subject: `Ihr Administrator-Konto bei ${tenantName}`,
       html: `<!DOCTYPE html>

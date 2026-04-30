@@ -583,10 +583,43 @@ export type Database = {
         }
         Relationships: []
       }
+      charge_point_uptime_snapshots: {
+        Row: {
+          charge_point_id: string
+          id: number
+          is_online: boolean
+          recorded_at: string
+        }
+        Insert: {
+          charge_point_id: string
+          id?: number
+          is_online: boolean
+          recorded_at?: string
+        }
+        Update: {
+          charge_point_id?: string
+          id?: number
+          is_online?: boolean
+          recorded_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "charge_point_uptime_snapshots_charge_point_id_fkey"
+            columns: ["charge_point_id"]
+            isOneToOne: false
+            referencedRelation: "charge_points"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       charge_points: {
         Row: {
           access_settings: Json
           address: string | null
+          auth_required: boolean
+          certificate_required: boolean
+          certificate_type: string | null
+          connection_protocol: string
           connector_count: number
           connector_type: string
           created_at: string
@@ -614,6 +647,10 @@ export type Database = {
         Insert: {
           access_settings?: Json
           address?: string | null
+          auth_required?: boolean
+          certificate_required?: boolean
+          certificate_type?: string | null
+          connection_protocol?: string
           connector_count?: number
           connector_type?: string
           created_at?: string
@@ -641,6 +678,10 @@ export type Database = {
         Update: {
           access_settings?: Json
           address?: string | null
+          auth_required?: boolean
+          certificate_required?: boolean
+          certificate_type?: string | null
+          connection_protocol?: string
           connector_count?: number
           connector_type?: string
           created_at?: string
@@ -4997,6 +5038,84 @@ export type Database = {
           },
         ]
       }
+      simulator_instances: {
+        Row: {
+          charge_point_id: string | null
+          created_at: string
+          created_by: string | null
+          external_id: string | null
+          id: string
+          id_tag: string | null
+          last_error: string | null
+          model: string
+          ocpp_id: string
+          power_kw: number
+          protocol: string
+          server_host: string
+          started_at: string
+          status: string
+          stopped_at: string | null
+          tenant_id: string
+          updated_at: string
+          vendor: string
+        }
+        Insert: {
+          charge_point_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          external_id?: string | null
+          id?: string
+          id_tag?: string | null
+          last_error?: string | null
+          model?: string
+          ocpp_id: string
+          power_kw?: number
+          protocol?: string
+          server_host?: string
+          started_at?: string
+          status?: string
+          stopped_at?: string | null
+          tenant_id: string
+          updated_at?: string
+          vendor?: string
+        }
+        Update: {
+          charge_point_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          external_id?: string | null
+          id?: string
+          id_tag?: string | null
+          last_error?: string | null
+          model?: string
+          ocpp_id?: string
+          power_kw?: number
+          protocol?: string
+          server_host?: string
+          started_at?: string
+          status?: string
+          stopped_at?: string | null
+          tenant_id?: string
+          updated_at?: string
+          vendor?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "simulator_instances_charge_point_id_fkey"
+            columns: ["charge_point_id"]
+            isOneToOne: false
+            referencedRelation: "charge_points"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "simulator_instances_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       solar_charging_config: {
         Row: {
           created_at: string
@@ -6192,6 +6311,39 @@ export type Database = {
         }
         Relationships: []
       }
+      user_role_audit_log: {
+        Row: {
+          id: string
+          new_role: Database["public"]["Enums"]["app_role"] | null
+          old_role: Database["public"]["Enums"]["app_role"] | null
+          operation: string
+          performed_at: string
+          performed_by: string | null
+          performed_by_email: string | null
+          target_user_id: string
+        }
+        Insert: {
+          id?: string
+          new_role?: Database["public"]["Enums"]["app_role"] | null
+          old_role?: Database["public"]["Enums"]["app_role"] | null
+          operation: string
+          performed_at?: string
+          performed_by?: string | null
+          performed_by_email?: string | null
+          target_user_id: string
+        }
+        Update: {
+          id?: string
+          new_role?: Database["public"]["Enums"]["app_role"] | null
+          old_role?: Database["public"]["Enums"]["app_role"] | null
+          operation?: string
+          performed_at?: string
+          performed_by?: string | null
+          performed_by_email?: string | null
+          target_user_id?: string
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           created_at: string
@@ -6366,6 +6518,7 @@ export type Database = {
         Args: never
         Returns: Database["public"]["Enums"]["app_role"]
       }
+      cleanup_charge_point_uptime_snapshots: { Args: never; Returns: number }
       cleanup_expired_backups: { Args: never; Returns: number }
       cleanup_old_infra_metrics: { Args: never; Returns: number }
       cleanup_old_ocpp_logs: { Args: never; Returns: number }
@@ -6386,6 +6539,10 @@ export type Database = {
         Returns: Database["public"]["Enums"]["app_role"]
       }
       get_auth_user_email: { Args: never; Returns: string }
+      get_charge_point_uptime_pct: {
+        Args: { p_charge_point_id: string; p_days?: number }
+        Returns: number
+      }
       get_meter_daily_totals: {
         Args: { p_from_date: string; p_meter_ids: string[]; p_to_date: string }
         Returns: {
@@ -6515,6 +6672,7 @@ export type Database = {
         Args: { p_integration_id: string; p_owner: string }
         Returns: undefined
       }
+      snapshot_charge_point_uptime: { Args: never; Returns: number }
       try_acquire_gateway_refresh_lock: {
         Args: {
           p_integration_id: string

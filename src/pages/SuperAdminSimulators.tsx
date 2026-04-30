@@ -1,0 +1,558 @@
+import { useMemo, useState } from "react";
+import { Navigate } from "react-router-dom";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useAuth } from "@/hooks/useAuth";
+import { useTenants } from "@/hooks/useTenants";
+import { supabase } from "@/integrations/supabase/client";
+import { invokeWithRetry } from "@/lib/invokeWithRetry";
+import SuperAdminSidebar from "@/components/super-admin/SuperAdminSidebar";
+import { SimulatorRowActions } from "@/components/super-admin/SimulatorRowActions";
+import { SimulatorLogSheet } from "@/components/super-admin/SimulatorLogSheet";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { toast } from "sonner";
+import {
+  Play,
+  Plug,
+  RefreshCw,
+  Loader2,
+  AlertTriangle,
+  ScrollText,
+} from "lucide-react";
+import { format } from "date-fns";
+
+const isTemporaryEdgeError = (error: unknown) => {
+  const message = error instanceof Error ? error.message : JSON.stringify(error);
+  return /503|temporarily unavailable|SUPABASE_EDGE_RUNTIME_ERROR|BOOT_ERROR|Service is temporarily unavailable/i.test(message);
+};
+
+interface SimulatorRow {
+  id: string;
+  tenant_id: string;
+  external_id: string | null;
+  ocpp_id: string;
+  protocol: "ws" | "wss";
+  vendor: string;
+  model: string;
+  status: string;
+  last_error: string | null;
+  started_at: string;
+  stopped_at: string | null;
+  charge_point_id: string | null;
+  power_kw: number | null;
+  id_tag: string | null;
+  live_status: string | null;
+  live_meter_wh: number | null;
+  live_transaction_id: number | null;
+  live_last_error: string | null;
+  live_power_kw?: number | null;
+  live_paused?: boolean | null;
+}
+
+interface ChargingUserLite {
+  id: string;
+  tenant_id: string;
+  name: string;
+  rfid_tag: string | null;
+  app_tag: string | null;
+}
+
+const POWER_OPTIONS = [3.7, 11, 22, 50, 150];
+
+const statusVariant = (
+  status: string,
+): "default" | "secondary" | "destructive" | "outline" => {
+  if (status === "charging") return "default";
+  if (status === "online") return "secondary";
+  if (status === "error" || status === "faulted") return "destructive";
+  return "outline";
+};
+
+const SuperAdminSimulators = () => {
+  const { user, loading } = useAuth();
+  const { tenants } = useTenants();
+  const qc = useQueryClient();
+
+  const [openStart, setOpenStart] = useState(false);
+  const [tenantId, setTenantId] = useState("");
+  const [vendor, setVendor] = useState("AICONO");
+  const [model, setModel] = useState("Simulator");
+  const [protocol, setProtocol] = useState<"ws" | "wss">("wss");
+  const [powerKw, setPowerKw] = useState<number>(11);
+  const [idTagSelect, setIdTagSelect] = useState<string>("__sim__");
+
+  const [logInstanceId, setLogInstanceId] = useState<string | null>(null);
+  const [logOcppId, setLogOcppId] = useState<string | undefined>(undefined);
+
+  // Lade-User des gewählten Tenants laden (nur wenn Dialog offen)
+  const { data: chargingUsers = [] } = useQuery({
+    queryKey: ["sim-charging-users", tenantId],
+    enabled: openStart && !!tenantId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("charging_users")
+        .select("id, tenant_id, name, rfid_tag, app_tag")
+        .eq("tenant_id", tenantId)
+        .eq("status", "active")
+        .order("name");
+      if (error) throw error;
+      return (data ?? []) as ChargingUserLite[];
+    },
+  });
+
+  const selectedIdTag = useMemo(() => {
+    if (idTagSelect === "__sim__") return "SIM-IDTAG";
+    const u = chargingUsers.find((x) => x.id === idTagSelect);
+    return u?.rfid_tag || u?.app_tag || "SIM-IDTAG";
+  }, [idTagSelect, chargingUsers]);
+
+  const { data, isFetching, refetch, error: statusError } = useQuery({
+    queryKey: ["simulator-instances"],
+    queryFn: async () => {
+      const { data, error } = await invokeWithRetry(
+        "ocpp-simulator-control?action=status",
+        {},
+        5,
+      );
+      if (error) {
+        if (isTemporaryEdgeError(error)) {
+          return (qc.getQueryData(["simulator-instances"]) as SimulatorRow[] | undefined) ?? [];
+        }
+        throw error;
+      }
+      return (data as { instances: SimulatorRow[] }).instances ?? [];
+    },
+    initialData: [] as SimulatorRow[],
+    refetchInterval: (query) => {
+      const rows = (query.state.data as SimulatorRow[] | undefined) ?? [];
+      const hasLiveInstance = rows.some((row) => !["stopped", "error"].includes(row.live_status ?? row.status));
+      return hasLiveInstance ? 10000 : false;
+    },
+    retry: (failureCount, error) => !isTemporaryEdgeError(error) && failureCount < 2,
+    retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 10000),
+    throwOnError: false,
+  });
+  const showTemporaryStatusError = !!statusError && isTemporaryEdgeError(statusError);
+
+  const friendlyError = (e: unknown): string => {
+    if (isTemporaryEdgeError(e)) {
+      return "Server kurzzeitig nicht erreichbar. Bitte erneut versuchen.";
+    }
+    return e instanceof Error ? e.message : String(e);
+  };
+
+  const startMut = useMutation({
+    mutationFn: async () => {
+      if (!tenantId) throw new Error("Tenant erforderlich");
+      const { data, error } = await invokeWithRetry(
+        "ocpp-simulator-control?action=start",
+        {
+          body: {
+            tenantId,
+            vendor,
+            model,
+            protocol,
+            powerKw,
+            idTag: selectedIdTag,
+          },
+        },
+        5,
+      );
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      toast.success("Simulator gestartet");
+      setOpenStart(false);
+      qc.invalidateQueries({ queryKey: ["simulator-instances"] });
+    },
+    onError: (e: unknown) => toast.error(friendlyError(e)),
+  });
+
+  const actionMut = useMutation({
+    mutationFn: async (vars: {
+      instanceId: string;
+      action: string;
+      value?: number | string;
+    }) => {
+      const { data, error } = await invokeWithRetry(
+        "ocpp-simulator-control?action=action",
+        { body: { instanceId: vars.instanceId, action: vars.action, value: vars.value } },
+        5,
+      );
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["simulator-instances"] });
+    },
+    onError: (e: unknown) => toast.error(friendlyError(e)),
+  });
+
+  const stopMut = useMutation({
+    mutationFn: async (instanceId: string) => {
+      const { data, error } = await invokeWithRetry(
+        "ocpp-simulator-control?action=stop",
+        { body: { instanceId } },
+        5,
+      );
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      toast.success("Simulator gestoppt");
+      qc.invalidateQueries({ queryKey: ["simulator-instances"] });
+    },
+    onError: (e: unknown) => toast.error(friendlyError(e)),
+  });
+
+  const deleteMut = useMutation({
+    mutationFn: async (instanceId: string) => {
+      const { data, error } = await invokeWithRetry(
+        "ocpp-simulator-control?action=delete",
+        { body: { instanceId } },
+        5,
+      );
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      toast.success("Eintrag gelöscht");
+      qc.invalidateQueries({ queryKey: ["simulator-instances"] });
+    },
+    onError: (e: unknown) => toast.error(friendlyError(e)),
+  });
+
+  if (loading) return null;
+  if (!user) return <Navigate to="/auth" replace />;
+
+  const tenantName = (id: string) =>
+    tenants.find((t) => t.id === id)?.name || id.slice(0, 8);
+
+  const openLogs = (row: SimulatorRow) => {
+    setLogInstanceId(row.id);
+    setLogOcppId(row.ocpp_id);
+  };
+
+  return (
+    <div className="flex h-screen bg-background">
+      <SuperAdminSidebar />
+      <main className="flex-1 overflow-auto p-6">
+        <div className="mx-auto max-w-7xl space-y-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl font-bold">Wallbox-Simulator</h1>
+              <p className="text-sm text-muted-foreground">
+                Virtuelle OCPP-1.6-Wallboxen für End-to-End-Tests des
+                OCPP-Servers, der Charge-Point-Logik und der Abrechnung.
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => refetch()}
+                disabled={isFetching}
+              >
+                <RefreshCw
+                  className={`h-4 w-4 mr-2 ${isFetching ? "animate-spin" : ""}`}
+                />
+                Aktualisieren
+              </Button>
+              <Dialog open={openStart} onOpenChange={setOpenStart}>
+                <DialogTrigger asChild>
+                  <Button size="sm">
+                    <Play className="h-4 w-4 mr-2" />
+                    Simulator starten
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-lg">
+                  <DialogHeader>
+                    <DialogTitle>Neuen Simulator starten</DialogTitle>
+                    <DialogDescription>
+                      Erstellt automatisch einen Charge-Point-Eintrag und
+                      startet eine virtuelle Wallbox auf dem Hetzner-Container.
+                      Maximal 3 aktive pro Tenant.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4 py-2">
+                    <div className="space-y-2">
+                      <Label>Tenant</Label>
+                      <Select value={tenantId} onValueChange={(v) => { setTenantId(v); setIdTagSelect("__sim__"); }}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Tenant auswählen" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {tenants.map((t) => (
+                            <SelectItem key={t.id} value={t.id}>
+                              {t.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>Hersteller</Label>
+                        <Input value={vendor} onChange={(e) => setVendor(e.target.value)} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Modell</Label>
+                        <Input value={model} onChange={(e) => setModel(e.target.value)} />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>Ladeleistung</Label>
+                        <Select value={String(powerKw)} onValueChange={(v) => setPowerKw(Number(v))}>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {POWER_OPTIONS.map((kw) => (
+                              <SelectItem key={kw} value={String(kw)}>
+                                {kw} kW
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Protokoll</Label>
+                        <Select value={protocol} onValueChange={(v) => setProtocol(v as "ws" | "wss")}>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="wss">wss (TLS)</SelectItem>
+                            <SelectItem value="ws">ws (unverschlüsselt)</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label>Lade-User (idTag)</Label>
+                      <Select
+                        value={idTagSelect}
+                        onValueChange={setIdTagSelect}
+                        disabled={!tenantId}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="User auswählen" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__sim__">SIM-IDTAG (Standard)</SelectItem>
+                          {chargingUsers.map((u) => {
+                            const tag = u.rfid_tag || u.app_tag;
+                            return (
+                              <SelectItem key={u.id} value={u.id} disabled={!tag}>
+                                {u.name} {tag ? `· ${tag}` : "(kein Tag)"}
+                              </SelectItem>
+                            );
+                          })}
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground">
+                        Effektiver idTag: <span className="font-mono">{selectedIdTag}</span>
+                      </p>
+                    </div>
+                  </div>
+                  <DialogFooter>
+                    <Button variant="outline" onClick={() => setOpenStart(false)}>
+                      Abbrechen
+                    </Button>
+                    <Button onClick={() => startMut.mutate()} disabled={!tenantId || startMut.isPending}>
+                      {startMut.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                      Starten
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+            </div>
+          </div>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Plug className="h-5 w-5" />
+                Aktive & vergangene Instanzen
+              </CardTitle>
+              <CardDescription>
+                Live-Status wird bei aktiven Simulatoren automatisch synchronisiert.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {showTemporaryStatusError && (
+                <div className="mb-4 flex items-start gap-3 rounded-md border border-border bg-muted/40 p-4 text-sm text-muted-foreground">
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                  <div>
+                    <p className="font-medium text-foreground">Live-Status kurzzeitig nicht erreichbar</p>
+                    <p>Die Seite bleibt geöffnet und versucht automatisch erneut zu synchronisieren.</p>
+                  </div>
+                </div>
+              )}
+              {(!data || data.length === 0) && isFetching ? (
+                <div className="flex items-center justify-center gap-2 py-12 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Live-Status wird geladen …
+                </div>
+              ) : !data || data.length === 0 ? (
+                <div className="py-12 text-center text-sm text-muted-foreground">
+                  Noch keine Simulator-Instanzen vorhanden.
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Tenant</TableHead>
+                      <TableHead>OCPP-ID</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="text-right">Leistung</TableHead>
+                      <TableHead className="text-right">Zähler (kWh)</TableHead>
+                      <TableHead>idTag</TableHead>
+                      <TableHead>Gestartet</TableHead>
+                      <TableHead className="text-right">Aktionen</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {data.map((row) => {
+                      const live = row.live_status ?? row.status;
+                      const livePower = row.live_power_kw ?? row.power_kw ?? 11;
+                      const livePaused = !!row.live_paused;
+                      const pending =
+                        actionMut.isPending || stopMut.isPending || deleteMut.isPending;
+                      return (
+                        <TableRow key={row.id}>
+                          <TableCell className="font-medium">
+                            {tenantName(row.tenant_id)}
+                          </TableCell>
+                          <TableCell className="font-mono text-xs">{row.ocpp_id}</TableCell>
+                          <TableCell>
+                            <Badge variant={statusVariant(live)}>{live}</Badge>
+                            {livePaused && (
+                              <Badge variant="outline" className="ml-1">paused</Badge>
+                            )}
+                            {row.live_last_error && (
+                              <p className="text-xs text-destructive mt-1">{row.live_last_error}</p>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right font-mono text-xs">
+                            {livePower.toFixed(1)} kW
+                          </TableCell>
+                          <TableCell className="text-right font-mono">
+                            {row.live_meter_wh != null
+                              ? (row.live_meter_wh / 1000).toFixed(2)
+                              : "—"}
+                          </TableCell>
+                          <TableCell className="font-mono text-xs">
+                            {row.id_tag ?? "—"}
+                          </TableCell>
+                          <TableCell className="text-xs text-muted-foreground">
+                            {format(new Date(row.started_at), "dd.MM. HH:mm")}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex items-center justify-end gap-1">
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => openLogs(row)}
+                                title="OCPP-Logs anzeigen"
+                              >
+                                <ScrollText className="h-4 w-4" />
+                              </Button>
+                              <SimulatorRowActions
+                                liveStatus={live}
+                                powerKw={livePower}
+                                paused={livePaused}
+                                pending={pending}
+                                onStartTx={() =>
+                                  actionMut.mutate({ instanceId: row.id, action: "startTx" })
+                                }
+                                onStopTx={() =>
+                                  actionMut.mutate({ instanceId: row.id, action: "stopTx" })
+                                }
+                                onSetPower={(kw) =>
+                                  actionMut.mutate({ instanceId: row.id, action: "setPower", value: kw })
+                                }
+                                onPause={() =>
+                                  actionMut.mutate({ instanceId: row.id, action: "pause" })
+                                }
+                                onResume={() =>
+                                  actionMut.mutate({ instanceId: row.id, action: "resume" })
+                                }
+                                onUnplug={() =>
+                                  actionMut.mutate({ instanceId: row.id, action: "unplug" })
+                                }
+                                onFault={(code) =>
+                                  actionMut.mutate({ instanceId: row.id, action: "fault", value: code })
+                                }
+                                onClearFault={() =>
+                                  actionMut.mutate({ instanceId: row.id, action: "clearFault" })
+                                }
+                                onStop={() => stopMut.mutate(row.id)}
+                                onDelete={() => {
+                                  if (confirm("Eintrag dauerhaft löschen?")) {
+                                    deleteMut.mutate(row.id);
+                                  }
+                                }}
+                              />
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      </main>
+
+      <SimulatorLogSheet
+        instanceId={logInstanceId}
+        ocppId={logOcppId}
+        open={!!logInstanceId}
+        onOpenChange={(o) => { if (!o) setLogInstanceId(null); }}
+      />
+    </div>
+  );
+};
+
+export default SuperAdminSimulators;
