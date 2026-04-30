@@ -40,6 +40,23 @@ function buildOcppCall(uniqueId: string, cmd: PendingRow): unknown[] | null {
         connectorId: (p.connectorId as number) ?? 0,
         type: (p.type as string) ?? "Operative",
       }];
+    case "SetChargingProfile":
+      return [2, uniqueId, "SetChargingProfile", {
+        connectorId: (p.connectorId as number) ?? 0,
+        csChargingProfiles: p.csChargingProfiles as Record<string, unknown>,
+      }];
+    case "ClearChargingProfile":
+      return [2, uniqueId, "ClearChargingProfile", {
+        ...(p.id !== undefined ? { id: p.id as number } : {}),
+        connectorId: (p.connectorId as number) ?? 0,
+        chargingProfilePurpose: (p.chargingProfilePurpose as string) ?? "TxDefaultProfile",
+        ...(p.stackLevel !== undefined ? { stackLevel: p.stackLevel as number } : {}),
+      }];
+    case "GetCompositeSchedule":
+      return [2, uniqueId, "GetCompositeSchedule", {
+        connectorId: (p.connectorId as number) ?? 0,
+        duration: (p.duration as number) ?? 3600,
+      }];
     default:
       return null;
   }
