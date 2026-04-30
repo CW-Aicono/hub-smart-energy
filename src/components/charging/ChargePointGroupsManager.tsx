@@ -17,6 +17,7 @@ import { Plus, Trash2, PlugZap, Users, Gauge, Shield, Info, Pencil, X, Check, Su
 import { PowerLimitScheduler, PowerLimitSchedule, defaultPowerLimitSchedule } from "@/components/charging/PowerLimitScheduler";
 import { AccessControlSettings, AccessSettings } from "@/components/charging/AccessControlSettings";
 import GroupSolarChargingConfig from "@/components/charging/GroupSolarChargingConfig";
+import { useMeters } from "@/hooks/useMeters";
 
 export function ChargePointGroupsManager({ isAdmin }: { isAdmin: boolean }) {
   const { groups, isLoading, createGroup, updateGroup, deleteGroup, assignChargePointToGroup } = useChargePointGroups();
