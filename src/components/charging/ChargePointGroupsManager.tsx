@@ -307,12 +307,55 @@ function ChargePointGroupDetail({ group, open, onOpenChange, chargePoints, isAdm
 
             <Separator />
 
-            <div className="flex items-center justify-between p-4 border rounded-lg">
-              <div>
-                <p className="font-medium">Dynamisches Lastmanagement</p>
-                <p className="text-sm text-muted-foreground">Leistung automatisch an verfügbare Kapazität anpassen</p>
+            <div className="p-4 border rounded-lg space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-medium">Dynamisches Lastmanagement (Soft-Limit)</p>
+                  <p className="text-sm text-muted-foreground">Drosselt die Ladepunkte dieser Gruppe, sobald der Referenzzähler das Limit überschreitet.</p>
+                </div>
+                <Switch
+                  checked={dlm.enabled}
+                  onCheckedChange={(v) => {
+                    setDlm({ ...dlm, enabled: v });
+                    setEnergy({ ...energy, dynamic_load_management: v });
+                  }}
+                  disabled={!isAdmin}
+                />
               </div>
-              <Switch checked={energy.dynamic_load_management} onCheckedChange={(v) => setEnergy({ ...energy, dynamic_load_management: v })} disabled={!isAdmin} />
+              {dlm.enabled && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Limit (kW)</Label>
+                    <Input
+                      type="number"
+                      min={0}
+                      step="0.1"
+                      placeholder="z.B. 22"
+                      value={dlm.limit_kw ?? ""}
+                      onChange={(e) => setDlm({ ...dlm, limit_kw: e.target.value === "" ? null : Number(e.target.value) })}
+                      disabled={!isAdmin}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Referenzzähler</Label>
+                    <Select
+                      value={dlm.reference_meter_id ?? ""}
+                      onValueChange={(v) => setDlm({ ...dlm, reference_meter_id: v || null })}
+                      disabled={!isAdmin}
+                    >
+                      <SelectTrigger><SelectValue placeholder="Zähler wählen…" /></SelectTrigger>
+                      <SelectContent>
+                        {meters.map((m: any) => (
+                          <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <p className="text-xs text-muted-foreground md:col-span-2 flex items-center gap-1">
+                    <Info className="h-3 w-3" /> Der Referenzzähler misst die Last des Stromkreises, an dem die Gruppe hängt (z.B. Unterverteilung). Hardlimit am Hausanschluss wird zusätzlich am Standort konfiguriert.
+                  </p>
+                </div>
+              )}
             </div>
             <div className="flex items-center justify-between p-4 border rounded-lg">
               <div>
