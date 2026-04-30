@@ -124,8 +124,6 @@ export function startCommandDispatcher() {
   // Echtzeit ist mit der begrenzten Backend-Funktion nicht verfügbar.
   // Polling alle 2 Sekunden reicht für Remote-Commands aus.
   return () => { if (pollTimer) clearInterval(pollTimer); };
-
-  return () => { if (pollTimer) clearInterval(pollTimer); };
 }
 
 /** Antwort vom Charger einem ausstehenden Command zuordnen und in DB schreiben. */
