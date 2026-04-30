@@ -142,7 +142,10 @@ Deno.serve(async (req) => {
           }
         }
 
-        // TODO: Send OCPP SetChargingProfile commands via gateway
+        // Queue OCPP SetChargingProfile commands per active connector with
+        // stackLevel=1 so it sits below DLM (stackLevel=2) but above
+        // power_limit (stackLevel=0) inside the wallbox.
+        await dispatchPvSurplus(admin, actions, cpIds);
 
         await logExecution(admin, config, availableSurplus, allocatedW, activeConnectors.length, "success", null, actions);
         results.push({ group_id: config.group_id, surplus_w: availableSurplus, allocated_w: allocatedW, connectors: activeConnectors.length });
