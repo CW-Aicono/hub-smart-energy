@@ -437,6 +437,7 @@ services:
     restart: unless-stopped
     volumes:
       - ../supabase/functions:/home/deno/functions:ro,z
+      - ./functions/main:/home/deno/functions/_main:ro,z
       - deno-cache:/root/.cache/deno
     depends_on:
       kong:
@@ -471,7 +472,7 @@ services:
       [
         "start",
         "--main-service",
-        "/home/deno/functions/main"
+        "/home/deno/functions/_main"
       ]
 
   analytics:
