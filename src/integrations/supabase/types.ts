@@ -6643,6 +6643,10 @@ export type Database = {
         Args: { p_charge_point_id: string; p_days?: number }
         Returns: number
       }
+      get_location_main_meter: {
+        Args: { p_location_id: string }
+        Returns: string
+      }
       get_meter_daily_totals: {
         Args: { p_from_date: string; p_meter_ids: string[]; p_to_date: string }
         Returns: {

@@ -142,7 +142,10 @@ Deno.serve(async (req) => {
           }
         }
 
-        // TODO: Send OCPP SetChargingProfile commands via gateway
+        // Queue OCPP SetChargingProfile commands per active connector with
+        // stackLevel=1 so it sits below DLM (stackLevel=2) but above
+        // power_limit (stackLevel=0) inside the wallbox.
+        await dispatchPvSurplus(admin, actions, cpIds);
 
         await logExecution(admin, config, availableSurplus, allocatedW, activeConnectors.length, "success", null, actions);
         results.push({ group_id: config.group_id, surplus_w: availableSurplus, allocated_w: allocatedW, connectors: activeConnectors.length });
@@ -183,4 +186,105 @@ async function logExecution(
     error_message: errorMessage,
     actions_taken: actions || null,
   });
+}
+
+const STACK_LEVEL_PV = 1;
+const PROFILE_ID_PV = 50;
+
+function kwToAmps(kw: number): number {
+  // 3-phase 400 V (matches power-limit/dlm schedulers)
+  return Math.max(6, Math.round((kw * 1000) / (400 * Math.sqrt(3))));
+}
+
+async function dispatchPvSurplus(
+  admin: any,
+  actions: Array<{ connector_id: string; charge_point_id: string; assigned_w: number; action: string }>,
+  cpIds: string[],
+) {
+  // Aggregate per charge point: if any of its connectors gets >0 W, the CP-level
+  // profile uses the maximum of those (TxDefaultProfile is per CP, not connector).
+  const perCp = new Map<string, number>();
+  for (const a of actions) {
+    const w = a.action === "pause" ? 0 : a.assigned_w;
+    perCp.set(a.charge_point_id, Math.max(perCp.get(a.charge_point_id) ?? 0, w));
+  }
+
+  // Load CP metadata for capability + connection state
+  const { data: cps } = await admin
+    .from("charge_points")
+    .select("id, ocpp_id, ws_connected, supports_charging_profile, max_power_kw")
+    .in("id", cpIds);
+
+  for (const cp of cps ?? []) {
+    const targetW = perCp.get(cp.id) ?? null;
+    const targetAmps = targetW && targetW > 0 ? kwToAmps(targetW / 1000) : null;
+
+    // Idempotency
+    const { data: active } = await admin
+      .from("charge_point_active_profile")
+      .select("current_limit_a")
+      .eq("charge_point_id", cp.id)
+      .eq("connector_id", 0)
+      .eq("source", "pv_surplus")
+      .maybeSingle();
+    const activeAmps = active?.current_limit_a != null ? Number(active.current_limit_a) : null;
+    if (activeAmps === targetAmps) continue;
+    if (!cp.ws_connected) continue;
+
+    const useChangeConfig = cp.supports_charging_profile === false;
+    let command: string;
+    let payload: Record<string, unknown>;
+
+    if (targetAmps === null) {
+      if (useChangeConfig) {
+        const maxA = kwToAmps(Number(cp.max_power_kw ?? 22));
+        command = "ChangeConfiguration";
+        payload = { key: "MaxChargingCurrent", value: String(maxA) };
+      } else {
+        command = "ClearChargingProfile";
+        payload = { id: PROFILE_ID_PV, connectorId: 0, chargingProfilePurpose: "TxDefaultProfile", stackLevel: STACK_LEVEL_PV };
+      }
+    } else if (useChangeConfig) {
+      command = "ChangeConfiguration";
+      payload = { key: "MaxChargingCurrent", value: String(targetAmps) };
+    } else {
+      command = "SetChargingProfile";
+      payload = {
+        connectorId: 0,
+        csChargingProfiles: {
+          chargingProfileId: PROFILE_ID_PV,
+          stackLevel: STACK_LEVEL_PV,
+          chargingProfilePurpose: "TxDefaultProfile",
+          chargingProfileKind: "Absolute",
+          chargingSchedule: {
+            chargingRateUnit: "A",
+            chargingSchedulePeriod: [{ startPeriod: 0, limit: targetAmps }],
+          },
+        },
+      };
+    }
+
+    await admin.from("pending_ocpp_commands").insert({
+      charge_point_ocpp_id: cp.ocpp_id, command, payload, status: "pending",
+    });
+
+    if (targetAmps === null) {
+      await admin
+        .from("charge_point_active_profile")
+        .delete()
+        .eq("charge_point_id", cp.id)
+        .eq("connector_id", 0)
+        .eq("source", "pv_surplus");
+    } else {
+      await admin.from("charge_point_active_profile").upsert({
+        charge_point_id: cp.id,
+        connector_id: 0,
+        profile_purpose: "TxDefaultProfile",
+        source: "pv_surplus",
+        current_limit_a: targetAmps,
+        applied_at: new Date().toISOString(),
+        metadata: { command, watts: targetW },
+      }, { onConflict: "charge_point_id,connector_id,profile_purpose" });
+    }
+  }
 }

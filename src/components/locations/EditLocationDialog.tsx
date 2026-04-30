@@ -74,6 +74,7 @@ const locationSchema = z.object({
   net_floor_area: z.coerce.number().min(0).optional().or(z.literal("")),
   gross_floor_area: z.coerce.number().min(0).optional().or(z.literal("")),
   heating_type: z.string().trim().max(100).optional(),
+  grid_limit_kw: z.coerce.number().min(0).max(10000).optional().or(z.literal("")),
 });
 
 type LocationFormData = z.infer<typeof locationSchema>;
@@ -115,6 +116,7 @@ export function EditLocationDialog({ location, onSuccess, trigger }: EditLocatio
       net_floor_area: location.net_floor_area ?? "",
       gross_floor_area: location.gross_floor_area ?? "",
       heating_type: location.heating_type || "",
+      grid_limit_kw: (location as any).grid_limit_kw ?? "",
     },
   });
 
@@ -143,6 +145,7 @@ export function EditLocationDialog({ location, onSuccess, trigger }: EditLocatio
       net_floor_area: location.net_floor_area ?? "",
       gross_floor_area: location.gross_floor_area ?? "",
       heating_type: location.heating_type || "",
+      grid_limit_kw: (location as any).grid_limit_kw ?? "",
     });
     setOpen(true);
   };
@@ -170,7 +173,8 @@ export function EditLocationDialog({ location, onSuccess, trigger }: EditLocatio
       net_floor_area: typeof rest.net_floor_area === "number" ? rest.net_floor_area : null,
       gross_floor_area: typeof rest.gross_floor_area === "number" ? rest.gross_floor_area : null,
       heating_type: rest.heating_type || null,
-    };
+      grid_limit_kw: typeof rest.grid_limit_kw === "number" ? rest.grid_limit_kw : null,
+    } as any;
 
     const { error } = await updateLocation(location.id, updates);
 
@@ -437,7 +441,29 @@ export function EditLocationDialog({ location, onSuccess, trigger }: EditLocatio
                 )} />
               </div>
 
-              {/* Coordinates */}
+              {/* DLM Hardlimit (Hausanschluss) */}
+              <div className="space-y-4">
+                <h4 className="text-sm font-medium">Lastmanagement (DLM)</h4>
+                <FormField control={form.control} name="grid_limit_kw" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Maximale Bezugsleistung am Hausanschluss (kW)</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        min={0}
+                        step="0.1"
+                        placeholder="z.B. 35"
+                        {...field}
+                      />
+                    </FormControl>
+                    <p className="text-xs text-muted-foreground">
+                      Hardlimit: alle Ladepunkte an diesem Standort werden bei Überschreitung automatisch gedrosselt.
+                      Voraussetzung: ein Hauptzähler ist diesem Standort zugeordnet. Leer lassen = kein Limit.
+                    </p>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+              </div>
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <h4 className="text-sm font-medium">{t("locations.coordinates")}</h4>
