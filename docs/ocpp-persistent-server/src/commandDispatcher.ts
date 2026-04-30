@@ -139,10 +139,39 @@ export async function resolvePendingCall(
   const pending = session.pendingCalls.get(uniqueId);
   if (!pending) return false;
   session.pendingCalls.delete(uniqueId);
+
+  // Capability auto-detection: when a SetChargingProfile call comes back as
+  // CALLERROR with NotSupported / NotImplemented, flip the wallbox flag so the
+  // power-limit-scheduler uses ChangeConfiguration on the next tick.
+  const errorCode = (result.errorCode ?? "").toString();
+  const isNotSupported = ["NotSupported", "NotImplemented"].includes(errorCode);
+  if (pending.command === "SetChargingProfile" && pending.chargePointPk && isNotSupported) {
+    try {
+      const { updateChargePoint } = await import("./backendApi");
+      await updateChargePoint(pending.chargePointPk, { supports_charging_profile: false });
+      log.warn("Wallbox flagged as not supporting SetChargingProfile — will use ChangeConfiguration next tick", {
+        chargePointId,
+        errorCode,
+      });
+    } catch (e) {
+      log.error("failed to flag SetChargingProfile capability", { error: (e as Error).message });
+    }
+  }
+
+  // First-time success of SetChargingProfile -> record capability as supported
+  if (pending.command === "SetChargingProfile" && pending.chargePointPk && result.status === "Accepted") {
+    try {
+      const { updateChargePoint } = await import("./backendApi");
+      await updateChargePoint(pending.chargePointPk, { supports_charging_profile: true });
+    } catch {
+      /* ignore */
+    }
+  }
+
   await updatePendingCommand(pending.commandId, {
-    status: "completed",
+    status: errorCode ? "failed" : "completed",
     result: result as unknown as Record<string, unknown>,
   });
-  log.info("Command response received", { chargePointId, uniqueId, status: result.status });
+  log.info("Command response received", { chargePointId, uniqueId, status: result.status, errorCode });
   return true;
 }
