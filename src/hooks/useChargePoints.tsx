@@ -10,6 +10,15 @@ export interface ChargePointAccessSettings {
   max_charging_duration_min: number;
 }
 
+export interface ChargePointPowerLimitSchedule {
+  enabled: boolean;
+  mode: "allday" | "window";
+  time_from: string;
+  time_to: string;
+  limit_type: "kw" | "minimal";
+  limit_kw: number | null;
+}
+
 export interface ChargePoint {
   id: string;
   tenant_id: string;
@@ -31,6 +40,9 @@ export interface ChargePoint {
   latitude: number | null;
   longitude: number | null;
   access_settings: ChargePointAccessSettings;
+  power_limit_schedule: ChargePointPowerLimitSchedule | null;
+  supports_charging_profile: boolean | null;
+  supports_change_configuration: boolean | null;
   ws_connected: boolean;
   ws_connected_since: string | null;
   created_at: string;

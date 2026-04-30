@@ -39,6 +39,7 @@ export interface Location {
   gross_floor_area: number | null;
   heating_type: string | null;
   photo_url: string | null;
+  grid_limit_kw?: number | null;
   created_at: string;
   updated_at: string;
   children?: Location[];
