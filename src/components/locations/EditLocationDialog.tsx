@@ -74,6 +74,7 @@ const locationSchema = z.object({
   net_floor_area: z.coerce.number().min(0).optional().or(z.literal("")),
   gross_floor_area: z.coerce.number().min(0).optional().or(z.literal("")),
   heating_type: z.string().trim().max(100).optional(),
+  grid_limit_kw: z.coerce.number().min(0).max(10000).optional().or(z.literal("")),
 });
 
 type LocationFormData = z.infer<typeof locationSchema>;
