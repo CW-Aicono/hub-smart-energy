@@ -3,6 +3,10 @@ import type { WebSocket } from "ws";
 export interface PendingCall {
   commandId: string;
   createdAt: number;
+  /** OCPP action name (e.g. SetChargingProfile) — used for capability fallback handling */
+  command?: string;
+  /** Charge-point primary key — needed when reacting to CALLERROR */
+  chargePointPk?: string;
 }
 
 export interface Session {
