@@ -116,6 +116,7 @@ export function EditLocationDialog({ location, onSuccess, trigger }: EditLocatio
       net_floor_area: location.net_floor_area ?? "",
       gross_floor_area: location.gross_floor_area ?? "",
       heating_type: location.heating_type || "",
+      grid_limit_kw: (location as any).grid_limit_kw ?? "",
     },
   });
 
