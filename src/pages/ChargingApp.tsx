@@ -359,9 +359,11 @@ function MapTab({ chargePoints, onStartCharge, initialCpId, initialConnectorId, 
       .order("connector_id")
       .then(({ data }) => {
         if (data && data.length > 0) {
-          setDrawerConnectors(data);
+          // Normalize OCPP status casing (DB stores "Available", code expects "available")
+          const normalized = data.map((c) => ({ ...c, status: (c.status || "").toLowerCase() }));
+          setDrawerConnectors(normalized);
           // Auto-select initial connector if valid
-          if (drawerConnectorId && data.some(c => c.connector_id === drawerConnectorId)) {
+          if (drawerConnectorId && normalized.some(c => c.connector_id === drawerConnectorId)) {
             // already set
           } else {
             setDrawerConnectorId(null);
@@ -713,7 +715,9 @@ function StationDetail({ cp, onBack, onStartCharge, initialConnector }: { cp: Ap
       .eq("charge_point_id", cp.id)
       .order("connector_id")
       .then(({ data }) => {
-        if (data && data.length > 0) setConnectors(data);
+        if (data && data.length > 0) {
+          setConnectors(data.map((c) => ({ ...c, status: (c.status || "").toLowerCase() })));
+        }
       });
   }, [cp.id, cp.connector_count]);
 
@@ -728,7 +732,9 @@ function StationDetail({ cp, onBack, onStartCharge, initialConnector }: { cp: Ap
           .select("connector_id, status, connector_type, max_power_kw, name")
           .eq("charge_point_id", cp.id)
           .order("connector_id")
-          .then(({ data }) => { if (data) setConnectors(data); });
+          .then(({ data }) => {
+            if (data) setConnectors(data.map((c) => ({ ...c, status: (c.status || "").toLowerCase() })));
+          });
       })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
