@@ -732,7 +732,9 @@ function StationDetail({ cp, onBack, onStartCharge, initialConnector }: { cp: Ap
           .select("connector_id, status, connector_type, max_power_kw, name")
           .eq("charge_point_id", cp.id)
           .order("connector_id")
-          .then(({ data }) => { if (data) setConnectors(data); });
+          .then(({ data }) => {
+            if (data) setConnectors(data.map((c) => ({ ...c, status: (c.status || "").toLowerCase() })));
+          });
       })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
