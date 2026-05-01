@@ -991,14 +991,16 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
                         <Select value={form.rfid_read_mode} onValueChange={(v) => setForm({ ...form, rfid_read_mode: v })}>
                           <SelectTrigger><SelectValue /></SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="raw">RAW (Standard)</SelectItem>
-                            <SelectItem value="byte_reversed">BYTE_REVERSED</SelectItem>
-                            <SelectItem value="nibble_swap">NIBBLE_SWAP</SelectItem>
-                            <SelectItem value="byte_reversed_nibble_swap">BYTE_REVERSED + NIBBLE_SWAP</SelectItem>
+                            <SelectItem value="raw">Original (z.B. 432503FC → 432503FC)</SelectItem>
+                            <SelectItem value="nibble_swap">Hex-Stellen je Byte tauschen (z.B. 432503FC → 345230CF)</SelectItem>
+                            <SelectItem value="byte_reversed">Byte-Reihenfolge umdrehen (z.B. 432503FC → FC032543)</SelectItem>
+                            <SelectItem value="byte_reversed_nibble_swap">Beides kombiniert (z.B. 432503FC → CF305234)</SelectItem>
                           </SelectContent>
                         </Select>
                         <p className="text-xs text-muted-foreground mt-1">
-                          Wie diese Wallbox RFID-Tags ausliest. Falsche Auswahl führt zu „Tag unbekannt". Im Zweifel verschiedene Modi testen.
+                          Wie diese Wallbox RFID-Tags ausliest. Beispiel zeigt, wie der Roh-Tag <code>432503FC</code> in den hinterlegten Tag umgerechnet wird. Falsche Auswahl führt zu „Tag unbekannt" – im Zweifel verschiedene Modi testen.
+                          <br />
+                          <span className="opacity-70">Hinweis: Manche Hersteller (z.B. Wallbe) bezeichnen das Tauschen der Hex-Stellen je Byte selbst als „BYTE_REVERSED". Maßgeblich ist hier das Beispiel.</span>
                         </p>
                       </div>
                       </div>
