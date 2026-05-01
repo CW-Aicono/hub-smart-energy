@@ -711,9 +711,9 @@ function StationDetail({ cp, onBack, onStartCharge, initialConnector }: { cp: Ap
     if (cp.connector_count <= 1) return;
     supabase
       .from("charge_point_connectors")
-      .select("connector_id, status, connector_type, max_power_kw, name")
+      .select("connector_id, status, connector_type, max_power_kw, name, display_order")
       .eq("charge_point_id", cp.id)
-      .order("connector_id")
+      .order("display_order")
       .then(({ data }) => {
         if (data && data.length > 0) {
           setConnectors(data.map((c) => ({ ...c, status: (c.status || "").toLowerCase() })));
