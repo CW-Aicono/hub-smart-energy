@@ -335,35 +335,56 @@ const ChargePointDetail = () => {
   };
 
   // Energy settings (Lastmanagement, PV-Überschuss-Switch, Günstig-Laden) on charge point
-  const cpEnergy = (cp as any)?.energy_settings as
-    | {
-        dynamic_load_management?: boolean;
-        pv_surplus_charging?: boolean;
-        cheap_charging_mode?: boolean;
-        cheap_charging?: {
-          enabled: boolean;
-          max_price_eur_mwh: number;
-          limit_kw: number;
-          use_fallback_window: boolean;
-          fallback_time_from: string;
-          fallback_time_to: string;
-        };
-      }
-    | undefined;
+  type CpEnergyShape = {
+    dynamic_load_management?: boolean;
+    pv_surplus_charging?: boolean;
+    cheap_charging_mode?: boolean;
+    cheap_charging?: {
+      enabled: boolean;
+      max_price_eur_mwh: number;
+      limit_kw: number;
+      use_fallback_window: boolean;
+      fallback_time_from: string;
+      fallback_time_to: string;
+    };
+  };
+  const dbEnergy = (cp as any)?.energy_settings as CpEnergyShape | undefined;
+  // Optimistic local overlay so switches don't snap back while save/refetch is in flight
+  const [energyOverlay, setEnergyOverlay] = useState<CpEnergyShape | null>(null);
+  const cpEnergy: CpEnergyShape | undefined = energyOverlay ?? dbEnergy;
+  const queryClient = useQueryClient();
 
-  const saveEnergySettings = async (patch: Record<string, unknown>) => {
+  const saveEnergySettings = async (patch: Partial<CpEnergyShape>) => {
     if (!cp) return;
-    const next = { ...(cpEnergy ?? {}), ...patch };
+    const base = cpEnergy ?? {};
+    const next: CpEnergyShape = { ...base, ...patch };
+    // 1) Optimistic UI
+    setEnergyOverlay(next);
+    // 2) Patch React Query cache so other consumers also see the change immediately
+    queryClient.setQueryData<any[]>(["charge-points"], (old) =>
+      old ? old.map((row) => (row.id === cp.id ? { ...row, energy_settings: next } : row)) : old
+    );
+    // 3) Persist
     const { error } = await supabase
       .from("charge_points")
       .update({ energy_settings: next as any })
       .eq("id", cp.id);
     if (error) {
+      // Roll back overlay on error
+      setEnergyOverlay(null);
+      queryClient.invalidateQueries({ queryKey: ["charge-points"] });
       toast({ title: "Fehler", description: error.message, variant: "destructive" });
     } else {
       toast({ title: "Energieeinstellungen gespeichert" });
     }
   };
+
+  // Drop overlay once the DB-truth catches up (or matches it)
+  useEffect(() => {
+    if (energyOverlay && JSON.stringify(dbEnergy ?? {}) === JSON.stringify(energyOverlay)) {
+      setEnergyOverlay(null);
+    }
+  }, [dbEnergy, energyOverlay]);
 
   const saveAccessSettings = async (next: AccessSettings) => {
     if (!cp) return;
