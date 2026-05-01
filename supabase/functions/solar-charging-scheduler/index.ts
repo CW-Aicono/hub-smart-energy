@@ -163,10 +163,10 @@ Deno.serve(async (req) => {
         await dispatchPvSurplus(admin, actions, cpIds);
 
         await logExecution(admin, config, availableSurplus, allocatedW, activeConnectors.length, "success", null, actions);
-        results.push({ group_id: config.group_id, surplus_w: availableSurplus, allocated_w: allocatedW, connectors: activeConnectors.length });
+        results.push({ ...scopeKey, surplus_w: availableSurplus, allocated_w: allocatedW, connectors: activeConnectors.length });
       } catch (err) {
         await logExecution(admin, config, 0, 0, 0, "error", (err as Error).message);
-        results.push({ group_id: config.group_id, status: "error", error: (err as Error).message });
+        results.push({ group_id: config.group_id, charge_point_id: config.charge_point_id, status: "error", error: (err as Error).message });
       }
     }
 
