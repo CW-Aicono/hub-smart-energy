@@ -61,16 +61,31 @@ Deno.serve(async (req) => {
         const surplusW = powerW < 0 ? Math.abs(powerW) - config.safety_buffer_w : 0;
         const availableSurplus = Math.max(0, surplusW);
 
-        // Get charge points in this group
-        const { data: chargePoints } = await admin
-          .from("charge_points")
-          .select("id")
-          .eq("group_id", config.group_id)
-          .eq("tenant_id", config.tenant_id);
+        // Get charge points: either by group_id or single charge_point_id
+        let chargePoints: { id: string }[] | null = null;
+        if (config.group_id) {
+          const { data } = await admin
+            .from("charge_points")
+            .select("id")
+            .eq("group_id", config.group_id)
+            .eq("tenant_id", config.tenant_id);
+          chargePoints = data;
+        } else if (config.charge_point_id) {
+          const { data } = await admin
+            .from("charge_points")
+            .select("id")
+            .eq("id", config.charge_point_id)
+            .eq("tenant_id", config.tenant_id);
+          chargePoints = data;
+        }
+
+        const scopeKey = config.group_id
+          ? { group_id: config.group_id }
+          : { charge_point_id: config.charge_point_id };
 
         if (!chargePoints || chargePoints.length === 0) {
           await logExecution(admin, config, availableSurplus, 0, 0, "success", null);
-          results.push({ group_id: config.group_id, status: "no_chargepoints" });
+          results.push({ ...scopeKey, status: "no_chargepoints" });
           continue;
         }
 
