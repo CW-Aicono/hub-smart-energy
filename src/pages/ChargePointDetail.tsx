@@ -10,6 +10,7 @@ import { useChargingSessions, useIdTagResolver } from "@/hooks/useChargingSessio
 import { useTenant } from "@/hooks/useTenant";
 import { useTasks } from "@/hooks/useTasks";
 import { useChargePointGroups } from "@/hooks/useChargePointGroups";
+import { useMeters } from "@/hooks/useMeters";
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
