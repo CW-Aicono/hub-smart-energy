@@ -354,9 +354,9 @@ function MapTab({ chargePoints, onStartCharge, initialCpId, initialConnectorId, 
     }
     supabase
       .from("charge_point_connectors")
-      .select("connector_id, status, connector_type, max_power_kw, name")
+      .select("connector_id, status, connector_type, max_power_kw, name, display_order")
       .eq("charge_point_id", selectedCp.id)
-      .order("connector_id")
+      .order("display_order")
       .then(({ data }) => {
         if (data && data.length > 0) {
           // Normalize OCPP status casing (DB stores "Available", code expects "available")
