@@ -943,7 +943,22 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
                           ) : (
                             <Input value={form.model} onChange={(e) => setForm({ ...form, model: e.target.value })} placeholder={form.vendor ? "Kein hinterlegtes Modell" : "Erst Hersteller wählen"} />
                           )}
-                        </div>
+                      </div>
+                      <div>
+                        <Label>RFID-Lesemodus</Label>
+                        <Select value={form.rfid_read_mode} onValueChange={(v) => setForm({ ...form, rfid_read_mode: v })}>
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="raw">RAW (Standard)</SelectItem>
+                            <SelectItem value="byte_reversed">BYTE_REVERSED</SelectItem>
+                            <SelectItem value="nibble_swap">NIBBLE_SWAP</SelectItem>
+                            <SelectItem value="byte_reversed_nibble_swap">BYTE_REVERSED + NIBBLE_SWAP</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Wie diese Wallbox RFID-Tags ausliest. Falsche Auswahl führt zu „Tag unbekannt". Im Zweifel verschiedene Modi testen.
+                        </p>
+                      </div>
                       </div>
                       {/* Photo upload */}
                       <div>
