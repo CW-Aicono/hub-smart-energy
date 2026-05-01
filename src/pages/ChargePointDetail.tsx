@@ -10,6 +10,7 @@ import { useChargingSessions, useIdTagResolver } from "@/hooks/useChargingSessio
 import { useTenant } from "@/hooks/useTenant";
 import { useTasks } from "@/hooks/useTasks";
 import { useChargePointGroups } from "@/hooks/useChargePointGroups";
+import { useMeters } from "@/hooks/useMeters";
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -66,6 +67,7 @@ const ChargePointDetail = () => {
   const { tenant } = useTenant();
   const { chargePoints, updateChargePoint, deleteChargePoint } = useChargePoints();
   const { groups, assignChargePointToGroup } = useChargePointGroups();
+  const { meters } = useMeters();
   const { createTask } = useTasks();
   const { sessions } = useChargingSessions(id);
   const resolveTag = useIdTagResolver();
@@ -118,6 +120,11 @@ const ChargePointDetail = () => {
     dynamic_load_management?: boolean;
     pv_surplus_charging?: boolean;
     cheap_charging_mode?: boolean;
+    dlm?: {
+      enabled: boolean;
+      limit_kw: number | null;
+      reference_meter_id: string | null;
+    };
     cheap_charging?: {
       enabled: boolean;
       max_price_eur_mwh: number;
@@ -1193,19 +1200,71 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
                       </CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-4">
-                      {/* Dynamisches Lastmanagement */}
-                      <div className="flex items-center justify-between p-4 border rounded-lg">
-                        <div>
-                          <p className="font-medium">Dynamisches Lastmanagement</p>
-                          <p className="text-sm text-muted-foreground">
-                            Leistung automatisch an verfügbare Kapazität anpassen (z. B. Hausanschluss-Limit)
-                          </p>
+                      {/* Dynamisches Lastmanagement (Soft-Limit) */}
+                      <div className="p-4 border rounded-lg space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="font-medium">Dynamisches Lastmanagement (Soft-Limit)</p>
+                            <p className="text-sm text-muted-foreground">
+                              Drosselt diesen Ladepunkt, sobald der Referenzzähler das Limit überschreitet.
+                            </p>
+                          </div>
+                          <Switch
+                            checked={cpEnergy?.dlm?.enabled ?? cpEnergy?.dynamic_load_management ?? false}
+                            onCheckedChange={(v) => {
+                              const prev = cpEnergy?.dlm ?? { enabled: false, limit_kw: null, reference_meter_id: null };
+                              saveEnergySettings({
+                                dynamic_load_management: v,
+                                dlm: { ...prev, enabled: v },
+                              });
+                            }}
+                            disabled={!isAdmin}
+                          />
                         </div>
-                        <Switch
-                          checked={cpEnergy?.dynamic_load_management ?? false}
-                          onCheckedChange={(v) => saveEnergySettings({ dynamic_load_management: v })}
-                          disabled={!isAdmin}
-                        />
+                        {(cpEnergy?.dlm?.enabled ?? cpEnergy?.dynamic_load_management) && (
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2 border-t">
+                            <div className="space-y-1.5">
+                              <Label className="text-xs">Limit (kW)</Label>
+                              <Input
+                                type="number"
+                                min={0}
+                                step="0.1"
+                                placeholder="z.B. 22"
+                                value={cpEnergy?.dlm?.limit_kw ?? ""}
+                                onChange={(e) => {
+                                  const prev = cpEnergy?.dlm ?? { enabled: true, limit_kw: null, reference_meter_id: null };
+                                  saveEnergySettings({
+                                    dlm: { ...prev, limit_kw: e.target.value === "" ? null : Number(e.target.value) },
+                                  });
+                                }}
+                                disabled={!isAdmin}
+                              />
+                            </div>
+                            <div className="space-y-1.5">
+                              <Label className="text-xs">Referenzzähler</Label>
+                              <Select
+                                value={cpEnergy?.dlm?.reference_meter_id ?? ""}
+                                onValueChange={(v) => {
+                                  const prev = cpEnergy?.dlm ?? { enabled: true, limit_kw: null, reference_meter_id: null };
+                                  saveEnergySettings({
+                                    dlm: { ...prev, reference_meter_id: v || null },
+                                  });
+                                }}
+                                disabled={!isAdmin}
+                              >
+                                <SelectTrigger><SelectValue placeholder="Zähler wählen…" /></SelectTrigger>
+                                <SelectContent>
+                                  {meters.map((m: any) => (
+                                    <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <p className="text-xs text-muted-foreground md:col-span-2 flex items-center gap-1">
+                              <Info className="h-3 w-3" /> Der Referenzzähler misst die Last des Stromkreises, an dem der Ladepunkt hängt (z. B. Unterverteilung). Hardlimit am Hausanschluss wird zusätzlich am Standort konfiguriert.
+                            </p>
+                          </div>
+                        )}
                       </div>
 
                       {/* PV-Überschussladen */}
