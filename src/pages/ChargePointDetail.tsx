@@ -118,6 +118,11 @@ const ChargePointDetail = () => {
     dynamic_load_management?: boolean;
     pv_surplus_charging?: boolean;
     cheap_charging_mode?: boolean;
+    dlm?: {
+      enabled: boolean;
+      limit_kw: number | null;
+      reference_meter_id: string | null;
+    };
     cheap_charging?: {
       enabled: boolean;
       max_price_eur_mwh: number;
