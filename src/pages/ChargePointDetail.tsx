@@ -113,6 +113,27 @@ const ChargePointDetail = () => {
   const cpGroup = cp?.group_id ? groups.find((g) => g.id === cp.group_id) ?? null : null;
   const ocppMeter = useOcppMeterValue(cp?.ocpp_id);
   const { connectors, reorderConnectors } = useChargePointConnectors(cp?.id);
+  const queryClient = useQueryClient();
+  type CpEnergyShape = {
+    dynamic_load_management?: boolean;
+    pv_surplus_charging?: boolean;
+    cheap_charging_mode?: boolean;
+    cheap_charging?: {
+      enabled: boolean;
+      max_price_eur_mwh: number;
+      limit_kw: number;
+      use_fallback_window: boolean;
+      fallback_time_from: string;
+      fallback_time_to: string;
+    };
+  };
+  const [energyOverlay, setEnergyOverlay] = useState<CpEnergyShape | null>(null);
+  const dbEnergyForEffect = (cp as any)?.energy_settings as CpEnergyShape | undefined;
+  useEffect(() => {
+    if (energyOverlay && JSON.stringify(dbEnergyForEffect ?? {}) === JSON.stringify(energyOverlay)) {
+      setEnergyOverlay(null);
+    }
+  }, [dbEnergyForEffect, energyOverlay]);
 
   // Sync powerLimit state from cp when cp loads or changes
   const cpPowerLimit = (cp as any)?.power_limit_schedule as PowerLimitSchedule | null | undefined;
@@ -336,24 +357,8 @@ const ChargePointDetail = () => {
   };
 
   // Energy settings (Lastmanagement, PV-Überschuss-Switch, Günstig-Laden) on charge point
-  type CpEnergyShape = {
-    dynamic_load_management?: boolean;
-    pv_surplus_charging?: boolean;
-    cheap_charging_mode?: boolean;
-    cheap_charging?: {
-      enabled: boolean;
-      max_price_eur_mwh: number;
-      limit_kw: number;
-      use_fallback_window: boolean;
-      fallback_time_from: string;
-      fallback_time_to: string;
-    };
-  };
   const dbEnergy = (cp as any)?.energy_settings as CpEnergyShape | undefined;
-  // Optimistic local overlay so switches don't snap back while save/refetch is in flight
-  const [energyOverlay, setEnergyOverlay] = useState<CpEnergyShape | null>(null);
   const cpEnergy: CpEnergyShape | undefined = energyOverlay ?? dbEnergy;
-  const queryClient = useQueryClient();
 
   const saveEnergySettings = async (patch: Partial<CpEnergyShape>) => {
     if (!cp) return;
@@ -380,12 +385,6 @@ const ChargePointDetail = () => {
     }
   };
 
-  // Drop overlay once the DB-truth catches up (or matches it)
-  useEffect(() => {
-    if (energyOverlay && JSON.stringify(dbEnergy ?? {}) === JSON.stringify(energyOverlay)) {
-      setEnergyOverlay(null);
-    }
-  }, [dbEnergy, energyOverlay]);
 
   const saveAccessSettings = async (next: AccessSettings) => {
     if (!cp) return;
