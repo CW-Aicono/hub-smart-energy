@@ -334,6 +334,49 @@ const ChargePointDetail = () => {
     setUploading(false);
   };
 
+  // Energy settings (Lastmanagement, PV-Überschuss-Switch, Günstig-Laden) on charge point
+  const cpEnergy = (cp as any)?.energy_settings as
+    | {
+        dynamic_load_management?: boolean;
+        pv_surplus_charging?: boolean;
+        cheap_charging_mode?: boolean;
+        cheap_charging?: {
+          enabled: boolean;
+          max_price_eur_mwh: number;
+          limit_kw: number;
+          use_fallback_window: boolean;
+          fallback_time_from: string;
+          fallback_time_to: string;
+        };
+      }
+    | undefined;
+
+  const saveEnergySettings = async (patch: Record<string, unknown>) => {
+    if (!cp) return;
+    const next = { ...(cpEnergy ?? {}), ...patch };
+    const { error } = await supabase
+      .from("charge_points")
+      .update({ energy_settings: next as any })
+      .eq("id", cp.id);
+    if (error) {
+      toast({ title: "Fehler", description: error.message, variant: "destructive" });
+    } else {
+      toast({ title: "Energieeinstellungen gespeichert" });
+    }
+  };
+
+  const saveAccessSettings = async (next: AccessSettings) => {
+    if (!cp) return;
+    const { error } = await supabase
+      .from("charge_points")
+      .update({ access_settings: next as any })
+      .eq("id", cp.id);
+    if (error) {
+      toast({ title: "Fehler", description: error.message, variant: "destructive" });
+    } else {
+      toast({ title: "Zugangseinstellungen gespeichert" });
+    }
+  };
 
 
   const callOcppCommand = async (endpoint: string, body: Record<string, unknown>) => {
