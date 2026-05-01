@@ -350,10 +350,7 @@ const ChargePointDetail = () => {
     };
   };
   const dbEnergy = (cp as any)?.energy_settings as CpEnergyShape | undefined;
-  // Optimistic local overlay so switches don't snap back while save/refetch is in flight
-  const [energyOverlay, setEnergyOverlay] = useState<CpEnergyShape | null>(null);
   const cpEnergy: CpEnergyShape | undefined = energyOverlay ?? dbEnergy;
-  const queryClient = useQueryClient();
 
   const saveEnergySettings = async (patch: Partial<CpEnergyShape>) => {
     if (!cp) return;
@@ -380,12 +377,6 @@ const ChargePointDetail = () => {
     }
   };
 
-  // Drop overlay once the DB-truth catches up (or matches it)
-  useEffect(() => {
-    if (energyOverlay && JSON.stringify(dbEnergy ?? {}) === JSON.stringify(energyOverlay)) {
-      setEnergyOverlay(null);
-    }
-  }, [dbEnergy, energyOverlay]);
 
   const saveAccessSettings = async (next: AccessSettings) => {
     if (!cp) return;
