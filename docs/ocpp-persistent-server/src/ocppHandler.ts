@@ -77,7 +77,7 @@ export async function handleCall(
 
       case "Authorize": {
         const idTag = payload.idTag as string;
-        const status = await authorizeIdTag(tenantId, idTag);
+        const status = await authorizeIdTag(tenantId, idTag, chargePointPk);
         return callResult(messageId, { idTagInfo: { status } });
       }
 
