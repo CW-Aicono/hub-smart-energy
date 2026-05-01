@@ -927,6 +927,17 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
                             <MapPin className="h-3 w-3" /> {coords.lat.toFixed(5)}, {coords.lng.toFixed(5)}
                           </p>
                         )}
+                        <div className="mt-3">
+                          <SingleChargePointMap
+                            latitude={coords.lat}
+                            longitude={coords.lng}
+                            alwaysEditable
+                            onPositionChange={(lat, lng) => setCoords({ lat, lng })}
+                          />
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Marker per Drag &amp; Drop verschieben. Änderungen werden mit „Speichern" übernommen.
+                          </p>
+                        </div>
                       </div>
                       <div className="grid grid-cols-2 gap-4">
                         <div><Label>Anschlüsse</Label><Input type="number" min="1" value={form.connector_count} onChange={(e) => setForm({ ...form, connector_count: e.target.value })} /></div>
