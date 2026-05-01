@@ -6,7 +6,8 @@ import { toast } from "sonner";
 export interface SolarChargingConfig {
   id: string;
   tenant_id: string;
-  group_id: string;
+  group_id: string | null;
+  charge_point_id: string | null;
   reference_meter_id: string | null;
   min_charge_power_w: number;
   safety_buffer_w: number;
