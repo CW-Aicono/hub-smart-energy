@@ -729,9 +729,9 @@ function StationDetail({ cp, onBack, onStartCharge, initialConnector }: { cp: Ap
       .on("postgres_changes", { event: "*", schema: "public", table: "charge_point_connectors", filter: `charge_point_id=eq.${cp.id}` }, () => {
         supabase
           .from("charge_point_connectors")
-          .select("connector_id, status, connector_type, max_power_kw, name")
+          .select("connector_id, status, connector_type, max_power_kw, name, display_order")
           .eq("charge_point_id", cp.id)
-          .order("connector_id")
+          .order("display_order")
           .then(({ data }) => {
             if (data) setConnectors(data.map((c) => ({ ...c, status: (c.status || "").toLowerCase() })));
           });
