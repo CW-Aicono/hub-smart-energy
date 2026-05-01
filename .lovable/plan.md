@@ -1,100 +1,81 @@
-## Analyse: Was funktioniert bereits, was fehlt?
+# Plan: Supabase Linter-Warnings beheben
 
-### 1. Zugangssteuerung — Status
+Der Linter meldet **97 Issues** (alle SECURITY-Kategorie). Sie verteilen sich auf 6 Klassen. Code im React-Frontend ist nicht betroffen — alle Findings liegen in der Datenbank/Storage.
 
-**Funktioniert (Gruppe + Einzel-Ladepunkt):**
-- UI für „Freies Laden", „Nutzergruppen-Beschränkung" (mit Auswahl), „Maximale Ladedauer" (`AccessControlSettings.tsx`)
-- Persistenz in `charge_point_groups.access_settings`, `charge_points.access_settings` und Verknüpfungstabellen `charge_point_group_allowed_user_groups` / `charge_point_allowed_user_groups`
-- Gruppe überschreibt Einzel-CP (`getEffectiveAccessSettings` in `ocpp-central`)
-- Backend-Enforcement bei `Authorize`/`StartTransaction`:
-  - `free_charging` → akzeptiert ohne Tag
-  - `user_group_restriction` → prüft Mitgliedschaft via `isUserInAllowedGroups`
-  - `max_charging_duration_min` → schreibt `RemoteStopTransaction` mit `scheduled_at` in `pending_ocpp_commands`
+## Übersicht der Findings
 
-**Lücken:**
+| # | Klasse | Anzahl | Betroffen |
+|---|---|---|---|
+| 1 | RLS Enabled, No Policy | 2 | `charging_invoice_counter`, `gateway_refresh_locks` |
+| 2 | Function Search Path Mutable | 1 | `public.get_meter_daily_totals_split` |
+| 3 | RLS Policy "Always True" (non-SELECT) | 3 | Service-Role-Policies auf `backup_snapshots`, `invite_tokens`, `spot_prices`, `integration_errors`, `infrastructure_metrics`, `charging_access_log`, `charge_point_active_profile` (8 Policies, der Linter zählt 3 repräsentativ) |
+| 4 | Public Bucket Allows Listing | 1 | `charging-invoice-assets` (Bucket public + offene SELECT-Policy) |
+| 5 | Public Can Execute SECURITY DEFINER | ~32 | Alle SD-Funktionen, die `anon` aufrufen darf |
+| 6 | Authenticated Can Execute SECURITY DEFINER | ~58 | Alle SD-Funktionen, die jeder eingeloggte User aufrufen darf |
 
-| # | Lücke | Was fehlt |
-|---|---|---|
-| A1 | **Geplanter Auto-Stop wird nie ausgeführt** | Der OCPP-Persistent-Server (`commandDispatcher.ts`) ruft `fetchPendingCommands(connectedIds)` ab; aber `pending_ocpp_commands` wird nur dann gefiltert, wenn `scheduled_at <= now()` (siehe `ocpp-persistent-api`, Zeile 235). Soweit grundsätzlich ok — **aber** der Status `"scheduled"` wird im API-Filter nicht zugelassen (es wird nach `status='pending'` gefiltert). Der mit `status:'scheduled'` eingefügte Stop-Befehl wird daher nie gepollt. → API-Filter erweitern auf `status in ('pending','scheduled')`. |
-| A2 | **Default „Maximale Ladedauer" ist 480 min, hartcodiert** | UI zeigt eingegebenen Wert (z. B. 600 min), aber wenn `> 0 && < 1440` greift Auto-Stop. Bei Wunsch „kein Limit" muss der User exakt 0 oder ≥1440 eingeben — nicht klar kommuniziert. UI sollte „0 = kein Limit" anzeigen oder einen Toggle haben. |
-| A3 | **`access_settings` Initialisierung in DB fehlt für neue CPs** | Wenn ein neu angelegter Ladepunkt kein `access_settings`-JSON hat, fällt das Backend zwar auf Defaults zurück, die UI rendert aber nichts. Default-Wert in DB (`DEFAULT '{...}'::jsonb`) prüfen/setzen. |
-| A4 | **Keine RFID-Tag-Logging bei „Blocked"-Resultat** | Wenn Authorize wegen Gruppen-Restriktion blockiert, gibt es keinen Eintrag in einer Audit-Tabelle. Für Diagnose wertvoll. |
+## Bewertung & Empfehlung pro Klasse
 
----
+### 1) RLS ohne Policy (FIX — einfach)
+- `charging_invoice_counter` und `gateway_refresh_locks` sind interne Tabellen, die nur von Edge Functions / Triggern (Service Role) geschrieben werden. Service Role umgeht RLS sowieso. **Fix:** explizite "deny all" Policy für `authenticated`/`anon` ergänzen, damit der Linter zufrieden ist und die Intention dokumentiert ist.
 
-### 2. Energiemanagement — Status
+### 2) Function Search Path (FIX — Pflicht)
+- `get_meter_daily_totals_split` hat kein `SET search_path`. **Fix:** `ALTER FUNCTION ... SET search_path = public;` ergänzen.
 
-**Funktioniert (nur Gruppe):**
-- UI-Toggles: Leistungsbegrenzung (`PowerLimitScheduler` mit Zeitfenster + kW/min-Wert), Dynamisches Lastmanagement, PV-Überschussladen, Günstig-Laden-Modus
-- PV-Überschuss: `GroupSolarChargingConfig` schreibt in `solar_charging_config` (Referenzzähler, min W, Puffer, Priorisierung)
-- Persistenz `charge_point_groups.energy_settings` (inkl. `power_limit_schedule` als JSON-Feld)
+### 3) RLS Policy "Always True" für Service-Role (FIX durch Einschränkung)
+- Diese Policies stammen aus älteren Migrationen, als wir Service-Role-Zugriff per RLS-Policy erlaubt haben. Service Role umgeht RLS bereits per Default → die Policies sind funktional überflüssig und nur noch Lärm.
+- **Fix:** Die 8 betroffenen Policies droppen. Service-Role-Zugriff bleibt voll erhalten (Bypass), authentifizierte User haben weiterhin keinen Zugriff (kein anderer Policy-Match → Default-Deny).
+- Tabellen, die parallel User-Lese-Policies haben (z. B. `integration_errors`, `charging_access_log`), bleiben für User unverändert lesbar.
 
-**Lücken — kritisch (alle Toggles sind reine UI-Schalter ohne Backend-Wirkung):**
+### 4) Public Bucket Listing (FIX — wichtig)
+- `charging-invoice-assets` ist `public=true` und hat eine `SELECT bucket_id='charging-invoice-assets'`-Policy → jeder kann **alle** Rechnungs-Assets listen. Das ist eine echte Lücke.
+- **Fix-Optionen:**
+  - **A (empfohlen):** Bucket auf `public=false` setzen + SELECT-Policy auf Tenant-scope einschränken (analog zu `floor-plans`). Frontend nutzt dann signierte URLs (`createSignedUrl`).
+  - B: Public lassen, aber Pfad-Konvention erzwingen und Listing per Edge-Function abschalten — nicht möglich in Storage RLS, daher A.
+- `floor-plans` und `floor-3d-models` sind ebenfalls `public=true`, haben aber bereits Tenant-scoped SELECT-Policies. Sie sollten zur Konsistenz ebenfalls auf `public=false` gestellt werden, damit die Tenant-Policy auch wirklich greift (sonst kann jeder mit der URL die Datei abrufen). Frontend-Anpassung: signierte URLs statt `getPublicUrl`.
 
-| # | Lücke | Was fehlt |
-|---|---|---|
-| E1 | **Kein Energiemanagement-Tab am einzelnen Ladepunkt** | `ChargePointDetailDialog.tsx` hat nur Details/Zugang/Sessions. DB-Spalte `charge_points.power_limit_schedule` existiert (Migration 20260219), wird aber weder in `useChargePoints` typisiert noch im Dialog editierbar gemacht. |
-| E2 | **`PowerLimitScheduler` setzt keine OCPP-Profile um** | Es existiert kein Scheduler/Edge-Function, der bei Eintreten von `time_from`/`time_to` ein `SetChargingProfile` (oder `ChangeConfiguration`) an die Wallbox schickt. `commandDispatcher.ts` hat **kein** `SetChargingProfile`-Mapping (nur RemoteStart/Stop, Reset, Unlock, ChangeConfiguration, ChangeAvailability). |
-| E3 | **`solar-charging-scheduler` läuft nie automatisch** | Edge-Function existiert, hat aber **kein pg_cron-Eintrag**. Außerdem: Funktion endet bei der eigentlich entscheidenden Stelle mit `// TODO: Send OCPP SetChargingProfile commands via gateway` — d. h. die berechnete `assigned_w`-Verteilung wird nirgendwohin geschickt. |
-| E4 | **Dynamisches Lastmanagement (DLM) ist nicht implementiert** | Nur ein Switch. Es fehlt: (a) Erfassung Hausanschluss-Headroom (kann `solar_charging_config.reference_meter_id` mitnutzen + Sicherungsgröße als neues Feld), (b) Verteil-Algorithmus über alle aktiven Connectoren der Gruppe, (c) periodischer Job der `SetChargingProfile` schickt. |
-| E5 | **Günstig-Laden-Modus** | Nur ein Switch. Es fehlt: Anbindung an dynamische Spotpreise (Modul ist im Projekt vorhanden — `mem://features/energy-data/dynamic-pricing`), Konfiguration „lade in den X günstigsten Stunden bis Abfahrtszeit", Pausieren/Fortsetzen via OCPP. |
-| E6 | **Per-CP-Override fehlt** | Falls ein Ladepunkt nicht in einer Gruppe ist, gibt es keine UI für sein eigenes `power_limit_schedule`/PV-Überschuss/etc. |
-| E7 | **`SetChargingProfile` im OCPP-Server** | Muss in `docs/ocpp-persistent-server/src/commandDispatcher.ts` ergänzt werden; das Charging-Profile-Objekt (chargingProfileId, stackLevel, chargingProfilePurpose=`TxDefaultProfile`/`TxProfile`, chargingProfileKind=`Absolute`/`Recurring`, chargingSchedule mit chargingRateUnit `A`/`W`, periods) muss aus `power_limit_schedule` abgeleitet werden. |
-| E8 | **Reference-Meter Auto-Wahl unzuverlässig** | `GroupSolarChargingConfig` filtert nur auf `meter_function === 'bidirectional'`. PV-Anlagen ohne bidirektionalen Hauptzähler werden nicht erkannt; Hinweis gibt es zwar, aber kein automatischer Fallback (z. B. Erzeugungs- minus Verbrauchszähler). |
+### 5 + 6) SECURITY DEFINER Functions ausführbar von anon/authenticated (FIX — selektiv)
+Der Linter empfiehlt hier konservativ, `EXECUTE` zu entziehen. In unserem Code rufen wir die Funktionen aber bewusst aus React/Edge auf. Wir gehen pro Funktion durch und entscheiden:
 
----
+- **Bleibt ausführbar für `authenticated`** (interner Daten-Zugriff durch RLS-Logik kontrolliert):
+  `has_role`, `has_permission`, `has_location_access`, `is_own_profile`, `get_user_tenant_id`, `get_auth_user_email`, `get_location_main_meter`, `get_meter_daily_totals*`, `get_meter_period_sums`, `get_power_readings_5min`, `get_pv_*`, `get_charge_point_uptime_pct`, `next_charging_invoice_number`, `generate_app_tag` — diese sind tenant-aware und werden vom Frontend benötigt. **Maßnahme:** keine Änderung, aber explizit dokumentieren (Kommentar in Migration), damit künftige Linter-Runs als "akzeptiert" gelten.
+- **EXECUTE entziehen für `anon` und `authenticated`** (reine Trigger-/Cron-/Edge-Helfer, niemals direkt vom Client gerufen):
+  `aggregate_pv_actual_hourly`, `auto_resolve_integration_errors_on_sync_success`, `bootstrap_user_role`, `check_main_meter_no_parent`, `check_meter_hierarchy`, `cleanup_*` (4 Funktionen), `collect_db_metrics`, `compact_power_readings_day`, `compute_daily_totals_from_5min`, `create_task_for_integration_error`, `enforce_simulator_instance_limit`, `ensure_at_least_one_admin`, `ensure_single_main_location`, `guard_privileged_roles`, `handle_new_user`, `handle_new_user_role`, `log_user_role_change` und weitere Trigger-/Cron-only-Funktionen.
+  **Fix:** `REVOKE EXECUTE ... FROM anon, authenticated;` — Service Role und Postgres-Owner können sie weiterhin aufrufen (Cron, Trigger).
+- **Reduziert das Linter-Volumen um ~70 %** (nur noch die wirklich client-callable Funktionen erscheinen, die akzeptierbar sind).
 
-## Implementierungsplan
-
-### Phase 1 — Quick Fixes (Zugang)
-1. **A1**: `ocpp-persistent-api` Filter erweitern: `status in ('pending','scheduled')` und nur Zeilen mit `scheduled_at IS NULL OR scheduled_at <= now()` zurückgeben.
-2. **A2**: `AccessControlSettings.tsx` — bei `max_charging_duration_min === 0` Label „Kein Limit" zeigen, Tooltip ergänzen.
-3. **A3**: Migration: `ALTER TABLE charge_points ALTER COLUMN access_settings SET DEFAULT '{"free_charging": false, "user_group_restriction": false, "max_charging_duration_min": 0}'::jsonb;` und Backfill für NULL-Werte.
-4. **A4**: Tabelle `charging_access_log` (cp_id, idTag, result, reason, ts) + Insert in `validateIdTag` bei Reject/Blocked. Anzeige in Detail-Dialog → neuer Sub-Tab oder unter „Ladevorgänge".
-
-### Phase 2 — Per-Charge-Point Energiemanagement (UI)
-5. **E1/E6**: Neuen Tab „Energiemanagement" in `ChargePointDetailDialog` einbauen. Wenn CP in Gruppe → Hinweis „wird über Gruppe gesteuert". Sonst:
-   - `PowerLimitScheduler` (wie Gruppe)
-   - Switches für Dyn. Lastmgmt / PV-Überschuss / Günstig-Laden
-   - `useChargePoints`-Hook + Interface erweitern um `power_limit_schedule`, `energy_settings`.
-
-### Phase 3 — OCPP-Profile-Dispatch
-6. **E7**: `commandDispatcher.ts` um `SetChargingProfile`, `ClearChargingProfile`, `GetCompositeSchedule` erweitern. Gleichzeitig Mapping-Helfer `buildProfileFromSchedule(power_limit_schedule)` in shared utility (`packages/`).
-7. **E2**: Neue Edge-Function `power-limit-scheduler` (alle 5 min via pg_cron):
-   - Liest alle aktiven `power_limit_schedule` (Gruppen + Einzel-CPs)
-   - Berechnet aktuell gültiges Limit (`allday` vs. `window`, mit Übernacht-Logik)
-   - Vergleicht mit zuletzt gesetztem Profil (neue Tabelle `charge_point_active_profile`)
-   - Bei Änderung: `pending_ocpp_commands`-Insert mit `command='SetChargingProfile'` (bzw. `ClearChargingProfile` wenn Limit aufgehoben)
-8. pg_cron-Migration für die neue Function.
-
-### Phase 4 — PV-Überschuss + DLM
-9. **E3**: pg_cron für `solar-charging-scheduler` (alle 1 min). TODO-Block ersetzen durch tatsächliches Schreiben von `SetChargingProfile`-Commands je Connector mit `assigned_w` umgerechnet auf Ampere (W → A: für 3-phasig 400 V → A = W/(3·230)).
-10. **E4**: DLM-Implementierung
-    - Neues Feld `charge_point_groups.energy_settings.dlm_max_grid_w` (Hausanschluss-Limit) — UI ergänzen
-    - Pro Gruppe: Verbrauch (Referenzzähler) + Summe aktive Ladeleistungen → Headroom = `dlm_max_grid_w − (Hausverbrauch − Ladeleistung)`
-    - Verteilung gleichmäßig oder nach `priority_mode`
-    - Reuse `solar-charging-scheduler` oder neue Function `dlm-scheduler` (1-min-Cron)
-11. **E8**: Fallback: wenn kein bidirektionaler Zähler vorhanden, virtuellen Zähler (Einspeisung = PV-Erzeugung − Hausverbrauch) automatisch anlegen lassen — Helper-Button im UI.
-
-### Phase 5 — Günstig-Laden
-12. **E5**: 
-    - Datenbank: Verbindung zu vorhandenem Spotpreis-Modul nutzen
-    - UI: pro Gruppe/CP „günstigste N Stunden bis HH:mm" einstellbar
-    - Cron-Function `cheap-charging-planner` (stündlich): plant `SetChargingProfile` mit Schedule-Periods (laden=volle Power in günstigsten Stunden, sonst 0 A) bis zur Abfahrtszeit
-
----
-
-## Reihenfolge / Priorisierung
+## Umsetzung — eine konsolidierte Migration
 
 ```text
-P1 (1–2 Tage): Phase 1 (A1–A4) — Zugang stabil
-P2 (1 Tag):    Phase 2 (E1/E6)  — UI-Parität pro CP
-P3 (2–3 Tage): Phase 3 (E2/E7)  — Leistungsbegrenzung wirklich aktiv
-P4 (3–4 Tage): Phase 4 (E3/E4/E8) — PV-Überschuss + DLM aktiv
-P5 (2 Tage):   Phase 5 (E5)     — Günstig-Laden
+supabase/migrations/<timestamp>_linter_hardening.sql
+├─ Block 1: charging_invoice_counter + gateway_refresh_locks
+│            → CREATE POLICY "Deny client access" ... USING (false)
+├─ Block 2: ALTER FUNCTION get_meter_daily_totals_split SET search_path=public
+├─ Block 3: DROP POLICY für die 8 redundanten "Service role"-Policies
+├─ Block 4: storage.buckets UPDATE public=false für die 3 Buckets
+│           + DROP "Anyone can view invoice assets" Policy
+│           + CREATE Tenant-scoped SELECT-Policy für charging-invoice-assets
+└─ Block 5: REVOKE EXECUTE ... FROM anon, authenticated
+            für die ~25 Trigger-/Cron-only Funktionen (Liste oben)
 ```
 
-## Offene Entscheidungen für den User
-1. **DLM-Topologie**: Pro Gruppe (=ein Hausanschluss) oder pro Standort? Im Code aktuell auf Gruppe gemappt — ok so?
-2. **Günstig-Laden**: braucht eine „spätestens fertig"-Eingabe pro Ladevorgang (App?) oder reicht ein globales Zeitfenster pro Gruppe?
-3. **`SetChargingProfile` vs. `ChangeConfiguration`**: Manche ältere Wallboxen unterstützen kein `SetChargingProfile`. Soll Fallback auf `ChangeConfiguration(MaxChargingCurrent)` implementiert werden? (Empfehlung: ja, vendor-abhängig in `vendorRegistry`.)
+## Frontend-/Edge-Anpassungen
+
+Nur durch Änderung 4 (Storage Buckets) nötig:
+
+- `src/lib/generateChargingInvoicePdf.ts` (und ggf. `ChargingBilling.tsx`): von `getPublicUrl` auf `createSignedUrl(path, 3600)` umstellen für Logo/Briefkopf-Assets.
+- `src/components/locations/*` (Floor-Plans/3D-Models): bereits an Stellen, an denen `getPublicUrl` genutzt wird, auf signierte URLs umstellen. Vorher: alle Aufrufe per `rg "from\\('floor-plans'\\)|from\\('floor-3d-models'\\)|from\\('charging-invoice-assets'\\)"` auflisten und gezielt anpassen.
+
+## Verifikation
+
+1. Migration anwenden.
+2. `supabase--linter` erneut ausführen → Ziel: < 10 Restwarnungen (nur die bewusst akzeptierten client-callable SD-Funktionen).
+3. Smoke-Tests in der App:
+   - Ladepunkt-Detail (RFID-Lesemodus)
+   - Floor-Plan anzeigen (Liegenschafts-Detail)
+   - Charging-Invoice PDF generieren
+   - Cron/Trigger laufen weiter (DB-Metriken, OCPP-Cleanup)
+
+## Aufwand & Risiko
+
+- **Aufwand:** 1 Migration (~150 Zeilen SQL) + 2-3 Frontend-Patches für signierte URLs.
+- **Risiko:** Mittel — Storage-Bucket-Switch ist die einzige potenziell brechende Änderung. Wird durch Frontend-Anpassung abgefangen. Restliche Änderungen sind reine Härtung ohne Funktionsverlust.
