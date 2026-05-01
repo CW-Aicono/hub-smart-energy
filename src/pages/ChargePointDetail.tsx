@@ -44,6 +44,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "@/hooks/use-toast";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, Cell } from "recharts";
 import { PowerLimitScheduler, PowerLimitSchedule, defaultPowerLimitSchedule } from "@/components/charging/PowerLimitScheduler";
+import SingleChargePointMap from "@/components/charging/SingleChargePointMap";
 
 const STATUS_KEYS: Record<string, { labelKey: string; color: string; variant: "default" | "secondary" | "destructive" | "outline"; icon: typeof Zap }> = {
   available: { labelKey: "cpd.available", color: "hsl(var(--primary))", variant: "default", icon: Zap },
@@ -762,6 +763,36 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
                   </Card>
                 </div>
               </div>
+
+              {/* Standortkarte – Drag&Drop des Markers aktualisiert die Koordinaten überall (Übersichtskarte, Lade-App, Detail) */}
+              <Card className="mt-6">
+                <CardHeader className="pb-2 flex flex-row items-center justify-between">
+                  <div>
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <MapPin className="h-4 w-4 text-primary" />
+                      Standort auf Karte
+                    </CardTitle>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Marker per Drag &amp; Drop auf die exakte Position ziehen. Die
+                      Änderung wird automatisch in der Übersichtskarte und der Lade-App übernommen.
+                    </p>
+                  </div>
+                  {cp.latitude && cp.longitude && (
+                    <span className="text-xs font-mono text-muted-foreground hidden sm:inline">
+                      {cp.latitude.toFixed(5)}, {cp.longitude.toFixed(5)}
+                    </span>
+                  )}
+                </CardHeader>
+                <CardContent>
+                  <SingleChargePointMap
+                    latitude={cp.latitude}
+                    longitude={cp.longitude}
+                    onPositionChange={(lat, lng) => {
+                      updateChargePoint.mutate({ id: cp.id, latitude: lat, longitude: lng } as any);
+                    }}
+                  />
+                </CardContent>
+              </Card>
             </TabsContent>
 
             {/* Sessions tab */}
@@ -896,6 +927,17 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
                             <MapPin className="h-3 w-3" /> {coords.lat.toFixed(5)}, {coords.lng.toFixed(5)}
                           </p>
                         )}
+                        <div className="mt-3">
+                          <SingleChargePointMap
+                            latitude={coords.lat}
+                            longitude={coords.lng}
+                            alwaysEditable
+                            onPositionChange={(lat, lng) => setCoords({ lat, lng })}
+                          />
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Marker per Drag &amp; Drop verschieben. Änderungen werden mit „Speichern" übernommen.
+                          </p>
+                        </div>
                       </div>
                       <div className="grid grid-cols-2 gap-4">
                         <div><Label>Anschlüsse</Label><Input type="number" min="1" value={form.connector_count} onChange={(e) => setForm({ ...form, connector_count: e.target.value })} /></div>
