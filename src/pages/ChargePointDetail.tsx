@@ -1172,31 +1172,196 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
                       </CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-4">
-                      <div className="flex items-center justify-between p-4 border rounded-lg opacity-60">
+                      {/* Dynamisches Lastmanagement */}
+                      <div className="flex items-center justify-between p-4 border rounded-lg">
                         <div>
                           <p className="font-medium">Dynamisches Lastmanagement</p>
-                          <p className="text-sm text-muted-foreground">Leistung automatisch an verfügbare Kapazität anpassen</p>
+                          <p className="text-sm text-muted-foreground">
+                            Leistung automatisch an verfügbare Kapazität anpassen (z. B. Hausanschluss-Limit)
+                          </p>
                         </div>
-                        <Switch disabled />
+                        <Switch
+                          checked={cpEnergy?.dynamic_load_management ?? false}
+                          onCheckedChange={(v) => saveEnergySettings({ dynamic_load_management: v })}
+                          disabled={!isAdmin}
+                        />
                       </div>
-                      <div className="flex items-center justify-between p-4 border rounded-lg border-primary/30 bg-primary/5">
-                        <div>
-                          <p className="font-medium">PV-Überschussladen</p>
-                          <p className="text-sm text-muted-foreground">Laden priorisiert mit eigenem Solarstrom – Konfiguration über Ladepunkt-Gruppen</p>
+
+                      {/* PV-Überschussladen */}
+                      <div className="border rounded-lg p-4 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="font-medium">PV-Überschussladen</p>
+                            <p className="text-sm text-muted-foreground">
+                              Laden priorisiert mit eigenem Solarstrom
+                            </p>
+                          </div>
+                          <Switch
+                            checked={cpEnergy?.pv_surplus_charging ?? false}
+                            onCheckedChange={(v) => saveEnergySettings({ pv_surplus_charging: v })}
+                            disabled={!isAdmin}
+                          />
                         </div>
-                        <Button variant="outline" size="sm" className="gap-1.5" onClick={() => navigate("/charging/points")}>
-                          <Zap className="h-3.5 w-3.5" /> Zur Gruppe
-                        </Button>
+                        {cpEnergy?.pv_surplus_charging && (
+                          <ChargePointSolarChargingConfig
+                            chargePointId={cp.id}
+                            locationId={cp.location_id}
+                            isAdmin={isAdmin}
+                            pvSurplusEnabled={true}
+                          />
+                        )}
                       </div>
-                      <div className="flex items-center justify-between p-4 border rounded-lg opacity-60">
-                        <div>
-                          <p className="font-medium">Günstig-Laden-Modus</p>
-                          <p className="text-sm text-muted-foreground">Laden automatisch in Niedrigtarifzeiten verschieben</p>
+
+                      {/* Günstig-Laden */}
+                      <div className="border rounded-lg p-4 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="font-medium">Günstig-Laden-Modus</p>
+                            <p className="text-sm text-muted-foreground">
+                              Laden automatisch in Niedrigtarifzeiten verschieben
+                            </p>
+                          </div>
+                          <Switch
+                            checked={cpEnergy?.cheap_charging?.enabled ?? cpEnergy?.cheap_charging_mode ?? false}
+                            onCheckedChange={(v) => {
+                              const prev = cpEnergy?.cheap_charging ?? {
+                                max_price_eur_mwh: 60,
+                                limit_kw: 11,
+                                use_fallback_window: true,
+                                fallback_time_from: "22:00",
+                                fallback_time_to: "06:00",
+                                enabled: false,
+                              };
+                              saveEnergySettings({
+                                cheap_charging_mode: v,
+                                cheap_charging: { ...prev, enabled: v },
+                              });
+                            }}
+                            disabled={!isAdmin}
+                          />
                         </div>
-                        <Switch disabled />
+
+                        {(cpEnergy?.cheap_charging?.enabled ?? cpEnergy?.cheap_charging_mode) && (
+                          <div className="grid grid-cols-2 gap-3 pt-2 border-t">
+                            <div className="space-y-1">
+                              <Label className="text-xs">Max. Preis (€/MWh)</Label>
+                              <Input
+                                type="number"
+                                value={cpEnergy?.cheap_charging?.max_price_eur_mwh ?? 60}
+                                onChange={(e) => {
+                                  const prev = cpEnergy?.cheap_charging ?? {
+                                    enabled: true,
+                                    limit_kw: 11,
+                                    use_fallback_window: true,
+                                    fallback_time_from: "22:00",
+                                    fallback_time_to: "06:00",
+                                    max_price_eur_mwh: 60,
+                                  };
+                                  saveEnergySettings({
+                                    cheap_charging: { ...prev, max_price_eur_mwh: Number(e.target.value) },
+                                  });
+                                }}
+                                className="h-8 text-sm"
+                                disabled={!isAdmin}
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <Label className="text-xs">Lade-Limit (kW)</Label>
+                              <Input
+                                type="number"
+                                value={cpEnergy?.cheap_charging?.limit_kw ?? 11}
+                                onChange={(e) => {
+                                  const prev = cpEnergy?.cheap_charging ?? {
+                                    enabled: true,
+                                    max_price_eur_mwh: 60,
+                                    use_fallback_window: true,
+                                    fallback_time_from: "22:00",
+                                    fallback_time_to: "06:00",
+                                    limit_kw: 11,
+                                  };
+                                  saveEnergySettings({
+                                    cheap_charging: { ...prev, limit_kw: Number(e.target.value) },
+                                  });
+                                }}
+                                className="h-8 text-sm"
+                                disabled={!isAdmin}
+                              />
+                            </div>
+                            <div className="col-span-2 flex items-center gap-2 pt-1">
+                              <Switch
+                                checked={cpEnergy?.cheap_charging?.use_fallback_window ?? true}
+                                onCheckedChange={(v) => {
+                                  const prev = cpEnergy?.cheap_charging ?? {
+                                    enabled: true,
+                                    max_price_eur_mwh: 60,
+                                    limit_kw: 11,
+                                    fallback_time_from: "22:00",
+                                    fallback_time_to: "06:00",
+                                    use_fallback_window: true,
+                                  };
+                                  saveEnergySettings({
+                                    cheap_charging: { ...prev, use_fallback_window: v },
+                                  });
+                                }}
+                                disabled={!isAdmin}
+                              />
+                              <Label className="text-xs">Fallback-Zeitfenster nutzen, wenn keine Spotpreise verfügbar</Label>
+                            </div>
+                            {(cpEnergy?.cheap_charging?.use_fallback_window ?? true) && (
+                              <>
+                                <div className="space-y-1">
+                                  <Label className="text-xs">Von</Label>
+                                  <Input
+                                    type="time"
+                                    value={cpEnergy?.cheap_charging?.fallback_time_from ?? "22:00"}
+                                    onChange={(e) => {
+                                      const prev = cpEnergy?.cheap_charging ?? {
+                                        enabled: true,
+                                        max_price_eur_mwh: 60,
+                                        limit_kw: 11,
+                                        use_fallback_window: true,
+                                        fallback_time_to: "06:00",
+                                        fallback_time_from: "22:00",
+                                      };
+                                      saveEnergySettings({
+                                        cheap_charging: { ...prev, fallback_time_from: e.target.value },
+                                      });
+                                    }}
+                                    className="h-8 text-sm"
+                                    disabled={!isAdmin}
+                                  />
+                                </div>
+                                <div className="space-y-1">
+                                  <Label className="text-xs">Bis</Label>
+                                  <Input
+                                    type="time"
+                                    value={cpEnergy?.cheap_charging?.fallback_time_to ?? "06:00"}
+                                    onChange={(e) => {
+                                      const prev = cpEnergy?.cheap_charging ?? {
+                                        enabled: true,
+                                        max_price_eur_mwh: 60,
+                                        limit_kw: 11,
+                                        use_fallback_window: true,
+                                        fallback_time_from: "22:00",
+                                        fallback_time_to: "06:00",
+                                      };
+                                      saveEnergySettings({
+                                        cheap_charging: { ...prev, fallback_time_to: e.target.value },
+                                      });
+                                    }}
+                                    className="h-8 text-sm"
+                                    disabled={!isAdmin}
+                                  />
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        )}
                       </div>
+
                       <p className="text-xs text-muted-foreground flex items-center gap-1">
-                        <Info className="h-3 w-3" /> Diese Funktionen sind über Ladepunkt-Gruppen konfigurierbar oder werden in einem späteren Update als Einzelkonfiguration verfügbar.
+                        <Info className="h-3 w-3" />
+                        Diese Einstellungen gelten nur für diesen Ladepunkt.
                       </p>
                     </CardContent>
                   </Card>
