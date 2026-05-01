@@ -43,6 +43,7 @@ export interface ChargePoint {
   power_limit_schedule: ChargePointPowerLimitSchedule | null;
   supports_charging_profile: boolean | null;
   supports_change_configuration: boolean | null;
+  rfid_read_mode: "raw" | "byte_reversed" | "nibble_swap" | "byte_reversed_nibble_swap";
   ws_connected: boolean;
   ws_connected_since: string | null;
   created_at: string;
