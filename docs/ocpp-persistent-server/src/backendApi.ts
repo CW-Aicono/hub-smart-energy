@@ -73,8 +73,16 @@ export async function updateConnectorStatus(chargePointId: string, connectorId: 
   await callBackend("update-connector-status", { chargePointId, connectorId, status });
 }
 
-export async function authorizeIdTag(tenantId: string, idTag: string): Promise<"Accepted" | "Invalid"> {
-  const result = await callBackend<{ status: "Accepted" | "Invalid" }>("authorize-id-tag", { tenantId, idTag });
+export async function authorizeIdTag(
+  tenantId: string,
+  idTag: string,
+  chargePointId?: string,
+): Promise<"Accepted" | "Invalid"> {
+  const result = await callBackend<{ status: "Accepted" | "Invalid" }>("authorize-id-tag", {
+    tenantId,
+    idTag,
+    chargePointId,
+  });
   return result.status;
 }
 
