@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { normalizeRfidTag, type RfidReadMode } from "../_shared/rfidNormalize.ts";
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -144,13 +145,38 @@ async function handle(action: string, body: Record<string, unknown>) {
     case "authorize-id-tag": {
       const tenantId = String(body.tenantId ?? "");
       const idTag = String(body.idTag ?? "");
+      const chargePointId = String(body.chargePointId ?? ""); // PK aus charge_points.id (optional)
       if (!tenantId || !idTag) return fail(400, "Missing tenantId/idTag");
+
+      // Lese-Modus der Wallbox ermitteln (Default: raw)
+      let readMode: RfidReadMode = "raw";
+      if (chargePointId) {
+        const { data: cp } = await admin
+          .from("charge_points")
+          .select("rfid_read_mode")
+          .eq("id", chargePointId)
+          .maybeSingle();
+        const mode = (cp as { rfid_read_mode?: string } | null)?.rfid_read_mode;
+        if (
+          mode === "raw" ||
+          mode === "byte_reversed" ||
+          mode === "nibble_swap" ||
+          mode === "byte_reversed_nibble_swap"
+        ) {
+          readMode = mode;
+        }
+      }
+
+      const normalizedIdTag = normalizeRfidTag(idTag, readMode);
+      console.log(
+        `[ocpp-persistent-api] authorize-id-tag raw="${idTag}" mode="${readMode}" normalized="${normalizedIdTag}"`,
+      );
 
       let { data: user, error } = await admin
         .from("charging_users")
         .select("id, status")
         .eq("tenant_id", tenantId)
-        .eq("rfid_tag", idTag)
+        .eq("rfid_tag", normalizedIdTag)
         .maybeSingle();
 
       if (!user && !error) {
@@ -158,7 +184,7 @@ async function handle(action: string, body: Record<string, unknown>) {
           .from("charging_users")
           .select("id, status")
           .eq("tenant_id", tenantId)
-          .eq("app_tag", idTag)
+          .eq("app_tag", normalizedIdTag)
           .maybeSingle();
         user = result.data;
         error = result.error;
