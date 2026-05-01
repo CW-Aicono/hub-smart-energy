@@ -1414,33 +1414,17 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
                       </CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-4">
-                      <div className="flex items-center justify-between p-4 border rounded-lg">
-                        <div>
-                          <p className="font-medium">Freies Laden erlauben</p>
-                          <p className="text-sm text-muted-foreground">Laden ohne RFID-Karte oder App-Autorisierung ermöglichen</p>
-                        </div>
-                        <Switch disabled />
-                      </div>
-                      <div className="flex items-center justify-between p-4 border rounded-lg">
-                        <div>
-                          <p className="font-medium">Nutzergruppen-Beschränkung</p>
-                          <p className="text-sm text-muted-foreground">Nur bestimmte Nutzergruppen für diesen Ladepunkt zulassen</p>
-                        </div>
-                        <Switch disabled />
-                      </div>
-                      <div className="flex items-center justify-between p-4 border rounded-lg">
-                        <div>
-                          <p className="font-medium">Maximale Ladedauer</p>
-                          <p className="text-sm text-muted-foreground">Ladevorgang nach Zeitlimit automatisch beenden</p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Input type="number" className="w-20" defaultValue="480" disabled />
-                          <span className="text-sm text-muted-foreground">min</span>
-                        </div>
-                      </div>
-                      <p className="text-xs text-muted-foreground flex items-center gap-1">
-                        <Info className="h-3 w-3" /> Diese Funktionen werden in einem zukünftigen Update verfügbar. Alternativ können Sie eine Gruppe erstellen und die Einstellungen dort verwalten.
-                      </p>
+                      <AccessControlSettings
+                        entityType="chargepoint"
+                        entityId={cp.id}
+                        settings={{
+                          free_charging: (cp as any).access_settings?.free_charging ?? false,
+                          user_group_restriction: (cp as any).access_settings?.user_group_restriction ?? false,
+                          max_charging_duration_min: (cp as any).access_settings?.max_charging_duration_min ?? 480,
+                        }}
+                        isAdmin={isAdmin}
+                        onSave={saveAccessSettings}
+                      />
                     </CardContent>
                   </Card>
 
