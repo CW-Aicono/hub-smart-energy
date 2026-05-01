@@ -715,7 +715,9 @@ function StationDetail({ cp, onBack, onStartCharge, initialConnector }: { cp: Ap
       .eq("charge_point_id", cp.id)
       .order("connector_id")
       .then(({ data }) => {
-        if (data && data.length > 0) setConnectors(data);
+        if (data && data.length > 0) {
+          setConnectors(data.map((c) => ({ ...c, status: (c.status || "").toLowerCase() })));
+        }
       });
   }, [cp.id, cp.connector_count]);
 
