@@ -68,7 +68,7 @@ const ChargePointDetail = () => {
   const { vendors: knownVendors, getModelsForVendor } = useChargerModels();
 
   const [editing, setEditing] = useState(false);
-  const [form, setForm] = useState({ name: "", ocpp_id: "", ocpp_password: "", address: "", connector_count: "1", max_power_kw: "22", vendor: "", model: "", connector_type: "Type2" });
+  const [form, setForm] = useState({ name: "", ocpp_id: "", ocpp_password: "", address: "", connector_count: "1", max_power_kw: "22", vendor: "", model: "", connector_type: "Type2", rfid_read_mode: "raw" });
   const [showPassword, setShowPassword] = useState(false);
   const generatePassword = () => {
     const bytes = new Uint8Array(18);
@@ -271,6 +271,7 @@ const ChargePointDetail = () => {
       vendor: cp.vendor || "",
       model: cp.model || "",
       connector_type: cp.connector_type || "Type2",
+      rfid_read_mode: (cp as any).rfid_read_mode || "raw",
     });
     setCoords({ lat: cp.latitude, lng: cp.longitude });
     setPhotoUrl(cp.photo_url || null);
@@ -291,6 +292,7 @@ const ChargePointDetail = () => {
       vendor: form.vendor || null,
       model: form.model || null,
       connector_type: form.connector_type || "Type2",
+      rfid_read_mode: form.rfid_read_mode || "raw",
       photo_url: photoUrl,
     } as any);
     setEditing(false);
