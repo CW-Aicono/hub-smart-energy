@@ -685,6 +685,7 @@ export type Database = {
           ocpp_password: string | null
           photo_url: string | null
           power_limit_schedule: Json | null
+          rfid_read_mode: string
           status: string
           supports_change_configuration: boolean | null
           supports_charging_profile: boolean | null
@@ -719,6 +720,7 @@ export type Database = {
           ocpp_password?: string | null
           photo_url?: string | null
           power_limit_schedule?: Json | null
+          rfid_read_mode?: string
           status?: string
           supports_change_configuration?: boolean | null
           supports_charging_profile?: boolean | null
@@ -753,6 +755,7 @@ export type Database = {
           ocpp_password?: string | null
           photo_url?: string | null
           power_limit_schedule?: Json | null
+          rfid_read_mode?: string
           status?: string
           supports_change_configuration?: boolean | null
           supports_charging_profile?: boolean | null
