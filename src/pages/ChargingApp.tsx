@@ -359,9 +359,11 @@ function MapTab({ chargePoints, onStartCharge, initialCpId, initialConnectorId, 
       .order("connector_id")
       .then(({ data }) => {
         if (data && data.length > 0) {
-          setDrawerConnectors(data);
+          // Normalize OCPP status casing (DB stores "Available", code expects "available")
+          const normalized = data.map((c) => ({ ...c, status: (c.status || "").toLowerCase() }));
+          setDrawerConnectors(normalized);
           // Auto-select initial connector if valid
-          if (drawerConnectorId && data.some(c => c.connector_id === drawerConnectorId)) {
+          if (drawerConnectorId && normalized.some(c => c.connector_id === drawerConnectorId)) {
             // already set
           } else {
             setDrawerConnectorId(null);
