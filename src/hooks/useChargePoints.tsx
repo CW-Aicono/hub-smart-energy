@@ -56,6 +56,7 @@ export interface ChargePoint {
   latitude: number | null;
   longitude: number | null;
   access_settings: ChargePointAccessSettings;
+  energy_settings: ChargePointEnergySettings;
   power_limit_schedule: ChargePointPowerLimitSchedule | null;
   supports_charging_profile: boolean | null;
   supports_change_configuration: boolean | null;
