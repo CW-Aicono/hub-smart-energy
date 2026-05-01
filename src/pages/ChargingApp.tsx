@@ -1592,7 +1592,13 @@ const ChargingApp = () => {
         supabase.from("charging_invoices").select("id, session_id, invoice_number, total_energy_kwh, total_amount, idle_fee_amount, currency, status, issued_at, created_at").order("created_at", { ascending: false }).limit(50),
         supabase.from("charging_tariffs").select("price_per_kwh, base_fee, idle_fee_per_minute, idle_fee_grace_minutes, currency").eq("is_active", true).limit(1),
       ]);
-      if (cpRes.data) setChargePoints(cpRes.data as AppChargePoint[]);
+      if (cpRes.data) {
+        const normalizedCps = (cpRes.data as AppChargePoint[]).map((cp) => ({
+          ...cp,
+          status: (cp.status || "").toLowerCase(),
+        }));
+        setChargePoints(normalizedCps);
+      }
       if (sessRes.data) setSessions(sessRes.data as AppSession[]);
       if (invRes.data) setInvoices(invRes.data as AppInvoice[]);
       if (tariffRes.data && tariffRes.data.length > 0) setTariff(tariffRes.data[0] as AppTariff);
