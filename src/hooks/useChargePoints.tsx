@@ -19,6 +19,22 @@ export interface ChargePointPowerLimitSchedule {
   limit_kw: number | null;
 }
 
+export interface ChargePointCheapChargingConfig {
+  enabled: boolean;
+  max_price_eur_mwh: number;
+  limit_kw: number;
+  use_fallback_window: boolean;
+  fallback_time_from: string;
+  fallback_time_to: string;
+}
+
+export interface ChargePointEnergySettings {
+  dynamic_load_management: boolean;
+  pv_surplus_charging: boolean;
+  cheap_charging_mode: boolean;
+  cheap_charging?: ChargePointCheapChargingConfig;
+}
+
 export interface ChargePoint {
   id: string;
   tenant_id: string;
