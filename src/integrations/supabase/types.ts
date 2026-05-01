@@ -671,6 +671,7 @@ export type Database = {
           connector_count: number
           connector_type: string
           created_at: string
+          energy_settings: Json
           firmware_version: string | null
           group_id: string | null
           id: string
@@ -706,6 +707,7 @@ export type Database = {
           connector_count?: number
           connector_type?: string
           created_at?: string
+          energy_settings?: Json
           firmware_version?: string | null
           group_id?: string | null
           id?: string
@@ -741,6 +743,7 @@ export type Database = {
           connector_count?: number
           connector_type?: string
           created_at?: string
+          energy_settings?: Json
           firmware_version?: string | null
           group_id?: string | null
           id?: string
@@ -5224,6 +5227,7 @@ export type Database = {
       }
       solar_charging_config: {
         Row: {
+          charge_point_id: string | null
           created_at: string
           group_id: string | null
           id: string
@@ -5236,6 +5240,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          charge_point_id?: string | null
           created_at?: string
           group_id?: string | null
           id?: string
@@ -5248,6 +5253,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          charge_point_id?: string | null
           created_at?: string
           group_id?: string | null
           id?: string
@@ -5260,6 +5266,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "solar_charging_config_charge_point_id_fkey"
+            columns: ["charge_point_id"]
+            isOneToOne: false
+            referencedRelation: "charge_points"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "solar_charging_config_group_id_fkey"
             columns: ["group_id"]
