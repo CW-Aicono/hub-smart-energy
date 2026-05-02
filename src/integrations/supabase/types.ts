@@ -4374,6 +4374,33 @@ export type Database = {
           },
         ]
       }
+      public_charge_status_links: {
+        Row: {
+          created_at: string
+          enabled: boolean
+          id: string
+          tenant_id: string
+          token: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          tenant_id: string
+          token: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          tenant_id?: string
+          token?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       pv_actual_hourly: {
         Row: {
           actual_kwh: number
