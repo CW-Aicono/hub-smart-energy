@@ -176,8 +176,13 @@ export default function PublicChargeStatus() {
       <header className="bg-white border-b border-slate-200">
         <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between gap-4 flex-wrap">
           <div className="flex items-center gap-3">
-            {data.tenant.logo_url ? (
-              <img src={data.tenant.logo_url} alt={data.tenant.name} className="h-8 w-8 object-contain" />
+            {data.tenant.logo_url && !logoFailed ? (
+              <img
+                src={data.tenant.logo_url}
+                alt={data.tenant.name}
+                className="h-8 w-8 object-contain"
+                onError={() => setLogoFailed(true)}
+              />
             ) : (
               <div className="h-8 w-8 rounded bg-slate-800 flex items-center justify-center text-white font-bold text-xs">
                 {data.tenant.name?.[0] ?? "?"}
