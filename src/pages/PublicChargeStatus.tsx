@@ -72,6 +72,7 @@ export default function PublicChargeStatus() {
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<StatusKey | null>(null);
   const [filterOpen, setFilterOpen] = useState(false);
+  const [logoFailed, setLogoFailed] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -124,7 +125,7 @@ export default function PublicChargeStatus() {
           const suffix = c.name?.trim() || `Connector ${c.connector_id}`;
           result.push({
             key: `${cp.id}-${c.connector_id}`,
-            name: `${cp.name} – ${suffix}`,
+            name: `${cp.name}\n${suffix}`,
             ocppId: cp.ocpp_id,
             status: normalizeStatus(cp, c.status),
           });
@@ -175,8 +176,13 @@ export default function PublicChargeStatus() {
       <header className="bg-white border-b border-slate-200">
         <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between gap-4 flex-wrap">
           <div className="flex items-center gap-3">
-            {data.tenant.logo_url ? (
-              <img src={data.tenant.logo_url} alt={data.tenant.name} className="h-8 w-8 object-contain" />
+            {data.tenant.logo_url && !logoFailed ? (
+              <img
+                src={data.tenant.logo_url}
+                alt={data.tenant.name}
+                className="h-8 w-8 object-contain"
+                onError={() => setLogoFailed(true)}
+              />
             ) : (
               <div className="h-8 w-8 rounded bg-slate-800 flex items-center justify-center text-white font-bold text-xs">
                 {data.tenant.name?.[0] ?? "?"}
@@ -230,7 +236,7 @@ export default function PublicChargeStatus() {
                     <Icon className={`h-3.5 w-3.5 ${meta.iconClass}`} />
                     {meta.label}
                   </div>
-                  <div className="mt-3 font-semibold leading-tight">{card.name}</div>
+                  <div className="mt-3 font-semibold leading-tight whitespace-pre-line">{card.name}</div>
                   <div className="mt-3 text-xs opacity-80 font-mono">#{card.ocppId}</div>
                 </div>
               );
