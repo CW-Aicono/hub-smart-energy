@@ -236,7 +236,7 @@ export default function PublicChargeStatus() {
                     <Icon className={`h-3.5 w-3.5 ${meta.iconClass}`} />
                     {meta.label}
                   </div>
-                  <div className="mt-3 font-semibold leading-tight">{card.name}</div>
+                  <div className="mt-3 font-semibold leading-tight whitespace-pre-line">{card.name}</div>
                   <div className="mt-3 text-xs opacity-80 font-mono">#{card.ocppId}</div>
                 </div>
               );
