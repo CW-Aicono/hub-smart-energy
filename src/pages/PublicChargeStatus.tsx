@@ -124,7 +124,7 @@ export default function PublicChargeStatus() {
           const suffix = c.name?.trim() || `Connector ${c.connector_id}`;
           result.push({
             key: `${cp.id}-${c.connector_id}`,
-            name: `${cp.name} – ${suffix}`,
+            name: `${cp.name}\n${suffix}`,
             ocppId: cp.ocpp_id,
             status: normalizeStatus(cp, c.status),
           });
