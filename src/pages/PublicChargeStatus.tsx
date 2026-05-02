@@ -72,6 +72,7 @@ export default function PublicChargeStatus() {
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<StatusKey | null>(null);
   const [filterOpen, setFilterOpen] = useState(false);
+  const [logoFailed, setLogoFailed] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
