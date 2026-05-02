@@ -9,6 +9,8 @@ import {
   Settings,
   HelpCircle,
   Filter,
+  Check,
+  X,
 } from "lucide-react";
 
 interface ChargePoint {
