@@ -1,12 +1,10 @@
-import { useState, useEffect, lazy, Suspense } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useSuperAdmin } from "@/hooks/useSuperAdmin";
 import { useTranslation } from "@/hooks/useTranslation";
 import { DashboardFilterProvider } from "@/hooks/useDashboardFilter";
-
-// Heavy dashboard content is lazy-loaded – not fetched until user is authenticated
-const DashboardContent = lazy(() => import("./DashboardContent"));
+import DashboardContent from "./DashboardContent";
 
 const Index = () => {
   const { user, loading, isRecovery } = useAuth();
