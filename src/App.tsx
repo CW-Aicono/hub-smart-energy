@@ -83,6 +83,7 @@ const EmbedPitchDashboard = lazy(() => import("./pages/EmbedPitchDashboard"));
 const EnergyReport = lazy(() => import("./pages/EnergyReport"));
 const LegalPageView = lazy(() => import("./pages/LegalPageView"));
 const PublicSalesQuote = lazy(() => import("./pages/PublicSalesQuote"));
+const PublicChargeStatus = lazy(() => import("./pages/PublicChargeStatus"));
 
 
 const queryClient = new QueryClient({
@@ -210,6 +211,7 @@ const App = () => (
                       <Route path="/m" element={<MobileApp />} />
                       <Route path="/getting-started" element={<GettingStarted />} />
                       <Route path="/embed/pitch-dashboard" element={<EmbedPitchDashboard />} />
+                      <Route path="/public/charge-status/:token" element={<PublicChargeStatus />} />
                       <Route path="/datenschutz" element={<LegalPageView pageKey="datenschutz" />} />
                       <Route path="/impressum" element={<LegalPageView pageKey="impressum" />} />
                       <Route path="/agb" element={<LegalPageView pageKey="agb" />} />

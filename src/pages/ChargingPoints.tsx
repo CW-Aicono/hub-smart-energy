@@ -19,7 +19,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Plus, PlugZap, Trash2, Zap, ZapOff, AlertTriangle, WifiOff, Info, Search, MapPin, ChevronDown, QrCode, Settings, Shield, Eye, EyeOff, RefreshCw, Copy, Lock, Unlock } from "lucide-react";
+import { Plus, PlugZap, Trash2, Zap, ZapOff, AlertTriangle, WifiOff, Info, Search, MapPin, ChevronDown, QrCode, Settings, Shield, Eye, EyeOff, RefreshCw, Copy, Lock, Unlock, Globe } from "lucide-react";
+import PublicStatusLinkDialog from "@/components/charging/PublicStatusLinkDialog";
 import { toast } from "@/hooks/use-toast";
 import { Switch } from "@/components/ui/switch";
 import { ChargePointGroupsManager } from "@/components/charging/ChargePointGroupsManager";
@@ -57,6 +58,7 @@ const ChargingPoints = () => {
   };
 
   const [addOpen, setAddOpen] = useState(false);
+  const [publicLinkOpen, setPublicLinkOpen] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
   const [showAddPassword, setShowAddPassword] = useState(false);
   const generatePw = () => {
@@ -335,16 +337,22 @@ const ChargingPoints = () => {
               <p className="text-muted-foreground">{t("charging.chargePointsDesc" as any)}</p>
             </div>
             {isAdmin && (
-              <Dialog open={addOpen} onOpenChange={setAddOpen}>
-                <DialogTrigger asChild>
-                  <Button onClick={resetForm}><Plus className="h-4 w-4 mr-2" />{t("charging.addChargePoint" as any)}</Button>
-                </DialogTrigger>
-                <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-                  <DialogHeader><DialogTitle>{t("charging.newChargePoint" as any)}</DialogTitle></DialogHeader>
-                  {formFields}
-                  <Button onClick={handleAdd} disabled={!form.name || !form.ocpp_id}>{t("common.create" as any)}</Button>
-                </DialogContent>
-              </Dialog>
+              <div className="flex items-center gap-2">
+                <Button variant="outline" onClick={() => setPublicLinkOpen(true)}>
+                  <Globe className="h-4 w-4 mr-2" />Öffentlicher Link
+                </Button>
+                <Dialog open={addOpen} onOpenChange={setAddOpen}>
+                  <DialogTrigger asChild>
+                    <Button onClick={resetForm}><Plus className="h-4 w-4 mr-2" />{t("charging.addChargePoint" as any)}</Button>
+                  </DialogTrigger>
+                  <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+                    <DialogHeader><DialogTitle>{t("charging.newChargePoint" as any)}</DialogTitle></DialogHeader>
+                    {formFields}
+                    <Button onClick={handleAdd} disabled={!form.name || !form.ocpp_id}>{t("common.create" as any)}</Button>
+                  </DialogContent>
+                </Dialog>
+                <PublicStatusLinkDialog open={publicLinkOpen} onOpenChange={setPublicLinkOpen} />
+              </div>
             )}
           </div>
 
