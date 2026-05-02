@@ -255,11 +255,6 @@ export default function PublicChargeStatus() {
             <Counter icon={HelpCircle} color="text-slate-400" value={0} />
           </div>
         </div>
-        {filterOpen && (
-          <div className="border-t border-slate-200 bg-slate-50 px-4 py-2 text-xs text-slate-600">
-            Klicken Sie auf einen Status oben, um nach diesem zu filtern.
-          </div>
-        )}
       </header>
 
       <main className="max-w-7xl mx-auto px-4 py-6">
