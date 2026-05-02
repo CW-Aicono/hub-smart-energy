@@ -9,6 +9,8 @@ import {
   Settings,
   HelpCircle,
   Filter,
+  Check,
+  X,
 } from "lucide-react";
 
 interface ChargePoint {
@@ -193,13 +195,54 @@ export default function PublicChargeStatus() {
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
               Real-time
             </span>
-            <button
-              onClick={() => setFilterOpen((o) => !o)}
-              className="ml-2 inline-flex items-center gap-1.5 px-3 py-1 rounded border border-slate-300 text-sm text-slate-700 hover:bg-slate-50"
-            >
-              <Filter className="h-3.5 w-3.5" />
-              Filter {filter ? `(1)` : ""}
-            </button>
+            <div className="relative">
+              <button
+                onClick={() => setFilterOpen((o) => !o)}
+                className="ml-2 inline-flex items-center gap-1.5 px-3 py-1 rounded border border-slate-300 text-sm text-slate-700 hover:bg-slate-50"
+              >
+                <Filter className="h-3.5 w-3.5" />
+                Filter {filter ? `(1)` : ""}
+              </button>
+              {filterOpen && (
+                <>
+                  <div
+                    className="fixed inset-0 z-10"
+                    onClick={() => setFilterOpen(false)}
+                  />
+                  <div className="absolute left-0 top-full mt-1 z-20 w-56 bg-white border border-slate-200 rounded-md shadow-lg py-1">
+                    <div className="px-3 py-1.5 text-xs font-medium text-slate-500 border-b border-slate-100 flex items-center justify-between">
+                      <span>Nach Status filtern</span>
+                      {filter && (
+                        <button
+                          onClick={() => { setFilter(null); setFilterOpen(false); }}
+                          className="text-slate-400 hover:text-slate-700 inline-flex items-center gap-0.5"
+                          title="Filter zurücksetzen"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      )}
+                    </div>
+                    {(Object.keys(STATUS_META) as StatusKey[]).map((key) => {
+                      const meta = STATUS_META[key];
+                      const Icon = meta.icon;
+                      const active = filter === key;
+                      return (
+                        <button
+                          key={key}
+                          onClick={() => { setFilter(active ? null : key); setFilterOpen(false); }}
+                          className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-slate-50 text-slate-700"
+                        >
+                          <Icon className="h-3.5 w-3.5 text-slate-500" />
+                          <span className="flex-1 text-left">{meta.label}</span>
+                          <span className="text-xs text-slate-400">{counters[key]}</span>
+                          {active && <Check className="h-3.5 w-3.5 text-emerald-600" />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+            </div>
           </div>
 
           <div className="flex items-center gap-3 text-sm">
@@ -212,11 +255,6 @@ export default function PublicChargeStatus() {
             <Counter icon={HelpCircle} color="text-slate-400" value={0} />
           </div>
         </div>
-        {filterOpen && (
-          <div className="border-t border-slate-200 bg-slate-50 px-4 py-2 text-xs text-slate-600">
-            Klicken Sie auf einen Status oben, um nach diesem zu filtern.
-          </div>
-        )}
       </header>
 
       <main className="max-w-7xl mx-auto px-4 py-6">

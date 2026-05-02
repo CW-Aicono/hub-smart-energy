@@ -79,10 +79,25 @@ Deno.serve(async (req) => {
       connectors = data ?? [];
     }
 
+    // Resolve tenant logo: stored as a path in the private "tenant-assets" bucket.
+    // Generate a long-lived signed URL so the public page can render it.
+    let logoUrl: string | null = null;
+    const rawLogo = tenantRes.data?.logo_url ?? null;
+    if (rawLogo) {
+      if (/^https?:\/\//i.test(rawLogo)) {
+        logoUrl = rawLogo;
+      } else {
+        const { data: signed } = await admin.storage
+          .from("tenant-assets")
+          .createSignedUrl(rawLogo, 60 * 60 * 24 * 7); // 7 days
+        logoUrl = signed?.signedUrl ?? null;
+      }
+    }
+
     return json({
       tenant: {
         name: tenantRes.data?.name ?? "",
-        logo_url: tenantRes.data?.logo_url ?? null,
+        logo_url: logoUrl,
       },
       charge_points: cps,
       connectors,
