@@ -661,19 +661,27 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
                             <XAxis dataKey="day" tick={{ fontSize: 12 }} />
                             <YAxis hide />
                             <Tooltip
-                              formatter={(value: number, name: string) => [
-                                `${value.toFixed(1)} %`,
-                                name === "available" ? t("cpd.available" as any) : name === "charging" ? t("cpd.occupied" as any) : t("cpd.error" as any),
-                              ]}
+                              formatter={(value: number, name: string) => {
+                                const label =
+                                  name === "available" ? t("cpd.available" as any)
+                                  : name === "charging" ? t("cpd.occupied" as any)
+                                  : name === "error" ? "Offline"
+                                  : "Keine Daten";
+                                return [`${value.toFixed(1)} %`, label];
+                              }}
                             />
                             <Legend
                               formatter={(value: string) =>
-                                value === "available" ? t("cpd.available" as any) : value === "charging" ? t("cpd.occupied" as any) : t("cpd.error" as any)
+                                value === "available" ? t("cpd.available" as any)
+                                : value === "charging" ? t("cpd.occupied" as any)
+                                : value === "error" ? "Offline"
+                                : "Keine Daten"
                               }
                             />
                             <Bar dataKey="available" stackId="a" fill="hsl(var(--primary))" radius={[0, 0, 0, 0]} />
                             <Bar dataKey="charging" stackId="a" fill="hsl(var(--chart-4))" radius={[0, 0, 0, 0]} />
-                            <Bar dataKey="error" stackId="a" fill="hsl(var(--destructive))" radius={[4, 4, 0, 0]} />
+                            <Bar dataKey="error" stackId="a" fill="hsl(var(--destructive))" radius={[0, 0, 0, 0]} />
+                            <Bar dataKey="noData" stackId="a" fill="hsl(var(--muted))" radius={[4, 4, 0, 0]} />
                           </BarChart>
                         </ResponsiveContainer>
                       </div>
