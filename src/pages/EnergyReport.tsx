@@ -278,6 +278,42 @@ const EnergyReport = () => {
     setTimeout(() => printWindow.print(), 500);
   };
 
+  const generateAiText = async (section: "vorwort" | "einleitung" | "ausblick") => {
+    setAiLoading(section);
+    try {
+      const { data, error } = await supabase.functions.invoke("generate-report-text", {
+        body: {
+          section,
+          profile: {
+            code: profile.code, name: profile.name,
+            legalBasis: profile.legalBasis, reportingCycle: profile.reportingCycle,
+            extraTopics: profile.extraTopics,
+          },
+          context: {
+            tenantName: tenant?.name,
+            reportYear: yearNum,
+            locationCount: selectedLocations.length,
+            totalArea: selectedLocations.reduce((s, l) => s + (l.net_floor_area || 0), 0),
+            totalCo2Tons: Math.round(totalCo2 / 1000),
+            totalCostEur: Math.round(totalCost),
+          },
+        },
+      });
+      if (error) throw error;
+      const html = (data as any)?.html;
+      if (html) {
+        setAiTexts((prev) => ({ ...prev, [section]: html }));
+        toast.success(`${section} generiert`);
+      } else {
+        toast.error((data as any)?.error || "Keine Antwort vom KI-Dienst");
+      }
+    } catch (e: any) {
+      toast.error(e?.message || "KI-Generierung fehlgeschlagen");
+    } finally {
+      setAiLoading(null);
+    }
+  };
+
   if (authLoading || locLoading) {
     return (
       <div className="flex flex-col md:flex-row min-h-screen bg-background">
