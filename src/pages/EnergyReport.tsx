@@ -688,6 +688,56 @@ const EnergyReport = () => {
                   </table>
                 </div>
 
+                {/* Einsparpotenzial & Priorisierung – Druckseite */}
+                {priorityRows.length > 0 && (
+                  <div className="page page-break">
+                    <h2>Einsparpotenzial &amp; Priorisierungsranking</h2>
+                    <p style={{ fontSize: "10pt", color: "#6b7280" }}>
+                      Theoretisches Potenzial bei Erreichen der Zielwerte (BMWi/BMUB 2015) – sortiert nach Dringlichkeit.
+                    </p>
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>#</th>
+                          <th>Liegenschaft</th>
+                          <th>Energieträger</th>
+                          <th style={{ textAlign: "right" }}>kWh/m²a</th>
+                          <th style={{ textAlign: "right" }}>Ø-BM</th>
+                          <th style={{ textAlign: "right" }}>Potenzial kWh/a</th>
+                          <th style={{ textAlign: "right" }}>Score</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {priorityRows.map((r, i) => (
+                          <tr key={`${r.locationId}-${r.energyType}`}>
+                            <td>{i + 1}</td>
+                            <td>{r.locationName}</td>
+                            <td style={{ textTransform: "capitalize" }}>{r.energyType}</td>
+                            <td style={{ textAlign: "right" }}>
+                              <span className={`rating-dot rating-${r.rating}`}></span>
+                              {r.specific.toFixed(1)}
+                            </td>
+                            <td style={{ textAlign: "right" }}>{r.benchmarkAvg.toFixed(0)}</td>
+                            <td style={{ textAlign: "right" }}>
+                              {Math.round(r.estSavingsKwh).toLocaleString("de-DE")}
+                            </td>
+                            <td style={{ textAlign: "right" }}>{r.priorityScore.toLocaleString("de-DE")}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                {/* Maßnahmenempfehlungen (KI) – Druckseite */}
+                <div className="page page-break" data-print-recommendations>
+                  <h2>Maßnahmenempfehlungen</h2>
+                  <p style={{ fontSize: "10pt", color: "#6b7280" }}>
+                    KI-generierte Empfehlungen werden beim Druck eingefügt.
+                  </p>
+                  <div data-print-recommendations-slot></div>
+                </div>
+
                 {/* Individual property profiles with charts */}
                 {selectedLocations.map((loc) => {
                   const locConsumption = consumption?.[yearNum]?.[loc.id] || {};
