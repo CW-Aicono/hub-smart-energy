@@ -2167,6 +2167,47 @@ export type Database = {
           },
         ]
       }
+      energy_report_drafts: {
+        Row: {
+          created_at: string
+          id: string
+          profile_code: string | null
+          report_year: number
+          tenant_id: string
+          texts: Json
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          profile_code?: string | null
+          report_year: number
+          tenant_id: string
+          texts?: Json
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          profile_code?: string | null
+          report_year?: number
+          tenant_id?: string
+          texts?: Json
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "energy_report_drafts_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       energy_storages: {
         Row: {
           capacity_kwh: number
