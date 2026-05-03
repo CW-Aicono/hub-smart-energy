@@ -364,6 +364,43 @@ const EnergyReport = () => {
             </TabsList>
 
             <TabsContent value="config" className="space-y-6 mt-6">
+              {/* Federal-state profile */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Scale className="h-5 w-5" />
+                    Bundesland-Profil
+                  </CardTitle>
+                  <CardDescription>
+                    Bestimmt rechtliche Grundlage, Berichtsturnus und Pflichtinhalte. Wird automatisch aus dem Hauptstandort übernommen.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <Select value={effectiveProfileCode} onValueChange={setProfileCode}>
+                      <SelectTrigger className="w-72"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {Object.values(FEDERAL_STATE_REPORT_PROFILES).map((p) => (
+                          <SelectItem key={p.code} value={p.code}>{p.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {autoFederalState && (
+                      <Badge variant="secondary" className="text-xs">
+                        Hauptstandort: {getFederalStateName(autoFederalState)}
+                      </Badge>
+                    )}
+                  </div>
+                  <div className="text-xs text-muted-foreground space-y-1">
+                    <p><strong>Rechtsgrundlage:</strong> {profile.legalBasis}</p>
+                    <p><strong>Turnus:</strong> alle {profile.reportingCycle} Jahre · <strong>Witterungsbereinigung:</strong> {profile.weatherCorrection ? "ja" : "nein"} · <strong>Emissionsfaktoren:</strong> {profile.emissionFactors}</p>
+                    {profile.extraTopics.length > 0 && (
+                      <p><strong>Zusatzpflichten:</strong> {profile.extraTopics.join(", ")}</p>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+
               {/* Year selection */}
               <Card>
                 <CardHeader>
