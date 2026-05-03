@@ -338,6 +338,7 @@ const EnergyReport = () => {
             totalArea: selectedLocations.reduce((s, l) => s + (l.net_floor_area || 0), 0),
             totalCo2Tons: Math.round(totalCo2 / 1000),
             totalCostEur: Math.round(totalCost),
+            existingSections: aiTexts,
           },
         },
       });
