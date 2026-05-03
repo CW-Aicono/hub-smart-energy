@@ -3412,6 +3412,7 @@ export type Database = {
           created_at: string
           description: string | null
           energy_sources: string[] | null
+          federal_state: string | null
           grid_limit_kw: number | null
           gross_floor_area: number | null
           heating_type: string | null
@@ -3444,6 +3445,7 @@ export type Database = {
           created_at?: string
           description?: string | null
           energy_sources?: string[] | null
+          federal_state?: string | null
           grid_limit_kw?: number | null
           gross_floor_area?: number | null
           heating_type?: string | null
@@ -3476,6 +3478,7 @@ export type Database = {
           created_at?: string
           description?: string | null
           energy_sources?: string[] | null
+          federal_state?: string | null
           grid_limit_kw?: number | null
           gross_floor_area?: number | null
           heating_type?: string | null

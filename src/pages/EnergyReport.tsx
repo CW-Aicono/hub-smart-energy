@@ -31,8 +31,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
-import { FileText, Download, Building2, Leaf, BarChart3, Settings2, Archive, TrendingUp, Save, ChevronRight } from "lucide-react";
+import { FileText, Download, Building2, Leaf, BarChart3, Settings2, Archive, TrendingUp, Save, ChevronRight, Sparkles, Loader2, Scale } from "lucide-react";
 import { toast } from "sonner";
+import { FEDERAL_STATES, getFederalStateName } from "@/lib/federalStates";
+import { FEDERAL_STATE_REPORT_PROFILES, getReportProfile, type FederalStateReportProfile } from "@/lib/report/federalStateProfiles";
+import { supabase } from "@/integrations/supabase/client";
 
 const currentYear = new Date().getFullYear();
 const YEARS = Array.from({ length: 5 }, (_, i) => currentYear - i);
@@ -52,6 +55,17 @@ const EnergyReport = () => {
   const [compareYears, setCompareYears] = useState(2);
   const [activeTab, setActiveTab] = useState("config");
   const reportRef = useRef<HTMLDivElement>(null);
+
+  // Federal-state aware report profile
+  const mainLocation = useMemo(() => locations.find((l) => l.is_main_location), [locations]);
+  const autoFederalState = (mainLocation as any)?.federal_state ?? null;
+  const [profileCode, setProfileCode] = useState<string>("");
+  const effectiveProfileCode = profileCode || autoFederalState || "NI";
+  const profile: FederalStateReportProfile = useMemo(() => getReportProfile(effectiveProfileCode), [effectiveProfileCode]);
+
+  // KI-generierte Texte (HTML), persistiert pro Sektion
+  const [aiTexts, setAiTexts] = useState<Record<string, string>>({});
+  const [aiLoading, setAiLoading] = useState<string | null>(null);
 
   const yearNum = parseInt(reportYear);
   const trendYears = useMemo(() => {
@@ -264,6 +278,42 @@ const EnergyReport = () => {
     setTimeout(() => printWindow.print(), 500);
   };
 
+  const generateAiText = async (section: "vorwort" | "einleitung" | "ausblick") => {
+    setAiLoading(section);
+    try {
+      const { data, error } = await supabase.functions.invoke("generate-report-text", {
+        body: {
+          section,
+          profile: {
+            code: profile.code, name: profile.name,
+            legalBasis: profile.legalBasis, reportingCycle: profile.reportingCycle,
+            extraTopics: profile.extraTopics,
+          },
+          context: {
+            tenantName: tenant?.name,
+            reportYear: yearNum,
+            locationCount: selectedLocations.length,
+            totalArea: selectedLocations.reduce((s, l) => s + (l.net_floor_area || 0), 0),
+            totalCo2Tons: Math.round(totalCo2 / 1000),
+            totalCostEur: Math.round(totalCost),
+          },
+        },
+      });
+      if (error) throw error;
+      const html = (data as any)?.html;
+      if (html) {
+        setAiTexts((prev) => ({ ...prev, [section]: html }));
+        toast.success(`${section} generiert`);
+      } else {
+        toast.error((data as any)?.error || "Keine Antwort vom KI-Dienst");
+      }
+    } catch (e: any) {
+      toast.error(e?.message || "KI-Generierung fehlgeschlagen");
+    } finally {
+      setAiLoading(null);
+    }
+  };
+
   if (authLoading || locLoading) {
     return (
       <div className="flex flex-col md:flex-row min-h-screen bg-background">
@@ -314,6 +364,43 @@ const EnergyReport = () => {
             </TabsList>
 
             <TabsContent value="config" className="space-y-6 mt-6">
+              {/* Federal-state profile */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Scale className="h-5 w-5" />
+                    Bundesland-Profil
+                  </CardTitle>
+                  <CardDescription>
+                    Bestimmt rechtliche Grundlage, Berichtsturnus und Pflichtinhalte. Wird automatisch aus dem Hauptstandort übernommen.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <Select value={effectiveProfileCode} onValueChange={setProfileCode}>
+                      <SelectTrigger className="w-72"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {Object.values(FEDERAL_STATE_REPORT_PROFILES).map((p) => (
+                          <SelectItem key={p.code} value={p.code}>{p.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {autoFederalState && (
+                      <Badge variant="secondary" className="text-xs">
+                        Hauptstandort: {getFederalStateName(autoFederalState)}
+                      </Badge>
+                    )}
+                  </div>
+                  <div className="text-xs text-muted-foreground space-y-1">
+                    <p><strong>Rechtsgrundlage:</strong> {profile.legalBasis}</p>
+                    <p><strong>Turnus:</strong> alle {profile.reportingCycle} Jahre · <strong>Witterungsbereinigung:</strong> {profile.weatherCorrection ? "ja" : "nein"} · <strong>Emissionsfaktoren:</strong> {profile.emissionFactors}</p>
+                    {profile.extraTopics.length > 0 && (
+                      <p><strong>Zusatzpflichten:</strong> {profile.extraTopics.join(", ")}</p>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+
               {/* Year selection */}
               <Card>
                 <CardHeader>
@@ -454,6 +541,37 @@ const EnergyReport = () => {
                 </Button>
               </div>
 
+              {/* AI text generation panel */}
+              <Card className="mb-4">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <Sparkles className="h-4 w-4" />
+                    KI-Texte ({profile.name})
+                  </CardTitle>
+                  <CardDescription>
+                    Vorwort, Einleitung und Ausblick werden auf Basis des Bundesland-Profils und Ihrer Daten generiert.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="flex flex-wrap gap-2">
+                    {(["vorwort", "einleitung", "ausblick"] as const).map((s) => (
+                      <Button key={s} size="sm" variant="outline" disabled={aiLoading === s}
+                        onClick={() => generateAiText(s)} className="gap-2">
+                        {aiLoading === s ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+                        {aiTexts[s] ? `${s} neu generieren` : s}
+                      </Button>
+                    ))}
+                  </div>
+                  {Object.entries(aiTexts).map(([key, html]) => (
+                    <div key={key} className="rounded border p-3">
+                      <div className="text-xs font-semibold uppercase text-muted-foreground mb-2">{key}</div>
+                      <div className="prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: html }} />
+                    </div>
+                  ))}
+                  <AiDisclaimer text="Diese Texte wurden mit KI generiert. Bitte vor Veröffentlichung redaktionell prüfen." />
+                </CardContent>
+              </Card>
+
               {/* Hidden printable content */}
               <div ref={reportRef} className="hidden">
                 {/* Cover page */}
@@ -461,10 +579,26 @@ const EnergyReport = () => {
                   <h1>Kommunaler Energiebericht</h1>
                   <p>{tenant?.name || ""}</p>
                   <p>Berichtsjahr {reportYear}</p>
+                  <p style={{ marginTop: "12pt", fontSize: "11pt" }}>
+                    {profile.name} · {profile.legalBasis}
+                  </p>
                   <p style={{ marginTop: "24pt", fontSize: "11pt", color: "#9ca3af" }}>
                     Erstellt am {new Date().toLocaleDateString("de-DE")}
                   </p>
                 </div>
+
+                {aiTexts.vorwort && (
+                  <div className="page page-break">
+                    <h2>Vorwort</h2>
+                    <div dangerouslySetInnerHTML={{ __html: aiTexts.vorwort }} />
+                  </div>
+                )}
+                {aiTexts.einleitung && (
+                  <div className="page page-break">
+                    <h2>Einleitung</h2>
+                    <div dangerouslySetInnerHTML={{ __html: aiTexts.einleitung }} />
+                  </div>
+                )}
 
                 {/* Management Summary */}
                 <div className="page page-break">
