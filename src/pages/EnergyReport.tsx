@@ -42,6 +42,7 @@ import { WeatherCorrectionSection } from "@/components/report/WeatherCorrectionS
 import { HeatVsElectricitySection } from "@/components/report/HeatVsElectricitySection";
 import { SavingsPotentialSection } from "@/components/report/SavingsPotentialSection";
 import { RecommendationsSection } from "@/components/report/RecommendationsSection";
+import { DraftsList } from "@/components/report/DraftsList";
 import { usePriorityRanking } from "@/hooks/usePriorityRanking";
 
 const currentYear = new Date().getFullYear();
@@ -457,6 +458,10 @@ const EnergyReport = () => {
               <TabsTrigger value="co2" className="gap-2">
                 <Leaf className="h-4 w-4" />
                 CO₂-Faktoren
+              </TabsTrigger>
+              <TabsTrigger value="drafts" className="gap-2">
+                <Save className="h-4 w-4" />
+                Entwürfe
               </TabsTrigger>
               <TabsTrigger value="archive" className="gap-2">
                 <Archive className="h-4 w-4" />
@@ -1138,6 +1143,16 @@ const EnergyReport = () => {
 
             <TabsContent value="co2" className="mt-6">
               <Co2FactorSettings />
+            </TabsContent>
+
+            <TabsContent value="drafts" className="mt-6">
+              <DraftsList
+                tenantId={tenant?.id}
+                onOpen={(year) => {
+                  setReportYear(String(year));
+                  setActiveTab("preview");
+                }}
+              />
             </TabsContent>
 
             <TabsContent value="archive" className="mt-6">
