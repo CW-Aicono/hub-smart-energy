@@ -338,6 +338,46 @@ export function EditLocationDialog({ location, onSuccess, trigger }: EditLocatio
                     )}
                   />
                 </div>
+                <FormField control={form.control} name="federal_state" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Bundesland</FormLabel>
+                    <div className="flex gap-2">
+                      <Select value={field.value || ""} onValueChange={field.onChange}>
+                        <FormControl>
+                          <SelectTrigger className="flex-1">
+                            <SelectValue placeholder="Bundesland auswählen (optional)" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {FEDERAL_STATES.map((s) => (
+                            <SelectItem key={s.code} value={s.code}>{s.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        title="Aus Postleitzahl ermitteln"
+                        onClick={() => {
+                          const plz = form.getValues("postal_code");
+                          const detected = detectFederalStateFromPostalCode(plz);
+                          if (detected) {
+                            field.onChange(detected);
+                          } else {
+                            toast({ title: "Keine Erkennung möglich", description: "Bitte PLZ prüfen oder manuell auswählen.", variant: "destructive" });
+                          }
+                        }}
+                      >
+                        <Wand2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    <FormDescription>
+                      Bestimmt die rechtliche Grundlage und Vorlage für den kommunalen Energiebericht (z.B. NKlimaG, EWärmeG).
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )} />
               </div>
 
               {/* Contact */}
