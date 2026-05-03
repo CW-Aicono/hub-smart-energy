@@ -1,4 +1,5 @@
-import { useState, useMemo, useRef } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
+import { RichTextEditor } from "@/components/ui/rich-text-editor";
 import { Input } from "@/components/ui/input";
 import { AiDisclaimer } from "@/components/ui/ai-disclaimer";
 import { Navigate } from "react-router-dom";
@@ -346,6 +347,7 @@ const EnergyReport = () => {
       const html = (data as any)?.html;
       if (html) {
         setAiTexts((prev) => ({ ...prev, [section]: html }));
+        setDraftDirty(true);
         toast.success(`${section} generiert`);
       } else {
         toast.error((data as any)?.error || "Keine Antwort vom KI-Dienst");
@@ -354,6 +356,62 @@ const EnergyReport = () => {
       toast.error(e?.message || "KI-Generierung fehlgeschlagen");
     } finally {
       setAiLoading(null);
+    }
+  };
+
+  // Draft persistence
+  const [draftSaving, setDraftSaving] = useState(false);
+  const [draftDirty, setDraftDirty] = useState(false);
+
+  useEffect(() => {
+    if (!tenant?.id) return;
+    let cancelled = false;
+    (async () => {
+      const { data, error } = await supabase
+        .from("energy_report_drafts")
+        .select("texts")
+        .eq("tenant_id", tenant.id)
+        .eq("report_year", yearNum)
+        .maybeSingle();
+      if (cancelled) return;
+      if (!error && data?.texts && typeof data.texts === "object") {
+        setAiTexts(data.texts as Record<string, string>);
+      } else {
+        setAiTexts({});
+      }
+      setDraftDirty(false);
+    })();
+    return () => { cancelled = true; };
+  }, [tenant?.id, yearNum]);
+
+  const updateAiText = (section: string, html: string) => {
+    setAiTexts((prev) => ({ ...prev, [section]: html }));
+    setDraftDirty(true);
+  };
+
+  const saveDraft = async () => {
+    if (!tenant?.id) return;
+    setDraftSaving(true);
+    try {
+      const { error } = await supabase
+        .from("energy_report_drafts")
+        .upsert(
+          {
+            tenant_id: tenant.id,
+            report_year: yearNum,
+            profile_code: effectiveProfileCode,
+            texts: aiTexts,
+            updated_by: user?.id,
+          },
+          { onConflict: "tenant_id,report_year" }
+        );
+      if (error) throw error;
+      setDraftDirty(false);
+      toast.success("Entwurf gespeichert");
+    } catch (e: any) {
+      toast.error(e?.message || "Speichern fehlgeschlagen");
+    } finally {
+      setDraftSaving(false);
     }
   };
 
@@ -596,7 +654,7 @@ const EnergyReport = () => {
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-3">
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     {(["vorwort", "einleitung", "ausblick"] as const).map((s) => (
                       <Button key={s} size="sm" variant="outline" disabled={aiLoading === s}
                         onClick={() => generateAiText(s)} className="gap-2">
@@ -607,14 +665,30 @@ const EnergyReport = () => {
                         })()}
                       </Button>
                     ))}
-                  </div>
-                  {Object.entries(aiTexts).map(([key, html]) => (
-                    <div key={key} className="rounded border p-3">
-                      <div className="text-xs font-semibold uppercase text-muted-foreground mb-2">{key}</div>
-                      <div className="prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: html }} />
+                    <div className="ml-auto flex items-center gap-2">
+                      {draftDirty && (
+                        <span className="text-xs text-muted-foreground">Ungespeicherte Änderungen</span>
+                      )}
+                      <Button size="sm" onClick={saveDraft} disabled={draftSaving || !draftDirty} className="gap-2">
+                        {draftSaving ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />}
+                        Entwurf speichern
+                      </Button>
                     </div>
-                  ))}
-                  <AiDisclaimer text="Diese Texte wurden mit KI generiert. Bitte vor Veröffentlichung redaktionell prüfen." />
+                  </div>
+                  {(["vorwort", "einleitung", "ausblick"] as const).map((key) =>
+                    aiTexts[key] !== undefined && aiTexts[key] !== "" ? (
+                      <div key={key} className="space-y-1">
+                        <div className="text-xs font-semibold uppercase text-muted-foreground">
+                          {key.charAt(0).toUpperCase() + key.slice(1)}
+                        </div>
+                        <RichTextEditor
+                          content={aiTexts[key] || ""}
+                          onChange={(html) => updateAiText(key, html)}
+                        />
+                      </div>
+                    ) : null
+                  )}
+                  <AiDisclaimer text="Diese Texte wurden mit KI generiert. Bitte vor Veröffentlichung redaktionell prüfen und ggf. anpassen." />
                 </CardContent>
               </Card>
 
