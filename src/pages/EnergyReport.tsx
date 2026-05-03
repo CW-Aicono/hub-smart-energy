@@ -358,6 +358,62 @@ const EnergyReport = () => {
     }
   };
 
+  // Draft persistence
+  const [draftSaving, setDraftSaving] = useState(false);
+  const [draftDirty, setDraftDirty] = useState(false);
+
+  useEffect(() => {
+    if (!tenant?.id) return;
+    let cancelled = false;
+    (async () => {
+      const { data, error } = await supabase
+        .from("energy_report_drafts")
+        .select("texts")
+        .eq("tenant_id", tenant.id)
+        .eq("report_year", yearNum)
+        .maybeSingle();
+      if (cancelled) return;
+      if (!error && data?.texts && typeof data.texts === "object") {
+        setAiTexts(data.texts as Record<string, string>);
+      } else {
+        setAiTexts({});
+      }
+      setDraftDirty(false);
+    })();
+    return () => { cancelled = true; };
+  }, [tenant?.id, yearNum]);
+
+  const updateAiText = (section: string, html: string) => {
+    setAiTexts((prev) => ({ ...prev, [section]: html }));
+    setDraftDirty(true);
+  };
+
+  const saveDraft = async () => {
+    if (!tenant?.id) return;
+    setDraftSaving(true);
+    try {
+      const { error } = await supabase
+        .from("energy_report_drafts")
+        .upsert(
+          {
+            tenant_id: tenant.id,
+            report_year: yearNum,
+            profile_code: effectiveProfileCode,
+            texts: aiTexts,
+            updated_by: user?.id,
+          },
+          { onConflict: "tenant_id,report_year" }
+        );
+      if (error) throw error;
+      setDraftDirty(false);
+      toast.success("Entwurf gespeichert");
+    } catch (e: any) {
+      toast.error(e?.message || "Speichern fehlgeschlagen");
+    } finally {
+      setDraftSaving(false);
+    }
+  };
+
   if (authLoading || locLoading) {
     return (
       <div className="flex flex-col md:flex-row min-h-screen bg-background">
