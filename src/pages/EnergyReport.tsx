@@ -123,6 +123,8 @@ const EnergyReport = () => {
   );
 
   const priorityRows = usePriorityRanking(selectedLocations, consumption?.[yearNum], prices, yearNum);
+
+  // Build hierarchical view of selected locations: parents with their selected children
   const selectedHierarchy = useMemo(() => {
     const selectedSet = new Set(selectedLocationIds);
     const result: { parent: Location; children: Location[] }[] = [];
