@@ -223,48 +223,59 @@ const ChargePointDetail = () => {
   // null = noch nie verbunden (keine Snapshots).
   const { data: uptimePercent = null } = useChargePointStability(cp?.id, 30);
 
-  // Daily chart data – real data only
+  // Reale Tages-Online-Quote aus 5-Min-Snapshots (charge_point_uptime_snapshots).
+  const { data: dailyUptime } = useChargePointDailyUptime(cp?.id, periodDays);
+
+  // Daily chart data – kombiniert reale Online-Snapshots mit Ladezeit aus Sessions.
   const chartData = useMemo(() => {
-    const today = format(new Date(), "yyyy-MM-dd");
-    const days: { day: string; date: string; available: number; charging: number; error: number }[] = [];
+    const days: { day: string; date: string; available: number; charging: number; error: number; noData: number }[] = [];
     for (let i = periodDays - 1; i >= 0; i--) {
       const d = subDays(new Date(), i);
       const dayLabel = format(d, "EEE", { locale: de });
       const dateLabel = format(d, "d. MMM", { locale: de });
       const dateStr = format(d, "yyyy-MM-dd");
-      const isToday = dateStr === today;
 
+      const uptimeBucket = dailyUptime?.find((u) => u.date === dateStr);
+      const hasSnapshots = !!uptimeBucket && uptimeBucket.total > 0;
+
+      if (!hasSnapshots) {
+        // Keine Snapshots → grauer "no data" Balken statt fälschlich grün.
+        days.push({ day: dayLabel, date: dateLabel, available: 0, charging: 0, error: 0, noData: 100 });
+        continue;
+      }
+
+      const onlinePct = (uptimeBucket!.online / uptimeBucket!.total) * 100;
+      const offlinePct = 100 - onlinePct;
+
+      // Charging-Anteil aus Sessions (in Minuten des Tages, capped auf onlinePct).
       const daySessions = periodSessions.filter(
-        (s) => format(new Date(s.start_time), "yyyy-MM-dd") === dateStr
+        (s) => format(new Date(s.start_time), "yyyy-MM-dd") === dateStr,
       );
-
-      const hoursInDay = isToday ? new Date().getHours() + (new Date().getMinutes() / 60) : 24;
-
-      const chargingHours = Math.min(hoursInDay, daySessions.reduce((sum, s) => {
+      const minutesInDay = 24 * 60;
+      const chargingMinutes = daySessions.reduce((sum, s) => {
         const start = new Date(s.start_time);
         const end = s.stop_time ? new Date(s.stop_time) : new Date();
         const dayStart = new Date(dateStr + "T00:00:00");
-        const dayEnd = isToday ? new Date() : new Date(dateStr + "T23:59:59.999");
+        const dayEnd = new Date(dateStr + "T23:59:59.999");
         const effectiveStart = start < dayStart ? dayStart : start;
         const effectiveEnd = end > dayEnd ? dayEnd : end;
         if (effectiveEnd <= effectiveStart) return sum;
-        return sum + (effectiveEnd.getTime() - effectiveStart.getTime()) / 3600000;
-      }, 0));
+        return sum + (effectiveEnd.getTime() - effectiveStart.getTime()) / 60000;
+      }, 0);
+      const chargingPct = Math.min(onlinePct, (chargingMinutes / minutesInDay) * 100);
+      const availablePct = Math.max(0, onlinePct - chargingPct);
 
-      // Approximate: project current status onto all days (no historic status log)
-      const errorHours = cp && (cp.status === "faulted" || cp.status === "offline") ? hoursInDay : 0;
-
-      const availableHours = Math.max(0, hoursInDay - chargingHours - errorHours);
       days.push({
         day: dayLabel,
         date: dateLabel,
-        available: hoursInDay > 0 ? (availableHours / hoursInDay) * 100 : 0,
-        charging: hoursInDay > 0 ? (chargingHours / hoursInDay) * 100 : 0,
-        error: hoursInDay > 0 ? (errorHours / hoursInDay) * 100 : 0,
+        available: availablePct,
+        charging: chargingPct,
+        error: offlinePct,
+        noData: 0,
       });
     }
     return days;
-  }, [periodSessions, periodDays, cp?.status]);
+  }, [periodSessions, periodDays, dailyUptime]);
 
   if (authLoading) return null;
   if (!user) return <Navigate to="/auth" replace />;
