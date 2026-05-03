@@ -1,100 +1,107 @@
 ## Ziel
-Öffentliche Status-Seite für alle Ladepunkte eines Tenants ohne Login, plus Button "Öffentlicher Link" auf der Ladepunkte-Seite.
 
-## Konzept
-Pro Tenant ein eindeutiger, zufälliger Slug-Token (z. B. `7f3a…`) erzeugt eine öffentliche URL:
+Den bestehenden kommunalen Energiebericht (`src/pages/EnergyReport.tsx`) so erweitern, dass er den landesspezifischen Anforderungen (z.B. NKlimaG Niedersachsen, EWärmeG BW, KSG Berlin etc.) entspricht und KI-gestützt Texte (Vorwort, Einleitung, Maßnahmenempfehlungen, Ausblick) generiert – orientiert am KEAN-Musterbericht und am realen Holle-Bericht.
 
-```
-https://ems-pro.aicono.org/public/charge-status/{token}
-```
+## Sichtung der Vorlagen
 
-Der Token kann jederzeit aktiviert/deaktiviert/regeneriert werden. Ohne gültigen Token oder bei deaktiviertem Status: 404/Hinweis-Seite.
+**KEAN-Mustervorlage (Niedersachsen, 23 S.):** Vorwort → Einleitung → 1. Energieverwendung (Liegenschaften, Kostenanalyse) → 2. Verbrauchsanalyse (Wärme/Strom/Wasser/CO₂) → 3. Liegenschaftsvergleich (Strom-Wärme-Diagramm) → 4. Einzelanalyse pro Liegenschaft (Datenblatt) → 5. Ausblick → Anlage Emissionsfaktoren.
 
-## Backend (Supabase Migration)
+**Holle-Bericht (KEMeasy, 85 S.):** Identische Struktur, ergänzt um Trennung Gebäude/Anlagen (Straßenbeleuchtung, Klärwerk), Witterungsbereinigung, Einsparpotenzial-Abschätzung, Platzierung nach Handlungsbedarf, ausführliche Einzeldatenblätter mit Diagrammen pro Liegenschaft.
 
-Neue Tabelle `public_charge_status_links`:
-- `id uuid pk`
-- `tenant_id uuid` (unique, FK auf tenants)
-- `token text unique not null` (URL-safe, 32 Zeichen)
-- `enabled boolean default true`
-- `created_at`, `updated_at`
+Beide folgen dem gleichen Niedersachsen-Schema. Andere Bundesländer haben abweichende Pflichten (BW: EWärmeG-Anteile, Berlin: EWG Bln + Solarpflicht, Bayern: BayKlimaG, NRW etc.).
 
-RLS:
-- Authenticated: nur eigener Tenant (admin) kann row CRUD
-- **Öffentlicher Lesezugriff über Edge Function** (kein anon SELECT auf der Tabelle nötig)
+## Plan
 
-Neue Edge Function `public-charge-status` (verify_jwt = false):
-- Input: `?token=…`
-- Lookup `public_charge_status_links` per Service Role
-- Wenn gefunden + enabled: liefert reduzierte Liste der `charge_points` (id, name, ocpp_id, status, connector_count, last_heartbeat, ws_connected) + `charge_point_connectors` (status pro Stecker) für den Tenant
-- Tenant-Name + Logo-URL ebenfalls zurückgeben (für Header)
-- Strenges CORS, kein Auth-Header nötig
+### 1. Bundesland im Hauptstandort
 
-## Frontend
+Migration: Spalte `locations.federal_state text` (Enum-artig, optional). Nur am Hauptstandort gepflegt; Fallback per Auto-Detect aus PLZ/Lat-Lon.
 
-### 1. Hook `useTenantPublicStatusLink`
-- Query: aktueller Link für Tenant
-- Mutations: `createOrEnable`, `disable`, `regenerateToken`
+- Auto-Detect Edge Function `detect-federal-state`: nimmt PLZ + Lat/Lon, mappt PLZ-Bereiche → Bundesland (statisches Lookup, keine externe API nötig).
+- Im Standort-Edit-Dialog (`src/components/locations/`) Dropdown „Bundesland" mit 16 Optionen + „Automatisch ermitteln"-Button; nur sichtbar wenn `is_main_location = true`.
+- TenantHook erweitern um `mainFederalState`.
 
-### 2. Dialog `PublicStatusLinkDialog.tsx` (neu, in `src/components/charging/`)
-Nachgebaut nach Screenshot 2 (Monta-Style):
-- Titel "Öffentlicher Link" + Status-Badge "Ein/Aus"
-- Beschreibung "Jeder mit diesem Link kann den Status sehen"
-- Read-only URL-Input + Copy-Button + Open-in-new-tab-Button
-- Buttons: "Abbrechen" + "Öffentlichen Link aktivieren/deaktivieren"
-- Bei Bedarf "Token neu generieren"
+### 2. Bundesland-Profile (Report-Templates)
 
-### 3. Button in `src/pages/ChargingPoints.tsx`
-Neben "Ladepunkt hinzufügen" (nur wenn `isAdmin`):
-```
-[Öffentlicher Link]  [+ Ladepunkt hinzufügen]
-```
-Icon: `Globe` oder `Link2` aus lucide-react.
+Neue Datei `src/lib/report/federalStateProfiles.ts` mit Profil pro Bundesland:
 
-### 4. Neue Route + Public-Page
-Route in `App.tsx` (ohne `M`/`SA`/`AuthProvider`-Schutz; AuthProvider läuft global, aber Seite nutzt keine `useAuth`-Pflicht):
-```tsx
-<Route path="/public/charge-status/:token" element={<PublicChargeStatus />} />
+```ts
+{
+  code: "NI",
+  name: "Niedersachsen",
+  legalBasis: "NKlimaG §… (3-Jahres-Turnus)",
+  reportingCycle: 3,            // Jahre
+  requiredSections: ["vorwort","einleitung","kostenanalyse","verbrauch","co2","einzelanalyse","ausblick"],
+  weatherCorrection: true,
+  benchmarkSource: "BMWi/BMUB 2015",
+  emissionFactors: "GEG 2020",
+  extras: []                    // z.B. ["solarpflicht-check"] für BE
+}
 ```
 
-Neue Datei `src/pages/PublicChargeStatus.tsx`:
-- Holt Daten via Edge Function (kein Supabase-Client mit Auth)
-- Layout 1:1 nach Screenshot 1:
-  - Header mit Tenant-Logo + Name links, Filter rechts, Status-Counter (Available, Charging, Disconnected, Faulted, Unavailable, Unconfigured) als kleine Pills
-  - "Real-time" Pulsbadge
-  - Grid mit Karten pro Ladepunkt:
-    - Hintergrundfarbe nach Status (grün = Available, grau = Disconnected/Offline, blau = Charging, rot = Faulted)
-    - Status-Icon + Label oben
-    - Name in groß
-    - `#OCPP-ID` in klein
-  - Wenn Connector-Count > 1: separate Karten pro Connector mit Suffix (z. B. „CCS 01 (Tor 1) Links")
-- Auto-Refresh alle 15s (oder Realtime-Subscription wenn machbar — hier reicht Polling, da kein Auth)
-- Sprache: Standard auf Browser-Locale, fällt auf DE zurück
-- Mobile-responsive Grid (1–2–3–4 Spalten)
+Initial vollständig nur **NI** (validiert gegen KEAN/Holle). Andere Länder als Stub mit korrektem rechtlichen Rahmen + Cycle, Sektionen werden inkrementell ergänzt. Nutzer kann Profil im Report-Dialog auch manuell überschreiben.
 
-### 5. Übersetzungen
-Neue Keys in `src/i18n/tenantAppTranslations.ts`:
-- `charging.publicLink.button` = "Öffentlicher Link"
-- `charging.publicLink.dialogTitle`, `description`, `enable`, `disable`, `regenerate`, `copy`, `open`, `enabled`, `disabled`
-- Status-Labels für Public-Page (existieren teils bereits)
+### 3. Bericht-Erweiterungen (Report-Builder)
 
-## Sicherheits-Hinweise
-- Token ist nicht erratbar (32-stellig kryptografisch zufällig)
-- Edge Function liefert nur whitelist-Felder (kein `ocpp_password`, keine `access_settings`, keine Sessions)
-- Rate-Limiting via Supabase-Standard
-- `enabled = false` ⇒ Edge Function antwortet 404, ohne preiszugeben dass Token existiert
-- Token wird im UI maskiert anzeigbar (optional)
+In `src/pages/EnergyReport.tsx`:
 
-## Memory-Update
-Neuer Eintrag `mem://features/ev-charging/public-status-link.md` mit Token-Schema + URL-Format.
+- Neuer Konfigurationsschritt „Bundesland-Profil": automatisch aus Hauptstandort vorausgewählt.
+- Sektionen rendern auf Basis von `profile.requiredSections`.
+- Neue Komponenten in `src/components/report/`:
+  - `CoverPage.tsx` – Wappen/Logo, Berichtstitel, Zuständige Stelle, Erstellungsdatum, Betrachtungszeitraum (Holle-Stil).
+  - `ForewordSection.tsx` – KI-generiertes Vorwort, mit Bürgermeister-Name aus Tenant-Settings.
+  - `IntroductionSection.tsx` – KI-generierte Einleitung mit Verweis auf Landesgesetz.
+  - `CostAnalysisSection.tsx` – Wärme/Strom/Wasser-Kostenentwicklung (gestapeltes Balkendiagramm) + Verteilung nach Gebäudekategorien (Pie).
+  - `ConsumptionSection.tsx` – Wärme/Strom/Wasser-Verbräuche pro Energieträger über Jahre (witterungsbereinigt für Wärme).
+  - `Co2Section.tsx` – Entwicklung CO₂ Strom/Wärme nach Jahren.
+  - `BuildingComparisonSection.tsx` – Strom-Wärme-Kennwert-Streudiagramm vs. Benchmark.
+  - `SavingPotentialSection.tsx` – KI-Schätzung pro Liegenschaft (kWh und €), basierend auf Abweichung vom Benchmark.
+  - `PriorityRankingSection.tsx` – Tabelle „Handlungsbedarf" sortiert nach Einsparpotenzial.
+  - `OutlookSection.tsx` – KI-generierter Ausblick mit Bezug auf bereits geplante `energy_measures`.
 
-## Geänderte/Neue Dateien
-- NEU `supabase/migrations/<timestamp>_public_charge_status_links.sql`
-- NEU `supabase/functions/public-charge-status/index.ts`
-- NEU `src/hooks/useTenantPublicStatusLink.ts`
-- NEU `src/components/charging/PublicStatusLinkDialog.tsx`
-- NEU `src/pages/PublicChargeStatus.tsx`
-- EDIT `src/pages/ChargingPoints.tsx` (Button im Header)
-- EDIT `src/App.tsx` (Route)
-- EDIT `src/i18n/tenantAppTranslations.ts`
-- NEU `.lovable/memory/features/ev-charging/public-status-link.md` + Index-Update
+Bestehende `PropertyProfile.tsx` als Einzeldatenblatt pro Liegenschaft beibehalten/erweitern (Witterungsbereinigung, Mehrjahres-Trend).
+
+### 4. Witterungsbereinigung
+
+Neue Hilfsfunktion `src/lib/weatherCorrection.ts`: Gradtagszahlen via Open-Meteo (existierende Wetter-Provider-Policy). Korrekturfaktor = HGT_normal / HGT_jahr. Nur auf Wärme-Verbrauch anwenden, nicht auf Strom/Wasser. Ergebnisse in Report-Tabellen mit „witterungsbereinigt" gekennzeichnet.
+
+### 5. KI-Texterstellung
+
+Edge Function `supabase/functions/generate-report-text/index.ts` (Lovable AI, `google/gemini-3-flash-preview`):
+
+Eingabe: `{ section, profile, locationData, year, tenantInfo }` → liefert deutschsprachigen Fließtext im Stil des Holle-Berichts. Tool-Calling für strukturierte Ausgabe (`{ html, summary }`).
+
+Sektionen mit KI-Unterstützung:
+- Vorwort (anpassbar an Bürgermeister/Land)
+- Einleitung (Bezug auf konkretes Landesgesetz aus Profil)
+- Maßnahmenempfehlungen pro Liegenschaft (Input: Benchmark-Abweichung + Baujahr + Heizungsart)
+- Ausblick
+
+Im UI pro Sektion „Mit KI generieren / neu generieren / manuell überschreiben"-Button. Generierte Texte speichern in `energy_report_archive.report_config.aiTexts`.
+
+### 6. PDF-Export
+
+Bestehender HTML→PDF-Pfad bleibt; neue Sektionen liefern semantisches HTML mit print-CSS (page-break-before für Einzeldatenblätter).
+
+### 7. Memory
+
+Neue Datei `mem://features/reports/communal-energy-report.md` mit:
+- Bundesland-Pflicht & Auto-Detect aus PLZ
+- KEAN-/Holle-Schema als Referenz
+- Witterungsbereinigung Pflicht für Wärme
+- KI-Texte über Edge Function, niemals client-seitig
+
+Index-Eintrag ergänzen.
+
+## Technische Details
+
+- Migration: `ALTER TABLE locations ADD COLUMN federal_state text;` + Trigger optional.
+- PLZ-Mapping als JSON in `src/lib/federalStatePostalRanges.ts` (16 Bundesländer, PLZ-Bereiche).
+- Recharts für alle neuen Diagramme (bereits im Stack).
+- Keine neue externe API – Wetterdaten via Open-Meteo (Provider-Policy), KI via Lovable AI.
+- Multi-Tenancy: alle Queries weiterhin mit `tenant_id`-Filter; Reports landen in `energy_report_archive` (existiert).
+
+## Out of Scope (bewusst)
+
+- Vollständige inhaltliche Profile für alle 16 Länder in einem Schritt – initial nur NI vollständig, Stubs für Rest.
+- Wappen-Upload pro Kommune (kann via vorhandenes `tenant.logo_url` genutzt werden).
+- Vollautomatischer Versand an Gremien.
