@@ -36,6 +36,12 @@ import { toast } from "sonner";
 import { FEDERAL_STATES, getFederalStateName } from "@/lib/federalStates";
 import { FEDERAL_STATE_REPORT_PROFILES, getReportProfile, type FederalStateReportProfile } from "@/lib/report/federalStateProfiles";
 import { supabase } from "@/integrations/supabase/client";
+import { CostAnalysisSection } from "@/components/report/CostAnalysisSection";
+import { WeatherCorrectionSection } from "@/components/report/WeatherCorrectionSection";
+import { HeatVsElectricitySection } from "@/components/report/HeatVsElectricitySection";
+import { SavingsPotentialSection } from "@/components/report/SavingsPotentialSection";
+import { RecommendationsSection } from "@/components/report/RecommendationsSection";
+import { usePriorityRanking } from "@/hooks/usePriorityRanking";
 
 const currentYear = new Date().getFullYear();
 const YEARS = Array.from({ length: 5 }, (_, i) => currentYear - i);
