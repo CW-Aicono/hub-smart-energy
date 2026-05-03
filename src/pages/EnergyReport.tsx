@@ -31,8 +31,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
-import { FileText, Download, Building2, Leaf, BarChart3, Settings2, Archive, TrendingUp, Save, ChevronRight } from "lucide-react";
+import { FileText, Download, Building2, Leaf, BarChart3, Settings2, Archive, TrendingUp, Save, ChevronRight, Sparkles, Loader2, Scale } from "lucide-react";
 import { toast } from "sonner";
+import { FEDERAL_STATES, getFederalStateName } from "@/lib/federalStates";
+import { FEDERAL_STATE_REPORT_PROFILES, getReportProfile, type FederalStateReportProfile } from "@/lib/report/federalStateProfiles";
+import { supabase } from "@/integrations/supabase/client";
 
 const currentYear = new Date().getFullYear();
 const YEARS = Array.from({ length: 5 }, (_, i) => currentYear - i);
