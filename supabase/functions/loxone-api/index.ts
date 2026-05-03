@@ -525,7 +525,7 @@ serve(async (req) => {
 
     console.log(`Config: serial=${config.serial_number}, user=${config.username}`);
 
-    const baseUrl = await resolveLoxoneCloudURL(config.serial_number);
+    const baseUrl = await resolveLocalOrCloud(config as LoxoneConfig & { local_host?: string });
     if (!baseUrl) {
       if (shouldPersistReadings) {
         await updateSyncStatus(supabase, locationIntegrationId, "error");
