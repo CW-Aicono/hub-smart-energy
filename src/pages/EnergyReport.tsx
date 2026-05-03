@@ -568,7 +568,7 @@ const EnergyReport = () => {
                       <div className="prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: html }} />
                     </div>
                   ))}
-                  <AiDisclaimer />
+                  <AiDisclaimer text="Diese Texte wurden mit KI generiert. Bitte vor Veröffentlichung redaktionell prüfen." />
                 </CardContent>
               </Card>
 
