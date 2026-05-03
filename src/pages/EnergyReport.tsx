@@ -541,6 +541,37 @@ const EnergyReport = () => {
                 </Button>
               </div>
 
+              {/* AI text generation panel */}
+              <Card className="mb-4">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <Sparkles className="h-4 w-4" />
+                    KI-Texte ({profile.name})
+                  </CardTitle>
+                  <CardDescription>
+                    Vorwort, Einleitung und Ausblick werden auf Basis des Bundesland-Profils und Ihrer Daten generiert.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="flex flex-wrap gap-2">
+                    {(["vorwort", "einleitung", "ausblick"] as const).map((s) => (
+                      <Button key={s} size="sm" variant="outline" disabled={aiLoading === s}
+                        onClick={() => generateAiText(s)} className="gap-2">
+                        {aiLoading === s ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+                        {aiTexts[s] ? `${s} neu generieren` : s}
+                      </Button>
+                    ))}
+                  </div>
+                  {Object.entries(aiTexts).map(([key, html]) => (
+                    <div key={key} className="rounded border p-3">
+                      <div className="text-xs font-semibold uppercase text-muted-foreground mb-2">{key}</div>
+                      <div className="prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: html }} />
+                    </div>
+                  ))}
+                  <AiDisclaimer />
+                </CardContent>
+              </Card>
+
               {/* Hidden printable content */}
               <div ref={reportRef} className="hidden">
                 {/* Cover page */}
@@ -548,10 +579,26 @@ const EnergyReport = () => {
                   <h1>Kommunaler Energiebericht</h1>
                   <p>{tenant?.name || ""}</p>
                   <p>Berichtsjahr {reportYear}</p>
+                  <p style={{ marginTop: "12pt", fontSize: "11pt" }}>
+                    {profile.name} · {profile.legalBasis}
+                  </p>
                   <p style={{ marginTop: "24pt", fontSize: "11pt", color: "#9ca3af" }}>
                     Erstellt am {new Date().toLocaleDateString("de-DE")}
                   </p>
                 </div>
+
+                {aiTexts.vorwort && (
+                  <div className="page page-break">
+                    <h2>Vorwort</h2>
+                    <div dangerouslySetInnerHTML={{ __html: aiTexts.vorwort }} />
+                  </div>
+                )}
+                {aiTexts.einleitung && (
+                  <div className="page page-break">
+                    <h2>Einleitung</h2>
+                    <div dangerouslySetInnerHTML={{ __html: aiTexts.einleitung }} />
+                  </div>
+                )}
 
                 {/* Management Summary */}
                 <div className="page page-break">
