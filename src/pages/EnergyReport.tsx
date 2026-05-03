@@ -600,7 +600,10 @@ const EnergyReport = () => {
                       <Button key={s} size="sm" variant="outline" disabled={aiLoading === s}
                         onClick={() => generateAiText(s)} className="gap-2">
                         {aiLoading === s ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
-                        {aiTexts[s] ? `${s} neu generieren` : s}
+                        {(() => {
+                          const label = s.charAt(0).toUpperCase() + s.slice(1);
+                          return aiTexts[s] ? `${label} neu generieren` : label;
+                        })()}
                       </Button>
                     ))}
                   </div>
