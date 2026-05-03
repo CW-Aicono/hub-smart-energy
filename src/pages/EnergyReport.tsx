@@ -1,4 +1,5 @@
-import { useState, useMemo, useRef } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
+import { RichTextEditor } from "@/components/ui/rich-text-editor";
 import { Input } from "@/components/ui/input";
 import { AiDisclaimer } from "@/components/ui/ai-disclaimer";
 import { Navigate } from "react-router-dom";
