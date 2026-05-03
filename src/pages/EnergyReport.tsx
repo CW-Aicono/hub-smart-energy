@@ -338,6 +338,7 @@ const EnergyReport = () => {
             totalArea: selectedLocations.reduce((s, l) => s + (l.net_floor_area || 0), 0),
             totalCo2Tons: Math.round(totalCo2 / 1000),
             totalCostEur: Math.round(totalCost),
+            existingSections: aiTexts,
           },
         },
       });
@@ -600,7 +601,10 @@ const EnergyReport = () => {
                       <Button key={s} size="sm" variant="outline" disabled={aiLoading === s}
                         onClick={() => generateAiText(s)} className="gap-2">
                         {aiLoading === s ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
-                        {aiTexts[s] ? `${s} neu generieren` : s}
+                        {(() => {
+                          const label = s.charAt(0).toUpperCase() + s.slice(1);
+                          return aiTexts[s] ? `${label} neu generieren` : label;
+                        })()}
                       </Button>
                     ))}
                   </div>
