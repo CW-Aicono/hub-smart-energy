@@ -892,6 +892,41 @@ const EnergyReport = () => {
                   </Card>
                 ))}
 
+                {/* Kostenanalyse */}
+                <CostAnalysisSection
+                  locations={selectedLocations}
+                  consumption={consumption}
+                  prices={prices}
+                  years={trendYears}
+                />
+
+                {/* Witterungsbereinigung – nur wenn Profil dies vorsieht */}
+                {profile.weatherCorrection && (
+                  <WeatherCorrectionSection
+                    locations={selectedLocations}
+                    consumption={consumption}
+                    years={trendYears}
+                  />
+                )}
+
+                {/* Strom vs. Wärme */}
+                <HeatVsElectricitySection
+                  locations={selectedLocations}
+                  consumption={consumption}
+                  years={trendYears}
+                />
+
+                {/* Einsparpotenzial / Priorisierung */}
+                <SavingsPotentialSection rows={priorityRows} />
+
+                {/* Maßnahmenempfehlungen (KI) */}
+                <RecommendationsSection
+                  profile={profile}
+                  tenantName={tenant?.name}
+                  reportYear={yearNum}
+                  rows={priorityRows}
+                />
+
                 {/* Property profiles – grouped by parent */}
                 {selectedHierarchy.map(({ parent, children }) => (
                   <div key={parent.id} className="space-y-4">
