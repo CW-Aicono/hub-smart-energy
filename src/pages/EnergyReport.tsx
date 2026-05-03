@@ -56,6 +56,17 @@ const EnergyReport = () => {
   const [activeTab, setActiveTab] = useState("config");
   const reportRef = useRef<HTMLDivElement>(null);
 
+  // Federal-state aware report profile
+  const mainLocation = useMemo(() => locations.find((l) => l.is_main_location), [locations]);
+  const autoFederalState = (mainLocation as any)?.federal_state ?? null;
+  const [profileCode, setProfileCode] = useState<string>("");
+  const effectiveProfileCode = profileCode || autoFederalState || "NI";
+  const profile: FederalStateReportProfile = useMemo(() => getReportProfile(effectiveProfileCode), [effectiveProfileCode]);
+
+  // KI-generierte Texte (HTML), persistiert pro Sektion
+  const [aiTexts, setAiTexts] = useState<Record<string, string>>({});
+  const [aiLoading, setAiLoading] = useState<string | null>(null);
+
   const yearNum = parseInt(reportYear);
   const trendYears = useMemo(() => {
     if (compareYears <= 0) return [yearNum];
