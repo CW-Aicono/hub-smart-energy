@@ -1144,6 +1144,16 @@ const EnergyReport = () => {
               <Co2FactorSettings />
             </TabsContent>
 
+            <TabsContent value="drafts" className="mt-6">
+              <DraftsList
+                tenantId={tenant?.id}
+                onOpen={(year) => {
+                  setReportYear(String(year));
+                  setActiveTab("preview");
+                }}
+              />
+            </TabsContent>
+
             <TabsContent value="archive" className="mt-6">
               <Card>
                 <CardHeader>
