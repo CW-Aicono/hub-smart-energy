@@ -142,22 +142,78 @@ function detectSensorMeta(controlType: string): { sensorType: string; unit: stri
   return { sensorType: "unknown", unit: "" };
 }
 
-// Resolve Loxone Cloud DNS by following the redirect
+// In-memory cache for resolved Cloud-DNS URLs (TTL 15 min).
+// connect.loxonecloud.com rate-limits to ~10 req/min per IP.
+const cloudUrlCache = new Map<string, { url: string; expiresAt: number }>();
+const CLOUD_URL_TTL_MS = 15 * 60 * 1000;
+
+// Resolve Loxone Cloud DNS via the new Remote Connect endpoint.
+// Loxone migrated `dns.loxonecloud.com` (legacy, returns 404 since 2026-05-03)
+// to `connect.loxonecloud.com` which serves an HTTP 307 with the actual
+// `https://{ipv6-encoded}.{Serial}.dyndns.loxonecloud.com:{port}/` URL in the
+// `Location` header (Loxone Remote Connect / lcs-proxy).
 async function resolveLoxoneCloudURL(serialNumber: string): Promise<string | null> {
-  try {
-    const dnsUrl = `http://dns.loxonecloud.com/${serialNumber}`;
-    console.log(`Resolving via Loxone Cloud redirect: ${dnsUrl}`);
-    const response = await fetchWithTimeout(dnsUrl, { method: "HEAD", redirect: "follow" });
-    const finalUrl = response.url;
-    console.log(`Resolved to final URL: ${finalUrl}`);
-    const urlObj = new URL(finalUrl);
-    const baseUrl = `${urlObj.protocol}//${urlObj.host}`;
-    console.log(`Using base URL: ${baseUrl}`);
-    return baseUrl;
-  } catch (error) {
-    console.error("Cloud DNS resolution error:", error);
-    return null;
+  const cached = cloudUrlCache.get(serialNumber);
+  if (cached && cached.expiresAt > Date.now()) {
+    console.log(`Using cached Cloud-DNS URL for ${serialNumber}: ${cached.url}`);
+    return cached.url;
   }
+
+  const tryEndpoint = async (url: string, follow: boolean): Promise<string | null> => {
+    console.log(`Resolving via ${url} (follow=${follow})`);
+    const res = await fetchWithTimeout(url, { method: "GET", redirect: follow ? "follow" : "manual" });
+    // Manual mode: read Location header from 3xx response
+    if (!follow && res.status >= 300 && res.status < 400) {
+      const loc = res.headers.get("location");
+      if (loc) {
+        const u = new URL(loc);
+        return `${u.protocol}//${u.host}`;
+      }
+    }
+    // Follow mode: use res.url after redirect chain
+    if (res.ok) {
+      const u = new URL(res.url);
+      return `${u.protocol}//${u.host}`;
+    }
+    return null;
+  };
+
+  // Primary: new Remote-Connect endpoint
+  try {
+    const baseUrl = await tryEndpoint(`https://connect.loxonecloud.com/${serialNumber}`, false);
+    if (baseUrl) {
+      console.log(`Resolved (Remote Connect) ${serialNumber} → ${baseUrl}`);
+      cloudUrlCache.set(serialNumber, { url: baseUrl, expiresAt: Date.now() + CLOUD_URL_TTL_MS });
+      return baseUrl;
+    }
+  } catch (error) {
+    console.warn(`Remote Connect resolution failed for ${serialNumber}:`, error);
+  }
+
+  // Fallback: legacy DNS endpoint (still works for some firmware/regions)
+  try {
+    const baseUrl = await tryEndpoint(`http://dns.loxonecloud.com/${serialNumber}`, true);
+    if (baseUrl) {
+      console.log(`Resolved (legacy DNS) ${serialNumber} → ${baseUrl}`);
+      cloudUrlCache.set(serialNumber, { url: baseUrl, expiresAt: Date.now() + CLOUD_URL_TTL_MS });
+      return baseUrl;
+    }
+  } catch (error) {
+    console.error(`Legacy DNS resolution failed for ${serialNumber}:`, error);
+  }
+
+  return null;
+}
+
+// Resolve base URL with optional local override (`config.local_host`) bypassing the cloud entirely.
+function resolveLocalOrCloud(config: LoxoneConfig & { local_host?: string }): Promise<string | null> {
+  const localHost = (config as { local_host?: string }).local_host?.trim();
+  if (localHost) {
+    const normalized = localHost.startsWith("http") ? localHost : `http://${localHost}`;
+    console.log(`Using local_host override: ${normalized}`);
+    return Promise.resolve(normalized.replace(/\/+$/, ""));
+  }
+  return resolveLoxoneCloudURL(config.serial_number);
 }
 
 // Fetch state value using control UUID (not state UUID!)
@@ -469,7 +525,7 @@ serve(async (req) => {
 
     console.log(`Config: serial=${config.serial_number}, user=${config.username}`);
 
-    const baseUrl = await resolveLoxoneCloudURL(config.serial_number);
+    const baseUrl = await resolveLocalOrCloud(config as LoxoneConfig & { local_host?: string });
     if (!baseUrl) {
       if (shouldPersistReadings) {
         await updateSyncStatus(supabase, locationIntegrationId, "error");
