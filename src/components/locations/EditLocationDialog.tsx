@@ -36,8 +36,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Pencil, MapPin, LocateFixed, Loader2, AlertTriangle } from "lucide-react";
+import { Pencil, MapPin, LocateFixed, Loader2, AlertTriangle, Wand2 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { FEDERAL_STATES, detectFederalStateFromPostalCode } from "@/lib/federalStates";
 
 // ENERGY_SOURCES constant removed — now using LocationEnergySourcesEditor
 
