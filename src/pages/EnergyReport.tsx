@@ -458,6 +458,10 @@ const EnergyReport = () => {
                 <Leaf className="h-4 w-4" />
                 CO₂-Faktoren
               </TabsTrigger>
+              <TabsTrigger value="drafts" className="gap-2">
+                <Save className="h-4 w-4" />
+                Entwürfe
+              </TabsTrigger>
               <TabsTrigger value="archive" className="gap-2">
                 <Archive className="h-4 w-4" />
                 Archiv
