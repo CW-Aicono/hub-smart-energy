@@ -149,6 +149,7 @@ export function EditLocationDialog({ location, onSuccess, trigger }: EditLocatio
       gross_floor_area: location.gross_floor_area ?? "",
       heating_type: location.heating_type || "",
       grid_limit_kw: (location as any).grid_limit_kw ?? "",
+      federal_state: (location as any).federal_state ?? "",
     });
     setOpen(true);
   };
