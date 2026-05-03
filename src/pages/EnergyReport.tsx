@@ -36,6 +36,12 @@ import { toast } from "sonner";
 import { FEDERAL_STATES, getFederalStateName } from "@/lib/federalStates";
 import { FEDERAL_STATE_REPORT_PROFILES, getReportProfile, type FederalStateReportProfile } from "@/lib/report/federalStateProfiles";
 import { supabase } from "@/integrations/supabase/client";
+import { CostAnalysisSection } from "@/components/report/CostAnalysisSection";
+import { WeatherCorrectionSection } from "@/components/report/WeatherCorrectionSection";
+import { HeatVsElectricitySection } from "@/components/report/HeatVsElectricitySection";
+import { SavingsPotentialSection } from "@/components/report/SavingsPotentialSection";
+import { RecommendationsSection } from "@/components/report/RecommendationsSection";
+import { usePriorityRanking } from "@/hooks/usePriorityRanking";
 
 const currentYear = new Date().getFullYear();
 const YEARS = Array.from({ length: 5 }, (_, i) => currentYear - i);
@@ -116,6 +122,8 @@ const EnergyReport = () => {
     [locations, selectedLocationIds]
   );
 
+  const priorityRows = usePriorityRanking(selectedLocations, consumption?.[yearNum], prices, yearNum);
+
   // Build hierarchical view of selected locations: parents with their selected children
   const selectedHierarchy = useMemo(() => {
     const selectedSet = new Set(selectedLocationIds);
@@ -160,10 +168,44 @@ const EnergyReport = () => {
       });
     }
 
+    // Capture other section charts (Kosten, Witterung, Strom-vs-Wärme) by data-chart key
+    const sectionChartSvgs: Record<string, string> = {};
+    if (previewContainer) {
+      previewContainer.querySelectorAll("[data-chart]").forEach((el) => {
+        const key = el.getAttribute("data-chart");
+        const svg = el.querySelector("svg");
+        if (key && svg) {
+          const clone = svg.cloneNode(true) as SVGElement;
+          clone.setAttribute("width", "100%");
+          clone.setAttribute("height", "260");
+          sectionChartSvgs[key] = clone.outerHTML;
+        }
+      });
+    }
+
+    // KI-Maßnahmen aus DOM einlesen
+    const recHtml =
+      previewContainer?.querySelector("[data-report-recommendations-html]")?.innerHTML ?? "";
+
     let contentHtml = reportRef.current.innerHTML;
     for (const [locId, svgHtml] of Object.entries(chartSvgs)) {
       const placeholder = `<!--chart-placeholder-${locId}-->`;
       contentHtml = contentHtml.replace(placeholder, svgHtml);
+    }
+    // Inject section charts at end of report (vor Per-Loc-Profilen wäre ideal, hier als Anhang Kostenanalyse)
+    const chartsBlock = Object.entries(sectionChartSvgs)
+      .map(([k, svg]) => `<div class="chart-container"><h3 style="font-size:11pt">${k}</h3>${svg}</div>`)
+      .join("");
+    if (chartsBlock) {
+      contentHtml = contentHtml.replace(
+        '<div data-print-recommendations-slot></div>',
+        `${chartsBlock}<div>${recHtml || "<p style=\"color:#6b7280;font-style:italic\">Keine KI-Empfehlungen erstellt.</p>"}</div>`,
+      );
+    } else {
+      contentHtml = contentHtml.replace(
+        '<div data-print-recommendations-slot></div>',
+        `<div>${recHtml || "<p style=\"color:#6b7280;font-style:italic\">Keine KI-Empfehlungen erstellt.</p>"}</div>`,
+      );
     }
 
     return `<!DOCTYPE html>
@@ -680,6 +722,56 @@ const EnergyReport = () => {
                   </table>
                 </div>
 
+                {/* Einsparpotenzial & Priorisierung – Druckseite */}
+                {priorityRows.length > 0 && (
+                  <div className="page page-break">
+                    <h2>Einsparpotenzial &amp; Priorisierungsranking</h2>
+                    <p style={{ fontSize: "10pt", color: "#6b7280" }}>
+                      Theoretisches Potenzial bei Erreichen der Zielwerte (BMWi/BMUB 2015) – sortiert nach Dringlichkeit.
+                    </p>
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>#</th>
+                          <th>Liegenschaft</th>
+                          <th>Energieträger</th>
+                          <th style={{ textAlign: "right" }}>kWh/m²a</th>
+                          <th style={{ textAlign: "right" }}>Ø-BM</th>
+                          <th style={{ textAlign: "right" }}>Potenzial kWh/a</th>
+                          <th style={{ textAlign: "right" }}>Score</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {priorityRows.map((r, i) => (
+                          <tr key={`${r.locationId}-${r.energyType}`}>
+                            <td>{i + 1}</td>
+                            <td>{r.locationName}</td>
+                            <td style={{ textTransform: "capitalize" }}>{r.energyType}</td>
+                            <td style={{ textAlign: "right" }}>
+                              <span className={`rating-dot rating-${r.rating}`}></span>
+                              {r.specific.toFixed(1)}
+                            </td>
+                            <td style={{ textAlign: "right" }}>{r.benchmarkAvg.toFixed(0)}</td>
+                            <td style={{ textAlign: "right" }}>
+                              {Math.round(r.estSavingsKwh).toLocaleString("de-DE")}
+                            </td>
+                            <td style={{ textAlign: "right" }}>{r.priorityScore.toLocaleString("de-DE")}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                {/* Maßnahmenempfehlungen (KI) – Druckseite */}
+                <div className="page page-break" data-print-recommendations>
+                  <h2>Maßnahmenempfehlungen</h2>
+                  <p style={{ fontSize: "10pt", color: "#6b7280" }}>
+                    KI-generierte Empfehlungen werden beim Druck eingefügt.
+                  </p>
+                  <div data-print-recommendations-slot></div>
+                </div>
+
                 {/* Individual property profiles with charts */}
                 {selectedLocations.map((loc) => {
                   const locConsumption = consumption?.[yearNum]?.[loc.id] || {};
@@ -883,6 +975,41 @@ const EnergyReport = () => {
                     </CardContent>
                   </Card>
                 ))}
+
+                {/* Kostenanalyse */}
+                <CostAnalysisSection
+                  locations={selectedLocations}
+                  consumption={consumption}
+                  prices={prices}
+                  years={trendYears}
+                />
+
+                {/* Witterungsbereinigung – nur wenn Profil dies vorsieht */}
+                {profile.weatherCorrection && (
+                  <WeatherCorrectionSection
+                    locations={selectedLocations}
+                    consumption={consumption}
+                    years={trendYears}
+                  />
+                )}
+
+                {/* Strom vs. Wärme */}
+                <HeatVsElectricitySection
+                  locations={selectedLocations}
+                  consumption={consumption}
+                  years={trendYears}
+                />
+
+                {/* Einsparpotenzial / Priorisierung */}
+                <SavingsPotentialSection rows={priorityRows} />
+
+                {/* Maßnahmenempfehlungen (KI) */}
+                <RecommendationsSection
+                  profile={profile}
+                  tenantName={tenant?.name}
+                  reportYear={yearNum}
+                  rows={priorityRows}
+                />
 
                 {/* Property profiles – grouped by parent */}
                 {selectedHierarchy.map(({ parent, children }) => (
