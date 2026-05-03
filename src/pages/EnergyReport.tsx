@@ -82,7 +82,6 @@ const EnergyReport = () => {
   // Data hooks
   const { data: consumption } = useLocationYearlyConsumption(selectedLocationIds, trendYears);
   const { data: completenessMap } = useDataCompleteness(selectedLocationIds, yearNum);
-  const priorityRows = usePriorityRanking(selectedLocations, consumption?.[yearNum], prices, yearNum);
 
   // Get child IDs for a given parent
   const getChildIds = (parentId: string): string[] => {
