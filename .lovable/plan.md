@@ -1,107 +1,38 @@
+
 ## Ziel
+Wiederherstellung der Datenanlieferung der drei Loxone-Miniserver. Root Cause ist mit hoher Wahrscheinlichkeit eine Loxone-seitige Änderung (Cloud-Routing oder Auto-Firmware-Update um 20:30), durch die `/data/LoxAPP3.json` per **HTTP Basic Auth** über den Cloud-Tunnel mit **404** statt 401 quittiert wird.
 
-Den bestehenden kommunalen Energiebericht (`src/pages/EnergyReport.tsx`) so erweitern, dass er den landesspezifischen Anforderungen (z.B. NKlimaG Niedersachsen, EWärmeG BW, KSG Berlin etc.) entspricht und KI-gestützt Texte (Vorwort, Einleitung, Maßnahmenempfehlungen, Ausblick) generiert – orientiert am KEAN-Musterbericht und am realen Holle-Bericht.
+## Schritt 1 – Live-Diagnose (vor jedem Fix)
+Edge-Function `loxone-api` mit bestehender Konfiguration testen, Antwort und Header inspizieren:
 
-## Sichtung der Vorlagen
+- Aufruf der `test`-Action (`/jdev/cfg/api`) für eine `location_integration_id` per `curl_edge_functions`. Liefert sie 200 → Basic Auth funktioniert grundsätzlich, dann ist nur der Strukturpfad betroffen. Liefert sie ebenfalls 404/401 → die Cloud-Route wurde komplett umgestellt.
+- Direkter Test gegen `http://dns.loxonecloud.com/{serial}` und gegen `https://{serial}.dns.loxonecloud.com/data/LoxAPP3.json` mit den hinterlegten Credentials, um zu sehen, ob der Server tatsächlich 404 (Pfad weg) oder 401 (Auth-Modus geändert) liefert.
+- Prüfen, ob die Firmware-Versionen der drei Miniserver heute Abend gewechselt haben (über `loxone-api` Action `getVersion`, sobald sie wieder antwortet, bzw. über das letzte gespeicherte `firmware_version`, falls vorhanden).
 
-**KEAN-Mustervorlage (Niedersachsen, 23 S.):** Vorwort → Einleitung → 1. Energieverwendung (Liegenschaften, Kostenanalyse) → 2. Verbrauchsanalyse (Wärme/Strom/Wasser/CO₂) → 3. Liegenschaftsvergleich (Strom-Wärme-Diagramm) → 4. Einzelanalyse pro Liegenschaft (Datenblatt) → 5. Ausblick → Anlage Emissionsfaktoren.
+## Schritt 2 – Sofort-Fix: Token-Auth implementieren
+Loxone unterstützt seit Firmware 9 den **Token-basierten Auth-Flow** (`/jdev/sys/getkey2/{user}` → SHA1/SHA256-Hash → `/jdev/sys/gettoken/...`). Der Cloud-Reverse-Proxy lehnt Basic Auth in neueren Stufen ab; Token-Auth wird weiterhin bedient.
 
-**Holle-Bericht (KEMeasy, 85 S.):** Identische Struktur, ergänzt um Trennung Gebäude/Anlagen (Straßenbeleuchtung, Klärwerk), Witterungsbereinigung, Einsparpotenzial-Abschätzung, Platzierung nach Handlungsbedarf, ausführliche Einzeldatenblätter mit Diagrammen pro Liegenschaft.
+Konkret in `supabase/functions/loxone-api/index.ts`:
 
-Beide folgen dem gleichen Niedersachsen-Schema. Andere Bundesländer haben abweichende Pflichten (BW: EWärmeG-Anteile, Berlin: EWG Bln + Solarpflicht, Bayern: BayKlimaG, NRW etc.).
+1. Helper `getLoxoneToken(baseUrl, user, password)` ergänzen, der den Token-Handshake durchführt und `{token, key, hashAlg}` für 1 h cached (KV-Tabelle `loxone_token_cache` o. Ä.; reicht eine In-Memory-Map pro Function-Instance + DB-Fallback).
+2. Strukturabruf umstellen auf `GET {baseUrl}/data/LoxAPP3.json?autht={hash}&user={user}` (URL-Token-Auth) statt `Authorization: Basic …`. Gleiches Schema für `/jdev/sps/io/...` und `/jdev/sys/...`.
+3. Bei 401 automatisch Token verwerfen + neu holen, bei 404 weiterhin Fehler werfen (echtes Problem).
+4. Basic Auth als Fallback behalten (für ältere Firmware), aber Token-Pfad zuerst probieren.
 
-## Plan
+## Schritt 3 – Resilienz & Beobachtbarkeit
+- **Throttling der Fehler-Logs**: Aktuell entsteht pro Miniserver minütlich ein Eintrag in `integration_errors`. Wenn derselbe Fehler bereits in den letzten 30 min für dieselbe Integration existiert, nicht erneut speichern (Tabelle wächst sonst stark).
+- **Sync-Status-Banner** im UI: Zeigen, dass der Cloud-Pfad nicht erreichbar ist und ggf. Token-Reauth empfohlen wird.
+- Optionaler **Local-Mode-Hinweis**: Wenn ein AICONO-Hub vor Ort läuft, kann die lokale IP statt Cloud-DNS verwendet werden – das umgeht das Cloud-Routing komplett. Im EditDialog der Integration ein Feld „Lokale IP (optional)" anbieten und in `resolveLoxoneCloudURL` bevorzugen.
 
-### 1. Bundesland im Hauptstandort
-
-Migration: Spalte `locations.federal_state text` (Enum-artig, optional). Nur am Hauptstandort gepflegt; Fallback per Auto-Detect aus PLZ/Lat-Lon.
-
-- Auto-Detect Edge Function `detect-federal-state`: nimmt PLZ + Lat/Lon, mappt PLZ-Bereiche → Bundesland (statisches Lookup, keine externe API nötig).
-- Im Standort-Edit-Dialog (`src/components/locations/`) Dropdown „Bundesland" mit 16 Optionen + „Automatisch ermitteln"-Button; nur sichtbar wenn `is_main_location = true`.
-- TenantHook erweitern um `mainFederalState`.
-
-### 2. Bundesland-Profile (Report-Templates)
-
-Neue Datei `src/lib/report/federalStateProfiles.ts` mit Profil pro Bundesland:
-
-```ts
-{
-  code: "NI",
-  name: "Niedersachsen",
-  legalBasis: "NKlimaG §… (3-Jahres-Turnus)",
-  reportingCycle: 3,            // Jahre
-  requiredSections: ["vorwort","einleitung","kostenanalyse","verbrauch","co2","einzelanalyse","ausblick"],
-  weatherCorrection: true,
-  benchmarkSource: "BMWi/BMUB 2015",
-  emissionFactors: "GEG 2020",
-  extras: []                    // z.B. ["solarpflicht-check"] für BE
-}
-```
-
-Initial vollständig nur **NI** (validiert gegen KEAN/Holle). Andere Länder als Stub mit korrektem rechtlichen Rahmen + Cycle, Sektionen werden inkrementell ergänzt. Nutzer kann Profil im Report-Dialog auch manuell überschreiben.
-
-### 3. Bericht-Erweiterungen (Report-Builder)
-
-In `src/pages/EnergyReport.tsx`:
-
-- Neuer Konfigurationsschritt „Bundesland-Profil": automatisch aus Hauptstandort vorausgewählt.
-- Sektionen rendern auf Basis von `profile.requiredSections`.
-- Neue Komponenten in `src/components/report/`:
-  - `CoverPage.tsx` – Wappen/Logo, Berichtstitel, Zuständige Stelle, Erstellungsdatum, Betrachtungszeitraum (Holle-Stil).
-  - `ForewordSection.tsx` – KI-generiertes Vorwort, mit Bürgermeister-Name aus Tenant-Settings.
-  - `IntroductionSection.tsx` – KI-generierte Einleitung mit Verweis auf Landesgesetz.
-  - `CostAnalysisSection.tsx` – Wärme/Strom/Wasser-Kostenentwicklung (gestapeltes Balkendiagramm) + Verteilung nach Gebäudekategorien (Pie).
-  - `ConsumptionSection.tsx` – Wärme/Strom/Wasser-Verbräuche pro Energieträger über Jahre (witterungsbereinigt für Wärme).
-  - `Co2Section.tsx` – Entwicklung CO₂ Strom/Wärme nach Jahren.
-  - `BuildingComparisonSection.tsx` – Strom-Wärme-Kennwert-Streudiagramm vs. Benchmark.
-  - `SavingPotentialSection.tsx` – KI-Schätzung pro Liegenschaft (kWh und €), basierend auf Abweichung vom Benchmark.
-  - `PriorityRankingSection.tsx` – Tabelle „Handlungsbedarf" sortiert nach Einsparpotenzial.
-  - `OutlookSection.tsx` – KI-generierter Ausblick mit Bezug auf bereits geplante `energy_measures`.
-
-Bestehende `PropertyProfile.tsx` als Einzeldatenblatt pro Liegenschaft beibehalten/erweitern (Witterungsbereinigung, Mehrjahres-Trend).
-
-### 4. Witterungsbereinigung
-
-Neue Hilfsfunktion `src/lib/weatherCorrection.ts`: Gradtagszahlen via Open-Meteo (existierende Wetter-Provider-Policy). Korrekturfaktor = HGT_normal / HGT_jahr. Nur auf Wärme-Verbrauch anwenden, nicht auf Strom/Wasser. Ergebnisse in Report-Tabellen mit „witterungsbereinigt" gekennzeichnet.
-
-### 5. KI-Texterstellung
-
-Edge Function `supabase/functions/generate-report-text/index.ts` (Lovable AI, `google/gemini-3-flash-preview`):
-
-Eingabe: `{ section, profile, locationData, year, tenantInfo }` → liefert deutschsprachigen Fließtext im Stil des Holle-Berichts. Tool-Calling für strukturierte Ausgabe (`{ html, summary }`).
-
-Sektionen mit KI-Unterstützung:
-- Vorwort (anpassbar an Bürgermeister/Land)
-- Einleitung (Bezug auf konkretes Landesgesetz aus Profil)
-- Maßnahmenempfehlungen pro Liegenschaft (Input: Benchmark-Abweichung + Baujahr + Heizungsart)
-- Ausblick
-
-Im UI pro Sektion „Mit KI generieren / neu generieren / manuell überschreiben"-Button. Generierte Texte speichern in `energy_report_archive.report_config.aiTexts`.
-
-### 6. PDF-Export
-
-Bestehender HTML→PDF-Pfad bleibt; neue Sektionen liefern semantisches HTML mit print-CSS (page-break-before für Einzeldatenblätter).
-
-### 7. Memory
-
-Neue Datei `mem://features/reports/communal-energy-report.md` mit:
-- Bundesland-Pflicht & Auto-Detect aus PLZ
-- KEAN-/Holle-Schema als Referenz
-- Witterungsbereinigung Pflicht für Wärme
-- KI-Texte über Edge Function, niemals client-seitig
-
-Index-Eintrag ergänzen.
+## Schritt 4 – Validierung
+- Nach Deploy `getSensors` für jede der 5 `location_integration_id`s antriggern und prüfen, dass `meter_power_readings` wieder Einträge bekommen.
+- `integration_errors` der letzten Stunde löschen/archivieren, damit das Tasks-Dashboard wieder sauber ist (auto-resolve-Hook greift, sobald sync_status = success).
 
 ## Technische Details
+- Betroffene Dateien: `supabase/functions/loxone-api/index.ts` (Token-Helper + alle 5 Stellen mit `LoxAPP3.json`), evtl. neue Migration für `loxone_token_cache`.
+- Keine Datenbank-Schema-Änderungen am Tenant-Modell nötig.
+- Migration kompatibel mit Multi-Tenancy-RLS (Cache nur Service-Role-Zugriff).
 
-- Migration: `ALTER TABLE locations ADD COLUMN federal_state text;` + Trigger optional.
-- PLZ-Mapping als JSON in `src/lib/federalStatePostalRanges.ts` (16 Bundesländer, PLZ-Bereiche).
-- Recharts für alle neuen Diagramme (bereits im Stack).
-- Keine neue externe API – Wetterdaten via Open-Meteo (Provider-Policy), KI via Lovable AI.
-- Multi-Tenancy: alle Queries weiterhin mit `tenant_id`-Filter; Reports landen in `energy_report_archive` (existiert).
-
-## Out of Scope (bewusst)
-
-- Vollständige inhaltliche Profile für alle 16 Länder in einem Schritt – initial nur NI vollständig, Stubs für Rest.
-- Wappen-Upload pro Kommune (kann via vorhandenes `tenant.logo_url` genutzt werden).
-- Vollautomatischer Versand an Gremien.
+## Risiken / Offene Fragen
+- Falls `test`-Action in Schritt 1 ebenfalls 404 liefert, ist der gesamte Cloud-HTTP-Pfad blockiert; dann hilft auch Token-Auth nicht und wir müssen auf **WebSocket-Auth über `lxcommunicator`** ausweichen (bereits im Code vorhanden für andere Pfade). Das wäre ein größerer Umbau – Entscheidung erst nach Diagnose.
+- Vor dem Umbau bitte einmal prüfen, ob nicht schlicht das Loxone-Cloud-Abo eines Standorts ausgelaufen ist (zeigt sich häufig ebenfalls als 404 auf dem Cloud-Tunnel).
