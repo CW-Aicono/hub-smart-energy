@@ -42,6 +42,7 @@ import { WeatherCorrectionSection } from "@/components/report/WeatherCorrectionS
 import { HeatVsElectricitySection } from "@/components/report/HeatVsElectricitySection";
 import { SavingsPotentialSection } from "@/components/report/SavingsPotentialSection";
 import { RecommendationsSection } from "@/components/report/RecommendationsSection";
+import { DraftsList } from "@/components/report/DraftsList";
 import { usePriorityRanking } from "@/hooks/usePriorityRanking";
 
 const currentYear = new Date().getFullYear();
