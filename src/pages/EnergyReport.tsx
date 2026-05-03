@@ -347,6 +347,7 @@ const EnergyReport = () => {
       const html = (data as any)?.html;
       if (html) {
         setAiTexts((prev) => ({ ...prev, [section]: html }));
+        setDraftDirty(true);
         toast.success(`${section} generiert`);
       } else {
         toast.error((data as any)?.error || "Keine Antwort vom KI-Dienst");
