@@ -890,6 +890,13 @@ const EnergyReport = () => {
                     </div>
                   );
                 })}
+
+                {aiTexts.ausblick && (
+                  <div className="page page-break">
+                    <h2>Ausblick</h2>
+                    <div dangerouslySetInnerHTML={{ __html: aiTexts.ausblick }} />
+                  </div>
+                )}
               </div>
 
               {/* On-screen preview */}
