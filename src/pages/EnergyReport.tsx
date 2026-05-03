@@ -654,7 +654,7 @@ const EnergyReport = () => {
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-3">
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     {(["vorwort", "einleitung", "ausblick"] as const).map((s) => (
                       <Button key={s} size="sm" variant="outline" disabled={aiLoading === s}
                         onClick={() => generateAiText(s)} className="gap-2">
@@ -665,14 +665,30 @@ const EnergyReport = () => {
                         })()}
                       </Button>
                     ))}
-                  </div>
-                  {Object.entries(aiTexts).map(([key, html]) => (
-                    <div key={key} className="rounded border p-3">
-                      <div className="text-xs font-semibold uppercase text-muted-foreground mb-2">{key}</div>
-                      <div className="prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: html }} />
+                    <div className="ml-auto flex items-center gap-2">
+                      {draftDirty && (
+                        <span className="text-xs text-muted-foreground">Ungespeicherte Änderungen</span>
+                      )}
+                      <Button size="sm" onClick={saveDraft} disabled={draftSaving || !draftDirty} className="gap-2">
+                        {draftSaving ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />}
+                        Entwurf speichern
+                      </Button>
                     </div>
-                  ))}
-                  <AiDisclaimer text="Diese Texte wurden mit KI generiert. Bitte vor Veröffentlichung redaktionell prüfen." />
+                  </div>
+                  {(["vorwort", "einleitung", "ausblick"] as const).map((key) =>
+                    aiTexts[key] !== undefined && aiTexts[key] !== "" ? (
+                      <div key={key} className="space-y-1">
+                        <div className="text-xs font-semibold uppercase text-muted-foreground">
+                          {key.charAt(0).toUpperCase() + key.slice(1)}
+                        </div>
+                        <RichTextEditor
+                          content={aiTexts[key] || ""}
+                          onChange={(html) => updateAiText(key, html)}
+                        />
+                      </div>
+                    ) : null
+                  )}
+                  <AiDisclaimer text="Diese Texte wurden mit KI generiert. Bitte vor Veröffentlichung redaktionell prüfen und ggf. anpassen." />
                 </CardContent>
               </Card>
 
