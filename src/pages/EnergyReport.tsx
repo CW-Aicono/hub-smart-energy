@@ -168,10 +168,44 @@ const EnergyReport = () => {
       });
     }
 
+    // Capture other section charts (Kosten, Witterung, Strom-vs-Wärme) by data-chart key
+    const sectionChartSvgs: Record<string, string> = {};
+    if (previewContainer) {
+      previewContainer.querySelectorAll("[data-chart]").forEach((el) => {
+        const key = el.getAttribute("data-chart");
+        const svg = el.querySelector("svg");
+        if (key && svg) {
+          const clone = svg.cloneNode(true) as SVGElement;
+          clone.setAttribute("width", "100%");
+          clone.setAttribute("height", "260");
+          sectionChartSvgs[key] = clone.outerHTML;
+        }
+      });
+    }
+
+    // KI-Maßnahmen aus DOM einlesen
+    const recHtml =
+      previewContainer?.querySelector("[data-report-recommendations-html]")?.innerHTML ?? "";
+
     let contentHtml = reportRef.current.innerHTML;
     for (const [locId, svgHtml] of Object.entries(chartSvgs)) {
       const placeholder = `<!--chart-placeholder-${locId}-->`;
       contentHtml = contentHtml.replace(placeholder, svgHtml);
+    }
+    // Inject section charts at end of report (vor Per-Loc-Profilen wäre ideal, hier als Anhang Kostenanalyse)
+    const chartsBlock = Object.entries(sectionChartSvgs)
+      .map(([k, svg]) => `<div class="chart-container"><h3 style="font-size:11pt">${k}</h3>${svg}</div>`)
+      .join("");
+    if (chartsBlock) {
+      contentHtml = contentHtml.replace(
+        '<div data-print-recommendations-slot></div>',
+        `${chartsBlock}<div>${recHtml || "<p style=\"color:#6b7280;font-style:italic\">Keine KI-Empfehlungen erstellt.</p>"}</div>`,
+      );
+    } else {
+      contentHtml = contentHtml.replace(
+        '<div data-print-recommendations-slot></div>',
+        `<div>${recHtml || "<p style=\"color:#6b7280;font-style:italic\">Keine KI-Empfehlungen erstellt.</p>"}</div>`,
+      );
     }
 
     return `<!DOCTYPE html>
