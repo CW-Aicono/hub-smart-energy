@@ -178,6 +178,7 @@ export function EditLocationDialog({ location, onSuccess, trigger }: EditLocatio
       gross_floor_area: typeof rest.gross_floor_area === "number" ? rest.gross_floor_area : null,
       heating_type: rest.heating_type || null,
       grid_limit_kw: typeof rest.grid_limit_kw === "number" ? rest.grid_limit_kw : null,
+      federal_state: rest.federal_state ? rest.federal_state : null,
     } as any;
 
     const { error } = await updateLocation(location.id, updates);
