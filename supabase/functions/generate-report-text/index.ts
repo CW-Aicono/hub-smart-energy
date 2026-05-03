@@ -22,6 +22,7 @@ interface RequestBody {
     totalArea?: number;
     totalCo2Tons?: number;
     totalCostEur?: number;
+    existingSections?: Partial<Record<"vorwort" | "einleitung" | "ausblick" | "massnahmen", string>>;
     locations?: Array<{
       name: string;
       usageType?: string;
@@ -34,8 +35,13 @@ interface RequestBody {
 
 const SYSTEM_PROMPT = `Du bist ein professioneller Redakteur für kommunale Energieberichte in Deutschland.
 Schreibe in sachlichem, verwaltungsadäquatem Deutsch (Sie-Form), ohne Marketing-Floskeln.
-Verwende konkrete Zahlen wenn vorhanden. Erwähne immer die jeweilige landesrechtliche Grundlage.
-Antworte ausschließlich mit gültigem semantischen HTML (z.B. <p>, <h3>, <ul>, <li>) – kein Markdown, kein <html>/<body>-Wrapper.`;
+Verwende konkrete Zahlen wenn vorhanden.
+WICHTIG: Vermeide Wiederholungen. Jeder Abschnitt hat eine klar abgegrenzte Funktion. Wiederhole NICHT Inhalte, die in bereits vorhandenen Abschnitten stehen (z. B. dieselbe Aufzählung von Liegenschaftszahl, Fläche, CO₂, Kosten oder die wortgleiche Wiedergabe der Rechtsgrundlage). Erwähne die landesrechtliche Grundlage höchstens einmal kurz pro Abschnitt – nur wenn für den Zweck wirklich nötig.
+Antworte ausschließlich mit gültigem semantischen HTML (z.B. <p>, <h3>, <ul>, <li>) – kein Markdown, kein <html>/<body>-Wrapper, KEINE Überschrift mit dem Abschnittsnamen (Vorwort/Einleitung/Ausblick) – die Überschrift wird vom Layout gesetzt.`;
+
+function stripHtml(html: string): string {
+  return html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+}
 
 function buildPrompt(body: RequestBody): string {
   const { section, profile, context } = body;
@@ -52,18 +58,32 @@ CO₂-Emissionen gesamt: ${context.totalCo2Tons ?? "?"} t/a
 Energiekosten gesamt: ${context.totalCostEur ?? "?"} €
 `;
 
+  const existing = context.existingSections ?? {};
+  const existingBlocks = (["vorwort", "einleitung", "ausblick", "massnahmen"] as const)
+    .filter((k) => k !== section && existing[k])
+    .map((k) => `--- Bereits vorhandener Abschnitt "${k}" (NICHT wiederholen, weder inhaltlich noch im Wortlaut) ---\n${stripHtml(existing[k]!).slice(0, 1500)}`)
+    .join("\n\n");
+  const avoidBlock = existingBlocks
+    ? `\n${existingBlocks}\n\nFormuliere deinen Abschnitt so, dass er sich inhaltlich und sprachlich deutlich von den oben aufgeführten Abschnitten unterscheidet.\n`
+    : "";
+
   switch (section) {
     case "vorwort":
-      return `${baseCtx}\nSchreibe ein 2–3 Absätze langes Vorwort der Verwaltungsspitze${context.mayorName ? ` (${context.mayorName})` : ""}. Bezug auf Klimaziele und Verantwortung der Kommune.`;
+      return `${baseCtx}${avoidBlock}\nSchreibe ein 2 Absätze langes Vorwort der Verwaltungsspitze${context.mayorName ? ` (${context.mayorName})` : ""}.
+Tonalität: persönlich-politisch, wertschätzend, motivierend. Bezug auf Verantwortung der Kommune und kommunalen Klimaschutz.
+NICHT enthalten: methodische Details (Witterungsbereinigung, Benchmarks, BMWi/BMUB), wörtliche Wiederholung der Kennzahlen-Liste (Liegenschaftszahl, Fläche, CO₂, Kosten). Höchstens ein knapper qualitativer Verweis auf die Größenordnung des Portfolios.`;
     case "einleitung":
-      return `${baseCtx}\nSchreibe eine 3–4 Absätze lange Einleitung zum Energiebericht. Erkläre Zweck, methodisches Vorgehen (Witterungsbereinigung, Benchmark-Vergleich nach BMWi/BMUB 2015) und Bezug zur landesrechtlichen Grundlage.`;
+      return `${baseCtx}${avoidBlock}\nSchreibe eine 3 Absätze lange Einleitung.
+Inhalt: (1) Zweck und Adressaten des Berichts, (2) methodisches Vorgehen – Witterungsbereinigung mit DWD-Klimafaktoren, Benchmark-Vergleich nach BMWi/BMUB 2015, Emissionsfaktoren –, (3) Aufbau des Berichts.
+NICHT enthalten: politisches Vorwort-Vokabular ("Vorbildfunktion", "Verantwortung"), wortgleiche Wiederholung der Rechtsgrundlage aus dem Vorwort. Kennzahlen nur dort einbauen, wo sie methodisch nötig sind (z. B. Bilanzraum), nicht als zweite Aufzählung.`;
     case "ausblick":
-      return `${baseCtx}\nSchreibe einen Ausblick (2–3 Absätze) mit konkreten nächsten Schritten: priorisierte Sanierungen, erneuerbare Wärme, PV-Ausbau. Berücksichtige die landesspezifischen Pflichten.`;
+      return `${baseCtx}${avoidBlock}\nSchreibe einen Ausblick (2–3 Absätze) mit konkreten nächsten Schritten: priorisierte Sanierungen, erneuerbare Wärme, PV-Ausbau, ggf. landesspezifische Pflichten.
+NICHT enthalten: Wiederholung der Rechtsgrundlage, Zweck des Berichts oder methodische Erläuterungen aus den vorherigen Abschnitten, wortgleiche Wiederholung der Gesamtkennzahlen. Fokus ausschließlich auf zukünftige Maßnahmen, Zeitachse und Ziele.`;
     case "massnahmen": {
       const locs = (context.locations ?? []).slice(0, 10).map((l) =>
         `- ${l.name} (${l.usageType ?? "?"}, ${l.area ?? "?"} m², Heizung: ${l.heatingType ?? "?"}, Abweichung Benchmark: ${l.benchmarkDeviation ?? "?"} %)`
       ).join("\n");
-      return `${baseCtx}\nFolgende Liegenschaften zeigen Auffälligkeiten:\n${locs}\n\nErstelle pro Liegenschaft eine konkrete Maßnahmenempfehlung (1–2 Sätze) als <h3>Liegenschaftsname</h3><p>Empfehlung</p>.`;
+      return `${baseCtx}${avoidBlock}\nFolgende Liegenschaften zeigen Auffälligkeiten:\n${locs}\n\nErstelle pro Liegenschaft eine konkrete Maßnahmenempfehlung (1–2 Sätze) als <h3>Liegenschaftsname</h3><p>Empfehlung</p>. Keine Wiederholung allgemeiner Bericht-Boilerplate.`;
     }
   }
 }
