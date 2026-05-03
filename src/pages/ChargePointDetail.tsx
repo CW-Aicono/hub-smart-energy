@@ -38,6 +38,7 @@ import { useOcppMeterValue } from "@/hooks/useOcppMeterValue";
 import { useChargePointConnectors } from "@/hooks/useChargePointConnectors";
 import { ConnectorStatusGrid } from "@/components/charging/ConnectorStatusGrid";
 import { useChargePointStability } from "@/hooks/useChargePointStability";
+import { useChargePointDailyUptime } from "@/hooks/useChargePointDailyUptime";
 import OcppLogViewer from "@/components/charging/OcppLogViewer";
 import ChargePointQrCode from "@/components/charging/ChargePointQrCode";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
