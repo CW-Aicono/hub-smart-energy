@@ -85,7 +85,9 @@ autoheal_missing_object() {
   fi
 
   log "AUTOHEAL: fuehre $(basename "$found") aus, um '$object_name' zu erstellen"
-  if ! docker exec -i "$DB_CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -v ON_ERROR_STOP=1 < "$found" 2>&1; then
+  # --single-transaction: atomic apply – ein Fehler rollt die ganze Heal-Migration zurueck,
+  # damit kein partial state ueberlebt (sonst scheitern Folge-Versuche an "already exists").
+  if ! docker exec -i "$DB_CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -v ON_ERROR_STOP=1 --single-transaction < "$found" 2>&1; then
     log "AUTOHEAL: CREATE-Migration fuer '$object_name' ist selbst fehlgeschlagen."
     return 1
   fi
@@ -105,7 +107,11 @@ run_migration_with_autoheal() {
   while [ $attempt -lt 5 ]; do
     attempt=$((attempt + 1))
     tmp="$(mktemp)"
-    if docker exec -i "$DB_CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -v ON_ERROR_STOP=1 < "$file" > "$tmp" 2>&1; then
+    # --single-transaction: jede Migration ist atomic. Wenn z.B. Statement 5 von 10 scheitert,
+    # rollen 1-4 mit zurueck, AUTOHEAL erstellt das fehlende Objekt, der Retry startet von 1
+    # auf einer sauberen Basis. Ohne -1 wuerden 1-4 committed bleiben, der Retry stiesse auf
+    # "already exists" und die Migration waere nicht mehr heilbar.
+    if docker exec -i "$DB_CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -v ON_ERROR_STOP=1 --single-transaction < "$file" > "$tmp" 2>&1; then
       cat "$tmp"
       rm -f "$tmp"
       return 0
