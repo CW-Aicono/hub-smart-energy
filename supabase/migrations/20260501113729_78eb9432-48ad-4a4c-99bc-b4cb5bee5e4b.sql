@@ -1,7 +1,9 @@
 -- Block 1: Deny-Policies für interne Tabellen
+DROP POLICY IF EXISTS "Deny client access" ON public.charging_invoice_counter;
 CREATE POLICY "Deny client access" ON public.charging_invoice_counter
   FOR ALL TO authenticated, anon USING (false) WITH CHECK (false);
 
+DROP POLICY IF EXISTS "Deny client access" ON public.gateway_refresh_locks;
 CREATE POLICY "Deny client access" ON public.gateway_refresh_locks
   FOR ALL TO authenticated, anon USING (false) WITH CHECK (false);
 
@@ -23,6 +25,7 @@ DROP POLICY IF EXISTS "Anyone can view invoice assets" ON storage.objects;
 
 -- Tenant-scoped SELECT (verhindert LIST für Fremde, getPublicUrl bleibt funktionsfähig
 -- weil das auf der Bucket-public=true Eigenschaft basiert, nicht auf der Policy)
+DROP POLICY IF EXISTS "Tenant can list invoice assets" ON storage.objects;
 CREATE POLICY "Tenant can list invoice assets" ON storage.objects
   FOR SELECT TO authenticated
   USING (
