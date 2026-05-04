@@ -136,10 +136,10 @@ const handler = async (req: Request): Promise<Response> => {
         .eq("user_id", newUserId);
 
       // Set role
-      if (role === "admin") {
+      if (role === "admin" || role === "super_admin") {
         await supabase
           .from("user_roles")
-          .update({ role: "admin" })
+          .update({ role })
           .eq("user_id", newUserId);
       }
 
@@ -174,7 +174,7 @@ const handler = async (req: Request): Promise<Response> => {
       const emailSent = await sendInvitationEmail(supabase, email, name, safeInviteUrl, effectiveTenantId, role || "user");
 
       return new Response(
-        JSON.stringify({ success: true, userId: newUserId, emailSent }),
+        JSON.stringify({ success: true, userId: newUserId, emailSent, inviteUrl: safeInviteUrl }),
         { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
       );
     }

@@ -226,41 +226,20 @@ const UserManagement = () => {
   };
 
   const resendInvitation = async (invitationId: string, email: string, role: "admin" | "user") => {
-    // Update expiration date
-    const newExpiresAt = new Date();
-    newExpiresAt.setDate(newExpiresAt.getDate() + 7);
-
-    const { data: invitation, error: updateError } = await supabase
-      .from("user_invitations")
-      .update({ expires_at: newExpiresAt.toISOString() })
-      .eq("id", invitationId)
-      .select()
-      .single();
-
-    if (updateError || !invitation) {
-      toast({
-        title: t("common.error"),
-        description: t("users.invitationResendError"),
-        variant: "destructive",
-      });
-      return;
-    }
-
-    // Resend email
     try {
-      const inviteLink = `${window.location.origin}/auth?token=${invitation.token}`;
-      
-      const { error: emailError } = await supabase.functions.invoke("send-invitation-email", {
+      const { data, error } = await supabase.functions.invoke("activate-invited-user", {
         body: {
+          directInvite: true,
           email,
-          inviteLink,
-          invitedByEmail: currentUser?.email,
           role,
           tenantId: tenant?.id,
+          redirectTo: `${window.location.origin}/set-password`,
         },
       });
 
-      if (emailError) throw emailError;
+      if (error) throw error;
+      const result = typeof data === "string" ? JSON.parse(data) : data;
+      if (!result?.success) throw new Error(result?.error || t("users.invitationResendError"));
 
       toast({
         title: t("users.invitationResent"),
@@ -271,7 +250,7 @@ const UserManagement = () => {
       console.error("Error resending invitation email:", error);
       toast({
         title: t("common.error"),
-        description: t("users.invitationResendError"),
+        description: error instanceof Error ? error.message : t("users.invitationResendError"),
         variant: "destructive",
       });
     }
