@@ -201,9 +201,13 @@ async function startServer() {
   if (config.startupCheckOcppId) {
     const auth = await loadChargePoint(config.startupCheckOcppId);
     if (!auth.chargePoint) {
-      throw new Error(`Startup check failed for ${config.startupCheckOcppId}: ${auth.message}`);
+      log.warn("Startup check failed, continuing server start", {
+        chargePointId: config.startupCheckOcppId,
+        message: auth.message,
+      });
+    } else {
+      log.info("Startup check ok", { chargePointId: config.startupCheckOcppId });
     }
-    log.info("Startup check ok", { chargePointId: config.startupCheckOcppId });
   }
 
   server.listen(config.port, () => {

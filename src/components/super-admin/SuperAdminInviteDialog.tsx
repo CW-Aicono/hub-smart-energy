@@ -28,32 +28,37 @@ const SuperAdminInviteDialog = () => {
     if (!email || !user) return;
     setLoading(true);
 
-    const { data, error } = await supabase
-      .from("user_invitations")
-      .insert({ email, role, invited_by: user.id })
-      .select()
-      .single();
-
-    if (error) {
-      toast({ title: "Fehler", description: "Einladung konnte nicht erstellt werden.", variant: "destructive" });
-      setLoading(false);
-      return;
-    }
-
-    const link = `${window.location.origin}/auth?invite=${data.token}`;
-    setInviteLink(link);
-
     try {
-      await supabase.functions.invoke("send-invitation-email", {
-        body: { email, inviteLink: link, invitedByEmail: user.email, role },
+      const { data, error } = await supabase.functions.invoke("activate-invited-user", {
+        body: {
+          directInvite: true,
+          email,
+          role,
+          redirectTo: `${window.location.origin}/set-password`,
+        },
       });
-      toast({ title: "Einladung gesendet", description: `E-Mail an ${email} versendet.` });
-    } catch {
-      toast({ title: "Einladung erstellt", description: "Link generiert, aber E-Mail konnte nicht gesendet werden." });
-    }
 
-    queryClient.invalidateQueries({ queryKey: ["super-admin-users"] });
-    setLoading(false);
+      if (error) throw error;
+      const result = typeof data === "string" ? JSON.parse(data) : data;
+      if (!result?.success) throw new Error(result?.error || "Einladung konnte nicht erstellt werden.");
+
+      setInviteLink(result.inviteUrl ?? null);
+      toast({
+        title: result.emailSent ? "Einladung gesendet" : "Einladung erstellt",
+        description: result.emailSent
+          ? `E-Mail an ${email} versendet.`
+          : "Link generiert, aber E-Mail konnte nicht gesendet werden.",
+      });
+      queryClient.invalidateQueries({ queryKey: ["super-admin-users"] });
+    } catch (err) {
+      toast({
+        title: "Fehler",
+        description: err instanceof Error ? err.message : "Einladung konnte nicht erstellt werden.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   const copyToClipboard = async () => {

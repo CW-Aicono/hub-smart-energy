@@ -1,4 +1,5 @@
 import { useState, useMemo, useRef, useEffect } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useParams, useNavigate, Navigate } from "react-router-dom";
 import { useTranslation } from "@/hooks/useTranslation";
 import { useAuth } from "@/hooks/useAuth";
@@ -9,6 +10,7 @@ import { useChargingSessions, useIdTagResolver } from "@/hooks/useChargingSessio
 import { useTenant } from "@/hooks/useTenant";
 import { useTasks } from "@/hooks/useTasks";
 import { useChargePointGroups } from "@/hooks/useChargePointGroups";
+import { useMeters } from "@/hooks/useMeters";
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -36,6 +38,7 @@ import { useOcppMeterValue } from "@/hooks/useOcppMeterValue";
 import { useChargePointConnectors } from "@/hooks/useChargePointConnectors";
 import { ConnectorStatusGrid } from "@/components/charging/ConnectorStatusGrid";
 import { useChargePointStability } from "@/hooks/useChargePointStability";
+import { useChargePointDailyUptime } from "@/hooks/useChargePointDailyUptime";
 import OcppLogViewer from "@/components/charging/OcppLogViewer";
 import ChargePointQrCode from "@/components/charging/ChargePointQrCode";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
@@ -44,6 +47,9 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "@/hooks/use-toast";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, Cell } from "recharts";
 import { PowerLimitScheduler, PowerLimitSchedule, defaultPowerLimitSchedule } from "@/components/charging/PowerLimitScheduler";
+import SingleChargePointMap from "@/components/charging/SingleChargePointMap";
+import { AccessControlSettings, AccessSettings } from "@/components/charging/AccessControlSettings";
+import ChargePointSolarChargingConfig from "@/components/charging/ChargePointSolarChargingConfig";
 
 const STATUS_KEYS: Record<string, { labelKey: string; color: string; variant: "default" | "secondary" | "destructive" | "outline"; icon: typeof Zap }> = {
   available: { labelKey: "cpd.available", color: "hsl(var(--primary))", variant: "default", icon: Zap },
@@ -62,13 +68,14 @@ const ChargePointDetail = () => {
   const { tenant } = useTenant();
   const { chargePoints, updateChargePoint, deleteChargePoint } = useChargePoints();
   const { groups, assignChargePointToGroup } = useChargePointGroups();
+  const { meters } = useMeters();
   const { createTask } = useTasks();
   const { sessions } = useChargingSessions(id);
   const resolveTag = useIdTagResolver();
   const { vendors: knownVendors, getModelsForVendor } = useChargerModels();
 
   const [editing, setEditing] = useState(false);
-  const [form, setForm] = useState({ name: "", ocpp_id: "", ocpp_password: "", address: "", connector_count: "1", max_power_kw: "22", vendor: "", model: "", connector_type: "Type2" });
+  const [form, setForm] = useState({ name: "", ocpp_id: "", ocpp_password: "", address: "", connector_count: "1", max_power_kw: "22", vendor: "", model: "", connector_type: "Type2", rfid_read_mode: "raw" });
   const [showPassword, setShowPassword] = useState(false);
   const generatePassword = () => {
     const bytes = new Uint8Array(18);
@@ -109,6 +116,32 @@ const ChargePointDetail = () => {
   const cpGroup = cp?.group_id ? groups.find((g) => g.id === cp.group_id) ?? null : null;
   const ocppMeter = useOcppMeterValue(cp?.ocpp_id);
   const { connectors, reorderConnectors } = useChargePointConnectors(cp?.id);
+  const queryClient = useQueryClient();
+  type CpEnergyShape = {
+    dynamic_load_management?: boolean;
+    pv_surplus_charging?: boolean;
+    cheap_charging_mode?: boolean;
+    dlm?: {
+      enabled: boolean;
+      limit_kw: number | null;
+      reference_meter_id: string | null;
+    };
+    cheap_charging?: {
+      enabled: boolean;
+      max_price_eur_mwh: number;
+      limit_kw: number;
+      use_fallback_window: boolean;
+      fallback_time_from: string;
+      fallback_time_to: string;
+    };
+  };
+  const [energyOverlay, setEnergyOverlay] = useState<CpEnergyShape | null>(null);
+  const dbEnergyForEffect = (cp as any)?.energy_settings as CpEnergyShape | undefined;
+  useEffect(() => {
+    if (energyOverlay && JSON.stringify(dbEnergyForEffect ?? {}) === JSON.stringify(energyOverlay)) {
+      setEnergyOverlay(null);
+    }
+  }, [dbEnergyForEffect, energyOverlay]);
 
   // Sync powerLimit state from cp when cp loads or changes
   const cpPowerLimit = (cp as any)?.power_limit_schedule as PowerLimitSchedule | null | undefined;
@@ -190,48 +223,59 @@ const ChargePointDetail = () => {
   // null = noch nie verbunden (keine Snapshots).
   const { data: uptimePercent = null } = useChargePointStability(cp?.id, 30);
 
-  // Daily chart data – real data only
+  // Reale Tages-Online-Quote aus 5-Min-Snapshots (charge_point_uptime_snapshots).
+  const { data: dailyUptime } = useChargePointDailyUptime(cp?.id, periodDays);
+
+  // Daily chart data – kombiniert reale Online-Snapshots mit Ladezeit aus Sessions.
   const chartData = useMemo(() => {
-    const today = format(new Date(), "yyyy-MM-dd");
-    const days: { day: string; date: string; available: number; charging: number; error: number }[] = [];
+    const days: { day: string; date: string; available: number; charging: number; error: number; noData: number }[] = [];
     for (let i = periodDays - 1; i >= 0; i--) {
       const d = subDays(new Date(), i);
       const dayLabel = format(d, "EEE", { locale: de });
       const dateLabel = format(d, "d. MMM", { locale: de });
       const dateStr = format(d, "yyyy-MM-dd");
-      const isToday = dateStr === today;
 
+      const uptimeBucket = dailyUptime?.find((u) => u.date === dateStr);
+      const hasSnapshots = !!uptimeBucket && uptimeBucket.total > 0;
+
+      if (!hasSnapshots) {
+        // Keine Snapshots → grauer "no data" Balken statt fälschlich grün.
+        days.push({ day: dayLabel, date: dateLabel, available: 0, charging: 0, error: 0, noData: 100 });
+        continue;
+      }
+
+      const onlinePct = (uptimeBucket!.online / uptimeBucket!.total) * 100;
+      const offlinePct = 100 - onlinePct;
+
+      // Charging-Anteil aus Sessions (in Minuten des Tages, capped auf onlinePct).
       const daySessions = periodSessions.filter(
-        (s) => format(new Date(s.start_time), "yyyy-MM-dd") === dateStr
+        (s) => format(new Date(s.start_time), "yyyy-MM-dd") === dateStr,
       );
-
-      const hoursInDay = isToday ? new Date().getHours() + (new Date().getMinutes() / 60) : 24;
-
-      const chargingHours = Math.min(hoursInDay, daySessions.reduce((sum, s) => {
+      const minutesInDay = 24 * 60;
+      const chargingMinutes = daySessions.reduce((sum, s) => {
         const start = new Date(s.start_time);
         const end = s.stop_time ? new Date(s.stop_time) : new Date();
         const dayStart = new Date(dateStr + "T00:00:00");
-        const dayEnd = isToday ? new Date() : new Date(dateStr + "T23:59:59.999");
+        const dayEnd = new Date(dateStr + "T23:59:59.999");
         const effectiveStart = start < dayStart ? dayStart : start;
         const effectiveEnd = end > dayEnd ? dayEnd : end;
         if (effectiveEnd <= effectiveStart) return sum;
-        return sum + (effectiveEnd.getTime() - effectiveStart.getTime()) / 3600000;
-      }, 0));
+        return sum + (effectiveEnd.getTime() - effectiveStart.getTime()) / 60000;
+      }, 0);
+      const chargingPct = Math.min(onlinePct, (chargingMinutes / minutesInDay) * 100);
+      const availablePct = Math.max(0, onlinePct - chargingPct);
 
-      // Approximate: project current status onto all days (no historic status log)
-      const errorHours = cp && (cp.status === "faulted" || cp.status === "offline") ? hoursInDay : 0;
-
-      const availableHours = Math.max(0, hoursInDay - chargingHours - errorHours);
       days.push({
         day: dayLabel,
         date: dateLabel,
-        available: hoursInDay > 0 ? (availableHours / hoursInDay) * 100 : 0,
-        charging: hoursInDay > 0 ? (chargingHours / hoursInDay) * 100 : 0,
-        error: hoursInDay > 0 ? (errorHours / hoursInDay) * 100 : 0,
+        available: availablePct,
+        charging: chargingPct,
+        error: offlinePct,
+        noData: 0,
       });
     }
     return days;
-  }, [periodSessions, periodDays, cp?.status]);
+  }, [periodSessions, periodDays, dailyUptime]);
 
   if (authLoading) return null;
   if (!user) return <Navigate to="/auth" replace />;
@@ -271,6 +315,7 @@ const ChargePointDetail = () => {
       vendor: cp.vendor || "",
       model: cp.model || "",
       connector_type: cp.connector_type || "Type2",
+      rfid_read_mode: (cp as any).rfid_read_mode || "raw",
     });
     setCoords({ lat: cp.latitude, lng: cp.longitude });
     setPhotoUrl(cp.photo_url || null);
@@ -291,6 +336,7 @@ const ChargePointDetail = () => {
       vendor: form.vendor || null,
       model: form.model || null,
       connector_type: form.connector_type || "Type2",
+      rfid_read_mode: form.rfid_read_mode || "raw",
       photo_url: photoUrl,
     } as any);
     setEditing(false);
@@ -329,6 +375,48 @@ const ChargePointDetail = () => {
     setUploading(false);
   };
 
+  // Energy settings (Lastmanagement, PV-Überschuss-Switch, Günstig-Laden) on charge point
+  const dbEnergy = (cp as any)?.energy_settings as CpEnergyShape | undefined;
+  const cpEnergy: CpEnergyShape | undefined = energyOverlay ?? dbEnergy;
+
+  const saveEnergySettings = async (patch: Partial<CpEnergyShape>) => {
+    if (!cp) return;
+    const base = cpEnergy ?? {};
+    const next: CpEnergyShape = { ...base, ...patch };
+    // 1) Optimistic UI
+    setEnergyOverlay(next);
+    // 2) Patch React Query cache so other consumers also see the change immediately
+    queryClient.setQueryData<any[]>(["charge-points"], (old) =>
+      old ? old.map((row) => (row.id === cp.id ? { ...row, energy_settings: next } : row)) : old
+    );
+    // 3) Persist
+    const { error } = await supabase
+      .from("charge_points")
+      .update({ energy_settings: next as any })
+      .eq("id", cp.id);
+    if (error) {
+      // Roll back overlay on error
+      setEnergyOverlay(null);
+      queryClient.invalidateQueries({ queryKey: ["charge-points"] });
+      toast({ title: "Fehler", description: error.message, variant: "destructive" });
+    } else {
+      toast({ title: "Energieeinstellungen gespeichert" });
+    }
+  };
+
+
+  const saveAccessSettings = async (next: AccessSettings) => {
+    if (!cp) return;
+    const { error } = await supabase
+      .from("charge_points")
+      .update({ access_settings: next as any })
+      .eq("id", cp.id);
+    if (error) {
+      toast({ title: "Fehler", description: error.message, variant: "destructive" });
+    } else {
+      toast({ title: "Zugangseinstellungen gespeichert" });
+    }
+  };
 
 
   const callOcppCommand = async (endpoint: string, body: Record<string, unknown>) => {
@@ -573,19 +661,27 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
                             <XAxis dataKey="day" tick={{ fontSize: 12 }} />
                             <YAxis hide />
                             <Tooltip
-                              formatter={(value: number, name: string) => [
-                                `${value.toFixed(1)} %`,
-                                name === "available" ? t("cpd.available" as any) : name === "charging" ? t("cpd.occupied" as any) : t("cpd.error" as any),
-                              ]}
+                              formatter={(value: number, name: string) => {
+                                const label =
+                                  name === "available" ? t("cpd.available" as any)
+                                  : name === "charging" ? t("cpd.occupied" as any)
+                                  : name === "error" ? "Offline"
+                                  : "Keine Daten";
+                                return [`${value.toFixed(1)} %`, label];
+                              }}
                             />
                             <Legend
                               formatter={(value: string) =>
-                                value === "available" ? t("cpd.available" as any) : value === "charging" ? t("cpd.occupied" as any) : t("cpd.error" as any)
+                                value === "available" ? t("cpd.available" as any)
+                                : value === "charging" ? t("cpd.occupied" as any)
+                                : value === "error" ? "Offline"
+                                : "Keine Daten"
                               }
                             />
                             <Bar dataKey="available" stackId="a" fill="hsl(var(--primary))" radius={[0, 0, 0, 0]} />
                             <Bar dataKey="charging" stackId="a" fill="hsl(var(--chart-4))" radius={[0, 0, 0, 0]} />
-                            <Bar dataKey="error" stackId="a" fill="hsl(var(--destructive))" radius={[4, 4, 0, 0]} />
+                            <Bar dataKey="error" stackId="a" fill="hsl(var(--destructive))" radius={[0, 0, 0, 0]} />
+                            <Bar dataKey="noData" stackId="a" fill="hsl(var(--muted))" radius={[4, 4, 0, 0]} />
                           </BarChart>
                         </ResponsiveContainer>
                       </div>
@@ -760,6 +856,36 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
                   </Card>
                 </div>
               </div>
+
+              {/* Standortkarte – Drag&Drop des Markers aktualisiert die Koordinaten überall (Übersichtskarte, Lade-App, Detail) */}
+              <Card className="mt-6">
+                <CardHeader className="pb-2 flex flex-row items-center justify-between">
+                  <div>
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <MapPin className="h-4 w-4 text-primary" />
+                      Standort auf Karte
+                    </CardTitle>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Marker per Drag &amp; Drop auf die exakte Position ziehen. Die
+                      Änderung wird automatisch in der Übersichtskarte und der Lade-App übernommen.
+                    </p>
+                  </div>
+                  {cp.latitude && cp.longitude && (
+                    <span className="text-xs font-mono text-muted-foreground hidden sm:inline">
+                      {cp.latitude.toFixed(5)}, {cp.longitude.toFixed(5)}
+                    </span>
+                  )}
+                </CardHeader>
+                <CardContent>
+                  <SingleChargePointMap
+                    latitude={cp.latitude}
+                    longitude={cp.longitude}
+                    onPositionChange={(lat, lng) => {
+                      updateChargePoint.mutate({ id: cp.id, latitude: lat, longitude: lng } as any);
+                    }}
+                  />
+                </CardContent>
+              </Card>
             </TabsContent>
 
             {/* Sessions tab */}
@@ -894,6 +1020,17 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
                             <MapPin className="h-3 w-3" /> {coords.lat.toFixed(5)}, {coords.lng.toFixed(5)}
                           </p>
                         )}
+                        <div className="mt-3">
+                          <SingleChargePointMap
+                            latitude={coords.lat}
+                            longitude={coords.lng}
+                            alwaysEditable
+                            onPositionChange={(lat, lng) => setCoords({ lat, lng })}
+                          />
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Marker per Drag &amp; Drop verschieben. Änderungen werden mit „Speichern" übernommen.
+                          </p>
+                        </div>
                       </div>
                       <div className="grid grid-cols-2 gap-4">
                         <div><Label>Anschlüsse</Label><Input type="number" min="1" value={form.connector_count} onChange={(e) => setForm({ ...form, connector_count: e.target.value })} /></div>
@@ -941,7 +1078,24 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
                           ) : (
                             <Input value={form.model} onChange={(e) => setForm({ ...form, model: e.target.value })} placeholder={form.vendor ? "Kein hinterlegtes Modell" : "Erst Hersteller wählen"} />
                           )}
-                        </div>
+                      </div>
+                      <div>
+                        <Label>RFID-Lesemodus</Label>
+                        <Select value={form.rfid_read_mode} onValueChange={(v) => setForm({ ...form, rfid_read_mode: v })}>
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="raw">Original (z.B. 432503FC → 432503FC)</SelectItem>
+                            <SelectItem value="nibble_swap">Hex-Stellen je Byte tauschen (z.B. 432503FC → 345230CF)</SelectItem>
+                            <SelectItem value="byte_reversed">Byte-Reihenfolge umdrehen (z.B. 432503FC → FC032543)</SelectItem>
+                            <SelectItem value="byte_reversed_nibble_swap">Beides kombiniert (z.B. 432503FC → CF305234)</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Wie diese Wallbox RFID-Tags ausliest. Beispiel zeigt, wie der Roh-Tag <code>432503FC</code> in den hinterlegten Tag umgerechnet wird. Falsche Auswahl führt zu „Tag unbekannt" – im Zweifel verschiedene Modi testen.
+                          <br />
+                          <span className="opacity-70">Hinweis: Manche Hersteller (z.B. Wallbe) bezeichnen das Tauschen der Hex-Stellen je Byte selbst als „BYTE_REVERSED". Maßgeblich ist hier das Beispiel.</span>
+                        </p>
+                      </div>
                       </div>
                       {/* Photo upload */}
                       <div>
@@ -1066,31 +1220,248 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
                       </CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-4">
-                      <div className="flex items-center justify-between p-4 border rounded-lg opacity-60">
-                        <div>
-                          <p className="font-medium">Dynamisches Lastmanagement</p>
-                          <p className="text-sm text-muted-foreground">Leistung automatisch an verfügbare Kapazität anpassen</p>
+                      {/* Dynamisches Lastmanagement (Soft-Limit) */}
+                      <div className="p-4 border rounded-lg space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="font-medium">Dynamisches Lastmanagement (Soft-Limit)</p>
+                            <p className="text-sm text-muted-foreground">
+                              Drosselt diesen Ladepunkt, sobald der Referenzzähler das Limit überschreitet.
+                            </p>
+                          </div>
+                          <Switch
+                            checked={cpEnergy?.dlm?.enabled ?? cpEnergy?.dynamic_load_management ?? false}
+                            onCheckedChange={(v) => {
+                              const prev = cpEnergy?.dlm ?? { enabled: false, limit_kw: null, reference_meter_id: null };
+                              saveEnergySettings({
+                                dynamic_load_management: v,
+                                dlm: { ...prev, enabled: v },
+                              });
+                            }}
+                            disabled={!isAdmin}
+                          />
                         </div>
-                        <Switch disabled />
+                        {(cpEnergy?.dlm?.enabled ?? cpEnergy?.dynamic_load_management) && (
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2 border-t">
+                            <div className="space-y-1.5">
+                              <Label className="text-xs">Limit (kW)</Label>
+                              <Input
+                                type="number"
+                                min={0}
+                                step="0.1"
+                                placeholder="z.B. 22"
+                                value={cpEnergy?.dlm?.limit_kw ?? ""}
+                                onChange={(e) => {
+                                  const prev = cpEnergy?.dlm ?? { enabled: true, limit_kw: null, reference_meter_id: null };
+                                  saveEnergySettings({
+                                    dlm: { ...prev, limit_kw: e.target.value === "" ? null : Number(e.target.value) },
+                                  });
+                                }}
+                                disabled={!isAdmin}
+                              />
+                            </div>
+                            <div className="space-y-1.5">
+                              <Label className="text-xs">Referenzzähler</Label>
+                              <Select
+                                value={cpEnergy?.dlm?.reference_meter_id ?? ""}
+                                onValueChange={(v) => {
+                                  const prev = cpEnergy?.dlm ?? { enabled: true, limit_kw: null, reference_meter_id: null };
+                                  saveEnergySettings({
+                                    dlm: { ...prev, reference_meter_id: v || null },
+                                  });
+                                }}
+                                disabled={!isAdmin}
+                              >
+                                <SelectTrigger><SelectValue placeholder="Zähler wählen…" /></SelectTrigger>
+                                <SelectContent>
+                                  {meters.map((m: any) => (
+                                    <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <p className="text-xs text-muted-foreground md:col-span-2 flex items-center gap-1">
+                              <Info className="h-3 w-3" /> Der Referenzzähler misst die Last des Stromkreises, an dem der Ladepunkt hängt (z. B. Unterverteilung). Hardlimit am Hausanschluss wird zusätzlich am Standort konfiguriert.
+                            </p>
+                          </div>
+                        )}
                       </div>
-                      <div className="flex items-center justify-between p-4 border rounded-lg border-primary/30 bg-primary/5">
-                        <div>
-                          <p className="font-medium">PV-Überschussladen</p>
-                          <p className="text-sm text-muted-foreground">Laden priorisiert mit eigenem Solarstrom – Konfiguration über Ladepunkt-Gruppen</p>
+
+                      {/* PV-Überschussladen */}
+                      <div className="border rounded-lg p-4 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="font-medium">PV-Überschussladen</p>
+                            <p className="text-sm text-muted-foreground">
+                              Laden priorisiert mit eigenem Solarstrom
+                            </p>
+                          </div>
+                          <Switch
+                            checked={cpEnergy?.pv_surplus_charging ?? false}
+                            onCheckedChange={(v) => saveEnergySettings({ pv_surplus_charging: v })}
+                            disabled={!isAdmin}
+                          />
                         </div>
-                        <Button variant="outline" size="sm" className="gap-1.5" onClick={() => navigate("/charging/points")}>
-                          <Zap className="h-3.5 w-3.5" /> Zur Gruppe
-                        </Button>
+                        {cpEnergy?.pv_surplus_charging && (
+                          <ChargePointSolarChargingConfig
+                            chargePointId={cp.id}
+                            locationId={cp.location_id}
+                            isAdmin={isAdmin}
+                            pvSurplusEnabled={true}
+                          />
+                        )}
                       </div>
-                      <div className="flex items-center justify-between p-4 border rounded-lg opacity-60">
-                        <div>
-                          <p className="font-medium">Günstig-Laden-Modus</p>
-                          <p className="text-sm text-muted-foreground">Laden automatisch in Niedrigtarifzeiten verschieben</p>
+
+                      {/* Günstig-Laden */}
+                      <div className="border rounded-lg p-4 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="font-medium">Günstig-Laden-Modus</p>
+                            <p className="text-sm text-muted-foreground">
+                              Laden automatisch in Niedrigtarifzeiten verschieben
+                            </p>
+                          </div>
+                          <Switch
+                            checked={cpEnergy?.cheap_charging?.enabled ?? cpEnergy?.cheap_charging_mode ?? false}
+                            onCheckedChange={(v) => {
+                              const prev = cpEnergy?.cheap_charging ?? {
+                                max_price_eur_mwh: 60,
+                                limit_kw: 11,
+                                use_fallback_window: true,
+                                fallback_time_from: "22:00",
+                                fallback_time_to: "06:00",
+                                enabled: false,
+                              };
+                              saveEnergySettings({
+                                cheap_charging_mode: v,
+                                cheap_charging: { ...prev, enabled: v },
+                              });
+                            }}
+                            disabled={!isAdmin}
+                          />
                         </div>
-                        <Switch disabled />
+
+                        {(cpEnergy?.cheap_charging?.enabled ?? cpEnergy?.cheap_charging_mode) && (
+                          <div className="grid grid-cols-2 gap-3 pt-2 border-t">
+                            <div className="space-y-1">
+                              <Label className="text-xs">Max. Preis (€/MWh)</Label>
+                              <Input
+                                type="number"
+                                value={cpEnergy?.cheap_charging?.max_price_eur_mwh ?? 60}
+                                onChange={(e) => {
+                                  const prev = cpEnergy?.cheap_charging ?? {
+                                    enabled: true,
+                                    limit_kw: 11,
+                                    use_fallback_window: true,
+                                    fallback_time_from: "22:00",
+                                    fallback_time_to: "06:00",
+                                    max_price_eur_mwh: 60,
+                                  };
+                                  saveEnergySettings({
+                                    cheap_charging: { ...prev, max_price_eur_mwh: Number(e.target.value) },
+                                  });
+                                }}
+                                className="h-8 text-sm"
+                                disabled={!isAdmin}
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <Label className="text-xs">Lade-Limit (kW)</Label>
+                              <Input
+                                type="number"
+                                value={cpEnergy?.cheap_charging?.limit_kw ?? 11}
+                                onChange={(e) => {
+                                  const prev = cpEnergy?.cheap_charging ?? {
+                                    enabled: true,
+                                    max_price_eur_mwh: 60,
+                                    use_fallback_window: true,
+                                    fallback_time_from: "22:00",
+                                    fallback_time_to: "06:00",
+                                    limit_kw: 11,
+                                  };
+                                  saveEnergySettings({
+                                    cheap_charging: { ...prev, limit_kw: Number(e.target.value) },
+                                  });
+                                }}
+                                className="h-8 text-sm"
+                                disabled={!isAdmin}
+                              />
+                            </div>
+                            <div className="col-span-2 flex items-center gap-2 pt-1">
+                              <Switch
+                                checked={cpEnergy?.cheap_charging?.use_fallback_window ?? true}
+                                onCheckedChange={(v) => {
+                                  const prev = cpEnergy?.cheap_charging ?? {
+                                    enabled: true,
+                                    max_price_eur_mwh: 60,
+                                    limit_kw: 11,
+                                    fallback_time_from: "22:00",
+                                    fallback_time_to: "06:00",
+                                    use_fallback_window: true,
+                                  };
+                                  saveEnergySettings({
+                                    cheap_charging: { ...prev, use_fallback_window: v },
+                                  });
+                                }}
+                                disabled={!isAdmin}
+                              />
+                              <Label className="text-xs">Fallback-Zeitfenster nutzen, wenn keine Spotpreise verfügbar</Label>
+                            </div>
+                            {(cpEnergy?.cheap_charging?.use_fallback_window ?? true) && (
+                              <>
+                                <div className="space-y-1">
+                                  <Label className="text-xs">Von</Label>
+                                  <Input
+                                    type="time"
+                                    value={cpEnergy?.cheap_charging?.fallback_time_from ?? "22:00"}
+                                    onChange={(e) => {
+                                      const prev = cpEnergy?.cheap_charging ?? {
+                                        enabled: true,
+                                        max_price_eur_mwh: 60,
+                                        limit_kw: 11,
+                                        use_fallback_window: true,
+                                        fallback_time_to: "06:00",
+                                        fallback_time_from: "22:00",
+                                      };
+                                      saveEnergySettings({
+                                        cheap_charging: { ...prev, fallback_time_from: e.target.value },
+                                      });
+                                    }}
+                                    className="h-8 text-sm"
+                                    disabled={!isAdmin}
+                                  />
+                                </div>
+                                <div className="space-y-1">
+                                  <Label className="text-xs">Bis</Label>
+                                  <Input
+                                    type="time"
+                                    value={cpEnergy?.cheap_charging?.fallback_time_to ?? "06:00"}
+                                    onChange={(e) => {
+                                      const prev = cpEnergy?.cheap_charging ?? {
+                                        enabled: true,
+                                        max_price_eur_mwh: 60,
+                                        limit_kw: 11,
+                                        use_fallback_window: true,
+                                        fallback_time_from: "22:00",
+                                        fallback_time_to: "06:00",
+                                      };
+                                      saveEnergySettings({
+                                        cheap_charging: { ...prev, fallback_time_to: e.target.value },
+                                      });
+                                    }}
+                                    className="h-8 text-sm"
+                                    disabled={!isAdmin}
+                                  />
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        )}
                       </div>
+
                       <p className="text-xs text-muted-foreground flex items-center gap-1">
-                        <Info className="h-3 w-3" /> Diese Funktionen sind über Ladepunkt-Gruppen konfigurierbar oder werden in einem späteren Update als Einzelkonfiguration verfügbar.
+                        <Info className="h-3 w-3" />
+                        Diese Einstellungen gelten nur für diesen Ladepunkt.
                       </p>
                     </CardContent>
                   </Card>
@@ -1143,33 +1514,17 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
                       </CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-4">
-                      <div className="flex items-center justify-between p-4 border rounded-lg">
-                        <div>
-                          <p className="font-medium">Freies Laden erlauben</p>
-                          <p className="text-sm text-muted-foreground">Laden ohne RFID-Karte oder App-Autorisierung ermöglichen</p>
-                        </div>
-                        <Switch disabled />
-                      </div>
-                      <div className="flex items-center justify-between p-4 border rounded-lg">
-                        <div>
-                          <p className="font-medium">Nutzergruppen-Beschränkung</p>
-                          <p className="text-sm text-muted-foreground">Nur bestimmte Nutzergruppen für diesen Ladepunkt zulassen</p>
-                        </div>
-                        <Switch disabled />
-                      </div>
-                      <div className="flex items-center justify-between p-4 border rounded-lg">
-                        <div>
-                          <p className="font-medium">Maximale Ladedauer</p>
-                          <p className="text-sm text-muted-foreground">Ladevorgang nach Zeitlimit automatisch beenden</p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Input type="number" className="w-20" defaultValue="480" disabled />
-                          <span className="text-sm text-muted-foreground">min</span>
-                        </div>
-                      </div>
-                      <p className="text-xs text-muted-foreground flex items-center gap-1">
-                        <Info className="h-3 w-3" /> Diese Funktionen werden in einem zukünftigen Update verfügbar. Alternativ können Sie eine Gruppe erstellen und die Einstellungen dort verwalten.
-                      </p>
+                      <AccessControlSettings
+                        entityType="chargepoint"
+                        entityId={cp.id}
+                        settings={{
+                          free_charging: (cp as any).access_settings?.free_charging ?? false,
+                          user_group_restriction: (cp as any).access_settings?.user_group_restriction ?? false,
+                          max_charging_duration_min: (cp as any).access_settings?.max_charging_duration_min ?? 480,
+                        }}
+                        isAdmin={isAdmin}
+                        onSave={saveAccessSettings}
+                      />
                     </CardContent>
                   </Card>
 

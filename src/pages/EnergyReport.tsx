@@ -1,4 +1,5 @@
-import { useState, useMemo, useRef } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
+import { RichTextEditor } from "@/components/ui/rich-text-editor";
 import { Input } from "@/components/ui/input";
 import { AiDisclaimer } from "@/components/ui/ai-disclaimer";
 import { Navigate } from "react-router-dom";
@@ -31,8 +32,18 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
-import { FileText, Download, Building2, Leaf, BarChart3, Settings2, Archive, TrendingUp, Save, ChevronRight } from "lucide-react";
+import { FileText, Download, Building2, Leaf, BarChart3, Settings2, Archive, TrendingUp, Save, ChevronRight, Sparkles, Loader2, Scale } from "lucide-react";
 import { toast } from "sonner";
+import { FEDERAL_STATES, getFederalStateName } from "@/lib/federalStates";
+import { FEDERAL_STATE_REPORT_PROFILES, getReportProfile, type FederalStateReportProfile } from "@/lib/report/federalStateProfiles";
+import { supabase } from "@/integrations/supabase/client";
+import { CostAnalysisSection } from "@/components/report/CostAnalysisSection";
+import { WeatherCorrectionSection } from "@/components/report/WeatherCorrectionSection";
+import { HeatVsElectricitySection } from "@/components/report/HeatVsElectricitySection";
+import { SavingsPotentialSection } from "@/components/report/SavingsPotentialSection";
+import { RecommendationsSection } from "@/components/report/RecommendationsSection";
+import { DraftsList } from "@/components/report/DraftsList";
+import { usePriorityRanking } from "@/hooks/usePriorityRanking";
 
 const currentYear = new Date().getFullYear();
 const YEARS = Array.from({ length: 5 }, (_, i) => currentYear - i);
@@ -52,6 +63,17 @@ const EnergyReport = () => {
   const [compareYears, setCompareYears] = useState(2);
   const [activeTab, setActiveTab] = useState("config");
   const reportRef = useRef<HTMLDivElement>(null);
+
+  // Federal-state aware report profile
+  const mainLocation = useMemo(() => locations.find((l) => l.is_main_location), [locations]);
+  const autoFederalState = (mainLocation as any)?.federal_state ?? null;
+  const [profileCode, setProfileCode] = useState<string>("");
+  const effectiveProfileCode = profileCode || autoFederalState || "NI";
+  const profile: FederalStateReportProfile = useMemo(() => getReportProfile(effectiveProfileCode), [effectiveProfileCode]);
+
+  // KI-generierte Texte (HTML), persistiert pro Sektion
+  const [aiTexts, setAiTexts] = useState<Record<string, string>>({});
+  const [aiLoading, setAiLoading] = useState<string | null>(null);
 
   const yearNum = parseInt(reportYear);
   const trendYears = useMemo(() => {
@@ -102,6 +124,8 @@ const EnergyReport = () => {
     [locations, selectedLocationIds]
   );
 
+  const priorityRows = usePriorityRanking(selectedLocations, consumption?.[yearNum], prices, yearNum);
+
   // Build hierarchical view of selected locations: parents with their selected children
   const selectedHierarchy = useMemo(() => {
     const selectedSet = new Set(selectedLocationIds);
@@ -146,10 +170,44 @@ const EnergyReport = () => {
       });
     }
 
+    // Capture other section charts (Kosten, Witterung, Strom-vs-Wärme) by data-chart key
+    const sectionChartSvgs: Record<string, string> = {};
+    if (previewContainer) {
+      previewContainer.querySelectorAll("[data-chart]").forEach((el) => {
+        const key = el.getAttribute("data-chart");
+        const svg = el.querySelector("svg");
+        if (key && svg) {
+          const clone = svg.cloneNode(true) as SVGElement;
+          clone.setAttribute("width", "100%");
+          clone.setAttribute("height", "260");
+          sectionChartSvgs[key] = clone.outerHTML;
+        }
+      });
+    }
+
+    // KI-Maßnahmen aus DOM einlesen
+    const recHtml =
+      previewContainer?.querySelector("[data-report-recommendations-html]")?.innerHTML ?? "";
+
     let contentHtml = reportRef.current.innerHTML;
     for (const [locId, svgHtml] of Object.entries(chartSvgs)) {
       const placeholder = `<!--chart-placeholder-${locId}-->`;
       contentHtml = contentHtml.replace(placeholder, svgHtml);
+    }
+    // Inject section charts at end of report (vor Per-Loc-Profilen wäre ideal, hier als Anhang Kostenanalyse)
+    const chartsBlock = Object.entries(sectionChartSvgs)
+      .map(([k, svg]) => `<div class="chart-container"><h3 style="font-size:11pt">${k}</h3>${svg}</div>`)
+      .join("");
+    if (chartsBlock) {
+      contentHtml = contentHtml.replace(
+        '<div data-print-recommendations-slot></div>',
+        `${chartsBlock}<div>${recHtml || "<p style=\"color:#6b7280;font-style:italic\">Keine KI-Empfehlungen erstellt.</p>"}</div>`,
+      );
+    } else {
+      contentHtml = contentHtml.replace(
+        '<div data-print-recommendations-slot></div>',
+        `<div>${recHtml || "<p style=\"color:#6b7280;font-style:italic\">Keine KI-Empfehlungen erstellt.</p>"}</div>`,
+      );
     }
 
     return `<!DOCTYPE html>
@@ -264,6 +322,100 @@ const EnergyReport = () => {
     setTimeout(() => printWindow.print(), 500);
   };
 
+  const generateAiText = async (section: "vorwort" | "einleitung" | "ausblick") => {
+    setAiLoading(section);
+    try {
+      const { data, error } = await supabase.functions.invoke("generate-report-text", {
+        body: {
+          section,
+          profile: {
+            code: profile.code, name: profile.name,
+            legalBasis: profile.legalBasis, reportingCycle: profile.reportingCycle,
+            extraTopics: profile.extraTopics,
+          },
+          context: {
+            tenantName: tenant?.name,
+            reportYear: yearNum,
+            locationCount: selectedLocations.length,
+            totalArea: selectedLocations.reduce((s, l) => s + (l.net_floor_area || 0), 0),
+            totalCo2Tons: Math.round(totalCo2 / 1000),
+            totalCostEur: Math.round(totalCost),
+            existingSections: aiTexts,
+          },
+        },
+      });
+      if (error) throw error;
+      const html = (data as any)?.html;
+      if (html) {
+        setAiTexts((prev) => ({ ...prev, [section]: html }));
+        setDraftDirty(true);
+        toast.success(`${section} generiert`);
+      } else {
+        toast.error((data as any)?.error || "Keine Antwort vom KI-Dienst");
+      }
+    } catch (e: any) {
+      toast.error(e?.message || "KI-Generierung fehlgeschlagen");
+    } finally {
+      setAiLoading(null);
+    }
+  };
+
+  // Draft persistence
+  const [draftSaving, setDraftSaving] = useState(false);
+  const [draftDirty, setDraftDirty] = useState(false);
+
+  useEffect(() => {
+    if (!tenant?.id) return;
+    let cancelled = false;
+    (async () => {
+      const { data, error } = await supabase
+        .from("energy_report_drafts")
+        .select("texts")
+        .eq("tenant_id", tenant.id)
+        .eq("report_year", yearNum)
+        .maybeSingle();
+      if (cancelled) return;
+      if (!error && data?.texts && typeof data.texts === "object") {
+        setAiTexts(data.texts as Record<string, string>);
+      } else {
+        setAiTexts({});
+      }
+      setDraftDirty(false);
+    })();
+    return () => { cancelled = true; };
+  }, [tenant?.id, yearNum]);
+
+  const updateAiText = (section: string, html: string) => {
+    setAiTexts((prev) => ({ ...prev, [section]: html }));
+    setDraftDirty(true);
+  };
+
+  const saveDraft = async () => {
+    if (!tenant?.id) return;
+    setDraftSaving(true);
+    try {
+      const { error } = await supabase
+        .from("energy_report_drafts")
+        .upsert(
+          {
+            tenant_id: tenant.id,
+            report_year: yearNum,
+            profile_code: effectiveProfileCode,
+            texts: aiTexts,
+            updated_by: user?.id,
+          },
+          { onConflict: "tenant_id,report_year" }
+        );
+      if (error) throw error;
+      setDraftDirty(false);
+      toast.success("Entwurf gespeichert");
+    } catch (e: any) {
+      toast.error(e?.message || "Speichern fehlgeschlagen");
+    } finally {
+      setDraftSaving(false);
+    }
+  };
+
   if (authLoading || locLoading) {
     return (
       <div className="flex flex-col md:flex-row min-h-screen bg-background">
@@ -307,6 +459,10 @@ const EnergyReport = () => {
                 <Leaf className="h-4 w-4" />
                 CO₂-Faktoren
               </TabsTrigger>
+              <TabsTrigger value="drafts" className="gap-2">
+                <Save className="h-4 w-4" />
+                Entwürfe
+              </TabsTrigger>
               <TabsTrigger value="archive" className="gap-2">
                 <Archive className="h-4 w-4" />
                 Archiv
@@ -314,6 +470,43 @@ const EnergyReport = () => {
             </TabsList>
 
             <TabsContent value="config" className="space-y-6 mt-6">
+              {/* Federal-state profile */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Scale className="h-5 w-5" />
+                    Bundesland-Profil
+                  </CardTitle>
+                  <CardDescription>
+                    Bestimmt rechtliche Grundlage, Berichtsturnus und Pflichtinhalte. Wird automatisch aus dem Hauptstandort übernommen.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <Select value={effectiveProfileCode} onValueChange={setProfileCode}>
+                      <SelectTrigger className="w-72"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {Object.values(FEDERAL_STATE_REPORT_PROFILES).map((p) => (
+                          <SelectItem key={p.code} value={p.code}>{p.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {autoFederalState && (
+                      <Badge variant="secondary" className="text-xs">
+                        Hauptstandort: {getFederalStateName(autoFederalState)}
+                      </Badge>
+                    )}
+                  </div>
+                  <div className="text-xs text-muted-foreground space-y-1">
+                    <p><strong>Rechtsgrundlage:</strong> {profile.legalBasis}</p>
+                    <p><strong>Turnus:</strong> alle {profile.reportingCycle} Jahre · <strong>Witterungsbereinigung:</strong> {profile.weatherCorrection ? "ja" : "nein"} · <strong>Emissionsfaktoren:</strong> {profile.emissionFactors}</p>
+                    {profile.extraTopics.length > 0 && (
+                      <p><strong>Zusatzpflichten:</strong> {profile.extraTopics.join(", ")}</p>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+
               {/* Year selection */}
               <Card>
                 <CardHeader>
@@ -454,6 +647,56 @@ const EnergyReport = () => {
                 </Button>
               </div>
 
+              {/* AI text generation panel */}
+              <Card className="mb-4">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <Sparkles className="h-4 w-4" />
+                    KI-Texte ({profile.name})
+                  </CardTitle>
+                  <CardDescription>
+                    Vorwort, Einleitung und Ausblick werden auf Basis des Bundesland-Profils und Ihrer Daten generiert.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    {(["vorwort", "einleitung", "ausblick"] as const).map((s) => (
+                      <Button key={s} size="sm" variant="outline" disabled={aiLoading === s}
+                        onClick={() => generateAiText(s)} className="gap-2">
+                        {aiLoading === s ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+                        {(() => {
+                          const label = s.charAt(0).toUpperCase() + s.slice(1);
+                          return aiTexts[s] ? `${label} neu generieren` : label;
+                        })()}
+                      </Button>
+                    ))}
+                    <div className="ml-auto flex items-center gap-2">
+                      {draftDirty && (
+                        <span className="text-xs text-muted-foreground">Ungespeicherte Änderungen</span>
+                      )}
+                      <Button size="sm" onClick={saveDraft} disabled={draftSaving || !draftDirty} className="gap-2">
+                        {draftSaving ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />}
+                        Entwurf speichern
+                      </Button>
+                    </div>
+                  </div>
+                  {(["vorwort", "einleitung", "ausblick"] as const).map((key) =>
+                    aiTexts[key] !== undefined && aiTexts[key] !== "" ? (
+                      <div key={key} className="space-y-1">
+                        <div className="text-xs font-semibold uppercase text-muted-foreground">
+                          {key.charAt(0).toUpperCase() + key.slice(1)}
+                        </div>
+                        <RichTextEditor
+                          content={aiTexts[key] || ""}
+                          onChange={(html) => updateAiText(key, html)}
+                        />
+                      </div>
+                    ) : null
+                  )}
+                  <AiDisclaimer text="Diese Texte wurden mit KI generiert. Bitte vor Veröffentlichung redaktionell prüfen und ggf. anpassen." />
+                </CardContent>
+              </Card>
+
               {/* Hidden printable content */}
               <div ref={reportRef} className="hidden">
                 {/* Cover page */}
@@ -461,10 +704,26 @@ const EnergyReport = () => {
                   <h1>Kommunaler Energiebericht</h1>
                   <p>{tenant?.name || ""}</p>
                   <p>Berichtsjahr {reportYear}</p>
+                  <p style={{ marginTop: "12pt", fontSize: "11pt" }}>
+                    {profile.name} · {profile.legalBasis}
+                  </p>
                   <p style={{ marginTop: "24pt", fontSize: "11pt", color: "#9ca3af" }}>
                     Erstellt am {new Date().toLocaleDateString("de-DE")}
                   </p>
                 </div>
+
+                {aiTexts.vorwort && (
+                  <div className="page page-break">
+                    <h2>Vorwort</h2>
+                    <div dangerouslySetInnerHTML={{ __html: aiTexts.vorwort }} />
+                  </div>
+                )}
+                {aiTexts.einleitung && (
+                  <div className="page page-break">
+                    <h2>Einleitung</h2>
+                    <div dangerouslySetInnerHTML={{ __html: aiTexts.einleitung }} />
+                  </div>
+                )}
 
                 {/* Management Summary */}
                 <div className="page page-break">
@@ -544,6 +803,56 @@ const EnergyReport = () => {
                       )}
                     </tbody>
                   </table>
+                </div>
+
+                {/* Einsparpotenzial & Priorisierung – Druckseite */}
+                {priorityRows.length > 0 && (
+                  <div className="page page-break">
+                    <h2>Einsparpotenzial &amp; Priorisierungsranking</h2>
+                    <p style={{ fontSize: "10pt", color: "#6b7280" }}>
+                      Theoretisches Potenzial bei Erreichen der Zielwerte (BMWi/BMUB 2015) – sortiert nach Dringlichkeit.
+                    </p>
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>#</th>
+                          <th>Liegenschaft</th>
+                          <th>Energieträger</th>
+                          <th style={{ textAlign: "right" }}>kWh/m²a</th>
+                          <th style={{ textAlign: "right" }}>Ø-BM</th>
+                          <th style={{ textAlign: "right" }}>Potenzial kWh/a</th>
+                          <th style={{ textAlign: "right" }}>Score</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {priorityRows.map((r, i) => (
+                          <tr key={`${r.locationId}-${r.energyType}`}>
+                            <td>{i + 1}</td>
+                            <td>{r.locationName}</td>
+                            <td style={{ textTransform: "capitalize" }}>{r.energyType}</td>
+                            <td style={{ textAlign: "right" }}>
+                              <span className={`rating-dot rating-${r.rating}`}></span>
+                              {r.specific.toFixed(1)}
+                            </td>
+                            <td style={{ textAlign: "right" }}>{r.benchmarkAvg.toFixed(0)}</td>
+                            <td style={{ textAlign: "right" }}>
+                              {Math.round(r.estSavingsKwh).toLocaleString("de-DE")}
+                            </td>
+                            <td style={{ textAlign: "right" }}>{r.priorityScore.toLocaleString("de-DE")}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                {/* Maßnahmenempfehlungen (KI) – Druckseite */}
+                <div className="page page-break" data-print-recommendations>
+                  <h2>Maßnahmenempfehlungen</h2>
+                  <p style={{ fontSize: "10pt", color: "#6b7280" }}>
+                    KI-generierte Empfehlungen werden beim Druck eingefügt.
+                  </p>
+                  <div data-print-recommendations-slot></div>
                 </div>
 
                 {/* Individual property profiles with charts */}
@@ -660,6 +969,13 @@ const EnergyReport = () => {
                     </div>
                   );
                 })}
+
+                {aiTexts.ausblick && (
+                  <div className="page page-break">
+                    <h2>Ausblick</h2>
+                    <div dangerouslySetInnerHTML={{ __html: aiTexts.ausblick }} />
+                  </div>
+                )}
               </div>
 
               {/* On-screen preview */}
@@ -750,6 +1066,41 @@ const EnergyReport = () => {
                   </Card>
                 ))}
 
+                {/* Kostenanalyse */}
+                <CostAnalysisSection
+                  locations={selectedLocations}
+                  consumption={consumption}
+                  prices={prices}
+                  years={trendYears}
+                />
+
+                {/* Witterungsbereinigung – nur wenn Profil dies vorsieht */}
+                {profile.weatherCorrection && (
+                  <WeatherCorrectionSection
+                    locations={selectedLocations}
+                    consumption={consumption}
+                    years={trendYears}
+                  />
+                )}
+
+                {/* Strom vs. Wärme */}
+                <HeatVsElectricitySection
+                  locations={selectedLocations}
+                  consumption={consumption}
+                  years={trendYears}
+                />
+
+                {/* Einsparpotenzial / Priorisierung */}
+                <SavingsPotentialSection rows={priorityRows} />
+
+                {/* Maßnahmenempfehlungen (KI) */}
+                <RecommendationsSection
+                  profile={profile}
+                  tenantName={tenant?.name}
+                  reportYear={yearNum}
+                  rows={priorityRows}
+                />
+
                 {/* Property profiles – grouped by parent */}
                 {selectedHierarchy.map(({ parent, children }) => (
                   <div key={parent.id} className="space-y-4">
@@ -792,6 +1143,16 @@ const EnergyReport = () => {
 
             <TabsContent value="co2" className="mt-6">
               <Co2FactorSettings />
+            </TabsContent>
+
+            <TabsContent value="drafts" className="mt-6">
+              <DraftsList
+                tenantId={tenant?.id}
+                onOpen={(year) => {
+                  setReportYear(String(year));
+                  setActiveTab("preview");
+                }}
+              />
             </TabsContent>
 
             <TabsContent value="archive" className="mt-6">

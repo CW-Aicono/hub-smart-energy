@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Zap, PlugZap, AlertTriangle, ZapOff, WifiOff, Wifi, Camera, Trash2, Edit, Save, X, Clock, MapPin, Search, Shield, Info as InfoIcon, Settings, Eye, EyeOff, RefreshCw, Copy, Lock, Unlock } from "lucide-react";
+import { Zap, PlugZap, AlertTriangle, ZapOff, WifiOff, Wifi, Camera, Trash2, Edit, Save, X, Clock, MapPin, Search, Shield, Info as InfoIcon, Settings, Eye, EyeOff, RefreshCw, Copy, Lock, Unlock, Gauge } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ConnectorStatusGrid } from "@/components/charging/ConnectorStatusGrid";
@@ -21,6 +21,7 @@ import { fmtKwh, fmtKw, normalizeConnectorStatus } from "@/lib/formatCharging";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { AccessControlSettings } from "@/components/charging/AccessControlSettings";
+import { PowerLimitScheduler, defaultPowerLimitSchedule, type PowerLimitSchedule } from "@/components/charging/PowerLimitScheduler";
 
 const statusConfig: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline"; icon: typeof Zap }> = {
   available: { label: "Verfügbar", variant: "default", icon: Zap },
@@ -192,7 +193,8 @@ export default function ChargePointDetailDialog({
         <Tabs defaultValue="details">
           <TabsList className="w-full">
             <TabsTrigger value="details" className="flex-1 text-xs">Details</TabsTrigger>
-            <TabsTrigger value="access" className="flex-1 gap-1.5 text-xs"><Shield className="h-3.5 w-3.5" />Zugangssteuerung</TabsTrigger>
+            <TabsTrigger value="energy" className="flex-1 gap-1.5 text-xs"><Gauge className="h-3.5 w-3.5" />Energie</TabsTrigger>
+            <TabsTrigger value="access" className="flex-1 gap-1.5 text-xs"><Shield className="h-3.5 w-3.5" />Zugang</TabsTrigger>
             <TabsTrigger value="sessions" className="flex-1 gap-1.5 text-xs"><Clock className="h-3.5 w-3.5" />Ladevorgänge</TabsTrigger>
           </TabsList>
 
@@ -409,6 +411,29 @@ export default function ChargePointDetailDialog({
             )}
           </TabsContent>
 
+          {/* Energy Tab */}
+          <TabsContent value="energy" className="mt-4">
+            {isInGroup ? (
+              <div className="p-4 border rounded-lg bg-muted/30 space-y-2">
+                <p className="text-sm font-medium flex items-center gap-2">
+                  <InfoIcon className="h-4 w-4 text-muted-foreground" />
+                  Dieser Ladepunkt ist einer Gruppe zugewiesen.
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  Energiemanagement (Leistungsbegrenzung, Lastmanagement, PV-Überschuss, Günstig-Laden) wird über die Gruppe konfiguriert.
+                </p>
+              </div>
+            ) : (
+              <PowerLimitScheduler
+                value={(cp.power_limit_schedule as PowerLimitSchedule) || defaultPowerLimitSchedule}
+                onChange={(v) => onUpdate({ id: cp.id, power_limit_schedule: v } as any)}
+                onSave={() => toast({ title: "Leistungsbegrenzung gespeichert" })}
+                disabled={!isAdmin}
+                maxPowerKw={cp.max_power_kw}
+              />
+            )}
+          </TabsContent>
+
           {/* Access Control Tab */}
           <TabsContent value="access" className="mt-4">
             {isInGroup ? (
@@ -425,7 +450,7 @@ export default function ChargePointDetailDialog({
               <AccessControlSettings
                 entityType="chargepoint"
                 entityId={cp.id}
-                settings={cp.access_settings || { free_charging: false, user_group_restriction: false, max_charging_duration_min: 480 }}
+                settings={cp.access_settings || { free_charging: false, user_group_restriction: false, max_charging_duration_min: 0 }}
                 isAdmin={isAdmin}
                 onSave={(s) => onUpdate({ id: cp.id, access_settings: s } as any)}
               />

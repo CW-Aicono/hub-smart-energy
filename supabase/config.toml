@@ -129,3 +129,6 @@ verify_jwt = false
 [functions.ocpp-persistent-api]
 verify_jwt = false
 
+
+[functions.public-charge-status]
+verify_jwt = false

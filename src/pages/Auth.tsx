@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { Navigate, useSearchParams, Link } from "react-router-dom";
+import { useState } from "react";
+import { Navigate, Link } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useTranslation } from "@/hooks/useTranslation";
 import { Button } from "@/components/ui/button";
@@ -18,25 +18,10 @@ const Auth = () => {
   const { user, loading, signIn } = useAuth();
   const { t } = useTranslation();
   const { toast } = useToast();
-  const [searchParams] = useSearchParams();
   const [view, setView] = useState<AuthView>("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
-
-  // If there's an invite token in the URL, redirect to the password-set page
-  const inviteToken = searchParams.get("invite");
-
-  useEffect(() => {
-    // Invite tokens are now handled via the activate-invited-user flow
-    // Users receive a direct password-reset link, so no invite token handling needed here
-    if (inviteToken) {
-      toast({
-        title: "Hinweis",
-        description: "Bitte nutzen Sie den Einladungslink aus Ihrer E-Mail, um Ihr Passwort zu setzen.",
-      });
-    }
-  }, [inviteToken]);
 
   const authSchema = z.object({
     email: z.string().email(t("auth.invalidCredentials")),

@@ -425,6 +425,53 @@ export type Database = {
           },
         ]
       }
+      charge_point_active_profile: {
+        Row: {
+          applied_at: string
+          charge_point_id: string
+          connector_id: number
+          current_limit_a: number | null
+          current_limit_w: number | null
+          expires_at: string | null
+          id: string
+          metadata: Json | null
+          profile_purpose: string
+          source: string
+        }
+        Insert: {
+          applied_at?: string
+          charge_point_id: string
+          connector_id?: number
+          current_limit_a?: number | null
+          current_limit_w?: number | null
+          expires_at?: string | null
+          id?: string
+          metadata?: Json | null
+          profile_purpose?: string
+          source: string
+        }
+        Update: {
+          applied_at?: string
+          charge_point_id?: string
+          connector_id?: number
+          current_limit_a?: number | null
+          current_limit_w?: number | null
+          expires_at?: string | null
+          id?: string
+          metadata?: Json | null
+          profile_purpose?: string
+          source?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "charge_point_active_profile_charge_point_id_fkey"
+            columns: ["charge_point_id"]
+            isOneToOne: false
+            referencedRelation: "charge_points"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       charge_point_allowed_user_groups: {
         Row: {
           charge_point_id: string
@@ -619,10 +666,12 @@ export type Database = {
           auth_required: boolean
           certificate_required: boolean
           certificate_type: string | null
+          cheap_charging_schedule: Json | null
           connection_protocol: string
           connector_count: number
           connector_type: string
           created_at: string
+          energy_settings: Json
           firmware_version: string | null
           group_id: string | null
           id: string
@@ -637,7 +686,10 @@ export type Database = {
           ocpp_password: string | null
           photo_url: string | null
           power_limit_schedule: Json | null
+          rfid_read_mode: string
           status: string
+          supports_change_configuration: boolean | null
+          supports_charging_profile: boolean | null
           tenant_id: string
           updated_at: string
           vendor: string | null
@@ -650,10 +702,12 @@ export type Database = {
           auth_required?: boolean
           certificate_required?: boolean
           certificate_type?: string | null
+          cheap_charging_schedule?: Json | null
           connection_protocol?: string
           connector_count?: number
           connector_type?: string
           created_at?: string
+          energy_settings?: Json
           firmware_version?: string | null
           group_id?: string | null
           id?: string
@@ -668,7 +722,10 @@ export type Database = {
           ocpp_password?: string | null
           photo_url?: string | null
           power_limit_schedule?: Json | null
+          rfid_read_mode?: string
           status?: string
+          supports_change_configuration?: boolean | null
+          supports_charging_profile?: boolean | null
           tenant_id: string
           updated_at?: string
           vendor?: string | null
@@ -681,10 +738,12 @@ export type Database = {
           auth_required?: boolean
           certificate_required?: boolean
           certificate_type?: string | null
+          cheap_charging_schedule?: Json | null
           connection_protocol?: string
           connector_count?: number
           connector_type?: string
           created_at?: string
+          energy_settings?: Json
           firmware_version?: string | null
           group_id?: string | null
           id?: string
@@ -699,7 +758,10 @@ export type Database = {
           ocpp_password?: string | null
           photo_url?: string | null
           power_limit_schedule?: Json | null
+          rfid_read_mode?: string
           status?: string
+          supports_change_configuration?: boolean | null
+          supports_charging_profile?: boolean | null
           tenant_id?: string
           updated_at?: string
           vendor?: string | null
@@ -768,6 +830,50 @@ export type Database = {
           vendor?: string
         }
         Relationships: []
+      }
+      charging_access_log: {
+        Row: {
+          charge_point_id: string | null
+          charge_point_ocpp_id: string | null
+          created_at: string
+          id: string
+          id_tag: string | null
+          metadata: Json | null
+          reason: string | null
+          result: string
+          tenant_id: string
+        }
+        Insert: {
+          charge_point_id?: string | null
+          charge_point_ocpp_id?: string | null
+          created_at?: string
+          id?: string
+          id_tag?: string | null
+          metadata?: Json | null
+          reason?: string | null
+          result: string
+          tenant_id: string
+        }
+        Update: {
+          charge_point_id?: string | null
+          charge_point_ocpp_id?: string | null
+          created_at?: string
+          id?: string
+          id_tag?: string | null
+          metadata?: Json | null
+          reason?: string | null
+          result?: string
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "charging_access_log_charge_point_id_fkey"
+            columns: ["charge_point_id"]
+            isOneToOne: false
+            referencedRelation: "charge_points"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       charging_invoice_counter: {
         Row: {
@@ -2061,6 +2167,47 @@ export type Database = {
           },
         ]
       }
+      energy_report_drafts: {
+        Row: {
+          created_at: string
+          id: string
+          profile_code: string | null
+          report_year: number
+          tenant_id: string
+          texts: Json
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          profile_code?: string | null
+          report_year: number
+          tenant_id: string
+          texts?: Json
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          profile_code?: string | null
+          report_year?: number
+          tenant_id?: string
+          texts?: Json
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "energy_report_drafts_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       energy_storages: {
         Row: {
           capacity_kwh: number
@@ -3306,6 +3453,8 @@ export type Database = {
           created_at: string
           description: string | null
           energy_sources: string[] | null
+          federal_state: string | null
+          grid_limit_kw: number | null
           gross_floor_area: number | null
           heating_type: string | null
           id: string
@@ -3337,6 +3486,8 @@ export type Database = {
           created_at?: string
           description?: string | null
           energy_sources?: string[] | null
+          federal_state?: string | null
+          grid_limit_kw?: number | null
           gross_floor_area?: number | null
           heating_type?: string | null
           id?: string
@@ -3368,6 +3519,8 @@ export type Database = {
           created_at?: string
           description?: string | null
           energy_sources?: string[] | null
+          federal_state?: string | null
+          grid_limit_kw?: number | null
           gross_floor_area?: number | null
           heating_type?: string | null
           id?: string
@@ -4265,6 +4418,33 @@ export type Database = {
           },
         ]
       }
+      public_charge_status_links: {
+        Row: {
+          created_at: string
+          enabled: boolean
+          id: string
+          tenant_id: string
+          token: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          tenant_id: string
+          token: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          tenant_id?: string
+          token?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       pv_actual_hourly: {
         Row: {
           actual_kwh: number
@@ -5118,6 +5298,7 @@ export type Database = {
       }
       solar_charging_config: {
         Row: {
+          charge_point_id: string | null
           created_at: string
           group_id: string | null
           id: string
@@ -5130,6 +5311,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          charge_point_id?: string | null
           created_at?: string
           group_id?: string | null
           id?: string
@@ -5142,6 +5324,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          charge_point_id?: string | null
           created_at?: string
           group_id?: string | null
           id?: string
@@ -5154,6 +5337,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "solar_charging_config_charge_point_id_fkey"
+            columns: ["charge_point_id"]
+            isOneToOne: false
+            referencedRelation: "charge_points"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "solar_charging_config_group_id_fkey"
             columns: ["group_id"]
@@ -6542,6 +6732,10 @@ export type Database = {
       get_charge_point_uptime_pct: {
         Args: { p_charge_point_id: string; p_days?: number }
         Returns: number
+      }
+      get_location_main_meter: {
+        Args: { p_location_id: string }
+        Returns: string
       }
       get_meter_daily_totals: {
         Args: { p_from_date: string; p_meter_ids: string[]; p_to_date: string }

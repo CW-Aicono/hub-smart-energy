@@ -354,14 +354,16 @@ function MapTab({ chargePoints, onStartCharge, initialCpId, initialConnectorId, 
     }
     supabase
       .from("charge_point_connectors")
-      .select("connector_id, status, connector_type, max_power_kw, name")
+      .select("connector_id, status, connector_type, max_power_kw, name, display_order")
       .eq("charge_point_id", selectedCp.id)
-      .order("connector_id")
+      .order("display_order")
       .then(({ data }) => {
         if (data && data.length > 0) {
-          setDrawerConnectors(data);
+          // Normalize OCPP status casing (DB stores "Available", code expects "available")
+          const normalized = data.map((c) => ({ ...c, status: (c.status || "").toLowerCase() }));
+          setDrawerConnectors(normalized);
           // Auto-select initial connector if valid
-          if (drawerConnectorId && data.some(c => c.connector_id === drawerConnectorId)) {
+          if (drawerConnectorId && normalized.some(c => c.connector_id === drawerConnectorId)) {
             // already set
           } else {
             setDrawerConnectorId(null);
@@ -709,11 +711,13 @@ function StationDetail({ cp, onBack, onStartCharge, initialConnector }: { cp: Ap
     if (cp.connector_count <= 1) return;
     supabase
       .from("charge_point_connectors")
-      .select("connector_id, status, connector_type, max_power_kw, name")
+      .select("connector_id, status, connector_type, max_power_kw, name, display_order")
       .eq("charge_point_id", cp.id)
-      .order("connector_id")
+      .order("display_order")
       .then(({ data }) => {
-        if (data && data.length > 0) setConnectors(data);
+        if (data && data.length > 0) {
+          setConnectors(data.map((c) => ({ ...c, status: (c.status || "").toLowerCase() })));
+        }
       });
   }, [cp.id, cp.connector_count]);
 
@@ -725,10 +729,12 @@ function StationDetail({ cp, onBack, onStartCharge, initialConnector }: { cp: Ap
       .on("postgres_changes", { event: "*", schema: "public", table: "charge_point_connectors", filter: `charge_point_id=eq.${cp.id}` }, () => {
         supabase
           .from("charge_point_connectors")
-          .select("connector_id, status, connector_type, max_power_kw, name")
+          .select("connector_id, status, connector_type, max_power_kw, name, display_order")
           .eq("charge_point_id", cp.id)
-          .order("connector_id")
-          .then(({ data }) => { if (data) setConnectors(data); });
+          .order("display_order")
+          .then(({ data }) => {
+            if (data) setConnectors(data.map((c) => ({ ...c, status: (c.status || "").toLowerCase() })));
+          });
       })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
@@ -1586,7 +1592,13 @@ const ChargingApp = () => {
         supabase.from("charging_invoices").select("id, session_id, invoice_number, total_energy_kwh, total_amount, idle_fee_amount, currency, status, issued_at, created_at").order("created_at", { ascending: false }).limit(50),
         supabase.from("charging_tariffs").select("price_per_kwh, base_fee, idle_fee_per_minute, idle_fee_grace_minutes, currency").eq("is_active", true).limit(1),
       ]);
-      if (cpRes.data) setChargePoints(cpRes.data as AppChargePoint[]);
+      if (cpRes.data) {
+        const normalizedCps = (cpRes.data as AppChargePoint[]).map((cp) => ({
+          ...cp,
+          status: (cp.status || "").toLowerCase(),
+        }));
+        setChargePoints(normalizedCps);
+      }
       if (sessRes.data) setSessions(sessRes.data as AppSession[]);
       if (invRes.data) setInvoices(invRes.data as AppInvoice[]);
       if (tariffRes.data && tariffRes.data.length > 0) setTariff(tariffRes.data[0] as AppTariff);
