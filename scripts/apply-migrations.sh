@@ -16,13 +16,22 @@ psql_exec() {
   docker exec -i "$DB_CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -v ON_ERROR_STOP=1 "$@"
 }
 
+# Filtert Postgres "command tags" raus (ALTER TABLE / GRANT / COPY 0 / setval-Tabellen / leere
+# Trennlinien) und behaelt nur informative Zeilen (ERROR, NOTICE, HINT, DETAIL, CONTEXT, QUERY,
+# LINE, plus alles, was nicht ein bekannter command tag ist). Damit wird der Deploy-Log um
+# Faktor 10-50 kuerzer ohne Verlust von Diagnose-Info. `|| true` macht den Pipe robust gegen
+# leeren Output (sonst wuerde grep mit Exit 1 unter `set -o pipefail` das Script kippen).
+filter_psql_noise() {
+  grep -vE '^(ALTER|CREATE|DROP|GRANT|REVOKE|COMMENT|COPY|SET|CALL|TRUNCATE|INSERT|UPDATE|DELETE|VALUES|BEGIN|COMMIT|ROLLBACK|SAVEPOINT|REINDEX|VACUUM|ANALYZE|CLUSTER|LOCK|LISTEN|NOTIFY|SELECT|FETCH|MOVE|CLOSE|DECLARE|PREPARE|EXECUTE|DEALLOCATE|EXPLAIN|REASSIGN|SECURITY|REFRESH|IMPORT|LOAD|CHECKPOINT|DISCARD|SHOW|RESET) ?[A-Z0-9_-]*$|^[[:space:]]*setval[[:space:]]*$|^[[:space:]]*-+[[:space:]]*$|^[[:space:]]*[0-9]+[[:space:]]*$|^\([0-9]+ rows?\)$|^[[:space:]]*$' || true
+}
+
 if [ ! -d "$MIG_DIR" ]; then
   log "Kein Migrations-Verzeichnis unter $MIG_DIR - skipping."
   exit 0
 fi
 
 log "Stelle Tracking-Tabelle _deploy_migrations sicher"
-psql_exec <<'SQL'
+psql_exec <<'SQL' 2>&1 | filter_psql_noise
 CREATE TABLE IF NOT EXISTS public._deploy_migrations (
   filename   TEXT PRIMARY KEY,
   applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -128,14 +137,15 @@ run_migration_with_autoheal() {
     # auf einer sauberen Basis. Ohne -1 wuerden 1-4 committed bleiben, der Retry stiesse auf
     # "already exists" und die Migration waere nicht mehr heilbar.
     if docker exec -i "$DB_CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -v ON_ERROR_STOP=1 --single-transaction < "$file" > "$tmp" 2>&1; then
-      cat "$tmp"
+      filter_psql_noise < "$tmp"
       rm -f "$tmp"
       return 0
     fi
 
     err="$(cat "$tmp")"
     rm -f "$tmp"
-    echo "$err"
+    # err bleibt unfiltered fuer das error-pattern-matching unten; gefilterte Variante geht raus
+    printf '%s\n' "$err" | filter_psql_noise
 
     # Fall 1: Tabelle fehlt
     local missing_table

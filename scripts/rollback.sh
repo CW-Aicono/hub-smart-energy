@@ -19,9 +19,19 @@ if [ ! -f "$BACKUP_FILE" ]; then
   exit 2
 fi
 
-log "1/3 DB aus $BACKUP_FILE wiederherstellen (pg_dumpall restore)"
-# pg_dumpall enthaelt DROP/CREATE fuer alle Datenbanken - kann direkt zurueckgespielt werden
-docker exec -i "$DB_CONTAINER" psql -U "$DB_USER" -d postgres < "$BACKUP_FILE"
+RESTORE_LOG="/tmp/rollback-restore-${TS}.log"
+log "1/3 DB aus $BACKUP_FILE wiederherstellen (Output -> $RESTORE_LOG)"
+# pg_dumpall enthaelt DROP/CREATE fuer alle Datenbanken - kann direkt zurueckgespielt werden.
+# Der Restore produziert sehr viel Output (tausende ALTER/GRANT/REVOKE-Tags, "already exists"-
+# Warnungen etc.). Wir loggen das in eine Datei statt auf stdout, damit der Deploy-Log lesbar
+# bleibt. Kurz-Summary (errors/warnings) auf stdout.
+if docker exec -i "$DB_CONTAINER" psql -U "$DB_USER" -d postgres < "$BACKUP_FILE" > "$RESTORE_LOG" 2>&1; then
+  log "Restore OK ($(wc -l < "$RESTORE_LOG") Zeilen Output in $RESTORE_LOG)"
+else
+  rc=$?
+  log "Restore meldete Fehler (exit $rc). Letzte 30 Zeilen:"
+  tail -n 30 "$RESTORE_LOG"
+fi
 
 log "2/3 Code auf $PREV_SHA zuruecksetzen"
 cd "$REPO_ROOT"
