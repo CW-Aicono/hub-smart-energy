@@ -59,6 +59,12 @@ applied_count=0
 skipped_count=0
 autoheal_count=0
 
+# Tiefen-Counter fuer rekursives AUTOHEAL: wenn eine Heal-Migration selbst auf ein fehlendes
+# Objekt stoesst, wird AUTOHEAL erneut aufgerufen. Limit verhindert Endlos-Schleifen bei
+# zirkulaeren Referenzen (real unwahrscheinlich, aber Sicherheitsnetz).
+AUTOHEAL_DEPTH=0
+AUTOHEAL_MAX_DEPTH=5
+
 # mark_applied <file>
 mark_applied() {
   local f="$1"
@@ -76,6 +82,11 @@ autoheal_missing_object() {
   local object_name="$1"
   local grep_pattern="$2"
 
+  if [ "$AUTOHEAL_DEPTH" -ge "$AUTOHEAL_MAX_DEPTH" ]; then
+    log "AUTOHEAL: max Tiefe ($AUTOHEAL_MAX_DEPTH) erreicht, gebe '$object_name' auf."
+    return 1
+  fi
+
   local found
   found="$(grep -l -E "$grep_pattern" "$MIG_DIR"/*.sql 2>/dev/null | sort | head -1)"
 
@@ -84,13 +95,18 @@ autoheal_missing_object() {
     return 1
   fi
 
-  log "AUTOHEAL: fuehre $(basename "$found") aus, um '$object_name' zu erstellen"
-  # --single-transaction: atomic apply – ein Fehler rollt die ganze Heal-Migration zurueck,
-  # damit kein partial state ueberlebt (sonst scheitern Folge-Versuche an "already exists").
-  if ! docker exec -i "$DB_CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -v ON_ERROR_STOP=1 --single-transaction < "$found" 2>&1; then
+  log "AUTOHEAL[$AUTOHEAL_DEPTH]: fuehre $(basename "$found") aus, um '$object_name' zu erstellen"
+  # Rekursiv via run_migration_with_autoheal: wenn die Heal-Migration selbst auf ein fehlendes
+  # Objekt stoesst (z.B. Tabelle X braucht Tabelle Y), wird AUTOHEAL erneut aufgerufen.
+  # --single-transaction (in run_migration_with_autoheal) sorgt dafuer, dass Teilarbeit nicht
+  # ueberlebt, falls die Heal-Migration scheitert.
+  AUTOHEAL_DEPTH=$((AUTOHEAL_DEPTH + 1))
+  if ! run_migration_with_autoheal "$found"; then
+    AUTOHEAL_DEPTH=$((AUTOHEAL_DEPTH - 1))
     log "AUTOHEAL: CREATE-Migration fuer '$object_name' ist selbst fehlgeschlagen."
     return 1
   fi
+  AUTOHEAL_DEPTH=$((AUTOHEAL_DEPTH - 1))
 
   mark_applied "$found"
   autoheal_count=$((autoheal_count + 1))
