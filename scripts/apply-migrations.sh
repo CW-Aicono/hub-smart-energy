@@ -123,6 +123,49 @@ autoheal_missing_object() {
   return 0
 }
 
+# Heilt eine fehlende Spalte: sucht eine Migration, die BEIDE Patterns enthaelt
+# (Tabellenname + ADD COLUMN spalte). Notwendig weil eine Spalte typischerweise
+# nicht durch CREATE TABLE, sondern durch ein nachtraegliches ALTER TABLE entsteht.
+autoheal_missing_column() {
+  local rel="$1"
+  local col="$2"
+
+  if [ "$AUTOHEAL_DEPTH" -ge "$AUTOHEAL_MAX_DEPTH" ]; then
+    log "AUTOHEAL: max Tiefe ($AUTOHEAL_MAX_DEPTH) erreicht, gebe '$rel.$col' auf."
+    return 1
+  fi
+
+  # File muss BEIDE Patterns enthalten. Per-Datei-Check, weil kein einzelner regex-Match
+  # ueber Zeilen hinweg garantiert ist, dass ADD COLUMN sich auf die richtige Tabelle bezieht.
+  local found="" f
+  for f in "$MIG_DIR"/*.sql; do
+    if grep -qE "ADD COLUMN (IF NOT EXISTS )?\"?${col}\"?[[:space:]]" "$f" 2>/dev/null \
+       && grep -qE "${rel}" "$f" 2>/dev/null; then
+      found="$f"
+      break
+    fi
+  done
+
+  if [ -z "$found" ]; then
+    log "AUTOHEAL: keine ADD-COLUMN-Migration fuer '$rel.$col' gefunden."
+    return 1
+  fi
+
+  log "AUTOHEAL[$AUTOHEAL_DEPTH]: fuehre $(basename "$found") aus, um '$rel.$col' hinzuzufuegen"
+  AUTOHEAL_DEPTH=$((AUTOHEAL_DEPTH + 1))
+  if ! run_migration_with_autoheal "$found"; then
+    AUTOHEAL_DEPTH=$((AUTOHEAL_DEPTH - 1))
+    log "AUTOHEAL: ADD-COLUMN-Migration fuer '$rel.$col' ist selbst fehlgeschlagen."
+    return 1
+  fi
+  AUTOHEAL_DEPTH=$((AUTOHEAL_DEPTH - 1))
+
+  mark_applied "$found"
+  autoheal_count=$((autoheal_count + 1))
+  log "AUTOHEAL: '$rel.$col' hinzugefuegt."
+  return 0
+}
+
 # Versucht eine Migration bis zu 5x mit Auto-Heal dazwischen.
 run_migration_with_autoheal() {
   local file="$1"
@@ -171,6 +214,18 @@ run_migration_with_autoheal() {
     if [ -n "$missing_type" ]; then
       if autoheal_missing_object "public.$missing_type (type)" "CREATE TYPE public\.${missing_type}[[:space:](]"; then
         continue
+      fi
+    fi
+
+    # Fall 4: Spalte fehlt – Pattern: 'column "X" of relation "Y" does not exist'
+    if echo "$err" | grep -qE 'column "[^"]+" of relation "[^"]+" does not exist'; then
+      local missing_col missing_rel
+      missing_col="$(echo "$err" | grep -oE 'column "[a-zA-Z_][a-zA-Z0-9_]*" of relation' | head -1 | sed -E 's/column "([^"]+)" of relation/\1/')"
+      missing_rel="$(echo "$err" | grep -oE 'of relation "[a-zA-Z_][a-zA-Z0-9_]*"' | head -1 | sed -E 's/of relation "([^"]+)"/\1/')"
+      if [ -n "$missing_col" ] && [ -n "$missing_rel" ]; then
+        if autoheal_missing_column "$missing_rel" "$missing_col"; then
+          continue
+        fi
       fi
     fi
 
