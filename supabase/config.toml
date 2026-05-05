@@ -15,6 +15,9 @@ verify_jwt = false
 [functions.send-invitation-email]
 verify_jwt = false
 
+[functions.send-test-email]
+verify_jwt = false
+
 [functions.meter-ocr]
 verify_jwt = false
 
