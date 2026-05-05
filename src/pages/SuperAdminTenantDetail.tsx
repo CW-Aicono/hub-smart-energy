@@ -295,6 +295,60 @@ const SuperAdminTenantDetail = () => {
 
   const totalSupportCost = supportSessions.reduce((sum, s) => sum + calcSessionCost(s), 0);
 
+  const refreshUsers = () => {
+    queryClient.invalidateQueries({ queryKey: ["tenant-users", id] });
+    queryClient.invalidateQueries({ queryKey: ["tenant-invitations", id] });
+  };
+
+  const handleDeleteUser = async (userId: string, email: string | null) => {
+    try {
+      const { data, error } = await supabase.functions.invoke("delete-user", { body: { userId } });
+      if (error) throw error;
+      if (data?.success === false) throw new Error(data.error);
+      toast.success(`Benutzer ${email ?? ""} gelöscht`);
+      refreshUsers();
+    } catch (err: any) {
+      toast.error("Löschen fehlgeschlagen: " + (err?.message ?? "Unbekannter Fehler"));
+    }
+  };
+
+  const handleRevokeInvitation = async (invitationId: string) => {
+    try {
+      const { error } = await supabase.from("user_invitations").delete().eq("id", invitationId);
+      if (error) throw error;
+      toast.success("Einladung zurückgezogen");
+      refreshUsers();
+    } catch (err: any) {
+      toast.error("Zurückziehen fehlgeschlagen: " + (err?.message ?? "Unbekannter Fehler"));
+    }
+  };
+
+  const handleResendInvitation = async (email: string, role: "admin" | "user", invitationId: string) => {
+    if (!id) return;
+    try {
+      // Remove old invitation first so a fresh one is generated
+      await supabase.from("user_invitations").delete().eq("id", invitationId);
+      const { data, error } = await supabase.functions.invoke("invite-tenant-admin", {
+        body: { adminEmail: email, role, tenantId: id },
+      });
+      if (error) throw error;
+      if (data?.success === false) throw new Error(data.error);
+      toast.success(`Einladung erneut an ${email} gesendet`);
+      refreshUsers();
+    } catch (err: any) {
+      toast.error("Erneute Einladung fehlgeschlagen: " + (err?.message ?? "Unbekannter Fehler"));
+    }
+  };
+
+  const formatExpiration = (expiresAt: string) => {
+    const date = new Date(expiresAt);
+    const now = new Date();
+    const daysLeft = Math.ceil((date.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+    if (daysLeft <= 0) return "Abgelaufen";
+    if (daysLeft === 1) return "Läuft in 1 Tag ab";
+    return `Läuft in ${daysLeft} Tagen ab`;
+  };
+
   return (
     <div className="flex min-h-screen bg-background">
       <SuperAdminSidebar />
