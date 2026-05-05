@@ -900,12 +900,12 @@ const SuperAdminTenantDetail = () => {
             <TabsContent value="users" className="mt-6">
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between">
-                  <CardTitle>{t("nav.users")} ({users.length})</CardTitle>
+                  <CardTitle>{t("nav.users")} ({users.length}{pendingInvitations.length > 0 ? ` + ${pendingInvitations.length} ausstehend` : ""})</CardTitle>
                   {tenant && (
                     <InviteTenantAdminDialog
                       tenantId={tenant.id}
                       tenantName={tenant.name}
-                      onSuccess={() => queryClient.invalidateQueries({ queryKey: ["tenant-users", id] })}
+                      onSuccess={refreshUsers}
                     />
                   )}
                 </CardHeader>
@@ -917,20 +917,112 @@ const SuperAdminTenantDetail = () => {
                         <TableHead>{t("tenant_detail.contact_person")}</TableHead>
                         <TableHead>{t("common.status")}</TableHead>
                         <TableHead>{t("common.created")}</TableHead>
+                        <TableHead className="text-right">Aktionen</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {users.length === 0 ? (
-                        <TableRow><TableCell colSpan={4} className="text-center py-8 text-muted-foreground">{t("tenant_detail.no_users")}</TableCell></TableRow>
+                      {users.length === 0 && pendingInvitations.length === 0 ? (
+                        <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">{t("tenant_detail.no_users")}</TableCell></TableRow>
                       ) : (
-                        users.map((u) => (
-                          <TableRow key={u.id}>
-                            <TableCell>{u.email ?? "–"}</TableCell>
-                            <TableCell>{u.contact_person ?? "–"}</TableCell>
-                            <TableCell><Badge variant={u.is_blocked ? "destructive" : "secondary"}>{u.is_blocked ? t("common.blocked") : t("common.active")}</Badge></TableCell>
-                            <TableCell className="text-muted-foreground">{new Date(u.created_at).toLocaleDateString("de-DE")}</TableCell>
-                          </TableRow>
-                        ))
+                        <>
+                          {users.map((u) => (
+                            <TableRow key={u.id}>
+                              <TableCell>{u.email ?? "–"}</TableCell>
+                              <TableCell>{u.contact_person ?? "–"}</TableCell>
+                              <TableCell><Badge variant={u.is_blocked ? "destructive" : "secondary"}>{u.is_blocked ? t("common.blocked") : t("common.active")}</Badge></TableCell>
+                              <TableCell className="text-muted-foreground">{new Date(u.created_at).toLocaleDateString("de-DE")}</TableCell>
+                              <TableCell className="text-right">
+                                <AlertDialog>
+                                  <AlertDialogTrigger asChild>
+                                    <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive hover:bg-destructive/10">
+                                      <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                  </AlertDialogTrigger>
+                                  <AlertDialogContent>
+                                    <AlertDialogHeader>
+                                      <AlertDialogTitle>Benutzer löschen?</AlertDialogTitle>
+                                      <AlertDialogDescription>
+                                        Der Benutzer <strong>{u.email}</strong> wird unwiderruflich gelöscht. Diese Aktion kann nicht rückgängig gemacht werden.
+                                      </AlertDialogDescription>
+                                    </AlertDialogHeader>
+                                    <AlertDialogFooter>
+                                      <AlertDialogCancel>Abbrechen</AlertDialogCancel>
+                                      <AlertDialogAction
+                                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                        onClick={() => handleDeleteUser(u.user_id, u.email)}
+                                      >
+                                        Löschen
+                                      </AlertDialogAction>
+                                    </AlertDialogFooter>
+                                  </AlertDialogContent>
+                                </AlertDialog>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                          {pendingInvitations.map((inv: any) => {
+                            const expired = new Date(inv.expires_at).getTime() < Date.now();
+                            return (
+                              <TableRow key={inv.id} className="opacity-80">
+                                <TableCell>
+                                  <div className="flex items-center gap-2">
+                                    <Mail className="h-4 w-4 text-muted-foreground" />
+                                    {inv.email}
+                                  </div>
+                                </TableCell>
+                                <TableCell className="text-muted-foreground">–</TableCell>
+                                <TableCell>
+                                  <div className="space-y-1">
+                                    <Badge variant={expired ? "destructive" : "secondary"} className="flex items-center gap-1 w-fit">
+                                      <Clock className="h-3 w-3" />
+                                      {expired ? "Abgelaufen" : "Eingeladen"}
+                                    </Badge>
+                                    <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                                      <CalendarClock className="h-3 w-3" />
+                                      {formatExpiration(inv.expires_at)}
+                                    </div>
+                                  </div>
+                                </TableCell>
+                                <TableCell className="text-muted-foreground">{new Date(inv.created_at).toLocaleDateString("de-DE")}</TableCell>
+                                <TableCell className="text-right">
+                                  <div className="flex items-center justify-end gap-1">
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => handleResendInvitation(inv.email, inv.role as "admin" | "user", inv.id)}
+                                      title="Einladung erneut senden"
+                                    >
+                                      <Send className="h-4 w-4" />
+                                    </Button>
+                                    <AlertDialog>
+                                      <AlertDialogTrigger asChild>
+                                        <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive hover:bg-destructive/10" title="Einladung zurückziehen">
+                                          <Trash2 className="h-4 w-4" />
+                                        </Button>
+                                      </AlertDialogTrigger>
+                                      <AlertDialogContent>
+                                        <AlertDialogHeader>
+                                          <AlertDialogTitle>Einladung zurückziehen?</AlertDialogTitle>
+                                          <AlertDialogDescription>
+                                            Die Einladung an <strong>{inv.email}</strong> wird gelöscht und der Link funktioniert nicht mehr.
+                                          </AlertDialogDescription>
+                                        </AlertDialogHeader>
+                                        <AlertDialogFooter>
+                                          <AlertDialogCancel>Abbrechen</AlertDialogCancel>
+                                          <AlertDialogAction
+                                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                            onClick={() => handleRevokeInvitation(inv.id)}
+                                          >
+                                            Zurückziehen
+                                          </AlertDialogAction>
+                                        </AlertDialogFooter>
+                                      </AlertDialogContent>
+                                    </AlertDialog>
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })}
+                        </>
                       )}
                     </TableBody>
                   </Table>
