@@ -60,17 +60,12 @@ const handler = async (req: Request): Promise<Response> => {
 
     // ── Uniqueness / cross-tenant guard ──
     const callerIsSuper = roles.includes("super_admin");
-    const force = !!(await Promise.resolve()) ? false : false; // placeholder, see below
-    // Re-read body fields we already parsed for force flag
-    const bodyForce = (typeof (globalThis as unknown as { __reqBody?: { force?: boolean } }).__reqBody?.force === "boolean")
-      ? (globalThis as unknown as { __reqBody: { force?: boolean } }).__reqBody.force
-      : false;
     const conflict = await checkInviteConflict({
       supabase,
       email: adminEmail,
       intent: "tenant_invite",
       tenantId,
-      force: !!bodyForce,
+      force: !!force,
       callerIsSuper,
     });
     if (!conflict.ok) {
