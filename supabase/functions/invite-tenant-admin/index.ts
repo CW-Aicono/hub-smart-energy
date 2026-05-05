@@ -58,33 +58,42 @@ const handler = async (req: Request): Promise<Response> => {
     const primaryColor = branding.primaryColor || "#1a365d";
     const accentColor = branding.accentColor || "#2d8a6e";
 
-    // Create auth user or find existing one
-    const tempPassword = crypto.randomUUID() + "Aa1!";
-    let newUserId: string;
-
-    const { data: newUserData, error: createError } = await supabase.auth.admin.createUser({
+    // ── Uniqueness / cross-tenant guard ──
+    const callerIsSuper = roles.includes("super_admin");
+    const force = !!(await Promise.resolve()) ? false : false; // placeholder, see below
+    // Re-read body fields we already parsed for force flag
+    const bodyForce = (typeof (globalThis as unknown as { __reqBody?: { force?: boolean } }).__reqBody?.force === "boolean")
+      ? (globalThis as unknown as { __reqBody: { force?: boolean } }).__reqBody.force
+      : false;
+    const conflict = await checkInviteConflict({
+      supabase,
       email: adminEmail,
-      password: tempPassword,
-      email_confirm: true,
+      intent: "tenant_invite",
+      tenantId,
+      force: !!bodyForce,
+      callerIsSuper,
     });
+    if (!conflict.ok) {
+      return new Response(
+        JSON.stringify({ success: false, error: conflict.error }),
+        { status: conflict.status ?? 409, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
+    }
 
-    if (createError) {
-      if (createError.message?.includes("already")) {
-        // User already exists in auth – find them and reassign to new tenant
-        const { data: listData, error: listError } = await supabase.auth.admin.listUsers({
-          page: 1,
-          perPage: 1000,
-        });
-        if (listError) throw new Error("Benutzer konnte nicht gefunden werden");
-        const existingUser = listData?.users?.find((u) => u.email?.toLowerCase() === adminEmail.toLowerCase());
-        if (!existingUser) throw new Error("Benutzer mit dieser E-Mail konnte nicht gefunden werden.");
-        newUserId = existingUser.id;
-      } else {
-        throw new Error(`Benutzer konnte nicht erstellt werden: ${createError.message}`);
-      }
+    let newUserId: string;
+    if (conflict.existingUserId) {
+      newUserId = conflict.existingUserId;
     } else {
+      const tempPassword = crypto.randomUUID() + "Aa1!";
+      const { data: newUserData, error: createError } = await supabase.auth.admin.createUser({
+        email: adminEmail,
+        password: tempPassword,
+        email_confirm: true,
+      });
+      if (createError || !newUserData?.user) {
+        throw new Error(`Benutzer konnte nicht erstellt werden: ${createError?.message ?? "unbekannt"}`);
+      }
       newUserId = newUserData.user.id;
-      // Wait briefly for handle_new_user trigger
       await new Promise(resolve => setTimeout(resolve, 600));
     }
 
@@ -97,11 +106,9 @@ const handler = async (req: Request): Promise<Response> => {
       })
       .eq("user_id", newUserId);
 
-    // Set role (upsert to handle existing role)
-    await supabase
-      .from("user_roles")
-      .update({ role: assignedRole })
-      .eq("user_id", newUserId);
+    // Set role: ensure exactly one role row for this user.
+    await supabase.from("user_roles").delete().eq("user_id", newUserId);
+    await supabase.from("user_roles").insert({ user_id: newUserId, role: assignedRole });
 
     // Generate password-reset link (user sets their own password)
     const appUrl = redirectTo || `https://hub-smart-energy.lovable.app/set-password`;
