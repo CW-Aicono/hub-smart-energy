@@ -2,7 +2,7 @@
 ALTER TYPE public.app_role ADD VALUE IF NOT EXISTS 'sales_partner';
 
 -- 2. Device Catalog (global, super-admin managed)
-CREATE TABLE public.device_catalog (
+CREATE TABLE IF NOT EXISTS public.device_catalog (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   hersteller text NOT NULL,
   modell text NOT NULL,
@@ -20,23 +20,26 @@ CREATE TABLE public.device_catalog (
 
 ALTER TABLE public.device_catalog ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Authenticated can view active catalog" ON public.device_catalog;
 CREATE POLICY "Authenticated can view active catalog"
   ON public.device_catalog FOR SELECT
   TO authenticated
   USING (is_active = true OR has_role(auth.uid(), 'super_admin'));
 
+DROP POLICY IF EXISTS "Super admins manage catalog" ON public.device_catalog;
 CREATE POLICY "Super admins manage catalog"
   ON public.device_catalog FOR ALL
   TO authenticated
   USING (has_role(auth.uid(), 'super_admin'))
   WITH CHECK (has_role(auth.uid(), 'super_admin'));
 
+DROP TRIGGER IF EXISTS trg_device_catalog_updated_at ON public.device_catalog;
 CREATE TRIGGER trg_device_catalog_updated_at
   BEFORE UPDATE ON public.device_catalog
   FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
 -- 3. Device Selection Rules
-CREATE TABLE public.device_selection_rules (
+CREATE TABLE IF NOT EXISTS public.device_selection_rules (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   name text NOT NULL,
   beschreibung text,
@@ -50,23 +53,26 @@ CREATE TABLE public.device_selection_rules (
 
 ALTER TABLE public.device_selection_rules ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Authenticated can view active rules" ON public.device_selection_rules;
 CREATE POLICY "Authenticated can view active rules"
   ON public.device_selection_rules FOR SELECT
   TO authenticated
   USING (is_active = true OR has_role(auth.uid(), 'super_admin'));
 
+DROP POLICY IF EXISTS "Super admins manage rules" ON public.device_selection_rules;
 CREATE POLICY "Super admins manage rules"
   ON public.device_selection_rules FOR ALL
   TO authenticated
   USING (has_role(auth.uid(), 'super_admin'))
   WITH CHECK (has_role(auth.uid(), 'super_admin'));
 
+DROP TRIGGER IF EXISTS trg_device_selection_rules_updated_at ON public.device_selection_rules;
 CREATE TRIGGER trg_device_selection_rules_updated_at
   BEFORE UPDATE ON public.device_selection_rules
   FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
 -- 4. Sales Projects
-CREATE TABLE public.sales_projects (
+CREATE TABLE IF NOT EXISTS public.sales_projects (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   partner_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   kunde_name text NOT NULL,
@@ -86,26 +92,29 @@ CREATE TABLE public.sales_projects (
 
 ALTER TABLE public.sales_projects ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Partner sees own projects" ON public.sales_projects;
 CREATE POLICY "Partner sees own projects"
   ON public.sales_projects FOR SELECT
   TO authenticated
   USING (partner_id = auth.uid() OR has_role(auth.uid(), 'super_admin'));
 
+DROP POLICY IF EXISTS "Partner manages own projects" ON public.sales_projects;
 CREATE POLICY "Partner manages own projects"
   ON public.sales_projects FOR ALL
   TO authenticated
   USING (partner_id = auth.uid() OR has_role(auth.uid(), 'super_admin'))
   WITH CHECK (partner_id = auth.uid() OR has_role(auth.uid(), 'super_admin'));
 
+DROP TRIGGER IF EXISTS trg_sales_projects_updated_at ON public.sales_projects;
 CREATE TRIGGER trg_sales_projects_updated_at
   BEFORE UPDATE ON public.sales_projects
   FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
-CREATE INDEX idx_sales_projects_partner ON public.sales_projects(partner_id);
-CREATE INDEX idx_sales_projects_status ON public.sales_projects(status);
+CREATE INDEX IF NOT EXISTS idx_sales_projects_partner ON public.sales_projects(partner_id);
+CREATE INDEX IF NOT EXISTS idx_sales_projects_status ON public.sales_projects(status);
 
 -- 5. Sales Distributions (NSHV/UV)
-CREATE TABLE public.sales_distributions (
+CREATE TABLE IF NOT EXISTS public.sales_distributions (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   project_id uuid NOT NULL REFERENCES public.sales_projects(id) ON DELETE CASCADE,
   parent_id uuid REFERENCES public.sales_distributions(id) ON DELETE CASCADE,
@@ -121,20 +130,22 @@ CREATE TABLE public.sales_distributions (
 
 ALTER TABLE public.sales_distributions ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Access via project" ON public.sales_distributions;
 CREATE POLICY "Access via project"
   ON public.sales_distributions FOR ALL
   TO authenticated
   USING (EXISTS (SELECT 1 FROM public.sales_projects p WHERE p.id = project_id AND (p.partner_id = auth.uid() OR has_role(auth.uid(), 'super_admin'))))
   WITH CHECK (EXISTS (SELECT 1 FROM public.sales_projects p WHERE p.id = project_id AND (p.partner_id = auth.uid() OR has_role(auth.uid(), 'super_admin'))));
 
+DROP TRIGGER IF EXISTS trg_sales_distributions_updated_at ON public.sales_distributions;
 CREATE TRIGGER trg_sales_distributions_updated_at
   BEFORE UPDATE ON public.sales_distributions
   FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
-CREATE INDEX idx_sales_distributions_project ON public.sales_distributions(project_id);
+CREATE INDEX IF NOT EXISTS idx_sales_distributions_project ON public.sales_distributions(project_id);
 
 -- 6. Sales Measurement Points
-CREATE TABLE public.sales_measurement_points (
+CREATE TABLE IF NOT EXISTS public.sales_measurement_points (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   distribution_id uuid NOT NULL REFERENCES public.sales_distributions(id) ON DELETE CASCADE,
   bezeichnung text NOT NULL,
@@ -154,6 +165,7 @@ CREATE TABLE public.sales_measurement_points (
 
 ALTER TABLE public.sales_measurement_points ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Access via distribution->project" ON public.sales_measurement_points;
 CREATE POLICY "Access via distribution->project"
   ON public.sales_measurement_points FOR ALL
   TO authenticated
@@ -168,14 +180,15 @@ CREATE POLICY "Access via distribution->project"
     WHERE d.id = distribution_id AND (p.partner_id = auth.uid() OR has_role(auth.uid(), 'super_admin'))
   ));
 
+DROP TRIGGER IF EXISTS trg_sales_mp_updated_at ON public.sales_measurement_points;
 CREATE TRIGGER trg_sales_mp_updated_at
   BEFORE UPDATE ON public.sales_measurement_points
   FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
-CREATE INDEX idx_sales_mp_distribution ON public.sales_measurement_points(distribution_id);
+CREATE INDEX IF NOT EXISTS idx_sales_mp_distribution ON public.sales_measurement_points(distribution_id);
 
 -- 7. Sales Recommended Devices
-CREATE TABLE public.sales_recommended_devices (
+CREATE TABLE IF NOT EXISTS public.sales_recommended_devices (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   measurement_point_id uuid NOT NULL REFERENCES public.sales_measurement_points(id) ON DELETE CASCADE,
   device_catalog_id uuid NOT NULL REFERENCES public.device_catalog(id) ON DELETE RESTRICT,
@@ -190,6 +203,7 @@ CREATE TABLE public.sales_recommended_devices (
 
 ALTER TABLE public.sales_recommended_devices ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Access via mp->distribution->project" ON public.sales_recommended_devices;
 CREATE POLICY "Access via mp->distribution->project"
   ON public.sales_recommended_devices FOR ALL
   TO authenticated
@@ -206,14 +220,15 @@ CREATE POLICY "Access via mp->distribution->project"
     WHERE mp.id = measurement_point_id AND (p.partner_id = auth.uid() OR has_role(auth.uid(), 'super_admin'))
   ));
 
+DROP TRIGGER IF EXISTS trg_sales_rec_updated_at ON public.sales_recommended_devices;
 CREATE TRIGGER trg_sales_rec_updated_at
   BEFORE UPDATE ON public.sales_recommended_devices
   FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
-CREATE INDEX idx_sales_rec_mp ON public.sales_recommended_devices(measurement_point_id);
+CREATE INDEX IF NOT EXISTS idx_sales_rec_mp ON public.sales_recommended_devices(measurement_point_id);
 
 -- 8. Sales Quotes
-CREATE TABLE public.sales_quotes (
+CREATE TABLE IF NOT EXISTS public.sales_quotes (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   project_id uuid NOT NULL REFERENCES public.sales_projects(id) ON DELETE CASCADE,
   version integer NOT NULL DEFAULT 1,
@@ -230,20 +245,22 @@ CREATE TABLE public.sales_quotes (
 
 ALTER TABLE public.sales_quotes ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Access via project" ON public.sales_quotes;
 CREATE POLICY "Access via project"
   ON public.sales_quotes FOR ALL
   TO authenticated
   USING (EXISTS (SELECT 1 FROM public.sales_projects p WHERE p.id = project_id AND (p.partner_id = auth.uid() OR has_role(auth.uid(), 'super_admin'))))
   WITH CHECK (EXISTS (SELECT 1 FROM public.sales_projects p WHERE p.id = project_id AND (p.partner_id = auth.uid() OR has_role(auth.uid(), 'super_admin'))));
 
+DROP TRIGGER IF EXISTS trg_sales_quotes_updated_at ON public.sales_quotes;
 CREATE TRIGGER trg_sales_quotes_updated_at
   BEFORE UPDATE ON public.sales_quotes
   FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
-CREATE INDEX idx_sales_quotes_project ON public.sales_quotes(project_id);
+CREATE INDEX IF NOT EXISTS idx_sales_quotes_project ON public.sales_quotes(project_id);
 
 -- 9. Sales Quote Modules
-CREATE TABLE public.sales_quote_modules (
+CREATE TABLE IF NOT EXISTS public.sales_quote_modules (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   quote_id uuid NOT NULL REFERENCES public.sales_quotes(id) ON DELETE CASCADE,
   module_code text NOT NULL,
@@ -254,6 +271,7 @@ CREATE TABLE public.sales_quote_modules (
 
 ALTER TABLE public.sales_quote_modules ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Access via quote->project" ON public.sales_quote_modules;
 CREATE POLICY "Access via quote->project"
   ON public.sales_quote_modules FOR ALL
   TO authenticated
@@ -275,6 +293,7 @@ INSERT INTO storage.buckets (id, name, public) VALUES
 ON CONFLICT (id) DO NOTHING;
 
 -- Storage policies: sales-photos
+DROP POLICY IF EXISTS "Sales partner uploads own photos" ON storage.objects;
 CREATE POLICY "Sales partner uploads own photos"
   ON storage.objects FOR INSERT
   TO authenticated
@@ -283,6 +302,7 @@ CREATE POLICY "Sales partner uploads own photos"
     AND (auth.uid()::text = split_part(name, '/', 1) OR has_role(auth.uid(), 'super_admin'))
   );
 
+DROP POLICY IF EXISTS "Sales partner reads own photos" ON storage.objects;
 CREATE POLICY "Sales partner reads own photos"
   ON storage.objects FOR SELECT
   TO authenticated
@@ -291,6 +311,7 @@ CREATE POLICY "Sales partner reads own photos"
     AND (auth.uid()::text = split_part(name, '/', 1) OR has_role(auth.uid(), 'super_admin'))
   );
 
+DROP POLICY IF EXISTS "Sales partner deletes own photos" ON storage.objects;
 CREATE POLICY "Sales partner deletes own photos"
   ON storage.objects FOR DELETE
   TO authenticated
@@ -300,6 +321,7 @@ CREATE POLICY "Sales partner deletes own photos"
   );
 
 -- Storage policies: sales-quotes
+DROP POLICY IF EXISTS "Sales partner reads own quotes" ON storage.objects;
 CREATE POLICY "Sales partner reads own quotes"
   ON storage.objects FOR SELECT
   TO authenticated
@@ -308,6 +330,7 @@ CREATE POLICY "Sales partner reads own quotes"
     AND (auth.uid()::text = split_part(name, '/', 1) OR has_role(auth.uid(), 'super_admin'))
   );
 
+DROP POLICY IF EXISTS "Service role writes quotes" ON storage.objects;
 CREATE POLICY "Service role writes quotes"
   ON storage.objects FOR INSERT
   TO authenticated
