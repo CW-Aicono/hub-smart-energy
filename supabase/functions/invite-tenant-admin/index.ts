@@ -121,8 +121,16 @@ const handler = async (req: Request): Promise<Response> => {
     if (!RESEND_API_KEY) throw new Error("RESEND_API_KEY not configured");
 
     const resend = new Resend(RESEND_API_KEY);
-    await resend.emails.send({
-      from: resendFrom(tenantName),
+    const fromAddress = resendFrom(tenantName);
+    console.log("[invite-tenant-admin] Sending email", {
+      to: adminEmail,
+      from: fromAddress,
+      tenantId,
+      userId: newUserId,
+    });
+
+    const emailResponse = await resend.emails.send({
+      from: fromAddress,
       to: [adminEmail],
       subject: `Ihr Administrator-Konto bei ${tenantName}`,
       html: `<!DOCTYPE html>
