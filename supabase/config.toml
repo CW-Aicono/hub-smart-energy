@@ -135,3 +135,6 @@ verify_jwt = false
 
 [functions.public-charge-status]
 verify_jwt = false
+
+[functions.check-email-availability]
+verify_jwt = false

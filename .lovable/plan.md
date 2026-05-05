@@ -1,44 +1,93 @@
-## Root Cause (bestätigt)
+## Ziel
 
-Loxone hat seinen Cloud-DNS-Service zwischen 20:25 und 20:30 Uhr auf eine neue Infrastruktur migriert:
+E-Mail-Adressen müssen systemweit eindeutig einer Identität zugeordnet sein. Eine bestehende Mailadresse darf bei einer neuen Einladung **nicht stillschweigend** in einen anderen Tenant verschoben oder in der Rolle verändert werden. Insbesondere muss die strikte Trennung zwischen Super-Admin und Tenant-User gewahrt bleiben.
 
-| | Alt (kaputt) | Neu (funktioniert) |
-|---|---|---|
-| Host | `http://dns.loxonecloud.com/{Serial}` | `https://connect.loxonecloud.com/{Serial}` |
-| Antwort | `404 Not Found` (Traefik-Default-Cert) | `307` → `https://{ip-encoded}.{Serial}.dyndns.loxonecloud.com:22809/` |
-| Proxy | – | `x-proxied-by: loxone-lcs-proxy/0.0.1` |
-| Rate-Limit | – | 10 req/min pro IP (Header `x-ratelimit-*`) |
+## Aktuelles Verhalten (Problem)
 
-Loxone Config und die Smart-Home-App nutzen seit Jahren intern bereits `connect.loxonecloud.com` (Loxone Remote Connect). Unsere Edge Function hing am Legacy-Endpunkt fest.
+In `activate-invited-user` (Mode `directInvite`) und `invite-tenant-admin`:
+- `auth.admin.createUser` wird direkt aufgerufen.
+- Bei "already exists" wird der bestehende User aus `auth.users` herausgesucht und **kommentarlos** wiederverwendet:
+  - `profiles.tenant_id` wird auf den neuen Tenant überschrieben.
+  - `user_roles.role` wird überschrieben (DB-Trigger `guard_privileged_roles` schützt zwar Super-Admin-Downgrade, aber der Fehler wird im Code nicht abgefangen → 500-artige Fehler statt klarer Meldung).
+  - Eine neue Einladungsmail wird verschickt.
+- UI bekommt nur "Einladung gesendet" zu sehen – keine Warnung, dass ein bestehender Account verändert wurde.
 
-## Fix-Plan
+## Geplante Änderungen
 
-### 1. `loxone-api/index.ts` – Resolver tauschen (Kern-Fix)
-- `resolveLoxoneCloudURL()` ruft jetzt **`https://connect.loxonecloud.com/{Serial}`** auf, mit `redirect: "manual"` um den Location-Header sauber zu lesen.
-- Antwort-Code 307 → `Location`-Header parsen → `https://{host}:{port}` als `baseUrl` zurückgeben.
-- Inklusive Port (22809) – nicht im alten Resolver berücksichtigt.
-- Result wird **15 min** in einem Modul-Cache (`Map<serial, {url, expires}>`) gehalten, damit wir das 10-req/min-Limit nie reißen.
-- Fallback: wenn `connect.loxonecloud.com` einmal 5xx liefert, einmal alten Endpunkt versuchen, dann sauber abbrechen.
+### 1. Neue Edge Function `check-email-availability` (read-only, schnell)
 
-### 2. `LoxoneConfigDialog.tsx` – optionales lokales Override
-- Neues Feld `config.local_host` (z. B. `http://192.168.178.50`).
-- Wenn gesetzt → bypass Cloud komplett, direkt lokal verbinden.
-- Hilfetext: „Nur ausfüllen, wenn der AICONO-Hub im selben LAN steht."
+- Input: `{ email, intent: "tenant_invite" | "super_admin_invite", tenantId? }`
+- Auth: nur authentifizierter Admin / Super-Admin darf aufrufen.
+- Logik:
+  1. Suche User in `auth.users` per `listUsers` (oder besser direkt in `profiles` per Mail-Lookup über `auth.users` Join via Service-Role).
+  2. Wenn nicht vorhanden → `{ status: "available" }`.
+  3. Wenn vorhanden → prüfe `profiles.tenant_id` und `user_roles.role`:
+     - Bereits Super-Admin (`tenant_id IS NULL`, role `super_admin`): bei `tenant_invite` → `status: "blocked_super_admin"`.
+     - Bereits in anderem Tenant: → `status: "blocked_other_tenant"` (mit Tenant-Name, nur für Super-Admin sichtbar; für Tenant-Admin generisch "andere Organisation").
+     - Bereits im selben Tenant: → `status: "exists_same_tenant"` (mit aktueller Rolle).
+     - Bei `super_admin_invite` und User ist Tenant-User: → `status: "blocked_tenant_user"`.
+- Verwendung: vor dem Submit im UI (debounced bei E-Mail-Eingabe) **und** nochmal serverseitig in den Invite-Functions.
 
-### 3. Error-Throttling (DB-Schutz)
-- In `loxone-api` und `loxone-periodic-sync`: vor `insert into integration_errors` prüfen, ob in den letzten 5 min ein offener Fehler mit gleichem `error_code` + `location_integration_id` existiert.
-- Wenn ja → nur `last_seen_at` und `occurrence_count` updaten.
-- Verhindert die DB-Flut, die wir ab 20:30 hatten (5 Integrations × Sync alle 60 s).
+### 2. Härtung in `activate-invited-user` (Mode `directInvite`)
 
-### 4. Resilienz im UI
-- `useLoxoneSensors`: bei Fehler den letzten Snapshot weiter anzeigen statt leer (ist heute schon teilweise so – ergänzen für `MiniserverStatus`).
+Vor `createUser` und nach Auflösung eines Konflikts:
+- Wenn Mail bereits existiert:
+  - Tenant-Admin (caller-Role `admin`):
+    - Existiert User in anderem Tenant → **400** „E-Mail wird bereits in einer anderen Organisation verwendet."
+    - Existiert User als Super-Admin → **400** „Diese E-Mail gehört zu einem Plattform-Konto und kann nicht eingeladen werden."
+    - Existiert im selben Tenant → **409** mit klarer Meldung „Nutzer existiert bereits (Rolle: X). Bitte vorhandenen Nutzer bearbeiten."
+  - Super-Admin (caller-Role `super_admin`):
+    - Bei `super_admin`-Einladung & User ist Tenant-User → **400** „E-Mail ist bereits Tenant-Nutzer. Plattform-Rolle kann nicht vergeben werden."
+    - Bei Tenant-Einladung & User existiert anderswo → standardmäßig blockieren, aber `force: true` Option erlaubt explizite Übernahme (mit Audit-Log-Eintrag).
+- **Niemals** `profiles.tenant_id` ohne explizite Bestätigung überschreiben.
+- **Niemals** `user_roles.role` ohne explizite Bestätigung überschreiben.
 
-## Reihenfolge der Umsetzung
+### 3. Härtung in `invite-tenant-admin`
 
-1. **Sofort (Kern-Fix):** Punkt 1 + 3 → 1 Edge-Function-Deploy, Daten fließen wieder.
-2. **Direkt danach:** Punkt 2 + 4 → UI-Polish und langfristige Resilienz.
-3. **Nicht nötig:** Token-Auth (alter Plan) – mit funktionierender Cloud-URL bleibt Basic Auth gültig.
+Identische Logik wie oben (super_admin als caller, Ziel ist Tenant-Admin):
+- Existiert User schon in anderem Tenant → blockieren ohne `force: true`.
+- Existiert User als Super-Admin → blockieren mit klarer Fehlermeldung.
 
-Schätzung: 1 Iteration, Daten fließen innerhalb 1 Sync-Zyklus (60 s) nach Deploy wieder.
+### 4. UI-Anpassungen
 
-Bestätige mit „Ok" und ich setze 1–4 in einem Rutsch um.
+- **`InviteUserDialog.tsx`** (Tenant-Admin):
+  - Bei E-Mail-Blur: Aufruf `check-email-availability`.
+  - Inline-Hinweis unter dem Feld:
+    - Grün „E-Mail verfügbar"
+    - Rot mit konkreter Fehlermeldung wenn blockiert
+    - Submit-Button disabled bei blockiertem Status
+- **`SuperAdminInviteDialog.tsx`** (Super-Admin):
+  - Identische Inline-Prüfung.
+  - Bei `blocked_other_tenant`: zeigt Tenant-Name (Super-Admin darf das sehen).
+  - Bei `exists_same_tenant`/`blocked_tenant_user`: Möglichkeit „Trotzdem übernehmen" mit Bestätigungsdialog (sendet `force: true` an Backend, erzeugt Audit-Eintrag).
+- Toast-Fehler aus dem Backend werden 1:1 angezeigt (Backend ist Quelle der Wahrheit).
+
+### 5. Audit-Log
+
+Neuer Eintrag in `user_role_audit_log` (existiert bereits) bzw. neuer Tabelle `user_invitation_audit`:
+- Wenn ein bestehender User per `force: true` übernommen wird, wird festgehalten:
+  - Caller, alter Tenant, neuer Tenant, alte Rolle, neue Rolle, Zeitpunkt.
+
+## Technische Details
+
+- Edge Function `check-email-availability`:
+  - `verify_jwt = false` mit manueller Token-Validierung (Standard-Pattern im Projekt).
+  - Antwort enthält keine PII außer dem nötigen Tenant-Namen (nur an Super-Admin).
+  - Rate-Limit empfohlen, aber zunächst nicht zwingend (Aufruf nur durch eingeloggten Admin).
+- Bestehende `auth.users.email` UNIQUE-Constraint bleibt – wir verlassen uns explizit darauf.
+- Keine DB-Migration nötig (existierende Tabellen reichen).
+
+## Out of Scope
+
+- Migration bestehender "verschobener" User (falls in Vergangenheit Konten unbeabsichtigt umgehängt wurden) – auf Anfrage separat.
+- Self-Service Mailwechsel durch User selbst.
+
+## Dateien, die geändert werden
+
+- `supabase/functions/check-email-availability/index.ts` (neu)
+- `supabase/functions/activate-invited-user/index.ts` (Härtung)
+- `supabase/functions/invite-tenant-admin/index.ts` (Härtung)
+- `supabase/config.toml` (verify_jwt-Eintrag für neue Function)
+- `src/components/admin/InviteUserDialog.tsx` (Inline-Check + Disabled-Logik)
+- `src/components/super-admin/SuperAdminInviteDialog.tsx` (Inline-Check + Force-Bestätigung)
+- Optional: i18n-Strings in `src/i18n/tenantAppTranslations.ts` und `src/i18n/superAdminTranslations.ts`
