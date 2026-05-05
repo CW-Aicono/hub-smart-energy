@@ -121,8 +121,16 @@ const handler = async (req: Request): Promise<Response> => {
     if (!RESEND_API_KEY) throw new Error("RESEND_API_KEY not configured");
 
     const resend = new Resend(RESEND_API_KEY);
-    await resend.emails.send({
-      from: resendFrom(tenantName),
+    const fromAddress = resendFrom(tenantName);
+    console.log("[invite-tenant-admin] Sending email", {
+      to: adminEmail,
+      from: fromAddress,
+      tenantId,
+      userId: newUserId,
+    });
+
+    const emailResponse = await resend.emails.send({
+      from: fromAddress,
       to: [adminEmail],
       subject: `Ihr Administrator-Konto bei ${tenantName}`,
       html: `<!DOCTYPE html>
@@ -151,8 +159,50 @@ const handler = async (req: Request): Promise<Response> => {
 </html>`,
     });
 
+    if (emailResponse.error) {
+      console.error("[invite-tenant-admin] Resend error", {
+        to: adminEmail,
+        from: fromAddress,
+        error: emailResponse.error,
+      });
+      throw new Error(
+        `E-Mail konnte nicht versendet werden: ${emailResponse.error.message || JSON.stringify(emailResponse.error)}`
+      );
+    }
+
+    console.log("[invite-tenant-admin] Resend success", {
+      to: adminEmail,
+      messageId: emailResponse.data?.id,
+    });
+
+    // Record invitation entry so the UI can list pending/expired invites and re-send them.
+    // Remove any prior pending invitation for this email+tenant first to avoid duplicates.
+    const emailLower = adminEmail.toLowerCase();
+    const { error: deletePrevError } = await supabase
+      .from("user_invitations")
+      .delete()
+      .eq("tenant_id", tenantId)
+      .ilike("email", emailLower)
+      .is("accepted_at", null);
+    if (deletePrevError) {
+      console.warn("[invite-tenant-admin] Could not clean previous invitations", deletePrevError);
+    }
+
+    const { error: invitationError } = await supabase
+      .from("user_invitations")
+      .insert({
+        tenant_id: tenantId,
+        email: emailLower,
+        role: assignedRole,
+        invited_by: callingUser.id,
+      });
+    if (invitationError) {
+      // Do not fail the whole flow – the user is already created and email sent.
+      console.error("[invite-tenant-admin] Could not record invitation", invitationError);
+    }
+
     return new Response(
-      JSON.stringify({ success: true, userId: newUserId }),
+      JSON.stringify({ success: true, userId: newUserId, emailId: emailResponse.data?.id ?? null }),
       { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
     );
   } catch (error: unknown) {
