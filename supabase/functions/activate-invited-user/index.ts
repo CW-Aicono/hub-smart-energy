@@ -144,21 +144,22 @@ const handler = async (req: Request): Promise<Response> => {
         await new Promise(resolve => setTimeout(resolve, 600));
       }
 
-      // Update profile with tenant + name
+      // Update profile with tenant + name.
+      // Super-admin invites: tenant_id MUST be NULL (Super-Admin/Tenant separation).
+      const profileTenantId = isSuperAdminInvite ? null : (effectiveTenantId || null);
       await supabase
         .from("profiles")
         .update({
-          tenant_id: effectiveTenantId || null,
+          tenant_id: profileTenantId,
           contact_person: name || null,
         })
         .eq("user_id", newUserId);
 
-      // Set role
-      if (role === "admin" || role === "super_admin") {
+      // Set role (upsert so it works for both freshly-created and existing users)
+      if (role === "admin" || role === "super_admin" || role === "user") {
         await supabase
           .from("user_roles")
-          .update({ role })
-          .eq("user_id", newUserId);
+          .upsert({ user_id: newUserId, role }, { onConflict: "user_id" });
       }
 
       // Generate password-reset link
