@@ -169,6 +169,21 @@ const SuperAdminTenantDetail = () => {
     },
   });
 
+  const { data: pendingInvitations = [] } = useQuery({
+    queryKey: ["tenant-invitations", id],
+    enabled: !!id,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("user_invitations")
+        .select("*")
+        .eq("tenant_id", id!)
+        .is("accepted_at", null)
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return data;
+    },
+  });
+
   const { data: locationCount = 0 } = useQuery({
     queryKey: ["tenant-location-count", id],
     enabled: !!id,
