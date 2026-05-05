@@ -123,55 +123,6 @@ autoheal_missing_object() {
   return 0
 }
 
-# Detect ob eine Migration sicher in einer Transaktion laufen kann. Postgres erlaubt
-# manche DDL-Statements nicht innerhalb von BEGIN/COMMIT — vor allem ALTER TYPE ... ADD VALUE
-# (enum-Erweiterung). Solche Migrations muessen ohne --single-transaction laufen und sind
-# darauf angewiesen, idempotent geschrieben zu sein.
-migration_is_tx_safe() {
-  ! grep -qE "ALTER TYPE.*ADD VALUE" "$1"
-}
-
-# Heilt einen fehlenden enum-Wert: sucht eine Migration, die ALTER TYPE X ADD VALUE 'Y'
-# enthaelt, und fuehrt sie aus. Pattern wird via run_migration_with_autoheal rekursiv,
-# der dank migration_is_tx_safe in dem Fall non-tx laeuft.
-autoheal_missing_enum_value() {
-  local enum_name="$1"
-  local enum_value="$2"
-
-  if [ "$AUTOHEAL_DEPTH" -ge "$AUTOHEAL_MAX_DEPTH" ]; then
-    log "AUTOHEAL: max Tiefe ($AUTOHEAL_MAX_DEPTH) erreicht, gebe '$enum_name=$enum_value' auf."
-    return 1
-  fi
-
-  local found="" f
-  for f in "$MIG_DIR"/*.sql; do
-    if grep -qE "ALTER TYPE (public\.)?${enum_name}[[:space:]]+ADD VALUE" "$f" 2>/dev/null \
-       && grep -qE "'${enum_value}'" "$f" 2>/dev/null; then
-      found="$f"
-      break
-    fi
-  done
-
-  if [ -z "$found" ]; then
-    log "AUTOHEAL: keine ADD-VALUE-Migration fuer Enum '$enum_name=$enum_value' gefunden."
-    return 1
-  fi
-
-  log "AUTOHEAL[$AUTOHEAL_DEPTH]: fuehre $(basename "$found") aus, um '$enum_name=$enum_value' hinzuzufuegen"
-  AUTOHEAL_DEPTH=$((AUTOHEAL_DEPTH + 1))
-  if ! run_migration_with_autoheal "$found"; then
-    AUTOHEAL_DEPTH=$((AUTOHEAL_DEPTH - 1))
-    log "AUTOHEAL: ADD-VALUE-Migration fuer '$enum_name=$enum_value' ist selbst fehlgeschlagen."
-    return 1
-  fi
-  AUTOHEAL_DEPTH=$((AUTOHEAL_DEPTH - 1))
-
-  mark_applied "$found"
-  autoheal_count=$((autoheal_count + 1))
-  log "AUTOHEAL: '$enum_name=$enum_value' hinzugefuegt."
-  return 0
-}
-
 # Heilt eine fehlende Spalte: sucht eine Migration, die BEIDE Patterns enthaelt
 # (Tabellenname + ADD COLUMN spalte). Notwendig weil eine Spalte typischerweise
 # nicht durch CREATE TABLE, sondern durch ein nachtraegliches ALTER TABLE entsteht.
@@ -221,15 +172,6 @@ run_migration_with_autoheal() {
   local attempt=0
   local err tmp
 
-  # Migrations mit ALTER TYPE ... ADD VALUE koennen nicht in einer Tx laufen — Postgres
-  # weigert sich. Sie muessen idempotent geschrieben sein, damit ein Retry nach partial
-  # state noch funktioniert.
-  local tx_flag="--single-transaction"
-  if ! migration_is_tx_safe "$file"; then
-    tx_flag=""
-    log "Hinweis: $(basename "$file") laeuft non-tx (enthaelt ALTER TYPE ADD VALUE)"
-  fi
-
   while [ $attempt -lt 5 ]; do
     attempt=$((attempt + 1))
     tmp="$(mktemp)"
@@ -237,7 +179,7 @@ run_migration_with_autoheal() {
     # rollen 1-4 mit zurueck, AUTOHEAL erstellt das fehlende Objekt, der Retry startet von 1
     # auf einer sauberen Basis. Ohne -1 wuerden 1-4 committed bleiben, der Retry stiesse auf
     # "already exists" und die Migration waere nicht mehr heilbar.
-    if docker exec -i "$DB_CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -v ON_ERROR_STOP=1 $tx_flag < "$file" > "$tmp" 2>&1; then
+    if docker exec -i "$DB_CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -v ON_ERROR_STOP=1 --single-transaction < "$file" > "$tmp" 2>&1; then
       filter_psql_noise < "$tmp"
       rm -f "$tmp"
       return 0
@@ -282,20 +224,6 @@ run_migration_with_autoheal() {
       missing_rel="$(echo "$err" | grep -oE 'of relation "[a-zA-Z_][a-zA-Z0-9_]*"' | head -1 | sed -E 's/of relation "([^"]+)"/\1/')"
       if [ -n "$missing_col" ] && [ -n "$missing_rel" ]; then
         if autoheal_missing_column "$missing_rel" "$missing_col"; then
-          continue
-        fi
-      fi
-    fi
-
-    # Fall 5: enum-Wert fehlt – Pattern: 'invalid input value for enum X: "Y"'
-    # Tritt z.B. auf, wenn eine Trigger-Funktion einen enum-Wert referenziert, dessen
-    # ALTER-TYPE-ADD-VALUE-Migration auf prod nie ausgefuehrt wurde (Bootstrap-Drift).
-    if echo "$err" | grep -qE 'invalid input value for enum'; then
-      local missing_enum missing_value
-      missing_enum="$(echo "$err" | grep -oE 'invalid input value for enum (public\.)?[a-zA-Z_][a-zA-Z0-9_]*' | head -1 | sed -E 's/invalid input value for enum (public\.)?([a-zA-Z_][a-zA-Z0-9_]*)/\2/')"
-      missing_value="$(echo "$err" | grep -oE ': "[^"]+"' | head -1 | sed -E 's/: "([^"]+)"/\1/')"
-      if [ -n "$missing_enum" ] && [ -n "$missing_value" ]; then
-        if autoheal_missing_enum_value "$missing_enum" "$missing_value"; then
           continue
         fi
       fi
