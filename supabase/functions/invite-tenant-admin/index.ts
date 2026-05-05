@@ -34,7 +34,7 @@ const handler = async (req: Request): Promise<Response> => {
       throw new Error("Insufficient permissions");
     }
 
-    const { tenantId, adminEmail, adminName, role, redirectTo } = await req.json();
+    const { tenantId, adminEmail, adminName, role, redirectTo, force } = await req.json();
 
     // Input validation (BSI CON.8 H1)
     if (!tenantId || typeof tenantId !== "string") throw new Error("Invalid tenantId");
