@@ -155,11 +155,10 @@ const handler = async (req: Request): Promise<Response> => {
         })
         .eq("user_id", newUserId);
 
-      // Set role (upsert so it works for both freshly-created and existing users)
+      // Set role: ensure exactly one role row for this user.
       if (role === "admin" || role === "super_admin" || role === "user") {
-        await supabase
-          .from("user_roles")
-          .upsert({ user_id: newUserId, role }, { onConflict: "user_id" });
+        await supabase.from("user_roles").delete().eq("user_id", newUserId);
+        await supabase.from("user_roles").insert({ user_id: newUserId, role });
       }
 
       // Generate password-reset link
