@@ -93,37 +93,54 @@ const handler = async (req: Request): Promise<Response> => {
 
     // ── MODE 1: Direct invite (new flow – no invitation record needed) ──
     if (body.directInvite) {
-      const { email, name, role, tenantId: overrideTenantId } = body;
+      const { email, name, role, tenantId: overrideTenantId, force } = body;
       if (!email) throw new Error("Missing email");
 
       const effectiveTenantId = overrideTenantId || tenantId;
+      const callerIsSuper = roles.includes("super_admin");
+      const isSuperAdminInvite = role === "super_admin";
 
-      const tempPassword = crypto.randomUUID() + "Aa1!";
-      const { data: newUserData, error: createError } = await supabase.auth.admin.createUser({
+      // Only super_admins may invite super_admins
+      if (isSuperAdminInvite && !callerIsSuper) {
+        return new Response(
+          JSON.stringify({ success: false, error: "Nur Super-Admins dürfen Plattform-Administratoren einladen." }),
+          { status: 403, headers: { "Content-Type": "application/json", ...corsHeaders } }
+        );
+      }
+
+      // ── Uniqueness / cross-tenant guard ──
+      const conflict = await checkInviteConflict({
+        supabase,
         email,
-        password: tempPassword,
-        email_confirm: true,
+        intent: isSuperAdminInvite ? "super_admin_invite" : "tenant_invite",
+        tenantId: effectiveTenantId ?? null,
+        force: !!force,
+        callerIsSuper,
       });
+      if (!conflict.ok) {
+        return new Response(
+          JSON.stringify({ success: false, error: conflict.error }),
+          { status: conflict.status ?? 409, headers: { "Content-Type": "application/json", ...corsHeaders } }
+        );
+      }
 
       let newUserId: string;
 
-      if (createError) {
-        if (createError.message?.toLowerCase().includes("already") || createError.message?.toLowerCase().includes("exists")) {
-          // User already exists – find them and reuse
-          const { data: listData, error: listError } = await supabase.auth.admin.listUsers({
-            page: 1,
-            perPage: 1000,
-          });
-          if (listError) throw new Error("Benutzer konnte nicht gefunden werden");
-          const existingUser = listData?.users?.find((u) => u.email?.toLowerCase() === email.toLowerCase());
-          if (!existingUser) throw new Error("Benutzer mit dieser E-Mail konnte nicht gefunden werden.");
-          newUserId = existingUser.id;
-        } else {
-          throw new Error(`Benutzer konnte nicht erstellt werden: ${createError.message}`);
-        }
+      if (conflict.existingUserId) {
+        // Existing user the conflict checker explicitly accepted (same tenant, orphan, or forced override)
+        newUserId = conflict.existingUserId;
       } else {
+        const tempPassword = crypto.randomUUID() + "Aa1!";
+        const { data: newUserData, error: createError } = await supabase.auth.admin.createUser({
+          email,
+          password: tempPassword,
+          email_confirm: true,
+        });
+        if (createError || !newUserData?.user) {
+          throw new Error(`Benutzer konnte nicht erstellt werden: ${createError?.message ?? "unbekannt"}`);
+        }
         newUserId = newUserData.user.id;
-        // Wait for trigger
+        // Wait for handle_new_user trigger
         await new Promise(resolve => setTimeout(resolve, 600));
       }
 
