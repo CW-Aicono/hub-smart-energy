@@ -1,93 +1,126 @@
 ## Ziel
 
-E-Mail-Adressen müssen systemweit eindeutig einer Identität zugeordnet sein. Eine bestehende Mailadresse darf bei einer neuen Einladung **nicht stillschweigend** in einen anderen Tenant verschoben oder in der Rolle verändert werden. Insbesondere muss die strikte Trennung zwischen Super-Admin und Tenant-User gewahrt bleiben.
+Alle ausgehenden Mails laufen einheitlich über **einen Kanal** (Resend mit `info@staging.aicono.org`) und tragen **AICONO-Branding**. Die unbranded Default-Mails von Supabase Auth werden ersetzt.
 
-## Aktuelles Verhalten (Problem)
+## Aktuelle Mail-Kanäle (Ist-Zustand)
 
-In `activate-invited-user` (Mode `directInvite`) und `invite-tenant-admin`:
-- `auth.admin.createUser` wird direkt aufgerufen.
-- Bei "already exists" wird der bestehende User aus `auth.users` herausgesucht und **kommentarlos** wiederverwendet:
-  - `profiles.tenant_id` wird auf den neuen Tenant überschrieben.
-  - `user_roles.role` wird überschrieben (DB-Trigger `guard_privileged_roles` schützt zwar Super-Admin-Downgrade, aber der Fehler wird im Code nicht abgefangen → 500-artige Fehler statt klarer Meldung).
-  - Eine neue Einladungsmail wird verschickt.
-- UI bekommt nur "Einladung gesendet" zu sehen – keine Warnung, dass ein bestehender Account verändert wurde.
+| Mail-Typ | Aktueller Kanal | Branded? |
+|---|---|---|
+| Tenant-/Admin-Einladungen | Resend (`activate-invited-user`, `invite-tenant-admin`) | Ja |
+| Berichte (PDF/HTML) | Resend (`send-scheduled-report`) | Ja |
+| Charging-Rechnungen | Resend (`send-charging-invoices`) | Ja |
+| Task-Transfer | Resend (`send-task-transfer-email`) | Ja |
+| **Passwort vergessen** | **Supabase Default-SMTP** | **Nein** |
+| **Signup-Bestätigung** (Charging-/Energy-PWA) | **Supabase Default-SMTP** | **Nein** |
+| **Email-Adressänderung** | **Supabase Default-SMTP** | **Nein** |
 
-## Geplante Änderungen
+Betroffene Aufruferstellen für Auth-Mails:
+- `src/pages/Auth.tsx` (Forgot-Password)
+- `src/components/settings/ChangePasswordCard.tsx` (Passwort ändern)
+- `src/pages/ChargingApp.tsx` (Signup + Forgot)
+- `src/pages/TenantEnergyApp.tsx` (Signup + Forgot)
+- `src/hooks/useAuth.tsx` (Signup)
 
-### 1. Neue Edge Function `check-email-availability` (read-only, schnell)
+## Lösung
 
-- Input: `{ email, intent: "tenant_invite" | "super_admin_invite", tenantId? }`
-- Auth: nur authentifizierter Admin / Super-Admin darf aufrufen.
-- Logik:
-  1. Suche User in `auth.users` per `listUsers` (oder besser direkt in `profiles` per Mail-Lookup über `auth.users` Join via Service-Role).
-  2. Wenn nicht vorhanden → `{ status: "available" }`.
-  3. Wenn vorhanden → prüfe `profiles.tenant_id` und `user_roles.role`:
-     - Bereits Super-Admin (`tenant_id IS NULL`, role `super_admin`): bei `tenant_invite` → `status: "blocked_super_admin"`.
-     - Bereits in anderem Tenant: → `status: "blocked_other_tenant"` (mit Tenant-Name, nur für Super-Admin sichtbar; für Tenant-Admin generisch "andere Organisation").
-     - Bereits im selben Tenant: → `status: "exists_same_tenant"` (mit aktueller Rolle).
-     - Bei `super_admin_invite` und User ist Tenant-User: → `status: "blocked_tenant_user"`.
-- Verwendung: vor dem Submit im UI (debounced bei E-Mail-Eingabe) **und** nochmal serverseitig in den Invite-Functions.
+### Neuer geteilter Mail-Renderer
 
-### 2. Härtung in `activate-invited-user` (Mode `directInvite`)
+Neue Datei `supabase/functions/_shared/email-templates.ts` mit gebrandeten HTML-Templates (AICONO-Logo, Blau-Header, gleiche Optik wie Einladungs-Mail). Templates:
+- `passwordReset(url, recipientName?)`
+- `signupConfirm(url, recipientName?)`
+- `emailChangeConfirm(url, oldEmail, newEmail)`
+- `magicLink(url)` (Reserve)
 
-Vor `createUser` und nach Auflösung eines Konflikts:
-- Wenn Mail bereits existiert:
-  - Tenant-Admin (caller-Role `admin`):
-    - Existiert User in anderem Tenant → **400** „E-Mail wird bereits in einer anderen Organisation verwendet."
-    - Existiert User als Super-Admin → **400** „Diese E-Mail gehört zu einem Plattform-Konto und kann nicht eingeladen werden."
-    - Existiert im selben Tenant → **409** mit klarer Meldung „Nutzer existiert bereits (Rolle: X). Bitte vorhandenen Nutzer bearbeiten."
-  - Super-Admin (caller-Role `super_admin`):
-    - Bei `super_admin`-Einladung & User ist Tenant-User → **400** „E-Mail ist bereits Tenant-Nutzer. Plattform-Rolle kann nicht vergeben werden."
-    - Bei Tenant-Einladung & User existiert anderswo → standardmäßig blockieren, aber `force: true` Option erlaubt explizite Übernahme (mit Audit-Log-Eintrag).
-- **Niemals** `profiles.tenant_id` ohne explizite Bestätigung überschreiben.
-- **Niemals** `user_roles.role` ohne explizite Bestätigung überschreiben.
+Inline-CSS, weißer Body-Hintergrund, AICONO-Farben (HSL 220 60% 20%), Capsule-Buttons, Footer mit Datenschutz-/Impressum-Links, mehrsprachig (DE-default, EN-Fallback).
 
-### 3. Härtung in `invite-tenant-admin`
+### Neue Edge Function `send-auth-email`
 
-Identische Logik wie oben (super_admin als caller, Ziel ist Tenant-Admin):
-- Existiert User schon in anderem Tenant → blockieren ohne `force: true`.
-- Existiert User als Super-Admin → blockieren mit klarer Fehlermeldung.
+Datei: `supabase/functions/send-auth-email/index.ts`, `verify_jwt = false` (in `config.toml` registrieren).
 
-### 4. UI-Anpassungen
+**Input:**
+```ts
+{ type: "password_reset" | "signup_confirm" | "email_change" | "magic_link",
+  email: string, redirectTo?: string, locale?: "de"|"en"|"es"|"nl",
+  templateData?: Record<string, unknown> }
+```
 
-- **`InviteUserDialog.tsx`** (Tenant-Admin):
-  - Bei E-Mail-Blur: Aufruf `check-email-availability`.
-  - Inline-Hinweis unter dem Feld:
-    - Grün „E-Mail verfügbar"
-    - Rot mit konkreter Fehlermeldung wenn blockiert
-    - Submit-Button disabled bei blockiertem Status
-- **`SuperAdminInviteDialog.tsx`** (Super-Admin):
-  - Identische Inline-Prüfung.
-  - Bei `blocked_other_tenant`: zeigt Tenant-Name (Super-Admin darf das sehen).
-  - Bei `exists_same_tenant`/`blocked_tenant_user`: Möglichkeit „Trotzdem übernehmen" mit Bestätigungsdialog (sendet `force: true` an Backend, erzeugt Audit-Eintrag).
-- Toast-Fehler aus dem Backend werden 1:1 angezeigt (Backend ist Quelle der Wahrheit).
+**Ablauf:**
+1. JWT-Validierung **nur** für `password_reset` mit existierendem User optional — die Funktion ist für nicht eingeloggte User (Forgot-Password, Signup) erreichbar. Schutz via Rate-Limit (in-memory pro IP, 5/min) + E-Mail-Format-Validierung (Zod).
+2. Service-Role-Client erstellen.
+3. Via `auth.admin.generateLink({ type, email, options: { redirectTo } })` den Magic-/Recovery-Link generieren.
+4. Wenn der User nicht existiert (bei `password_reset`): **kein** Fehler nach außen (Information-Disclosure-Schutz), aber kein Versand.
+5. Template rendern → Resend-Send via `RESEND_API_KEY` mit `From: "AICONO <info@staging.aicono.org>"` (über `_shared/resend-from.ts`).
+6. Reply-To: `info@staging.aicono.org`.
+7. Audit-Logging in `email_send_audit` (siehe unten).
 
-### 5. Audit-Log
+### Frontend-Umstellung
 
-Neuer Eintrag in `user_role_audit_log` (existiert bereits) bzw. neuer Tabelle `user_invitation_audit`:
-- Wenn ein bestehender User per `force: true` übernommen wird, wird festgehalten:
-  - Caller, alter Tenant, neuer Tenant, alte Rolle, neue Rolle, Zeitpunkt.
+Statt `supabase.auth.resetPasswordForEmail(...)` und `supabase.auth.signUp({ email, password })` (für Signup-Confirmation-Mail) wird `supabase.functions.invoke("send-auth-email", { body: {...} })` aufgerufen:
 
-## Technische Details
+- **`Auth.tsx`** (`handleForgotPassword`): Aufruf `send-auth-email` mit `type: "password_reset"`, `redirectTo: ${origin}/set-password`.
+- **`ChangePasswordCard.tsx`**: gleicher Call.
+- **`ChargingApp.tsx`** (Forgot + Signup): beide Calls auf neue Function umstellen.
+- **`TenantEnergyApp.tsx`** (Forgot + Signup): identisch.
+- **`useAuth.tsx`** (`signUp`): bleibt — Supabase erstellt den User; aber Confirmation-Mail unterdrücken (siehe Auth-Settings) und parallel `send-auth-email` mit `type: "signup_confirm"` aufrufen.
 
-- Edge Function `check-email-availability`:
-  - `verify_jwt = false` mit manueller Token-Validierung (Standard-Pattern im Projekt).
-  - Antwort enthält keine PII außer dem nötigen Tenant-Namen (nur an Super-Admin).
-  - Rate-Limit empfohlen, aber zunächst nicht zwingend (Aufruf nur durch eingeloggten Admin).
-- Bestehende `auth.users.email` UNIQUE-Constraint bleibt – wir verlassen uns explizit darauf.
-- Keine DB-Migration nötig (existierende Tabellen reichen).
+### Auth-Settings anpassen
 
-## Out of Scope
+Über `cloud--configure_auth`:
+- `mailer_autoconfirm = false` (bleibt — User muss Mail bestätigen).
+- Default-Mail-Templates in Supabase deaktivieren ist **nicht möglich** ohne Auth-Hook (Pro-Feature). Fallback: **Custom SMTP-Sender-Adresse** in Supabase auf `info@staging.aicono.org` setzen, damit auch unverhinderbare System-Mails (z. B. Email-Change-Confirmation, falls User über UI ändert) konsistent aussehen. Custom-Templates (HTML) ebenfalls in Supabase auf AICONO-Branding hinterlegen.
 
-- Migration bestehender "verschobener" User (falls in Vergangenheit Konten unbeabsichtigt umgehängt wurden) – auf Anfrage separat.
-- Self-Service Mailwechsel durch User selbst.
+→ Konkret: Wir setzen die Auth-Email-Templates in Supabase via Management-API/Migration auf vereinfachte AICONO-Versionen mit `{{ .ConfirmationURL }}` als Fallback. Die primäre Versandstrecke bleibt aber `send-auth-email` über Resend.
 
-## Dateien, die geändert werden
+### Audit-Tabelle
 
-- `supabase/functions/check-email-availability/index.ts` (neu)
-- `supabase/functions/activate-invited-user/index.ts` (Härtung)
-- `supabase/functions/invite-tenant-admin/index.ts` (Härtung)
-- `supabase/config.toml` (verify_jwt-Eintrag für neue Function)
-- `src/components/admin/InviteUserDialog.tsx` (Inline-Check + Disabled-Logik)
-- `src/components/super-admin/SuperAdminInviteDialog.tsx` (Inline-Check + Force-Bestätigung)
-- Optional: i18n-Strings in `src/i18n/tenantAppTranslations.ts` und `src/i18n/superAdminTranslations.ts`
+Neue Tabelle `email_send_audit` (RLS: nur super_admin lesen):
+```
+id uuid pk, created_at timestamptz, type text, recipient text,
+status text ('sent'|'failed'|'suppressed_user_not_found'),
+resend_message_id text, error text
+```
+Migration via `supabase--migration_lov`.
+
+### Umzustellende/zu erstellende Dateien
+
+**Neu:**
+- `supabase/functions/send-auth-email/index.ts`
+- `supabase/functions/_shared/email-templates.ts`
+- Migration für `email_send_audit`
+
+**Geändert:**
+- `supabase/config.toml` (Registrierung `send-auth-email`)
+- `src/pages/Auth.tsx`
+- `src/pages/ChargingApp.tsx`
+- `src/pages/TenantEnergyApp.tsx`
+- `src/components/settings/ChangePasswordCard.tsx`
+- `src/hooks/useAuth.tsx`
+- Optional: i18n-Strings (DE/EN/ES/NL) für Toast-Fehlermeldungen
+
+### Was sich für den User sichtbar ändert
+
+- Passwort-Reset-Mail kommt von `info@staging.aicono.org` mit AICONO-Logo + Blau-Header (statt unbranded Supabase-Mail).
+- Signup-Bestätigung in beiden PWAs ebenfalls gebrandet.
+- Einheitliche Reply-To-Adresse für alle Mails.
+
+### Out of Scope
+
+- Migration zu Lovable Emails / DNS-Umzug (bewusst ausgeschlossen, Resend bleibt).
+- Marketing-/Newsletter-Versand.
+- Bounce-/Complaint-Handling über Resend-Webhooks (kann später separat ergänzt werden).
+
+### Risiken & Hinweise
+
+- `auth.admin.generateLink` setzt voraus, dass der User in `auth.users` bereits existiert (bei Signup wird er durch `signUp()` zuerst angelegt — Reihenfolge im Frontend beachten).
+- Supabase sendet bei `signUp()` ggf. **automatisch** eine Confirmation-Mail. Um Doppelversand zu vermeiden: in den Auth-Settings die Default-Confirmation-Mail per Custom-Template auf einen minimalen "wird gleich zugestellt"-Hinweis reduzieren — oder den Template-Inhalt mit dem AICONO-Branding vereinheitlichen, dann ist es egal welcher Kanal greift. Empfehlung: **Beide Wege brand-konsistent halten** (Supabase-Template + send-auth-email) statt Doppelversand zu jagen.
+- Rate-Limit gegen Mail-Bombing wichtig, da Endpoint ohne JWT erreichbar ist.
+
+## Reihenfolge der Umsetzung
+
+1. Migration `email_send_audit` anlegen.
+2. `_shared/email-templates.ts` schreiben.
+3. Edge Function `send-auth-email` schreiben + in `config.toml` registrieren + deployen.
+4. Mit `curl` testen (Test-Recipient `christvs@t-online.de`).
+5. Frontend-Aufrufe in 5 Dateien umstellen.
+6. Supabase-Auth-Templates (über Management-API) auf AICONO-Branding setzen — als Sicherheitsnetz.
+7. End-to-End-Test: Forgot-Password aus `/auth`, Signup aus Charging-PWA.

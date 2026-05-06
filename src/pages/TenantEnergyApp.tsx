@@ -130,8 +130,13 @@ function TenantAppAuth({ onAuth, lang }: { onAuth: () => void; lang: TenantLang 
     e.preventDefault();
     if (!email) { toast.error(t("auth.enter_email")); return; }
     setLoading(true);
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: window.location.origin + "/te",
+    const { error } = await supabase.functions.invoke("send-auth-email", {
+      body: {
+        type: "password_reset",
+        email,
+        redirectTo: window.location.origin + "/te",
+        locale: "de",
+      },
     });
     setLoading(false);
     if (error) { toast.error(t("auth.send_error")); } else {
