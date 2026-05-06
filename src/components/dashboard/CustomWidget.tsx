@@ -300,15 +300,28 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
         });
       }
 
-      // Non-day periods: use split daily totals for proper bezug/einspeisung
-      const { data } = await supabase.rpc("get_meter_daily_totals_split" as any, {
-        p_meter_ids: config.meter_ids,
-        p_from_date: from.toISOString().split("T")[0],
-        p_to_date: to.toISOString().split("T")[0],
-      });
-      if (!data) return [];
-
-      const rows = data as Array<{ meter_id: string; day: string; bezug: number; einspeisung: number }>;
+      // Non-day periods: use split daily totals for proper bezug/einspeisung.
+      // Paginate to avoid the implicit 1000-row PostgREST limit on RPCs
+      // (year × many meters can otherwise truncate silently).
+      const rows: Array<{ meter_id: string; day: string; bezug: number; einspeisung: number }> = [];
+      const dailyPageSize = 1000;
+      let dailyFrom = 0;
+      let dailyHasMore = true;
+      while (dailyHasMore) {
+        const { data: page, error: dailyError } = await supabase
+          .rpc("get_meter_daily_totals_split" as any, {
+            p_meter_ids: config.meter_ids,
+            p_from_date: from.toISOString().split("T")[0],
+            p_to_date: to.toISOString().split("T")[0],
+          })
+          .range(dailyFrom, dailyFrom + dailyPageSize - 1);
+        if (dailyError) throw dailyError;
+        if (!page || page.length === 0) break;
+        rows.push(...(page as Array<{ meter_id: string; day: string; bezug: number; einspeisung: number }>));
+        dailyHasMore = page.length === dailyPageSize;
+        dailyFrom += dailyPageSize;
+      }
+      if (rows.length === 0) return [];
 
       // Check which meters have any einspeisung (bidirectional)
       const hasBidi = new Set<string>();
