@@ -120,8 +120,13 @@ function ChargingAppAuth({ onAuth }: { onAuth: () => void }) {
     e.preventDefault();
     if (!email) { toast.error("Bitte E-Mail eingeben"); return; }
     setLoading(true);
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: window.location.origin + "/ev",
+    const { error } = await supabase.functions.invoke("send-auth-email", {
+      body: {
+        type: "password_reset",
+        email,
+        redirectTo: window.location.origin + "/ev",
+        locale: "de",
+      },
     });
     setLoading(false);
     if (error) { toast.error("Fehler beim Senden"); } else {
