@@ -113,10 +113,20 @@ function TenantAppAuth({ onAuth, lang }: { onAuth: () => void; lang: TenantLang 
     e.preventDefault();
     if (password.length < 6) { toast.error(t("auth.password_min")); return; }
     setLoading(true);
-    const { error } = await supabase.auth.signUp({
+    const redirectUrl = window.location.origin + "/te";
+    const { error, data } = await supabase.auth.signUp({
       email, password,
-      options: { emailRedirectTo: window.location.origin + "/te", data: { display_name: name } },
+      options: { emailRedirectTo: redirectUrl, data: { display_name: name } },
     });
+    if (!error && data?.user) {
+      try {
+        await supabase.functions.invoke("send-auth-email", {
+          body: { type: "signup_confirm", email, redirectTo: redirectUrl, locale: "de", recipientName: name },
+        });
+      } catch (e) {
+        console.error("[TenantEnergyApp] send-auth-email signup_confirm failed", e);
+      }
+    }
     setLoading(false);
     if (error) {
       toast.error(error.message.includes("already registered") ? t("auth.email_exists") : error.message);
