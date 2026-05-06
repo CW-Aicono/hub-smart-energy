@@ -217,26 +217,15 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
         );
 
         const aggregatedRows: Array<{ meter_id: string; power_avg: number; bucket: string }> = [];
-        const pageSize = 1000;
-        let pageFrom = 0;
-        let hasMore = true;
-
-        while (hasMore) {
-          const { data, error } = await supabase
-            .rpc("get_power_readings_5min", {
-              p_meter_ids: config.meter_ids,
-              p_start: from.toISOString(),
-              p_end: to.toISOString(),
-            })
-            .range(pageFrom, pageFrom + pageSize - 1);
-
-          if (error) throw error;
-          if (!data || data.length === 0) break;
-
-          aggregatedRows.push(...(data as Array<{ meter_id: string; power_avg: number; bucket: string }>));
-          hasMore = data.length === pageSize;
-          pageFrom += pageSize;
-        }
+        const { data: aggData, error: aggError } = await supabase
+          .rpc("get_power_readings_5min", {
+            p_meter_ids: config.meter_ids,
+            p_start: from.toISOString(),
+            p_end: to.toISOString(),
+          })
+          .range(0, 9999);
+        if (aggError) throw aggError;
+        if (aggData) aggregatedRows.push(...(aggData as Array<{ meter_id: string; power_avg: number; bucket: string }>));
 
         let mergedRows = aggregatedRows.map((row) => ({
           meter_id: row.meter_id,
@@ -248,32 +237,20 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
         // last compaction run and now (the RPC already handles on-the-fly
         // aggregation, but may miss the very latest readings still being written)
         const recentCutoff = new Date(Date.now() - 15 * 60 * 1000);
-        const recentPages: Array<{ meter_id: string; power_value: number; recorded_at: string }> = [];
-        let recentFrom = 0;
-        const recentPageSize = 1000;
-        let recentHasMore = true;
+        const { data: recentRaw, error: recentError } = await supabase
+          .from("meter_power_readings")
+          .select("meter_id, power_value, recorded_at")
+          .in("meter_id", config.meter_ids)
+          .gte("recorded_at", recentCutoff.toISOString())
+          .lte("recorded_at", to.toISOString())
+          .order("recorded_at", { ascending: true })
+          .limit(2000);
+        if (recentError) throw recentError;
 
-        while (recentHasMore) {
-          const { data: recentRaw, error: recentError } = await supabase
-            .from("meter_power_readings")
-            .select("meter_id, power_value, recorded_at")
-            .in("meter_id", config.meter_ids)
-            .gte("recorded_at", recentCutoff.toISOString())
-            .lte("recorded_at", to.toISOString())
-            .order("recorded_at", { ascending: true })
-            .range(recentFrom, recentFrom + recentPageSize - 1);
-
-          if (recentError) throw recentError;
-          if (!recentRaw || recentRaw.length === 0) break;
-          recentPages.push(...recentRaw);
-          recentHasMore = recentRaw.length === recentPageSize;
-          recentFrom += recentPageSize;
-        }
-
-        if (recentPages.length) {
+        if (recentRaw && recentRaw.length) {
           mergedRows = mergedRows.filter((row) => new Date(row.recorded_at) < recentCutoff);
           mergedRows.push(
-            ...recentPages.map((row) => ({
+            ...recentRaw.map((row) => ({
               meter_id: row.meter_id,
               value: row.power_value,
               recorded_at: row.recorded_at,

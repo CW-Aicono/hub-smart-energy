@@ -185,41 +185,23 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
 
       let allData: Array<{ meter_id: string; power_value: number; recorded_at: string }> = [];
 
-      const pageSize = 1000;
-      let from = 0;
-      let hasMore = true;
-      let aggError: unknown = null;
-      const aggregatedRows: Array<{ meter_id: string; power_avg: number; bucket: string }> = [];
-
-      while (hasMore && !stale) {
-        const { data: pageData, error: pageError } = await supabase
-          .rpc("get_power_readings_5min", {
-            p_meter_ids: mainMeterIds,
-            p_start: rangeStart.toISOString(),
-            p_end: rangeEnd.toISOString(),
-          })
-          .range(from, from + pageSize - 1);
-
-        if (pageError) { aggError = pageError; break; }
-        if (!pageData || pageData.length === 0) { hasMore = false; break; }
-
-        aggregatedRows.push(...(pageData as Array<{ meter_id: string; power_avg: number; bucket: string }>));
-        hasMore = pageData.length === pageSize;
-        from += pageSize;
-      }
+      const { data: pageData, error: aggError } = await supabase
+        .rpc("get_power_readings_5min", {
+          p_meter_ids: mainMeterIds,
+          p_start: rangeStart.toISOString(),
+          p_end: rangeEnd.toISOString(),
+        })
+        .range(0, 9999);
 
       if (stale) return;
 
-      if (!aggError && aggregatedRows.length > 0) {
-        allData = aggregatedRows.map((r) => ({
+      if (!aggError && pageData && pageData.length > 0) {
+        allData = (pageData as Array<{ meter_id: string; power_avg: number; bucket: string }>).map((r) => ({
           meter_id: r.meter_id,
           power_value: r.power_avg,
           recorded_at: r.bucket,
         }));
-
-        // Raw data supplement removed: aggregated 5-min buckets only
-        // This eliminates Loxone boundary spikes at :00 and :30 marks
-      } else {
+      } else if (aggError) {
         console.warn("get_power_readings_5min returned no data or error:", aggError);
       }
 
