@@ -185,24 +185,40 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
 
       let allData: Array<{ meter_id: string; power_value: number; recorded_at: string }> = [];
 
-      const { data: pageData, error: aggError } = await supabase
-        .rpc("get_power_readings_5min", {
-          p_meter_ids: mainMeterIds,
-          p_start: rangeStart.toISOString(),
-          p_end: rangeEnd.toISOString(),
-        })
-        .range(0, 9999);
+      // Paginate to avoid PostgREST row limits when many main meters × 288 buckets/day
+      // exceed a single page (e.g. "Alle Liegenschaften" view truncates Strom after noon).
+      const PAGE_SIZE = 1000;
+      let pageIdx = 0;
+      while (true) {
+        const from = pageIdx * PAGE_SIZE;
+        const to = from + PAGE_SIZE - 1;
+        const { data: pageData, error: aggError } = await supabase
+          .rpc("get_power_readings_5min", {
+            p_meter_ids: mainMeterIds,
+            p_start: rangeStart.toISOString(),
+            p_end: rangeEnd.toISOString(),
+          })
+          .range(from, to);
 
-      if (stale) return;
+        if (stale) return;
 
-      if (!aggError && pageData && pageData.length > 0) {
-        allData = (pageData as Array<{ meter_id: string; power_avg: number; bucket: string }>).map((r) => ({
-          meter_id: r.meter_id,
-          power_value: r.power_avg,
-          recorded_at: r.bucket,
-        }));
-      } else if (aggError) {
-        console.warn("get_power_readings_5min returned no data or error:", aggError);
+        if (aggError) {
+          console.warn("get_power_readings_5min error:", aggError);
+          break;
+        }
+        if (!pageData || pageData.length === 0) break;
+
+        allData = allData.concat(
+          (pageData as Array<{ meter_id: string; power_avg: number; bucket: string }>).map((r) => ({
+            meter_id: r.meter_id,
+            power_value: r.power_avg,
+            recorded_at: r.bucket,
+          }))
+        );
+
+        if (pageData.length < PAGE_SIZE) break;
+        pageIdx++;
+        if (pageIdx > 50) break; // safety
       }
 
       if (!stale) {
