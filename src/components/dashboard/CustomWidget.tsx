@@ -5,6 +5,7 @@ import { CustomWidgetDefinition, ChartType } from "@/hooks/useCustomWidgetDefini
 import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useDashboardFilter, TimePeriod } from "@/hooks/useDashboardFilter";
+import { useWeekStartDay } from "@/hooks/useWeekStartDay";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { BarChart3, LineChart, Gauge, Activity, Table2, GitBranch, ChevronLeft, ChevronRight } from "lucide-react";
