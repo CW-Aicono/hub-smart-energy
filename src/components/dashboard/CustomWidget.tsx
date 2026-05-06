@@ -300,27 +300,21 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
         });
       }
 
-      // Non-day periods: use split daily totals for proper bezug/einspeisung.
-      // Paginate to avoid the implicit 1000-row PostgREST limit on RPCs
-      // (year × many meters can otherwise truncate silently).
-      const rows: Array<{ meter_id: string; day: string; bezug: number; einspeisung: number }> = [];
-      const dailyPageSize = 1000;
-      let dailyFrom = 0;
-      let dailyHasMore = true;
-      while (dailyHasMore) {
-        const { data: page, error: dailyError } = await supabase
-          .rpc("get_meter_daily_totals_split" as any, {
-            p_meter_ids: config.meter_ids,
-            p_from_date: from.toISOString().split("T")[0],
-            p_to_date: to.toISOString().split("T")[0],
-          })
-          .range(dailyFrom, dailyFrom + dailyPageSize - 1);
-        if (dailyError) throw dailyError;
-        if (!page || page.length === 0) break;
-        rows.push(...(page as Array<{ meter_id: string; day: string; bezug: number; einspeisung: number }>));
-        dailyHasMore = page.length === dailyPageSize;
-        dailyFrom += dailyPageSize;
-      }
+      // Non-day periods: use the server-side fallback RPC, which prefers archived
+      // daily totals from `meter_period_totals` and only aggregates from 5-min
+      // readings for days that aren't archived yet (typically: today). This
+      // avoids scanning tens of thousands of 5-min rows for week/month/year
+      // views and removes the previous ~60 s wait time.
+      const { data: rpcRows, error: dailyError } = await supabase.rpc(
+        "get_meter_daily_totals_split_with_fallback" as any,
+        {
+          p_meter_ids: config.meter_ids,
+          p_from_date: from.toISOString().split("T")[0],
+          p_to_date: to.toISOString().split("T")[0],
+        },
+      );
+      if (dailyError) throw dailyError;
+      const rows = (rpcRows ?? []) as Array<{ meter_id: string; day: string; bezug: number; einspeisung: number }>;
       if (rows.length === 0) return [];
 
       // Check which meters have any einspeisung (bidirectional)
