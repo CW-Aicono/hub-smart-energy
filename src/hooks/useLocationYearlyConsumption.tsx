@@ -35,7 +35,7 @@ export function useLocationYearlyConsumption(
 
       const result: MultiYearConsumption = {};
 
-      for (const year of years) {
+      await Promise.all(years.map(async (year) => {
         const fromDate = `${year}-01-01`;
         const toDate = `${year}-12-31`;
 
@@ -46,7 +46,7 @@ export function useLocationYearlyConsumption(
 
         if (sErr || !sums) {
           result[year] = {};
-          continue;
+          return;
         }
 
         const byLocation: ConsumptionByLocation = {};
@@ -63,7 +63,7 @@ export function useLocationYearlyConsumption(
         }
 
         result[year] = byLocation;
-      }
+      }));
 
       return result;
     },
