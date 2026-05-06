@@ -1857,6 +1857,39 @@ export type Database = {
           },
         ]
       }
+      email_send_audit: {
+        Row: {
+          created_at: string
+          error: string | null
+          id: string
+          metadata: Json
+          recipient: string
+          resend_message_id: string | null
+          status: string
+          type: string
+        }
+        Insert: {
+          created_at?: string
+          error?: string | null
+          id?: string
+          metadata?: Json
+          recipient: string
+          resend_message_id?: string | null
+          status: string
+          type: string
+        }
+        Update: {
+          created_at?: string
+          error?: string | null
+          id?: string
+          metadata?: Json
+          recipient?: string
+          resend_message_id?: string | null
+          status?: string
+          type?: string
+        }
+        Relationships: []
+      }
       email_templates: {
         Row: {
           body_html: string
