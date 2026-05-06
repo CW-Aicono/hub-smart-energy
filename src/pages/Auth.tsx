@@ -45,8 +45,13 @@ const Auth = () => {
       return;
     }
     setSubmitting(true);
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/set-password`,
+    const { error } = await supabase.functions.invoke("send-auth-email", {
+      body: {
+        type: "password_reset",
+        email,
+        redirectTo: `${window.location.origin}/set-password`,
+        locale: "de",
+      },
     });
     setSubmitting(false);
     if (error) {
