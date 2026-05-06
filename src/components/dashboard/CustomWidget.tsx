@@ -461,9 +461,18 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
                       <YAxis tick={{ fontSize: 11 }} domain={yDomain} allowDataOverflow={false} />
                       <Tooltip content={selectedPeriod === "day" ? <DayTooltip unit={displayUnit} /> : undefined} formatter={selectedPeriod !== "day" ? (v: number) => v?.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " " + displayUnit : undefined} />
                       <Legend content={() => null} />
-                      {config.meter_ids.map((mid, i) => (
-                        <Line key={mid} type="monotone" dataKey={mid} name={meterDetails[mid]?.name || `Zähler ${i + 1}`} stroke={getSeriesColor(i)} strokeWidth={2} dot={false} connectNulls={true} hide={hiddenSeries.has(mid)} />
-                      ))}
+                      {config.meter_ids.flatMap((mid, i) => {
+                        const meterName = meterDetails[mid]?.name || `Zähler ${i + 1}`;
+                        if (bidirectionalMeterIds.has(mid) && selectedPeriod !== "day") {
+                          return [
+                            <Line key={`${mid}_bezug`} type="monotone" dataKey={`${mid}_bezug`} name={`${meterName} Bezug`} stroke={getSeriesColor(i)} strokeWidth={2} dot={false} connectNulls={true} hide={hiddenSeries.has(`${mid}_bezug`)} />,
+                            <Line key={`${mid}_einspeisung`} type="monotone" dataKey={`${mid}_einspeisung`} name={`${meterName} Einspeisung`} stroke={EINSPEISUNG_COLOR} strokeWidth={2} dot={false} connectNulls={true} hide={hiddenSeries.has(`${mid}_einspeisung`)} />,
+                          ];
+                        }
+                        return [
+                          <Line key={mid} type="monotone" dataKey={mid} name={meterName} stroke={getSeriesColor(i)} strokeWidth={2} dot={false} connectNulls={true} hide={hiddenSeries.has(mid)} />,
+                        ];
+                      })}
                       {(config.thresholds || []).map((t, i) => (
                         <ReferenceLine key={i} y={t.value} stroke={t.color} strokeDasharray="5 5" label={t.label} />
                       ))}
