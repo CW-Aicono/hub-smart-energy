@@ -176,7 +176,8 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
   const activeChartType: ChartType =
     config.chart_type_per_period?.[selectedPeriod] ?? definition.chart_type;
 
-  const { from, to } = useMemo(() => getDateRange(selectedPeriod, offset), [selectedPeriod, offset]);
+  const weekStartsOn = useWeekStartDay();
+  const { from, to } = useMemo(() => getDateRange(selectedPeriod, offset, weekStartsOn), [selectedPeriod, offset, weekStartsOn]);
   const periodLabel = useMemo(() => getPeriodLabel(selectedPeriod, offset), [selectedPeriod, offset]);
   const canGoForward = offset < 0;
 
