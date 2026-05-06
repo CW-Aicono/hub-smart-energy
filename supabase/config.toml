@@ -138,3 +138,6 @@ verify_jwt = false
 
 [functions.check-email-availability]
 verify_jwt = false
+
+[functions.send-auth-email]
+verify_jwt = false
