@@ -6796,6 +6796,14 @@ export type Database = {
           meter_id: string
         }[]
       }
+      get_meter_daily_totals_with_fallback: {
+        Args: { p_from_date: string; p_meter_ids: string[]; p_to_date: string }
+        Returns: {
+          day: string
+          meter_id: string
+          total_value: number
+        }[]
+      }
       get_meter_period_sums: {
         Args: { p_from_date: string; p_meter_ids: string[]; p_to_date: string }
         Returns: {

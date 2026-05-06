@@ -1,107 +1,60 @@
-## Ziel
+## Performance-Audit Dashboard-Graphen
 
-**Alle Mails — Auth + App — laufen ausschließlich über Resend**, sowohl in Lovable (Staging) als auch auf Hetzner (Live). Supabase Default-SMTP wird vollständig umgangen. Frontend-/Function-Code ist **environment-agnostisch** — der Unterschied zwischen Staging und Live liegt ausschließlich in den Resend-Secrets/Absender-Adressen.
+### Bestandsaufnahme (was bereits optimiert ist)
 
-## Aktuelle Lücke
+- `usePeriodSumsWithFallback` → Sankey, Pie, Kosten, Sustainability nutzen die schnelle Server-RPC `get_meter_period_sums_with_fallback`.
+- `EnergyChart` (Energieverbrauch) und `CustomWidget` Woche/Monat/Jahr → seit der letzten Änderung auf `get_meter_daily_totals_split_with_fallback`.
 
-| Mail-Typ | Status |
-|---|---|
-| Tenant-/Admin-Einladungen, Berichte, Rechnungen, Task-Transfer | Resend ✅ |
-| Passwort vergessen | Resend ✅ (`send-auth-email`) |
-| **Signup-Bestätigung** (Charging-PWA, Energy-PWA, Hauptapp) | **Supabase Default-SMTP ❌** |
-| **Email-Adressänderung** | **Supabase Default-SMTP ❌** |
+### Verbleibende Bottlenecks
 
-## Environment-Strategie (Lovable Staging vs. Hetzner Live)
+| # | Komponente | Problem | Auswirkung |
+|---|---|---|---|
+| 1 | `EnergyChart` Tag-Ansicht | `get_power_readings_5min` wird seitenweise (1000er-Pages) geholt — bei vielen Hauptzählern mehrere Roundtrips | 2–8 s Initialladung |
+| 2 | `CustomWidget` Tag-Ansicht | Gleiche Pagination + zusätzlicher 15-Min-Raw-Fetch mit Pagination | 2–8 s |
+| 3 | `EnergyFlowMonitor` | Nutzt altes `get_meter_daily_totals` (ohne Fallback) → heutiger Tag fehlt, Werte erscheinen erst nach Mitternachts-Aggregation | Falsche Anzeige + langsam |
+| 4 | `useDataCompleteness` (Reports) | Altes `get_meter_daily_totals`, kein Fallback | Heutiger Tag wird als „lückenhaft" markiert |
+| 5 | `useLocationYearlyConsumption` | Sequentielle Schleife pro Jahr (`for year of years` mit `await`) | Bei 3 Jahren ≈ 3× Latenz statt parallel |
+| 6 | `pvActuals.ts` | Paginierte `meter_power_readings` Abfrage | Bei großen Zeiträumen viele Roundtrips |
 
-Der gesamte Application-Code (Frontend + Edge Functions) bleibt **identisch** in beiden Umgebungen. Trennung erfolgt nur über Secrets, die pro Umgebung **getrennt** gepflegt werden:
+### Geplante Änderungen
 
-| Secret | Lovable (Staging) | Hetzner (Live) |
+**1. Neue Server-RPC `get_meter_daily_totals_with_fallback`** (Migration)
+- Kombiniert wie bei der Split-Variante: archivierte Tagessummen aus `meter_period_totals` + 5-Min-Fallback nur für fehlende Tage (typischerweise heute).
+- Gibt `meter_id, day, total_value` zurück (kompatibel zur alten Signatur).
+
+**2. `EnergyFlowMonitor.tsx`**
+- `get_meter_daily_totals` → `get_meter_daily_totals_with_fallback`.
+- Damit werden auch heutige Werte korrekt angezeigt, ohne Wartezeit.
+
+**3. `useDataCompleteness.tsx`**
+- Wechsel auf neue RPC, damit Lückenanalyse den heutigen Tag korrekt einschließt.
+
+**4. `EnergyChart` und `CustomWidget` Tag-Ansicht**
+- Pagination entfernen (eine einzige RPC-Anfrage). Die 5-Min-Daten für einen Tag mit ein paar Hauptzählern liegen weit unter dem 1000-Zeilen-Default — die Schleife macht im Schnitt 1–2 unnötige Roundtrips. Falls > 1000 Zeilen erwartet (sehr viele Zähler), Limit explizit auf 5000 setzen.
+- `CustomWidget`: 15-Min-Raw-Pagination ebenfalls auf einen Single-Call mit `limit(2000)` reduzieren.
+
+**5. `useLocationYearlyConsumption.tsx`**
+- Schleife durch `Promise.all(years.map(...))` ersetzen → alle Jahre parallel laden.
+
+**6. `pvActuals.ts`**
+- Pagination der `meter_power_readings`-Abfrage durch Single-Call mit hartem Limit ersetzen (gleiche Logik wie EnergyChart).
+
+**7. React-Query-Caching vereinheitlichen**
+- Bei `EnergyChart` und `EnergyFlowMonitor` (beide nutzen noch `useEffect` + `useState`) auf `useQuery` mit `staleTime: 5 min` und `placeholderData: keepPreviousData` umstellen, damit Periodenwechsel keinen Blank-State erzeugt und nicht jedes Mal neu gefetcht wird.
+
+### Erwartete Wirkung
+
+| Sicht | Vorher | Nachher |
 |---|---|---|
-| `RESEND_API_KEY` | Staging-Resend-Key | **Live-Resend-Key (separater API-Key auf Resend)** |
-| `RESEND_FROM_EMAIL` | `info@staging.aicono.org` | **`info@aicono.org`** (verifizierte Live-Domain) |
+| Energieverbrauch Tag | 2–8 s | < 1 s |
+| Energieverbrauch Woche/Monat | bereits 1–2 s | unverändert |
+| EnergyFlowMonitor heute | zeigt 0 / 30 s | < 1 s mit korrekten Werten |
+| Custom Widget Tag | 2–8 s | < 1 s |
+| Reports Datencompleteness | langsam | < 1 s, korrekt |
+| Mehrjahres-Vergleich | n × Latenz | 1× Latenz |
 
-**Wichtig — kein Code-Pfad referenziert die Umgebung explizit.** Die existierende Helper-Funktion `supabase/functions/_shared/resend-from.ts` liest bereits `RESEND_FROM_EMAIL` aus den Env-Vars. Dadurch:
-- GitHub-Push von Lovable → Hetzner deployt nur Code, **keine Secrets**.
-- Hetzner behält seinen eigenen Resend-Key + `info@aicono.org` Absender.
-- Reply-To wird ebenfalls auf `RESEND_FROM_EMAIL` umgestellt (statt hartcodiert `info@staging.aicono.org`).
+### Out of scope
 
-### Hartcodierter Reply-To-Fix
-
-In `supabase/functions/send-auth-email/index.ts` ist aktuell `reply_to: "info@staging.aicono.org"` hartcodiert → das **muss** auf `RESEND_FROM_EMAIL` umgestellt werden, sonst geht auf Hetzner Reply-To an die falsche Domain.
-
-→ Suche projektweit nach weiteren hartcodierten `staging.aicono.org`-Vorkommen in `supabase/functions/**` und ersetze sie durch `Deno.env.get("RESEND_FROM_EMAIL")` bzw. `resendFrom(...)`.
-
-## Lösung — drei Bausteine
-
-### 1. Auth-Settings: Default-Confirmation-Mail abschalten
-
-Über `cloud--configure_auth`:
-- `mailer_autoconfirm = true` → Supabase legt User direkt verifiziert an, sendet **keine** Mail.
-- Wir übernehmen Branding-Mail über Resend selbst.
-
-Gilt für Lovable-Cloud-Supabase **und** für die Hetzner-Self-Hosted-Supabase. Die Hetzner-Supabase muss in `supabase-docker/.env` ebenfalls `MAILER_AUTOCONFIRM=true` (bzw. `GOTRUE_MAILER_AUTOCONFIRM=true`) gesetzt bekommen — das ist eine **einmalige Server-Konfig-Anpassung**, keine Code-Änderung.
-
-### 2. Edge Function `send-auth-email` erweitern
-
-Aktuell produktiv nur `password_reset`. Vollständig ausbauen für:
-- `signup_confirm` → `auth.admin.generateLink({ type: "signup", email, password })`
-- `email_change` → `auth.admin.generateLink({ type: "email_change_current"/"_new", email, newEmail })`
-- `magic_link` → fertig verdrahten
-
-Templates in `_shared/email-templates.ts` existieren bereits (DE/EN/ES/NL).
-
-**Außerdem**: Reply-To dynamisieren (siehe oben).
-
-### 3. Frontend-Aufrufstellen umstellen
-
-Da `mailer_autoconfirm = true` ist, sendet Supabase keine Mail mehr → Signup-Mail aktiv via `send-auth-email` triggern.
-
-**Signup-Flows** (3 Stellen):
-- `src/pages/ChargingApp.tsx` `handleRegister` (Zeile 105): nach `signUp()` `send-auth-email` mit `type: "signup_confirm"`, `redirectTo: window.location.origin + "/ev"`.
-- `src/pages/TenantEnergyApp.tsx` `handleRegister` (Zeile 116): identisch, `redirectTo: "/te"`.
-- `src/hooks/useAuth.tsx` `signUp` (Zeile 78): identisch, `redirectTo: "/"`.
-
-**Email-Change-Flow**: projektweit nach `updateUser({ email })` suchen → falls vorhanden, ebenfalls über `send-auth-email type: "email_change"` umleiten.
-
-**SetPassword & Update-Password** bleiben unverändert (kein Mail-Versand).
-
-## Risiken & Hinweise
-
-- **`mailer_autoconfirm = true` heißt: User gilt sofort als verifiziert**, auch ohne Klick auf den Link. Bewusster Trade-off — alternativ müsste eine eigene `email_confirmed`-Spalte in `profiles` + Login-Guard ergänzt werden (out of scope).
-- `auth.admin.generateLink({ type: "signup" })` setzt voraus, dass User in `auth.users` existiert → erst `signUp()`, dann `send-auth-email`.
-- Audit-Logging (`email_send_audit`) greift automatisch.
-- Rate-Limit (5/min/IP) bleibt aktiv.
-- **GitHub-Sync Lovable → Hetzner verändert keine Secrets** — Hetzner-`.env` und Hetzner-Resend-API-Key bleiben isoliert. Nur Code wird gepusht.
-
-## Geänderte Dateien
-
-**Bearbeitet:**
-- `supabase/functions/send-auth-email/index.ts` — `signup_confirm` + `email_change` ausbauen, Reply-To dynamisieren
-- `src/pages/ChargingApp.tsx` — Signup-Flow
-- `src/pages/TenantEnergyApp.tsx` — Signup-Flow
-- `src/hooks/useAuth.tsx` — Signup-Flow
-- ggf. `src/pages/Profile.tsx` / `src/components/settings/*` — Email-Change-Flow
-- Auth-Settings via `cloud--configure_auth`: `mailer_autoconfirm = true` (Lovable)
-
-**Manuell auf Hetzner (einmalig, kein Code-Push):**
-- `supabase-docker/.env`: `GOTRUE_MAILER_AUTOCONFIRM=true`
-- Verifizieren: `RESEND_API_KEY` (Live-Key) und `RESEND_FROM_EMAIL=info@aicono.org` sind in den Edge-Function-Secrets gesetzt
-- Container-Restart von `auth` und Edge-Functions-Runtime
-
-**Keine neuen Dateien.**
-
-## Reihenfolge der Umsetzung
-
-1. `send-auth-email` erweitern (signup_confirm, email_change) + Reply-To dynamisieren.
-2. `cloud--configure_auth` → `mailer_autoconfirm = true` (Lovable).
-3. Frontend Signup-Aufrufe in 3 Dateien ergänzen.
-4. Email-Change-Aufrufe finden und umstellen.
-5. End-to-End-Test in Lovable-Preview: Signup aus `/ev`, `/te`, `/auth` — Mail kommt von `info@staging.aicono.org` mit AICONO-Branding.
-6. **Hetzner-Side (manuell, dokumentieren)**: `.env` anpassen, Live-Resend-Key + `info@aicono.org` setzen, Container restart, gleicher End-to-End-Test gegen Live-Domain.
-
-## Out of Scope
-
-- Echte Verifikations-Pflicht vor Login (separates Thema, da `mailer_autoconfirm = true` Sofort-Login erlaubt).
-- Migration zu Lovable Emails (bleibt bei Resend).
-- Bounce-/Complaint-Webhooks.
-- Hetzner-Deploy-Automatisierung.
+- Recharts-Render-Performance (Chart.js/Canvas-Wechsel) — derzeit kein Engpass laut Profilen.
+- ChargingApp-Charts (separate Domäne, keine Beschwerden).
+- ArbitrageAi/Anomaly-Widgets (eigene RPCs, schnell).
