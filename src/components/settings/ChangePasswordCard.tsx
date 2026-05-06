@@ -30,10 +30,15 @@ export function ChangePasswordCard() {
 
     setIsLoading(true);
     try {
-      const redirectUrl = `${window.location.origin}/auth?mode=reset`;
-      
-      const { error } = await supabase.auth.resetPasswordForEmail(user.email, {
-        redirectTo: redirectUrl,
+      const redirectUrl = `${window.location.origin}/set-password`;
+
+      const { error } = await supabase.functions.invoke("send-auth-email", {
+        body: {
+          type: "password_reset",
+          email: user.email,
+          redirectTo: redirectUrl,
+          locale: "de",
+        },
       });
 
       if (error) {
