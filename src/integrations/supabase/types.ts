@@ -6794,6 +6794,13 @@ export type Database = {
           total_value: number
         }[]
       }
+      get_meter_period_sums_with_fallback: {
+        Args: { p_from_date: string; p_meter_ids: string[]; p_to_date: string }
+        Returns: {
+          meter_id: string
+          total_value: number
+        }[]
+      }
       get_power_readings_5min: {
         Args: { p_end: string; p_meter_ids: string[]; p_start: string }
         Returns: {

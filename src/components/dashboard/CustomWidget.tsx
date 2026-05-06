@@ -2,7 +2,7 @@ import { useMemo, useState, useCallback, lazy, Suspense } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { CustomWidgetDefinition, ChartType } from "@/hooks/useCustomWidgetDefinitions";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useDashboardFilter, TimePeriod } from "@/hooks/useDashboardFilter";
 import { Button } from "@/components/ui/button";
@@ -300,15 +300,28 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
         });
       }
 
-      // Non-day periods: use split daily totals for proper bezug/einspeisung
-      const { data } = await supabase.rpc("get_meter_daily_totals_split" as any, {
-        p_meter_ids: config.meter_ids,
-        p_from_date: from.toISOString().split("T")[0],
-        p_to_date: to.toISOString().split("T")[0],
-      });
-      if (!data) return [];
-
-      const rows = data as Array<{ meter_id: string; day: string; bezug: number; einspeisung: number }>;
+      // Non-day periods: use split daily totals for proper bezug/einspeisung.
+      // Paginate to avoid the implicit 1000-row PostgREST limit on RPCs
+      // (year × many meters can otherwise truncate silently).
+      const rows: Array<{ meter_id: string; day: string; bezug: number; einspeisung: number }> = [];
+      const dailyPageSize = 1000;
+      let dailyFrom = 0;
+      let dailyHasMore = true;
+      while (dailyHasMore) {
+        const { data: page, error: dailyError } = await supabase
+          .rpc("get_meter_daily_totals_split" as any, {
+            p_meter_ids: config.meter_ids,
+            p_from_date: from.toISOString().split("T")[0],
+            p_to_date: to.toISOString().split("T")[0],
+          })
+          .range(dailyFrom, dailyFrom + dailyPageSize - 1);
+        if (dailyError) throw dailyError;
+        if (!page || page.length === 0) break;
+        rows.push(...(page as Array<{ meter_id: string; day: string; bezug: number; einspeisung: number }>));
+        dailyHasMore = page.length === dailyPageSize;
+        dailyFrom += dailyPageSize;
+      }
+      if (rows.length === 0) return [];
 
       // Check which meters have any einspeisung (bidirectional)
       const hasBidi = new Set<string>();
@@ -341,6 +354,7 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
     },
     enabled: config.meter_ids.length > 0,
     staleTime: selectedPeriod === "day" ? 60 * 1000 : 5 * 60 * 1000,
+    placeholderData: keepPreviousData,
     // Realtime invalidation triggers instant refresh on new data; this is the fallback.
     refetchInterval: 5 * 60 * 1000,
   });
@@ -448,9 +462,18 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
                       <YAxis tick={{ fontSize: 11 }} domain={yDomain} allowDataOverflow={false} />
                       <Tooltip content={selectedPeriod === "day" ? <DayTooltip unit={displayUnit} /> : undefined} formatter={selectedPeriod !== "day" ? (v: number) => v?.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " " + displayUnit : undefined} />
                       <Legend content={() => null} />
-                      {config.meter_ids.map((mid, i) => (
-                        <Line key={mid} type="monotone" dataKey={mid} name={meterDetails[mid]?.name || `Zähler ${i + 1}`} stroke={getSeriesColor(i)} strokeWidth={2} dot={false} connectNulls={true} hide={hiddenSeries.has(mid)} />
-                      ))}
+                      {config.meter_ids.flatMap((mid, i) => {
+                        const meterName = meterDetails[mid]?.name || `Zähler ${i + 1}`;
+                        if (bidirectionalMeterIds.has(mid) && selectedPeriod !== "day") {
+                          return [
+                            <Line key={`${mid}_bezug`} type="monotone" dataKey={`${mid}_bezug`} name={`${meterName} Bezug`} stroke={getSeriesColor(i)} strokeWidth={2} dot={false} connectNulls={true} hide={hiddenSeries.has(`${mid}_bezug`)} />,
+                            <Line key={`${mid}_einspeisung`} type="monotone" dataKey={`${mid}_einspeisung`} name={`${meterName} Einspeisung`} stroke={EINSPEISUNG_COLOR} strokeWidth={2} dot={false} connectNulls={true} hide={hiddenSeries.has(`${mid}_einspeisung`)} />,
+                          ];
+                        }
+                        return [
+                          <Line key={mid} type="monotone" dataKey={mid} name={meterName} stroke={getSeriesColor(i)} strokeWidth={2} dot={false} connectNulls={true} hide={hiddenSeries.has(mid)} />,
+                        ];
+                      })}
                       {(config.thresholds || []).map((t, i) => (
                         <ReferenceLine key={i} y={t.value} stroke={t.color} strokeDasharray="5 5" label={t.label} />
                       ))}
