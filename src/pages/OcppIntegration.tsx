@@ -8,13 +8,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Copy, PlugZap, BookOpen, Search, Shield, AlertTriangle } from "lucide-react";
+import { Copy, PlugZap, BookOpen, Search, Server } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/hooks/use-toast";
-import { OcppServerUrlCard } from "@/components/ocpp/OcppServerUrlCard";
 
-const OCPP_WS_URL_SHORT = "wss://ocpp.aicono.org";
+const OCPP_HOST = "ocpp.aicono.org";
+const OCPP_WSS_URL = `wss://${OCPP_HOST}`; // Port 443 (Standard)
+const OCPP_WS_URL = `ws://${OCPP_HOST}`;   // Port 80 (Standard)
 
 const DIFFICULTY_COLORS: Record<string, string> = {
   easy: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400",
