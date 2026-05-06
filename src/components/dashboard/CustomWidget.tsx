@@ -5,6 +5,7 @@ import { CustomWidgetDefinition, ChartType } from "@/hooks/useCustomWidgetDefini
 import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useDashboardFilter, TimePeriod } from "@/hooks/useDashboardFilter";
+import { useWeekStartDay } from "@/hooks/useWeekStartDay";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { BarChart3, LineChart, Gauge, Activity, Table2, GitBranch, ChevronLeft, ChevronRight } from "lucide-react";
@@ -74,12 +75,13 @@ function normalizePowerUnit(unit?: string | null, energyType?: string | null, fa
 }
 
 /** Compute date range from the dashboard time period and offset */
-function getDateRange(period: TimePeriod, offset: number): { from: Date; to: Date } {
+type WeekStart = 0 | 1 | 2 | 3 | 4 | 5 | 6;
+function getDateRange(period: TimePeriod, offset: number, weekStartsOn: WeekStart = 1): { from: Date; to: Date } {
   const now = new Date();
   let base: Date;
   switch (period) {
     case "day": base = addDays(now, offset); return { from: startOfDay(base), to: endOfDay(base) };
-    case "week": base = addWeeks(now, offset); return { from: startOfWeek(base, { weekStartsOn: 1 }), to: endOfWeek(base, { weekStartsOn: 1 }) };
+    case "week": base = addWeeks(now, offset); return { from: startOfWeek(base, { weekStartsOn }), to: endOfWeek(base, { weekStartsOn }) };
     case "month": base = addMonths(now, offset); return { from: startOfMonth(base), to: endOfMonth(base) };
     case "quarter": base = addQuarters(now, offset); return { from: startOfQuarter(base), to: endOfQuarter(base) };
     case "year": base = addYears(now, offset); return { from: startOfYear(base), to: endOfYear(base) };
@@ -174,7 +176,8 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
   const activeChartType: ChartType =
     config.chart_type_per_period?.[selectedPeriod] ?? definition.chart_type;
 
-  const { from, to } = useMemo(() => getDateRange(selectedPeriod, offset), [selectedPeriod, offset]);
+  const weekStartsOn = useWeekStartDay();
+  const { from, to } = useMemo(() => getDateRange(selectedPeriod, offset, weekStartsOn), [selectedPeriod, offset, weekStartsOn]);
   const periodLabel = useMemo(() => getPeriodLabel(selectedPeriod, offset), [selectedPeriod, offset]);
   const canGoForward = offset < 0;
 
