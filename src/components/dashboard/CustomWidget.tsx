@@ -285,12 +285,14 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
       // readings for days that aren't archived yet (typically: today). This
       // avoids scanning tens of thousands of 5-min rows for week/month/year
       // views and removes the previous ~60 s wait time.
+      const toLocalYmd = (d: Date) =>
+        `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
       const { data: rpcRows, error: dailyError } = await supabase.rpc(
         "get_meter_daily_totals_split_with_fallback" as any,
         {
           p_meter_ids: config.meter_ids,
-          p_from_date: from.toISOString().split("T")[0],
-          p_to_date: to.toISOString().split("T")[0],
+          p_from_date: toLocalYmd(from),
+          p_to_date: toLocalYmd(to),
         },
       );
       if (dailyError) throw dailyError;
