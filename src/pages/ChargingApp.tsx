@@ -102,10 +102,20 @@ function ChargingAppAuth({ onAuth }: { onAuth: () => void }) {
     e.preventDefault();
     if (password.length < 6) { toast.error("Passwort muss mindestens 6 Zeichen haben"); return; }
     setLoading(true);
+    const redirectUrl = window.location.origin + "/ev";
     const { error, data } = await supabase.auth.signUp({
       email, password,
-      options: { emailRedirectTo: window.location.origin + "/ev", data: { display_name: name } },
+      options: { emailRedirectTo: redirectUrl, data: { display_name: name } },
     });
+    if (!error && data?.user) {
+      try {
+        await supabase.functions.invoke("send-auth-email", {
+          body: { type: "signup_confirm", email, redirectTo: redirectUrl, locale: "de", recipientName: name },
+        });
+      } catch (e) {
+        console.error("[ChargingApp] send-auth-email signup_confirm failed", e);
+      }
+    }
     setLoading(false);
     if (error) {
       toast.error(error.message.includes("already registered") ? "E-Mail bereits registriert" : error.message);
@@ -120,8 +130,13 @@ function ChargingAppAuth({ onAuth }: { onAuth: () => void }) {
     e.preventDefault();
     if (!email) { toast.error("Bitte E-Mail eingeben"); return; }
     setLoading(true);
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: window.location.origin + "/ev",
+    const { error } = await supabase.functions.invoke("send-auth-email", {
+      body: {
+        type: "password_reset",
+        email,
+        redirectTo: window.location.origin + "/ev",
+        locale: "de",
+      },
     });
     setLoading(false);
     if (error) { toast.error("Fehler beim Senden"); } else {

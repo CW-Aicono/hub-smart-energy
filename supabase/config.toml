@@ -15,6 +15,9 @@ verify_jwt = false
 [functions.send-invitation-email]
 verify_jwt = false
 
+[functions.send-test-email]
+verify_jwt = false
+
 [functions.meter-ocr]
 verify_jwt = false
 
@@ -131,4 +134,10 @@ verify_jwt = false
 
 
 [functions.public-charge-status]
+verify_jwt = false
+
+[functions.check-email-availability]
+verify_jwt = false
+
+[functions.send-auth-email]
 verify_jwt = false
