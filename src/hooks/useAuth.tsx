@@ -82,6 +82,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       password,
       options: { emailRedirectTo: redirectUrl },
     });
+    // Send branded confirmation mail via Resend (Supabase auto_confirm = true, so no default mail goes out)
+    if (!error && data?.user) {
+      try {
+        await supabase.functions.invoke("send-auth-email", {
+          body: { type: "signup_confirm", email, redirectTo: redirectUrl, locale: "de" },
+        });
+      } catch (e) {
+        console.error("[useAuth] send-auth-email signup_confirm failed", e);
+      }
+    }
     return { error: error as Error | null, data: data ? { user: data.user } : null };
   };
 
