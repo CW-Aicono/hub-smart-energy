@@ -185,42 +185,40 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
 
       let allData: Array<{ meter_id: string; power_value: number; recorded_at: string }> = [];
 
-      const pageSize = 1000;
-      let from = 0;
-      let hasMore = true;
-      let aggError: unknown = null;
-      const aggregatedRows: Array<{ meter_id: string; power_avg: number; bucket: string }> = [];
-
-      while (hasMore && !stale) {
-        const { data: pageData, error: pageError } = await supabase
+      // Paginate to avoid PostgREST row limits when many main meters × 288 buckets/day
+      // exceed a single page (e.g. "Alle Liegenschaften" view truncates Strom after noon).
+      const PAGE_SIZE = 1000;
+      let pageIdx = 0;
+      while (true) {
+        const from = pageIdx * PAGE_SIZE;
+        const to = from + PAGE_SIZE - 1;
+        const { data: pageData, error: aggError } = await supabase
           .rpc("get_power_readings_5min", {
             p_meter_ids: mainMeterIds,
             p_start: rangeStart.toISOString(),
             p_end: rangeEnd.toISOString(),
           })
-          .range(from, from + pageSize - 1);
+          .range(from, to);
 
-        if (pageError) { aggError = pageError; break; }
-        if (!pageData || pageData.length === 0) { hasMore = false; break; }
+        if (stale) return;
 
-        aggregatedRows.push(...(pageData as Array<{ meter_id: string; power_avg: number; bucket: string }>));
-        hasMore = pageData.length === pageSize;
-        from += pageSize;
-      }
+        if (aggError) {
+          console.warn("get_power_readings_5min error:", aggError);
+          break;
+        }
+        if (!pageData || pageData.length === 0) break;
 
-      if (stale) return;
+        allData = allData.concat(
+          (pageData as Array<{ meter_id: string; power_avg: number; bucket: string }>).map((r) => ({
+            meter_id: r.meter_id,
+            power_value: r.power_avg,
+            recorded_at: r.bucket,
+          }))
+        );
 
-      if (!aggError && aggregatedRows.length > 0) {
-        allData = aggregatedRows.map((r) => ({
-          meter_id: r.meter_id,
-          power_value: r.power_avg,
-          recorded_at: r.bucket,
-        }));
-
-        // Raw data supplement removed: aggregated 5-min buckets only
-        // This eliminates Loxone boundary spikes at :00 and :30 marks
-      } else {
-        console.warn("get_power_readings_5min returned no data or error:", aggError);
+        if (pageData.length < PAGE_SIZE) break;
+        pageIdx++;
+        if (pageIdx > 50) break; // safety
       }
 
       if (!stale) {
@@ -265,7 +263,7 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
       const fromDate = format(rangeStart, "yyyy-MM-dd");
       const toDate = format(rangeEnd, "yyyy-MM-dd");
 
-      const { data, error } = await supabase.rpc("get_meter_daily_totals_split" as any, {
+      const { data, error } = await supabase.rpc("get_meter_daily_totals_split_with_fallback" as any, {
         p_meter_ids: mainMeterIds,
         p_from_date: fromDate,
         p_to_date: toDate,
@@ -278,75 +276,6 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
       if (error) {
         console.error("Error fetching daily totals:", error);
         results = [];
-      }
-
-      const todayDate = new Date();
-      const effectiveEnd = new Date(Math.min(rangeEnd.getTime(), todayDate.getTime()));
-      const daysInRange = eachDayOfInterval({ start: rangeStart, end: effectiveEnd });
-      const daysWithData = new Set(
-        results.map(r => {
-          const dayStr = typeof r.day === "string" ? r.day.split("T")[0] : format(new Date(r.day), "yyyy-MM-dd");
-          return dayStr;
-        })
-      );
-      const missingDays = daysInRange
-        .map(d => format(d, "yyyy-MM-dd"))
-        .filter(d => !daysWithData.has(d));
-
-      if (missingDays.length > 0 && !stale) {
-        try {
-          const missingStart = startOfDay(new Date(missingDays[0])).toISOString();
-          const missingEnd = endOfDay(new Date(missingDays[missingDays.length - 1])).toISOString();
-
-          let allPowerData: Array<{ meter_id: string; power_avg: number; bucket: string }> = [];
-          let from = 0;
-          const pageSize = 1000;
-          let hasMore = true;
-          while (hasMore && !stale) {
-            const { data: pageData, error: pageError } = await supabase
-              .rpc("get_power_readings_5min", {
-                p_meter_ids: mainMeterIds,
-                p_start: missingStart,
-                p_end: missingEnd,
-              })
-              .range(from, from + pageSize - 1);
-            if (pageError || !pageData || pageData.length === 0) {
-              hasMore = false;
-            } else {
-              allPowerData.push(...(pageData as Array<{ meter_id: string; power_avg: number; bucket: string }>));
-              hasMore = pageData.length === pageSize;
-              from += pageSize;
-            }
-          }
-
-          if (!stale && allPowerData.length > 0) {
-            const missingSet = new Set(missingDays);
-            const dayMeterSplit = new Map<string, Map<string, { bezug: number; einspeisung: number }>>();
-            for (const row of allPowerData) {
-              const dayStr = format(new Date(row.bucket), "yyyy-MM-dd");
-              if (!missingSet.has(dayStr)) continue;
-              if (!dayMeterSplit.has(dayStr)) dayMeterSplit.set(dayStr, new Map());
-              const meterMap = dayMeterSplit.get(dayStr)!;
-              if (!meterMap.has(row.meter_id)) meterMap.set(row.meter_id, { bezug: 0, einspeisung: 0 });
-              const entry = meterMap.get(row.meter_id)!;
-              const kwh = row.power_avg * 5.0 / 60.0;
-              if (row.power_avg >= 0) {
-                entry.bezug += kwh;
-              } else {
-                entry.einspeisung += Math.abs(kwh);
-              }
-            }
-            for (const [dayStr, meterMap] of dayMeterSplit) {
-              for (const [meterId, split] of meterMap) {
-                if (split.bezug !== 0 || split.einspeisung !== 0) {
-                  results.push({ meter_id: meterId, day: dayStr, bezug: split.bezug, einspeisung: split.einspeisung });
-                }
-              }
-            }
-          }
-        } catch (e) {
-          console.warn("Error computing missing days from power readings:", e);
-        }
       }
 
       if (!stale) {

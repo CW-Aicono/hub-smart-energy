@@ -42,7 +42,7 @@ export function useDataCompleteness(locationIds: string[], year: number) {
       const meterIds = meters.map((m) => m.id);
 
       // Get daily totals for the year
-      const { data: dailyTotals } = await supabase.rpc("get_meter_daily_totals", {
+      const { data: dailyTotals } = await supabase.rpc("get_meter_daily_totals_with_fallback" as any, {
         p_meter_ids: meterIds,
         p_from_date: `${year}-01-01`,
         p_to_date: `${year}-12-31`,

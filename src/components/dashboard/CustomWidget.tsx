@@ -2,7 +2,7 @@ import { useMemo, useState, useCallback, lazy, Suspense } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { CustomWidgetDefinition, ChartType } from "@/hooks/useCustomWidgetDefinitions";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useDashboardFilter, TimePeriod } from "@/hooks/useDashboardFilter";
 import { Button } from "@/components/ui/button";
@@ -217,26 +217,15 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
         );
 
         const aggregatedRows: Array<{ meter_id: string; power_avg: number; bucket: string }> = [];
-        const pageSize = 1000;
-        let pageFrom = 0;
-        let hasMore = true;
-
-        while (hasMore) {
-          const { data, error } = await supabase
-            .rpc("get_power_readings_5min", {
-              p_meter_ids: config.meter_ids,
-              p_start: from.toISOString(),
-              p_end: to.toISOString(),
-            })
-            .range(pageFrom, pageFrom + pageSize - 1);
-
-          if (error) throw error;
-          if (!data || data.length === 0) break;
-
-          aggregatedRows.push(...(data as Array<{ meter_id: string; power_avg: number; bucket: string }>));
-          hasMore = data.length === pageSize;
-          pageFrom += pageSize;
-        }
+        const { data: aggData, error: aggError } = await supabase
+          .rpc("get_power_readings_5min", {
+            p_meter_ids: config.meter_ids,
+            p_start: from.toISOString(),
+            p_end: to.toISOString(),
+          })
+          .range(0, 9999);
+        if (aggError) throw aggError;
+        if (aggData) aggregatedRows.push(...(aggData as Array<{ meter_id: string; power_avg: number; bucket: string }>));
 
         let mergedRows = aggregatedRows.map((row) => ({
           meter_id: row.meter_id,
@@ -248,32 +237,20 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
         // last compaction run and now (the RPC already handles on-the-fly
         // aggregation, but may miss the very latest readings still being written)
         const recentCutoff = new Date(Date.now() - 15 * 60 * 1000);
-        const recentPages: Array<{ meter_id: string; power_value: number; recorded_at: string }> = [];
-        let recentFrom = 0;
-        const recentPageSize = 1000;
-        let recentHasMore = true;
+        const { data: recentRaw, error: recentError } = await supabase
+          .from("meter_power_readings")
+          .select("meter_id, power_value, recorded_at")
+          .in("meter_id", config.meter_ids)
+          .gte("recorded_at", recentCutoff.toISOString())
+          .lte("recorded_at", to.toISOString())
+          .order("recorded_at", { ascending: true })
+          .limit(2000);
+        if (recentError) throw recentError;
 
-        while (recentHasMore) {
-          const { data: recentRaw, error: recentError } = await supabase
-            .from("meter_power_readings")
-            .select("meter_id, power_value, recorded_at")
-            .in("meter_id", config.meter_ids)
-            .gte("recorded_at", recentCutoff.toISOString())
-            .lte("recorded_at", to.toISOString())
-            .order("recorded_at", { ascending: true })
-            .range(recentFrom, recentFrom + recentPageSize - 1);
-
-          if (recentError) throw recentError;
-          if (!recentRaw || recentRaw.length === 0) break;
-          recentPages.push(...recentRaw);
-          recentHasMore = recentRaw.length === recentPageSize;
-          recentFrom += recentPageSize;
-        }
-
-        if (recentPages.length) {
+        if (recentRaw && recentRaw.length) {
           mergedRows = mergedRows.filter((row) => new Date(row.recorded_at) < recentCutoff);
           mergedRows.push(
-            ...recentPages.map((row) => ({
+            ...recentRaw.map((row) => ({
               meter_id: row.meter_id,
               value: row.power_value,
               recorded_at: row.recorded_at,
@@ -300,15 +277,22 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
         });
       }
 
-      // Non-day periods: use split daily totals for proper bezug/einspeisung
-      const { data } = await supabase.rpc("get_meter_daily_totals_split" as any, {
-        p_meter_ids: config.meter_ids,
-        p_from_date: from.toISOString().split("T")[0],
-        p_to_date: to.toISOString().split("T")[0],
-      });
-      if (!data) return [];
-
-      const rows = data as Array<{ meter_id: string; day: string; bezug: number; einspeisung: number }>;
+      // Non-day periods: use the server-side fallback RPC, which prefers archived
+      // daily totals from `meter_period_totals` and only aggregates from 5-min
+      // readings for days that aren't archived yet (typically: today). This
+      // avoids scanning tens of thousands of 5-min rows for week/month/year
+      // views and removes the previous ~60 s wait time.
+      const { data: rpcRows, error: dailyError } = await supabase.rpc(
+        "get_meter_daily_totals_split_with_fallback" as any,
+        {
+          p_meter_ids: config.meter_ids,
+          p_from_date: from.toISOString().split("T")[0],
+          p_to_date: to.toISOString().split("T")[0],
+        },
+      );
+      if (dailyError) throw dailyError;
+      const rows = (rpcRows ?? []) as Array<{ meter_id: string; day: string; bezug: number; einspeisung: number }>;
+      if (rows.length === 0) return [];
 
       // Check which meters have any einspeisung (bidirectional)
       const hasBidi = new Set<string>();
@@ -341,6 +325,7 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
     },
     enabled: config.meter_ids.length > 0,
     staleTime: selectedPeriod === "day" ? 60 * 1000 : 5 * 60 * 1000,
+    placeholderData: keepPreviousData,
     // Realtime invalidation triggers instant refresh on new data; this is the fallback.
     refetchInterval: 5 * 60 * 1000,
   });
@@ -448,9 +433,18 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
                       <YAxis tick={{ fontSize: 11 }} domain={yDomain} allowDataOverflow={false} />
                       <Tooltip content={selectedPeriod === "day" ? <DayTooltip unit={displayUnit} /> : undefined} formatter={selectedPeriod !== "day" ? (v: number) => v?.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " " + displayUnit : undefined} />
                       <Legend content={() => null} />
-                      {config.meter_ids.map((mid, i) => (
-                        <Line key={mid} type="monotone" dataKey={mid} name={meterDetails[mid]?.name || `Zähler ${i + 1}`} stroke={getSeriesColor(i)} strokeWidth={2} dot={false} connectNulls={true} hide={hiddenSeries.has(mid)} />
-                      ))}
+                      {config.meter_ids.flatMap((mid, i) => {
+                        const meterName = meterDetails[mid]?.name || `Zähler ${i + 1}`;
+                        if (bidirectionalMeterIds.has(mid) && selectedPeriod !== "day") {
+                          return [
+                            <Line key={`${mid}_bezug`} type="monotone" dataKey={`${mid}_bezug`} name={`${meterName} Bezug`} stroke={getSeriesColor(i)} strokeWidth={2} dot={false} connectNulls={true} hide={hiddenSeries.has(`${mid}_bezug`)} />,
+                            <Line key={`${mid}_einspeisung`} type="monotone" dataKey={`${mid}_einspeisung`} name={`${meterName} Einspeisung`} stroke={EINSPEISUNG_COLOR} strokeWidth={2} dot={false} connectNulls={true} hide={hiddenSeries.has(`${mid}_einspeisung`)} />,
+                          ];
+                        }
+                        return [
+                          <Line key={mid} type="monotone" dataKey={mid} name={meterName} stroke={getSeriesColor(i)} strokeWidth={2} dot={false} connectNulls={true} hide={hiddenSeries.has(mid)} />,
+                        ];
+                      })}
                       {(config.thresholds || []).map((t, i) => (
                         <ReferenceLine key={i} y={t.value} stroke={t.color} strokeDasharray="5 5" label={t.label} />
                       ))}

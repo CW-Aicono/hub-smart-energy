@@ -97,7 +97,7 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
     queryKey: ["energyflow-sums", meterIds, selectedPeriod],
     queryFn: async () => {
       if (!meterIds.length) return {};
-      const { data } = await supabase.rpc("get_meter_daily_totals", {
+      const { data } = await supabase.rpc("get_meter_daily_totals_with_fallback" as any, {
         p_meter_ids: meterIds,
         p_from_date: from.toISOString().split("T")[0],
         p_to_date: to.toISOString().split("T")[0],
