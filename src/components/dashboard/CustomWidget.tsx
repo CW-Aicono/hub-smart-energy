@@ -2,7 +2,7 @@ import { useMemo, useState, useCallback, lazy, Suspense } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { CustomWidgetDefinition, ChartType } from "@/hooks/useCustomWidgetDefinitions";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useDashboardFilter, TimePeriod } from "@/hooks/useDashboardFilter";
 import { Button } from "@/components/ui/button";
