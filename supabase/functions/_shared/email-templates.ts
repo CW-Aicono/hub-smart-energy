@@ -8,8 +8,11 @@ const MUTED = "#6b7280";
 const BG = "#ffffff";
 const SURFACE = "#f5f7fa";
 const BORDER = "#e5e7eb";
-const LOGO_URL = "https://staging.aicono.org/aicono-logo.png";
-const APP_URL = "https://staging.aicono.org";
+// Environment-driven so Lovable (Staging) and Hetzner (Live) render correct branding URLs.
+// Set EMAIL_APP_URL = "https://aicono.org" and EMAIL_LOGO_URL on Live;
+// defaults below are safe Staging fallbacks.
+const APP_URL = Deno.env.get("EMAIL_APP_URL") ?? "https://staging.aicono.org";
+const LOGO_URL = Deno.env.get("EMAIL_LOGO_URL") ?? `${APP_URL}/aicono-logo.png`;
 
 type Locale = "de" | "en" | "es" | "nl";
 
