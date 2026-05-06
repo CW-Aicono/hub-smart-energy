@@ -74,12 +74,13 @@ function normalizePowerUnit(unit?: string | null, energyType?: string | null, fa
 }
 
 /** Compute date range from the dashboard time period and offset */
-function getDateRange(period: TimePeriod, offset: number): { from: Date; to: Date } {
+type WeekStart = 0 | 1 | 2 | 3 | 4 | 5 | 6;
+function getDateRange(period: TimePeriod, offset: number, weekStartsOn: WeekStart = 1): { from: Date; to: Date } {
   const now = new Date();
   let base: Date;
   switch (period) {
     case "day": base = addDays(now, offset); return { from: startOfDay(base), to: endOfDay(base) };
-    case "week": base = addWeeks(now, offset); return { from: startOfWeek(base, { weekStartsOn: 1 }), to: endOfWeek(base, { weekStartsOn: 1 }) };
+    case "week": base = addWeeks(now, offset); return { from: startOfWeek(base, { weekStartsOn }), to: endOfWeek(base, { weekStartsOn }) };
     case "month": base = addMonths(now, offset); return { from: startOfMonth(base), to: endOfMonth(base) };
     case "quarter": base = addQuarters(now, offset); return { from: startOfQuarter(base), to: endOfQuarter(base) };
     case "year": base = addYears(now, offset); return { from: startOfYear(base), to: endOfYear(base) };
