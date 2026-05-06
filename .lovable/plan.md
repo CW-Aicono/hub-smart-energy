@@ -1,126 +1,107 @@
 ## Ziel
 
-Alle ausgehenden Mails laufen einheitlich über **einen Kanal** (Resend mit `info@staging.aicono.org`) und tragen **AICONO-Branding**. Die unbranded Default-Mails von Supabase Auth werden ersetzt.
+**Alle Mails — Auth + App — laufen ausschließlich über Resend**, sowohl in Lovable (Staging) als auch auf Hetzner (Live). Supabase Default-SMTP wird vollständig umgangen. Frontend-/Function-Code ist **environment-agnostisch** — der Unterschied zwischen Staging und Live liegt ausschließlich in den Resend-Secrets/Absender-Adressen.
 
-## Aktuelle Mail-Kanäle (Ist-Zustand)
+## Aktuelle Lücke
 
-| Mail-Typ | Aktueller Kanal | Branded? |
+| Mail-Typ | Status |
+|---|---|
+| Tenant-/Admin-Einladungen, Berichte, Rechnungen, Task-Transfer | Resend ✅ |
+| Passwort vergessen | Resend ✅ (`send-auth-email`) |
+| **Signup-Bestätigung** (Charging-PWA, Energy-PWA, Hauptapp) | **Supabase Default-SMTP ❌** |
+| **Email-Adressänderung** | **Supabase Default-SMTP ❌** |
+
+## Environment-Strategie (Lovable Staging vs. Hetzner Live)
+
+Der gesamte Application-Code (Frontend + Edge Functions) bleibt **identisch** in beiden Umgebungen. Trennung erfolgt nur über Secrets, die pro Umgebung **getrennt** gepflegt werden:
+
+| Secret | Lovable (Staging) | Hetzner (Live) |
 |---|---|---|
-| Tenant-/Admin-Einladungen | Resend (`activate-invited-user`, `invite-tenant-admin`) | Ja |
-| Berichte (PDF/HTML) | Resend (`send-scheduled-report`) | Ja |
-| Charging-Rechnungen | Resend (`send-charging-invoices`) | Ja |
-| Task-Transfer | Resend (`send-task-transfer-email`) | Ja |
-| **Passwort vergessen** | **Supabase Default-SMTP** | **Nein** |
-| **Signup-Bestätigung** (Charging-/Energy-PWA) | **Supabase Default-SMTP** | **Nein** |
-| **Email-Adressänderung** | **Supabase Default-SMTP** | **Nein** |
+| `RESEND_API_KEY` | Staging-Resend-Key | **Live-Resend-Key (separater API-Key auf Resend)** |
+| `RESEND_FROM_EMAIL` | `info@staging.aicono.org` | **`info@aicono.org`** (verifizierte Live-Domain) |
 
-Betroffene Aufruferstellen für Auth-Mails:
-- `src/pages/Auth.tsx` (Forgot-Password)
-- `src/components/settings/ChangePasswordCard.tsx` (Passwort ändern)
-- `src/pages/ChargingApp.tsx` (Signup + Forgot)
-- `src/pages/TenantEnergyApp.tsx` (Signup + Forgot)
-- `src/hooks/useAuth.tsx` (Signup)
+**Wichtig — kein Code-Pfad referenziert die Umgebung explizit.** Die existierende Helper-Funktion `supabase/functions/_shared/resend-from.ts` liest bereits `RESEND_FROM_EMAIL` aus den Env-Vars. Dadurch:
+- GitHub-Push von Lovable → Hetzner deployt nur Code, **keine Secrets**.
+- Hetzner behält seinen eigenen Resend-Key + `info@aicono.org` Absender.
+- Reply-To wird ebenfalls auf `RESEND_FROM_EMAIL` umgestellt (statt hartcodiert `info@staging.aicono.org`).
 
-## Lösung
+### Hartcodierter Reply-To-Fix
 
-### Neuer geteilter Mail-Renderer
+In `supabase/functions/send-auth-email/index.ts` ist aktuell `reply_to: "info@staging.aicono.org"` hartcodiert → das **muss** auf `RESEND_FROM_EMAIL` umgestellt werden, sonst geht auf Hetzner Reply-To an die falsche Domain.
 
-Neue Datei `supabase/functions/_shared/email-templates.ts` mit gebrandeten HTML-Templates (AICONO-Logo, Blau-Header, gleiche Optik wie Einladungs-Mail). Templates:
-- `passwordReset(url, recipientName?)`
-- `signupConfirm(url, recipientName?)`
-- `emailChangeConfirm(url, oldEmail, newEmail)`
-- `magicLink(url)` (Reserve)
+→ Suche projektweit nach weiteren hartcodierten `staging.aicono.org`-Vorkommen in `supabase/functions/**` und ersetze sie durch `Deno.env.get("RESEND_FROM_EMAIL")` bzw. `resendFrom(...)`.
 
-Inline-CSS, weißer Body-Hintergrund, AICONO-Farben (HSL 220 60% 20%), Capsule-Buttons, Footer mit Datenschutz-/Impressum-Links, mehrsprachig (DE-default, EN-Fallback).
+## Lösung — drei Bausteine
 
-### Neue Edge Function `send-auth-email`
-
-Datei: `supabase/functions/send-auth-email/index.ts`, `verify_jwt = false` (in `config.toml` registrieren).
-
-**Input:**
-```ts
-{ type: "password_reset" | "signup_confirm" | "email_change" | "magic_link",
-  email: string, redirectTo?: string, locale?: "de"|"en"|"es"|"nl",
-  templateData?: Record<string, unknown> }
-```
-
-**Ablauf:**
-1. JWT-Validierung **nur** für `password_reset` mit existierendem User optional — die Funktion ist für nicht eingeloggte User (Forgot-Password, Signup) erreichbar. Schutz via Rate-Limit (in-memory pro IP, 5/min) + E-Mail-Format-Validierung (Zod).
-2. Service-Role-Client erstellen.
-3. Via `auth.admin.generateLink({ type, email, options: { redirectTo } })` den Magic-/Recovery-Link generieren.
-4. Wenn der User nicht existiert (bei `password_reset`): **kein** Fehler nach außen (Information-Disclosure-Schutz), aber kein Versand.
-5. Template rendern → Resend-Send via `RESEND_API_KEY` mit `From: "AICONO <info@staging.aicono.org>"` (über `_shared/resend-from.ts`).
-6. Reply-To: `info@staging.aicono.org`.
-7. Audit-Logging in `email_send_audit` (siehe unten).
-
-### Frontend-Umstellung
-
-Statt `supabase.auth.resetPasswordForEmail(...)` und `supabase.auth.signUp({ email, password })` (für Signup-Confirmation-Mail) wird `supabase.functions.invoke("send-auth-email", { body: {...} })` aufgerufen:
-
-- **`Auth.tsx`** (`handleForgotPassword`): Aufruf `send-auth-email` mit `type: "password_reset"`, `redirectTo: ${origin}/set-password`.
-- **`ChangePasswordCard.tsx`**: gleicher Call.
-- **`ChargingApp.tsx`** (Forgot + Signup): beide Calls auf neue Function umstellen.
-- **`TenantEnergyApp.tsx`** (Forgot + Signup): identisch.
-- **`useAuth.tsx`** (`signUp`): bleibt — Supabase erstellt den User; aber Confirmation-Mail unterdrücken (siehe Auth-Settings) und parallel `send-auth-email` mit `type: "signup_confirm"` aufrufen.
-
-### Auth-Settings anpassen
+### 1. Auth-Settings: Default-Confirmation-Mail abschalten
 
 Über `cloud--configure_auth`:
-- `mailer_autoconfirm = false` (bleibt — User muss Mail bestätigen).
-- Default-Mail-Templates in Supabase deaktivieren ist **nicht möglich** ohne Auth-Hook (Pro-Feature). Fallback: **Custom SMTP-Sender-Adresse** in Supabase auf `info@staging.aicono.org` setzen, damit auch unverhinderbare System-Mails (z. B. Email-Change-Confirmation, falls User über UI ändert) konsistent aussehen. Custom-Templates (HTML) ebenfalls in Supabase auf AICONO-Branding hinterlegen.
+- `mailer_autoconfirm = true` → Supabase legt User direkt verifiziert an, sendet **keine** Mail.
+- Wir übernehmen Branding-Mail über Resend selbst.
 
-→ Konkret: Wir setzen die Auth-Email-Templates in Supabase via Management-API/Migration auf vereinfachte AICONO-Versionen mit `{{ .ConfirmationURL }}` als Fallback. Die primäre Versandstrecke bleibt aber `send-auth-email` über Resend.
+Gilt für Lovable-Cloud-Supabase **und** für die Hetzner-Self-Hosted-Supabase. Die Hetzner-Supabase muss in `supabase-docker/.env` ebenfalls `MAILER_AUTOCONFIRM=true` (bzw. `GOTRUE_MAILER_AUTOCONFIRM=true`) gesetzt bekommen — das ist eine **einmalige Server-Konfig-Anpassung**, keine Code-Änderung.
 
-### Audit-Tabelle
+### 2. Edge Function `send-auth-email` erweitern
 
-Neue Tabelle `email_send_audit` (RLS: nur super_admin lesen):
-```
-id uuid pk, created_at timestamptz, type text, recipient text,
-status text ('sent'|'failed'|'suppressed_user_not_found'),
-resend_message_id text, error text
-```
-Migration via `supabase--migration_lov`.
+Aktuell produktiv nur `password_reset`. Vollständig ausbauen für:
+- `signup_confirm` → `auth.admin.generateLink({ type: "signup", email, password })`
+- `email_change` → `auth.admin.generateLink({ type: "email_change_current"/"_new", email, newEmail })`
+- `magic_link` → fertig verdrahten
 
-### Umzustellende/zu erstellende Dateien
+Templates in `_shared/email-templates.ts` existieren bereits (DE/EN/ES/NL).
 
-**Neu:**
-- `supabase/functions/send-auth-email/index.ts`
-- `supabase/functions/_shared/email-templates.ts`
-- Migration für `email_send_audit`
+**Außerdem**: Reply-To dynamisieren (siehe oben).
 
-**Geändert:**
-- `supabase/config.toml` (Registrierung `send-auth-email`)
-- `src/pages/Auth.tsx`
-- `src/pages/ChargingApp.tsx`
-- `src/pages/TenantEnergyApp.tsx`
-- `src/components/settings/ChangePasswordCard.tsx`
-- `src/hooks/useAuth.tsx`
-- Optional: i18n-Strings (DE/EN/ES/NL) für Toast-Fehlermeldungen
+### 3. Frontend-Aufrufstellen umstellen
 
-### Was sich für den User sichtbar ändert
+Da `mailer_autoconfirm = true` ist, sendet Supabase keine Mail mehr → Signup-Mail aktiv via `send-auth-email` triggern.
 
-- Passwort-Reset-Mail kommt von `info@staging.aicono.org` mit AICONO-Logo + Blau-Header (statt unbranded Supabase-Mail).
-- Signup-Bestätigung in beiden PWAs ebenfalls gebrandet.
-- Einheitliche Reply-To-Adresse für alle Mails.
+**Signup-Flows** (3 Stellen):
+- `src/pages/ChargingApp.tsx` `handleRegister` (Zeile 105): nach `signUp()` `send-auth-email` mit `type: "signup_confirm"`, `redirectTo: window.location.origin + "/ev"`.
+- `src/pages/TenantEnergyApp.tsx` `handleRegister` (Zeile 116): identisch, `redirectTo: "/te"`.
+- `src/hooks/useAuth.tsx` `signUp` (Zeile 78): identisch, `redirectTo: "/"`.
 
-### Out of Scope
+**Email-Change-Flow**: projektweit nach `updateUser({ email })` suchen → falls vorhanden, ebenfalls über `send-auth-email type: "email_change"` umleiten.
 
-- Migration zu Lovable Emails / DNS-Umzug (bewusst ausgeschlossen, Resend bleibt).
-- Marketing-/Newsletter-Versand.
-- Bounce-/Complaint-Handling über Resend-Webhooks (kann später separat ergänzt werden).
+**SetPassword & Update-Password** bleiben unverändert (kein Mail-Versand).
 
-### Risiken & Hinweise
+## Risiken & Hinweise
 
-- `auth.admin.generateLink` setzt voraus, dass der User in `auth.users` bereits existiert (bei Signup wird er durch `signUp()` zuerst angelegt — Reihenfolge im Frontend beachten).
-- Supabase sendet bei `signUp()` ggf. **automatisch** eine Confirmation-Mail. Um Doppelversand zu vermeiden: in den Auth-Settings die Default-Confirmation-Mail per Custom-Template auf einen minimalen "wird gleich zugestellt"-Hinweis reduzieren — oder den Template-Inhalt mit dem AICONO-Branding vereinheitlichen, dann ist es egal welcher Kanal greift. Empfehlung: **Beide Wege brand-konsistent halten** (Supabase-Template + send-auth-email) statt Doppelversand zu jagen.
-- Rate-Limit gegen Mail-Bombing wichtig, da Endpoint ohne JWT erreichbar ist.
+- **`mailer_autoconfirm = true` heißt: User gilt sofort als verifiziert**, auch ohne Klick auf den Link. Bewusster Trade-off — alternativ müsste eine eigene `email_confirmed`-Spalte in `profiles` + Login-Guard ergänzt werden (out of scope).
+- `auth.admin.generateLink({ type: "signup" })` setzt voraus, dass User in `auth.users` existiert → erst `signUp()`, dann `send-auth-email`.
+- Audit-Logging (`email_send_audit`) greift automatisch.
+- Rate-Limit (5/min/IP) bleibt aktiv.
+- **GitHub-Sync Lovable → Hetzner verändert keine Secrets** — Hetzner-`.env` und Hetzner-Resend-API-Key bleiben isoliert. Nur Code wird gepusht.
+
+## Geänderte Dateien
+
+**Bearbeitet:**
+- `supabase/functions/send-auth-email/index.ts` — `signup_confirm` + `email_change` ausbauen, Reply-To dynamisieren
+- `src/pages/ChargingApp.tsx` — Signup-Flow
+- `src/pages/TenantEnergyApp.tsx` — Signup-Flow
+- `src/hooks/useAuth.tsx` — Signup-Flow
+- ggf. `src/pages/Profile.tsx` / `src/components/settings/*` — Email-Change-Flow
+- Auth-Settings via `cloud--configure_auth`: `mailer_autoconfirm = true` (Lovable)
+
+**Manuell auf Hetzner (einmalig, kein Code-Push):**
+- `supabase-docker/.env`: `GOTRUE_MAILER_AUTOCONFIRM=true`
+- Verifizieren: `RESEND_API_KEY` (Live-Key) und `RESEND_FROM_EMAIL=info@aicono.org` sind in den Edge-Function-Secrets gesetzt
+- Container-Restart von `auth` und Edge-Functions-Runtime
+
+**Keine neuen Dateien.**
 
 ## Reihenfolge der Umsetzung
 
-1. Migration `email_send_audit` anlegen.
-2. `_shared/email-templates.ts` schreiben.
-3. Edge Function `send-auth-email` schreiben + in `config.toml` registrieren + deployen.
-4. Mit `curl` testen (Test-Recipient `christvs@t-online.de`).
-5. Frontend-Aufrufe in 5 Dateien umstellen.
-6. Supabase-Auth-Templates (über Management-API) auf AICONO-Branding setzen — als Sicherheitsnetz.
-7. End-to-End-Test: Forgot-Password aus `/auth`, Signup aus Charging-PWA.
+1. `send-auth-email` erweitern (signup_confirm, email_change) + Reply-To dynamisieren.
+2. `cloud--configure_auth` → `mailer_autoconfirm = true` (Lovable).
+3. Frontend Signup-Aufrufe in 3 Dateien ergänzen.
+4. Email-Change-Aufrufe finden und umstellen.
+5. End-to-End-Test in Lovable-Preview: Signup aus `/ev`, `/te`, `/auth` — Mail kommt von `info@staging.aicono.org` mit AICONO-Branding.
+6. **Hetzner-Side (manuell, dokumentieren)**: `.env` anpassen, Live-Resend-Key + `info@aicono.org` setzen, Container restart, gleicher End-to-End-Test gegen Live-Domain.
+
+## Out of Scope
+
+- Echte Verifikations-Pflicht vor Login (separates Thema, da `mailer_autoconfirm = true` Sofort-Login erlaubt).
+- Migration zu Lovable Emails (bleibt bei Resend).
+- Bounce-/Complaint-Webhooks.
+- Hetzner-Deploy-Automatisierung.
