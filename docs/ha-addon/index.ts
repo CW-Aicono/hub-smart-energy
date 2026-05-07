@@ -27,6 +27,49 @@ try {
   WebSocketClient = require("ws") as any;
 } catch { /* ws not available, WebSocket features disabled */ }
 
+import { WallboxBridgeManager, type WallboxInstance, type WallboxTemplate } from "./modbus-wallbox-bridge";
+let wallboxManager: WallboxBridgeManager | null = null;
+
+function getWallboxManager(): WallboxBridgeManager {
+  if (!wallboxManager) {
+    const cloudWsBase = (config.cloud_url || "").replace(/^http/, "ws").replace(/\/$/, "") + "/functions/v1/ocpp-ws";
+    const password = process.env.GATEWAY_OCPP_PASSWORD || config.gateway_password || "";
+    wallboxManager = new WallboxBridgeManager(cloudWsBase, password);
+  }
+  return wallboxManager;
+}
+
+async function fetchWallboxInstanceAndTemplate(instanceId: string): Promise<{ inst: WallboxInstance; tpl: WallboxTemplate } | null> {
+  try {
+    const url = `${config.cloud_url}/rest/v1/wallbox_modbus_instances?id=eq.${instanceId}&select=*,template:wallbox_modbus_templates(*),charge_point:charge_points(ocpp_id)`;
+    const res = await fetch(url, {
+      headers: {
+        apikey: process.env.SUPABASE_ANON_KEY || "",
+        Authorization: `Bearer ${process.env.SUPABASE_ANON_KEY || ""}`,
+      },
+    });
+    if (!res.ok) return null;
+    const rows = await res.json() as any[];
+    const row = rows?.[0];
+    if (!row) return null;
+    return {
+      inst: {
+        id: row.id,
+        template_id: row.template_id,
+        charge_point_ocpp_id: row.charge_point?.ocpp_id ?? row.id,
+        modbus_host: row.modbus_host,
+        modbus_port: row.modbus_port,
+        unit_id: row.unit_id,
+      },
+      tpl: row.template as WallboxTemplate,
+    };
+  } catch (e) {
+    console.error("[wb-bridge] fetch instance failed", (e as Error).message);
+    return null;
+  }
+}
+
+
 /* ── Configuration ───────────────────────────────────────────────────────────── */
 
 interface AddonConfig {
