@@ -6,6 +6,7 @@ import type { GatewayDeviceWithMetrics } from "@/hooks/useGatewayDevices";
 import { StatusBadge } from "./StatusBadge";
 import { PinConfigDialog } from "./PinConfigDialog";
 import { HaConfigDialog } from "./HaConfigDialog";
+import { GatewayConfigDialog } from "./GatewayConfigDialog";
 import { DeviceMetrics } from "./DeviceMetrics";
 import {
   Server,
@@ -16,6 +17,7 @@ import {
   Lock,
   ClipboardList,
   Sparkles,
+  Settings2,
 } from "lucide-react";
 
 interface DeviceCardProps {
@@ -29,6 +31,7 @@ export function DeviceCard({ device, onCommand, isAdmin, onKeyGenerated }: Devic
   const { t } = useTranslation();
   const [pinDialogOpen, setPinDialogOpen] = useState(false);
   const [haConfigOpen, setHaConfigOpen] = useState(false);
+  const [gwConfigOpen, setGwConfigOpen] = useState(false);
   const hasUpdate =
     device.latest_available_version &&
     device.addon_version &&
@@ -90,6 +93,9 @@ export function DeviceCard({ device, onCommand, isAdmin, onKeyGenerated }: Devic
             </Button>
             {isAdmin && (
               <>
+                <Button variant="ghost" size="icon" onClick={() => setGwConfigOpen(true)} title="Gateway-Konfiguration">
+                  <Settings2 className="h-4 w-4" />
+                </Button>
                 <Button variant="ghost" size="icon" onClick={() => setPinDialogOpen(true)} title="UI-PIN konfigurieren">
                   <Lock className="h-4 w-4" />
                 </Button>
@@ -138,12 +144,20 @@ export function DeviceCard({ device, onCommand, isAdmin, onKeyGenerated }: Devic
       />
 
       {isAdmin && (
-        <PinConfigDialog
-          device={device}
-          open={pinDialogOpen}
-          onOpenChange={setPinDialogOpen}
-          onUpdated={onKeyGenerated}
-        />
+        <>
+          <PinConfigDialog
+            device={device}
+            open={pinDialogOpen}
+            onOpenChange={setPinDialogOpen}
+            onUpdated={onKeyGenerated}
+          />
+          <GatewayConfigDialog
+            deviceId={device.id}
+            deviceName={device.device_name}
+            open={gwConfigOpen}
+            onOpenChange={setGwConfigOpen}
+          />
+        </>
       )}
     </>
   );
