@@ -2213,22 +2213,17 @@ async function main(): Promise<void> {
   // Polling loop (REST-based, for readings)
   // WICHTIG: initialer Poll sofort ausführen, damit latestHAStates die volle
   // HA-Entity-Liste enthält BEVOR der erste Device-Snapshot gepusht wird.
-  // Ohne diesen Init-Poll würde nur der lokale SQLite-Cache (max 500, ggf. nur
-  // wenige System-Sensoren) als Inventar an die Cloud gehen.
   pollHAStates().catch((e) => console.error("[ha-poll] initial poll failed", e));
-  setInterval(() => pollHAStates(), config.poll_interval_seconds * 1000);
+  workerTimers.poll = setInterval(() => pollHAStates(), config.poll_interval_seconds * 1000);
 
   // Flush loop
-  setInterval(() => flushBuffer(), config.flush_interval_seconds * 1000);
+  workerTimers.flush = setInterval(() => flushBuffer(), config.flush_interval_seconds * 1000);
 
-  // Cloud-Health-Watchdog: prüft alle 60s ob die WS noch lebt; falls nein,
-  // wird der Reconnect bereits durch das `close`-Event getriggert. Wir nutzen
-  // diesen Tick zusätzlich, um HA-Version aktuell zu halten.
-  setInterval(async () => {
+  // Cloud-Health-Watchdog
+  workerTimers.watchdog = setInterval(async () => {
     try {
       await fetchHAVersion();
       if (!cloudWsConnected) {
-        // markCloudUnreachable kümmert sich um den UI-Status
         markCloudUnreachable();
       }
     } catch (err) {
@@ -2237,26 +2232,24 @@ async function main(): Promise<void> {
   }, 60_000);
 
   // Automation evaluation loop
-  setInterval(() => evaluateAndExecuteAutomations(), config.automation_eval_seconds * 1000);
+  workerTimers.automation = setInterval(() => evaluateAndExecuteAutomations(), config.automation_eval_seconds * 1000);
 
   // Sync automations from cloud every 5 minutes
-  setInterval(async () => {
+  workerTimers.syncAutomations = setInterval(async () => {
     await syncAutomationsFromCloud();
     await pushExecutionLogs();
   }, 5 * 60 * 1000);
 
   // Refresh meter mappings every 5 minutes
-  setInterval(() => fetchMeterMappings(), 5 * 60 * 1000);
+  workerTimers.meterMappings = setInterval(() => fetchMeterMappings(), 5 * 60 * 1000);
 
   // Push device inventory snapshot to cloud.
-  // Erster Push erst nach 25s, damit der initiale pollHAStates() (oben) sicher
-  // alle Entities von HA geladen hat. Danach alle 2 Minuten erneut.
   setTimeout(() => pushDeviceSnapshot(), 25_000);
-  setInterval(() => pushDeviceSnapshot(), 2 * 60 * 1000);
+  workerTimers.snapshot = setInterval(() => pushDeviceSnapshot(), 2 * 60 * 1000);
 
   // Auto backup
   if (config.auto_backup_hours > 0) {
-    setInterval(() => sendBackup(), config.auto_backup_hours * 60 * 60 * 1000);
+    workerTimers.backup = setInterval(() => sendBackup(), config.auto_backup_hours * 60 * 60 * 1000);
   }
 
   console.log("[main] All loops started. AICONO EMS Gateway is running.");
