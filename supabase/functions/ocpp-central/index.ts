@@ -676,11 +676,11 @@ async function handleRemoteCommand(
       return { status: "Accepted" };
     }
     case "Reset": {
-      await supabase
-        .from("charge_points")
-        .update({ status: "offline" })
-        .eq("ocpp_id", chargePointOcppId);
-
+      // Status NICHT auf "offline" setzen: das führt dazu, dass die UI die
+      // Wallbox dauerhaft als offline anzeigt, obwohl die WS-Verbindung
+      // (ws_connected) nach dem Reboot wieder steht. Der reale Status
+      // wird durch die nächste StatusNotification (connectorId=0) und
+      // die Heartbeats korrekt wiederhergestellt.
       await supabase
         .from("pending_ocpp_commands")
         .insert({

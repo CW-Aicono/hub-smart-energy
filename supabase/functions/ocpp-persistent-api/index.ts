@@ -173,11 +173,14 @@ async function handle(action: string, body: Record<string, unknown>) {
         `[ocpp-persistent-api] authorize-id-tag raw="${idTag}" mode="${readMode}" normalized="${normalizedIdTag}"`,
       );
 
+      // Case-insensitiver Match: in der DB können RFID-Tags in beliebiger
+      // Schreibweise gespeichert sein (z.B. lowercase), normalizeRfidTag liefert
+      // jedoch immer Uppercase-Hex. Daher ilike statt eq.
       let { data: user, error } = await admin
         .from("charging_users")
         .select("id, status")
         .eq("tenant_id", tenantId)
-        .eq("rfid_tag", normalizedIdTag)
+        .ilike("rfid_tag", normalizedIdTag)
         .maybeSingle();
 
       if (!user && !error) {
@@ -185,7 +188,7 @@ async function handle(action: string, body: Record<string, unknown>) {
           .from("charging_users")
           .select("id, status")
           .eq("tenant_id", tenantId)
-          .eq("app_tag", normalizedIdTag)
+          .ilike("app_tag", normalizedIdTag)
           .maybeSingle();
         user = result.data;
         error = result.error;
