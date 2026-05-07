@@ -182,7 +182,7 @@ Deno.serve(async (req) => {
 
       if (req.method === "GET" && sub.length === 1) {
         let q = admin.from("wallbox_modbus_instances").select(
-          "*, template:wallbox_modbus_templates(vendor,model,version), gateway:gateway_devices(id,name), charge_point:charge_points(id,charge_point_id,vendor,model)"
+          "*, template:wallbox_modbus_templates(vendor,model,version), gateway:gateway_devices(id,name), charge_point:charge_points(id,ocpp_id,vendor,model)"
         );
         if (!su) q = q.eq("tenant_id", tenantId);
         const { data, error } = await q.order("created_at", { ascending: false });
