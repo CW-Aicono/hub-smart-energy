@@ -2624,6 +2624,9 @@ async function main(): Promise<void> {
   // Connect persistent WSS to AICONO Cloud (gateway-ws) for heartbeat + commands
   connectCloudWebSocket();
 
+  // Phase 4: report any pending update result after a Supervisor restart
+  setTimeout(() => reportPostBootUpdateResult(), 10_000);
+
   // Polling loop (REST-based, for readings)
   // WICHTIG: initialer Poll sofort ausführen, damit latestHAStates die volle
   // HA-Entity-Liste enthält BEVOR der erste Device-Snapshot gepusht wird.
