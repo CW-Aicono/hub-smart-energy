@@ -54,7 +54,7 @@ export default function ModbusWallboxWizard({ onCreated }: Props) {
     (async () => {
       const [tplRes, gwRes, locRes] = await Promise.all([
         supabase.from("wallbox_modbus_templates").select("id,vendor,model,default_unit_id,default_port,is_active").eq("is_active", true).order("vendor"),
-        supabase.from("gateway_devices").select("id,name,status").eq("tenant_id", tenant.id).order("name"),
+        supabase.from("gateway_devices").select("id,device_name,status").eq("tenant_id", tenant.id).order("device_name"),
         supabase.from("locations").select("id,name").eq("tenant_id", tenant.id).order("name"),
       ]);
       setTemplates((tplRes.data ?? []) as Template[]);
