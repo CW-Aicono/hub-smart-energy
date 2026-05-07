@@ -306,10 +306,23 @@ function LocationNode({ location, level, selectedId, onSelect, onRefresh, isAdmi
           <Wifi className="h-3 w-3" />
         </Badge>
       );
-    } else if (status.onlineIntegrations === 0 && !status.hasUnconfigured) {
+    } else if (status.onlineIntegrations === 0 && !status.hasUnconfigured && !status.hasSyncError) {
       badges.push(
         <Badge key="offline" variant="outline" className="text-xs gap-1 bg-destructive/10 text-destructive border-destructive/20">
           <WifiOff className="h-3 w-3" />
+        </Badge>
+      );
+    }
+
+    if (status.hasSyncError) {
+      badges.push(
+        <Badge
+          key="syncerr"
+          variant="outline"
+          className="text-xs gap-1 bg-amber-500/10 text-amber-600 border-amber-500/30"
+          title={`Sync-Fehler: ${status.syncErrorNames.join(", ")}`}
+        >
+          <AlertCircle className="h-3 w-3" />
         </Badge>
       );
     }
