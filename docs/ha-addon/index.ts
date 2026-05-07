@@ -1718,6 +1718,34 @@ async function handleCloudCommand(cmdType: string, payload: Record<string, unkno
       });
       return { ok: true, job_id: jobId, accepted: true };
     }
+    case "provision_wallbox":
+    case "update_wallbox": {
+      const instanceId = String(payload.instance_id || "");
+      if (!instanceId) throw new Error("instance_id missing");
+      const data = await fetchWallboxInstanceAndTemplate(instanceId);
+      if (!data) throw new Error(`wallbox instance ${instanceId} not found`);
+      await getWallboxManager().provision(data.inst, data.tpl);
+      saveLocalIntegrationConfig(`wallbox:${instanceId}`, { instance_id: instanceId });
+      return { ok: true, instance_id: instanceId };
+    }
+    case "remove_wallbox": {
+      const instanceId = String(payload.instance_id || "");
+      await getWallboxManager().remove(instanceId);
+      removeLocalIntegrationConfig(`wallbox:${instanceId}`);
+      return { ok: true };
+    }
+    case "test_wallbox": {
+      const instanceId = String(payload.instance_id || "");
+      const data = await fetchWallboxInstanceAndTemplate(instanceId);
+      if (!data) return { ok: false, error: "instance not found" };
+      try {
+        const bridge = getWallboxManager().get(instanceId);
+        const state = bridge?.getState();
+        return { ok: true, state: state ?? null };
+      } catch (e) {
+        return { ok: false, error: (e as Error).message };
+      }
+    }
     default:
       throw new Error(`Unknown command: ${cmdType}`);
   }
