@@ -1662,8 +1662,99 @@ async function handleCloudCommand(cmdType: string, payload: Record<string, unkno
       const result = await deprovisionEntity(payload as any);
       return result;
     }
+    case "pull_image": {
+      // Phase 4: Cloud schickt Auto-/Remote-Software-Update.
+      const jobId = String(payload.job_id || "");
+      const imageRef = String(payload.image_ref || "");
+      const targetVersion = String(payload.target_version || "");
+      if (!jobId || !imageRef) throw new Error("job_id/image_ref missing");
+      // Fire-and-forget: HA Supervisor restartet uns mitten im Update.
+      runUpdateJob(jobId, imageRef, targetVersion).catch((err) => {
+        console.error("[update] runUpdateJob failed:", err?.message || err);
+        reportUpdateProgress(jobId, "failed", { error: err?.message || String(err) });
+      });
+      return { ok: true, job_id: jobId, accepted: true };
+    }
     default:
       throw new Error(`Unknown command: ${cmdType}`);
+  }
+}
+
+// -------------------------------------------------------------------------
+// Phase 4 helpers – Remote-/Auto-Software-Updates
+// -------------------------------------------------------------------------
+
+function reportUpdateProgress(
+  jobId: string,
+  status: "running" | "success" | "failed",
+  extra: { log?: string; error?: string; installed_version?: string } = {},
+): void {
+  if (!cloudWs || !cloudWsConnected) return;
+  safeWsSend(cloudWs, {
+    type: "update_progress",
+    job_id: jobId,
+    status,
+    log: extra.log,
+    error: extra.error,
+    installed_version: extra.installed_version,
+  });
+}
+
+async function runUpdateJob(jobId: string, imageRef: string, targetVersion: string): Promise<void> {
+  console.log(`[update] job=${jobId} image=${imageRef} version=${targetVersion}`);
+  reportUpdateProgress(jobId, "running", { log: `Starting update to ${targetVersion} (${imageRef})` });
+
+  // 1) Versuche, das HA-Supervisor-Add-on zu updaten (zieht Image automatisch).
+  try {
+    persistPendingUpdateJob(jobId, targetVersion);
+    await callSupervisorAddonCommand("update");
+    reportUpdateProgress(jobId, "running", { log: "Supervisor update dispatched – waiting for restart" });
+    return;
+  } catch (err) {
+    console.warn("[update] Supervisor update failed:", (err as Error).message);
+    reportUpdateProgress(jobId, "failed", { error: (err as Error).message });
+  }
+}
+
+function persistPendingUpdateJob(jobId: string, targetVersion: string): void {
+  try {
+    db.prepare(`CREATE TABLE IF NOT EXISTS pending_update_jobs (
+      job_id TEXT PRIMARY KEY,
+      target_version TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )`).run();
+    db.prepare(`INSERT OR REPLACE INTO pending_update_jobs (job_id, target_version) VALUES (?, ?)`)
+      .run(jobId, targetVersion);
+  } catch (err) {
+    console.warn("[update] persist failed:", (err as Error).message);
+  }
+}
+
+function reportPostBootUpdateResult(): void {
+  try {
+    db.prepare(`CREATE TABLE IF NOT EXISTS pending_update_jobs (
+      job_id TEXT PRIMARY KEY,
+      target_version TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )`).run();
+    const rows = db.prepare(`SELECT job_id, target_version FROM pending_update_jobs`).all() as Array<{ job_id: string; target_version: string }>;
+    for (const row of rows) {
+      const ok = ADDON_VERSION === row.target_version;
+      const send = () => {
+        if (!cloudWsConnected) { setTimeout(send, 2000); return; }
+        reportUpdateProgress(row.job_id, ok ? "success" : "failed", {
+          installed_version: ADDON_VERSION,
+          log: ok
+            ? `Update applied successfully to ${ADDON_VERSION}`
+            : `Update mismatch: expected ${row.target_version}, running ${ADDON_VERSION}`,
+          error: ok ? undefined : `version mismatch (running ${ADDON_VERSION})`,
+        });
+        try { db.prepare(`DELETE FROM pending_update_jobs WHERE job_id = ?`).run(row.job_id); } catch { /* ignore */ }
+      };
+      send();
+    }
+  } catch (err) {
+    console.warn("[update] post-boot report failed:", (err as Error).message);
   }
 }
 
