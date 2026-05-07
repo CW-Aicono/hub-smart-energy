@@ -23,7 +23,7 @@ interface Template {
 
 interface Gateway {
   id: string;
-  name: string;
+  device_name: string;
   status: string;
 }
 
