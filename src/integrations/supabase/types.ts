@@ -2984,6 +2984,7 @@ export type Database = {
       gateway_devices: {
         Row: {
           addon_version: string | null
+          auto_update_enabled: boolean
           config: Json
           created_at: string
           device_name: string
@@ -2993,6 +2994,9 @@ export type Database = {
           ha_version: string | null
           id: string
           last_heartbeat_at: string | null
+          last_update_attempt_at: string | null
+          last_update_check_at: string | null
+          last_update_error: string | null
           last_ws_ping_at: string | null
           latest_available_version: string | null
           local_ip: string | null
@@ -3003,11 +3007,13 @@ export type Database = {
           offline_buffer_count: number
           status: string
           tenant_id: string | null
+          update_channel: string
           updated_at: string
           ws_connected_since: string | null
         }
         Insert: {
           addon_version?: string | null
+          auto_update_enabled?: boolean
           config?: Json
           created_at?: string
           device_name: string
@@ -3017,6 +3023,9 @@ export type Database = {
           ha_version?: string | null
           id?: string
           last_heartbeat_at?: string | null
+          last_update_attempt_at?: string | null
+          last_update_check_at?: string | null
+          last_update_error?: string | null
           last_ws_ping_at?: string | null
           latest_available_version?: string | null
           local_ip?: string | null
@@ -3027,11 +3036,13 @@ export type Database = {
           offline_buffer_count?: number
           status?: string
           tenant_id?: string | null
+          update_channel?: string
           updated_at?: string
           ws_connected_since?: string | null
         }
         Update: {
           addon_version?: string | null
+          auto_update_enabled?: boolean
           config?: Json
           created_at?: string
           device_name?: string
@@ -3041,6 +3052,9 @@ export type Database = {
           ha_version?: string | null
           id?: string
           last_heartbeat_at?: string | null
+          last_update_attempt_at?: string | null
+          last_update_check_at?: string | null
+          last_update_error?: string | null
           last_ws_ping_at?: string | null
           latest_available_version?: string | null
           local_ip?: string | null
@@ -3051,6 +3065,7 @@ export type Database = {
           offline_buffer_count?: number
           status?: string
           tenant_id?: string | null
+          update_channel?: string
           updated_at?: string
           ws_connected_since?: string | null
         }
@@ -3093,6 +3108,45 @@ export type Database = {
           location_integration_id?: string
           locked_at?: string
           locked_by?: string | null
+        }
+        Relationships: []
+      }
+      gateway_release_channels: {
+        Row: {
+          channel: string
+          created_at: string
+          created_by: string | null
+          id: string
+          image_ref: string
+          is_latest: boolean
+          release_notes: string | null
+          released_at: string
+          updated_at: string
+          version: string
+        }
+        Insert: {
+          channel: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          image_ref: string
+          is_latest?: boolean
+          release_notes?: string | null
+          released_at?: string
+          updated_at?: string
+          version: string
+        }
+        Update: {
+          channel?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          image_ref?: string
+          is_latest?: boolean
+          release_notes?: string | null
+          released_at?: string
+          updated_at?: string
+          version?: string
         }
         Relationships: []
       }
@@ -3140,6 +3194,78 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      gateway_update_jobs: {
+        Row: {
+          channel: string
+          created_at: string
+          created_by: string | null
+          dispatched_at: string | null
+          error_message: string | null
+          finished_at: string | null
+          gateway_device_id: string
+          id: string
+          image_ref: string
+          log_excerpt: string | null
+          started_at: string | null
+          status: string
+          target_version: string
+          tenant_id: string | null
+          triggered_by: string
+          updated_at: string
+        }
+        Insert: {
+          channel?: string
+          created_at?: string
+          created_by?: string | null
+          dispatched_at?: string | null
+          error_message?: string | null
+          finished_at?: string | null
+          gateway_device_id: string
+          id?: string
+          image_ref: string
+          log_excerpt?: string | null
+          started_at?: string | null
+          status?: string
+          target_version: string
+          tenant_id?: string | null
+          triggered_by?: string
+          updated_at?: string
+        }
+        Update: {
+          channel?: string
+          created_at?: string
+          created_by?: string | null
+          dispatched_at?: string | null
+          error_message?: string | null
+          finished_at?: string | null
+          gateway_device_id?: string
+          id?: string
+          image_ref?: string
+          log_excerpt?: string | null
+          started_at?: string | null
+          status?: string
+          target_version?: string
+          tenant_id?: string | null
+          triggered_by?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gateway_update_jobs_gateway_device_id_fkey"
+            columns: ["gateway_device_id"]
+            isOneToOne: false
+            referencedRelation: "gateway_devices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gateway_update_jobs_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       infrastructure_metrics: {
         Row: {

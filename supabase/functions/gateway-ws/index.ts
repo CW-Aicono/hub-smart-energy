@@ -810,6 +810,35 @@ async function handleFrame(session: Session, raw: any) {
         .eq("gateway_device_id", session.deviceId);
       break;
     }
+    case "update_progress": {
+      // Phase 4: gateway reports update job state (running / success / failed).
+      const jobId = String(raw.job_id || "");
+      if (!jobId) break;
+      const status = String(raw.status || "running");
+      const allowed = ["running", "success", "failed"];
+      if (!allowed.includes(status)) break;
+      const patch: Record<string, unknown> = {
+        status,
+        log_excerpt: raw.log ? String(raw.log).slice(0, 2000) : null,
+        error_message: raw.error ? String(raw.error).slice(0, 1000) : null,
+      };
+      const now = new Date().toISOString();
+      if (status === "running") patch.started_at = now;
+      if (status === "success" || status === "failed") patch.finished_at = now;
+      await svc().from("gateway_update_jobs").update(patch)
+        .eq("id", jobId).eq("gateway_device_id", session.deviceId);
+
+      // Bump device-level diagnostics
+      const devicePatch: Record<string, unknown> = {
+        last_update_attempt_at: now,
+        last_update_error: status === "failed" ? (raw.error ? String(raw.error).slice(0, 500) : "unknown") : null,
+      };
+      if (status === "success" && raw.installed_version) {
+        devicePatch.addon_version = String(raw.installed_version);
+      }
+      await svc().from("gateway_devices").update(devicePatch).eq("id", session.deviceId);
+      break;
+    }
     default:
       // Unknown frame – ignore
       break;
