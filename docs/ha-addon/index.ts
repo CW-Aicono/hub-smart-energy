@@ -124,6 +124,89 @@ const ADDON_VERSION = process.env.ADDON_VERSION || "dev";
 const SUPERVISOR_COMMAND_COOLDOWN_MS = 5 * 60 * 1000;
 let supervisorCommandInFlight: { command: string; startedAt: number } | null = null;
 
+/* ── Phase 2: Worker timers + remote-config state ────────────────────────────── */
+type TimerName = "poll" | "flush" | "watchdog" | "automation" | "syncAutomations" | "meterMappings" | "snapshot" | "backup";
+const workerTimers: Partial<Record<TimerName, NodeJS.Timeout>> = {};
+let remoteConfigVersion = 0;
+
+function clampInt(v: unknown, min: number, max: number, fallback: number): number {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.max(min, Math.min(max, Math.round(n)));
+}
+
+/** Apply a remote config patch coming from the Cloud. Resets affected timers live. */
+function applyRemoteConfig(incoming: Record<string, unknown> | null | undefined, version: number): void {
+  if (!incoming || typeof incoming !== "object") return;
+  if (version > 0 && version === remoteConfigVersion) {
+    return; // no-op, same version
+  }
+  const before = {
+    poll: config.poll_interval_seconds,
+    flush: config.flush_interval_seconds,
+    heartbeat: config.heartbeat_interval_seconds,
+    automation: config.automation_eval_seconds,
+    filter: config.entity_filter,
+    bufferMb: config.offline_buffer_max_mb,
+    backup: config.auto_backup_hours,
+  };
+
+  if (incoming.poll_interval_seconds !== undefined)
+    config.poll_interval_seconds = clampInt(incoming.poll_interval_seconds, 5, 3600, before.poll);
+  if (incoming.flush_interval_seconds !== undefined)
+    config.flush_interval_seconds = clampInt(incoming.flush_interval_seconds, 1, 600, before.flush);
+  if (incoming.heartbeat_interval_seconds !== undefined)
+    config.heartbeat_interval_seconds = clampInt(incoming.heartbeat_interval_seconds, 10, 600, before.heartbeat);
+  if (incoming.automation_eval_seconds !== undefined)
+    config.automation_eval_seconds = clampInt(incoming.automation_eval_seconds, 5, 600, before.automation);
+  if (typeof incoming.entity_filter === "string" && incoming.entity_filter.trim().length > 0)
+    config.entity_filter = incoming.entity_filter;
+  if (incoming.offline_buffer_max_mb !== undefined)
+    config.offline_buffer_max_mb = clampInt(incoming.offline_buffer_max_mb, 10, 5000, before.bufferMb);
+  if (incoming.auto_backup_hours !== undefined)
+    config.auto_backup_hours = clampInt(incoming.auto_backup_hours, 0, 168, before.backup);
+
+  remoteConfigVersion = version;
+  saveRemoteConfigToCache(incoming, version);
+
+  // Live-reset timers if values changed
+  if (before.poll !== config.poll_interval_seconds && workerTimers.poll) {
+    clearInterval(workerTimers.poll);
+    workerTimers.poll = setInterval(() => pollHAStates(), config.poll_interval_seconds * 1000);
+    console.log(`[remote-config] poll_interval → ${config.poll_interval_seconds}s`);
+  }
+  if (before.flush !== config.flush_interval_seconds && workerTimers.flush) {
+    clearInterval(workerTimers.flush);
+    workerTimers.flush = setInterval(() => flushBuffer(), config.flush_interval_seconds * 1000);
+    console.log(`[remote-config] flush_interval → ${config.flush_interval_seconds}s`);
+  }
+  if (before.automation !== config.automation_eval_seconds && workerTimers.automation) {
+    clearInterval(workerTimers.automation);
+    workerTimers.automation = setInterval(() => evaluateAndExecuteAutomations(), config.automation_eval_seconds * 1000);
+    console.log(`[remote-config] automation_eval → ${config.automation_eval_seconds}s`);
+  }
+  if (before.heartbeat !== config.heartbeat_interval_seconds && cloudWsHeartbeatTimer) {
+    clearInterval(cloudWsHeartbeatTimer);
+    cloudWsHeartbeatTimer = setInterval(sendCloudHeartbeat, config.heartbeat_interval_seconds * 1000);
+    console.log(`[remote-config] heartbeat_interval → ${config.heartbeat_interval_seconds}s`);
+  }
+  if (before.filter !== config.entity_filter) {
+    compileEntityFilter();
+    console.log(`[remote-config] entity_filter updated`);
+  }
+  if (before.backup !== config.auto_backup_hours) {
+    if (workerTimers.backup) {
+      clearInterval(workerTimers.backup);
+      workerTimers.backup = undefined;
+    }
+    if (config.auto_backup_hours > 0) {
+      workerTimers.backup = setInterval(() => sendBackup(), config.auto_backup_hours * 60 * 60 * 1000);
+    }
+    console.log(`[remote-config] auto_backup_hours → ${config.auto_backup_hours}`);
+  }
+  console.log(`[remote-config] applied version ${version}`);
+}
+
 /* ── Auth header helper for gateway-ingest (Daten-Upload) ────────────────────── */
 // gateway-ingest akzeptiert weiterhin Basic Auth (username/password) ODER Bearer.
 // Die WS-Verbindung nutzt einen eigenen JSON-Auth-Frame (siehe gatewayWsClient).
@@ -406,6 +489,44 @@ db.exec(`
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
 `);
+
+// ── NEW: Remote Config Cache (Phase 2 – Cloud-managed Worker-Settings) ──
+db.exec(`
+  CREATE TABLE IF NOT EXISTS gateway_remote_config (
+    cache_key TEXT PRIMARY KEY,
+    config_json TEXT NOT NULL,
+    version INTEGER NOT NULL DEFAULT 0,
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+`);
+
+function loadRemoteConfigFromCache(): { config: Record<string, unknown>; version: number } | null {
+  try {
+    const row = db
+      .prepare(`SELECT config_json, version FROM gateway_remote_config WHERE cache_key = 'primary'`)
+      .get() as { config_json: string; version: number } | undefined;
+    if (!row) return null;
+    return { config: JSON.parse(row.config_json), version: row.version };
+  } catch (err) {
+    console.warn("[remote-config] cache load failed:", err);
+    return null;
+  }
+}
+
+function saveRemoteConfigToCache(cfg: Record<string, unknown>, version: number): void {
+  try {
+    db.prepare(
+      `INSERT INTO gateway_remote_config (cache_key, config_json, version, updated_at)
+       VALUES ('primary', ?, ?, datetime('now'))
+       ON CONFLICT(cache_key) DO UPDATE SET
+         config_json = excluded.config_json,
+         version = excluded.version,
+         updated_at = excluded.updated_at`
+    ).run(JSON.stringify(cfg), version);
+  } catch (err) {
+    console.warn("[remote-config] cache save failed:", err);
+  }
+}
 
 /* ── Readings Buffer Statements ──────────────────────────────────────────────── */
 
@@ -1425,7 +1546,7 @@ async function connectCloudWebSocket(): Promise<void> {
         await sendCloudHeartbeat();
         // Periodischer Heartbeat
         if (cloudWsHeartbeatTimer) clearInterval(cloudWsHeartbeatTimer);
-        cloudWsHeartbeatTimer = setInterval(sendCloudHeartbeat, 30_000);
+        cloudWsHeartbeatTimer = setInterval(sendCloudHeartbeat, config.heartbeat_interval_seconds * 1000);
         break;
       }
       case "auth_error": {
@@ -1439,6 +1560,15 @@ async function connectCloudWebSocket(): Promise<void> {
         // Server bestätigt Heartbeat
         markCloudReachable();
         break;
+      case "config_update": {
+        // Phase 2: Cloud pushes a fresh remote-config snapshot.
+        const v = Number(msg.version) || 0;
+        applyRemoteConfig(msg.config || {}, v);
+        try {
+          safeWsSend(cloudWs, { type: "config_ack", version: v });
+        } catch { /* ignore */ }
+        break;
+      }
       case "command": {
         const cmdId = String(msg.id || "");
         const cmdType = String(msg.command_type || "");
@@ -2158,6 +2288,13 @@ async function main(): Promise<void> {
     console.log(`[offline] Loaded cached gateway assignment: ${cachedAssignment.location_name || cachedAssignment.tenant_name || 'unknown'}`);
   }
 
+  // Phase 2: Apply cached remote config (so reboot keeps Cloud-managed settings)
+  const cachedRemote = loadRemoteConfigFromCache();
+  if (cachedRemote) {
+    applyRemoteConfig(cachedRemote.config, cachedRemote.version);
+    console.log(`[offline] Loaded cached remote config (v${cachedRemote.version})`);
+  }
+
   await startServer();
 
   // Initial setup
@@ -2175,22 +2312,17 @@ async function main(): Promise<void> {
   // Polling loop (REST-based, for readings)
   // WICHTIG: initialer Poll sofort ausführen, damit latestHAStates die volle
   // HA-Entity-Liste enthält BEVOR der erste Device-Snapshot gepusht wird.
-  // Ohne diesen Init-Poll würde nur der lokale SQLite-Cache (max 500, ggf. nur
-  // wenige System-Sensoren) als Inventar an die Cloud gehen.
   pollHAStates().catch((e) => console.error("[ha-poll] initial poll failed", e));
-  setInterval(() => pollHAStates(), config.poll_interval_seconds * 1000);
+  workerTimers.poll = setInterval(() => pollHAStates(), config.poll_interval_seconds * 1000);
 
   // Flush loop
-  setInterval(() => flushBuffer(), config.flush_interval_seconds * 1000);
+  workerTimers.flush = setInterval(() => flushBuffer(), config.flush_interval_seconds * 1000);
 
-  // Cloud-Health-Watchdog: prüft alle 60s ob die WS noch lebt; falls nein,
-  // wird der Reconnect bereits durch das `close`-Event getriggert. Wir nutzen
-  // diesen Tick zusätzlich, um HA-Version aktuell zu halten.
-  setInterval(async () => {
+  // Cloud-Health-Watchdog
+  workerTimers.watchdog = setInterval(async () => {
     try {
       await fetchHAVersion();
       if (!cloudWsConnected) {
-        // markCloudUnreachable kümmert sich um den UI-Status
         markCloudUnreachable();
       }
     } catch (err) {
@@ -2199,26 +2331,24 @@ async function main(): Promise<void> {
   }, 60_000);
 
   // Automation evaluation loop
-  setInterval(() => evaluateAndExecuteAutomations(), config.automation_eval_seconds * 1000);
+  workerTimers.automation = setInterval(() => evaluateAndExecuteAutomations(), config.automation_eval_seconds * 1000);
 
   // Sync automations from cloud every 5 minutes
-  setInterval(async () => {
+  workerTimers.syncAutomations = setInterval(async () => {
     await syncAutomationsFromCloud();
     await pushExecutionLogs();
   }, 5 * 60 * 1000);
 
   // Refresh meter mappings every 5 minutes
-  setInterval(() => fetchMeterMappings(), 5 * 60 * 1000);
+  workerTimers.meterMappings = setInterval(() => fetchMeterMappings(), 5 * 60 * 1000);
 
   // Push device inventory snapshot to cloud.
-  // Erster Push erst nach 25s, damit der initiale pollHAStates() (oben) sicher
-  // alle Entities von HA geladen hat. Danach alle 2 Minuten erneut.
   setTimeout(() => pushDeviceSnapshot(), 25_000);
-  setInterval(() => pushDeviceSnapshot(), 2 * 60 * 1000);
+  workerTimers.snapshot = setInterval(() => pushDeviceSnapshot(), 2 * 60 * 1000);
 
   // Auto backup
   if (config.auto_backup_hours > 0) {
-    setInterval(() => sendBackup(), config.auto_backup_hours * 60 * 60 * 1000);
+    workerTimers.backup = setInterval(() => sendBackup(), config.auto_backup_hours * 60 * 60 * 1000);
   }
 
   console.log("[main] All loops started. AICONO EMS Gateway is running.");
