@@ -1645,9 +1645,233 @@ async function handleCloudCommand(cmdType: string, payload: Record<string, unkno
       console.log(`[cloud-ws] UI PIN ${uiPinHash ? "updated" : "cleared"}`);
       return { ok: true };
     }
+    case "discover_devices": {
+      // Phase 3: Cloud bittet uns einen Discovery-Lauf zu fahren.
+      const methods = Array.isArray(payload.methods) ? payload.methods as string[] : ["mdns", "mqtt"];
+      const found = await runDeviceDiscovery(methods, payload.modbus as any);
+      await pushDiscoveriesToCloud(found);
+      return { ok: true, count: found.length, methods };
+    }
+    case "provision_entity": {
+      // Phase 3: Cloud will eine neue Sensor-/Aktor-/Zähler-Integration einrichten.
+      const result = await provisionEntity(payload as any);
+      await reportProvisionStatus(String(payload.entity_id || ""), result);
+      return result;
+    }
+    case "deprovision_entity": {
+      const result = await deprovisionEntity(payload as any);
+      return result;
+    }
     default:
       throw new Error(`Unknown command: ${cmdType}`);
   }
+}
+
+// -------------------------------------------------------------------------
+// Phase 3 helpers – Discovery / Provision
+// -------------------------------------------------------------------------
+
+interface DiscoveredItem {
+  discovery_method: "mdns" | "mqtt" | "modbus_scan";
+  payload: Record<string, unknown>;
+}
+
+async function runDeviceDiscovery(
+  methods: string[],
+  modbus?: { host?: string; port?: number; unit_ids?: number[] },
+): Promise<DiscoveredItem[]> {
+  const results: DiscoveredItem[] = [];
+
+  // mDNS / MQTT discovery: re-use HA's auto-discovered entities. The HA
+  // integration registry already aggregates anything Shelly/Tasmota/ESPHome/
+  // Zeroconf has spotted, so we expose unmapped entities to the cloud.
+  if (methods.includes("mdns") || methods.includes("mqtt")) {
+    try {
+      const states = await fetchHAStatesRaw();
+      for (const s of states) {
+        const eid = String(s.entity_id || "");
+        if (!eid) continue;
+        const integration = guessIntegrationFromEntity(eid, s);
+        if (!integration) continue;
+        // Skip entities that already have an AICONO mapping
+        if (isEntityMapped(eid)) continue;
+        const method = integration === "shelly" ? "mdns" : "mqtt";
+        if (!methods.includes(method)) continue;
+        results.push({
+          discovery_method: method,
+          payload: {
+            ha_entity_id: eid,
+            integration_type: integration,
+            name: s.attributes?.friendly_name || eid,
+            unit: s.attributes?.unit_of_measurement,
+            device_class: s.attributes?.device_class,
+            state: s.state,
+          },
+        });
+      }
+    } catch (err) {
+      console.warn("[discover] HA state fetch failed:", (err as Error).message);
+    }
+  }
+
+  if (methods.includes("modbus_scan") && modbus?.host) {
+    const port = Number(modbus.port || 502);
+    const unitIds = modbus.unit_ids && modbus.unit_ids.length > 0 ? modbus.unit_ids : [1, 2, 3];
+    for (const unit of unitIds) {
+      const reachable = await probeModbusUnit(modbus.host, port, unit);
+      if (reachable) {
+        results.push({
+          discovery_method: "modbus_scan",
+          payload: {
+            host: modbus.host,
+            port,
+            unit_id: unit,
+            integration_type: "modbus_tcp",
+            name: `Modbus ${modbus.host}:${port}/${unit}`,
+          },
+        });
+      }
+    }
+  }
+
+  return results;
+}
+
+async function fetchHAStatesRaw(): Promise<any[]> {
+  // Lazy import to avoid breaking environments where this helper isn't loaded yet.
+  // pollHAStates() already exists in this file – it caches the latest snapshot.
+  // We expose the raw cache via a global accessor populated during normal polling.
+  const cache = (globalThis as any).__lastHaStates;
+  if (Array.isArray(cache)) return cache;
+  return [];
+}
+
+function guessIntegrationFromEntity(entityId: string, state: any): string | null {
+  const eid = entityId.toLowerCase();
+  const platform = String(state?.attributes?.platform || "").toLowerCase();
+  if (platform === "shelly" || eid.includes("shelly")) return "shelly";
+  if (platform === "mqtt" || platform === "tasmota") return "tasmota";
+  if (platform === "esphome") return "esphome";
+  if (platform === "modbus") return "modbus_tcp";
+  return null;
+}
+
+function isEntityMapped(entityId: string): boolean {
+  try {
+    return meterMappings.some((m: any) =>
+      m.ha_entity_id === entityId || m.sensor_uuid === entityId,
+    );
+  } catch {
+    return false;
+  }
+}
+
+async function probeModbusUnit(host: string, port: number, _unit: number): Promise<boolean> {
+  // Lightweight TCP reachability probe – the real protocol scan happens in the
+  // dedicated aicono-ocpp-bridge / modbus worker (Phase 5). Here we only verify
+  // that the device is reachable so the Cloud-UI can offer it as a candidate.
+  return await new Promise((resolve) => {
+    try {
+      // deno-lint-ignore no-explicit-any
+      const net = require("node:net") as any;
+      const sock = net.createConnection({ host, port, timeout: 1500 }, () => {
+        sock.end();
+        resolve(true);
+      });
+      sock.on("error", () => resolve(false));
+      sock.on("timeout", () => { sock.destroy(); resolve(false); });
+    } catch {
+      resolve(false);
+    }
+  });
+}
+
+async function pushDiscoveriesToCloud(items: DiscoveredItem[]): Promise<void> {
+  if (items.length === 0) return;
+  try {
+    safeWsSend(cloudWs, {
+      type: "discoveries",
+      device_id: gatewayDeviceId,
+      items: items.map((i) => ({
+        discovery_method: i.discovery_method,
+        discovered_payload: i.payload,
+      })),
+    });
+  } catch (err) {
+    console.warn("[discover] push failed:", (err as Error).message);
+  }
+}
+
+async function provisionEntity(payload: {
+  entity_id: string;
+  integration_type: string;
+  entity_kind: string;
+  ha_entity_id?: string | null;
+  config: Record<string, unknown>;
+}): Promise<{ ok: boolean; error?: string }> {
+  // For HA-managed integrations (shelly via mDNS, MQTT, ESPHome) the entity is
+  // typically already present in HA – we just need to make sure the meter cache
+  // is refreshed so the new sensor flows into the dashboard. For modbus_tcp we
+  // hand off to the local modbus worker (Phase 5 will register a real driver).
+  try {
+    if (payload.integration_type === "modbus_tcp") {
+      // Persist the modbus config locally for the bridge to pick up.
+      saveLocalIntegrationConfig(payload.entity_id, payload.config);
+    }
+    await fetchMeterMappings();
+    return { ok: true };
+  } catch (err: any) {
+    return { ok: false, error: err?.message || String(err) };
+  }
+}
+
+async function deprovisionEntity(payload: { entity_id: string; integration_type: string }) {
+  try {
+    if (payload.integration_type === "modbus_tcp") {
+      removeLocalIntegrationConfig(payload.entity_id);
+    }
+    return { ok: true };
+  } catch (err: any) {
+    return { ok: false, error: err?.message || String(err) };
+  }
+}
+
+function saveLocalIntegrationConfig(entityId: string, config: Record<string, unknown>): void {
+  try {
+    db.prepare(`
+      CREATE TABLE IF NOT EXISTS gateway_local_integrations (
+        entity_id TEXT PRIMARY KEY,
+        config_json TEXT NOT NULL,
+        updated_at INTEGER NOT NULL
+      )
+    `).run();
+    db.prepare(`
+      INSERT INTO gateway_local_integrations (entity_id, config_json, updated_at)
+      VALUES (?, ?, ?)
+      ON CONFLICT(entity_id) DO UPDATE SET config_json = excluded.config_json, updated_at = excluded.updated_at
+    `).run(entityId, JSON.stringify(config), Date.now());
+  } catch (err) {
+    console.warn("[provision] local persist failed:", (err as Error).message);
+  }
+}
+
+function removeLocalIntegrationConfig(entityId: string): void {
+  try {
+    db.prepare(`DELETE FROM gateway_local_integrations WHERE entity_id = ?`).run(entityId);
+  } catch { /* table may not exist yet */ }
+}
+
+async function reportProvisionStatus(entityId: string, result: { ok: boolean; error?: string }) {
+  if (!entityId) return;
+  try {
+    safeWsSend(cloudWs, {
+      type: "provision_result",
+      device_id: gatewayDeviceId,
+      entity_id: entityId,
+      ok: result.ok,
+      error: result.error || null,
+    });
+  } catch { /* ignore */ }
 }
 
 let cachedHostIPAt = 0;
