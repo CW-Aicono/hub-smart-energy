@@ -84,8 +84,9 @@ serve(async (req) => {
         );
 
         const data = await response.json();
-
-        if (data.success) {
+        if (!response.ok || !data.success) {
+          console.error(`[loxone-periodic-sync] HTTP ${response.status} for integration ${integrationId}: ${data?.error || response.statusText}`);
+        }
           const sensors = data.sensors || [];
           const systemMessages = data.systemMessages || [];
           const offlineSensors = sensors.filter((s: any) => s.status === "offline");
