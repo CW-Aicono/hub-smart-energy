@@ -210,19 +210,18 @@ Deno.serve(async (req) => {
         // Create charge_point if not provided
         let chargePointFk = body.charge_point_id ?? null;
         if (!chargePointFk) {
-          const cpId = body.charge_point_id_string ??
+          const ocppId = body.ocpp_id ??
             `wb-${tpl.vendor.toLowerCase().replace(/\s+/g, "-")}-${Date.now().toString(36)}`;
           const { data: cp, error: cpErr } = await admin
             .from("charge_points")
             .insert({
               tenant_id: tenantId,
               location_id: body.location_id ?? null,
-              charge_point_id: cpId,
-              label: body.label ?? `${tpl.vendor} ${tpl.model}`,
+              ocpp_id: ocppId,
+              name: body.label ?? `${tpl.vendor} ${tpl.model}`,
               vendor: tpl.vendor,
               model: tpl.model,
               auth_required: false,
-              source: "gateway-modbus",
             })
             .select("id")
             .single();
