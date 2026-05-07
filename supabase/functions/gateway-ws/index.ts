@@ -501,7 +501,22 @@ async function subscribeCommands(session: Session) {
     await pushCommand(session, cmd);
   }
 
-  // 2. Realtime subscription for new INSERTs
+  // 2. Push current config snapshot so the gateway boots with up-to-date settings.
+  const { data: cfgRow } = await sb
+    .from("gateway_device_config")
+    .select("config, version, updated_at")
+    .eq("gateway_device_id", session.deviceId)
+    .maybeSingle();
+  if (cfgRow) {
+    safeSend(session.socket, {
+      type: "config_update",
+      version: (cfgRow as any).version,
+      config: (cfgRow as any).config ?? {},
+      updated_at: (cfgRow as any).updated_at,
+    });
+  }
+
+  // 3. Realtime subscription for new INSERTs (commands) + config updates.
   session.channel = sb
     .channel(`gw-cmds-${session.deviceId}`)
     .on(
@@ -516,6 +531,25 @@ async function subscribeCommands(session: Session) {
         const cmd = payload.new as any;
         if (cmd.status !== "pending") return;
         await pushCommand(session, cmd);
+      },
+    )
+    .on(
+      "postgres_changes",
+      {
+        event: "*",
+        schema: "public",
+        table: "gateway_device_config",
+        filter: `gateway_device_id=eq.${session.deviceId}`,
+      },
+      (payload) => {
+        const row = (payload.new ?? payload.old) as any;
+        if (!row) return;
+        safeSend(session.socket, {
+          type: "config_update",
+          version: row.version,
+          config: row.config ?? {},
+          updated_at: row.updated_at,
+        });
       },
     )
     .subscribe();
