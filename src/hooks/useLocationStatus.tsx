@@ -17,6 +17,8 @@ export interface LocationStatus {
   onlineIntegrations: number;
   hasUnconfigured: boolean;
   unconfiguredNames: string[];
+  hasSyncError: boolean;
+  syncErrorNames: string[];
 }
 
 /** Check if an integration has been fully configured based on its type */
@@ -102,6 +104,8 @@ export function useLocationStatus(locationIds: string[]): UseLocationStatusRetur
           onlineIntegrations: 0,
           hasUnconfigured: false,
           unconfiguredNames: [],
+          hasSyncError: false,
+          syncErrorNames: [],
         });
       });
 
@@ -159,12 +163,15 @@ export function useLocationStatus(locationIds: string[]): UseLocationStatusRetur
             onlineIntegrations: 0,
             hasUnconfigured: false,
             unconfiguredNames: [],
+            hasSyncError: false,
+            syncErrorNames: [],
           });
           return;
         }
 
         let online = 0;
         const unconfiguredNames: string[] = [];
+        const syncErrorNames: string[] = [];
 
         enabledIntegrations.forEach((integration) => {
           const configured = isIntegrationConfigured(integration.integration_type, integration.config);
@@ -184,12 +191,19 @@ export function useLocationStatus(locationIds: string[]): UseLocationStatusRetur
           }
 
           // sync_status === 'success' OR 'syncing' with a fresh last_sync_at (≤ 15 min) counts as online.
-          // 'syncing' is set transiently at the start of every periodic sync; without this, the dashboard
-          // shows a warning during normal sync windows.
           const lastSyncMs = integration.last_sync_at ? new Date(integration.last_sync_at).getTime() : 0;
           const syncFresh = Date.now() - lastSyncMs < 15 * 60 * 1000;
-          if (integration.sync_status === "success" || (integration.sync_status === "syncing" && syncFresh)) {
+          const isOnlineNow = integration.sync_status === "success" || (integration.sync_status === "syncing" && syncFresh);
+          if (isOnlineNow) {
             online++;
+            return;
+          }
+
+          // Sync-Fehler: konfiguriert, aber kein erfolgreicher Sync seit > 30 min
+          // (oder explizit error-Status). Nur für nicht-aicono-Integrationen mit periodischem Sync.
+          const stale = !integration.last_sync_at || Date.now() - lastSyncMs > 30 * 60 * 1000;
+          if (integration.sync_status === "error" || integration.sync_status === "failed" || stale) {
+            syncErrorNames.push(integrationShortName(integration.integration_type, integration.integration_name));
           }
         });
 
@@ -200,6 +214,8 @@ export function useLocationStatus(locationIds: string[]): UseLocationStatusRetur
           onlineIntegrations: online,
           hasUnconfigured: unconfiguredNames.length > 0,
           unconfiguredNames,
+          hasSyncError: syncErrorNames.length > 0,
+          syncErrorNames,
         });
       });
 
