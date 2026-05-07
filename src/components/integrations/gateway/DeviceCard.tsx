@@ -7,6 +7,7 @@ import { StatusBadge } from "./StatusBadge";
 import { PinConfigDialog } from "./PinConfigDialog";
 import { HaConfigDialog } from "./HaConfigDialog";
 import { GatewayConfigDialog } from "./GatewayConfigDialog";
+import { RemoteDeviceWizard } from "./RemoteDeviceWizard";
 import { DeviceMetrics } from "./DeviceMetrics";
 import {
   Server,
@@ -18,6 +19,7 @@ import {
   ClipboardList,
   Sparkles,
   Settings2,
+  PlugZap,
 } from "lucide-react";
 
 interface DeviceCardProps {
@@ -32,6 +34,7 @@ export function DeviceCard({ device, onCommand, isAdmin, onKeyGenerated }: Devic
   const [pinDialogOpen, setPinDialogOpen] = useState(false);
   const [haConfigOpen, setHaConfigOpen] = useState(false);
   const [gwConfigOpen, setGwConfigOpen] = useState(false);
+  const [wizardOpen, setWizardOpen] = useState(false);
   const hasUpdate =
     device.latest_available_version &&
     device.addon_version &&
@@ -93,6 +96,9 @@ export function DeviceCard({ device, onCommand, isAdmin, onKeyGenerated }: Devic
             </Button>
             {isAdmin && (
               <>
+                <Button variant="ghost" size="icon" onClick={() => setWizardOpen(true)} title="Geräte einbinden">
+                  <PlugZap className="h-4 w-4" />
+                </Button>
                 <Button variant="ghost" size="icon" onClick={() => setGwConfigOpen(true)} title="Gateway-Konfiguration">
                   <Settings2 className="h-4 w-4" />
                 </Button>
@@ -156,6 +162,12 @@ export function DeviceCard({ device, onCommand, isAdmin, onKeyGenerated }: Devic
             deviceName={device.device_name}
             open={gwConfigOpen}
             onOpenChange={setGwConfigOpen}
+          />
+          <RemoteDeviceWizard
+            deviceId={device.id}
+            deviceName={device.device_name}
+            open={wizardOpen}
+            onOpenChange={setWizardOpen}
           />
         </>
       )}

@@ -775,6 +775,41 @@ async function handleFrame(session: Session, raw: any) {
       }
       break;
     }
+    case "config_ack": {
+      // Gateway acknowledges that a remote-config snapshot was applied.
+      console.log(`[gateway-ws] config_ack v${raw.version} from ${session.deviceId}`);
+      break;
+    }
+    case "discoveries": {
+      // Phase 3: gateway pushes discovery results into the cloud buffer.
+      const items = Array.isArray(raw.items) ? raw.items : [];
+      if (items.length === 0) break;
+      const rows = items.slice(0, 200).map((it: any) => ({
+        gateway_device_id: session.deviceId,
+        tenant_id: session.tenantId,
+        discovery_method: String(it.discovery_method || "manual"),
+        discovered_payload: it.discovered_payload ?? {},
+      }));
+      const { error } = await svc().from("gateway_device_discoveries").insert(rows);
+      if (error) console.warn("[gateway-ws] discovery insert failed:", error.message);
+      break;
+    }
+    case "provision_result": {
+      // Phase 3: gateway reports provisioning outcome for an entity.
+      const entityId = String(raw.entity_id || "");
+      if (!entityId) break;
+      const ok = Boolean(raw.ok);
+      await svc()
+        .from("gateway_device_entities")
+        .update({
+          provision_status: ok ? "active" : "error",
+          last_error: ok ? null : (raw.error ? String(raw.error) : "unknown"),
+          last_synced_at: new Date().toISOString(),
+        })
+        .eq("id", entityId)
+        .eq("gateway_device_id", session.deviceId);
+      break;
+    }
     default:
       // Unknown frame – ignore
       break;
