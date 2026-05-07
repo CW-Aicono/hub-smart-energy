@@ -1,60 +1,58 @@
-## Performance-Audit Dashboard-Graphen
+## Befund
 
-### Bestandsaufnahme (was bereits optimiert ist)
+Seit 09:47 UTC (≈ 11:47 Uhr DE) schlagen alle periodischen Syncs für Loxone und Shelly mit `"Ungültiges Token"` fehl (DB: 320× loxone, 164× shelly innerhalb der letzten 1,5 h, kontinuierlich alle ~1 min). Daher kommen seit 12:00 keine neuen Werte mehr in `meter_power_readings_5min` (letzter Bucket: gestern 23:55 UTC).
 
-- `usePeriodSumsWithFallback` → Sankey, Pie, Kosten, Sustainability nutzen die schnelle Server-RPC `get_meter_period_sums_with_fallback`.
-- `EnergyChart` (Energieverbrauch) und `CustomWidget` Woche/Monat/Jahr → seit der letzten Änderung auf `get_meter_daily_totals_split_with_fallback`.
+Die Standorte werden trotzdem als „Online" angezeigt, weil dieser Status anhand des **letzten erfolgreichen Heartbeats des Loxone Miniservers / der Shelly Cloud** ermittelt wird – nicht anhand erfolgreicher Cloud-Syncs. Der Miniserver ist also von außen ansprechbar, aber unsere Edge Function lehnt die periodische Anfrage ab, bevor sie ihn überhaupt kontaktiert.
 
-### Verbleibende Bottlenecks
+### Root Cause
 
-| # | Komponente | Problem | Auswirkung |
-|---|---|---|---|
-| 1 | `EnergyChart` Tag-Ansicht | `get_power_readings_5min` wird seitenweise (1000er-Pages) geholt — bei vielen Hauptzählern mehrere Roundtrips | 2–8 s Initialladung |
-| 2 | `CustomWidget` Tag-Ansicht | Gleiche Pagination + zusätzlicher 15-Min-Raw-Fetch mit Pagination | 2–8 s |
-| 3 | `EnergyFlowMonitor` | Nutzt altes `get_meter_daily_totals` (ohne Fallback) → heutiger Tag fehlt, Werte erscheinen erst nach Mitternachts-Aggregation | Falsche Anzeige + langsam |
-| 4 | `useDataCompleteness` (Reports) | Altes `get_meter_daily_totals`, kein Fallback | Heutiger Tag wird als „lückenhaft" markiert |
-| 5 | `useLocationYearlyConsumption` | Sequentielle Schleife pro Jahr (`for year of years` mit `await`) | Bei 3 Jahren ≈ 3× Latenz statt parallel |
-| 6 | `pvActuals.ts` | Paginierte `meter_power_readings` Abfrage | Bei großen Zeiträumen viele Roundtrips |
+`loxone-periodic-sync` und `shelly-periodic-sync` rufen die jeweilige API-Edge-Function mit `Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}` auf. Die API-Funktionen erkennen Server-to-Server-Calls per **Strict-String-Equality**:
 
-### Geplante Änderungen
+```ts
+const isServiceRole = token === supabaseServiceKey;
+```
 
-**1. Neue Server-RPC `get_meter_daily_totals_with_fallback`** (Migration)
-- Kombiniert wie bei der Split-Variante: archivierte Tagessummen aus `meter_period_totals` + 5-Min-Fallback nur für fehlende Tage (typischerweise heute).
-- Gibt `meter_id, day, total_value` zurück (kompatibel zur alten Signatur).
+Wenn Supabase den Service-Role-Schlüssel rotiert oder das neue API-Key-System (legacy `eyJ…` JWT vs. neues `sb_secret_…`) aktiviert, kann der von `periodic-sync` gesendete Wert nicht mehr exakt mit dem in `loxone-api` gelesenen Wert übereinstimmen (z. B. weil eine Funktion auf einen älteren Cache/Deployment-Snapshot zugreift oder zwei verschiedene Schlüssel im Umlauf sind). Folge: Fall durchfällt in den User-JWT-Pfad → `auth.getUser(serviceToken)` → 401 „Ungültiges Token".
 
-**2. `EnergyFlowMonitor.tsx`**
-- `get_meter_daily_totals` → `get_meter_daily_totals_with_fallback`.
-- Damit werden auch heutige Werte korrekt angezeigt, ohne Wartezeit.
+Dieselbe brüchige Prüfung steckt vermutlich in **mehreren** Adapter-Functions (loxone, shelly, abb, siemens, brighthub, tuya, homematic, omada – alle teilen das Muster aus dem `rg`-Fund).
 
-**3. `useDataCompleteness.tsx`**
-- Wechsel auf neue RPC, damit Lückenanalyse den heutigen Tag korrekt einschließt.
+## Lösung
 
-**4. `EnergyChart` und `CustomWidget` Tag-Ansicht**
-- Pagination entfernen (eine einzige RPC-Anfrage). Die 5-Min-Daten für einen Tag mit ein paar Hauptzählern liegen weit unter dem 1000-Zeilen-Default — die Schleife macht im Schnitt 1–2 unnötige Roundtrips. Falls > 1000 Zeilen erwartet (sehr viele Zähler), Limit explizit auf 5000 setzen.
-- `CustomWidget`: 15-Min-Raw-Pagination ebenfalls auf einen Single-Call mit `limit(2000)` reduzieren.
+Die Service-Role-Erkennung robust machen, statt auf Byte-Gleichheit zu verlassen.
 
-**5. `useLocationYearlyConsumption.tsx`**
-- Schleife durch `Promise.all(years.map(...))` ersetzen → alle Jahre parallel laden.
+### Änderungen in `supabase/functions/loxone-api/index.ts` und `supabase/functions/shelly-api/index.ts`
 
-**6. `pvActuals.ts`**
-- Pagination der `meter_power_readings`-Abfrage durch Single-Call mit hartem Limit ersetzen (gleiche Logik wie EnergyChart).
+Ersetze die String-Equality durch eine Erkennung anhand der JWT-Payload `role === "service_role"` mit Equality als Fallback:
 
-**7. React-Query-Caching vereinheitlichen**
-- Bei `EnergyChart` und `EnergyFlowMonitor` (beide nutzen noch `useEffect` + `useState`) auf `useQuery` mit `staleTime: 5 min` und `placeholderData: keepPreviousData` umstellen, damit Periodenwechsel keinen Blank-State erzeugt und nicht jedes Mal neu gefetcht wird.
+```ts
+function isServiceRoleToken(token: string, serviceKey: string): boolean {
+  if (token === serviceKey) return true;
+  try {
+    const payload = JSON.parse(atob(token.split(".")[1] ?? ""));
+    return payload?.role === "service_role";
+  } catch {
+    return false;
+  }
+}
+```
 
-### Erwartete Wirkung
+Damit greift der Server-to-Server-Pfad zuverlässig, unabhängig von Key-Rotation oder unterschiedlichen Snapshots. User-JWTs (`role: "authenticated"`) gehen weiterhin in den `auth.getUser`-Pfad.
 
-| Sicht | Vorher | Nachher |
-|---|---|---|
-| Energieverbrauch Tag | 2–8 s | < 1 s |
-| Energieverbrauch Woche/Monat | bereits 1–2 s | unverändert |
-| EnergyFlowMonitor heute | zeigt 0 / 30 s | < 1 s mit korrekten Werten |
-| Custom Widget Tag | 2–8 s | < 1 s |
-| Reports Datencompleteness | langsam | < 1 s, korrekt |
-| Mehrjahres-Vergleich | n × Latenz | 1× Latenz |
+### Zusätzlich
 
-### Out of scope
+- Im Loxone- und Shelly-Sync-Logger die HTTP-Statuscode des `loxone-api`/`shelly-api`-Aufrufs mitloggen, damit künftige 401er sofort als Auth-Problem erkennbar sind (statt als generischer „Sync failed").
+- Aktuell offene `integration_errors` mit `error_message = 'Ungültiges Token'` automatisch als resolved markieren, sobald wieder ein erfolgreicher Sync läuft (greift bereits, da `error_type = 'connection'` vom bestehenden Auto-Resolve abgedeckt ist – keine Codeänderung nötig).
 
-- Recharts-Render-Performance (Chart.js/Canvas-Wechsel) — derzeit kein Engpass laut Profilen.
-- ChargingApp-Charts (separate Domäne, keine Beschwerden).
-- ArbitrageAi/Anomaly-Widgets (eigene RPCs, schnell).
+### Optional, falls Zeit
+
+Dasselbe Pattern in den anderen betroffenen Adapter-Functions (`abb-api`, `siemens-api`, `brighthub-sync`, `tuya-api`, `homematic-api`, `omada-api`) prophylaktisch fixen, damit diese nicht beim nächsten Key-Rotate dasselbe Problem haben.
+
+## Test
+
+1. Nach Deploy: `supabase--curl_edge_functions` mit Service-Token gegen `loxone-api` aufrufen → muss `success: true` liefern.
+2. `loxone-periodic-sync` manuell triggern → Edge-Logs sollen wieder „Successfully synced integration …" zeigen.
+3. Neue Buckets in `meter_power_readings_5min` prüfen.
+
+## Hinweis zum „Online"-Badge
+
+Das ist korrekt – der Miniserver ist tatsächlich erreichbar. Der Badge spiegelt Geräteerreichbarkeit, nicht Datensync-Erfolg. Falls gewünscht, kann ich in einem Folgeschritt den Standort-Badge so erweitern, dass er bei `> 30 min` ohne erfolgreichen Sync auf „Sync-Fehler" (gelb) wechselt – sag Bescheid.
