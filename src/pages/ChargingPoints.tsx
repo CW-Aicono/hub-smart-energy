@@ -31,6 +31,7 @@ import { format } from "date-fns";
 import { fmtKwh, fmtKw, normalizeConnectorStatus } from "@/lib/formatCharging";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import ChargingOverviewStats from "@/components/charging/ChargingOverviewStats";
+import ModbusWallboxWizard from "@/components/charging/ModbusWallboxWizard";
 
 const LazyChargePointsMap = lazy(() => import("@/components/charging/ChargePointsMap"));
 
