@@ -66,11 +66,11 @@ async function enqueueGatewayCommand(
   payload: Record<string, unknown>,
 ) {
   await admin.from("gateway_commands").insert({
-    gateway_id: gatewayId,
+    gateway_device_id: gatewayId,
     tenant_id: tenantId,
-    command,
+    command_type: command,
     payload,
-    status: "queued",
+    status: "pending",
   });
 }
 
