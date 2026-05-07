@@ -1546,7 +1546,7 @@ async function connectCloudWebSocket(): Promise<void> {
         await sendCloudHeartbeat();
         // Periodischer Heartbeat
         if (cloudWsHeartbeatTimer) clearInterval(cloudWsHeartbeatTimer);
-        cloudWsHeartbeatTimer = setInterval(sendCloudHeartbeat, 30_000);
+        cloudWsHeartbeatTimer = setInterval(sendCloudHeartbeat, config.heartbeat_interval_seconds * 1000);
         break;
       }
       case "auth_error": {
