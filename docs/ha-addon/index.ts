@@ -2288,6 +2288,13 @@ async function main(): Promise<void> {
     console.log(`[offline] Loaded cached gateway assignment: ${cachedAssignment.location_name || cachedAssignment.tenant_name || 'unknown'}`);
   }
 
+  // Phase 2: Apply cached remote config (so reboot keeps Cloud-managed settings)
+  const cachedRemote = loadRemoteConfigFromCache();
+  if (cachedRemote) {
+    applyRemoteConfig(cachedRemote.config, cachedRemote.version);
+    console.log(`[offline] Loaded cached remote config (v${cachedRemote.version})`);
+  }
+
   await startServer();
 
   // Initial setup
