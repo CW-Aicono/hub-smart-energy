@@ -2738,6 +2738,51 @@ export type Database = {
           },
         ]
       }
+      gateway_device_config: {
+        Row: {
+          config: Json
+          created_at: string
+          gateway_device_id: string
+          tenant_id: string | null
+          updated_at: string
+          updated_by: string | null
+          version: number
+        }
+        Insert: {
+          config?: Json
+          created_at?: string
+          gateway_device_id: string
+          tenant_id?: string | null
+          updated_at?: string
+          updated_by?: string | null
+          version?: number
+        }
+        Update: {
+          config?: Json
+          created_at?: string
+          gateway_device_id?: string
+          tenant_id?: string | null
+          updated_at?: string
+          updated_by?: string | null
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gateway_device_config_gateway_device_id_fkey"
+            columns: ["gateway_device_id"]
+            isOneToOne: true
+            referencedRelation: "gateway_devices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gateway_device_config_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       gateway_device_inventory: {
         Row: {
           category: string
