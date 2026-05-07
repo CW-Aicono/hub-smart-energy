@@ -17,6 +17,8 @@ export interface LocationStatus {
   onlineIntegrations: number;
   hasUnconfigured: boolean;
   unconfiguredNames: string[];
+  hasSyncError: boolean;
+  syncErrorNames: string[];
 }
 
 /** Check if an integration has been fully configured based on its type */
