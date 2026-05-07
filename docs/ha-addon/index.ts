@@ -407,6 +407,44 @@ db.exec(`
   );
 `);
 
+// ── NEW: Remote Config Cache (Phase 2 – Cloud-managed Worker-Settings) ──
+db.exec(`
+  CREATE TABLE IF NOT EXISTS gateway_remote_config (
+    cache_key TEXT PRIMARY KEY,
+    config_json TEXT NOT NULL,
+    version INTEGER NOT NULL DEFAULT 0,
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+`);
+
+function loadRemoteConfigFromCache(): { config: Record<string, unknown>; version: number } | null {
+  try {
+    const row = db
+      .prepare(`SELECT config_json, version FROM gateway_remote_config WHERE cache_key = 'primary'`)
+      .get() as { config_json: string; version: number } | undefined;
+    if (!row) return null;
+    return { config: JSON.parse(row.config_json), version: row.version };
+  } catch (err) {
+    console.warn("[remote-config] cache load failed:", err);
+    return null;
+  }
+}
+
+function saveRemoteConfigToCache(cfg: Record<string, unknown>, version: number): void {
+  try {
+    db.prepare(
+      `INSERT INTO gateway_remote_config (cache_key, config_json, version, updated_at)
+       VALUES ('primary', ?, ?, datetime('now'))
+       ON CONFLICT(cache_key) DO UPDATE SET
+         config_json = excluded.config_json,
+         version = excluded.version,
+         updated_at = excluded.updated_at`
+    ).run(JSON.stringify(cfg), version);
+  } catch (err) {
+    console.warn("[remote-config] cache save failed:", err);
+  }
+}
+
 /* ── Readings Buffer Statements ──────────────────────────────────────────────── */
 
 const insertReading = db.prepare(
