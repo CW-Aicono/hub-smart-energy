@@ -1,110 +1,118 @@
-# AICONO Gateway v4 – Eigenständiges Linux-Edge-Device
+## Phase 5: Modbus-TCP-Wallbox-Bridge mit Hersteller-Templates
 
-Ziel: Das Gateway tritt als eigenständiges AICONO-Produkt auf (HA optisch unsichtbar), läuft auf **mehreren Hardware-Klassen** (Raspberry Pi und Industrie-PCs mit SSD/eMMC – alles Linux), wird vollständig aus dem Tenant-/Super-Admin-Backend remote konfiguriert (inkl. Sensoren/Aktoren/Zähler), führt Automationen lokal priorisiert aus und übernimmt OCPP-Bridging zu Modbus-Wallboxen.
+Ziel: Gateway als Modbus↔OCPP-Bridge — pro Wallbox eine eigene OCPP-1.6J-Client-Verbindung zum bestehenden `ocpp-ws`-Backend. Hersteller-Templates werden zentral gepflegt und ans Gateway gepusht.
 
-## Entscheidungen (vom User bestätigt)
+### Architektur
 
-1. **Reihenfolge:** Phase 2 → 3 → 4 → 5 → 6. Phase 1 läuft parallel als Infrastruktur-Track.
-2. **Architekturen:** `linux/amd64` + `linux/arm64`. Kein armv7.
-3. **Erste Wallbox (Phase 5):** Mennekes Amtron Charge Control via Modbus TCP.
-4. **Home Assistant** in Standardauslieferung enthalten (als Container im Stack).
+```text
+Wallbox (Modbus TCP)
+   ↑↓  Polling (2-5s status/power, 30s energy)
+Gateway (HA-Addon)
+   - lädt wallbox_modbus_templates per gateway-ws
+   - ModbusWallboxBridge je Instanz
+   - hält pro Wallbox einen OCPP-1.6J WS-Client
+   ↑↓  WebSocket (OCPP 1.6J)
+ocpp-ws (Cloud) → bestehende EV-Pipeline
+```
 
-## Architektur-Entscheidung: Container statt monolithisches OS-Image
+### 1. Datenbank-Migration
 
-Da die Hardware heterogen ist (Pi mit SD-Karte, Industrie-PCs mit SSD/eMMC, x86 + ARM), liefern wir keinen OS-Build, sondern einen **Docker-Stack** auf Debian 12 (Bookworm) Minimal:
+**`wallbox_modbus_templates`** (Super-Admin, `tenant_id IS NULL`):
+- `id`, `vendor`, `model`, `firmware_min`, `firmware_max`, `default_unit_id`, `default_port` (502)
+- `read_map jsonb` — Array `{address, function_code, data_type, byte_order, scale, target_field, poll_group}`
+- `write_map jsonb` — `{set_current, start_charge, stop_charge, unlock}` mit Register/Wert/Datentyp
+- `status_map jsonb` — Hersteller-Statuscode → OCPP `ChargePointStatus`
+- `poll_intervals jsonb` — `{fast_ms: 3000, slow_ms: 30000}`
+- `is_active`, `version`, `created_by`, timestamps
+- RLS: alle authentifizierten Tenants lesen, nur `super_admin` schreibt
 
-- `aicono-gateway` – heutiger HA-Add-on-Worker (`docs/ha-addon/index.ts`), aus dem HA-Kontext gelöst und als eigenständiger Container
-- `aicono-homeassistant` – Standard-HA-Container (für Shelly/MQTT/Modbus-Discovery), UI gebrandet/versteckt
-- `aicono-ocpp-bridge` – neu in Phase 5
+**`wallbox_modbus_instances`** (pro Tenant):
+- `id`, `tenant_id`, `location_id`, `gateway_id` (FK `gateway_devices`), `template_id`
+- `modbus_host`, `modbus_port`, `unit_id`
+- `charge_point_id` (FK `charge_points`) — verlinkt zur OCPP-Instanz
+- `provision_status` (`pending`/`active`/`error`/`offline`), `last_error`, `last_seen_at`
+- `version`, timestamps
+- RLS: tenant_isolation + `gateway.manage`
 
-Provisioning:
-- **Pi (Consumer):** Vorgefertigtes `.img.xz` (Debian + Docker + Stack), via Raspberry Pi Imager
-- **Industrie-PC:** Bash-One-Liner-Installer auf bestehendem Debian/Ubuntu
+**Trigger**: beim Insert einer Instance automatisch passenden `charge_points`-Eintrag (vendor/model aus Template) anlegen, falls noch nicht vorhanden.
 
-Identifikation: weiterhin MAC + `gateway_username`/`gateway_password` (existierende `gateway-credentials`-Logik). Hardware-Fingerprint (DMI-UUID/Disk-Serial) als Fallback für Industrie-Hardware ohne reservierte MAC.
+### 2. Edge Function `wallbox-template-control`
 
----
+- `GET /templates` — Liste verfügbarer Templates (alle Tenants)
+- `POST /templates` — Super-Admin: neues Template anlegen (oder JSON-Import)
+- `PUT /templates/:id` — Super-Admin: Template-Update (bumpt `version`)
+- `GET /templates/:id/export` — JSON-Export
+- `POST /instances` — Tenant-Admin: Wallbox provisionieren (template_id + modbus_host + gateway_id)
+  → erstellt `wallbox_modbus_instances`, `charge_points`, enqueued `provision_wallbox` an Gateway
+- `PUT /instances/:id` — Update (Host, Unit-ID, Template-Wechsel)
+- `DELETE /instances/:id` — Entfernen + Gateway-Cleanup-Befehl
+- `POST /instances/:id/test` — einmaliger Modbus-Connect-Test
 
-## Phase 2 – Vollständige Remote-Administration (START)
+### 3. Gateway-Worker (`docs/ha-addon/index.ts`)
 
-Ziel: Alle Add-on-Optionen aus heutiger `config.yaml` werden im Tenant-/Super-Admin-Backend gepflegt und in Echtzeit ans Gateway gepusht. Lokale UI bleibt als Debug-Panel.
+Neues Modul `modbus-wallbox-bridge.ts` (lokal im Worker):
+- `ModbusWallboxBridge`-Klasse pro Instance:
+  - öffnet Modbus-TCP-Socket (`modbus-serial` package)
+  - öffnet OCPP-1.6J WebSocket zu `wss://…/functions/v1/ocpp-ws/<charge_point_id>` mit `OCPP_GATEWAY_PASSWORD` (siehe Schritt 6)
+  - schickt `BootNotification` mit vendor/model aus Template
+  - Polling-Loop liest Register laut Template, mapped auf interne Felder, sendet `StatusNotification` / `MeterValues` an OCPP-Backend
+  - Befehle vom Backend (`RemoteStartTransaction`, `RemoteStopTransaction`, `ChangeConfiguration[CurrentLimit]`) → Modbus-Write laut `write_map`
+  - SQLite-Persistierung in neuer Tabelle `wallbox_modbus_instances` (lokal) für Offline-Restart
+- Neue Command-Handler:
+  - `provision_wallbox` → Bridge starten + persistieren
+  - `update_wallbox` → Template/Host neu laden
+  - `remove_wallbox` → Bridge stoppen, lokal löschen
+  - `reload_template` → Templates aus Cloud nachziehen
+- Bridge-Restart bei Worker-Boot aus SQLite
 
-### Backend
-- Neue Tabelle `gateway_device_config` (gateway_device_id PK, config jsonb, version int, updated_at, updated_by) + RLS:
-  - Tenant-User mit Zugriff auf das Gateway-Device dürfen lesen/schreiben
-  - Super-Admin global
-- Erweiterung der bestehenden `gateway-ws` Edge Function: neuer Realtime-Channel-Topic `config-update` (Postgres-Change-Trigger auf `gateway_device_config`)
-- Neue Edge Function `gateway-device-config` (REST, JWT-geschützt):
-  - `GET /:device_id` → liefert aktuelle Config (auch fürs Gateway selbst per Service-Role)
-  - `PUT /:device_id` → schreibt neue Config-Version, Realtime-Push erfolgt automatisch über DB-Trigger
-- UI-Dialog `GatewayConfigDialog.tsx` (neu, eingebunden in `useGatewayDevices`-Card und `SuperAdminTenants`):
-  - Tabs „Polling/Sync", „Buffer/Backup", „Discovery", „Erweitert"
-  - Form-Felder mit Defaults aus `config.yaml`
-  - „An Gateway senden" Button → `gateway-device-config PUT`
+### 4. Template-Seed (Migration, Super-Admin)
 
-### Gateway-Stack
-- `index.ts` Refactor: Config-Quelle wird priorisiert
-  1. Cloud (`gateway-device-config GET` via Service-Role-Equivalent: `GATEWAY_API_KEY`)
-  2. Lokaler SQLite-Cache (`gateway_config_cache` Tabelle)
-  3. `/data/options.json` (Bootstrap-Werte: nur `gateway_username`/`gateway_password`)
-- Neuer Realtime-Listener auf `config-update` → Hot-Reload aller Worker-Intervalle ohne Container-Restart
-- Lokale UI (`ui/`) bekommt Hinweis „Konfiguration wird zentral aus AICONO Cloud verwaltet" + Read-Only-Anzeige
+Initial werden 6 Templates angelegt (`is_active = true` nur für Mennekes, Rest als Stub mit `is_active = false`):
+- **Mennekes Amtron Charge Control** — vollständig (Holding-Register lt. Manual: Status 0x0100, Power 0x010C, Energy 0x010E, Set-Current 0x012E, ...)
+- **KEBA KeContact P30** — Stub-Template mit dokumentierten Standard-Registern (TCP-DSR-Mapping)
+- **ABB Terra AC** — Stub
+- **Alfen Eve Single/Pro-line** — Stub (SCN-fähig)
+- **go-e Charger HOMEfix** — Stub (HTTP-API-Hinweis im Kommentar, Modbus optional)
+- **Webasto Live / Next** — Stub
 
-### Reduktion HA-Sichtbarkeit (Vorbereitung Phase 1)
-- `panel_title: "AICONO Gateway"` (statt EMS), `panel_icon` AICONO-Logo
-- HA-Onboarding-Skip-Skript für Standardauslieferung
+Templates als JSON in Migration eingebettet, damit Super-Admin sie später per UI verfeinern kann.
 
----
+### 5. Frontend
 
-## Phase 3 – Remote-Setup von Sensoren, Aktoren, Zählern
+**Tenant-UI** (`src/pages/EvCharging.tsx` / Wallbox-Hinzufügen-Dialog):
+- Neuer Connector-Typ „Modbus TCP (Gateway)"
+- Wizard:
+  1. Gateway auswählen
+  2. Template auswählen (Dropdown vendor/model)
+  3. Modbus-Host + Port + Unit-ID eingeben
+  4. „Verbindung testen" → ruft `wallbox-template-control/instances/:id/test`
+  5. Speichern → erstellt Instance + Charge Point
 
-- Tabelle `gateway_device_entities` (gateway_device_id, integration_type, config_json, mapping zu `meters`/`sensors`/`actuators`)
-- Edge Functions:
-  - `gateway-device-discover` – startet im Gateway einen mDNS-/MQTT-/Modbus-Scan und gibt Funde zurück
-  - `gateway-device-provision` – provisioniert die Integration (HA Supervisor API für Shelly/MQTT, AICONO-eigener Modbus-Worker für Modbus TCP)
-- UI: Wizard `RemoteDeviceWizard.tsx` mit Discovery + manueller Anlage; Mapping HA-Entity-ID ↔ AICONO-Meter/Sensor/Actuator über bestehende `deviceClassification.ts`
+**Super-Admin-UI** (`src/pages/SuperAdminWallboxTemplates.tsx`):
+- Liste aller Templates mit Vendor/Model/Version/aktiv
+- Detail-Editor mit JSON-Editor für `read_map`/`write_map`/`status_map` (Monaco oder simples Textarea mit Validierung)
+- Buttons: Neu, Importieren (JSON), Exportieren, Aktivieren/Deaktivieren
+- Route `/super-admin/wallbox-templates` + Sidebar-Eintrag
 
----
+### 6. OCPP-Auth fürs Gateway
 
-## Phase 4 – Remote- & Auto-Software-Updates
+- Neuer Secret `GATEWAY_OCPP_PASSWORD` (geteilt) — Gateway nutzt diesen für die WS-Auth pro Charge Point
+- `charge_points`-Insert-Trigger setzt für gateway-stammende CPs `auth_required = true` und einen vom Gateway abgeleiteten Passwort-Hash
+- `ocpp-ws` akzeptiert wie bisher
 
-- Container-Image-Pull aus GHCR via Realtime-Befehl `update-now` (Stack führt `docker compose pull && up -d` aus)
-- Optional: Debian `unattended-upgrades`
-- Super-Admin → Infrastructure: Fleet-Tabelle (Stack-Version, Hardware-Klasse, Online, „Update jetzt", „Auto-Update-Plan z. B. Mo 03:00", Bulk-Update)
-- Tabelle `gateway_update_jobs` (target_version, status, started_at, finished_at, error)
+### Bewusst NICHT in Phase 5
 
----
+- ISO 15118 / Plug & Charge
+- Eigener OCPP-Server **im** Gateway
+- Erweitertes Lastmanagement (kommt über bestehende `pv-surplus-charging`)
 
-## Phase 5 – OCPP-Bridge zu Modbus-Wallboxen (Start: Mennekes Amtron Charge Control)
+### Reihenfolge der Umsetzung
 
-- Neuer Container `aicono-ocpp-bridge` (abgeleitet aus `docs/ocpp-persistent-server`)
-- Liest Mennekes-Modbus-TCP-Register (Status, Energie, Strom, Leistung, RFID) via `modbus-serial`
-- Eröffnet pro Wallbox eine OCPP-1.6-J-WebSocket-Verbindung zum bestehenden Hetzner-Persistent-Server
-- Mappt Modbus → `BootNotification`, `Heartbeat`, `MeterValues`, `StatusNotification`, `Start/StopTransaction`, `Authorize`
-- Empfängt OCPP-Commands (`RemoteStart/Stop`, `ChangeConfiguration`) → schreibt Modbus
-- Konfiguration vollständig remote (Phase 2): Modbus-IP/Port/Slave-ID, Profile (zunächst nur „mennekes_amtron_charge_control"; ABB/Bender/Phoenix/Keba folgen)
-- Backend legt automatisch `charge_points`-Eintrag mit `connection_type = 'bridged_modbus'` und Verweis aufs Gateway an
+1. Migration (Tabellen + Seed-Templates + Trigger)
+2. Edge Function `wallbox-template-control`
+3. Super-Admin-UI für Templates
+4. Tenant-UI Wizard
+5. Gateway-Worker `modbus-wallbox-bridge.ts` + Command-Handler
+6. End-to-End-Test mit Mennekes Amtron Charge Control
 
----
-
-## Phase 6 – Automation-Sync mit Gateway-Priorität
-
-- `automations`-Save → Trigger pusht `automation-sync` an alle relevanten Gateways via `gateway-ws`
-- `cloud-scheduler` skippt Automation, wenn das Gateway in den letzten 3 min einen Heartbeat hatte
-- Lokale Engine pusht `automation_executions`-Logs in die Cloud
-- Bei Reconnect: Lokal hat Priorität, Cloud-Executions im Overlap-Fenster werden als `executor='cloud-fallback'` markiert (Deduplication)
-
----
-
-## Phase 1 – White-Label-Linux-Stack & Multi-Hardware-Provisioning (Parallel-Track)
-
-- Neues Repo bzw. Verzeichnis `docs/aicono-gateway-stack/` mit `docker-compose.yml`, `install.sh`, GitHub-Action für Multi-Arch-Build (`linux/amd64`, `linux/arm64`) auf GHCR
-- Pi-Image via `pi-gen` Custom-Stage
-- Hostname-Schema `aicono-gw-<MAC-Suffix>`, mDNS via `avahi`: `aicono-gateway.local`
-- Branded Bootsplash/Login-Banner
-
----
-
-## Aktueller Schritt
-
-**Phase 2, Schritt 1:** Migration `gateway_device_config` + RLS + Postgres-Change-Trigger für Realtime-Push. Danach Edge Function + UI + Gateway-Worker-Refactor.
+Soll ich mit Schritt 1 (Migration + Seed) starten?
