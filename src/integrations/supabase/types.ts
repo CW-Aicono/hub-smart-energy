@@ -2783,6 +2783,128 @@ export type Database = {
           },
         ]
       }
+      gateway_device_discoveries: {
+        Row: {
+          created_at: string
+          discovered_payload: Json
+          discovery_method: string
+          expires_at: string
+          gateway_device_id: string
+          id: string
+          is_provisioned: boolean
+          tenant_id: string
+        }
+        Insert: {
+          created_at?: string
+          discovered_payload?: Json
+          discovery_method: string
+          expires_at?: string
+          gateway_device_id: string
+          id?: string
+          is_provisioned?: boolean
+          tenant_id: string
+        }
+        Update: {
+          created_at?: string
+          discovered_payload?: Json
+          discovery_method?: string
+          expires_at?: string
+          gateway_device_id?: string
+          id?: string
+          is_provisioned?: boolean
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gateway_device_discoveries_gateway_device_id_fkey"
+            columns: ["gateway_device_id"]
+            isOneToOne: false
+            referencedRelation: "gateway_devices"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      gateway_device_entities: {
+        Row: {
+          actuator_uuid: string | null
+          config_json: Json
+          created_at: string
+          created_by: string | null
+          discovery_method: string | null
+          entity_kind: string
+          entity_label: string
+          gateway_device_id: string
+          ha_entity_id: string | null
+          id: string
+          integration_type: string
+          last_error: string | null
+          last_synced_at: string | null
+          meter_id: string | null
+          provision_status: string
+          sensor_uuid: string | null
+          tenant_id: string
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          actuator_uuid?: string | null
+          config_json?: Json
+          created_at?: string
+          created_by?: string | null
+          discovery_method?: string | null
+          entity_kind?: string
+          entity_label: string
+          gateway_device_id: string
+          ha_entity_id?: string | null
+          id?: string
+          integration_type: string
+          last_error?: string | null
+          last_synced_at?: string | null
+          meter_id?: string | null
+          provision_status?: string
+          sensor_uuid?: string | null
+          tenant_id: string
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          actuator_uuid?: string | null
+          config_json?: Json
+          created_at?: string
+          created_by?: string | null
+          discovery_method?: string | null
+          entity_kind?: string
+          entity_label?: string
+          gateway_device_id?: string
+          ha_entity_id?: string | null
+          id?: string
+          integration_type?: string
+          last_error?: string | null
+          last_synced_at?: string | null
+          meter_id?: string | null
+          provision_status?: string
+          sensor_uuid?: string | null
+          tenant_id?: string
+          updated_at?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gateway_device_entities_gateway_device_id_fkey"
+            columns: ["gateway_device_id"]
+            isOneToOne: false
+            referencedRelation: "gateway_devices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gateway_device_entities_meter_id_fkey"
+            columns: ["meter_id"]
+            isOneToOne: false
+            referencedRelation: "meters"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       gateway_device_inventory: {
         Row: {
           category: string
