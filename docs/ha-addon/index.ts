@@ -1560,6 +1560,15 @@ async function connectCloudWebSocket(): Promise<void> {
         // Server bestätigt Heartbeat
         markCloudReachable();
         break;
+      case "config_update": {
+        // Phase 2: Cloud pushes a fresh remote-config snapshot.
+        const v = Number(msg.version) || 0;
+        applyRemoteConfig(msg.config || {}, v);
+        try {
+          safeWsSend(cloudWs, { type: "config_ack", version: v });
+        } catch { /* ignore */ }
+        break;
+      }
       case "command": {
         const cmdId = String(msg.id || "");
         const cmdType = String(msg.command_type || "");
