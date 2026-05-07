@@ -119,7 +119,7 @@ export default function ModbusWallboxWizard({ onCreated }: Props) {
               <SelectTrigger><SelectValue placeholder="Gateway wählen" /></SelectTrigger>
               <SelectContent>
                 {gateways.map((g) => (
-                  <SelectItem key={g.id} value={g.id}>{g.name} ({g.status})</SelectItem>
+                  <SelectItem key={g.id} value={g.id}>{g.device_name} ({g.status})</SelectItem>
                 ))}
                 {gateways.length === 0 && (
                   <div className="px-3 py-2 text-sm text-muted-foreground">Kein Gateway vorhanden</div>
