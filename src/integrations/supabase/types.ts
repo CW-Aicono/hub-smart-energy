@@ -6923,6 +6923,155 @@ export type Database = {
           },
         ]
       }
+      wallbox_modbus_instances: {
+        Row: {
+          charge_point_id: string | null
+          created_at: string
+          created_by: string | null
+          gateway_id: string | null
+          id: string
+          label: string | null
+          last_error: string | null
+          last_seen_at: string | null
+          location_id: string | null
+          modbus_host: string
+          modbus_port: number
+          provision_status: string
+          template_id: string
+          tenant_id: string
+          unit_id: number
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          charge_point_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          gateway_id?: string | null
+          id?: string
+          label?: string | null
+          last_error?: string | null
+          last_seen_at?: string | null
+          location_id?: string | null
+          modbus_host: string
+          modbus_port?: number
+          provision_status?: string
+          template_id: string
+          tenant_id: string
+          unit_id?: number
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          charge_point_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          gateway_id?: string | null
+          id?: string
+          label?: string | null
+          last_error?: string | null
+          last_seen_at?: string | null
+          location_id?: string | null
+          modbus_host?: string
+          modbus_port?: number
+          provision_status?: string
+          template_id?: string
+          tenant_id?: string
+          unit_id?: number
+          updated_at?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "wallbox_modbus_instances_charge_point_id_fkey"
+            columns: ["charge_point_id"]
+            isOneToOne: false
+            referencedRelation: "charge_points"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "wallbox_modbus_instances_gateway_id_fkey"
+            columns: ["gateway_id"]
+            isOneToOne: false
+            referencedRelation: "gateway_devices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "wallbox_modbus_instances_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "wallbox_modbus_instances_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "wallbox_modbus_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      wallbox_modbus_templates: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          default_port: number
+          default_unit_id: number
+          firmware_max: string | null
+          firmware_min: string | null
+          id: string
+          is_active: boolean
+          model: string
+          notes: string | null
+          poll_intervals: Json
+          read_map: Json
+          status_map: Json
+          updated_at: string
+          vendor: string
+          version: number
+          write_map: Json
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          default_port?: number
+          default_unit_id?: number
+          firmware_max?: string | null
+          firmware_min?: string | null
+          id?: string
+          is_active?: boolean
+          model: string
+          notes?: string | null
+          poll_intervals?: Json
+          read_map?: Json
+          status_map?: Json
+          updated_at?: string
+          vendor: string
+          version?: number
+          write_map?: Json
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          default_port?: number
+          default_unit_id?: number
+          firmware_max?: string | null
+          firmware_min?: string | null
+          id?: string
+          is_active?: boolean
+          model?: string
+          notes?: string | null
+          poll_intervals?: Json
+          read_map?: Json
+          status_map?: Json
+          updated_at?: string
+          vendor?: string
+          version?: number
+          write_map?: Json
+        }
+        Relationships: []
+      }
       weather_degree_days: {
         Row: {
           avg_temperature: number
