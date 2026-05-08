@@ -120,7 +120,7 @@ export default function ModbusWallboxWizard({ onCreated, presetGatewayId, preset
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <Button variant="outline">
-          <Cable className="h-4 w-4 mr-2" />Modbus-Wallbox (Gateway)
+          <Cable className="h-4 w-4 mr-2" />{triggerLabel ?? "Modbus-Wallbox (Gateway)"}
         </Button>
       </DialogTrigger>
       <DialogContent className="max-w-lg">
