@@ -1,118 +1,90 @@
-## Phase 5: Modbus-TCP-Wallbox-Bridge mit Hersteller-Templates
+## Ziel
 
-Ziel: Gateway als Modbus↔OCPP-Bridge — pro Wallbox eine eigene OCPP-1.6J-Client-Verbindung zum bestehenden `ocpp-ws`-Backend. Hersteller-Templates werden zentral gepflegt und ans Gateway gepusht.
+Hersteller **ABL** mit allen Modellen, die per **OCPP 1.6 JSON** oder **Modbus TCP** integriert werden können, in der Tabelle "Ladestationsmodelle" (Super-Admin → OCPP-Integrationen) ergänzen. Bei den Modellen, die ein eigenes ABL-Backend-Zertifikat erfordern, wird dies im Hinweisfeld dokumentiert.
 
-### Architektur
+## Recherche-Ergebnisse
 
-```text
-Wallbox (Modbus TCP)
-   ↑↓  Polling (2-5s status/power, 30s energy)
-Gateway (HA-Addon)
-   - lädt wallbox_modbus_templates per gateway-ws
-   - ModbusWallboxBridge je Instanz
-   - hält pro Wallbox einen OCPP-1.6J WS-Client
-   ↑↓  WebSocket (OCPP 1.6J)
-ocpp-ws (Cloud) → bestehende EV-Pipeline
+ABL hat 4 Produktlinien. Filterung nach OCPP- bzw. Modbus-TCP-Fähigkeit:
+
+| Linie | OCPP 1.6J | Modbus TCP | Aufnahme |
+|---|---|---|---|
+| **eMH1** (Home) | ❌ | ❌ (nur Modbus RTU im Standalone-Modus) | **NEIN** |
+| **eMH2** (Controller/Extender) | ✅ (Controller) | ⚠️ (RTU nativ, TCP nur per RS485-IP-Gateway) | **JA** (nur Controller, OCPP) |
+| **eMH3** (Controller/Extender, Twin/Single) | ✅ (Controller) | ⚠️ (RTU, TCP per Gateway möglich) | **JA** (nur Controller, OCPP) |
+| **em4** (Single/Twin) | ✅ | ✅ | **JA** |
+
+Extender-Varianten (eMH2/eMH3) werden **nicht** als eigenes Modell aufgenommen, da sie keinen eigenen Backend-Anschluss haben — sie hängen am Controller.
+
+## Aufzunehmende Modelle (insgesamt 8)
+
+| Artikel-Nr. | Modell | kW | Protokoll | Eichrecht |
+|---|---|---|---|---|
+| eMH2 Controller | eMH2 Controller (3,7–22 kW) | 22 | ocpp1.6 | nein |
+| 3W2260 | eMH3 Single Controller 22 kW (Standalone) | 22 | ocpp1.6 | ja |
+| 3W2263 | eMH3 Twin Controller 2×11 kW | 22 | ocpp1.6 | ja |
+| 3W2254 | eMH3 Twin Controller 2×11 / 1×22 kW | 22 | ocpp1.6 | nein |
+| 3W2214 | eMH3 Twin Controller 2×11 kW Steckdose | 22 | ocpp1.6 | nein |
+| em4 Single Socket | em4 Single (Steckdose, bis 22 kW) | 22 | ocpp1.6 | ja (MID-Variante) |
+| em4 Single Cable | em4 Single (Typ-2-Kabel, bis 22 kW) | 22 | ocpp1.6 | ja (MID-Variante) |
+| em4 Twin | em4 Twin (2×22 kW) | 44 | ocpp1.6 | ja (MID-Variante) |
+
+## Zertifikat-Frage (Antwort an User)
+
+ABL erlaubt bei den **eMH3 ab Firmware 1.6** und allen **em4** nur Backend-Verbindungen über `wss://` mit einer von ABL freigegebenen Zertifikats-CA (TLS-Pinning).
+
+**Vorgehen, um unser Backend (`ocpp-persistent-server`) freischalten zu lassen:**
+
+1. **Antrag** an `partnerservice@abl.de` bzw. über das ABL Partner Portal (Account erforderlich).
+2. **Einreichen:**
+   - Backend-WSS-URL (z. B. `wss://ocpp.aicono.org`)
+   - Öffentliche Zertifikatskette (Let's Encrypt o. ä.)
+   - OCPP-1.6J-Konformitätsbericht (haben wir aus Mennekes-/Keba-Tests vorliegen)
+3. **Konnektivitätstest** durch ABL (~2 Wochen)
+4. **Aufnahme der CA** in das nächste Firmware-Release (quartalsweise; Bearbeitungszeit insgesamt **4–8 Wochen**)
+5. **Kosten:** kein fixer Listenpreis, Partnervertrag erforderlich.
+
+Bis zur Freigabe können eMH2 und ältere eMH3 (FW < 1.6) bereits genutzt werden — diese akzeptieren beliebige öffentlich vertrauenswürdige Zertifikate.
+
+→ Information wird im **`notes`**-Feld der betroffenen Modelle (eMH3 + em4) hinterlegt.
+
+## Umsetzung
+
+**Ein Insert** über das Supabase-Insert-Tool (keine Schemaänderung nötig, Tabelle und RLS existieren):
+
+```sql
+INSERT INTO public.charger_models
+  (vendor, model, protocol, power_kw, charging_type, notes, is_active)
+VALUES
+  ('ABL', 'eMH2 Controller (3,7–22 kW)', 'ocpp1.6', 22, 'AC',
+   'OCPP 1.6 JSON. Master einer Gruppe (Extender hängen am Controller). Kein Eichrecht.', true),
+
+  ('ABL', 'eMH3 Single Controller 3W2260 (22 kW, eichrechtskonform)', 'ocpp1.6', 22, 'AC',
+   'OCPP 1.6 JSON, eichrechtskonform (PTB). Ab FW 1.6: ABL-Backend-Zertifizierung erforderlich (Antrag bei partnerservice@abl.de, ca. 4–8 Wochen).', true),
+
+  ('ABL', 'eMH3 Twin Controller 3W2263 (2×11 kW, eichrechtskonform)', 'ocpp1.6', 22, 'AC',
+   'OCPP 1.6 JSON, eichrechtskonform (PTB). Ab FW 1.6: ABL-Backend-Zertifizierung erforderlich.', true),
+
+  ('ABL', 'eMH3 Twin Controller 3W2254 (2×11 / 1×22 kW)', 'ocpp1.6', 22, 'AC',
+   'OCPP 1.6 JSON. Ab FW 1.6: ABL-Backend-Zertifizierung erforderlich.', true),
+
+  ('ABL', 'eMH3 Twin Controller 3W2214 (2×11 kW, Steckdose)', 'ocpp1.6', 22, 'AC',
+   'OCPP 1.6 JSON. Ab FW 1.6: ABL-Backend-Zertifizierung erforderlich.', true),
+
+  ('ABL', 'em4 Single Socket (bis 22 kW)', 'ocpp1.6', 22, 'AC',
+   'OCPP 1.6 JSON. Modbus TCP zusätzlich verfügbar. MID-/Eichrecht-Variante erhältlich. ABL-Backend-Zertifizierung erforderlich.', true),
+
+  ('ABL', 'em4 Single Cable (bis 22 kW)', 'ocpp1.6', 22, 'AC',
+   'OCPP 1.6 JSON. Modbus TCP zusätzlich verfügbar. MID-/Eichrecht-Variante erhältlich. ABL-Backend-Zertifizierung erforderlich.', true),
+
+  ('ABL', 'em4 Twin (2×22 kW)', 'ocpp1.6', 44, 'AC',
+   'OCPP 1.6 JSON. Modbus TCP zusätzlich verfügbar. MID-/Eichrecht-Variante erhältlich. ABL-Backend-Zertifizierung erforderlich.', true)
+ON CONFLICT (vendor, model) DO NOTHING;
 ```
 
-### 1. Datenbank-Migration
+## Akzeptanzkriterien
 
-**`wallbox_modbus_templates`** (Super-Admin, `tenant_id IS NULL`):
-- `id`, `vendor`, `model`, `firmware_min`, `firmware_max`, `default_unit_id`, `default_port` (502)
-- `read_map jsonb` — Array `{address, function_code, data_type, byte_order, scale, target_field, poll_group}`
-- `write_map jsonb` — `{set_current, start_charge, stop_charge, unlock}` mit Register/Wert/Datentyp
-- `status_map jsonb` — Hersteller-Statuscode → OCPP `ChargePointStatus`
-- `poll_intervals jsonb` — `{fast_ms: 3000, slow_ms: 30000}`
-- `is_active`, `version`, `created_by`, timestamps
-- RLS: alle authentifizierten Tenants lesen, nur `super_admin` schreibt
-
-**`wallbox_modbus_instances`** (pro Tenant):
-- `id`, `tenant_id`, `location_id`, `gateway_id` (FK `gateway_devices`), `template_id`
-- `modbus_host`, `modbus_port`, `unit_id`
-- `charge_point_id` (FK `charge_points`) — verlinkt zur OCPP-Instanz
-- `provision_status` (`pending`/`active`/`error`/`offline`), `last_error`, `last_seen_at`
-- `version`, timestamps
-- RLS: tenant_isolation + `gateway.manage`
-
-**Trigger**: beim Insert einer Instance automatisch passenden `charge_points`-Eintrag (vendor/model aus Template) anlegen, falls noch nicht vorhanden.
-
-### 2. Edge Function `wallbox-template-control`
-
-- `GET /templates` — Liste verfügbarer Templates (alle Tenants)
-- `POST /templates` — Super-Admin: neues Template anlegen (oder JSON-Import)
-- `PUT /templates/:id` — Super-Admin: Template-Update (bumpt `version`)
-- `GET /templates/:id/export` — JSON-Export
-- `POST /instances` — Tenant-Admin: Wallbox provisionieren (template_id + modbus_host + gateway_id)
-  → erstellt `wallbox_modbus_instances`, `charge_points`, enqueued `provision_wallbox` an Gateway
-- `PUT /instances/:id` — Update (Host, Unit-ID, Template-Wechsel)
-- `DELETE /instances/:id` — Entfernen + Gateway-Cleanup-Befehl
-- `POST /instances/:id/test` — einmaliger Modbus-Connect-Test
-
-### 3. Gateway-Worker (`docs/ha-addon/index.ts`)
-
-Neues Modul `modbus-wallbox-bridge.ts` (lokal im Worker):
-- `ModbusWallboxBridge`-Klasse pro Instance:
-  - öffnet Modbus-TCP-Socket (`modbus-serial` package)
-  - öffnet OCPP-1.6J WebSocket zu `wss://…/functions/v1/ocpp-ws/<charge_point_id>` mit `OCPP_GATEWAY_PASSWORD` (siehe Schritt 6)
-  - schickt `BootNotification` mit vendor/model aus Template
-  - Polling-Loop liest Register laut Template, mapped auf interne Felder, sendet `StatusNotification` / `MeterValues` an OCPP-Backend
-  - Befehle vom Backend (`RemoteStartTransaction`, `RemoteStopTransaction`, `ChangeConfiguration[CurrentLimit]`) → Modbus-Write laut `write_map`
-  - SQLite-Persistierung in neuer Tabelle `wallbox_modbus_instances` (lokal) für Offline-Restart
-- Neue Command-Handler:
-  - `provision_wallbox` → Bridge starten + persistieren
-  - `update_wallbox` → Template/Host neu laden
-  - `remove_wallbox` → Bridge stoppen, lokal löschen
-  - `reload_template` → Templates aus Cloud nachziehen
-- Bridge-Restart bei Worker-Boot aus SQLite
-
-### 4. Template-Seed (Migration, Super-Admin)
-
-Initial werden 6 Templates angelegt (`is_active = true` nur für Mennekes, Rest als Stub mit `is_active = false`):
-- **Mennekes Amtron Charge Control** — vollständig (Holding-Register lt. Manual: Status 0x0100, Power 0x010C, Energy 0x010E, Set-Current 0x012E, ...)
-- **KEBA KeContact P30** — Stub-Template mit dokumentierten Standard-Registern (TCP-DSR-Mapping)
-- **ABB Terra AC** — Stub
-- **Alfen Eve Single/Pro-line** — Stub (SCN-fähig)
-- **go-e Charger HOMEfix** — Stub (HTTP-API-Hinweis im Kommentar, Modbus optional)
-- **Webasto Live / Next** — Stub
-
-Templates als JSON in Migration eingebettet, damit Super-Admin sie später per UI verfeinern kann.
-
-### 5. Frontend
-
-**Tenant-UI** (`src/pages/EvCharging.tsx` / Wallbox-Hinzufügen-Dialog):
-- Neuer Connector-Typ „Modbus TCP (Gateway)"
-- Wizard:
-  1. Gateway auswählen
-  2. Template auswählen (Dropdown vendor/model)
-  3. Modbus-Host + Port + Unit-ID eingeben
-  4. „Verbindung testen" → ruft `wallbox-template-control/instances/:id/test`
-  5. Speichern → erstellt Instance + Charge Point
-
-**Super-Admin-UI** (`src/pages/SuperAdminWallboxTemplates.tsx`):
-- Liste aller Templates mit Vendor/Model/Version/aktiv
-- Detail-Editor mit JSON-Editor für `read_map`/`write_map`/`status_map` (Monaco oder simples Textarea mit Validierung)
-- Buttons: Neu, Importieren (JSON), Exportieren, Aktivieren/Deaktivieren
-- Route `/super-admin/wallbox-templates` + Sidebar-Eintrag
-
-### 6. OCPP-Auth fürs Gateway
-
-- Neuer Secret `GATEWAY_OCPP_PASSWORD` (geteilt) — Gateway nutzt diesen für die WS-Auth pro Charge Point
-- `charge_points`-Insert-Trigger setzt für gateway-stammende CPs `auth_required = true` und einen vom Gateway abgeleiteten Passwort-Hash
-- `ocpp-ws` akzeptiert wie bisher
-
-### Bewusst NICHT in Phase 5
-
-- ISO 15118 / Plug & Charge
-- Eigener OCPP-Server **im** Gateway
-- Erweitertes Lastmanagement (kommt über bestehende `pv-surplus-charging`)
-
-### Reihenfolge der Umsetzung
-
-1. Migration (Tabellen + Seed-Templates + Trigger)
-2. Edge Function `wallbox-template-control`
-3. Super-Admin-UI für Templates
-4. Tenant-UI Wizard
-5. Gateway-Worker `modbus-wallbox-bridge.ts` + Command-Handler
-6. End-to-End-Test mit Mennekes Amtron Charge Control
-
-Soll ich mit Schritt 1 (Migration + Seed) starten?
+- Im Super-Admin → OCPP-Integrationen → "Ladestationsmodelle" erscheinen unter dem Hersteller-Filter **ABL** genau **8** Einträge.
+- Alle Einträge haben `protocol = 'ocpp1.6'`, `charging_type = 'AC'` und sind aktiv.
+- eMH3- und em4-Einträge enthalten den Hinweis auf die ABL-Backend-Zertifizierung im `notes`-Feld.
+- eMH1, Extender-Varianten und das Zubehör "eMS home" werden **nicht** angelegt.
+- Optional Folgearbeit (separat, nicht Teil dieses Plans): Modbus-TCP-Templates für em4 in `wallbox_modbus_templates` ergänzen, sobald Phase 5 produktiv ist.
