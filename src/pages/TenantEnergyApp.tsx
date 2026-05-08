@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import { format, subMonths, startOfMonth, endOfMonth } from "date-fns";
-import { de, enUS, pl, fr } from "date-fns/locale";
+import { de, enUS, es, nl } from "date-fns/locale";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from "recharts";
