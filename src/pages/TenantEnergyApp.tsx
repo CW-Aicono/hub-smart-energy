@@ -68,15 +68,15 @@ interface MonthlyReading {
 const getDateFnsLocale = (lang: TenantLang) => {
   switch (lang) {
     case "en": return enUS;
-    case "pl": return pl;
-    case "fr": return fr;
+    case "es": return es;
+    case "nl": return nl;
     default: return de;
   }
 };
 
 // Number formatter based on language
 const fmtNum = (v: number, decimals = 1, lang: TenantLang = "de") => {
-  const loc = lang === "de" ? "de-DE" : lang === "fr" ? "fr-FR" : lang === "pl" ? "pl-PL" : "en-US";
+  const loc = lang === "de" ? "de-DE" : lang === "es" ? "es-ES" : lang === "nl" ? "nl-NL" : "en-US";
   return v.toLocaleString(loc, { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
 };
 
