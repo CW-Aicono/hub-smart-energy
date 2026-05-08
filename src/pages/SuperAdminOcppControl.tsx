@@ -23,6 +23,8 @@ const SuperAdminOcppControl = () => {
   const { chargePoints } = useChargePoints();
   const { sessions, isLoading: sessionsLoading } = useChargingSessions();
   const [tenantFilter, setTenantFilter] = useState<string>("all");
+  const [logTenantId, setLogTenantId] = useState<string>("");
+  const [logChargePointId, setLogChargePointId] = useState<string>("");
 
   if (loading) return null;
   if (!user) return <Navigate to="/auth" replace />;
