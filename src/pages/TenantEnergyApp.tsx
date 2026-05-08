@@ -1106,7 +1106,7 @@ function TariffsTab({ tenantRecord, lang }: { tenantRecord: TenantRecord; lang: 
                 <div className="mt-1 text-sm">
                   <span className="font-bold">{fmtNum(Number(tr.price_per_kwh), 4, lang)} €/{tr.energy_type === "wasser" || tr.energy_type === "gas" ? "m³" : "kWh"}</span>
                   {Number(tr.base_fee_monthly) > 0 && (
-                    <span className="text-muted-foreground ml-2">+ {fmtNum(Number(tr.base_fee_monthly), 2, lang)} €/{lang === "de" ? "Monat" : lang === "en" ? "month" : lang === "pl" ? "mies." : "mois"}</span>
+                    <span className="text-muted-foreground ml-2">+ {fmtNum(Number(tr.base_fee_monthly), 2, lang)} €/{lang === "de" ? "Monat" : lang === "en" ? "month" : lang === "es" ? "mes" : "maand"}</span>
                   )}
                 </div>
                 <p className="text-xs text-muted-foreground mt-0.5">
