@@ -441,7 +441,7 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
                             : value
                         }
                       />
-                      <YAxis tick={{ fontSize: 11 }} domain={yDomain} allowDataOverflow={false} />
+                      <YAxis tick={{ fontSize: 11 }} domain={yDomain} allowDataOverflow={false} tickFormatter={(v: number) => Number(v).toLocaleString("de-DE", { maximumFractionDigits: 2 })} />
                       <Tooltip content={selectedPeriod === "day" ? <DayTooltip unit={displayUnit} /> : undefined} formatter={selectedPeriod !== "day" ? (v: number) => v?.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " " + displayUnit : undefined} />
                       <Legend content={() => null} />
                       {config.meter_ids.flatMap((mid, i) => {
@@ -473,7 +473,7 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
                             : value
                         }
                       />
-                      <YAxis tick={{ fontSize: 11 }} domain={yDomain} allowDataOverflow={false} />
+                      <YAxis tick={{ fontSize: 11 }} domain={yDomain} allowDataOverflow={false} tickFormatter={(v: number) => Number(v).toLocaleString("de-DE", { maximumFractionDigits: 2 })} />
                       <Tooltip content={selectedPeriod === "day" ? <DayTooltip unit={displayUnit} /> : undefined} formatter={selectedPeriod !== "day" ? (v: number) => v?.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " " + displayUnit : undefined} />
                       <Legend content={() => null} />
                       {config.meter_ids.map((mid, i) => {
