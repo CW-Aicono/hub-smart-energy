@@ -326,7 +326,7 @@ const SuperAdminGatewayFleet = () => {
                         <TableRow key={d.id}>
                           <TableCell>
                             <div className="font-medium">{d.device_name}</div>
-                            <div className="text-xs text-muted-foreground">{d.tenant_id?.slice(0, 8) ?? "—"}</div>
+                            <div className="text-xs text-muted-foreground">{(d.tenant_id && tenantNameMap[d.tenant_id]) || "—"}</div>
                           </TableCell>
                           <TableCell>
                             <Badge variant={d.status === "online" ? "default" : "secondary"}>{d.status}</Badge>
