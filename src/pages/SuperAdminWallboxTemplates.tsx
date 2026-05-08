@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Download, Upload, Trash2, Pencil } from "lucide-react";
+import SuperAdminSidebar from "@/components/super-admin/SuperAdminSidebar";
 
 interface Template {
   id: string;
@@ -149,7 +150,10 @@ export default function SuperAdminWallboxTemplates() {
   };
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="flex min-h-screen" style={{ backgroundColor: `hsl(var(--sa-background))`, color: `hsl(var(--sa-foreground))` }}>
+      <SuperAdminSidebar />
+      <main className="flex-1 overflow-auto">
+        <div className="p-4 md:p-8 space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">Wallbox Modbus-Templates</h1>
@@ -269,6 +273,8 @@ export default function SuperAdminWallboxTemplates() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+        </div>
+      </main>
     </div>
   );
 }
