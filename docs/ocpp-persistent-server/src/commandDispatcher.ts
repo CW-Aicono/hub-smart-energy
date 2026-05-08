@@ -20,14 +20,14 @@ function buildOcppCall(uniqueId: string, cmd: PendingRow): unknown[] | null {
     case "RemoteStartTransaction":
       return [2, uniqueId, "RemoteStartTransaction", {
         connectorId: (p.connectorId as number) ?? 1,
-        idTag: (p.idTag as string) ?? "APP_USER",
+        idTag: (p.idTag as string) ?? "APPBACKEND00",
       }];
     case "RemoteStopTransaction":
       return [2, uniqueId, "RemoteStopTransaction", {
         transactionId: p.transactionId as number,
       }];
     case "Reset":
-      return [2, uniqueId, "Reset", { type: (p.type as string) ?? "Soft" }];
+      return [2, uniqueId, "Reset", { type: (p.type as string) ?? "Hard" }];
     case "UnlockConnector":
       return [2, uniqueId, "UnlockConnector", { connectorId: (p.connectorId as number) ?? 1 }];
     case "ChangeConfiguration":
