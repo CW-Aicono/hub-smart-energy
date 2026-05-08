@@ -125,6 +125,7 @@ export default function SuperAdminSidebar() {
         { to: "/super-admin/ocpp/integrations", icon: PlugZap, label: t("nav.ocpp_integrations") },
         { to: "/super-admin/ocpp/control", icon: Server, label: "OCPP Control" },
         { to: "/super-admin/ocpp/simulators", icon: Plug, label: "Wallbox-Simulator" },
+        { to: "/super-admin/wallbox-templates", icon: PlugZap, label: "Wallbox-Templates" },
       ],
     },
     {
@@ -137,7 +138,6 @@ export default function SuperAdminSidebar() {
       ],
     },
     { to: "/super-admin/gateways", icon: Cpu, label: "Gateway-Flotte" },
-    { to: "/super-admin/wallbox-templates", icon: PlugZap, label: "Wallbox-Templates" },
     { to: "/super-admin/monitoring", icon: Activity, label: t("nav.monitoring") },
     { to: "/super-admin/support", icon: HeadsetIcon, label: t("nav.support") },
     { to: "/super-admin/settings", icon: Settings, label: t("nav.settings") },
