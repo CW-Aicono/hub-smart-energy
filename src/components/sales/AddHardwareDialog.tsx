@@ -153,7 +153,7 @@ export function AddHardwareDialog({ open, onOpenChange, distributionId, onAdded 
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-3 flex-1 overflow-hidden flex flex-col">
+        <div className="space-y-3 flex-1 min-h-0 overflow-hidden flex flex-col">
           <Tabs value={klasse} onValueChange={setKlasse}>
             <ScrollArea className="w-full">
               <TabsList className="inline-flex w-auto">
