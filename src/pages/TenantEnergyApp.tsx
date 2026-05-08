@@ -1007,7 +1007,7 @@ function TariffsTab({ tenantRecord, lang }: { tenantRecord: TenantRecord; lang: 
                 <p>{t("dash.local_pv")}: <span className="font-semibold text-foreground">{fmtNum(landlordTariff.price_per_kwh_local, 4, lang)} €/kWh</span></p>
                 <p>{t("dash.grid")}: <span className="font-semibold text-foreground">{fmtNum(landlordTariff.price_per_kwh_grid, 4, lang)} €/kWh</span></p>
                 {landlordTariff.base_fee_monthly > 0 && (
-                  <p>{t("inv.base_fee")} <span className="font-semibold text-foreground">{fmtNum(landlordTariff.base_fee_monthly, 2, lang)} €/{lang === "de" ? "Monat" : lang === "fr" ? "mois" : lang === "pl" ? "mies." : "month"}</span></p>
+                  <p>{t("inv.base_fee")} <span className="font-semibold text-foreground">{fmtNum(landlordTariff.base_fee_monthly, 2, lang)} €/{lang === "de" ? "Monat" : lang === "es" ? "mes" : lang === "nl" ? "maand" : "month"}</span></p>
                 )}
                 <p className="text-xs">{t("tariff.from")} {landlordTariff.valid_from}</p>
               </div>
