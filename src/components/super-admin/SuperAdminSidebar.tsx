@@ -28,8 +28,8 @@ const SA_SIDEBAR_KEY = "sa-sidebar-collapsed";
 const LANGUAGE_LABELS: Record<SALanguage, string> = {
   de: "Deutsch",
   en: "English",
-  fr: "Français",
-  pl: "Polski",
+  es: "Español",
+  nl: "Nederlands",
 };
 
 const PRESET_COLORS: Record<SAColorPreset, string> = {
