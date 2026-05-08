@@ -47,13 +47,22 @@ export default function ModbusWallboxWizard({ onCreated, presetGatewayId, preset
   const [submitting, setSubmitting] = useState(false);
   const [form, setForm] = useState({
     template_id: "",
-    gateway_id: "",
-    location_id: "",
+    gateway_id: presetGatewayId ?? "",
+    location_id: presetLocationId ?? "",
     label: "",
     modbus_host: "",
     modbus_port: 502,
     unit_id: 1,
   });
+
+  // Sync presets when they change while dialog is closed
+  useEffect(() => {
+    setForm((f) => ({
+      ...f,
+      gateway_id: presetGatewayId ?? f.gateway_id,
+      location_id: presetLocationId ?? f.location_id,
+    }));
+  }, [presetGatewayId, presetLocationId]);
 
   useEffect(() => {
     if (!open || !tenant?.id) return;
