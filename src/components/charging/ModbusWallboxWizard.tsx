@@ -177,6 +177,22 @@ export default function ModbusWallboxWizard({ onCreated, presetGatewayId, preset
           )}
 
           <div>
+            <Label>Bezeichnung</Label>
+            <Input value={form.label} onChange={(e) => setForm({ ...form, label: e.target.value })} placeholder="z. B. Wallbox Carport" />
+          </div>
+
+          <div className="grid grid-cols-3 gap-2">
+            <div className="col-span-2">
+              <Label>Modbus-Host *</Label>
+              <Input value={form.modbus_host} onChange={(e) => setForm({ ...form, modbus_host: e.target.value })} placeholder="192.168.1.50" />
+            </div>
+            <div>
+              <Label>Port</Label>
+              <Input type="number" value={form.modbus_port} onChange={(e) => setForm({ ...form, modbus_port: Number(e.target.value) })} />
+            </div>
+          </div>
+
+          <div>
             <Label>Unit-ID</Label>
             <Input type="number" value={form.unit_id} onChange={(e) => setForm({ ...form, unit_id: Number(e.target.value) })} />
           </div>
