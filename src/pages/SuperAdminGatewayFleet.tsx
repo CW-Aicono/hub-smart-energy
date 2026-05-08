@@ -185,6 +185,18 @@ const SuperAdminGatewayFleet = () => {
     refetchInterval: 30_000,
   });
 
+  const { data: tenantNameMap = {} } = useQuery({
+    queryKey: ["sa-gateway-fleet-tenant-names"],
+    enabled: !!isSuperAdmin,
+    queryFn: async () => {
+      const { data, error } = await supabase.from("tenants").select("id, name");
+      if (error) throw error;
+      const map: Record<string, string> = {};
+      (data ?? []).forEach((t: { id: string; name: string }) => { map[t.id] = t.name; });
+      return map;
+    },
+  });
+
   const { data: channels = [], refetch: refetchChannels } = useQuery({
     queryKey: ["sa-gateway-channels"],
     queryFn: async () => {
