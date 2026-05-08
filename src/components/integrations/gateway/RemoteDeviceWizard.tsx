@@ -230,7 +230,10 @@ export function RemoteDeviceWizard({ deviceId, deviceName, open, onOpenChange }:
               </AlertDescription>
             </Alert>
             <div className="flex justify-center py-4">
-              <ModbusWallboxWizard />
+              <ModbusWallboxWizard
+                presetGatewayId={deviceId}
+                triggerLabel="Wallbox einrichten"
+              />
             </div>
           </TabsContent>
 
