@@ -162,9 +162,10 @@ export function RemoteDeviceWizard({ deviceId, deviceName, open, onOpenChange }:
         </DialogHeader>
 
         <Tabs value={tab} onValueChange={setTab}>
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="discover">Discovery</TabsTrigger>
             <TabsTrigger value="manual">Manuell anlegen</TabsTrigger>
+            <TabsTrigger value="wallbox">Wallbox</TabsTrigger>
             <TabsTrigger value="installed">
               Installiert {entities.data ? `(${entities.data.length})` : ""}
             </TabsTrigger>
