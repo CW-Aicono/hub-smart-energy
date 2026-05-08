@@ -631,7 +631,7 @@ async function handleRemoteCommand(
         return { status: "Rejected", message: `Charge point not ready (current status: ${cp.status || "unknown"})` };
       }
 
-      const idTag = (body.idTag as string) || "APP_USER";
+      const idTag = (body.idTag as string) || "APPBACKEND00";
       const connectorId = (body.connectorId as number) || 1;
 
       // Queue command for WebSocket proxy to pick up

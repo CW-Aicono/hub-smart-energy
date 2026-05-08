@@ -444,10 +444,10 @@ const ChargePointDetail = () => {
       let result: any;
       switch (action) {
         case "Ladestation neu starten":
-          result = await callOcppCommand("Reset", { chargePointId: cp.ocpp_id, type: "Soft" });
+          result = await callOcppCommand("Reset", { chargePointId: cp.ocpp_id, type: "Hard" });
           break;
         case "Ladevorgang starten":
-          result = await callOcppCommand("RemoteStartTransaction", { chargePointId: cp.ocpp_id, idTag: "ADMIN", connectorId: selectedConnectorId });
+          result = await callOcppCommand("RemoteStartTransaction", { chargePointId: cp.ocpp_id, idTag: "APPBACKEND00", connectorId: selectedConnectorId });
           break;
         case "Ladevorgang stoppen": {
           const activeSession = sessions.find((s) => s.status === "active" && s.transaction_id);
