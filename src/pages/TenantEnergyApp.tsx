@@ -1320,7 +1320,7 @@ const TenantEnergyApp = () => {
     return <NotLinkedScreen email={user.email || ""} onLogout={handleLogout} lang={tenantLang} />;
   }
 
-  const langLabels: Record<TenantLang, string> = { de: "Deutsch", en: "English", pl: "Polski", fr: "Français" };
+  const langLabels: Record<TenantLang, string> = { de: "Deutsch", en: "English", es: "Español", nl: "Nederlands" };
 
   return (
     <div className="min-h-screen bg-background flex flex-col" style={{ paddingTop: "env(safe-area-inset-top, 0px)", paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
