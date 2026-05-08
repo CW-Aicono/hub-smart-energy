@@ -22,7 +22,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2, RefreshCw, Search, Trash2, Plus, AlertCircle, CheckCircle2 } from "lucide-react";
+import { Loader2, RefreshCw, Search, Trash2, Plus, AlertCircle, CheckCircle2, Cable, Info } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import ModbusWallboxWizard from "@/components/charging/ModbusWallboxWizard";
 
 interface Props {
   deviceId: string;
