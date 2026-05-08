@@ -238,8 +238,14 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
 
         // Recent raw data: fetch last 15 minutes to cover gap between
         // last compaction run and now (the RPC already handles on-the-fly
-        // aggregation, but may miss the very latest readings still being written)
-        const recentCutoff = new Date(Date.now() - 15 * 60 * 1000);
+        // aggregation, but may miss the very latest readings still being written).
+        // IMPORTANT: clamp the cutoff to the start of the selected day, otherwise
+        // shortly after midnight (e.g. 00:09 local) the "last 15 min" reaches into
+        // YESTERDAY and those rows would get bucketed into today's 23:xx slots,
+        // producing a phantom flat line across the whole new day.
+        const recentCutoff = new Date(
+          Math.max(Date.now() - 15 * 60 * 1000, from.getTime()),
+        );
         const { data: recentRaw, error: recentError } = await supabase
           .from("meter_power_readings")
           .select("meter_id, power_value, recorded_at")
