@@ -17,6 +17,7 @@ import {
   Plug, ShieldCheck, ShieldOff, Lock, Unlock, Copy, CheckCircle2, AlertTriangle,
   ArrowLeft, ArrowRight, Loader2, Wifi, WifiOff, Sparkles,
 } from "lucide-react";
+import SuperAdminSidebar from "@/components/super-admin/SuperAdminSidebar";
 
 type Protocol = "ws" | "wss";
 const OCPP_DOMAIN = "ocpp.aicono.org";
@@ -180,7 +181,10 @@ export default function SuperAdminChargePointOnboarding() {
   }
 
   return (
-    <div className="container mx-auto max-w-4xl p-4 md:p-8 space-y-6">
+    <div className="flex min-h-screen" style={{ backgroundColor: `hsl(var(--sa-background))`, color: `hsl(var(--sa-foreground))` }}>
+      <SuperAdminSidebar />
+      <main className="flex-1 overflow-auto">
+        <div className="container mx-auto max-w-4xl p-4 md:p-8 space-y-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="h-12 w-12 rounded-lg bg-primary/10 grid place-items-center">
@@ -521,6 +525,8 @@ export default function SuperAdminChargePointOnboarding() {
           </Card>
         </div>
       )}
+        </div>
+      </main>
     </div>
   );
 }
