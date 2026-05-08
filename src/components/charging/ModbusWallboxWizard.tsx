@@ -128,20 +128,22 @@ export default function ModbusWallboxWizard({ onCreated, presetGatewayId, preset
           <DialogTitle>Modbus-Wallbox via Gateway anbinden</DialogTitle>
         </DialogHeader>
         <div className="space-y-3">
-          <div>
-            <Label>Gateway *</Label>
-            <Select value={form.gateway_id} onValueChange={(v) => setForm({ ...form, gateway_id: v })}>
-              <SelectTrigger><SelectValue placeholder="Gateway wählen" /></SelectTrigger>
-              <SelectContent>
-                {gateways.map((g) => (
-                  <SelectItem key={g.id} value={g.id}>{g.device_name} ({g.status})</SelectItem>
-                ))}
-                {gateways.length === 0 && (
-                  <div className="px-3 py-2 text-sm text-muted-foreground">Kein Gateway vorhanden</div>
-                )}
-              </SelectContent>
-            </Select>
-          </div>
+          {!presetGatewayId && (
+            <div>
+              <Label>Gateway *</Label>
+              <Select value={form.gateway_id} onValueChange={(v) => setForm({ ...form, gateway_id: v })}>
+                <SelectTrigger><SelectValue placeholder="Gateway wählen" /></SelectTrigger>
+                <SelectContent>
+                  {gateways.map((g) => (
+                    <SelectItem key={g.id} value={g.id}>{g.device_name} ({g.status})</SelectItem>
+                  ))}
+                  {gateways.length === 0 && (
+                    <div className="px-3 py-2 text-sm text-muted-foreground">Kein Gateway vorhanden</div>
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
           <div>
             <Label>Hersteller / Modell *</Label>
@@ -160,33 +162,19 @@ export default function ModbusWallboxWizard({ onCreated, presetGatewayId, preset
             )}
           </div>
 
-          <div>
-            <Label>Standort</Label>
-            <Select value={form.location_id} onValueChange={(v) => setForm({ ...form, location_id: v })}>
-              <SelectTrigger><SelectValue placeholder="Standort wählen" /></SelectTrigger>
-              <SelectContent>
-                {locations.map((l) => (
-                  <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div>
-            <Label>Bezeichnung</Label>
-            <Input value={form.label} onChange={(e) => setForm({ ...form, label: e.target.value })} placeholder="z. B. Wallbox Carport" />
-          </div>
-
-          <div className="grid grid-cols-3 gap-2">
-            <div className="col-span-2">
-              <Label>Modbus-Host *</Label>
-              <Input value={form.modbus_host} onChange={(e) => setForm({ ...form, modbus_host: e.target.value })} placeholder="192.168.1.50" />
-            </div>
+          {!presetLocationId && (
             <div>
-              <Label>Port</Label>
-              <Input type="number" value={form.modbus_port} onChange={(e) => setForm({ ...form, modbus_port: Number(e.target.value) })} />
+              <Label>Standort</Label>
+              <Select value={form.location_id} onValueChange={(v) => setForm({ ...form, location_id: v })}>
+                <SelectTrigger><SelectValue placeholder="Standort wählen" /></SelectTrigger>
+                <SelectContent>
+                  {locations.map((l) => (
+                    <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
-          </div>
+          )}
 
           <div>
             <Label>Unit-ID</Label>
