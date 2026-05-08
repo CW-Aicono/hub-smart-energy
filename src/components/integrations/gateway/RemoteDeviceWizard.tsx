@@ -206,8 +206,32 @@ export function RemoteDeviceWizard({ deviceId, deviceName, open, onOpenChange }:
             </div>
           </TabsContent>
 
-          <TabsContent value="manual" className="pt-3">
+          <TabsContent value="manual" className="pt-3 space-y-3">
+            <Alert>
+              <Info className="h-4 w-4" />
+              <AlertDescription className="text-xs">
+                Hinweis: Für <strong>Wallboxen via Modbus TCP</strong> bitte den Tab{" "}
+                <strong>„Wallbox"</strong> nutzen. Dort wird automatisch ein Ladepunkt mit
+                OCPP-Bridge angelegt. „Manuell anlegen" erstellt nur generische
+                Sensor-/Aktor-Einträge ohne Lade-Logik.
+              </AlertDescription>
+            </Alert>
             <ManualForm onCreate={(p) => provision.mutate(p)} pending={provision.isPending} />
+          </TabsContent>
+
+          <TabsContent value="wallbox" className="pt-3 space-y-3">
+            <Alert>
+              <Cable className="h-4 w-4" />
+              <AlertDescription className="text-xs">
+                Bindet eine Wallbox per <strong>Modbus TCP</strong> über dieses Gateway an.
+                Das Gateway baut für jede Wallbox eine eigene OCPP-1.6J-Bridge zum Backend
+                auf. Hersteller/Modell stammen aus den vom Super-Admin gepflegten
+                Wallbox-Templates.
+              </AlertDescription>
+            </Alert>
+            <div className="flex justify-center py-4">
+              <ModbusWallboxWizard />
+            </div>
           </TabsContent>
 
           <TabsContent value="installed" className="pt-3">
