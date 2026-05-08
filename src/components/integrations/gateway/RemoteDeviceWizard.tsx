@@ -429,7 +429,7 @@ function ManualForm({ onCreate, pending }: { onCreate: (p: any) => void; pending
       </div>
       <div className="space-y-1">
         <Label className="text-sm">Bezeichnung</Label>
-        <Input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="z.B. Mennekes Wallbox Hof" />
+        <Input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="z.B. Stromzähler Heizungsraum" />
       </div>
       <div className="space-y-1">
         <Label className="text-sm">HA Entity-ID (optional)</Label>
