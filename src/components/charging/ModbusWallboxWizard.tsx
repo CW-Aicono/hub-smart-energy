@@ -29,9 +29,15 @@ interface Gateway {
 
 interface Props {
   onCreated?: () => void;
+  /** Pre-selected gateway (hides the gateway dropdown if set). */
+  presetGatewayId?: string;
+  /** Pre-selected location (hides the location dropdown if set). */
+  presetLocationId?: string;
+  /** Custom trigger label (e.g. "Wallbox anlegen"). */
+  triggerLabel?: string;
 }
 
-export default function ModbusWallboxWizard({ onCreated }: Props) {
+export default function ModbusWallboxWizard({ onCreated, presetGatewayId, presetLocationId, triggerLabel }: Props) {
   const { toast } = useToast();
   const { tenant } = useTenant();
   const [open, setOpen] = useState(false);
