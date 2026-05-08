@@ -172,15 +172,28 @@ export function RemoteDeviceWizard({ deviceId, deviceName, open, onOpenChange }:
           </TabsList>
 
           <TabsContent value="discover" className="space-y-3 pt-3">
+            <Alert>
+              <Info className="h-4 w-4" />
+              <AlertDescription className="text-xs">
+                Discovery zeigt <strong>nur Geräte, die Home Assistant bereits kennt</strong>{" "}
+                (Plattform <code>shelly</code>, <code>mqtt</code>, <code>tasmota</code> oder{" "}
+                <code>esphome</code>) und die in AICONO noch <strong>nicht zugeordnet</strong>{" "}
+                sind. Modbus-TCP-Scan benötigt Host/Port/Unit-IDs und wird hier als reine
+                Erreichbarkeitsprüfung ausgeführt.
+              </AlertDescription>
+            </Alert>
             <div className="flex flex-wrap gap-2">
               <Button size="sm" variant="outline" onClick={() => scan.mutate(["mdns"])} disabled={scan.isPending}>
-                <Search className="h-4 w-4 mr-1" /> mDNS scan
+                {scan.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Search className="h-4 w-4 mr-1" />}
+                mDNS scan
               </Button>
               <Button size="sm" variant="outline" onClick={() => scan.mutate(["mqtt"])} disabled={scan.isPending}>
-                <Search className="h-4 w-4 mr-1" /> MQTT scan
+                {scan.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Search className="h-4 w-4 mr-1" />}
+                MQTT scan
               </Button>
               <Button size="sm" variant="outline" onClick={() => scan.mutate(["modbus_scan"])} disabled={scan.isPending}>
-                <Search className="h-4 w-4 mr-1" /> Modbus TCP scan
+                {scan.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Search className="h-4 w-4 mr-1" />}
+                Modbus TCP scan
               </Button>
               <Button size="sm" variant="ghost" onClick={() => discoveries.refetch()}>
                 <RefreshCw className="h-4 w-4" />
@@ -193,8 +206,13 @@ export function RemoteDeviceWizard({ deviceId, deviceName, open, onOpenChange }:
                   <Loader2 className="h-4 w-4 animate-spin inline mr-2" />Lade …
                 </div>
               ) : (discoveries.data ?? []).length === 0 ? (
-                <div className="p-6 text-center text-sm text-muted-foreground">
-                  Noch keine Funde. Starte einen Scan oder warte auf den nächsten Heartbeat.
+                <div className="p-6 text-center text-sm text-muted-foreground space-y-1">
+                  <p>Keine neuen Funde.</p>
+                  <p className="text-xs">
+                    Tipp: Wenn HA keine passenden Plattform-Entitäten kennt oder bereits alle
+                    in AICONO eingebunden sind, bleibt die Liste leer. Nutze in diesem Fall
+                    den Tab <strong>„Manuell anlegen"</strong>.
+                  </p>
                 </div>
               ) : (
                 <ul className="divide-y">
