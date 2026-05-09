@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/hooks/useTenant";
 import { useLocations } from "@/hooks/useLocations";
+import { useTranslation } from "@/hooks/useTranslation";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -54,6 +55,9 @@ import {
   XCircle,
   HardDrive,
   KeyRound,
+  Cpu,
+  Factory,
+  Home,
 } from "lucide-react";
 
 interface PairingToken {
@@ -69,7 +73,7 @@ interface PairingToken {
   bound_device_id: string | null;
 }
 
-const TOKEN_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // omit I,O,0,1
+const TOKEN_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 function generateToken(): string {
   const buf = new Uint8Array(8);
   crypto.getRandomValues(buf);
@@ -88,15 +92,10 @@ function formatDateDE(iso: string | null | undefined): string {
   });
 }
 
-function tokenStatus(t: PairingToken): { label: string; variant: "default" | "secondary" | "destructive" | "outline"; icon: typeof CheckCircle2 } {
-  if (t.used_at) return { label: "Gepairt", variant: "default", icon: CheckCircle2 };
-  if (new Date(t.expires_at).getTime() < Date.now()) return { label: "Abgelaufen", variant: "destructive", icon: XCircle };
-  return { label: "Offen", variant: "secondary", icon: Clock };
-}
-
 export function AiconoHubManager() {
   const { tenant } = useTenant();
   const { locations } = useLocations();
+  const { t } = useTranslation();
   const qc = useQueryClient();
 
   const tokensQuery = useQuery({
@@ -139,11 +138,11 @@ export function AiconoHubManager() {
       setCreateOpen(false);
       setPendingLabel("");
       setPendingLocationId("none");
-      toast.success("Pairing-Token erstellt", {
-        description: `Token ${row.token} ist 7 Tage gültig.`,
+      toast.success(t("aiconoHub.token.created"), {
+        description: t("aiconoHub.token.createdDesc").replace("{token}", row.token),
       });
     },
-    onError: (e: Error) => toast.error("Erstellung fehlgeschlagen", { description: e.message }),
+    onError: (e: Error) => toast.error(t("aiconoHub.token.createFailed"), { description: e.message }),
   });
 
   const deleteMutation = useMutation({
@@ -153,16 +152,24 @@ export function AiconoHubManager() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["gateway-pairing-tokens", tenant?.id] });
-      toast.success("Pairing-Token entfernt");
+      toast.success(t("aiconoHub.token.removed"));
     },
-    onError: (e: Error) => toast.error("Löschen fehlgeschlagen", { description: e.message }),
+    onError: (e: Error) => toast.error(t("aiconoHub.token.removeFailed"), { description: e.message }),
   });
 
+  function tokenStatus(tok: PairingToken) {
+    if (tok.used_at) return { label: t("aiconoHub.token.statusPaired"), variant: "default" as const, icon: CheckCircle2 };
+    if (new Date(tok.expires_at).getTime() < Date.now())
+      return { label: t("aiconoHub.token.statusExpired"), variant: "destructive" as const, icon: XCircle };
+    return { label: t("aiconoHub.token.statusOpen"), variant: "secondary" as const, icon: Clock };
+  }
+
   const tokens = tokensQuery.data || [];
-  const openTokens = tokens.filter((t) => !t.used_at && new Date(t.expires_at).getTime() >= Date.now());
+  const openTokens = tokens.filter((tok) => !tok.used_at && new Date(tok.expires_at).getTime() >= Date.now());
 
   return (
     <div className="space-y-6">
+      <HardwareSkuCards />
       <ImageDownloadCard />
 
       <Card>
@@ -171,62 +178,55 @@ export function AiconoHubManager() {
             <div>
               <CardTitle className="flex items-center gap-2">
                 <KeyRound className="h-5 w-5" />
-                Pairing-Token
+                {t("aiconoHub.token.title")}
               </CardTitle>
-              <CardDescription className="mt-1">
-                Erzeuge einen Einmal-Code für ein neues AICONO Hub. Der Kunde gibt den Code beim
-                ersten Start im Setup-Wizard ein – das Hub bindet sich anschließend automatisch
-                an die hinterlegte Liegenschaft.
-              </CardDescription>
+              <CardDescription className="mt-1">{t("aiconoHub.token.desc")}</CardDescription>
             </div>
             <Button onClick={() => setCreateOpen(true)}>
               <Plus className="mr-2 h-4 w-4" />
-              Neuer Token
+              {t("aiconoHub.token.new")}
             </Button>
           </div>
         </CardHeader>
         <CardContent>
           {tokensQuery.isLoading ? (
             <div className="flex items-center gap-2 text-muted-foreground py-8 justify-center">
-              <Loader2 className="h-4 w-4 animate-spin" /> Lade Token …
+              <Loader2 className="h-4 w-4 animate-spin" /> {t("aiconoHub.token.loading")}
             </div>
           ) : tokens.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              Noch keine Pairing-Token. Erzeuge einen, um ein Hub auszuliefern.
-            </div>
+            <div className="text-center py-8 text-muted-foreground">{t("aiconoHub.token.empty")}</div>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Token</TableHead>
-                  <TableHead>Label</TableHead>
-                  <TableHead>Liegenschaft</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Gültig bis</TableHead>
-                  <TableHead>MAC</TableHead>
+                  <TableHead>{t("aiconoHub.token.colToken")}</TableHead>
+                  <TableHead>{t("aiconoHub.token.colLabel")}</TableHead>
+                  <TableHead>{t("aiconoHub.token.colLocation")}</TableHead>
+                  <TableHead>{t("aiconoHub.token.colStatus")}</TableHead>
+                  <TableHead>{t("aiconoHub.token.colExpires")}</TableHead>
+                  <TableHead>{t("aiconoHub.token.colMac")}</TableHead>
                   <TableHead className="w-[80px]"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {tokens.map((t) => {
-                  const status = tokenStatus(t);
+                {tokens.map((tok) => {
+                  const status = tokenStatus(tok);
                   const StatusIcon = status.icon;
-                  const locationName = locations.find((l) => l.id === t.location_id)?.name ?? "—";
+                  const locationName = locations.find((l) => l.id === tok.location_id)?.name ?? "—";
                   return (
-                    <TableRow key={t.id}>
+                    <TableRow key={tok.id}>
                       <TableCell>
                         <button
                           onClick={() => {
-                            navigator.clipboard.writeText(t.token);
-                            toast.success("Token kopiert");
+                            navigator.clipboard.writeText(tok.token);
+                            toast.success(t("aiconoHub.token.copied"));
                           }}
                           className="font-mono text-base tracking-wider hover:underline"
-                          title="Klicken zum Kopieren"
                         >
-                          {t.token}
+                          {tok.token}
                         </button>
                       </TableCell>
-                      <TableCell className="text-sm">{t.label || "—"}</TableCell>
+                      <TableCell className="text-sm">{tok.label || "—"}</TableCell>
                       <TableCell className="text-sm">{locationName}</TableCell>
                       <TableCell>
                         <Badge variant={status.variant} className="gap-1">
@@ -234,12 +234,8 @@ export function AiconoHubManager() {
                           {status.label}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {formatDateDE(t.expires_at)}
-                      </TableCell>
-                      <TableCell className="text-xs font-mono text-muted-foreground">
-                        {t.bound_to_mac || "—"}
-                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">{formatDateDE(tok.expires_at)}</TableCell>
+                      <TableCell className="text-xs font-mono text-muted-foreground">{tok.bound_to_mac || "—"}</TableCell>
                       <TableCell>
                         <AlertDialog>
                           <AlertDialogTrigger asChild>
@@ -249,17 +245,15 @@ export function AiconoHubManager() {
                           </AlertDialogTrigger>
                           <AlertDialogContent>
                             <AlertDialogHeader>
-                              <AlertDialogTitle>Token entfernen?</AlertDialogTitle>
+                              <AlertDialogTitle>{t("aiconoHub.token.removeQ")}</AlertDialogTitle>
                               <AlertDialogDescription>
-                                {t.used_at
-                                  ? "Das verbundene Gateway bleibt aktiv. Nur der Token-Eintrag wird gelöscht."
-                                  : "Der Token kann danach nicht mehr für ein neues Hub genutzt werden."}
+                                {tok.used_at ? t("aiconoHub.token.removeUsed") : t("aiconoHub.token.removeUnused")}
                               </AlertDialogDescription>
                             </AlertDialogHeader>
                             <AlertDialogFooter>
-                              <AlertDialogCancel>Abbrechen</AlertDialogCancel>
-                              <AlertDialogAction onClick={() => deleteMutation.mutate(t.id)}>
-                                Löschen
+                              <AlertDialogCancel>{t("aiconoHub.token.cancel")}</AlertDialogCancel>
+                              <AlertDialogAction onClick={() => deleteMutation.mutate(tok.id)}>
+                                {t("aiconoHub.token.delete")}
                               </AlertDialogAction>
                             </AlertDialogFooter>
                           </AlertDialogContent>
@@ -273,7 +267,7 @@ export function AiconoHubManager() {
           )}
           {openTokens.length > 0 && (
             <p className="text-xs text-muted-foreground mt-4">
-              {openTokens.length.toLocaleString("de-DE")} offene{openTokens.length === 1 ? "r" : ""} Token
+              {t("aiconoHub.token.openCount").replace("{count}", openTokens.length.toLocaleString("de-DE"))}
             </p>
           )}
         </CardContent>
@@ -282,30 +276,28 @@ export function AiconoHubManager() {
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Neues Pairing-Token</DialogTitle>
-            <DialogDescription>
-              Wird beim ersten Start eines AICONO Hubs einmalig eingegeben. 7 Tage gültig.
-            </DialogDescription>
+            <DialogTitle>{t("aiconoHub.token.dialogTitle")}</DialogTitle>
+            <DialogDescription>{t("aiconoHub.token.dialogDesc")}</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <Label htmlFor="hub-label">Label (optional)</Label>
+              <Label htmlFor="hub-label">{t("aiconoHub.token.labelField")}</Label>
               <Input
                 id="hub-label"
-                placeholder="z. B. Hub Filiale Nord"
+                placeholder={t("aiconoHub.token.labelPh")}
                 value={pendingLabel}
                 onChange={(e) => setPendingLabel(e.target.value)}
                 maxLength={64}
               />
             </div>
             <div>
-              <Label htmlFor="hub-location">Liegenschaft (optional)</Label>
+              <Label htmlFor="hub-location">{t("aiconoHub.token.locationField")}</Label>
               <Select value={pendingLocationId} onValueChange={setPendingLocationId}>
                 <SelectTrigger id="hub-location">
-                  <SelectValue placeholder="Keine Vorbindung" />
+                  <SelectValue placeholder={t("aiconoHub.token.locationNone")} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="none">Keine Vorbindung</SelectItem>
+                  <SelectItem value="none">{t("aiconoHub.token.locationNone")}</SelectItem>
                   {locations.map((l) => (
                     <SelectItem key={l.id} value={l.id}>
                       {l.name}
@@ -313,18 +305,16 @@ export function AiconoHubManager() {
                   ))}
                 </SelectContent>
               </Select>
-              <p className="text-xs text-muted-foreground mt-1">
-                Wird vorgegeben, ordnet sich das Hub direkt der Liegenschaft zu.
-              </p>
+              <p className="text-xs text-muted-foreground mt-1">{t("aiconoHub.token.locationHint")}</p>
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setCreateOpen(false)}>
-              Abbrechen
+              {t("aiconoHub.token.cancel")}
             </Button>
             <Button onClick={() => createMutation.mutate()} disabled={createMutation.isPending}>
               {createMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Token erzeugen
+              {t("aiconoHub.token.create")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -333,7 +323,64 @@ export function AiconoHubManager() {
   );
 }
 
+/* ──────────────────────────── Hardware-Pakete ──────────────────────────── */
+
+function HardwareSkuCards() {
+  const { t } = useTranslation();
+  const skus = [
+    { key: "mini", icon: Cpu, name: t("aiconoHub.sku.miniName"), desc: t("aiconoHub.sku.miniDesc"), price: 349 },
+    { key: "industrial", icon: Factory, name: t("aiconoHub.sku.industrialName"), desc: t("aiconoHub.sku.industrialDesc"), price: 1190 },
+    { key: "home", icon: Home, name: t("aiconoHub.sku.homeName"), desc: t("aiconoHub.sku.homeDesc"), price: 129 },
+  ];
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>{t("aiconoHub.sku.title")}</CardTitle>
+        <CardDescription>{t("aiconoHub.sku.desc")}</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="grid gap-4 md:grid-cols-3">
+          {skus.map((s) => {
+            const Icon = s.icon;
+            return (
+              <div
+                key={s.key}
+                className="rounded-lg border border-border bg-card p-4 flex flex-col gap-3"
+              >
+                <div className="flex items-center gap-2">
+                  <Icon className="h-5 w-5 text-primary" />
+                  <span className="font-semibold">{s.name}</span>
+                </div>
+                <p className="text-sm text-muted-foreground flex-1">{s.desc}</p>
+                <div className="text-sm">
+                  <span className="text-muted-foreground">{t("aiconoHub.sku.priceFrom")} </span>
+                  <span className="text-lg font-semibold">
+                    {s.price.toLocaleString("de-DE")} €
+                  </span>
+                  <span className="text-muted-foreground"> netto</span>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  <Badge variant="secondary" className="text-xs">{t("aiconoHub.sku.preflashed")}</Badge>
+                </div>
+                <Button variant="outline" size="sm" asChild>
+                  <a href={`mailto:sales@aicono.org?subject=${encodeURIComponent(s.name)}`}>
+                    {t("aiconoHub.sku.requestQuote")}
+                  </a>
+                </Button>
+              </div>
+            );
+          })}
+        </div>
+        <p className="text-xs text-muted-foreground mt-4">{t("aiconoHub.sku.bringYourOwn")}</p>
+      </CardContent>
+    </Card>
+  );
+}
+
+/* ──────────────────────────── Image-Download ──────────────────────────── */
+
 function ImageDownloadCard() {
+  const { t } = useTranslation();
   const [variant, setVariant] = useState<"x86_64" | "aarch64">("x86_64");
   const [loading, setLoading] = useState(false);
   const [latest, setLatest] = useState<{ version: string; filename: string; sha256: string | null; size_bytes: number } | null>(null);
@@ -352,16 +399,15 @@ function ImageDownloadCard() {
         sha256: data.sha256 ?? null,
         size_bytes: data.size_bytes ?? 0,
       });
-      // Trigger download immediately
       const a = document.createElement("a");
       a.href = data.url;
       a.download = data.filename;
       document.body.appendChild(a);
       a.click();
       a.remove();
-      toast.success("Download gestartet", { description: `Version ${data.version}` });
+      toast.success(t("aiconoHub.image.downloadStarted"), { description: `Version ${data.version}` });
     } catch (e) {
-      toast.error("Download fehlgeschlagen", {
+      toast.error(t("aiconoHub.image.downloadFailed"), {
         description: e instanceof Error ? e.message : undefined,
       });
     } finally {
@@ -374,17 +420,14 @@ function ImageDownloadCard() {
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <HardDrive className="h-5 w-5" />
-          AICONO Hub Image
+          {t("aiconoHub.image.title")}
         </CardTitle>
-        <CardDescription>
-          Lade das aktuelle AICONO Gateway OS für x86 Mini-PCs oder ARM-Hardware (HA Yellow/Green,
-          Raspberry Pi 5). Das Image enthält bereits unser Add-on und den Pairing-Wizard.
-        </CardDescription>
+        <CardDescription>{t("aiconoHub.image.desc")}</CardDescription>
       </CardHeader>
       <CardContent>
         <div className="flex flex-wrap items-end gap-3">
           <div className="space-y-1">
-            <Label>Hardware-Variante</Label>
+            <Label>{t("aiconoHub.image.variant")}</Label>
             <Select value={variant} onValueChange={(v) => setVariant(v as "x86_64" | "aarch64")}>
               <SelectTrigger className="w-[260px]">
                 <SelectValue />
@@ -397,20 +440,24 @@ function ImageDownloadCard() {
           </div>
           <Button onClick={requestDownload} disabled={loading}>
             {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
-            Image herunterladen
+            {t("aiconoHub.image.download")}
           </Button>
         </div>
         {latest && (
           <div className="mt-4 p-3 rounded-md border border-border bg-muted/30 text-sm">
             <div className="font-medium">{latest.filename}</div>
             <div className="text-muted-foreground text-xs mt-1">
-              Version {latest.version} · {(latest.size_bytes / 1024 / 1024).toLocaleString("de-DE", { maximumFractionDigits: 0 })} MB
+              Version {latest.version} ·{" "}
+              {(latest.size_bytes / 1024 / 1024).toLocaleString("de-DE", { maximumFractionDigits: 0 })} MB
             </div>
             {latest.sha256 && (
               <div className="text-muted-foreground text-xs font-mono break-all mt-1">
                 SHA-256: {latest.sha256}
                 <button
-                  onClick={() => { navigator.clipboard.writeText(latest.sha256!); toast.success("SHA-256 kopiert"); }}
+                  onClick={() => {
+                    navigator.clipboard.writeText(latest.sha256!);
+                    toast.success(t("aiconoHub.image.copySha"));
+                  }}
                   className="ml-2 inline-flex items-center text-foreground hover:underline"
                 >
                   <Copy className="h-3 w-3" />
