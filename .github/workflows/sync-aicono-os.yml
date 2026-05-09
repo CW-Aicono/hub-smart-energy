@@ -1,0 +1,49 @@
+name: AICONO Hub OS – CI/CD
+
+# Mirror-Workflow für das eigenständige Repo CW-Aicono/aicono-os.
+# Wird in der Cloud (hub-smart-energy) gepflegt und beim nächsten Sync
+# nach CW-Aicono/aicono-os gespiegelt – siehe ../sync-aicono-os.yml.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "docs/aicono-os/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { path: source }
+
+      - name: Checkout aicono-os repo
+        uses: actions/checkout@v4
+        with:
+          repository: CW-Aicono/aicono-os
+          token: ${{ secrets.HA_ADDONS_PUSH_TOKEN }}
+          path: target
+          fetch-depth: 0
+
+      - name: Sync docs/aicono-os/ → repo root
+        run: |
+          # Alles im Ziel löschen außer .git, dann frisch kopieren
+          find target -mindepth 1 -maxdepth 1 ! -name '.git' -exec rm -rf {} +
+          cp -r source/docs/aicono-os/. target/
+
+      - name: Commit & push
+        working-directory: target
+        run: |
+          git config user.name "AICONO Lovable Bot"
+          git config user.email "bot@aicono.org"
+          git add -A
+          if git diff --staged --quiet; then
+            echo "No changes."
+            exit 0
+          fi
+          git commit -m "chore: sync aicono-os from hub-smart-energy"
+          git push origin HEAD:main
