@@ -3093,6 +3093,63 @@ export type Database = {
           },
         ]
       }
+      gateway_pairing_tokens: {
+        Row: {
+          bound_device_id: string | null
+          bound_to_mac: string | null
+          created_at: string
+          created_by: string | null
+          expires_at: string
+          id: string
+          label: string | null
+          location_id: string | null
+          tenant_id: string
+          token: string
+          used_at: string | null
+        }
+        Insert: {
+          bound_device_id?: string | null
+          bound_to_mac?: string | null
+          created_at?: string
+          created_by?: string | null
+          expires_at?: string
+          id?: string
+          label?: string | null
+          location_id?: string | null
+          tenant_id: string
+          token: string
+          used_at?: string | null
+        }
+        Update: {
+          bound_device_id?: string | null
+          bound_to_mac?: string | null
+          created_at?: string
+          created_by?: string | null
+          expires_at?: string
+          id?: string
+          label?: string | null
+          location_id?: string | null
+          tenant_id?: string
+          token?: string
+          used_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gateway_pairing_tokens_bound_device_id_fkey"
+            columns: ["bound_device_id"]
+            isOneToOne: false
+            referencedRelation: "gateway_devices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gateway_pairing_tokens_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       gateway_refresh_locks: {
         Row: {
           location_integration_id: string
