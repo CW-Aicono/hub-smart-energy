@@ -172,7 +172,7 @@ const Integrations = () => {
               </TabsTrigger>
               <TabsTrigger value="hub" className="gap-2">
                 <HardDrive className="h-4 w-4" />
-                AICONO Hub
+                {t("aiconoHub.title")}
               </TabsTrigger>
               <TabsTrigger value="scanners" className="gap-2">
                 <Smartphone className="h-4 w-4" />
