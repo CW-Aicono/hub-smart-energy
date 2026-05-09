@@ -96,7 +96,7 @@ function tokenStatus(t: PairingToken): { label: string; variant: "default" | "se
 
 export function AiconoHubManager() {
   const { tenant } = useTenant();
-  const { data: locations = [] } = useLocations();
+  const { locations } = useLocations();
   const qc = useQueryClient();
 
   const tokensQuery = useQuery({
