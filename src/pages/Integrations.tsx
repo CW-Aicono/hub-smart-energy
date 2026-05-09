@@ -259,6 +259,10 @@ const Integrations = () => {
               )}
             </TabsContent>
 
+            <TabsContent value="hub">
+              <AiconoHubManager />
+            </TabsContent>
+
             <TabsContent value="scanners">
               <ScannerManagement />
             </TabsContent>
