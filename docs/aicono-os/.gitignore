@@ -1,0 +1,6 @@
+build/
+*.img
+*.img.xz
+*.sha256
+node_modules/
+.DS_Store

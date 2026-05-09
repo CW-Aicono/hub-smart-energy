@@ -2639,6 +2639,18 @@ async function main(): Promise<void> {
   console.log("═══════════════════════════════════════════════════════");
   console.log(`  AICONO EMS Gateway v${ADDON_VERSION}`);
   console.log("═══════════════════════════════════════════════════════");
+
+  // Boot-Check: Falls noch keine Credentials hinterlegt sind, starten wir
+  // den Captive-Setup-Wizard auf Port 8099 (mDNS: aicono.local) und
+  // beenden uns danach – der HA-Supervisor restartet das Add-on automatisch
+  // mit den frisch gepairten Credentials.
+  if (!config.gateway_username || !config.gateway_password) {
+    console.log("[boot] Keine Credentials gefunden – starte Pairing-Wizard …");
+    const { runSetupWizard } = await import("./setup-wizard");
+    await runSetupWizard();
+    return; // wird nie erreicht (Wizard exit(0))
+  }
+
   console.log(`  Device:     ${config.device_name}`);
   console.log(`  Tenant:     ${config.tenant_id || "auto via Cloud-Zuordnung"}`);
   console.log(`  Poll:       ${config.poll_interval_seconds}s`);
