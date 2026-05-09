@@ -12,9 +12,10 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
-import { Server, Loader2, Plug, Wifi, WifiOff, Globe, Smartphone } from "lucide-react";
+import { Server, Loader2, Plug, Wifi, WifiOff, Globe, Smartphone, HardDrive } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ApiSettings } from "@/components/settings/ApiSettings";
+import { AiconoHubManager } from "@/components/integrations/AiconoHubManager";
 import { getGatewayDefinition } from "@/lib/gatewayRegistry";
 
 const Integrations = () => {
@@ -169,6 +170,10 @@ const Integrations = () => {
                 <Server className="h-4 w-4" />
                 Gateways
               </TabsTrigger>
+              <TabsTrigger value="hub" className="gap-2">
+                <HardDrive className="h-4 w-4" />
+                AICONO Hub
+              </TabsTrigger>
               <TabsTrigger value="scanners" className="gap-2">
                 <Smartphone className="h-4 w-4" />
                 Mobile Scanner
@@ -252,6 +257,10 @@ const Integrations = () => {
                   ))}
                 </div>
               )}
+            </TabsContent>
+
+            <TabsContent value="hub">
+              <AiconoHubManager />
             </TabsContent>
 
             <TabsContent value="scanners">
