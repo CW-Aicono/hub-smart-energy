@@ -141,3 +141,9 @@ verify_jwt = false
 
 [functions.send-auth-email]
 verify_jwt = false
+
+[functions.gateway-pair]
+verify_jwt = false
+
+[functions.gateway-image-download]
+verify_jwt = false
