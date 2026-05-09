@@ -135,7 +135,8 @@ Deno.serve(async (req) => {
       addon_version: addonVersion,
       status: "online",
       last_heartbeat_at: new Date().toISOString(),
-      config: tokenRow.location_id ? { paired_location_id: tokenRow.location_id } : {},
+      location_id: tokenRow.location_id,
+      config: { paired_via: "pairing_token", paired_at: new Date().toISOString() },
     }).select("id").maybeSingle();
     if (insErr || !created) {
       console.error("[gateway-pair] device insert error", insErr?.message);
