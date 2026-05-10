@@ -52,3 +52,4 @@ mit allen Image-Varianten + SHA-256-Sums.
 
 <!-- Sync-Test: aicono-os ready -->
 <!-- Sync-Trigger: 2026-05-10T10:22:22Z -->
+<!-- Sync-Retry nach Repo-Anlage: 2026-05-10T10:45:00Z -->
