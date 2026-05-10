@@ -438,14 +438,14 @@ const ChargePointDetail = () => {
     return res.json();
   };
 
-  const remoteAction = async (action: string) => {
+  const remoteAction = async (action: string, opts?: { resetType?: "Soft" | "Hard" }) => {
     if (!cp) return;
     setRemoteLoading(action);
     try {
       let result: any;
       switch (action) {
         case "Ladestation neu starten":
-          result = await callOcppCommand("Reset", { chargePointId: cp.ocpp_id, type: "Hard" });
+          result = await callOcppCommand("Reset", { chargePointId: cp.ocpp_id, type: opts?.resetType ?? "Soft" });
           break;
         case "Ladevorgang starten":
           result = await callOcppCommand("RemoteStartTransaction", { chargePointId: cp.ocpp_id, idTag: "APPBACKEND00", connectorId: selectedConnectorId });
