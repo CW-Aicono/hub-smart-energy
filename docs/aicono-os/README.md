@@ -21,12 +21,12 @@ aicono-os/
 
 ## Hardware-Matrix
 
-| Variante              | HAOS-Asset                              | Endgeräte                              |
-|-----------------------|-----------------------------------------|----------------------------------------|
-| **AICONO Hub Mini**   | `haos_generic-x86-64-*.img.xz`          | Intel N100 Mini-PC (~250–350 €)        |
-| **AICONO Hub Industrial** | `haos_generic-x86-64-*.img.xz`      | Onlogic K-100, RevPi Connect 4         |
-| **AICONO Hub Home**   | `haos_yellow-*.img.xz` / `haos_green-*` | HA Yellow / HA Green (rebrand)         |
-| **AICONO Hub ARM**    | `haos_rpi5-64-*.img.xz`                 | Raspberry Pi 5 + SSD                   |
+| Variante                  | HAOS-Asset                              | Endgeräte                       |
+| ------------------------- | --------------------------------------- | ------------------------------- |
+| **AICONO Hub Mini**       | `haos_generic-x86-64-*.img.xz`          | Intel N100 Mini-PC (~250–350 €) |
+| **AICONO Hub Industrial** | `haos_generic-x86-64-*.img.xz`          | Onlogic K-100, RevPi Connect 4  |
+| **AICONO Hub Home**       | `haos_yellow-*.img.xz` / `haos_green-*` | HA Yellow / HA Green (rebrand)  |
+| **AICONO Hub ARM**        | `haos_rpi5-64-*.img.xz`                 | Raspberry Pi 5 + SSD            |
 
 x86_64-Builds dienen Mini + Industrial (gleiches Image), aarch64-Builds
 für Yellow/Green/Pi5.
@@ -49,3 +49,5 @@ git tag v2026.05.0 && git push --tags
 
 → Workflow lädt aktuelles HAOS, mergt Overlay + Add-on, erstellt Release
 mit allen Image-Varianten + SHA-256-Sums.
+
+<!-- Sync-Test: aicono-os ready -->
