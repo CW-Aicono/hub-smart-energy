@@ -46,6 +46,33 @@ const VARIANTS: Record<string, RegExp> = {
   "aarch64": /aicono-os.*aarch64\.img\.xz$/i,
 };
 
+const githubHeaders = (useToken = true, accept = "application/vnd.github+json") => {
+  const headers: Record<string, string> = {
+    Accept: accept,
+    "User-Agent": "aicono-cloud",
+  };
+  if (useToken && GH_TOKEN) headers.Authorization = `Bearer ${GH_TOKEN}`;
+  return headers;
+};
+
+async function githubFetch(pathOrUrl: string, init: RequestInit = {}, retryPublic = true): Promise<Response> {
+  const url = pathOrUrl.startsWith("http") ? pathOrUrl : `https://api.github.com${pathOrUrl}`;
+  const res = await fetch(url, {
+    ...init,
+    headers: { ...githubHeaders(true), ...(init.headers as Record<string, string> | undefined) },
+  });
+
+  // If the repo is public, an invalid/under-scoped token must not block downloads.
+  // GitHub returns 401/403 when a bad Authorization header is present, even for public resources.
+  if (retryPublic && (res.status === 401 || res.status === 403)) {
+    const publicHeaders = { ...githubHeaders(false), ...(init.headers as Record<string, string> | undefined) };
+    delete publicHeaders.Authorization;
+    return fetch(url, { ...init, headers: publicHeaders });
+  }
+
+  return res;
+}
+
 async function resolveAdmin(token: string): Promise<{ ok: boolean }> {
   const sb = createClient(SUPABASE_URL, ANON_KEY, {
     global: { headers: { Authorization: `Bearer ${token}` } },
@@ -77,21 +104,13 @@ Deno.serve(async (req) => {
   const variant = String(body?.variant || "x86_64");
   const version = String(body?.version || "latest");
   if (!VARIANTS[variant]) return json({ error: "Unknown variant" }, 400);
-  if (!GH_TOKEN) return json({ error: "Image release token not configured" }, 503);
-
   const releasePath = version === "latest"
     ? `/repos/${GH_REPO}/releases/latest`
     : `/repos/${GH_REPO}/releases/tags/${encodeURIComponent(version)}`;
 
-  const releaseRes = await fetch(`https://api.github.com${releasePath}`, {
-    headers: {
-      Authorization: `Bearer ${GH_TOKEN}`,
-      Accept: "application/vnd.github+json",
-      "User-Agent": "aicono-cloud",
-    },
-  });
+  const releaseRes = await githubFetch(releasePath);
   if (!releaseRes.ok) {
-    return json({ error: `Release not found (${releaseRes.status})` }, 404);
+    return json({ error: `Release not found (${releaseRes.status}) – repo exists, but no matching GitHub Release/tag is available yet` }, 404);
   }
   const release = await releaseRes.json();
 
@@ -104,11 +123,9 @@ Deno.serve(async (req) => {
   const sumsAsset = (release.assets || []).find((a: any) => /SHA256SUMS\.txt$/i.test(a.name));
   if (sumsAsset) {
     try {
-      const sumsRes = await fetch(sumsAsset.url, {
+      const sumsRes = await githubFetch(sumsAsset.url, {
         headers: {
-          Authorization: `Bearer ${GH_TOKEN}`,
           Accept: "application/octet-stream",
-          "User-Agent": "aicono-cloud",
         },
       });
       const sumsText = await sumsRes.text();
@@ -120,13 +137,11 @@ Deno.serve(async (req) => {
   }
 
   // Resolve signed download URL by following the asset redirect manually
-  const assetRes = await fetch(asset.url, {
+  const assetRes = await githubFetch(asset.url, {
     method: "GET",
     redirect: "manual",
     headers: {
-      Authorization: `Bearer ${GH_TOKEN}`,
       Accept: "application/octet-stream",
-      "User-Agent": "aicono-cloud",
     },
   });
   const signedUrl = assetRes.headers.get("location");
