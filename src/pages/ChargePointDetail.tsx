@@ -105,6 +105,7 @@ const ChargePointDetail = () => {
   const [geocoding, setGeocoding] = useState(false);
   const [statsPeriod, setStatsPeriod] = useState("7");
   const [remoteLoading, setRemoteLoading] = useState<string | null>(null);
+  const [resetDialogOpen, setResetDialogOpen] = useState(false);
   const [powerLimit, setPowerLimit] = useState<PowerLimitSchedule | null>(null);
   const [savingPowerLimit, setSavingPowerLimit] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
