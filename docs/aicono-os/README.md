@@ -51,3 +51,4 @@ git tag v2026.05.0 && git push --tags
 mit allen Image-Varianten + SHA-256-Sums.
 
 <!-- Sync-Test: aicono-os ready -->
+<!-- Sync-Trigger: 2026-05-10T10:22:22Z -->
