@@ -764,7 +764,7 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
                         </div>
                       </CardHeader>
                       <CardContent className="space-y-1">
-                        <Button variant="ghost" className="w-full justify-start gap-2 text-sm" onClick={() => remoteAction("Ladestation neu starten")}>
+                        <Button variant="ghost" className="w-full justify-start gap-2 text-sm" onClick={() => setResetDialogOpen(true)}>
                           <RefreshCw className="h-4 w-4" /> {t("cpd.restart" as any)}
                         </Button>
                         <Button variant="ghost" className="w-full justify-start gap-2 text-sm" onClick={() => remoteAction("Ladevorgang starten")}>
