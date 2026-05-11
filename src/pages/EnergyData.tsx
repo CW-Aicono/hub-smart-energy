@@ -465,24 +465,79 @@ const EnergyData = () => {
                     </div>
                     <Badge variant="secondary">{filteredMeters.length} {t("energyData.metersCount" as any)}</Badge>
                   </div>
+
+                  <div className="flex items-center justify-between p-3 rounded-md border">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <Checkbox
+                          id="source-daily"
+                          checked={includeDailyTotals}
+                          onCheckedChange={(c) => setIncludeDailyTotals(!!c)}
+                        />
+                        <Label htmlFor="source-daily" className="cursor-pointer font-medium">Tagesverbräuche</Label>
+                      </div>
+                      <p className="text-xs text-muted-foreground ml-6">Tageswerte aus automatischen Zählern (kWh, m³)</p>
+                    </div>
+                    <Badge variant="secondary">empfohlen</Badge>
+                  </div>
+
+                  <div className="flex items-center justify-between p-3 rounded-md border">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <Checkbox
+                          id="source-monthly"
+                          checked={includeMonthlyTotals}
+                          onCheckedChange={(c) => setIncludeMonthlyTotals(!!c)}
+                        />
+                        <Label htmlFor="source-monthly" className="cursor-pointer font-medium">Monatsverbräuche</Label>
+                      </div>
+                      <p className="text-xs text-muted-foreground ml-6">Aggregierte Monatswerte für Reporting</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between p-3 rounded-md border">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <Checkbox
+                          id="source-power5"
+                          checked={includePower5min}
+                          onCheckedChange={(c) => setIncludePower5min(!!c)}
+                        />
+                        <Label htmlFor="source-power5" className="cursor-pointer font-medium">5-Minuten-Leistung</Label>
+                      </div>
+                      <p className="text-xs text-muted-foreground ml-6">
+                        Lastprofile in kW – kann sehr groß werden, wird automatisch in ZIP/Excel verpackt
+                      </p>
+                    </div>
+                    <Badge variant="outline">groß</Badge>
+                  </div>
                 </CardContent>
               </Card>
 
               {/* Export Buttons */}
-              <div className="flex justify-end gap-3">
+              <div className="flex justify-end gap-3 flex-wrap">
                 <Button
                   variant="outline"
                   size="lg"
                   onClick={handlePdfExport}
-                  disabled={(!includeReadings && !includeMeters) || loadingReadings}
+                  disabled={!anySource || loadingReadings}
                 >
                   <FileText className="h-4 w-4 mr-2" />
                   {t("energyData.exportPdf" as any)}
                 </Button>
                 <Button
+                  variant="outline"
+                  size="lg"
+                  onClick={handleXlsxExport}
+                  disabled={!anySource || loadingReadings}
+                >
+                  <FileSpreadsheet className="h-4 w-4 mr-2" />
+                  Excel (XLSX)
+                </Button>
+                <Button
                   size="lg"
                   onClick={handleExport}
-                  disabled={(!includeReadings && !includeMeters) || loadingReadings}
+                  disabled={!anySource || loadingReadings}
                 >
                   <Download className="h-4 w-4 mr-2" />
                   {t("energyData.exportCsv" as any)}
