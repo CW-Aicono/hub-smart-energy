@@ -1,6 +1,7 @@
 -- Repair-Migration für Bootstrap-Drift auf Hetzner:
 -- Stellt sicher, dass public.sales_recommended_devices die Spalten distribution_id + scope hat,
--- bevor die Folge-Migration 20260508145707 darauf eine RLS-Policy bauen will.
+-- BEVOR die Folge-Migration 20260508145707 darauf eine RLS-Policy bauen will.
+-- Zeitstempel intentional eine Sekunde vor 20260508145707, damit sie zuerst läuft.
 -- Auf Lovable Cloud sind die Spalten bereits vorhanden — vollständiges No-Op dank IF NOT EXISTS.
 
 ALTER TABLE public.sales_recommended_devices
