@@ -287,6 +287,36 @@ run_migration_with_autoheal() {
       fi
     fi
 
+    # Fall 4b: nackte Spalten-Fehlermeldung – Pattern: 'column "X" does not exist'
+    # Tritt z.B. in EXISTS-Subqueries oder RLS-Policies auf, wo Postgres die Tabelle
+    # nicht im Fehlertext nennt. Wir versuchen alle Migrations nach passendem ADD COLUMN.
+    if echo "$err" | grep -qE 'column "[a-zA-Z_][a-zA-Z0-9_]*" does not exist' \
+       && ! echo "$err" | grep -qE 'column "[^"]+" of relation'; then
+      local bare_col
+      bare_col="$(echo "$err" | grep -oE 'column "[a-zA-Z_][a-zA-Z0-9_]*" does not exist' | head -1 | sed -E 's/column "([^"]+)" does not exist/\1/')"
+      if [ -n "$bare_col" ]; then
+        # Suche eine Migration, die ADD COLUMN <col> enthaelt (irgendeine Tabelle).
+        local found_bare="" f
+        for f in "$MIG_DIR"/*.sql; do
+          if grep -qE "ADD COLUMN (IF NOT EXISTS )?\"?${bare_col}\"?[[:space:]]" "$f" 2>/dev/null; then
+            found_bare="$f"
+            break
+          fi
+        done
+        if [ -n "$found_bare" ] && [ "$AUTOHEAL_DEPTH" -lt "$AUTOHEAL_MAX_DEPTH" ]; then
+          log "AUTOHEAL[$AUTOHEAL_DEPTH]: fuehre $(basename "$found_bare") aus, um Spalte '$bare_col' hinzuzufuegen"
+          AUTOHEAL_DEPTH=$((AUTOHEAL_DEPTH + 1))
+          if run_migration_with_autoheal "$found_bare"; then
+            AUTOHEAL_DEPTH=$((AUTOHEAL_DEPTH - 1))
+            mark_applied "$found_bare"
+            autoheal_count=$((autoheal_count + 1))
+            continue
+          fi
+          AUTOHEAL_DEPTH=$((AUTOHEAL_DEPTH - 1))
+        fi
+      fi
+    fi
+
     # Fall 5: enum-Wert fehlt – Pattern: 'invalid input value for enum X: "Y"'
     # Tritt z.B. auf, wenn eine Trigger-Funktion einen enum-Wert referenziert, dessen
     # ALTER-TYPE-ADD-VALUE-Migration auf prod nie ausgefuehrt wurde (Bootstrap-Drift).
