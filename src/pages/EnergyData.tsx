@@ -113,60 +113,164 @@ const EnergyData = () => {
     return true;
   });
 
-  const buildExportRows = async () => {
-    const rows: Record<string, string | number>[] = [];
+  // Helper: paginated fetch (Supabase 1k row limit)
+  const fetchAllPages = async <T,>(
+    builder: (from: number, to: number) => Promise<{ data: T[] | null; error: unknown }>
+  ): Promise<T[]> => {
+    const all: T[] = [];
+    let from = 0;
+    while (true) {
+      const { data, error } = await builder(from, from + PAGE - 1);
+      if (error || !data) break;
+      all.push(...data);
+      if (data.length < PAGE) break;
+      from += PAGE;
+      if (all.length > 1_000_000) break; // hard safety cap
+    }
+    return all;
+  };
 
-    if (includeReadings) {
-      setLoadingReadings(true);
-      const meterIds = filteredMeters.map((m) => m.id);
-      if (meterIds.length > 0) {
-        let query = supabase
-          .from("meter_readings")
-          .select("meter_id, value, reading_date, capture_method")
-          .in("meter_id", meterIds)
-          .order("reading_date", { ascending: true });
+  type Block = { name: string; rows: Record<string, string | number>[] };
 
-        if (dateFrom) query = query.gte("reading_date", dateFrom);
-        if (dateTo) query = query.lte("reading_date", dateTo);
+  const buildExportBlocks = async (): Promise<Block[]> => {
+    const blocks: Block[] = [];
+    const meterIds = filteredMeters.map((m) => m.id);
+    const labelEnergy = (et: string) => t((ENERGY_TYPE_KEYS[et] || et) as any);
+    const meterById = new Map(meters.map((m) => [m.id, m]));
+    const locById = new Map(locations.map((l) => [l.id, l]));
 
-        const { data } = await query;
-        const readingRows = (data ?? []) as ReadingExportRow[];
-
-        readingRows.forEach((r) => {
-          const meter = meters.find((m) => m.id === r.meter_id);
-          const loc = locations.find((l) => l.id === meter?.location_id);
-          rows.push({
-            Quelle: t("energyData.meterReadings" as any),
+    setLoadingReadings(true);
+    try {
+      // Stammdaten
+      if (includeMeters && filteredMeters.length > 0) {
+        const rows = filteredMeters.map((m) => {
+          const loc = locById.get(m.location_id ?? "");
+          return {
+            Quelle: "Stammdaten",
             Standort: loc?.name || "",
-            Zähler: meter?.name || "",
-            Zählernummer: meter?.meter_number || "",
-            Energieart: t((ENERGY_TYPE_KEYS[meter?.energy_type || ""] || meter?.energy_type || "") as any),
+            Zähler: m.name,
+            Zählernummer: m.meter_number || "",
+            Energieart: labelEnergy(m.energy_type),
+            Einheit: m.unit,
+            Erfassung: m.capture_type === "automatic" ? "Automatic" : "Manual",
+          };
+        });
+        blocks.push({ name: "Stammdaten", rows });
+      }
+
+      // Manuelle Ablesungen
+      if (includeReadings && meterIds.length > 0) {
+        const rows = await fetchAllPages<ReadingExportRow>(async (from, to) => {
+          let q = supabase
+            .from("meter_readings")
+            .select("meter_id, value, reading_date, capture_method")
+            .in("meter_id", meterIds)
+            .order("reading_date", { ascending: true })
+            .range(from, to);
+          if (dateFrom) q = q.gte("reading_date", dateFrom);
+          if (dateTo) q = q.lte("reading_date", dateTo);
+          const res = await q;
+          return { data: res.data as ReadingExportRow[] | null, error: res.error };
+        });
+        const out = rows.map((r) => {
+          const m = meterById.get(r.meter_id);
+          const loc = m ? locById.get(m.location_id ?? "") : undefined;
+          return {
+            Quelle: "Ablesung",
+            Standort: loc?.name || "",
+            Zähler: m?.name || "",
+            Zählernummer: m?.meter_number || "",
+            Energieart: labelEnergy(m?.energy_type || ""),
             Datum: r.reading_date,
             Wert: r.value,
-            Einheit: meter?.unit || "kWh",
+            Einheit: m?.unit || "kWh",
             Erfassung: r.capture_method === "manual" ? "Manual" : r.capture_method === "ai" ? "AI-OCR" : r.capture_method,
-          });
+          };
         });
+        blocks.push({ name: "Ablesungen", rows: out });
       }
+
+      // Tages- / Monatsverbräuche aus meter_period_totals
+      if ((includeDailyTotals || includeMonthlyTotals) && meterIds.length > 0) {
+        const wanted: string[] = [];
+        if (includeDailyTotals) wanted.push("day");
+        if (includeMonthlyTotals) wanted.push("month");
+        const rows = await fetchAllPages<PeriodTotalRow>(async (from, to) => {
+          let q = supabase
+            .from("meter_period_totals")
+            .select("meter_id, period_type, period_start, total_value, energy_type, source")
+            .in("meter_id", meterIds)
+            .in("period_type", wanted)
+            .order("period_start", { ascending: true })
+            .range(from, to);
+          if (dateFrom) q = q.gte("period_start", dateFrom);
+          if (dateTo) q = q.lte("period_start", dateTo);
+          const res = await q;
+          return { data: res.data as PeriodTotalRow[] | null, error: res.error };
+        });
+        const dayRows: Record<string, string | number>[] = [];
+        const monthRows: Record<string, string | number>[] = [];
+        rows.forEach((r) => {
+          const m = meterById.get(r.meter_id);
+          const loc = m ? locById.get(m.location_id ?? "") : undefined;
+          const out = {
+            Quelle: r.period_type === "month" ? "Verbrauch (Monat)" : "Verbrauch (Tag)",
+            Standort: loc?.name || "",
+            Zähler: m?.name || "",
+            Zählernummer: m?.meter_number || "",
+            Energieart: labelEnergy(r.energy_type || m?.energy_type || ""),
+            Datum: r.period_start,
+            Wert: r.total_value,
+            Einheit: m?.unit || "kWh",
+            Quellsystem: r.source || "",
+          };
+          (r.period_type === "month" ? monthRows : dayRows).push(out);
+        });
+        if (dayRows.length) blocks.push({ name: "Tagesverbrauch", rows: dayRows });
+        if (monthRows.length) blocks.push({ name: "Monatsverbrauch", rows: monthRows });
+      }
+
+      // 5-Min-Leistungswerte
+      if (includePower5min && meterIds.length > 0) {
+        const fromTs = dateFrom ? `${dateFrom}T00:00:00Z` : null;
+        const toTs = dateTo ? `${dateTo}T23:59:59Z` : null;
+        const rows = await fetchAllPages<PowerReadingRow>(async (from, to) => {
+          let q = supabase
+            .from("meter_power_readings_5min")
+            .select("meter_id, bucket, power_avg")
+            .in("meter_id", meterIds)
+            .order("bucket", { ascending: true })
+            .range(from, to);
+          if (fromTs) q = q.gte("bucket", fromTs);
+          if (toTs) q = q.lte("bucket", toTs);
+          const res = await q;
+          return { data: res.data as PowerReadingRow[] | null, error: res.error };
+        });
+        const out = rows.map((r) => {
+          const m = meterById.get(r.meter_id);
+          const loc = m ? locById.get(m.location_id ?? "") : undefined;
+          const d = new Date(r.bucket);
+          const datePart = d.toLocaleDateString("de-DE", { timeZone: "Europe/Berlin", year: "numeric", month: "2-digit", day: "2-digit" }).split(".").reverse().join("-");
+          const timePart = d.toLocaleTimeString("de-DE", { timeZone: "Europe/Berlin", hour: "2-digit", minute: "2-digit", hour12: false });
+          return {
+            Quelle: "Leistung 5min",
+            Standort: loc?.name || "",
+            Zähler: m?.name || "",
+            Zählernummer: m?.meter_number || "",
+            Energieart: labelEnergy(m?.energy_type || ""),
+            Datum: datePart,
+            Zeit: timePart,
+            Wert: r.power_avg,
+            Einheit: "kW",
+          };
+        });
+        blocks.push({ name: "Leistung 5min", rows: out });
+      }
+    } finally {
       setLoadingReadings(false);
     }
 
-    if (includeMeters && filteredMeters.length > 0) {
-      filteredMeters.forEach((m) => {
-        const loc = locations.find((l) => l.id === m.location_id);
-        rows.push({
-          Quelle: t("energyData.meters" as any),
-          Standort: loc?.name || "",
-          Name: m.name,
-          Zählernummer: m.meter_number || "",
-          Energieart: t((ENERGY_TYPE_KEYS[m.energy_type] || m.energy_type) as any),
-          Einheit: m.unit,
-          Erfassung: m.capture_type === "automatic" ? "Automatic" : "Manual",
-        });
-      });
-    }
-
-    return rows;
+    return blocks;
   };
 
   const getHeaders = (rows: Record<string, string | number>[]) => {
@@ -177,19 +281,52 @@ const EnergyData = () => {
   };
 
   const handleExport = async () => {
-    const rows = await buildExportRows();
-    if (rows.length === 0) return;
-    downloadCSV(rows, "energiedaten-export", getHeaders(rows));
+    toast.loading("Export wird vorbereitet …", { id: "exp" });
+    const blocks = await buildExportBlocks();
+    const totalRows = blocks.reduce((s, b) => s + b.rows.length, 0);
+    if (totalRows === 0) {
+      toast.error("Keine Daten zum Exportieren", { id: "exp" });
+      return;
+    }
+    if (totalRows > ZIP_THRESHOLD || blocks.length > 1) {
+      // ZIP mit einer CSV pro Block (Excel-sicher, klare Trennung)
+      await downloadCsvZip(
+        blocks.map((b) => ({ name: b.name, data: b.rows, headers: getHeaders(b.rows) })),
+        "energiedaten-export"
+      );
+    } else {
+      const rows = blocks[0].rows;
+      downloadCSV(rows, "energiedaten-export", getHeaders(rows));
+    }
+    toast.success(`Export fertig: ${totalRows.toLocaleString("de-DE")} Zeilen`, { id: "exp" });
+  };
+
+  const handleXlsxExport = async () => {
+    toast.loading("Excel-Export wird vorbereitet …", { id: "xlsx" });
+    const blocks = await buildExportBlocks();
+    const totalRows = blocks.reduce((s, b) => s + b.rows.length, 0);
+    if (totalRows === 0) {
+      toast.error("Keine Daten zum Exportieren", { id: "xlsx" });
+      return;
+    }
+    downloadXlsxMulti(
+      blocks.map((b) => ({ name: b.name, data: b.rows, headers: getHeaders(b.rows) })),
+      "energiedaten-export"
+    );
+    toast.success(`Excel-Export fertig: ${totalRows.toLocaleString("de-DE")} Zeilen`, { id: "xlsx" });
   };
 
   const handlePdfExport = async () => {
-    const rows = await buildExportRows();
+    const blocks = await buildExportBlocks();
+    const rows = blocks.flatMap((b) => b.rows);
     if (rows.length === 0) return;
     downloadPDF(rows, "energiedaten-export", getHeaders(rows), t("energyData.title" as any), {
       logoUrl: tenant?.logo_url,
       tenantName: tenant?.name,
     });
   };
+
+  const anySource = includeReadings || includeMeters || includeDailyTotals || includeMonthlyTotals || includePower5min;
 
   return (
     <div className="flex flex-col md:flex-row min-h-screen bg-background">
