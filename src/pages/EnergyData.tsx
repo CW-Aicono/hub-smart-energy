@@ -31,6 +31,24 @@ interface ReadingExportRow {
   capture_method: string;
 }
 
+interface PeriodTotalRow {
+  meter_id: string;
+  period_type: string;
+  period_start: string;
+  total_value: number;
+  energy_type: string;
+  source: string | null;
+}
+
+interface PowerReadingRow {
+  meter_id: string;
+  bucket: string;
+  power_avg: number;
+}
+
+const PAGE = 1000;
+const ZIP_THRESHOLD = 200_000;
+
 const EnergyData = () => {
   const { user, loading: authLoading } = useAuth();
   const { locations, loading: locationsLoading } = useLocations();
@@ -44,6 +62,9 @@ const EnergyData = () => {
   const [dateTo, setDateTo] = useState("");
   const [includeReadings, setIncludeReadings] = useState(true);
   const [includeMeters, setIncludeMeters] = useState(true);
+  const [includeDailyTotals, setIncludeDailyTotals] = useState(true);
+  const [includeMonthlyTotals, setIncludeMonthlyTotals] = useState(false);
+  const [includePower5min, setIncludePower5min] = useState(false);
   const [readingsCount, setReadingsCount] = useState(0);
   const [loadingReadings, setLoadingReadings] = useState(false);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
