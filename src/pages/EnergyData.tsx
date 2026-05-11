@@ -16,7 +16,8 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Download, Database, Filter, Calendar, FileText, Upload, Info, FileSpreadsheet, CheckCircle2, ArrowRight, Receipt } from "lucide-react";
-import { downloadCSV, downloadPDF } from "@/lib/exportUtils";
+import { downloadCSV, downloadPDF, downloadCsvZip, downloadXlsxMulti } from "@/lib/exportUtils";
+import { toast } from "sonner";
 import ReportSchedulesList from "@/components/energy-data/ReportSchedulesList";
 import { supabase } from "@/integrations/supabase/client";
 
