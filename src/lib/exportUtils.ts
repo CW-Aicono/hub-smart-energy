@@ -1,3 +1,32 @@
+import JSZip from "jszip";
+import * as XLSX from "@e965/xlsx";
+
+/** Format a number in German locale (comma decimal) for CSV/XLSX exports. */
+function formatNumberDE(n: number): string {
+  return n.toLocaleString("de-DE", { maximumFractionDigits: 4, useGrouping: false });
+}
+
+/** Build a single CSV string from rows + headers (semicolon separator, BOM, German numbers). */
+export function buildCSV(
+  data: Record<string, unknown>[],
+  headers?: Record<string, string>
+): string {
+  if (!data.length) return "";
+  const keys = Object.keys(headers || data[0]);
+  const headerRow = keys.map((k) => headers?.[k] ?? k).join(";");
+  const rows = data.map((row) =>
+    keys.map((k) => {
+      const val = row[k];
+      if (val === null || val === undefined || val === "") return "";
+      const str = typeof val === "number" ? formatNumberDE(val) : String(val);
+      return str.includes(";") || str.includes('"') || str.includes("\n")
+        ? `"${str.replace(/"/g, '""')}"`
+        : str;
+    }).join(";")
+  );
+  return "\uFEFF" + [headerRow, ...rows].join("\r\n");
+}
+
 /**
  * CSV Export Utility
  */
@@ -7,22 +36,7 @@ export function downloadCSV(
   headers?: Record<string, string>
 ) {
   if (!data.length) return;
-
-  const keys = Object.keys(headers || data[0]);
-  const headerRow = keys.map((k) => headers?.[k] ?? k).join(";");
-
-  const rows = data.map((row) =>
-    keys.map((k) => {
-      const val = row[k];
-      if (val === null || val === undefined) return "";
-      const str = String(val);
-      return str.includes(";") || str.includes('"')
-        ? `"${str.replace(/"/g, '""')}"`
-        : str;
-    }).join(";")
-  );
-
-  const csv = "\uFEFF" + [headerRow, ...rows].join("\n");
+  const csv = buildCSV(data, headers);
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
@@ -30,6 +44,48 @@ export function downloadCSV(
   link.download = `${filename}.csv`;
   link.click();
   URL.revokeObjectURL(url);
+}
+
+/**
+ * Pack multiple CSVs into one ZIP – used when an export would otherwise overflow Excel's row limit.
+ */
+export async function downloadCsvZip(
+  files: { name: string; data: Record<string, unknown>[]; headers?: Record<string, string> }[],
+  filename: string
+) {
+  const zip = new JSZip();
+  for (const f of files) {
+    if (!f.data.length) continue;
+    zip.file(`${f.name}.csv`, buildCSV(f.data, f.headers));
+  }
+  const blob = await zip.generateAsync({ type: "blob" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `${filename}.zip`;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+/**
+ * Multi-sheet XLSX export – one sheet per data block (Stammdaten / Tagesverbrauch / Leistung 5min …).
+ */
+export function downloadXlsxMulti(
+  sheets: { name: string; data: Record<string, unknown>[]; headers?: Record<string, string> }[],
+  filename: string
+) {
+  const wb = XLSX.utils.book_new();
+  for (const s of sheets) {
+    if (!s.data.length) continue;
+    const keys = Object.keys(s.headers || s.data[0]);
+    const headerRow = keys.map((k) => s.headers?.[k] ?? k);
+    const rows = s.data.map((r) => keys.map((k) => r[k] ?? ""));
+    const ws = XLSX.utils.aoa_to_sheet([headerRow, ...rows]);
+    // Trim sheet name to 31 chars (Excel limit) and strip invalid characters
+    const safeName = s.name.replace(/[\\/?*[\]:]/g, "_").slice(0, 31);
+    XLSX.utils.book_append_sheet(wb, ws, safeName);
+  }
+  XLSX.writeFile(wb, `${filename}.xlsx`);
 }
 
 function formatDE(n: number): string {
