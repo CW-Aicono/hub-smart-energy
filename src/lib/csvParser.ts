@@ -110,14 +110,32 @@ export async function parseFile(file: File): Promise<ParseResult> {
 
 // ─── Column auto-detection ───────────────────────────────────────────
 
-export type MappableField = "meter_number" | "date" | "value" | "notes" | "energy_type" | "none";
+export type MappableField =
+  | "meter_number"
+  | "meter_name"
+  | "location_name"
+  | "date"
+  | "time"
+  | "value"
+  | "notes"
+  | "energy_type"
+  | "unit"
+  | "period_type"
+  | "source_block"
+  | "none";
 
 const HEADER_PATTERNS: Partial<Record<MappableField, RegExp>> = {
   meter_number: /^(z[äa]hler(nummer|nr|[\-_\s]?nr\.?)?|meter[\-_\s]?number|meterno)$/i,
-  date: /^(datum|ablesedatum|date|reading[\-_\s]?date|zeitraum|period|monat)$/i,
-  value: /^(wert|z[äa]hlerstand|stand|value|verbrauch|consumption|reading)$/i,
+  meter_name: /^(z[äa]hler(name)?|meter|meter[\-_\s]?name|name)$/i,
+  location_name: /^(standort|location|geb[äa]ude|liegenschaft)$/i,
+  date: /^(datum|ablesedatum|date|reading[\-_\s]?date|zeitraum|period|monat|tag|day|bucket|zeitstempel|timestamp)$/i,
+  time: /^(zeit|uhrzeit|time|stunde)$/i,
+  value: /^(wert|z[äa]hlerstand|stand|value|verbrauch|consumption|reading|leistung|power|kwh|kw)$/i,
   notes: /^(notiz|bemerkung|notes?|kommentar|comment)$/i,
   energy_type: /^(energieart|energy[\-_\s]?type|medium|art)$/i,
+  unit: /^(einheit|unit)$/i,
+  period_type: /^(periode|period[\-_\s]?type|periodentyp)$/i,
+  source_block: /^(quelle|source|datenart|block)$/i,
 };
 
 export function autoDetectMapping(headers: string[]): Record<string, MappableField> {
