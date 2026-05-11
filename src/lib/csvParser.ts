@@ -172,10 +172,10 @@ export function parseGermanNumber(raw: string): number | null {
   return isNaN(n) ? null : n;
 }
 
-/** Parse various date formats and return YYYY-MM-DD */
+/** Parse various date formats and return YYYY-MM-DD (date-only). */
 export function parseFlexibleDate(raw: string): string | null {
   if (!raw || !raw.trim()) return null;
-  const s = raw.trim();
+  const s = raw.trim().split(/[ T]/)[0]; // strip any time portion
 
   // MM/YYYY or MM.YYYY -> first of month
   const mmYYYY = s.match(/^(\d{1,2})[./](\d{4})$/);
@@ -194,16 +194,56 @@ export function parseFlexibleDate(raw: string): string | null {
 
   // YYYY-MM-DD
   const iso = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
-  if (iso) return s;
+  if (iso) {
+    const y = iso[1];
+    const m = iso[2].padStart(2, "0");
+    const d = iso[3].padStart(2, "0");
+    return `${y}-${m}-${d}`;
+  }
 
   return null;
 }
 
+/**
+ * Parse a date+time pair into an ISO timestamp (UTC).
+ * Accepts date in any format from parseFlexibleDate, time as HH:MM[:SS].
+ * If no time is given, midnight is used. Input is treated as Berlin local time.
+ */
+export function parseFlexibleTimestamp(rawDate: string, rawTime?: string): string | null {
+  // Combined ISO timestamp like "2024-03-15T10:25:00Z"
+  if (rawDate && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(rawDate.trim())) {
+    const d = new Date(rawDate.trim());
+    if (!isNaN(d.getTime())) return d.toISOString();
+  }
+  const datePart = parseFlexibleDate(rawDate);
+  if (!datePart) return null;
+  let h = 0, m = 0, s = 0;
+  if (rawTime && rawTime.trim()) {
+    const tm = rawTime.trim().match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+    if (!tm) return null;
+    h = parseInt(tm[1], 10);
+    m = parseInt(tm[2], 10);
+    s = tm[3] ? parseInt(tm[3], 10) : 0;
+  }
+  const [y, mo, d] = datePart.split("-").map((x) => parseInt(x, 10));
+  // Treat as UTC for stable round-trip (Berlin offset can be applied by caller)
+  const date = new Date(Date.UTC(y, mo - 1, d, h, m, s));
+  return date.toISOString();
+}
+
 /** Generate CSV template content */
 export function generateReadingsTemplate(): string {
-  return `Zählernummer;Datum;Wert;Notiz\n12345678;01.01.2023;15234.5;Jahresablesung\n12345678;01.01.2024;17890.2;Jahresablesung`;
+  return `Zählernummer;Datum;Wert;Notiz\n12345678;01.01.2023;15234,5;Jahresablesung\n12345678;01.01.2024;17890,2;Jahresablesung`;
 }
 
 export function generateConsumptionTemplate(): string {
-  return `Zählernummer;Zeitraum;Verbrauch;Energieart\n12345678;01/2023;1250.5;\n12345678;02/2023;1180.3;`;
+  return `Zählernummer;Datum;Wert;Energieart\n12345678;15.01.2024;42,3;strom\n12345678;16.01.2024;38,7;strom`;
+}
+
+export function generateConsumptionMonthlyTemplate(): string {
+  return `Zählernummer;Datum;Wert;Energieart\n12345678;01.01.2024;1250,5;strom\n12345678;01.02.2024;1180,3;strom`;
+}
+
+export function generatePower5MinTemplate(): string {
+  return `Zählernummer;Datum;Zeit;Wert;Energieart\n12345678;15.01.2024;08:00;3,42;strom\n12345678;15.01.2024;08:05;3,55;strom\n12345678;15.01.2024;08:10;3,61;strom`;
 }
