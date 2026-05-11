@@ -42,8 +42,8 @@ const GH_TOKEN = Deno.env.get("HA_ADDONS_PUSH_TOKEN") || "";
 const GH_REPO = "CW-Aicono/aicono-os";
 
 const VARIANTS: Record<string, RegExp> = {
-  "x86_64": /aicono-os.*x86[_-]?64\.img\.xz$/i,
-  "aarch64": /aicono-os.*aarch64\.img\.xz$/i,
+  "x86_64": /aicono-os.*x86[_-]?64(?:-[0-9][0-9A-Za-z._-]*)?\.img\.xz$/i,
+  "aarch64": /aicono-os.*aarch64(?:-[0-9][0-9A-Za-z._-]*)?\.img\.xz$/i,
 };
 
 const githubHeaders = (useToken = true, accept = "application/vnd.github+json") => {
