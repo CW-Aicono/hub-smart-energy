@@ -1,15 +1,25 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useMemo } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Checkbox } from "@/components/ui/checkbox";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
-import { Upload, FileSpreadsheet, CheckCircle2, AlertTriangle, XCircle, Download } from "lucide-react";
+import { Upload, FileSpreadsheet, CheckCircle2, AlertTriangle, XCircle, Download, Sparkles } from "lucide-react";
 import { useTranslation } from "@/hooks/useTranslation";
-import { parseFile, autoDetectMapping, generateReadingsTemplate, generateConsumptionTemplate, type ParseResult, type MappableField } from "@/lib/csvParser";
-import { useDataImport, type ImportType, type ValidatedRow, type ImportResult } from "@/hooks/useDataImport";
+import {
+  parseFile,
+  autoDetectMapping,
+  generateReadingsTemplate,
+  generateConsumptionTemplate,
+  generateConsumptionMonthlyTemplate,
+  generatePower5MinTemplate,
+  type ParseResult,
+  type MappableField,
+} from "@/lib/csvParser";
+import { useDataImport, type ImportType, type ConflictStrategy, type ValidatedRow, type ImportResult } from "@/hooks/useDataImport";
 import { toast } from "sonner";
 
 interface DataImportDialogProps {
@@ -21,11 +31,23 @@ type Step = "upload" | "mapping" | "validation" | "result";
 
 const FIELD_OPTIONS: { value: MappableField; label: string }[] = [
   { value: "none", label: "– Ignorieren –" },
+  { value: "source_block", label: "Quelle / Datenart" },
+  { value: "location_name", label: "Standort" },
+  { value: "meter_name", label: "Zähler-Name" },
   { value: "meter_number", label: "Zählernummer" },
   { value: "date", label: "Datum / Zeitraum" },
-  { value: "value", label: "Wert / Verbrauch" },
-  { value: "notes", label: "Notiz" },
+  { value: "time", label: "Zeit / Uhrzeit" },
+  { value: "value", label: "Wert / Verbrauch / Leistung" },
+  { value: "unit", label: "Einheit" },
   { value: "energy_type", label: "Energieart" },
+  { value: "notes", label: "Notiz" },
+];
+
+const IMPORT_TYPE_OPTIONS: { value: ImportType; label: string; hint: string }[] = [
+  { value: "readings", label: "Manuelle Ablesungen", hint: "Zählerstände (kWh, m³)" },
+  { value: "consumption", label: "Tagesverbrauch", hint: "Differenz pro Tag" },
+  { value: "consumption_monthly", label: "Monatsverbrauch", hint: "Summe pro Monat" },
+  { value: "power_5min", label: "5-Min Leistung", hint: "Lastprofile in kW" },
 ];
 
 export default function DataImportDialog({ open, onOpenChange }: DataImportDialogProps) {
@@ -35,11 +57,13 @@ export default function DataImportDialog({ open, onOpenChange }: DataImportDialo
 
   const [step, setStep] = useState<Step>("upload");
   const [importType, setImportType] = useState<ImportType>("readings");
+  const [conflictStrategy, setConflictStrategy] = useState<ConflictStrategy>("skip");
   const [parsed, setParsed] = useState<ParseResult | null>(null);
   const [mapping, setMapping] = useState<Record<string, MappableField>>({});
   const [validated, setValidated] = useState<ValidatedRow[]>([]);
   const [result, setResult] = useState<ImportResult | null>(null);
   const [fileName, setFileName] = useState("");
+  const [autoDetected, setAutoDetected] = useState(false);
 
   const reset = useCallback(() => {
     setStep("upload");
@@ -48,6 +72,7 @@ export default function DataImportDialog({ open, onOpenChange }: DataImportDialo
     setValidated([]);
     setResult(null);
     setFileName("");
+    setAutoDetected(false);
   }, []);
 
   const handleClose = (open: boolean) => {
@@ -64,7 +89,11 @@ export default function DataImportDialog({ open, onOpenChange }: DataImportDialo
       }
       setParsed(result);
       setFileName(file.name);
-      setMapping(autoDetectMapping(result.headers));
+      const detected = autoDetectMapping(result.headers);
+      setMapping(detected);
+      // If "Quelle" column is present, this is a Lovable-format export → auto-detection works
+      const hasSource = Object.values(detected).includes("source_block");
+      setAutoDetected(hasSource);
       setStep("mapping");
     } catch {
       toast.error(t("import.error" as any));
@@ -85,29 +114,30 @@ export default function DataImportDialog({ open, onOpenChange }: DataImportDialo
   };
 
   const handleExecute = async () => {
-    const res = await executeImport(validated, importType);
+    const res = await executeImport(validated, importType, conflictStrategy);
     setResult(res);
     setStep("result");
-    if (res.errors === 0) {
-      toast.success(t("import.success" as any));
-    } else {
-      toast.warning(t("import.partialSuccess" as any));
-    }
+    if (res.errors === 0) toast.success(t("import.success" as any));
+    else toast.warning(t("import.partialSuccess" as any));
   };
 
   const toggleExcluded = (idx: number) => {
-    setValidated((prev) =>
-      prev.map((r, i) => (i === idx ? { ...r, excluded: !r.excluded } : r))
-    );
+    setValidated((prev) => prev.map((r, i) => (i === idx ? { ...r, excluded: !r.excluded } : r)));
   };
 
-  const downloadTemplate = () => {
-    const content = importType === "readings" ? generateReadingsTemplate() : generateConsumptionTemplate();
+  const downloadTemplate = (type: ImportType) => {
+    const map: Record<ImportType, { content: string; name: string }> = {
+      readings: { content: generateReadingsTemplate(), name: "vorlage-zaehlerstaende.csv" },
+      consumption: { content: generateConsumptionTemplate(), name: "vorlage-tagesverbrauch.csv" },
+      consumption_monthly: { content: generateConsumptionMonthlyTemplate(), name: "vorlage-monatsverbrauch.csv" },
+      power_5min: { content: generatePower5MinTemplate(), name: "vorlage-leistung-5min.csv" },
+    };
+    const { content, name } = map[type];
     const blob = new Blob(["\uFEFF" + content], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = importType === "readings" ? "vorlage-zaehlerstaende.csv" : "vorlage-verbrauchsdaten.csv";
+    a.download = name;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -115,6 +145,15 @@ export default function DataImportDialog({ open, onOpenChange }: DataImportDialo
   const errorCount = validated.filter((r) => r.issues.some((i) => i.severity === "error")).length;
   const warningCount = validated.filter((r) => r.issues.some((i) => i.severity === "warning") && !r.issues.some((i) => i.severity === "error")).length;
   const validCount = validated.filter((r) => !r.excluded).length;
+
+  // Per-import-type breakdown for the validation step
+  const typeBreakdown = useMemo(() => {
+    const m = new Map<ImportType, number>();
+    validated.forEach((r) => {
+      if (!r.excluded) m.set(r.importType, (m.get(r.importType) ?? 0) + 1);
+    });
+    return m;
+  }, [validated]);
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
@@ -126,7 +165,6 @@ export default function DataImportDialog({ open, onOpenChange }: DataImportDialo
           </DialogTitle>
         </DialogHeader>
 
-        {/* Step indicators */}
         <div className="flex gap-1 mb-4">
           {(["upload", "mapping", "validation", "result"] as Step[]).map((s, i) => (
             <div
@@ -140,24 +178,45 @@ export default function DataImportDialog({ open, onOpenChange }: DataImportDialo
           ))}
         </div>
 
-        {/* Step 1: Upload */}
         {step === "upload" && (
           <div className="space-y-4">
-            <div className="flex gap-3">
-              <Button
-                variant={importType === "readings" ? "default" : "outline"}
-                onClick={() => setImportType("readings")}
-                className="flex-1"
-              >
-                {t("import.typeReadings" as any)}
-              </Button>
-              <Button
-                variant={importType === "consumption" ? "default" : "outline"}
-                onClick={() => setImportType("consumption")}
-                className="flex-1"
-              >
-                {t("import.typeConsumption" as any)}
-              </Button>
+            <div>
+              <Label className="mb-2 block text-sm">Datentyp</Label>
+              <div className="grid grid-cols-2 gap-2">
+                {IMPORT_TYPE_OPTIONS.map((opt) => (
+                  <Button
+                    key={opt.value}
+                    variant={importType === opt.value ? "default" : "outline"}
+                    onClick={() => setImportType(opt.value)}
+                    className="flex-col h-auto py-3 items-start"
+                  >
+                    <span className="font-semibold">{opt.label}</span>
+                    <span className="text-xs opacity-80">{opt.hint}</span>
+                  </Button>
+                ))}
+              </div>
+              <p className="text-xs text-muted-foreground mt-2">
+                Tipp: Wenn Sie eine Datei aus dem Lovable-Export hochladen, werden gemischte Inhalte
+                automatisch korrekt verteilt – die Auswahl hier dient nur als Standard.
+              </p>
+            </div>
+
+            <div>
+              <Label className="mb-2 block text-sm">Bei Konflikt mit existierenden Daten</Label>
+              <RadioGroup value={conflictStrategy} onValueChange={(v) => setConflictStrategy(v as ConflictStrategy)} className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <RadioGroupItem value="skip" id="cs-skip" />
+                  <Label htmlFor="cs-skip" className="text-sm font-normal">Überspringen (Standard)</Label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <RadioGroupItem value="overwrite" id="cs-overwrite" />
+                  <Label htmlFor="cs-overwrite" className="text-sm font-normal">Überschreiben</Label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <RadioGroupItem value="insert_new" id="cs-new" />
+                  <Label htmlFor="cs-new" className="text-sm font-normal">Nur neue Zeitpunkte einfügen</Label>
+                </div>
+              </RadioGroup>
             </div>
 
             <div
@@ -181,19 +240,32 @@ export default function DataImportDialog({ open, onOpenChange }: DataImportDialo
               />
             </div>
 
-            <Button variant="ghost" size="sm" onClick={downloadTemplate} className="w-full">
-              <Download className="h-4 w-4 mr-2" />
-              {t("import.downloadTemplate" as any)}
-            </Button>
+            <div className="grid grid-cols-2 gap-2">
+              {IMPORT_TYPE_OPTIONS.map((opt) => (
+                <Button key={opt.value} variant="ghost" size="sm" onClick={() => downloadTemplate(opt.value)}>
+                  <Download className="h-3.5 w-3.5 mr-1.5" />
+                  {opt.label}
+                </Button>
+              ))}
+            </div>
           </div>
         )}
 
-        {/* Step 2: Mapping */}
         {step === "mapping" && parsed && (
           <div className="space-y-4">
             <p className="text-sm text-muted-foreground">
               {fileName} – {parsed.rows.length} {t("import.rows" as any)}
             </p>
+
+            {autoDetected && (
+              <div className="flex items-start gap-2 p-3 rounded-md border border-primary/30 bg-primary/5 text-sm">
+                <Sparkles className="h-4 w-4 text-primary mt-0.5 shrink-0" />
+                <span>
+                  Lovable-Export erkannt. Die Spalte „Quelle" verteilt jede Zeile automatisch
+                  auf die richtige Zieltabelle (Ablesungen, Tages-/Monatsverbrauch, 5-Min-Leistung).
+                </span>
+              </div>
+            )}
 
             <div className="space-y-3">
               {parsed.headers.map((h) => (
@@ -216,7 +288,6 @@ export default function DataImportDialog({ open, onOpenChange }: DataImportDialo
               ))}
             </div>
 
-            {/* Preview first 3 rows */}
             <div className="border rounded-md overflow-x-auto">
               <table className="text-xs w-full">
                 <thead>
@@ -242,7 +313,11 @@ export default function DataImportDialog({ open, onOpenChange }: DataImportDialo
               <Button variant="outline" onClick={() => setStep("upload")}>{t("import.back" as any)}</Button>
               <Button
                 onClick={handleValidate}
-                disabled={!Object.values(mapping).includes("meter_number") || !Object.values(mapping).includes("date") || !Object.values(mapping).includes("value")}
+                disabled={
+                  !(Object.values(mapping).includes("meter_number") || Object.values(mapping).includes("meter_name")) ||
+                  !Object.values(mapping).includes("date") ||
+                  !Object.values(mapping).includes("value")
+                }
               >
                 {t("import.validate" as any)}
               </Button>
@@ -250,7 +325,6 @@ export default function DataImportDialog({ open, onOpenChange }: DataImportDialo
           </div>
         )}
 
-        {/* Step 3: Validation */}
         {step === "validation" && (
           <div className="space-y-4">
             <div className="grid grid-cols-3 gap-3">
@@ -277,7 +351,19 @@ export default function DataImportDialog({ open, onOpenChange }: DataImportDialo
               </div>
             </div>
 
-            {/* Issue list */}
+            {typeBreakdown.size > 0 && (
+              <div className="flex flex-wrap gap-2 text-xs">
+                {Array.from(typeBreakdown.entries()).map(([type, count]) => {
+                  const label = IMPORT_TYPE_OPTIONS.find((o) => o.value === type)?.label ?? type;
+                  return (
+                    <Badge key={type} variant="secondary">
+                      {label}: {count.toLocaleString("de-DE")}
+                    </Badge>
+                  );
+                })}
+              </div>
+            )}
+
             {validated.filter((r) => r.issues.length > 0).length > 0 && (
               <div className="border rounded-md max-h-48 overflow-y-auto">
                 <table className="text-xs w-full">
@@ -324,7 +410,7 @@ export default function DataImportDialog({ open, onOpenChange }: DataImportDialo
             <div className="flex justify-between">
               <Button variant="outline" onClick={() => setStep("mapping")}>{t("import.back" as any)}</Button>
               <Button onClick={handleExecute} disabled={validCount === 0 || importing}>
-                {importing ? `${progress}%` : `${validCount} ${t("import.execute" as any)}`}
+                {importing ? `${progress}%` : `${validCount.toLocaleString("de-DE")} ${t("import.execute" as any)}`}
               </Button>
             </div>
 
@@ -332,22 +418,21 @@ export default function DataImportDialog({ open, onOpenChange }: DataImportDialo
           </div>
         )}
 
-        {/* Step 4: Result */}
         {step === "result" && result && (
           <div className="space-y-4 text-center py-4">
             <CheckCircle2 className="h-16 w-16 mx-auto text-green-600" />
             <div>
-              <p className="text-2xl font-bold">{result.imported}</p>
+              <p className="text-2xl font-bold">{result.imported.toLocaleString("de-DE")}</p>
               <p className="text-sm text-muted-foreground">{t("import.importedRows" as any)}</p>
             </div>
             {result.skipped > 0 && (
               <p className="text-sm text-muted-foreground">
-                {result.skipped} {t("import.skippedRows" as any)}
+                {result.skipped.toLocaleString("de-DE")} {t("import.skippedRows" as any)}
               </p>
             )}
             {result.errors > 0 && (
               <p className="text-sm text-destructive">
-                {result.errors} {t("import.errorRows" as any)}
+                {result.errors.toLocaleString("de-DE")} {t("import.errorRows" as any)}
               </p>
             )}
             <Button onClick={() => handleClose(false)} className="mt-4">{t("import.close" as any)}</Button>

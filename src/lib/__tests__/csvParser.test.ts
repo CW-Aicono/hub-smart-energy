@@ -133,7 +133,8 @@ describe("template generators", () => {
 
   it("generates consumption template with headers", () => {
     const csv = generateConsumptionTemplate();
-    expect(csv).toContain("Verbrauch");
-    expect(csv).toContain("Zeitraum");
+    expect(csv).toContain("Zählernummer");
+    expect(csv).toContain("Wert");
+    expect(csv).toContain("Energieart");
   });
 });
