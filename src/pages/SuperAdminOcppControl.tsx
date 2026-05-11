@@ -23,6 +23,8 @@ const SuperAdminOcppControl = () => {
   const { chargePoints } = useChargePoints();
   const { sessions, isLoading: sessionsLoading } = useChargingSessions();
   const [tenantFilter, setTenantFilter] = useState<string>("all");
+  const [logTenantId, setLogTenantId] = useState<string>("");
+  const [logChargePointId, setLogChargePointId] = useState<string>("");
 
   if (loading) return null;
   if (!user) return <Navigate to="/auth" replace />;
@@ -155,8 +157,55 @@ const SuperAdminOcppControl = () => {
               </Card>
             </TabsContent>
 
-            <TabsContent value="ocpp-log" className="mt-6">
-              <OcppLogViewer showCpColumn />
+            <TabsContent value="ocpp-log" className="mt-6 space-y-4">
+              <Card style={{ backgroundColor: `hsl(var(--sa-card))`, borderColor: `hsl(var(--sa-border))` }}>
+                <CardHeader>
+                  <CardTitle className="text-base">Auswahl</CardTitle>
+                </CardHeader>
+                <CardContent className="flex flex-wrap items-center gap-3">
+                  <Select value={logTenantId} onValueChange={(v) => { setLogTenantId(v); setLogChargePointId(""); }}>
+                    <SelectTrigger className="w-64 h-9 text-sm">
+                      <SelectValue placeholder="Mandant wählen" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {tenants.map(t => (
+                        <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Select
+                    value={logChargePointId}
+                    onValueChange={setLogChargePointId}
+                    disabled={!logTenantId}
+                  >
+                    <SelectTrigger className="w-72 h-9 text-sm">
+                      <SelectValue placeholder={logTenantId ? "Ladepunkt wählen" : "Zuerst Mandant wählen"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {chargePoints
+                        .filter(cp => cp.tenant_id === logTenantId)
+                        .map(cp => (
+                          <SelectItem key={cp.id} value={cp.id}>
+                            {cp.name} {cp.ocpp_id ? `(${cp.ocpp_id})` : ""}
+                          </SelectItem>
+                        ))}
+                      {logTenantId && chargePoints.filter(cp => cp.tenant_id === logTenantId).length === 0 && (
+                        <div className="px-2 py-1.5 text-xs text-muted-foreground">Keine Ladepunkte vorhanden</div>
+                      )}
+                    </SelectContent>
+                  </Select>
+                </CardContent>
+              </Card>
+
+              {logChargePointId ? (
+                <OcppLogViewer chargePointId={logChargePointId} />
+              ) : (
+                <Card style={{ backgroundColor: `hsl(var(--sa-card))`, borderColor: `hsl(var(--sa-border))` }}>
+                  <CardContent className="py-12 text-center text-sm" style={{ color: `hsl(var(--sa-muted-foreground))` }}>
+                    Bitte zuerst Mandant und Ladepunkt auswählen, um die letzten 200 OCPP-Nachrichten anzuzeigen.
+                  </CardContent>
+                </Card>
+              )}
             </TabsContent>
           </Tabs>
         </div>

@@ -105,6 +105,7 @@ const ChargePointDetail = () => {
   const [geocoding, setGeocoding] = useState(false);
   const [statsPeriod, setStatsPeriod] = useState("7");
   const [remoteLoading, setRemoteLoading] = useState<string | null>(null);
+  const [resetDialogOpen, setResetDialogOpen] = useState(false);
   const [powerLimit, setPowerLimit] = useState<PowerLimitSchedule | null>(null);
   const [savingPowerLimit, setSavingPowerLimit] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -437,17 +438,17 @@ const ChargePointDetail = () => {
     return res.json();
   };
 
-  const remoteAction = async (action: string) => {
+  const remoteAction = async (action: string, opts?: { resetType?: "Soft" | "Hard" }) => {
     if (!cp) return;
     setRemoteLoading(action);
     try {
       let result: any;
       switch (action) {
         case "Ladestation neu starten":
-          result = await callOcppCommand("Reset", { chargePointId: cp.ocpp_id, type: "Soft" });
+          result = await callOcppCommand("Reset", { chargePointId: cp.ocpp_id, type: opts?.resetType ?? "Soft" });
           break;
         case "Ladevorgang starten":
-          result = await callOcppCommand("RemoteStartTransaction", { chargePointId: cp.ocpp_id, idTag: "ADMIN", connectorId: selectedConnectorId });
+          result = await callOcppCommand("RemoteStartTransaction", { chargePointId: cp.ocpp_id, idTag: "APPBACKEND00", connectorId: selectedConnectorId });
           break;
         case "Ladevorgang stoppen": {
           const activeSession = sessions.find((s) => s.status === "active" && s.transaction_id);
@@ -763,7 +764,7 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
                         </div>
                       </CardHeader>
                       <CardContent className="space-y-1">
-                        <Button variant="ghost" className="w-full justify-start gap-2 text-sm" onClick={() => remoteAction("Ladestation neu starten")}>
+                        <Button variant="ghost" className="w-full justify-start gap-2 text-sm" onClick={() => setResetDialogOpen(true)}>
                           <RefreshCw className="h-4 w-4" /> {t("cpd.restart" as any)}
                         </Button>
                         <Button variant="ghost" className="w-full justify-start gap-2 text-sm" onClick={() => remoteAction("Ladevorgang starten")}>
@@ -781,6 +782,34 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
                       </CardContent>
                     </Card>
                   )}
+
+                  <AlertDialog open={resetDialogOpen} onOpenChange={setResetDialogOpen}>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Ladestation neu starten</AlertDialogTitle>
+                        <AlertDialogDescription asChild>
+                          <div className="space-y-3 text-sm">
+                            <p><strong>Soft Reset</strong> (empfohlen): Die Ladestation beendet laufende Ladevorgänge sauber und startet nur die Software neu. Dauert ca. 10–30 s.</p>
+                            <p><strong>Hard Reset</strong>: Power-Cycle der gesamten Hardware. Laufende Ladevorgänge werden <strong>abrupt abgebrochen</strong>. Nur verwenden, wenn die Box nicht mehr reagiert.</p>
+                          </div>
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter className="flex-col sm:flex-row gap-2">
+                        <AlertDialogCancel>Abbrechen</AlertDialogCancel>
+                        <AlertDialogAction
+                          onClick={() => { setResetDialogOpen(false); remoteAction("Ladestation neu starten", { resetType: "Hard" }); }}
+                          className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                        >
+                          Hard Reset
+                        </AlertDialogAction>
+                        <AlertDialogAction
+                          onClick={() => { setResetDialogOpen(false); remoteAction("Ladestation neu starten", { resetType: "Soft" }); }}
+                        >
+                          Soft Reset (empfohlen)
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
 
                   {/* Photo */}
                   <Card>

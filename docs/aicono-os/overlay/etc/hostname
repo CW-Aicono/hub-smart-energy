@@ -1,0 +1,3 @@
+# Beispiel-Hostname für Bonjour/mDNS.
+# Wird vom Setup-Wizard beim ersten Boot auf "aicono" gesetzt.
+aicono

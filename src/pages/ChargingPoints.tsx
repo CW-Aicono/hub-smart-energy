@@ -31,6 +31,7 @@ import { format } from "date-fns";
 import { fmtKwh, fmtKw, normalizeConnectorStatus } from "@/lib/formatCharging";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import ChargingOverviewStats from "@/components/charging/ChargingOverviewStats";
+import ModbusWallboxWizard from "@/components/charging/ModbusWallboxWizard";
 
 const LazyChargePointsMap = lazy(() => import("@/components/charging/ChargePointsMap"));
 
@@ -341,6 +342,7 @@ const ChargingPoints = () => {
                 <Button variant="outline" onClick={() => setPublicLinkOpen(true)}>
                   <Globe className="h-4 w-4 mr-2" />Öffentlicher Link
                 </Button>
+                <ModbusWallboxWizard />
                 <Dialog open={addOpen} onOpenChange={setAddOpen}>
                   <DialogTrigger asChild>
                     <Button onClick={resetForm}><Plus className="h-4 w-4 mr-2" />{t("charging.addChargePoint" as any)}</Button>

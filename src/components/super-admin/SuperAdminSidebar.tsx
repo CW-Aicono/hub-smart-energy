@@ -28,8 +28,8 @@ const SA_SIDEBAR_KEY = "sa-sidebar-collapsed";
 const LANGUAGE_LABELS: Record<SALanguage, string> = {
   de: "Deutsch",
   en: "English",
-  fr: "Français",
-  pl: "Polski",
+  es: "Español",
+  nl: "Nederlands",
 };
 
 const PRESET_COLORS: Record<SAColorPreset, string> = {
@@ -125,6 +125,7 @@ export default function SuperAdminSidebar() {
         { to: "/super-admin/ocpp/integrations", icon: PlugZap, label: t("nav.ocpp_integrations") },
         { to: "/super-admin/ocpp/control", icon: Server, label: "OCPP Control" },
         { to: "/super-admin/ocpp/simulators", icon: Plug, label: "Wallbox-Simulator" },
+        { to: "/super-admin/wallbox-templates", icon: PlugZap, label: "Wallbox-Templates" },
       ],
     },
     {
@@ -136,6 +137,7 @@ export default function SuperAdminSidebar() {
         { to: "/super-admin/sales/rules", icon: ListChecks, label: "Auswahl-Regeln" },
       ],
     },
+    { to: "/super-admin/gateways", icon: Cpu, label: "Gateway-Flotte" },
     { to: "/super-admin/monitoring", icon: Activity, label: t("nav.monitoring") },
     { to: "/super-admin/support", icon: HeadsetIcon, label: t("nav.support") },
     { to: "/super-admin/settings", icon: Settings, label: t("nav.settings") },

@@ -8,13 +8,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Copy, PlugZap, BookOpen, Search, Shield, AlertTriangle } from "lucide-react";
+import { Copy, PlugZap, BookOpen, Search, Server } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/hooks/use-toast";
-import { OcppServerUrlCard } from "@/components/ocpp/OcppServerUrlCard";
 
-const OCPP_WS_URL_SHORT = "wss://ocpp.aicono.org";
+const OCPP_HOST = "ocpp.aicono.org";
+const OCPP_WSS_URL = `wss://${OCPP_HOST}`; // Port 443 (Standard)
+const OCPP_WS_URL = `ws://${OCPP_HOST}`;   // Port 80 (Standard)
 
 const DIFFICULTY_COLORS: Record<string, string> = {
   easy: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400",
@@ -107,41 +108,46 @@ const OcppIntegration = () => {
           <p className="text-muted-foreground text-sm mt-0.5">{t("ocppIntegration.subtitle" as any)}</p>
         </div>
 
-        {/* OCPP Server URL Auswahl (Cloud vs. Eigener Server) */}
-        <OcppServerUrlCard cloudUrl={OCPP_WS_URL_SHORT} />
-
-        {/* ws:// Cloud-Proxy für ältere Ladepunkte */}
-        <Card className="border-yellow-500/20 bg-yellow-500/5">
-          <CardContent className="pt-4 pb-4">
+        {/* OCPP Server URL (wss:// + ws://) */}
+        <Card className="border-primary/20 bg-primary/5">
+          <CardContent className="pt-4 pb-4 space-y-3">
             <div className="flex items-start gap-2">
-              <Shield className="h-4 w-4 text-yellow-600 dark:text-yellow-400 mt-0.5 shrink-0" />
-              <div className="flex-1 min-w-0 space-y-2">
-                <p className="text-xs font-medium">ws:// für ältere Ladepunkte (ohne TLS)</p>
+              <Server className="h-4 w-4 text-primary mt-0.5 shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-medium">OCPP-Server-URL</p>
                 <p className="text-[11px] text-muted-foreground">
-                  Ältere Wallboxen ohne TLS-Unterstützung können sich über ws:// (unverschlüsselt) verbinden.
-                  Der Cloud-Proxy leitet die Verbindung automatisch verschlüsselt (wss://) an das Backend weiter.
+                  Persistenter OCPP-Server. Verwende <code>wss://</code> für moderne Wallboxen mit TLS,
+                  <code> ws://</code> für ältere Ladepunkte ohne TLS.
                 </p>
+              </div>
+            </div>
 
-                <div>
-                  <p className="text-[11px] font-medium mb-0.5">Verbindungs-URL für ältere Wallboxen:</p>
-                  <div className="flex items-center gap-1.5">
-                    <code className="text-xs bg-background border rounded px-2 py-1.5 break-all select-all flex-1 font-semibold">
-                      ws://ocpp.aicono.org/{"<OCPP_ID>"}
-                    </code>
-                    <Button variant="outline" size="icon" className="shrink-0 h-8 w-8" onClick={() => {
-                      navigator.clipboard.writeText("ws://ocpp.aicono.org/{OCPP_ID}");
-                      toast({ title: t("common.copied" as any) || "Kopiert!" });
-                    }}>
-                      <Copy className="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
+            <div className="space-y-2">
+              <div>
+                <p className="text-[11px] font-medium mb-0.5">
+                  wss:// (verschlüsselt, Standard-Port 443) — empfohlen
+                </p>
+                <div className="flex items-center gap-1.5">
+                  <code className="text-xs bg-background border rounded px-2 py-1.5 break-all select-all flex-1 font-semibold">
+                    {OCPP_WSS_URL}/{"<OCPP_ID>"}
+                  </code>
+                  <Button variant="outline" size="icon" className="shrink-0 h-8 w-8" onClick={() => copyUrl(OCPP_WSS_URL)}>
+                    <Copy className="h-3.5 w-3.5" />
+                  </Button>
                 </div>
+              </div>
 
-                <div className="flex items-start gap-1.5 text-yellow-700 dark:text-yellow-400">
-                  <AlertTriangle className="h-3 w-3 mt-0.5 shrink-0" />
-                  <p className="text-[11px]">
-                    Die Strecke Wallbox → Cloud ist unverschlüsselt (ws://). Die Strecke Cloud-Proxy → Backend ist verschlüsselt (wss://). Dieses Vorgehen entspricht dem Branchenstandard für ältere Ladepunkte.
-                  </p>
+              <div>
+                <p className="text-[11px] font-medium mb-0.5">
+                  ws:// (unverschlüsselt, Standard-Port 80) — für ältere Ladepunkte
+                </p>
+                <div className="flex items-center gap-1.5">
+                  <code className="text-xs bg-background border rounded px-2 py-1.5 break-all select-all flex-1 font-semibold">
+                    {OCPP_WS_URL}/{"<OCPP_ID>"}
+                  </code>
+                  <Button variant="outline" size="icon" className="shrink-0 h-8 w-8" onClick={() => copyUrl(OCPP_WS_URL)}>
+                    <Copy className="h-3.5 w-3.5" />
+                  </Button>
                 </div>
               </div>
             </div>

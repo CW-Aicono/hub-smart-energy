@@ -27,6 +27,49 @@ try {
   WebSocketClient = require("ws") as any;
 } catch { /* ws not available, WebSocket features disabled */ }
 
+import { WallboxBridgeManager, type WallboxInstance, type WallboxTemplate } from "./modbus-wallbox-bridge";
+let wallboxManager: WallboxBridgeManager | null = null;
+
+function getWallboxManager(): WallboxBridgeManager {
+  if (!wallboxManager) {
+    const cloudWsBase = (config.cloud_url || "").replace(/^http/, "ws").replace(/\/$/, "") + "/functions/v1/ocpp-ws";
+    const password = process.env.GATEWAY_OCPP_PASSWORD || config.gateway_password || "";
+    wallboxManager = new WallboxBridgeManager(cloudWsBase, password);
+  }
+  return wallboxManager;
+}
+
+async function fetchWallboxInstanceAndTemplate(instanceId: string): Promise<{ inst: WallboxInstance; tpl: WallboxTemplate } | null> {
+  try {
+    const url = `${config.cloud_url}/rest/v1/wallbox_modbus_instances?id=eq.${instanceId}&select=*,template:wallbox_modbus_templates(*),charge_point:charge_points(ocpp_id)`;
+    const res = await fetch(url, {
+      headers: {
+        apikey: process.env.SUPABASE_ANON_KEY || "",
+        Authorization: `Bearer ${process.env.SUPABASE_ANON_KEY || ""}`,
+      },
+    });
+    if (!res.ok) return null;
+    const rows = await res.json() as any[];
+    const row = rows?.[0];
+    if (!row) return null;
+    return {
+      inst: {
+        id: row.id,
+        template_id: row.template_id,
+        charge_point_ocpp_id: row.charge_point?.ocpp_id ?? row.id,
+        modbus_host: row.modbus_host,
+        modbus_port: row.modbus_port,
+        unit_id: row.unit_id,
+      },
+      tpl: row.template as WallboxTemplate,
+    };
+  } catch (e) {
+    console.error("[wb-bridge] fetch instance failed", (e as Error).message);
+    return null;
+  }
+}
+
+
 /* ── Configuration ───────────────────────────────────────────────────────────── */
 
 interface AddonConfig {
@@ -123,6 +166,89 @@ const GATEWAY_WS_URL = `${config.cloud_url.replace(/^http/, "ws")}/functions/v1/
 const ADDON_VERSION = process.env.ADDON_VERSION || "dev";
 const SUPERVISOR_COMMAND_COOLDOWN_MS = 5 * 60 * 1000;
 let supervisorCommandInFlight: { command: string; startedAt: number } | null = null;
+
+/* ── Phase 2: Worker timers + remote-config state ────────────────────────────── */
+type TimerName = "poll" | "flush" | "watchdog" | "automation" | "syncAutomations" | "meterMappings" | "snapshot" | "backup";
+const workerTimers: Partial<Record<TimerName, NodeJS.Timeout>> = {};
+let remoteConfigVersion = 0;
+
+function clampInt(v: unknown, min: number, max: number, fallback: number): number {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.max(min, Math.min(max, Math.round(n)));
+}
+
+/** Apply a remote config patch coming from the Cloud. Resets affected timers live. */
+function applyRemoteConfig(incoming: Record<string, unknown> | null | undefined, version: number): void {
+  if (!incoming || typeof incoming !== "object") return;
+  if (version > 0 && version === remoteConfigVersion) {
+    return; // no-op, same version
+  }
+  const before = {
+    poll: config.poll_interval_seconds,
+    flush: config.flush_interval_seconds,
+    heartbeat: config.heartbeat_interval_seconds,
+    automation: config.automation_eval_seconds,
+    filter: config.entity_filter,
+    bufferMb: config.offline_buffer_max_mb,
+    backup: config.auto_backup_hours,
+  };
+
+  if (incoming.poll_interval_seconds !== undefined)
+    config.poll_interval_seconds = clampInt(incoming.poll_interval_seconds, 5, 3600, before.poll);
+  if (incoming.flush_interval_seconds !== undefined)
+    config.flush_interval_seconds = clampInt(incoming.flush_interval_seconds, 1, 600, before.flush);
+  if (incoming.heartbeat_interval_seconds !== undefined)
+    config.heartbeat_interval_seconds = clampInt(incoming.heartbeat_interval_seconds, 10, 600, before.heartbeat);
+  if (incoming.automation_eval_seconds !== undefined)
+    config.automation_eval_seconds = clampInt(incoming.automation_eval_seconds, 5, 600, before.automation);
+  if (typeof incoming.entity_filter === "string" && incoming.entity_filter.trim().length > 0)
+    config.entity_filter = incoming.entity_filter;
+  if (incoming.offline_buffer_max_mb !== undefined)
+    config.offline_buffer_max_mb = clampInt(incoming.offline_buffer_max_mb, 10, 5000, before.bufferMb);
+  if (incoming.auto_backup_hours !== undefined)
+    config.auto_backup_hours = clampInt(incoming.auto_backup_hours, 0, 168, before.backup);
+
+  remoteConfigVersion = version;
+  saveRemoteConfigToCache(incoming, version);
+
+  // Live-reset timers if values changed
+  if (before.poll !== config.poll_interval_seconds && workerTimers.poll) {
+    clearInterval(workerTimers.poll);
+    workerTimers.poll = setInterval(() => pollHAStates(), config.poll_interval_seconds * 1000);
+    console.log(`[remote-config] poll_interval → ${config.poll_interval_seconds}s`);
+  }
+  if (before.flush !== config.flush_interval_seconds && workerTimers.flush) {
+    clearInterval(workerTimers.flush);
+    workerTimers.flush = setInterval(() => flushBuffer(), config.flush_interval_seconds * 1000);
+    console.log(`[remote-config] flush_interval → ${config.flush_interval_seconds}s`);
+  }
+  if (before.automation !== config.automation_eval_seconds && workerTimers.automation) {
+    clearInterval(workerTimers.automation);
+    workerTimers.automation = setInterval(() => evaluateAndExecuteAutomations(), config.automation_eval_seconds * 1000);
+    console.log(`[remote-config] automation_eval → ${config.automation_eval_seconds}s`);
+  }
+  if (before.heartbeat !== config.heartbeat_interval_seconds && cloudWsHeartbeatTimer) {
+    clearInterval(cloudWsHeartbeatTimer);
+    cloudWsHeartbeatTimer = setInterval(sendCloudHeartbeat, config.heartbeat_interval_seconds * 1000);
+    console.log(`[remote-config] heartbeat_interval → ${config.heartbeat_interval_seconds}s`);
+  }
+  if (before.filter !== config.entity_filter) {
+    compileEntityFilter();
+    console.log(`[remote-config] entity_filter updated`);
+  }
+  if (before.backup !== config.auto_backup_hours) {
+    if (workerTimers.backup) {
+      clearInterval(workerTimers.backup);
+      workerTimers.backup = undefined;
+    }
+    if (config.auto_backup_hours > 0) {
+      workerTimers.backup = setInterval(() => sendBackup(), config.auto_backup_hours * 60 * 60 * 1000);
+    }
+    console.log(`[remote-config] auto_backup_hours → ${config.auto_backup_hours}`);
+  }
+  console.log(`[remote-config] applied version ${version}`);
+}
 
 /* ── Auth header helper for gateway-ingest (Daten-Upload) ────────────────────── */
 // gateway-ingest akzeptiert weiterhin Basic Auth (username/password) ODER Bearer.
@@ -406,6 +532,44 @@ db.exec(`
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
 `);
+
+// ── NEW: Remote Config Cache (Phase 2 – Cloud-managed Worker-Settings) ──
+db.exec(`
+  CREATE TABLE IF NOT EXISTS gateway_remote_config (
+    cache_key TEXT PRIMARY KEY,
+    config_json TEXT NOT NULL,
+    version INTEGER NOT NULL DEFAULT 0,
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+`);
+
+function loadRemoteConfigFromCache(): { config: Record<string, unknown>; version: number } | null {
+  try {
+    const row = db
+      .prepare(`SELECT config_json, version FROM gateway_remote_config WHERE cache_key = 'primary'`)
+      .get() as { config_json: string; version: number } | undefined;
+    if (!row) return null;
+    return { config: JSON.parse(row.config_json), version: row.version };
+  } catch (err) {
+    console.warn("[remote-config] cache load failed:", err);
+    return null;
+  }
+}
+
+function saveRemoteConfigToCache(cfg: Record<string, unknown>, version: number): void {
+  try {
+    db.prepare(
+      `INSERT INTO gateway_remote_config (cache_key, config_json, version, updated_at)
+       VALUES ('primary', ?, ?, datetime('now'))
+       ON CONFLICT(cache_key) DO UPDATE SET
+         config_json = excluded.config_json,
+         version = excluded.version,
+         updated_at = excluded.updated_at`
+    ).run(JSON.stringify(cfg), version);
+  } catch (err) {
+    console.warn("[remote-config] cache save failed:", err);
+  }
+}
 
 /* ── Readings Buffer Statements ──────────────────────────────────────────────── */
 
@@ -1425,7 +1589,7 @@ async function connectCloudWebSocket(): Promise<void> {
         await sendCloudHeartbeat();
         // Periodischer Heartbeat
         if (cloudWsHeartbeatTimer) clearInterval(cloudWsHeartbeatTimer);
-        cloudWsHeartbeatTimer = setInterval(sendCloudHeartbeat, 30_000);
+        cloudWsHeartbeatTimer = setInterval(sendCloudHeartbeat, config.heartbeat_interval_seconds * 1000);
         break;
       }
       case "auth_error": {
@@ -1439,6 +1603,15 @@ async function connectCloudWebSocket(): Promise<void> {
         // Server bestätigt Heartbeat
         markCloudReachable();
         break;
+      case "config_update": {
+        // Phase 2: Cloud pushes a fresh remote-config snapshot.
+        const v = Number(msg.version) || 0;
+        applyRemoteConfig(msg.config || {}, v);
+        try {
+          safeWsSend(cloudWs, { type: "config_ack", version: v });
+        } catch { /* ignore */ }
+        break;
+      }
       case "command": {
         const cmdId = String(msg.id || "");
         const cmdType = String(msg.command_type || "");
@@ -1515,9 +1688,352 @@ async function handleCloudCommand(cmdType: string, payload: Record<string, unkno
       console.log(`[cloud-ws] UI PIN ${uiPinHash ? "updated" : "cleared"}`);
       return { ok: true };
     }
+    case "discover_devices": {
+      // Phase 3: Cloud bittet uns einen Discovery-Lauf zu fahren.
+      const methods = Array.isArray(payload.methods) ? payload.methods as string[] : ["mdns", "mqtt"];
+      const found = await runDeviceDiscovery(methods, payload.modbus as any);
+      await pushDiscoveriesToCloud(found);
+      return { ok: true, count: found.length, methods };
+    }
+    case "provision_entity": {
+      // Phase 3: Cloud will eine neue Sensor-/Aktor-/Zähler-Integration einrichten.
+      const result = await provisionEntity(payload as any);
+      await reportProvisionStatus(String(payload.entity_id || ""), result);
+      return result;
+    }
+    case "deprovision_entity": {
+      const result = await deprovisionEntity(payload as any);
+      return result;
+    }
+    case "pull_image": {
+      // Phase 4: Cloud schickt Auto-/Remote-Software-Update.
+      const jobId = String(payload.job_id || "");
+      const imageRef = String(payload.image_ref || "");
+      const targetVersion = String(payload.target_version || "");
+      if (!jobId || !imageRef) throw new Error("job_id/image_ref missing");
+      // Fire-and-forget: HA Supervisor restartet uns mitten im Update.
+      runUpdateJob(jobId, imageRef, targetVersion).catch((err) => {
+        console.error("[update] runUpdateJob failed:", err?.message || err);
+        reportUpdateProgress(jobId, "failed", { error: err?.message || String(err) });
+      });
+      return { ok: true, job_id: jobId, accepted: true };
+    }
+    case "provision_wallbox":
+    case "update_wallbox": {
+      const instanceId = String(payload.instance_id || "");
+      if (!instanceId) throw new Error("instance_id missing");
+      const data = await fetchWallboxInstanceAndTemplate(instanceId);
+      if (!data) throw new Error(`wallbox instance ${instanceId} not found`);
+      await getWallboxManager().provision(data.inst, data.tpl);
+      saveLocalIntegrationConfig(`wallbox:${instanceId}`, { instance_id: instanceId });
+      return { ok: true, instance_id: instanceId };
+    }
+    case "remove_wallbox": {
+      const instanceId = String(payload.instance_id || "");
+      await getWallboxManager().remove(instanceId);
+      removeLocalIntegrationConfig(`wallbox:${instanceId}`);
+      return { ok: true };
+    }
+    case "test_wallbox": {
+      const instanceId = String(payload.instance_id || "");
+      const data = await fetchWallboxInstanceAndTemplate(instanceId);
+      if (!data) return { ok: false, error: "instance not found" };
+      try {
+        const bridge = getWallboxManager().get(instanceId);
+        const state = bridge?.getState();
+        return { ok: true, state: state ?? null };
+      } catch (e) {
+        return { ok: false, error: (e as Error).message };
+      }
+    }
     default:
       throw new Error(`Unknown command: ${cmdType}`);
   }
+}
+
+// -------------------------------------------------------------------------
+// Phase 4 helpers – Remote-/Auto-Software-Updates
+// -------------------------------------------------------------------------
+
+function reportUpdateProgress(
+  jobId: string,
+  status: "running" | "success" | "failed",
+  extra: { log?: string; error?: string; installed_version?: string } = {},
+): void {
+  if (!cloudWs || !cloudWsConnected) return;
+  safeWsSend(cloudWs, {
+    type: "update_progress",
+    job_id: jobId,
+    status,
+    log: extra.log,
+    error: extra.error,
+    installed_version: extra.installed_version,
+  });
+}
+
+async function runUpdateJob(jobId: string, imageRef: string, targetVersion: string): Promise<void> {
+  console.log(`[update] job=${jobId} image=${imageRef} version=${targetVersion}`);
+  reportUpdateProgress(jobId, "running", { log: `Starting update to ${targetVersion} (${imageRef})` });
+
+  // 1) Versuche, das HA-Supervisor-Add-on zu updaten (zieht Image automatisch).
+  try {
+    persistPendingUpdateJob(jobId, targetVersion);
+    await callSupervisorAddonCommand("update");
+    reportUpdateProgress(jobId, "running", { log: "Supervisor update dispatched – waiting for restart" });
+    return;
+  } catch (err) {
+    console.warn("[update] Supervisor update failed:", (err as Error).message);
+    reportUpdateProgress(jobId, "failed", { error: (err as Error).message });
+  }
+}
+
+function persistPendingUpdateJob(jobId: string, targetVersion: string): void {
+  try {
+    db.prepare(`CREATE TABLE IF NOT EXISTS pending_update_jobs (
+      job_id TEXT PRIMARY KEY,
+      target_version TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )`).run();
+    db.prepare(`INSERT OR REPLACE INTO pending_update_jobs (job_id, target_version) VALUES (?, ?)`)
+      .run(jobId, targetVersion);
+  } catch (err) {
+    console.warn("[update] persist failed:", (err as Error).message);
+  }
+}
+
+function reportPostBootUpdateResult(): void {
+  try {
+    db.prepare(`CREATE TABLE IF NOT EXISTS pending_update_jobs (
+      job_id TEXT PRIMARY KEY,
+      target_version TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )`).run();
+    const rows = db.prepare(`SELECT job_id, target_version FROM pending_update_jobs`).all() as Array<{ job_id: string; target_version: string }>;
+    for (const row of rows) {
+      const ok = ADDON_VERSION === row.target_version;
+      const send = () => {
+        if (!cloudWsConnected) { setTimeout(send, 2000); return; }
+        reportUpdateProgress(row.job_id, ok ? "success" : "failed", {
+          installed_version: ADDON_VERSION,
+          log: ok
+            ? `Update applied successfully to ${ADDON_VERSION}`
+            : `Update mismatch: expected ${row.target_version}, running ${ADDON_VERSION}`,
+          error: ok ? undefined : `version mismatch (running ${ADDON_VERSION})`,
+        });
+        try { db.prepare(`DELETE FROM pending_update_jobs WHERE job_id = ?`).run(row.job_id); } catch { /* ignore */ }
+      };
+      send();
+    }
+  } catch (err) {
+    console.warn("[update] post-boot report failed:", (err as Error).message);
+  }
+}
+
+// -------------------------------------------------------------------------
+// Phase 3 helpers – Discovery / Provision
+// -------------------------------------------------------------------------
+
+interface DiscoveredItem {
+  discovery_method: "mdns" | "mqtt" | "modbus_scan";
+  payload: Record<string, unknown>;
+}
+
+async function runDeviceDiscovery(
+  methods: string[],
+  modbus?: { host?: string; port?: number; unit_ids?: number[] },
+): Promise<DiscoveredItem[]> {
+  const results: DiscoveredItem[] = [];
+
+  // mDNS / MQTT discovery: re-use HA's auto-discovered entities. The HA
+  // integration registry already aggregates anything Shelly/Tasmota/ESPHome/
+  // Zeroconf has spotted, so we expose unmapped entities to the cloud.
+  if (methods.includes("mdns") || methods.includes("mqtt")) {
+    try {
+      const states = await fetchHAStatesRaw();
+      for (const s of states) {
+        const eid = String(s.entity_id || "");
+        if (!eid) continue;
+        const integration = guessIntegrationFromEntity(eid, s);
+        if (!integration) continue;
+        // Skip entities that already have an AICONO mapping
+        if (isEntityMapped(eid)) continue;
+        const method = integration === "shelly" ? "mdns" : "mqtt";
+        if (!methods.includes(method)) continue;
+        results.push({
+          discovery_method: method,
+          payload: {
+            ha_entity_id: eid,
+            integration_type: integration,
+            name: s.attributes?.friendly_name || eid,
+            unit: s.attributes?.unit_of_measurement,
+            device_class: s.attributes?.device_class,
+            state: s.state,
+          },
+        });
+      }
+    } catch (err) {
+      console.warn("[discover] HA state fetch failed:", (err as Error).message);
+    }
+  }
+
+  if (methods.includes("modbus_scan") && modbus?.host) {
+    const port = Number(modbus.port || 502);
+    const unitIds = modbus.unit_ids && modbus.unit_ids.length > 0 ? modbus.unit_ids : [1, 2, 3];
+    for (const unit of unitIds) {
+      const reachable = await probeModbusUnit(modbus.host, port, unit);
+      if (reachable) {
+        results.push({
+          discovery_method: "modbus_scan",
+          payload: {
+            host: modbus.host,
+            port,
+            unit_id: unit,
+            integration_type: "modbus_tcp",
+            name: `Modbus ${modbus.host}:${port}/${unit}`,
+          },
+        });
+      }
+    }
+  }
+
+  return results;
+}
+
+async function fetchHAStatesRaw(): Promise<any[]> {
+  // Lazy import to avoid breaking environments where this helper isn't loaded yet.
+  // pollHAStates() already exists in this file – it caches the latest snapshot.
+  // We expose the raw cache via a global accessor populated during normal polling.
+  const cache = (globalThis as any).__lastHaStates;
+  if (Array.isArray(cache)) return cache;
+  return [];
+}
+
+function guessIntegrationFromEntity(entityId: string, state: any): string | null {
+  const eid = entityId.toLowerCase();
+  const platform = String(state?.attributes?.platform || "").toLowerCase();
+  if (platform === "shelly" || eid.includes("shelly")) return "shelly";
+  if (platform === "mqtt" || platform === "tasmota") return "tasmota";
+  if (platform === "esphome") return "esphome";
+  if (platform === "modbus") return "modbus_tcp";
+  return null;
+}
+
+function isEntityMapped(entityId: string): boolean {
+  try {
+    return meterMappings.some((m: any) =>
+      m.ha_entity_id === entityId || m.sensor_uuid === entityId,
+    );
+  } catch {
+    return false;
+  }
+}
+
+async function probeModbusUnit(host: string, port: number, _unit: number): Promise<boolean> {
+  // Lightweight TCP reachability probe – the real protocol scan happens in the
+  // dedicated aicono-ocpp-bridge / modbus worker (Phase 5). Here we only verify
+  // that the device is reachable so the Cloud-UI can offer it as a candidate.
+  return await new Promise((resolve) => {
+    try {
+      // deno-lint-ignore no-explicit-any
+      const net = require("node:net") as any;
+      const sock = net.createConnection({ host, port, timeout: 1500 }, () => {
+        sock.end();
+        resolve(true);
+      });
+      sock.on("error", () => resolve(false));
+      sock.on("timeout", () => { sock.destroy(); resolve(false); });
+    } catch {
+      resolve(false);
+    }
+  });
+}
+
+async function pushDiscoveriesToCloud(items: DiscoveredItem[]): Promise<void> {
+  if (items.length === 0) return;
+  try {
+    safeWsSend(cloudWs, {
+      type: "discoveries",
+      device_id: gatewayDeviceId,
+      items: items.map((i) => ({
+        discovery_method: i.discovery_method,
+        discovered_payload: i.payload,
+      })),
+    });
+  } catch (err) {
+    console.warn("[discover] push failed:", (err as Error).message);
+  }
+}
+
+async function provisionEntity(payload: {
+  entity_id: string;
+  integration_type: string;
+  entity_kind: string;
+  ha_entity_id?: string | null;
+  config: Record<string, unknown>;
+}): Promise<{ ok: boolean; error?: string }> {
+  // For HA-managed integrations (shelly via mDNS, MQTT, ESPHome) the entity is
+  // typically already present in HA – we just need to make sure the meter cache
+  // is refreshed so the new sensor flows into the dashboard. For modbus_tcp we
+  // hand off to the local modbus worker (Phase 5 will register a real driver).
+  try {
+    if (payload.integration_type === "modbus_tcp") {
+      // Persist the modbus config locally for the bridge to pick up.
+      saveLocalIntegrationConfig(payload.entity_id, payload.config);
+    }
+    await fetchMeterMappings();
+    return { ok: true };
+  } catch (err: any) {
+    return { ok: false, error: err?.message || String(err) };
+  }
+}
+
+async function deprovisionEntity(payload: { entity_id: string; integration_type: string }) {
+  try {
+    if (payload.integration_type === "modbus_tcp") {
+      removeLocalIntegrationConfig(payload.entity_id);
+    }
+    return { ok: true };
+  } catch (err: any) {
+    return { ok: false, error: err?.message || String(err) };
+  }
+}
+
+function saveLocalIntegrationConfig(entityId: string, config: Record<string, unknown>): void {
+  try {
+    db.prepare(`
+      CREATE TABLE IF NOT EXISTS gateway_local_integrations (
+        entity_id TEXT PRIMARY KEY,
+        config_json TEXT NOT NULL,
+        updated_at INTEGER NOT NULL
+      )
+    `).run();
+    db.prepare(`
+      INSERT INTO gateway_local_integrations (entity_id, config_json, updated_at)
+      VALUES (?, ?, ?)
+      ON CONFLICT(entity_id) DO UPDATE SET config_json = excluded.config_json, updated_at = excluded.updated_at
+    `).run(entityId, JSON.stringify(config), Date.now());
+  } catch (err) {
+    console.warn("[provision] local persist failed:", (err as Error).message);
+  }
+}
+
+function removeLocalIntegrationConfig(entityId: string): void {
+  try {
+    db.prepare(`DELETE FROM gateway_local_integrations WHERE entity_id = ?`).run(entityId);
+  } catch { /* table may not exist yet */ }
+}
+
+async function reportProvisionStatus(entityId: string, result: { ok: boolean; error?: string }) {
+  if (!entityId) return;
+  try {
+    safeWsSend(cloudWs, {
+      type: "provision_result",
+      device_id: gatewayDeviceId,
+      entity_id: entityId,
+      ok: result.ok,
+      error: result.error || null,
+    });
+  } catch { /* ignore */ }
 }
 
 let cachedHostIPAt = 0;
@@ -2123,6 +2639,18 @@ async function main(): Promise<void> {
   console.log("═══════════════════════════════════════════════════════");
   console.log(`  AICONO EMS Gateway v${ADDON_VERSION}`);
   console.log("═══════════════════════════════════════════════════════");
+
+  // Boot-Check: Falls noch keine Credentials hinterlegt sind, starten wir
+  // den Captive-Setup-Wizard auf Port 8099 (mDNS: aicono.local) und
+  // beenden uns danach – der HA-Supervisor restartet das Add-on automatisch
+  // mit den frisch gepairten Credentials.
+  if (!config.gateway_username || !config.gateway_password) {
+    console.log("[boot] Keine Credentials gefunden – starte Pairing-Wizard …");
+    const { runSetupWizard } = await import("./setup-wizard");
+    await runSetupWizard();
+    return; // wird nie erreicht (Wizard exit(0))
+  }
+
   console.log(`  Device:     ${config.device_name}`);
   console.log(`  Tenant:     ${config.tenant_id || "auto via Cloud-Zuordnung"}`);
   console.log(`  Poll:       ${config.poll_interval_seconds}s`);
@@ -2158,6 +2686,13 @@ async function main(): Promise<void> {
     console.log(`[offline] Loaded cached gateway assignment: ${cachedAssignment.location_name || cachedAssignment.tenant_name || 'unknown'}`);
   }
 
+  // Phase 2: Apply cached remote config (so reboot keeps Cloud-managed settings)
+  const cachedRemote = loadRemoteConfigFromCache();
+  if (cachedRemote) {
+    applyRemoteConfig(cachedRemote.config, cachedRemote.version);
+    console.log(`[offline] Loaded cached remote config (v${cachedRemote.version})`);
+  }
+
   await startServer();
 
   // Initial setup
@@ -2172,25 +2707,23 @@ async function main(): Promise<void> {
   // Connect persistent WSS to AICONO Cloud (gateway-ws) for heartbeat + commands
   connectCloudWebSocket();
 
+  // Phase 4: report any pending update result after a Supervisor restart
+  setTimeout(() => reportPostBootUpdateResult(), 10_000);
+
   // Polling loop (REST-based, for readings)
   // WICHTIG: initialer Poll sofort ausführen, damit latestHAStates die volle
   // HA-Entity-Liste enthält BEVOR der erste Device-Snapshot gepusht wird.
-  // Ohne diesen Init-Poll würde nur der lokale SQLite-Cache (max 500, ggf. nur
-  // wenige System-Sensoren) als Inventar an die Cloud gehen.
   pollHAStates().catch((e) => console.error("[ha-poll] initial poll failed", e));
-  setInterval(() => pollHAStates(), config.poll_interval_seconds * 1000);
+  workerTimers.poll = setInterval(() => pollHAStates(), config.poll_interval_seconds * 1000);
 
   // Flush loop
-  setInterval(() => flushBuffer(), config.flush_interval_seconds * 1000);
+  workerTimers.flush = setInterval(() => flushBuffer(), config.flush_interval_seconds * 1000);
 
-  // Cloud-Health-Watchdog: prüft alle 60s ob die WS noch lebt; falls nein,
-  // wird der Reconnect bereits durch das `close`-Event getriggert. Wir nutzen
-  // diesen Tick zusätzlich, um HA-Version aktuell zu halten.
-  setInterval(async () => {
+  // Cloud-Health-Watchdog
+  workerTimers.watchdog = setInterval(async () => {
     try {
       await fetchHAVersion();
       if (!cloudWsConnected) {
-        // markCloudUnreachable kümmert sich um den UI-Status
         markCloudUnreachable();
       }
     } catch (err) {
@@ -2199,26 +2732,24 @@ async function main(): Promise<void> {
   }, 60_000);
 
   // Automation evaluation loop
-  setInterval(() => evaluateAndExecuteAutomations(), config.automation_eval_seconds * 1000);
+  workerTimers.automation = setInterval(() => evaluateAndExecuteAutomations(), config.automation_eval_seconds * 1000);
 
   // Sync automations from cloud every 5 minutes
-  setInterval(async () => {
+  workerTimers.syncAutomations = setInterval(async () => {
     await syncAutomationsFromCloud();
     await pushExecutionLogs();
   }, 5 * 60 * 1000);
 
   // Refresh meter mappings every 5 minutes
-  setInterval(() => fetchMeterMappings(), 5 * 60 * 1000);
+  workerTimers.meterMappings = setInterval(() => fetchMeterMappings(), 5 * 60 * 1000);
 
   // Push device inventory snapshot to cloud.
-  // Erster Push erst nach 25s, damit der initiale pollHAStates() (oben) sicher
-  // alle Entities von HA geladen hat. Danach alle 2 Minuten erneut.
   setTimeout(() => pushDeviceSnapshot(), 25_000);
-  setInterval(() => pushDeviceSnapshot(), 2 * 60 * 1000);
+  workerTimers.snapshot = setInterval(() => pushDeviceSnapshot(), 2 * 60 * 1000);
 
   // Auto backup
   if (config.auto_backup_hours > 0) {
-    setInterval(() => sendBackup(), config.auto_backup_hours * 60 * 60 * 1000);
+    workerTimers.backup = setInterval(() => sendBackup(), config.auto_backup_hours * 60 * 60 * 1000);
   }
 
   console.log("[main] All loops started. AICONO EMS Gateway is running.");

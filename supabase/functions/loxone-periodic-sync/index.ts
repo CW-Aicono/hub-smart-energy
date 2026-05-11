@@ -84,6 +84,9 @@ serve(async (req) => {
         );
 
         const data = await response.json();
+        if (!response.ok || !data.success) {
+          console.error(`[loxone-periodic-sync] HTTP ${response.status} for integration ${integrationId}: ${data?.error || response.statusText}`);
+        }
 
         if (data.success) {
           const sensors = data.sensors || [];

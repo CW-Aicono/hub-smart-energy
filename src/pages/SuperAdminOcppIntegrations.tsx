@@ -22,6 +22,7 @@ import OcppLogViewer from "@/components/charging/OcppLogViewer";
 const PROTOCOLS = [
   { value: "ocpp1.6", label: "OCPP 1.6 JSON" },
   { value: "ocpp2.0.1", label: "OCPP 2.0.1" },
+  { value: "modbus", label: "Modbus TCP" },
   { value: "proprietary", label: "Proprietär" },
 ];
 

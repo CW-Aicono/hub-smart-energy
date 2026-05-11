@@ -5,6 +5,7 @@ import { CustomWidgetDefinition, ChartType } from "@/hooks/useCustomWidgetDefini
 import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useDashboardFilter, TimePeriod } from "@/hooks/useDashboardFilter";
+import { useWeekStartDay } from "@/hooks/useWeekStartDay";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { BarChart3, LineChart, Gauge, Activity, Table2, GitBranch, ChevronLeft, ChevronRight } from "lucide-react";
@@ -74,12 +75,13 @@ function normalizePowerUnit(unit?: string | null, energyType?: string | null, fa
 }
 
 /** Compute date range from the dashboard time period and offset */
-function getDateRange(period: TimePeriod, offset: number): { from: Date; to: Date } {
+type WeekStart = 0 | 1 | 2 | 3 | 4 | 5 | 6;
+function getDateRange(period: TimePeriod, offset: number, weekStartsOn: WeekStart = 1): { from: Date; to: Date } {
   const now = new Date();
   let base: Date;
   switch (period) {
     case "day": base = addDays(now, offset); return { from: startOfDay(base), to: endOfDay(base) };
-    case "week": base = addWeeks(now, offset); return { from: startOfWeek(base, { weekStartsOn: 1 }), to: endOfWeek(base, { weekStartsOn: 1 }) };
+    case "week": base = addWeeks(now, offset); return { from: startOfWeek(base, { weekStartsOn }), to: endOfWeek(base, { weekStartsOn }) };
     case "month": base = addMonths(now, offset); return { from: startOfMonth(base), to: endOfMonth(base) };
     case "quarter": base = addQuarters(now, offset); return { from: startOfQuarter(base), to: endOfQuarter(base) };
     case "year": base = addYears(now, offset); return { from: startOfYear(base), to: endOfYear(base) };
@@ -174,7 +176,8 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
   const activeChartType: ChartType =
     config.chart_type_per_period?.[selectedPeriod] ?? definition.chart_type;
 
-  const { from, to } = useMemo(() => getDateRange(selectedPeriod, offset), [selectedPeriod, offset]);
+  const weekStartsOn = useWeekStartDay();
+  const { from, to } = useMemo(() => getDateRange(selectedPeriod, offset, weekStartsOn), [selectedPeriod, offset, weekStartsOn]);
   const periodLabel = useMemo(() => getPeriodLabel(selectedPeriod, offset), [selectedPeriod, offset]);
   const canGoForward = offset < 0;
 
@@ -235,8 +238,14 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
 
         // Recent raw data: fetch last 15 minutes to cover gap between
         // last compaction run and now (the RPC already handles on-the-fly
-        // aggregation, but may miss the very latest readings still being written)
-        const recentCutoff = new Date(Date.now() - 15 * 60 * 1000);
+        // aggregation, but may miss the very latest readings still being written).
+        // IMPORTANT: clamp the cutoff to the start of the selected day, otherwise
+        // shortly after midnight (e.g. 00:09 local) the "last 15 min" reaches into
+        // YESTERDAY and those rows would get bucketed into today's 23:xx slots,
+        // producing a phantom flat line across the whole new day.
+        const recentCutoff = new Date(
+          Math.max(Date.now() - 15 * 60 * 1000, from.getTime()),
+        );
         const { data: recentRaw, error: recentError } = await supabase
           .from("meter_power_readings")
           .select("meter_id, power_value, recorded_at")
@@ -282,12 +291,14 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
       // readings for days that aren't archived yet (typically: today). This
       // avoids scanning tens of thousands of 5-min rows for week/month/year
       // views and removes the previous ~60 s wait time.
+      const toLocalYmd = (d: Date) =>
+        `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
       const { data: rpcRows, error: dailyError } = await supabase.rpc(
         "get_meter_daily_totals_split_with_fallback" as any,
         {
           p_meter_ids: config.meter_ids,
-          p_from_date: from.toISOString().split("T")[0],
-          p_to_date: to.toISOString().split("T")[0],
+          p_from_date: toLocalYmd(from),
+          p_to_date: toLocalYmd(to),
         },
       );
       if (dailyError) throw dailyError;
@@ -430,7 +441,7 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
                             : value
                         }
                       />
-                      <YAxis tick={{ fontSize: 11 }} domain={yDomain} allowDataOverflow={false} />
+                      <YAxis tick={{ fontSize: 11 }} domain={yDomain} allowDataOverflow={false} tickFormatter={(v: number) => Number(v).toLocaleString("de-DE", { maximumFractionDigits: 2 })} />
                       <Tooltip content={selectedPeriod === "day" ? <DayTooltip unit={displayUnit} /> : undefined} formatter={selectedPeriod !== "day" ? (v: number) => v?.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " " + displayUnit : undefined} />
                       <Legend content={() => null} />
                       {config.meter_ids.flatMap((mid, i) => {
@@ -462,7 +473,7 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
                             : value
                         }
                       />
-                      <YAxis tick={{ fontSize: 11 }} domain={yDomain} allowDataOverflow={false} />
+                      <YAxis tick={{ fontSize: 11 }} domain={yDomain} allowDataOverflow={false} tickFormatter={(v: number) => Number(v).toLocaleString("de-DE", { maximumFractionDigits: 2 })} />
                       <Tooltip content={selectedPeriod === "day" ? <DayTooltip unit={displayUnit} /> : undefined} formatter={selectedPeriod !== "day" ? (v: number) => v?.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " " + displayUnit : undefined} />
                       <Legend content={() => null} />
                       {config.meter_ids.map((mid, i) => {

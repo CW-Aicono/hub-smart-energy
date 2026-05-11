@@ -2738,6 +2738,173 @@ export type Database = {
           },
         ]
       }
+      gateway_device_config: {
+        Row: {
+          config: Json
+          created_at: string
+          gateway_device_id: string
+          tenant_id: string | null
+          updated_at: string
+          updated_by: string | null
+          version: number
+        }
+        Insert: {
+          config?: Json
+          created_at?: string
+          gateway_device_id: string
+          tenant_id?: string | null
+          updated_at?: string
+          updated_by?: string | null
+          version?: number
+        }
+        Update: {
+          config?: Json
+          created_at?: string
+          gateway_device_id?: string
+          tenant_id?: string | null
+          updated_at?: string
+          updated_by?: string | null
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gateway_device_config_gateway_device_id_fkey"
+            columns: ["gateway_device_id"]
+            isOneToOne: true
+            referencedRelation: "gateway_devices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gateway_device_config_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      gateway_device_discoveries: {
+        Row: {
+          created_at: string
+          discovered_payload: Json
+          discovery_method: string
+          expires_at: string
+          gateway_device_id: string
+          id: string
+          is_provisioned: boolean
+          tenant_id: string
+        }
+        Insert: {
+          created_at?: string
+          discovered_payload?: Json
+          discovery_method: string
+          expires_at?: string
+          gateway_device_id: string
+          id?: string
+          is_provisioned?: boolean
+          tenant_id: string
+        }
+        Update: {
+          created_at?: string
+          discovered_payload?: Json
+          discovery_method?: string
+          expires_at?: string
+          gateway_device_id?: string
+          id?: string
+          is_provisioned?: boolean
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gateway_device_discoveries_gateway_device_id_fkey"
+            columns: ["gateway_device_id"]
+            isOneToOne: false
+            referencedRelation: "gateway_devices"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      gateway_device_entities: {
+        Row: {
+          actuator_uuid: string | null
+          config_json: Json
+          created_at: string
+          created_by: string | null
+          discovery_method: string | null
+          entity_kind: string
+          entity_label: string
+          gateway_device_id: string
+          ha_entity_id: string | null
+          id: string
+          integration_type: string
+          last_error: string | null
+          last_synced_at: string | null
+          meter_id: string | null
+          provision_status: string
+          sensor_uuid: string | null
+          tenant_id: string
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          actuator_uuid?: string | null
+          config_json?: Json
+          created_at?: string
+          created_by?: string | null
+          discovery_method?: string | null
+          entity_kind?: string
+          entity_label: string
+          gateway_device_id: string
+          ha_entity_id?: string | null
+          id?: string
+          integration_type: string
+          last_error?: string | null
+          last_synced_at?: string | null
+          meter_id?: string | null
+          provision_status?: string
+          sensor_uuid?: string | null
+          tenant_id: string
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          actuator_uuid?: string | null
+          config_json?: Json
+          created_at?: string
+          created_by?: string | null
+          discovery_method?: string | null
+          entity_kind?: string
+          entity_label?: string
+          gateway_device_id?: string
+          ha_entity_id?: string | null
+          id?: string
+          integration_type?: string
+          last_error?: string | null
+          last_synced_at?: string | null
+          meter_id?: string | null
+          provision_status?: string
+          sensor_uuid?: string | null
+          tenant_id?: string
+          updated_at?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gateway_device_entities_gateway_device_id_fkey"
+            columns: ["gateway_device_id"]
+            isOneToOne: false
+            referencedRelation: "gateway_devices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gateway_device_entities_meter_id_fkey"
+            columns: ["meter_id"]
+            isOneToOne: false
+            referencedRelation: "meters"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       gateway_device_inventory: {
         Row: {
           category: string
@@ -2817,6 +2984,7 @@ export type Database = {
       gateway_devices: {
         Row: {
           addon_version: string | null
+          auto_update_enabled: boolean
           config: Json
           created_at: string
           device_name: string
@@ -2826,6 +2994,9 @@ export type Database = {
           ha_version: string | null
           id: string
           last_heartbeat_at: string | null
+          last_update_attempt_at: string | null
+          last_update_check_at: string | null
+          last_update_error: string | null
           last_ws_ping_at: string | null
           latest_available_version: string | null
           local_ip: string | null
@@ -2836,11 +3007,13 @@ export type Database = {
           offline_buffer_count: number
           status: string
           tenant_id: string | null
+          update_channel: string
           updated_at: string
           ws_connected_since: string | null
         }
         Insert: {
           addon_version?: string | null
+          auto_update_enabled?: boolean
           config?: Json
           created_at?: string
           device_name: string
@@ -2850,6 +3023,9 @@ export type Database = {
           ha_version?: string | null
           id?: string
           last_heartbeat_at?: string | null
+          last_update_attempt_at?: string | null
+          last_update_check_at?: string | null
+          last_update_error?: string | null
           last_ws_ping_at?: string | null
           latest_available_version?: string | null
           local_ip?: string | null
@@ -2860,11 +3036,13 @@ export type Database = {
           offline_buffer_count?: number
           status?: string
           tenant_id?: string | null
+          update_channel?: string
           updated_at?: string
           ws_connected_since?: string | null
         }
         Update: {
           addon_version?: string | null
+          auto_update_enabled?: boolean
           config?: Json
           created_at?: string
           device_name?: string
@@ -2874,6 +3052,9 @@ export type Database = {
           ha_version?: string | null
           id?: string
           last_heartbeat_at?: string | null
+          last_update_attempt_at?: string | null
+          last_update_check_at?: string | null
+          last_update_error?: string | null
           last_ws_ping_at?: string | null
           latest_available_version?: string | null
           local_ip?: string | null
@@ -2884,6 +3065,7 @@ export type Database = {
           offline_buffer_count?: number
           status?: string
           tenant_id?: string | null
+          update_channel?: string
           updated_at?: string
           ws_connected_since?: string | null
         }
@@ -2911,6 +3093,63 @@ export type Database = {
           },
         ]
       }
+      gateway_pairing_tokens: {
+        Row: {
+          bound_device_id: string | null
+          bound_to_mac: string | null
+          created_at: string
+          created_by: string | null
+          expires_at: string
+          id: string
+          label: string | null
+          location_id: string | null
+          tenant_id: string
+          token: string
+          used_at: string | null
+        }
+        Insert: {
+          bound_device_id?: string | null
+          bound_to_mac?: string | null
+          created_at?: string
+          created_by?: string | null
+          expires_at?: string
+          id?: string
+          label?: string | null
+          location_id?: string | null
+          tenant_id: string
+          token: string
+          used_at?: string | null
+        }
+        Update: {
+          bound_device_id?: string | null
+          bound_to_mac?: string | null
+          created_at?: string
+          created_by?: string | null
+          expires_at?: string
+          id?: string
+          label?: string | null
+          location_id?: string | null
+          tenant_id?: string
+          token?: string
+          used_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gateway_pairing_tokens_bound_device_id_fkey"
+            columns: ["bound_device_id"]
+            isOneToOne: false
+            referencedRelation: "gateway_devices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gateway_pairing_tokens_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       gateway_refresh_locks: {
         Row: {
           location_integration_id: string
@@ -2926,6 +3165,45 @@ export type Database = {
           location_integration_id?: string
           locked_at?: string
           locked_by?: string | null
+        }
+        Relationships: []
+      }
+      gateway_release_channels: {
+        Row: {
+          channel: string
+          created_at: string
+          created_by: string | null
+          id: string
+          image_ref: string
+          is_latest: boolean
+          release_notes: string | null
+          released_at: string
+          updated_at: string
+          version: string
+        }
+        Insert: {
+          channel: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          image_ref: string
+          is_latest?: boolean
+          release_notes?: string | null
+          released_at?: string
+          updated_at?: string
+          version: string
+        }
+        Update: {
+          channel?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          image_ref?: string
+          is_latest?: boolean
+          release_notes?: string | null
+          released_at?: string
+          updated_at?: string
+          version?: string
         }
         Relationships: []
       }
@@ -2973,6 +3251,78 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      gateway_update_jobs: {
+        Row: {
+          channel: string
+          created_at: string
+          created_by: string | null
+          dispatched_at: string | null
+          error_message: string | null
+          finished_at: string | null
+          gateway_device_id: string
+          id: string
+          image_ref: string
+          log_excerpt: string | null
+          started_at: string | null
+          status: string
+          target_version: string
+          tenant_id: string | null
+          triggered_by: string
+          updated_at: string
+        }
+        Insert: {
+          channel?: string
+          created_at?: string
+          created_by?: string | null
+          dispatched_at?: string | null
+          error_message?: string | null
+          finished_at?: string | null
+          gateway_device_id: string
+          id?: string
+          image_ref: string
+          log_excerpt?: string | null
+          started_at?: string | null
+          status?: string
+          target_version: string
+          tenant_id?: string | null
+          triggered_by?: string
+          updated_at?: string
+        }
+        Update: {
+          channel?: string
+          created_at?: string
+          created_by?: string | null
+          dispatched_at?: string | null
+          error_message?: string | null
+          finished_at?: string | null
+          gateway_device_id?: string
+          id?: string
+          image_ref?: string
+          log_excerpt?: string | null
+          started_at?: string | null
+          status?: string
+          target_version?: string
+          tenant_id?: string | null
+          triggered_by?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gateway_update_jobs_gateway_device_id_fkey"
+            columns: ["gateway_device_id"]
+            isOneToOne: false
+            referencedRelation: "gateway_devices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gateway_update_jobs_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       infrastructure_metrics: {
         Row: {
@@ -6629,6 +6979,155 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      wallbox_modbus_instances: {
+        Row: {
+          charge_point_id: string | null
+          created_at: string
+          created_by: string | null
+          gateway_id: string | null
+          id: string
+          label: string | null
+          last_error: string | null
+          last_seen_at: string | null
+          location_id: string | null
+          modbus_host: string
+          modbus_port: number
+          provision_status: string
+          template_id: string
+          tenant_id: string
+          unit_id: number
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          charge_point_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          gateway_id?: string | null
+          id?: string
+          label?: string | null
+          last_error?: string | null
+          last_seen_at?: string | null
+          location_id?: string | null
+          modbus_host: string
+          modbus_port?: number
+          provision_status?: string
+          template_id: string
+          tenant_id: string
+          unit_id?: number
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          charge_point_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          gateway_id?: string | null
+          id?: string
+          label?: string | null
+          last_error?: string | null
+          last_seen_at?: string | null
+          location_id?: string | null
+          modbus_host?: string
+          modbus_port?: number
+          provision_status?: string
+          template_id?: string
+          tenant_id?: string
+          unit_id?: number
+          updated_at?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "wallbox_modbus_instances_charge_point_id_fkey"
+            columns: ["charge_point_id"]
+            isOneToOne: false
+            referencedRelation: "charge_points"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "wallbox_modbus_instances_gateway_id_fkey"
+            columns: ["gateway_id"]
+            isOneToOne: false
+            referencedRelation: "gateway_devices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "wallbox_modbus_instances_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "wallbox_modbus_instances_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "wallbox_modbus_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      wallbox_modbus_templates: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          default_port: number
+          default_unit_id: number
+          firmware_max: string | null
+          firmware_min: string | null
+          id: string
+          is_active: boolean
+          model: string
+          notes: string | null
+          poll_intervals: Json
+          read_map: Json
+          status_map: Json
+          updated_at: string
+          vendor: string
+          version: number
+          write_map: Json
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          default_port?: number
+          default_unit_id?: number
+          firmware_max?: string | null
+          firmware_min?: string | null
+          id?: string
+          is_active?: boolean
+          model: string
+          notes?: string | null
+          poll_intervals?: Json
+          read_map?: Json
+          status_map?: Json
+          updated_at?: string
+          vendor: string
+          version?: number
+          write_map?: Json
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          default_port?: number
+          default_unit_id?: number
+          firmware_max?: string | null
+          firmware_min?: string | null
+          id?: string
+          is_active?: boolean
+          model?: string
+          notes?: string | null
+          poll_intervals?: Json
+          read_map?: Json
+          status_map?: Json
+          updated_at?: string
+          vendor?: string
+          version?: number
+          write_map?: Json
+        }
+        Relationships: []
       }
       weather_degree_days: {
         Row: {

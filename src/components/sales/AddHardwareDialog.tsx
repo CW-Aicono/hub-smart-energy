@@ -153,7 +153,7 @@ export function AddHardwareDialog({ open, onOpenChange, distributionId, onAdded 
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-3 flex-1 overflow-hidden flex flex-col">
+        <div className="space-y-3 flex-1 min-h-0 overflow-hidden flex flex-col">
           <Tabs value={klasse} onValueChange={setKlasse}>
             <ScrollArea className="w-full">
               <TabsList className="inline-flex w-auto">
@@ -176,7 +176,7 @@ export function AddHardwareDialog({ open, onOpenChange, distributionId, onAdded 
             />
           </div>
 
-          <ScrollArea className="flex-1 -mx-1 px-1">
+          <ScrollArea className="flex-1 min-h-0 -mx-1 px-1">
             {loading ? (
               <div className="flex items-center justify-center py-12">
                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />

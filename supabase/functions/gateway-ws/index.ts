@@ -501,7 +501,22 @@ async function subscribeCommands(session: Session) {
     await pushCommand(session, cmd);
   }
 
-  // 2. Realtime subscription for new INSERTs
+  // 2. Push current config snapshot so the gateway boots with up-to-date settings.
+  const { data: cfgRow } = await sb
+    .from("gateway_device_config")
+    .select("config, version, updated_at")
+    .eq("gateway_device_id", session.deviceId)
+    .maybeSingle();
+  if (cfgRow) {
+    safeSend(session.socket, {
+      type: "config_update",
+      version: (cfgRow as any).version,
+      config: (cfgRow as any).config ?? {},
+      updated_at: (cfgRow as any).updated_at,
+    });
+  }
+
+  // 3. Realtime subscription for new INSERTs (commands) + config updates.
   session.channel = sb
     .channel(`gw-cmds-${session.deviceId}`)
     .on(
@@ -516,6 +531,25 @@ async function subscribeCommands(session: Session) {
         const cmd = payload.new as any;
         if (cmd.status !== "pending") return;
         await pushCommand(session, cmd);
+      },
+    )
+    .on(
+      "postgres_changes",
+      {
+        event: "*",
+        schema: "public",
+        table: "gateway_device_config",
+        filter: `gateway_device_id=eq.${session.deviceId}`,
+      },
+      (payload) => {
+        const row = (payload.new ?? payload.old) as any;
+        if (!row) return;
+        safeSend(session.socket, {
+          type: "config_update",
+          version: row.version,
+          config: row.config ?? {},
+          updated_at: row.updated_at,
+        });
       },
     )
     .subscribe();
@@ -739,6 +773,70 @@ async function handleFrame(session: Session, raw: any) {
           });
         }
       }
+      break;
+    }
+    case "config_ack": {
+      // Gateway acknowledges that a remote-config snapshot was applied.
+      console.log(`[gateway-ws] config_ack v${raw.version} from ${session.deviceId}`);
+      break;
+    }
+    case "discoveries": {
+      // Phase 3: gateway pushes discovery results into the cloud buffer.
+      const items = Array.isArray(raw.items) ? raw.items : [];
+      if (items.length === 0) break;
+      const rows = items.slice(0, 200).map((it: any) => ({
+        gateway_device_id: session.deviceId,
+        tenant_id: session.tenantId,
+        discovery_method: String(it.discovery_method || "manual"),
+        discovered_payload: it.discovered_payload ?? {},
+      }));
+      const { error } = await svc().from("gateway_device_discoveries").insert(rows);
+      if (error) console.warn("[gateway-ws] discovery insert failed:", error.message);
+      break;
+    }
+    case "provision_result": {
+      // Phase 3: gateway reports provisioning outcome for an entity.
+      const entityId = String(raw.entity_id || "");
+      if (!entityId) break;
+      const ok = Boolean(raw.ok);
+      await svc()
+        .from("gateway_device_entities")
+        .update({
+          provision_status: ok ? "active" : "error",
+          last_error: ok ? null : (raw.error ? String(raw.error) : "unknown"),
+          last_synced_at: new Date().toISOString(),
+        })
+        .eq("id", entityId)
+        .eq("gateway_device_id", session.deviceId);
+      break;
+    }
+    case "update_progress": {
+      // Phase 4: gateway reports update job state (running / success / failed).
+      const jobId = String(raw.job_id || "");
+      if (!jobId) break;
+      const status = String(raw.status || "running");
+      const allowed = ["running", "success", "failed"];
+      if (!allowed.includes(status)) break;
+      const patch: Record<string, unknown> = {
+        status,
+        log_excerpt: raw.log ? String(raw.log).slice(0, 2000) : null,
+        error_message: raw.error ? String(raw.error).slice(0, 1000) : null,
+      };
+      const now = new Date().toISOString();
+      if (status === "running") patch.started_at = now;
+      if (status === "success" || status === "failed") patch.finished_at = now;
+      await svc().from("gateway_update_jobs").update(patch)
+        .eq("id", jobId).eq("gateway_device_id", session.deviceId);
+
+      // Bump device-level diagnostics
+      const devicePatch: Record<string, unknown> = {
+        last_update_attempt_at: now,
+        last_update_error: status === "failed" ? (raw.error ? String(raw.error).slice(0, 500) : "unknown") : null,
+      };
+      if (status === "success" && raw.installed_version) {
+        devicePatch.addon_version = String(raw.installed_version);
+      }
+      await svc().from("gateway_devices").update(devicePatch).eq("id", session.deviceId);
       break;
     }
     default:

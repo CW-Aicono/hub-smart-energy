@@ -44,6 +44,9 @@ export async function handleCall(
           last_heartbeat: new Date().toISOString(),
           ws_connected: true,
           ws_connected_since: new Date().toISOString(),
+          // Reset stale "offline"-Status nach (Re-)Boot. Der reale Status
+          // wird gleich darauf per StatusNotification gesetzt.
+          status: "available",
         });
         return callResult(messageId, {
           currentTime: new Date().toISOString(),

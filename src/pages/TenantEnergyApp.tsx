@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import { format, subMonths, startOfMonth, endOfMonth } from "date-fns";
-import { de, enUS, pl, fr } from "date-fns/locale";
+import { de, enUS, es, nl } from "date-fns/locale";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from "recharts";
@@ -68,15 +68,15 @@ interface MonthlyReading {
 const getDateFnsLocale = (lang: TenantLang) => {
   switch (lang) {
     case "en": return enUS;
-    case "pl": return pl;
-    case "fr": return fr;
+    case "es": return es;
+    case "nl": return nl;
     default: return de;
   }
 };
 
 // Number formatter based on language
 const fmtNum = (v: number, decimals = 1, lang: TenantLang = "de") => {
-  const loc = lang === "de" ? "de-DE" : lang === "fr" ? "fr-FR" : lang === "pl" ? "pl-PL" : "en-US";
+  const loc = lang === "de" ? "de-DE" : lang === "es" ? "es-ES" : lang === "nl" ? "nl-NL" : "en-US";
   return v.toLocaleString(loc, { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
 };
 
@@ -1007,7 +1007,7 @@ function TariffsTab({ tenantRecord, lang }: { tenantRecord: TenantRecord; lang: 
                 <p>{t("dash.local_pv")}: <span className="font-semibold text-foreground">{fmtNum(landlordTariff.price_per_kwh_local, 4, lang)} €/kWh</span></p>
                 <p>{t("dash.grid")}: <span className="font-semibold text-foreground">{fmtNum(landlordTariff.price_per_kwh_grid, 4, lang)} €/kWh</span></p>
                 {landlordTariff.base_fee_monthly > 0 && (
-                  <p>{t("inv.base_fee")} <span className="font-semibold text-foreground">{fmtNum(landlordTariff.base_fee_monthly, 2, lang)} €/{lang === "de" ? "Monat" : lang === "fr" ? "mois" : lang === "pl" ? "mies." : "month"}</span></p>
+                  <p>{t("inv.base_fee")} <span className="font-semibold text-foreground">{fmtNum(landlordTariff.base_fee_monthly, 2, lang)} €/{lang === "de" ? "Monat" : lang === "es" ? "mes" : lang === "nl" ? "maand" : "month"}</span></p>
                 )}
                 <p className="text-xs">{t("tariff.from")} {landlordTariff.valid_from}</p>
               </div>
@@ -1106,7 +1106,7 @@ function TariffsTab({ tenantRecord, lang }: { tenantRecord: TenantRecord; lang: 
                 <div className="mt-1 text-sm">
                   <span className="font-bold">{fmtNum(Number(tr.price_per_kwh), 4, lang)} €/{tr.energy_type === "wasser" || tr.energy_type === "gas" ? "m³" : "kWh"}</span>
                   {Number(tr.base_fee_monthly) > 0 && (
-                    <span className="text-muted-foreground ml-2">+ {fmtNum(Number(tr.base_fee_monthly), 2, lang)} €/{lang === "de" ? "Monat" : lang === "en" ? "month" : lang === "pl" ? "mies." : "mois"}</span>
+                    <span className="text-muted-foreground ml-2">+ {fmtNum(Number(tr.base_fee_monthly), 2, lang)} €/{lang === "de" ? "Monat" : lang === "en" ? "month" : lang === "es" ? "mes" : "maand"}</span>
                   )}
                 </div>
                 <p className="text-xs text-muted-foreground mt-0.5">
@@ -1320,7 +1320,7 @@ const TenantEnergyApp = () => {
     return <NotLinkedScreen email={user.email || ""} onLogout={handleLogout} lang={tenantLang} />;
   }
 
-  const langLabels: Record<TenantLang, string> = { de: "Deutsch", en: "English", pl: "Polski", fr: "Français" };
+  const langLabels: Record<TenantLang, string> = { de: "Deutsch", en: "English", es: "Español", nl: "Nederlands" };
 
   return (
     <div className="min-h-screen bg-background flex flex-col" style={{ paddingTop: "env(safe-area-inset-top, 0px)", paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>

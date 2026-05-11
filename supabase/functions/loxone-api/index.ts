@@ -413,7 +413,20 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
     const token = authHeader.replace("Bearer ", "");
-    const isServiceRole = token === supabaseServiceKey;
+    // Robust service-role detection: equality OR JWT payload role === "service_role".
+    // Equality alone is brittle when keys are rotated or different deployment snapshots
+    // hold different copies of SUPABASE_SERVICE_ROLE_KEY.
+    let isServiceRole = token === supabaseServiceKey;
+    if (!isServiceRole) {
+      try {
+        const part = token.split(".")[1];
+        if (part) {
+          const padded = part + "=".repeat((4 - (part.length % 4)) % 4);
+          const payload = JSON.parse(atob(padded.replace(/-/g, "+").replace(/_/g, "/")));
+          if (payload?.role === "service_role") isServiceRole = true;
+        }
+      } catch { /* not a JWT, fall through */ }
+    }
 
     let userTenantId: string | null = null;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
