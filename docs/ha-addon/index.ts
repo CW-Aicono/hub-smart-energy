@@ -1953,7 +1953,7 @@ async function pushDiscoveriesToCloud(items: DiscoveredItem[]): Promise<void> {
   try {
     safeWsSend(cloudWs, {
       type: "discoveries",
-      device_id: gatewayDeviceId,
+      device_id: cloudWsAssignment.device_id || null,
       items: items.map((i) => ({
         discovery_method: i.discovery_method,
         discovered_payload: i.payload,
@@ -2028,7 +2028,7 @@ async function reportProvisionStatus(entityId: string, result: { ok: boolean; er
   try {
     safeWsSend(cloudWs, {
       type: "provision_result",
-      device_id: gatewayDeviceId,
+      device_id: cloudWsAssignment.device_id || null,
       entity_id: entityId,
       ok: result.ok,
       error: result.error || null,
