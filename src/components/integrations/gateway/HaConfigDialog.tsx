@@ -85,7 +85,6 @@ export function HaConfigDialog({ device, open, onOpenChange }: HaConfigDialogPro
   const cloudWsUrl = projectId
     ? `wss://${projectId}.supabase.co/functions/v1/gateway-ws`
     : null;
-  const hasTenantId = Boolean(device.tenant_id);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

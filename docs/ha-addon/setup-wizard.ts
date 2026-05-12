@@ -196,7 +196,6 @@ export function runSetupWizard(port = 8099): Promise<void> {
               ...opts,
               gateway_username: paired.gateway_username,
               gateway_password: paired.gateway_password,
-              tenant_id: paired.tenant_id,
               device_name: deviceName,
               cloud_url: cloud,
             });
