@@ -33,7 +33,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
   && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/dist/index.js ./index.js
+COPY --from=builder /app/dist ./dist
 COPY --from=builder /addon_version.txt /addon_version.txt
 
 # Copy UI files
