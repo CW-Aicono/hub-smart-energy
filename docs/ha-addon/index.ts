@@ -2357,9 +2357,13 @@ function startServer(): Promise<void> {
     }
 
     // ── Session check for all other /api/* and UI routes ──
+    // Public endpoints (no PIN required):
+    //  - /api/version       → health check
+    //  - /api/status        → Supervisor watchdog (called WITHOUT cookies, must return 200)
+    //  - /api/auth-status   → UI login page needs to know if PIN is configured
+    const PUBLIC_API_PATHS = new Set(["/api/version", "/api/status", "/api/auth-status"]);
     if (uiPinHash && !isSessionValid(req)) {
-      // Allow version endpoint without auth (for health checks)
-      if (pathname !== "/api/version") {
+      if (!PUBLIC_API_PATHS.has(pathname)) {
         res.writeHead(401, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ error: "Unauthorized", pin_required: true }));
         return;

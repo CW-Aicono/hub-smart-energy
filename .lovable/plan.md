@@ -1,98 +1,61 @@
-## Problem
+# AICONO EMS Add-on: Restart-Loop durch PIN-Schutz
 
-Der aktuelle CSV-Export auf `/energy-data` enthält nur **Zähler-Stammdaten** (Name, Nummer, Einheit, Erfassungsart) und **manuelle Ablesungen** aus `meter_readings`. Für automatisch erfasste Zähler (Loxone, Shelly, Schneider, Siemens, EMS-Gateway) liegen die Daten aber in **anderen Tabellen** und werden weder exportiert noch importiert. Im hochgeladenen Beispiel-Export sieht man genau das: nur Stammdaten, keine Werte.
+## Ursache (sicher identifiziert)
 
-## Ziel
-
-Export und Import sollen die tatsächlichen Verbrauchs- und Leistungsdaten enthalten — vollständig, wiederherstellbar (Round-Trip), und für Laien verständlich (Excel-kompatibel, deutsches Zahlenformat, Semikolon).
-
-## Datenquellen (Ist-Zustand)
-
-
-| Tabelle                     | Inhalt                                                                 | Heute exportiert? |
-| --------------------------- | ---------------------------------------------------------------------- | ----------------- |
-| `meters`                    | Stammdaten                                                             | Ja                |
-| `meter_readings`            | Manuelle Zählerstände                                                  | Ja                |
-| `meter_period_totals`       | Tages-/Monatsverbrauch (kWh, m³) — Hauptquelle für automatische Zähler | **Nein**          |
-| `meter_power_readings_5min` | 5-Min-Leistungswerte (kW) — für Lastprofile/Charts                     | **Nein**          |
-
-
-## Plan
-
-### 1. Export — drei zusätzliche Datenbereiche
-
-In `src/pages/EnergyData.tsx` werden drei neue Checkboxen ergänzt:
-
-- ☐ **Tages-/Monatsverbräuche** (`meter_period_totals`) — Standard: an
-- ☐ **5-Minuten-Leistungswerte** (`meter_power_readings_5min`) — Standard: aus, mit Hinweis "kann sehr groß werden"
-- ☐ **Manuelle Ablesungen** (`meter_readings`) — wie heute, Standard: an
-
-Pro Bereich werden eigene Zeilen mit `Quelle = "Verbrauch (Tag)"`, `"Verbrauch (Monat)"`, `"Leistung 5min"` oder `"Ablesung"` geschrieben. Spalten:
+In `docs/ha-addon/config.yaml` ist der Supervisor-Watchdog konfiguriert auf:
 
 ```
-Quelle;Standort;Zähler;Zählernummer;Energieart;Datum;Zeit;Wert;Einheit;Erfassung;Quellsystem
+watchdog: "http://[HOST]:[PORT:8099]/api/status"
 ```
 
-Datum/Zeit getrennt für Excel-Filter, Werte im deutschen Format (Komma) via `toLocaleString("de-DE")`.
-
-**Performance:** 5-Min-Werte werden in 50.000er-Batches paginiert, mit Fortschrittstoast. Bei > 200.000 Zeilen wird statt CSV automatisch ein **ZIP mit mehreren CSVs** (eine pro Datenbereich) geliefert, damit Excel nicht abstürzt.
-
-### 2. Import — drei neue Importtypen
-
-In `src/components/energy-data/DataImportDialog.tsx` und `useDataImport.tsx` wird `ImportType` erweitert:
+Der Supervisor ruft diese URL **ohne Session-Cookie** auf. In `docs/ha-addon/index.ts` (Zeilen 2359-2367) gibt es jedoch einen globalen Auth-Gate, der **alle** `/api/*`-Routen außer `/api/version` blockt, sobald ein UI-PIN gesetzt ist:
 
 ```ts
-type ImportType = "readings" | "consumption" | "consumption_monthly" | "power_5min";
+if (uiPinHash && !isSessionValid(req)) {
+  if (pathname !== "/api/version") {
+    res.writeHead(401, ...);  // ← Watchdog bekommt 401
+    return;
+  }
+}
 ```
 
-- `**consumption**` (Tag) → `meter_period_totals` mit `period_type = 'day'` (existiert bereits, nur Mapping erweitern)
-- `**consumption_monthly**` (Monat) → `meter_period_totals` mit `period_type = 'month'`
-- `**power_5min**` → `meter_power_readings_5min` mit Bucket-Validierung (Vielfaches von 5 Min, UTC)
+Folge:
+1. Supervisor-Watchdog ruft `/api/status` → bekommt **401**
+2. Watchdog wertet das als „App failed" → `restarting...`
+3. Beim Neustart kollidiert der Restart mit dem laufenden Stop-Job → `"Another job is running for job group addon_..."`
+4. `Stream error ... Cannot write to closing transport` – der HTTP-Server wird mitten in einer Antwort beendet
+5. Endlosschleife alle paar Minuten
 
-Alle Importe erkennen den **Quelle-Spaltenwert aus dem Export automatisch** — d. h. ein unverändert re-importiertes Export-CSV verteilt seine Zeilen selbst auf die richtigen Tabellen (Round-Trip).
+Die Logzeilen `Home Assistant WebSocket API closed` + `Watchdog found app ... is failed` direkt hintereinander passen exakt zu diesem Muster.
 
-**Konflikt-Strategie** (per Radio-Button im Dialog):
+## Fix
 
-- *Überspringen* (Default): vorhandene Werte bleiben
-- *Überschreiben*: `ON CONFLICT … DO UPDATE`
-- *Nur neue Zeitpunkte*: Insert mit `ON CONFLICT DO NOTHING`
+`/api/status` und `/api/auth-status` aus dem PIN-Gate ausnehmen — beide sind reine Health/Status-Endpoints ohne sensible Daten und werden vom Supervisor (Watchdog) bzw. der Login-UI selbst aufgerufen.
 
-### 3. CSV-Template-Generator
+### Änderung in `docs/ha-addon/index.ts` (~Zeile 2362)
 
-Drei neue Vorlagen-Buttons im Import-Dialog:
+```ts
+if (uiPinHash && !isSessionValid(req)) {
+  // Health-/Status-Endpoints für Supervisor-Watchdog & UI-Login freigeben
+  const publicPaths = new Set(["/api/version", "/api/status", "/api/auth-status"]);
+  if (!publicPaths.has(pathname)) {
+    res.writeHead(401, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: "Unauthorized", pin_required: true }));
+    return;
+  }
+}
+```
 
-- "Vorlage Tagesverbrauch"
-- "Vorlage Monatsverbrauch"  
-- "Vorlage 5-Min-Leistung"
+Optional härten: `/api/status` zusätzlich auf Aufrufe vom Supervisor-Subnetz (172.30.32.0/23) beschränken, falls ein Schutz vor LAN-Zugriff gewünscht ist – für Health-Daten aber unkritisch.
 
-Jede mit 2 Beispielzeilen + erklärendem Header-Kommentar (`# Spalten: …`).
+### Sofort-Workaround für den Anwender (ohne Update)
 
-### 4. Validierung
+Falls der Hub gerade gar nicht startet:
+1. HA → **Einstellungen → Add-ons → AICONO EMS Gateway → Konfiguration**
+2. PIN-Hash temporär entfernen (Add-on-Optionen) **oder** Watchdog deaktivieren (Tab „Info" → „Watchdog" aus)
+3. Add-on starten, anschließend Update einspielen, danach Watchdog/PIN wieder aktivieren
 
-- Zähler-Lookup wie heute (Zählernummer, sonst Name+Standort als Fallback)
-- Einheit muss zur `meters.unit` passen, sonst Warnung mit automatischer Umrechnung (z. B. m³ Gas → kWh über Brennwert, falls hinterlegt)
-- Negative Werte erlaubt (Einspeisung) — keine Warnung mehr
-- Duplikat-Erkennung pro `(meter_id, period_start)` bzw. `(meter_id, bucket)`
+## Memory-Update (nach Approval)
 
-### 5. Technische Umsetzung
-
-
-| Datei                                             | Änderung                                                                  |
-| ------------------------------------------------- | ------------------------------------------------------------------------- |
-| `src/pages/EnergyData.tsx`                        | 3 neue Checkboxen, erweiterte `buildExportRows`, ZIP-Fallback via `jszip` |
-| `src/lib/exportUtils.ts`                          | Neue Helper `downloadCsvZip(files[])`, deutsches Zahlenformat             |
-| `src/lib/csvParser.ts`                            | Neue Felder `period_type`, `bucket_time` im `MappableField`-Typ           |
-| `src/hooks/useDataImport.tsx`                     | 2 neue Import-Pfade, `conflictStrategy`-Param                             |
-| `src/components/energy-data/DataImportDialog.tsx` | Importtyp-Auswahl auf 4 Optionen erweitert, Konflikt-Strategie            |
-
-
-Keine DB-Migration nötig — alle Tabellen existieren bereits inkl. RLS.
-
-## Bonus (optional, separat)
-
-- **Auto-Erkennung beim Import**: Wenn die hochgeladene CSV eine `Quelle`-Spalte hat (Lovable-Export-Format), Schritt "Importtyp wählen" überspringen und direkt verteilen.
-- **XLSX-Export** mit mehreren Tabs (Stammdaten / Tagesverbrauch / Leistung) — über `@e965/xlsx`, das schon im Projekt ist.
-
-Soll ich den Plan direkt umsetzen, oder zuerst nur Teil 1 + 2 (Export + Import von Tages-/Monatsverbrauch), und 5-Min-Leistung in einem zweiten Schritt?  
-  
-Antwort: Gerne den Plan komplett umsetzen.ond auch gleich mit dem optionalen Bonus bitte.
+Eintrag in `mem://features/gateways/aicono-ems-pin-protection` ergänzen:
+> Watchdog-Endpoints (`/api/status`, `/api/version`, `/api/auth-status`) müssen am PIN-Gate vorbeigeleitet werden – sonst Restart-Loop durch Supervisor.
