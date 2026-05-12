@@ -12,7 +12,7 @@ WORKDIR /app
 COPY package.json package-lock.json tsconfig.json ./
 RUN npm ci
 
-COPY index.ts ./
+COPY index.ts setup-wizard.ts modbus-wallbox-bridge.ts ./
 RUN npm run build && npm prune --omit=dev
 
 # Version aus config.yaml extrahieren – wird im Runner-Stage als ENV gesetzt,
