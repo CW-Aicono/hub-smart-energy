@@ -34,6 +34,9 @@ if ! "${REPO_ROOT}/scripts/apply-migrations.sh"; then
   exit 1
 fi
 
+log "3b/6 Cron-Settings bootstrappen"
+"${REPO_ROOT}/scripts/bootstrap-cron-settings.sh"
+
 log "4/6 Frontend-Image pullen: $IMAGE"
 docker pull "$IMAGE"
 docker tag "$IMAGE" hub-smart-energy-frontend:latest
