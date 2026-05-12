@@ -116,13 +116,6 @@ export function HaConfigDialog({ device, open, onOpenChange }: HaConfigDialogPro
             missingHint="Wird automatisch beim ersten Verbindungsaufbau des Gateways gesetzt."
           />
 
-          {hasTenantId && (
-            <CopyRow
-              label="tenant_id"
-              value={device.tenant_id}
-              hint="Nur für Legacy-/Fallback-Fälle relevant. Im aktuellen v3-Onboarding wird die Zuordnung primär über MAC-Adresse und Zugangsdaten hergestellt."
-            />
-          )}
 
           <CopyRow
             label="gateway_username"
