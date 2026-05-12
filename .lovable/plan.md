@@ -1,61 +1,36 @@
-# AICONO EMS Add-on: Restart-Loop durch PIN-Schutz
+## Befund
 
-## Ursache (sicher identifiziert)
+Das aktuelle Log zeigt diesmal nicht primär einen PIN-/Watchdog-Fehler, sondern: Der Supervisor wartet 120 Sekunden darauf, dass auf Port `8099` etwas erreichbar wird – aber das Add-on öffnet den Port nicht rechtzeitig. Danach kommen die Ingress-Fehler `Cannot connect to host 172.30.33.1:8099`, weil schlicht kein Webserver im Container lauscht.
 
-In `docs/ha-addon/config.yaml` ist der Supervisor-Watchdog konfiguriert auf:
+Der kritischste Codepunkt ist in `docs/ha-addon/index.ts`: Der lokale Webserver wird erst nach Offline-Cache-Initialisierung gestartet, danach laufen noch Cloud-/HA-Initialabfragen. Zusätzlich kann bei fehlenden Credentials der Setup-Wizard den Hauptserver ersetzen. Für Home Assistant ist das riskant, weil Ingress/Startprüfung sehr früh eine Antwort auf Port 8099 erwartet.
 
-```
-watchdog: "http://[HOST]:[PORT:8099]/api/status"
-```
+## Plan
 
-Der Supervisor ruft diese URL **ohne Session-Cookie** auf. In `docs/ha-addon/index.ts` (Zeilen 2359-2367) gibt es jedoch einen globalen Auth-Gate, der **alle** `/api/*`-Routen außer `/api/version` blockt, sobald ein UI-PIN gesetzt ist:
+1. **Port 8099 sofort beim Boot öffnen**
+   - `startServer()` ganz früh in `main()` starten, bevor Cloud-, HA-, Mapping-, Automation- oder Setup-Schritte laufen.
+   - Dadurch bekommt Home Assistant sofort eine Antwort und der 120s-Starttimeout wird verhindert.
 
-```ts
-if (uiPinHash && !isSessionValid(req)) {
-  if (pathname !== "/api/version") {
-    res.writeHead(401, ...);  // ← Watchdog bekommt 401
-    return;
-  }
-}
-```
+2. **Health-Endpoint maximal robust machen**
+   - `/api/status` darf keine langsamen oder potenziell blockierenden Operationen enthalten.
+   - Die MAC-Adresse dort nicht live über `/network/info` holen, sondern nur gecacht/fallbackfähig ausgeben.
+   - Ziel: `/api/status` antwortet auch dann mit `200`, wenn Cloud, HA API, PIN oder MAC-Ermittlung gerade Probleme haben.
 
-Folge:
-1. Supervisor-Watchdog ruft `/api/status` → bekommt **401**
-2. Watchdog wertet das als „App failed" → `restarting...`
-3. Beim Neustart kollidiert der Restart mit dem laufenden Stop-Job → `"Another job is running for job group addon_..."`
-4. `Stream error ... Cannot write to closing transport` – der HTTP-Server wird mitten in einer Antwort beendet
-5. Endlosschleife alle paar Minuten
+3. **Setup-/Credentials-Fall Ingress-tauglich machen**
+   - Wenn `gateway_username` oder `gateway_password` fehlen, nicht in einen separaten Wizard blockieren, der den Bootfluss übernimmt.
+   - Stattdessen soll der bereits gestartete Server weiterlaufen und `/api/status` `credentials_configured: false` melden; die UI kann Setup/Login anzeigen.
+   - So startet das Add-on auch bei kaputter/alter Konfiguration und bleibt reparierbar.
 
-Die Logzeilen `Home Assistant WebSocket API closed` + `Watchdog found app ... is failed` direkt hintereinander passen exakt zu diesem Muster.
+4. **Startphase entkoppeln**
+   - Initiale Cloud-/HA-Aufrufe (`checkCloudConnectivity`, `fetchHAVersion`, `fetchMeterMappings`, `syncAutomationsFromCloud`) nicht mehr vor “Gateway läuft” blockierend erzwingen.
+   - Diese Aufgaben nach Serverstart im Hintergrund ausführen und Fehler nur loggen, nicht den Prozess beenden.
 
-## Fix
+5. **Version synchronisieren**
+   - `package.json` steht noch auf `3.1.4`, `config.yaml` bereits auf `3.2.0`. Das sollte vereinheitlicht werden, damit HA nicht weiterhin alte 3.1.4-Builds zieht.
 
-`/api/status` und `/api/auth-status` aus dem PIN-Gate ausnehmen — beide sind reine Health/Status-Endpoints ohne sensible Daten und werden vom Supervisor (Watchdog) bzw. der Login-UI selbst aufgerufen.
+6. **Kurztest ergänzen/ausführen**
+   - Minimal prüfen, dass `/api/status` ohne PIN/Cookie und auch ohne Credentials erreichbar bleibt.
+   - Keine Änderung an der Cloud-Datenbank nötig.
 
-### Änderung in `docs/ha-addon/index.ts` (~Zeile 2362)
+## Sofort-Hinweis für dich
 
-```ts
-if (uiPinHash && !isSessionValid(req)) {
-  // Health-/Status-Endpoints für Supervisor-Watchdog & UI-Login freigeben
-  const publicPaths = new Set(["/api/version", "/api/status", "/api/auth-status"]);
-  if (!publicPaths.has(pathname)) {
-    res.writeHead(401, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ error: "Unauthorized", pin_required: true }));
-    return;
-  }
-}
-```
-
-Optional härten: `/api/status` zusätzlich auf Aufrufe vom Supervisor-Subnetz (172.30.32.0/23) beschränken, falls ein Schutz vor LAN-Zugriff gewünscht ist – für Health-Daten aber unkritisch.
-
-### Sofort-Workaround für den Anwender (ohne Update)
-
-Falls der Hub gerade gar nicht startet:
-1. HA → **Einstellungen → Add-ons → AICONO EMS Gateway → Konfiguration**
-2. PIN-Hash temporär entfernen (Add-on-Optionen) **oder** Watchdog deaktivieren (Tab „Info" → „Watchdog" aus)
-3. Add-on starten, anschließend Update einspielen, danach Watchdog/PIN wieder aktivieren
-
-## Memory-Update (nach Approval)
-
-Eintrag in `mem://features/gateways/aicono-ems-pin-protection` ergänzen:
-> Watchdog-Endpoints (`/api/status`, `/api/version`, `/api/auth-status`) müssen am PIN-Gate vorbeigeleitet werden – sonst Restart-Loop durch Supervisor.
+Solange das Update noch nicht installiert ist: Die Meldung `Cannot connect to host 172.30.33.1:8099` bedeutet, dass das Add-on intern gar keinen Webserver geöffnet hat. Deshalb helfen PIN deaktivieren oder Watchdog ausschalten allein nicht zuverlässig.
