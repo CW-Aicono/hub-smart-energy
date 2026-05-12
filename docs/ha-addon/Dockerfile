@@ -46,4 +46,4 @@ ENV NODE_ENV=production
 
 # ADDON_VERSION zur Laufzeit aus der beim Build extrahierten Datei lesen –
 # garantiert, dass UI-Anzeige === config.yaml-Version.
-CMD ["sh", "-c", "export ADDON_VERSION=$(cat /addon_version.txt) && node index.js"]
+CMD ["sh", "-c", "export ADDON_VERSION=$(cat /addon_version.txt) && node dist/index.js"]
