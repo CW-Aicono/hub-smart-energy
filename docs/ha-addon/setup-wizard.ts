@@ -34,7 +34,6 @@ const SUPABASE_ANON =
 interface AddonOptions {
   gateway_username?: string;
   gateway_password?: string;
-  tenant_id?: string;
   device_name?: string;
   cloud_url?: string;
   [key: string]: unknown;
