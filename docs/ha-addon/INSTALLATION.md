@@ -342,10 +342,10 @@ Im Multi-Tenant-Betrieb sollte jeder Raspberry Pi einen **eigenen API-Key** habe
 
 ### Add-on startet nicht
 
-1. Logs prüfen: **Add-ons** → **EMS Gateway Hub** → **Protokoll**
+1. Logs prüfen: **Add-ons** → **AICONO EMS Gateway** → **Protokoll**
 2. Häufige Ursachen:
-   - Cloud URL oder Gateway API Key nicht eingetragen
-   - Ungültige Tenant ID
+   - Cloud-URL oder Gateway-Benutzername/Passwort nicht eingetragen
+   - Add-on wurde noch nicht in AICONO zugeordnet (MAC + Benutzername + Passwort in der Integration hinterlegen)
 
 ### Keine Sensordaten
 
@@ -364,7 +364,7 @@ Im Multi-Tenant-Betrieb sollte jeder Raspberry Pi einen **eigenen API-Key** habe
 
 1. Internetverbindung prüfen: `ping google.com`
 2. Cloud-URL Erreichbarkeit prüfen
-3. API Key Gültigkeit in der App prüfen
+3. Gateway-Zugangsdaten in der AICONO-Integration prüfen (Benutzername/Passwort)
 
 ### SSH-Zugang
 
