@@ -152,7 +152,7 @@ async function pairWithCloud(token: string, mac: string, deviceName: string, clo
     },
     body: JSON.stringify({ token: token.replace(/-/g, ""), mac, device_name: deviceName }),
   });
-  const body = await res.json().catch(() => ({}));
+  const body = await res.json().catch(() => ({})) as { error?: string };
   if (!res.ok) throw new Error(body?.error || `HTTP ${res.status}`);
   return body as { gateway_username: string; gateway_password: string };
 }
