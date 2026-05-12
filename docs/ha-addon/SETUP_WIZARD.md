@@ -14,7 +14,7 @@ neuen werkseitig vorinstallierten Hub-Images.
 4. Kunde gibt 8-stelligen Code (z. B. `ABCD-1234`) aus dem AICONO Backend ein.
 5. Wizard ruft `POST /functions/v1/gateway-pair` (anonym; Edge-Function
    erlaubt einmaligen Pairing-Aufruf, rotiert dabei `gateway_password`).
-6. Antwort enthält `gateway_username`, `gateway_password`, `tenant_id` →
+6. Antwort enthält `gateway_username` und `gateway_password` →
    wird in `/data/options.json` persistiert.
 7. Wizard beendet sich mit `exit(0)` → HA-Supervisor startet das Add-on neu →
    regulärer Gateway-Loop läuft mit den frischen Credentials.

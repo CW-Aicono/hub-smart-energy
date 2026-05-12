@@ -2357,9 +2357,13 @@ function startServer(): Promise<void> {
     }
 
     // ── Session check for all other /api/* and UI routes ──
+    // Public endpoints (no PIN required):
+    //  - /api/version       → health check
+    //  - /api/status        → Supervisor watchdog (called WITHOUT cookies, must return 200)
+    //  - /api/auth-status   → UI login page needs to know if PIN is configured
+    const PUBLIC_API_PATHS = new Set(["/api/version", "/api/status", "/api/auth-status"]);
     if (uiPinHash && !isSessionValid(req)) {
-      // Allow version endpoint without auth (for health checks)
-      if (pathname !== "/api/version") {
+      if (!PUBLIC_API_PATHS.has(pathname)) {
         res.writeHead(401, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ error: "Unauthorized", pin_required: true }));
         return;
@@ -2368,7 +2372,11 @@ function startServer(): Promise<void> {
 
     // API endpoints
     if (pathname === "/api/status") {
-      const mac = await getHostMAC();
+      // Non-blocking: never await network calls here – Supervisor watchdog
+      // and Ingress healthcheck must get an instant 200 even if Cloud/HA are down.
+      const mac = cachedHostMAC || "";
+      // Refresh MAC in background for next call
+      if (!cachedHostMAC) { getHostMAC().catch(() => {}); }
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end(JSON.stringify({
         status: "running",
@@ -2640,15 +2648,21 @@ async function main(): Promise<void> {
   console.log(`  AICONO EMS Gateway v${ADDON_VERSION}`);
   console.log("═══════════════════════════════════════════════════════");
 
-  // Boot-Check: Falls noch keine Credentials hinterlegt sind, starten wir
-  // den Captive-Setup-Wizard auf Port 8099 (mDNS: aicono.local) und
-  // beenden uns danach – der HA-Supervisor restartet das Add-on automatisch
-  // mit den frisch gepairten Credentials.
+  // PHASE 1 – open port 8099 IMMEDIATELY so Home Assistant Ingress and the
+  // Supervisor start-watchdog (120s timeout on /api/status) get an instant 200.
+  // Anything that can fail (Cloud, HA API, MAC lookup) MUST run afterwards in
+  // the background – never block the boot path.
+  try {
+    await startServer();
+  } catch (err) {
+    console.error("[boot] startServer failed:", err);
+    process.exit(1);
+  }
+
+  // Captive setup hint – no longer hijacks port 8099. The main server already
+  // owns the port; the UI surfaces /setup based on /api/status.
   if (!config.gateway_username || !config.gateway_password) {
-    console.log("[boot] Keine Credentials gefunden – starte Pairing-Wizard …");
-    const { runSetupWizard } = await import("./setup-wizard");
-    await runSetupWizard();
-    return; // wird nie erreicht (Wizard exit(0))
+    console.warn("[boot] Keine Gateway-Credentials konfiguriert – Pairing über UI erforderlich. /api/status meldet credentials_configured=false.");
   }
 
   console.log(`  Device:     ${config.device_name}`);
@@ -2661,7 +2675,7 @@ async function main(): Promise<void> {
 
   compileEntityFilter();
 
-  // Load offline caches before starting server
+  // Load offline caches (synchronous, fast – safe to await)
   const cachedMappings = loadMeterMappingsFromCache();
   if (cachedMappings.length > 0) {
     meterMappings = cachedMappings;
@@ -2686,20 +2700,21 @@ async function main(): Promise<void> {
     console.log(`[offline] Loaded cached gateway assignment: ${cachedAssignment.location_name || cachedAssignment.tenant_name || 'unknown'}`);
   }
 
-  // Phase 2: Apply cached remote config (so reboot keeps Cloud-managed settings)
   const cachedRemote = loadRemoteConfigFromCache();
   if (cachedRemote) {
     applyRemoteConfig(cachedRemote.config, cachedRemote.version);
     console.log(`[offline] Loaded cached remote config (v${cachedRemote.version})`);
   }
 
-  await startServer();
-
-  // Initial setup
-  await checkCloudConnectivity();
-  await fetchHAVersion();
-  await fetchMeterMappings();
-  await syncAutomationsFromCloud();
+  // PHASE 3 – Initial cloud/HA bootstrap runs in background. Failures only log.
+  void (async () => {
+    try { await checkCloudConnectivity(); } catch (e) { console.warn("[boot] cloud check failed:", (e as Error).message); }
+    try { await fetchHAVersion(); } catch (e) { console.warn("[boot] HA version failed:", (e as Error).message); }
+    try { await fetchMeterMappings(); } catch (e) { console.warn("[boot] meter mappings failed:", (e as Error).message); }
+    try { await syncAutomationsFromCloud(); } catch (e) { console.warn("[boot] automation sync failed:", (e as Error).message); }
+    // Warm MAC cache for /api/status
+    try { await getHostMAC(); } catch { /* ignore */ }
+  })();
 
   // Connect HA WebSocket for live sensor updates
   connectHAWebSocket();

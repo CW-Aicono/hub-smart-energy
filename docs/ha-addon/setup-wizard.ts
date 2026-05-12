@@ -34,7 +34,6 @@ const SUPABASE_ANON =
 interface AddonOptions {
   gateway_username?: string;
   gateway_password?: string;
-  tenant_id?: string;
   device_name?: string;
   cloud_url?: string;
   [key: string]: unknown;
@@ -155,7 +154,7 @@ async function pairWithCloud(token: string, mac: string, deviceName: string, clo
   });
   const body = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(body?.error || `HTTP ${res.status}`);
-  return body as { gateway_username: string; gateway_password: string; tenant_id: string };
+  return body as { gateway_username: string; gateway_password: string };
 }
 
 function primaryMac(): string {
@@ -196,7 +195,6 @@ export function runSetupWizard(port = 8099): Promise<void> {
               ...opts,
               gateway_username: paired.gateway_username,
               gateway_password: paired.gateway_password,
-              tenant_id: paired.tenant_id,
               device_name: deviceName,
               cloud_url: cloud,
             });
