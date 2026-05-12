@@ -154,7 +154,7 @@ async function pairWithCloud(token: string, mac: string, deviceName: string, clo
   });
   const body = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(body?.error || `HTTP ${res.status}`);
-  return body as { gateway_username: string; gateway_password: string; tenant_id: string };
+  return body as { gateway_username: string; gateway_password: string };
 }
 
 function primaryMac(): string {
