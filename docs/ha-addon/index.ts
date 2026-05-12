@@ -2372,7 +2372,11 @@ function startServer(): Promise<void> {
 
     // API endpoints
     if (pathname === "/api/status") {
-      const mac = await getHostMAC();
+      // Non-blocking: never await network calls here – Supervisor watchdog
+      // and Ingress healthcheck must get an instant 200 even if Cloud/HA are down.
+      const mac = cachedHostMAC || "";
+      // Refresh MAC in background for next call
+      if (!cachedHostMAC) { getHostMAC().catch(() => {}); }
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end(JSON.stringify({
         status: "running",
