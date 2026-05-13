@@ -74,6 +74,53 @@ export default function SuperAdminChargePointOnboarding() {
   const [connectorType, setConnectorType] = useState("Type2");
   const [notes, setNotes] = useState("");
 
+  // Vendor-Templates (OCPP 1.6J Defaults)
+  type VendorTemplate = {
+    id: string;
+    label: string;
+    vendor: string;
+    model: string;
+    connectorCount: number;
+    maxPowerKw: number;
+    connectorType: string;
+    protocol: Protocol;
+    authRequired: boolean;
+    notes: string;
+  };
+  const VENDOR_TEMPLATES: VendorTemplate[] = [
+    {
+      id: "abl-emh3-sbc4",
+      label: "ABL eMH3 (sbc4) – OCPP 1.6J",
+      vendor: "ABL",
+      model: "eMH3 (sbc4)",
+      connectorCount: 2,
+      maxPowerKw: 22,
+      connectorType: "Type2",
+      protocol: "wss",
+      authRequired: true,
+      notes:
+        "OCPP 1.6J · Heartbeat 60s · MeterValues 30s · WS-Ping 30s · " +
+        "MeterValuesSampledData: Energy.Active.Import.Register,Power.Active.Import,Current.Import,Voltage,SoC · " +
+        "Firmware ≥ 1.7.4 (Let's Encrypt im Trust-Store). " +
+        "Anleitung: docs/wallbox-onboarding/ABL-eMH3-sbc4-Inbetriebnahme.md",
+    },
+  ];
+  const [templateId, setTemplateId] = useState<string>("");
+  function applyTemplate(id: string) {
+    setTemplateId(id);
+    const tpl = VENDOR_TEMPLATES.find((t) => t.id === id);
+    if (!tpl) return;
+    setVendor(tpl.vendor);
+    setModel(tpl.model);
+    setConnectorCount(tpl.connectorCount);
+    setMaxPowerKw(tpl.maxPowerKw);
+    setConnectorType(tpl.connectorType);
+    setProtocol(tpl.protocol);
+    setAuthRequired(tpl.authRequired);
+    setNotes(tpl.notes);
+    toast({ title: "Template geladen", description: tpl.label });
+  }
+
   // Step 2
   const [autoOcppId, setAutoOcppId] = useState(true);
   const [ocppId, setOcppId] = useState(generateOcppId());
@@ -227,6 +274,20 @@ export default function SuperAdminChargePointOnboarding() {
             <CardDescription>Grunddaten zur Wallbox und Zuordnung zum Mandanten.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
+            <div className="space-y-1.5">
+              <Label>Hersteller-Template (optional)</Label>
+              <Select value={templateId} onValueChange={applyTemplate}>
+                <SelectTrigger><SelectValue placeholder="Vorlage wählen, um Felder vorauszufüllen…" /></SelectTrigger>
+                <SelectContent>
+                  {VENDOR_TEMPLATES.map((t) => (
+                    <SelectItem key={t.id} value={t.id}>{t.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Lädt Hersteller-/Modell-Defaults und empfohlene OCPP-1.6J-Parameter in die Notizen.
+              </p>
+            </div>
             <div className="grid md:grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <Label>Bezeichnung *</Label>
