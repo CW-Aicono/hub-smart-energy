@@ -13,7 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Loader2, Server, Cpu } from "lucide-react";
+import { Plus, Loader2, Server, Cpu, Copy } from "lucide-react";
 import { useLocationIntegrations, useIntegrations } from "@/hooks/useIntegrations";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
