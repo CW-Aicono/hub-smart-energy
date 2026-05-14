@@ -285,6 +285,32 @@ export function AddIntegrationDialog({ locationId, onSuccess }: AddIntegrationDi
                   </AlertDescription>
                 </Alert>
 
+                <div className="rounded-lg border border-border bg-background/60 p-3 space-y-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold text-foreground">cloud_url für dieses System</p>
+                      <code className="font-mono text-xs break-all">{import.meta.env.VITE_SUPABASE_URL}</code>
+                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={async () => {
+                        try {
+                          await navigator.clipboard.writeText(import.meta.env.VITE_SUPABASE_URL as string);
+                          toast({ title: "URL kopiert", description: import.meta.env.VITE_SUPABASE_URL as string });
+                        } catch { /* ignore */ }
+                      }}
+                    >
+                      <Copy className="h-3.5 w-3.5 mr-1" /> Kopieren
+                    </Button>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">
+                    Genau diesen Wert im Add-on-Feld <code>cloud_url</code> eintragen. Es ist die Adresse der AICONO-Backend-API – nicht die IP des Servers. Lässt du das Feld leer, verbindet sich der Gateway mit der Standard-Lovable-Cloud.
+                  </p>
+                </div>
+
+
                 <div className="space-y-4 rounded-lg border border-border bg-muted/20 p-4">
                   <FormField
                     control={form.control}
