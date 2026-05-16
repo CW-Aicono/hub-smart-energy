@@ -121,6 +121,13 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
     setZustandszahl((meter as any).zustandszahl != null ? String((meter as any).zustandszahl).replace(".", ",") : "0,9636");
     setBrennwertVal((meter as any).brennwert != null ? String((meter as any).brennwert).replace(".", ",") : "");
     setSourceUnit((meter as any).source_unit_power || "kW");
+    setOffsetValue(
+      (meter as any).meter_offset_kwh != null && Number((meter as any).meter_offset_kwh) !== 0
+        ? String((meter as any).meter_offset_kwh).replace(".", ",")
+        : ""
+    );
+    setOffsetReason(((meter as any).meter_offset_reason as MeterOffsetReason) || "");
+    setOffsetNote((meter as any).meter_offset_note || "");
     // Load virtual sources
     if (meter.capture_type === "virtual") {
       supabase
