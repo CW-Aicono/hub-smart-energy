@@ -199,6 +199,9 @@ export const AddMeterDialog = ({ locationId, open, onOpenChange }: AddMeterDialo
     setZustandszahl("0,9636");
     setBrenwert("");
     setSourceUnit("kW");
+    setOffsetValue("");
+    setOffsetReason("");
+    setOffsetNote("");
     onOpenChange(false);
   };
 
