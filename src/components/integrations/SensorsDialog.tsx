@@ -21,12 +21,19 @@ import {
   Loader2, RefreshCw, AlertCircle, Plus, CheckCircle2,
   Zap, Thermometer, Droplets, Wind, Gauge, Sun, BatteryCharging,
   ToggleLeft, Activity, Lightbulb, Waves, CloudRain, Eye, Radio,
+  ArrowRightLeft,
 } from "lucide-react";
 import { LocationIntegration } from "@/hooks/useIntegrations";
 import { supabase } from "@/integrations/supabase/client";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AssignMeterDialog } from "./AssignMeterDialog";
-import { useMeters } from "@/hooks/useMeters";
+import { useMeters, type Meter } from "@/hooks/useMeters";
+import { useLocations } from "@/hooks/useLocations";
+import { useQuery } from "@tanstack/react-query";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { getGatewayDefinition, getEdgeFunctionName } from "@/lib/gatewayRegistry";
 import { getResolvedDeviceType } from "@/lib/deviceClassification";
 import { invokeWithRetry } from "@/lib/invokeWithRetry";
