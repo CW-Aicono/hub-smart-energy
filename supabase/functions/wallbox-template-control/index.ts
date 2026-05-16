@@ -191,7 +191,7 @@ Deno.serve(async (req) => {
       }
 
       const canManage = su || (await hasGatewayManage(admin, user.id));
-      if (!canManage) return json(403, { error: "gateway.manage required" });
+      if (!canManage) return json(403, { error: "integrations.edit permission required" });
 
       if (req.method === "POST" && sub.length === 1) {
         const body = await req.json();
