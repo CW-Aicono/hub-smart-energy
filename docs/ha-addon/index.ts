@@ -41,27 +41,33 @@ function getWallboxManager(): WallboxBridgeManager {
 
 async function fetchWallboxInstanceAndTemplate(instanceId: string): Promise<{ inst: WallboxInstance; tpl: WallboxTemplate } | null> {
   try {
-    const url = `${config.cloud_url}/rest/v1/wallbox_modbus_instances?id=eq.${instanceId}&select=*,template:wallbox_modbus_templates(*),charge_point:charge_points(ocpp_id)`;
+    // Authentifizierter Gateway-Endpoint (RLS-Bypass via GATEWAY_API_KEY).
+    const url = `${config.cloud_url}/functions/v1/gateway-wallbox-fetch`;
+    const key = config.gateway_api_key || process.env.GATEWAY_API_KEY || "";
     const res = await fetch(url, {
+      method: "POST",
       headers: {
-        apikey: process.env.SUPABASE_ANON_KEY || "",
-        Authorization: `Bearer ${process.env.SUPABASE_ANON_KEY || ""}`,
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${key}`,
       },
+      body: JSON.stringify({ instance_id: instanceId }),
     });
-    if (!res.ok) return null;
-    const rows = await res.json() as any[];
-    const row = rows?.[0];
-    if (!row) return null;
+    if (!res.ok) {
+      console.error("[wb-bridge] fetch instance HTTP", res.status, await res.text().catch(() => ""));
+      return null;
+    }
+    const data = await res.json() as { instance: any; template: WallboxTemplate };
+    if (!data?.instance || !data?.template) return null;
     return {
       inst: {
-        id: row.id,
-        template_id: row.template_id,
-        charge_point_ocpp_id: row.charge_point?.ocpp_id ?? row.id,
-        modbus_host: row.modbus_host,
-        modbus_port: row.modbus_port,
-        unit_id: row.unit_id,
+        id: data.instance.id,
+        template_id: data.instance.template_id,
+        charge_point_ocpp_id: data.instance.charge_point_ocpp_id ?? data.instance.id,
+        modbus_host: data.instance.modbus_host,
+        modbus_port: data.instance.modbus_port,
+        unit_id: data.instance.unit_id,
       },
-      tpl: row.template as WallboxTemplate,
+      tpl: data.template,
     };
   } catch (e) {
     console.error("[wb-bridge] fetch instance failed", (e as Error).message);
