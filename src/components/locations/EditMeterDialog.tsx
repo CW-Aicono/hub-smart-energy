@@ -77,6 +77,15 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
   const [zustandszahl, setZustandszahl] = useState((meter as any).zustandszahl != null ? String((meter as any).zustandszahl).replace(".", ",") : "0,9636");
   const [brennwertVal, setBrennwertVal] = useState((meter as any).brennwert != null ? String((meter as any).brennwert).replace(".", ",") : "");
   const [sourceUnit, setSourceUnit] = useState((meter as any).source_unit_power || "kW");
+  const [offsetValue, setOffsetValue] = useState(
+    (meter as any).meter_offset_kwh != null && Number((meter as any).meter_offset_kwh) !== 0
+      ? String((meter as any).meter_offset_kwh).replace(".", ",")
+      : ""
+  );
+  const [offsetReason, setOffsetReason] = useState<MeterOffsetReason | "">(
+    ((meter as any).meter_offset_reason as MeterOffsetReason) || ""
+  );
+  const [offsetNote, setOffsetNote] = useState((meter as any).meter_offset_note || "");
   const photoInputRef = useRef<HTMLInputElement>(null);
   const [floors, setFloors] = useState<Floor[]>([]);
   const [rooms, setRooms] = useState<Room[]>([]);
