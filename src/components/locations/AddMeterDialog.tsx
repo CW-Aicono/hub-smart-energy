@@ -159,6 +159,17 @@ export const AddMeterDialog = ({ locationId, open, onOpenChange }: AddMeterDialo
         ...(energyType === "gas" ? { gas_type: gasType, zustandszahl: parsedZustandszahl, brennwert: parsedBrennwert || undefined } : {}),
         ...(captureType === "automatic" ? { source_unit_power: sourceUnit, source_unit_energy: sourceUnit === "m³" ? "m³" : sourceUnit === "kW" ? "kWh" : "Wh" } : {}),
         is_bidirectional: isBidirectional,
+        ...(() => {
+          const parsed = offsetValue.trim() ? parseFloat(offsetValue.replace(",", ".")) : 0;
+          const finalOffset = Number.isFinite(parsed) ? parsed : 0;
+          if (finalOffset === 0) return { meter_offset_kwh: 0 };
+          return {
+            meter_offset_kwh: finalOffset,
+            meter_offset_reason: offsetReason || null,
+            meter_offset_note: offsetNote.trim() || null,
+            meter_offset_set_at: new Date().toISOString(),
+          };
+        })(),
       } as any,
       parentMeterId && parentMeterId !== "none" ? parentMeterId : null,
       isMainMeter,
