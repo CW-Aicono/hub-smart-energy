@@ -16,6 +16,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { AlertCircle } from "lucide-react";
 import { VirtualMeterFormulaBuilder, VirtualMeterSource } from "./VirtualMeterFormulaBuilder";
+import { MeterOffsetSection } from "./MeterOffsetSection";
+import type { MeterOffsetReason } from "@/lib/meterOffset";
 
 interface AddMeterDialogProps {
   locationId: string;
