@@ -586,6 +586,18 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
               </div>
             </div>
           )}
+          {/* Offset / Anfangsbestand - only for meters */}
+          {deviceType === "meter" && (
+            <MeterOffsetSection
+              value={offsetValue}
+              onValueChange={setOffsetValue}
+              reason={offsetReason}
+              onReasonChange={setOffsetReason}
+              note={offsetNote}
+              onNoteChange={setOffsetNote}
+              unit={unit || "kWh"}
+            />
+          )}
           {/* Photo, Installation Date, Operator */}
           <div className="space-y-3 rounded-md border p-3 bg-muted/30">
             <p className="text-sm font-medium text-muted-foreground">Zusatzinformationen</p>
