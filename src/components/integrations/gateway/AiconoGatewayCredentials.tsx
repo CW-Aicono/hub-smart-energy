@@ -187,15 +187,40 @@ export function AiconoGatewayCredentials({ locationIntegrationId, onSaved }: Aic
       </Alert>
 
       <Alert className="bg-muted/40">
-        <AlertDescription className="text-sm space-y-1">
+        <AlertDescription className="text-sm space-y-2">
           <p><strong>Empfohlener Ablauf</strong></p>
           <ol className="list-decimal pl-5 space-y-1 text-muted-foreground">
             <li>Add-on in Home Assistant öffnen</li>
             <li>Benutzername und Passwort setzen</li>
+            <li><strong>cloud_url</strong> eintragen (siehe unten) – oder leer lassen für die Standard-Cloud</li>
             <li>Add-on speichern und starten</li>
             <li>Hier auf Aktualisieren klicken</li>
             <li>Erkanntes Gateway übernehmen und speichern</li>
           </ol>
+          <div className="mt-2 rounded-md border border-border bg-background/60 p-2 space-y-1">
+            <div className="flex items-center justify-between gap-2">
+              <div className="min-w-0">
+                <p className="text-xs font-semibold text-foreground">cloud_url für dieses System</p>
+                <code className="font-mono text-xs break-all">{import.meta.env.VITE_SUPABASE_URL}</code>
+              </div>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(import.meta.env.VITE_SUPABASE_URL as string);
+                    toast({ title: "URL kopiert", description: import.meta.env.VITE_SUPABASE_URL as string });
+                  } catch { /* ignore */ }
+                }}
+              >
+                <Copy className="h-3.5 w-3.5 mr-1" /> Kopieren
+              </Button>
+            </div>
+            <p className="text-[11px] text-muted-foreground">
+              Genau diesen Wert im Add-on-Feld <code>cloud_url</code> eintragen. Es ist die Adresse der AICONO-Backend-API – nicht die IP des Servers. Lässt du das Feld leer, verbindet sich der Gateway mit der Standard-Lovable-Cloud.
+            </p>
+          </div>
         </AlertDescription>
       </Alert>
 

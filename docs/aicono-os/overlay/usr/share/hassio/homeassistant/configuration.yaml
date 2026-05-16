@@ -1,0 +1,70 @@
+# =====================================================================
+# AICONO Hub – Home Assistant Basis-Konfiguration (White-Label Phase 1)
+# =====================================================================
+# Diese Datei wird beim ersten Boot in das HA-Konfigurationsverzeichnis
+# kopiert. Ziel: Home Assistant läuft im Hintergrund, der Nutzer sieht
+# ausschliesslich die AICONO-Oberfläche (Add-on Ingress).
+#
+# Wirkung:
+#  - Beim Login landet der Nutzer direkt auf dem AICONO EMS Gateway Panel
+#    (Ingress des Add-ons "aicono-ems-gateway").
+#  - AICONO-Theme ist Standard (Light + Dark) – kein HA-Blau mehr.
+#  - Eigener Seitentitel "AICONO Hub" statt "Home Assistant".
+# ---------------------------------------------------------------------
+
+# Lädt alle Standard-Integrationen (nötig, damit HA bootet).
+default_config:
+
+# ---------------- Frontend / Branding ----------------
+frontend:
+  # Beim Login direkt zum AICONO-Panel (Ingress-Slug des Add-ons).
+  # Der Slug entspricht dem "slug:" aus der Add-on config.yaml.
+  default_panel: aicono-ems-gateway
+  themes: !include_dir_merge_named themes
+  # Phase 2: kiosk-mode-Plugin laedt nur die Sidebar-Filterregeln.
+  # Die HA-Routen (/config, /developer-tools, /history, ...) bleiben
+  # ueber direkte URL-Eingabe weiterhin erreichbar – fuer Einrichtung
+  # und Bugfixing notwendig.
+  extra_module_url:
+    - /local/kiosk-mode.js
+
+# ---------------- Phase 2: Kiosk-Mode (Sidebar verstecken) ----------------
+# Versteckt alle Standard-HA-Sidebar-Eintraege fuer normale Nutzer.
+# Power-User koennen die Bereiche jederzeit ueber die URL aufrufen,
+# z.B.  https://<hub>/config/dashboard  oder  /developer-tools/state
+kiosk_mode:
+  kiosk: false                # Vollkiosk aus – Header bleibt sichtbar
+  non_admin_settings:
+    hide_sidebar: false       # Sidebar bleibt sichtbar (nur eingedampft)
+  admin_settings:
+    hide_sidebar: false
+  hide_sidebar:
+    - "config"                # Einstellungen
+    - "developer-tools"       # Entwicklerwerkzeuge
+    - "hassio"                # Add-ons (Power-User-Bereich)
+    - "lovelace"              # HA-Standard-Dashboard ("Uebersicht")
+    - "logbook"               # Logbuch
+    - "history"               # Verlauf
+    - "map"                   # Karte
+    - "energy"                # HA-Energie-Dashboard (wir haben eigenes)
+    - "media-browser"         # Medien
+    - "todo"                  # Aufgaben
+    - "calendar"              # Kalender
+    - "shopping_list"
+  hide_header: false          # Header sichtbar lassen (Sidebar-Toggle)
+  hide_account: false         # Profil-Menue sichtbar (Sprache/Logout)
+
+# ---------------- HTTP / Reverse Proxy ----------------
+http:
+  # Erlaubt, dass die AICONO-UI ueber Ingress eingebettet wird.
+  use_x_forwarded_for: true
+  # Lokale Adressen (Supervisor Ingress laeuft im Docker-Subnetz).
+  trusted_proxies:
+    - 172.30.32.0/23
+    - 127.0.0.1
+    - ::1
+
+# ---------------- Standard-Komponenten ----------------
+automation: !include automations.yaml
+script: !include scripts.yaml
+scene: !include scenes.yaml
