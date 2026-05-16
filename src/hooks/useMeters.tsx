@@ -28,6 +28,10 @@ export interface MeterInsert {
   meter_operator?: string;
   photo_url?: string;
   device_type?: string;
+  meter_offset_kwh?: number;
+  meter_offset_set_at?: string | null;
+  meter_offset_reason?: string | null;
+  meter_offset_note?: string | null;
 }
 
 export function useMeters(locationId?: string) {

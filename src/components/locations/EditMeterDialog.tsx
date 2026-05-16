@@ -18,6 +18,8 @@ import { Switch } from "@/components/ui/switch";
 import { AlertCircle, Layers, DoorOpen, Upload, Loader2, ImageIcon } from "lucide-react";
 import { toast } from "sonner";
 import { VirtualMeterFormulaBuilder, VirtualMeterSource } from "./VirtualMeterFormulaBuilder";
+import { MeterOffsetSection } from "./MeterOffsetSection";
+import type { MeterOffsetReason } from "@/lib/meterOffset";
 
 interface Floor {
   id: string;
@@ -75,6 +77,15 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
   const [zustandszahl, setZustandszahl] = useState((meter as any).zustandszahl != null ? String((meter as any).zustandszahl).replace(".", ",") : "0,9636");
   const [brennwertVal, setBrennwertVal] = useState((meter as any).brennwert != null ? String((meter as any).brennwert).replace(".", ",") : "");
   const [sourceUnit, setSourceUnit] = useState((meter as any).source_unit_power || "kW");
+  const [offsetValue, setOffsetValue] = useState(
+    (meter as any).meter_offset_kwh != null && Number((meter as any).meter_offset_kwh) !== 0
+      ? String((meter as any).meter_offset_kwh).replace(".", ",")
+      : ""
+  );
+  const [offsetReason, setOffsetReason] = useState<MeterOffsetReason | "">(
+    ((meter as any).meter_offset_reason as MeterOffsetReason) || ""
+  );
+  const [offsetNote, setOffsetNote] = useState((meter as any).meter_offset_note || "");
   const photoInputRef = useRef<HTMLInputElement>(null);
   const [floors, setFloors] = useState<Floor[]>([]);
   const [rooms, setRooms] = useState<Room[]>([]);
@@ -110,6 +121,13 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
     setZustandszahl((meter as any).zustandszahl != null ? String((meter as any).zustandszahl).replace(".", ",") : "0,9636");
     setBrennwertVal((meter as any).brennwert != null ? String((meter as any).brennwert).replace(".", ",") : "");
     setSourceUnit((meter as any).source_unit_power || "kW");
+    setOffsetValue(
+      (meter as any).meter_offset_kwh != null && Number((meter as any).meter_offset_kwh) !== 0
+        ? String((meter as any).meter_offset_kwh).replace(".", ",")
+        : ""
+    );
+    setOffsetReason(((meter as any).meter_offset_reason as MeterOffsetReason) || "");
+    setOffsetNote((meter as any).meter_offset_note || "");
     // Load virtual sources
     if (meter.capture_type === "virtual") {
       supabase
@@ -274,6 +292,19 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
       } : { gas_type: null, zustandszahl: null, brennwert: null }),
       source_unit_power: captureType === "automatic" ? sourceUnit : null,
       source_unit_energy: captureType === "automatic" ? (sourceUnit === "m³" ? "m³" : sourceUnit === "kW" ? "kWh" : "Wh") : null,
+      ...(deviceType === "meter" ? (() => {
+        const parsed = offsetValue.trim() ? parseFloat(offsetValue.replace(",", ".")) : 0;
+        const finalOffset = Number.isFinite(parsed) ? parsed : 0;
+        return {
+          meter_offset_kwh: finalOffset,
+          meter_offset_reason: finalOffset !== 0 ? (offsetReason || null) : null,
+          meter_offset_note: finalOffset !== 0 ? (offsetNote.trim() || null) : null,
+          meter_offset_set_at:
+            finalOffset !== 0 && Number(meter.meter_offset_kwh ?? 0) !== finalOffset
+              ? new Date().toISOString()
+              : ((meter as any).meter_offset_set_at ?? null),
+        };
+      })() : {}),
     } as any);
 
     // Update virtual sources
@@ -554,6 +585,18 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
                 </Select>
               </div>
             </div>
+          )}
+          {/* Offset / Anfangsbestand - only for meters */}
+          {deviceType === "meter" && (
+            <MeterOffsetSection
+              value={offsetValue}
+              onValueChange={setOffsetValue}
+              reason={offsetReason}
+              onReasonChange={setOffsetReason}
+              note={offsetNote}
+              onNoteChange={setOffsetNote}
+              unit={unit || "kWh"}
+            />
           )}
           {/* Photo, Installation Date, Operator */}
           <div className="space-y-3 rounded-md border p-3 bg-muted/30">

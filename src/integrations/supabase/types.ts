@@ -4205,6 +4205,10 @@ export type Database = {
           medium: string | null
           meter_function: string
           meter_number: string | null
+          meter_offset_kwh: number
+          meter_offset_note: string | null
+          meter_offset_reason: string | null
+          meter_offset_set_at: string | null
           meter_operator: string | null
           name: string
           notes: string | null
@@ -4213,6 +4217,7 @@ export type Database = {
           position_3d_x: number | null
           position_3d_y: number | null
           position_3d_z: number | null
+          replaces_meter_id: string | null
           room_id: string | null
           sensor_uuid: string | null
           source_unit_energy: string | null
@@ -4243,6 +4248,10 @@ export type Database = {
           medium?: string | null
           meter_function?: string
           meter_number?: string | null
+          meter_offset_kwh?: number
+          meter_offset_note?: string | null
+          meter_offset_reason?: string | null
+          meter_offset_set_at?: string | null
           meter_operator?: string | null
           name: string
           notes?: string | null
@@ -4251,6 +4260,7 @@ export type Database = {
           position_3d_x?: number | null
           position_3d_y?: number | null
           position_3d_z?: number | null
+          replaces_meter_id?: string | null
           room_id?: string | null
           sensor_uuid?: string | null
           source_unit_energy?: string | null
@@ -4281,6 +4291,10 @@ export type Database = {
           medium?: string | null
           meter_function?: string
           meter_number?: string | null
+          meter_offset_kwh?: number
+          meter_offset_note?: string | null
+          meter_offset_reason?: string | null
+          meter_offset_set_at?: string | null
           meter_operator?: string | null
           name?: string
           notes?: string | null
@@ -4289,6 +4303,7 @@ export type Database = {
           position_3d_x?: number | null
           position_3d_y?: number | null
           position_3d_z?: number | null
+          replaces_meter_id?: string | null
           room_id?: string | null
           sensor_uuid?: string | null
           source_unit_energy?: string | null
@@ -4323,6 +4338,13 @@ export type Database = {
           {
             foreignKeyName: "meters_parent_meter_id_fkey"
             columns: ["parent_meter_id"]
+            isOneToOne: false
+            referencedRelation: "meters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meters_replaces_meter_id_fkey"
+            columns: ["replaces_meter_id"]
             isOneToOne: false
             referencedRelation: "meters"
             referencedColumns: ["id"]
