@@ -1,118 +1,77 @@
-# Tiefenrecherche: AICONO White-Label-Image auf Basis Home Assistant
+# Fix: Gateway-Zuordnung schlägt auf Live-Version (Hetzner) fehl
 
-## Kurze, ehrliche Antwort
+## Was der Fehler im Screenshot wirklich bedeutet
 
-**Nein – ein zu 100 % „echtes" White-Label von Home Assistant (HA) als auslieferbares AICONO-Image können wir nicht seriös garantieren.**
+Beim Klick auf **„Gateway zuordnen"** auf `ems.aicono.org` erscheint:
 
-Technisch ist sehr viel möglich (Logo, Farben, Domain, vorinstalliertes Add-on, eigenes Image für SD-Karte und x86-Industrie-PC). Rechtlich und betrieblich gibt es aber harte Grenzen, die ein „echtes" White-Label (Endkunde sieht *nichts* von Home Assistant) unsicher machen.
+> Fehler bei Zuordnung – Edge Function returned a non-2xx status code
 
-Wir sollten deshalb klar trennen zwischen:
+Das Frontend ruft die Edge Function `gateway-credentials` auf. Auf der **Lovable-Cloud-Version** funktioniert die Funktion einwandfrei (getestet, antwortet mit `200 OK`).
 
-1. **Was sicher geht** (empfohlen, produktionsreif)
-2. **Was technisch geht, aber rechtlich grau ist** (Risiko)
-3. **Was nicht geht / sich nicht lohnt**
+Auf der **Hetzner-Live-Version** zeigt derselbe Aufruf:
 
----
+```
+POST https://api-ems.aicono.org/functions/v1/gateway-credentials
+→ {"error":"Datenbankfehler"}
+```
 
-## 1. Was sicher und produktionsreif geht
+Sogar die einfache „pending devices"-Abfrage scheitert – also lange bevor die eigentliche Zuordnung läuft.
 
-Das ist der Weg, den wir als „AICONO Gateway" verkaufen können, ohne Try & Error:
+## Ursache
 
-- **Offizielles HAOS-Image** (Home Assistant Operating System) als Basis, unverändert.
-- **Eigenes Repository `CW-Aicono/ha-addons`** mit dem AICONO-EMS-Gateway-Add-on (haben wir bereits).
-- **Vorkonfiguriertes Image bauen** über den offiziellen `home-assistant/operating-system`-Build (Buildroot, Apache-2.0-Lizenz) – inklusive:
-  - vorinstalliertem AICONO-Add-on,
-  - vorhinterlegtem Repository,
-  - Auto-Start + Auto-Update des Add-ons,
-  - eigenem Hostname (`aicono.local`),
-  - eigenem AICONO-Branding **im Add-on-Frontend** (Ingress-UI, Logo, Farben, Texte → bereits umgesetzt).
-- **Auslieferung** als `.img.xz` für:
-  - Raspberry Pi (SD-Karte / SSD),
-  - Generic x86-64 (Industrie-PC, NUC, Mini-PC).
-- **Flash-Tool**: Raspberry Pi Imager oder Balena Etcher – beides für Endkunden geeignet.
-- **Onboarding**: HA-Standard-Onboarding (Benutzer anlegen) → danach öffnet sich automatisch die AICONO-Oberfläche im Ingress.
+Die Live-Version `ems.aicono.org` spricht **nicht** mit der Lovable Cloud, sondern mit dem **selbst gehosteten Supabase-Stack auf Hetzner** (`api-ems.aicono.org`).
 
-Bewertung: **Funktioniert zuverlässig, ist lizenzkonform (Apache 2.0), skaliert auf Industrie-PCs.**
-Einschränkung: Der Endkunde sieht beim *ersten* Start kurz „Home Assistant" (Onboarding-Screen, Setup-Wizard, Footer).
+Lovable deployt Edge Functions und Datenbank-Migrationen **ausschließlich in die Lovable Cloud**. Für den Hetzner-Stack ist das ein getrennter, manueller Prozess.
 
----
+Auf dem Hetzner-Backend fehlt **mindestens eines** davon:
 
-## 2. Was technisch geht, aber rechtlich heikel ist
+1. Die Tabelle `gateway_devices` (oder Spalten wie `mac_address`, `gateway_username`, `gateway_password_hash`, `location_integration_id`, `tenant_id`, `last_heartbeat_at`, `local_ip`)
+2. Oder die Edge Function `gateway-credentials` läuft mit veraltetem Code
+3. Oder der `SUPABASE_SERVICE_ROLE_KEY` in der Edge-Function-Umgebung passt nicht zur lokalen Postgres-Instanz
 
-Ein „echtes" White-Label, bei dem der Endkunde *nirgends* mehr „Home Assistant" sieht, würde bedeuten:
+Beweis: Die identische Funktion mit identischem Code antwortet in Lovable Cloud sauber mit `{"devices":[],"success":true}` und in Hetzner mit `{"error":"Datenbankfehler"}`.
 
-- HAOS forken,
-- alle Logos, Texte, Markennamen in Frontend, Supervisor, Onboarding, Dokumentation, About-Dialogen ersetzen,
-- eigenes Branding in der Polymer/Lit-Weboberfläche kompilieren,
-- eigene Update-Channels betreiben.
+## Lösungsweg (in dieser Reihenfolge)
 
-**Lizenz (Apache 2.0):** Das *Forken und Umlabeln* des Codes ist erlaubt.
+### Schritt 1 – Hetzner-Datenbank-Schema angleichen
 
-**Markenrecht – das ist der Knackpunkt:**
+Alle Migrationen, die auf Lovable Cloud bereits laufen, müssen auf dem Hetzner-Postgres ebenfalls angewendet werden. Im Repo gibt es dafür bereits:
 
-- „Home Assistant" und das Logo sind Marken der **Open Home Foundation / Nabu Casa**.
-- Apache 2.0 gewährt **keine** Markenrechte (Section 6 der Lizenz).
-- Es gibt **keine offizielle Whitelabel-/OEM-Lizenz** für Home Assistant. Kommerzielle Partner (z. B. Apollo Automation, HomeAssistant Green, Yellow) verkaufen **Hardware mit HA**, nicht „eigene Marke statt HA".
-- Wer HA umlabelt und unter eigener Marke vertreibt, riskiert eine markenrechtliche Abmahnung durch die Open Home Foundation.
-- Verschärfend: Der Supervisor lädt regelmäßig Updates, UI-Strings und Brand-Assets aus offiziellen HA-Quellen nach – ein dauerhaftes, sauberes Umlabeln erfordert eigenen Update-Server und permanente Pflege bei jedem HA-Release (alle ~4 Wochen).
+- `scripts/apply-migrations.sh`
+- `supabase-docker/volumes/db/zz-migrations.sh`
 
-Bewertung: **Technisch machbar, aber kein „Image bauen und fertig" – es ist ein eigenes Produkt mit eigener Build-Pipeline, eigenem Update-Channel, dauerhafter Wartung und rechtlichem Restrisiko.** Das können wir nicht zu 100 % als „zuverlässig" zusichern.
+Konkret muss der gesamte Migrationsstand aus `supabase/migrations/` auf Hetzner eingespielt werden. Besonders relevant: alle Migrationen, die `gateway_devices` und verwandte Tabellen anlegen oder erweitern.
 
----
+### Schritt 2 – Edge Functions auf Hetzner aktualisieren
 
-## 3. Was sich nicht lohnt
+Die Functions im Hetzner-Stack (`supabase-docker/functions/`) müssen mit dem aktuellen Stand aus `supabase/functions/` synchronisiert werden – zumindest `gateway-credentials`, `gateway-ingest`, `gateway-ws`, `gateway-periodic-sync`.
 
-- Eigener HAOS-Fork **nur** wegen Logo-Tausch im Onboarding-Screen.
-- Eine reine Skript-Lösung „nach dem ersten Boot Logos überschreiben" – wird bei jedem HA-Update wieder überschrieben.
-- Versuche, den Supervisor-Login oder das Onboarding komplett zu entfernen – HA verweigert dann Updates und Add-on-Store-Funktion.
+Falls noch kein automatischer Sync existiert, ist eine `rsync`/`docker cp`-basierte Deployment-Routine zu definieren und in `scripts/deploy.sh` zu ergänzen.
 
----
+### Schritt 3 – Verifikation
 
-## Empfehlung
+Nach Deployment direkt gegen `api-ems.aicono.org` testen:
 
-**Variante A („Powered by Home Assistant", produktionsreif – empfohlen):**
+```bash
+curl -X POST https://api-ems.aicono.org/functions/v1/gateway-credentials \
+  -H "Content-Type: application/json" \
+  -d '{"action":"pending"}'
+```
 
-- AICONO als sichtbare Hauptmarke (Hostname, Add-on-Ingress, Dokumentation, Verpackung).
-- Home Assistant als technische Basis bleibt sichtbar (Onboarding, Footer „powered by HA").
-- Wir liefern: vorgefertigtes Image (Pi + x86), vorinstalliertes Add-on, Auto-Start in AICONO-UI nach Login.
-- Lizenz- und markenrechtlich sauber, langfristig wartbar, kein Eigenbau-Update-Channel nötig.
+Erwartet: `{"devices":[],"success":true}` (statt aktuell `{"error":"Datenbankfehler"}`).
 
-**Variante B (Vollständiges White-Label):**
+Dann den Live-Test im Browser wiederholen.
 
-- Nur sinnvoll, wenn ein juristisch geprüfter Lizenz- oder Partnervertrag mit Nabu Casa / Open Home Foundation existiert.
-- Sonst nicht empfehlenswert – das ist genau das „Try & Error", das du vermeiden willst.
+## Wichtig – ehrliche Einschätzung
 
----
+- **Was ich JA garantieren kann:** Diagnose ist eindeutig. Der Fehler liegt **nicht** im Frontend- oder Edge-Function-Code, sondern in einer **fehlenden Synchronisation** zwischen Lovable Cloud und Hetzner.
+- **Was ich NICHT blind ausführen kann:** Ich habe keinen direkten SSH-Zugriff auf den Hetzner-Server. Die Migration und das Function-Deployment müssen entweder von dir auf dem Server ausgeführt werden, oder wir bauen einen CI-Job, der das übernimmt (analog zu `.github/workflows/deploy-prod.yml`, falls dieser noch nicht alle Migrationen anwendet).
 
-## Technische Details (für die Umsetzung von Variante A)
+## Entscheidungspunkt für dich
 
-Build-Komponenten:
+Bitte wähle, wie wir weitermachen:
 
-- `home-assistant/operating-system` (Buildroot) → liefert `haos_rpi*-XX.X.img.xz` und `haos_generic-x86-64-XX.X.img.xz`.
-- `home-assistant/builder` → baut Add-on-Container.
-- Eigenes Overlay in `buildroot-external/rootfs-overlay/` für:
-  - `/etc/hostname` → `aicono`,
-  - vorinstallierte Repository-Definition unter `/usr/share/hassio/addons/git/`,
-  - First-Boot-Script, das das AICONO-Add-on automatisch installiert und startet.
-- GitHub Actions Workflow, der pro HAOS-Release (z. B. 13.x, 14.x) ein AICONO-Image baut und als Release-Asset bereitstellt.
+1. **Manuell auf Hetzner**: Du gibst mir grünes Licht und ich schreibe dir eine exakte, Schritt-für-Schritt-Anleitung (mit allen Kommandos zum Kopieren), die du auf dem Hetzner-Server ausführst, um Schema + Functions anzugleichen.
+2. **CI/CD ausbauen**: Wir prüfen `deploy-prod.yml` und ergänzen, was zur automatischen Migration + Function-Sync auf Hetzner fehlt – damit dieser Fehler bei künftigen Änderungen nicht wieder auftritt.
 
-Auslieferung:
-
-- `aicono-gateway-<version>-rpi5.img.xz`
-- `aicono-gateway-<version>-x86_64.img.xz`
-- Anleitung (laienverständlich): Raspberry Pi Imager → Image auswählen → flashen → booten → `http://aicono.local:8123` → Benutzer anlegen → fertig.
-
-Wartung:
-
-- Bei jedem HAOS-Release neues AICONO-Image bauen (CI).
-- Add-on-Updates laufen unabhängig über das `CW-Aicono/ha-addons`-Repository – kein neues Image nötig.
-
----
-
-## Entscheidung, die wir brauchen
-
-Bitte wähle den Weg, bevor wir weiterbauen:
-
-- **A**: „Powered by Home Assistant" – AICONO-Image mit vorinstalliertem Add-on, sichtbare HA-Basis. Sicher, schnell, wartbar.
-- **B**: Vollständiges White-Label – nur mit vorheriger rechtlicher Klärung mit Nabu Casa.
-- **C**: Image-Idee verwerfen, beim reinen Add-on-Vertrieb über das HA-Repository bleiben.
+Empfehlung: **erst 1, dann 2** – so kommst du heute zur Inbetriebnahme, und die Automatisierung folgt sauber danach.
