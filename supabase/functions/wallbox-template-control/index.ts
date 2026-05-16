@@ -44,7 +44,7 @@ async function isSuperAdmin(admin: ReturnType<typeof createClient>, userId: stri
 async function hasGatewayManage(admin: ReturnType<typeof createClient>, userId: string) {
   const { data } = await admin.rpc("has_permission", {
     _user_id: userId,
-    _permission_code: "gateway.manage",
+    _permission_code: "integrations.edit",
   });
   return !!data;
 }
@@ -191,7 +191,7 @@ Deno.serve(async (req) => {
       }
 
       const canManage = su || (await hasGatewayManage(admin, user.id));
-      if (!canManage) return json(403, { error: "gateway.manage required" });
+      if (!canManage) return json(403, { error: "integrations.edit permission required" });
 
       if (req.method === "POST" && sub.length === 1) {
         const body = await req.json();
