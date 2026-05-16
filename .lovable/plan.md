@@ -1,36 +1,118 @@
-## Befund
+# Tiefenrecherche: AICONO White-Label-Image auf Basis Home Assistant
 
-Das aktuelle Log zeigt diesmal nicht primär einen PIN-/Watchdog-Fehler, sondern: Der Supervisor wartet 120 Sekunden darauf, dass auf Port `8099` etwas erreichbar wird – aber das Add-on öffnet den Port nicht rechtzeitig. Danach kommen die Ingress-Fehler `Cannot connect to host 172.30.33.1:8099`, weil schlicht kein Webserver im Container lauscht.
+## Kurze, ehrliche Antwort
 
-Der kritischste Codepunkt ist in `docs/ha-addon/index.ts`: Der lokale Webserver wird erst nach Offline-Cache-Initialisierung gestartet, danach laufen noch Cloud-/HA-Initialabfragen. Zusätzlich kann bei fehlenden Credentials der Setup-Wizard den Hauptserver ersetzen. Für Home Assistant ist das riskant, weil Ingress/Startprüfung sehr früh eine Antwort auf Port 8099 erwartet.
+**Nein – ein zu 100 % „echtes" White-Label von Home Assistant (HA) als auslieferbares AICONO-Image können wir nicht seriös garantieren.**
 
-## Plan
+Technisch ist sehr viel möglich (Logo, Farben, Domain, vorinstalliertes Add-on, eigenes Image für SD-Karte und x86-Industrie-PC). Rechtlich und betrieblich gibt es aber harte Grenzen, die ein „echtes" White-Label (Endkunde sieht *nichts* von Home Assistant) unsicher machen.
 
-1. **Port 8099 sofort beim Boot öffnen**
-   - `startServer()` ganz früh in `main()` starten, bevor Cloud-, HA-, Mapping-, Automation- oder Setup-Schritte laufen.
-   - Dadurch bekommt Home Assistant sofort eine Antwort und der 120s-Starttimeout wird verhindert.
+Wir sollten deshalb klar trennen zwischen:
 
-2. **Health-Endpoint maximal robust machen**
-   - `/api/status` darf keine langsamen oder potenziell blockierenden Operationen enthalten.
-   - Die MAC-Adresse dort nicht live über `/network/info` holen, sondern nur gecacht/fallbackfähig ausgeben.
-   - Ziel: `/api/status` antwortet auch dann mit `200`, wenn Cloud, HA API, PIN oder MAC-Ermittlung gerade Probleme haben.
+1. **Was sicher geht** (empfohlen, produktionsreif)
+2. **Was technisch geht, aber rechtlich grau ist** (Risiko)
+3. **Was nicht geht / sich nicht lohnt**
 
-3. **Setup-/Credentials-Fall Ingress-tauglich machen**
-   - Wenn `gateway_username` oder `gateway_password` fehlen, nicht in einen separaten Wizard blockieren, der den Bootfluss übernimmt.
-   - Stattdessen soll der bereits gestartete Server weiterlaufen und `/api/status` `credentials_configured: false` melden; die UI kann Setup/Login anzeigen.
-   - So startet das Add-on auch bei kaputter/alter Konfiguration und bleibt reparierbar.
+---
 
-4. **Startphase entkoppeln**
-   - Initiale Cloud-/HA-Aufrufe (`checkCloudConnectivity`, `fetchHAVersion`, `fetchMeterMappings`, `syncAutomationsFromCloud`) nicht mehr vor “Gateway läuft” blockierend erzwingen.
-   - Diese Aufgaben nach Serverstart im Hintergrund ausführen und Fehler nur loggen, nicht den Prozess beenden.
+## 1. Was sicher und produktionsreif geht
 
-5. **Version synchronisieren**
-   - `package.json` steht noch auf `3.1.4`, `config.yaml` bereits auf `3.2.0`. Das sollte vereinheitlicht werden, damit HA nicht weiterhin alte 3.1.4-Builds zieht.
+Das ist der Weg, den wir als „AICONO Gateway" verkaufen können, ohne Try & Error:
 
-6. **Kurztest ergänzen/ausführen**
-   - Minimal prüfen, dass `/api/status` ohne PIN/Cookie und auch ohne Credentials erreichbar bleibt.
-   - Keine Änderung an der Cloud-Datenbank nötig.
+- **Offizielles HAOS-Image** (Home Assistant Operating System) als Basis, unverändert.
+- **Eigenes Repository `CW-Aicono/ha-addons`** mit dem AICONO-EMS-Gateway-Add-on (haben wir bereits).
+- **Vorkonfiguriertes Image bauen** über den offiziellen `home-assistant/operating-system`-Build (Buildroot, Apache-2.0-Lizenz) – inklusive:
+  - vorinstalliertem AICONO-Add-on,
+  - vorhinterlegtem Repository,
+  - Auto-Start + Auto-Update des Add-ons,
+  - eigenem Hostname (`aicono.local`),
+  - eigenem AICONO-Branding **im Add-on-Frontend** (Ingress-UI, Logo, Farben, Texte → bereits umgesetzt).
+- **Auslieferung** als `.img.xz` für:
+  - Raspberry Pi (SD-Karte / SSD),
+  - Generic x86-64 (Industrie-PC, NUC, Mini-PC).
+- **Flash-Tool**: Raspberry Pi Imager oder Balena Etcher – beides für Endkunden geeignet.
+- **Onboarding**: HA-Standard-Onboarding (Benutzer anlegen) → danach öffnet sich automatisch die AICONO-Oberfläche im Ingress.
 
-## Sofort-Hinweis für dich
+Bewertung: **Funktioniert zuverlässig, ist lizenzkonform (Apache 2.0), skaliert auf Industrie-PCs.**
+Einschränkung: Der Endkunde sieht beim *ersten* Start kurz „Home Assistant" (Onboarding-Screen, Setup-Wizard, Footer).
 
-Solange das Update noch nicht installiert ist: Die Meldung `Cannot connect to host 172.30.33.1:8099` bedeutet, dass das Add-on intern gar keinen Webserver geöffnet hat. Deshalb helfen PIN deaktivieren oder Watchdog ausschalten allein nicht zuverlässig.
+---
+
+## 2. Was technisch geht, aber rechtlich heikel ist
+
+Ein „echtes" White-Label, bei dem der Endkunde *nirgends* mehr „Home Assistant" sieht, würde bedeuten:
+
+- HAOS forken,
+- alle Logos, Texte, Markennamen in Frontend, Supervisor, Onboarding, Dokumentation, About-Dialogen ersetzen,
+- eigenes Branding in der Polymer/Lit-Weboberfläche kompilieren,
+- eigene Update-Channels betreiben.
+
+**Lizenz (Apache 2.0):** Das *Forken und Umlabeln* des Codes ist erlaubt.
+
+**Markenrecht – das ist der Knackpunkt:**
+
+- „Home Assistant" und das Logo sind Marken der **Open Home Foundation / Nabu Casa**.
+- Apache 2.0 gewährt **keine** Markenrechte (Section 6 der Lizenz).
+- Es gibt **keine offizielle Whitelabel-/OEM-Lizenz** für Home Assistant. Kommerzielle Partner (z. B. Apollo Automation, HomeAssistant Green, Yellow) verkaufen **Hardware mit HA**, nicht „eigene Marke statt HA".
+- Wer HA umlabelt und unter eigener Marke vertreibt, riskiert eine markenrechtliche Abmahnung durch die Open Home Foundation.
+- Verschärfend: Der Supervisor lädt regelmäßig Updates, UI-Strings und Brand-Assets aus offiziellen HA-Quellen nach – ein dauerhaftes, sauberes Umlabeln erfordert eigenen Update-Server und permanente Pflege bei jedem HA-Release (alle ~4 Wochen).
+
+Bewertung: **Technisch machbar, aber kein „Image bauen und fertig" – es ist ein eigenes Produkt mit eigener Build-Pipeline, eigenem Update-Channel, dauerhafter Wartung und rechtlichem Restrisiko.** Das können wir nicht zu 100 % als „zuverlässig" zusichern.
+
+---
+
+## 3. Was sich nicht lohnt
+
+- Eigener HAOS-Fork **nur** wegen Logo-Tausch im Onboarding-Screen.
+- Eine reine Skript-Lösung „nach dem ersten Boot Logos überschreiben" – wird bei jedem HA-Update wieder überschrieben.
+- Versuche, den Supervisor-Login oder das Onboarding komplett zu entfernen – HA verweigert dann Updates und Add-on-Store-Funktion.
+
+---
+
+## Empfehlung
+
+**Variante A („Powered by Home Assistant", produktionsreif – empfohlen):**
+
+- AICONO als sichtbare Hauptmarke (Hostname, Add-on-Ingress, Dokumentation, Verpackung).
+- Home Assistant als technische Basis bleibt sichtbar (Onboarding, Footer „powered by HA").
+- Wir liefern: vorgefertigtes Image (Pi + x86), vorinstalliertes Add-on, Auto-Start in AICONO-UI nach Login.
+- Lizenz- und markenrechtlich sauber, langfristig wartbar, kein Eigenbau-Update-Channel nötig.
+
+**Variante B (Vollständiges White-Label):**
+
+- Nur sinnvoll, wenn ein juristisch geprüfter Lizenz- oder Partnervertrag mit Nabu Casa / Open Home Foundation existiert.
+- Sonst nicht empfehlenswert – das ist genau das „Try & Error", das du vermeiden willst.
+
+---
+
+## Technische Details (für die Umsetzung von Variante A)
+
+Build-Komponenten:
+
+- `home-assistant/operating-system` (Buildroot) → liefert `haos_rpi*-XX.X.img.xz` und `haos_generic-x86-64-XX.X.img.xz`.
+- `home-assistant/builder` → baut Add-on-Container.
+- Eigenes Overlay in `buildroot-external/rootfs-overlay/` für:
+  - `/etc/hostname` → `aicono`,
+  - vorinstallierte Repository-Definition unter `/usr/share/hassio/addons/git/`,
+  - First-Boot-Script, das das AICONO-Add-on automatisch installiert und startet.
+- GitHub Actions Workflow, der pro HAOS-Release (z. B. 13.x, 14.x) ein AICONO-Image baut und als Release-Asset bereitstellt.
+
+Auslieferung:
+
+- `aicono-gateway-<version>-rpi5.img.xz`
+- `aicono-gateway-<version>-x86_64.img.xz`
+- Anleitung (laienverständlich): Raspberry Pi Imager → Image auswählen → flashen → booten → `http://aicono.local:8123` → Benutzer anlegen → fertig.
+
+Wartung:
+
+- Bei jedem HAOS-Release neues AICONO-Image bauen (CI).
+- Add-on-Updates laufen unabhängig über das `CW-Aicono/ha-addons`-Repository – kein neues Image nötig.
+
+---
+
+## Entscheidung, die wir brauchen
+
+Bitte wähle den Weg, bevor wir weiterbauen:
+
+- **A**: „Powered by Home Assistant" – AICONO-Image mit vorinstalliertem Add-on, sichtbare HA-Basis. Sicher, schnell, wartbar.
+- **B**: Vollständiges White-Label – nur mit vorheriger rechtlicher Klärung mit Nabu Casa.
+- **C**: Image-Idee verwerfen, beim reinen Add-on-Vertrieb über das HA-Repository bleiben.
