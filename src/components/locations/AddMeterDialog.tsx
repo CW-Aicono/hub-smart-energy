@@ -57,6 +57,9 @@ export const AddMeterDialog = ({ locationId, open, onOpenChange }: AddMeterDialo
   const [zustandszahl, setZustandszahl] = useState("0,9636");
   const [brennwert, setBrenwert] = useState("");
   const [sourceUnit, setSourceUnit] = useState("kW");
+  const [offsetValue, setOffsetValue] = useState("");
+  const [offsetReason, setOffsetReason] = useState<MeterOffsetReason | "">("");
+  const [offsetNote, setOffsetNote] = useState("");
 
   const activeMeters = meters.filter((m) => !m.is_archived);
 
