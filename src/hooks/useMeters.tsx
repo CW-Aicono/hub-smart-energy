@@ -180,5 +180,5 @@ export function useMeters(locationId?: string) {
     }
   };
 
-  return { meters, loading, addMeter, updateMeter, deleteMeter, archiveMeter, updateMeterParent, refetch: invalidate };
+  return { meters, loading, addMeter, updateMeter, deleteMeter, archiveMeter, updateMeterParent, reassignMeter, refetch: invalidate };
 }
