@@ -424,6 +424,15 @@ export const AddMeterDialog = ({ locationId, open, onOpenChange }: AddMeterDialo
               </Select>
             </div>
           </div>
+          <MeterOffsetSection
+            value={offsetValue}
+            onValueChange={setOffsetValue}
+            reason={offsetReason}
+            onReasonChange={setOffsetReason}
+            note={offsetNote}
+            onNoteChange={setOffsetNote}
+            unit={unit || "kWh"}
+          />
           <div>
             <Label>Notizen</Label>
             <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} />
