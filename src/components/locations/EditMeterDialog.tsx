@@ -18,6 +18,8 @@ import { Switch } from "@/components/ui/switch";
 import { AlertCircle, Layers, DoorOpen, Upload, Loader2, ImageIcon } from "lucide-react";
 import { toast } from "sonner";
 import { VirtualMeterFormulaBuilder, VirtualMeterSource } from "./VirtualMeterFormulaBuilder";
+import { MeterOffsetSection } from "./MeterOffsetSection";
+import type { MeterOffsetReason } from "@/lib/meterOffset";
 
 interface Floor {
   id: string;
