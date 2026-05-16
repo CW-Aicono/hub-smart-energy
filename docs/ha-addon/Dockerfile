@@ -3,7 +3,7 @@
 # Runtime image for the Home Assistant add-on.
 # TypeScript wird bereits vor dem Sync ins HA-Add-on-Repository gebaut.
 # Der Home-Assistant-Rechner installiert nur noch Laufzeit-Abhängigkeiten und
-# muss beim Update nicht mehr selbst `tsc` ausführen.
+# muss beim Update nicht mehr selbst TypeScript kompilieren.
 
 FROM node:20-bullseye-slim AS runner
 
