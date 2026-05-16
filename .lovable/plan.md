@@ -1,148 +1,69 @@
-# Plan: Geräte-/Gateway-Tausch & Zählerstand-Offset
+# Bereits zugeordnete Geräte an einen anderen Standort übernehmen
+
+## Problem
+
+Im Dialog **„Gefundene Geräte"** eines Gateways werden Sensoren mit dem Hinweis *(zugeordnet)* angezeigt und sind nicht auswählbar, sobald ihre `sensor_uuid` bereits in einem `meters`-Datensatz vorkommt – **egal an welcher Liegenschaft oder an welchem Gateway**.
+
+Dadurch lässt sich ein Gerät, das früher an Liegenschaft A (oder gar an gar keiner Liegenschaft mehr) angelegt war, nicht erneut an Liegenschaft B (der aktuell mit dem Gateway verknüpften Liegenschaft) zuordnen, obwohl genau das gewünscht ist (z. B. nach Umzug, Gateway-Wechsel oder bei verwaisten Datensätzen).
 
 ## Ziel
 
-Sauberer Umgang mit drei realen Lebenszyklus-Ereignissen:
+Im Dialog soll bei einem bereits zugeordneten Gerät erkennbar sein, **wo** es aktuell hängt, und der Nutzer soll es **mit einem Klick an die aktuelle Liegenschaft + das aktuelle Gateway übernehmen** können. Historische Messwerte bleiben dabei erhalten (gleicher Meter-Datensatz, nur `location_id` / `location_integration_id` werden aktualisiert).
 
-1. **Gateway-Tausch** (z. B. AICONO/HA-Hardware defekt) – ohne Datenverlust, ohne Neuanlage aller Zähler/Sensoren/Aktoren.
-2. **Gerätetausch** (Zähler, Sensor, Aktor defekt) – neues Gerät übernimmt die Identität (Historie, Zuordnung, Automationen) des alten.
-3. **Zählerstand-Offset** – Anfangsbestand bei Neukunden, oder Korrektur nach Tausch, damit die in AICONO angezeigten kWh dem realen Display am Zähler entsprechen.
+## Umsetzung
 
-Keine Code-Änderungen mit dieser Nachricht – nur das Konzept zur Freigabe.
+### 1. Datenmodell-Logik
 
----
+Pro `sensor_uuid` werden im `SensorsDialog` drei Zustände unterschieden:
 
-## Fall 1 – Gateway-Tausch
+| Status | Bedingung | UI |
+|---|---|---|
+| **Frei** | keine Meter-Row mit dieser `sensor_uuid` | Checkbox aktiv (wie bisher) |
+| **Hier zugeordnet** | Meter-Row mit gleicher `location_id` **und** gleicher `location_integration_id` wie der aktuelle Kontext | Haken + Hinweis *(zugeordnet)* (wie bisher) |
+| **Woanders zugeordnet** | Meter-Row existiert, aber `location_id` und/oder `location_integration_id` weichen ab (auch wenn `location_id` NULL ist) | Hinweis mit Standort/Gateway-Name + Button **„An diese Liegenschaft übernehmen"** |
 
-### Auslöser
+### 2. UI im SensorsDialog
 
-Im UI auf der Liegenschafts-/Integrations-Seite: Button **„Gateway tauschen"** am bestehenden Gateway-Eintrag.
+- Statt nur *(zugeordnet)*: zusätzliche Zeile mit dem aktuellen Standort und Gateway des verknüpften Meters (z. B. *„Aktuell: Realschule am Buchenberg · Loxone Miniserver"* bzw. *„Aktuell: keine Liegenschaft"*).
+- Bei *Woanders zugeordnet* erscheint ein kleiner Button **Übernehmen** (Icon `ArrowRightLeft`).
+- Klick öffnet einen Bestätigungs-Dialog mit Inhalt:
+  - „Das Gerät **{Name}** ist aktuell an **{alte Liegenschaft / kein Standort}** über Gateway **{altes Gateway / keins}** angelegt."
+  - „Es wird zur Liegenschaft **{neue Liegenschaft}** verschoben und mit Gateway **{neues Gateway}** verknüpft. Alle bisherigen Zählerstände und Messwerte bleiben erhalten."
+  - Optionen: *Abbrechen* / *Übernehmen*
 
-### Ablauf
+### 3. Server-Aktion
 
-1. Neues Gateway koppeln wie heute (Pairing-Code / Setup-Wizard im HA-Addon).
-2. System erkennt: am alten `location_integration_id` hängen bereits **N Zähler / M Sensoren / K Aktoren**.
-3. Dialog **„Geräte übernehmen?"**:
-   - **(A) Alle Geräte 1:1 übernehmen** (Default, empfohlen)
-     – Alle `meters.location_integration_id` werden auf das neue Gateway umgezogen.
-     – `sensor_uuid` bleibt erhalten, sofern das neue Gateway dieselben UUIDs meldet (z. B. gleiches HA-Addon mit gleichem MQTT-Discovery).
-     – Falls sich UUIDs ändern: Mapping-Schritt (siehe unten).
-   - **(B) Manuell zuordnen** – das alte Gateway wird auf „archiviert" gesetzt, Geräte bleiben bestehen, aber als „ohne Gateway"; Nutzer kann jedes Gerät im neuen Gateway-Dialog neu zuordnen.
-   - **(C) Verwerfen** – alle alten Geräte werden archiviert (nicht gelöscht!) und das neue Gateway startet leer.
+Eine neue Hilfsfunktion `reassignMeterToCurrentGateway(meterId, newLocationId, newLocationIntegrationId)`:
 
-### UUID-Mapping-Schritt (nur falls Option A und UUIDs unterschiedlich)
-
-Tabelle „Altes Gerät → Neues Gerät", per Dropdown gemappt. System schlägt Mapping per Namensähnlichkeit vor. Bei Bestätigung:
-
-- `meters.sensor_uuid` wird auf neue UUID umgesetzt
-- `meters.location_integration_id` auf neues Gateway umgesetzt
-- alle historischen Daten (`meter_period_totals`, `meter_power_readings_5min`, `meter_readings`) bleiben am `meter_id` hängen – also automatisch erhalten
-
-### Was bleibt erhalten
-
-- Zähler-Historie, Verbräuche, Automationen, Räume/Etagen-Zuordnung, Tarife, Kostenrechnungen, Reports.
-
-### Was wird neu
-
-- Gateway-Eintrag selbst, MQTT-/HA-Credentials, ggf. lokale Sensor-UUIDs.
-
----
-
-## Fall 2 – Einzel-Gerätetausch (Zähler / Sensor / Aktor)
-
-### Auslöser
-
-Im Gerät-Detail oder in der Geräteliste: Aktion **„Gerät tauschen"**.
-
-### Ablauf
-
-1. Nutzer markiert das **defekte Gerät** als zu tauschen.
-2. Dialog **„Wie tauschen?"**:
-   - **(A) Gegen ein bereits vom Gateway gefundenes neues Gerät tauschen** – Auswahl aus der „Gefundene Geräte"-Liste (alle Geräte, die noch keiner `meters`-Zeile zugeordnet sind).
-   - **(B) Gegen ein manuell angelegtes Gerät tauschen** – nur für manuelle Zähler.
-3. System führt den Tausch durch:
-   - **`meters.sensor_uuid`** wird auf die neue UUID umgesetzt.
-   - **`meters.id` bleibt gleich** ⇒ Historie, Automationen, Räume, Tarife, Kostenrechnungen bleiben unverändert.
-   - Das alte Gateway-Device wird intern als „ersetzt durch X" markiert.
-4. **Bei Zählern:** Offset-Dialog (siehe Fall 3) zwingend einblenden – neue Hardware fängt typischerweise bei 0 kWh an, das reale Display der Liegenschaft aber nicht.
-
-### Vorteil dieses Ansatzes
-
-Keine Neuanlage, keine kaputten Diagramme, Automationen laufen ohne Neukonfiguration weiter.
-
----
-
-## Fall 3 – Zähler-Offset (Anfangsbestand & Tausch-Korrektur)
-
-### Problem
-
-- Neukunde startet mit bestehender Liegenschaft → physischer Zähler zeigt z. B. 145.823 kWh; AICONO würde aber bei 0 starten und nur ab Inbetriebnahme zählen.
-- Nach Zählertausch zählt das neue Gerät wieder ab 0 hoch; reales Display in der Liegenschaft zeigt aber den alten Stand plus neue kWh.
-
-### Lösung
-
-Pro Zähler zwei neue Felder im Datenmodell:
-
-| Feld | Bedeutung |
-|---|---|
-| `meter_offset_kwh` | Konstanter Offset, der bei jeder Anzeige zum gemessenen Verbrauchsstand addiert wird. Default 0. |
-| `meter_offset_set_at` | Zeitpunkt, ab dem der Offset gilt (für Audit/Reports). |
-| `meter_offset_reason` | Enum: `initial_reading`, `device_replacement`, `manual_correction`. |
-| `meter_offset_note` | Freitext (optional). |
-
-### UI
-
-- Auf der **Zähler-Detailseite** Box **„Anfangsbestand / Offset"** mit Wert, Datum, Begründung, Notiz.
-- Beim **Anlegen eines manuellen Zählers** und bei **Fall 2 (Gerätetausch)** wird der Offset-Dialog automatisch vorgeschlagen.
-- Anzeige des Zählerstands überall: `displayed_kwh = sum_of_measured_kwh + meter_offset_kwh`.
-
-### Auswirkungen auf Verbrauchs-Auswertungen
-
-- **Verbrauch über Zeitraum** (kWh/Tag, kWh/Monat) ist **NICHT** vom Offset betroffen – Differenzen bleiben gleich.
-- **Zählerstand-Anzeige** (Anfangsbestand + Verlauf der Tageswerte) ist mit Offset.
-- **Manuelle Zählerablesungen** (`meter_readings`) werden weiterhin als „abgelesener realer Stand am Zähler" gespeichert (inkl. Offset-Welt). Die Logik, die daraus Verbräuche berechnet, zieht den Offset wieder ab.
-
-### Technisches Modell (Kurzfassung)
-
-Neue Spalten an `meters` (Migration nach Freigabe):
-
-```sql
-ALTER TABLE public.meters
-  ADD COLUMN meter_offset_kwh numeric NOT NULL DEFAULT 0,
-  ADD COLUMN meter_offset_set_at timestamptz,
-  ADD COLUMN meter_offset_reason text,
-  ADD COLUMN meter_offset_note text,
-  ADD COLUMN replaces_meter_id uuid REFERENCES public.meters(id);
+```ts
+await supabase.from("meters")
+  .update({
+    location_id: newLocationId,
+    location_integration_id: newLocationIntegrationId,
+    capture_type: "automatic",
+    is_archived: false,            // falls archiviert
+  })
+  .eq("id", meterId);
 ```
 
-`replaces_meter_id` wird bei Fall 2 gesetzt – nur für Audit, das aktive `meters.id` bleibt unverändert.
+Anschließend `useMeters().refetch()` triggern.
 
----
+### 4. Sonderfälle
 
-## Umsetzungsreihenfolge (3 Stufen, jede einzeln freigabefähig)
+- **Mehrere Treffer pro `sensor_uuid`** (sollte nicht vorkommen, kann aber bei Altdaten passieren): erste Row gewinnt, die übrigen werden in der Bestätigung mit aufgeführt und unverändert gelassen.
+- **Archivierte Meter** mit gleicher `sensor_uuid`: ebenfalls als „Woanders zugeordnet" behandeln, Übernahme reaktiviert sie (`is_archived = false`).
+- **Aktuell verbundenes Gateway** = Gateway, dessen Dialog gerade offen ist → `locationIntegration.id` und `locationIntegration.location_id`.
 
-### Stufe 1 – Zähler-Offset (kleinster Schritt, sofort nützlich)
+## Technische Details
 
-- DB-Migration für Offset-Felder
-- UI in Zähler-Detail + beim Anlegen manueller Zähler
-- Anzeige-Helper, damit alle Stellen den Offset korrekt aufaddieren
+- Datei `src/components/integrations/SensorsDialog.tsx`:
+  - `assignedSensorIds` durch `assignedMetersBySensorId: Map<sensorUuid, MeterRow>` ersetzen.
+  - Neue Render-Logik in der Tabellenzeile (Status-Switch wie oben).
+- Neue Komponente `src/components/integrations/AdoptMeterDialog.tsx` (kleiner AlertDialog).
+- Neue Helper-Funktion in `src/hooks/useMeters.tsx`: `reassignMeter(meterId, { location_id, location_integration_id })`.
+- Für den Anzeigetext der „alten" Liegenschaft: bereits geladenes Set aus `useLocations()` joinen; für Gateway-Name aus `useIntegrations()` bzw. `location_integrations`.
+- Keine Schema-Migration nötig.
 
-### Stufe 2 – Einzel-Gerätetausch
+## Abgrenzung
 
-- Action „Gerät tauschen" in Geräteliste + Detail
-- Tausch-Dialog mit Auswahl aus „gefundenen Geräten"
-- Bei Zählern automatisch Offset-Dialog (nutzt Stufe 1)
-
-### Stufe 3 – Gateway-Tausch
-
-- Action „Gateway tauschen" am Gateway-Eintrag
-- Drei Optionen A/B/C
-- Optionales UUID-Mapping mit Namens-Vorschlag
-
----
-
-## Was ich von dir brauche
-
-1. **Freigabe des Konzepts** (oder Anmerkungen / Änderungen).
-2. **Reihenfolge bestätigen** (Empfehlung: 1 → 2 → 3).
-3. Danach starte ich mit **Stufe 1** (DB-Migration + UI) als erste konkrete Umsetzung.
+Dieser Plan deckt den im Screenshot beschriebenen Fall ab. Den umfassenderen „Gateway-Tausch"-Workflow (Massen-Umzug aller Meter eines Gateways) gibt es bereits über `ReplaceGatewayDialog` und bleibt unverändert.
