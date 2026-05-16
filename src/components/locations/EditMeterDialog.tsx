@@ -19,7 +19,9 @@ import { AlertCircle, Layers, DoorOpen, Upload, Loader2, ImageIcon } from "lucid
 import { toast } from "sonner";
 import { VirtualMeterFormulaBuilder, VirtualMeterSource } from "./VirtualMeterFormulaBuilder";
 import { MeterOffsetSection } from "./MeterOffsetSection";
+import { ReplaceDeviceDialog } from "./ReplaceDeviceDialog";
 import type { MeterOffsetReason } from "@/lib/meterOffset";
+import { ArrowRightLeft } from "lucide-react";
 
 interface Floor {
   id: string;
@@ -89,6 +91,7 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
   const photoInputRef = useRef<HTMLInputElement>(null);
   const [floors, setFloors] = useState<Floor[]>([]);
   const [rooms, setRooms] = useState<Room[]>([]);
+  const [replaceOpen, setReplaceOpen] = useState(false);
   // Available parents: all active meters except self and descendants
   const availableParents = allMeters.filter((m) => !m.is_archived && m.id !== meter.id);
 
@@ -633,16 +636,34 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
             <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} />
           </div>
         </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Abbrechen</Button>
+        <DialogFooter className="flex-col sm:flex-row sm:justify-between gap-2">
           <Button
-            onClick={handleSubmit}
-            disabled={!name.trim() || saving || (captureType === "automatic" && (!selectedIntegration || !selectedSensor))}
+            type="button"
+            variant="outline"
+            onClick={() => setReplaceOpen(true)}
+            className="gap-1.5 sm:mr-auto"
+            title="Defektes Gerät gegen ein neues tauschen"
           >
-            {saving ? "Speichern…" : "Speichern"}
+            <ArrowRightLeft className="h-4 w-4" />
+            Gerät tauschen
           </Button>
+          <div className="flex gap-2 sm:ml-auto">
+            <Button variant="outline" onClick={() => onOpenChange(false)}>Abbrechen</Button>
+            <Button
+              onClick={handleSubmit}
+              disabled={!name.trim() || saving || (captureType === "automatic" && (!selectedIntegration || !selectedSensor))}
+            >
+              {saving ? "Speichern…" : "Speichern"}
+            </Button>
+          </div>
         </DialogFooter>
       </DialogContent>
+      <ReplaceDeviceDialog
+        meter={meter}
+        open={replaceOpen}
+        onOpenChange={setReplaceOpen}
+        onReplaced={() => onOpenChange(false)}
+      />
     </Dialog>
   );
 };
