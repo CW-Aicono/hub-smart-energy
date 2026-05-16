@@ -1,77 +1,148 @@
-# Fix: Gateway-Zuordnung schlägt auf Live-Version (Hetzner) fehl
+# Plan: Geräte-/Gateway-Tausch & Zählerstand-Offset
 
-## Was der Fehler im Screenshot wirklich bedeutet
+## Ziel
 
-Beim Klick auf **„Gateway zuordnen"** auf `ems.aicono.org` erscheint:
+Sauberer Umgang mit drei realen Lebenszyklus-Ereignissen:
 
-> Fehler bei Zuordnung – Edge Function returned a non-2xx status code
+1. **Gateway-Tausch** (z. B. AICONO/HA-Hardware defekt) – ohne Datenverlust, ohne Neuanlage aller Zähler/Sensoren/Aktoren.
+2. **Gerätetausch** (Zähler, Sensor, Aktor defekt) – neues Gerät übernimmt die Identität (Historie, Zuordnung, Automationen) des alten.
+3. **Zählerstand-Offset** – Anfangsbestand bei Neukunden, oder Korrektur nach Tausch, damit die in AICONO angezeigten kWh dem realen Display am Zähler entsprechen.
 
-Das Frontend ruft die Edge Function `gateway-credentials` auf. Auf der **Lovable-Cloud-Version** funktioniert die Funktion einwandfrei (getestet, antwortet mit `200 OK`).
+Keine Code-Änderungen mit dieser Nachricht – nur das Konzept zur Freigabe.
 
-Auf der **Hetzner-Live-Version** zeigt derselbe Aufruf:
+---
 
+## Fall 1 – Gateway-Tausch
+
+### Auslöser
+
+Im UI auf der Liegenschafts-/Integrations-Seite: Button **„Gateway tauschen"** am bestehenden Gateway-Eintrag.
+
+### Ablauf
+
+1. Neues Gateway koppeln wie heute (Pairing-Code / Setup-Wizard im HA-Addon).
+2. System erkennt: am alten `location_integration_id` hängen bereits **N Zähler / M Sensoren / K Aktoren**.
+3. Dialog **„Geräte übernehmen?"**:
+   - **(A) Alle Geräte 1:1 übernehmen** (Default, empfohlen)
+     – Alle `meters.location_integration_id` werden auf das neue Gateway umgezogen.
+     – `sensor_uuid` bleibt erhalten, sofern das neue Gateway dieselben UUIDs meldet (z. B. gleiches HA-Addon mit gleichem MQTT-Discovery).
+     – Falls sich UUIDs ändern: Mapping-Schritt (siehe unten).
+   - **(B) Manuell zuordnen** – das alte Gateway wird auf „archiviert" gesetzt, Geräte bleiben bestehen, aber als „ohne Gateway"; Nutzer kann jedes Gerät im neuen Gateway-Dialog neu zuordnen.
+   - **(C) Verwerfen** – alle alten Geräte werden archiviert (nicht gelöscht!) und das neue Gateway startet leer.
+
+### UUID-Mapping-Schritt (nur falls Option A und UUIDs unterschiedlich)
+
+Tabelle „Altes Gerät → Neues Gerät", per Dropdown gemappt. System schlägt Mapping per Namensähnlichkeit vor. Bei Bestätigung:
+
+- `meters.sensor_uuid` wird auf neue UUID umgesetzt
+- `meters.location_integration_id` auf neues Gateway umgesetzt
+- alle historischen Daten (`meter_period_totals`, `meter_power_readings_5min`, `meter_readings`) bleiben am `meter_id` hängen – also automatisch erhalten
+
+### Was bleibt erhalten
+
+- Zähler-Historie, Verbräuche, Automationen, Räume/Etagen-Zuordnung, Tarife, Kostenrechnungen, Reports.
+
+### Was wird neu
+
+- Gateway-Eintrag selbst, MQTT-/HA-Credentials, ggf. lokale Sensor-UUIDs.
+
+---
+
+## Fall 2 – Einzel-Gerätetausch (Zähler / Sensor / Aktor)
+
+### Auslöser
+
+Im Gerät-Detail oder in der Geräteliste: Aktion **„Gerät tauschen"**.
+
+### Ablauf
+
+1. Nutzer markiert das **defekte Gerät** als zu tauschen.
+2. Dialog **„Wie tauschen?"**:
+   - **(A) Gegen ein bereits vom Gateway gefundenes neues Gerät tauschen** – Auswahl aus der „Gefundene Geräte"-Liste (alle Geräte, die noch keiner `meters`-Zeile zugeordnet sind).
+   - **(B) Gegen ein manuell angelegtes Gerät tauschen** – nur für manuelle Zähler.
+3. System führt den Tausch durch:
+   - **`meters.sensor_uuid`** wird auf die neue UUID umgesetzt.
+   - **`meters.id` bleibt gleich** ⇒ Historie, Automationen, Räume, Tarife, Kostenrechnungen bleiben unverändert.
+   - Das alte Gateway-Device wird intern als „ersetzt durch X" markiert.
+4. **Bei Zählern:** Offset-Dialog (siehe Fall 3) zwingend einblenden – neue Hardware fängt typischerweise bei 0 kWh an, das reale Display der Liegenschaft aber nicht.
+
+### Vorteil dieses Ansatzes
+
+Keine Neuanlage, keine kaputten Diagramme, Automationen laufen ohne Neukonfiguration weiter.
+
+---
+
+## Fall 3 – Zähler-Offset (Anfangsbestand & Tausch-Korrektur)
+
+### Problem
+
+- Neukunde startet mit bestehender Liegenschaft → physischer Zähler zeigt z. B. 145.823 kWh; AICONO würde aber bei 0 starten und nur ab Inbetriebnahme zählen.
+- Nach Zählertausch zählt das neue Gerät wieder ab 0 hoch; reales Display in der Liegenschaft zeigt aber den alten Stand plus neue kWh.
+
+### Lösung
+
+Pro Zähler zwei neue Felder im Datenmodell:
+
+| Feld | Bedeutung |
+|---|---|
+| `meter_offset_kwh` | Konstanter Offset, der bei jeder Anzeige zum gemessenen Verbrauchsstand addiert wird. Default 0. |
+| `meter_offset_set_at` | Zeitpunkt, ab dem der Offset gilt (für Audit/Reports). |
+| `meter_offset_reason` | Enum: `initial_reading`, `device_replacement`, `manual_correction`. |
+| `meter_offset_note` | Freitext (optional). |
+
+### UI
+
+- Auf der **Zähler-Detailseite** Box **„Anfangsbestand / Offset"** mit Wert, Datum, Begründung, Notiz.
+- Beim **Anlegen eines manuellen Zählers** und bei **Fall 2 (Gerätetausch)** wird der Offset-Dialog automatisch vorgeschlagen.
+- Anzeige des Zählerstands überall: `displayed_kwh = sum_of_measured_kwh + meter_offset_kwh`.
+
+### Auswirkungen auf Verbrauchs-Auswertungen
+
+- **Verbrauch über Zeitraum** (kWh/Tag, kWh/Monat) ist **NICHT** vom Offset betroffen – Differenzen bleiben gleich.
+- **Zählerstand-Anzeige** (Anfangsbestand + Verlauf der Tageswerte) ist mit Offset.
+- **Manuelle Zählerablesungen** (`meter_readings`) werden weiterhin als „abgelesener realer Stand am Zähler" gespeichert (inkl. Offset-Welt). Die Logik, die daraus Verbräuche berechnet, zieht den Offset wieder ab.
+
+### Technisches Modell (Kurzfassung)
+
+Neue Spalten an `meters` (Migration nach Freigabe):
+
+```sql
+ALTER TABLE public.meters
+  ADD COLUMN meter_offset_kwh numeric NOT NULL DEFAULT 0,
+  ADD COLUMN meter_offset_set_at timestamptz,
+  ADD COLUMN meter_offset_reason text,
+  ADD COLUMN meter_offset_note text,
+  ADD COLUMN replaces_meter_id uuid REFERENCES public.meters(id);
 ```
-POST https://api-ems.aicono.org/functions/v1/gateway-credentials
-→ {"error":"Datenbankfehler"}
-```
 
-Sogar die einfache „pending devices"-Abfrage scheitert – also lange bevor die eigentliche Zuordnung läuft.
+`replaces_meter_id` wird bei Fall 2 gesetzt – nur für Audit, das aktive `meters.id` bleibt unverändert.
 
-## Ursache
+---
 
-Die Live-Version `ems.aicono.org` spricht **nicht** mit der Lovable Cloud, sondern mit dem **selbst gehosteten Supabase-Stack auf Hetzner** (`api-ems.aicono.org`).
+## Umsetzungsreihenfolge (3 Stufen, jede einzeln freigabefähig)
 
-Lovable deployt Edge Functions und Datenbank-Migrationen **ausschließlich in die Lovable Cloud**. Für den Hetzner-Stack ist das ein getrennter, manueller Prozess.
+### Stufe 1 – Zähler-Offset (kleinster Schritt, sofort nützlich)
 
-Auf dem Hetzner-Backend fehlt **mindestens eines** davon:
+- DB-Migration für Offset-Felder
+- UI in Zähler-Detail + beim Anlegen manueller Zähler
+- Anzeige-Helper, damit alle Stellen den Offset korrekt aufaddieren
 
-1. Die Tabelle `gateway_devices` (oder Spalten wie `mac_address`, `gateway_username`, `gateway_password_hash`, `location_integration_id`, `tenant_id`, `last_heartbeat_at`, `local_ip`)
-2. Oder die Edge Function `gateway-credentials` läuft mit veraltetem Code
-3. Oder der `SUPABASE_SERVICE_ROLE_KEY` in der Edge-Function-Umgebung passt nicht zur lokalen Postgres-Instanz
+### Stufe 2 – Einzel-Gerätetausch
 
-Beweis: Die identische Funktion mit identischem Code antwortet in Lovable Cloud sauber mit `{"devices":[],"success":true}` und in Hetzner mit `{"error":"Datenbankfehler"}`.
+- Action „Gerät tauschen" in Geräteliste + Detail
+- Tausch-Dialog mit Auswahl aus „gefundenen Geräten"
+- Bei Zählern automatisch Offset-Dialog (nutzt Stufe 1)
 
-## Lösungsweg (in dieser Reihenfolge)
+### Stufe 3 – Gateway-Tausch
 
-### Schritt 1 – Hetzner-Datenbank-Schema angleichen
+- Action „Gateway tauschen" am Gateway-Eintrag
+- Drei Optionen A/B/C
+- Optionales UUID-Mapping mit Namens-Vorschlag
 
-Alle Migrationen, die auf Lovable Cloud bereits laufen, müssen auf dem Hetzner-Postgres ebenfalls angewendet werden. Im Repo gibt es dafür bereits:
+---
 
-- `scripts/apply-migrations.sh`
-- `supabase-docker/volumes/db/zz-migrations.sh`
+## Was ich von dir brauche
 
-Konkret muss der gesamte Migrationsstand aus `supabase/migrations/` auf Hetzner eingespielt werden. Besonders relevant: alle Migrationen, die `gateway_devices` und verwandte Tabellen anlegen oder erweitern.
-
-### Schritt 2 – Edge Functions auf Hetzner aktualisieren
-
-Die Functions im Hetzner-Stack (`supabase-docker/functions/`) müssen mit dem aktuellen Stand aus `supabase/functions/` synchronisiert werden – zumindest `gateway-credentials`, `gateway-ingest`, `gateway-ws`, `gateway-periodic-sync`.
-
-Falls noch kein automatischer Sync existiert, ist eine `rsync`/`docker cp`-basierte Deployment-Routine zu definieren und in `scripts/deploy.sh` zu ergänzen.
-
-### Schritt 3 – Verifikation
-
-Nach Deployment direkt gegen `api-ems.aicono.org` testen:
-
-```bash
-curl -X POST https://api-ems.aicono.org/functions/v1/gateway-credentials \
-  -H "Content-Type: application/json" \
-  -d '{"action":"pending"}'
-```
-
-Erwartet: `{"devices":[],"success":true}` (statt aktuell `{"error":"Datenbankfehler"}`).
-
-Dann den Live-Test im Browser wiederholen.
-
-## Wichtig – ehrliche Einschätzung
-
-- **Was ich JA garantieren kann:** Diagnose ist eindeutig. Der Fehler liegt **nicht** im Frontend- oder Edge-Function-Code, sondern in einer **fehlenden Synchronisation** zwischen Lovable Cloud und Hetzner.
-- **Was ich NICHT blind ausführen kann:** Ich habe keinen direkten SSH-Zugriff auf den Hetzner-Server. Die Migration und das Function-Deployment müssen entweder von dir auf dem Server ausgeführt werden, oder wir bauen einen CI-Job, der das übernimmt (analog zu `.github/workflows/deploy-prod.yml`, falls dieser noch nicht alle Migrationen anwendet).
-
-## Entscheidungspunkt für dich
-
-Bitte wähle, wie wir weitermachen:
-
-1. **Manuell auf Hetzner**: Du gibst mir grünes Licht und ich schreibe dir eine exakte, Schritt-für-Schritt-Anleitung (mit allen Kommandos zum Kopieren), die du auf dem Hetzner-Server ausführst, um Schema + Functions anzugleichen.
-2. **CI/CD ausbauen**: Wir prüfen `deploy-prod.yml` und ergänzen, was zur automatischen Migration + Function-Sync auf Hetzner fehlt – damit dieser Fehler bei künftigen Änderungen nicht wieder auftritt.
-
-Empfehlung: **erst 1, dann 2** – so kommst du heute zur Inbetriebnahme, und die Automatisierung folgt sauber danach.
+1. **Freigabe des Konzepts** (oder Anmerkungen / Änderungen).
+2. **Reihenfolge bestätigen** (Empfehlung: 1 → 2 → 3).
+3. Danach starte ich mit **Stufe 1** (DB-Migration + UI) als erste konkrete Umsetzung.
