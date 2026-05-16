@@ -147,3 +147,6 @@ verify_jwt = false
 
 [functions.gateway-image-download]
 verify_jwt = false
+
+[functions.gateway-wallbox-fetch]
+verify_jwt = false

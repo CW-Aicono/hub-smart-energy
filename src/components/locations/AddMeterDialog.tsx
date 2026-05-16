@@ -16,6 +16,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { AlertCircle } from "lucide-react";
 import { VirtualMeterFormulaBuilder, VirtualMeterSource } from "./VirtualMeterFormulaBuilder";
+import { MeterOffsetSection } from "./MeterOffsetSection";
+import type { MeterOffsetReason } from "@/lib/meterOffset";
 
 interface AddMeterDialogProps {
   locationId: string;
@@ -55,6 +57,9 @@ export const AddMeterDialog = ({ locationId, open, onOpenChange }: AddMeterDialo
   const [zustandszahl, setZustandszahl] = useState("0,9636");
   const [brennwert, setBrenwert] = useState("");
   const [sourceUnit, setSourceUnit] = useState("kW");
+  const [offsetValue, setOffsetValue] = useState("");
+  const [offsetReason, setOffsetReason] = useState<MeterOffsetReason | "">("");
+  const [offsetNote, setOffsetNote] = useState("");
 
   const activeMeters = meters.filter((m) => !m.is_archived);
 
@@ -154,6 +159,17 @@ export const AddMeterDialog = ({ locationId, open, onOpenChange }: AddMeterDialo
         ...(energyType === "gas" ? { gas_type: gasType, zustandszahl: parsedZustandszahl, brennwert: parsedBrennwert || undefined } : {}),
         ...(captureType === "automatic" ? { source_unit_power: sourceUnit, source_unit_energy: sourceUnit === "m³" ? "m³" : sourceUnit === "kW" ? "kWh" : "Wh" } : {}),
         is_bidirectional: isBidirectional,
+        ...(() => {
+          const parsed = offsetValue.trim() ? parseFloat(offsetValue.replace(",", ".")) : 0;
+          const finalOffset = Number.isFinite(parsed) ? parsed : 0;
+          if (finalOffset === 0) return { meter_offset_kwh: 0 };
+          return {
+            meter_offset_kwh: finalOffset,
+            meter_offset_reason: offsetReason || null,
+            meter_offset_note: offsetNote.trim() || null,
+            meter_offset_set_at: new Date().toISOString(),
+          };
+        })(),
       } as any,
       parentMeterId && parentMeterId !== "none" ? parentMeterId : null,
       isMainMeter,
@@ -183,6 +199,9 @@ export const AddMeterDialog = ({ locationId, open, onOpenChange }: AddMeterDialo
     setZustandszahl("0,9636");
     setBrenwert("");
     setSourceUnit("kW");
+    setOffsetValue("");
+    setOffsetReason("");
+    setOffsetNote("");
     onOpenChange(false);
   };
 
@@ -405,6 +424,15 @@ export const AddMeterDialog = ({ locationId, open, onOpenChange }: AddMeterDialo
               </Select>
             </div>
           </div>
+          <MeterOffsetSection
+            value={offsetValue}
+            onValueChange={setOffsetValue}
+            reason={offsetReason}
+            onReasonChange={setOffsetReason}
+            note={offsetNote}
+            onNoteChange={setOffsetNote}
+            unit={unit || "kWh"}
+          />
           <div>
             <Label>Notizen</Label>
             <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} />

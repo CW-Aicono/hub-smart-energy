@@ -1,36 +1,69 @@
-## Befund
+# Bereits zugeordnete Geräte an einen anderen Standort übernehmen
 
-Das aktuelle Log zeigt diesmal nicht primär einen PIN-/Watchdog-Fehler, sondern: Der Supervisor wartet 120 Sekunden darauf, dass auf Port `8099` etwas erreichbar wird – aber das Add-on öffnet den Port nicht rechtzeitig. Danach kommen die Ingress-Fehler `Cannot connect to host 172.30.33.1:8099`, weil schlicht kein Webserver im Container lauscht.
+## Problem
 
-Der kritischste Codepunkt ist in `docs/ha-addon/index.ts`: Der lokale Webserver wird erst nach Offline-Cache-Initialisierung gestartet, danach laufen noch Cloud-/HA-Initialabfragen. Zusätzlich kann bei fehlenden Credentials der Setup-Wizard den Hauptserver ersetzen. Für Home Assistant ist das riskant, weil Ingress/Startprüfung sehr früh eine Antwort auf Port 8099 erwartet.
+Im Dialog **„Gefundene Geräte"** eines Gateways werden Sensoren mit dem Hinweis *(zugeordnet)* angezeigt und sind nicht auswählbar, sobald ihre `sensor_uuid` bereits in einem `meters`-Datensatz vorkommt – **egal an welcher Liegenschaft oder an welchem Gateway**.
 
-## Plan
+Dadurch lässt sich ein Gerät, das früher an Liegenschaft A (oder gar an gar keiner Liegenschaft mehr) angelegt war, nicht erneut an Liegenschaft B (der aktuell mit dem Gateway verknüpften Liegenschaft) zuordnen, obwohl genau das gewünscht ist (z. B. nach Umzug, Gateway-Wechsel oder bei verwaisten Datensätzen).
 
-1. **Port 8099 sofort beim Boot öffnen**
-   - `startServer()` ganz früh in `main()` starten, bevor Cloud-, HA-, Mapping-, Automation- oder Setup-Schritte laufen.
-   - Dadurch bekommt Home Assistant sofort eine Antwort und der 120s-Starttimeout wird verhindert.
+## Ziel
 
-2. **Health-Endpoint maximal robust machen**
-   - `/api/status` darf keine langsamen oder potenziell blockierenden Operationen enthalten.
-   - Die MAC-Adresse dort nicht live über `/network/info` holen, sondern nur gecacht/fallbackfähig ausgeben.
-   - Ziel: `/api/status` antwortet auch dann mit `200`, wenn Cloud, HA API, PIN oder MAC-Ermittlung gerade Probleme haben.
+Im Dialog soll bei einem bereits zugeordneten Gerät erkennbar sein, **wo** es aktuell hängt, und der Nutzer soll es **mit einem Klick an die aktuelle Liegenschaft + das aktuelle Gateway übernehmen** können. Historische Messwerte bleiben dabei erhalten (gleicher Meter-Datensatz, nur `location_id` / `location_integration_id` werden aktualisiert).
 
-3. **Setup-/Credentials-Fall Ingress-tauglich machen**
-   - Wenn `gateway_username` oder `gateway_password` fehlen, nicht in einen separaten Wizard blockieren, der den Bootfluss übernimmt.
-   - Stattdessen soll der bereits gestartete Server weiterlaufen und `/api/status` `credentials_configured: false` melden; die UI kann Setup/Login anzeigen.
-   - So startet das Add-on auch bei kaputter/alter Konfiguration und bleibt reparierbar.
+## Umsetzung
 
-4. **Startphase entkoppeln**
-   - Initiale Cloud-/HA-Aufrufe (`checkCloudConnectivity`, `fetchHAVersion`, `fetchMeterMappings`, `syncAutomationsFromCloud`) nicht mehr vor “Gateway läuft” blockierend erzwingen.
-   - Diese Aufgaben nach Serverstart im Hintergrund ausführen und Fehler nur loggen, nicht den Prozess beenden.
+### 1. Datenmodell-Logik
 
-5. **Version synchronisieren**
-   - `package.json` steht noch auf `3.1.4`, `config.yaml` bereits auf `3.2.0`. Das sollte vereinheitlicht werden, damit HA nicht weiterhin alte 3.1.4-Builds zieht.
+Pro `sensor_uuid` werden im `SensorsDialog` drei Zustände unterschieden:
 
-6. **Kurztest ergänzen/ausführen**
-   - Minimal prüfen, dass `/api/status` ohne PIN/Cookie und auch ohne Credentials erreichbar bleibt.
-   - Keine Änderung an der Cloud-Datenbank nötig.
+| Status | Bedingung | UI |
+|---|---|---|
+| **Frei** | keine Meter-Row mit dieser `sensor_uuid` | Checkbox aktiv (wie bisher) |
+| **Hier zugeordnet** | Meter-Row mit gleicher `location_id` **und** gleicher `location_integration_id` wie der aktuelle Kontext | Haken + Hinweis *(zugeordnet)* (wie bisher) |
+| **Woanders zugeordnet** | Meter-Row existiert, aber `location_id` und/oder `location_integration_id` weichen ab (auch wenn `location_id` NULL ist) | Hinweis mit Standort/Gateway-Name + Button **„An diese Liegenschaft übernehmen"** |
 
-## Sofort-Hinweis für dich
+### 2. UI im SensorsDialog
 
-Solange das Update noch nicht installiert ist: Die Meldung `Cannot connect to host 172.30.33.1:8099` bedeutet, dass das Add-on intern gar keinen Webserver geöffnet hat. Deshalb helfen PIN deaktivieren oder Watchdog ausschalten allein nicht zuverlässig.
+- Statt nur *(zugeordnet)*: zusätzliche Zeile mit dem aktuellen Standort und Gateway des verknüpften Meters (z. B. *„Aktuell: Realschule am Buchenberg · Loxone Miniserver"* bzw. *„Aktuell: keine Liegenschaft"*).
+- Bei *Woanders zugeordnet* erscheint ein kleiner Button **Übernehmen** (Icon `ArrowRightLeft`).
+- Klick öffnet einen Bestätigungs-Dialog mit Inhalt:
+  - „Das Gerät **{Name}** ist aktuell an **{alte Liegenschaft / kein Standort}** über Gateway **{altes Gateway / keins}** angelegt."
+  - „Es wird zur Liegenschaft **{neue Liegenschaft}** verschoben und mit Gateway **{neues Gateway}** verknüpft. Alle bisherigen Zählerstände und Messwerte bleiben erhalten."
+  - Optionen: *Abbrechen* / *Übernehmen*
+
+### 3. Server-Aktion
+
+Eine neue Hilfsfunktion `reassignMeterToCurrentGateway(meterId, newLocationId, newLocationIntegrationId)`:
+
+```ts
+await supabase.from("meters")
+  .update({
+    location_id: newLocationId,
+    location_integration_id: newLocationIntegrationId,
+    capture_type: "automatic",
+    is_archived: false,            // falls archiviert
+  })
+  .eq("id", meterId);
+```
+
+Anschließend `useMeters().refetch()` triggern.
+
+### 4. Sonderfälle
+
+- **Mehrere Treffer pro `sensor_uuid`** (sollte nicht vorkommen, kann aber bei Altdaten passieren): erste Row gewinnt, die übrigen werden in der Bestätigung mit aufgeführt und unverändert gelassen.
+- **Archivierte Meter** mit gleicher `sensor_uuid`: ebenfalls als „Woanders zugeordnet" behandeln, Übernahme reaktiviert sie (`is_archived = false`).
+- **Aktuell verbundenes Gateway** = Gateway, dessen Dialog gerade offen ist → `locationIntegration.id` und `locationIntegration.location_id`.
+
+## Technische Details
+
+- Datei `src/components/integrations/SensorsDialog.tsx`:
+  - `assignedSensorIds` durch `assignedMetersBySensorId: Map<sensorUuid, MeterRow>` ersetzen.
+  - Neue Render-Logik in der Tabellenzeile (Status-Switch wie oben).
+- Neue Komponente `src/components/integrations/AdoptMeterDialog.tsx` (kleiner AlertDialog).
+- Neue Helper-Funktion in `src/hooks/useMeters.tsx`: `reassignMeter(meterId, { location_id, location_integration_id })`.
+- Für den Anzeigetext der „alten" Liegenschaft: bereits geladenes Set aus `useLocations()` joinen; für Gateway-Name aus `useIntegrations()` bzw. `location_integrations`.
+- Keine Schema-Migration nötig.
+
+## Abgrenzung
+
+Dieser Plan deckt den im Screenshot beschriebenen Fall ab. Den umfassenderen „Gateway-Tausch"-Workflow (Massen-Umzug aller Meter eines Gateways) gibt es bereits über `ReplaceGatewayDialog` und bleibt unverändert.

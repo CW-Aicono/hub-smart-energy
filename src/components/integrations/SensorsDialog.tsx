@@ -21,12 +21,19 @@ import {
   Loader2, RefreshCw, AlertCircle, Plus, CheckCircle2,
   Zap, Thermometer, Droplets, Wind, Gauge, Sun, BatteryCharging,
   ToggleLeft, Activity, Lightbulb, Waves, CloudRain, Eye, Radio,
+  ArrowRightLeft,
 } from "lucide-react";
 import { LocationIntegration } from "@/hooks/useIntegrations";
 import { supabase } from "@/integrations/supabase/client";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AssignMeterDialog } from "./AssignMeterDialog";
-import { useMeters } from "@/hooks/useMeters";
+import { useMeters, type Meter } from "@/hooks/useMeters";
+import { useLocations } from "@/hooks/useLocations";
+import { useQuery } from "@tanstack/react-query";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { getGatewayDefinition, getEdgeFunctionName } from "@/lib/gatewayRegistry";
 import { getResolvedDeviceType } from "@/lib/deviceClassification";
 import { invokeWithRetry } from "@/lib/invokeWithRetry";
@@ -108,15 +115,14 @@ export function SensorsDialog({ locationIntegration, open, onOpenChange, locatio
 
   const effectiveLocationId = locationId || locationIntegration?.location_id || "";
   // Fetch ALL meters (no location filter) so we can detect sensor assignments across locations
-  const { meters } = useMeters();
+  const { meters, reassignMeter } = useMeters();
+  const { locations } = useLocations();
 
   const integrationName = locationIntegration?.integration?.name || "Integration";
   const integrationType = locationIntegration?.integration?.type || "";
   const edgeFunctionName = getEdgeFunctionName(integrationType);
 
   // Push-based gateways without getSensors support – they receive data, not poll it.
-  // gateway-ingest (Schneider/Siemens) is push-only.
-  // gateway-ws (AICONO Gateway) DOES support getSensors via HTTP POST action="getSensors".
   const isPushGateway = edgeFunctionName === "gateway-ingest";
 
   // For non-Loxone gateways, show all sensors; for Loxone filter to meter types
@@ -124,17 +130,55 @@ export function SensorsDialog({ locationIntegration, open, onOpenChange, locatio
     ? sensors.filter((s) => METER_CONTROL_TYPES.has(s.controlType || ""))
     : sensors;
 
-  // Set of sensor UUIDs already assigned to this location
-  // Check ALL meters globally – a sensor_uuid must only be assigned once across the entire system
-  const assignedSensorIds = useMemo(() => {
-    const ids = new Set<string>();
-    meters.forEach((m) => {
-      if (m.sensor_uuid) {
-        ids.add(m.sensor_uuid);
+  // Lookup: location_id -> name
+  const locationNameById = useMemo(() => {
+    const map = new Map<string, string>();
+    const walk = (list: typeof locations) => list.forEach((l) => {
+      map.set(l.id, l.name);
+      if (l.children) walk(l.children);
+    });
+    walk(locations);
+    return map;
+  }, [locations]);
+
+  // Lookup: location_integration_id -> integration display name (across tenant)
+  const { data: liMap } = useQuery({
+    queryKey: ["sensors-dialog-li-map"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("location_integrations")
+        .select("id, integration:integrations(name)");
+      if (error) {
+        console.error(error);
+        return new Map<string, string>();
+      }
+      const m = new Map<string, string>();
+      (data ?? []).forEach((row: { id: string; integration: { name: string } | null }) => {
+        if (row.integration?.name) m.set(row.id, row.integration.name);
+      });
+      return m;
+    },
+    staleTime: 60_000,
+  });
+
+  // Map sensor_uuid -> Meter row (first match wins)
+  const assignedMeterBySensorId = useMemo(() => {
+    const m = new Map<string, Meter>();
+    meters.forEach((meter) => {
+      if (meter.sensor_uuid && !m.has(meter.sensor_uuid)) {
+        m.set(meter.sensor_uuid, meter);
       }
     });
-    return ids;
+    return m;
   }, [meters]);
+
+  // Sensor is "here" when both location_id and location_integration_id match current context
+  const isAssignedHere = (meter: Meter): boolean => {
+    return (
+      meter.location_id === effectiveLocationId &&
+      meter.location_integration_id === (locationIntegration?.id ?? null)
+    );
+  };
 
   const fetchSensors = async () => {
     if (!locationIntegration || isPushGateway) return;
@@ -183,7 +227,8 @@ export function SensorsDialog({ locationIntegration, open, onOpenChange, locatio
     });
   };
 
-  const selectableSensors = meterSensors.filter((s) => !assignedSensorIds.has(s.id));
+  // Selectable = no existing meter at all (truly free)
+  const selectableSensors = meterSensors.filter((s) => !assignedMeterBySensorId.has(s.id));
 
   const toggleAll = () => {
     if (selectedSensorIds.size === selectableSensors.length) {
@@ -194,6 +239,21 @@ export function SensorsDialog({ locationIntegration, open, onOpenChange, locatio
   };
 
   const selectedSensors = meterSensors.filter((s) => selectedSensorIds.has(s.id));
+
+  // Adoption confirm state
+  const [adoptTarget, setAdoptTarget] = useState<{ sensorName: string; meter: Meter } | null>(null);
+  const [adopting, setAdopting] = useState(false);
+
+  const handleAdopt = async () => {
+    if (!adoptTarget || !locationIntegration) return;
+    setAdopting(true);
+    const { error: e } = await reassignMeter(adoptTarget.meter.id, {
+      location_id: effectiveLocationId,
+      location_integration_id: locationIntegration.id,
+    });
+    setAdopting(false);
+    if (!e) setAdoptTarget(null);
+  };
 
   return (
     <>
@@ -274,15 +334,33 @@ export function SensorsDialog({ locationIntegration, open, onOpenChange, locatio
                 </TableHeader>
                 <TableBody>
                   {meterSensors.map((sensor) => {
-                    const isAssigned = assignedSensorIds.has(sensor.id);
+                    const assignedMeter = assignedMeterBySensorId.get(sensor.id);
+                    const assignedHere = assignedMeter ? isAssignedHere(assignedMeter) : false;
+                    const assignedElsewhere = !!assignedMeter && !assignedHere;
+                    const oldLocName = assignedMeter?.location_id
+                      ? (locationNameById.get(assignedMeter.location_id) ?? "Unbekannte Liegenschaft")
+                      : "keine Liegenschaft";
+                    const oldGwName = assignedMeter?.location_integration_id
+                      ? (liMap?.get(assignedMeter.location_integration_id) ?? "Unbekanntes Gateway")
+                      : "kein Gateway";
                     return (
                       <TableRow
                         key={sensor.id}
-                        className={isAssigned ? "opacity-60" : selectedSensorIds.has(sensor.id) ? "bg-muted/50" : ""}
+                        className={assignedHere ? "opacity-60" : selectedSensorIds.has(sensor.id) ? "bg-muted/50" : ""}
                       >
                         <TableCell>
-                          {isAssigned ? (
+                          {assignedHere ? (
                             <CheckCircle2 className="h-4 w-4 text-primary" />
+                          ) : assignedElsewhere ? (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-7 px-2"
+                              onClick={() => assignedMeter && setAdoptTarget({ sensorName: sensor.name, meter: assignedMeter })}
+                              title="An diese Liegenschaft übernehmen"
+                            >
+                              <ArrowRightLeft className="h-3.5 w-3.5" />
+                            </Button>
                           ) : (
                             <Checkbox
                               checked={selectedSensorIds.has(sensor.id)}
@@ -298,8 +376,13 @@ export function SensorsDialog({ locationIntegration, open, onOpenChange, locatio
                         </TableCell>
                         <TableCell className="font-medium">
                           {sensor.name}
-                          {isAssigned && (
+                          {assignedHere && (
                             <span className="ml-2 text-xs text-muted-foreground">(zugeordnet)</span>
+                          )}
+                          {assignedElsewhere && (
+                            <div className="text-xs text-muted-foreground mt-0.5">
+                              Aktuell: {oldLocName} · {oldGwName}
+                            </div>
                           )}
                         </TableCell>
                         <TableCell className="text-muted-foreground">{sensor.room}</TableCell>
@@ -364,6 +447,47 @@ export function SensorsDialog({ locationIntegration, open, onOpenChange, locatio
           currentLocationId={effectiveLocationId}
         />
       )}
+
+      <AlertDialog open={!!adoptTarget} onOpenChange={(o) => { if (!o) setAdoptTarget(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Gerät an diese Liegenschaft übernehmen?</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2 text-sm">
+                <p>
+                  Das Gerät <strong>{adoptTarget?.sensorName}</strong> ist aktuell an{" "}
+                  <strong>
+                    {adoptTarget?.meter.location_id
+                      ? (locationNameById.get(adoptTarget.meter.location_id) ?? "Unbekannte Liegenschaft")
+                      : "keiner Liegenschaft"}
+                  </strong>{" "}
+                  über Gateway{" "}
+                  <strong>
+                    {adoptTarget?.meter.location_integration_id
+                      ? (liMap?.get(adoptTarget.meter.location_integration_id) ?? "Unbekanntes Gateway")
+                      : "keinem Gateway"}
+                  </strong>{" "}
+                  angelegt.
+                </p>
+                <p>
+                  Es wird zur Liegenschaft{" "}
+                  <strong>{locationNameById.get(effectiveLocationId) ?? "aktuelle Liegenschaft"}</strong>{" "}
+                  verschoben und mit Gateway <strong>{integrationName}</strong> verknüpft.
+                </p>
+                <p className="text-muted-foreground">
+                  Alle bisherigen Zählerstände und Messwerte bleiben erhalten.
+                </p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={adopting}>Abbrechen</AlertDialogCancel>
+            <AlertDialogAction onClick={(e) => { e.preventDefault(); handleAdopt(); }} disabled={adopting}>
+              {adopting ? "Wird übernommen..." : "Übernehmen"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }

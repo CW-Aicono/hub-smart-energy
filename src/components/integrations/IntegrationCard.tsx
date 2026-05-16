@@ -9,7 +9,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useTranslation } from "@/hooks/useTranslation";
-import { Server, Trash2, Pencil, CheckCircle2, XCircle, Clock, Loader2, Gauge, RefreshCw } from "lucide-react";
+import { Server, Trash2, Pencil, CheckCircle2, XCircle, Clock, Loader2, Gauge, RefreshCw, ArrowRightLeft } from "lucide-react";
+import { ReplaceGatewayDialog } from "./ReplaceGatewayDialog";
 import { LocationIntegration } from "@/hooks/useIntegrations";
 import { SensorsDialog } from "./SensorsDialog";
 import { DeviceCard } from "./gateway/DeviceCard";
@@ -36,6 +37,7 @@ export function IntegrationCard({ locationIntegration, onUpdate, onDelete }: Int
   const [isToggling, setIsToggling] = useState(false);
   const [sensorsOpen, setSensorsOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
+  const [replaceGatewayOpen, setReplaceGatewayOpen] = useState(false);
   const [isBackfilling, setIsBackfilling] = useState(false);
   const [backfillFrom, setBackfillFrom] = useState(() => {
     const d = new Date(); d.setDate(d.getDate() - 2);
@@ -223,6 +225,14 @@ export function IntegrationCard({ locationIntegration, onUpdate, onDelete }: Int
                 </AlertDialog>
               )}
               <Switch checked={locationIntegration.is_enabled} onCheckedChange={handleToggleEnabled} disabled={isToggling} />
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setReplaceGatewayOpen(true)}
+                title="Gateway tauschen"
+              >
+                <ArrowRightLeft className="h-4 w-4" />
+              </Button>
               <Button variant="ghost" size="icon" onClick={() => setEditOpen(true)} title={t("common.edit")}><Pencil className="h-4 w-4" /></Button>
               <AlertDialog>
                 <AlertDialogTrigger asChild>
@@ -261,6 +271,11 @@ export function IntegrationCard({ locationIntegration, onUpdate, onDelete }: Int
       </Card>
       <SensorsDialog locationIntegration={locationIntegration} open={sensorsOpen} onOpenChange={setSensorsOpen} locationId={locationIntegration.location_id} />
       <EditIntegrationDialog locationIntegration={locationIntegration} open={editOpen} onOpenChange={setEditOpen} onUpdate={onUpdate} />
+      <ReplaceGatewayDialog
+        oldGateway={locationIntegration}
+        open={replaceGatewayOpen}
+        onOpenChange={setReplaceGatewayOpen}
+      />
     </>
   );
 }

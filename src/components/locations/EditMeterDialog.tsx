@@ -18,6 +18,10 @@ import { Switch } from "@/components/ui/switch";
 import { AlertCircle, Layers, DoorOpen, Upload, Loader2, ImageIcon } from "lucide-react";
 import { toast } from "sonner";
 import { VirtualMeterFormulaBuilder, VirtualMeterSource } from "./VirtualMeterFormulaBuilder";
+import { MeterOffsetSection } from "./MeterOffsetSection";
+import { ReplaceDeviceDialog } from "./ReplaceDeviceDialog";
+import type { MeterOffsetReason } from "@/lib/meterOffset";
+import { ArrowRightLeft } from "lucide-react";
 
 interface Floor {
   id: string;
@@ -75,9 +79,19 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
   const [zustandszahl, setZustandszahl] = useState((meter as any).zustandszahl != null ? String((meter as any).zustandszahl).replace(".", ",") : "0,9636");
   const [brennwertVal, setBrennwertVal] = useState((meter as any).brennwert != null ? String((meter as any).brennwert).replace(".", ",") : "");
   const [sourceUnit, setSourceUnit] = useState((meter as any).source_unit_power || "kW");
+  const [offsetValue, setOffsetValue] = useState(
+    (meter as any).meter_offset_kwh != null && Number((meter as any).meter_offset_kwh) !== 0
+      ? String((meter as any).meter_offset_kwh).replace(".", ",")
+      : ""
+  );
+  const [offsetReason, setOffsetReason] = useState<MeterOffsetReason | "">(
+    ((meter as any).meter_offset_reason as MeterOffsetReason) || ""
+  );
+  const [offsetNote, setOffsetNote] = useState((meter as any).meter_offset_note || "");
   const photoInputRef = useRef<HTMLInputElement>(null);
   const [floors, setFloors] = useState<Floor[]>([]);
   const [rooms, setRooms] = useState<Room[]>([]);
+  const [replaceOpen, setReplaceOpen] = useState(false);
   // Available parents: all active meters except self and descendants
   const availableParents = allMeters.filter((m) => !m.is_archived && m.id !== meter.id);
 
@@ -110,6 +124,13 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
     setZustandszahl((meter as any).zustandszahl != null ? String((meter as any).zustandszahl).replace(".", ",") : "0,9636");
     setBrennwertVal((meter as any).brennwert != null ? String((meter as any).brennwert).replace(".", ",") : "");
     setSourceUnit((meter as any).source_unit_power || "kW");
+    setOffsetValue(
+      (meter as any).meter_offset_kwh != null && Number((meter as any).meter_offset_kwh) !== 0
+        ? String((meter as any).meter_offset_kwh).replace(".", ",")
+        : ""
+    );
+    setOffsetReason(((meter as any).meter_offset_reason as MeterOffsetReason) || "");
+    setOffsetNote((meter as any).meter_offset_note || "");
     // Load virtual sources
     if (meter.capture_type === "virtual") {
       supabase
@@ -274,6 +295,19 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
       } : { gas_type: null, zustandszahl: null, brennwert: null }),
       source_unit_power: captureType === "automatic" ? sourceUnit : null,
       source_unit_energy: captureType === "automatic" ? (sourceUnit === "m³" ? "m³" : sourceUnit === "kW" ? "kWh" : "Wh") : null,
+      ...(deviceType === "meter" ? (() => {
+        const parsed = offsetValue.trim() ? parseFloat(offsetValue.replace(",", ".")) : 0;
+        const finalOffset = Number.isFinite(parsed) ? parsed : 0;
+        return {
+          meter_offset_kwh: finalOffset,
+          meter_offset_reason: finalOffset !== 0 ? (offsetReason || null) : null,
+          meter_offset_note: finalOffset !== 0 ? (offsetNote.trim() || null) : null,
+          meter_offset_set_at:
+            finalOffset !== 0 && Number(meter.meter_offset_kwh ?? 0) !== finalOffset
+              ? new Date().toISOString()
+              : ((meter as any).meter_offset_set_at ?? null),
+        };
+      })() : {}),
     } as any);
 
     // Update virtual sources
@@ -555,6 +589,18 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
               </div>
             </div>
           )}
+          {/* Offset / Anfangsbestand - only for meters */}
+          {deviceType === "meter" && (
+            <MeterOffsetSection
+              value={offsetValue}
+              onValueChange={setOffsetValue}
+              reason={offsetReason}
+              onReasonChange={setOffsetReason}
+              note={offsetNote}
+              onNoteChange={setOffsetNote}
+              unit={unit || "kWh"}
+            />
+          )}
           {/* Photo, Installation Date, Operator */}
           <div className="space-y-3 rounded-md border p-3 bg-muted/30">
             <p className="text-sm font-medium text-muted-foreground">Zusatzinformationen</p>
@@ -590,16 +636,34 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
             <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} />
           </div>
         </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Abbrechen</Button>
+        <DialogFooter className="flex-col sm:flex-row sm:justify-between gap-2">
           <Button
-            onClick={handleSubmit}
-            disabled={!name.trim() || saving || (captureType === "automatic" && (!selectedIntegration || !selectedSensor))}
+            type="button"
+            variant="outline"
+            onClick={() => setReplaceOpen(true)}
+            className="gap-1.5 sm:mr-auto"
+            title="Defektes Gerät gegen ein neues tauschen"
           >
-            {saving ? "Speichern…" : "Speichern"}
+            <ArrowRightLeft className="h-4 w-4" />
+            Gerät tauschen
           </Button>
+          <div className="flex gap-2 sm:ml-auto">
+            <Button variant="outline" onClick={() => onOpenChange(false)}>Abbrechen</Button>
+            <Button
+              onClick={handleSubmit}
+              disabled={!name.trim() || saving || (captureType === "automatic" && (!selectedIntegration || !selectedSensor))}
+            >
+              {saving ? "Speichern…" : "Speichern"}
+            </Button>
+          </div>
         </DialogFooter>
       </DialogContent>
+      <ReplaceDeviceDialog
+        meter={meter}
+        open={replaceOpen}
+        onOpenChange={setReplaceOpen}
+        onReplaced={() => onOpenChange(false)}
+      />
     </Dialog>
   );
 };
