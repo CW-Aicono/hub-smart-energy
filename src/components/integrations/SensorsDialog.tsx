@@ -115,15 +115,14 @@ export function SensorsDialog({ locationIntegration, open, onOpenChange, locatio
 
   const effectiveLocationId = locationId || locationIntegration?.location_id || "";
   // Fetch ALL meters (no location filter) so we can detect sensor assignments across locations
-  const { meters } = useMeters();
+  const { meters, reassignMeter } = useMeters();
+  const { locations } = useLocations();
 
   const integrationName = locationIntegration?.integration?.name || "Integration";
   const integrationType = locationIntegration?.integration?.type || "";
   const edgeFunctionName = getEdgeFunctionName(integrationType);
 
   // Push-based gateways without getSensors support – they receive data, not poll it.
-  // gateway-ingest (Schneider/Siemens) is push-only.
-  // gateway-ws (AICONO Gateway) DOES support getSensors via HTTP POST action="getSensors".
   const isPushGateway = edgeFunctionName === "gateway-ingest";
 
   // For non-Loxone gateways, show all sensors; for Loxone filter to meter types
@@ -131,17 +130,55 @@ export function SensorsDialog({ locationIntegration, open, onOpenChange, locatio
     ? sensors.filter((s) => METER_CONTROL_TYPES.has(s.controlType || ""))
     : sensors;
 
-  // Set of sensor UUIDs already assigned to this location
-  // Check ALL meters globally – a sensor_uuid must only be assigned once across the entire system
-  const assignedSensorIds = useMemo(() => {
-    const ids = new Set<string>();
-    meters.forEach((m) => {
-      if (m.sensor_uuid) {
-        ids.add(m.sensor_uuid);
+  // Lookup: location_id -> name
+  const locationNameById = useMemo(() => {
+    const map = new Map<string, string>();
+    const walk = (list: typeof locations) => list.forEach((l) => {
+      map.set(l.id, l.name);
+      if (l.children) walk(l.children);
+    });
+    walk(locations);
+    return map;
+  }, [locations]);
+
+  // Lookup: location_integration_id -> integration display name (across tenant)
+  const { data: liMap } = useQuery({
+    queryKey: ["sensors-dialog-li-map"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("location_integrations")
+        .select("id, integration:integrations(name)");
+      if (error) {
+        console.error(error);
+        return new Map<string, string>();
+      }
+      const m = new Map<string, string>();
+      (data ?? []).forEach((row: { id: string; integration: { name: string } | null }) => {
+        if (row.integration?.name) m.set(row.id, row.integration.name);
+      });
+      return m;
+    },
+    staleTime: 60_000,
+  });
+
+  // Map sensor_uuid -> Meter row (first match wins)
+  const assignedMeterBySensorId = useMemo(() => {
+    const m = new Map<string, Meter>();
+    meters.forEach((meter) => {
+      if (meter.sensor_uuid && !m.has(meter.sensor_uuid)) {
+        m.set(meter.sensor_uuid, meter);
       }
     });
-    return ids;
+    return m;
   }, [meters]);
+
+  // Sensor is "here" when both location_id and location_integration_id match current context
+  const isAssignedHere = (meter: Meter): boolean => {
+    return (
+      meter.location_id === effectiveLocationId &&
+      meter.location_integration_id === (locationIntegration?.id ?? null)
+    );
+  };
 
   const fetchSensors = async () => {
     if (!locationIntegration || isPushGateway) return;
