@@ -44,7 +44,7 @@ async function isSuperAdmin(admin: ReturnType<typeof createClient>, userId: stri
 async function hasGatewayManage(admin: ReturnType<typeof createClient>, userId: string) {
   const { data } = await admin.rpc("has_permission", {
     _user_id: userId,
-    _permission_code: "gateway.manage",
+    _permission_code: "integrations.edit",
   });
   return !!data;
 }
