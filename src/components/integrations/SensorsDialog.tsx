@@ -447,6 +447,47 @@ export function SensorsDialog({ locationIntegration, open, onOpenChange, locatio
           currentLocationId={effectiveLocationId}
         />
       )}
+
+      <AlertDialog open={!!adoptTarget} onOpenChange={(o) => { if (!o) setAdoptTarget(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Gerät an diese Liegenschaft übernehmen?</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2 text-sm">
+                <p>
+                  Das Gerät <strong>{adoptTarget?.sensorName}</strong> ist aktuell an{" "}
+                  <strong>
+                    {adoptTarget?.meter.location_id
+                      ? (locationNameById.get(adoptTarget.meter.location_id) ?? "Unbekannte Liegenschaft")
+                      : "keiner Liegenschaft"}
+                  </strong>{" "}
+                  über Gateway{" "}
+                  <strong>
+                    {adoptTarget?.meter.location_integration_id
+                      ? (liMap?.get(adoptTarget.meter.location_integration_id) ?? "Unbekanntes Gateway")
+                      : "keinem Gateway"}
+                  </strong>{" "}
+                  angelegt.
+                </p>
+                <p>
+                  Es wird zur Liegenschaft{" "}
+                  <strong>{locationNameById.get(effectiveLocationId) ?? "aktuelle Liegenschaft"}</strong>{" "}
+                  verschoben und mit Gateway <strong>{integrationName}</strong> verknüpft.
+                </p>
+                <p className="text-muted-foreground">
+                  Alle bisherigen Zählerstände und Messwerte bleiben erhalten.
+                </p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={adopting}>Abbrechen</AlertDialogCancel>
+            <AlertDialogAction onClick={(e) => { e.preventDefault(); handleAdopt(); }} disabled={adopting}>
+              {adopting ? "Wird übernommen..." : "Übernehmen"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }
