@@ -334,15 +334,33 @@ export function SensorsDialog({ locationIntegration, open, onOpenChange, locatio
                 </TableHeader>
                 <TableBody>
                   {meterSensors.map((sensor) => {
-                    const isAssigned = assignedSensorIds.has(sensor.id);
+                    const assignedMeter = assignedMeterBySensorId.get(sensor.id);
+                    const assignedHere = assignedMeter ? isAssignedHere(assignedMeter) : false;
+                    const assignedElsewhere = !!assignedMeter && !assignedHere;
+                    const oldLocName = assignedMeter?.location_id
+                      ? (locationNameById.get(assignedMeter.location_id) ?? "Unbekannte Liegenschaft")
+                      : "keine Liegenschaft";
+                    const oldGwName = assignedMeter?.location_integration_id
+                      ? (liMap?.get(assignedMeter.location_integration_id) ?? "Unbekanntes Gateway")
+                      : "kein Gateway";
                     return (
                       <TableRow
                         key={sensor.id}
-                        className={isAssigned ? "opacity-60" : selectedSensorIds.has(sensor.id) ? "bg-muted/50" : ""}
+                        className={assignedHere ? "opacity-60" : selectedSensorIds.has(sensor.id) ? "bg-muted/50" : ""}
                       >
                         <TableCell>
-                          {isAssigned ? (
+                          {assignedHere ? (
                             <CheckCircle2 className="h-4 w-4 text-primary" />
+                          ) : assignedElsewhere ? (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-7 px-2"
+                              onClick={() => assignedMeter && setAdoptTarget({ sensorName: sensor.name, meter: assignedMeter })}
+                              title="An diese Liegenschaft übernehmen"
+                            >
+                              <ArrowRightLeft className="h-3.5 w-3.5" />
+                            </Button>
                           ) : (
                             <Checkbox
                               checked={selectedSensorIds.has(sensor.id)}
@@ -358,8 +376,13 @@ export function SensorsDialog({ locationIntegration, open, onOpenChange, locatio
                         </TableCell>
                         <TableCell className="font-medium">
                           {sensor.name}
-                          {isAssigned && (
+                          {assignedHere && (
                             <span className="ml-2 text-xs text-muted-foreground">(zugeordnet)</span>
+                          )}
+                          {assignedElsewhere && (
+                            <div className="text-xs text-muted-foreground mt-0.5">
+                              Aktuell: {oldLocName} · {oldGwName}
+                            </div>
                           )}
                         </TableCell>
                         <TableCell className="text-muted-foreground">{sensor.room}</TableCell>
