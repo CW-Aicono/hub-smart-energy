@@ -227,7 +227,8 @@ export function SensorsDialog({ locationIntegration, open, onOpenChange, locatio
     });
   };
 
-  const selectableSensors = meterSensors.filter((s) => !assignedSensorIds.has(s.id));
+  // Selectable = no existing meter at all (truly free)
+  const selectableSensors = meterSensors.filter((s) => !assignedMeterBySensorId.has(s.id));
 
   const toggleAll = () => {
     if (selectedSensorIds.size === selectableSensors.length) {
@@ -238,6 +239,21 @@ export function SensorsDialog({ locationIntegration, open, onOpenChange, locatio
   };
 
   const selectedSensors = meterSensors.filter((s) => selectedSensorIds.has(s.id));
+
+  // Adoption confirm state
+  const [adoptTarget, setAdoptTarget] = useState<{ sensorName: string; meter: Meter } | null>(null);
+  const [adopting, setAdopting] = useState(false);
+
+  const handleAdopt = async () => {
+    if (!adoptTarget || !locationIntegration) return;
+    setAdopting(true);
+    const { error: e } = await reassignMeter(adoptTarget.meter.id, {
+      location_id: effectiveLocationId,
+      location_integration_id: locationIntegration.id,
+    });
+    setAdopting(false);
+    if (!e) setAdoptTarget(null);
+  };
 
   return (
     <>
