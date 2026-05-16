@@ -292,6 +292,19 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
       } : { gas_type: null, zustandszahl: null, brennwert: null }),
       source_unit_power: captureType === "automatic" ? sourceUnit : null,
       source_unit_energy: captureType === "automatic" ? (sourceUnit === "m³" ? "m³" : sourceUnit === "kW" ? "kWh" : "Wh") : null,
+      ...(deviceType === "meter" ? (() => {
+        const parsed = offsetValue.trim() ? parseFloat(offsetValue.replace(",", ".")) : 0;
+        const finalOffset = Number.isFinite(parsed) ? parsed : 0;
+        return {
+          meter_offset_kwh: finalOffset,
+          meter_offset_reason: finalOffset !== 0 ? (offsetReason || null) : null,
+          meter_offset_note: finalOffset !== 0 ? (offsetNote.trim() || null) : null,
+          meter_offset_set_at:
+            finalOffset !== 0 && Number(meter.meter_offset_kwh ?? 0) !== finalOffset
+              ? new Date().toISOString()
+              : ((meter as any).meter_offset_set_at ?? null),
+        };
+      })() : {}),
     } as any);
 
     // Update virtual sources
