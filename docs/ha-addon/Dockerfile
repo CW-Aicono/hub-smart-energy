@@ -1,26 +1,10 @@
 # AICONO EMS Gateway v3.0
 # =========================================
-# Multi-stage build for minimal production image.
-# v3.0: Cloudflared entfernt – Worker kommuniziert ausschließlich via
-#       ausgehende WebSocket-Verbindung zur AICONO Cloud.
+# Runtime image for the Home Assistant add-on.
+# TypeScript wird bereits vor dem Sync ins HA-Add-on-Repository gebaut.
+# Der Home-Assistant-Rechner installiert nur noch Laufzeit-Abhängigkeiten und
+# muss beim Update nicht mehr selbst `tsc` ausführen.
 
-# ── Stage 1: Build TypeScript ────────────────────────────────────────────────
-FROM node:20-bullseye-slim AS builder
-
-WORKDIR /app
-
-COPY package.json package-lock.json tsconfig.json ./
-RUN npm ci
-
-COPY index.ts setup-wizard.ts modbus-wallbox-bridge.ts ./
-RUN npm run build && npm prune --omit=dev
-
-# Version aus config.yaml extrahieren – wird im Runner-Stage als ENV gesetzt,
-# damit Worker-Code (ADDON_VERSION) und Add-on-Manifest immer synchron sind.
-COPY config.yaml ./config.yaml
-RUN grep '^version:' config.yaml | sed -E 's/version: *"?([^"]+)"?/\1/' > /addon_version.txt
-
-# ── Stage 2: Production image ────────────────────────────────────────────────
 FROM node:20-bullseye-slim AS runner
 
 # IMPORTANT: Must run as root to access /data/options.json
@@ -28,13 +12,19 @@ FROM node:20-bullseye-slim AS runner
 
 WORKDIR /app
 
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev
+
 # Minimal runtime deps – no cloudflared needed in v3.0
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates \
   && rm -rf /var/lib/apt/lists/*
 
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/dist ./dist
-COPY --from=builder /addon_version.txt /addon_version.txt
+COPY dist ./dist
+
+# Version aus config.yaml extrahieren – wird als ENV gesetzt, damit Worker-Code
+# (ADDON_VERSION) und Add-on-Manifest immer synchron sind.
+COPY config.yaml ./config.yaml
+RUN grep '^version:' config.yaml | sed -E 's/version: *"?([^"]+)"?/\1/' > /addon_version.txt
 
 # Copy UI files into dist/ so __dirname (which is /app/dist when running
 # `node dist/index.js`) finds them via path.join(__dirname, "ui").
