@@ -143,6 +143,29 @@ export function useMeters(locationId?: string) {
     }
   };
 
+  const reassignMeter = async (
+    meterId: string,
+    target: { location_id: string; location_integration_id: string },
+  ) => {
+    const { error } = await supabase
+      .from("meters")
+      .update({
+        location_id: target.location_id,
+        location_integration_id: target.location_integration_id,
+        capture_type: "automatic",
+        is_archived: false,
+      })
+      .eq("id", meterId);
+    if (error) {
+      toast.error("Übernahme fehlgeschlagen");
+      console.error(error);
+      return { error };
+    }
+    toast.success("Gerät übernommen");
+    invalidate();
+    return { error: null };
+  };
+
   const updateMeterParent = async (meterId: string, parentMeterId: string | null) => {
     const { error } = await supabase
       .from("meters")
@@ -157,5 +180,5 @@ export function useMeters(locationId?: string) {
     }
   };
 
-  return { meters, loading, addMeter, updateMeter, deleteMeter, archiveMeter, updateMeterParent, refetch: invalidate };
+  return { meters, loading, addMeter, updateMeter, deleteMeter, archiveMeter, updateMeterParent, reassignMeter, refetch: invalidate };
 }
