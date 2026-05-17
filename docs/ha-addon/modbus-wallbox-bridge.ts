@@ -365,6 +365,13 @@ export class ModbusWallboxBridge {
   }
 
   getState(): ParsedState { return { ...this.state, ocpp_status: this.lastOcppStatus }; }
+  getInstance(): WallboxInstance { return this.inst; }
+  getTemplate(): WallboxTemplate { return this.tpl; }
+  isOcppConnected(): boolean { return !!this.ws && this.ws.readyState === 1; }
+  isModbusConnected(): boolean {
+    try { return !!this.modbus?.isOpen; } catch { return false; }
+  }
+  getTransactionId(): number | null { return this.transactionId; }
 }
 
 /** Bridge-Manager: hält alle Bridges des Gateways. */
@@ -386,4 +393,42 @@ export class WallboxBridgeManager {
 
   list(): string[] { return [...this.bridges.keys()]; }
   get(id: string): ModbusWallboxBridge | undefined { return this.bridges.get(id); }
+
+  /** Liefert alle Bridges samt aktuellem Live-Status für die lokale UI. */
+  listDetails(): Array<{
+    id: string;
+    ocpp_id: string;
+    vendor: string;
+    model: string;
+    modbus_host: string;
+    modbus_port: number;
+    unit_id: number;
+    modbus_connected: boolean;
+    ocpp_connected: boolean;
+    ocpp_status: string;
+    transaction_id: number | null;
+    state: Record<string, unknown>;
+  }> {
+    const out: ReturnType<WallboxBridgeManager["listDetails"]> = [];
+    for (const [id, b] of this.bridges.entries()) {
+      const inst = b.getInstance();
+      const tpl = b.getTemplate();
+      const st = b.getState();
+      out.push({
+        id,
+        ocpp_id: inst.charge_point_ocpp_id,
+        vendor: tpl.vendor,
+        model: tpl.model,
+        modbus_host: inst.modbus_host,
+        modbus_port: inst.modbus_port,
+        unit_id: inst.unit_id,
+        modbus_connected: b.isModbusConnected(),
+        ocpp_connected: b.isOcppConnected(),
+        ocpp_status: String(st.ocpp_status ?? "Unknown"),
+        transaction_id: b.getTransactionId(),
+        state: st,
+      });
+    }
+    return out;
+  }
 }
