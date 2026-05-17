@@ -684,6 +684,7 @@
         automations: [],
         logs: [],
         devices: null,
+        wallboxes: null,
         deviceTab: 'meters',
         deviceSearch: '',
         error: '',
@@ -693,6 +694,7 @@
       var pageLabels = {
         dashboard: '📊 Dashboard',
         devices: '🔧 Geräte',
+        wallboxes: '🚗 Wallboxen',
         control: '🔌 Steuerung',
         automations: '🤖 Automationen',
         logs: '🧾 Logs',
@@ -1240,9 +1242,70 @@
           '</div>';
       }
 
+      function renderWallboxes() {
+        if (!state.wallboxes) {
+          return '<div class="empty-state"><div class="icon">⏳</div><p>Lade Wallboxen…</p></div>';
+        }
+        var list = state.wallboxes;
+        if (!list.length) {
+          return '<div class="empty-state"><div class="icon">🚗</div>' +
+            '<p>Keine Wallboxen aktiv</p>' +
+            '<p class="muted">Lege in AICONO unter „Ladepunkte" eine Modbus-Wallbox an. Das Gateway baut die Verbindung dann automatisch auf.</p>' +
+            '</div>';
+        }
+
+        function statusBadge(ocpp, modbus, ws) {
+          if (!modbus) return '<span class="badge badge-error">⚠️ Modbus offline</span>';
+          if (!ws) return '<span class="badge badge-warn">🟡 Cloud getrennt</span>';
+          if (ocpp === 'Charging') return '<span class="badge badge-active">⚡ Lädt</span>';
+          if (ocpp === 'Available') return '<span class="badge badge-success">🟢 Bereit</span>';
+          if (ocpp === 'Preparing' || ocpp === 'Finishing') return '<span class="badge badge-warn">🟡 ' + escapeHtml(ocpp) + '</span>';
+          if (ocpp === 'Faulted' || ocpp === 'Unavailable') return '<span class="badge badge-error">🔴 ' + escapeHtml(ocpp) + '</span>';
+          return '<span class="badge badge-inactive">' + escapeHtml(ocpp || '–') + '</span>';
+        }
+
+        function fmtNum(v, digits) {
+          if (v == null || v === '' || isNaN(Number(v))) return '–';
+          return Number(v).toLocaleString('de-DE', { minimumFractionDigits: digits, maximumFractionDigits: digits });
+        }
+
+        var cards = list.map(function (w) {
+          var st = w.state || {};
+          var powerKw = st.power_total_w != null ? Number(st.power_total_w) / 1000 : null;
+          var currents = [st.current_l1_a, st.current_l2_a, st.current_l3_a]
+            .map(function (c) { return c != null ? fmtNum(c, 1) + ' A' : '–'; })
+            .join(' / ');
+          return '' +
+            '<div class="panel" style="margin-bottom:14px">' +
+              '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:12px">' +
+                '<div>' +
+                  '<div class="section-title" style="margin:0">🚗 ' + escapeHtml(w.vendor || '') + ' ' + escapeHtml(w.model || '') + '</div>' +
+                  '<div class="muted" style="font-size:0.8rem">OCPP-ID: <code>' + escapeHtml(w.ocpp_id) + '</code></div>' +
+                '</div>' +
+                '<div style="display:flex;gap:6px;flex-wrap:wrap">' +
+                  statusBadge(w.ocpp_status, w.modbus_connected, w.ocpp_connected) +
+                  (w.transaction_id ? '<span class="badge badge-blue">Tx #' + escapeHtml(w.transaction_id) + '</span>' : '') +
+                '</div>' +
+              '</div>' +
+              '<div class="grid">' +
+                card('Leistung', powerKw != null ? fmtNum(powerKw, 2) + ' kW' : '–', 'Aktuelle Ladeleistung') +
+                card('Energie gesamt', st.energy_total_kwh != null ? fmtNum(st.energy_total_kwh, 2) + ' kWh' : '–', 'Zählerstand') +
+                card('Stromstärke L1/L2/L3', currents, 'Pro Phase') +
+                card('Sollstrom', st.set_current_a != null ? fmtNum(st.set_current_a, 0) + ' A' : '–', 'Vorgabe an Wallbox') +
+                card('Modbus', w.modbus_host + ':' + w.modbus_port + ' (Unit ' + w.unit_id + ')', w.modbus_connected ? '🟢 verbunden' : '🔴 getrennt') +
+                card('Cloud (OCPP)', w.ocpp_connected ? '🟢 verbunden' : '🔴 getrennt', 'WebSocket zur AICONO Cloud') +
+              '</div>' +
+            '</div>';
+        }).join('');
+
+        var hint = '<div class="muted" style="margin-bottom:10px;font-size:0.85rem">Live-Daten aller im Gateway aktiven Wallboxen. Aktualisierung alle 10 Sekunden.</div>';
+        return hint + cards;
+      }
+
       function pageContent() {
         switch (state.page) {
           case 'devices': return renderDevices();
+          case 'wallboxes': return renderWallboxes();
           case 'control': return renderControl();
           case 'automations': return renderAutomations();
           case 'logs': return renderLogs();
@@ -1376,6 +1439,11 @@
         state.devices = payload && payload.devices ? payload.devices : { meters: [], sensors: [], actuators: [] };
       }
 
+      async function loadWallboxes() {
+        var payload = await fetchJson('/api/wallboxes');
+        state.wallboxes = payload && payload.wallboxes ? payload.wallboxes : [];
+      }
+
       async function loadActuators() {
         var payload = await fetchJson('/api/actuators');
         state.actuators = payload && payload.actuators ? payload.actuators : [];
@@ -1427,6 +1495,7 @@
           }
 
           if (state.page === 'devices') await loadDevices();
+          if (state.page === 'wallboxes') await loadWallboxes();
           if (state.page === 'control') await loadActuators();
           if (state.page === 'automations') await loadAutomations();
           if (state.page === 'logs') await loadLogs();
