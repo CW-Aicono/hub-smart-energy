@@ -365,6 +365,13 @@ export class ModbusWallboxBridge {
   }
 
   getState(): ParsedState { return { ...this.state, ocpp_status: this.lastOcppStatus }; }
+  getInstance(): WallboxInstance { return this.inst; }
+  getTemplate(): WallboxTemplate { return this.tpl; }
+  isOcppConnected(): boolean { return !!this.ws && this.ws.readyState === 1; }
+  isModbusConnected(): boolean {
+    try { return !!this.modbus?.isOpen; } catch { return false; }
+  }
+  getTransactionId(): number | null { return this.transactionId; }
 }
 
 /** Bridge-Manager: hält alle Bridges des Gateways. */
