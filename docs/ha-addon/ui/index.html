@@ -1439,6 +1439,11 @@
         state.devices = payload && payload.devices ? payload.devices : { meters: [], sensors: [], actuators: [] };
       }
 
+      async function loadWallboxes() {
+        var payload = await fetchJson('/api/wallboxes');
+        state.wallboxes = payload && payload.wallboxes ? payload.wallboxes : [];
+      }
+
       async function loadActuators() {
         var payload = await fetchJson('/api/actuators');
         state.actuators = payload && payload.actuators ? payload.actuators : [];
