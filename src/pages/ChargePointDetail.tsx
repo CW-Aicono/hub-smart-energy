@@ -1159,7 +1159,9 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
                   )}
                 </CardContent>
               </Card>
+              <ModbusInstancePanel chargePointId={cp.id} canEdit={!!isAdmin} />
             </TabsContent>
+
 
             {/* Energy Management tab */}
             <TabsContent value="energy" className="mt-6 space-y-6">
