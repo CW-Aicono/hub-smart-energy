@@ -45,6 +45,7 @@ const ChargingPoints = () => {
   const { user, loading: authLoading } = useAuth();
   const { isAdmin } = useUserRole();
   const { t } = useTranslation();
+  const queryClient = useQueryClient();
   const { tenant } = useTenant();
   const { chargePoints, isLoading, addChargePoint, updateChargePoint, deleteChargePoint } = useChargePoints();
   const { sessions } = useChargingSessions();
