@@ -342,7 +342,7 @@ const ChargingPoints = () => {
                 <Button variant="outline" onClick={() => setPublicLinkOpen(true)}>
                   <Globe className="h-4 w-4 mr-2" />Öffentlicher Link
                 </Button>
-                <ModbusWallboxWizard onCreated={() => queryClient.invalidateQueries({ queryKey: ["charge-points"] })} />
+                <ModbusWallboxWizard onCreated={() => window.location.reload()} />
                 <Dialog open={addOpen} onOpenChange={setAddOpen}>
                   <DialogTrigger asChild>
                     <Button onClick={resetForm}><Plus className="h-4 w-4 mr-2" />{t("charging.addChargePoint" as any)}</Button>
