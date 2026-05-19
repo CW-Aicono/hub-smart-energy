@@ -50,6 +50,7 @@ import { PowerLimitScheduler, PowerLimitSchedule, defaultPowerLimitSchedule } fr
 import SingleChargePointMap from "@/components/charging/SingleChargePointMap";
 import { AccessControlSettings, AccessSettings } from "@/components/charging/AccessControlSettings";
 import ChargePointSolarChargingConfig from "@/components/charging/ChargePointSolarChargingConfig";
+import ModbusInstancePanel from "@/components/charging/ModbusInstancePanel";
 
 const STATUS_KEYS: Record<string, { labelKey: string; color: string; variant: "default" | "secondary" | "destructive" | "outline"; icon: typeof Zap }> = {
   available: { labelKey: "cpd.available", color: "hsl(var(--primary))", variant: "default", icon: Zap },
