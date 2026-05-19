@@ -1,4 +1,5 @@
 import { useState, lazy, Suspense } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Navigate, useNavigate } from "react-router-dom";
 import { useDemoPath } from "@/contexts/DemoMode";
 import { useAuth } from "@/hooks/useAuth";
