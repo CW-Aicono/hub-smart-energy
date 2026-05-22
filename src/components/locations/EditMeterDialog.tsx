@@ -371,6 +371,44 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
           <DialogTitle>Gerät bearbeiten – {meter.name}</DialogTitle>
         </DialogHeader>
         <div className="space-y-4 overflow-y-auto flex-1 pr-2">
+          {/* Setup validation */}
+          <div className={`rounded-md border p-3 ${validatedAt ? "bg-emerald-500/10 border-emerald-500/30" : "bg-muted/30"}`}>
+            {validatedAt ? (
+              <div className="flex items-start gap-2">
+                <ShieldCheck className="h-5 w-5 text-emerald-600 mt-0.5 shrink-0" />
+                <div className="text-sm">
+                  <p className="font-medium">Einrichtung validiert</p>
+                  <p className="text-muted-foreground">
+                    Messwert wurde am{" "}
+                    {new Date(validatedAt).toLocaleString("de-DE", {
+                      day: "2-digit", month: "2-digit", year: "numeric",
+                      hour: "2-digit", minute: "2-digit",
+                    })}{" "}
+                    von {validatedByEmail ?? "unbekannt"} geprüft und validiert.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <p className="text-sm text-muted-foreground">
+                  Einrichtung dieses Geräts noch nicht validiert.
+                </p>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="gap-1.5"
+                  onClick={handleValidateSetup}
+                  disabled={validating}
+                >
+                  {validating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Flag className="h-4 w-4" />}
+                  Einrichtung validieren
+                </Button>
+              </div>
+            )}
+          </div>
+
+
           {/* Device type selector */}
           <div>
             <Label className="mb-2 block">Gerätetyp *</Label>
