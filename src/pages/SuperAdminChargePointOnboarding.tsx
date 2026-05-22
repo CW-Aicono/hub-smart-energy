@@ -481,7 +481,7 @@ export default function SuperAdminChargePointOnboarding() {
               ) : (
                 <p className="text-xs text-muted-foreground">
                   Falls Ihre Wallbox eine Server-Zertifikat-Auswahl verlangt: <strong>"Amazon Root CA 1"</strong> oder
-                  <strong> "Let's Encrypt R3"</strong> wählen — beides funktioniert mit cp.aicono.org.
+                  <strong> "Let's Encrypt R3"</strong> wählen — beides funktioniert mit {OCPP_DOMAIN}.
                 </p>
               )}
             </div>
