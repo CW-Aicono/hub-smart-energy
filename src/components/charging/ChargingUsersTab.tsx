@@ -44,6 +44,9 @@ const ChargingUsersTab = () => {
   const [deleteTarget, setDeleteTarget] = useState<{ type: "user" | "group"; id: string; name: string } | null>(null);
 
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "blocked" | "archived">("all");
+  const [ioOpen, setIoOpen] = useState(false);
+  const [ioType, setIoType] = useState<ExportType>("users");
+  const openIo = (t: ExportType) => { setIoType(t); setIoOpen(true); };
 
   const filteredUsers = statusFilter === "all" ? users : users.filter((u) => u.status === statusFilter);
 
