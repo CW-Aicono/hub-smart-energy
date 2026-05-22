@@ -15,7 +15,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
-import { AlertCircle, Layers, DoorOpen, Upload, Loader2, ImageIcon } from "lucide-react";
+import { AlertCircle, Layers, DoorOpen, Upload, Loader2, ImageIcon, ShieldCheck, Flag } from "lucide-react";
 import { toast } from "sonner";
 import { VirtualMeterFormulaBuilder, VirtualMeterSource } from "./VirtualMeterFormulaBuilder";
 import { MeterOffsetSection } from "./MeterOffsetSection";
