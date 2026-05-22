@@ -13,12 +13,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/hooks/use-toast";
 
-// Produktiv-Domain (Live-Gateway auf Hetzner). Auch in der Lovable-Vorschau wird die
-// Live-URL angezeigt, da Lovable nur Test-/Entwicklungsumgebung ist und die Wallboxen
-// grundsätzlich auf den Live-Gateway gepointet werden sollen.
-const OCPP_HOST = "cp.aicono.org";
-const OCPP_WSS_URL = `wss://${OCPP_HOST}`; // Port 443 (Standard)
-const OCPP_WS_URL = `ws://${OCPP_HOST}`;   // Port 80 (Standard)
+// OCPP-Domain wird automatisch passend zur Umgebung gewählt:
+//  - Live-Domains (ems-pro.aicono.org / aicono.org) → cp.aicono.org
+//  - Test/Staging/Lovable-Preview                    → ocpp.aicono.org
+import { getOcppHost, getOcppWssUrl, getOcppWsUrl, getOcppEnvironmentLabel } from "@/lib/ocppEnvironment";
+const OCPP_HOST = getOcppHost();
+const OCPP_WSS_URL = getOcppWssUrl();
+const OCPP_WS_URL = getOcppWsUrl();
+const OCPP_ENV_LABEL = getOcppEnvironmentLabel();
 
 const DIFFICULTY_COLORS: Record<string, string> = {
   easy: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400",
