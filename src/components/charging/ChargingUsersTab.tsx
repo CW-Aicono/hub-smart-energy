@@ -354,6 +354,8 @@ const ChargingUsersTab = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <ChargingImportExportDialog open={ioOpen} onOpenChange={setIoOpen} initialType={ioType} />
     </div>
   );
 };
