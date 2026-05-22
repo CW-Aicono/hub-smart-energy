@@ -7,7 +7,7 @@
  *    zusätzlich stempeln wir tenant_id explizit beim Insert.
  *  - Excel-Dateien werden mit @e965/xlsx erzeugt/gelesen; CSV nutzt denselben Writer
  *    mit dem CSV-Format. So bleibt das Mapping identisch.
- *  - \"NFC-Tags" ist kein eigenes Modell, sondern eine schlanke Sicht auf
+ *  - 'NFC-Tags" ist kein eigenes Modell, sondern eine schlanke Sicht auf
  *    charging_users.rfid_tag (Email → RFID-Tag).
  */
 
@@ -228,7 +228,7 @@ export function buildUserPreview(
     const statusRaw = (r["Status"] ?? "active").trim().toLowerCase();
 
     if (!name) {
-      issues.push({ row: rowNumber, severity: "error", message: "\"Name" fehlt — Zeile wird übersprungen." });
+      issues.push({ row: rowNumber, severity: "error", message: "'Name" fehlt — Zeile wird übersprungen." });
       skipped++;
       return;
     }
@@ -239,14 +239,14 @@ export function buildUserPreview(
     if (groupName) {
       group_id = findIdByName(groups, groupName);
       if (!group_id) {
-        issues.push({ row: rowNumber, severity: "warning", message: `Gruppe \"${groupName}" nicht gefunden — wird leer gesetzt.` });
+        issues.push({ row: rowNumber, severity: "warning", message: `Gruppe '${groupName}" nicht gefunden — wird leer gesetzt.` });
       }
     }
     let tariff_id: string | null = null;
     if (tariffName) {
       tariff_id = findIdByName(tariffs, tariffName);
       if (!tariff_id) {
-        issues.push({ row: rowNumber, severity: "warning", message: `Tarif \"${tariffName}" nicht gefunden — Standard wird verwendet.` });
+        issues.push({ row: rowNumber, severity: "warning", message: `Tarif '${tariffName}" nicht gefunden — Standard wird verwendet.` });
       }
     }
 
@@ -297,7 +297,7 @@ export function buildGroupPreview(
     const rowNumber = i + 2;
     const name = (r["Name"] ?? "").trim();
     if (!name) {
-      issues.push({ row: rowNumber, severity: "error", message: "\"Name" fehlt — Zeile wird übersprungen." });
+      issues.push({ row: rowNumber, severity: "error", message: "'Name" fehlt — Zeile wird übersprungen." });
       skipped++;
       return;
     }
@@ -309,7 +309,7 @@ export function buildGroupPreview(
     if (tariffName) {
       tariff_id = findIdByName(tariffs, tariffName);
       if (!tariff_id) {
-        issues.push({ row: rowNumber, severity: "warning", message: `Tarif \"${tariffName}" nicht gefunden — leer gesetzt.` });
+        issues.push({ row: rowNumber, severity: "warning", message: `Tarif '${tariffName}" nicht gefunden — leer gesetzt.` });
       }
     }
     const existing = existingGroups.find((g) => g.name.trim().toLowerCase() === name.toLowerCase()) ?? null;
@@ -348,13 +348,13 @@ export function buildNfcPreview(
     const email = (r["E-Mail"] ?? "").trim().toLowerCase();
     const rfid = (r["RFID-Tag"] ?? "").trim();
     if (!email || !rfid) {
-      issues.push({ row: rowNumber, severity: "error", message: "\"E-Mail" und \"RFID-Tag" sind Pflicht — Zeile wird übersprungen." });
+      issues.push({ row: rowNumber, severity: "error", message: "'E-Mail" und 'RFID-Tag" sind Pflicht — Zeile wird übersprungen." });
       skipped++;
       return;
     }
     const user = existingUsers.find((u) => (u.email ?? "").toLowerCase() === email);
     if (!user) {
-      issues.push({ row: rowNumber, severity: "error", message: `Kein Nutzer mit E-Mail \"${email}" gefunden — Zeile wird übersprungen.` });
+      issues.push({ row: rowNumber, severity: "error", message: `Kein Nutzer mit E-Mail '${email}" gefunden — Zeile wird übersprungen.` });
       skipped++;
       return;
     }
