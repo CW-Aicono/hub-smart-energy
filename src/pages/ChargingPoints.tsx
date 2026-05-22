@@ -37,7 +37,7 @@ import ModbusWallboxWizard from "@/components/charging/ModbusWallboxWizard";
 const LazyChargePointsMap = lazy(() => import("@/components/charging/ChargePointsMap"));
 
 const OCPP_ENDPOINT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ocpp-central`;
-const OCPP_WS_ENDPOINT_URL = "wss://ocpp.aicono.org";
+const OCPP_WS_ENDPOINT_URL = "wss://cp.aicono.org";
 
 const ChargingPoints = () => {
   const navigate = useNavigate();
@@ -149,7 +149,7 @@ const ChargingPoints = () => {
     : chargePoints;
 
   const wsScheme = form.connection_protocol === "ws" ? "ws" : "wss";
-  const wsHostUrl = `${wsScheme}://ocpp.aicono.org`;
+  const wsHostUrl = `${wsScheme}://cp.aicono.org`;
 
   const ocppHint = (
     <Alert className="mt-4">
